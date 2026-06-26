@@ -1,0 +1,169 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem;
+  background: radial-gradient(ellipse 120% 80% at 50% 0%, #0a1f6e 0%, #00104b 45%, #000a2e 100%);
+}
+
+.brand {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.brand img {
+  height: 44px;
+  width: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cardHeader {
+  background: linear-gradient(180deg, #e8edf5 0%, #dce3ef 100%);
+  padding: 1.5rem 1.5rem 1.25rem;
+  border-bottom: 1px solid rgba(0, 16, 75, 0.08);
+}
+
+.cardTitle {
+  color: #00104b;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.cardSubtitle {
+  color: #5a6b8a;
+  font-size: 0.875rem;
+  margin-top: 0.35rem;
+  line-height: 1.45;
+}
+
+.cardBody {
+  background: #fff;
+  padding: 1.5rem;
+}
+
+.toggleRow {
+  display: flex;
+  gap: 4px;
+  background: #eef1f7;
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 1.25rem;
+}
+
+.toggleBtn {
+  flex: 1;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
+}
+
+.toggleBtnIdle {
+  background: transparent;
+  color: #5a6b8a;
+}
+
+.toggleBtnIdle:hover {
+  color: #00104b;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.toggleBtnActive {
+  background: #00104b;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 16, 75, 0.25);
+}
+
+/* Matches common “Sign in with Google” web button: white, gray border, Roboto Medium */
+.googleSignInButton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 18px;
+  margin: 0;
+  box-sizing: border-box;
+  font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.25px;
+  color: #3c4043;
+  background: #fff;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.googleSignInButton:hover:not(:disabled) {
+  background: #f8f9fa;
+  border-color: #d2d2d2;
+  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.15), 0 1px 3px 1px rgba(60, 64, 67, 0.1);
+}
+
+.googleSignInButton:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+.googleSignInButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.googleSignInIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.googleSignInLabel {
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.errorBox {
+  margin-top: 0.75rem;
+}
+
+.configCard {
+  width: 100%;
+  max-width: 480px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.configInner {
+  padding: 1.5rem;
+}
+
+.configInner code {
+  font-size: 0.8rem;
+}

@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "experimentalServices": {
+    "frontend": {
+      "entrypoint": "frontend",
+      "routePrefix": "/",
+      "framework": "vite"
+    },
+    "backend": {
+      "entrypoint": "backend",
+      "routePrefix": "/_/backend"
+    }
+  },
+  "crons": [
+    {
+      "path": "/_/backend/api/cron/tick/health",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/_/backend/api/cron/tick/widget",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

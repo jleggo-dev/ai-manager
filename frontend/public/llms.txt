@@ -1,0 +1,17 @@
+# AI Admin
+
+> AI profile management, health monitoring, and workflow orchestration platform
+
+## Docs
+
+- [Integration Guide](/docs/INTEGRATION.md): How to integrate via Edge Function proxy — auth, patterns, CORS, rate limits
+- [API Reference](/docs/API.md): Complete REST API endpoint reference
+- [Concepts](/docs/CONCEPTS.md): Architecture, entity model, workflows, health monitoring
+- [Lovable Handbook](/integration/AI_ADMIN_LOVABLE_INTEGRATION.md): Full Lovable integration handbook
+- [Edge Function](/integration/ai-admin-supabase-edge-function.ts): Reference Supabase Edge Function
+- [Workflow Builder](/integration/WORKFLOW_BUILDER_PROMPT.md): LLM prompt for workflow decomposition
+- [Changelog](/docs/CHANGELOG.md): Version history and release notes
+
+## Machine-Readable Manifest
+
+- [manifest.json](/docs/manifest.json): Structured index with version info and tool-specific instructions

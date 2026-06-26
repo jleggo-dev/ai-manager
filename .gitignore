@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Environment (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Vite
+frontend/dist/
+
+# Puppeteer / Chromium cache
+.cache/
+
+# Vitest
+**/.vite/
+
+# Local screenshots from widget health checks
+**/screenshots/

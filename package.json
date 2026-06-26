@@ -1,0 +1,47 @@
+{
+  "name": "ai-admin",
+  "private": true,
+  "version": "1.2.0",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm run dev:backend & npm run dev:frontend",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=frontend",
+    "start": "npm run start --workspace=backend",
+    "test": "npm run test --workspace=backend",
+    "lint": "npm run lint --workspace=backend && npm run lint --workspace=frontend",
+    "vercel:build:frontend": "npm run lint --workspace=frontend && npm run build --workspace=frontend",
+    "lint:fix": "npm run lint:fix --workspace=backend && npm run lint:fix --workspace=frontend",
+    "format": "prettier --write \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\"",
+    "typecheck": "npm run typecheck --workspace=backend && npm run typecheck --workspace=frontend",
+    "migrate:supabase-data": "npm run migrate:data --workspace=backend",
+    "test:e2e": "npx vitest run --config e2e/vitest.config.ts",
+    "test:e2e:full": "bash scripts/run-e2e.sh",
+    "ci": "npm run typecheck && npm run format:check && npm run lint && npm test",
+    "prepare": "husky || true"
+  },
+  "lint-staged": {
+    "backend/{src,test}/**/*.ts": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "frontend/src/**/*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "**/*.ts?(x)": [
+      "bash -c 'npm run typecheck'"
+    ]
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.3",
+    "puppeteer": "^24.40.0"
+  }
+}

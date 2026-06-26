@@ -1,0 +1,103 @@
+vi.mock('./supabase', () => ({ supabase: null }));
+vi.mock('./api-url', () => ({ resolveApiUrl: (p: string) => p }));
+
+const STORAGE_KEY_ACCESS = 'aim_access_token';
+const STORAGE_KEY_WORKSPACE = 'aim_workspace_id';
+
+let store: Record<string, string>;
+
+beforeEach(() => {
+  store = {};
+  vi.stubGlobal('sessionStorage', {
+    getItem: vi.fn((k: string) => store[k] ?? null),
+    setItem: vi.fn((k: string, v: string) => {
+      store[k] = v;
+    }),
+    removeItem: vi.fn((k: string) => {
+      delete store[k];
+    }),
+    clear: vi.fn(() => {
+      store = {};
+    }),
+  });
+  vi.stubEnv('VITE_DEV_API_KEY', '');
+  vi.resetModules();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
+
+async function loadModule() {
+  return import('./auth-session');
+}
+
+describe('auth-session', () => {
+  it('getAccessToken returns null when no session exists', async () => {
+    const { getAccessToken } = await loadModule();
+    expect(getAccessToken()).toBeNull();
+  });
+
+  it('setWorkspaceId stores workspace ID in sessionStorage', async () => {
+    const { setWorkspaceId } = await loadModule();
+    setWorkspaceId('ws-123');
+    expect(sessionStorage.setItem).toHaveBeenCalledWith(STORAGE_KEY_WORKSPACE, 'ws-123');
+    expect(store[STORAGE_KEY_WORKSPACE]).toBe('ws-123');
+  });
+
+  it('getWorkspaceId retrieves stored workspace ID', async () => {
+    const { setWorkspaceId, getWorkspaceId } = await loadModule();
+    setWorkspaceId('ws-456');
+    expect(getWorkspaceId()).toBe('ws-456');
+  });
+
+  it('clearAuthSession clears tokens and workspace from storage', async () => {
+    store[STORAGE_KEY_ACCESS] = 'tok';
+    store[STORAGE_KEY_WORKSPACE] = 'ws-1';
+    const { clearAuthSession, getAccessToken, getWorkspaceId } = await loadModule();
+
+    clearAuthSession();
+
+    expect(getAccessToken()).toBeNull();
+    expect(getWorkspaceId()).toBeNull();
+    expect(sessionStorage.removeItem).toHaveBeenCalledWith(STORAGE_KEY_ACCESS);
+    expect(sessionStorage.removeItem).toHaveBeenCalledWith(STORAGE_KEY_WORKSPACE);
+  });
+
+  it('getSessionUser returns null when no user is cached', async () => {
+    const { getSessionUser } = await loadModule();
+    expect(getSessionUser()).toBeNull();
+  });
+
+  it('getAccessToken returns the dev key when VITE_DEV_API_KEY is set', async () => {
+    vi.stubEnv('VITE_DEV_API_KEY', 'dev-key-abc');
+    const { getAccessToken } = await loadModule();
+    expect(getAccessToken()).toBe('dev-key-abc');
+  });
+
+  it('setWorkspaceId with null clears the workspace', async () => {
+    const { setWorkspaceId, getWorkspaceId } = await loadModule();
+    setWorkspaceId('ws-999');
+    expect(getWorkspaceId()).toBe('ws-999');
+
+    setWorkspaceId(null);
+    expect(getWorkspaceId()).toBeNull();
+    expect(sessionStorage.removeItem).toHaveBeenCalledWith(STORAGE_KEY_WORKSPACE);
+  });
+
+  it('multiple calls to get/set are consistent', async () => {
+    const { setWorkspaceId, getWorkspaceId, getAccessToken } = await loadModule();
+
+    setWorkspaceId('ws-a');
+    expect(getWorkspaceId()).toBe('ws-a');
+
+    setWorkspaceId('ws-b');
+    expect(getWorkspaceId()).toBe('ws-b');
+
+    setWorkspaceId(null);
+    expect(getWorkspaceId()).toBeNull();
+
+    expect(getAccessToken()).toBeNull();
+  });
+});

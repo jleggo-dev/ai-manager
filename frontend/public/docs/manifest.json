@@ -1,0 +1,81 @@
+{
+  "name": "AI Admin",
+  "version": "1.1.0",
+  "lastUpdated": "2026-05-13",
+  "description": "AI profile management, health monitoring, and workflow orchestration platform",
+  "documents": [
+    {
+      "id": "integration-guide",
+      "title": "Integration Guide",
+      "description": "How to integrate with AI Admin via Edge Function proxy — auth, patterns, CORS, rate limits, pitfalls",
+      "path": "/docs/INTEGRATION.md",
+      "format": "markdown",
+      "audience": ["lovable", "cursor", "developer"]
+    },
+    {
+      "id": "api-reference",
+      "title": "API Reference",
+      "description": "Complete REST API endpoint reference — methods, paths, request/response shapes, auth requirements",
+      "path": "/docs/API.md",
+      "format": "markdown",
+      "audience": ["cursor", "developer"]
+    },
+    {
+      "id": "concepts",
+      "title": "Architecture Concepts",
+      "description": "Entity model, workflows, health monitoring, encryption, provider types",
+      "path": "/docs/CONCEPTS.md",
+      "format": "markdown",
+      "audience": ["lovable", "cursor", "developer"]
+    },
+    {
+      "id": "lovable-integration",
+      "title": "Lovable Integration Handbook",
+      "description": "Complete integration handbook for Lovable-generated apps — enforcement rules, Edge Function modes, SSE, workflows, MCP",
+      "path": "/integration/AI_ADMIN_LOVABLE_INTEGRATION.md",
+      "format": "markdown",
+      "audience": ["lovable"]
+    },
+    {
+      "id": "edge-function",
+      "title": "Supabase Edge Function Reference",
+      "description": "Reference Edge Function for proxying requests to AI Admin from Supabase-hosted apps",
+      "path": "/integration/ai-admin-supabase-edge-function.ts",
+      "format": "typescript",
+      "audience": ["lovable", "developer"]
+    },
+    {
+      "id": "workflow-builder",
+      "title": "Workflow Builder Prompt",
+      "description": "LLM prompt for decomposing user intent into AI Admin workflows via two-phase plan-then-build",
+      "path": "/integration/WORKFLOW_BUILDER_PROMPT.md",
+      "format": "markdown",
+      "audience": ["lovable", "cursor"]
+    },
+    {
+      "id": "changelog",
+      "title": "Changelog",
+      "description": "Version history and release notes",
+      "path": "/docs/CHANGELOG.md",
+      "format": "markdown",
+      "audience": ["lovable", "cursor", "developer"]
+    }
+  ],
+  "changelog": [
+    {
+      "version": "1.1.0",
+      "date": "2026-05-13",
+      "summary": "Multi-tenant RPC hardening, safe error responses, user-data RBAC, public docs manifest"
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-04-01",
+      "summary": "Initial release — workspaces, providers, AI profiles, workflows, health monitoring, widget checks"
+    }
+  ],
+  "instructions": {
+    "lovable": "Download the 'lovable-integration' and 'edge-function' documents. Follow the handbook's MUST/NEVER rules. Deploy the edge function to your Supabase project.",
+    "cursor": "Download the 'api-reference' and 'integration-guide' documents for endpoint contracts and proxy patterns.",
+    "general": "Start with 'concepts' for architecture overview, then 'api-reference' for endpoint details."
+  }
+}
