@@ -57,6 +57,21 @@ export type AsyncRequestHandler = (req: Request, res: Response, next: NextFuncti
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member';
 
+/* ── Account approval (profiles) ───────────────────────────── */
+
+export type AccountStatus = 'pending' | 'approved' | 'suspended';
+
+export interface ProfileRow {
+  id: string;
+  email: string | null;
+  display_name: string | null;
+  status: AccountStatus;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /* ── LLM Client Interface ─────────────────────────────────── */
 
 export interface ChatCompletionUsage {

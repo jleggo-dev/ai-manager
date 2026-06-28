@@ -3,7 +3,24 @@
 > **Source of truth for field-level detail**: `backend/src/schemas/*.ts` (Zod) and `backend/src/models/*.ts`.
 > This document is the human-readable overview. Keep it in sync when routes change.
 
+## Table of contents
+
+| Section | When you need it |
+|---------|------------------|
+| [API Stability Contract](#api-stability-contract) | Versioning and error conventions |
+| [Global Conventions](#global-conventions) | Auth, pagination, rate limits |
+| [Validation Errors](#validation-errors) | Structured 400 response shape |
+| [Health / Auth / Workspaces](#health) | Bootstrap and team management |
+| [API Keys / Providers / AI Profiles](#api-keys) | Core resource CRUD |
+| [Processing Jobs / Groups](#processing-jobs) | Templated prompts and test execution |
+| [Chat Sessions](#chat-sessions) | Streaming SSE, workflows, rule sets |
+| [AI Matcher](#ai-matcher) | One-shot `run-slot` |
+| [Workflows](#workflows) | Multi-step pipelines and variable mappings |
+| [User Data / Health Checks / Widget Checks](#user-data-deletion-gdpr--ccpa) | Compliance and monitoring |
+
 ## API Stability Contract
+
+> **Summary:** SemVer via `X-API-Version` header; tolerant consumers; sanitized errors; structured validation details.
 
 - Every response includes an `X-API-Version` header matching the root `package.json` version (SemVer).
 - New optional fields may be added to responses at any time (minor version bump). Consumers must tolerate unknown keys.
@@ -14,6 +31,8 @@
 - See `CHANGELOG.md` for version history and the `manifest.json` at `/docs/manifest.json` for machine-readable discovery.
 
 ## Global Conventions
+
+> **Summary:** Bearer auth (JWT or `aim_sk_`), workspace scoping, forwarded user identity, cursor pagination.
 
 | Item | Detail |
 |------|--------|
@@ -26,6 +45,8 @@
 ---
 
 ## Validation Errors
+
+> **Summary:** HTTP 400 returns `{ error, details[], warnings[] }` from Zod + semantic validators.
 
 All endpoints validate request bodies with Zod schemas (structural) and semantic validators (referential integrity, cross-field rules). When validation fails, the response uses HTTP 400 with a structured body:
 
@@ -57,6 +78,8 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 ---
 
 ## Health
+
+> **Summary:** Unauthenticated liveness check at `GET /api/health`.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -207,6 +230,8 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 
 ## Chat Sessions
 
+> **Summary:** Stateful streaming conversations — open session, send messages (SSE), tool outputs, list/get.
+
 | Method | Path | Auth | Write restriction |Description |
 |--------|------|------|-------------------|------------|
 | POST | `/api/chat-sessions` | JWT/Key | — | Create session |
@@ -316,6 +341,8 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 ---
 
 ## Workflows
+
+> **Summary:** Multi-step chat pipelines with inline steps, variable mappings, and dependency enforcement.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|

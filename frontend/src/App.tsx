@@ -3,6 +3,8 @@ import { Select, Group, Center, Loader } from '@mantine/core';
 import AppShellLayout from './layouts/AppShell';
 import type { AppMode } from './layouts/AppShell';
 import AuthLanding from './components/auth/AuthLanding';
+import PendingApproval from './components/auth/PendingApproval';
+import ResetPasswordForm from './components/auth/ResetPasswordForm';
 
 import ProvidersPage from './pages/ProvidersPage';
 import AiProfilesPage from './pages/AiProfilesPage';
@@ -10,6 +12,7 @@ import ProcessingJobsPage from './pages/ProcessingJobsPage';
 import AiMatcherPage from './pages/AiMatcherPage';
 import SettingsPage from './pages/SettingsPage';
 import TeamPage from './pages/TeamPage';
+import UserManagementPage from './pages/UserManagementPage';
 import LovableGuidePage from './pages/LovableGuidePage';
 import WorkflowsPage from './pages/WorkflowsPage';
 import WorkflowEditorPage from './pages/WorkflowEditorPage';
@@ -25,10 +28,14 @@ import {
   signOut,
   getAccessToken,
   getSessionUser,
+  getAccountStatus,
   setWorkspaceId,
   getWorkspaceId,
+  refreshBootstrap,
+  onAccountStatusChange,
 } from './lib/auth-session';
 import type { SessionUser } from './lib/auth-session';
+import { isPasswordRecoveryUrl } from './lib/supabase';
 import { isAdminRole } from './lib/roles';
 import { listWorkspaces } from './services/api';
 import type { WorkspaceMembership } from './types/api';
@@ -50,6 +57,7 @@ const PAGES: Record<string, ComponentType<PageComponentProps>> = {
   'workflow-detail': WorkflowDetailPage,
   'workflow-editor': WorkflowEditorPage,
   team: TeamPage,
+  users: UserManagementPage,
   settings: SettingsPage,
   lovable: LovableGuidePage,
   'hc-dashboard': HealthDashboardPage,
@@ -103,13 +111,15 @@ export default function App() {
   const [navKey, setNavKey] = useState(0);
   const [authReady, setAuthReady] = useState(false);
   const [sessionTick, setSessionTick] = useState(0);
+  const [accountStatusTick, setAccountStatusTick] = useState(0);
+  const [recoveryMode, setRecoveryMode] = useState(() => isPasswordRecoveryUrl());
   const [workspaceOpts, setWorkspaceOpts] = useState<{ value: string; label: string }[]>([]);
   const [workspaceSummaries, setWorkspaceSummaries] = useState<WorkspaceMembership[]>([]);
   const [sessionUserProfile, setSessionUserProfile] = useState<SessionUser | null>(null);
   const [appMode, setAppMode] = useState<AppMode>(initial.mode);
 
   const loadWorkspaceOptions = useCallback(async () => {
-    if (!getAccessToken()) {
+    if (!getAccessToken() || getAccountStatus() !== 'approved') {
       setWorkspaceOpts([]);
       setWorkspaceSummaries([]);
       return;
@@ -139,10 +149,14 @@ export default function App() {
     initAuthSession()
       .then(() => {
         setSessionUserProfile(getSessionUser());
-        return loadWorkspaceOptions();
+        if (getAccountStatus() === 'approved') return loadWorkspaceOptions();
       })
       .finally(() => setAuthReady(true));
   }, [loadWorkspaceOptions]);
+
+  useEffect(() => {
+    return onAccountStatusChange(() => setAccountStatusTick((t) => t + 1));
+  }, []);
 
   const navigate: NavigateFn = useCallback((key, params = {}) => {
     setNavKey((k) => k + 1);
@@ -156,8 +170,27 @@ export default function App() {
     setWorkspaceOpts([]);
     setWorkspaceSummaries([]);
     setSessionUserProfile(null);
+    setRecoveryMode(false);
     setSessionTick((t) => t + 1);
   }, []);
+
+  const handleAuthSuccess = useCallback(async () => {
+    setSessionUserProfile(getSessionUser());
+    if (getAccountStatus() === 'approved') await loadWorkspaceOptions();
+    setSessionTick((t) => t + 1);
+  }, [loadWorkspaceOptions]);
+
+  const handleRefreshApproval = useCallback(async () => {
+    await refreshBootstrap();
+    setSessionUserProfile(getSessionUser());
+    if (getAccountStatus() === 'approved') await loadWorkspaceOptions();
+    setAccountStatusTick((t) => t + 1);
+  }, [loadWorkspaceOptions]);
+
+  const handlePasswordResetComplete = useCallback(async () => {
+    setRecoveryMode(false);
+    await handleAuthSuccess();
+  }, [handleAuthSuccess]);
 
   const currentWorkspaceId = getWorkspaceId();
   const currentWorkspaceRole = workspaceSummaries.find((w) => w.workspace_id === currentWorkspaceId)?.role;
@@ -175,6 +208,9 @@ export default function App() {
   }, []);
 
   const ActiveComponent = PAGES[activePage] || ProvidersPage;
+  const token = getAccessToken();
+  const accountStatus = getAccountStatus();
+  void accountStatusTick;
 
   if (!authReady) {
     return (
@@ -184,8 +220,23 @@ export default function App() {
     );
   }
 
-  if (!getAccessToken()) {
-    return <AuthLanding />;
+  if (recoveryMode && token) {
+    return <ResetPasswordForm onSuccess={handlePasswordResetComplete} />;
+  }
+
+  if (!token) {
+    return <AuthLanding onAuthenticated={handleAuthSuccess} />;
+  }
+
+  if (accountStatus !== 'approved') {
+    return (
+      <PendingApproval
+        status={accountStatus}
+        email={sessionUserProfile?.email ?? getSessionUser()?.email ?? null}
+        onSignOut={handleSignOut}
+        onRefresh={accountStatus === 'pending' ? handleRefreshApproval : undefined}
+      />
+    );
   }
 
   return (

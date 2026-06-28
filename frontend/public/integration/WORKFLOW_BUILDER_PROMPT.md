@@ -2,7 +2,24 @@
 
 > **Audience:** You are a code-generating LLM (Lovable, Cursor, Copilot, etc.). A user has described an AI-powered feature they want. This document tells you how to create the necessary AI Admin infrastructure — profiles, jobs, and workflows — via API calls.
 
+## Table of contents
+
+| Section | When you need it |
+|---------|------------------|
+| [Two-phase flow](#two-phase-flow) | Plan before building |
+| [1. Decomposition algorithm](#1-decomposition-algorithm) | Break user intent into steps |
+| [2. API reference (compact)](#2-api-reference-compact) | Create profiles, jobs, workflows |
+| [3. Variable pipeline rules](#3-variable-pipeline-rules) | inputMappings, outputMappings |
+| [4. Profile selection guide](#4-profile-selection-guide) | Pick or create AI profiles |
+| [5. Naming conventions](#5-naming-conventions) | Slugs and step keys |
+| [6. Confirmation UX](#6-confirmation-ux) | Present plan to user first |
+| [7. Prompt template design](#7-prompt-template-design) | JSON output for pipelines |
+| [8. Example decompositions](#8-example-decompositions) | TAM, interview prep, content |
+| [9. Execution wiring](#9-execution-wiring) | Connect workflow to app |
+
 ## Two-phase flow
+
+> **Summary:** Phase 1 presents a plan; Phase 2 creates infrastructure via API after user confirms.
 
 **Phase 1 — Plan:** Decompose the user's intent into logical steps. Present the plan in plain language. Wait for confirmation before creating anything.
 
@@ -11,6 +28,8 @@
 ---
 
 ## 1. Decomposition algorithm
+
+> **Summary:** Identify goal → break into 2–5 steps → order dependencies → design data flow → choose JSON vs free-form output.
 
 Given a user's intent (e.g. "build a TAM for a new market"):
 
@@ -233,6 +252,8 @@ Adjust the detail level to the user's technical sophistication. Non-technical us
 ---
 
 ## 7. Prompt template design
+
+> **Summary:** Use `{{variable}}` placeholders; instruct JSON output when using `outputMappings`; set `expectedResponseFormat: "json"`.
 
 Each job's `config.promptTemplate` is the actual prompt sent to the LLM, with `{{placeholders}}` replaced by variable values at runtime.
 

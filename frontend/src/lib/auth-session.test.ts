@@ -1,4 +1,8 @@
-vi.mock('./supabase', () => ({ supabase: null }));
+vi.mock('./supabase', () => ({
+  supabase: null,
+  isSupabaseConfigured: () => false,
+  clearAuthHashFromUrl: vi.fn(),
+}));
 vi.mock('./api-url', () => ({ resolveApiUrl: (p: string) => p }));
 
 const STORAGE_KEY_ACCESS = 'aim_access_token';
@@ -74,6 +78,20 @@ describe('auth-session', () => {
     vi.stubEnv('VITE_DEV_API_KEY', 'dev-key-abc');
     const { getAccessToken } = await loadModule();
     expect(getAccessToken()).toBe('dev-key-abc');
+  });
+
+  it('getAccessToken returns null after signOut even when dev key is configured', async () => {
+    vi.stubEnv('VITE_DEV_API_KEY', 'dev-key-abc');
+    const { signOut, getAccessToken } = await loadModule();
+    await signOut();
+    expect(getAccessToken()).toBeNull();
+  });
+
+  it('getAccessToken ignores stale API keys stored as session tokens', async () => {
+    store[STORAGE_KEY_ACCESS] = 'aim_sk_old_deleted_key';
+    const { getAccessToken } = await loadModule();
+    expect(getAccessToken()).toBeNull();
+    expect(store[STORAGE_KEY_ACCESS]).toBeUndefined();
   });
 
   it('setWorkspaceId with null clears the workspace', async () => {

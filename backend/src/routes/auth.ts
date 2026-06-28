@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createUserSupabase } from '../db/tenant.ts';
 import { getServiceSupabase } from '../db/service-supabase.ts';
+import { ensureProfileRow } from '../models/profiles.ts';
+import type { AccountStatus } from '../constants/account-status.ts';
 
 const router = Router();
 
@@ -61,10 +63,24 @@ async function userPayloadForResponse(
   };
 }
 
+function bootstrapResponseForStatus(
+  res: Response,
+  userPayload: { id: string; email: string | null; display_name: string | null },
+  status: AccountStatus,
+) {
+  const approved = status === 'approved';
+  res.json({
+    user: userPayload,
+    status,
+    approved,
+    workspaces: approved ? undefined : [],
+  });
+}
+
 /**
- * Ensures the Supabase user has at least one workspace membership (adds `default` if none).
- * Ensures a `user_settings` row exists with `default_workspace_id`.
+ * Ensures profile + (when approved) workspace membership and user_settings.
  * Call after sign-in. Requires `Authorization: Bearer <supabase_access_token>`.
+ * Pending/suspended users receive status only — no workspace bootstrap.
  */
 router.post('/bootstrap', async (req: Request, res: Response) => {
   try {
@@ -86,6 +102,15 @@ router.post('/bootstrap', async (req: Request, res: Response) => {
 
     const svc = getServiceSupabase();
     const idpName = displayNameFromUser(user);
+    const profile = await ensureProfileRow(user.id, user.email ?? null, idpName);
+
+    const userPayload = await userPayloadForResponse(svc, user, idpName);
+
+    if (profile.status !== 'approved') {
+      bootstrapResponseForStatus(res, userPayload, profile.status);
+      return;
+    }
+
     const { data: memberships, error: mErr } = await svc
       .from('workspace_members')
       .select('workspace_id, role')
@@ -101,9 +126,10 @@ router.post('/bootstrap', async (req: Request, res: Response) => {
       const wsIds = [...new Set(memberships.map((m: { workspace_id: string }) => m.workspace_id))];
       const { data: wss } = await svc.from('workspaces').select('id, slug, name, created_at').in('id', wsIds);
       const byId = Object.fromEntries((wss || []).map((w: { id: string }) => [w.id, w]));
-      const userPayload = await userPayloadForResponse(svc, user, idpName);
       res.json({
         user: userPayload,
+        status: profile.status,
+        approved: true,
         workspaces: memberships.map((m: { workspace_id: string; role: string }) => ({
           ...m,
           workspace: byId[m.workspace_id] || null,
@@ -133,9 +159,10 @@ router.post('/bootstrap', async (req: Request, res: Response) => {
 
     await ensureUserSettingsRow(svc, user.id, defWs.id, idpName);
 
-    const userPayload = await userPayloadForResponse(svc, user, idpName);
     res.json({
       user: userPayload,
+      status: profile.status,
+      approved: true,
       workspaces: [{ workspace_id: defWs.id, role: 'member', workspace: defWs }],
       bootstrapped: true,
     });

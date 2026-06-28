@@ -4,9 +4,27 @@ This document is for teams who use **AI Admin** to configure providers and profi
 
 **Prefer a guided UI?** In AI Admin, use the sidebar link **Connect Lovable** for step-by-step instructions.
 
-**LLM / Lovable reference:** `frontend/public/integration/AI_ADMIN_LOVABLE_INTEGRATION.md` (download from the app or repo) — completion vs streaming, jobs, variables, JSON fields, and Edge Function modes. The TypeScript proxy is `frontend/public/integration/ai-admin-supabase-edge-function.ts`.
+**LLM / Lovable reference:** `/integration/AI_ADMIN_LOVABLE_INTEGRATION.md` (download from the app or repo) — completion vs streaming, jobs, variables, JSON fields, and Edge Function modes. The TypeScript proxy is `/integration/ai-admin-supabase-edge-function.ts`.
+
+## Table of contents
+
+| Section | When you need it |
+|---------|------------------|
+| [1. What to set up in AI Admin first](#1-what-to-set-up-in-ai-admin-first) | Prerequisites before integrating |
+| [2. Security: where the API key may live](#2-security-where-the-api-key-may-live) | Proxy pattern — never expose `aim_sk_` in browser |
+| [3. Base URL and path prefix](#3-base-url-and-path-prefix) | Local vs Vercel URL construction |
+| [4. Authentication headers](#4-authentication-headers) | API key, JWT, `X-Forwarded-User-Id` |
+| [5. Choose an integration pattern](#5-choose-an-integration-pattern) | Completion vs job vs chat vs workflow |
+| [6. CORS](#6-cors) | Why browser must use a proxy |
+| [7. Rate limiting](#7-rate-limiting) | Tier limits and 429 handling |
+| [8. Errors](#8-errors) | HTTP status codes and error shape |
+| [9. What to tell Lovable in one prompt](#9-what-to-tell-lovable-or-any-generator-in-one-prompt) | Copy-paste spec for generators |
+| [10. Common pitfalls](#10-common-pitfalls) | 409, snake_case, rule sets |
+| [11–14. Session, compliance, diagnostics](#11-session-write-restrictions) | Advanced operational topics |
 
 ## 1. What to set up in AI Admin first
+
+> **Summary:** Deploy AI Admin, join a workspace, configure providers/profiles/jobs, and create an API key stored as a secret.
 
 1. **Deploy** the AI Admin stack (or use a shared instance your org runs).
 2. **Workspace** — your user must be a member of the workspace whose data the app will use.
@@ -30,6 +48,8 @@ User-specific credentials (personal API keys, OAuth tokens stored via the in-app
 
 ## 2. Security: where the API key may live
 
+> **Summary:** Never embed `aim_sk_` in client code. Use Supabase Edge Function secrets or another server-side proxy.
+
 - **Browser-only Lovable (or any public frontend):** do **not** embed `aim_sk_…` in client code or `VITE_*` env vars visible to the bundle. Anyone can extract it.
 - **Recommended for Lovable:** deploy the **Supabase Edge Function** from the Connect Lovable guide and store `AI_ADMIN_API_KEY` plus `AI_ADMIN_BASE_URL` in **Supabase → Project Settings → Edge Function secrets**. Lovable calls `supabase.functions.invoke(...)`; the key never ships to the browser.
 - **Other options:** a small server-side proxy (server action, Vercel/Netlify function, Cloudflare Worker, your own API) that holds the key and forwards `Authorization: Bearer …` to AI Admin.
@@ -37,6 +57,8 @@ User-specific credentials (personal API keys, OAuth tokens stored via the in-app
 If the integration is **server-to-server** only (cron, backend worker), the key can live in that server's environment.
 
 ## 3. Base URL and path prefix
+
+> **Summary:** Local dev uses `http://localhost:3001`; Vercel deployments append `/_/backend` to the origin.
 
 | Environment | Typical base for API calls |
 |-------------|----------------------------|
@@ -46,6 +68,8 @@ If the integration is **server-to-server** only (cron, backend worker), the key 
 Endpoints below are expressed as paths after that base, e.g. `POST /api/chat-sessions`.
 
 ## 4. Authentication headers
+
+> **Summary:** API keys for server proxies; JWT + `X-Workspace-Id` for admin UI; `X-Forwarded-User-Id` for per-user context.
 
 All routes under `/api/*` except `/api/health` and `/api/auth/*` require auth.
 
@@ -77,6 +101,8 @@ X-Workspace-Id: <uuid>
 Used by the React admin after Google sign-in. External "product" apps usually use an **API key** via a proxy instead.
 
 ## 5. Choose an integration pattern
+
+> **Summary:** Pick one of: one-shot completion, templated job, streaming chat, workflow, helpers, or MCP credentials.
 
 ### A. One-shot prompt (no job template) — `POST /api/ai-matcher/run-slot`
 
@@ -161,7 +187,7 @@ Parse SSE `data:` lines; provider-specific chunks may appear until a completion 
 
 Calling applications can create and manage workflows entirely via the API — no admin UI required.
 
-> **Intent-to-workflow:** If your calling application uses an LLM (e.g. Lovable, Cursor), it can decompose a user's natural language request into jobs and workflows automatically. See `docs/WORKFLOW_BUILDER_PROMPT.md` for a compact, LLM-optimized reference covering the decomposition algorithm, API shapes, variable pipeline rules, and example patterns.
+> **Intent-to-workflow:** If your calling application uses an LLM (e.g. Lovable, Cursor), it can decompose a user's natural language request into jobs and workflows automatically. See `docs/integration/WORKFLOW_BUILDER_PROMPT.md` for a compact, LLM-optimized reference covering the decomposition algorithm, API shapes, variable pipeline rules, and example patterns.
 
 **1. Create processing jobs** for each step (if they don't already exist):
 

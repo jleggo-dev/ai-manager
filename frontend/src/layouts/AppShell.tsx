@@ -13,6 +13,7 @@ import {
   IconScale,
   IconLogout,
   IconUsers,
+  IconUserShield,
   IconHeartHandshake,
   IconGitMerge,
   IconHeartRateMonitor,
@@ -32,6 +33,7 @@ interface NavItem {
   key: string;
   label: string;
   icon: IconComponent;
+  adminOnly?: boolean;
 }
 
 interface NavSection {
@@ -51,7 +53,8 @@ const ADMIN_NAV_SECTIONS: NavSection[] = [
       { key: 'workflows', label: 'Workflows', icon: IconGitMerge },
       { key: 'ai-matcher', label: 'Matcher', icon: IconScale },
       { key: 'team', label: 'Team', icon: IconUsers },
-      { key: 'lovable', label: 'Connect Lovable', icon: IconHeartHandshake },
+      { key: 'users', label: 'Users', icon: IconUserShield, adminOnly: true },
+      { key: 'lovable', label: 'Vibe-Coding Tools', icon: IconHeartHandshake },
       { key: 'settings', label: 'Settings', icon: IconSettings },
     ],
   },
@@ -75,7 +78,7 @@ const MOBILE_TABS: NavItem[] = [
   { key: 'ai-profiles', label: 'Profiles', icon: IconBrain },
   { key: 'processing-jobs', label: 'Jobs', icon: IconListCheck },
   { key: 'team', label: 'Team', icon: IconUsers },
-  { key: 'lovable', label: 'Lovable', icon: IconHeartHandshake },
+  { key: 'lovable', label: 'Vibe-Coding Tools', icon: IconHeartHandshake },
   { key: 'settings', label: 'Settings', icon: IconSettings },
 ];
 
@@ -248,7 +251,7 @@ export default function AppShellLayout({
             <div key={section.label}>
               {sIdx > 0 && <hr className={styles.sectionDivider} />}
               {expanded && <div className={styles.sectionLabel}>{section.label}</div>}
-              {section.items.map(renderNavItem)}
+              {section.items.filter((item) => !item.adminOnly || isAdmin).map(renderNavItem)}
             </div>
           ))}
         </div>

@@ -4,9 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "sync:docs": "node ../scripts/sync-docs.mjs",
+    "predev": "npm run sync:docs",
     "dev": "vite",
     "build": "vite build",
-    "prebuild": "mkdir -p public/docs && cp ../docs/API.md ../docs/CONCEPTS.md ../docs/INTEGRATION.md ../CHANGELOG.md public/docs/",
+    "prebuild": "npm run sync:docs",
     "vercel:build": "npm run lint && npm run prebuild && npm run build",
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",

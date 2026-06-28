@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.0] - 2026-05-13
 
+### Known Limitations
+- Health check crons run hourly (`0 * * * *`) due to Vercel Hobby plan limits. After upgrading to Pro, change both schedules in `vercel.json` to `* * * * *` for per-minute checks.
+
 ### Added
 - `p_workspace_id` parameter on `merge_workflow_variables`, `hc_daily_run_summary`, and `widget_hc_daily_run_summary` RPCs for tenant isolation (backward compatible — defaults to NULL)
 - `safeClientError()` and `safeStatusError()` utilities for sanitized error responses

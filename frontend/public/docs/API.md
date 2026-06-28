@@ -3,15 +3,36 @@
 > **Source of truth for field-level detail**: `backend/src/schemas/*.ts` (Zod) and `backend/src/models/*.ts`.
 > This document is the human-readable overview. Keep it in sync when routes change.
 
+## Table of contents
+
+| Section | When you need it |
+|---------|------------------|
+| [API Stability Contract](#api-stability-contract) | Versioning and error conventions |
+| [Global Conventions](#global-conventions) | Auth, pagination, rate limits |
+| [Validation Errors](#validation-errors) | Structured 400 response shape |
+| [Health / Auth / Workspaces](#health) | Bootstrap and team management |
+| [API Keys / Providers / AI Profiles](#api-keys) | Core resource CRUD |
+| [Processing Jobs / Groups](#processing-jobs) | Templated prompts and test execution |
+| [Chat Sessions](#chat-sessions) | Streaming SSE, workflows, rule sets |
+| [AI Matcher](#ai-matcher) | One-shot `run-slot` |
+| [Workflows](#workflows) | Multi-step pipelines and variable mappings |
+| [User Data / Health Checks / Widget Checks](#user-data-deletion-gdpr--ccpa) | Compliance and monitoring |
+
 ## API Stability Contract
+
+> **Summary:** SemVer via `X-API-Version` header; tolerant consumers; sanitized errors; structured validation details.
 
 - Every response includes an `X-API-Version` header matching the root `package.json` version (SemVer).
 - New optional fields may be added to responses at any time (minor version bump). Consumers must tolerate unknown keys.
 - Existing response fields are never removed or renamed without a deprecation cycle and major version bump.
 - Error responses always use `{ "error": "..." }`. Error messages are sanitized — they never expose internal database details, constraint names, or stack traces. Branch on HTTP status codes, not error message text.
+- **Validation errors** (HTTP 400) return a structured `details` array alongside the `error` string. See **Validation Errors** section below.
+- Create/update responses may include a `warnings` array of non-blocking advisory strings.
 - See `CHANGELOG.md` for version history and the `manifest.json` at `/docs/manifest.json` for machine-readable discovery.
 
 ## Global Conventions
+
+> **Summary:** Bearer auth (JWT or `aim_sk_`), workspace scoping, forwarded user identity, cursor pagination.
 
 | Item | Detail |
 |------|--------|
@@ -23,13 +44,48 @@
 
 ---
 
+## Validation Errors
+
+> **Summary:** HTTP 400 returns `{ error, details[], warnings[] }` from Zod + semantic validators.
+
+All endpoints validate request bodies with Zod schemas (structural) and semantic validators (referential integrity, cross-field rules). When validation fails, the response uses HTTP 400 with a structured body:
+
+```json
+{
+  "error": "Validation failed",
+  "details": [
+    { "path": "ai_profile_id", "message": "AI profile not found" },
+    { "path": "config.inputVariables.0.name", "message": "Variable name is required" }
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `error` | `string` | Always `"Validation failed"` for validation errors |
+| `details` | `array` | One entry per field that failed validation |
+| `details[].path` | `string` | Dot-path to the offending field (e.g. `"steps.0.depends_on"`) |
+| `details[].message` | `string` | Human-readable description of the issue |
+
+**Semantic validation** (ref checks) runs after Zod parsing. Examples:
+- `ai_profile_id` must reference an existing AI profile within the workspace
+- `processing_job_id` on workflow steps must reference an existing processing job
+- Widget health check URLs are validated for safety (HTTPS, no private IPs)
+- Workflow step `depends_on` values must reference existing step keys with no cycles
+
+**Warnings**: Successful create/update responses may include a `"warnings"` array of non-blocking advisory strings (e.g. `"Multiple steps share sort_order 1"`).
+
+---
+
 ## Health
+
+> **Summary:** Unauthenticated liveness check at `GET /api/health`.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/health` | None | Liveness/readiness check with DB connectivity |
 
-**Response**: `{ status: "ok" | "degraded", version: "1.1.0" }`
+**Response**: `{ status: "ok" | "degraded", version: "1.2.0" }`
 
 ---
 
@@ -174,6 +230,8 @@
 
 ## Chat Sessions
 
+> **Summary:** Stateful streaming conversations — open session, send messages (SSE), tool outputs, list/get.
+
 | Method | Path | Auth | Write restriction |Description |
 |--------|------|------|-------------------|------------|
 | POST | `/api/chat-sessions` | JWT/Key | — | Create session |
@@ -283,6 +341,8 @@
 ---
 
 ## Workflows
+
+> **Summary:** Multi-step chat pipelines with inline steps, variable mappings, and dependency enforcement.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|

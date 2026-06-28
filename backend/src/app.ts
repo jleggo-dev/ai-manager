@@ -22,6 +22,7 @@ import userDataRouter from './routes/user-data.ts';
 import healthChecksRouter from './routes/health-checks.ts';
 import widgetHealthChecksRouter from './routes/widget-health-checks.ts';
 import cronRouter from './routes/cron.ts';
+import adminUsersRouter from './routes/admin-users.ts';
 
 import { healthCheck } from './models/index.ts';
 import { getRateLimits } from './lib/rate-limit-settings.ts';
@@ -139,6 +140,7 @@ app.use(authMiddleware);
 app.use(validateCursorParam);
 
 app.use('/api/workspaces', workspacesRouter);
+app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/api-keys', apiKeysRouter);
 app.use('/api/providers', providersRouter);
 app.use('/api/ai-profiles', aiProfilesRouter);

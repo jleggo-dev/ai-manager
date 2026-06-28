@@ -2,9 +2,26 @@
 
 This document explains the building blocks of AI Admin: what each entity is, how they relate to each other, and how they work together to power AI-driven applications.
 
+## Table of contents
+
+| Section | When you need it |
+|---------|------------------|
+| [How Everything Fits Together](#how-everything-fits-together) | First read — entity hierarchy overview |
+| [Providers](#providers) | Connecting LLM platforms (Devs.ai, Gemini) |
+| [AI Profiles](#ai-profiles) | Choosing model/agent, completion vs chat mode |
+| [Processing Jobs](#processing-jobs) | Prompt templates, config, execution flow |
+| [Build Rules (Formatting Rules)](#build-rules-formatting-rules) | Post-processing LLM output |
+| [Rule Sets](#rule-sets) | Multiple invokable prompts in one job |
+| [Workflows](#workflows) | Multi-step pipelines with variable pipeline |
+| [Choosing the Right Pattern](#choosing-the-right-pattern) | Job vs workflow vs chat decision |
+| [Health Monitoring](#health-monitoring) | API and widget health checks |
+| [Key Relationships](#key-relationships) | Quick reference diagram |
+
 ---
 
 ## How Everything Fits Together
+
+> **Summary:** Workspace-scoped hierarchy from Providers → AI Profiles → Processing Jobs → Workflows. Read this first to understand how entities relate.
 
 ```
 Workspace
@@ -28,6 +45,8 @@ Everything is scoped to a **workspace**. Teams share providers, profiles, and jo
 ---
 
 ## Providers
+
+> **Summary:** LLM platform connections (Devs.ai, Google Gemini) with encrypted API keys and model catalogs.
 
 A **provider** represents an LLM platform that AI Admin connects to.
 
@@ -54,6 +73,8 @@ Provider API keys are encrypted before being stored in the database using AES-25
 ---
 
 ## AI Profiles
+
+> **Summary:** A configured model or agent on a provider — controls completion vs chat, runtime options, failover, and per-user credentials.
 
 An **AI profile** is a configured identity on a provider — it points to a specific model or agent and carries settings that control how it behaves.
 
@@ -107,6 +128,8 @@ When "Requires User Credentials" is enabled, end-users must register their own A
 ---
 
 ## Processing Jobs
+
+> **Summary:** Reusable prompt templates with variables, formatting rules, and optional rule sets — the core unit for one-shot and chat AI calls.
 
 A **processing job** is a reusable AI task. It combines a prompt template with an AI profile and formatting rules, creating a standardized, repeatable operation that applications can call by name.
 
@@ -167,6 +190,8 @@ If diagnostics are enabled, timing data, token usage, and request/response detai
 
 ## Build Rules (Formatting Rules)
 
+> **Summary:** Post-processing steps applied to raw LLM output (trim JSON, extract fields, etc.).
+
 **Build rules** are post-processing transformations applied to the AI's raw output. They clean, extract, or restructure the response into the format your application needs.
 
 ### Available Rule Types
@@ -212,6 +237,8 @@ During SSE chat streaming, only two rules can be applied to content as it arrive
 
 ## Rule Sets
 
+> **Summary:** Named sub-prompts inside a chat-mode job, invoked by `ruleSetKey` — not separate database entities.
+
 **Rule sets** allow a single chat-mode processing job to host multiple structured prompts that a calling application can invoke by name during a conversation. Instead of creating separate jobs for each task, you define rule sets within one job.
 
 ### When to Use Rule Sets
@@ -254,6 +281,8 @@ Rule set invocations, free-form messages, and workflow steps are all mutually ex
 ---
 
 ## Workflows
+
+> **Summary:** Ordered multi-step chat flows linking processing jobs with input/output variable mappings and dependencies.
 
 A **workflow** chains multiple processing jobs into an ordered, multi-step chat flow with dependency management. It's designed for guided processes where each step builds on previous ones.
 
@@ -326,6 +355,8 @@ The workflow's AI profile provides the LLM connection, while each step's linked 
 
 ## Choosing the Right Pattern
 
+> **Summary:** Decision guide — use a single job for one-shot tasks, workflows for multi-step pipelines with data dependencies, chat sessions for interactive streaming.
+
 | Scenario | Use |
 |----------|-----|
 | One-off prompt against a configured model | **AI Profile** via `run-slot` |
@@ -337,6 +368,8 @@ The workflow's AI profile provides the LLM connection, while each step's linked 
 ---
 
 ## Health Monitoring
+
+> **Summary:** API-based and browser-based health checks with profiles, runs, incidents, and uptime dashboards.
 
 AI Admin includes a built-in health monitoring system that continuously verifies your AI providers and embedded chat widgets are operational. It tracks uptime, detects outages, and surfaces failure patterns — all scoped to the workspace like everything else.
 
@@ -516,6 +549,8 @@ This logic lives in a shared `computeHealthStatus()` function used by both API a
 ---
 
 ## Key Relationships
+
+> **Summary:** Quick-reference of how all entities connect within a workspace.
 
 - A **provider** supplies the LLM platform and credentials
 - An **AI profile** points to a specific model/agent on a provider

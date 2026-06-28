@@ -4,6 +4,8 @@ import { createUserSupabase, runWithAuth } from '../db/tenant.ts';
 import { getServiceSupabase } from '../db/service-supabase.ts';
 import { errorMessage } from '../lib/error-message.ts';
 import type { RequestAuthContext, WorkspaceRole } from '../types.ts';
+import { getProfile } from '../models/profiles.ts';
+import { ACCOUNT_STATUS_CODES } from '../constants/account-status.ts';
 
 const API_KEY_PREFIX = 'aim_sk_';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -153,6 +155,28 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     if (userErr || !user) {
       console.warn(`[auth] Invalid JWT from ${req.ip}`);
       res.status(401).json({ error: 'Invalid or expired session' });
+      return;
+    }
+
+    let profileStatus: string;
+    try {
+      const profile = await getProfile(user.id);
+      profileStatus = profile?.status ?? 'pending';
+    } catch (profileErr: unknown) {
+      console.error('[auth] profile lookup failed:', errorMessage(profileErr));
+      res.status(500).json({ error: 'Auth profile check failed' });
+      return;
+    }
+
+    if (profileStatus !== 'approved') {
+      const code =
+        profileStatus === 'suspended' ? ACCOUNT_STATUS_CODES.suspended : ACCOUNT_STATUS_CODES.pending;
+      const message =
+        profileStatus === 'suspended'
+          ? 'Your account has been suspended. Contact an administrator.'
+          : 'Your account is pending approval. An administrator must approve your access.';
+      console.info(`[auth] Blocked JWT user ${user.id} (status=${profileStatus})`);
+      res.status(403).json({ error: message, code });
       return;
     }
 
