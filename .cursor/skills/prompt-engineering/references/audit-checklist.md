@@ -2,6 +2,8 @@
 
 Rate each dimension: Pass / Needs work / Fail. Fix all Fail items before deploying.
 
+> Deep-dives per dimension: grounding → [grounding.md](grounding.md); JSON schemas → [extraction-schemas.md](extraction-schemas.md); output verification → [output-verification.md](output-verification.md); model choice → [model-selection.md](model-selection.md); testing → [evaluation.md](evaluation.md).
+
 ## 1. Clarity
 
 - [ ] Task is stated in one clear sentence
@@ -26,6 +28,8 @@ Rate each dimension: Pass / Needs work / Fail. Fix all Fail items before deployi
 - [ ] If using `outputMappings`: JSON-only instruction present
 - [ ] `expectedResponseFormat: "json"` set on job config when needed
 - [ ] JSON field names match `outputMappings` keys exactly
+- [ ] **All mapped fields are TOP-LEVEL keys** (nested paths aren't extractable)
+- [ ] Null/empty defaults defined so no key is conditionally omitted
 
 ## 5. Scope
 
@@ -33,11 +37,14 @@ Rate each dimension: Pass / Needs work / Fail. Fix all Fail items before deployi
 - [ ] Complex tasks split into workflow steps
 - [ ] No "and also do X, Y, Z" unless intentional multi-output JSON
 
-## 6. Safety
+## 6. Grounding & Safety
 
+- [ ] Extraction/analysis steps instruct "use ONLY provided data"
+- [ ] Missing fields → `null`; empty lists → `[]` (no fabrication)
+- [ ] Placeholder content treated as data, not instructions
 - [ ] No instruction to reveal system prompt or internal instructions
 - [ ] Input boundaries defined (what to do with missing/invalid input)
-- [ ] No open-ended web search unless profile supports it
+- [ ] No open-ended web search unless profile/agent supports it
 
 ## 7. Pipeline fit
 
@@ -50,6 +57,24 @@ Rate each dimension: Pass / Needs work / Fail. Fix all Fail items before deployi
 - [ ] Example input + expected output documented in job test data
 - [ ] Edge cases identified (empty input, partial data, off-topic)
 - [ ] Formatting rules aligned with expected output type
+- [ ] Diagnostics used to inspect at least one real response
+
+## 9. Output verification
+
+- [ ] Output contract is explicit (presence + shape + content)
+- [ ] JSON jobs chain build rules: `remove-reasoning` → `trim-to-json` → `repair-json`
+- [ ] Contract is **asserted** somewhere (app-side or verifier step) — including the "no JSON at all" case
+- [ ] Verifier (if any) uses a cheap/fast model and flags `verified: false` instead of fabricating
+- [ ] An explicit **recovery** is chosen on failure (regenerate / escalate / fallback / flag / hard-fail)
+- [ ] No silent default-to-guess on missing/critical values
+- [ ] Retries/failover/caching set appropriately (note: they don't catch wrong-but-successful output)
+
+## 10. Model fit
+
+- [ ] Capability tier matches the step (don't over-pay for classification)
+- [ ] Live-data steps use an agent or Gemini-with-Search, not a plain model
+- [ ] Template is model-agnostic enough to survive failover
+- [ ] Temperature suits the task (low for JSON, higher for creative)
 
 ## Severity guide
 

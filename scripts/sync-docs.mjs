@@ -32,6 +32,11 @@ const FILE_MAPPINGS = [
   { src: '.cursor/skills/prompt-engineering/SKILL.md', dest: 'frontend/public/skills/prompt-engineering/SKILL.md' },
   { src: '.cursor/skills/prompt-engineering/references/frameworks.md', dest: 'frontend/public/skills/prompt-engineering/references/frameworks.md' },
   { src: '.cursor/skills/prompt-engineering/references/audit-checklist.md', dest: 'frontend/public/skills/prompt-engineering/references/audit-checklist.md' },
+  { src: '.cursor/skills/prompt-engineering/references/grounding.md', dest: 'frontend/public/skills/prompt-engineering/references/grounding.md' },
+  { src: '.cursor/skills/prompt-engineering/references/extraction-schemas.md', dest: 'frontend/public/skills/prompt-engineering/references/extraction-schemas.md' },
+  { src: '.cursor/skills/prompt-engineering/references/output-verification.md', dest: 'frontend/public/skills/prompt-engineering/references/output-verification.md' },
+  { src: '.cursor/skills/prompt-engineering/references/model-selection.md', dest: 'frontend/public/skills/prompt-engineering/references/model-selection.md' },
+  { src: '.cursor/skills/prompt-engineering/references/evaluation.md', dest: 'frontend/public/skills/prompt-engineering/references/evaluation.md' },
 ];
 
 function sha256(path) {
