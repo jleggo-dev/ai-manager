@@ -39,7 +39,7 @@ import {
 import PageHeader from '../components/atoms/PageHeader';
 
 const AI_ADMIN_VERSION = '1.2.0';
-const AI_ADMIN_URL = 'https://ai-admin.vercel.app';
+const AI_ADMIN_URL = 'https://ai-manager-alpha-seven.vercel.app';
 
 // Lovable files
 const HANDBOOK_FILENAME = 'AI_ADMIN_LOVABLE_INTEGRATION.md';

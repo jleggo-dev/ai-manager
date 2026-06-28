@@ -93,9 +93,9 @@ Set in **Project Settings → Edge Functions → Secrets** (wording may vary):
 | Secret | Value |
 |--------|--------|
 | `AI_ADMIN_API_KEY` | Full key from AI Admin → **Settings → API keys** (starts with `aim_sk_`). Shown once. |
-| `AI_ADMIN_BASE_URL` | The Vercel domain of the AI Admin app, e.g. `https://ai-admin-xyz.vercel.app`. Users may paste either the bare domain or the full backend URL — your edge function must handle both (see below). |
+| `AI_ADMIN_BASE_URL` | The Vercel domain of the AI Admin app, e.g. `https://ai-manager-alpha-seven.vercel.app`. Users may paste either the bare domain or the full backend URL — your edge function must handle both (see below). |
 
-> **IMPORTANT — Normalize the base URL in your edge function code.** On Vercel, the backend API lives behind a `/_/backend` route prefix. Users may set `AI_ADMIN_BASE_URL` to the bare domain (e.g. `https://ai-admin.vercel.app`) or the full backend path (`https://ai-admin.vercel.app/_/backend`). Your edge function **must** normalize this so it always works regardless of what the user entered. Use this helper at the top of every edge function that calls AI Admin:
+> **IMPORTANT — Normalize the base URL in your edge function code.** On Vercel, the backend API lives behind a `/_/backend` route prefix. Users may set `AI_ADMIN_BASE_URL` to the bare domain (e.g. `https://ai-manager-alpha-seven.vercel.app`) or the full backend path (`https://ai-manager-alpha-seven.vercel.app/_/backend`). Your edge function **must** normalize this so it always works regardless of what the user entered. Use this helper at the top of every edge function that calls AI Admin:
 
 ```typescript
 const rawBase = Deno.env.get("AI_ADMIN_BASE_URL") ?? "";
