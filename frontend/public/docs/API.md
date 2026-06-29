@@ -212,6 +212,10 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 ### POST .../datasources
 **Body**: `{ rows: Record[] (max 1000), namePrefix?, maxChunkBytes?, callingApplication? }`
 
+### Formatting rules — streaming-safe caveat
+
+During **SSE chat streaming** (`POST /api/chat-sessions/:id/messages`), only two build rules are applied delta-by-delta as content arrives: `remove-reasoning` and `remove-footnote-tags`. All other rules require the complete response and run **post-stream** only (on accumulated content). The client receives streaming-safe output in real time; post-stream rules produce a separate `formatted_response` SSE event and feed workflow `outputMappings`. For non-streaming job execution (`POST .../test`), all rules run once on the full response.
+
 ---
 
 ## Processing Job Groups
@@ -663,6 +667,22 @@ Creates health checks for any profiles that don't have one.
 Executes the health check immediately and records the result.
 **Response**: Run result object with status, latency, response data.
 **Errors**: 400 if profile not found.
+
+### Scheduled runs (Vercel Cron)
+
+On **serverless deploys** (Vercel), the in-process 60-second scheduler is **not** started. Health and widget checks run only when an external cron hits the tick endpoints below. `vercel.json` configures these paths (currently `0 0 * * *` — once daily at 00:00 UTC); increase frequency on Vercel Pro if checks need shorter cadence than daily.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/cron/tick/health` | `Bearer CRON_SECRET` | Run all due API health checks |
+| GET | `/api/cron/tick/widget` | `Bearer CRON_SECRET` | Run all due widget health checks |
+
+**Auth**: Set `CRON_SECRET` in the deployment environment. Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`. All other callers receive `401`.
+
+**Response** (health): `{ ok: true, healthChecks: number, errors: number }`  
+**Response** (widget): `{ ok: true, widgetChecks: number, errors: number }`
+
+**Local dev**: Long-running `npm run dev:backend` starts an in-process scheduler (poll every 60s) instead of requiring cron hits.
 
 ---
 

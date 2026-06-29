@@ -22,6 +22,8 @@ import userDataRouter from './routes/user-data.ts';
 import healthChecksRouter from './routes/health-checks.ts';
 import widgetHealthChecksRouter from './routes/widget-health-checks.ts';
 import cronRouter from './routes/cron.ts';
+import triggersRouter from './routes/triggers.ts';
+import syncRouter from './routes/sync.ts';
 import adminUsersRouter from './routes/admin-users.ts';
 
 import { healthCheck } from './models/index.ts';
@@ -156,6 +158,8 @@ app.use('/api/workflows', workflowsRouter);
 app.use('/api/user-data', userDataRouter);
 app.use('/api/health-checks', healthChecksRouter);
 app.use('/api/widget-health-checks', widgetHealthChecksRouter);
+app.use('/api/triggers', triggersRouter);
+app.use('/api/sync', syncRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[unhandled]', err);

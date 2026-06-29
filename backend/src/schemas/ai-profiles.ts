@@ -2,6 +2,13 @@ import { z } from 'zod';
 
 export const createAiProfileSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
+  slug: z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens')
+    .optional()
+    .nullable(),
   provider_id: z.string().uuid('Must be a valid provider ID'),
   external_ai_id: z.string().min(1, 'External AI ID is required').max(200),
   description: z.string().max(50_000).optional().nullable(),
@@ -9,6 +16,7 @@ export const createAiProfileSchema = z.object({
   profile_type: z.enum(['agent', 'model']).optional(),
   mode: z.enum(['completion', 'chat']).optional(),
   runtime_options: z.record(z.string(), z.unknown()).optional().nullable(),
+  config: z.record(z.string(), z.unknown()).optional().nullable(),
   failover_provider_id: z.string().uuid().optional().nullable(),
   failover_external_ai_id: z.string().max(200).optional().nullable(),
   failover_runtime_options: z.record(z.string(), z.unknown()).optional().nullable(),

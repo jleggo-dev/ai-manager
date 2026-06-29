@@ -279,6 +279,101 @@ describe('trim-to-json with expectedKeys', () => {
   });
 });
 
+/* ── Assertion rules (require-keys, assert-json-schema, coerce-types, constrain-enum) ── */
+
+describe('require-keys', () => {
+  it('passes when all keys present', () => {
+    const result = runRule('require-keys', '{"a":1,"b":"x"}', { keys: ['a', 'b'] });
+    expect(JSON.parse(result)).toEqual({ a: 1, b: 'x' });
+  });
+
+  it('fails with verified:false when key missing', () => {
+    const result = runRule('require-keys', '{"a":1}', { keys: ['a', 'b'] });
+    const parsed = JSON.parse(result);
+    expect(parsed.verified).toBe(false);
+    expect(parsed.reason).toBe('missing_keys');
+  });
+
+  it('fails with not_json for prose', () => {
+    const result = runRule('require-keys', 'Sorry, I cannot help.', { keys: ['a'] });
+    const parsed = JSON.parse(result);
+    expect(parsed.verified).toBe(false);
+    expect(parsed.reason).toBe('not_json');
+  });
+});
+
+describe('assert-json-schema', () => {
+  it('passes valid schema', () => {
+    const result = runRule('assert-json-schema', '{"score": 5, "status": "ok"}', {
+      schema: { score: 'number', status: { type: 'string', enum: ['ok', 'fail'] } },
+    });
+    expect(JSON.parse(result)).toEqual({ score: 5, status: 'ok' });
+  });
+
+  it('fails type_mismatch', () => {
+    const result = runRule('assert-json-schema', '{"score": "five"}', { schema: { score: 'number' } });
+    const parsed = JSON.parse(result);
+    expect(parsed.verified).toBe(false);
+    expect(parsed.reason).toBe('type_mismatch');
+  });
+});
+
+describe('coerce-types', () => {
+  it('coerces string to number', () => {
+    const result = runRule('coerce-types', '{"score": "42"}', { fields: { score: 'number' } });
+    expect(JSON.parse(result)).toEqual({ score: 42 });
+  });
+
+  it('fails on invalid number', () => {
+    const result = runRule('coerce-types', '{"score": "not-a-number"}', { fields: { score: 'number' } });
+    const parsed = JSON.parse(result);
+    expect(parsed.verified).toBe(false);
+    expect(parsed.reason).toBe('type_mismatch');
+  });
+});
+
+describe('constrain-enum', () => {
+  it('passes allowed value', () => {
+    const result = runRule('constrain-enum', '{"status": "active"}', {
+      field: 'status',
+      allowed: ['active', 'closed'],
+    });
+    expect(JSON.parse(result)).toEqual({ status: 'active' });
+  });
+
+  it('fails enum_violation', () => {
+    const result = runRule('constrain-enum', '{"status": "unknown"}', {
+      field: 'status',
+      allowed: ['active', 'closed'],
+    });
+    const parsed = JSON.parse(result);
+    expect(parsed.verified).toBe(false);
+    expect(parsed.reason).toBe('enum_violation');
+  });
+});
+
+describe('assertion rule chain', () => {
+  it('trim-to-json + require-keys passes valid output', () => {
+    const input = 'Here:\n```json\n{"name":"test","value":1}\n```';
+    const result = applyFormattingRules(input, [
+      { type: 'trim-to-json', order: 0 },
+      { type: 'require-keys', order: 1, options: { keys: ['name', 'value'] } },
+    ]);
+    expect(JSON.parse(result.formatted)).toEqual({ name: 'test', value: 1 });
+  });
+
+  it('trim-to-json + require-keys fails when model returns no JSON', () => {
+    const input = 'I refuse to output JSON.';
+    const result = applyFormattingRules(input, [
+      { type: 'trim-to-json', order: 0 },
+      { type: 'require-keys', order: 1, options: { keys: ['name'] } },
+    ]);
+    const parsed = JSON.parse(result.formatted);
+    expect(parsed.verified).toBe(false);
+    expect(parsed.reason).toBe('not_json');
+  });
+});
+
 /* ── listAvailableRules ──────────────────────────────────────── */
 
 describe('listAvailableRules', () => {

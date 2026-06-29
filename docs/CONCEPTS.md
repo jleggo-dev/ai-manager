@@ -317,12 +317,12 @@ Workflows support an automatic variable pipeline that threads data between steps
 
 1. **Workflow Input Variables** — declared in the workflow's `config.inputVariables`. These are the variables the calling application supplies when starting the workflow.
 2. **Input Mappings** — each step can map workflow-level variable names to the job's expected variable names via `config.inputMappings`. Before interpolation, the accumulated variables are translated through these mappings.
-3. **Output Mappings** — each step can extract fields from the LLM's JSON response and save them as workflow-level variables via `config.outputMappings`. AI Admin attempts to parse the response as JSON and maps matching top-level keys. The merge is atomic (Postgres `jsonb ||`) so concurrent steps cannot overwrite each other's outputs.
+3. **Output Mappings** — each step can extract fields from the LLM's JSON response and save them as workflow-level variables via `config.outputMappings`. AI Admin parses the response as JSON and maps keys using dot/bracket paths (e.g. `"analysis.score": "lead_score"`, `"items[0].title": "first_item"`) or simple top-level keys. The merge is atomic (Postgres `jsonb ||`) so concurrent steps cannot overwrite each other's outputs.
 4. **Accumulated Variables** — stored in `chat_sessions.workflow_variables` (JSONB), this accumulator grows after each step. Later steps can consume variables produced by earlier steps.
 
 This allows independent processing jobs (which may use different variable names) to be connected together in a workflow without modification.
 
-> **Current limitation:** Output extraction reads only **top-level keys** from the LLM's JSON response. Nested paths (e.g. `options[0].title`) are not supported — the entire nested value is captured as-is under the mapped variable name. If you need individual nested fields, structure your prompt to return them as flat top-level keys.
+> **Path syntax:** Top-level keys work as before (`"score": "lead_score"`). Nested extraction uses dot/bracket paths in the mapping key — the resolved value (which may be nested) is stored whole under the workflow variable name.
 
 ### How Dependencies Work
 
@@ -448,7 +448,9 @@ A **health check** is a scheduled API-based monitor. It periodically sends a tes
 
 #### Scheduling
 
-A background scheduler determines which checks are due by comparing `last_run_at` against the applicable cadence. During an active incident, the outage cadence is used instead, enabling more frequent probing while the provider is down.
+**Local / long-running server:** An in-process scheduler polls every 60 seconds, compares `last_run_at` against each check's cadence, and runs due checks. During an active incident, the outage cadence is used instead, enabling more frequent probing while the provider is down.
+
+**Serverless (Vercel):** The in-process scheduler is disabled. Due checks run only when an external cron hits `GET /api/cron/tick/health` or `GET /api/cron/tick/widget` with `Authorization: Bearer CRON_SECRET`. See [API.md — Scheduled runs](API.md#scheduled-runs-vercel-cron). Manual runs remain available via `POST /api/health-checks/:id/run`.
 
 ---
 

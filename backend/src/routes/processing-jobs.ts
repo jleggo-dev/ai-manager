@@ -18,6 +18,9 @@ import {
 } from '../models/processing-jobs.ts';
 import { executeJobById, uploadApiDataSourcesChunked } from '../ai-manager/index.ts';
 import { listAvailableRules, applyFormattingRules } from '../services/formatting-rules.ts';
+import { runJobEval } from '../services/job-eval.ts';
+import { getIdempotencyRecord, storeIdempotencyRecord } from '../services/idempotency.ts';
+import crypto from 'node:crypto';
 import { resolveCallingApplication } from '../models/calling-applications.ts';
 import { getAuthContext } from '../db/tenant.ts';
 import { stripSecrets } from '../lib/sanitize.ts';
@@ -205,6 +208,12 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
 router.post('/:id/test', validateBody(executeJobSchema), async (req: Request, res: Response) => {
   try {
+    const idempotencyKey = req.headers['idempotency-key'] as string | undefined;
+    if (idempotencyKey) {
+      const cached = await getIdempotencyRecord(idempotencyKey);
+      if (cached) return res.status(cached.status_code).json(cached.response_body);
+    }
+
     const { variables = {}, promptOverride, callingApplication, attachments } = req.body;
 
     const ctx = getAuthContext();
@@ -229,7 +238,7 @@ router.post('/:id/test', validateBody(executeJobSchema), async (req: Request, re
       attachments: attachments || [],
     });
 
-    return res.json({
+    const responseBody = {
       messageSent: result.messageSent,
       raw: result.raw,
       formatted: result.formatted,
@@ -239,10 +248,46 @@ router.post('/:id/test', validateBody(executeJobSchema), async (req: Request, re
       usage: result.metadata.usage,
       finishReason: result.metadata.finishReason,
       diagnostics: result.diagnostics || null,
-    });
+    };
+
+    if (idempotencyKey) {
+      await storeIdempotencyRecord(
+        idempotencyKey,
+        `/api/processing-jobs/${req.params.id}/test`,
+        responseBody,
+        200,
+        crypto.createHash('sha256').update(JSON.stringify(req.body)).digest('hex'),
+      );
+    }
+
+    return res.json(responseBody);
   } catch (err) {
     console.error('[POST /processing-jobs/:id/test]', err);
     return res.status(500).json({ error: 'Processing job test failed' });
+  }
+});
+
+/* ================================================================
+   POST /api/processing-jobs/:id/eval
+   Run golden test cases from config.testData / config.evalCases.
+   Returns pass/fail per case — wireable into CI.
+   ================================================================ */
+
+router.post('/:id/eval', async (req: Request, res: Response) => {
+  try {
+    const job = await getProcessingJob(req.params.id as string);
+    if (!job) return res.status(404).json({ error: 'Processing job not found' });
+
+    const ctx = getAuthContext();
+    const callingApplication =
+      (req.body?.callingApplication as string) || (ctx?.mode === 'jwt' ? 'ai-admin-eval' : 'ai-admin-eval');
+
+    const evalResult = await runJobEval(job, callingApplication);
+    const status = evalResult.failed > 0 ? 422 : 200;
+    return res.status(status).json(evalResult);
+  } catch (err) {
+    console.error('[POST /processing-jobs/:id/eval]', err);
+    return res.status(500).json({ error: 'Job eval failed' });
   }
 });
 

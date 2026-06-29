@@ -68,5 +68,18 @@ describe('Diagnostic Logs', () => {
     expect(res.body.totals).toHaveProperty('totalTokens');
     expect(res.body).toHaveProperty('byJob');
     expect(res.body).toHaveProperty('byModel');
+    expect(res.body).toHaveProperty('byUser');
+    expect(typeof res.body.byUser).toBe('object');
+  });
+
+  it('GET /api/diagnostic-logs/token-stats filters by userId', async () => {
+    const fakeUserId = '00000000-0000-4000-8000-000000000099';
+    const res = await request(app)
+      .get(`/api/diagnostic-logs/token-stats?userId=${fakeUserId}`)
+      .set(authHeaders());
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('byUser');
+    /* Empty sample when no logs for this user */
+    expect(res.body.sampleSize).toBeGreaterThanOrEqual(0);
   });
 });

@@ -13,6 +13,8 @@ import {
   submitChatToolOutputs,
   recordAssistantMessage,
   extractAndAccumulateOutputs,
+  fulfillPendingToolJobCalls,
+  getToolJobsFromProfile,
   getChatHistory,
   closeChatSession,
   resetChatSession,
@@ -36,6 +38,7 @@ import { applyFormattingRules } from '../services/formatting-rules.ts';
 import { getAuthContext } from '../db/tenant.ts';
 import { stripSecrets } from '../lib/sanitize.ts';
 import { errorMessage } from '../lib/error-message.ts';
+import { rootKeyFromPath } from '../lib/json-path.ts';
 import { safeClientError } from '../lib/safe-error.ts';
 import type { PatchedResponse } from '../types.ts';
 import { validateBody } from '../middleware/validate.ts';
@@ -45,8 +48,10 @@ import {
   sendMessageSchema,
   toolOutputsSchema,
 } from '../schemas/chat-sessions.ts';
+import { fireInternalTriggers } from '../services/internal-triggers.ts';
 import { parsePagination, buildPaginatedResponse } from '../lib/pagination.ts';
 import type { ChatSessionRow, FormattingRule } from '../types.ts';
+import type { PendingToolCall } from '../services/tool-jobs.ts';
 
 const MAX_SSE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -301,6 +306,14 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
     let promptTokens: number | null = null;
     let completionTokens: number | null = null;
     let streamModel: string | null = null;
+    const chatSessionRow = await dbGetChatSession(req.params.id as string);
+    if (!chatSessionRow) {
+      clearTimeout(sseTimeout);
+      return res.status(404).json({ error: 'Chat session not found' });
+    }
+    const internalToolNames = new Set(getToolJobsFromProfile(chatSessionRow.ai_profile).map((t) => t.exposeAs));
+    const pendingInternalToolCalls: PendingToolCall[] = [];
+    let pendingSystemMessageId: string | undefined;
 
     const body = sseResponse.body as ReadableStream<Uint8Array> | null;
     if (!body) {
@@ -402,8 +415,20 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
             }
 
             /* Forward tool.call events so calling apps can handle
-               OAuth prompts, user input requests, and MCP interactions. */
+               OAuth prompts, user input requests, and MCP interactions.
+               Internal tool-jobs are queued for server-side fulfillment. */
             if (parsed.type === 'tool.call' || parsed.type === 'tool_calls') {
+              const toolName = parsed.name as string | undefined;
+              const toolCallId = parsed.toolCallId as string | undefined;
+              if (toolName && toolCallId && internalToolNames.has(toolName)) {
+                pendingInternalToolCalls.push({
+                  toolCallId,
+                  name: toolName,
+                  arguments: parsed.arguments,
+                  systemMessageId: parsed.systemMessageId as string | undefined,
+                });
+                if (parsed.systemMessageId) pendingSystemMessageId = parsed.systemMessageId as string;
+              }
               continue;
             }
 
@@ -451,7 +476,7 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
     if (hasPostStreamRules) {
       let postStreamRules = [...allRules];
       if (stepOutputMappings && expectedResponseFormat === 'json') {
-        const expectedKeys = Object.keys(stepOutputMappings);
+        const expectedKeys = [...new Set(Object.keys(stepOutputMappings).map(rootKeyFromPath))];
         postStreamRules = postStreamRules.map((r) =>
           r.type === 'trim-to-json' ? { ...r, options: { ...(r.options || {}), expectedKeys } } : r,
         );
@@ -471,6 +496,36 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
 
     if (formattedContent) {
       res.write(`data: ${JSON.stringify({ type: 'formatted_response', content: formattedContent })}\n\n`);
+    }
+
+    /* Fulfill internal tool-job calls before closing the stream */
+    if (pendingInternalToolCalls.length > 0) {
+      try {
+        const outputs = await fulfillPendingToolJobCalls(
+          pendingInternalToolCalls,
+          chatSessionRow.ai_profile,
+          chatSessionRow.calling_application || 'unknown',
+        );
+        if (outputs.length > 0) {
+          const toolStream = await submitChatToolOutputs(
+            sessionId,
+            pendingSystemMessageId || '',
+            outputs,
+          );
+          const toolBody = toolStream.response.body as ReadableStream<Uint8Array> | null;
+          if (toolBody) {
+            const toolReader = toolBody.getReader();
+            while (true) {
+              const { value, done } = await toolReader.read();
+              if (done) break;
+              res.write(decoder.decode(value, { stream: true }));
+            }
+          }
+        }
+      } catch (toolErr) {
+        console.error('[chat-sessions] Internal tool-job fulfillment failed:', errorMessage(toolErr));
+        res.write(`data: ${JSON.stringify({ type: 'error', error: errorMessage(toolErr) })}\n\n`);
+      }
     }
 
     res.write('data: [DONE]\n\n');
@@ -502,10 +557,22 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
               [`${resolvedStepKey}.prompt`]: resolvedMessage,
               [`${resolvedStepKey}.response`]: contentForWorkflow,
             });
+            await fireInternalTriggers('workflow.step.completed', {
+              sessionId,
+              stepKey: resolvedStepKey,
+              callingApplication: chatSessionRow.calling_application,
+              userId: chatSessionRow.user_id,
+            });
           } catch (autoErr) {
             console.warn('[chat-sessions] Non-blocking auto-capture failed:', errorMessage(autoErr));
           }
         }
+
+        await fireInternalTriggers('session.message.created', {
+          sessionId,
+          callingApplication: chatSessionRow.calling_application,
+          userId: chatSessionRow.user_id,
+        });
       } catch (err) {
         console.warn('[chat-sessions] Failed to record assistant message:', errorMessage(err));
       }

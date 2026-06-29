@@ -84,6 +84,18 @@ export async function getAiProfileWithKeys(id: string): Promise<AiProfileRow> {
   return row;
 }
 
+/** Get a single AI profile by slug (config-as-code upsert key). */
+export async function getAiProfileBySlug(slug: string): Promise<AiProfileRow | null> {
+  const { data: row, error } = await tenantFrom(TABLE)
+    .select(
+      '*, provider:providers!ai_profiles_provider_id_fkey(id, name, type, base_url), failover_provider:providers!ai_profiles_failover_provider_id_fkey(id, name, type, base_url)',
+    )
+    .eq('slug', slug)
+    .maybeSingle();
+  if (error) throw new Error(`AI Profile slug lookup error: ${error.message}`);
+  return row;
+}
+
 /** Delete an AI profile by id. */
 export async function deleteAiProfile(id: string): Promise<void> {
   const { error } = await tenantFrom(TABLE).delete().eq('id', id);

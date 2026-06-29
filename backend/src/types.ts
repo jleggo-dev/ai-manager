@@ -133,6 +133,7 @@ export interface ProviderRow {
 export interface AiProfileRow {
   id: string;
   name: string;
+  slug?: string | null;
   provider_id: string;
   external_ai_id: string;
   description?: string | null;
@@ -141,6 +142,7 @@ export interface AiProfileRow {
   profile_type?: string;
   mode?: string;
   runtime_options?: Record<string, unknown> | null;
+  config?: Record<string, unknown> | null;
   requires_user_credentials?: boolean;
   failover_provider_id?: string | null;
   failover_external_ai_id?: string | null;
@@ -183,6 +185,8 @@ export interface ChatSessionRow {
   total_prompt_tokens?: number;
   total_completion_tokens?: number;
   workflow_variables?: Record<string, unknown>;
+  config?: Record<string, unknown> | null;
+  session_summary?: string | null;
   uses_user_credentials?: boolean;
   processing_message_id?: string | null;
   processing_started_at?: string | null;
@@ -528,4 +532,19 @@ export interface WidgetHealthCheckIncidentRow {
   failed_run_count: number;
   last_error: string | null;
   created_at: string;
+}
+
+export interface TriggerRow {
+  id: string;
+  workspace_id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  trigger_type: 'external_clock' | 'session.message.created' | 'workflow.step.completed';
+  target_type: 'job' | 'workflow';
+  target_slug: string;
+  config?: Record<string, unknown> | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
 }

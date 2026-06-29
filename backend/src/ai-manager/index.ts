@@ -34,6 +34,21 @@ import { getSetting } from '../models/app-settings.ts';
 import { getAuthContext, effectiveUserId, requireWorkspaceId, tenantFrom } from '../db/tenant.ts';
 import { getServiceSupabase } from '../db/service-supabase.ts';
 import { resolveAttachments, resolveAttachmentsAsText } from '../services/attachment-resolver.ts';
+import { resolveJsonPath } from '../lib/json-path.ts';
+import {
+  buildToolDefinitions,
+  buildToolNameMap,
+  getToolJobsFromProfile,
+  parseToolArguments,
+  type PendingToolCall,
+  type ToolJobBinding,
+} from '../services/tool-jobs.ts';
+import {
+  maybeCompactSession,
+  buildCompactedHistory,
+  estimateSessionTokens,
+  getSummarizerConfig,
+} from '../services/session-compaction.ts';
 import {
   createChatSession as dbCreateSession,
   getChatSession as dbGetSession,
@@ -988,6 +1003,10 @@ export async function sendChatMessage(
     rule_set_key: ruleSetKey,
   });
 
+  /* Session compaction: summarize older turns when over token threshold */
+  await maybeCompactSession(session, session.calling_application || 'unknown');
+  const refreshedSession = (await dbGetSession(sessionId)) || session;
+
   let sseResponse: globalThis.Response;
   if (diagnosticSession) diagnosticSession.startLlmTimer();
 
@@ -1005,7 +1024,10 @@ export async function sendChatMessage(
       prompt = textContent;
     }
 
-    sseResponse = await (client as DevsAiClient).messageChatSession(session.external_chat_id, prompt, { timeoutMs });
+    sseResponse = await (client as DevsAiClient).messageChatSession(session.external_chat_id, prompt, {
+      timeoutMs,
+      tools: await resolveProfileToolDefinitions(session.ai_profile),
+    });
   } else if (typeof client.chatCompletionStream === 'function') {
     let enrichedContent = resolvedMessage;
     if (attachments.length > 0) {
@@ -1015,8 +1037,13 @@ export async function sendChatMessage(
         enrichedContent = `${fileBlock}\n\n---\n\n${enrichedContent}`;
       }
     }
-    const history = await listChatMessages(sessionId);
-    const chatMessages: ChatMessage[] = history.map((m) => ({
+    const historyRaw = await listChatMessages(sessionId);
+    const historyMessages = buildCompactedHistory(
+      refreshedSession,
+      historyRaw,
+      getSummarizerConfig(refreshedSession),
+    );
+    const chatMessages: ChatMessage[] = historyMessages.map((m) => ({
       role: m.role as 'system' | 'user' | 'assistant',
       content: m.content,
     }));
@@ -1491,8 +1518,9 @@ export async function extractAndAccumulateOutputs(
 
   const newVars: Record<string, unknown> = {};
   for (const [outputField, workflowVar] of Object.entries(outputMappings)) {
-    if (parsed[outputField] !== undefined) {
-      newVars[workflowVar] = parsed[outputField];
+    const value = resolveJsonPath(parsed, outputField);
+    if (value !== undefined) {
+      newVars[workflowVar] = value;
     }
   }
 
@@ -1514,6 +1542,59 @@ export async function extractAndAccumulateOutputs(
     return newVars;
   }
 }
+
+/** Resolve Devs.ai tool definitions from profile.config.toolJobs. */
+async function resolveProfileToolDefinitions(
+  profile: AiProfileRow | null | undefined,
+): Promise<unknown[] | undefined> {
+  const toolJobs = getToolJobsFromProfile(profile);
+  if (toolJobs.length === 0) return undefined;
+  const defs = await buildToolDefinitions(toolJobs);
+  return defs.length > 0 ? defs : undefined;
+}
+
+/**
+ * Fulfill pending internal tool-job calls by running linked processing jobs.
+ * Returns outputs ready for submitChatToolOutputs.
+ */
+export async function fulfillPendingToolJobCalls(
+  pending: PendingToolCall[],
+  profile: AiProfileRow | null | undefined,
+  callingApplication: string,
+): Promise<Array<{ toolCallId: string; output: string }>> {
+  const toolJobs = getToolJobsFromProfile(profile);
+  const nameMap = buildToolNameMap(toolJobs);
+  const outputs: Array<{ toolCallId: string; output: string }> = [];
+
+  for (const call of pending) {
+    const binding = nameMap.get(call.name);
+    if (!binding) continue;
+
+    try {
+      const job = await getProcessingJobBySlug(binding.jobSlug);
+      if (!job) throw new Error(`Tool job "${binding.jobSlug}" not found`);
+      const args = parseToolArguments(call.arguments);
+      const result = await executeJobById(job.id, { callingApplication, variables: args });
+      outputs.push({
+        toolCallId: call.toolCallId,
+        output: result.formatted || result.raw || JSON.stringify({ ok: true }),
+      });
+      console.info('[ai-manager] fulfilled internal tool job', {
+        exposeAs: call.name,
+        jobSlug: binding.jobSlug,
+      });
+    } catch (err) {
+      outputs.push({
+        toolCallId: call.toolCallId,
+        output: JSON.stringify({ error: errorMessage(err), verified: false }),
+      });
+    }
+  }
+
+  return outputs;
+}
+
+export { getToolJobsFromProfile, buildToolNameMap, type PendingToolCall, type ToolJobBinding };
 
 const MAX_VARIABLE_LENGTH = 10_000;
 

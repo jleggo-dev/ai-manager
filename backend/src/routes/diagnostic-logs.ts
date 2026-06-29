@@ -52,6 +52,7 @@ router.get('/token-stats', async (req: Request, res: Response) => {
     const filters = {
       processingJobId: (req.query.processingJobId as string) || null,
       callingApplication: (req.query.callingApplication as string) || null,
+      userId: (req.query.userId as string) || null,
       limit: Math.min(Math.max(parseInt(req.query.limit as string, 10) || 1000, 1), 5000),
     };
     const stats = await getDiagTokenUsageStats(filters);

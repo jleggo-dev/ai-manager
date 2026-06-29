@@ -1,0 +1,8 @@
+{
+  "name": "@ai-admin/edge",
+  "version": "1.3.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "description": "Reference Supabase Edge Function proxy for AI Admin"
+}

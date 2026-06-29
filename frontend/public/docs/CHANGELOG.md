@@ -5,6 +5,24 @@ All notable changes to AI Admin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-06-29
+
+### Added
+- **Deterministic assertion build rules** — `require-keys`, `assert-json-schema`, `coerce-types`, `constrain-enum` emit `{ verified: false, reason: ... }` on contract failure.
+- **Nested outputMappings** — dot/bracket paths (e.g. `"analysis.score"`, `"items[0].title"`) in workflow step output extraction.
+- **Jobs-as-tools** — `ai_profiles.config.toolJobs[]` exposes processing jobs as Devs.ai callable tools; AI Admin fulfills matching `tool.call` events server-side.
+- **Triggers** — `POST /api/triggers/:slug/run` (external-clock), internal event triggers on `session.message.created` / `workflow.step.completed`, CRUD at `/api/triggers`.
+- **Session compaction** — `chat_sessions.config.summarizer` runs a summarizer job when token threshold exceeded; `session_summary` prepended on subsequent calls.
+- **Job eval** — `POST /api/processing-jobs/:id/eval` runs golden test cases; CLI `backend/scripts/eval-job.mjs`.
+- **Idempotency-Key** — safe retries on `POST .../test` via `idempotency_keys` table.
+- **Per-user token stats** — `byUser` bucket and `userId` filter on `GET /api/diagnostic-logs/token-stats`; soft budget warnings via `app_settings.token_budgets`.
+- **Config-as-code** — `POST /api/sync` idempotent upsert-by-slug; CLI `backend/scripts/ai-admin-sync.mjs`; AI profile slugs.
+- **SDK packages** — `@ai-admin/types`, `@ai-admin/client`, `@ai-admin/edge` in `packages/`.
+
+### Changed
+- Health check crons in `vercel.json` set to hourly (`0 * * * *`).
+- Docs: streaming-safe build rules caveat and Vercel cron endpoints documented in `API.md`; scheduler behavior clarified in `CONCEPTS.md`.
+
 ## [1.3.0] - 2026-06-28
 
 ### Added
@@ -22,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.0] - 2026-05-13
 
 ### Known Limitations
-- Health check crons run hourly (`0 * * * *`) due to Vercel Hobby plan limits. After upgrading to Pro, change both schedules in `vercel.json` to `* * * * *` for per-minute checks.
+- Health check crons are configured in `vercel.json` at `0 0 * * *` (once daily at 00:00 UTC). On Vercel Hobby, cron frequency is limited; after upgrading to Pro, increase cadence (e.g. `0 * * * *` hourly or `*/5 * * * *` every 5 minutes) to match check `cadence_minutes`. Until then, use `POST /api/health-checks/:id/run` for manual runs or rely on the daily tick.
 
 ### Added
 - `p_workspace_id` parameter on `merge_workflow_variables`, `hc_daily_run_summary`, and `widget_hc_daily_run_summary` RPCs for tenant isolation (backward compatible — defaults to NULL)
