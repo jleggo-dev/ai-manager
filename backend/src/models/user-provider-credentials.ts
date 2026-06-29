@@ -12,6 +12,7 @@
 import type { ProviderRow, UserProviderCredentialRow } from '../types.ts';
 import { tenantFrom, tenantInsertPayload, getAuthContext, effectiveUserId } from '../db/tenant.ts';
 import { encryptSecret, decryptSecret } from '../lib/crypto.ts';
+import { decryptProviderRow } from './providers.ts';
 
 const TABLE = 'user_provider_credentials';
 
@@ -77,7 +78,8 @@ export async function resolveApiKeyForUser(
   userId: string | null | undefined,
   provider: ProviderRow | null | undefined,
 ): Promise<string | null | undefined> {
-  if (!userId || !provider?.id) return provider?.api_key;
+  const providerKey = provider ? decryptProviderRow(provider)?.api_key : undefined;
+  if (!userId || !provider?.id) return providerKey;
   const cred = await getUserCredential(userId, provider.id);
-  return (cred?.api_key as string | null) || provider.api_key;
+  return (cred?.api_key as string | null) || providerKey;
 }

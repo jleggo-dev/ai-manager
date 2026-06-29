@@ -166,7 +166,7 @@ export default function ProviderManager() {
               </Group>
             </Group>
             <Text size="xs" c="dimmed" mt={4}>
-              {p.base_url} — Key: {p.api_key ? `${p.api_key.slice(0, 4)}...` : 'Not set'}
+              {p.base_url} — Key: {p.has_api_key ? 'Configured' : 'Not set'}
             </Text>
           </Card>
         ))

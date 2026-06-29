@@ -30,7 +30,7 @@ const mockProviders = [
     name: 'Devs.ai Corporate',
     type: 'devs-ai',
     base_url: 'https://devs.ai',
-    api_key: 'sk-test1234abcd',
+    has_api_key: true,
     is_active: true,
     workspace_id: 'ws-1',
     created_at: '2024-01-01T00:00:00Z',
@@ -42,7 +42,7 @@ const mockProviders = [
     name: 'Google Gemini',
     type: 'google-gemini',
     base_url: 'https://generativelanguage.googleapis.com',
-    api_key: 'AIza-secret-key',
+    has_api_key: false,
     is_active: false,
     workspace_id: 'ws-1',
     created_at: '2024-02-01T00:00:00Z',
@@ -117,14 +117,14 @@ describe('ProviderManager', () => {
     });
   });
 
-  it('shows masked API key (not raw)', async () => {
+  it('shows API key status without exposing raw keys', async () => {
     renderComponent();
     await waitFor(() => {
-      expect(screen.getByText(/Key: sk-t\.\.\./)).toBeInTheDocument();
-      expect(screen.getByText(/Key: AIza\.\.\./)).toBeInTheDocument();
+      expect(screen.getByText(/Key: Configured/)).toBeInTheDocument();
+      expect(screen.getByText(/Key: Not set/)).toBeInTheDocument();
     });
-    expect(screen.queryByText(/sk-test1234abcd/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/AIza-secret-key/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sk-test/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/AIza-secret/)).not.toBeInTheDocument();
   });
 
   it('has action buttons including delete for each provider', async () => {

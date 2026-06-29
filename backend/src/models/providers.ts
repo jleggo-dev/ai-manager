@@ -22,6 +22,12 @@ function decryptRow(row: ProviderRow): ProviderRow {
   return row;
 }
 
+/** Decrypt api_key on a provider row (joins / nested selects skip model-layer decrypt). */
+export function decryptProviderRow(row: ProviderRow | null | undefined): ProviderRow | null | undefined {
+  if (!row) return row ?? null;
+  return decryptRow(row);
+}
+
 /** Create a new provider. */
 export async function createProvider(data: Partial<ProviderRow>): Promise<ProviderRow> {
   const payload: Record<string, unknown> = { ...data, updated_at: new Date().toISOString() };

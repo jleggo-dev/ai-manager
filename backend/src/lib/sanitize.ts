@@ -37,3 +37,9 @@ export function stripSecrets(obj: unknown): unknown {
   }
   return clean;
 }
+
+/** Provider responses: strip api_key but expose whether one is configured. */
+export function sanitizeProvider(row: Record<string, unknown>): Record<string, unknown> {
+  const hasApiKey = Boolean(String(row.api_key ?? '').trim());
+  return { ...(stripSecrets(row) as Record<string, unknown>), has_api_key: hasApiKey };
+}

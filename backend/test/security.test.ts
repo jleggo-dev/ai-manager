@@ -55,6 +55,7 @@ describe('Security', () => {
     const provider = res.body.data.find((p: { id: string }) => p.id === providerId);
     expect(provider).toBeDefined();
     expect(provider).not.toHaveProperty('api_key');
+    expect(provider.has_api_key).toBe(true);
     expect(JSON.stringify(res.body)).not.toContain(TEST_RAW_KEY);
   });
 
@@ -63,6 +64,7 @@ describe('Security', () => {
     const res = await request(app).get(`/api/providers/${providerId}`).set(authHeaders());
     expect(res.status).toBe(200);
     expect(res.body).not.toHaveProperty('api_key');
+    expect(res.body.has_api_key).toBe(true);
   });
 
   it('GET /api/ai-profiles/:id strips api_key from provider join', async () => {

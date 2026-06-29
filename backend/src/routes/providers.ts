@@ -26,7 +26,7 @@ import {
 } from '../services/llm-models-seed.ts';
 import { validateBody } from '../middleware/validate.ts';
 import { createProviderSchema, updateProviderSchema } from '../schemas/providers.ts';
-import { stripSecrets } from '../lib/sanitize.ts';
+import { sanitizeProvider } from '../lib/sanitize.ts';
 import { z } from 'zod';
 import type { LlmModelRow, AiProfileRow } from '../types.ts';
 
@@ -84,7 +84,7 @@ router.get('/', async (req: Request, res: Response) => {
     const params = parsePagination(req);
     const rows = await listProviders({ cursor: params.cursor ?? undefined, limit: params.limit });
     const result = buildPaginatedResponse(rows, params);
-    result.data = result.data.map((p) => stripSecrets(p)) as typeof result.data;
+    result.data = result.data.map((p) => sanitizeProvider(p as Record<string, unknown>)) as typeof result.data;
     return res.json(result);
   } catch (err) {
     console.error('[GET /providers]', err);
@@ -109,7 +109,7 @@ router.post('/', validateBody(createProviderSchema), async (req: Request, res: R
       ...(request_timeout_ms !== undefined && { request_timeout_ms: Number(request_timeout_ms) || null }),
     });
 
-    return res.status(201).json(stripSecrets(row));
+    return res.status(201).json(sanitizeProvider(row as Record<string, unknown>));
   } catch (err) {
     console.error('[POST /providers]', err);
     return res.status(500).json({ error: 'Failed to create provider' });
@@ -123,7 +123,7 @@ router.post('/', validateBody(createProviderSchema), async (req: Request, res: R
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const row = await getProvider(req.params.id as string);
-    return res.json(stripSecrets(row));
+    return res.json(sanitizeProvider(row as Record<string, unknown>));
   } catch (_err) {
     return res.status(404).json({ error: 'Provider not found' });
   }
@@ -136,7 +136,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.put('/:id', validateBody(updateProviderSchema), async (req: Request, res: Response) => {
   try {
     const updated = await updateProvider(req.params.id as string, req.body);
-    return res.json(stripSecrets(updated));
+    return res.json(sanitizeProvider(updated as Record<string, unknown>));
   } catch (err) {
     console.error('[PUT /providers/:id]', err);
     return res.status(500).json({ error: 'Failed to update provider' });

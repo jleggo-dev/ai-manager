@@ -168,7 +168,10 @@ router.post('/', validateBody(createChatSessionSchema), async (req: Request, res
     if (msg.includes('Could not resolve AI profile')) {
       return res.status(422).json({ error: 'Could not resolve AI profile for this request.' });
     }
-    return res.status(500).json({ error: 'Failed to create chat session' });
+    if (msg.includes('no API key configured')) {
+      return res.status(422).json({ error: safeClientError(err, 'Provider has no API key configured.') });
+    }
+    return res.status(500).json({ error: safeClientError(err, 'Failed to create chat session') });
   }
 });
 

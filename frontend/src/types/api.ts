@@ -4,6 +4,8 @@ export interface Provider {
   type: string;
   base_url: string;
   api_key?: string;
+  /** Present on API responses — api_key is stripped for security */
+  has_api_key?: boolean;
   is_active: boolean;
   request_timeout_ms: number | null;
   workspace_id: string;

@@ -22,7 +22,7 @@
 import { getProcessingJobBySlug, getProcessingJob, updateProcessingJob } from '../models/processing-jobs.ts';
 import { getWorkflow, getWorkflowBySlug, getWorkflowStepByKey, listWorkflowSteps } from '../models/workflows.ts';
 import { upsertCallingApplication } from '../models/calling-applications.ts';
-import { getAiProfileWithKeys } from '../models/ai-profiles.ts';
+import { getAiProfileWithKeys, hydrateAiProfileProviderKeys } from '../models/ai-profiles.ts';
 import { DevsAiClient } from '../integrations/devs-ai/client.ts';
 import { GoogleGeminiClient } from '../integrations/google-gemini/client.ts';
 import { createLlmClientForProvider, createLlmClientForUser } from '../integrations/client-factory.ts';
@@ -607,6 +607,8 @@ export async function openChatSession(
   if (!profile?.provider) {
     throw new Error('Could not resolve AI profile with provider');
   }
+
+  profile = hydrateAiProfileProviderKeys(profile);
 
   const provider: ProviderRow = profile.provider;
   const providerType = provider.type;

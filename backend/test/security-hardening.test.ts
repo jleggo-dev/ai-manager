@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import request from 'supertest';
 import { app, authHeaders, uniqueName, onCleanup, runCleanup } from './setup.ts';
-import { stripSecrets } from '../src/lib/sanitize.ts';
+import { stripSecrets, sanitizeProvider } from '../src/lib/sanitize.ts';
 
 afterAll(async () => {
   await runCleanup();
@@ -57,6 +57,17 @@ describe('Security Hardening', () => {
       expect(result).toEqual({
         provider: { name: 'p1' },
         items: [{ value: 'v1' }],
+      });
+    });
+
+    it('sanitizeProvider strips api_key but sets has_api_key', () => {
+      expect(sanitizeProvider({ name: 'Devs.ai', api_key: 'sk-secret' })).toEqual({
+        name: 'Devs.ai',
+        has_api_key: true,
+      });
+      expect(sanitizeProvider({ name: 'Empty', api_key: '' })).toEqual({
+        name: 'Empty',
+        has_api_key: false,
       });
     });
   });

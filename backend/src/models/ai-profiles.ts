@@ -6,11 +6,25 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AiProfileRow } from '../types.ts';
+import type { AiProfileRow, ProviderRow } from '../types.ts';
 import { tenantFrom, getAuthContext, tenantInsertPayload } from '../db/tenant.ts';
 import { getServiceSupabase } from '../db/service-supabase.ts';
+import { decryptProviderRow } from './providers.ts';
 
 const TABLE = 'ai_profiles';
+
+/** Decrypt nested provider api_key fields on a profile loaded via Supabase join. */
+export function hydrateAiProfileProviderKeys(profile: AiProfileRow): AiProfileRow {
+  return {
+    ...profile,
+    provider: profile.provider
+      ? (decryptProviderRow(profile.provider as ProviderRow) as AiProfileRow['provider'])
+      : profile.provider,
+    failover_provider: profile.failover_provider
+      ? (decryptProviderRow(profile.failover_provider as ProviderRow) as AiProfileRow['failover_provider'])
+      : profile.failover_provider,
+  };
+}
 
 function supabaseForRpc(): SupabaseClient {
   const ctx = getAuthContext();
@@ -81,7 +95,7 @@ export async function getAiProfileWithKeys(id: string): Promise<AiProfileRow> {
     .eq('id', id)
     .single();
   if (error) throw new Error(`AI Profile get error: ${error.message}`);
-  return row;
+  return hydrateAiProfileProviderKeys(row);
 }
 
 /** Get a single AI profile by slug (config-as-code upsert key). */
