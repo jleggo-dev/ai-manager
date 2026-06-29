@@ -20,8 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SDK packages** — `@ai-admin/types`, `@ai-admin/client`, `@ai-admin/edge` in `packages/`.
 
 ### Changed
-- Health check crons in `vercel.json` set to hourly (`0 * * * *`).
 - Docs: streaming-safe build rules caveat and Vercel cron endpoints documented in `API.md`; scheduler behavior clarified in `CONCEPTS.md`.
+
+### Fixed
+- Revert health check crons in `vercel.json` to daily (`0 0 * * *`) — hourly schedule from v1.4.0 blocked Vercel Hobby deploys.
 
 ## [1.3.0] - 2026-06-28
 

@@ -763,7 +763,7 @@ Executes the health check immediately and records the result.
 
 ### Scheduled runs (Vercel Cron)
 
-On **serverless deploys** (Vercel), the in-process 60-second scheduler is **not** started. Health and widget checks run only when an external cron hits the tick endpoints below. `vercel.json` configures these paths on an **hourly** schedule (`0 * * * *` — top of each hour UTC).
+On **serverless deploys** (Vercel), the in-process 60-second scheduler is **not** started. Health and widget checks run only when an external cron hits the tick endpoints below. `vercel.json` configures these paths on a **daily** schedule (`0 0 * * *` — once at 00:00 UTC). Vercel Hobby allows only daily crons; after upgrading to Pro, increase frequency (e.g. `0 * * * *` hourly) to better match check `cadence_minutes`.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
