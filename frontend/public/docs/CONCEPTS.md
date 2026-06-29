@@ -83,6 +83,7 @@ An **AI profile** is a configured identity on a provider — it points to a spec
 | Field | Purpose |
 |-------|---------|
 | **Name** | Human-readable label (e.g. "Claude Opus — Company Research") |
+| **Slug** | Optional stable identifier for config-as-code sync (unique per workspace) |
 | **Provider** | Which provider platform to use |
 | **External AI ID** | The model ID or agent UUID at the provider |
 | **Profile Type** | `agent` (Devs.ai agent with tools) or `model` (raw LLM model) |
@@ -92,6 +93,7 @@ An **AI profile** is a configured identity on a provider — it points to a spec
 | **Requires User Credentials** | If true, end-users must store their own provider API key |
 | **Failover Provider + AI ID** | Backup provider/model if the primary fails |
 | **Failover Runtime Options** | Separate behavior settings for the failover |
+| **Config** | JSONB — includes `toolJobs[]` for jobs-as-tools (see [Jobs-as-Tools](#jobs-as-tools)) |
 
 ### Profile Type: Agent vs Model
 
@@ -214,6 +216,12 @@ If diagnostics are enabled, timing data, token usage, and request/response detai
 | `csv-to-json` | Parses CSV content into a JSON array |
 | `repair-json` | Attempts to fix malformed JSON |
 | `repair-csv` | Attempts to fix malformed CSV |
+| `require-keys` | Assert top-level JSON keys are present and non-empty; emits `{ verified: false, reason: "missing_keys" }` on failure |
+| `assert-json-schema` | Validate against a flat schema (types, required, enums); deterministic contract check |
+| `coerce-types` | Normalize top-level field types (string→number/boolean) |
+| `constrain-enum` | Assert field values are in an allowed set |
+
+**Assertion rules** (last four) are for output contracts — they fail loudly instead of passing malformed data downstream. Chain after `trim-to-json` and `repair-json`.
 
 ### How Rules Are Applied
 
@@ -354,6 +362,47 @@ The workflow's AI profile provides the LLM connection, while each step's linked 
 ### Resuming a Conversation
 
 Chat sessions are durable. Closing a session marks it `closed` but **preserves** both the local history and the provider's remote chat (e.g. the Devs.ai chat id), so an end user can return later and continue where they left off. To resume, call `POST /api/chat-sessions/resume` with either the AI Admin `sessionId` or the provider's `externalChatId`. The session is reactivated (idempotent if already active), the remote chat is validated, and the response restores the local `messages`, `completedSteps`, and `workflowVariables` so mid-workflow pipelines pick up exactly where they stopped. (There is nothing to resume for one-shot completion jobs — only streaming chat sessions carry state.)
+
+---
+
+## Triggers
+
+> **Summary:** Run a job or open a workflow session on a schedule or when internal events fire.
+
+A **trigger** binds a slug to a target job or workflow. Triggers can be:
+
+- **External clock** (`external_clock`) — invoked by `POST /api/triggers/:slug/run` from Vercel cron, GitHub Actions, or manual calls. Use for nightly reports, scheduled enrichment, etc.
+- **Event-driven** — `session.message.created` or `workflow.step.completed` fire automatically from chat post-stream hooks when configured.
+
+Each trigger stores `target_type` (`job` | `workflow`), `target_slug`, optional `config.defaultVariables`, and `is_active`.
+
+---
+
+## Jobs-as-Tools
+
+> **Summary:** Expose processing jobs as callable tools on a chat profile.
+
+Set `ai_profiles.config.toolJobs[]` to `{ jobSlug, exposeAs, description? }`. During streaming chat, AI Admin registers these as Devs.ai tools (parameters derived from the job's input variables). When the model emits a matching `tool.call`, AI Admin runs the job internally and submits the result — no client round-trip for registered tool jobs.
+
+Use this when the model should decide *when* to run a structured extraction or lookup, while staying in a conversational session.
+
+---
+
+## Session Compaction
+
+> **Summary:** Summarize older turns when context grows too large.
+
+Set `chat_sessions.config.summarizer` to `{ jobSlug, triggerTokens?, keepLastNTurns? }`. Before each message, AI Admin estimates session tokens; when over `triggerTokens` (default 8000), it runs the summarizer job on older turns (keeping the last N turns intact) and stores the result in `session_summary`. Subsequent prompts prepend the summary so long conversations stay within context limits.
+
+---
+
+## Config-as-Code
+
+> **Summary:** Version-control AI Admin configuration and sync by slug.
+
+Profiles, processing jobs, and workflows can carry a workspace-unique `slug`. `POST /api/sync` upserts arrays of these entities idempotently — create if missing, update if present. Use `dryRun: true` to preview the diff. The CLI `backend/scripts/ai-admin-sync.mjs` wraps the same endpoint for CI/CD pipelines.
+
+Pair with `POST /api/processing-jobs/:id/eval` to run golden test cases before promoting config changes.
 
 ---
 

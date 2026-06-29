@@ -164,13 +164,13 @@ Variable sources (resolved in order):
 
 ### outputMappings
 
-After the LLM responds, AI Admin parses the response as JSON and extracts top-level fields.
+After the LLM responds, AI Admin parses the response as JSON and extracts fields by key or path.
 
 ```json
-{ "sources": "raw_sources", "market_definition": "market_def" }
+{ "sources": "raw_sources", "analysis.score": "lead_score", "items[0].title": "first_item" }
 ```
 
-This means: extract the `sources` field from the JSON response and store it as workflow variable `raw_sources`.
+Keys may be **top-level field names** (`sources`) or **dot/bracket paths** into nested JSON (`analysis.score`, `items[0].title`). The resolved value is stored under the workflow variable name (right-hand side).
 
 **Important:** `outputMappings` require `expectedResponseFormat: "json"` on the job config, and the prompt must instruct the LLM to respond in JSON.
 

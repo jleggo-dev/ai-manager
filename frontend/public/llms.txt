@@ -21,6 +21,7 @@
 - [Workflow Builder](/integration/WORKFLOW_BUILDER_PROMPT.md): LLM prompt for workflow decomposition
 - [Test Page Spec](/integration/AI_ADMIN_TEST_PAGE_SPEC.md): Minimal integration test page
 - [Changelog](/docs/CHANGELOG.md): Version history and release notes
+- [SDK packages](/docs/API.md#config-sync): `@ai-admin/types`, `@ai-admin/client`, `@ai-admin/edge` (monorepo `packages/`)
 
 ## Source of truth in repo
 

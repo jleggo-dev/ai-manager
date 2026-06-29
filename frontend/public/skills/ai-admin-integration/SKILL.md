@@ -35,6 +35,15 @@ User needs AI in their app
 │   └─ Workflow: create jobs + workflow via API, open session with workflowSlug,
 │      trigger steps by stepKey, read workflow_variables when done
 │
+├─ Scheduled or event-driven job/workflow (cron, webhook)?
+│   └─ Triggers: POST /api/triggers (CRUD) + POST /api/triggers/:slug/run
+│
+├─ Version-controlled config (profiles, jobs, workflows in git)?
+│   └─ POST /api/sync (upsert by slug) or backend/scripts/ai-admin-sync.mjs
+│
+├─ CI golden tests for a prompt before deploy?
+│   └─ POST /api/processing-jobs/:id/eval or backend/scripts/eval-job.mjs
+│
 └─ User described a feature in natural language?
     └─ Read docs/integration/WORKFLOW_BUILDER_PROMPT.md — decompose into jobs/workflow first
 ```
@@ -85,6 +94,17 @@ POST /api/ai-matcher/run-slot
 POST /api/processing-jobs/:id/test
 { "variables": { "companyName": "Acme" }, "callingApplication": "cursor:my-app" }
 ```
+Optional header: `Idempotency-Key: <unique-id>` for safe retries (24h cache).
+
+**Job eval (CI):**
+```
+POST /api/processing-jobs/:id/eval  → { total, passed, failed, cases[] }
+```
+
+**Config sync:**
+```
+POST /api/sync  → { profiles?, jobs?, workflows?, dryRun? }
+```
 
 **Streaming chat:**
 ```
@@ -113,8 +133,19 @@ See [docs/integration/WORKFLOW_BUILDER_PROMPT.md](../../docs/integration/WORKFLO
 ## Variable pipeline essentials
 
 - `inputMappings`: job template `{{placeholder}}` → workflow variable name
-- `outputMappings`: JSON field in LLM response → workflow variable name (requires JSON output)
+- `outputMappings`: JSON path in LLM response → workflow variable name (top-level keys or dot/bracket paths like `"analysis.score"`)
 - Auto-captured: `{stepKey}.prompt` and `{stepKey}.response` always available to later steps
+
+## v1.4+ features (see API.md / CONCEPTS.md)
+
+| Feature | When |
+|---------|------|
+| **Jobs-as-tools** | `ai_profiles.config.toolJobs[]` — model invokes processing jobs as tools during chat |
+| **Session compaction** | `chat_sessions.config.summarizer` — auto-summarize when context exceeds threshold |
+| **Triggers** | Cron/event-driven job or workflow execution |
+| **Config sync** | Git-managed slugs → `POST /api/sync` |
+| **Assertion rules** | `require-keys`, `assert-json-schema`, `coerce-types`, `constrain-enum` on job output |
+| **SDK** | `@ai-admin/client` in `packages/client` for typed server-side calls |
 
 ## Edge Function modes (Lovable / Supabase)
 

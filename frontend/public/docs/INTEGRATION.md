@@ -21,6 +21,7 @@ This document is for teams who use **AI Admin** to configure providers and profi
 | [9. What to tell Lovable in one prompt](#9-what-to-tell-lovable-or-any-generator-in-one-prompt) | Copy-paste spec for generators |
 | [10. Common pitfalls](#10-common-pitfalls) | 409, snake_case, rule sets |
 | [11–14. Session, compliance, diagnostics](#11-session-write-restrictions) | Advanced operational topics |
+| [15. Advanced patterns (v1.4+)](#15-advanced-patterns-v14) | Triggers, eval, idempotency, config sync |
 
 ## 1. What to set up in AI Admin first
 
@@ -149,6 +150,8 @@ Use when your team defined a **processing job** in AI Admin (slug, prompt templa
 
 **Response:** `messageSent`, `raw`, `formatted`, `formattingSteps`, `durationMs`, `model`, `usage`, `finishReason`, `diagnostics`.
 
+**Idempotent retries:** Send `Idempotency-Key: <unique-id>` on retries to receive the cached response without re-executing the job (24-hour TTL per workspace).
+
 **Discovery:** `GET /api/processing-jobs` for job `id` and `slug`. Open a job in the UI to confirm variable names expected in the template.
 
 ---
@@ -162,7 +165,7 @@ Use when your team defined a **processing job** in AI Admin (slug, prompt templa
 2. `POST /api/chat-sessions/:id/messages`
    **Body:** Exactly one trigger — `{ "message": "user text" }` for free-form, `{ "stepKey": "…", "variables": {…} }` for a workflow step, or `{ "ruleSetKey": "…", "variables": {…} }` for a rule set invocation. Optional `attachments` array.
    **Response:** **SSE** (`text/event-stream`), not plain JSON. Your client must use `fetch` + `ReadableStream`, `EventSource` (if applicable), or handle the stream in the proxy.
-   **Variable pipeline (workflows):** When a step has `inputMappings` configured, AI Admin automatically loads accumulated variables from earlier steps and maps them into the job's expected variable names before interpolation. Caller-provided `variables` override mapped values. After the LLM responds, any `outputMappings` on the step extract top-level JSON fields from the response and store them in the session's `workflow_variables` accumulator for use by later steps. Additionally, the full prompt and response for every step are **automatically captured** as `{stepKey}.prompt` and `{stepKey}.response`, making them available to subsequent steps without explicit output mappings.
+   **Variable pipeline (workflows):** When a step has `inputMappings` configured, AI Admin automatically loads accumulated variables from earlier steps and maps them into the job's expected variable names before interpolation. Caller-provided `variables` override mapped values. After the LLM responds, `outputMappings` extract JSON fields using top-level keys or dot/bracket paths (e.g. `"analysis.score": "lead_score"`) and store them in the session's `workflow_variables` accumulator. Additionally, the full prompt and response for every step are **automatically captured** as `{stepKey}.prompt` and `{stepKey}.response`.
 
 3. `POST /api/chat-sessions/:id/tool-outputs`
    **Body:** `{ "systemMessageId": "…", "outputs": [{ "toolCallId": "…", "output": "…" }] }`
@@ -677,3 +680,29 @@ Diagnostic logging is **enabled by default** for all processing jobs. Every job 
 ## 14. Maintaining this doc
 
 When you add or rename HTTP routes, update this file and the README pointer. For the exact contract, the source of truth is `backend/src/routes/*.ts` and `backend/src/middleware/auth.ts`.
+
+## 15. Advanced patterns (v1.4+)
+
+> **Summary:** Triggers, job eval CI, idempotent job retries, and config-as-code sync — mostly server-side / admin workflows.
+
+### Job eval (CI golden tests)
+
+`POST /api/processing-jobs/:id/eval` runs test cases from `config.evalCases` (or falls back to `config.testData`). Returns `{ total, passed, failed, cases[] }`. HTTP `422` when any case fails — wire into CI before promoting prompt changes.
+
+CLI: `node backend/scripts/eval-job.mjs --job-id <uuid> --base-url <url> --api-key aim_sk_...`
+
+### Triggers (scheduled / event-driven)
+
+Create triggers via `POST /api/triggers` with `target_type` (`job` | `workflow`) and `target_slug`. Invoke external-clock triggers with `POST /api/triggers/:slug/run` (API key or `Bearer CRON_SECRET`). Event triggers (`session.message.created`, `workflow.step.completed`) fire automatically from chat hooks.
+
+### Config-as-code sync
+
+`POST /api/sync` upserts `profiles`, `jobs`, and `workflows` arrays by `slug`. Use `dryRun: true` to preview. CLI: `backend/scripts/ai-admin-sync.mjs`. Monorepo SDK packages: `@ai-admin/types`, `@ai-admin/client`, `@ai-admin/edge`.
+
+### Per-user token stats
+
+`GET /api/diagnostic-logs/token-stats?userId=<id>` includes a `byUser` breakdown and optional budget `warnings[]` when `app_settings.token_budgets` thresholds are exceeded.
+
+### Jobs-as-tools and session compaction
+
+Configure `ai_profiles.config.toolJobs[]` to expose jobs as model-callable tools during chat (server-side fulfillment). Set `chat_sessions.config.summarizer` for automatic long-conversation summarization. See `docs/CONCEPTS.md` and `docs/API.md`.

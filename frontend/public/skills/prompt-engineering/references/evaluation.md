@@ -11,6 +11,19 @@ Don't eval prompts in the abstract — AI Admin ships features that make the loo
 5. **Refine** the template (one change at a time) and re-run.
 6. **Turn diagnostics back to one-time or off** once stable.
 
+## Automated eval endpoint (CI)
+
+`POST /api/processing-jobs/:id/eval` runs golden cases from the job config:
+
+- **`config.evalCases`** — array of `{ name, variables, expectedKeys?, expectedContains? }`
+- **Fallback** — single case from `config.testData` when no evalCases defined
+
+**Response:** `{ jobId, jobSlug, total, passed, failed, cases: [{ name, passed, reason?, ... }] }` — HTTP `422` when any case fails.
+
+**CLI:** `node backend/scripts/eval-job.mjs --job-id <uuid> --base-url <url> --api-key aim_sk_...`
+
+Wire eval into CI before promoting prompt or config changes (`POST /api/sync`).
+
 ## Test data
 
 Jobs and rule sets carry **test data** — example variable values. Seed it with:

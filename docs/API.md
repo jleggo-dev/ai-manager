@@ -12,10 +12,12 @@
 | [Validation Errors](#validation-errors) | Structured 400 response shape |
 | [Health / Auth / Workspaces](#health) | Bootstrap and team management |
 | [API Keys / Providers / AI Profiles](#api-keys) | Core resource CRUD |
-| [Processing Jobs / Groups](#processing-jobs) | Templated prompts and test execution |
-| [Chat Sessions](#chat-sessions) | Streaming SSE, workflows, rule sets |
+| [Processing Jobs / Groups](#processing-jobs) | Templated prompts, test execution, eval, idempotency |
+| [Chat Sessions](#chat-sessions) | Streaming SSE, workflows, rule sets, session compaction |
 | [AI Matcher](#ai-matcher) | One-shot `run-slot` |
 | [Workflows](#workflows) | Multi-step pipelines and variable mappings |
+| [Triggers](#triggers) | External-clock and event-driven job/workflow execution |
+| [Config Sync](#config-sync) | Config-as-code upsert by slug |
 | [User Data / Health Checks / Widget Checks](#user-data-deletion-gdpr--ccpa) | Compliance and monitoring |
 
 ## API Stability Contract
@@ -177,7 +179,17 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 | DELETE | `/api/ai-profiles/:id/tools/:toolId/oauth-token` | JWT/Key | Remove OAuth token |
 
 ### POST /api/ai-profiles
-**Body**: `{ name, provider_id (UUID), external_ai_id, description?, is_active?, profile_type?, mode?, runtime_options?, failover_provider_id?, failover_external_ai_id?, failover_runtime_options? }`
+**Body**: `{ name, slug?, provider_id (UUID), external_ai_id, description?, is_active?, profile_type?, mode?, runtime_options?, failover_provider_id?, failover_external_ai_id?, failover_runtime_options?, config? }`
+
+`slug` (optional) — stable lowercase-hyphen identifier for config-as-code sync (`POST /api/sync`). Unique per workspace when set.
+
+### Profile `config` object (jobs-as-tools)
+
+| Field | Type | Description |
+|---|---|---|
+| `toolJobs` | `Array<{ jobSlug, exposeAs, description? }>` | Expose processing jobs as Devs.ai callable tools during chat streaming. When the model emits a matching `tool.call`, AI Admin runs the linked job server-side and submits the result back to the provider — no client `tool-outputs` round-trip for registered tool jobs. |
+
+Tool parameter schemas are derived from the job's `config.inputVariables` (or `config.variables`).
 
 ### POST .../test-chat
 **Body**: `{ message, systemPrompt? }`
@@ -197,7 +209,8 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 | GET | `/api/processing-jobs/:id` | JWT/Key | Get job |
 | PUT | `/api/processing-jobs/:id` | JWT/Key | Update job |
 | DELETE | `/api/processing-jobs/:id` | JWT/Key | Delete job |
-| POST | `/api/processing-jobs/:id/test` | JWT/Key | Execute job (test) |
+| POST | `/api/processing-jobs/:id/test` | JWT/Key | Execute job (test); supports `Idempotency-Key` header |
+| POST | `/api/processing-jobs/:id/eval` | JWT/Key | Run golden test cases from job config |
 | POST | `/api/processing-jobs/:id/datasources` | JWT/Key | Upload rows as Devs.ai datasources |
 
 ### POST /api/processing-jobs
@@ -208,6 +221,32 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 ### POST .../test
 **Body**: `{ message, variables?, ruleSetKey?, callingApplication?, promptOverride?, attachments? }`
 **Response**: `{ messageSent, raw, formatted, formattingSteps?, durationMs, model, usage, finishReason?, diagnostics }`
+
+**Idempotency:** Send `Idempotency-Key: <unique-string>` to safely retry without double execution. Cached responses are returned for 24 hours per workspace. Same key + same request body returns the stored response; keys are scoped to the workspace.
+
+### POST .../eval
+Run golden test cases for CI or pre-deploy checks. Cases come from `config.evalCases` (array) or fall back to a single case from `config.testData`.
+
+**Body**: `{ callingApplication? }` (defaults to `ai-admin-eval` for JWT callers)
+
+**Response**: `{ jobId, jobSlug, total, passed, failed, cases: [{ name, passed, reason?, formatted?, durationMs? }] }`
+
+**Status**: `200` when all pass; `422` when any case fails.
+
+**CLI**: `node backend/scripts/eval-job.mjs --job-id <uuid> --base-url <url> --api-key aim_sk_...`
+
+### Assertion build rules
+
+In addition to transform rules (`trim-to-json`, `repair-json`, etc.), these **contract assertion** rules emit `{ verified: false, reason: ... }` on failure instead of silently passing bad output:
+
+| Rule | Purpose |
+|------|---------|
+| `require-keys` | Assert listed top-level JSON keys are present and non-empty |
+| `assert-json-schema` | Validate against a flat schema (types, required fields, enums) |
+| `coerce-types` | Normalize top-level field types (string→number, string→boolean) |
+| `constrain-enum` | Assert field values are in an allowed set |
+
+All assertion rules require the full response (post-stream in chat; after all rules in job test). Chain after `trim-to-json` and `repair-json`. List all rule types via `GET /api/processing-jobs/formatting-rules`.
 
 ### POST .../datasources
 **Body**: `{ rows: Record[] (max 1000), namePrefix?, maxChunkBytes?, callingApplication? }`
@@ -255,6 +294,8 @@ During **SSE chat streaming** (`POST /api/chat-sessions/:id/messages`), only two
 **Write restriction note:** JWT callers can only send messages, submit tool outputs, reset, resume, or close sessions they own (`session.user_id === JWT userId`). API-key callers have workspace-wide write access. GET and DELETE are allowed for any authenticated workspace member (cross-user read for troubleshooting, delete for sensitive content remediation).
 
 **Lifecycle note:** `close` marks a session `closed` but **preserves** the provider's remote chat so it can be resumed later via `POST /api/chat-sessions/resume`. `reset` clears history (and the remote chat where supported); `DELETE` removes the session and best-effort purges the remote chat. The user-data deletion endpoints (`DELETE /api/user-data/:userId[/sessions]`) also best-effort purge remote chats before dropping rows, so closed-but-retained chats are not orphaned.
+
+**Session compaction:** When `chat_sessions.config.summarizer` is set (`{ jobSlug, triggerTokens?, keepLastNTurns? }`), AI Admin runs the summarizer job when estimated context tokens exceed `triggerTokens` (default 8000). The result is stored in `session_summary` and prepended on subsequent messages. Defaults: keep last 6 turns when summarizing older history.
 
 ### POST /api/chat-sessions
 **Body**: `{ userId, jobSlug?, jobId?, aiProfileId?, workflowSlug?, workflowId?, callingApplication?, systemPrompt? }`
@@ -350,7 +391,9 @@ Continue a previously opened **streaming chat** session (there is nothing to res
 **Query**: `processingJobId`, `chatSessionId`, `callingApplication`, `status`, `userId`, `authMode`, pagination params.
 
 ### GET .../token-stats
-**Query**: `processingJobId`, `callingApplication`, `limit` (1–5000, default 1000).
+**Query**: `processingJobId`, `callingApplication`, `userId`, `limit` (1–5000, default 1000).
+
+**Response** includes aggregated buckets: `totals`, `byJob`, `byCallingApplication`, `byUser` (keyed by end-user id), and optional `warnings[]` when soft token budgets are exceeded. Budget thresholds are configured in `app_settings` under key `token_budgets` (`defaultPerUser`, `perUser`, `perCallingApplication`).
 
 ---
 
@@ -444,7 +487,7 @@ Creates a workflow. You can include steps inline or add them individually afterw
 | Field | Type | Description |
 |---|---|---|
 | `inputMappings` | `Record<string, string>` | Maps **job template placeholders** (keys) to **workflow variable names** (values). AI Admin loads accumulated variables from earlier steps and injects them into the job's `{{placeholder}}` slots before sending to the LLM. |
-| `outputMappings` | `Record<string, string>` | Maps **JSON response fields** (keys) to **workflow variable names** (values). After the LLM responds, AI Admin parses the response as JSON and stores extracted fields in the session's `workflow_variables` for later steps. |
+| `outputMappings` | `Record<string, string>` | Maps **JSON response paths** (keys) to **workflow variable names** (values). Keys may be top-level field names (`"score"`) or dot/bracket paths (`"analysis.score"`, `"items[0].title"`). After the LLM responds, AI Admin parses the response as JSON, resolves each path, and stores the extracted value under the workflow variable name. |
 
 ### Variable pipeline (automatic)
 
@@ -466,6 +509,56 @@ The `config` object accepts `inputMappings` and `outputMappings` as described ab
 ### PUT /api/workflows/:id
 
 Update workflow fields. If a `steps` array is provided, it **replaces all existing steps** atomically.
+
+---
+
+## Triggers
+
+> **Summary:** Run jobs or open workflow sessions on a schedule (external clock) or in response to internal events.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/triggers` | JWT/Key | List triggers |
+| POST | `/api/triggers` | JWT/Key | Create trigger |
+| PUT | `/api/triggers/:id` | JWT/Key | Update trigger |
+| DELETE | `/api/triggers/:id` | JWT/Key | Delete trigger |
+| POST | `/api/triggers/:slug/run` | JWT/Key or `Bearer CRON_SECRET` | Execute trigger |
+
+### POST /api/triggers
+**Body**: `{ slug (lowercase-hyphen), name, description?, trigger_type?, target_type ('job' \| 'workflow'), target_slug, config?, is_active? }`
+
+`trigger_type`: `external_clock` (default — invoked by cron/GitHub Action/manual run), `session.message.created`, or `workflow.step.completed` (internal event hooks; fired automatically when matching events occur in chat).
+
+`config.defaultVariables` — optional default variables passed to the target job or session.
+
+### POST /api/triggers/:slug/run
+**Body**: `{ variables?, callingApplication?, userId? }`
+
+**Response**: `{ triggerSlug, targetType, targetSlug, status: 'success' \| 'error', result?, error? }`
+
+For `target_type: 'job'`, runs the job and returns `{ formatted, raw, usage }`. For `target_type: 'workflow'`, opens a chat session and returns `{ sessionId, steps }`.
+
+**Auth for cron:** External schedulers may call with `Authorization: Bearer CRON_SECRET` (same secret as health-check cron ticks). API-key auth also works for manual runs.
+
+---
+
+## Config Sync
+
+> **Summary:** Idempotent config-as-code upsert of profiles, jobs, and workflows by slug.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/sync` | JWT/Key | Upsert profiles, jobs, workflows by slug |
+
+**Body**: `{ dryRun?, profiles?, jobs?, workflows? }` — each array contains entity objects with required `slug` field (same shapes as create/update API bodies).
+
+**Response**: `{ dryRun, diff: [{ entity, slug, action, error? }], created, updated, errors }`
+
+**Status**: `200` on success; `422` when any entity errors.
+
+**CLI**: `node backend/scripts/ai-admin-sync.mjs --file config.json --base-url <url> --api-key aim_sk_... [--dry-run]`
+
+**SDK packages** (monorepo `packages/`): `@ai-admin/types`, `@ai-admin/client`, `@ai-admin/edge` — typed client helpers for server-side integrations.
 
 ---
 
@@ -670,7 +763,7 @@ Executes the health check immediately and records the result.
 
 ### Scheduled runs (Vercel Cron)
 
-On **serverless deploys** (Vercel), the in-process 60-second scheduler is **not** started. Health and widget checks run only when an external cron hits the tick endpoints below. `vercel.json` configures these paths (currently `0 0 * * *` — once daily at 00:00 UTC); increase frequency on Vercel Pro if checks need shorter cadence than daily.
+On **serverless deploys** (Vercel), the in-process 60-second scheduler is **not** started. Health and widget checks run only when an external cron hits the tick endpoints below. `vercel.json` configures these paths on an **hourly** schedule (`0 * * * *` — top of each hour UTC).
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|

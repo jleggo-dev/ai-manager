@@ -136,8 +136,28 @@
         {
           "id": "processing-jobs",
           "title": "Processing jobs",
-          "summary": "CRUD, test execution, formatting rules",
+          "summary": "CRUD, test execution, eval, idempotency, formatting rules",
           "anchor": "#processing-jobs",
+          "audience": [
+            "cursor",
+            "developer"
+          ]
+        },
+        {
+          "id": "triggers",
+          "title": "Triggers",
+          "summary": "External-clock and event-driven job/workflow execution",
+          "anchor": "#triggers",
+          "audience": [
+            "cursor",
+            "developer"
+          ]
+        },
+        {
+          "id": "config-sync",
+          "title": "Config sync",
+          "summary": "Config-as-code upsert by slug",
+          "anchor": "#config-sync",
           "audience": [
             "cursor",
             "developer"
@@ -202,6 +222,36 @@
           "title": "Workflows",
           "summary": "Multi-step pipelines with variable pipeline",
           "anchor": "#workflows",
+          "audience": [
+            "cursor",
+            "developer"
+          ]
+        },
+        {
+          "id": "triggers-concept",
+          "title": "Triggers",
+          "summary": "Scheduled and event-driven execution",
+          "anchor": "#triggers",
+          "audience": [
+            "cursor",
+            "developer"
+          ]
+        },
+        {
+          "id": "jobs-as-tools",
+          "title": "Jobs-as-tools",
+          "summary": "Processing jobs exposed as chat tools",
+          "anchor": "#jobs-as-tools",
+          "audience": [
+            "cursor",
+            "developer"
+          ]
+        },
+        {
+          "id": "config-as-code",
+          "title": "Config-as-code",
+          "summary": "Sync profiles, jobs, workflows by slug",
+          "anchor": "#config-as-code",
           "audience": [
             "cursor",
             "developer"
@@ -411,6 +461,11 @@
     }
   ],
   "changelog": [
+    {
+      "version": "1.4.0",
+      "date": "2026-06-29",
+      "summary": "Triggers, jobs-as-tools, session compaction, job eval, idempotency, config sync, assertion build rules, nested outputMappings, per-user token stats, SDK packages"
+    },
     {
       "version": "1.3.0",
       "date": "2026-06-28",

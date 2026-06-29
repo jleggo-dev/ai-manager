@@ -120,6 +120,7 @@ Map the verifier's *input* from auto-captured `generate-analysis.response`; take
 
 ## Other reliability levers (job config)
 
+- **Assertion build rules** — `require-keys`, `assert-json-schema`, `coerce-types`, `constrain-enum` emit `{ verified: false, reason: ... }` on contract failure without a separate LLM verifier step. Chain after `trim-to-json` / `repair-json`. See `GET /api/processing-jobs/formatting-rules`.
 - **Retries** — re-attempt on *failure* (provider errors), not on wrong-but-successful output.
 - **Failover** — backup model on error/empty only (won't catch prose-instead-of-JSON).
 - **Caching** — TTL on responses; avoid for non-deterministic creative steps.
@@ -128,7 +129,7 @@ Map the verifier's *input* from auto-captured `generate-analysis.response`; take
 ## Checklist
 
 - [ ] Output contract is explicit (presence + shape + content).
-- [ ] Rung 1 build rules on JSON jobs (`remove-reasoning` → `trim-to-json` → `repair-json`).
+- [ ] Rung 1 build rules on JSON jobs (`remove-reasoning` → `trim-to-json` → `repair-json` → assertion rules when no verifier step).
 - [ ] Something **asserts** the contract — app-side check or verifier step — incl. the "no JSON at all" case.
 - [ ] Verifier flags unrecoverable output (`verified: false`) instead of fabricating.
 - [ ] An explicit **recovery** is chosen for failed verification (regenerate / escalate / fallback / flag / fail).

@@ -38,7 +38,7 @@ import {
 } from '@tabler/icons-react';
 import PageHeader from '../components/atoms/PageHeader';
 
-const AI_ADMIN_VERSION = '1.2.0';
+const AI_ADMIN_VERSION = '1.4.0';
 const AI_ADMIN_URL = 'https://ai-manager-alpha-seven.vercel.app';
 
 // Lovable files
@@ -258,10 +258,13 @@ This project integrates with AI Admin (${url}) for all AI features.
 1. Fetch ${AI_ADMIN_URL}/docs/manifest.json to discover available docs and jump to relevant sections.
 2. Follow the integration pattern decision tree:
    - One-shot prompt → POST /api/ai-matcher/run-slot
-   - Repeatable task → POST /api/processing-jobs/:id/test
+   - Repeatable task → POST /api/processing-jobs/:id/test (optional Idempotency-Key header)
    - Streaming chat → POST /api/chat-sessions + SSE messages
    - Resume a past chat → POST /api/chat-sessions/resume (by sessionId or externalChatId)
-   - Multi-step pipeline → workflow with variable mappings
+   - Multi-step pipeline → workflow with variable mappings (nested outputMappings paths supported)
+   - Scheduled/event-driven → POST /api/triggers/:slug/run
+   - Config in git → POST /api/sync (upsert by slug)
+   - CI prompt tests → POST /api/processing-jobs/:id/eval
 3. NEVER expose aim_sk_ API keys in client code. Use server-side proxy.
 4. Set callingApplication: "cursor:<project-name>" on every job/chat call.
 
@@ -440,7 +443,7 @@ This project integrates with AI Admin (${url}) for all AI features.
 ## When adding AI functionality
 
 - Fetch ${AI_ADMIN_URL}/docs/manifest.json to navigate docs by section.
-- Pattern: one-shot → run-slot | templated → processing-jobs test | streaming → chat sessions | resume → chat-sessions/resume | pipeline → workflow.
+- Pattern: one-shot → run-slot | templated → processing-jobs test (+ Idempotency-Key) | streaming → chat sessions | resume → chat-sessions/resume | pipeline → workflow | scheduled → triggers/:slug/run | config → /api/sync | CI eval → processing-jobs/:id/eval.
 - NEVER expose aim_sk_ keys in client code. Proxy through server/edge function.
 - Always set callingApplication: "claude:<project-name>" on every job/chat call.
 - Wait for SSE [DONE] before sending the next message (409 if concurrent).

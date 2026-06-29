@@ -27,8 +27,7 @@ Rate each dimension: Pass / Needs work / Fail. Fix all Fail items before deployi
 - [ ] Format explicitly specified (JSON schema, prose, bullet list)
 - [ ] If using `outputMappings`: JSON-only instruction present
 - [ ] `expectedResponseFormat: "json"` set on job config when needed
-- [ ] JSON field names match `outputMappings` keys exactly
-- [ ] **All mapped fields are TOP-LEVEL keys** (nested paths aren't extractable)
+- [ ] JSON field names / paths match `outputMappings` keys exactly (top-level or dot/bracket paths)
 - [ ] Null/empty defaults defined so no key is conditionally omitted
 
 ## 5. Scope
@@ -62,7 +61,7 @@ Rate each dimension: Pass / Needs work / Fail. Fix all Fail items before deployi
 ## 9. Output verification
 
 - [ ] Output contract is explicit (presence + shape + content)
-- [ ] JSON jobs chain build rules: `remove-reasoning` → `trim-to-json` → `repair-json`
+- [ ] JSON jobs chain build rules: `remove-reasoning` → `trim-to-json` → `repair-json` → assertion rules (`require-keys`, `assert-json-schema`, etc.)
 - [ ] Contract is **asserted** somewhere (app-side or verifier step) — including the "no JSON at all" case
 - [ ] Verifier (if any) uses a cheap/fast model and flags `verified: false` instead of fabricating
 - [ ] An explicit **recovery** is chosen on failure (regenerate / escalate / fallback / flag / hard-fail)
