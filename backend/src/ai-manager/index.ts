@@ -320,7 +320,7 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
     /* ── 3. Resolve AI client from job → AI profile → provider ── */
     if (fullDiagnostics) diag.startSupabaseTimer();
 
-    const profile = job.ai_profile;
+    const profile = job.ai_profile ? hydrateAiProfileProviderKeys(job.ai_profile) : job.ai_profile;
     const provider: ProviderRow | undefined = profile?.provider;
 
     if (!profile || !provider) {
@@ -1329,7 +1329,7 @@ export async function uploadApiDataSourcesChunked(
   const job = jobId ? await getProcessingJob(jobId) : await getProcessingJobBySlug(jobSlug ?? '');
   if (!job) throw new Error(`Processing job not found (${jobId || jobSlug})`);
 
-  const profile = job.ai_profile;
+  const profile = job.ai_profile ? hydrateAiProfileProviderKeys(job.ai_profile) : job.ai_profile;
   const provider: ProviderRow | undefined = profile?.provider;
   const aiId = String(profile?.external_ai_id || '').trim();
   if (!provider || provider.type !== 'devs-ai') {
