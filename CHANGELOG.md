@@ -5,6 +5,20 @@ All notable changes to AI Admin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-06-28
+
+### Added
+- **Resume chat sessions** — `POST /api/chat-sessions/resume` continues a previously opened streaming chat by AI Admin `sessionId` or provider `externalChatId` (e.g. a Devs.ai chat id). Reactivates closed sessions (idempotent), validates the provider's remote chat, and returns restored local `messages`, `completedSteps`, and `workflowVariables` for mid-workflow resume. Opt-in `fallbackToLocal` continues via local-history replay when the remote chat is gone.
+- `externalChatId` filter on `GET /api/chat-sessions` (and `list-chat-sessions` Edge Function mode) to find the session for a given provider chat id.
+- `resume-chat-session` Edge Function mode in the reference proxy and Lovable handbook.
+- Model helpers `getChatSessionByExternalChatId` and `reactivateChatSession`; `resumeChatSessionSchema` request validation.
+
+### Changed
+- **`PUT /api/chat-sessions/:id/close` now preserves the provider's remote chat** instead of deleting it, so closed conversations can be resumed later. Remote cleanup still happens on `reset` (history) and `DELETE` (full removal).
+
+### Security / Compliance
+- User-data deletion endpoints (`DELETE /api/user-data/:userId` and `/:userId/sessions`) now best-effort **purge provider remote chats** before dropping rows (reported as `remoteChatsPurged`), preventing orphaned remote chats from closed-but-retained sessions.
+
 ## [1.1.0] - 2026-05-13
 
 ### Known Limitations

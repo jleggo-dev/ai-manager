@@ -8,6 +8,7 @@
 import { Router, Request, Response } from 'express';
 import {
   openChatSession,
+  resumeChatSession,
   sendChatMessage,
   submitChatToolOutputs,
   recordAssistantMessage,
@@ -21,6 +22,7 @@ import {
 import {
   listChatSessions,
   getChatSession as dbGetChatSession,
+  getChatSessionByExternalChatId as dbGetChatSessionByExternalChatId,
   getChatSessionStats,
   acquireSessionLock,
   releaseSessionLock,
@@ -37,7 +39,12 @@ import { errorMessage } from '../lib/error-message.ts';
 import { safeClientError } from '../lib/safe-error.ts';
 import type { PatchedResponse } from '../types.ts';
 import { validateBody } from '../middleware/validate.ts';
-import { createChatSessionSchema, sendMessageSchema, toolOutputsSchema } from '../schemas/chat-sessions.ts';
+import {
+  createChatSessionSchema,
+  resumeChatSessionSchema,
+  sendMessageSchema,
+  toolOutputsSchema,
+} from '../schemas/chat-sessions.ts';
 import { parsePagination, buildPaginatedResponse } from '../lib/pagination.ts';
 import type { ChatSessionRow, FormattingRule } from '../types.ts';
 
@@ -157,6 +164,53 @@ router.post('/', validateBody(createChatSessionSchema), async (req: Request, res
       return res.status(422).json({ error: 'Could not resolve AI profile for this request.' });
     }
     return res.status(500).json({ error: 'Failed to create chat session' });
+  }
+});
+
+/* ================================================================
+   POST /api/chat-sessions/resume
+   Resume a previously opened streaming chat session and continue it.
+   Body: { sessionId? | externalChatId?, fallbackToLocal? }
+   Returns JSON (session metadata + restored local history). The caller
+   then continues with POST /:id/messages (SSE).
+   ================================================================ */
+
+router.post('/resume', validateBody(resumeChatSessionSchema), async (req: Request, res: Response) => {
+  try {
+    const { sessionId, externalChatId, fallbackToLocal } = req.body;
+
+    /* Resolve to a concrete session first so we can authorize ownership.
+       Lookup is tenant-scoped, so a cross-tenant id resolves to 404. */
+    let target = sessionId ? await dbGetChatSession(sessionId) : null;
+    if (!target && externalChatId) target = await dbGetChatSessionByExternalChatId(externalChatId);
+    if (!target) return res.status(404).json({ error: 'Session not found' });
+
+    const authorized = await authorizeSessionAccess(target.id, res, { requireOwnership: true });
+    if (!authorized) return;
+
+    const result = await resumeChatSession({
+      sessionId: target.id,
+      fallbackToLocal: fallbackToLocal === true,
+    });
+    return res.json(stripSecrets(result));
+  } catch (err) {
+    console.error('[POST /chat-sessions/resume]', err);
+    const msg = errorMessage(err);
+    /* Check 'no longer available' before 'not found' — the remote-gone error
+       embeds the provider's own "...not found" text, which would otherwise be
+       misclassified as a 404. */
+    if (msg.includes('no longer available')) {
+      return res.status(409).json({
+        error: safeClientError(err, 'The remote chat is no longer available on the provider.'),
+      });
+    }
+    if (msg.includes('personal credentials')) {
+      return res.status(403).json({ error: safeClientError(err, 'This session requires personal credentials.') });
+    }
+    if (msg.includes('not found')) {
+      return res.status(404).json({ error: safeClientError(err, 'Session not found') });
+    }
+    return res.status(500).json({ error: 'Failed to resume chat session' });
   }
 });
 
@@ -662,6 +716,7 @@ router.get('/', async (req: Request, res: Response) => {
       workflowId: (req.query.workflowId as string) || undefined,
       status: (req.query.status as string) || undefined,
       callingApplication: (req.query.callingApplication as string) || undefined,
+      externalChatId: (req.query.externalChatId as string) || undefined,
       cursor: params.cursor ?? undefined,
       limit: params.limit,
     });

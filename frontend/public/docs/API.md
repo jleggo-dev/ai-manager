@@ -235,23 +235,33 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 | Method | Path | Auth | Write restriction |Description |
 |--------|------|------|-------------------|------------|
 | POST | `/api/chat-sessions` | JWT/Key | — | Create session |
+| POST | `/api/chat-sessions/resume` | JWT/Key | JWT: own session only | Resume a prior session by `sessionId` or `externalChatId` |
 | POST | `/api/chat-sessions/:id/messages` | JWT/Key | JWT: own session only | Send message — **SSE stream** |
 | POST | `/api/chat-sessions/:id/tool-outputs` | JWT/Key | JWT: own session only | Submit tool outputs — **SSE stream** |
 | GET | `/api/chat-sessions` | JWT/Key | — | Paginated session list with filters |
 | GET | `/api/chat-sessions/:id` | JWT/Key | — | Session detail + stats + history |
 | GET | `/api/chat-sessions/:id/messages` | JWT/Key | — | Message history (`?fromProvider=true`) |
 | PUT | `/api/chat-sessions/:id/reset` | JWT/Key | JWT: own session only | Reset conversation |
-| PUT | `/api/chat-sessions/:id/close` | JWT/Key | JWT: own session only | Close session |
+| PUT | `/api/chat-sessions/:id/close` | JWT/Key | JWT: own session only | Close session (preserves remote chat for resume) |
 | DELETE | `/api/chat-sessions/:id` | JWT/Key | — | Delete session (any member, for remediation) |
 | GET | `/api/chat-sessions/:id/diagnostics` | JWT/Key | — | Diagnostic summary |
 | GET | `/api/chat-sessions/:id/files` | JWT/Key | — | List session files |
 | GET | `/api/chat-sessions/analytics/by-profile/:aiProfileId` | JWT/Key | — | Aggregate session stats per profile |
 
-**Write restriction note:** JWT callers can only send messages, submit tool outputs, reset, or close sessions they own (`session.user_id === JWT userId`). API-key callers have workspace-wide write access. GET and DELETE are allowed for any authenticated workspace member (cross-user read for troubleshooting, delete for sensitive content remediation).
+**Write restriction note:** JWT callers can only send messages, submit tool outputs, reset, resume, or close sessions they own (`session.user_id === JWT userId`). API-key callers have workspace-wide write access. GET and DELETE are allowed for any authenticated workspace member (cross-user read for troubleshooting, delete for sensitive content remediation).
+
+**Lifecycle note:** `close` marks a session `closed` but **preserves** the provider's remote chat so it can be resumed later via `POST /api/chat-sessions/resume`. `reset` clears history (and the remote chat where supported); `DELETE` removes the session and best-effort purges the remote chat. The user-data deletion endpoints (`DELETE /api/user-data/:userId[/sessions]`) also best-effort purge remote chats before dropping rows, so closed-but-retained chats are not orphaned.
 
 ### POST /api/chat-sessions
 **Body**: `{ userId, jobSlug?, jobId?, aiProfileId?, workflowSlug?, workflowId?, callingApplication?, systemPrompt? }`
 **Note**: JWT callers use `ctx.userId` (body `userId` ignored for JWT). API keys require `callingApplication`.
+
+### POST /api/chat-sessions/resume
+Continue a previously opened **streaming chat** session (there is nothing to resume for one-shot completion jobs).
+**Body**: `{ sessionId? , externalChatId?, fallbackToLocal? }` — provide `sessionId` (AI Admin id) **or** `externalChatId` (provider chat id, e.g. Devs.ai). `fallbackToLocal` (default `false`): if the provider's remote chat is gone, drop `external_chat_id` and continue with local history replay instead of failing.
+**Response**: `{ sessionId, externalChatId, providerType, status, workflowId, steps, ruleSets, completedSteps, workflowVariables, aiProfileId, aiProfileName, messages }` — `messages` is the restored local history; `completedSteps` and `workflowVariables` restore mid-workflow pipeline state.
+**Behavior**: Closed sessions are reactivated (idempotent if already active). For Devs.ai, the remote chat is validated via "get a chat session" first. Lookups are tenant-scoped, so cross-tenant ids resolve to `404`.
+**Errors**: `400` (neither id provided), `403` (session uses personal credentials but no user identity), `404` (not found / cross-tenant), `409` (remote chat no longer available and `fallbackToLocal` not set). Continue the conversation by calling `POST /:id/messages` with the returned `sessionId`.
 
 ### POST .../messages
 **Body**: `{ message?, stepKey?, ruleSetKey?, variables?, attachments? }`
@@ -262,7 +272,7 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 **Response**: SSE stream.
 
 ### GET /api/chat-sessions (list)
-**Query**: `userId`, `aiProfileId`, `workflowId`, `status`, `callingApplication`, pagination params.
+**Query**: `userId`, `aiProfileId`, `workflowId`, `status`, `callingApplication`, `externalChatId`, pagination params.
 
 ---
 

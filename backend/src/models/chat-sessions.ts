@@ -13,6 +13,10 @@ const MESSAGE_TABLE = 'chat_messages';
 
 const STALE_LOCK_MS = 5 * 60 * 1000 + 30 * 1000; // MAX_SSE_DURATION (5 min) + 30 s buffer
 
+/* Shared select string so single-row reads always hydrate the AI profile + provider. */
+const SESSION_SELECT =
+  '*, ai_profile:ai_profiles!chat_sessions_ai_profile_id_fkey(id, name, external_ai_id, mode, provider:providers!ai_profiles_provider_id_fkey(id, name, type, base_url))';
+
 /* ── Sessions ───────────────────────────────────────────────── */
 
 export async function createChatSession(data: Partial<ChatSessionRow>): Promise<ChatSessionRow> {
@@ -25,14 +29,34 @@ export async function createChatSession(data: Partial<ChatSessionRow>): Promise<
 }
 
 export async function getChatSession(id: string): Promise<ChatSessionRow | null> {
-  const { data: row, error } = await tenantFrom(SESSION_TABLE)
-    .select(
-      '*, ai_profile:ai_profiles!chat_sessions_ai_profile_id_fkey(id, name, external_ai_id, mode, provider:providers!ai_profiles_provider_id_fkey(id, name, type, base_url))',
-    )
-    .eq('id', id)
-    .maybeSingle();
+  const { data: row, error } = await tenantFrom(SESSION_TABLE).select(SESSION_SELECT).eq('id', id).maybeSingle();
   if (error) throw new Error(`Chat session get error: ${error.message}`);
   return row;
+}
+
+/**
+ * Look up a chat session by its provider-side chat id (e.g. the Devs.ai
+ * external_chat_id). Tenant-scoped — only returns sessions in the caller's
+ * workspace, so a provider id from another tenant resolves to null (no
+ * existence leak). Returns the most recent match if more than one exists.
+ */
+export async function getChatSessionByExternalChatId(externalChatId: string): Promise<ChatSessionRow | null> {
+  const { data, error } = await tenantFrom(SESSION_TABLE)
+    .select(SESSION_SELECT)
+    .eq('external_chat_id', externalChatId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`Chat session lookup error: ${error.message}`);
+  return data?.[0] ?? null;
+}
+
+/**
+ * Reactivate a chat session (status -> 'active') so a closed conversation
+ * can be resumed and continued. Does not touch the processing lock — stale
+ * locks are reclaimed by the send path on the next message.
+ */
+export async function reactivateChatSession(id: string): Promise<ChatSessionRow> {
+  return updateChatSession(id, { status: 'active' });
 }
 
 export async function updateChatSession(id: string, updates: Partial<ChatSessionRow>): Promise<ChatSessionRow> {
@@ -56,6 +80,7 @@ interface ChatSessionFilters {
   workflowId?: string;
   status?: string;
   callingApplication?: string;
+  externalChatId?: string;
 }
 
 export async function listChatSessions(
@@ -71,6 +96,7 @@ export async function listChatSessions(
   if (filters.workflowId) query = query.eq('workflow_id', filters.workflowId);
   if (filters.status) query = query.eq('status', filters.status);
   if (filters.callingApplication) query = query.eq('calling_application', filters.callingApplication);
+  if (filters.externalChatId) query = query.eq('external_chat_id', filters.externalChatId);
   if (filters.cursor) {
     query = query.lt('created_at', filters.cursor);
   }

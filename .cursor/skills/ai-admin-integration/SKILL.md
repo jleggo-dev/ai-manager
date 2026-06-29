@@ -28,6 +28,9 @@ User needs AI in their app
 ├─ Interactive back-and-forth chat with streaming?
 │   └─ Chat sessions: POST /api/chat-sessions → POST .../messages (SSE)
 │
+├─ User returning to a past conversation?
+│   └─ POST /api/chat-sessions/resume (by sessionId or externalChatId) → then POST .../messages
+│
 ├─ Multi-step pipeline where step N needs step N-1 output?
 │   └─ Workflow: create jobs + workflow via API, open session with workflowSlug,
 │      trigger steps by stepKey, read workflow_variables when done
@@ -89,6 +92,14 @@ POST /api/chat-sessions  → { workflowSlug, userId, callingApplication }
 POST /api/chat-sessions/:id/messages  → SSE stream until [DONE]
 ```
 
+**Resume a prior chat:**
+```
+POST /api/chat-sessions/resume  → { sessionId }  (or { externalChatId })
+  → reactivates closed session, returns restored messages + completedSteps + workflowVariables
+POST /api/chat-sessions/:id/messages  → continue (SSE)
+```
+Closing a session preserves its remote provider chat so it can be resumed. Use `fallbackToLocal: true` to continue via local history if the remote chat is gone.
+
 ## Workflow decomposition (intent → infrastructure)
 
 When a user describes an AI feature:
@@ -114,7 +125,9 @@ Reference implementation: [docs/integration/ai-admin-supabase-edge-function.ts](
 | `ask-ai-profile` | One-shot completion |
 | `run-processing-job` | Templated job |
 | `open-chat-session` | Start streaming session |
+| `resume-chat-session` | Continue a prior session (by `sessionId` or `externalChatId`) |
 | `send-chat-message-stream` | Send message (SSE via fetch) |
+| `list-chat-sessions` | List the user's sessions (filter by `status`, `externalChatId`, …) |
 | `get-chat-session` | Read session + workflow_variables |
 | `store-user-credential` | Per-user provider API key |
 

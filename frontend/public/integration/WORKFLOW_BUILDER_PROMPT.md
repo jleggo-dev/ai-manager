@@ -337,5 +337,8 @@ For Edge Function apps (Supabase/Lovable), use the `mode` field:
 - `"open-chat-session"` with `workflowSlug`
 - `"send-chat-message-stream"` with `sessionId` + `stepKey` + optional `variables`
 - `"get-chat-session"` with `sessionId` to read final `workflow_variables`
+- `"resume-chat-session"` with `sessionId` (or `externalChatId`) to continue a paused workflow — the response restores `completedSteps` and `workflowVariables`, so you can pick up at the next pending step
+
+**Resuming a partially-completed workflow:** If a user steps away mid-pipeline, the session can be closed and later resumed with `POST /api/chat-sessions/resume`. Resume returns `completedSteps` (which `stepKey`s already ran) and the accumulated `workflowVariables`, so the calling app knows which step to trigger next without re-running earlier ones.
 
 See `INTEGRATION.md` section C3 and `AI_ADMIN_LOVABLE_INTEGRATION.md` section 10 for complete code examples.

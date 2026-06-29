@@ -207,6 +207,7 @@ The Edge Function **always** sends the `aim_sk_` API key. Some modes also need t
 | `ask-ai-profile` | Completion | No |
 | `run-processing-job` | Completion | No |
 | `open-chat-session` | Chat | **Yes** (for MCP / personal-credential profiles) |
+| `resume-chat-session` | Chat | **Yes** (ownership + personal-credential parity) |
 | `send-chat-message-stream` | Chat | **Yes** (forwarded from session, but include for consistency) |
 | `list-chat-files` | Chat / Files | **Yes** |
 | `list-chat-sessions` | Chat / History | **Yes** |
@@ -239,6 +240,13 @@ Each mode has a minimum set of test cases that MUST pass. Use these to verify yo
 | `open-chat-session` | No identifier (no profileId/jobSlug/jobId) | `400` with error message |
 | `open-chat-session` | Valid request | JSON with `sessionId`, `status: "active"` |
 | `open-chat-session` | Valid with job that has rule sets | JSON includes `ruleSets` array |
+| `resume-chat-session` | No JWT | `401` from Edge Function |
+| `resume-chat-session` | Neither `sessionId` nor `externalChatId` | `400` with error message |
+| `resume-chat-session` | Valid `sessionId` of a closed session | JSON with `status: "active"`, restored `messages`, `completedSteps`, `workflowVariables` |
+| `resume-chat-session` | Valid `externalChatId` (provider chat id) | JSON resolving to the same session |
+| `resume-chat-session` | `sessionId` owned by a different user | `403` forbidden |
+| `resume-chat-session` | Remote chat deleted on provider (no `fallbackToLocal`) | `409` with error message |
+| `resume-chat-session` | Remote chat deleted + `fallbackToLocal: true` | JSON with `externalChatId: null`, continues via local history |
 | `send-chat-message-stream` | No JWT | `401` from Edge Function |
 | `send-chat-message-stream` | Missing `sessionId` | `400` with error message |
 | `send-chat-message-stream` | No trigger (`message`, `stepKey`, or `ruleSetKey`) | `400` with error message |
@@ -632,6 +640,63 @@ Save **`sessionId`** for the next call.
 
 ---
 
+### `resume-chat-session` (continue a prior conversation)
+
+Use this when an end user returns to a conversation they started earlier. Closing a session **preserves** its history and the provider's remote chat, so it can be picked back up. Resume reactivates the session (idempotent if it is already `active`), validates the provider's remote chat (Devs.ai), and returns the restored local history so your UI can rehydrate.
+
+**Body (resume by AI Admin session id):**
+
+```json
+{
+  "mode": "resume-chat-session",
+  "sessionId": "<saved sessionId>"
+}
+```
+
+**Body (resume by provider chat id — e.g. a stored Devs.ai chat id):**
+
+```json
+{
+  "mode": "resume-chat-session",
+  "externalChatId": "<provider chat id>",
+  "fallbackToLocal": false
+}
+```
+
+Provide **either** `sessionId` **or** `externalChatId`. `fallbackToLocal` (default `false`): if the provider's remote chat is gone, drop `external_chat_id` and continue using local-history replay instead of failing with `409`.
+
+**Upstream:** `POST /api/chat-sessions/resume`.
+
+**Auth context:** User-context. The caller must own the session (JWT users) or supply the matching `X-Forwarded-User-Id`. Sessions opened with personal credentials require a user identity to resume (else `403`). Lookups are tenant-scoped, so a provider id from another workspace returns `404`.
+
+**Typical success JSON:**
+
+```json
+{
+  "sessionId": "uuid",
+  "externalChatId": "provider-chat-id or null",
+  "providerType": "devs-ai",
+  "status": "active",
+  "workflowId": "uuid or null",
+  "steps": [ /* same shape as open-chat-session */ ],
+  "ruleSets": [ /* same shape as open-chat-session */ ],
+  "completedSteps": ["generate-timeline"],
+  "workflowVariables": { "generate-timeline.response": "…" },
+  "aiProfileId": "uuid",
+  "aiProfileName": "…",
+  "messages": [
+    { "role": "user", "content": "…" },
+    { "role": "assistant", "content": "…" }
+  ]
+}
+```
+
+After resuming, continue the conversation with `send-chat-message-stream` using the returned `sessionId`. `messages` rehydrates the chat UI; `completedSteps` and `workflowVariables` let a workflow pick up at the next pending step.
+
+**Errors:** `400` (neither id provided), `403` (ownership / personal-credential parity), `404` (not found / cross-tenant), `409` (remote chat no longer available and `fallbackToLocal` not set).
+
+---
+
 ### `send-chat-message-stream` (streaming — step 2)
 
 **Body (free-form message):**
@@ -739,7 +804,7 @@ Files with `source: "USER"` were uploaded by the caller; `source: "SYSTEM"` mean
 
 ### `list-chat-sessions` (retrieve the user's chat sessions)
 
-List all chat sessions for the authenticated user. Use this to build a conversation history UI, let users resume past chats, or display session metadata.
+List all chat sessions for the authenticated user. Use this to build a conversation history UI, let users resume past chats, or display session metadata. To let a user pick a past conversation and continue it, list sessions here, then call `resume-chat-session` with the chosen `id`.
 
 **Body:**
 
@@ -748,13 +813,14 @@ List all chat sessions for the authenticated user. Use this to build a conversat
   "mode": "list-chat-sessions",
   "aiProfileId": "(optional) filter to sessions for a specific AI profile",
   "status": "(optional) filter by status: active | closed",
-  "callingApplication": "(optional) filter to sessions created by a specific app"
+  "callingApplication": "(optional) filter to sessions created by a specific app",
+  "externalChatId": "(optional) find the session for a specific provider chat id"
 }
 ```
 
 All filter fields are optional. Omit them to retrieve all sessions for the user.
 
-**Upstream:** `GET /api/chat-sessions?aiProfileId=...&status=...&callingApplication=...`. The Edge Function adds `X-Forwarded-User-Id` so the backend automatically scopes results to the authenticated user.
+**Upstream:** `GET /api/chat-sessions?aiProfileId=...&status=...&callingApplication=...&externalChatId=...`. The Edge Function adds `X-Forwarded-User-Id` so the backend automatically scopes results to the authenticated user.
 
 **Auth context:** User-context **required**.
 
@@ -3578,6 +3644,8 @@ AI Admin provides purpose-built endpoints for erasing user data. These can be ca
 | `DELETE /api/user-data/:userId/credentials` | Provider credentials only | Self, or admin/owner targeting another member |
 
 All endpoints require `{ "confirm": "DELETE_USER_DATA" }` in the request body.
+
+**Remote chat purge:** Because closing a session preserves the provider's remote chat (so it can be resumed), the session-deleting endpoints (`/:userId` and `/:userId/sessions`) **best-effort purge those remote chats** (e.g. Devs.ai) before dropping the rows. The response reports the count as `remoteChatsPurged`, ensuring closed-but-retained chats are not orphaned on the provider.
 
 **RBAC rules:** Deleting **credentials** or performing a **full purge** (all data) for another user requires the caller to be an **admin** or **owner** of the workspace. Members can always delete their own data. Sessions and diagnostic logs can be deleted by any workspace member regardless of target. If a non-admin member attempts to delete another user's credentials or perform a full purge, AI Admin returns **403**.
 

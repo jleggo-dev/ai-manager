@@ -11,6 +11,20 @@ export const createChatSessionSchema = z.object({
   systemPrompt: z.string().max(50_000).optional().nullable(),
 });
 
+export const resumeChatSessionSchema = z
+  .object({
+    sessionId: z.string().uuid().optional(),
+    externalChatId: z.string().min(1).max(200).optional(),
+    userId: z.string().max(200).optional(),
+    callingApplication: z.string().max(200).optional(),
+    /* Opt-in: if the Devs.ai remote chat is gone, drop external_chat_id and
+       continue with local-history replay instead of failing. Off by default. */
+    fallbackToLocal: z.boolean().optional(),
+  })
+  .refine((data) => Boolean(data.sessionId || data.externalChatId), {
+    message: 'Provide sessionId or externalChatId',
+  });
+
 export const toolOutputsSchema = z
   .object({
     outputs: z.array(z.record(z.string(), z.unknown())).min(1).max(50),

@@ -31,13 +31,15 @@ import { applyFormattingRules } from '../services/formatting-rules.ts';
 import { DiagnosticSession, shouldRunDiagnostics } from '../services/ai-diagnostics.ts';
 import { buildProviderChatOptions } from '../services/ai-profile-runtime-options.ts';
 import { getSetting } from '../models/app-settings.ts';
-import { getAuthContext, effectiveUserId, requireWorkspaceId } from '../db/tenant.ts';
+import { getAuthContext, effectiveUserId, requireWorkspaceId, tenantFrom } from '../db/tenant.ts';
 import { getServiceSupabase } from '../db/service-supabase.ts';
 import { resolveAttachments, resolveAttachmentsAsText } from '../services/attachment-resolver.ts';
 import {
   createChatSession as dbCreateSession,
   getChatSession as dbGetSession,
+  getChatSessionByExternalChatId as dbGetSessionByExternalChatId,
   updateChatSession as dbUpdateSession,
+  reactivateChatSession as dbReactivateSession,
   deleteChatSession as dbDeleteSession,
   createChatMessage,
   listChatMessages,
@@ -106,6 +108,23 @@ interface OpenChatSessionResult {
   }>;
   aiProfileId: string;
   aiProfileName: string;
+}
+
+interface ResumeChatSessionOptions {
+  sessionId?: string | null;
+  externalChatId?: string | null;
+  /* If the provider remote chat is gone, drop external_chat_id and continue
+     with local-history replay instead of throwing. Off by default. */
+  fallbackToLocal?: boolean;
+}
+
+interface ResumeChatSessionResult extends OpenChatSessionResult {
+  /* step_keys already completed in this session (for mid-workflow resume) */
+  completedSteps: string[];
+  /* accumulated workflow variable pipeline state */
+  workflowVariables: Record<string, unknown>;
+  /* locally stored conversation history to restore the UI */
+  messages: ChatMessageRow[];
 }
 
 interface SendChatMessageOptions {
@@ -683,6 +702,133 @@ export async function openChatSession(
 }
 
 /**
+ * Resume a previously opened streaming chat session so a calling application
+ * can continue a prior conversation. Looks the session up by AI Admin
+ * sessionId or by the provider chat id (Devs.ai external_chat_id),
+ * reactivates it if it was closed, and returns the restored local history.
+ *
+ * Streaming chat only — there is no session (and nothing to resume) for
+ * one-shot completion jobs.
+ *
+ * Behavior:
+ *   - Devs.ai sessions: validates the remote chat via Devs.ai "get a chat
+ *     session" before reactivating; if the remote chat is gone, throws
+ *     (or, with fallbackToLocal, drops external_chat_id and replays local
+ *     history via chatCompletionStream).
+ *   - Gemini / model sessions: reactivates and relies on local history.
+ *   - Idempotent: resuming an already-active session is a no-op success.
+ */
+export async function resumeChatSession(options: ResumeChatSessionOptions): Promise<ResumeChatSessionResult> {
+  const { sessionId = null, externalChatId = null, fallbackToLocal = false } = options;
+  if (!sessionId && !externalChatId) {
+    throw new Error('Provide sessionId or externalChatId to resume a chat session');
+  }
+
+  let session = sessionId ? await dbGetSession(sessionId) : null;
+  if (!session && externalChatId) session = await dbGetSessionByExternalChatId(externalChatId);
+  if (!session) throw new Error('Chat session not found');
+
+  const profile = session.ai_profile;
+  if (!profile?.provider) throw new Error('Chat session AI profile has no provider');
+
+  /* Credential parity: sessions opened with personal credentials require a
+     user identity (JWT or X-Forwarded-User-Id) to resume. */
+  const ctx = getAuthContext();
+  const authUserId = effectiveUserId(ctx);
+  if (session.uses_user_credentials && !authUserId) {
+    throw new Error(
+      'This session uses personal credentials. Provide user identity via JWT or X-Forwarded-User-Id header.',
+    );
+  }
+
+  /* Devs.ai: validate the remote chat still exists before reactivating. */
+  let remoteValidated = false;
+  if (session.provider_type === 'devs-ai' && session.external_chat_id) {
+    const provider = await getSessionProviderWithKey(session);
+    const client = await resolveSessionClient(session, provider);
+    if (typeof (client as DevsAiClient).getChatSession === 'function') {
+      try {
+        await (client as DevsAiClient).getChatSession(session.external_chat_id);
+        remoteValidated = true;
+      } catch (err) {
+        if (fallbackToLocal) {
+          await dbUpdateSession(session.id, { external_chat_id: null });
+          session = { ...session, external_chat_id: null };
+        } else {
+          throw new Error(
+            `Remote chat ${session.external_chat_id} is no longer available on the provider: ${errorMessage(err)}`,
+            { cause: err },
+          );
+        }
+      }
+    }
+  }
+
+  /* Reactivate if closed (idempotent if already active), then re-hydrate the
+     joined row so downstream relations/status are fresh. */
+  if (session.status !== 'active') {
+    await dbReactivateSession(session.id);
+    const fresh = await dbGetSession(session.id);
+    if (fresh) session = fresh;
+  }
+
+  /* Re-derive workflow steps + completion state for mid-workflow resume. */
+  let steps: OpenChatSessionResult['steps'] = [];
+  let completedSteps: string[] = [];
+  if (session.workflow_id) {
+    const workflow = await getWorkflow(session.workflow_id).catch(() => null);
+    steps =
+      workflow?.steps?.map((s) => ({
+        stepKey: s.step_key,
+        name: s.name,
+        sortOrder: s.sort_order,
+        isRequired: s.is_required,
+        dependsOn: s.depends_on,
+      })) ?? [];
+    const done = await getCompletedWorkflowSteps(session.id, session.workflow_id);
+    completedSteps = [...done];
+  }
+
+  /* Re-expose rule sets from the linked processing job. */
+  let ruleSets: OpenChatSessionResult['ruleSets'] = [];
+  if (session.processing_job_id) {
+    const job = await getProcessingJob(session.processing_job_id).catch(() => null);
+    const configRuleSets = (job?.config as JobConfig | undefined)?.ruleSets;
+    ruleSets = (Array.isArray(configRuleSets) ? configRuleSets : []).map((rs) => ({
+      key: rs.key,
+      name: rs.name,
+      description: rs.description ?? null,
+    }));
+  }
+
+  const messages = await listChatMessages(session.id);
+
+  console.info('[ai-manager] resume chat session', {
+    sessionId: session.id,
+    externalChatId: session.external_chat_id ?? null,
+    providerType: session.provider_type ?? null,
+    remoteValidated,
+    status: session.status,
+    messageCount: messages.length,
+  });
+
+  return {
+    sessionId: session.id,
+    externalChatId: session.external_chat_id ?? null,
+    providerType: session.provider_type ?? '',
+    status: session.status,
+    workflowId: session.workflow_id ?? null,
+    steps,
+    ruleSets,
+    aiProfileId: session.ai_profile_id,
+    aiProfileName: profile.name,
+    completedSteps,
+    workflowVariables: (session.workflow_variables as Record<string, unknown>) ?? {},
+    messages,
+  };
+}
+
+/**
  * Send a message to an existing chat session and return the raw SSE Response
  * for the route handler to pipe through to the client.
  * Also records the user message immediately and stores the assistant reply
@@ -1007,26 +1153,15 @@ export async function getChatHistory(
 }
 
 /**
- * Close a chat session. Optionally deletes the remote Devs.ai session.
+ * Close a chat session (mark as closed, keep data).
+ *
+ * The remote Devs.ai chat is intentionally PRESERVED so the session can be
+ * resumed later via resumeChatSession. Remote cleanup happens on reset
+ * (clears history) and delete (removes the session entirely).
  */
 export async function closeChatSession(sessionId: string): Promise<ChatSessionRow> {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
-
-  if (session.provider_type === 'devs-ai' && session.external_chat_id) {
-    try {
-      if (session.ai_profile?.provider) {
-        const provider = await getSessionProviderWithKey(session);
-        const client = await resolveSessionClient(session, provider);
-        if (typeof (client as DevsAiClient).deleteChatSession === 'function') {
-          await (client as DevsAiClient).deleteChatSession(session.external_chat_id);
-        }
-      }
-    } catch (_err) {
-      /* best-effort cleanup */
-    }
-  }
-
   return dbUpdateSession(sessionId, { status: 'closed' });
 }
 
@@ -1090,6 +1225,49 @@ export async function removeChatSession(sessionId: string): Promise<void> {
   }
 
   return dbDeleteSession(sessionId);
+}
+
+/**
+ * Best-effort purge of remote Devs.ai chats for all of a user's sessions in
+ * the current workspace. Used by the compliance/user-data deletion paths:
+ * because closing a session now PRESERVES the remote chat (so it can be
+ * resumed), bulk row deletion would otherwise orphan remote chats on the
+ * provider. Never throws — logs and continues. Returns the count purged.
+ */
+export async function purgeRemoteChatsForUser(userId: string): Promise<number> {
+  let rows: Array<
+    Pick<ChatSessionRow, 'id' | 'ai_profile_id' | 'provider_type' | 'external_chat_id' | 'uses_user_credentials' | 'user_id'>
+  > = [];
+  try {
+    const { data, error } = await tenantFrom('chat_sessions')
+      .select('id, ai_profile_id, provider_type, external_chat_id, uses_user_credentials, user_id')
+      .eq('user_id', userId)
+      .eq('provider_type', 'devs-ai')
+      .not('external_chat_id', 'is', null);
+    if (error) throw new Error(error.message);
+    rows = (data as typeof rows) || [];
+  } catch (err) {
+    console.warn('[ai-manager] purgeRemoteChatsForUser: failed to list sessions:', errorMessage(err));
+    return 0;
+  }
+
+  let purged = 0;
+  for (const row of rows) {
+    try {
+      const provider = await getSessionProviderWithKey(row as ChatSessionRow);
+      const client = await resolveSessionClient(row as ChatSessionRow, provider);
+      if (row.external_chat_id && typeof (client as DevsAiClient).deleteChatSession === 'function') {
+        await (client as DevsAiClient).deleteChatSession(row.external_chat_id);
+        purged++;
+      }
+    } catch (err) {
+      console.warn(
+        `[ai-manager] purgeRemoteChatsForUser: failed to delete remote chat ${row.external_chat_id}:`,
+        errorMessage(err),
+      );
+    }
+  }
+  return purged;
 }
 
 /**

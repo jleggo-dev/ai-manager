@@ -140,9 +140,21 @@ while (true) {
 }
 ```
 
+Step C *(optional)* — resume a prior session: to test continuity, store `session.id` (or the provider's `externalChatId`), then later re-open the conversation before streaming again:
+
+```typescript
+const { data: resumed } = await supabase.functions.invoke("ai-admin", {
+  body: {
+    mode: "resume-chat-session",
+    sessionId: savedSessionId, // or: externalChatId: savedExternalChatId
+  },
+});
+// resumed.messages restores prior history; then send-chat-message-stream with resumed.sessionId
+```
+
 ### What success looks like
 
-Text appears **gradually** (like typing), not all at once. If the entire response pops in as one block, streaming is not wired correctly.
+Text appears **gradually** (like typing), not all at once. If the entire response pops in as one block, streaming is not wired correctly. For the resume test, `resumed.messages` should contain the earlier turns, and the next streamed reply should reflect that prior context.
 
 ---
 

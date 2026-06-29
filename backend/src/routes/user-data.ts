@@ -9,6 +9,7 @@
 import { Router, Request, Response } from 'express';
 import { getServiceSupabase } from '../db/service-supabase.ts';
 import { getAuthContext, effectiveUserId } from '../db/tenant.ts';
+import { purgeRemoteChatsForUser } from '../ai-manager/index.ts';
 
 const CONFIRM_STRING = 'DELETE_USER_DATA';
 
@@ -79,6 +80,10 @@ router.delete('/:userId', async (req: Request, res: Response) => {
 
     const svc = getServiceSupabase();
 
+    /* Purge provider-side (Devs.ai) chats before dropping rows, so retained
+       remote chats from closed sessions are not orphaned (best-effort). */
+    const remoteChatsPurged = await purgeRemoteChatsForUser(userId);
+
     const { count: sessionsCount } = await svc
       .from('chat_sessions')
       .delete({ count: 'exact' })
@@ -100,6 +105,7 @@ router.delete('/:userId', async (req: Request, res: Response) => {
     return res.json({
       deleted: {
         sessions: sessionsCount ?? 0,
+        remoteChatsPurged,
         diagnosticLogs: diagnosticLogsCount ?? 0,
         credentials: credentialsCount ?? 0,
       },
@@ -136,13 +142,17 @@ router.delete('/:userId/sessions', async (req: Request, res: Response) => {
     }
 
     const svc = getServiceSupabase();
+
+    /* Purge provider-side (Devs.ai) chats before dropping rows (best-effort). */
+    const remoteChatsPurged = await purgeRemoteChatsForUser(userId);
+
     const { count } = await svc
       .from('chat_sessions')
       .delete({ count: 'exact' })
       .eq('user_id', userId)
       .eq('workspace_id', workspaceId);
 
-    return res.json({ deleted: { sessions: count ?? 0 } });
+    return res.json({ deleted: { sessions: count ?? 0, remoteChatsPurged } });
   } catch (err) {
     console.error('[DELETE /user-data/:userId/sessions]', err);
     return res.status(500).json({ error: 'Failed to delete user sessions' });

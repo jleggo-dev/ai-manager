@@ -260,6 +260,7 @@ This project integrates with AI Admin (${url}) for all AI features.
    - One-shot prompt → POST /api/ai-matcher/run-slot
    - Repeatable task → POST /api/processing-jobs/:id/test
    - Streaming chat → POST /api/chat-sessions + SSE messages
+   - Resume a past chat → POST /api/chat-sessions/resume (by sessionId or externalChatId)
    - Multi-step pipeline → workflow with variable mappings
 3. NEVER expose aim_sk_ API keys in client code. Use server-side proxy.
 4. Set callingApplication: "cursor:<project-name>" on every job/chat call.
@@ -439,10 +440,11 @@ This project integrates with AI Admin (${url}) for all AI features.
 ## When adding AI functionality
 
 - Fetch ${AI_ADMIN_URL}/docs/manifest.json to navigate docs by section.
-- Pattern: one-shot → run-slot | templated → processing-jobs test | streaming → chat sessions | pipeline → workflow.
+- Pattern: one-shot → run-slot | templated → processing-jobs test | streaming → chat sessions | resume → chat-sessions/resume | pipeline → workflow.
 - NEVER expose aim_sk_ keys in client code. Proxy through server/edge function.
 - Always set callingApplication: "claude:<project-name>" on every job/chat call.
 - Wait for SSE [DONE] before sending the next message (409 if concurrent).
+- To continue a past conversation, POST /api/chat-sessions/resume with sessionId (or externalChatId), then send messages as usual.
 
 ## Prompt templates
 

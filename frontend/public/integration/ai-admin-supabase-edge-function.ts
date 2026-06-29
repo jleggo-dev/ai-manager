@@ -41,9 +41,10 @@ const ALL_MODES = [
   "ask-ai-profile          — completion: prompt + profileId + attachments?",
   "run-processing-job      — completion: jobId + variables + attachments?",
   "open-chat-session       — chat step 1: userId + aiProfileId | jobSlug | jobId | workflowSlug | workflowId",
+  "resume-chat-session     — chat: continue a prior session by sessionId | externalChatId (+ fallbackToLocal?)",
   "send-chat-message-stream — chat step 2: sessionId + (message | stepKey + variables | ruleSetKey + variables) + attachments? (returns SSE)",
   "list-chat-files         — list all files (uploaded + AI-generated) for a session",
-  "list-chat-sessions      — chat: list sessions for the authenticated user (optional filters)",
+  "list-chat-sessions      — chat: list sessions for the authenticated user (optional filters incl. externalChatId)",
   "get-chat-session        — chat: retrieve a single session with full message history + stats",
   "submit-tool-outputs     — chat: sessionId + systemMessageId + outputs",
   "store-user-credential   — credentials: providerId + apiKey",
@@ -326,6 +327,45 @@ Deno.serve(async (req) => {
     return proxyJsonResponse(r);
   }
 
+  /* ── Chat: resume-chat-session ──────────────────────────────────── */
+
+  if (mode === "resume-chat-session") {
+    const userIdResult = await requireUserId(req);
+    if (userIdResult instanceof Response) return userIdResult;
+    const userId = userIdResult;
+
+    const sessionId = body.sessionId;
+    const externalChatId = body.externalChatId;
+    const hasSessionId = typeof sessionId === "string" && sessionId.trim();
+    const hasExternalChatId =
+      typeof externalChatId === "string" && externalChatId.trim();
+    if (!hasSessionId && !hasExternalChatId) {
+      return json(
+        {
+          error:
+            'Provide "sessionId" (AI Admin session id) or "externalChatId" (provider chat id, e.g. Devs.ai) to resume.',
+        },
+        400,
+      );
+    }
+
+    const resumePayload: Record<string, unknown> = {};
+    if (hasSessionId) resumePayload.sessionId = (sessionId as string).trim();
+    if (hasExternalChatId) {
+      resumePayload.externalChatId = (externalChatId as string).trim();
+    }
+    // Opt-in: if the provider's remote chat is gone, continue with local
+    // history replay instead of failing with 409.
+    if (body.fallbackToLocal === true) resumePayload.fallbackToLocal = true;
+
+    const r = await fetch(`${base}/api/chat-sessions/resume`, {
+      method: "POST",
+      headers: aiAdminHeaders(userId),
+      body: JSON.stringify(resumePayload),
+    });
+    return proxyJsonResponse(r);
+  }
+
   /* ── Chat: send-chat-message-stream ─────────────────────────────── */
 
   if (mode === "send-chat-message-stream") {
@@ -450,6 +490,9 @@ Deno.serve(async (req) => {
     }
     if (typeof body.callingApplication === "string" && body.callingApplication.trim()) {
       params.set("callingApplication", body.callingApplication.trim());
+    }
+    if (typeof body.externalChatId === "string" && body.externalChatId.trim()) {
+      params.set("externalChatId", body.externalChatId.trim());
     }
 
     const qs = params.toString();

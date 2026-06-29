@@ -168,12 +168,18 @@ Use when your team defined a **processing job** in AI Admin (slug, prompt templa
    **Body:** `{ "systemMessageId": "…", "outputs": [{ "toolCallId": "…", "output": "…" }] }`
    Used to resume a paused stream after an MCP tool requires user action (e.g. OAuth). Response is SSE.
 
-4. `GET /api/chat-sessions`
-   **Query params (all optional):** `userId`, `aiProfileId`, `status` (`active` | `closed`), `callingApplication`.
+4. `POST /api/chat-sessions/resume` *(resume a prior conversation)*
+   **Body:** `{ "sessionId": "…" }` **or** `{ "externalChatId": "…" }` (the provider chat id, e.g. Devs.ai), plus optional `fallbackToLocal: true`.
+   Use this when an end user returns to a previous conversation. It reactivates a `closed` session (idempotent if already `active`), validates the provider's remote chat (Devs.ai), and returns a JSON payload with the restored local `messages`, plus `completedSteps` and `workflowVariables` for mid-workflow resume. Then continue with `POST /api/chat-sessions/:id/messages` using the returned `sessionId`.
+   `fallbackToLocal` (default `false`): if the remote chat is gone, drop `external_chat_id` and continue with local-history replay instead of returning `409`.
+   **Edge Function mode:** `resume-chat-session`.
+
+5. `GET /api/chat-sessions`
+   **Query params (all optional):** `userId`, `aiProfileId`, `status` (`active` | `closed`), `callingApplication`, `externalChatId`.
    API-key callers with `X-Forwarded-User-Id` are automatically scoped to that user's sessions. Returns a JSON array of session objects ordered by `updated_at` desc (limit 200). Each object includes `id`, `status`, `message_count`, token totals, timestamps, and `ai_profile: { id, name }`.
    **Edge Function mode:** `list-chat-sessions`.
 
-5. `GET /api/chat-sessions/:id`
+6. `GET /api/chat-sessions/:id`
    Returns the full session — metadata, complete `messages` array (chronological), and a `stats` object with aggregated metrics (`messageCount`, `assistantMessageCount`, `avgResponseMs`, `avgFirstTokenMs`, `totalPromptTokens`, `totalCompletionTokens`, `totalTokens`). API-key callers with `X-Forwarded-User-Id` can only access sessions they own.
    **Edge Function mode:** `get-chat-session`.
 
@@ -633,9 +639,11 @@ Rule sets are JSON objects inside `config.ruleSets`, not standalone database ent
 
 ## 11. Session write restrictions
 
-JWT (admin UI) callers can only **write** to sessions they own. This means `POST .../messages`, `POST .../tool-outputs`, `PUT .../reset`, and `PUT .../close` return **403** if `session.user_id` does not match the JWT user.
+JWT (admin UI) callers can only **write** to sessions they own. This means `POST .../messages`, `POST .../tool-outputs`, `POST /resume`, `PUT .../reset`, and `PUT .../close` return **403** if `session.user_id` does not match the JWT user.
 
 **Read and delete remain workspace-wide** — any authenticated member can view any session (for troubleshooting) and delete any session (for remediating accidental exposure of sensitive content).
+
+**Lifecycle:** `close` marks the session `closed` but **preserves** the provider's remote chat so it can later be resumed via `POST /api/chat-sessions/resume`. `reset` clears history (and the remote chat where supported). `DELETE` removes the session and best-effort purges the remote chat.
 
 API-key callers retain workspace-wide write access (trusted server credentials). API keys with `X-Forwarded-User-Id` are still scoped to the forwarded user's sessions.
 
@@ -652,7 +660,7 @@ AI Admin provides purpose-built endpoints for erasing user data in compliance wi
 | `DELETE /api/user-data/:userId/diagnostic-logs` | Diagnostic logs only |
 | `DELETE /api/user-data/:userId/credentials` | Provider credentials only |
 
-All endpoints require `{ "confirm": "DELETE_USER_DATA" }` in the request body. The response includes counts of deleted records.
+All endpoints require `{ "confirm": "DELETE_USER_DATA" }` in the request body. The response includes counts of deleted records. The session-deleting endpoints also **best-effort purge the provider's remote chats** (e.g. Devs.ai) before dropping rows — reported as `remoteChatsPurged` — so closed-but-retained chats are not orphaned on the provider.
 
 **UI location:** Settings → Data Management tab (deliberately the last tab to prevent accidental clicks).
 

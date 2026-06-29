@@ -351,6 +351,10 @@ Step 4: generate-report         (depends on: propose-solution)
 
 The workflow's AI profile provides the LLM connection, while each step's linked processing job provides the prompt template and formatting rules for that specific task.
 
+### Resuming a Conversation
+
+Chat sessions are durable. Closing a session marks it `closed` but **preserves** both the local history and the provider's remote chat (e.g. the Devs.ai chat id), so an end user can return later and continue where they left off. To resume, call `POST /api/chat-sessions/resume` with either the AI Admin `sessionId` or the provider's `externalChatId`. The session is reactivated (idempotent if already active), the remote chat is validated, and the response restores the local `messages`, `completedSteps`, and `workflowVariables` so mid-workflow pipelines pick up exactly where they stopped. (There is nothing to resume for one-shot completion jobs — only streaming chat sessions carry state.)
+
 ---
 
 ## Choosing the Right Pattern
