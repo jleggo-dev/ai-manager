@@ -604,11 +604,13 @@ export async function openChatSession(
     }
   }
 
+  if (profile) {
+    profile = hydrateAiProfileProviderKeys(profile);
+  }
+
   if (!profile?.provider) {
     throw new Error('Could not resolve AI profile with provider');
   }
-
-  profile = hydrateAiProfileProviderKeys(profile);
 
   const provider: ProviderRow = profile.provider;
   const providerType = provider.type;
