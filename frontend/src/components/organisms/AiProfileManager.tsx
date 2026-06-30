@@ -66,6 +66,9 @@ import * as api from '../../services/api';
 import type { AiProfile, Provider, LlmModel } from '../../types/api';
 import {
   DEVS_AI_BUILTIN_TOOL_OPTIONS,
+  DEVS_AI_V2_BUILTIN_TOOL_OPTIONS,
+  DEVS_AI_V2_CHAT_MODE_OPTIONS,
+  DEVS_AI_V2_THREAD_MODE_OPTIONS,
   DEFAULT_RUNTIME_OPTIONS,
   normaliseRuntimeOptions,
 } from '../../lib/runtime-options';
@@ -485,7 +488,7 @@ export default function AiProfileManager() {
       : filteredAndGroupedProfiles.groups.reduce((sum, g) => sum + g.items.length, 0);
 
   const selectedProviderType = providers.find((p) => p.id === form.provider_id)?.type || '';
-  const isModelOnlyProvider = selectedProviderType === 'google-gemini';
+  const isModelOnlyProvider = selectedProviderType === 'google-gemini' || selectedProviderType === 'devs-ai-v2';
 
   /* Build select options from available AIs (Devs.ai format) */
   const aiOptions = availableAis.map((ai) => ({
@@ -507,6 +510,26 @@ export default function AiProfileManager() {
   })();
 
   const providerOptions = providers.map((p) => ({ value: p.id, label: `${p.name} (${p.type})` }));
+
+  function toggleDevsAiV2Tool(toolKey: string, enabled: boolean) {
+    setForm((prev) => {
+      const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options, selectedProviderType);
+      const currentTools = runtimeOptions.devs_ai_v2.built_in_tools;
+      const nextTools: string[] = enabled
+        ? Array.from(new Set<string>([...currentTools, toolKey]))
+        : currentTools.filter((t: string) => t !== toolKey);
+      return {
+        ...prev,
+        runtime_options: {
+          ...runtimeOptions,
+          devs_ai_v2: {
+            ...runtimeOptions.devs_ai_v2,
+            built_in_tools: nextTools,
+          },
+        },
+      };
+    });
+  }
 
   function toggleDevsAiTool(toolKey: string, enabled: boolean) {
     setForm((prev) => {
@@ -1184,6 +1207,89 @@ export default function AiProfileManager() {
                       )}
                     </>
                   )}
+                </Stack>
+              </Paper>
+            )}
+
+            {selectedProviderType === 'devs-ai-v2' && profileType === 'model' && (
+              <Paper withBorder p="sm" radius="sm">
+                <Stack gap="xs">
+                  <Text size="sm" fw={600}>
+                    Devs.ai v2 Runtime Options
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Responses API v2 — built-in tools, chat mode, and threading behavior.
+                  </Text>
+                  {DEVS_AI_V2_BUILTIN_TOOL_OPTIONS.map((tool) => (
+                    <Switch
+                      key={tool.key}
+                      size="sm"
+                      label={tool.label}
+                      checked={normaliseRuntimeOptions(form.runtime_options, 'devs-ai-v2').devs_ai_v2.built_in_tools.includes(
+                        tool.key,
+                      )}
+                      onChange={(e) => toggleDevsAiV2Tool(tool.key, e.currentTarget.checked)}
+                    />
+                  ))}
+                  <Select
+                    label="Chat mode"
+                    size="xs"
+                    data={[...DEVS_AI_V2_CHAT_MODE_OPTIONS]}
+                    value={normaliseRuntimeOptions(form.runtime_options, 'devs-ai-v2').devs_ai_v2.chat_mode}
+                    onChange={(val) => {
+                      if (!val) return;
+                      setForm((prev) => {
+                        const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options, 'devs-ai-v2');
+                        return {
+                          ...prev,
+                          runtime_options: {
+                            ...runtimeOptions,
+                            devs_ai_v2: { ...runtimeOptions.devs_ai_v2, chat_mode: val as 'execute' | 'chat' | 'plan' },
+                          },
+                        };
+                      });
+                    }}
+                  />
+                  <Select
+                    label="Thread mode"
+                    size="xs"
+                    data={[...DEVS_AI_V2_THREAD_MODE_OPTIONS]}
+                    value={normaliseRuntimeOptions(form.runtime_options, 'devs-ai-v2').devs_ai_v2.thread_mode}
+                    onChange={(val) => {
+                      if (!val) return;
+                      setForm((prev) => {
+                        const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options, 'devs-ai-v2');
+                        return {
+                          ...prev,
+                          runtime_options: {
+                            ...runtimeOptions,
+                            devs_ai_v2: {
+                              ...runtimeOptions.devs_ai_v2,
+                              thread_mode: val as 'collect' | 'steer' | 'interrupt' | 'force',
+                            },
+                          },
+                        };
+                      });
+                    }}
+                  />
+                  <Switch
+                    size="sm"
+                    label="Parallel Tool Calls"
+                    checked={normaliseRuntimeOptions(form.runtime_options, 'devs-ai-v2').devs_ai_v2.parallel_tool_calls}
+                    onChange={(e) => {
+                      const checked = e.currentTarget.checked;
+                      setForm((prev) => {
+                        const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options, 'devs-ai-v2');
+                        return {
+                          ...prev,
+                          runtime_options: {
+                            ...runtimeOptions,
+                            devs_ai_v2: { ...runtimeOptions.devs_ai_v2, parallel_tool_calls: checked },
+                          },
+                        };
+                      });
+                    }}
+                  />
                 </Stack>
               </Paper>
             )}

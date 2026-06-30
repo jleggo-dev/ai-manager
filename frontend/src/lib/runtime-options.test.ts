@@ -77,6 +77,12 @@ describe('DEFAULT_RUNTIME_OPTIONS', () => {
         generate_citations: false,
         parallel_tool_calls: false,
       },
+      devs_ai_v2: {
+        built_in_tools: [],
+        parallel_tool_calls: true,
+        chat_mode: 'execute',
+        thread_mode: 'collect',
+      },
       google_gemini: {
         grounding_with_google_search: false,
       },

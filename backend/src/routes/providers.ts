@@ -17,6 +17,7 @@ import {
   deleteLlmModel,
 } from '../models/llm-models.ts';
 import { DevsAiClient } from '../integrations/devs-ai/client.ts';
+import { DevsAiV2Client } from '../integrations/devs-ai-v2/client.ts';
 import { GoogleGeminiClient } from '../integrations/google-gemini/client.ts';
 import {
   categorizeModel,
@@ -67,7 +68,7 @@ function filterModelsForProvider(providerType: string, models: LlmModelRow[] = [
 
 function modelIdMatchesProvider(providerType: string, modelId: string): boolean {
   if (providerType === 'google-gemini') return isGoogleGeminiCatalogModel(modelId);
-  if (providerType === 'devs-ai') return true;
+  if (providerType === 'devs-ai' || providerType === 'devs-ai-v2') return true;
   return true;
 }
 
@@ -185,6 +186,15 @@ router.post('/:id/test', async (req: Request, res: Response) => {
       const ais = await client.listAIs('ALL');
       return res.json({ success: true, ai_count: Array.isArray(ais) ? ais.length : 0 });
     }
+    if (provider.type === 'devs-ai-v2') {
+      const client = new DevsAiV2Client(provider.base_url, provider.api_key);
+      const models = await client.listModels();
+      return res.json({
+        success: true,
+        model_count: models.length,
+        message: models.length > 0 ? 'v2 provider reachable' : 'v2 provider reachable (no models listed)',
+      });
+    }
     if (provider.type === 'google-gemini') {
       const client = new GoogleGeminiClient(provider.base_url, provider.api_key);
       const models = await client.listModels();
@@ -296,8 +306,11 @@ router.post('/:id/models/sync', async (req: Request, res: Response) => {
               id.includes('aqa')
             ),
         );
-    } else if (provider.type === 'devs-ai') {
-      const client = new DevsAiClient(provider.base_url, provider.api_key);
+    } else if (provider.type === 'devs-ai' || provider.type === 'devs-ai-v2') {
+      const client =
+        provider.type === 'devs-ai-v2'
+          ? new DevsAiV2Client(provider.base_url, provider.api_key)
+          : new DevsAiClient(provider.base_url, provider.api_key);
       try {
         const raw = await client.listModels();
         const filtered = (raw || [])
@@ -319,7 +332,7 @@ router.post('/:id/models/sync', async (req: Request, res: Response) => {
         discoveredModelIds = [...DEVS_AI_SEED_MODEL_IDS];
       }
     } else {
-      return res.status(400).json({ error: 'Model discovery is supported for Google Gemini and Devs.ai providers' });
+      return res.status(400).json({ error: 'Model discovery is supported for Google Gemini, Devs.ai, and Devs.ai v2 providers' });
     }
 
     const unique = [...new Set(discoveredModelIds.filter(Boolean))]

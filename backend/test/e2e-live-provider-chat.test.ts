@@ -30,7 +30,7 @@ const TEST_USER_ID = '00000000-0000-4000-8000-0000000000b1';
 const CALLING_APP = 'e2e-test:live-provider-chat';
 
 /** Provider types we expect to be able to exercise when present. */
-const TARGET_PROVIDER_TYPES = ['devs-ai', 'google-gemini'] as const;
+const TARGET_PROVIDER_TYPES = ['devs-ai', 'devs-ai-v2', 'google-gemini'] as const;
 
 interface ApiProfile {
   id: string;

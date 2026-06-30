@@ -155,6 +155,10 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 ### POST /api/providers
 **Body**: `{ name, type, base_url, api_key?, is_active?, request_timeout_ms? }`
 
+**Provider types**: `devs-ai` (v1 chat/completions), `devs-ai-v2` (Responses API v2 — native JSON schema, threaded chat via `previous_response_id`), `google-gemini`.
+
+`devs-ai-v2` sessions store threading state in `chat_sessions.provider_metadata` (`previous_response_id`, `conversation_id`, `last_sequence`). v2 tool continuations use `POST /api/v2/responses/{id}/resume` (wired through `POST /api/chat-sessions/:id/tool-outputs`).
+
 ### POST .../models
 **Body**: `{ models: [{ external_ai_id, display_name?, category?, is_active? }] }` (1–100 items)
 

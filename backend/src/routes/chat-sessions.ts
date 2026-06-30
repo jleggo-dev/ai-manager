@@ -11,6 +11,7 @@ import {
   resumeChatSession,
   sendChatMessage,
   submitChatToolOutputs,
+  updateV2ProviderMetadata,
   recordAssistantMessage,
   extractAndAccumulateOutputs,
   fulfillPendingToolJobCalls,
@@ -317,6 +318,8 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
     const internalToolNames = new Set(getToolJobsFromProfile(chatSessionRow.ai_profile).map((t) => t.exposeAs));
     const pendingInternalToolCalls: PendingToolCall[] = [];
     let pendingSystemMessageId: string | undefined;
+    let pendingV2ResponseId: string | undefined;
+    const isV2Session = chatSessionRow.provider_type === 'devs-ai-v2';
 
     const body = sseResponse.body as ReadableStream<Uint8Array> | null;
     if (!body) {
@@ -414,7 +417,55 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
               if (parsed.modelId) streamModel = parsed.modelId;
               const completeText = parsed.text ?? parsed.content ?? parsed.delta ?? '';
               if (completeText && !fullContent) fullContent = completeText;
+              if (isV2Session && parsed.responseId) {
+                pendingV2ResponseId = parsed.responseId as string;
+                updateV2ProviderMetadata(sessionId, {
+                  previous_response_id: parsed.responseId as string,
+                  conversation_id: (parsed.conversationId as string) || undefined,
+                  last_sequence:
+                    parsed.lastSequence != null ? Number(parsed.lastSequence) : undefined,
+                }).catch((err) =>
+                  console.warn('[chat-sessions] Failed to persist v2 provider_metadata:', errorMessage(err)),
+                );
+              }
               continue;
+            }
+
+            if (isV2Session && parsed.type === 'v2.response.created' && parsed.responseId) {
+              pendingV2ResponseId = parsed.responseId as string;
+            }
+
+            /* v2 function_call events — queue internal tool-jobs for server-side fulfillment */
+            if (isV2Session) {
+              if (parsed.type === 'response.output_item.added') {
+                const item = parsed.item as { type?: string; name?: string; call_id?: string; id?: string } | undefined;
+                if (item?.type === 'function_call' && item.name) {
+                  const toolCallId = item.call_id || item.id;
+                  if (toolCallId && internalToolNames.has(item.name)) {
+                    pendingInternalToolCalls.push({
+                      toolCallId,
+                      name: item.name,
+                      arguments: undefined,
+                    });
+                  }
+                }
+              }
+              if (parsed.type === 'response.function_call_arguments.done') {
+                const name = parsed.name as string | undefined;
+                const toolCallId = (parsed.call_id || parsed.item_id) as string | undefined;
+                if (name && toolCallId && internalToolNames.has(name)) {
+                  const existing = pendingInternalToolCalls.find((t) => t.toolCallId === toolCallId);
+                  if (existing) {
+                    existing.arguments = parsed.arguments as string | undefined;
+                  } else {
+                    pendingInternalToolCalls.push({
+                      toolCallId,
+                      name,
+                      arguments: parsed.arguments as string | undefined,
+                    });
+                  }
+                }
+              }
             }
 
             /* Forward tool.call events so calling apps can handle
@@ -510,11 +561,9 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
           chatSessionRow.calling_application || 'unknown',
         );
         if (outputs.length > 0) {
-          const toolStream = await submitChatToolOutputs(
-            sessionId,
-            pendingSystemMessageId || '',
-            outputs,
-          );
+          const toolStream = isV2Session
+            ? await submitChatToolOutputs(sessionId, pendingV2ResponseId || '', outputs)
+            : await submitChatToolOutputs(sessionId, pendingSystemMessageId || '', outputs);
           const toolBody = toolStream.response.body as ReadableStream<Uint8Array> | null;
           if (toolBody) {
             const toolReader = toolBody.getReader();

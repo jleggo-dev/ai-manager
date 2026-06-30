@@ -24,8 +24,8 @@ import { getWorkflow, getWorkflowBySlug, getWorkflowStepByKey, listWorkflowSteps
 import { upsertCallingApplication } from '../models/calling-applications.ts';
 import { getAiProfileWithKeys, hydrateAiProfileProviderKeys } from '../models/ai-profiles.ts';
 import { DevsAiClient } from '../integrations/devs-ai/client.ts';
-import { GoogleGeminiClient } from '../integrations/google-gemini/client.ts';
-import { createLlmClientForProvider, createLlmClientForUser } from '../integrations/client-factory.ts';
+import { DevsAiV2Client } from '../integrations/devs-ai-v2/client.ts';
+import { createLlmClientForProvider, createLlmClientForUser, type LlmClientInstance } from '../integrations/client-factory.ts';
 import { getUserCredential } from '../models/user-provider-credentials.ts';
 import { applyFormattingRules } from '../services/formatting-rules.ts';
 import { DiagnosticSession, shouldRunDiagnostics } from '../services/ai-diagnostics.ts';
@@ -187,6 +187,8 @@ interface JobConfig {
   promptTemplate?: string;
   formattingRules?: FormattingRule[];
   expectedResponseFormat?: string | null;
+  expectedSchema?: { fields?: Record<string, unknown> } | null;
+  applyFormattingRules?: boolean;
   advanced?: Record<string, unknown>;
   ruleSets?: RuleSetConfig[];
 }
@@ -331,7 +333,11 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
 
     const client = createLlmClientForProvider(provider);
     const primaryModel = String(modelOverride || profile.external_ai_id || '').trim();
-    const chatOptions = buildProviderChatOptions(provider.type, profile.runtime_options ?? undefined);
+    const providerTypeNorm = String(provider.type || '').trim().toLowerCase();
+    const chatOptions = buildProviderChatOptions(provider.type, profile.runtime_options ?? undefined, {
+      expectedSchema:
+        providerTypeNorm === 'devs-ai-v2' ? (jobConfig.expectedSchema as JobConfig['expectedSchema']) : undefined,
+    });
     const failoverProvider: ProviderRow | undefined = profile.failover_provider ?? undefined;
     const failoverAiId = String(profile.failover_external_ai_id || '').trim();
     const hasFailover = enableFailover && !modelOverride && failoverProvider && failoverAiId;
@@ -376,7 +382,7 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
     let finishReason: string | null = null;
 
     async function callWithClient(
-      llmClient: DevsAiClient | GoogleGeminiClient,
+      llmClient: LlmClientInstance,
       modelId: string,
       msgs: ChatMessage[],
       opts: Record<string, unknown>,
@@ -470,7 +476,11 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
     /* ── 6. Apply formatting rules ────────────────────────── */
     if (fullDiagnostics) diag.startFormattingTimer();
 
-    const formattingRules: FormattingRule[] = jobConfig.formattingRules || [];
+    const hasNativeV2Schema =
+      providerTypeNorm === 'devs-ai-v2' &&
+      Boolean(jobConfig.expectedSchema?.fields && Object.keys(jobConfig.expectedSchema.fields).length > 0);
+    const skipFormatting = hasNativeV2Schema && !jobConfig.applyFormattingRules;
+    const formattingRules: FormattingRule[] = skipFormatting ? [] : jobConfig.formattingRules || [];
     const { formatted, steps } = applyFormattingRules(rawContent, formattingRules);
 
     if (fullDiagnostics) diag.endFormattingTimer(formattingRules.length);
@@ -1063,7 +1073,14 @@ export async function sendChatMessage(
       const lastMsg = chatMessages[chatMessages.length - 1];
       if (lastMsg) lastMsg.content = enrichedContent;
     }
-    const chatOptions = buildProviderChatOptions(provider.type, profile?.runtime_options || {});
+    const chatOptions = buildProviderChatOptions(provider.type, profile?.runtime_options || {}, {
+      previousResponseId: (session.provider_metadata as { previous_response_id?: string } | null)?.previous_response_id,
+      conversationId: (session.provider_metadata as { conversation_id?: string } | null)?.conversation_id,
+      expectedSchema:
+        providerType === 'devs-ai-v2'
+          ? ((resolvedJob?.config as JobConfig | undefined)?.expectedSchema as JobConfig['expectedSchema'])
+          : undefined,
+    });
     const modelId = String(profile?.external_ai_id || '').trim();
     sseResponse = await client.chatCompletionStream(modelId, chatMessages, { ...chatOptions, timeoutMs });
   } else {
@@ -1100,11 +1117,19 @@ export async function submitChatToolOutputs(
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
   if (session.status !== 'active') throw new Error(`Chat session ${sessionId} is ${session.status}`);
-  if (!session.external_chat_id) throw new Error('Session has no external chat id (tool outputs require Devs.ai)');
 
   const profile = session.ai_profile;
   if (!profile?.provider) throw new Error('Chat session AI profile has no provider');
   const provider = await getSessionProviderWithKey(session);
+
+  if (provider.type === 'devs-ai-v2') {
+    const meta = (session.provider_metadata || {}) as { previous_response_id?: string };
+    const responseId = meta.previous_response_id;
+    if (!responseId) throw new Error('v2 session has no previous_response_id for tool resume');
+    return submitV2ToolOutputs(sessionId, responseId, outputs);
+  }
+
+  if (!session.external_chat_id) throw new Error('Session has no external chat id (tool outputs require Devs.ai)');
 
   const client = await resolveSessionClient(session, provider);
 
@@ -1117,6 +1142,48 @@ export async function submitChatToolOutputs(
   );
 
   return { response: sseResponse, sessionId };
+}
+
+/**
+ * Submit tool outputs to a Devs.ai v2 response via POST /responses/{id}/resume.
+ */
+export async function submitV2ToolOutputs(
+  sessionId: string,
+  responseId: string,
+  outputs: Array<{ toolCallId: string; output: string }>,
+): Promise<{ response: globalThis.Response; sessionId: string }> {
+  const session = await dbGetSession(sessionId);
+  if (!session) throw new Error(`Chat session ${sessionId} not found`);
+  if (session.status !== 'active') throw new Error(`Chat session ${sessionId} is ${session.status}`);
+
+  const profile = session.ai_profile;
+  if (!profile?.provider) throw new Error('Chat session AI profile has no provider');
+  const provider = await getSessionProviderWithKey(session);
+  if (provider.type !== 'devs-ai-v2') {
+    throw new Error(`submitV2ToolOutputs requires devs-ai-v2 provider, got "${provider.type}"`);
+  }
+
+  const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
+  const timeoutMs = await resolveTimeoutMs({}, provider);
+  const v2Outputs = outputs.map((o) => ({ tool_call_id: o.toolCallId, output: o.output }));
+  const sseResponse = await client.resumeResponseStream(responseId, v2Outputs, { timeoutMs });
+
+  return { response: sseResponse, sessionId };
+}
+
+/** Persist v2 threading metadata on a chat session after a completed response. */
+export async function updateV2ProviderMetadata(
+  sessionId: string,
+  patch: { previous_response_id?: string; conversation_id?: string; last_sequence?: number },
+): Promise<void> {
+  const session = await dbGetSession(sessionId);
+  if (!session) return;
+  const current = (session.provider_metadata || {}) as Record<string, unknown>;
+  const next: Record<string, unknown> = { ...current };
+  if (patch.previous_response_id) next.previous_response_id = patch.previous_response_id;
+  if (patch.conversation_id) next.conversation_id = patch.conversation_id;
+  if (patch.last_sequence != null) next.last_sequence = patch.last_sequence;
+  await dbUpdateSession(sessionId, { provider_metadata: next });
 }
 
 /**
@@ -1227,19 +1294,27 @@ export async function resetChatSession(sessionId: string): Promise<ChatSessionRo
 
   await deleteChatMessages(sessionId);
 
+  const resetUpdates: Partial<ChatSessionRow> = {
+    status: 'active',
+    message_count: session.system_prompt ? 1 : 0,
+    total_prompt_tokens: 0,
+    total_completion_tokens: 0,
+    workflow_variables: {},
+  };
+  if (session.provider_type === 'devs-ai-v2') {
+    resetUpdates.provider_metadata = null;
+  }
+
   if (session.system_prompt) {
     await createChatMessage({
       chat_session_id: sessionId,
       role: 'system',
       content: session.system_prompt,
     });
+    resetUpdates.message_count = 1;
   }
 
-  return dbUpdateSession(sessionId, {
-    message_count: 0,
-    total_prompt_tokens: 0,
-    total_completion_tokens: 0,
-  });
+  return dbUpdateSession(sessionId, resetUpdates);
 }
 
 /**

@@ -3,12 +3,14 @@ import { useState, FormEvent } from 'react';
 import type { Provider } from '../../types/api';
 
 const PROVIDER_TYPES = [
-  { value: 'devs-ai', label: 'Devs.ai' },
+  { value: 'devs-ai', label: 'Devs.ai (API v1)' },
+  { value: 'devs-ai-v2', label: 'Devs.ai (API v2)' },
   { value: 'google-gemini', label: 'Google Gemini' },
 ];
 
 const DEFAULT_BASE_URL_BY_TYPE: Record<string, string> = {
   'devs-ai': 'https://devs.ai',
+  'devs-ai-v2': 'https://devs.ai',
   'google-gemini': 'https://generativelanguage.googleapis.com',
 };
 

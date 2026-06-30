@@ -3167,6 +3167,8 @@ function BuildRulesTab({
       ? cfg.expectedSchema
       : null;
   const schemaFieldCount = expectedSchema?.fields ? Object.keys(expectedSchema.fields).length : 0;
+  const isV2Profile = selectedJobFull.ai_profile?.provider?.type === 'devs-ai-v2';
+  const hasNativeV2Schema = isV2Profile && schemaFieldCount > 0;
 
   function addRule(ruleType: string) {
     setAppliedRules((prev) => [...prev, { type: ruleType, order: prev.length, options: {} }]);
@@ -3216,6 +3218,13 @@ function BuildRulesTab({
   return (
     <Stack gap="lg">
       <Title order={4}>{selectedJobFull.name} — Prompt & Rules Configuration</Title>
+
+      {hasNativeV2Schema && (
+        <Alert variant="light" color="blue" title="Native structured output (v2)">
+          Structured output is enforced by the Devs.ai v2 provider when Expected Schema is set. JSON build rules such as
+          trim-to-json are optional — use them only if you need a post-processing validation layer.
+        </Alert>
+      )}
 
       {jobVariables.length > 0 && <VariablesReference variables={jobVariables} />}
 
