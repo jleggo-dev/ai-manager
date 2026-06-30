@@ -778,7 +778,7 @@ export async function resumeChatSession(options: ResumeChatSessionOptions): Prom
     );
   }
 
-  /* Devs.ai: validate the remote chat still exists before reactivating. */
+  /* Devs.ai v1: validate the remote chat still exists before reactivating. */
   let remoteValidated = false;
   if (session.provider_type === 'devs-ai' && session.external_chat_id) {
     const provider = await getSessionProviderWithKey(session);
@@ -794,6 +794,29 @@ export async function resumeChatSession(options: ResumeChatSessionOptions): Prom
         } else {
           throw new Error(
             `Remote chat ${session.external_chat_id} is no longer available on the provider: ${errorMessage(err)}`,
+            { cause: err },
+          );
+        }
+      }
+    }
+  }
+
+  /* Devs.ai v2: validate the last response still exists when we have threading metadata. */
+  if (session.provider_type === 'devs-ai-v2') {
+    const meta = (session.provider_metadata || {}) as { previous_response_id?: string };
+    if (meta.previous_response_id) {
+      const provider = await getSessionProviderWithKey(session);
+      const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
+      try {
+        await client.getResponse(meta.previous_response_id);
+        remoteValidated = true;
+      } catch (err) {
+        if (fallbackToLocal) {
+          await dbUpdateSession(session.id, { provider_metadata: null });
+          session = { ...session, provider_metadata: null };
+        } else {
+          throw new Error(
+            `Remote v2 response ${meta.previous_response_id} is no longer available: ${errorMessage(err)}`,
             { cause: err },
           );
         }
@@ -1184,6 +1207,72 @@ export async function updateV2ProviderMetadata(
   if (patch.conversation_id) next.conversation_id = patch.conversation_id;
   if (patch.last_sequence != null) next.last_sequence = patch.last_sequence;
   await dbUpdateSession(sessionId, { provider_metadata: next });
+}
+
+/**
+ * Cancel the in-flight Devs.ai v2 response for a chat session.
+ * Only supported when provider_type is devs-ai-v2.
+ */
+export async function cancelV2ChatResponse(
+  sessionId: string,
+): Promise<{ cancelled: boolean; responseId: string }> {
+  const session = await dbGetSession(sessionId);
+  if (!session) throw new Error(`Chat session ${sessionId} not found`);
+  if (session.provider_type !== 'devs-ai-v2') {
+    throw new Error(`cancel is only supported for devs-ai-v2 sessions (got "${session.provider_type}")`);
+  }
+
+  const profile = session.ai_profile;
+  if (!profile?.provider) throw new Error('Chat session AI profile has no provider');
+  const provider = await getSessionProviderWithKey(session);
+
+  const meta = (session.provider_metadata || {}) as { previous_response_id?: string };
+  const responseId = meta.previous_response_id;
+  if (!responseId) throw new Error('No v2 response id in provider_metadata to cancel');
+
+  const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
+  await client.cancelResponse(responseId);
+
+  console.info('[ai-manager] cancelled v2 response', { sessionId, responseId });
+  return { cancelled: true, responseId };
+}
+
+/**
+ * Reconnect to a Devs.ai v2 response stream after a disconnect.
+ * Uses provider_metadata.last_sequence when lastSequence is not supplied.
+ * Only supported when provider_type is devs-ai-v2.
+ */
+export async function reconnectV2ChatStream(
+  sessionId: string,
+  options: { lastSequence?: number } = {},
+): Promise<{ response: globalThis.Response; sessionId: string }> {
+  const session = await dbGetSession(sessionId);
+  if (!session) throw new Error(`Chat session ${sessionId} not found`);
+  if (session.status !== 'active') throw new Error(`Chat session ${sessionId} is ${session.status}`);
+  if (session.provider_type !== 'devs-ai-v2') {
+    throw new Error(`stream reconnect is only supported for devs-ai-v2 sessions (got "${session.provider_type}")`);
+  }
+
+  const profile = session.ai_profile;
+  if (!profile?.provider) throw new Error('Chat session AI profile has no provider');
+  const provider = await getSessionProviderWithKey(session);
+
+  const meta = (session.provider_metadata || {}) as {
+    previous_response_id?: string;
+    last_sequence?: number;
+  };
+  const responseId = meta.previous_response_id;
+  if (!responseId) throw new Error('No v2 response id in provider_metadata to reconnect');
+
+  const lastSequence =
+    options.lastSequence != null ? options.lastSequence : Number(meta.last_sequence ?? 0) || 0;
+
+  const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
+  const timeoutMs = await resolveTimeoutMs({}, provider);
+  const sseResponse = await client.reconnectResponseStream(responseId, lastSequence, { timeoutMs });
+
+  console.info('[ai-manager] reconnecting v2 stream', { sessionId, responseId, lastSequence });
+  return { response: sseResponse, sessionId };
 }
 
 /**

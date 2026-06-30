@@ -170,6 +170,14 @@ Use when your team defined a **processing job** in AI Admin (slug, prompt templa
 3. `POST /api/chat-sessions/:id/tool-outputs`
    **Body:** `{ "systemMessageId": "…", "outputs": [{ "toolCallId": "…", "output": "…" }] }`
    Used to resume a paused stream after an MCP tool requires user action (e.g. OAuth). Response is SSE.
+   For **devs-ai-v2** sessions, `systemMessageId` is not used — the server resumes via the v2 Responses API using `provider_metadata.previous_response_id`.
+
+3b. `POST /api/chat-sessions/:id/cancel` *(devs-ai-v2 only)*
+   Cancels an in-flight v2 response. Requires `provider_metadata.previous_response_id` on the session.
+
+3c. `POST /api/chat-sessions/:id/reconnect-stream` *(devs-ai-v2 only)*
+   **Body:** `{ "lastSequence": 0 }` (optional — defaults to stored `provider_metadata.last_sequence`).
+   Reconnects to a v2 response stream after a client disconnect. Response is SSE.
 
 4. `POST /api/chat-sessions/resume` *(resume a prior conversation)*
    **Body:** `{ "sessionId": "…" }` **or** `{ "externalChatId": "…" }` (the provider chat id, e.g. Devs.ai), plus optional `fallbackToLocal: true`.

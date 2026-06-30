@@ -160,6 +160,50 @@ export class DevsAiV2Client {
     await this._request('POST', `/api/v2/responses/${responseId}/cancel`);
   }
 
+  /**
+   * Reconnect to an in-progress v2 response stream (GET .../stream?lastSequence=).
+   * Re-emits SSE in the same chat-compatible shape as chatCompletionStream.
+   */
+  async reconnectResponseStream(
+    responseId: string,
+    lastSequence: number = 0,
+    options: { timeoutMs?: number } = {},
+  ): Promise<globalThis.Response> {
+    const qs = lastSequence > 0 ? `?lastSequence=${encodeURIComponent(String(lastSequence))}` : '';
+    const url = `${this.baseUrl}/api/v2/responses/${responseId}/stream${qs}`;
+
+    let controller: AbortController | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeoutMs = options.timeoutMs;
+    if (timeoutMs && timeoutMs > 0) {
+      controller = new AbortController();
+      timer = setTimeout(() => controller?.abort(), timeoutMs);
+    }
+
+    let upstream: globalThis.Response;
+    try {
+      upstream = await fetch(url, {
+        method: 'GET',
+        headers: this._headers({ Accept: 'text/event-stream' }),
+        signal: controller?.signal,
+      });
+    } catch (err: unknown) {
+      if (timer) clearTimeout(timer);
+      if ((err as Error).name === 'AbortError') {
+        throw new Error(`Devs.ai v2 stream reconnect timed out after ${timeoutMs}ms`, { cause: err });
+      }
+      throw err;
+    }
+
+    if (!upstream.ok) {
+      if (timer) clearTimeout(timer);
+      const errorText = await upstream.text();
+      throw new Error(`Devs.ai v2 stream reconnect error (${upstream.status}): ${errorText}`);
+    }
+
+    return this._wrapUpstreamSse(upstream, { timer, controller });
+  }
+
   async resumeResponse(
     responseId: string,
     toolOutputs?: Array<{ tool_call_id: string; output: string }>,

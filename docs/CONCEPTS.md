@@ -55,7 +55,7 @@ A **provider** represents an LLM platform that AI Admin connects to.
 | Field | Purpose |
 |-------|---------|
 | **Name** | Human-readable label (e.g. "Production Devs.ai") |
-| **Type** | `devs-ai` or `google-gemini` — determines which client library is used |
+| **Type** | `devs-ai`, `devs-ai-v2`, or `google-gemini` — determines which client library is used |
 | **Base URL** | The provider's API endpoint |
 | **API Key** | Platform credentials, encrypted at rest with AES-256-GCM |
 | **Request Timeout** | Optional per-provider timeout override (milliseconds) |
@@ -63,7 +63,8 @@ A **provider** represents an LLM platform that AI Admin connects to.
 
 ### Supported Provider Types
 
-- **Devs.ai** — Supports agents with MCP tools, OAuth integrations, data sources, and model-based chat. This is the richest integration.
+- **Devs.ai (v1)** — `devs-ai`. Supports agents with MCP tools, OAuth integrations, data sources, and model-based chat. Uses `/api/v1/chats/*` and `/api/v1/chat/completions`.
+- **Devs.ai (v2)** — `devs-ai-v2`. Separate provider type using the Responses API (`POST /api/v2/responses`). Native JSON schema enforcement, threaded chat via `previous_response_id`, stream reconnect, and cancel. Does not replace v1 — existing v1 profiles continue unchanged.
 - **Google Gemini** — Direct model access via the Gemini API. Profiles on Gemini providers are automatically set to "model" type.
 
 ### How API Keys Are Protected

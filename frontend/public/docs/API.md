@@ -155,6 +155,10 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 ### POST /api/providers
 **Body**: `{ name, type, base_url, api_key?, is_active?, request_timeout_ms? }`
 
+**Provider types**: `devs-ai` (v1 chat/completions), `devs-ai-v2` (Responses API v2 — native JSON schema, threaded chat via `previous_response_id`), `google-gemini`.
+
+`devs-ai-v2` sessions store threading state in `chat_sessions.provider_metadata` (`previous_response_id`, `conversation_id`, `last_sequence`). v2 tool continuations use `POST /api/v2/responses/{id}/resume` (wired through `POST /api/chat-sessions/:id/tool-outputs`).
+
 ### POST .../models
 **Body**: `{ models: [{ external_ai_id, display_name?, category?, is_active? }] }` (1–100 items)
 
@@ -281,6 +285,8 @@ During **SSE chat streaming** (`POST /api/chat-sessions/:id/messages`), only two
 | POST | `/api/chat-sessions/resume` | JWT/Key | JWT: own session only | Resume a prior session by `sessionId` or `externalChatId` |
 | POST | `/api/chat-sessions/:id/messages` | JWT/Key | JWT: own session only | Send message — **SSE stream** |
 | POST | `/api/chat-sessions/:id/tool-outputs` | JWT/Key | JWT: own session only | Submit tool outputs — **SSE stream** |
+| POST | `/api/chat-sessions/:id/cancel` | JWT/Key | JWT: own session only | Cancel in-flight response — **devs-ai-v2 only** |
+| POST | `/api/chat-sessions/:id/reconnect-stream` | JWT/Key | JWT: own session only | Reconnect v2 SSE after disconnect — **devs-ai-v2 only** |
 | GET | `/api/chat-sessions` | JWT/Key | — | Paginated session list with filters |
 | GET | `/api/chat-sessions/:id` | JWT/Key | — | Session detail + stats + history |
 | GET | `/api/chat-sessions/:id/messages` | JWT/Key | — | Message history (`?fromProvider=true`) |
@@ -315,6 +321,15 @@ Continue a previously opened **streaming chat** session (there is nothing to res
 ### POST .../tool-outputs
 **Body**: `{ outputs: [{ ... }] (1–50), systemMessageId? }`
 **Response**: SSE stream.
+
+For **devs-ai-v2** sessions, `systemMessageId` is ignored. Tool continuations use the v2 Responses API with `previous_response_id` from `chat_sessions.provider_metadata`.
+
+### POST .../cancel *(devs-ai-v2 only)*
+Cancel an in-flight Devs.ai v2 response. Requires `provider_metadata.previous_response_id`.
+**Response**: `{ cancelled: true, responseId: "resp_…" }`
+
+### POST .../reconnect-stream *(devs-ai-v2 only)*
+Reconnect to a v2 response stream after disconnect. **Body**: `{ lastSequence?: number }`. **Response**: SSE stream.
 
 ### GET /api/chat-sessions (list)
 **Query**: `userId`, `aiProfileId`, `workflowId`, `status`, `callingApplication`, `externalChatId`, pagination params.

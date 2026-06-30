@@ -1,6 +1,6 @@
 # Devs.ai API v2 Provider Integration Plan
 
-**Status:** Draft v2 (Step 2 — Opus architecture review incorporated)  
+**Status:** Implemented (Phase A–C)  
 **Goal:** Add `devs-ai-v2` as a **separate** provider type alongside existing `devs-ai` (v1). Do not replace v1. Leverage Responses API v2 capabilities, especially native structured JSON output.
 
 ---

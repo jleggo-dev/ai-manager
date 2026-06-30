@@ -11,6 +11,9 @@ import {
   resumeChatSession,
   sendChatMessage,
   submitChatToolOutputs,
+  submitV2ToolOutputs,
+  cancelV2ChatResponse,
+  reconnectV2ChatStream,
   updateV2ProviderMetadata,
   recordAssistantMessage,
   extractAndAccumulateOutputs,
@@ -48,6 +51,7 @@ import {
   resumeChatSessionSchema,
   sendMessageSchema,
   toolOutputsSchema,
+  reconnectStreamSchema,
 } from '../schemas/chat-sessions.ts';
 import { fireInternalTriggers } from '../services/internal-triggers.ts';
 import { parsePagination, buildPaginatedResponse } from '../lib/pagination.ts';
@@ -561,9 +565,14 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
           chatSessionRow.calling_application || 'unknown',
         );
         if (outputs.length > 0) {
-          const toolStream = isV2Session
-            ? await submitChatToolOutputs(sessionId, pendingV2ResponseId || '', outputs)
-            : await submitChatToolOutputs(sessionId, pendingSystemMessageId || '', outputs);
+          const v2ResponseId =
+            pendingV2ResponseId ||
+            ((chatSessionRow.provider_metadata || {}) as { previous_response_id?: string }).previous_response_id ||
+            '';
+          const toolStream =
+            isV2Session && v2ResponseId
+              ? await submitV2ToolOutputs(sessionId, v2ResponseId, outputs)
+              : await submitChatToolOutputs(sessionId, pendingSystemMessageId || '', outputs);
           const toolBody = toolStream.response.body as ReadableStream<Uint8Array> | null;
           if (toolBody) {
             const toolReader = toolBody.getReader();
@@ -811,6 +820,138 @@ router.post('/:id/tool-outputs', validateBody(toolOutputsSchema), async (req: Re
     if (lockMessageId) {
       releaseSessionLock(req.params.id as string, lockMessageId).catch((err) => {
         console.warn('[chat-sessions/tool-outputs] Failed to release session lock:', errorMessage(err));
+      });
+    }
+  }
+});
+
+/* ================================================================
+   POST /api/chat-sessions/:id/cancel
+   Cancel an in-flight Devs.ai v2 response (devs-ai-v2 sessions only).
+   ================================================================ */
+
+router.post('/:id/cancel', async (req: Request, res: Response) => {
+  try {
+    const authorized = await authorizeSessionAccess(req.params.id as string, res, { requireOwnership: true });
+    if (!authorized) return;
+    if (authorized.provider_type !== 'devs-ai-v2') {
+      return res.status(400).json({ error: 'cancel is only supported for devs-ai-v2 chat sessions' });
+    }
+    const result = await cancelV2ChatResponse(req.params.id as string);
+    return res.json(result);
+  } catch (err) {
+    console.error('[POST /chat-sessions/:id/cancel]', err);
+    return res.status(400).json({ error: errorMessage(err) });
+  }
+});
+
+/* ================================================================
+   POST /api/chat-sessions/:id/reconnect-stream
+   Reconnect to a Devs.ai v2 response stream after disconnect (devs-ai-v2 only).
+   Body: { lastSequence?: number } — defaults to session provider_metadata.last_sequence.
+   Returns SSE stream in the same shape as POST /messages.
+   ================================================================ */
+
+router.post('/:id/reconnect-stream', validateBody(reconnectStreamSchema), async (req: Request, res: Response) => {
+  let lockMessageId: string | null = null;
+  try {
+    const authorized = await authorizeSessionAccess(req.params.id as string, res, { requireOwnership: true });
+    if (!authorized) return;
+    if (authorized.provider_type !== 'devs-ai-v2') {
+      return res.status(400).json({ error: 'stream reconnect is only supported for devs-ai-v2 chat sessions' });
+    }
+
+    const candidateLockId = randomUUID();
+    const acquired = await acquireSessionLock(req.params.id as string, candidateLockId);
+    if (!acquired) {
+      return res.status(409).json({
+        error: 'Session is currently processing another message. Wait for the current stream to complete before reconnecting.',
+      });
+    }
+    lockMessageId = candidateLockId;
+
+    const { lastSequence } = req.body as { lastSequence?: number };
+    const { response: sseResponse, sessionId } = await reconnectV2ChatStream(req.params.id as string, {
+      lastSequence,
+    });
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Chat-Session-Id', sessionId);
+
+    const upstreamAbort = (sseResponse as PatchedResponse)._abortController;
+    const sseTimeout = setTimeout(() => {
+      upstreamAbort?.abort();
+      res.write('event: timeout\ndata: {"error":"Connection timeout"}\n\n');
+      res.end();
+    }, MAX_SSE_DURATION_MS);
+
+    const body = sseResponse.body as ReadableStream<Uint8Array> | null;
+    if (!body) {
+      clearTimeout(sseTimeout);
+      res.write('data: [DONE]\n\n');
+      res.end();
+      return;
+    }
+
+    req.on('close', () => {
+      upstreamAbort?.abort();
+    });
+
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let lineBuffer = '';
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        res.write(chunk);
+
+        lineBuffer += chunk;
+        const lines = lineBuffer.split('\n');
+        lineBuffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const dataStr = line.slice(6).trim();
+          if (dataStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(dataStr);
+            if (parsed.type === 'message.complete' && parsed.responseId) {
+              updateV2ProviderMetadata(sessionId, {
+                previous_response_id: parsed.responseId as string,
+                conversation_id: (parsed.conversationId as string) || undefined,
+                last_sequence:
+                  parsed.lastSequence != null ? Number(parsed.lastSequence) : undefined,
+              }).catch((metaErr) =>
+                console.warn('[chat-sessions/reconnect-stream] Failed to persist provider_metadata:', errorMessage(metaErr)),
+              );
+            }
+          } catch {
+            /* non-JSON SSE line */
+          }
+        }
+      }
+    } finally {
+      clearTimeout(sseTimeout);
+      const abortTimer = (sseResponse as PatchedResponse)._abortTimer;
+      if (abortTimer) clearTimeout(abortTimer);
+    }
+
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (err) {
+    console.error('[POST /chat-sessions/:id/reconnect-stream]', err);
+    if (!res.headersSent) {
+      return res.status(400).json({ error: errorMessage(err) });
+    }
+    res.end();
+  } finally {
+    if (lockMessageId) {
+      releaseSessionLock(req.params.id as string, lockMessageId).catch((err) => {
+        console.warn('[chat-sessions/reconnect-stream] Failed to release session lock:', errorMessage(err));
       });
     }
   }

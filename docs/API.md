@@ -285,6 +285,8 @@ During **SSE chat streaming** (`POST /api/chat-sessions/:id/messages`), only two
 | POST | `/api/chat-sessions/resume` | JWT/Key | JWT: own session only | Resume a prior session by `sessionId` or `externalChatId` |
 | POST | `/api/chat-sessions/:id/messages` | JWT/Key | JWT: own session only | Send message — **SSE stream** |
 | POST | `/api/chat-sessions/:id/tool-outputs` | JWT/Key | JWT: own session only | Submit tool outputs — **SSE stream** |
+| POST | `/api/chat-sessions/:id/cancel` | JWT/Key | JWT: own session only | Cancel in-flight response — **devs-ai-v2 only** |
+| POST | `/api/chat-sessions/:id/reconnect-stream` | JWT/Key | JWT: own session only | Reconnect v2 SSE after disconnect — **devs-ai-v2 only** |
 | GET | `/api/chat-sessions` | JWT/Key | — | Paginated session list with filters |
 | GET | `/api/chat-sessions/:id` | JWT/Key | — | Session detail + stats + history |
 | GET | `/api/chat-sessions/:id/messages` | JWT/Key | — | Message history (`?fromProvider=true`) |
@@ -319,6 +321,29 @@ Continue a previously opened **streaming chat** session (there is nothing to res
 ### POST .../tool-outputs
 **Body**: `{ outputs: [{ ... }] (1–50), systemMessageId? }`
 **Response**: SSE stream.
+
+For **devs-ai-v2** sessions, `systemMessageId` is ignored. Tool continuations use the v2 Responses API (`POST /api/v2/responses/{id}/resume`) with `previous_response_id` from `chat_sessions.provider_metadata`. Internal jobs-as-tools on v2 profiles are fulfilled server-side when the v2 stream emits `function_call` events.
+
+### POST .../cancel *(devs-ai-v2 only)*
+Cancel an in-flight Devs.ai v2 response. Requires `provider_metadata.previous_response_id` on the session.
+**Response**: `{ cancelled: true, responseId: "resp_…" }`
+**Errors**: `400` if session is not `devs-ai-v2` or has no response id to cancel.
+
+### POST .../reconnect-stream *(devs-ai-v2 only)*
+Reconnect to a v2 response stream after a client disconnect. Uses `provider_metadata.last_sequence` when `lastSequence` is omitted.
+**Body**: `{ lastSequence?: number }`
+**Response**: SSE stream (same event shapes as `POST .../messages`). Updates `provider_metadata` on completion.
+
+### Devs.ai v2 vs v1 (chat sessions)
+
+| Concern | `devs-ai` (v1) | `devs-ai-v2` |
+|---------|-----------------|--------------|
+| Remote chat id | `external_chat_id` (created at session open for agents) | Not used — thread is lazy via Responses API |
+| Threading state | Remote chat history | `provider_metadata`: `previous_response_id`, `conversation_id`, `last_sequence` |
+| Tool continuation | `POST .../tool-outputs` + `systemMessageId` | Same route; server routes to v2 `/resume` |
+| Stream reconnect | Not supported | `POST .../reconnect-stream` |
+| Cancel in-flight | Not supported | `POST .../cancel` |
+| Structured output | Build rules (`trim-to-json`, etc.) | Native `text.format.json_schema` from job `expectedSchema` |
 
 ### GET /api/chat-sessions (list)
 **Query**: `userId`, `aiProfileId`, `workflowId`, `status`, `callingApplication`, `externalChatId`, pagination params.
