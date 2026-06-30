@@ -267,6 +267,7 @@ interface LegacySchemaFieldDef {
 }
 
 interface ProcessingJobConfig {
+  systemPrompt?: string;
   promptTemplate?: string;
   variables?: JobVariable[];
   testData?: Record<string, string>;
@@ -3132,6 +3133,7 @@ function BuildRulesTab({
   onSelect?: (id: string) => void;
   onRefresh: () => Promise<void>;
 }) {
+  const [systemPrompt, setSystemPrompt] = useState('');
   const [promptTemplate, setPromptTemplate] = useState('');
   const [appliedRules, setAppliedRules] = useState<AppliedRule[]>([]);
   const [saving, setSaving] = useState(false);
@@ -3139,6 +3141,7 @@ function BuildRulesTab({
   useEffect(() => {
     if (!selectedJobFull) return;
     const c = getJobConfig(selectedJobFull);
+    setSystemPrompt(c.systemPrompt || '');
     setPromptTemplate(c.promptTemplate || '');
     setAppliedRules(c.formattingRules || []);
   }, [selectedJobFull]);
@@ -3191,13 +3194,17 @@ function BuildRulesTab({
   async function handleSave() {
     try {
       setSaving(true);
+      // Preserve all other config keys (advanced, variables, testData, ruleSets, …) — only
+      // overwrite the three this tab owns.
       const config = {
+        ...getJobConfig(selectedJobFull),
+        systemPrompt,
         promptTemplate,
         formattingRules: appliedRules.map((r, i) => ({ ...r, order: i })),
       };
       if (!selectedJob) return;
       await api.updateProcessingJob(selectedJob, { config });
-      notifications.show({ title: 'Saved', message: 'Prompt and formatting rules updated', color: 'green' });
+      notifications.show({ title: 'Saved', message: 'System prompt, prompt template, and rules updated', color: 'green' });
       await onRefresh();
     } catch (err: unknown) {
       notifications.show({ title: 'Error', message: err instanceof Error ? err.message : String(err), color: 'red' });
@@ -3213,6 +3220,17 @@ function BuildRulesTab({
       {jobVariables.length > 0 && <VariablesReference variables={jobVariables} />}
 
       {expectedSchema && schemaFieldCount > 0 && <ResponseSchemaViewer expectedSchema={expectedSchema} />}
+
+      <Textarea
+        label="System Prompt"
+        description="The model's standing instructions / persona for this job. For chat sessions this becomes the system role applied to every turn (the cacheable prefix), with per-call data supplied separately. Leave blank for one-shot templated jobs that put everything in the Prompt Template below."
+        value={systemPrompt}
+        onChange={(e) => setSystemPrompt(e.target.value)}
+        autosize
+        minRows={6}
+        maxRows={30}
+        styles={{ input: { fontFamily: 'monospace', fontSize: 12 } }}
+      />
 
       <Textarea
         label="Prompt Template"

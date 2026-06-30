@@ -183,6 +183,7 @@ interface UploadChunkedOptions {
 }
 
 interface JobConfig {
+  systemPrompt?: string | null;
   promptTemplate?: string;
   formattingRules?: FormattingRule[];
   expectedResponseFormat?: string | null;
@@ -647,8 +648,15 @@ export async function openChatSession(
     externalChatId = (chatSession?.id as string) || null;
   }
 
+  // A job-bound chat session uses the JOB's config.systemPrompt as its base system
+  // prompt — managed/editable in the job's build rules — and a caller-supplied
+  // systemPrompt (e.g. per-user runtime context) is appended to it. A workflow's
+  // systemPrompt still takes precedence; callers with no bound job are unaffected.
+  const jobSystemPrompt = (jobConfig?.systemPrompt as string | null) ?? null;
   const effectiveSystemPrompt: string | null =
-    (workflow?.config?.systemPrompt as string | null) || systemPrompt || null;
+    (workflow?.config?.systemPrompt as string | null) ||
+    [jobSystemPrompt, systemPrompt].filter(Boolean).join('\n\n') ||
+    null;
 
   const session = await dbCreateSession({
     ai_profile_id: profile.id,
