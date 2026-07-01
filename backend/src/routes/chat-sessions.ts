@@ -886,7 +886,7 @@ router.post('/:id/cancel', async (req: Request, res: Response) => {
     return res.json(result);
   } catch (err) {
     console.error('[POST /chat-sessions/:id/cancel]', err);
-    return res.status(400).json({ error: errorMessage(err) });
+    return res.status(400).json({ error: safeClientError(err, 'Failed to cancel v2 response') });
   }
 });
 
