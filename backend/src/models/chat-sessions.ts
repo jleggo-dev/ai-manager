@@ -15,7 +15,7 @@ const STALE_LOCK_MS = 5 * 60 * 1000 + 30 * 1000; // MAX_SSE_DURATION (5 min) + 3
 
 /* Shared select string so single-row reads always hydrate the AI profile + provider. */
 const SESSION_SELECT =
-  '*, ai_profile:ai_profiles!chat_sessions_ai_profile_id_fkey(id, name, external_ai_id, mode, provider:providers!ai_profiles_provider_id_fkey(id, name, type, base_url))';
+  '*, ai_profile:ai_profiles!chat_sessions_ai_profile_id_fkey(id, name, external_ai_id, mode, config, provider:providers!ai_profiles_provider_id_fkey(id, name, type, base_url))';
 
 /* ── Sessions ───────────────────────────────────────────────── */
 

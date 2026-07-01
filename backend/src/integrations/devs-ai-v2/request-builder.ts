@@ -49,7 +49,7 @@ export function messagesToV2Request(
   };
 
   if (instructions) body.instructions = instructions;
-  if (options.tools) body.tools = options.tools as unknown[];
+  if (options.tools) body.tools = normalizeToolsForV2(options.tools as unknown[]);
   if (options.parallel_tool_calls != null) body.parallel_tool_calls = Boolean(options.parallel_tool_calls);
   if (options.chat_mode) body.chat_mode = String(options.chat_mode);
   if (options.thread_mode) body.thread_mode = String(options.thread_mode);
@@ -67,6 +67,24 @@ export function messagesToV2Request(
   }
 
   return body;
+}
+
+/** Flatten Chat Completions-style `{ type, function: { name, ... } }` for Responses API v2. */
+export function normalizeToolsForV2(tools: unknown[]): unknown[] {
+  return tools.map((tool) => {
+    if (!tool || typeof tool !== 'object') return tool;
+    const row = tool as Record<string, unknown>;
+    if (row.type === 'function' && row.function && typeof row.function === 'object') {
+      const fn = row.function as Record<string, unknown>;
+      return {
+        type: 'function',
+        name: fn.name,
+        description: fn.description,
+        parameters: fn.parameters,
+      };
+    }
+    return tool;
+  });
 }
 
 /** Extract assistant text from a completed v2 Response object. */

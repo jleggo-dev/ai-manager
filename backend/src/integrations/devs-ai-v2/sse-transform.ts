@@ -100,8 +100,12 @@ export function transformV2SseDataLine(dataStr: string, state: SseTransformState
     return out;
   }
 
-  /* v2 function_call events — forward for Phase B tool loop */
-  if (eventType.includes('function_call') || eventType === 'response.output_item.added') {
+  /* v2 function_call events — forward for tool loop */
+  if (
+    eventType.includes('function_call') ||
+    eventType === 'response.output_item.added' ||
+    eventType === 'response.output_item.done'
+  ) {
     out.push(`data: ${JSON.stringify({ type: eventType, ...parsed })}\n\n`);
   }
 

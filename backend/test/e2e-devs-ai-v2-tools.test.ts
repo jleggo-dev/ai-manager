@@ -28,6 +28,8 @@ interface ApiProfile {
 }
 
 let v2Profile: ApiProfile | undefined;
+let createdProfileId: string | null = null;
+let createdProviderId: string | null = null;
 let originalProfileConfig: Record<string, unknown> | null = null;
 let jobId: string | null = null;
 let jobSlug: string | null = null;
@@ -69,23 +71,88 @@ function sawV2FunctionCall(events: Array<Record<string, unknown>>): boolean {
   return events.some((ev) => {
     const type = String(ev.type || '');
     if (type.includes('function_call')) return true;
-    if (type === 'response.output_item.added') {
-      const item = ev.item as { type?: string } | undefined;
-      return item?.type === 'function_call';
+    if (type === 'response.output_item.added' || type === 'response.output_item.done') {
+      const item = ev.item as { type?: string; call_id?: string } | undefined;
+      return item?.type === 'function_call' || Boolean(item?.call_id);
     }
     return false;
   });
 }
 
-beforeAll(async () => {
-  const res = await request(app).get('/api/ai-profiles?limit=200').set(authHeaders());
-  expect(res.status).toBe(200);
-  const profiles = (res.body.data || []) as ApiProfile[];
-  v2Profile = profiles.find(
+/** Use an existing v2 chat profile, or provision provider + profile for live testing. */
+async function ensureV2ChatProfile(): Promise<ApiProfile | undefined> {
+  const profRes = await request(app).get('/api/ai-profiles?limit=200').set(authHeaders());
+  expect(profRes.status).toBe(200);
+  const existing = ((profRes.body.data || []) as ApiProfile[]).find(
     (p) => p.provider?.type === 'devs-ai-v2' && p.mode === 'chat' && Boolean(p.external_ai_id),
   );
+  if (existing) return existing;
+
+  const provRes = await request(app).get('/api/providers?limit=100').set(authHeaders());
+  expect(provRes.status).toBe(200);
+  let v2Provider = (
+    (provRes.body.data || []) as Array<{ id: string; type: string; is_active?: boolean }>
+  ).find((p) => p.type === 'devs-ai-v2' && p.is_active !== false);
+
+  if (!v2Provider) {
+    const apiKey = process.env.DEVS_AI_API_KEY || process.env.TEST_DEVS_AI_API_KEY || '';
+    const baseUrl = process.env.DEVS_AI_BASE_URL || 'https://devs.ai';
+    if (!apiKey) {
+      console.warn('[e2e-devs-ai-v2-tools] no devs-ai-v2 provider and DEVS_AI_API_KEY unset — skip');
+      return undefined;
+    }
+    const createProv = await request(app)
+      .post('/api/providers')
+      .set(authHeaders())
+      .send({
+        name: uniqueName('E2E V2 Tools Provider'),
+        type: 'devs-ai-v2',
+        base_url: baseUrl,
+        api_key: apiKey,
+      });
+    expect(createProv.status).toBe(201);
+    v2Provider = createProv.body;
+    createdProviderId = v2Provider.id;
+    console.info('[e2e-devs-ai-v2-tools] provisioned ephemeral devs-ai-v2 provider', createdProviderId);
+  }
+
+  let modelsRes = await request(app).get(`/api/providers/${v2Provider.id}/models`).set(authHeaders());
+  expect(modelsRes.status).toBe(200);
+  let models = (modelsRes.body.data || modelsRes.body || []) as Array<{ model_id?: string; is_active?: boolean }>;
+  let modelId = models.find((m) => m.is_active !== false)?.model_id;
+  if (!modelId) {
+    const syncRes = await request(app).post(`/api/providers/${v2Provider.id}/models/sync`).set(authHeaders());
+    if (syncRes.status === 200) {
+      modelsRes = await request(app).get(`/api/providers/${v2Provider.id}/models`).set(authHeaders());
+      models = (modelsRes.body.data || modelsRes.body || []) as Array<{ model_id?: string }>;
+      modelId = models[0]?.model_id;
+    }
+  }
+  if (!modelId) {
+    console.warn('[e2e-devs-ai-v2-tools] devs-ai-v2 provider has no models — cannot provision profile');
+    return undefined;
+  }
+
+  const createRes = await request(app)
+    .post('/api/ai-profiles')
+    .set(authHeaders())
+    .send({
+      name: uniqueName('E2E V2 Tools Profile'),
+      provider_id: v2Provider.id,
+      external_ai_id: modelId,
+      mode: 'chat',
+      profile_type: 'model',
+    });
+  expect(createRes.status).toBe(201);
+  createdProfileId = createRes.body.id;
+  console.info('[e2e-devs-ai-v2-tools] provisioned ephemeral v2 chat profile', createdProfileId);
+  return createRes.body as ApiProfile;
+}
+
+beforeAll(async () => {
+  v2Profile = await ensureV2ChatProfile();
   if (!v2Profile) {
-    console.warn('[e2e-devs-ai-v2-tools] no devs-ai-v2 chat profile — tests will skip');
+    console.warn('[e2e-devs-ai-v2-tools] no devs-ai-v2 provider/profile — tests will skip');
     return;
   }
 
@@ -126,12 +193,17 @@ afterAll(async () => {
   if (jobId) {
     await request(app).delete(`/api/processing-jobs/${jobId}`).set(authHeaders()).catch(() => {});
   }
-  if (v2Profile && originalProfileConfig !== null) {
+  if (createdProfileId) {
+    await request(app).delete(`/api/ai-profiles/${createdProfileId}`).set(authHeaders()).catch(() => {});
+  } else if (v2Profile && originalProfileConfig !== null) {
     await request(app)
       .put(`/api/ai-profiles/${v2Profile.id}`)
       .set(authHeaders())
       .send({ config: originalProfileConfig })
       .catch(() => {});
+  }
+  if (createdProviderId) {
+    await request(app).delete(`/api/providers/${createdProviderId}`).set(authHeaders()).catch(() => {});
   }
 });
 
@@ -165,12 +237,12 @@ describe('E2E: devs-ai-v2 jobs-as-tools (live)', () => {
        and a non-empty continuation. If the model answers directly, still require text. */
     if (sawV2FunctionCall(events)) {
       expect(assistantText.trim().length, 'tool call occurred but no assistant text after resume').toBeGreaterThan(0);
-      console.info('[e2e-devs-ai-v2-tools] v2 function_call observed; assistant text length:', assistantText.length);
+      expect(assistantText.toUpperCase()).toContain('PONG');
+      console.info('[e2e-devs-ai-v2-tools] v2 function_call observed; assistant:', assistantText.slice(0, 80));
     } else {
-      console.warn(
-        '[e2e-devs-ai-v2-tools] model did not emit v2 function_call — accepting direct reply if non-empty',
+      expect.fail(
+        'Expected devs-ai-v2 to emit a function_call for jobs-as-tools; model replied without calling echo_ping',
       );
-      expect(assistantText.trim().length).toBeGreaterThan(0);
     }
 
     /* Session should have persisted v2 threading metadata after a completed response */

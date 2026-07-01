@@ -441,30 +441,47 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
 
             /* v2 function_call events — queue internal tool-jobs for server-side fulfillment */
             if (isV2Session) {
-              if (parsed.type === 'response.output_item.added') {
-                const item = parsed.item as { type?: string; name?: string; call_id?: string; id?: string } | undefined;
-                if (item?.type === 'function_call' && item.name) {
+              if (parsed.type === 'response.output_item.added' || parsed.type === 'response.output_item.done') {
+                const item = parsed.item as {
+                  type?: string;
+                  name?: string;
+                  call_id?: string;
+                  id?: string;
+                  arguments?: string;
+                } | undefined;
+                if (item?.type === 'function_call') {
                   const toolCallId = item.call_id || item.id;
-                  if (toolCallId && internalToolNames.has(item.name)) {
-                    pendingInternalToolCalls.push({
-                      toolCallId,
-                      name: item.name,
-                      arguments: undefined,
-                    });
+                  const toolName = item.name;
+                  if (toolCallId) {
+                    const existing = pendingInternalToolCalls.find((t) => t.toolCallId === toolCallId);
+                    if (existing) {
+                      if (toolName) existing.name = toolName;
+                      if (item.arguments) existing.arguments = item.arguments;
+                    } else {
+                      pendingInternalToolCalls.push({
+                        toolCallId,
+                        name: toolName || '',
+                        arguments: item.arguments,
+                      });
+                    }
                   }
                 }
               }
-              if (parsed.type === 'response.function_call_arguments.done') {
+              if (
+                parsed.type === 'response.function_call_arguments.done' ||
+                parsed.type === 'response.function_call_arguments.delta'
+              ) {
                 const name = parsed.name as string | undefined;
                 const toolCallId = (parsed.call_id || parsed.item_id) as string | undefined;
-                if (name && toolCallId && internalToolNames.has(name)) {
+                if (toolCallId) {
                   const existing = pendingInternalToolCalls.find((t) => t.toolCallId === toolCallId);
                   if (existing) {
-                    existing.arguments = parsed.arguments as string | undefined;
+                    if (name) existing.name = name;
+                    if (parsed.arguments) existing.arguments = parsed.arguments as string;
                   } else {
                     pendingInternalToolCalls.push({
                       toolCallId,
-                      name,
+                      name: name || '',
                       arguments: parsed.arguments as string | undefined,
                     });
                   }
@@ -559,8 +576,11 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
     /* Fulfill internal tool-job calls before closing the stream */
     if (pendingInternalToolCalls.length > 0) {
       try {
+        const registeredCalls = pendingInternalToolCalls.filter(
+          (call) => call.name && internalToolNames.has(call.name),
+        );
         const outputs = await fulfillPendingToolJobCalls(
-          pendingInternalToolCalls,
+          registeredCalls,
           chatSessionRow.ai_profile,
           chatSessionRow.calling_application || 'unknown',
         );
