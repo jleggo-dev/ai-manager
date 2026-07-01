@@ -19,23 +19,50 @@
  *   // result.metadata   — timing, model, usage, finish reason
  */
 
-import { getProcessingJobBySlug, getProcessingJob, updateProcessingJob } from '../models/processing-jobs.ts';
-import { getWorkflow, getWorkflowBySlug, getWorkflowStepByKey, listWorkflowSteps } from '../models/workflows.ts';
-import { upsertCallingApplication } from '../models/calling-applications.ts';
-import { getAiProfileWithKeys, hydrateAiProfileProviderKeys } from '../models/ai-profiles.ts';
-import { DevsAiClient } from '../integrations/devs-ai/client.ts';
-import { DevsAiV2Client } from '../integrations/devs-ai-v2/client.ts';
-import type { ExpectedSchemaInput } from '../services/expected-schema-to-json-schema.ts';
-import { createLlmClientForProvider, createLlmClientForUser, type LlmClientInstance } from '../integrations/client-factory.ts';
-import { getUserCredential } from '../models/user-provider-credentials.ts';
-import { applyFormattingRules } from '../services/formatting-rules.ts';
-import { DiagnosticSession, shouldRunDiagnostics } from '../services/ai-diagnostics.ts';
-import { buildProviderChatOptions } from '../services/ai-profile-runtime-options.ts';
-import { getSetting } from '../models/app-settings.ts';
-import { getAuthContext, effectiveUserId, requireWorkspaceId, tenantFrom } from '../db/tenant.ts';
-import { getServiceSupabase } from '../db/service-supabase.ts';
-import { resolveAttachments, resolveAttachmentsAsText } from '../services/attachment-resolver.ts';
-import { resolveJsonPath } from '../lib/json-path.ts';
+import {
+  getProcessingJobBySlug,
+  getProcessingJob,
+  updateProcessingJob,
+} from "../models/processing-jobs.ts";
+import {
+  getWorkflow,
+  getWorkflowBySlug,
+  getWorkflowStepByKey,
+  listWorkflowSteps,
+} from "../models/workflows.ts";
+import { upsertCallingApplication } from "../models/calling-applications.ts";
+import {
+  getAiProfileWithKeys,
+  hydrateAiProfileProviderKeys,
+} from "../models/ai-profiles.ts";
+import { DevsAiClient } from "../integrations/devs-ai/client.ts";
+import { DevsAiV2Client } from "../integrations/devs-ai-v2/client.ts";
+import type { ExpectedSchemaInput } from "../services/expected-schema-to-json-schema.ts";
+import {
+  createLlmClientForProvider,
+  createLlmClientForUser,
+  type LlmClientInstance,
+} from "../integrations/client-factory.ts";
+import { getUserCredential } from "../models/user-provider-credentials.ts";
+import { applyFormattingRules } from "../services/formatting-rules.ts";
+import {
+  DiagnosticSession,
+  shouldRunDiagnostics,
+} from "../services/ai-diagnostics.ts";
+import { buildProviderChatOptions } from "../services/ai-profile-runtime-options.ts";
+import { getSetting } from "../models/app-settings.ts";
+import {
+  getAuthContext,
+  effectiveUserId,
+  requireWorkspaceId,
+  tenantFrom,
+} from "../db/tenant.ts";
+import { getServiceSupabase } from "../db/service-supabase.ts";
+import {
+  resolveAttachments,
+  resolveAttachmentsAsText,
+} from "../services/attachment-resolver.ts";
+import { resolveJsonPath } from "../lib/json-path.ts";
 import {
   buildToolDefinitions,
   buildToolNameMap,
@@ -43,13 +70,12 @@ import {
   parseToolArguments,
   type PendingToolCall,
   type ToolJobBinding,
-} from '../services/tool-jobs.ts';
+} from "../services/tool-jobs.ts";
 import {
   maybeCompactSession,
   buildCompactedHistory,
-  estimateSessionTokens,
   getSummarizerConfig,
-} from '../services/session-compaction.ts';
+} from "../services/session-compaction.ts";
 import {
   createChatSession as dbCreateSession,
   getChatSession as dbGetSession,
@@ -61,9 +87,9 @@ import {
   listChatMessages,
   deleteChatMessages,
   incrementSessionCounters,
-} from '../models/chat-sessions.ts';
-import { getConfig } from '../config.ts';
-import { errorMessage } from '../lib/error-message.ts';
+} from "../models/chat-sessions.ts";
+import { getConfig } from "../config.ts";
+import { errorMessage } from "../lib/error-message.ts";
 import type {
   AiManagerResult,
   AiProfileRow,
@@ -79,7 +105,7 @@ import type {
   ProviderRow,
   WorkflowRow,
   WorkflowStepConfig,
-} from '../types.ts';
+} from "../types.ts";
 
 /* ── Option / Result Interfaces ──────────────────────────────── */
 
@@ -235,9 +261,12 @@ interface UploadSummary {
  *   - Applying configured formatting rules
  *   - (Optional) Logging diagnostics
  */
-export async function executeJob(jobSlug: string, options: ExecuteJobOptions = {}): Promise<AiManagerResult> {
+export async function executeJob(
+  jobSlug: string,
+  options: ExecuteJobOptions = {},
+): Promise<AiManagerResult> {
   const {
-    callingApplication = 'unknown',
+    callingApplication = "unknown",
     variables = {},
     promptOverride = null,
     modelOverride = null,
@@ -264,9 +293,12 @@ export async function executeJob(jobSlug: string, options: ExecuteJobOptions = {
  * Execute a processing job by ID.
  * Same as executeJob() but uses the job ID directly.
  */
-export async function executeJobById(jobId: string, options: ExecuteJobByIdOptions = {}): Promise<AiManagerResult> {
+export async function executeJobById(
+  jobId: string,
+  options: ExecuteJobByIdOptions = {},
+): Promise<AiManagerResult> {
   const {
-    callingApplication = 'unknown',
+    callingApplication = "unknown",
     variables = {},
     promptOverride = null,
     modelOverride = null,
@@ -287,16 +319,27 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
   const advancedConfig: Record<string, unknown> = jobConfig.advanced ?? {};
 
   /* ── 1b. Auto-register calling application + tag job ───── */
-  if (callingApplication && callingApplication !== 'unknown' && callingApplication !== 'ai-admin-test') {
+  if (
+    callingApplication &&
+    callingApplication !== "unknown" &&
+    callingApplication !== "ai-admin-test"
+  ) {
     try {
       await upsertCallingApplication(callingApplication, callingApplication);
-      console.info(`[ai-manager] Registered calling application: "${callingApplication}"`);
+      console.info(
+        `[ai-manager] Registered calling application: "${callingApplication}"`,
+      );
       if (!job.calling_application_id) {
-        await updateProcessingJob(job.id, { calling_application_id: callingApplication });
+        await updateProcessingJob(job.id, {
+          calling_application_id: callingApplication,
+        });
         job.calling_application_id = callingApplication;
       }
     } catch (autoRegErr: unknown) {
-      console.warn('[ai-manager] auto-register calling app failed (non-fatal):', errorMessage(autoRegErr));
+      console.warn(
+        "[ai-manager] auto-register calling app failed (non-fatal):",
+        errorMessage(autoRegErr),
+      );
     }
   }
 
@@ -308,7 +351,12 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
    */
   const diagCheck = shouldRunDiagnostics(advancedConfig);
   const fullDiagnostics = diagCheck.enabled && diagCheck.persist;
-  const diag = new DiagnosticSession(job.id, callingApplication, true, job.workspace_id);
+  const diag = new DiagnosticSession(
+    job.id,
+    callingApplication,
+    true,
+    job.workspace_id,
+  );
 
   if (fullDiagnostics) {
     diag.logRequestPayload({
@@ -324,34 +372,54 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
     /* ── 3. Resolve AI client from job → AI profile → provider ── */
     if (fullDiagnostics) diag.startSupabaseTimer();
 
-    const profile = job.ai_profile ? hydrateAiProfileProviderKeys(job.ai_profile) : job.ai_profile;
+    const profile = job.ai_profile
+      ? hydrateAiProfileProviderKeys(job.ai_profile)
+      : job.ai_profile;
     const provider: ProviderRow | undefined = profile?.provider;
 
     if (!profile || !provider) {
-      if (fullDiagnostics) diag.endSupabaseTimer('resolve-ai-client', false, 'No AI profile or provider assigned');
-      throw new Error('Processing job has no AI profile or provider assigned');
+      if (fullDiagnostics)
+        diag.endSupabaseTimer(
+          "resolve-ai-client",
+          false,
+          "No AI profile or provider assigned",
+        );
+      throw new Error("Processing job has no AI profile or provider assigned");
     }
 
     const client = createLlmClientForProvider(provider);
-    const primaryModel = String(modelOverride || profile.external_ai_id || '').trim();
-    const providerTypeNorm = String(provider.type || '').trim().toLowerCase();
-    const chatOptions = buildProviderChatOptions(provider.type, profile.runtime_options ?? undefined, {
-      expectedSchema: providerTypeNorm === 'devs-ai-v2' ? jobConfig.expectedSchema ?? undefined : undefined,
-    });
-    const failoverProvider: ProviderRow | undefined = profile.failover_provider ?? undefined;
-    const failoverAiId = String(profile.failover_external_ai_id || '').trim();
-    const hasFailover = enableFailover && !modelOverride && failoverProvider && failoverAiId;
+    const primaryModel = String(
+      modelOverride || profile.external_ai_id || "",
+    ).trim();
+    const providerTypeNorm = String(provider.type || "")
+      .trim()
+      .toLowerCase();
+    const chatOptions = buildProviderChatOptions(
+      provider.type,
+      profile.runtime_options ?? undefined,
+      {
+        expectedSchema:
+          providerTypeNorm === "devs-ai-v2"
+            ? (jobConfig.expectedSchema ?? undefined)
+            : undefined,
+      },
+    );
+    const failoverProvider: ProviderRow | undefined =
+      profile.failover_provider ?? undefined;
+    const failoverAiId = String(profile.failover_external_ai_id || "").trim();
+    const hasFailover =
+      enableFailover && !modelOverride && failoverProvider && failoverAiId;
 
-    if (fullDiagnostics) diag.endSupabaseTimer('resolve-ai-client', true);
+    if (fullDiagnostics) diag.endSupabaseTimer("resolve-ai-client", true);
 
     /* ── 4. Build the final prompt ────────────────────────── */
     let finalPrompt: string;
     if (promptOverride) {
       finalPrompt = promptOverride;
     } else {
-      const template: string = jobConfig.promptTemplate || '';
+      const template: string = jobConfig.promptTemplate || "";
       if (!template.trim()) {
-        throw new Error('No prompt template configured for this job');
+        throw new Error("No prompt template configured for this job");
       }
       finalPrompt = interpolateTemplate(template, variables);
     }
@@ -360,24 +428,27 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
     if (attachments.length > 0) {
       const textFiles = await resolveAttachmentsAsText(attachments);
       if (textFiles.length > 0) {
-        const fileBlock = textFiles.map((f) => `--- ${f.fileName} ---\n${f.content}`).join('\n\n');
+        const fileBlock = textFiles
+          .map((f) => `--- ${f.fileName} ---\n${f.content}`)
+          .join("\n\n");
         finalPrompt = `${fileBlock}\n\n---\n\n${finalPrompt}`;
       }
     }
 
     /* ── 5. Call the LLM ──────────────────────────────────── */
     const effectiveTimeoutMs = await resolveTimeoutMs(advancedConfig, provider);
-    if (fullDiagnostics) diag.addMetadata('effectiveTimeoutMs', effectiveTimeoutMs);
+    if (fullDiagnostics)
+      diag.addMetadata("effectiveTimeoutMs", effectiveTimeoutMs);
 
     if (fullDiagnostics) diag.startLlmTimer();
 
-    const messages: ChatMessage[] = [{ role: 'user', content: finalPrompt }];
+    const messages: ChatMessage[] = [{ role: "user", content: finalPrompt }];
     let modelUsed = primaryModel;
     let failoverUsed = false;
-    let primaryErrorMessage = '';
+    let primaryErrorMessage = "";
 
     let data: ChatCompletionResponse | null = null;
-    let rawContent = '';
+    let rawContent = "";
     let usage: ChatCompletionUsage | null = null;
     let finishReason: string | null = null;
 
@@ -393,8 +464,11 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
       nextUsage: ChatCompletionUsage | null;
       nextFinishReason: string | null;
     }> {
-      const resp = await llmClient.chatCompletion(modelId, msgs, { ...opts, timeoutMs: timeout });
-      const content = resp.choices?.[0]?.message?.content || '';
+      const resp = await llmClient.chatCompletion(modelId, msgs, {
+        ...opts,
+        timeoutMs: timeout,
+      });
+      const content = resp.choices?.[0]?.message?.content || "";
       return {
         resp,
         content,
@@ -407,9 +481,17 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
 
     try {
       tried.push(primaryModel);
-      const out = await callWithClient(client, primaryModel, messages, chatOptions, effectiveTimeoutMs);
-      if (!String(out.content || '').trim()) {
-        throw new Error(`Model "${primaryModel}" returned empty response content`);
+      const out = await callWithClient(
+        client,
+        primaryModel,
+        messages,
+        chatOptions,
+        effectiveTimeoutMs,
+      );
+      if (!String(out.content || "").trim()) {
+        throw new Error(
+          `Model "${primaryModel}" returned empty response content`,
+        );
       }
       data = out.resp;
       rawContent = out.content;
@@ -422,14 +504,32 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
       if (hasFailover && failoverProvider) {
         try {
           const failoverClient = createLlmClientForProvider(failoverProvider);
-          const failoverRuntimeOpts = profile.failover_runtime_options ?? profile.runtime_options ?? undefined;
-          const failoverChatOpts = buildProviderChatOptions(failoverProvider.type, failoverRuntimeOpts);
-          const failoverTimeoutMs = await resolveTimeoutMs(advancedConfig, failoverProvider);
+          const failoverRuntimeOpts =
+            profile.failover_runtime_options ??
+            profile.runtime_options ??
+            undefined;
+          const failoverChatOpts = buildProviderChatOptions(
+            failoverProvider.type,
+            failoverRuntimeOpts,
+          );
+          const failoverTimeoutMs = await resolveTimeoutMs(
+            advancedConfig,
+            failoverProvider,
+          );
           tried.push(failoverAiId);
 
-          const out = await callWithClient(failoverClient, failoverAiId, messages, failoverChatOpts, failoverTimeoutMs);
-          if (!String(out.content || '').trim()) {
-            throw new Error(`Failover model "${failoverAiId}" returned empty response content`, { cause: primaryErr });
+          const out = await callWithClient(
+            failoverClient,
+            failoverAiId,
+            messages,
+            failoverChatOpts,
+            failoverTimeoutMs,
+          );
+          if (!String(out.content || "").trim()) {
+            throw new Error(
+              `Failover model "${failoverAiId}" returned empty response content`,
+              { cause: primaryErr },
+            );
           }
           data = out.resp;
           rawContent = out.content;
@@ -442,7 +542,7 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
         }
       }
 
-      if (!String(rawContent || '').trim()) {
+      if (!String(rawContent || "").trim()) {
         if (failoverErr) {
           throw new Error(
             `Primary model "${primaryModel}" failed and failover "${failoverAiId}" on provider "${failoverProvider?.name}" also failed: ${failoverErr.message}`,
@@ -454,7 +554,8 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
       }
     }
 
-    const actualProvider = failoverUsed && failoverProvider ? failoverProvider : provider;
+    const actualProvider =
+      failoverUsed && failoverProvider ? failoverProvider : provider;
 
     if (fullDiagnostics) {
       diag.endLlmTimer(
@@ -477,11 +578,19 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
     if (fullDiagnostics) diag.startFormattingTimer();
 
     const hasNativeV2Schema =
-      providerTypeNorm === 'devs-ai-v2' &&
-      Boolean(jobConfig.expectedSchema?.fields && Object.keys(jobConfig.expectedSchema.fields).length > 0);
+      providerTypeNorm === "devs-ai-v2" &&
+      Boolean(
+        jobConfig.expectedSchema?.fields &&
+        Object.keys(jobConfig.expectedSchema.fields).length > 0,
+      );
     const skipFormatting = hasNativeV2Schema && !jobConfig.applyFormattingRules;
-    const formattingRules: FormattingRule[] = skipFormatting ? [] : jobConfig.formattingRules || [];
-    const { formatted, steps } = applyFormattingRules(rawContent, formattingRules);
+    const formattingRules: FormattingRule[] = skipFormatting
+      ? []
+      : jobConfig.formattingRules || [];
+    const { formatted, steps } = applyFormattingRules(
+      rawContent,
+      formattingRules,
+    );
 
     if (fullDiagnostics) diag.endFormattingTimer(formattingRules.length);
 
@@ -507,30 +616,39 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
 
     /* ── 8. Finalise diagnostics (fire-and-forget) ──────────── */
     if (fullDiagnostics) {
-      diag.addMetadata('formattedLength', formatted.length);
-      diag.addMetadata('rawLength', rawContent.length);
-      diag.addMetadata('primaryModel', primaryModel);
-      diag.addMetadata('failoverUsed', failoverUsed);
-      diag.addMetadata('modelOverride', modelOverride || null);
-      diag.addMetadata('enableFailover', enableFailover !== false);
-      diag.addMetadata('modelsTried', tried);
-      diag.addMetadata('chatOptions', chatOptions);
+      diag.addMetadata("formattedLength", formatted.length);
+      diag.addMetadata("rawLength", rawContent.length);
+      diag.addMetadata("primaryModel", primaryModel);
+      diag.addMetadata("failoverUsed", failoverUsed);
+      diag.addMetadata("modelOverride", modelOverride || null);
+      diag.addMetadata("enableFailover", enableFailover !== false);
+      diag.addMetadata("modelsTried", tried);
+      diag.addMetadata("chatOptions", chatOptions);
       if (hasFailover) {
-        diag.addMetadata('failoverModel', failoverAiId);
-        diag.addMetadata('failoverProviderName', failoverProvider?.name || null);
-        diag.addMetadata('failoverProviderType', failoverProvider?.type || null);
+        diag.addMetadata("failoverModel", failoverAiId);
+        diag.addMetadata(
+          "failoverProviderName",
+          failoverProvider?.name || null,
+        );
+        diag.addMetadata(
+          "failoverProviderType",
+          failoverProvider?.type || null,
+        );
       }
       if (primaryErrorMessage) {
-        diag.addMetadata('primaryModelError', primaryErrorMessage);
+        diag.addMetadata("primaryModelError", primaryErrorMessage);
       }
     }
-    diag.complete('success').catch((diagErr: unknown) => {
-      console.warn('[AI Manager] Non-blocking diagnostics write failed:', errorMessage(diagErr));
+    diag.complete("success").catch((diagErr: unknown) => {
+      console.warn(
+        "[AI Manager] Non-blocking diagnostics write failed:",
+        errorMessage(diagErr),
+      );
     });
 
     return result;
   } catch (err: unknown) {
-    diag.complete('error', errorMessage(err)).catch(() => {});
+    diag.complete("error", errorMessage(err)).catch(() => {});
     throw err;
   }
 }
@@ -545,18 +663,20 @@ export async function executeRawPrompt(
 ): Promise<AiManagerResult> {
   const cfg = getConfig();
   if (!cfg.devsAi.apiKey) {
-    throw new Error('DEVS_AI_API_KEY is not configured');
+    throw new Error("DEVS_AI_API_KEY is not configured");
   }
   const client = new DevsAiClient(cfg.devsAi.baseUrl, cfg.devsAi.apiKey);
   const model = cfg.devsAi.defaultModel;
 
   const t0 = Date.now();
-  const data = await client.chatCompletion(model, [{ role: 'user', content: prompt }]);
+  const data = await client.chatCompletion(model, [
+    { role: "user", content: prompt },
+  ]);
   const durationMs = Date.now() - t0;
 
   return {
-    raw: data.choices?.[0]?.message?.content || '',
-    formatted: data.choices?.[0]?.message?.content || '',
+    raw: data.choices?.[0]?.message?.content || "",
+    formatted: data.choices?.[0]?.message?.content || "",
     formattingSteps: [],
     messageSent: prompt,
     metadata: {
@@ -566,8 +686,8 @@ export async function executeRawPrompt(
       finishReason: data.choices?.[0]?.finish_reason || null,
       jobSlug: null,
       jobName: null,
-      aiProfile: 'env-default',
-      provider: 'env-default',
+      aiProfile: "env-default",
+      provider: "env-default",
     },
   };
 }
@@ -584,10 +704,16 @@ export async function executeRawPrompt(
  */
 export async function openChatSession(
   jobSlugOrProfileId: string,
-  options: OpenChatSessionOptions = { userId: '' },
+  options: OpenChatSessionOptions = { userId: "" },
 ): Promise<OpenChatSessionResult> {
-  const { callingApplication, userId, systemPrompt = null, workflowSlug = null, workflowId = null } = options;
-  if (!userId) throw new Error('userId is required for chat sessions');
+  const {
+    callingApplication,
+    userId,
+    systemPrompt = null,
+    workflowSlug = null,
+    workflowId = null,
+  } = options;
+  if (!userId) throw new Error("userId is required for chat sessions");
 
   let profile: AiProfileRow | null | undefined;
   let jobId: string | null = null;
@@ -596,9 +722,12 @@ export async function openChatSession(
   let resolvedJob: ProcessingJobRow | null = null;
 
   if (workflowSlug || workflowId) {
-    workflow = workflowId ? await getWorkflow(workflowId) : await getWorkflowBySlug(workflowSlug ?? '');
-    if (!workflow) throw new Error(`Workflow "${workflowSlug || workflowId}" not found`);
-    if (!workflow.is_active) throw new Error('This workflow is not active');
+    workflow = workflowId
+      ? await getWorkflow(workflowId)
+      : await getWorkflowBySlug(workflowSlug ?? "");
+    if (!workflow)
+      throw new Error(`Workflow "${workflowSlug || workflowId}" not found`);
+    if (!workflow.is_active) throw new Error("This workflow is not active");
     profile = workflow.ai_profile;
   } else {
     /* Try slug first, then UUID lookup, then fall back to treating it as a profile ID */
@@ -620,7 +749,7 @@ export async function openChatSession(
   }
 
   if (!profile?.provider) {
-    throw new Error('Could not resolve AI profile with provider');
+    throw new Error("Could not resolve AI profile with provider");
   }
 
   const provider: ProviderRow = profile.provider;
@@ -632,29 +761,33 @@ export async function openChatSession(
   if (resolvedJob?.requires_user_credentials) {
     if (!authUserId) {
       throw new Error(
-        'This job requires personal credentials. Provide user identity via JWT or X-Forwarded-User-Id header.',
+        "This job requires personal credentials. Provide user identity via JWT or X-Forwarded-User-Id header.",
       );
     }
     const cred = await getUserCredential(authUserId, provider.id);
     if (!cred) {
       throw new Error(
-        'This job requires personal credentials. Store your provider key via POST /api/user-credentials.',
+        "This job requires personal credentials. Store your provider key via POST /api/user-credentials.",
       );
     }
   }
 
   const usesUserCreds = !!authUserId;
-  const client = authUserId ? await createLlmClientForUser(provider, authUserId) : createLlmClientForProvider(provider);
+  const client = authUserId
+    ? await createLlmClientForUser(provider, authUserId)
+    : createLlmClientForProvider(provider);
 
   let externalChatId: string | null = null;
   const isDevsAiAgent =
-    providerType === 'devs-ai' &&
-    profile.mode === 'chat' &&
-    typeof (client as DevsAiClient).createChatSession === 'function';
+    providerType === "devs-ai" &&
+    profile.mode === "chat" &&
+    typeof (client as DevsAiClient).createChatSession === "function";
   if (isDevsAiAgent) {
-    const aiId = String(profile.external_ai_id || '').trim();
-    if (!aiId) throw new Error('Devs.ai profile has no external_ai_id');
-    const chatSession = (await (client as DevsAiClient).createChatSession(aiId)) as Record<string, unknown> | null;
+    const aiId = String(profile.external_ai_id || "").trim();
+    if (!aiId) throw new Error("Devs.ai profile has no external_ai_id");
+    const chatSession = (await (client as DevsAiClient).createChatSession(
+      aiId,
+    )) as Record<string, unknown> | null;
     externalChatId = (chatSession?.id as string) || null;
   }
 
@@ -665,7 +798,7 @@ export async function openChatSession(
   const jobSystemPrompt = (jobConfig?.systemPrompt as string | null) ?? null;
   const effectiveSystemPrompt: string | null =
     (workflow?.config?.systemPrompt as string | null) ||
-    [jobSystemPrompt, systemPrompt].filter(Boolean).join('\n\n') ||
+    [jobSystemPrompt, systemPrompt].filter(Boolean).join("\n\n") ||
     null;
 
   const session = await dbCreateSession({
@@ -673,28 +806,36 @@ export async function openChatSession(
     processing_job_id: jobId,
     workflow_id: workflow?.id || null,
     user_id: userId,
-    calling_application: callingApplication || 'unknown',
+    calling_application: callingApplication || "unknown",
     external_chat_id: externalChatId,
     provider_type: providerType,
-    status: 'active',
+    status: "active",
     system_prompt: effectiveSystemPrompt,
     uses_user_credentials: usesUserCreds,
   });
 
   /* ── Auto-register calling application + tag linked job ── */
-  if (callingApplication && callingApplication !== 'unknown' && callingApplication !== 'ai-admin-test') {
+  if (
+    callingApplication &&
+    callingApplication !== "unknown" &&
+    callingApplication !== "ai-admin-test"
+  ) {
     try {
       await upsertCallingApplication(callingApplication, callingApplication);
-      console.info(`[ai-manager] Registered calling application: "${callingApplication}"`);
+      console.info(
+        `[ai-manager] Registered calling application: "${callingApplication}"`,
+      );
       if (jobId) {
         const linkedJob = await getProcessingJob(jobId);
         if (linkedJob && !linkedJob.calling_application_id) {
-          await updateProcessingJob(jobId, { calling_application_id: callingApplication });
+          await updateProcessingJob(jobId, {
+            calling_application_id: callingApplication,
+          });
         }
       }
     } catch (autoRegErr: unknown) {
       console.warn(
-        '[ai-manager] openChatSession auto-register calling app failed (non-fatal):',
+        "[ai-manager] openChatSession auto-register calling app failed (non-fatal):",
         errorMessage(autoRegErr),
       );
     }
@@ -703,7 +844,7 @@ export async function openChatSession(
   if (effectiveSystemPrompt) {
     await createChatMessage({
       chat_session_id: session.id,
-      role: 'system',
+      role: "system",
       content: effectiveSystemPrompt,
     });
   }
@@ -719,17 +860,19 @@ export async function openChatSession(
 
   /* Expose rule sets so the calling app knows which keys are available */
   const configRuleSets = jobConfig?.ruleSets;
-  const ruleSets = (Array.isArray(configRuleSets) ? configRuleSets : []).map((rs) => ({
-    key: rs.key,
-    name: rs.name,
-    description: rs.description ?? null,
-  }));
+  const ruleSets = (Array.isArray(configRuleSets) ? configRuleSets : []).map(
+    (rs) => ({
+      key: rs.key,
+      name: rs.name,
+      description: rs.description ?? null,
+    }),
+  );
 
   return {
     sessionId: session.id,
     externalChatId,
     providerType,
-    status: 'active',
+    status: "active",
     workflowId: workflow?.id || null,
     steps,
     ruleSets,
@@ -755,18 +898,28 @@ export async function openChatSession(
  *   - Gemini / model sessions: reactivates and relies on local history.
  *   - Idempotent: resuming an already-active session is a no-op success.
  */
-export async function resumeChatSession(options: ResumeChatSessionOptions): Promise<ResumeChatSessionResult> {
-  const { sessionId = null, externalChatId = null, fallbackToLocal = false } = options;
+export async function resumeChatSession(
+  options: ResumeChatSessionOptions,
+): Promise<ResumeChatSessionResult> {
+  const {
+    sessionId = null,
+    externalChatId = null,
+    fallbackToLocal = false,
+  } = options;
   if (!sessionId && !externalChatId) {
-    throw new Error('Provide sessionId or externalChatId to resume a chat session');
+    throw new Error(
+      "Provide sessionId or externalChatId to resume a chat session",
+    );
   }
 
   let session = sessionId ? await dbGetSession(sessionId) : null;
-  if (!session && externalChatId) session = await dbGetSessionByExternalChatId(externalChatId);
-  if (!session) throw new Error('Chat session not found');
+  if (!session && externalChatId)
+    session = await dbGetSessionByExternalChatId(externalChatId);
+  if (!session) throw new Error("Chat session not found");
 
   const profile = session.ai_profile;
-  if (!profile?.provider) throw new Error('Chat session AI profile has no provider');
+  if (!profile?.provider)
+    throw new Error("Chat session AI profile has no provider");
 
   /* Credential parity: sessions opened with personal credentials require a
      user identity (JWT or X-Forwarded-User-Id) to resume. */
@@ -774,16 +927,16 @@ export async function resumeChatSession(options: ResumeChatSessionOptions): Prom
   const authUserId = effectiveUserId(ctx);
   if (session.uses_user_credentials && !authUserId) {
     throw new Error(
-      'This session uses personal credentials. Provide user identity via JWT or X-Forwarded-User-Id header.',
+      "This session uses personal credentials. Provide user identity via JWT or X-Forwarded-User-Id header.",
     );
   }
 
   /* Devs.ai v1: validate the remote chat still exists before reactivating. */
   let remoteValidated = false;
-  if (session.provider_type === 'devs-ai' && session.external_chat_id) {
+  if (session.provider_type === "devs-ai" && session.external_chat_id) {
     const provider = await getSessionProviderWithKey(session);
     const client = await resolveSessionClient(session, provider);
-    if (typeof (client as DevsAiClient).getChatSession === 'function') {
+    if (typeof (client as DevsAiClient).getChatSession === "function") {
       try {
         await (client as DevsAiClient).getChatSession(session.external_chat_id);
         remoteValidated = true;
@@ -802,11 +955,16 @@ export async function resumeChatSession(options: ResumeChatSessionOptions): Prom
   }
 
   /* Devs.ai v2: validate the last response still exists when we have threading metadata. */
-  if (session.provider_type === 'devs-ai-v2') {
-    const meta = (session.provider_metadata || {}) as { previous_response_id?: string };
+  if (session.provider_type === "devs-ai-v2") {
+    const meta = (session.provider_metadata || {}) as {
+      previous_response_id?: string;
+    };
     if (meta.previous_response_id) {
       const provider = await getSessionProviderWithKey(session);
-      const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
+      const client = (await resolveSessionClient(
+        session,
+        provider,
+      )) as DevsAiV2Client;
       try {
         await client.getResponse(meta.previous_response_id);
         remoteValidated = true;
@@ -826,14 +984,14 @@ export async function resumeChatSession(options: ResumeChatSessionOptions): Prom
 
   /* Reactivate if closed (idempotent if already active), then re-hydrate the
      joined row so downstream relations/status are fresh. */
-  if (session.status !== 'active') {
+  if (session.status !== "active") {
     await dbReactivateSession(session.id);
     const fresh = await dbGetSession(session.id);
     if (fresh) session = fresh;
   }
 
   /* Re-derive workflow steps + completion state for mid-workflow resume. */
-  let steps: OpenChatSessionResult['steps'] = [];
+  let steps: OpenChatSessionResult["steps"] = [];
   let completedSteps: string[] = [];
   if (session.workflow_id) {
     const workflow = await getWorkflow(session.workflow_id).catch(() => null);
@@ -845,25 +1003,32 @@ export async function resumeChatSession(options: ResumeChatSessionOptions): Prom
         isRequired: s.is_required,
         dependsOn: s.depends_on,
       })) ?? [];
-    const done = await getCompletedWorkflowSteps(session.id, session.workflow_id);
+    const done = await getCompletedWorkflowSteps(
+      session.id,
+      session.workflow_id,
+    );
     completedSteps = [...done];
   }
 
   /* Re-expose rule sets from the linked processing job. */
-  let ruleSets: OpenChatSessionResult['ruleSets'] = [];
+  let ruleSets: OpenChatSessionResult["ruleSets"] = [];
   if (session.processing_job_id) {
-    const job = await getProcessingJob(session.processing_job_id).catch(() => null);
+    const job = await getProcessingJob(session.processing_job_id).catch(
+      () => null,
+    );
     const configRuleSets = (job?.config as JobConfig | undefined)?.ruleSets;
-    ruleSets = (Array.isArray(configRuleSets) ? configRuleSets : []).map((rs) => ({
-      key: rs.key,
-      name: rs.name,
-      description: rs.description ?? null,
-    }));
+    ruleSets = (Array.isArray(configRuleSets) ? configRuleSets : []).map(
+      (rs) => ({
+        key: rs.key,
+        name: rs.name,
+        description: rs.description ?? null,
+      }),
+    );
   }
 
   const messages = await listChatMessages(session.id);
 
-  console.info('[ai-manager] resume chat session', {
+  console.info("[ai-manager] resume chat session", {
     sessionId: session.id,
     externalChatId: session.external_chat_id ?? null,
     providerType: session.provider_type ?? null,
@@ -875,7 +1040,7 @@ export async function resumeChatSession(options: ResumeChatSessionOptions): Prom
   return {
     sessionId: session.id,
     externalChatId: session.external_chat_id ?? null,
-    providerType: session.provider_type ?? '',
+    providerType: session.provider_type ?? "",
     status: session.status,
     workflowId: session.workflow_id ?? null,
     steps,
@@ -883,7 +1048,8 @@ export async function resumeChatSession(options: ResumeChatSessionOptions): Prom
     aiProfileId: session.ai_profile_id,
     aiProfileName: profile.name,
     completedSteps,
-    workflowVariables: (session.workflow_variables as Record<string, unknown>) ?? {},
+    workflowVariables:
+      (session.workflow_variables as Record<string, unknown>) ?? {},
     messages,
   };
 }
@@ -906,10 +1072,12 @@ export async function sendChatMessage(
 ): Promise<SendChatMessageResult> {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
-  if (session.status !== 'active') throw new Error(`Chat session ${sessionId} is ${session.status}`);
+  if (session.status !== "active")
+    throw new Error(`Chat session ${sessionId} is ${session.status}`);
 
   const profile = session.ai_profile;
-  if (!profile?.provider) throw new Error('Chat session AI profile has no provider');
+  if (!profile?.provider)
+    throw new Error("Chat session AI profile has no provider");
   const provider = await getSessionProviderWithKey(session);
 
   const ctx = getAuthContext();
@@ -917,7 +1085,7 @@ export async function sendChatMessage(
 
   if (session.uses_user_credentials && !authUserId) {
     throw new Error(
-      'This session uses personal credentials. Provide user identity via JWT or X-Forwarded-User-Id header.',
+      "This session uses personal credentials. Provide user identity via JWT or X-Forwarded-User-Id header.",
     );
   }
 
@@ -936,26 +1104,46 @@ export async function sendChatMessage(
 
   if (options.stepKey && session.workflow_id) {
     /* ── Mode 2: Workflow step invocation ── */
-    const step = await getWorkflowStepByKey(session.workflow_id, options.stepKey);
+    const step = await getWorkflowStepByKey(
+      session.workflow_id,
+      options.stepKey,
+    );
     if (!step) throw new Error(`Workflow step "${options.stepKey}" not found`);
 
     const job = step.processing_job;
-    if (!job) throw new Error(`Workflow step "${options.stepKey}" has no linked processing job`);
+    if (!job)
+      throw new Error(
+        `Workflow step "${options.stepKey}" has no linked processing job`,
+      );
 
-    const template: string | undefined = (job.config as JobConfig | undefined)?.promptTemplate;
-    if (!template) throw new Error(`Processing job "${job.name}" has no prompt template configured`);
+    const template: string | undefined = (job.config as JobConfig | undefined)
+      ?.promptTemplate;
+    if (!template)
+      throw new Error(
+        `Processing job "${job.name}" has no prompt template configured`,
+      );
 
     if (step.depends_on && step.depends_on.length > 0) {
-      const completedSteps = await getCompletedWorkflowSteps(sessionId, session.workflow_id);
-      const unmet = step.depends_on.filter((dep: string) => !completedSteps.has(dep));
+      const completedSteps = await getCompletedWorkflowSteps(
+        sessionId,
+        session.workflow_id,
+      );
+      const unmet = step.depends_on.filter(
+        (dep: string) => !completedSteps.has(dep),
+      );
       if (unmet.length > 0) {
-        throw new Error(`Step "${options.stepKey}" depends on incomplete steps: ${unmet.join(', ')}`);
+        throw new Error(
+          `Step "${options.stepKey}" depends on incomplete steps: ${unmet.join(", ")}`,
+        );
       }
     }
 
     const stepConfig = (step.config || {}) as WorkflowStepConfig;
     const inputMappings = stepConfig.inputMappings || {};
-    const accumulated = (session.workflow_variables || {}) as Record<string, unknown>;
+    const accumulated = (session.workflow_variables || {}) as Record<
+      string,
+      unknown
+    >;
 
     const mergedVars: Record<string, unknown> = {};
     for (const [jobVar, workflowVar] of Object.entries(inputMappings)) {
@@ -967,36 +1155,51 @@ export async function sendChatMessage(
 
     resolvedMessage = interpolateTemplate(template, mergedVars);
     workflowStepId = step.id;
-    stepFormattingRules = (job.config as JobConfig | undefined)?.formattingRules ?? null;
+    stepFormattingRules =
+      (job.config as JobConfig | undefined)?.formattingRules ?? null;
     stepOutputMappings =
-      stepConfig.outputMappings && Object.keys(stepConfig.outputMappings).length > 0 ? stepConfig.outputMappings : null;
+      stepConfig.outputMappings &&
+      Object.keys(stepConfig.outputMappings).length > 0
+        ? stepConfig.outputMappings
+        : null;
     resolvedJob = job;
   } else if (options.ruleSetKey) {
     /* ── Mode 3: Rule set invocation ── */
-    const job = session.processing_job_id ? await getProcessingJob(session.processing_job_id) : null;
+    const job = session.processing_job_id
+      ? await getProcessingJob(session.processing_job_id)
+      : null;
     if (!job) {
       throw new Error(
-        'ruleSetKey requires the chat session to be opened with a processing job (use jobSlug or jobId when opening the session).',
+        "ruleSetKey requires the chat session to be opened with a processing job (use jobSlug or jobId when opening the session).",
       );
     }
 
-    const ruleSets: RuleSetConfig[] | undefined = (job.config as JobConfig | undefined)?.ruleSets;
+    const ruleSets: RuleSetConfig[] | undefined = (
+      job.config as JobConfig | undefined
+    )?.ruleSets;
     if (!Array.isArray(ruleSets) || ruleSets.length === 0) {
-      throw new Error(`Processing job "${job.name}" has no rule sets configured.`);
+      throw new Error(
+        `Processing job "${job.name}" has no rule sets configured.`,
+      );
     }
 
     const ruleSet = ruleSets.find((rs) => rs.key === options.ruleSetKey);
     if (!ruleSet) {
       throw new Error(
-        `Rule set "${options.ruleSetKey}" not found in job "${job.name}". Available: ${ruleSets.map((rs) => rs.key).join(', ')}`,
+        `Rule set "${options.ruleSetKey}" not found in job "${job.name}". Available: ${ruleSets.map((rs) => rs.key).join(", ")}`,
       );
     }
 
     if (!ruleSet.promptTemplate?.trim()) {
-      throw new Error(`Rule set "${options.ruleSetKey}" has no prompt template configured.`);
+      throw new Error(
+        `Rule set "${options.ruleSetKey}" has no prompt template configured.`,
+      );
     }
 
-    resolvedMessage = interpolateTemplate(ruleSet.promptTemplate, options.variables || {});
+    resolvedMessage = interpolateTemplate(
+      ruleSet.promptTemplate,
+      options.variables || {},
+    );
     ruleSetKey = ruleSet.key;
     stepFormattingRules = ruleSet.formattingRules || null;
     resolvedJob = job;
@@ -1010,26 +1213,36 @@ export async function sendChatMessage(
   }
 
   if (!resolvedMessage) {
-    throw new Error('No message content resolved — provide a message, stepKey, or ruleSetKey');
+    throw new Error(
+      "No message content resolved — provide a message, stepKey, or ruleSetKey",
+    );
   }
 
   /* ── Set up diagnostics ──────────────────────────────────── */
   let diagnosticSession: DiagnosticSession | null = null;
   if (resolvedJob) {
     const advancedConfig: Record<string, unknown> =
-      (resolvedJob.config as Record<string, Record<string, unknown>> | undefined)?.advanced || {};
+      (
+        resolvedJob.config as
+          | Record<string, Record<string, unknown>>
+          | undefined
+      )?.advanced || {};
     const diagCheck = shouldRunDiagnostics(advancedConfig);
     if (diagCheck.enabled && diagCheck.persist) {
       diagnosticSession = new DiagnosticSession(
         resolvedJob.id,
-        session.calling_application || 'unknown',
+        session.calling_application || "unknown",
         true,
         resolvedJob.workspace_id || null,
         sessionId,
       );
       diagnosticSession.logRequestPayload({
         chatSessionId: sessionId,
-        mode: options.ruleSetKey ? 'rule-set' : options.stepKey ? 'workflow-step' : 'free-form',
+        mode: options.ruleSetKey
+          ? "rule-set"
+          : options.stepKey
+            ? "workflow-step"
+            : "free-form",
         ruleSetKey: ruleSetKey || null,
         stepKey: options.stepKey || null,
         variables: options.variables || {},
@@ -1042,20 +1255,20 @@ export async function sendChatMessage(
 
   const userMsg = await createChatMessage({
     chat_session_id: sessionId,
-    role: 'user',
+    role: "user",
     content: resolvedMessage,
     workflow_step_id: workflowStepId,
     rule_set_key: ruleSetKey,
   });
 
   /* Session compaction: summarize older turns when over token threshold */
-  await maybeCompactSession(session, session.calling_application || 'unknown');
+  await maybeCompactSession(session, session.calling_application || "unknown");
   const refreshedSession = (await dbGetSession(sessionId)) || session;
 
   let sseResponse: globalThis.Response;
   if (diagnosticSession) diagnosticSession.startLlmTimer();
 
-  if (providerType === 'devs-ai' && session.external_chat_id) {
+  if (providerType === "devs-ai" && session.external_chat_id) {
     let prompt: string | unknown[];
     const textContent =
       session.message_count === 0 && session.system_prompt
@@ -1063,22 +1276,32 @@ export async function sendChatMessage(
         : resolvedMessage;
 
     if (attachments.length > 0) {
-      const fileRefs = await resolveAttachments(session.external_chat_id, attachments, client as DevsAiClient);
-      prompt = [{ type: 'text', text: textContent }, ...fileRefs];
+      const fileRefs = await resolveAttachments(
+        session.external_chat_id,
+        attachments,
+        client as DevsAiClient,
+      );
+      prompt = [{ type: "text", text: textContent }, ...fileRefs];
     } else {
       prompt = textContent;
     }
 
-    sseResponse = await (client as DevsAiClient).messageChatSession(session.external_chat_id, prompt, {
-      timeoutMs,
-      tools: await resolveProfileToolDefinitions(refreshedSession.ai_profile),
-    });
-  } else if (typeof client.chatCompletionStream === 'function') {
+    sseResponse = await (client as DevsAiClient).messageChatSession(
+      session.external_chat_id,
+      prompt,
+      {
+        timeoutMs,
+        tools: await resolveProfileToolDefinitions(refreshedSession.ai_profile),
+      },
+    );
+  } else if (typeof client.chatCompletionStream === "function") {
     let enrichedContent = resolvedMessage;
     if (attachments.length > 0) {
       const textFiles = await resolveAttachmentsAsText(attachments);
       if (textFiles.length > 0) {
-        const fileBlock = textFiles.map((f) => `--- ${f.fileName} ---\n${f.content}`).join('\n\n');
+        const fileBlock = textFiles
+          .map((f) => `--- ${f.fileName} ---\n${f.content}`)
+          .join("\n\n");
         enrichedContent = `${fileBlock}\n\n---\n\n${enrichedContent}`;
       }
     }
@@ -1089,36 +1312,57 @@ export async function sendChatMessage(
       getSummarizerConfig(refreshedSession),
     );
     const chatMessages: ChatMessage[] = historyMessages.map((m) => ({
-      role: m.role as 'system' | 'user' | 'assistant',
+      role: m.role as "system" | "user" | "assistant",
       content: m.content,
     }));
     if (enrichedContent !== resolvedMessage && chatMessages.length > 0) {
       const lastMsg = chatMessages[chatMessages.length - 1];
       if (lastMsg) lastMsg.content = enrichedContent;
     }
-    const chatOptions = buildProviderChatOptions(provider.type, profile?.runtime_options || {}, {
-      previousResponseId: (refreshedSession.provider_metadata as { previous_response_id?: string } | null)
-        ?.previous_response_id,
-      conversationId: (refreshedSession.provider_metadata as { conversation_id?: string } | null)?.conversation_id,
-      expectedSchema: providerType === 'devs-ai-v2' ? (resolvedJob?.config as JobConfig | undefined)?.expectedSchema : undefined,
-    });
-    const profileTools = await resolveProfileToolDefinitions(refreshedSession.ai_profile);
+    const chatOptions = buildProviderChatOptions(
+      provider.type,
+      profile?.runtime_options || {},
+      {
+        previousResponseId: (
+          refreshedSession.provider_metadata as {
+            previous_response_id?: string;
+          } | null
+        )?.previous_response_id,
+        conversationId: (
+          refreshedSession.provider_metadata as {
+            conversation_id?: string;
+          } | null
+        )?.conversation_id,
+        expectedSchema:
+          providerType === "devs-ai-v2"
+            ? (resolvedJob?.config as JobConfig | undefined)?.expectedSchema
+            : undefined,
+      },
+    );
+    const profileTools = await resolveProfileToolDefinitions(
+      refreshedSession.ai_profile,
+    );
     const mergedTools = [
-      ...(Array.isArray(chatOptions.tools) ? (chatOptions.tools as unknown[]) : []),
+      ...(Array.isArray(chatOptions.tools)
+        ? (chatOptions.tools as unknown[])
+        : []),
       ...(Array.isArray(profileTools) ? profileTools : []),
     ];
-    const modelId = String(profile?.external_ai_id || '').trim();
+    const modelId = String(profile?.external_ai_id || "").trim();
     sseResponse = await client.chatCompletionStream(modelId, chatMessages, {
       ...chatOptions,
       ...(mergedTools.length > 0 ? { tools: mergedTools } : {}),
       timeoutMs,
     });
   } else {
-    throw new Error(`Unsupported provider type "${providerType}" for chat streaming`);
+    throw new Error(
+      `Unsupported provider type "${providerType}" for chat streaming`,
+    );
   }
 
   const expectedResponseFormat: string | null =
-    (resolvedJob?.config as JobConfig | undefined)?.expectedResponseFormat ?? null;
+    (resolvedJob?.config as JobConfig | undefined)?.expectedResponseFormat ??
+    null;
 
   return {
     response: sseResponse,
@@ -1146,20 +1390,28 @@ export async function submitChatToolOutputs(
 ): Promise<{ response: globalThis.Response; sessionId: string }> {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
-  if (session.status !== 'active') throw new Error(`Chat session ${sessionId} is ${session.status}`);
+  if (session.status !== "active")
+    throw new Error(`Chat session ${sessionId} is ${session.status}`);
 
   const profile = session.ai_profile;
-  if (!profile?.provider) throw new Error('Chat session AI profile has no provider');
+  if (!profile?.provider)
+    throw new Error("Chat session AI profile has no provider");
   const provider = await getSessionProviderWithKey(session);
 
-  if (provider.type === 'devs-ai-v2') {
-    const meta = (session.provider_metadata || {}) as { previous_response_id?: string };
+  if (provider.type === "devs-ai-v2") {
+    const meta = (session.provider_metadata || {}) as {
+      previous_response_id?: string;
+    };
     const responseId = meta.previous_response_id;
-    if (!responseId) throw new Error('v2 session has no previous_response_id for tool resume');
+    if (!responseId)
+      throw new Error("v2 session has no previous_response_id for tool resume");
     return submitV2ToolOutputs(sessionId, responseId, outputs);
   }
 
-  if (!session.external_chat_id) throw new Error('Session has no external chat id (tool outputs require Devs.ai)');
+  if (!session.external_chat_id)
+    throw new Error(
+      "Session has no external chat id (tool outputs require Devs.ai)",
+    );
 
   const client = await resolveSessionClient(session, provider);
 
@@ -1184,19 +1436,31 @@ export async function submitV2ToolOutputs(
 ): Promise<{ response: globalThis.Response; sessionId: string }> {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
-  if (session.status !== 'active') throw new Error(`Chat session ${sessionId} is ${session.status}`);
+  if (session.status !== "active")
+    throw new Error(`Chat session ${sessionId} is ${session.status}`);
 
   const profile = session.ai_profile;
-  if (!profile?.provider) throw new Error('Chat session AI profile has no provider');
+  if (!profile?.provider)
+    throw new Error("Chat session AI profile has no provider");
   const provider = await getSessionProviderWithKey(session);
-  if (provider.type !== 'devs-ai-v2') {
-    throw new Error(`submitV2ToolOutputs requires devs-ai-v2 provider, got "${provider.type}"`);
+  if (provider.type !== "devs-ai-v2") {
+    throw new Error(
+      `submitV2ToolOutputs requires devs-ai-v2 provider, got "${provider.type}"`,
+    );
   }
 
-  const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
+  const client = (await resolveSessionClient(
+    session,
+    provider,
+  )) as DevsAiV2Client;
   const timeoutMs = await resolveTimeoutMs({}, provider);
-  const v2Outputs = outputs.map((o) => ({ tool_call_id: o.toolCallId, output: o.output }));
-  const sseResponse = await client.resumeResponseStream(responseId, v2Outputs, { timeoutMs });
+  const v2Outputs = outputs.map((o) => ({
+    tool_call_id: o.toolCallId,
+    output: o.output,
+  }));
+  const sseResponse = await client.resumeResponseStream(responseId, v2Outputs, {
+    timeoutMs,
+  });
 
   return { response: sseResponse, sessionId };
 }
@@ -1204,13 +1468,18 @@ export async function submitV2ToolOutputs(
 /** Persist v2 threading metadata on a chat session after a completed response. */
 export async function updateV2ProviderMetadata(
   sessionId: string,
-  patch: { previous_response_id?: string; conversation_id?: string; last_sequence?: number },
+  patch: {
+    previous_response_id?: string;
+    conversation_id?: string;
+    last_sequence?: number;
+  },
 ): Promise<void> {
   const session = await dbGetSession(sessionId);
   if (!session) return;
   const current = (session.provider_metadata || {}) as Record<string, unknown>;
   const next: Record<string, unknown> = { ...current };
-  if (patch.previous_response_id) next.previous_response_id = patch.previous_response_id;
+  if (patch.previous_response_id)
+    next.previous_response_id = patch.previous_response_id;
   if (patch.conversation_id) next.conversation_id = patch.conversation_id;
   if (patch.last_sequence != null) next.last_sequence = patch.last_sequence;
   await dbUpdateSession(sessionId, { provider_metadata: next });
@@ -1225,22 +1494,31 @@ export async function cancelV2ChatResponse(
 ): Promise<{ cancelled: boolean; responseId: string }> {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
-  if (session.provider_type !== 'devs-ai-v2') {
-    throw new Error(`cancel is only supported for devs-ai-v2 sessions (got "${session.provider_type}")`);
+  if (session.provider_type !== "devs-ai-v2") {
+    throw new Error(
+      `cancel is only supported for devs-ai-v2 sessions (got "${session.provider_type}")`,
+    );
   }
 
   const profile = session.ai_profile;
-  if (!profile?.provider) throw new Error('Chat session AI profile has no provider');
+  if (!profile?.provider)
+    throw new Error("Chat session AI profile has no provider");
   const provider = await getSessionProviderWithKey(session);
 
-  const meta = (session.provider_metadata || {}) as { previous_response_id?: string };
+  const meta = (session.provider_metadata || {}) as {
+    previous_response_id?: string;
+  };
   const responseId = meta.previous_response_id;
-  if (!responseId) throw new Error('No v2 response id in provider_metadata to cancel');
+  if (!responseId)
+    throw new Error("No v2 response id in provider_metadata to cancel");
 
-  const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
+  const client = (await resolveSessionClient(
+    session,
+    provider,
+  )) as DevsAiV2Client;
   await client.cancelResponse(responseId);
 
-  console.info('[ai-manager] cancelled v2 response', { sessionId, responseId });
+  console.info("[ai-manager] cancelled v2 response", { sessionId, responseId });
   return { cancelled: true, responseId };
 }
 
@@ -1255,13 +1533,17 @@ export async function reconnectV2ChatStream(
 ): Promise<{ response: globalThis.Response; sessionId: string }> {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
-  if (session.status !== 'active') throw new Error(`Chat session ${sessionId} is ${session.status}`);
-  if (session.provider_type !== 'devs-ai-v2') {
-    throw new Error(`stream reconnect is only supported for devs-ai-v2 sessions (got "${session.provider_type}")`);
+  if (session.status !== "active")
+    throw new Error(`Chat session ${sessionId} is ${session.status}`);
+  if (session.provider_type !== "devs-ai-v2") {
+    throw new Error(
+      `stream reconnect is only supported for devs-ai-v2 sessions (got "${session.provider_type}")`,
+    );
   }
 
   const profile = session.ai_profile;
-  if (!profile?.provider) throw new Error('Chat session AI profile has no provider');
+  if (!profile?.provider)
+    throw new Error("Chat session AI profile has no provider");
   const provider = await getSessionProviderWithKey(session);
 
   const meta = (session.provider_metadata || {}) as {
@@ -1269,16 +1551,30 @@ export async function reconnectV2ChatStream(
     last_sequence?: number;
   };
   const responseId = meta.previous_response_id;
-  if (!responseId) throw new Error('No v2 response id in provider_metadata to reconnect');
+  if (!responseId)
+    throw new Error("No v2 response id in provider_metadata to reconnect");
 
   const lastSequence =
-    options.lastSequence != null ? options.lastSequence : Number(meta.last_sequence ?? 0) || 0;
+    options.lastSequence != null
+      ? options.lastSequence
+      : Number(meta.last_sequence ?? 0) || 0;
 
-  const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
+  const client = (await resolveSessionClient(
+    session,
+    provider,
+  )) as DevsAiV2Client;
   const timeoutMs = await resolveTimeoutMs({}, provider);
-  const sseResponse = await client.reconnectResponseStream(responseId, lastSequence, { timeoutMs });
+  const sseResponse = await client.reconnectResponseStream(
+    responseId,
+    lastSequence,
+    { timeoutMs },
+  );
 
-  console.info('[ai-manager] reconnecting v2 stream', { sessionId, responseId, lastSequence });
+  console.info("[ai-manager] reconnecting v2 stream", {
+    sessionId,
+    responseId,
+    lastSequence,
+  });
   return { response: sseResponse, sessionId };
 }
 
@@ -1293,7 +1589,7 @@ export async function recordAssistantMessage(
 ): Promise<ChatMessageRow> {
   const msg = await createChatMessage({
     chat_session_id: sessionId,
-    role: 'assistant',
+    role: "assistant",
     content,
     prompt_tokens: metrics.promptTokens || null,
     completion_tokens: metrics.completionTokens || null,
@@ -1313,10 +1609,16 @@ export async function recordAssistantMessage(
  * List all files (user-uploaded and AI-generated) for a chat session.
  * Proxies through to the Devs.ai chat files API.
  */
-export async function getChatSessionFiles(
-  sessionId: string,
-): Promise<
-  Array<{ id: string; source: string; filename: string; size: number; mimeType: string; url: string; status: string }>
+export async function getChatSessionFiles(sessionId: string): Promise<
+  Array<{
+    id: string;
+    source: string;
+    filename: string;
+    size: number;
+    mimeType: string;
+    url: string;
+    status: string;
+  }>
 > {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
@@ -1340,12 +1642,18 @@ export async function getChatHistory(
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
 
-  if (options.fromProvider && session.provider_type === 'devs-ai' && session.external_chat_id) {
+  if (
+    options.fromProvider &&
+    session.provider_type === "devs-ai" &&
+    session.external_chat_id
+  ) {
     if (session.ai_profile?.provider) {
       const provider = await getSessionProviderWithKey(session);
       const client = await resolveSessionClient(session, provider);
-      if (typeof (client as DevsAiClient).getChatSession === 'function') {
-        return (client as DevsAiClient).getChatSession(session.external_chat_id);
+      if (typeof (client as DevsAiClient).getChatSession === "function") {
+        return (client as DevsAiClient).getChatSession(
+          session.external_chat_id,
+        );
       }
     }
   }
@@ -1361,26 +1669,32 @@ export async function getChatHistory(
  * resumed later via resumeChatSession. Remote cleanup happens on reset
  * (clears history) and delete (removes the session entirely).
  */
-export async function closeChatSession(sessionId: string): Promise<ChatSessionRow> {
+export async function closeChatSession(
+  sessionId: string,
+): Promise<ChatSessionRow> {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
-  return dbUpdateSession(sessionId, { status: 'closed' });
+  return dbUpdateSession(sessionId, { status: "closed" });
 }
 
 /**
  * Reset a chat session — clear messages and optionally reset the remote session.
  */
-export async function resetChatSession(sessionId: string): Promise<ChatSessionRow> {
+export async function resetChatSession(
+  sessionId: string,
+): Promise<ChatSessionRow> {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
 
-  if (session.provider_type === 'devs-ai' && session.external_chat_id) {
+  if (session.provider_type === "devs-ai" && session.external_chat_id) {
     try {
       if (session.ai_profile?.provider) {
         const provider = await getSessionProviderWithKey(session);
         const client = await resolveSessionClient(session, provider);
-        if (typeof (client as DevsAiClient).resetChatSession === 'function') {
-          await (client as DevsAiClient).resetChatSession(session.external_chat_id);
+        if (typeof (client as DevsAiClient).resetChatSession === "function") {
+          await (client as DevsAiClient).resetChatSession(
+            session.external_chat_id,
+          );
         }
       }
     } catch (_err) {
@@ -1391,20 +1705,20 @@ export async function resetChatSession(sessionId: string): Promise<ChatSessionRo
   await deleteChatMessages(sessionId);
 
   const resetUpdates: Partial<ChatSessionRow> = {
-    status: 'active',
+    status: "active",
     message_count: session.system_prompt ? 1 : 0,
     total_prompt_tokens: 0,
     total_completion_tokens: 0,
     workflow_variables: {},
   };
-  if (session.provider_type === 'devs-ai-v2') {
+  if (session.provider_type === "devs-ai-v2") {
     resetUpdates.provider_metadata = null;
   }
 
   if (session.system_prompt) {
     await createChatMessage({
       chat_session_id: sessionId,
-      role: 'system',
+      role: "system",
       content: session.system_prompt,
     });
     resetUpdates.message_count = 1;
@@ -1420,13 +1734,15 @@ export async function removeChatSession(sessionId: string): Promise<void> {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
 
-  if (session.provider_type === 'devs-ai' && session.external_chat_id) {
+  if (session.provider_type === "devs-ai" && session.external_chat_id) {
     try {
       if (session.ai_profile?.provider) {
         const provider = await getSessionProviderWithKey(session);
         const client = await resolveSessionClient(session, provider);
-        if (typeof (client as DevsAiClient).deleteChatSession === 'function') {
-          await (client as DevsAiClient).deleteChatSession(session.external_chat_id);
+        if (typeof (client as DevsAiClient).deleteChatSession === "function") {
+          await (client as DevsAiClient).deleteChatSession(
+            session.external_chat_id,
+          );
         }
       }
     } catch (_err) {
@@ -1446,18 +1762,31 @@ export async function removeChatSession(sessionId: string): Promise<void> {
  */
 export async function purgeRemoteChatsForUser(userId: string): Promise<number> {
   let rows: Array<
-    Pick<ChatSessionRow, 'id' | 'ai_profile_id' | 'provider_type' | 'external_chat_id' | 'uses_user_credentials' | 'user_id'>
+    Pick<
+      ChatSessionRow,
+      | "id"
+      | "ai_profile_id"
+      | "provider_type"
+      | "external_chat_id"
+      | "uses_user_credentials"
+      | "user_id"
+    >
   > = [];
   try {
-    const { data, error } = await tenantFrom('chat_sessions')
-      .select('id, ai_profile_id, provider_type, external_chat_id, uses_user_credentials, user_id')
-      .eq('user_id', userId)
-      .eq('provider_type', 'devs-ai')
-      .not('external_chat_id', 'is', null);
+    const { data, error } = await tenantFrom("chat_sessions")
+      .select(
+        "id, ai_profile_id, provider_type, external_chat_id, uses_user_credentials, user_id",
+      )
+      .eq("user_id", userId)
+      .eq("provider_type", "devs-ai")
+      .not("external_chat_id", "is", null);
     if (error) throw new Error(error.message);
     rows = (data as typeof rows) || [];
   } catch (err) {
-    console.warn('[ai-manager] purgeRemoteChatsForUser: failed to list sessions:', errorMessage(err));
+    console.warn(
+      "[ai-manager] purgeRemoteChatsForUser: failed to list sessions:",
+      errorMessage(err),
+    );
     return 0;
   }
 
@@ -1465,8 +1794,14 @@ export async function purgeRemoteChatsForUser(userId: string): Promise<number> {
   for (const row of rows) {
     try {
       const provider = await getSessionProviderWithKey(row as ChatSessionRow);
-      const client = await resolveSessionClient(row as ChatSessionRow, provider);
-      if (row.external_chat_id && typeof (client as DevsAiClient).deleteChatSession === 'function') {
+      const client = await resolveSessionClient(
+        row as ChatSessionRow,
+        provider,
+      );
+      if (
+        row.external_chat_id &&
+        typeof (client as DevsAiClient).deleteChatSession === "function"
+      ) {
         await (client as DevsAiClient).deleteChatSession(row.external_chat_id);
         purged++;
       }
@@ -1493,30 +1828,41 @@ export async function uploadApiDataSourcesChunked(
   const {
     jobSlug = null,
     jobId = null,
-    callingApplication = 'unknown',
+    callingApplication = "unknown",
     rows = [],
     maxChunkBytes = 750_000,
-    namePrefix = 'datasource',
-    operationType = 'datasource-upload',
+    namePrefix = "datasource",
+    operationType = "datasource-upload",
     preDeleteSummary = null,
   } = options;
 
   if (!jobSlug && !jobId) {
-    throw new Error('uploadApiDataSourcesChunked requires jobSlug or jobId');
+    throw new Error("uploadApiDataSourcesChunked requires jobSlug or jobId");
   }
 
-  const job = jobId ? await getProcessingJob(jobId) : await getProcessingJobBySlug(jobSlug ?? '');
+  const job = jobId
+    ? await getProcessingJob(jobId)
+    : await getProcessingJobBySlug(jobSlug ?? "");
   if (!job) throw new Error(`Processing job not found (${jobId || jobSlug})`);
 
-  const profile = job.ai_profile ? hydrateAiProfileProviderKeys(job.ai_profile) : job.ai_profile;
+  const profile = job.ai_profile
+    ? hydrateAiProfileProviderKeys(job.ai_profile)
+    : job.ai_profile;
   const provider: ProviderRow | undefined = profile?.provider;
-  const aiId = String(profile?.external_ai_id || '').trim();
-  if (!provider || provider.type !== 'devs-ai') {
-    throw new Error('Chunked datasource upload is only supported for Devs.ai provider');
+  const aiId = String(profile?.external_ai_id || "").trim();
+  if (!provider || provider.type !== "devs-ai") {
+    throw new Error(
+      "Chunked datasource upload is only supported for Devs.ai provider",
+    );
   }
-  if (!aiId) throw new Error('Processing job AI profile has no external_ai_id');
+  if (!aiId) throw new Error("Processing job AI profile has no external_ai_id");
 
-  const diag = new DiagnosticSession(job.id, callingApplication, true, job.workspace_id);
+  const diag = new DiagnosticSession(
+    job.id,
+    callingApplication,
+    true,
+    job.workspace_id,
+  );
   const startedAtMs = Date.now();
   const chunks = splitRowsByByteCap(rows, maxChunkBytes);
   const summary: UploadSummary = {
@@ -1556,13 +1902,17 @@ export async function uploadApiDataSourcesChunked(
       const chunkBytes = payloadBytes(chunkRows);
       const chunkName = buildChunkName(namePrefix, i, chunks.length);
       try {
-        const created = (await client.createApiDataSource(aiId, chunkName, { mappings: chunkRows })) as Record<
-          string,
-          unknown
-        > | null;
-        const createdData = created?.data as Record<string, unknown> | undefined;
+        const created = (await client.createApiDataSource(aiId, chunkName, {
+          mappings: chunkRows,
+        })) as Record<string, unknown> | null;
+        const createdData = created?.data as
+          | Record<string, unknown>
+          | undefined;
         const dataSourceId: string | null =
-          (created?.dataSourceId as string) || (createdData?.id as string) || (created?.id as string) || null;
+          (created?.dataSourceId as string) ||
+          (createdData?.id as string) ||
+          (created?.id as string) ||
+          null;
         let refreshed = false;
         let refreshError: string | null = null;
         if (dataSourceId) {
@@ -1595,27 +1945,33 @@ export async function uploadApiDataSourcesChunked(
 
     summary.completedAt = new Date().toISOString();
     summary.totalDurationMs = Date.now() - startedAtMs;
-    summary.status = summary.failedChunks.length > 0 ? 'partial_failure' : 'success';
-    diag.addMetadata('operationType', operationType);
-    diag.addMetadata('preDeleteSummary', preDeleteSummary);
-    diag.addMetadata('uploadedDataSources', summary.uploadedDataSources);
-    diag.addMetadata('failedChunks', summary.failedChunks);
-    diag.addMetadata('totalMappings', summary.totalMappings);
-    diag.addMetadata('totalChunks', summary.totalChunks);
-    diag.addMetadata('estimatedBytes', summary.estimatedBytes);
+    summary.status =
+      summary.failedChunks.length > 0 ? "partial_failure" : "success";
+    diag.addMetadata("operationType", operationType);
+    diag.addMetadata("preDeleteSummary", preDeleteSummary);
+    diag.addMetadata("uploadedDataSources", summary.uploadedDataSources);
+    diag.addMetadata("failedChunks", summary.failedChunks);
+    diag.addMetadata("totalMappings", summary.totalMappings);
+    diag.addMetadata("totalChunks", summary.totalChunks);
+    diag.addMetadata("estimatedBytes", summary.estimatedBytes);
     if (summary.failedChunks.length > 0) {
-      await diag.complete('error', `Chunk upload failed for ${summary.failedChunks.length} chunk(s)`);
+      await diag.complete(
+        "error",
+        `Chunk upload failed for ${summary.failedChunks.length} chunk(s)`,
+      );
       throw Object.assign(
-        new Error(`Datasource upload partial failure: ${summary.failedChunks.length} chunk(s) failed`),
+        new Error(
+          `Datasource upload partial failure: ${summary.failedChunks.length} chunk(s) failed`,
+        ),
         { summary },
       );
     }
 
-    await diag.complete('success');
+    await diag.complete("success");
     return summary;
   } catch (err: unknown) {
-    if (!(err instanceof Error && 'summary' in err)) {
-      await diag.complete('error', errorMessage(err));
+    if (!(err instanceof Error && "summary" in err)) {
+      await diag.complete("error", errorMessage(err));
     }
     throw err;
   }
@@ -1623,11 +1979,14 @@ export async function uploadApiDataSourcesChunked(
 
 /* ── Internal helpers (not exported) ──────────────────────── */
 
-async function getSessionProviderWithKey(session: ChatSessionRow): Promise<ProviderRow> {
+async function getSessionProviderWithKey(
+  session: ChatSessionRow,
+): Promise<ProviderRow> {
   const profileId = session.ai_profile?.id || session.ai_profile_id;
-  if (!profileId) throw new Error('Chat session has no AI profile');
+  if (!profileId) throw new Error("Chat session has no AI profile");
   const fullProfile = await getAiProfileWithKeys(profileId);
-  if (!fullProfile?.provider) throw new Error('AI profile has no provider with credentials');
+  if (!fullProfile?.provider)
+    throw new Error("AI profile has no provider with credentials");
   return fullProfile.provider;
 }
 
@@ -1636,7 +1995,10 @@ async function getSessionProviderWithKey(session: ChatSessionRow): Promise<Provi
  * Sessions opened with user credentials continue using that user's key;
  * all others use the workspace-shared provider key.
  */
-async function resolveSessionClient(session: ChatSessionRow, provider: ProviderRow): Promise<LlmClient> {
+async function resolveSessionClient(
+  session: ChatSessionRow,
+  provider: ProviderRow,
+): Promise<LlmClient> {
   if (session.uses_user_credentials && session.user_id) {
     return createLlmClientForUser(provider, session.user_id);
   }
@@ -1647,15 +2009,21 @@ async function resolveSessionClient(session: ChatSessionRow, provider: ProviderR
  * Resolve the effective timeout (ms) for an LLM call.
  * Priority: per-job override → provider setting → system default.
  */
-async function resolveTimeoutMs(advancedConfig: Record<string, unknown>, provider: ProviderRow): Promise<number> {
-  const timeoutConfig = advancedConfig?.timeout as Record<string, unknown> | undefined;
-  const jobTimeout = Number(timeoutConfig?.llmTimeoutMs || advancedConfig?.timeoutMs) || 0;
+async function resolveTimeoutMs(
+  advancedConfig: Record<string, unknown>,
+  provider: ProviderRow,
+): Promise<number> {
+  const timeoutConfig = advancedConfig?.timeout as
+    | Record<string, unknown>
+    | undefined;
+  const jobTimeout =
+    Number(timeoutConfig?.llmTimeoutMs || advancedConfig?.timeoutMs) || 0;
   if (jobTimeout > 0) return jobTimeout;
 
   const providerTimeout = Number(provider?.request_timeout_ms) || 0;
   if (providerTimeout > 0) return providerTimeout;
 
-  const setting = await getSetting('default_llm_timeout_ms');
+  const setting = await getSetting("default_llm_timeout_ms");
   return Number((setting?.value as Record<string, unknown>)?.value) || 300_000;
 }
 
@@ -1663,15 +2031,22 @@ async function resolveTimeoutMs(advancedConfig: Record<string, unknown>, provide
  * Determine which workflow step_keys have been completed in a chat session
  * by checking for user messages tagged with a workflow_step_id.
  */
-async function getCompletedWorkflowSteps(sessionId: string, workflowId: string): Promise<Set<string>> {
+async function getCompletedWorkflowSteps(
+  sessionId: string,
+  workflowId: string,
+): Promise<Set<string>> {
   const messages = await listChatMessages(sessionId);
   const completedStepIds = new Set<string>(
-    messages.filter((m) => m.workflow_step_id).map((m) => m.workflow_step_id as string),
+    messages
+      .filter((m) => m.workflow_step_id)
+      .map((m) => m.workflow_step_id as string),
   );
   if (completedStepIds.size === 0) return new Set();
 
   const steps = await listWorkflowSteps(workflowId);
-  return new Set(steps.filter((s) => completedStepIds.has(s.id)).map((s) => s.step_key));
+  return new Set(
+    steps.filter((s) => completedStepIds.has(s.id)).map((s) => s.step_key),
+  );
 }
 
 /**
@@ -1688,14 +2063,23 @@ export async function extractAndAccumulateOutputs(
   let parsed: Record<string, unknown>;
   try {
     const jsonMatch = assistantContent.match(/```(?:json)?\s*([\s\S]*?)```/);
-    const toParse = jsonMatch && jsonMatch[1] ? jsonMatch[1].trim() : assistantContent.trim();
+    const toParse =
+      jsonMatch && jsonMatch[1] ? jsonMatch[1].trim() : assistantContent.trim();
     parsed = JSON.parse(toParse);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      console.warn('[workflow-vars] LLM response is not a JSON object, skipping output extraction');
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      console.warn(
+        "[workflow-vars] LLM response is not a JSON object, skipping output extraction",
+      );
       return {};
     }
   } catch {
-    console.warn('[workflow-vars] LLM response is not valid JSON, skipping output extraction');
+    console.warn(
+      "[workflow-vars] LLM response is not valid JSON, skipping output extraction",
+    );
     return {};
   }
 
@@ -1710,18 +2094,24 @@ export async function extractAndAccumulateOutputs(
   if (Object.keys(newVars).length === 0) return {};
 
   try {
-    const { data, error } = await getServiceSupabase().rpc('merge_workflow_variables', {
-      p_session_id: sessionId,
-      p_new_vars: newVars,
-      p_workspace_id: requireWorkspaceId(),
-    });
+    const { data, error } = await getServiceSupabase().rpc(
+      "merge_workflow_variables",
+      {
+        p_session_id: sessionId,
+        p_new_vars: newVars,
+        p_workspace_id: requireWorkspaceId(),
+      },
+    );
     if (error) {
-      console.warn('[workflow-vars] Atomic merge failed:', error.message);
+      console.warn("[workflow-vars] Atomic merge failed:", error.message);
       return newVars;
     }
     return (data as Record<string, unknown>) ?? newVars;
   } catch (err) {
-    console.warn('[workflow-vars] Failed to persist workflow_variables:', errorMessage(err));
+    console.warn(
+      "[workflow-vars] Failed to persist workflow_variables:",
+      errorMessage(err),
+    );
     return newVars;
   }
 }
@@ -1757,12 +2147,15 @@ export async function fulfillPendingToolJobCalls(
       const job = await getProcessingJobBySlug(binding.jobSlug);
       if (!job) throw new Error(`Tool job "${binding.jobSlug}" not found`);
       const args = parseToolArguments(call.arguments);
-      const result = await executeJobById(job.id, { callingApplication, variables: args });
+      const result = await executeJobById(job.id, {
+        callingApplication,
+        variables: args,
+      });
       outputs.push({
         toolCallId: call.toolCallId,
         output: result.formatted || result.raw || JSON.stringify({ ok: true }),
       });
-      console.info('[ai-manager] fulfilled internal tool job', {
+      console.info("[ai-manager] fulfilled internal tool job", {
         exposeAs: call.name,
         jobSlug: binding.jobSlug,
       });
@@ -1777,24 +2170,35 @@ export async function fulfillPendingToolJobCalls(
   return outputs;
 }
 
-export { getToolJobsFromProfile, buildToolNameMap, type PendingToolCall, type ToolJobBinding };
+export {
+  getToolJobsFromProfile,
+  buildToolNameMap,
+  type PendingToolCall,
+  type ToolJobBinding,
+};
 
 const MAX_VARIABLE_LENGTH = 10_000;
 
 /** Replace {{variableName}} placeholders with actual values. */
-function interpolateTemplate(template: string, variables: Record<string, unknown>): string {
-  return template.replace(/\{\{([\w.-]+)\}\}/g, (match: string, key: string): string => {
-    if (variables[key] === undefined) return match;
-    let value = String(variables[key]);
-    if (value.length > MAX_VARIABLE_LENGTH) {
-      value = value.slice(0, MAX_VARIABLE_LENGTH) + '... [truncated]';
-    }
-    return `<user_input name="${key}">${value}</user_input>`;
-  });
+function interpolateTemplate(
+  template: string,
+  variables: Record<string, unknown>,
+): string {
+  return template.replace(
+    /\{\{([\w.-]+)\}\}/g,
+    (match: string, key: string): string => {
+      if (variables[key] === undefined) return match;
+      let value = String(variables[key]);
+      if (value.length > MAX_VARIABLE_LENGTH) {
+        value = value.slice(0, MAX_VARIABLE_LENGTH) + "... [truncated]";
+      }
+      return `<user_input name="${key}">${value}</user_input>`;
+    },
+  );
 }
 
 function payloadBytes(rows: Record<string, unknown>[] = []): number {
-  return Buffer.byteLength(JSON.stringify({ mappings: rows || [] }), 'utf8');
+  return Buffer.byteLength(JSON.stringify({ mappings: rows || [] }), "utf8");
 }
 
 function splitRowsByByteCap(
@@ -1823,7 +2227,7 @@ function splitRowsByByteCap(
 
 function utcTag(): string {
   const now = new Date();
-  const p2 = (n: number): string => String(n).padStart(2, '0');
+  const p2 = (n: number): string => String(n).padStart(2, "0");
   return `${now.getUTCFullYear()}${p2(now.getUTCMonth() + 1)}${p2(now.getUTCDate())}-${p2(now.getUTCHours())}${p2(now.getUTCMinutes())}`;
 }
 
