@@ -383,7 +383,12 @@ Each trigger stores `target_type` (`job` | `workflow`), `target_slug`, optional 
 
 > **Summary:** Expose processing jobs as callable tools on a chat profile.
 
-Set `ai_profiles.config.toolJobs[]` to `{ jobSlug, exposeAs, description? }`. During streaming chat, AI Admin registers these as Devs.ai tools (parameters derived from the job's input variables). When the model emits a matching `tool.call`, AI Admin runs the job internally and submits the result — no client round-trip for registered tool jobs.
+Set `ai_profiles.config.toolJobs[]` to `{ jobSlug, exposeAs, description? }`. In the UI, configure these under **AI Profiles** → edit a **chat** profile → **Jobs as tools**.
+
+During streaming chat, AI Admin registers these tools (parameters derived from the job's input variables). When the model invokes a registered tool:
+
+- **devs-ai (v1)** — `tool.call` events; AI Admin runs the job and submits outputs via the v1 tool API.
+- **devs-ai-v2** — `function_call` events (including items surfaced on `response.completed`); AI Admin fulfills in a server-side loop, merges continuation text, updates `provider_metadata`, and persists the final assistant message.
 
 Use this when the model should decide *when* to run a structured extraction or lookup, while staying in a conversational session.
 

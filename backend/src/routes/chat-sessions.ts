@@ -57,10 +57,121 @@ import { fireInternalTriggers } from '../services/internal-triggers.ts';
 import { parsePagination, buildPaginatedResponse } from '../lib/pagination.ts';
 import type { ChatSessionRow, FormattingRule } from '../types.ts';
 import type { PendingToolCall } from '../services/tool-jobs.ts';
+import {
+  ingestParsedSseEvent,
+  selectUnfulfilledToolCalls,
+  type ChatStreamAccum,
+} from '../services/v2-stream-events.ts';
 
 const MAX_SSE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 
 const STREAMING_SAFE_RULES = new Set(['remove-footnote-tags', 'remove-reasoning']);
+
+const MAX_TOOL_ROUNDS = 5;
+
+async function runInternalToolJobLoop(options: {
+  res: Response;
+  decoder: TextDecoder;
+  sessionId: string;
+  isV2Session: boolean;
+  chatSessionRow: ChatSessionRow;
+  accum: ChatStreamAccum;
+  pendingInternalToolCalls: PendingToolCall[];
+  internalToolNames: Set<string>;
+  pendingSystemMessageId: string | undefined;
+  pendingV2ResponseId: string | undefined;
+}): Promise<{ pendingSystemMessageId: string | undefined; pendingV2ResponseId: string | undefined }> {
+  let { pendingSystemMessageId, pendingV2ResponseId } = options;
+  const fulfilledCallIds = new Set<string>();
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const registeredCalls = selectUnfulfilledToolCalls(
+      options.pendingInternalToolCalls,
+      options.internalToolNames,
+      fulfilledCallIds,
+    );
+    if (registeredCalls.length === 0) break;
+
+    try {
+      const outputs = await fulfillPendingToolJobCalls(
+        registeredCalls,
+        options.chatSessionRow.ai_profile,
+        options.chatSessionRow.calling_application || 'unknown',
+      );
+      if (outputs.length === 0) break;
+
+      for (const call of registeredCalls) fulfilledCallIds.add(call.toolCallId);
+
+      const v2ResponseId =
+        pendingV2ResponseId ||
+        ((options.chatSessionRow.provider_metadata || {}) as { previous_response_id?: string }).previous_response_id ||
+        '';
+      const toolStream =
+        options.isV2Session && v2ResponseId
+          ? await submitV2ToolOutputs(options.sessionId, v2ResponseId, outputs)
+          : await submitChatToolOutputs(options.sessionId, pendingSystemMessageId || '', outputs);
+
+      const toolBody = toolStream.response.body as ReadableStream<Uint8Array> | null;
+      if (!toolBody) break;
+
+      options.pendingInternalToolCalls.length = 0;
+      const toolReader = toolBody.getReader();
+      let lineBuffer = '';
+
+      const ingestOpts = {
+        isV2Session: options.isV2Session,
+        internalToolNames: options.internalToolNames,
+        pendingInternalToolCalls: options.pendingInternalToolCalls,
+        fulfilledCallIds,
+        onV2Metadata: (patch: {
+          previous_response_id?: string;
+          conversation_id?: string;
+          last_sequence?: number;
+        }) => {
+          updateV2ProviderMetadata(options.sessionId, patch).catch((err) =>
+            console.warn('[chat-sessions] Failed to persist v2 provider_metadata:', errorMessage(err)),
+          );
+          if (patch.previous_response_id) pendingV2ResponseId = patch.previous_response_id;
+        },
+        onSystemMessageId: (id: string) => {
+          pendingSystemMessageId = id;
+        },
+      };
+
+      while (true) {
+        const { value, done } = await toolReader.read();
+        if (done) break;
+        const chunk = options.decoder.decode(value, { stream: true });
+        options.res.write(chunk);
+
+        lineBuffer += chunk;
+        const lines = lineBuffer.split('\n');
+        lineBuffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const dataStr = line.slice(6).trim();
+          if (dataStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(dataStr) as Record<string, unknown>;
+            ingestParsedSseEvent(parsed, options.accum, ingestOpts);
+          } catch {
+            /* non-JSON SSE line */
+          }
+        }
+      }
+
+      if (selectUnfulfilledToolCalls(options.pendingInternalToolCalls, options.internalToolNames, fulfilledCallIds).length === 0) {
+        break;
+      }
+    } catch (toolErr) {
+      console.error('[chat-sessions] Internal tool-job fulfillment failed:', errorMessage(toolErr));
+      options.res.write(`data: ${JSON.stringify({ type: 'error', error: errorMessage(toolErr) })}\n\n`);
+      break;
+    }
+  }
+
+  return { pendingSystemMessageId, pendingV2ResponseId };
+}
 
 /**
  * Verify the caller has access to a chat session.
@@ -310,10 +421,12 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
 
     const t0 = Date.now();
     let firstTokenMs: number | null = null;
-    let fullContent = '';
-    let promptTokens: number | null = null;
-    let completionTokens: number | null = null;
-    let streamModel: string | null = null;
+    const streamAccum: ChatStreamAccum = {
+      fullContent: '',
+      promptTokens: null,
+      completionTokens: null,
+      streamModel: null,
+    };
     const chatSessionRow = await dbGetChatSession(req.params.id as string);
     if (!chatSessionRow) {
       clearTimeout(sseTimeout);
@@ -321,9 +434,30 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
     }
     const internalToolNames = new Set(getToolJobsFromProfile(chatSessionRow.ai_profile).map((t) => t.exposeAs));
     const pendingInternalToolCalls: PendingToolCall[] = [];
+    const fulfilledCallIds = new Set<string>();
     let pendingSystemMessageId: string | undefined;
     let pendingV2ResponseId: string | undefined;
     const isV2Session = chatSessionRow.provider_type === 'devs-ai-v2';
+
+    const ingestOpts = {
+      isV2Session,
+      internalToolNames,
+      pendingInternalToolCalls,
+      fulfilledCallIds,
+      onV2Metadata: (patch: {
+        previous_response_id?: string;
+        conversation_id?: string;
+        last_sequence?: number;
+      }) => {
+        updateV2ProviderMetadata(sessionId, patch).catch((err) =>
+          console.warn('[chat-sessions] Failed to persist v2 provider_metadata:', errorMessage(err)),
+        );
+        if (patch.previous_response_id) pendingV2ResponseId = patch.previous_response_id;
+      },
+      onSystemMessageId: (id: string) => {
+        pendingSystemMessageId = id;
+      },
+    };
 
     const body = sseResponse.body as ReadableStream<Uint8Array> | null;
     if (!body) {
@@ -408,106 +542,13 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
           const dataStr = line.slice(6).trim();
           if (dataStr === '[DONE]') continue;
           try {
-            const parsed = JSON.parse(dataStr);
+            const parsed = JSON.parse(dataStr) as Record<string, unknown>;
 
             if (sseEventLog.length < 20) {
               const topKeys = Object.keys(parsed).slice(0, 8).join(',');
               sseEventLog.push(`type=${parsed.type ?? '(none)'} keys=[${topKeys}]`);
             }
 
-            if (parsed.type === 'message.complete') {
-              promptTokens = parsed.inputTokens ?? parsed.estimatedInputTokens ?? null;
-              completionTokens = parsed.outputTokens ?? parsed.estimatedOutputTokens ?? null;
-              if (parsed.modelId) streamModel = parsed.modelId;
-              const completeText = parsed.text ?? parsed.content ?? parsed.delta ?? '';
-              if (completeText && !fullContent) fullContent = completeText;
-              if (isV2Session && parsed.responseId) {
-                pendingV2ResponseId = parsed.responseId as string;
-                updateV2ProviderMetadata(sessionId, {
-                  previous_response_id: parsed.responseId as string,
-                  conversation_id: (parsed.conversationId as string) || undefined,
-                  last_sequence:
-                    parsed.lastSequence != null ? Number(parsed.lastSequence) : undefined,
-                }).catch((err) =>
-                  console.warn('[chat-sessions] Failed to persist v2 provider_metadata:', errorMessage(err)),
-                );
-              }
-              continue;
-            }
-
-            if (isV2Session && parsed.type === 'v2.response.created' && parsed.responseId) {
-              pendingV2ResponseId = parsed.responseId as string;
-            }
-
-            /* v2 function_call events — queue internal tool-jobs for server-side fulfillment */
-            if (isV2Session) {
-              if (parsed.type === 'response.output_item.added' || parsed.type === 'response.output_item.done') {
-                const item = parsed.item as {
-                  type?: string;
-                  name?: string;
-                  call_id?: string;
-                  id?: string;
-                  arguments?: string;
-                } | undefined;
-                if (item?.type === 'function_call') {
-                  const toolCallId = item.call_id || item.id;
-                  const toolName = item.name;
-                  if (toolCallId) {
-                    const existing = pendingInternalToolCalls.find((t) => t.toolCallId === toolCallId);
-                    if (existing) {
-                      if (toolName) existing.name = toolName;
-                      if (item.arguments) existing.arguments = item.arguments;
-                    } else {
-                      pendingInternalToolCalls.push({
-                        toolCallId,
-                        name: toolName || '',
-                        arguments: item.arguments,
-                      });
-                    }
-                  }
-                }
-              }
-              if (
-                parsed.type === 'response.function_call_arguments.done' ||
-                parsed.type === 'response.function_call_arguments.delta'
-              ) {
-                const name = parsed.name as string | undefined;
-                const toolCallId = (parsed.call_id || parsed.item_id) as string | undefined;
-                if (toolCallId) {
-                  const existing = pendingInternalToolCalls.find((t) => t.toolCallId === toolCallId);
-                  if (existing) {
-                    if (name) existing.name = name;
-                    if (parsed.arguments) existing.arguments = parsed.arguments as string;
-                  } else {
-                    pendingInternalToolCalls.push({
-                      toolCallId,
-                      name: name || '',
-                      arguments: parsed.arguments as string | undefined,
-                    });
-                  }
-                }
-              }
-            }
-
-            /* Forward tool.call events so calling apps can handle
-               OAuth prompts, user input requests, and MCP interactions.
-               Internal tool-jobs are queued for server-side fulfillment. */
-            if (parsed.type === 'tool.call' || parsed.type === 'tool_calls') {
-              const toolName = parsed.name as string | undefined;
-              const toolCallId = parsed.toolCallId as string | undefined;
-              if (toolName && toolCallId && internalToolNames.has(toolName)) {
-                pendingInternalToolCalls.push({
-                  toolCallId,
-                  name: toolName,
-                  arguments: parsed.arguments,
-                  systemMessageId: parsed.systemMessageId as string | undefined,
-                });
-                if (parsed.systemMessageId) pendingSystemMessageId = parsed.systemMessageId as string;
-              }
-              continue;
-            }
-
-            /* Extract AI-generated files from tool.message events */
             if (parsed.type === 'tool.message') {
               try {
                 const output = typeof parsed.output === 'string' ? JSON.parse(parsed.output) : parsed.output;
@@ -521,19 +562,13 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
               continue;
             }
 
-            const delta =
-              parsed.choices?.[0]?.delta?.content ||
-              parsed.candidates?.[0]?.content?.parts?.[0]?.text ||
-              (typeof parsed.content === 'object' ? parsed.content?.text : parsed.content) ||
-              parsed.text ||
-              parsed.delta ||
-              '';
-            if (delta && typeof delta === 'string') fullContent += delta;
+            const skipForward = ingestParsedSseEvent(parsed, streamAccum, ingestOpts);
+            if (skipForward) continue;
           } catch {
             /* SSE lines may not be valid JSON (e.g. event names) */
           }
         }
-        if (sseEventLog.length > 0 && !fullContent) {
+        if (sseEventLog.length > 0 && !streamAccum.fullContent) {
           console.warn('[SSE debug] Stream ended with empty fullContent. Events seen:', sseEventLog.join(' | '));
         }
       }
@@ -543,9 +578,28 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
       if (abortTimer) clearTimeout(abortTimer);
     }
 
+    if (
+      selectUnfulfilledToolCalls(pendingInternalToolCalls, internalToolNames, new Set()).length > 0
+    ) {
+      await runInternalToolJobLoop({
+        res,
+        decoder,
+        sessionId,
+        isV2Session,
+        chatSessionRow,
+        accum: streamAccum,
+        pendingInternalToolCalls,
+        internalToolNames,
+        pendingSystemMessageId,
+        pendingV2ResponseId,
+      });
+    }
+
     /* rawContent = what the client received (streaming-safe rules only).
        formattedContent = full rule chain applied (for workflows + formatted_response event). */
-    const rawContent = hasStreamRules ? applyFormattingRules(fullContent, streamRules).formatted : fullContent;
+    const rawContent = hasStreamRules
+      ? applyFormattingRules(streamAccum.fullContent, streamRules).formatted
+      : streamAccum.fullContent;
 
     let formattedContent: string | null = null;
     if (hasPostStreamRules) {
@@ -556,57 +610,24 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
           r.type === 'trim-to-json' ? { ...r, options: { ...(r.options || {}), expectedKeys } } : r,
         );
       }
-      const result = applyFormattingRules(fullContent, postStreamRules);
+      const result = applyFormattingRules(streamAccum.fullContent, postStreamRules);
       if (result.formatted !== rawContent) {
         formattedContent = result.formatted;
       }
     }
 
-    const totalTokens = promptTokens || completionTokens ? (promptTokens || 0) + (completionTokens || 0) : null;
-    if (promptTokens || completionTokens) {
+    const totalTokens =
+      streamAccum.promptTokens || streamAccum.completionTokens
+        ? (streamAccum.promptTokens || 0) + (streamAccum.completionTokens || 0)
+        : null;
+    if (streamAccum.promptTokens || streamAccum.completionTokens) {
       res.write(
-        `data: ${JSON.stringify({ type: 'usage', prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: totalTokens, model: streamModel })}\n\n`,
+        `data: ${JSON.stringify({ type: 'usage', prompt_tokens: streamAccum.promptTokens, completion_tokens: streamAccum.completionTokens, total_tokens: totalTokens, model: streamAccum.streamModel })}\n\n`,
       );
     }
 
     if (formattedContent) {
       res.write(`data: ${JSON.stringify({ type: 'formatted_response', content: formattedContent })}\n\n`);
-    }
-
-    /* Fulfill internal tool-job calls before closing the stream */
-    if (pendingInternalToolCalls.length > 0) {
-      try {
-        const registeredCalls = pendingInternalToolCalls.filter(
-          (call) => call.name && internalToolNames.has(call.name),
-        );
-        const outputs = await fulfillPendingToolJobCalls(
-          registeredCalls,
-          chatSessionRow.ai_profile,
-          chatSessionRow.calling_application || 'unknown',
-        );
-        if (outputs.length > 0) {
-          const v2ResponseId =
-            pendingV2ResponseId ||
-            ((chatSessionRow.provider_metadata || {}) as { previous_response_id?: string }).previous_response_id ||
-            '';
-          const toolStream =
-            isV2Session && v2ResponseId
-              ? await submitV2ToolOutputs(sessionId, v2ResponseId, outputs)
-              : await submitChatToolOutputs(sessionId, pendingSystemMessageId || '', outputs);
-          const toolBody = toolStream.response.body as ReadableStream<Uint8Array> | null;
-          if (toolBody) {
-            const toolReader = toolBody.getReader();
-            while (true) {
-              const { value, done } = await toolReader.read();
-              if (done) break;
-              res.write(decoder.decode(value, { stream: true }));
-            }
-          }
-        }
-      } catch (toolErr) {
-        console.error('[chat-sessions] Internal tool-job fulfillment failed:', errorMessage(toolErr));
-        res.write(`data: ${JSON.stringify({ type: 'error', error: errorMessage(toolErr) })}\n\n`);
-      }
     }
 
     res.write('data: [DONE]\n\n');
@@ -618,8 +639,8 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
         await recordAssistantMessage(sessionId, rawContent, {
           durationMs,
           firstTokenMs,
-          promptTokens,
-          completionTokens,
+          promptTokens: streamAccum.promptTokens,
+          completionTokens: streamAccum.completionTokens,
         });
 
         const contentForWorkflow = formattedContent || rawContent;
@@ -663,16 +684,20 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
           diag.endLlmTimer(
             {
               provider: authorized?.provider_type || 'unknown',
-              model: streamModel || 'unknown',
+              model: streamAccum.streamModel || 'unknown',
               promptContent: resolvedMessage || message || null,
             },
             {
               rawContent,
-              rawLength: fullContent.length,
+              rawLength: streamAccum.fullContent.length,
               formattedContent: formattedContent || undefined,
               usage:
-                promptTokens || completionTokens
-                  ? { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: totalTokens }
+                streamAccum.promptTokens || streamAccum.completionTokens
+                  ? {
+                      prompt_tokens: streamAccum.promptTokens,
+                      completion_tokens: streamAccum.completionTokens,
+                      total_tokens: totalTokens,
+                    }
                   : null,
             },
           );
@@ -683,10 +708,10 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
           }
           diag.addMetadata('durationMs', durationMs);
           diag.addMetadata('firstTokenMs', firstTokenMs);
-          diag.addMetadata('promptTokens', promptTokens);
-          diag.addMetadata('completionTokens', completionTokens);
+          diag.addMetadata('promptTokens', streamAccum.promptTokens);
+          diag.addMetadata('completionTokens', streamAccum.completionTokens);
           diag.addMetadata('totalTokens', totalTokens);
-          diag.addMetadata('streamModel', streamModel);
+          diag.addMetadata('streamModel', streamAccum.streamModel);
           diag.addMetadata('contentLength', rawContent.length);
           diag.addMetadata('ruleSetKey', ruleSetKey || null);
           diag.addMetadata('stepKey', stepKey || null);

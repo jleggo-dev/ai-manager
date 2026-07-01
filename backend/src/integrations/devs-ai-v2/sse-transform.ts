@@ -76,6 +76,16 @@ export function transformV2SseDataLine(dataStr: string, state: SseTransformState
     if (typeof conv === 'string') state.conversationId = conv;
     else if (conv && typeof conv === 'object' && conv.id) state.conversationId = conv.id;
 
+    const outputItems = parsed.response?.output;
+    if (Array.isArray(outputItems)) {
+      for (const raw of outputItems) {
+        const item = raw as { type?: string; call_id?: string; id?: string; name?: string; arguments?: string };
+        if (item?.type === 'function_call') {
+          out.push(`data: ${JSON.stringify({ type: 'response.output_item.done', item })}\n\n`);
+        }
+      }
+    }
+
     const text = state.fullText || parsed.text || '';
     out.push(
       `data: ${JSON.stringify({
@@ -87,6 +97,7 @@ export function transformV2SseDataLine(dataStr: string, state: SseTransformState
         responseId: state.responseId,
         conversationId: state.conversationId,
         lastSequence: state.lastSequence,
+        output: outputItems,
       })}\n\n`,
     );
     out.push('data: [DONE]\n\n');
@@ -106,7 +117,8 @@ export function transformV2SseDataLine(dataStr: string, state: SseTransformState
     eventType === 'response.output_item.added' ||
     eventType === 'response.output_item.done'
   ) {
-    out.push(`data: ${JSON.stringify({ type: eventType, ...parsed })}\n\n`);
+    const { type: _ignored, ...rest } = parsed;
+    out.push(`data: ${JSON.stringify({ type: eventType, ...rest })}\n\n`);
   }
 
   return out;

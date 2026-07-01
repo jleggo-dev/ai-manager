@@ -111,10 +111,13 @@ async function ensureV2ChatProfile(): Promise<ApiProfile | undefined> {
         api_key: apiKey,
       });
     expect(createProv.status).toBe(201);
-    v2Provider = createProv.body;
-    createdProviderId = v2Provider.id;
+    const created = createProv.body as { id: string; type: string; is_active?: boolean };
+    v2Provider = created;
+    createdProviderId = created.id;
     console.info('[e2e-devs-ai-v2-tools] provisioned ephemeral devs-ai-v2 provider', createdProviderId);
   }
+
+  if (!v2Provider) return undefined;
 
   let modelsRes = await request(app).get(`/api/providers/${v2Provider.id}/models`).set(authHeaders());
   expect(modelsRes.status).toBe(200);
@@ -245,9 +248,13 @@ describe('E2E: devs-ai-v2 jobs-as-tools (live)', () => {
       );
     }
 
-    /* Session should have persisted v2 threading metadata after a completed response */
     const sessionRes = await request(app).get(`/api/chat-sessions/${sessionId}`).set(authHeaders());
     expect(sessionRes.status).toBe(200);
+    const messages = (sessionRes.body.messages || []) as Array<{ role?: string; content?: string }>;
+    const persistedAssistant = messages.filter((m) => m.role === 'assistant').pop();
+    expect(persistedAssistant?.content?.toUpperCase(), 'assistant message should be persisted after tool loop').toContain(
+      'PONG',
+    );
     const meta = sessionRes.body.provider_metadata as { previous_response_id?: string } | null;
     expect(meta?.previous_response_id, 'expected provider_metadata.previous_response_id after v2 chat').toBeTruthy();
   }, 120_000);

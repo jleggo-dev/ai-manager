@@ -25,6 +25,7 @@ import { upsertCallingApplication } from '../models/calling-applications.ts';
 import { getAiProfileWithKeys, hydrateAiProfileProviderKeys } from '../models/ai-profiles.ts';
 import { DevsAiClient } from '../integrations/devs-ai/client.ts';
 import { DevsAiV2Client } from '../integrations/devs-ai-v2/client.ts';
+import type { ExpectedSchemaInput } from '../services/expected-schema-to-json-schema.ts';
 import { createLlmClientForProvider, createLlmClientForUser, type LlmClientInstance } from '../integrations/client-factory.ts';
 import { getUserCredential } from '../models/user-provider-credentials.ts';
 import { applyFormattingRules } from '../services/formatting-rules.ts';
@@ -187,7 +188,7 @@ interface JobConfig {
   promptTemplate?: string;
   formattingRules?: FormattingRule[];
   expectedResponseFormat?: string | null;
-  expectedSchema?: { fields?: Record<string, unknown> } | null;
+  expectedSchema?: ExpectedSchemaInput | null;
   applyFormattingRules?: boolean;
   advanced?: Record<string, unknown>;
   ruleSets?: RuleSetConfig[];
@@ -335,8 +336,7 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
     const primaryModel = String(modelOverride || profile.external_ai_id || '').trim();
     const providerTypeNorm = String(provider.type || '').trim().toLowerCase();
     const chatOptions = buildProviderChatOptions(provider.type, profile.runtime_options ?? undefined, {
-      expectedSchema:
-        providerTypeNorm === 'devs-ai-v2' ? (jobConfig.expectedSchema as JobConfig['expectedSchema']) : undefined,
+      expectedSchema: providerTypeNorm === 'devs-ai-v2' ? jobConfig.expectedSchema ?? undefined : undefined,
     });
     const failoverProvider: ProviderRow | undefined = profile.failover_provider ?? undefined;
     const failoverAiId = String(profile.failover_external_ai_id || '').trim();
@@ -1071,7 +1071,7 @@ export async function sendChatMessage(
 
     sseResponse = await (client as DevsAiClient).messageChatSession(session.external_chat_id, prompt, {
       timeoutMs,
-      tools: await resolveProfileToolDefinitions(session.ai_profile),
+      tools: await resolveProfileToolDefinitions(refreshedSession.ai_profile),
     });
   } else if (typeof client.chatCompletionStream === 'function') {
     let enrichedContent = resolvedMessage;
@@ -1097,14 +1097,12 @@ export async function sendChatMessage(
       if (lastMsg) lastMsg.content = enrichedContent;
     }
     const chatOptions = buildProviderChatOptions(provider.type, profile?.runtime_options || {}, {
-      previousResponseId: (session.provider_metadata as { previous_response_id?: string } | null)?.previous_response_id,
-      conversationId: (session.provider_metadata as { conversation_id?: string } | null)?.conversation_id,
-      expectedSchema:
-        providerType === 'devs-ai-v2'
-          ? ((resolvedJob?.config as JobConfig | undefined)?.expectedSchema as JobConfig['expectedSchema'])
-          : undefined,
+      previousResponseId: (refreshedSession.provider_metadata as { previous_response_id?: string } | null)
+        ?.previous_response_id,
+      conversationId: (refreshedSession.provider_metadata as { conversation_id?: string } | null)?.conversation_id,
+      expectedSchema: providerType === 'devs-ai-v2' ? (resolvedJob?.config as JobConfig | undefined)?.expectedSchema : undefined,
     });
-    const profileTools = await resolveProfileToolDefinitions(session.ai_profile);
+    const profileTools = await resolveProfileToolDefinitions(refreshedSession.ai_profile);
     const mergedTools = [
       ...(Array.isArray(chatOptions.tools) ? (chatOptions.tools as unknown[]) : []),
       ...(Array.isArray(profileTools) ? profileTools : []),

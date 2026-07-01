@@ -714,3 +714,19 @@ Create triggers via `POST /api/triggers` with `target_type` (`job` | `workflow`)
 ### Jobs-as-tools and session compaction
 
 Configure `ai_profiles.config.toolJobs[]` to expose jobs as model-callable tools during chat (server-side fulfillment). Set `chat_sessions.config.summarizer` for automatic long-conversation summarization. See `docs/CONCEPTS.md` and `docs/API.md`.
+
+### Structured output (JSON assertion)
+
+Processing jobs can require JSON-shaped responses in two ways, depending on provider type:
+
+| Mechanism | devs-ai (v1) | devs-ai-v2 |
+|-----------|--------------|------------|
+| **Native schema** | Not supported — use prompt + build rules | Set `config.expectedSchema.fields` on the job; AI Admin sends `text.format.json_schema` to the provider |
+| **Post-hoc rules** | `formattingRules`: `trim-to-json`, `assert-json-schema`, `require-keys` | Optional when native schema is set; skipped by default unless `config.applyFormattingRules: true` |
+| **Eval / CI** | `POST /api/processing-jobs/:id/eval` validates `expectedSchema` when configured | Same |
+
+**UI:** Processing Job → Build Rules → Expected Schema editor; optional “Apply formatting rules after native v2 schema” when the linked profile uses devs-ai-v2.
+
+**API:** Pass `expectedSchema` and `expectedResponseFormat: "json"` in job `config` on create/update. Chat sessions linked to that job forward `expectedSchema` to v2 automatically.
+
+**Edge proxy:** `cancel-chat-session` and `reconnect-chat-stream` modes (devs-ai-v2 lifecycle) — see `docs/integration/ai-admin-supabase-edge-function.ts`.

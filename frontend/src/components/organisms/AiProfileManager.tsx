@@ -116,7 +116,11 @@ interface PendingAuth {
   authUrl: string | null;
 }
 
-interface TestChatApiResult {
+interface ToolJobFormRow {
+  jobSlug: string;
+  exposeAs: string;
+  description: string;
+}
   content: string;
   durationMs?: number;
   model?: string;
@@ -160,6 +164,8 @@ export default function AiProfileManager() {
   const [mcpTools, setMcpTools] = useState<McpTool[]>([]);
   const [toolAuthStatus, setToolAuthStatus] = useState<ToolAuthEntry[]>([]);
   const [mcpLoading, setMcpLoading] = useState(false);
+  const [processingJobs, setProcessingJobs] = useState<Array<{ slug: string; name: string }>>([]);
+  const [toolJobs, setToolJobs] = useState<ToolJobFormRow[]>([]);
 
   /* Form state */
   const [form, setForm] = useState({
@@ -187,6 +193,18 @@ export default function AiProfileManager() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!modalOpened) return;
+    api
+      .listProcessingJobs({ limit: 200 })
+      .then((result) => {
+        setProcessingJobs(
+          (result.data || []).map((j) => ({ slug: j.slug, name: j.name })).filter((j) => Boolean(j.slug)),
+        );
+      })
+      .catch(() => setProcessingJobs([]));
+  }, [modalOpened]);
 
   /* Fetch AIs or models whenever provider or profile type changes */
   useEffect(() => {
@@ -289,6 +307,7 @@ export default function AiProfileManager() {
       is_active: true,
       runtime_options: DEFAULT_RUNTIME_OPTIONS,
     });
+    setToolJobs([]);
     setAvailableAis([]);
     setAvailableModels([]);
     setSelectedProvider(null);
@@ -335,6 +354,16 @@ export default function AiProfileManager() {
       is_active: profile.is_active !== false,
       runtime_options: normaliseRuntimeOptions(profile.runtime_options),
     });
+    const cfg = (profile.config || {}) as { toolJobs?: ToolJobFormRow[] };
+    setToolJobs(
+      Array.isArray(cfg.toolJobs)
+        ? cfg.toolJobs.map((t) => ({
+            jobSlug: t.jobSlug || '',
+            exposeAs: t.exposeAs || '',
+            description: t.description || '',
+          }))
+        : [],
+    );
     setMcpTools([]);
     setToolAuthStatus([]);
     loadMcpTools(profile.id, resolvedProviderType);
@@ -355,12 +384,19 @@ export default function AiProfileManager() {
     e.preventDefault();
     try {
       setSaving(true);
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...form,
         profile_type: profileType,
         mode,
         runtime_options: normaliseRuntimeOptions(form.runtime_options),
       };
+      if (mode === 'chat') {
+        const priorConfig = (editing?.config as Record<string, unknown> | undefined) || {};
+        payload.config = {
+          ...priorConfig,
+          toolJobs: toolJobs.filter((t) => t.jobSlug.trim() && t.exposeAs.trim()),
+        };
+      }
       if (editing) {
         await api.updateAiProfile(editing.id, payload);
         notifications.show({ title: 'Updated', message: 'AI profile updated', color: 'green' });
@@ -1324,6 +1360,82 @@ export default function AiProfileManager() {
                       });
                     }}
                   />
+                </Stack>
+              </Paper>
+            )}
+
+            {mode === 'chat' && (
+              <Paper withBorder p="sm" radius="sm">
+                <Stack gap="sm">
+                  <Text size="sm" fw={600}>
+                    Jobs as tools
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Expose processing jobs as model-callable tools. AI Admin runs the linked job server-side when the
+                    model invokes the tool (devs-ai v1 tool.call or devs-ai-v2 function_call).
+                  </Text>
+                  {toolJobs.length === 0 && (
+                    <Text size="xs" c="dimmed">
+                      No tool jobs configured.
+                    </Text>
+                  )}
+                  {toolJobs.map((row, index) => (
+                    <Group key={`tool-job-${index}`} align="flex-end" wrap="nowrap">
+                      <Select
+                        label="Processing job"
+                        placeholder="Select job"
+                        searchable
+                        style={{ flex: 1 }}
+                        data={processingJobs.map((j) => ({ value: j.slug, label: `${j.name} (${j.slug})` }))}
+                        value={row.jobSlug || null}
+                        onChange={(value) =>
+                          setToolJobs((prev) =>
+                            prev.map((r, i) => (i === index ? { ...r, jobSlug: value || '' } : r)),
+                          )
+                        }
+                      />
+                      <TextInput
+                        label="Expose as"
+                        placeholder="tool_name"
+                        style={{ flex: 1 }}
+                        value={row.exposeAs}
+                        onChange={(e) =>
+                          setToolJobs((prev) =>
+                            prev.map((r, i) => (i === index ? { ...r, exposeAs: e.currentTarget.value } : r)),
+                          )
+                        }
+                      />
+                      <TextInput
+                        label="Description"
+                        placeholder="Optional"
+                        style={{ flex: 1 }}
+                        value={row.description}
+                        onChange={(e) =>
+                          setToolJobs((prev) =>
+                            prev.map((r, i) => (i === index ? { ...r, description: e.currentTarget.value } : r)),
+                          )
+                        }
+                      />
+                      <ActionIcon
+                        color="red"
+                        variant="subtle"
+                        aria-label="Remove tool job"
+                        onClick={() => setToolJobs((prev) => prev.filter((_, i) => i !== index))}
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </Group>
+                  ))}
+                  <Button
+                    variant="light"
+                    size="xs"
+                    leftSection={<IconPlus size={14} />}
+                    onClick={() =>
+                      setToolJobs((prev) => [...prev, { jobSlug: '', exposeAs: '', description: '' }])
+                    }
+                  >
+                    Add tool job
+                  </Button>
                 </Stack>
               </Paper>
             )}

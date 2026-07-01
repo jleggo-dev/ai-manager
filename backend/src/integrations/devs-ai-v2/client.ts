@@ -98,7 +98,7 @@ export class DevsAiV2Client {
 
     return {
       model: data.model || model,
-      choices: [{ message: { role: 'assistant', content }, finish_reason: data.status === 'completed' ? 'stop' : null }],
+      choices: [{ message: { content }, finish_reason: data.status === 'completed' ? 'stop' : null }],
       usage,
       raw: data,
     };

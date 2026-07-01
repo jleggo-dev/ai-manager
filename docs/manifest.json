@@ -1,7 +1,7 @@
 {
   "name": "AI Admin",
-  "version": "1.4.0",
-  "lastUpdated": "2026-06-29",
+  "version": "1.4.1",
+  "lastUpdated": "2026-07-01",
   "description": "AI profile management, health monitoring, and workflow orchestration platform",
   "navigationHint": "Use sections[] to jump to the relevant part of each document. Fetch this manifest first, then read only the sections you need.",
   "documents": [
@@ -78,6 +78,17 @@
             "lovable",
             "cursor",
             "developer"
+          ]
+        },
+        {
+          "id": "structured-output",
+          "title": "Structured output (JSON)",
+          "summary": "expectedSchema, v1 build rules vs v2 native json_schema, eval",
+          "anchor": "#structured-output-json-assertion",
+          "audience": [
+            "cursor",
+            "developer",
+            "lovable"
           ]
         }
       ]
@@ -461,6 +472,11 @@
     }
   ],
   "changelog": [
+    {
+      "version": "1.4.1",
+      "date": "2026-07-01",
+      "summary": "devs-ai-v2 provider, native JSON schema, v2 cancel/reconnect, jobs-as-tools UI, eval expectedSchema validation, tool-loop reliability"
+    },
     {
       "version": "1.4.0",
       "date": "2026-06-29",

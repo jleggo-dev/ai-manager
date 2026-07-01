@@ -191,7 +191,7 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 
 | Field | Type | Description |
 |---|---|---|
-| `toolJobs` | `Array<{ jobSlug, exposeAs, description? }>` | Expose processing jobs as Devs.ai callable tools during chat streaming. When the model emits a matching `tool.call`, AI Admin runs the linked job server-side and submits the result back to the provider — no client `tool-outputs` round-trip for registered tool jobs. |
+| `toolJobs` | `Array<{ jobSlug, exposeAs, description? }>` | Expose processing jobs as callable tools during chat. **UI:** AI Profiles → edit chat profile → **Jobs as tools**. On **devs-ai** the model emits `tool.call`; on **devs-ai-v2** it emits `function_call` events. AI Admin fulfills registered tools server-side (multi-round on v2), then continues the stream — no client `tool-outputs` round-trip for registered tool jobs. |
 
 Tool parameter schemas are derived from the job's `config.inputVariables` (or `config.variables`).
 
@@ -236,6 +236,8 @@ Run golden test cases for CI or pre-deploy checks. Cases come from `config.evalC
 **Response**: `{ jobId, jobSlug, total, passed, failed, cases: [{ name, passed, reason?, formatted?, durationMs? }] }`
 
 **Status**: `200` when all pass; `422` when any case fails.
+
+When `config.expectedSchema.fields` is set, each case is also validated for required fields and types (same rules as the Test tab schema validator), in addition to `expectedKeys` / `expectedContains` on the eval case.
 
 **CLI**: `node backend/scripts/eval-job.mjs --job-id <uuid> --base-url <url> --api-key aim_sk_...`
 

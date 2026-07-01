@@ -213,6 +213,8 @@ The Edge Function **always** sends the `aim_sk_` API key. Some modes also need t
 | `list-chat-sessions` | Chat / History | **Yes** |
 | `get-chat-session` | Chat / History | **Yes** |
 | `submit-tool-outputs` | Chat | **Yes** |
+| `cancel-chat-session` | Chat (v2) | **Yes** |
+| `reconnect-chat-stream` | Chat (v2) | **Yes** |
 | `store-user-credential` | Credentials | **Yes** |
 | `check-tool-auth` | MCP / OAuth | **Yes** |
 | `initiate-tool-oauth` | MCP / OAuth | **Yes** |
@@ -266,6 +268,12 @@ Each mode has a minimum set of test cases that MUST pass. Use these to verify yo
 | `get-chat-session` | `sessionId` owned by a different user | `403` forbidden |
 | `submit-tool-outputs` | No JWT | `401` from Edge Function |
 | `submit-tool-outputs` | Valid `sessionId` + `systemMessageId` + `outputs` | SSE stream with AI continuation |
+| `cancel-chat-session` | No JWT | `401` from Edge Function |
+| `cancel-chat-session` | Valid `sessionId` on devs-ai-v2 session | JSON `{ cancelled, responseId }` |
+| `cancel-chat-session` | Session not devs-ai-v2 | `400` from AI Admin |
+| `reconnect-chat-stream` | No JWT | `401` from Edge Function |
+| `reconnect-chat-stream` | Valid `sessionId` on devs-ai-v2 session | SSE stream (same parser as `send-chat-message-stream`) |
+| `reconnect-chat-stream` | Session already processing | `409` — wait for prior stream `[DONE]` |
 
 ---
 
@@ -946,6 +954,55 @@ When the AI emits a `tool.call` event that requires user input (e.g. confirming 
 **Auth context:** User-context. Include `X-Forwarded-User-Id`.
 
 **Response:** SSE stream (same format as `send-chat-message-stream`). The AI processes the outputs and continues the conversation.
+
+> **devs-ai-v2:** For sessions on a `devs-ai-v2` profile, `systemMessageId` is optional — the server resumes via `provider_metadata.previous_response_id`. Registered **jobs-as-tools** on the profile are fulfilled automatically when the stream emits `function_call` events; you only need this mode for external MCP tools that require user action.
+
+---
+
+### `cancel-chat-session` (chat — stop an in-flight v2 response)
+
+**devs-ai-v2 only.** Cancels the current Responses API generation when the user clicks "Stop" or navigates away.
+
+**Body:**
+
+```json
+{
+  "mode": "cancel-chat-session",
+  "sessionId": "<chat session ID>"
+}
+```
+
+**Upstream:** `POST /api/chat-sessions/:sessionId/cancel`
+
+**Auth context:** User-context.
+
+**Response:** `{ "cancelled": true, "responseId": "resp_…" }`
+
+---
+
+### `reconnect-chat-stream` (chat — resume SSE after disconnect)
+
+**devs-ai-v2 only.** Reconnects to an in-progress v2 response stream after a network drop. Use the same SSE parser as `send-chat-message-stream`.
+
+**Body:**
+
+```json
+{
+  "mode": "reconnect-chat-stream",
+  "sessionId": "<chat session ID>",
+  "lastSequence": 42
+}
+```
+
+`lastSequence` is optional — defaults to `provider_metadata.last_sequence` on the session.
+
+**Upstream:** `POST /api/chat-sessions/:sessionId/reconnect-stream`
+
+**Auth context:** User-context.
+
+**Response:** SSE stream until `[DONE]`.
+
+> **409:** If another message or reconnect is already in flight on the session, wait for `[DONE]` before retrying.
 
 ---
 
