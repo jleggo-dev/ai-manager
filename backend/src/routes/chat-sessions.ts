@@ -990,7 +990,7 @@ router.post('/:id/reconnect-stream', validateBody(reconnectStreamSchema), async 
   } catch (err) {
     console.error('[POST /chat-sessions/:id/reconnect-stream]', err);
     if (!res.headersSent) {
-      return res.status(400).json({ error: errorMessage(err) });
+      return res.status(400).json({ error: safeClientError(err, 'Failed to reconnect v2 stream') });
     }
     res.end();
   } finally {
