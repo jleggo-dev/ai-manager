@@ -32,6 +32,12 @@ export const toolOutputsSchema = z
   })
   .strict();
 
+export const reconnectStreamSchema = z
+  .object({
+    lastSequence: z.number().int().min(0).optional(),
+  })
+  .strict();
+
 export const sendMessageSchema = z
   .object({
     message: z.string().min(1).max(50_000).optional(),

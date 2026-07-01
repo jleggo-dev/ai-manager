@@ -33,6 +33,7 @@ export interface AiProfile {
   workspace_id: string;
   created_at: string;
   updated_at: string;
+  config?: Record<string, unknown> | null;
 }
 
 export interface ProcessingJob {

@@ -155,6 +155,10 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 ### POST /api/providers
 **Body**: `{ name, type, base_url, api_key?, is_active?, request_timeout_ms? }`
 
+**Provider types**: `devs-ai` (v1 chat/completions), `devs-ai-v2` (Responses API v2 — native JSON schema, threaded chat via `previous_response_id`), `google-gemini`.
+
+`devs-ai-v2` sessions store threading state in `chat_sessions.provider_metadata` (`previous_response_id`, `conversation_id`, `last_sequence`). v2 tool continuations use `POST /api/v2/responses/{id}/resume` (wired through `POST /api/chat-sessions/:id/tool-outputs`).
+
 ### POST .../models
 **Body**: `{ models: [{ external_ai_id, display_name?, category?, is_active? }] }` (1–100 items)
 
@@ -187,7 +191,7 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 
 | Field | Type | Description |
 |---|---|---|
-| `toolJobs` | `Array<{ jobSlug, exposeAs, description? }>` | Expose processing jobs as Devs.ai callable tools during chat streaming. When the model emits a matching `tool.call`, AI Admin runs the linked job server-side and submits the result back to the provider — no client `tool-outputs` round-trip for registered tool jobs. |
+| `toolJobs` | `Array<{ jobSlug, exposeAs, description? }>` | Expose processing jobs as callable tools during chat. **UI:** AI Profiles → edit chat profile → **Jobs as tools**. On **devs-ai** the model emits `tool.call`; on **devs-ai-v2** it emits `function_call` events. AI Admin fulfills registered tools server-side (multi-round on v2), then continues the stream — no client `tool-outputs` round-trip for registered tool jobs. |
 
 Tool parameter schemas are derived from the job's `config.inputVariables` (or `config.variables`).
 
@@ -232,6 +236,8 @@ Run golden test cases for CI or pre-deploy checks. Cases come from `config.evalC
 **Response**: `{ jobId, jobSlug, total, passed, failed, cases: [{ name, passed, reason?, formatted?, durationMs? }] }`
 
 **Status**: `200` when all pass; `422` when any case fails.
+
+When `config.expectedSchema.fields` is set, each case is also validated for required fields and types (same rules as the Test tab schema validator), in addition to `expectedKeys` / `expectedContains` on the eval case.
 
 **CLI**: `node backend/scripts/eval-job.mjs --job-id <uuid> --base-url <url> --api-key aim_sk_...`
 
@@ -281,6 +287,8 @@ During **SSE chat streaming** (`POST /api/chat-sessions/:id/messages`), only two
 | POST | `/api/chat-sessions/resume` | JWT/Key | JWT: own session only | Resume a prior session by `sessionId` or `externalChatId` |
 | POST | `/api/chat-sessions/:id/messages` | JWT/Key | JWT: own session only | Send message — **SSE stream** |
 | POST | `/api/chat-sessions/:id/tool-outputs` | JWT/Key | JWT: own session only | Submit tool outputs — **SSE stream** |
+| POST | `/api/chat-sessions/:id/cancel` | JWT/Key | JWT: own session only | Cancel in-flight response — **devs-ai-v2 only** |
+| POST | `/api/chat-sessions/:id/reconnect-stream` | JWT/Key | JWT: own session only | Reconnect v2 SSE after disconnect — **devs-ai-v2 only** |
 | GET | `/api/chat-sessions` | JWT/Key | — | Paginated session list with filters |
 | GET | `/api/chat-sessions/:id` | JWT/Key | — | Session detail + stats + history |
 | GET | `/api/chat-sessions/:id/messages` | JWT/Key | — | Message history (`?fromProvider=true`) |
@@ -315,6 +323,29 @@ Continue a previously opened **streaming chat** session (there is nothing to res
 ### POST .../tool-outputs
 **Body**: `{ outputs: [{ ... }] (1–50), systemMessageId? }`
 **Response**: SSE stream.
+
+For **devs-ai-v2** sessions, `systemMessageId` is ignored. Tool continuations use the v2 Responses API (`POST /api/v2/responses/{id}/resume`) with `previous_response_id` from `chat_sessions.provider_metadata`. Internal jobs-as-tools on v2 profiles are fulfilled server-side when the v2 stream emits `function_call` events.
+
+### POST .../cancel *(devs-ai-v2 only)*
+Cancel an in-flight Devs.ai v2 response. Requires `provider_metadata.previous_response_id` on the session.
+**Response**: `{ cancelled: true, responseId: "resp_…" }`
+**Errors**: `400` if session is not `devs-ai-v2` or has no response id to cancel.
+
+### POST .../reconnect-stream *(devs-ai-v2 only)*
+Reconnect to a v2 response stream after a client disconnect. Uses `provider_metadata.last_sequence` when `lastSequence` is omitted.
+**Body**: `{ lastSequence?: number }`
+**Response**: SSE stream (same event shapes as `POST .../messages`). Updates `provider_metadata` on completion.
+
+### Devs.ai v2 vs v1 (chat sessions)
+
+| Concern | `devs-ai` (v1) | `devs-ai-v2` |
+|---------|-----------------|--------------|
+| Remote chat id | `external_chat_id` (created at session open for agents) | Not used — thread is lazy via Responses API |
+| Threading state | Remote chat history | `provider_metadata`: `previous_response_id`, `conversation_id`, `last_sequence` |
+| Tool continuation | `POST .../tool-outputs` + `systemMessageId` | Same route; server routes to v2 `/resume` |
+| Stream reconnect | Not supported | `POST .../reconnect-stream` |
+| Cancel in-flight | Not supported | `POST .../cancel` |
+| Structured output | Build rules (`trim-to-json`, etc.) | Native `text.format.json_schema` from job `expectedSchema` |
 
 ### GET /api/chat-sessions (list)
 **Query**: `userId`, `aiProfileId`, `workflowId`, `status`, `callingApplication`, `externalChatId`, pagination params.

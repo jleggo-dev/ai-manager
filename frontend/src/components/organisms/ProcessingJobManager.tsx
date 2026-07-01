@@ -3136,6 +3136,7 @@ function BuildRulesTab({
   const [systemPrompt, setSystemPrompt] = useState('');
   const [promptTemplate, setPromptTemplate] = useState('');
   const [appliedRules, setAppliedRules] = useState<AppliedRule[]>([]);
+  const [applyFormattingRules, setApplyFormattingRules] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -3144,6 +3145,7 @@ function BuildRulesTab({
     setSystemPrompt(c.systemPrompt || '');
     setPromptTemplate(c.promptTemplate || '');
     setAppliedRules(c.formattingRules || []);
+    setApplyFormattingRules(c.applyFormattingRules === true);
   }, [selectedJobFull]);
 
   if (!selectedJob) {
@@ -3167,6 +3169,8 @@ function BuildRulesTab({
       ? cfg.expectedSchema
       : null;
   const schemaFieldCount = expectedSchema?.fields ? Object.keys(expectedSchema.fields).length : 0;
+  const isV2Profile = selectedJobFull.ai_profile?.provider?.type === 'devs-ai-v2';
+  const hasNativeV2Schema = isV2Profile && schemaFieldCount > 0;
 
   function addRule(ruleType: string) {
     setAppliedRules((prev) => [...prev, { type: ruleType, order: prev.length, options: {} }]);
@@ -3201,6 +3205,7 @@ function BuildRulesTab({
         systemPrompt,
         promptTemplate,
         formattingRules: appliedRules.map((r, i) => ({ ...r, order: i })),
+        applyFormattingRules: applyFormattingRules || undefined,
       };
       if (!selectedJob) return;
       await api.updateProcessingJob(selectedJob, { config });
@@ -3216,6 +3221,22 @@ function BuildRulesTab({
   return (
     <Stack gap="lg">
       <Title order={4}>{selectedJobFull.name} — Prompt & Rules Configuration</Title>
+
+      {hasNativeV2Schema && (
+        <Alert variant="light" color="blue" title="Native structured output (v2)">
+          Structured output is enforced by the Devs.ai v2 provider when Expected Schema is set. JSON build rules such as
+          trim-to-json are optional — use them only if you need a post-processing validation layer.
+        </Alert>
+      )}
+
+      {hasNativeV2Schema && (
+        <Switch
+          label="Apply formatting rules after native v2 schema"
+          description="When off (default), formatting rules are skipped when the provider enforces expectedSchema."
+          checked={applyFormattingRules}
+          onChange={(e) => setApplyFormattingRules(e.currentTarget.checked)}
+        />
+      )}
 
       {jobVariables.length > 0 && <VariablesReference variables={jobVariables} />}
 

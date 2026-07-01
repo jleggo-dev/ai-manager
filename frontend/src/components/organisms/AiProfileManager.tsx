@@ -66,6 +66,9 @@ import * as api from '../../services/api';
 import type { AiProfile, Provider, LlmModel } from '../../types/api';
 import {
   DEVS_AI_BUILTIN_TOOL_OPTIONS,
+  DEVS_AI_V2_BUILTIN_TOOL_OPTIONS,
+  DEVS_AI_V2_CHAT_MODE_OPTIONS,
+  DEVS_AI_V2_THREAD_MODE_OPTIONS,
   DEFAULT_RUNTIME_OPTIONS,
   normaliseRuntimeOptions,
 } from '../../lib/runtime-options';
@@ -113,6 +116,12 @@ interface PendingAuth {
   authUrl: string | null;
 }
 
+interface ToolJobFormRow {
+  jobSlug: string;
+  exposeAs: string;
+  description: string;
+}
+
 interface TestChatApiResult {
   content: string;
   durationMs?: number;
@@ -157,6 +166,8 @@ export default function AiProfileManager() {
   const [mcpTools, setMcpTools] = useState<McpTool[]>([]);
   const [toolAuthStatus, setToolAuthStatus] = useState<ToolAuthEntry[]>([]);
   const [mcpLoading, setMcpLoading] = useState(false);
+  const [processingJobs, setProcessingJobs] = useState<Array<{ slug: string; name: string }>>([]);
+  const [toolJobs, setToolJobs] = useState<ToolJobFormRow[]>([]);
 
   /* Form state */
   const [form, setForm] = useState({
@@ -184,6 +195,18 @@ export default function AiProfileManager() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!modalOpened) return;
+    api
+      .listProcessingJobs({ limit: 200 })
+      .then((result) => {
+        setProcessingJobs(
+          (result.data || []).map((j) => ({ slug: j.slug, name: j.name })).filter((j) => Boolean(j.slug)),
+        );
+      })
+      .catch(() => setProcessingJobs([]));
+  }, [modalOpened]);
 
   /* Fetch AIs or models whenever provider or profile type changes */
   useEffect(() => {
@@ -286,6 +309,7 @@ export default function AiProfileManager() {
       is_active: true,
       runtime_options: DEFAULT_RUNTIME_OPTIONS,
     });
+    setToolJobs([]);
     setAvailableAis([]);
     setAvailableModels([]);
     setSelectedProvider(null);
@@ -332,6 +356,16 @@ export default function AiProfileManager() {
       is_active: profile.is_active !== false,
       runtime_options: normaliseRuntimeOptions(profile.runtime_options),
     });
+    const cfg = (profile.config || {}) as { toolJobs?: ToolJobFormRow[] };
+    setToolJobs(
+      Array.isArray(cfg.toolJobs)
+        ? cfg.toolJobs.map((t) => ({
+            jobSlug: t.jobSlug || '',
+            exposeAs: t.exposeAs || '',
+            description: t.description || '',
+          }))
+        : [],
+    );
     setMcpTools([]);
     setToolAuthStatus([]);
     loadMcpTools(profile.id, resolvedProviderType);
@@ -352,12 +386,19 @@ export default function AiProfileManager() {
     e.preventDefault();
     try {
       setSaving(true);
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...form,
         profile_type: profileType,
         mode,
         runtime_options: normaliseRuntimeOptions(form.runtime_options),
       };
+      if (mode === 'chat') {
+        const priorConfig = (editing?.config as Record<string, unknown> | undefined) || {};
+        payload.config = {
+          ...priorConfig,
+          toolJobs: toolJobs.filter((t) => t.jobSlug.trim() && t.exposeAs.trim()),
+        };
+      }
       if (editing) {
         await api.updateAiProfile(editing.id, payload);
         notifications.show({ title: 'Updated', message: 'AI profile updated', color: 'green' });
@@ -485,7 +526,7 @@ export default function AiProfileManager() {
       : filteredAndGroupedProfiles.groups.reduce((sum, g) => sum + g.items.length, 0);
 
   const selectedProviderType = providers.find((p) => p.id === form.provider_id)?.type || '';
-  const isModelOnlyProvider = selectedProviderType === 'google-gemini';
+  const isModelOnlyProvider = selectedProviderType === 'google-gemini' || selectedProviderType === 'devs-ai-v2';
 
   /* Build select options from available AIs (Devs.ai format) */
   const aiOptions = availableAis.map((ai) => ({
@@ -507,6 +548,26 @@ export default function AiProfileManager() {
   })();
 
   const providerOptions = providers.map((p) => ({ value: p.id, label: `${p.name} (${p.type})` }));
+
+  function toggleDevsAiV2Tool(toolKey: string, enabled: boolean) {
+    setForm((prev) => {
+      const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options, selectedProviderType);
+      const currentTools = runtimeOptions.devs_ai_v2.built_in_tools;
+      const nextTools: string[] = enabled
+        ? Array.from(new Set<string>([...currentTools, toolKey]))
+        : currentTools.filter((t: string) => t !== toolKey);
+      return {
+        ...prev,
+        runtime_options: {
+          ...runtimeOptions,
+          devs_ai_v2: {
+            ...runtimeOptions.devs_ai_v2,
+            built_in_tools: nextTools,
+          },
+        },
+      };
+    });
+  }
 
   function toggleDevsAiTool(toolKey: string, enabled: boolean) {
     setForm((prev) => {
@@ -1188,6 +1249,89 @@ export default function AiProfileManager() {
               </Paper>
             )}
 
+            {selectedProviderType === 'devs-ai-v2' && profileType === 'model' && (
+              <Paper withBorder p="sm" radius="sm">
+                <Stack gap="xs">
+                  <Text size="sm" fw={600}>
+                    Devs.ai v2 Runtime Options
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Responses API v2 — built-in tools, chat mode, and threading behavior.
+                  </Text>
+                  {DEVS_AI_V2_BUILTIN_TOOL_OPTIONS.map((tool) => (
+                    <Switch
+                      key={tool.key}
+                      size="sm"
+                      label={tool.label}
+                      checked={normaliseRuntimeOptions(form.runtime_options, 'devs-ai-v2').devs_ai_v2.built_in_tools.includes(
+                        tool.key,
+                      )}
+                      onChange={(e) => toggleDevsAiV2Tool(tool.key, e.currentTarget.checked)}
+                    />
+                  ))}
+                  <Select
+                    label="Chat mode"
+                    size="xs"
+                    data={[...DEVS_AI_V2_CHAT_MODE_OPTIONS]}
+                    value={normaliseRuntimeOptions(form.runtime_options, 'devs-ai-v2').devs_ai_v2.chat_mode}
+                    onChange={(val) => {
+                      if (!val) return;
+                      setForm((prev) => {
+                        const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options, 'devs-ai-v2');
+                        return {
+                          ...prev,
+                          runtime_options: {
+                            ...runtimeOptions,
+                            devs_ai_v2: { ...runtimeOptions.devs_ai_v2, chat_mode: val as 'execute' | 'chat' | 'plan' },
+                          },
+                        };
+                      });
+                    }}
+                  />
+                  <Select
+                    label="Thread mode"
+                    size="xs"
+                    data={[...DEVS_AI_V2_THREAD_MODE_OPTIONS]}
+                    value={normaliseRuntimeOptions(form.runtime_options, 'devs-ai-v2').devs_ai_v2.thread_mode}
+                    onChange={(val) => {
+                      if (!val) return;
+                      setForm((prev) => {
+                        const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options, 'devs-ai-v2');
+                        return {
+                          ...prev,
+                          runtime_options: {
+                            ...runtimeOptions,
+                            devs_ai_v2: {
+                              ...runtimeOptions.devs_ai_v2,
+                              thread_mode: val as 'collect' | 'steer' | 'interrupt' | 'force',
+                            },
+                          },
+                        };
+                      });
+                    }}
+                  />
+                  <Switch
+                    size="sm"
+                    label="Parallel Tool Calls"
+                    checked={normaliseRuntimeOptions(form.runtime_options, 'devs-ai-v2').devs_ai_v2.parallel_tool_calls}
+                    onChange={(e) => {
+                      const checked = e.currentTarget.checked;
+                      setForm((prev) => {
+                        const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options, 'devs-ai-v2');
+                        return {
+                          ...prev,
+                          runtime_options: {
+                            ...runtimeOptions,
+                            devs_ai_v2: { ...runtimeOptions.devs_ai_v2, parallel_tool_calls: checked },
+                          },
+                        };
+                      });
+                    }}
+                  />
+                </Stack>
+              </Paper>
+            )}
+
             {selectedProviderType === 'google-gemini' && (
               <Paper withBorder p="sm" radius="sm">
                 <Stack gap="xs">
@@ -1218,6 +1362,82 @@ export default function AiProfileManager() {
                       });
                     }}
                   />
+                </Stack>
+              </Paper>
+            )}
+
+            {mode === 'chat' && (
+              <Paper withBorder p="sm" radius="sm">
+                <Stack gap="sm">
+                  <Text size="sm" fw={600}>
+                    Jobs as tools
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Expose processing jobs as model-callable tools. AI Admin runs the linked job server-side when the
+                    model invokes the tool (devs-ai v1 tool.call or devs-ai-v2 function_call).
+                  </Text>
+                  {toolJobs.length === 0 && (
+                    <Text size="xs" c="dimmed">
+                      No tool jobs configured.
+                    </Text>
+                  )}
+                  {toolJobs.map((row, index) => (
+                    <Group key={`tool-job-${index}`} align="flex-end" wrap="nowrap">
+                      <Select
+                        label="Processing job"
+                        placeholder="Select job"
+                        searchable
+                        style={{ flex: 1 }}
+                        data={processingJobs.map((j) => ({ value: j.slug, label: `${j.name} (${j.slug})` }))}
+                        value={row.jobSlug || null}
+                        onChange={(value) =>
+                          setToolJobs((prev) =>
+                            prev.map((r, i) => (i === index ? { ...r, jobSlug: value || '' } : r)),
+                          )
+                        }
+                      />
+                      <TextInput
+                        label="Expose as"
+                        placeholder="tool_name"
+                        style={{ flex: 1 }}
+                        value={row.exposeAs}
+                        onChange={(e) =>
+                          setToolJobs((prev) =>
+                            prev.map((r, i) => (i === index ? { ...r, exposeAs: e.currentTarget.value } : r)),
+                          )
+                        }
+                      />
+                      <TextInput
+                        label="Description"
+                        placeholder="Optional"
+                        style={{ flex: 1 }}
+                        value={row.description}
+                        onChange={(e) =>
+                          setToolJobs((prev) =>
+                            prev.map((r, i) => (i === index ? { ...r, description: e.currentTarget.value } : r)),
+                          )
+                        }
+                      />
+                      <ActionIcon
+                        color="red"
+                        variant="subtle"
+                        aria-label="Remove tool job"
+                        onClick={() => setToolJobs((prev) => prev.filter((_, i) => i !== index))}
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </Group>
+                  ))}
+                  <Button
+                    variant="light"
+                    size="xs"
+                    leftSection={<IconPlus size={14} />}
+                    onClick={() =>
+                      setToolJobs((prev) => [...prev, { jobSlug: '', exposeAs: '', description: '' }])
+                    }
+                  >
+                    Add tool job
+                  </Button>
                 </Stack>
               </Paper>
             )}

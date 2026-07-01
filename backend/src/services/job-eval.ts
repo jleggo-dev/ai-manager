@@ -4,6 +4,8 @@
 
 import { executeJobById } from '../ai-manager/index.ts';
 import { applyFormattingRules } from '../services/formatting-rules.ts';
+import { expectedSchemaPasses, validateAgainstExpectedSchema } from '../services/expected-schema-validation.ts';
+import type { ExpectedSchemaInput } from '../services/expected-schema-to-json-schema.ts';
 import type { ProcessingJobRow, FormattingRule } from '../types.ts';
 
 export interface EvalCase {
@@ -50,6 +52,8 @@ export async function runJobEval(
   const cases = parseEvalCases(job);
   const results: EvalCaseResult[] = [];
   const formattingRules = (job.config?.formattingRules as FormattingRule[]) || [];
+  const expectedSchema = (job.config?.expectedSchema as ExpectedSchemaInput | undefined) || undefined;
+  const hasExpectedSchema = Boolean(expectedSchema?.fields && Object.keys(expectedSchema.fields).length > 0);
 
   for (const evalCase of cases) {
     try {
@@ -97,6 +101,14 @@ export async function runJobEval(
         }
       } catch {
         /* not JSON — ok if no JSON expectations */
+      }
+
+      if (passed && hasExpectedSchema) {
+        const schemaResult = validateAgainstExpectedSchema(output, expectedSchema);
+        if (!expectedSchemaPasses(output, expectedSchema)) {
+          passed = false;
+          reason = schemaResult.errors[0] || 'Output failed expectedSchema validation';
+        }
       }
 
       results.push({

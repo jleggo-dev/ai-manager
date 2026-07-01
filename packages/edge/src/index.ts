@@ -15,6 +15,8 @@ export const EDGE_FUNCTION_MODES = [
   'list-chat-sessions',
   'get-chat-session',
   'submit-tool-outputs',
+  'cancel-chat-session',
+  'reconnect-chat-stream',
   'store-user-credential',
   'check-tool-auth',
   'initiate-tool-oauth',

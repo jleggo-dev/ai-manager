@@ -55,7 +55,7 @@ A **provider** represents an LLM platform that AI Admin connects to.
 | Field | Purpose |
 |-------|---------|
 | **Name** | Human-readable label (e.g. "Production Devs.ai") |
-| **Type** | `devs-ai` or `google-gemini` — determines which client library is used |
+| **Type** | `devs-ai`, `devs-ai-v2`, or `google-gemini` — determines which client library is used |
 | **Base URL** | The provider's API endpoint |
 | **API Key** | Platform credentials, encrypted at rest with AES-256-GCM |
 | **Request Timeout** | Optional per-provider timeout override (milliseconds) |
@@ -63,7 +63,8 @@ A **provider** represents an LLM platform that AI Admin connects to.
 
 ### Supported Provider Types
 
-- **Devs.ai** — Supports agents with MCP tools, OAuth integrations, data sources, and model-based chat. This is the richest integration.
+- **Devs.ai (v1)** — `devs-ai`. Supports agents with MCP tools, OAuth integrations, data sources, and model-based chat. Uses `/api/v1/chats/*` and `/api/v1/chat/completions`.
+- **Devs.ai (v2)** — `devs-ai-v2`. Separate provider type using the Responses API (`POST /api/v2/responses`). Native JSON schema enforcement, threaded chat via `previous_response_id`, stream reconnect, and cancel. Does not replace v1 — existing v1 profiles continue unchanged.
 - **Google Gemini** — Direct model access via the Gemini API. Profiles on Gemini providers are automatically set to "model" type.
 
 ### How API Keys Are Protected
@@ -382,7 +383,12 @@ Each trigger stores `target_type` (`job` | `workflow`), `target_slug`, optional 
 
 > **Summary:** Expose processing jobs as callable tools on a chat profile.
 
-Set `ai_profiles.config.toolJobs[]` to `{ jobSlug, exposeAs, description? }`. During streaming chat, AI Admin registers these as Devs.ai tools (parameters derived from the job's input variables). When the model emits a matching `tool.call`, AI Admin runs the job internally and submits the result — no client round-trip for registered tool jobs.
+Set `ai_profiles.config.toolJobs[]` to `{ jobSlug, exposeAs, description? }`. In the UI, configure these under **AI Profiles** → edit a **chat** profile → **Jobs as tools**.
+
+During streaming chat, AI Admin registers these tools (parameters derived from the job's input variables). When the model invokes a registered tool:
+
+- **devs-ai (v1)** — `tool.call` events; AI Admin runs the job and submits outputs via the v1 tool API.
+- **devs-ai-v2** — `function_call` events (including items surfaced on `response.completed`); AI Admin fulfills in a server-side loop, merges continuation text, updates `provider_metadata`, and persists the final assistant message.
 
 Use this when the model should decide *when* to run a structured extraction or lookup, while staying in a conversational session.
 

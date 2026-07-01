@@ -140,7 +140,9 @@ See [docs/integration/WORKFLOW_BUILDER_PROMPT.md](../../docs/integration/WORKFLO
 
 | Feature | When |
 |---------|------|
-| **Jobs-as-tools** | `ai_profiles.config.toolJobs[]` — model invokes processing jobs as tools during chat |
+| **Jobs-as-tools** | `ai_profiles.config.toolJobs[]` — UI: AI Profiles → **Jobs as tools**; v1 `tool.call`, v2 `function_call` |
+| **devs-ai-v2** | Separate provider type: native JSON schema, cancel/reconnect Edge modes, `provider_metadata` threading |
+| **Structured output** | Job `expectedSchema` — native on v2; build rules + optional `applyFormattingRules` on v2 |
 | **Session compaction** | `chat_sessions.config.summarizer` — auto-summarize when context exceeds threshold |
 | **Triggers** | Cron/event-driven job or workflow execution |
 | **Config sync** | Git-managed slugs → `POST /api/sync` |
@@ -158,6 +160,9 @@ Reference implementation: [docs/integration/ai-admin-supabase-edge-function.ts](
 | `open-chat-session` | Start streaming session |
 | `resume-chat-session` | Continue a prior session (by `sessionId` or `externalChatId`) |
 | `send-chat-message-stream` | Send message (SSE via fetch) |
+| `submit-tool-outputs` | Resume after MCP/user tool action (SSE) |
+| `cancel-chat-session` | Stop in-flight generation (**devs-ai-v2** only) |
+| `reconnect-chat-stream` | Resume v2 SSE after disconnect (**devs-ai-v2** only) |
 | `list-chat-sessions` | List the user's sessions (filter by `status`, `externalChatId`, …) |
 | `get-chat-session` | Read session + workflow_variables |
 | `store-user-credential` | Per-user provider API key |

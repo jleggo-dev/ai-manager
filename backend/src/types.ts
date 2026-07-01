@@ -187,6 +187,7 @@ export interface ChatSessionRow {
   workflow_variables?: Record<string, unknown>;
   config?: Record<string, unknown> | null;
   session_summary?: string | null;
+  provider_metadata?: Record<string, unknown> | null;
   uses_user_credentials?: boolean;
   processing_message_id?: string | null;
   processing_started_at?: string | null;

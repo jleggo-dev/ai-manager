@@ -47,6 +47,8 @@ const ALL_MODES = [
   "list-chat-sessions      — chat: list sessions for the authenticated user (optional filters incl. externalChatId)",
   "get-chat-session        — chat: retrieve a single session with full message history + stats",
   "submit-tool-outputs     — chat: sessionId + systemMessageId + outputs",
+  "cancel-chat-session     — chat (v2): sessionId — cancel in-flight response",
+  "reconnect-chat-stream   — chat (v2): sessionId + lastSequence? — resume SSE",
   "store-user-credential   — credentials: providerId + apiKey",
   "check-tool-auth         — MCP OAuth: profileId + toolId",
   "initiate-tool-oauth     — MCP OAuth: profileId + toolId → authUrl",
@@ -587,6 +589,73 @@ Deno.serve(async (req) => {
     const copyHeaders: Record<string, string> = { ...corsHeaders };
     const ct = r.headers.get("content-type");
     if (ct) copyHeaders["Content-Type"] = ct;
+
+    return new Response(r.body, {
+      status: r.status,
+      headers: copyHeaders,
+    });
+  }
+
+  /* ── Chat: cancel-chat-session (devs-ai-v2) ─────────────────────── */
+
+  if (mode === "cancel-chat-session") {
+    const userIdResult = await requireUserId(req);
+    if (userIdResult instanceof Response) return userIdResult;
+    const userId = userIdResult;
+
+    const sessionId = body.sessionId;
+    if (typeof sessionId !== "string" || !sessionId.trim()) {
+      return json({ error: "sessionId required." }, 400);
+    }
+
+    const r = await fetch(
+      `${base}/api/chat-sessions/${encodeURIComponent(sessionId.trim())}/cancel`,
+      {
+        method: "POST",
+        headers: aiAdminHeaders(userId),
+        body: JSON.stringify({}),
+      },
+    );
+    return proxyJsonResponse(r);
+  }
+
+  /* ── Chat: reconnect-chat-stream (devs-ai-v2) ─────────────────── */
+
+  if (mode === "reconnect-chat-stream") {
+    const userIdResult = await requireUserId(req);
+    if (userIdResult instanceof Response) return userIdResult;
+    const userId = userIdResult;
+
+    const sessionId = body.sessionId;
+    if (typeof sessionId !== "string" || !sessionId.trim()) {
+      return json({ error: "sessionId required." }, 400);
+    }
+
+    const payload: Record<string, unknown> = {};
+    if (body.lastSequence != null) payload.lastSequence = body.lastSequence;
+
+    const r = await fetch(
+      `${base}/api/chat-sessions/${encodeURIComponent(sessionId.trim())}/reconnect-stream`,
+      {
+        method: "POST",
+        headers: aiAdminHeaders(userId),
+        body: JSON.stringify(payload),
+      },
+    );
+
+    if (!r.ok) {
+      const errText = await r.text();
+      return new Response(errText, {
+        status: r.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const copyHeaders: Record<string, string> = { ...corsHeaders };
+    const ct = r.headers.get("content-type");
+    if (ct) copyHeaders["Content-Type"] = ct;
+    const xsid = r.headers.get("X-Chat-Session-Id");
+    if (xsid) copyHeaders["X-Chat-Session-Id"] = xsid;
 
     return new Response(r.body, {
       status: r.status,

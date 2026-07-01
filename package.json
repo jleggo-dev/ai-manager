@@ -26,6 +26,7 @@
     "test:e2e": "npx vitest run --config e2e/vitest.config.ts",
     "test:e2e:full": "bash scripts/run-e2e.sh",
     "ci": "npm run typecheck && npm run format:check && npm run lint && npm test",
+    "prepush": "npm run typecheck && npm run format:check && npm run lint && npm run build --workspace=backend && npm run vercel:build:frontend && npm test",
     "prepare": "husky || true"
   },
   "lint-staged": {

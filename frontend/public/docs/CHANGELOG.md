@@ -5,6 +5,18 @@ All notable changes to AI Admin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-07-01
+
+### Added
+- **`devs-ai-v2` provider** — Responses API adapter (`POST /api/v2/responses`): native `expectedSchema` → `json_schema`, threaded chat via `provider_metadata`, cancel (`POST .../cancel`), stream reconnect (`POST .../reconnect-stream`).
+- **Jobs-as-tools UI** — AI Profiles → **Jobs as tools** editor (`config.toolJobs[]`).
+- **Edge proxy modes** — `cancel-chat-session`, `reconnect-chat-stream` in the reference Supabase Edge Function.
+- **Eval schema validation** — `POST /api/processing-jobs/:id/eval` validates output against `config.expectedSchema` when configured.
+- **`applyFormattingRules` job flag** — optional post-processing when devs-ai-v2 native schema is active (UI toggle on Build Rules tab).
+
+### Fixed
+- **v2 jobs-as-tools loop** — tool continuation streams accumulate assistant text, persist `provider_metadata`, and support multi-round `function_call` fulfillment before `recordAssistantMessage`.
+
 ## [1.4.0] - 2026-06-29
 
 ### Added
