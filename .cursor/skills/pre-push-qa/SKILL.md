@@ -1,11 +1,11 @@
 ---
 name: pre-push-qa
-description: Runs pre-push quality gates matching Vercel CI before git push. Use when committing, pushing to GitHub, opening a PR, or when the user asks to verify the build or run QA before push.
+description: Runs pre-push quality gates matching Vercel CI before git push. Use as step 4 of development-workflow, when committing, pushing to GitHub, opening a PR, or when the user asks to verify the build or run QA before push.
 ---
 
 # Pre-push QA (AI Admin)
 
-Run these checks **before every `git push`**. Do not push until all required steps pass.
+Part of [development-workflow](../development-workflow/SKILL.md) **step 4**. Run after lint (step 2) and targeted tests (step 3).
 
 ## Required commands (PowerShell)
 
@@ -18,19 +18,23 @@ npm run prepush
 Or run individually if debugging a failure:
 
 ```powershell
+npm run format:check
+npm run lint
 npm run typecheck
 npm run build --workspace=backend
 npm run vercel:build:frontend
 npm test
 ```
 
-### What each step mirrors
+### What `npm run prepush` runs
 
 | Step | Catches |
 |------|---------|
-| `typecheck` | TS errors in backend + frontend (e.g. broken interfaces) |
-| `build --workspace=backend` | Vercel backend service `tsc` |
-| `vercel:build:frontend` | Frontend ESLint + Vite production build (same as Vercel frontend) |
+| `format:check` | Prettier drift |
+| `lint` | ESLint backend + frontend |
+| `typecheck` | TS errors (e.g. broken interfaces) |
+| `build --workspace=backend` | Vercel backend `tsc` |
+| `vercel:build:frontend` | Frontend ESLint + Vite production build |
 | `npm test` | Backend unit/integration regressions |
 
 ## Frontend build gotcha (local)
@@ -39,10 +43,10 @@ Vite fails if `VITE_DEV_API_KEY` is set during production build. Unset it or rem
 
 ## After code changes
 
-1. Run `npm run prepush`.
-2. If you edited `docs/` or `.cursor/skills/`, `prebuild` syncs to `frontend/public/` automatically during frontend build.
-3. Apply [pre-push-review](../pre-push-review/SKILL.md) on the diff.
-4. Only then: `git push`.
+1. Complete [development-workflow](../development-workflow/SKILL.md) steps 2–3 first.
+2. Run `npm run prepush`.
+3. If you edited `docs/` or `.cursor/skills/`, `prebuild` syncs to `frontend/public/` during frontend build.
+4. Open/update PR (step 5); then [pr-tl-review](../pr-tl-review/SKILL.md) (step 6).
 
 ## On failure
 

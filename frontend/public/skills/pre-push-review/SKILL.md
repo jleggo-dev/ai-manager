@@ -1,11 +1,11 @@
 ---
 name: pre-push-review
-description: Code review checklist for AI Admin changes before git push or PR. Use after implementing a feature or fix and before pushing, or when the user asks for a pre-push review or code review on the branch diff.
+description: Code and architecture review checklist before commit or PR. Use as step 2 of development-workflow, after implementing changes and before prepush, or when the user asks for a pre-push review.
 ---
 
 # Pre-push code review
 
-Review the **staged or branch diff** before push. Pair with [pre-push-qa](../pre-push-qa/SKILL.md) — review does not replace builds/tests.
+Part of [development-workflow](../development-workflow/SKILL.md) **step 2**. Run **after** `npm run lint` and `npm run typecheck`, **before** writing new tests and `npm run prepush`.
 
 ## Quick checklist
 
@@ -21,7 +21,8 @@ Pre-push review
 - [ ] API/docs updated if routes, edge modes, or config shapes changed
 - [ ] frontend/public/ synced if docs or skills changed (via prebuild)
 - [ ] Tests added or updated for non-trivial backend behavior
-- [ ] npm run prepush passed in this session
+- [ ] npm run lint && npm run typecheck passed
+- [ ] npm run prepush passed (step 4)
 ```
 
 ## High-risk areas (extra scrutiny)

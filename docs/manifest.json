@@ -1,6 +1,6 @@
 {
   "name": "AI Admin",
-  "version": "1.4.1",
+  "version": "1.4.0",
   "lastUpdated": "2026-07-01",
   "description": "AI profile management, health monitoring, and workflow orchestration platform",
   "navigationHint": "Use sections[] to jump to the relevant part of each document. Fetch this manifest first, then read only the sections you need.",
@@ -505,7 +505,7 @@
   ],
   "instructions": {
     "lovable": "Fetch /docs/manifest.json first. Read sections matching your task from 'lovable-integration' and 'edge-function'. Follow MUST/NEVER enforcement rules. Deploy the edge function to your Supabase project.",
-    "cursor": "Fetch /docs/manifest.json first. Use section anchors to read only relevant parts of 'api-reference', 'integration-guide', and 'workflow-builder'. Project skills in .cursor/skills/ provide routing guidance.",
+    "cursor": "Fetch /docs/manifest.json first. Use section anchors to read only relevant parts of 'api-reference', 'integration-guide', and 'workflow-builder'. For ship/merge work, follow project skill development-workflow (.cursor/skills/development-workflow/SKILL.md). Project skills in .cursor/skills/ provide routing guidance.",
     "general": "Start with manifest.json for navigation, then 'concepts' for architecture overview, then targeted sections from 'api-reference' or 'lovable-integration'."
   }
 }
