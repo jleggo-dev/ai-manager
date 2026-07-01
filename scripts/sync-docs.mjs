@@ -29,6 +29,8 @@ const FILE_MAPPINGS = [
   { src: 'docs/integration/WORKFLOW_BUILDER_PROMPT.md', dest: 'frontend/public/integration/WORKFLOW_BUILDER_PROMPT.md' },
   // Skills — published so any coding agent can download them
   { src: '.cursor/skills/ai-admin-integration/SKILL.md', dest: 'frontend/public/skills/ai-admin-integration/SKILL.md' },
+  { src: '.cursor/skills/pre-push-qa/SKILL.md', dest: 'frontend/public/skills/pre-push-qa/SKILL.md' },
+  { src: '.cursor/skills/pre-push-review/SKILL.md', dest: 'frontend/public/skills/pre-push-review/SKILL.md' },
   { src: '.cursor/skills/prompt-engineering/SKILL.md', dest: 'frontend/public/skills/prompt-engineering/SKILL.md' },
   { src: '.cursor/skills/prompt-engineering/references/frameworks.md', dest: 'frontend/public/skills/prompt-engineering/references/frameworks.md' },
   { src: '.cursor/skills/prompt-engineering/references/audit-checklist.md', dest: 'frontend/public/skills/prompt-engineering/references/audit-checklist.md' },

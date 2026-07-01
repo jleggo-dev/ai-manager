@@ -121,6 +121,8 @@ interface ToolJobFormRow {
   exposeAs: string;
   description: string;
 }
+
+interface TestChatApiResult {
   content: string;
   durationMs?: number;
   model?: string;
