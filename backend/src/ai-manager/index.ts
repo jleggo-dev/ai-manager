@@ -1104,8 +1104,17 @@ export async function sendChatMessage(
           ? ((resolvedJob?.config as JobConfig | undefined)?.expectedSchema as JobConfig['expectedSchema'])
           : undefined,
     });
+    const profileTools = await resolveProfileToolDefinitions(session.ai_profile);
+    const mergedTools = [
+      ...(Array.isArray(chatOptions.tools) ? (chatOptions.tools as unknown[]) : []),
+      ...(Array.isArray(profileTools) ? profileTools : []),
+    ];
     const modelId = String(profile?.external_ai_id || '').trim();
-    sseResponse = await client.chatCompletionStream(modelId, chatMessages, { ...chatOptions, timeoutMs });
+    sseResponse = await client.chatCompletionStream(modelId, chatMessages, {
+      ...chatOptions,
+      ...(mergedTools.length > 0 ? { tools: mergedTools } : {}),
+      timeoutMs,
+    });
   } else {
     throw new Error(`Unsupported provider type "${providerType}" for chat streaming`);
   }
