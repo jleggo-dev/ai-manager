@@ -511,6 +511,15 @@ export async function executeJobById(
           const failoverChatOpts = buildProviderChatOptions(
             failoverProvider.type,
             failoverRuntimeOpts,
+            {
+              // The failover must carry the same native schema as the primary — omitting
+              // it made a v2 failover answer schema-less on jobs that expect one.
+              expectedSchema:
+                String(failoverProvider.type || "").trim().toLowerCase() ===
+                "devs-ai-v2"
+                  ? (jobConfig.expectedSchema ?? undefined)
+                  : undefined,
+            },
           );
           const failoverTimeoutMs = await resolveTimeoutMs(
             advancedConfig,
@@ -577,16 +586,13 @@ export async function executeJobById(
     /* ── 6. Apply formatting rules ────────────────────────── */
     if (fullDiagnostics) diag.startFormattingTimer();
 
-    const hasNativeV2Schema =
-      providerTypeNorm === "devs-ai-v2" &&
-      Boolean(
-        jobConfig.expectedSchema?.fields &&
-        Object.keys(jobConfig.expectedSchema.fields).length > 0,
-      );
-    const skipFormatting = hasNativeV2Schema && !jobConfig.applyFormattingRules;
-    const formattingRules: FormattingRule[] = skipFormatting
-      ? []
-      : jobConfig.formattingRules || [];
+    /* Formatting rules ALWAYS run when defined — even with a native v2 json_schema.
+       The Devs.ai v2 shim accepts text.format but does not reliably enforce it for
+       every model (observed: gpt-4.1-mini returns ```json fences WITH a strict schema
+       accepted), and the failover model may answer without the schema. The rules are
+       deterministic app-side transforms (no LLM cost): on clean output they're no-ops;
+       on fenced/dirty output they're the backstop that keeps the contract. */
+    const formattingRules: FormattingRule[] = jobConfig.formattingRules || [];
     const { formatted, steps } = applyFormattingRules(
       rawContent,
       formattingRules,

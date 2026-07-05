@@ -27,11 +27,26 @@ export function messagesToV2Request(
   options: Record<string, unknown> = {},
 ): V2CreateResponseBody {
   const systemParts: string[] = [];
-  const inputItems: Array<{ role: string; content: string }> = [];
+  const inputItems: Array<Record<string, unknown>> = [];
+  let assistantItemSeq = 0;
 
   for (const msg of messages) {
     if (msg.role === 'system') {
       systemParts.push(msg.content);
+    } else if (msg.role === 'assistant') {
+      // v2 accepts a bare {role, content: string} item for a NEW user turn, but a replayed
+      // assistant/model-output item (multi-turn chat history) must carry the full "message"
+      // item shape — id + status + content as parts — or the API 400s with e.g.
+      // "input[N].id: expected string, received undefined". There's no real prior response id
+      // to reference here (this is a persisted chat-history row, not a live tool-call chain),
+      // so a synthetic id + status "completed" satisfies validation for plain-text replay.
+      inputItems.push({
+        type: 'message',
+        role: 'assistant',
+        id: `hist_asst_${assistantItemSeq++}`,
+        status: 'completed',
+        content: [{ type: 'output_text', text: msg.content }],
+      });
     } else {
       inputItems.push({ role: msg.role, content: msg.content });
     }
@@ -44,7 +59,10 @@ export function messagesToV2Request(
   const body: V2CreateResponseBody = {
     model,
     stream: Boolean(options.stream),
-    input: inputItems.length === 1 && inputItems[0]?.role === 'user' ? inputItems[0].content : inputItems,
+    input:
+      inputItems.length === 1 && inputItems[0]?.role === 'user'
+        ? (inputItems[0].content as string)
+        : inputItems,
     store: options.store !== false,
   };
 
