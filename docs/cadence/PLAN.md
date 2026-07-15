@@ -516,20 +516,22 @@ HealthKit (the deciding constraint, §7/§8). The path:
 - **Adaptation (Phase 7).** Tripwires → `situation_assess` → disrupted mode (additive temp
   plan) / check-in / replan (`cadence-replan` workflow exists).
 
-**C. Capture quality — BUGs found in real use**
-- **Baseline schema drift.** `capture_extract` writes non-schema baseline keys (e.g. `weight_lbs`,
-  `fitness_state`) via the jsonb merge, but the typed `Baseline` uses `weight_kg: WeightTrend`, so
-  the Review screen can't read them (weight showed blank). Align the capture prompt/contract to the
-  `Baseline` schema (age, height_cm, weight_kg{current,start,source}, injuries[], constraints[]).
-  The curate wizard writes the correct shape when a user edits, but capture should emit it too.
-- Capture fixes SHIPPED: full-conversation window + tighter prompt + replace-`captured` (dedup);
-  durable `cadence.ai_log`; the remaining item is the baseline schema alignment above.
-
-- **Over-extraction / duplication.** `capture_extract` runs per user message on a narrow window
-  → creates duplicate/spurious goals (observed the counter climb 1→2→4 for ~2 real objectives).
-  Fixes: dedup against existing goals (title/semantic), widen the conversation window, and/or
-  route capture through Broker curation with the existing-goals list as context. Symptom in UI:
-  duplicate goal cards on the Review screen.
+**C. Capture quality — FIXED (2026-07-15)**
+- **Baseline schema drift — FIXED.** `normalizeBaseline` (`services/capture-normalize.ts`)
+  canonicalizes every weight shape the Broker emits (`{value,unit}`, `weight_lbs`, `weight_kg`,
+  bare number) into `weight_kg{current,start,source}` + `weight_unit`, and maps legacy `injuries[]`
+  → `constraints[]`. Verified against the exact fields Review reads (`weight_kg.current` behind a
+  20–500 kg plausibility guard, [ReviewScreen.tsx:163-169]); unit-tested. Earlier capture fixes
+  still in place: full-conversation window, tighter prompt, replace-`captured`, durable
+  `cadence.ai_log`.
+- **Over-extraction / duplication — FIXED.** Two deterministic layers now. Cross-run duplication
+  (the old 1→2→4 climb) was already killed by REPLACE-on-each-run: delete captured-without-
+  milestones, re-insert the consolidated set. Intra-run duplication — the model returning two
+  near-duplicate goals in ONE response — is now caught by `selectCapturedGoals`
+  (`services/capture-normalize.ts`): a fuzzy title collapse against confirmed, sticky
+  milestone-bearing goals, AND each other (keep first seen). The prompt also caps to "the FEWEST
+  goals … usually 1-3". Unit-tested. (Semantic/embedding dedup for reworded-but-unrelated titles
+  remains a possible future upgrade; the title-fuzzy backstop covers the observed failure.)
 
 **D. Persona / UX tuning**
 - **Question cadence.** The coach bundles 1–2 *related* questions per turn despite the "one at a
@@ -551,7 +553,7 @@ HealthKit (the deciding constraint, §7/§8). The path:
 - Cross-session longitudinal variables.
 
 ### Known issues
-- **Capture over-extraction** (see C).
+- ~~**Capture over-extraction / baseline drift**~~ — FIXED 2026-07-15 (see C).
 - **Backend `tsc` fails on EXTERNAL `devs-ai-v2` code** (not Cadence): `devs-ai-v2/client.ts:101`
   (`role` on the response message type), `devs-ai-v2/sse-transform.ts:105` (duplicate `type`),
   `ai-manager/index.ts` `ExpectedSchema` cast. Appeared ~2026-06-30 (in-progress Devs.ai v2

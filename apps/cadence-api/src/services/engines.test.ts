@@ -5,6 +5,7 @@ import { budgetTier } from './token-budget.ts';
 import { parseRecurrence, expandRecurrence, describeRecurrence } from './scheduling.ts';
 import { wearStatus, applyRun } from './shoe-mileage.ts';
 import { detectTripwires, haversineKm } from './tripwires.ts';
+import { selectCapturedGoals, normalizeBaseline, normTitle } from './capture-normalize.ts';
 
 type GoalLite = Pick<Goal, 'area' | 'type' | 'status'>;
 
@@ -166,5 +167,87 @@ describe('tripwires (§B4)', () => {
     const km = haversineKm(40.71, -74.01, 34.05, -118.24);
     expect(km).toBeGreaterThan(3800);
     expect(km).toBeLessThan(4100);
+  });
+});
+
+describe('capture selectCapturedGoals (§6.1 — no duplicate goal cards)', () => {
+  const titles = (gs: { title?: string }[]) => gs.map((g) => g.title);
+
+  it('collapses intra-run near-duplicates to one, keeping the first seen', () => {
+    const kept = selectCapturedGoals(
+      [{ title: 'Run a 10k' }, { title: 'Run a 10k this spring' }],
+      new Set(),
+      [],
+    );
+    expect(titles(kept)).toEqual(['Run a 10k']);
+  });
+
+  it('keeps genuinely distinct goals that merely share a word', () => {
+    const kept = selectCapturedGoals(
+      [{ title: 'Run a 10k' }, { title: 'Run a marathon' }],
+      new Set(),
+      [],
+    );
+    expect(titles(kept)).toEqual(['Run a 10k', 'Run a marathon']);
+  });
+
+  it('drops an EXACT match of a confirmed/committed goal, but not a mere superstring', () => {
+    const confirmed = new Set([normTitle('Run a 10k')]);
+    // exact-confirmed dropped; the distinct new goal kept
+    expect(titles(selectCapturedGoals([{ title: 'Run a 10k' }, { title: 'Meditate daily' }], confirmed, []))).toEqual(
+      ['Meditate daily'],
+    );
+    // a superstring of a confirmed goal is a NEW, more specific goal — confirmed match is exact-only
+    expect(titles(selectCapturedGoals([{ title: 'Run a 10k this spring' }], confirmed, []))).toEqual([
+      'Run a 10k this spring',
+    ]);
+  });
+
+  it('fuzzy-skips a re-extraction of a milestone-bearing "sticky" captured goal', () => {
+    const sticky = [normTitle('Run a 10k')];
+    expect(selectCapturedGoals([{ title: 'Run a 10k this spring' }], new Set(), sticky)).toHaveLength(0);
+  });
+
+  it('drops empty/whitespace titles', () => {
+    const kept = selectCapturedGoals([{ title: '' }, { title: '   ' }, { title: 'Read more' }], new Set(), []);
+    expect(titles(kept)).toEqual(['Read more']);
+  });
+});
+
+describe('capture normalizeBaseline (§6.1 — weight lands where the UI reads it)', () => {
+  it('canonicalizes {value, unit:lbs} to weight_kg{current,start} + weight_unit', () => {
+    const b = normalizeBaseline({ weight: { value: 200, unit: 'lbs' } });
+    const w = b.weight_kg as { current: number; start: number; source: string };
+    expect(w.current).toBe(90.7); // 200 * 0.453592, rounded to 0.1
+    expect(w.start).toBe(90.7);
+    expect(w.source).toBe('captured');
+    expect(b.weight_unit).toBe('lbs');
+  });
+
+  it('accepts a bare kg number and the legacy weight_lbs key', () => {
+    expect((normalizeBaseline({ weight_kg: 80 }).weight_kg as { current: number }).current).toBe(80);
+    expect(normalizeBaseline({ weight_kg: 80 }).weight_unit).toBe('kg');
+    expect((normalizeBaseline({ weight_lbs: 150 }).weight_kg as { current: number }).current).toBe(68);
+    expect(normalizeBaseline({ weight_lbs: 150 }).weight_unit).toBe('lbs');
+  });
+
+  it('passes through age/height and omits weight when none is stated', () => {
+    const b = normalizeBaseline({ age: 30, height_cm: 180 });
+    expect(b.age).toBe(30);
+    expect(b.height_cm).toBe(180);
+    expect(b.weight_kg).toBeUndefined();
+  });
+
+  it('maps constraints and legacy injuries into the unified constraint list', () => {
+    const c = normalizeBaseline({ constraints: [{ label: 'burnout', kind: 'life', plan_around: true }] })
+      .constraints as Array<{ label: string; kind: string; plan_around: boolean; id: string }>;
+    expect(c).toHaveLength(1);
+    const c0 = c[0]!;
+    expect(c0).toMatchObject({ label: 'burnout', kind: 'life', plan_around: true });
+    expect(typeof c0.id).toBe('string');
+
+    const inj = normalizeBaseline({ injuries: [{ area: 'left knee', condition: 'patellar tendinopathy' }] })
+      .constraints as Array<{ label: string; kind: string; plan_around: boolean }>;
+    expect(inj[0]!).toMatchObject({ label: 'left knee — patellar tendinopathy', kind: 'physical', plan_around: true });
   });
 });
