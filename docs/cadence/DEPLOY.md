@@ -32,27 +32,46 @@ Config: `apps/cadence-web/vercel.json`. Create a Vercel **project**:
     - **Cross-origin:** set the absolute API URL; then cadence-api must emit CORS headers for the
       web origin.
 
-## cadence-api (hosting decision needed)
+## cadence-api (decided: Vercel Services, its own project)
 
-cadence-api fits Vercel's *classic serverless functions* poorly because it: (a) holds a
-`postgres.js` connection pool (serverless instances exhaust DB connections); (b) streams SSE for
-coach chat (a function's `maxDuration` caps the stream); (c) cold-loads the whole embedded AI Admin
-engine. AI Admin's own backend sidesteps all three by running as a **long-running service**
-(`experimentalServices`).
+cadence-api runs as a **long-running Vercel Service** (not a classic serverless function) — the same
+compute model AI Admin's backend uses. That matters because serverless would break it three ways:
+(a) it holds a `postgres.js` connection pool (serverless instances exhaust DB connections); (b) it
+streams SSE for coach chat (a function's `maxDuration` caps the stream); (c) it cold-loads the whole
+embedded AI Admin engine. A long-running Service keeps the pool warm, the stream open, and the engine
+resident.
 
-Options:
+**Topology — two Vercel projects, each rooted in its own app folder.** AI Admin's
+`experimentalServices` manifest already owns the repo-root `vercel.json`, and Vercel reads one
+config per project Root Directory — so rather than fight that collision with a shared multi-service
+manifest, Cadence deploys as two single-purpose projects. Same Services mechanism, genuinely
+separate, no root-config contention.
 
-- **A — Vercel, mirror AI Admin (`experimentalServices`).** Same proven long-running mechanism; SSE
-  and pooling behave. Snag to resolve: `experimentalServices` config lives at the repo root, which
-  AI Admin's `vercel.json` already occupies — so a separate Cadence project needs a topology call
-  (its own root config vs. a shared one).
-- **B — a long-running Node host** (Railway / Render / Fly) for the API; cadence-web stays on
-  Vercel. Cleanest fit for a streaming, pooled, engine-embedding server — "install the monorepo,
-  run `apps/cadence-api`" is trivial. Cost: two platforms.
-- **C — Vercel serverless-function wrapper** (`apps/cadence-api/api/index.ts` exporting the Express
-  app). Standard Express-on-Vercel, but the pooling + SSE-duration caveats above apply; viable only
-  if turns stay under the plan's `maxDuration` and the DB client is swapped for a serverless-
-  friendly pooling mode.
+**Vercel project: `cadence-api`**
+- **Root Directory:** `apps/cadence-api`, with *"Include files outside the root directory"* ON — the
+  in-process engine imports `../../../backend/src/*`, so `backend/` + `packages/` must ride along.
+- **Product mode:** Services (long-running), so the Express `app.listen` server stays up. Start
+  command is the package's `npm start` (`node --import tsx src/index.ts`) — there is no build step.
+- Serves routes at the domain root (`/coach`, `/plan`, `/progress`, `/me`, …), so unlike AI Admin's
+  `/_/backend` service it needs **no** prefix-stripping middleware.
+
+**Web → API wiring.** The browser calls `/api/...` and the dev Vite proxy strips `/api` before
+hitting cadence-api (which serves at `/`). Reproduce that in prod with a rewrite in
+`apps/cadence-web/vercel.json`, added once the API domain exists, **above** the SPA rewrite:
+
+```json
+{ "source": "/api/:path*", "destination": "https://<cadence-api-domain>/:path*" }
+```
+
+Same-origin from the browser → no CORS, and keep `VITE_CADENCE_API_BASE=/api`. (Alternative: point
+`VITE_CADENCE_API_BASE` at the absolute API URL and add CORS to cadence-api — the rewrite is cleaner
+and matches dev.)
+
+> **Experimental-feature caveat:** Vercel Services is an experimental product mode. The first link
+> may need one iteration on the Root-Directory / include-outside-root / start-command settings, and
+> if a single-service `vercel.json` is needed beyond the project settings, it's best added *after*
+> that first link, when the dashboard confirms the exact schema. Everything above is the intended
+> shape, verified against how AI Admin's backend is configured — not yet against a live Cadence deploy.
 
 **Env (server-side — real secrets; set in the host's env, never committed):**
 `CADENCE_SUPABASE_SERVICE_ROLE_KEY`, `CADENCE_DB_PASSWORD` (or `CADENCE_DATABASE_URL`),
