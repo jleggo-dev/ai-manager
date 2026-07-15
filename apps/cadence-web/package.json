@@ -1,0 +1,26 @@
+{
+  "name": "@cadence/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cadence PWA (React + Vite). Wrapped in Capacitor for iOS later; native calls go through the capability seam.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cadence/shared": "*",
+    "@supabase/supabase-js": "^2.101.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^6.0.3",
+    "vite": "^5.4.11"
+  }
+}

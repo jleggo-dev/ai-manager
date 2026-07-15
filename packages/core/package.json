@@ -1,0 +1,12 @@
+{
+  "name": "@ai-admin/core",
+  "version": "1.4.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "description": "In-process surface for the AI Admin engine (Coach chat + Broker jobs + lifecycle). Consumed by Cadence's Node backend.",
+  "dependencies": {
+    "@supabase/supabase-js": "^2"
+  }
+}
