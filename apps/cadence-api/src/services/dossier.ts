@@ -70,8 +70,37 @@ export async function compileDossier(input: DossierInput): Promise<string> {
   }
 
   if (plan) {
-    lines.push(`Current plan v${plan.version} (${activities.length} activities):`);
-    for (const a of activities) lines.push(`  - [${a.kind}] ${a.title} — ${a.schedule?.recurrence ?? ''}`);
+    // Commit recency tells the persona whether this plan is NEW (walk the ladder, invite
+    // pushback) or established. String() guards the postgres.js Date-object trap.
+    const committedAt = new Date(String(plan.generated_at ?? ''));
+    const daysAgo = Number.isNaN(committedAt.getTime())
+      ? null
+      : Math.max(0, Math.floor((now.getTime() - committedAt.getTime()) / 86_400_000));
+    lines.push(
+      `Current plan v${plan.version} (${activities.length} commitments${
+        daysAgo != null ? `, committed ${daysAgo === 0 ? 'today' : `${daysAgo}d ago`}` : ''
+      }):`,
+    );
+    // The objective→commitment ladder (§6.3): each goal's commitments — with the stored why —
+    // under the goal they serve; foundational/system work last. This is the exact shape the
+    // coach walks in chat ("For your 10k: ... because ...").
+    const renderAct = (a: (typeof activities)[number]) =>
+      `    - [${a.kind}] ${a.title} — ${a.schedule?.recurrence ?? ''}${a.why ? ` · why: ${a.why}` : ''}`;
+    const linkedIds = new Set<string>();
+    for (const g of goals) {
+      const acts = activities.filter((a) => a.goal_id === g.goal_id);
+      if (!acts.length) continue;
+      lines.push(`  Toward "${g.title}":`);
+      for (const a of acts) {
+        lines.push(renderAct(a));
+        linkedIds.add(a.activity_id);
+      }
+    }
+    const foundations = activities.filter((a) => !linkedIds.has(a.activity_id));
+    if (foundations.length) {
+      lines.push('  Foundations (whole-plan):');
+      for (const a of foundations) lines.push(renderAct(a));
+    }
   }
 
   if (consistencyPct !== null) lines.push(`Consistency (last ${lastN}d): ${consistencyPct}% (${done}/${occ.length} showed up)`);

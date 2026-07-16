@@ -418,6 +418,18 @@ export function ReviewScreen({
                           onBlur={(e) => updateGoal(g.goal_id, { measure: { ...g.measure, unit: e.target.value } })}
                         />
                       </div>
+                      {/* Where they are TODAY on this metric — the intake fact the plan calibrates from.
+                          Capture fills it when stated in chat; this is the hand-fix when it wasn't. */}
+                      <div className="wiz-fields">
+                        <span className="wiz-now-label">starting from</span>
+                        <input
+                          className="wiz-in wiz-target"
+                          placeholder="where you are now"
+                          value={g.measure?.start != null ? String(g.measure.start) : ''}
+                          onChange={(e) => setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, measure: { ...x.measure, start: e.target.value } } : x)))}
+                          onBlur={(e) => updateGoal(g.goal_id, { measure: { ...g.measure, start: e.target.value } })}
+                        />
+                      </div>
                     </>
                   )}
                   {g.type === 'milestone' && (
@@ -472,6 +484,16 @@ export function ReviewScreen({
                             <li key={i}><b>{m.label}</b>{m.target_date ? ` · ${m.target_date}` : ''}</li>
                           ))}
                         </ul>
+                      )}
+                      {(a.intake?.length ?? 0) > 0 && (
+                        <div className="ga-intake">
+                          <div className="ga-intake-t">Worth talking through with your coach:</div>
+                          <ul>
+                            {a.intake!.map((q, i) => (
+                              <li key={i}>{q}</li>
+                            ))}
+                          </ul>
+                        </div>
                       )}
                       <div className="ga-actions">
                         <button className="ga-apply" onClick={() => applyAssessment(g, a)}>Use these</button>

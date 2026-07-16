@@ -208,6 +208,7 @@ export interface OccurrenceDetail {
   session?: OccurrenceSession | null;
   log?: OccurrenceLog | null;
   value?: Record<string, number>;
+  why?: string | null; // the commitment's stored rationale — "why this session exists"
 }
 
 /**

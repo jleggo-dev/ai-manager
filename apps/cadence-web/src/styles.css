@@ -118,6 +118,14 @@ svg { stroke-width: 1.9; } .stroke { stroke: currentColor; fill: none; }
 .prev-group { margin-bottom: 2px; }
 .prev-group-h { font-size: 11.5px; font-weight: 600; letter-spacing: .02em; color: var(--text-dim); margin: 2px 2px 8px; }
 .cs-why { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; margin-top: 3px; }
+/* Why-this-session line in the occurrence sheet (the commitment's stored rationale). */
+.sheet-why { font-size: 12px; color: var(--text-dim); line-height: 1.5; padding: 0 2px 10px; }
+/* Bespoke intake questions in the goal-assessment panel. */
+.ga-intake { margin-top: 8px; }
+.ga-intake-t { font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--text-dim); margin-bottom: 4px; }
+.ga-intake ul { margin: 0; padding-left: 16px; font-size: 12px; line-height: 1.6; }
+/* "starting from" label beside the measure.start input. */
+.wiz-now-label { font-size: 11.5px; color: var(--text-dim); align-self: center; white-space: nowrap; }
 .cs-state.ok { color: var(--forest); background: rgba(44, 85, 69, .12); } .cs-state.todo { color: var(--dawn-4); background: rgba(234, 150, 112, .18); }
 .lockbar { padding: 12px 16px 16px; }
 .lockbtn { width: 100%; background: linear-gradient(135deg, var(--dawn-2), var(--dawn-3) 60%, var(--dawn-4)); border-radius: 16px; padding: 15px; color: #fff; font-weight: 700; font-size: 14.5px; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 2px 4px rgba(120, 58, 40, .18), 0 12px 26px -6px rgba(194, 95, 69, .5); transition: box-shadow .18s ease, transform .18s ease; }

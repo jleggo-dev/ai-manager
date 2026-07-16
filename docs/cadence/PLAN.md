@@ -503,18 +503,21 @@ HealthKit (the deciding constraint, §7/§8). The path:
   foundational work sinks to a "Foundations" group); and because occurrences inherit the activity's
   `goal_id` via the existing join, logged accomplishments now AUTO-LINK to the right goal's progress
   count (closes the goal_events manual-only gap from the Progress module). Live-verified: a real
-  synth linked 2/3 activities to their goals, the weekly check-in stayed unlinked. REMAINING: the
-  deeper *conversational* coached moment — the coach talking the objective→commitment ladder through
-  in chat with per-commitment rationale — rather than only the grouped preview panel. (Blog #2.)
+  synth linked 2/3 activities to their goals, the weekly check-in stayed unlinked. The
+  conversational moment SHIPPED 2026-07-16: `why` persists at commit (migration 0012), the dossier
+  renders the full ladder (goal → commitments → why, with commit recency), and the persona walks
+  it in chat on a fresh thread after a recent commit — see the cut-3 batch entry. (Blog #2.)
 - **Dynamic intake — CUT 1 SHIPPED (2026-07-16), deterministic.** For a TARGET goal, the missing
   intake fact is almost always "where are you now?" — detectable without an LLM. `GoalMeasure.start`
   added; capture extracts it ONLY when the user states today's number (body weight excluded —
   baseline owns it); pure `services/intake.ts` `startingPointGaps` (unit-tested) feeds
   `onboardingReadiness` with per-goal "where they are today on X" need-lines + a one-at-a-time
   nudge, so the coach asks naturally in conversation — never a form. Live-verified on account-2
-  ("Read 100 books" flagged; weight goal correctly skipped). REMAINING (cut 2, LLM layer): bespoke
-  non-numeric intake via assess-goal ("have you raced before?", "what's your evening routine?"),
-  and a Review editor for measure.start when capture misses it.
+  ("Read 100 books" flagged; weight goal correctly skipped). CUT 2 SHIPPED (2026-07-16): bespoke
+  non-numeric intake via assess-goal (`intake[]`, ≤3 coach-voiced questions, rendered in the
+  assessment panel as "worth talking through with your coach") and the Review `measure.start`
+  editor ("starting from …") for when capture misses it. Intake is now: deterministic starting
+  points chased in chat + LLM texture questions on demand — never a fixed form.
 - **Daily loop (Phase 6).** `GET /today` timeline, occurrences, HealthKit auto-complete
   (capability seam), shoe-mileage, `weekly_readout`, one nudge channel.
 - **Proactive check-ins.** End-of-session/day "how did it go?"; user picks a cadence at
@@ -1337,6 +1340,26 @@ Driven by a live "Jeffrey" walkthrough that surfaced real gaps between capture a
   synthesis smoke (every activity carried a coach-voiced why; goal links intact); live readiness
   render on account-2 (books gap flagged, weight goal correctly skipped; account-1 empty state
   clean). On `feat/cadence`.
+
+- **Coaching depth cut 3 — the coach walks the ladder in chat (2026-07-16):** closes the
+  coaching-depth thread. **(1) `why` persists** (migration 0012 `activities.why`; insertActivities
+  writes it; commitActivities passes it) — the rationale survives commit instead of dying with
+  pending_plan. **(2) The dossier renders the ladder**: `Current plan v1 (3 commitments, committed
+  today): / Toward "goal": / - Easy Run … · why: …` with foundations last and commit recency, and
+  the persona (ongoing intent) opens a fresh post-commit thread by walking it and inviting
+  pushback ("does any of this feel off?"), answering every "why am I doing X" from the STORED why
+  lines — never improvising a contradicting rationale. **(3) Session sheet says why**: occurrence
+  detail carries `a.why` ("why this session exists" under the title). **(4) assess-goal intake**:
+  `intake[]` (≤3 short coach questions the data can't answer) in the assessment panel. **(5)
+  Review start editor**: "starting from …" input on target goals. **Verified:** tsc×2, vitest
+  38/38, migration applied (`activities.why exists ✓`), sync-jobs 13/0, persona synced (5585
+  chars); scratch-user end-to-end (never touching demo accounts): commit v1 → all 3 activities
+  carried why in the DB → dossier rendered the exact ladder above → occurrence detail returned the
+  why → cleaned up via resetUserData; assess-goal live returned verdict `stretch` + 3 milestones +
+  intake ("Have you trained with speed work before?", "Mornings or evenings work better for you?",
+  "Any old niggles that show up when you push pace?"). Not browser-walked (preview server down):
+  the start editor / intake panel / sheet-why renders — all tsc-clean simple binds over verified
+  API data. On `feat/cadence`.
 
 ### Final step (post-finalization) — the agentic retrieval loop: the coach answers its own questions
 

@@ -152,6 +152,7 @@ export async function commitActivities(
     kind: a.kind,
     category: a.category,
     goal_id: a.goal_id, // links the committed activity to its objective (insertActivities writes it)
+    why: a.why, // rationale persists at commit (0012) — the coach walks the ladder from it later
     schedule: { recurrence: a.recurrence, time_of_day: a.time_of_day, duration_min: a.duration_min },
     target: a.target,
     completion_source: a.completion_source,

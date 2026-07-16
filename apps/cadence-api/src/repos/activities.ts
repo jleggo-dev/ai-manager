@@ -15,11 +15,11 @@ export async function insertActivities(
   for (const a of activities) {
     const [row] = await sql<Activity[]>`
       insert into cadence.activities
-        (user_id, plan_id, goal_id, title, kind, category, schedule, target, completion_source, how_to)
+        (user_id, plan_id, goal_id, title, kind, category, schedule, target, completion_source, why, how_to)
       values (
         ${userId}, ${planId}, ${a.goal_id ?? null}, ${a.title ?? ''}, ${a.kind ?? 'user'}, ${a.category ?? null},
         ${json(a.schedule ?? {})}, ${a.target ? json(a.target) : null},
-        ${a.completion_source ?? 'self_report'}, ${a.how_to ?? null}
+        ${a.completion_source ?? 'self_report'}, ${a.why ?? null}, ${a.how_to ?? null}
       )
       returning *`;
     if (row) out.push(row);

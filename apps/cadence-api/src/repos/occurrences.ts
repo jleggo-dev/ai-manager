@@ -44,6 +44,7 @@ export interface OccurrenceWithActivity extends Occurrence {
   goal_id?: string | null; // the activity's goal link (often null today) — rides onto goal_events
   schedule: Activity['schedule'] | null;
   target: Activity['target'] | null;
+  why?: string | null; // the commitment's stored rationale (0012) — "why this session exists"
   how_to?: string | null;
 }
 
@@ -55,7 +56,7 @@ export async function getOccurrenceWithActivity(
   const [row] = await sql<OccurrenceWithActivity[]>`
     select o.occurrence_id, o.activity_id, to_char(o.date, 'YYYY-MM-DD') as date, o.status,
            o.value, o.provenance, o.session, o.log,
-           a.title, a.kind, a.category, a.goal_id, a.schedule, a.target, a.how_to
+           a.title, a.kind, a.category, a.goal_id, a.schedule, a.target, a.why, a.how_to
     from cadence.occurrences o
     join cadence.activities a on a.activity_id = o.activity_id
     where o.user_id = ${userId} and o.occurrence_id = ${occurrenceId}`;

@@ -132,6 +132,7 @@ export interface GoalAssessment {
   suggested_target?: { value: number; unit: string } | null; // if the target should be right-sized
   suggested_end?: string | null; // YYYY-MM-DD, if the deadline should shift
   milestones: Array<{ label: string; target_date?: string }>; // stepping-stones toward the goal
+  intake?: string[]; // ≤3 bespoke questions a coach would ask about THIS goal that the data can't answer ("have you raced before?")
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -205,6 +206,7 @@ export interface Activity {
   schedule: ActivitySchedule;
   target?: ActivityTarget;
   completion_source: 'self_report' | 'healthkit' | 'reply' | 'auto';
+  why?: string | null; // the coach's one-line rationale, persisted at commit (0012) — walks the ladder in chat + session sheet
   how_to?: string | null; // optional video ref (§6.7)
   disrupted_override?: string | null;
 }

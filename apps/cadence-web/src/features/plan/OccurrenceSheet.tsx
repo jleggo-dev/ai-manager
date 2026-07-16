@@ -129,6 +129,9 @@ export function OccurrenceSheet({
               <button className="sheet-x" onClick={onClose} aria-label="Close">×</button>
             </div>
 
+            {/* Why this session exists — the commitment's stored rationale (persisted at commit). */}
+            {detail.why && <div className="sheet-why">{detail.why}</div>}
+
             {detail.log && (
               <div className="log-chip">
                 <b>Logged:</b> {detail.log.summary}
