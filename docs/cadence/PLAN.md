@@ -496,12 +496,16 @@ HealthKit (the deciding constraint, §7/§8). The path:
   on the AI Admin "context/memory store" enhancement (F).
 
 **B. Coaching**
-- **Objective → commitment bridge (the missing coached step).** Distinguish high-level
-  **objectives** (outcomes, e.g. "sub-3 Spartan Beast in October") from daily/weekly
-  **commitments** (executable: runs, strength, mobility, weigh-ins) that ladder up. After
-  capture the coach must **review the objective and propose the commitment plan to agree to**
-  (objective → `synthesize_plan` → commitments) as a distinct coached moment, not silent
-  generation. OKR-shaped: objectives = goals; commitments = activities/occurrences. (Blog #2.)
+- **Objective → commitment bridge — PARTIAL (2026-07-15).** Objectives = goals, commitments =
+  activities/occurrences. SHIPPED: `synthesize_plan` now tags each activity with the goal it serves
+  (`goal_title` → deterministic `matchGoal` in `services/plan-match.ts` → `activities.goal_id`); the
+  "Set your rhythm" preview GROUPS commitments under their objective ("Toward Run a 10k", system/
+  foundational work sinks to a "Foundations" group); and because occurrences inherit the activity's
+  `goal_id` via the existing join, logged accomplishments now AUTO-LINK to the right goal's progress
+  count (closes the goal_events manual-only gap from the Progress module). Live-verified: a real
+  synth linked 2/3 activities to their goals, the weekly check-in stayed unlinked. REMAINING: the
+  deeper *conversational* coached moment — the coach talking the objective→commitment ladder through
+  in chat with per-commitment rationale — rather than only the grouped preview panel. (Blog #2.)
 - **Dynamic intake.** After assessing the stated objective, a Broker step decides *what metrics
   it needs* to tailor a plan → coach proposes a tailored questionnaire → user fills → Broker
   captures. Intake is a function of the goal, not a fixed form.
@@ -1295,6 +1299,21 @@ Driven by a live "Jeffrey" walkthrough that surfaced real gaps between capture a
   phrase / 200 right → stage 'new' / 401 unauthenticated; manage walk (Step 1 of 3, Done ✓ →
   adjust offer → declined) — zero console errors throughout. account-2 left rich for demo:
   committed plan, logged sessions, adapted Wednesday, 2/100 books, a weigh-in, history.
+
+- **Capture trust + coaching-depth cut 1 — "commitments know their objective" (2026-07-15):** two
+  batches after the deploy config. (1) **Capture trust:** fixed intra-run goal duplication with a
+  deterministic `selectCapturedGoals` backstop and extracted the trust-critical transforms into a
+  pure, unit-tested `services/capture-normalize.ts` (weight canonicalization + goal dedup) — see
+  section C. (2) **Objective→commitment linkage:** `synthesize_plan` now tags each activity with
+  `goal_title`; `services/plan-match.ts` `matchGoal` resolves it to a real `goal_id` (exact-norm,
+  then UNIQUE-containment, never ambiguous); `goal_id` flows synth→preview→commit→`activities` (the
+  column + insert already existed, just unpopulated). The "Set your rhythm" preview groups
+  commitments under the objective they serve ("Toward …", foundational/system work under
+  "Foundations"). Because occurrences already read `a.goal_id` via join and `session.ts` rides it
+  onto `goal_events`, progress auto-linking falls out for free — zero occurrence/session change.
+  **Verified:** tsc both apps; vitest 33/33 (+9 capture, +5 matchGoal); a live `synthesizeAndVet`
+  linked Easy Run→Run a 10k and Daily Reading→Read 100 books, weekly check-in left unlinked. Not yet
+  screenshot-walked: the grouped lock preview (needs a fresh onboarding synth). On branch `feat/cadence`.
 
 ### Final step (post-finalization) — the agentic retrieval loop: the coach answers its own questions
 

@@ -508,6 +508,8 @@ export interface PendingPlanActivity {
   duration_min?: number;
   target?: ActivityTarget;
   completion_source: 'self_report' | 'healthkit' | 'reply' | 'auto';
+  goal_id?: string; // the objective this commitment serves (null for foundational/system items)
+  goal_title?: string; // display only — the objective's title, for grouping the preview by goal
 }
 
 /** The FIRST-lock analog of PendingProposal: synthesize_plan + plan_vet already ran, the result

@@ -27,6 +27,27 @@ const ONBOARD_ORDER: Step[] = ['goals', 'you', 'gear', 'lock'];
 // committed; changes are offered to the Adjust flow on Done, never re-locked.
 const MANAGE_ORDER: Step[] = ['goals', 'you', 'gear'];
 const LABELS: Record<Step, string> = { goals: 'Goals', you: 'About you', gear: 'Tools', lock: 'Set your rhythm' };
+
+/**
+ * Group the proposed commitments under the objective each serves (the coached ladder made
+ * visible), preserving the order goals first appear. Unlinked/system items (a weekly check-in,
+ * whole-plan foundational work) fall into a "Foundations" group that sinks to the bottom.
+ */
+function groupByGoal(activities: PendingPlanActivity[]): { key: string; title: string; items: PendingPlanActivity[] }[] {
+  const groups: { key: string; title: string; items: PendingPlanActivity[] }[] = [];
+  const index = new Map<string, number>();
+  for (const a of activities) {
+    const key = a.goal_id ?? '__foundations__';
+    let gi = index.get(key);
+    if (gi == null) {
+      gi = groups.length;
+      index.set(key, gi);
+      groups.push({ key, title: a.goal_title ?? 'Foundations', items: [] });
+    }
+    groups[gi]!.items.push(a);
+  }
+  return groups.sort((x, y) => Number(x.key === '__foundations__') - Number(y.key === '__foundations__'));
+}
 const GOAL_AREAS: GoalArea[] = ['movement', 'nourishment', 'mind', 'practice'];
 const AREA_LABELS: Record<GoalArea, string> = {
   movement: 'Movement',
@@ -586,12 +607,17 @@ export function ReviewScreen({
             <div className="wiz-list">
               <div className="screen-title">Here's the rhythm I'd build</div>
               <div className="screen-sub">{preview.note || "Take a look — nothing's set until you say go."}</div>
-              {preview.activities.map((a, i) => (
-                <div className="confirm-sec" key={i}>
-                  <div className="cs-t">
-                    <b>{a.title}</b>
-                    <span>{[a.cadence, a.time_of_day, a.duration_min ? `${a.duration_min} min` : null].filter(Boolean).join(' · ') || '—'}</span>
-                  </div>
+              {groupByGoal(preview.activities).map((grp) => (
+                <div className="prev-group" key={grp.key}>
+                  <div className="prev-group-h">{grp.key === '__foundations__' ? grp.title : `Toward ${grp.title}`}</div>
+                  {grp.items.map((a, i) => (
+                    <div className="confirm-sec" key={i}>
+                      <div className="cs-t">
+                        <b>{a.title}</b>
+                        <span>{[a.cadence, a.time_of_day, a.duration_min ? `${a.duration_min} min` : null].filter(Boolean).join(' · ') || '—'}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>

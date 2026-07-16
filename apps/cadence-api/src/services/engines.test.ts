@@ -6,6 +6,7 @@ import { parseRecurrence, expandRecurrence, describeRecurrence } from './schedul
 import { wearStatus, applyRun } from './shoe-mileage.ts';
 import { detectTripwires, haversineKm } from './tripwires.ts';
 import { selectCapturedGoals, normalizeBaseline, normTitle } from './capture-normalize.ts';
+import { matchGoal } from './plan-match.ts';
 
 type GoalLite = Pick<Goal, 'area' | 'type' | 'status'>;
 
@@ -249,5 +250,39 @@ describe('capture normalizeBaseline (§6.1 — weight lands where the UI reads i
     const inj = normalizeBaseline({ injuries: [{ area: 'left knee', condition: 'patellar tendinopathy' }] })
       .constraints as Array<{ label: string; kind: string; plan_around: boolean }>;
     expect(inj[0]!).toMatchObject({ label: 'left knee — patellar tendinopathy', kind: 'physical', plan_around: true });
+  });
+});
+
+describe('plan matchGoal (§6.3 — commitments link to their objective)', () => {
+  const goals = [
+    { goal_id: 'g1', title: 'Run a 10k' },
+    { goal_id: 'g2', title: 'Read 100 books' },
+  ] as unknown as Goal[];
+
+  it('matches an exact (case/space-insensitive) title to its goal', () => {
+    expect(matchGoal('Run a 10k', goals)?.goal_id).toBe('g1');
+    expect(matchGoal('read 100 BOOKS', goals)?.goal_id).toBe('g2');
+  });
+
+  it('matches a lightly reworded title via UNIQUE containment', () => {
+    expect(matchGoal('Run a 10k this spring', goals)?.goal_id).toBe('g1');
+  });
+
+  it('returns the canonical goal title, not the model echo', () => {
+    expect(matchGoal('run a 10k', goals)?.title).toBe('Run a 10k');
+  });
+
+  it('returns undefined for empty, no-match, or foundational/system activities', () => {
+    expect(matchGoal(undefined, goals)).toBeUndefined();
+    expect(matchGoal('', goals)).toBeUndefined();
+    expect(matchGoal('Weekly check-in', goals)).toBeUndefined();
+  });
+
+  it('refuses an AMBIGUOUS containment match rather than mis-linking', () => {
+    const ambiguous = [
+      { goal_id: 'a', title: 'Read books' },
+      { goal_id: 'b', title: 'Read papers' },
+    ] as unknown as Goal[];
+    expect(matchGoal('Read', ambiguous)).toBeUndefined(); // "read" ⊂ both → unlinked, never guessed
   });
 });

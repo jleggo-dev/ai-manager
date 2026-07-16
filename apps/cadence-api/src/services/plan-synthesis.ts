@@ -5,6 +5,7 @@ import { insertActivities } from '../repos/activities.ts';
 import { deleteFuturePendingOccurrences } from '../repos/occurrences.ts';
 import { ensureHorizon } from './plan-horizon.ts';
 import { toRRule, describeRecurrence } from './scheduling.ts';
+import { matchGoal } from './plan-match.ts';
 import type { Activity, Goal, PendingPlanActivity, PlanVetResult } from '@cadence/shared';
 
 const COMPLETION_SOURCES = new Set(['self_report', 'healthkit', 'reply', 'auto']);
@@ -106,17 +107,27 @@ export async function synthesizeAndVet(
 
   // Display (cadence) and commit (recurrence) both need this, computed once so neither side
   // — the preview response now, commitActivities later — has to re-derive it.
-  const activities: PendingPlanActivity[] = normalized.map((a) => ({
-    title: a.title ?? '',
-    kind: a.kind === 'system' ? 'system' : 'user',
-    category: a.category,
-    cadence: describeRecurrence(a.schedule?.recurrence ?? ''),
-    recurrence: a.schedule?.recurrence ?? '',
-    time_of_day: a.schedule?.time_of_day,
-    duration_min: a.schedule?.duration_min,
-    target: a.target,
-    completion_source: a.completion_source ?? 'self_report',
-  }));
+  const activities: PendingPlanActivity[] = normalized.map((a) => {
+    // The Coach tags each activity with the confirmed goal it serves (goal_title); resolve it to a
+    // real goal_id so the commitment links to its objective (drives the grouped preview AND lets
+    // logged accomplishments auto-attach to the right goal's progress). Rides on the spread `a` as
+    // an untyped extra field from the model's JSON.
+    const stated = (a as Record<string, unknown>).goal_title;
+    const matched = matchGoal(typeof stated === 'string' ? stated : undefined, opts.goals);
+    return {
+      title: a.title ?? '',
+      kind: a.kind === 'system' ? 'system' : 'user',
+      category: a.category,
+      cadence: describeRecurrence(a.schedule?.recurrence ?? ''),
+      recurrence: a.schedule?.recurrence ?? '',
+      time_of_day: a.schedule?.time_of_day,
+      duration_min: a.schedule?.duration_min,
+      target: a.target,
+      completion_source: a.completion_source ?? 'self_report',
+      goal_id: matched?.goal_id,
+      goal_title: matched?.title,
+    };
+  });
 
   return { status: 'proposed', activities, note };
 }
@@ -136,6 +147,7 @@ export async function commitActivities(
     title: a.title,
     kind: a.kind,
     category: a.category,
+    goal_id: a.goal_id, // links the committed activity to its objective (insertActivities writes it)
     schedule: { recurrence: a.recurrence, time_of_day: a.time_of_day, duration_min: a.duration_min },
     target: a.target,
     completion_source: a.completion_source,

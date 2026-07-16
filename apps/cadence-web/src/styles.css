@@ -114,6 +114,9 @@ svg { stroke-width: 1.9; } .stroke { stroke: currentColor; fill: none; }
 .confirm-sec .cs-ic { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 9px; display: grid; place-items: center; background: var(--surface-2); }
 .confirm-sec .cs-t { flex: 1; min-width: 0; } .confirm-sec .cs-t b { font-size: 13.5px; font-weight: 600; display: block; } .confirm-sec .cs-t span { font-size: 11.5px; color: var(--text-dim); }
 .confirm-sec .cs-state { font-family: var(--mono); font-size: 9.5px; letter-spacing: .05em; padding: 3px 7px; border-radius: 5px; flex: 0 0 auto; }
+/* Objective→commitment grouping in the "Set your rhythm" preview: each goal's commitments ride under it. */
+.prev-group { margin-bottom: 2px; }
+.prev-group-h { font-size: 11.5px; font-weight: 600; letter-spacing: .02em; color: var(--text-dim); margin: 2px 2px 8px; }
 .cs-state.ok { color: var(--forest); background: rgba(44, 85, 69, .12); } .cs-state.todo { color: var(--dawn-4); background: rgba(234, 150, 112, .18); }
 .lockbar { padding: 12px 16px 16px; }
 .lockbtn { width: 100%; background: linear-gradient(135deg, var(--dawn-2), var(--dawn-3) 60%, var(--dawn-4)); border-radius: 16px; padding: 15px; color: #fff; font-weight: 700; font-size: 14.5px; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 2px 4px rgba(120, 58, 40, .18), 0 12px 26px -6px rgba(194, 95, 69, .5); transition: box-shadow .18s ease, transform .18s ease; }
