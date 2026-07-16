@@ -90,6 +90,7 @@ export type GoalStatus =
 export interface GoalMeasure {
   metric: string; // "distance" | "protein" | "no_snacking_after" | ...
   target: number | string;
+  start?: number | string; // where they are TODAY on this metric (intake: a coach's first question); body weight lives in baseline, never here
   unit?: string;
   direction?: 'increase' | 'decrease';
 }
@@ -510,6 +511,7 @@ export interface PendingPlanActivity {
   completion_source: 'self_report' | 'healthkit' | 'reply' | 'auto';
   goal_id?: string; // the objective this commitment serves (null for foundational/system items)
   goal_title?: string; // display only — the objective's title, for grouping the preview by goal
+  why?: string; // display only — the coach's one-line rationale for THIS commitment (the coached ladder, explained)
 }
 
 /** The FIRST-lock analog of PendingProposal: synthesize_plan + plan_vet already ran, the result

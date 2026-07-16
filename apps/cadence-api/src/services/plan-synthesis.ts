@@ -114,6 +114,9 @@ export async function synthesizeAndVet(
     // an untyped extra field from the model's JSON.
     const stated = (a as Record<string, unknown>).goal_title;
     const matched = matchGoal(typeof stated === 'string' ? stated : undefined, opts.goals);
+    // The coach's one-line rationale for THIS commitment — the objective→commitment ladder said
+    // out loud. Display-only (preview + pending_plan); capped so a rambling model can't bloat it.
+    const why = (a as Record<string, unknown>).why;
     return {
       title: a.title ?? '',
       kind: a.kind === 'system' ? 'system' : 'user',
@@ -126,6 +129,7 @@ export async function synthesizeAndVet(
       completion_source: a.completion_source ?? 'self_report',
       goal_id: matched?.goal_id,
       goal_title: matched?.title,
+      why: typeof why === 'string' && why.trim() ? why.trim().slice(0, 160) : undefined,
     };
   });
 

@@ -7,6 +7,7 @@ import { wearStatus, applyRun } from './shoe-mileage.ts';
 import { detectTripwires, haversineKm } from './tripwires.ts';
 import { selectCapturedGoals, normalizeBaseline, normTitle } from './capture-normalize.ts';
 import { matchGoal } from './plan-match.ts';
+import { startingPointGaps } from './intake.ts';
 
 type GoalLite = Pick<Goal, 'area' | 'type' | 'status'>;
 
@@ -284,5 +285,34 @@ describe('plan matchGoal (§6.3 — commitments link to their objective)', () =>
       { goal_id: 'b', title: 'Read papers' },
     ] as unknown as Goal[];
     expect(matchGoal('Read', ambiguous)).toBeUndefined(); // "read" ⊂ both → unlinked, never guessed
+  });
+});
+
+describe('intake startingPointGaps (dynamic intake — "where are you now?")', () => {
+  type G = Parameters<typeof startingPointGaps>[0][number];
+  const g = (over: Partial<G>): G =>
+    ({ title: 'Run a faster 5k', type: 'target', measure: { metric: '5k time', target: 30, unit: 'min' }, ...over }) as G;
+
+  it('flags a target goal with a target but no start', () => {
+    expect(startingPointGaps([g({})])).toEqual([{ title: 'Run a faster 5k', metric: '5k time' }]);
+  });
+
+  it('clears once a start is known (intake question answered)', () => {
+    expect(startingPointGaps([g({ measure: { metric: '5k time', target: 30, start: 35, unit: 'min' } })])).toEqual([]);
+  });
+
+  it('skips milestone/recurring goals and goals with no numeric target', () => {
+    expect(startingPointGaps([g({ type: 'milestone' }), g({ type: 'recurring' })])).toEqual([]);
+    expect(startingPointGaps([g({ measure: { metric: 'pages', target: '' } as G['measure'] })])).toEqual([]);
+  });
+
+  it('skips body-weight metrics — baseline owns the current weight', () => {
+    expect(startingPointGaps([g({ measure: { metric: 'body weight', target: 175, unit: 'lbs' } })])).toEqual([]);
+    expect(startingPointGaps([g({ measure: { metric: 'weight', target: 80, unit: 'kg' } })])).toEqual([]);
+  });
+
+  it('caps at 3 so the readiness line never floods', () => {
+    const many = ['a', 'b', 'c', 'd', 'e'].map((t) => g({ title: t }));
+    expect(startingPointGaps(many)).toHaveLength(3);
   });
 });

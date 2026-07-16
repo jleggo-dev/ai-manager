@@ -506,9 +506,15 @@ HealthKit (the deciding constraint, §7/§8). The path:
   synth linked 2/3 activities to their goals, the weekly check-in stayed unlinked. REMAINING: the
   deeper *conversational* coached moment — the coach talking the objective→commitment ladder through
   in chat with per-commitment rationale — rather than only the grouped preview panel. (Blog #2.)
-- **Dynamic intake.** After assessing the stated objective, a Broker step decides *what metrics
-  it needs* to tailor a plan → coach proposes a tailored questionnaire → user fills → Broker
-  captures. Intake is a function of the goal, not a fixed form.
+- **Dynamic intake — CUT 1 SHIPPED (2026-07-16), deterministic.** For a TARGET goal, the missing
+  intake fact is almost always "where are you now?" — detectable without an LLM. `GoalMeasure.start`
+  added; capture extracts it ONLY when the user states today's number (body weight excluded —
+  baseline owns it); pure `services/intake.ts` `startingPointGaps` (unit-tested) feeds
+  `onboardingReadiness` with per-goal "where they are today on X" need-lines + a one-at-a-time
+  nudge, so the coach asks naturally in conversation — never a form. Live-verified on account-2
+  ("Read 100 books" flagged; weight goal correctly skipped). REMAINING (cut 2, LLM layer): bespoke
+  non-numeric intake via assess-goal ("have you raced before?", "what's your evening routine?"),
+  and a Review editor for measure.start when capture misses it.
 - **Daily loop (Phase 6).** `GET /today` timeline, occurrences, HealthKit auto-complete
   (capability seam), shoe-mileage, `weekly_readout`, one nudge channel.
 - **Proactive check-ins.** End-of-session/day "how did it go?"; user picks a cadence at
@@ -1314,6 +1320,23 @@ Driven by a live "Jeffrey" walkthrough that surfaced real gaps between capture a
   **Verified:** tsc both apps; vitest 33/33 (+9 capture, +5 matchGoal); a live `synthesizeAndVet`
   linked Easy Run→Run a 10k and Daily Reading→Read 100 books, weekly check-in left unlinked. Not yet
   screenshot-walked: the grouped lock preview (needs a fresh onboarding synth). On branch `feat/cadence`.
+
+- **Coaching depth cut 2 — "the coach asks where you are, and says why" (2026-07-16):** two
+  halves of the same coached instinct. **(1) Per-commitment rationale:** `synthesize_plan` now
+  emits a `why` per activity — ONE warm line (≤20 words) tying the commitment to its goal and
+  their starting point — capped app-side at 160 chars, carried on `PendingPlanActivity` (display-
+  only through preview/pending_plan, no DB column), rendered under each commitment in the grouped
+  "Set your rhythm" preview (`.cs-why`). **(2) Deterministic dynamic intake:** `GoalMeasure.start`
+  ("where they are today"); capture-extract extracts it only from a STATED current number (body
+  weight explicitly excluded — baseline owns it); pure `services/intake.ts` `startingPointGaps`
+  (target + numeric target + no start + non-weight metric, cap 3) feeds `onboardingReadiness` as
+  "where they are today on \"X\"" need-lines + a never-as-a-form nudge; synthesize_plan calibrates
+  week one FROM start toward target instead of guessing (no start → week one stays discovery).
+  **Verified:** tsc both apps; vitest 38/38 (+5 intake); config JSON validated; sync-jobs 13/0;
+  live capture smoke ("about 35 minutes right now" → START=35; "read 3 so far" → START=3); live
+  synthesis smoke (every activity carried a coach-voiced why; goal links intact); live readiness
+  render on account-2 (books gap flagged, weight goal correctly skipped; account-1 empty state
+  clean). On `feat/cadence`.
 
 ### Final step (post-finalization) — the agentic retrieval loop: the coach answers its own questions
 

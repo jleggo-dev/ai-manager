@@ -2,6 +2,7 @@ import { getUser } from '../repos/users.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
 import { injectTurnContext } from './turn-context.ts';
+import { startingPointGaps } from './intake.ts';
 
 /**
  * Coach context assembly (spec §4.1 role 3, §4.3) — INTENT-AWARE.
@@ -57,12 +58,20 @@ export async function onboardingReadiness(userId: string): Promise<string> {
   (equipment.length ? have : need).push(`tools/equipment (${equipment.length})`);
   (user?.home_location ? have : need).push('home location + timezone');
 
+  // Goal-specific intake (deterministic): a target goal without a starting point is an open
+  // "where are you now?" — the question a real coach asks before prescribing anything.
+  const gaps = startingPointGaps(goals);
+  for (const gap of gaps) need.push(`where they are today on "${gap.title}" (their current ${gap.metric})`);
+
   return [
     `Captured so far: ${have.join(', ') || 'nothing yet'}.`,
     `Still to gather before planning: ${need.join(', ') || 'nothing — ready to review and set their rhythm'}.`,
     bodyRelevant
       ? 'This goal is body-related, so age, height, and current weight matter for a safe, realistic plan — gather the missing ones (one at a time) before pointing them to Review.'
       : 'This goal does not need body metrics — do not ask for weight or height unless the user brings them up.',
+    ...(gaps.length
+      ? ['For each numeric goal, a coach’s first question is where they are today — ask for the missing starting point in their own words (one at a time, never as a form).']
+      : []),
   ].join('\n');
 }
 

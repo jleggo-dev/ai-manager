@@ -615,6 +615,7 @@ export function ReviewScreen({
                       <div className="cs-t">
                         <b>{a.title}</b>
                         <span>{[a.cadence, a.time_of_day, a.duration_min ? `${a.duration_min} min` : null].filter(Boolean).join(' · ') || '—'}</span>
+                        {a.why && <div className="cs-why">{a.why}</div>}
                       </div>
                     </div>
                   ))}
