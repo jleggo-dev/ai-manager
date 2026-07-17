@@ -8,6 +8,7 @@ import { detectTripwires, haversineKm } from './tripwires.ts';
 import { selectCapturedGoals, normalizeBaseline, normTitle } from './capture-normalize.ts';
 import { matchGoal } from './plan-match.ts';
 import { startingPointGaps } from './intake.ts';
+import { summarizeNutrition, renderNutritionLine } from './nutrition-summarize.ts';
 
 type GoalLite = Pick<Goal, 'area' | 'type' | 'status'>;
 
@@ -314,5 +315,55 @@ describe('intake startingPointGaps (dynamic intake — "where are you now?")', (
   it('caps at 3 so the readiness line never floods', () => {
     const many = ['a', 'b', 'c', 'd', 'e'].map((t) => g({ title: t }));
     expect(startingPointGaps(many)).toHaveLength(3);
+  });
+});
+
+describe('nutrition summarize (Observe phase — §5.6 module arc)', () => {
+  type Row = Parameters<typeof summarizeNutrition>[0][number];
+  const row = (over: Partial<Row>): Row =>
+    ({ date: '2026-07-16', meal: 'breakfast', items: [{ name: 'eggs' }], flags: {}, ...over }) as Row;
+
+  it('counts distinct days (the phase signal), meals, and meals/day', () => {
+    const s = summarizeNutrition(
+      [
+        row({ date: '2026-07-14' }),
+        row({ date: '2026-07-14', meal: 'dinner', items: [{ name: 'salmon' }] }),
+        row({ date: '2026-07-15', items: [{ name: 'eggs' }, { name: 'toast' }] }),
+      ],
+      7,
+    );
+    expect(s.days_logged).toBe(2);
+    expect(s.meals_logged).toBe(3);
+    expect(s.meals_per_logged_day).toBe(1.5);
+  });
+
+  it('ranks top items case-insensitively and caps at 5', () => {
+    const rows = [
+      row({ items: [{ name: 'Eggs' }, { name: 'coffee' }] }),
+      row({ date: '2026-07-15', items: [{ name: 'eggs' }, { name: 'a' }, { name: 'b' }, { name: 'c' }, { name: 'd' }] }),
+    ];
+    const s = summarizeNutrition(rows, 7);
+    expect(s.top_items[0]).toEqual({ name: 'eggs', count: 2 });
+    expect(s.top_items).toHaveLength(5);
+  });
+
+  it('counts alcohol/caffeine by DAY, not by mention', () => {
+    const s = summarizeNutrition(
+      [
+        row({ date: '2026-07-14', flags: { alcohol: true } }),
+        row({ date: '2026-07-14', meal: 'drink', flags: { alcohol: true, caffeine: true } }),
+        row({ date: '2026-07-15', flags: {} }),
+      ],
+      7,
+    );
+    expect(s.alcohol_days).toBe(1);
+    expect(s.caffeine_days).toBe(1);
+  });
+
+  it('renders one compact line, and nothing when empty', () => {
+    expect(renderNutritionLine(summarizeNutrition([], 7))).toBe('');
+    const line = renderNutritionLine(summarizeNutrition([row({ flags: { alcohol: true } })], 7));
+    expect(line).toContain('1 of last 7 days logged');
+    expect(line).toContain('alcohol on 1 day');
   });
 });

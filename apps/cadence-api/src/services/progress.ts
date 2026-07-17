@@ -17,6 +17,8 @@ import { getUser } from '../repos/users.ts';
 import { listLoggedForProgress } from '../repos/occurrences.ts';
 import { countGoalCompletions, listGoalEvents } from '../repos/goal-events.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
+import { listNutritionLogs } from '../repos/nutrition.ts';
+import { summarizeNutrition } from './nutrition-summarize.ts';
 import { rollingConsistency } from './metrics.ts';
 
 const WINDOW_DAYS = 90;
@@ -158,6 +160,14 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
       cards.push({ kind: 'consistency', title: g.title, kept, window });
     }
   }
+
+  // Observe-phase food card — appears only when meals are actually logged (stable chrome,
+  // variable content). days_logged doubles as the nutrition module's phase signal.
+  const foodDays = summarizeNutrition(
+    await listNutritionLogs(userId, iso(Date.now() - 6 * 86_400_000), iso(Date.now())),
+    7,
+  ).days_logged;
+  if (foodDays > 0) cards.push({ kind: 'consistency', title: 'Food log', kept: foodDays, window: 7 });
 
   /* Activity trends — only titles with ≥2 honest points (sparse-but-honest rule) */
   const trends: ProgressTrend[] = [];

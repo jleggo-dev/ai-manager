@@ -262,6 +262,36 @@ export async function addGoalEvent(goalId: string, label: string): Promise<void>
   });
 }
 
+/* ── Nutrition (Observe phase) ─────────────────────────────────── */
+export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | 'other';
+export interface Meal {
+  log_id: string;
+  date: string;
+  meal: MealKind;
+  items: { name: string; qty?: number; unit?: string }[];
+  raw_text?: string | null;
+  flags?: { alcohol?: boolean; caffeine?: boolean };
+}
+
+/** Record one meal in the user's words — parse-meal structures it; nothing is ever judged. */
+export async function logMeal(text: string, meal?: MealKind): Promise<Meal> {
+  const res = await fetch(`${BASE}/nutrition/meals`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ text, ...(meal ? { meal } : {}) }),
+  });
+  if (!res.ok) throw Object.assign(new Error(`meal log failed: ${res.status}`), { status: res.status });
+  return res.json();
+}
+
+/** Recent meals, newest first (the food-log sheet's list). */
+export async function getRecentMeals(days = 7): Promise<Meal[]> {
+  const res = await fetch(`${BASE}/nutrition/recent?days=${days}`, { headers: headers() });
+  if (!res.ok) return [];
+  const body = (await res.json()) as { meals?: Meal[] };
+  return body.meals ?? [];
+}
+
 /** Weigh-in capture (deterministic, no LLM) — stores the series point + updates baseline. */
 export async function recordWeighIn(id: string, weight: number, unit: 'kg' | 'lb'): Promise<{ weight_kg: number }> {
   const res = await fetch(`${BASE}/plan/occurrences/${id}/weigh-in`, {

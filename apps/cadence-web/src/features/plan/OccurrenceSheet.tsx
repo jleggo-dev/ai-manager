@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SessionItem } from '@cadence/shared';
-import { getOccurrenceDetail, logOccurrence, recordWeighIn, type OccurrenceDetail } from '../../lib/api.ts';
+import { getOccurrenceDetail, logOccurrence, recordWeighIn, logMeal, getRecentMeals, type OccurrenceDetail, type Meal, type MealKind } from '../../lib/api.ts';
 import { Orb } from '../../components/Orb.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
 
@@ -26,6 +26,15 @@ function qty(i: SessionItem): string {
 
 const ytSearch = (q: string) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q.replace(/\s+/g, ' ').trim())}`;
 
+const isFoodRow = (d: OccurrenceDetail | null): boolean =>
+  !!d && d.kind === 'system' && /food|meal|nutrition/i.test(d.title);
+
+/** Sensible default meal for right now — the user can always switch it. */
+const mealForNow = (): MealKind => {
+  const h = new Date().getHours();
+  return h < 11 ? 'breakfast' : h < 15 ? 'lunch' : h < 17 ? 'snack' : h < 21 ? 'dinner' : 'snack';
+};
+
 export function OccurrenceSheet({
   occurrenceId,
   onClose,
@@ -42,6 +51,28 @@ export function OccurrenceSheet({
   const [logErr, setLogErr] = useState('');
   const [weight, setWeight] = useState('');
   const [weightUnit, setWeightUnit] = useState<'lb' | 'kg'>('lb');
+  const [mealText, setMealText] = useState('');
+  const [mealKind, setMealKind] = useState<MealKind>(mealForNow());
+  const [mealBusy, setMealBusy] = useState(false);
+  const [meals, setMeals] = useState<Meal[]>([]);
+
+  async function submitMeal() {
+    const text = mealText.trim();
+    if (!text || mealBusy || !detail) return;
+    setMealBusy(true);
+    setLogErr('');
+    try {
+      const m = await logMeal(text, mealKind);
+      setMeals([m, ...meals]);
+      setMealText('');
+      if (detail.status === 'pending') setDetail({ ...detail, status: 'done' }); // server ticked the row
+      onLogged?.();
+    } catch {
+      setLogErr("That didn't save — give it another try.");
+    } finally {
+      setMealBusy(false);
+    }
+  }
 
   async function submitWeighIn() {
     const w = parseFloat(weight);
@@ -98,6 +129,21 @@ export function OccurrenceSheet({
       alive = false;
     };
   }, [occurrenceId]);
+
+  // Food rows: load the day's meals so the sheet shows what's already been logged.
+  useEffect(() => {
+    if (!isFoodRow(detail)) return;
+    let alive = true;
+    getRecentMeals(7)
+      .then((ms) => {
+        if (alive) setMeals(ms.filter((m) => m.date === detail!.date));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.occurrence_id]);
 
   const session = detail?.session;
 
@@ -186,6 +232,46 @@ export function OccurrenceSheet({
                     </button>
                   </div>
                 )}
+              </div>
+            ) : isFoodRow(detail) ? (
+              /* Observe phase: meals accumulate all day (open even when already ticked done). */
+              <div className="logbox" style={{ borderTop: 'none', paddingTop: 0 }}>
+                <div className="logbox-label">What did you eat? Your words are enough.</div>
+                {meals.length > 0 && (
+                  <div className="meal-list">
+                    {meals.map((m) => (
+                      <div className="meal-item" key={m.log_id}>
+                        <span className="meal-kind">{m.meal}</span>
+                        <span className="meal-what">{m.items.map((i) => i.name).join(', ') || m.raw_text || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="steer-row">
+                  <textarea
+                    className="logbox-in"
+                    value={mealText}
+                    onChange={(e) => setMealText(e.target.value)}
+                    placeholder={'e.g. "two eggs, sourdough toast and a coffee"'}
+                    rows={2}
+                    disabled={mealBusy}
+                  />
+                  <MicButton value={mealText} onChange={setMealText} disabled={mealBusy} />
+                </div>
+                <div className="weigh-row">
+                  <select className="wiz-sel" value={mealKind} onChange={(e) => setMealKind(e.target.value as MealKind)} disabled={mealBusy}>
+                    <option value="breakfast">breakfast</option>
+                    <option value="lunch">lunch</option>
+                    <option value="dinner">dinner</option>
+                    <option value="snack">snack</option>
+                    <option value="drink">drink</option>
+                    <option value="other">other</option>
+                  </select>
+                  <button className="logbox-btn meal-btn" onClick={submitMeal} disabled={mealBusy || !mealText.trim()}>
+                    {mealBusy ? 'Writing it down…' : 'Log this meal'}
+                  </button>
+                </div>
+                {logErr && <div className="auth-error">{logErr}</div>}
               </div>
             ) : detail.kind === 'system' && /weigh/i.test(detail.title) && detail.status === 'pending' ? (
               <div className="logbox" style={{ borderTop: 'none', paddingTop: 0 }}>

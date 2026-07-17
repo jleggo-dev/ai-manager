@@ -4,6 +4,8 @@ import { getUser, setPendingProposal, setPendingPlan } from '../repos/users.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
+import { listNutritionLogs } from '../repos/nutrition.ts';
+import { summarizeNutrition } from './nutrition-summarize.ts';
 import { rollingConsistency } from './metrics.ts';
 import { describeRecurrence } from './scheduling.ts';
 import { synthesizeVetCommit, synthesizeAndVet, commitActivities, type CommitResult, type PlanFlowResult } from './plan-synthesis.ts';
@@ -15,9 +17,14 @@ const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10)
 async function recentActivity(userId: string, days = 14) {
   const now = new Date();
   const base = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const occ = await listOccurrences(userId, iso(new Date(base - (days - 1) * 86_400_000)), iso(new Date(base)));
+  const from = iso(new Date(base - (days - 1) * 86_400_000));
+  const to = iso(new Date(base));
+  const occ = await listOccurrences(userId, from, to);
   const count = (s: string) => occ.filter((o) => o.status === s).length;
   const { kept, window } = rollingConsistency(occ as never, now, 7);
+  // Observe-phase food signal: days_logged is the nutrition module's phase gate — synthesis
+  // holds off on eating changes below ~7 logged days, then introduces ONE at a time.
+  const nutrition = summarizeNutrition(await listNutritionLogs(userId, from, to), days);
   return {
     window_days: days,
     consistency_last_7_days: `${kept} of ${window} days`,
@@ -25,6 +32,9 @@ async function recentActivity(userId: string, days = 14) {
     skipped: count('skipped'),
     missed: count('missed'),
     scheduled: occ.length,
+    ...(nutrition.meals_logged
+      ? { food_log: { days_logged: nutrition.days_logged, meals_per_logged_day: nutrition.meals_per_logged_day, top_items: nutrition.top_items, alcohol_days: nutrition.alcohol_days } }
+      : {}),
   };
 }
 

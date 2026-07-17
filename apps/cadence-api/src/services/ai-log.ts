@@ -8,7 +8,8 @@ export type AiLogKind =
   | 'context_select'
   | 'assess_goal'
   | 'prescribe_session'
-  | 'parse_session_log';
+  | 'parse_session_log'
+  | 'parse_meal';
 
 /**
  * Durable log of a behind-the-scenes AI call (see migration 0004). Best-effort: a logging

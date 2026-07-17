@@ -4,6 +4,7 @@ import coachRoutes from './routes/coach.ts';
 import planRoutes from './routes/plan.ts';
 import reviewRoutes from './routes/review.ts';
 import progressRoutes from './routes/progress.ts';
+import nutritionRoutes from './routes/nutrition.ts';
 import meRoutes from './routes/me.ts';
 import devRoutes from './routes/dev.ts';
 
@@ -16,6 +17,7 @@ export function createApp() {
   app.use('/plan', planRoutes);
   app.use('/review', reviewRoutes);
   app.use('/progress', progressRoutes);
+  app.use('/nutrition', nutritionRoutes);
   app.use('/me', meRoutes);
   app.use('/dev', devRoutes);
 

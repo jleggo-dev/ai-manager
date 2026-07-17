@@ -356,17 +356,32 @@ export interface Macros {
   fat_g?: number;
 }
 
+export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | 'other';
+
 export interface NutritionLog {
   log_id: string;
   date: string;
-  meal: 'breakfast' | 'lunch' | 'dinner' | 'snack';
-  items: { name: string }[];
+  meal: MealKind;
+  items: { name: string; qty?: number; unit?: string }[];
   macros: Macros;
   input_method: 'photo' | 'voice' | 'text' | 'manual';
   ai_confidence?: number;
   /** Below `confirm_below_confidence` the value is provisional and excluded from totals (§B2). */
   provisional?: boolean;
   photo_ref?: string;
+  raw_text?: string | null; // the user's own words — always kept (0013)
+  flags?: { alcohol?: boolean; caffeine?: boolean }; // ONLY from explicit mentions, never inferred (0013)
+}
+
+/** Deterministic Observe-phase read over nutrition_logs — the coach's food-log summary. */
+export interface NutritionSummary {
+  window_days: number;
+  days_logged: number; // distinct dates — the module arc's PHASE SIGNAL (~7 → baseline ready)
+  meals_logged: number;
+  meals_per_logged_day: number; // rounded 0.1
+  top_items: { name: string; count: number }[]; // ≤5
+  alcohol_days: number;
+  caffeine_days: number;
 }
 
 export interface MacroTargets {

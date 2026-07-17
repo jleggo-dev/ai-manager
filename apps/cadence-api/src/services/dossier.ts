@@ -4,6 +4,8 @@ import { listEquipment } from '../repos/equipment.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
+import { listNutritionLogs } from '../repos/nutrition.ts';
+import { summarizeNutrition, renderNutritionLine } from './nutrition-summarize.ts';
 
 export interface DossierInput {
   userId: string;
@@ -104,6 +106,11 @@ export async function compileDossier(input: DossierInput): Promise<string> {
   }
 
   if (consistencyPct !== null) lines.push(`Consistency (last ${lastN}d): ${consistencyPct}% (${done}/${occ.length} showed up)`);
+
+  // Observe-phase food log (pure repo+summarize path — no LLM in the dossier graph). One line,
+  // only when something is logged; days_logged doubles as the module's phase signal for the coach.
+  const foodLine = renderNutritionLine(summarizeNutrition(await listNutritionLogs(userId, from, to), lastN));
+  if (foodLine) lines.push(foodLine);
 
   return lines.join('\n');
 }

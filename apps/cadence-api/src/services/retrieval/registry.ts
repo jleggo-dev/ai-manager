@@ -12,8 +12,10 @@ import { listEquipment } from '../../repos/equipment.ts';
 import { getActivePlan } from '../../repos/plans.ts';
 import { listActivities } from '../../repos/activities.ts';
 import { listOccurrences, listRecentLogged } from '../../repos/occurrences.ts';
+import { listNutritionLogs } from '../../repos/nutrition.ts';
 import { buildProgress } from '../progress.ts';
-import type { OccurrenceLog, ProgressCard } from '@cadence/shared';
+import { summarizeNutrition, renderNutritionLine } from '../nutrition-summarize.ts';
+import type { NutritionLog, NutritionSummary, OccurrenceLog, ProgressCard } from '@cadence/shared';
 
 export interface RetrievalFunction {
   name: string;
@@ -241,6 +243,30 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
     },
     rows(r) {
       return r ? 1 : 0;
+    },
+  },
+
+  get_food_log: {
+    name: 'get_food_log',
+    description:
+      'Recent meals (last 7 days) with the deterministic food-log summary (days logged, meals/day, common items, alcohol days). Use for "how has my eating been?" or any food/nutrition question.',
+    domains: ['nutrition'],
+    async run(userId) {
+      const { from, to } = isoRange(7);
+      const meals = await listNutritionLogs(userId, from, to);
+      return { meals, summary: summarizeNutrition(meals, 7) };
+    },
+    render(r) {
+      const { meals, summary } = r as { meals: NutritionLog[]; summary: NutritionSummary };
+      if (!meals.length) return 'Food log: nothing logged in the last 7 days.';
+      const recent = meals
+        .slice(0, 10)
+        .map((m) => `- ${m.date} ${m.meal}: ${m.items.map((i) => i.name).join(', ') || (m.raw_text ?? '').slice(0, 60)}`)
+        .join('\n');
+      return [renderNutritionLine(summary), recent].filter(Boolean).join('\n');
+    },
+    rows(r) {
+      return (r as { meals: unknown[] }).meals.length;
     },
   },
 };

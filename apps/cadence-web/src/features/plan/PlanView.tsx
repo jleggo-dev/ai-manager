@@ -93,8 +93,8 @@ export function PlanView() {
   const Item = ({ o }: { o: PlanOccurrence }) => {
     const done = o.status === 'done';
     const skipped = o.status === 'skipped';
-    // user rows open the session sheet; weigh-in system rows open the weigh-in capture.
-    const openable = o.kind === 'user' || /weigh/i.test(o.title);
+    // user rows open the session sheet; weigh-in / food-log system rows open their capture sheets.
+    const openable = o.kind === 'user' || /weigh|food|meal|nutrition/i.test(o.title);
     return (
       <div className={`occ${done ? ' occ-done' : ''}${skipped ? ' occ-skip' : ''}`}>
         <button className="occ-check" onClick={() => set(o, done ? 'pending' : 'done')} aria-label={done ? 'Mark not done' : 'Mark done'}>

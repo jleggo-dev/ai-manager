@@ -36,6 +36,21 @@ export async function listOccurrences(
     where user_id = ${userId} and date >= ${fromDate} and date <= ${toDate}`;
 }
 
+/**
+ * Today's pending "Food log" system row, if any — the deterministic anchor the nutrition module
+ * ticks when the first meal of the day is logged (mirrors the weigh-in title-test pattern).
+ */
+export async function findPendingFoodLogOccurrence(userId: string, date: string): Promise<string | null> {
+  const [row] = await sql<{ occurrence_id: string }[]>`
+    select o.occurrence_id
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and o.date = ${date} and o.status = 'pending'
+      and a.kind = 'system' and a.title ~* 'food|meal|nutrition'
+    limit 1`;
+  return row?.occurrence_id ?? null;
+}
+
 /** An occurrence joined with its activity — the payload behind the session detail sheet. */
 export interface OccurrenceWithActivity extends Occurrence {
   title: string;

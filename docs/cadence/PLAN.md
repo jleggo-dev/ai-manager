@@ -524,8 +524,11 @@ HealthKit (the deciding constraint, §7/§8). The path:
   onboarding; a `capture_feedback` Broker job saves per-session/day/week feedback; a flaring
   injury triggers a plan adjustment. Needs a `check_ins` table + `users.check_in` cadence
   (migration `0004`).
-- **Nutrition topic slice.** Per-topic continuity (resume the nutrition thread), a nutrition
-  `compose_context` slice (needs a `nutrition_logs` table), `parse_meal`.
+- **Nutrition topic slice — OBSERVE PHASE SHIPPED (2026-07-17).** `parse-meal` job +
+  `nutrition_logs` writes (raw_text always kept) + deterministic summary feeding dossier,
+  `get_food_log` retrieval, replan `recent_activity.food_log`, and the Food-log capture sheet;
+  synthesis holds eating changes until 7+ logged days, then ONE at a time. See the dated batch
+  entry. REMAINING: per-topic thread continuity; `users.macro_targets` day view; photo input.
 - **Adaptation (Phase 7).** Tripwires → `situation_assess` → disrupted mode (additive temp
   plan) / check-in / replan (`cadence-replan` workflow exists).
 
@@ -1360,6 +1363,32 @@ Driven by a live "Jeffrey" walkthrough that surfaced real gaps between capture a
   "Any old niggles that show up when you push pace?"). Not browser-walked (preview server down):
   the start editor / intake panel / sheet-why renders — all tsc-clean simple binds over verified
   API data. On `feat/cadence`.
+
+- **Nutrition module — the Observe phase (2026-07-17):** the module arc's second instantiation
+  (design 2026-07-12: "week 1 = SILENT OBSERVATION"), honoring the original ask — observe the food
+  log before suggesting changes. **Storage:** `nutrition_logs` existed since 0001 (0002 already
+  repointed its FK — checked live this time instead of re-hitting the goal_events trap); migration
+  0013 adds `raw_text` (the user's words, ALWAYS kept — a parse failure still stores the meal),
+  `flags` jsonb, and widens `meal` to drink/other. **parse-meal** (Broker, 14th job): one meal in
+  their words → items (qty/unit ONLY if stated — never estimates grams/calories/macros), flags
+  alcohol/caffeine ONLY from explicit mentions, one-line summary; meal kind from the hint or
+  honest `other`, never forced. **Service** `logMeal`: parse best-effort → insert → best-effort
+  tick of today's pending Food-log system row (`findPendingFoodLogOccurrence`, the weigh-in
+  title-test pattern); `parse_meal` ai_log kind. **Deterministic read** (pure, unit-tested
+  `nutrition-summarize.ts`): days_logged (THE PHASE SIGNAL), meals/day, top items, alcohol/
+  caffeine DAYS (not mentions). **Coach visibility:** dossier line, `get_food_log` retrieval fn,
+  replan `recent_activity.food_log`, and the synthesis FOOD LOG rule — eating-focused goal → daily
+  Food log (kind=system); <7 logged days → NO eating changes, note says "learning how you eat";
+  7+ → exactly ONE gradual change grounded in observed items, stabilize before the next.
+  **UI:** Food-log rows open a capture sheet (words + mic + meal-kind select defaulting by time of
+  day + the day's meals list; stays open after done — meals accumulate); Progress gains a
+  "Food log — N of 7 days" card only when logs exist. **Verified:** tsc×2; vitest 42/42 (+4);
+  migration applied (raw_text ✓, drink/other ✓); sync-jobs 1 created + 13 updated / 0 errors;
+  scratch-user live smoke — "two eggs, sourdough toast and a black coffee" → itemized + caffeine
+  flag; "grilled salmon… couple of IPAs" (dinner hint) → alcohol flag; summary/retrieval/dossier
+  all rendered the observe line; scratch reset. Not live-exercised: the occurrence auto-tick (needs
+  a committed plan with a Food-log row) and the capture-sheet browser walk (preview server down) —
+  both thin binds over verified paths. On `feat/cadence`.
 
 ### Final step (post-finalization) — the agentic retrieval loop: the coach answers its own questions
 
