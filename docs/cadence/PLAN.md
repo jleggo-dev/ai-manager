@@ -1573,7 +1573,7 @@ Explicitly out: Steps (HealthKit later), social feed, ads (obviously).
 
 | Phase | Scope | Size | Verify |
 |---|---|---|---|
-| **N1** | Engine vision E1–E5 (AI Admin repo) | M | backend unit tests; live words-in-image smoke; catalog vision check |
+| **N1** ✅ 2026-07-17 | Engine vision E1–E5 (AI Admin repo) — SHIPPED: `ContentPart` + `ChatMessage.content: string \| parts[]`, `lib/message-content.ts` helpers, v2 builder → `input_image`, v1 compat → OpenAI dialect (non-stream + stream), gemini text-extracts + drops images w/ debug note, `executeJob({images})` post-interpolation, diag `imageUrls` / metadata `imageCount`. S8 #3 RESOLVED: signed-URL transport works — no file-ID path needed. | M | ✅ backend tsc 0; +6 unit tests (builder mapping, helpers, string-shortcut guard); LIVE: signed Storage URL of words-in-image → gpt-4.1-mini replied "eggs and toast" verbatim (vision confirmed on the broker default — no gpt-4o fallback needed) |
 | **N2** | parse-meal v2 + macros/provisional + `GET /nutrition/day` + PATCH correction + photo backfill | M | unit sums; live photo→items; ai_log shows URL ref not blob |
 | **N3** | nutrition-targets job + Baseline-moment proposal + Settings editor | S–M | propose→edit→confirm→rings math; gates hold (no goal → no offer) |
 | **N4** | Visual Today (cards, segment toggle, rings/dots/sparks) | L | browser across 3 personas: runner+food, books-only, mind-only — each sees only their cards; zero console errors |

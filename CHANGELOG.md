@@ -5,6 +5,21 @@ All notable changes to AI Admin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Vision content parts** — canonical `ContentPart` (`text` | `image_url`) with
+  `ChatMessage.content: string | ContentPart[]` (`backend/src/types.ts`) and helpers in
+  `backend/src/lib/message-content.ts`. Provider mapping: devs-ai-v2 → Responses
+  `input_text`/`input_image`; devs-ai v1 compat → OpenAI-style `image_url:{url}` (non-stream +
+  stream); google-gemini extracts text and drops image parts with a debug note (inlineData
+  transport not implemented). `executeJob`/`executeJobById` accept `images?: string[]` — https
+  URLs attached as image parts AFTER template interpolation (templates stay text-only);
+  diagnostics record `imageUrls` (never image bytes), result metadata gains `imageCount`.
+  Text-only messages are byte-for-byte unchanged. Verified live: a signed Supabase Storage URL
+  of an image containing only the words "eggs and toast" round-tripped through
+  `messagesToV2Request` on `gpt-4.1-mini` and came back verbatim.
+
 ## [1.4.1] - 2026-07-01
 
 ### Added

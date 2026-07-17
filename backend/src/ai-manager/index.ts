@@ -90,6 +90,7 @@ import {
 } from "../models/chat-sessions.ts";
 import { getConfig } from "../config.ts";
 import { errorMessage } from "../lib/error-message.ts";
+import { withImageParts } from "../lib/message-content.ts";
 import type {
   AiManagerResult,
   AiProfileRow,
@@ -115,6 +116,9 @@ interface ExecuteJobOptions {
   promptOverride?: string | null;
   modelOverride?: string | null;
   enableFailover?: boolean;
+  /** https image URLs attached as vision content parts AFTER template interpolation.
+   *  Templates stay text-only; diagnostics record the URL references, never image bytes. */
+  images?: string[];
 }
 
 interface ExecuteJobByIdOptions extends ExecuteJobOptions {
@@ -271,6 +275,7 @@ export async function executeJob(
     promptOverride = null,
     modelOverride = null,
     enableFailover = true,
+    images = [],
   } = options;
 
   /* ── 1. Resolve the processing job ──────────────────────── */
@@ -285,6 +290,7 @@ export async function executeJob(
     promptOverride,
     modelOverride,
     enableFailover,
+    images,
     _job: job,
   });
 }
@@ -304,6 +310,7 @@ export async function executeJobById(
     modelOverride = null,
     enableFailover = true,
     attachments = [],
+    images = [],
     _job = null /* Internal: pre-fetched job to avoid double query */,
   } = options;
 
@@ -435,6 +442,14 @@ export async function executeJobById(
       }
     }
 
+    /* ── 4c. Attach image parts (vision) ──────────────────────
+     *  URLs only (https, e.g. short-lived signed Storage URLs) — never inline
+     *  base64. The prompt TEXT stays `finalPrompt` everywhere it is logged;
+     *  images ride as content parts the provider layer maps to its dialect. */
+    const imageUrls = images.filter(
+      (u) => typeof u === "string" && /^https?:\/\//i.test(u),
+    );
+
     /* ── 5. Call the LLM ──────────────────────────────────── */
     const effectiveTimeoutMs = await resolveTimeoutMs(advancedConfig, provider);
     if (fullDiagnostics)
@@ -442,7 +457,9 @@ export async function executeJobById(
 
     if (fullDiagnostics) diag.startLlmTimer();
 
-    const messages: ChatMessage[] = [{ role: "user", content: finalPrompt }];
+    const messages: ChatMessage[] = [
+      { role: "user", content: withImageParts(finalPrompt, imageUrls) },
+    ];
     let modelUsed = primaryModel;
     let failoverUsed = false;
     let primaryErrorMessage = "";
@@ -515,8 +532,9 @@ export async function executeJobById(
               // The failover must carry the same native schema as the primary — omitting
               // it made a v2 failover answer schema-less on jobs that expect one.
               expectedSchema:
-                String(failoverProvider.type || "").trim().toLowerCase() ===
-                "devs-ai-v2"
+                String(failoverProvider.type || "")
+                  .trim()
+                  .toLowerCase() === "devs-ai-v2"
                   ? (jobConfig.expectedSchema ?? undefined)
                   : undefined,
             },
@@ -573,6 +591,7 @@ export async function executeJobById(
           provider: actualProvider.name,
           promptContent: finalPrompt,
           promptLength: finalPrompt.length,
+          ...(imageUrls.length ? { imageUrls } : {}),
         },
         {
           rawContent,
@@ -617,6 +636,7 @@ export async function executeJobById(
         jobName: job.name,
         aiProfile: profile.name,
         provider: provider.name,
+        ...(imageUrls.length ? { imageCount: imageUrls.length } : {}),
       },
     };
 
