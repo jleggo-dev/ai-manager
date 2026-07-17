@@ -316,6 +316,19 @@ export async function patchMeal(
   return res.json();
 }
 
+/** Confirm/edit daily macro targets (the user's tap; unlocks "left" + rings). */
+export async function setMacroTargets(targets: MealMacros): Promise<MealMacros | null> {
+  const res = await fetch(`${BASE}/nutrition/targets`, { method: 'PUT', headers: headers(), body: JSON.stringify(targets) });
+  if (!res.ok) return null;
+  return (await res.json()).targets;
+}
+
+/** Remove daily targets — back to observe-style (no "left"). */
+export async function clearMacroTargets(): Promise<boolean> {
+  const res = await fetch(`${BASE}/nutrition/targets`, { method: 'DELETE', headers: headers() });
+  return res.ok;
+}
+
 /** Record one meal — their words, a photo, or both. Nothing is ever judged. */
 export async function logMeal(text: string, meal?: MealKind, photo?: string): Promise<Meal> {
   const res = await fetch(`${BASE}/nutrition/meals`, {
@@ -337,7 +350,14 @@ export async function getRecentMeals(days = 7): Promise<Meal[]> {
 
 export type BaselineRead =
   | { ready: false; days_logged: number; days_needed: number }
-  | { ready: true; read: string; suggestion: string; rationale: string };
+  | {
+      ready: true;
+      read: string;
+      suggestion: string;
+      rationale: string;
+      proposed_targets?: MealMacros | null;
+      targets_rationale?: string | null;
+    };
 
 /** The Baseline moment — the coach's pattern read + ONE gradual change (7+ observed days). */
 export async function getBaselineRead(): Promise<BaselineRead> {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SessionItem } from '@cadence/shared';
-import { getOccurrenceDetail, logOccurrence, recordWeighIn, logMeal, getRecentMeals, getBaselineRead, getNutritionDay, patchMeal, type OccurrenceDetail, type Meal, type MealKind, type MealMacros, type BaselineRead, type NutritionDayData } from '../../lib/api.ts';
+import { getOccurrenceDetail, logOccurrence, recordWeighIn, logMeal, getRecentMeals, getBaselineRead, getNutritionDay, patchMeal, setMacroTargets, type OccurrenceDetail, type Meal, type MealKind, type MealMacros, type BaselineRead, type NutritionDayData } from '../../lib/api.ts';
 import { Orb } from '../../components/Orb.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
 
@@ -28,6 +28,18 @@ const ytSearch = (q: string) => `https://www.youtube.com/results?search_query=${
 
 const isFoodRow = (d: OccurrenceDetail | null): boolean =>
   !!d && d.kind === 'system' && /food|meal|nutrition/i.test(d.title);
+
+/** "1400 · P0 C110 F35 left" — what's remaining toward targets (no ~; these are the goal). */
+function leftLine(m?: MealMacros | null): string {
+  if (!m) return '';
+  const bits: string[] = [];
+  if (m.kcal != null) bits.push(`${m.kcal} kcal`);
+  const pcf = [m.protein_g != null ? `P${Math.round(m.protein_g)}` : '', m.carbs_g != null ? `C${Math.round(m.carbs_g)}` : '', m.fat_g != null ? `F${Math.round(m.fat_g)}` : '']
+    .filter(Boolean)
+    .join(' ');
+  if (pcf) bits.push(pcf);
+  return bits.length ? `${bits.join(' · ')} left` : '';
+}
 
 /** "~320 kcal · P18 C34 F12" — estimates wear a ~ on purpose. */
 function macroLine(m?: MealMacros): string {
@@ -129,6 +141,21 @@ export function OccurrenceSheet({
   }
   const [baseline, setBaseline] = useState<BaselineRead | null>(null);
   const [baselineBusy, setBaselineBusy] = useState(false);
+  const [targetsBusy, setTargetsBusy] = useState(false);
+  const [targetsSet, setTargetsSet] = useState(false); // the proposal was accepted this session
+
+  async function applyTargets(t: MealMacros) {
+    if (targetsBusy) return;
+    setTargetsBusy(true);
+    try {
+      if (await setMacroTargets(t)) {
+        setTargetsSet(true);
+        await refreshDay(detail?.date); // day now returns targets + "left"
+      }
+    } finally {
+      setTargetsBusy(false);
+    }
+  }
 
   async function fetchBaseline() {
     if (baselineBusy) return;
@@ -335,6 +362,7 @@ export function OccurrenceSheet({
                         {day.provisional_totals.kcal ? ` + ~${day.provisional_totals.kcal} kcal` : ` + ${day.provisional_count} meal${day.provisional_count === 1 ? '' : 's'}`} unconfirmed
                       </span>
                     )}
+                    {leftLine(day.left) && <div className="day-left">{leftLine(day.left)}</div>}
                   </div>
                 )}
                 {meals.length > 0 && (
@@ -432,6 +460,19 @@ export function OccurrenceSheet({
                         Weave it into my plan →
                       </button>
                     )}
+                    {/* Coach-proposed daily targets (N3): suggest-never-auto-apply — the user taps. */}
+                    {baseline.proposed_targets && !targetsSet && (
+                      <div className="baseline-targets">
+                        <div className="baseline-targets-t">Daily targets I'd start you at</div>
+                        <div className="baseline-targets-n">{macroLine(baseline.proposed_targets).replace(/~/g, '')}</div>
+                        {baseline.targets_rationale && <div className="baseline-why">{baseline.targets_rationale}</div>}
+                        <button className="lockbtn" onClick={() => applyTargets(baseline.proposed_targets!)} disabled={targetsBusy}>
+                          {targetsBusy ? 'Setting…' : 'Use these targets'}
+                        </button>
+                        <div className="baseline-targets-edit">You can fine-tune them anytime in Settings.</div>
+                      </div>
+                    )}
+                    {targetsSet && <div className="baseline-targets-done">Targets set — your day now shows what's left. ✓</div>}
                   </div>
                 )}
               </div>

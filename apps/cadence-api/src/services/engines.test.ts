@@ -10,7 +10,7 @@ import { matchGoal } from './plan-match.ts';
 import { startingPointGaps } from './intake.ts';
 import { summarizeNutrition, renderNutritionLine } from './nutrition-summarize.ts';
 import { parsePhotoDataUrl, MAX_PHOTO_BYTES } from './photo-validate.ts';
-import { sanitizeMacros, sumDay, computeLeft } from './nutrition-day.ts';
+import { sanitizeMacros, sumDay, computeLeft, sanitizeTargets } from './nutrition-day.ts';
 
 type GoalLite = Pick<Goal, 'area' | 'type' | 'status'>;
 
@@ -428,5 +428,17 @@ describe('nutrition-day (S1/S5 — estimates honestly, totals deterministically)
       protein_g: 0, // over target → 0 left, never negative
     });
     expect(computeLeft({ kcal: null, fat_g: 60 }, { fat_g: 25 })).toEqual({ fat_g: 35 });
+  });
+
+  it('sanitizeTargets rounds (kcal→50s, grams→5s) and DROPS out-of-range fields, never clamps', () => {
+    expect(sanitizeTargets({ kcal: 2130, protein_g: 142, carbs_g: 218, fat_g: 63 })).toEqual({
+      kcal: 2150,
+      protein_g: 140,
+      carbs_g: 220,
+      fat_g: 65,
+    });
+    expect(sanitizeTargets({ kcal: 80000, protein_g: 140 })).toEqual({ protein_g: 140 }); // absurd kcal dropped, not clamped
+    expect(sanitizeTargets({ kcal: 500 })).toBeNull(); // starvation-level → dropped → nothing survives
+    expect(sanitizeTargets('nope')).toBeNull();
   });
 });

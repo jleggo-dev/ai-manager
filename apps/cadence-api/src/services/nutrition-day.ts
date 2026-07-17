@@ -31,6 +31,31 @@ export function sanitizeMacros(raw: unknown): Macros | null {
   return Object.keys(out).length ? out : null;
 }
 
+/** Sanity windows for DAILY TARGETS (vs per-meal caps above): a proposal outside these is
+ *  dropped field-by-field — an absurd number is worse silently clamped than honestly absent. */
+const TARGET_RANGES: Record<MacroKey, [number, number]> = {
+  kcal: [1000, 4500],
+  protein_g: [30, 300],
+  carbs_g: [20, 600],
+  fat_g: [15, 250],
+};
+
+/** Round + range-check proposed daily targets (kcal→50s, grams→5s); null when nothing survives. */
+export function sanitizeTargets(raw: unknown): Macros | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const out: Macros = {};
+  for (const k of MACRO_KEYS) {
+    const v = r[k];
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+    const rounded = k === 'kcal' ? Math.round(v / 50) * 50 : Math.round(v / 5) * 5;
+    const [lo, hi] = TARGET_RANGES[k];
+    if (rounded < lo || rounded > hi) continue;
+    out[k] = rounded;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 export interface DayTotals {
   totals: Macros; // confirmed rows only — what the rings/targets count
   provisional_totals: Macros; // low-confidence estimates awaiting a tap-to-confirm

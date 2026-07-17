@@ -139,6 +139,20 @@ svg { stroke-width: 1.9; } .stroke { stroke: currentColor; fill: none; }
 .meal-confirm:hover { color: var(--text); border-style: solid; }
 .day-totals { font-size: 12.5px; padding: 8px 10px; margin-bottom: 10px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 11px; font-variant-numeric: tabular-nums; }
 .day-totals-prov { color: var(--text-dim); }
+.day-left { margin-top: 4px; font-weight: 600; }
+/* Coach-proposed daily targets in the Baseline moment. */
+.baseline-targets { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.baseline-targets-t { font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--text-dim); margin-bottom: 4px; }
+.baseline-targets-n { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+.baseline-targets-edit { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+.baseline-targets-done { margin-top: 10px; font-size: 12.5px; color: var(--text-dim); }
+/* Settings macro-target editor. */
+.set-targets { padding: 12px 0; border-top: 1px solid var(--line-soft); }
+.set-targets-t { font-size: 13.5px; font-weight: 600; margin-bottom: 8px; }
+.set-targets-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.set-target { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--text-dim); }
+.set-targets-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.set-targets-actions .lockbtn { flex: 1; }
 /* Snap-your-plate button + pending-photo preview. */
 .photo-btn { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 38px; border: 1px dashed var(--line-soft); border-radius: 11px; cursor: pointer; font-size: 16px; align-self: flex-end; }
 .photo-btn:hover { border-color: var(--line); }

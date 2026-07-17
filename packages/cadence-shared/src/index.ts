@@ -392,7 +392,7 @@ export interface MacroTargets {
   protein_g?: number | null;
   carbs_g?: number | null;
   fat_g?: number | null;
-  confirm_below_confidence: number; // e.g. 0.75
+  confirm_below_confidence?: number; // provisional threshold; defaults to 0.5 in nutrition.ts when unset
 }
 
 export interface Recipe {

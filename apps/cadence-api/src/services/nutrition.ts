@@ -10,11 +10,11 @@
 import { runJobBySlug } from '../ai/aim.ts';
 import { insertNutritionLog, listNutritionLogs, updateNutritionLog } from '../repos/nutrition.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
-import { getUser } from '../repos/users.ts';
+import { getUser, setMacroTargets } from '../repos/users.ts';
 import { findPendingFoodLogOccurrence, setOccurrenceStatus } from '../repos/occurrences.ts';
 import { putMealPhoto, signMealPhotoUrl, signMealPhotoUrls } from './meal-photos.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
-import { sanitizeMacros, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
+import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
 import { logAi } from './ai-log.ts';
 import type { Macros, MacroTargets, MealKind, NutritionLog, NutritionSummary } from '@cadence/shared';
 
@@ -196,7 +196,27 @@ export async function listRecentMeals(userId: string, days = 7): Promise<Nutriti
 
 export type BaselineRead =
   | { ready: false; days_logged: number; days_needed: number }
-  | { ready: true; read: string; suggestion: string; rationale: string };
+  | {
+      ready: true;
+      read: string;
+      suggestion: string;
+      rationale: string;
+      /** Coach-proposed daily targets (S4) — suggest-never-auto-apply; null when not warranted
+       *  (no eating/weight goal), already set (Settings owns edits), or the model declined. */
+      proposed_targets: Macros | null;
+      targets_rationale: string | null;
+    };
+
+/** Deterministic gate: targets are only WORTH proposing for an eating-focused or weight goal. */
+const WEIGHTY_MEASURE = /\b(kg|lbs?|weight)\b/i;
+function wantsTargets(goals: Array<{ area?: string; type?: string; measure?: { unit?: string; metric?: string } }>): boolean {
+  return goals.some(
+    (g) =>
+      g.area === 'nourishment' ||
+      (g.type === 'target' &&
+        (WEIGHTY_MEASURE.test(String(g.measure?.unit ?? '')) || WEIGHTY_MEASURE.test(String(g.measure?.metric ?? '')))),
+  );
+}
 
 const OBSERVE_DAYS_NEEDED = 7;
 
@@ -215,26 +235,59 @@ export async function getBaselineRead(userId: string): Promise<BaselineRead> {
     return { ready: false, days_logged: summary.days_logged, days_needed: OBSERVE_DAYS_NEEDED };
   }
 
-  const goals = await listGoalsByStatus(userId, ['confirmed', 'committed']);
+  const [goals, user] = await Promise.all([
+    listGoalsByStatus(userId, ['confirmed', 'committed']),
+    getUser(userId),
+  ]);
+  // Propose targets only when a goal warrants them AND none are set yet (Settings owns edits).
+  const hasTargets = !!user?.macro_targets && Object.keys(user.macro_targets).length > 0;
+  const propose = !hasTargets && wantsTargets(goals);
+
   const res = await runJobBySlug(userId, 'nutrition-baseline', {
     summary: JSON.stringify(summary),
     meals: JSON.stringify(
       meals.map((m) => ({ date: m.date, meal: m.meal, items: m.items.map((i) => i.name), flags: m.flags })),
     ),
-    goals: JSON.stringify(goals.map((g) => ({ title: g.title, area: g.area, type: g.type }))),
+    goals: JSON.stringify(goals.map((g) => ({ title: g.title, area: g.area, type: g.type, measure: g.measure }))),
+    baseline: JSON.stringify(user?.baseline ?? {}),
+    propose_targets: propose ? 'yes' : 'no',
   });
   const raw = res.formatted ?? res.raw ?? '';
-  const parsed = JSON.parse(raw) as { read?: unknown; suggestion?: unknown; rationale?: unknown };
+  const parsed = JSON.parse(raw) as {
+    read?: unknown;
+    suggestion?: unknown;
+    rationale?: unknown;
+    proposed_targets?: unknown;
+    targets_rationale?: unknown;
+  };
   const read = typeof parsed.read === 'string' ? parsed.read.trim() : '';
   const suggestion = typeof parsed.suggestion === 'string' ? parsed.suggestion.trim().slice(0, 300) : '';
   const rationale = typeof parsed.rationale === 'string' ? parsed.rationale.trim() : '';
   if (!read || !suggestion) throw new Error('nutrition-baseline returned an incomplete read');
+  // The deterministic gate is the wall — a proposal the app didn't ask for is discarded.
+  const proposedTargets = propose ? sanitizeTargets(parsed.proposed_targets) : null;
+  const targetsRationale =
+    proposedTargets && typeof parsed.targets_rationale === 'string' ? parsed.targets_rationale.trim() : null;
 
   void logAi(userId, {
     kind: 'nutrition_baseline',
     input: { summary },
     output: { raw: raw.slice(0, 2000) },
-    meta: { days_logged: summary.days_logged },
+    meta: { days_logged: summary.days_logged, proposed_targets: !!proposedTargets },
   });
-  return { ready: true, read, suggestion, rationale };
+  return { ready: true, read, suggestion, rationale, proposed_targets: proposedTargets, targets_rationale: targetsRationale };
+}
+
+/** Confirm/edit daily targets (suggest-never-auto-apply: only ever called by the user's tap). */
+export async function setTargets(userId: string, raw: unknown): Promise<Macros> {
+  const t = sanitizeTargets(raw);
+  if (!t) throw new Error('no valid targets');
+  const { source: _source, ...clean } = t;
+  await setMacroTargets(userId, clean);
+  return clean;
+}
+
+/** Remove targets entirely — back to observe-style, no rings, no "left". */
+export async function clearTargets(userId: string): Promise<void> {
+  await setMacroTargets(userId, {});
 }

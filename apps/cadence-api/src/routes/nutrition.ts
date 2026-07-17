@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
-import { logMeal, getNutritionSummary, listRecentMeals, getBaselineRead, getNutritionDay, patchMeal } from '../services/nutrition.ts';
+import { logMeal, getNutritionSummary, listRecentMeals, getBaselineRead, getNutritionDay, patchMeal, setTargets, clearTargets } from '../services/nutrition.ts';
 import type { MealKind } from '@cadence/shared';
 
 const router = Router();
@@ -93,6 +93,31 @@ router.post('/baseline', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[POST /nutrition/baseline]', err);
     res.status(500).json({ error: 'failed to build the read' });
+  }
+});
+
+/** PUT /nutrition/targets — confirm/edit daily macro targets (the user's tap; unlocks "left"). */
+router.put('/targets', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    res.json({ targets: await setTargets(userId, req.body) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '';
+    if (/no valid targets/.test(msg)) return void res.status(400).json({ error: 'no valid targets' });
+    console.error('[PUT /nutrition/targets]', err);
+    res.status(500).json({ error: 'failed to set targets' });
+  }
+});
+
+/** DELETE /nutrition/targets — remove targets (back to observe-style; no rings, no "left"). */
+router.delete('/targets', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    await clearTargets(userId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[DELETE /nutrition/targets]', err);
+    res.status(500).json({ error: 'failed to clear targets' });
   }
 });
 
