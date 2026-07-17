@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "apps/cadence-web"],
       "port": 3100
+    },
+    {
+      "name": "cadence-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "apps/cadence-api"],
+      "port": 3101
     }
   ]
 }

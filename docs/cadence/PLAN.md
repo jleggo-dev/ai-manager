@@ -1412,6 +1412,33 @@ Driven by a live "Jeffrey" walkthrough that surfaced real gaps between capture a
   itself was grounded; the prompt's use-their-words rule could be tightened later. On
   `feat/cadence`.
 
+- **Fresh-onboarding browser walkthrough — everything at once (2026-07-17):** account-1 reset →
+  full live run in the phone UI, closing every "not browser-walked" caveat from the coaching-depth
+  and nutrition batches. Welcome → name → chat: "5k under 30 by mid-October, run it in about 35
+  now… eat better on weeknights" → coach asked ONE question at a time (knee → where-do-you-run →
+  height/weight), acknowledged the knee ("we'll keep an eye on that knee and build around it"),
+  then PRESSURE-TESTED ("three months — doable, but… three runs a week; with the knee we need to
+  be smart"). Capture: EXACTLY 2 goals (dedup held), measure target 30/start **35**/unit minutes
+  from natural speech, age 38 + 5'10" + 190 lbs + "left knee discomfort when pushing hard"
+  [plan-around ON] + shoes/kettlebell + Toronto — all from conversation. Review: "starting from
+  35" editor live; assess → "A stretch" + START-CALIBRATED ladder (34 → intervals → 32 → 31,
+  dated to Oct); intake [] (correct — conversation already answered everything). Lock preview
+  GROUPED with whys: "Toward Run 5k under 30" (Easy Run — "finding your comfortable easy pace
+  from your current 35-minute 5k"; Knee-Safe Strength — no knee loading), "Toward Eat better on
+  weeknights" (Food log daily — "learning your weeknight eating patterns before suggesting any
+  changes"), Foundations (check-in). Commit → full week materialized (Food log every day 20:00).
+  Meal sheet: "chicken stir fry with rice and a glass of red wine" → parsed items listed, row
+  AUTO-TICKED (done:true in the UI). Coach tab: fresh thread (graduation staleness — old
+  transcript gone), "why am I doing the strength sessions?" answered FROM the stored why
+  ("protect your knee… takes pressure off your left knee"); X-ray showed the turn pulled
+  get_active_plan/get_consistency/get_constraints. Progress: "Eat better on weeknights — 1 of 7
+  days" + "Food log — 1 of 7 days"; 5k card correctly absent (sparse-but-honest, no runs logged
+  yet). ZERO console errors across the entire run. account-1 left in this committed demo state
+  (a second rich demo alongside account-2); reset via /dev/reset when a fresh-onboarding demo is
+  needed again. Walkthrough-only side effect committed: `.claude/launch.json` gains a cadence-api
+  entry. Known tooling quirk (not app): browser screenshots lagged the DOM a few frames; DOM
+  reads were used as source of truth and the final frames rendered correctly.
+
 ### Final step (post-finalization) — the agentic retrieval loop: the coach answers its own questions
 
 **Framing (decided 2026-07-07):** the current context engine is a *workable, shippable* model, not a
