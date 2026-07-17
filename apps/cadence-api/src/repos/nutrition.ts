@@ -17,14 +17,15 @@ export async function insertNutritionLog(
     ai_confidence?: number | null;
     raw_text?: string | null;
     flags?: NutritionLog['flags'];
+    photo_ref?: string | null;
   },
 ): Promise<NutritionLog> {
   const [out] = await sql<NutritionLog[]>`
     insert into cadence.nutrition_logs
-      (user_id, date, meal, items, input_method, ai_confidence, raw_text, flags)
+      (user_id, date, meal, items, input_method, ai_confidence, raw_text, flags, photo_ref)
     values (
       ${userId}, ${row.date}, ${row.meal}, ${json(row.items ?? [])}, ${row.input_method},
-      ${row.ai_confidence ?? null}, ${row.raw_text ?? null}, ${json(row.flags ?? {})}
+      ${row.ai_confidence ?? null}, ${row.raw_text ?? null}, ${json(row.flags ?? {})}, ${row.photo_ref ?? null}
     )
     returning ${COLS}`;
   return out!;

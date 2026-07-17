@@ -9,6 +9,7 @@ import { selectCapturedGoals, normalizeBaseline, normTitle } from './capture-nor
 import { matchGoal } from './plan-match.ts';
 import { startingPointGaps } from './intake.ts';
 import { summarizeNutrition, renderNutritionLine } from './nutrition-summarize.ts';
+import { parsePhotoDataUrl, MAX_PHOTO_BYTES } from './photo-validate.ts';
 
 type GoalLite = Pick<Goal, 'area' | 'type' | 'status'>;
 
@@ -365,5 +366,28 @@ describe('nutrition summarize (Observe phase — §5.6 module arc)', () => {
     const line = renderNutritionLine(summarizeNutrition([row({ flags: { alcohol: true } })], 7));
     expect(line).toContain('1 of last 7 days logged');
     expect(line).toContain('alcohol on 1 day');
+  });
+});
+
+describe('photo-validate (meal photos — capture-first)', () => {
+  const jpeg = (bytes: number) => `data:image/jpeg;base64,${Buffer.alloc(bytes, 1).toString('base64')}`;
+
+  it('accepts jpeg/png/webp data URLs and reports mime + extension', () => {
+    const r = parsePhotoDataUrl(jpeg(100));
+    expect(r.ok && r.mime === 'image/jpeg' && r.ext === 'jpg' && r.buffer.length === 100).toBe(true);
+    expect(parsePhotoDataUrl(`data:image/png;base64,${Buffer.alloc(8, 1).toString('base64')}`).ok).toBe(true);
+    expect(parsePhotoDataUrl(`data:image/webp;base64,${Buffer.alloc(8, 1).toString('base64')}`).ok).toBe(true);
+  });
+
+  it('rejects non-image payloads, junk, and svg (never trusted)', () => {
+    for (const bad of ['data:text/plain;base64,aGk=', 'data:image/svg+xml;base64,aGk=', 'not a data url', 'data:image/jpeg;base64,!!!']) {
+      expect(parsePhotoDataUrl(bad).ok).toBe(false);
+    }
+  });
+
+  it('caps decoded size at MAX_PHOTO_BYTES', () => {
+    const over = parsePhotoDataUrl(jpeg(MAX_PHOTO_BYTES + 1));
+    expect(!over.ok && over.reason === 'too_large').toBe(true);
+    expect(parsePhotoDataUrl(jpeg(MAX_PHOTO_BYTES)).ok).toBe(true);
   });
 });

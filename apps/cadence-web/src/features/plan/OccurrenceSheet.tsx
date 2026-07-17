@@ -35,6 +35,31 @@ const mealForNow = (): MealKind => {
   return h < 11 ? 'breakfast' : h < 15 ? 'lunch' : h < 17 ? 'snack' : h < 21 ? 'dinner' : 'snack';
 };
 
+/**
+ * Downscale a photo client-side (max 1024px, JPEG q0.8) so a 10MB phone shot becomes a
+ * ~100-300KB upload — well inside the server's caps. Returns a data URL.
+ */
+function downscalePhoto(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, 1024 / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('unreadable image'));
+    };
+    img.src = url;
+  });
+}
+
 export function OccurrenceSheet({
   occurrenceId,
   onClose,
@@ -57,7 +82,18 @@ export function OccurrenceSheet({
   const [mealKind, setMealKind] = useState<MealKind>(mealForNow());
   const [mealBusy, setMealBusy] = useState(false);
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [mealPhoto, setMealPhoto] = useState<string | null>(null); // downscaled data URL, ready to send
   const [daysLogged, setDaysLogged] = useState(0); // distinct dates in the last 7d — the phase gate
+
+  async function pickPhoto(file: File | null | undefined) {
+    if (!file || mealBusy) return;
+    setLogErr('');
+    try {
+      setMealPhoto(await downscalePhoto(file));
+    } catch {
+      setLogErr("Couldn't read that photo — try a different one.");
+    }
+  }
   const [baseline, setBaseline] = useState<BaselineRead | null>(null);
   const [baselineBusy, setBaselineBusy] = useState(false);
 
@@ -76,13 +112,14 @@ export function OccurrenceSheet({
 
   async function submitMeal() {
     const text = mealText.trim();
-    if (!text || mealBusy || !detail) return;
+    if ((!text && !mealPhoto) || mealBusy || !detail) return;
     setMealBusy(true);
     setLogErr('');
     try {
-      const m = await logMeal(text, mealKind);
+      const m = await logMeal(text, mealKind, mealPhoto ?? undefined);
       setMeals([m, ...meals]);
       setMealText('');
+      setMealPhoto(null);
       if (detail.status === 'pending') setDetail({ ...detail, status: 'done' }); // server ticked the row
       onLogged?.();
     } catch {
@@ -262,7 +299,8 @@ export function OccurrenceSheet({
                     {meals.map((m) => (
                       <div className="meal-item" key={m.log_id}>
                         <span className="meal-kind">{m.meal}</span>
-                        <span className="meal-what">{m.items.map((i) => i.name).join(', ') || m.raw_text || ''}</span>
+                        {m.photo_url && <img className="meal-thumb" src={m.photo_url} alt="" loading="lazy" />}
+                        <span className="meal-what">{m.items.map((i) => i.name).join(', ') || m.raw_text || (m.photo_url ? '📷 photo' : '')}</span>
                       </div>
                     ))}
                   </div>
@@ -272,12 +310,34 @@ export function OccurrenceSheet({
                     className="logbox-in"
                     value={mealText}
                     onChange={(e) => setMealText(e.target.value)}
-                    placeholder={'e.g. "two eggs, sourdough toast and a coffee"'}
+                    placeholder={'e.g. "two eggs, sourdough toast and a coffee" — or just snap it'}
                     rows={2}
                     disabled={mealBusy}
                   />
                   <MicButton value={mealText} onChange={setMealText} disabled={mealBusy} />
+                  {/* capture="environment" opens the rear camera on phones; a file picker on desktop. */}
+                  <label className={`photo-btn${mealPhoto ? ' photo-on' : ''}`} title="Snap your plate" aria-label="Add a photo">
+                    📷
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      hidden
+                      disabled={mealBusy}
+                      onChange={(e) => {
+                        void pickPhoto(e.target.files?.[0]);
+                        e.target.value = ''; // same photo re-pickable
+                      }}
+                    />
+                  </label>
                 </div>
+                {mealPhoto && (
+                  <div className="photo-preview">
+                    <img src={mealPhoto} alt="your plate" />
+                    <button className="photo-clear" onClick={() => setMealPhoto(null)} disabled={mealBusy} aria-label="Remove photo">×</button>
+                    <span className="photo-hint">Add a few words if you like — I can't read plates yet, but the photo is kept.</span>
+                  </div>
+                )}
                 <div className="weigh-row">
                   <select className="wiz-sel" value={mealKind} onChange={(e) => setMealKind(e.target.value as MealKind)} disabled={mealBusy}>
                     <option value="breakfast">breakfast</option>
@@ -287,7 +347,7 @@ export function OccurrenceSheet({
                     <option value="drink">drink</option>
                     <option value="other">other</option>
                   </select>
-                  <button className="logbox-btn meal-btn" onClick={submitMeal} disabled={mealBusy || !mealText.trim()}>
+                  <button className="logbox-btn meal-btn" onClick={submitMeal} disabled={mealBusy || (!mealText.trim() && !mealPhoto)}>
                     {mealBusy ? 'Writing it down…' : 'Log this meal'}
                   </button>
                 </div>

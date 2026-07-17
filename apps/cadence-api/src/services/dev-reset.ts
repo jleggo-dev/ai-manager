@@ -1,5 +1,6 @@
 import { sql, json } from '../db/sql.ts';
 import { ensureUser } from '../repos/users.ts';
+import { purgeMealPhotos } from './meal-photos.ts';
 
 /**
  * Dev-only account data reset — the shared implementation behind both the `/dev/reset`
@@ -21,6 +22,13 @@ export { ensureUser };
 /** Wipe all cadence data for a user; keep the users row but reset name + baseline. */
 export async function resetUserData(userId: string): Promise<void> {
   await ensureUser(userId);
+  // Meal photos live in Storage, not a table — purge them too (the start-over promise:
+  // "erases everything"). Best-effort: a storage hiccup must never block the data wipe.
+  try {
+    await purgeMealPhotos(userId);
+  } catch (e) {
+    console.warn('[reset] meal-photo purge failed (continuing):', e);
+  }
   for (const t of DEV_CHILD_TABLES) {
     await sql`delete from cadence.${sql(t)} where user_id = ${userId}`;
   }

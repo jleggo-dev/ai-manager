@@ -8,15 +8,18 @@ router.use(requireCadenceUser);
 
 const MEALS: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
 
-/** POST /nutrition/meals — record one meal in the user's words (Observe phase; never judged). */
+/** POST /nutrition/meals — one meal, in their words and/or a photo (Observe phase; never judged). */
 router.post('/meals', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
   const meal = MEALS.includes(req.body?.meal) ? (req.body.meal as MealKind) : undefined;
-  if (!text) return void res.status(400).json({ error: 'text required' });
+  const photo = typeof req.body?.photo === 'string' && req.body.photo.startsWith('data:image/') ? req.body.photo : undefined;
+  if (!text && !photo) return void res.status(400).json({ error: 'a meal needs words or a photo' });
   try {
-    res.json(await logMeal(userId, { text, meal }));
+    res.json(await logMeal(userId, { text: text || undefined, meal, photo }));
   } catch (err) {
+    const msg = err instanceof Error ? err.message : '';
+    if (/invalid photo/.test(msg)) return void res.status(400).json({ error: msg });
     console.error('[POST /nutrition/meals]', err);
     res.status(500).json({ error: 'failed to log meal' });
   }

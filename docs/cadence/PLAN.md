@@ -562,6 +562,11 @@ HealthKit (the deciding constraint, §7/§8). The path:
 - **Native iOS (Capacitor) + HealthKit** — Phase 7; capability seam already scaffolded.
 
 **F. AI Admin enhancements this exercise surfaced (proposed — MEMORY-ARCHITECTURE.md §5)**
+- **Multimodal content parts in the provider layer** (surfaced by meal photos, 2026-07-17): every
+  integration (devs-ai, devs-ai-v2, gemini) sends `content: string` only — no image parts — so no
+  job/chat/raw path can carry a photo to a vision model. Cadence ships photo capture-first
+  (Storage + photo_ref) and skips machine reading; when the engine gains image input, parse-meal
+  can read plates — and every photo logged since day one is retroactively parseable via photo_ref.
 - Engine-owned chat finalization (so no consumer can bypass logging).
 - First-class per-user **context/memory store** primitive (TTL + provenance).
 - Cache-aware "stable prefix + dynamic tail" prompt assembly.
@@ -1438,6 +1443,28 @@ Driven by a live "Jeffrey" walkthrough that surfaced real gaps between capture a
   needed again. Walkthrough-only side effect committed: `.claude/launch.json` gains a cadence-api
   entry. Known tooling quirk (not app): browser screenshots lagged the DOM a few frames; DOM
   reads were used as source of truth and the final frames rendered correctly.
+
+- **Meal photos — snap your plate, capture-first (2026-07-17):** closes the spec's photo-input
+  requirement (`input_method='photo'` + `photo_ref` existed since 0001, unused until now). The
+  engine can't see images (all integrations are text-only — recorded as the §F multimodal
+  enhancement), so the honest cut is CAPTURE-FIRST: photo → client-side canvas downscale (≤1024px
+  JPEG ~100-300KB) → data URL → `POST /nutrition/meals {photo}` → pure `photo-validate.ts`
+  (jpeg/png/webp only, svg rejected, 1.5MB cap; unit-tested) → PRIVATE Supabase Storage bucket
+  `meal-photos` (self-healing create on first upload; path `userId/date/uuid.jpg`) → `photo_ref`;
+  caption optional — with one, parse-meal runs as usual; photo-only stores items=[] honestly. Reads
+  attach 1h signed URLs (`photo_url`, display-only field, never stored). UI: 📷 button beside the
+  mic (`capture="environment"` → rear camera on phones; picker on desktop), preview + remove +
+  honest hint ("I can't read plates yet, but the photo is kept"), thumbnails in the day's meal
+  list. `resetUserData` (and thus /dev/reset AND DELETE /me/data start-over) now purges the user's
+  Storage folder — the "erases everything" promise covers photos. days_logged/phase-gate count
+  photo-only meals (a snapped plate is an observed day). **Verified:** tsc×2; vitest 45/45 (+3
+  photo-validate); live smoke on account-1 — photo-only POST → 200 with photo_ref (bucket
+  auto-created on first ever upload), GET /recent attached a signed URL that fetched 200; browser —
+  📷 renders with accept/capture attrs, the photo meal's thumbnail LOADED from the signed URL
+  (naturalWidth>0), meal list shows "snack · 📷 photo" beside the captioned dinner; zero console
+  errors. Not exercisable in the automated browser: the OS file/camera picker itself (needs a real
+  device) — the downscale path is standard canvas code and the server pipeline is proven. On
+  `feat/cadence`.
 
 ### Final step (post-finalization) — the agentic retrieval loop: the coach answers its own questions
 

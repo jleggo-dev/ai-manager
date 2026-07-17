@@ -11,6 +11,7 @@ import { runJobBySlug } from '../ai/aim.ts';
 import { insertNutritionLog, listNutritionLogs } from '../repos/nutrition.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { findPendingFoodLogOccurrence, setOccurrenceStatus } from '../repos/occurrences.ts';
+import { putMealPhoto, signMealPhotoUrls } from './meal-photos.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { logAi } from './ai-log.ts';
 import type { MealKind, NutritionLog, NutritionSummary } from '@cadence/shared';
@@ -21,54 +22,64 @@ const isMeal = (v: unknown): v is MealKind => MEALS.includes(v as MealKind);
 const today = (): string => new Date().toISOString().slice(0, 10);
 
 /**
- * Record one meal from the user's words. Parse is best-effort — on any failure the raw text is
- * still stored (meal = hint or 'other', items empty) so nothing they said is lost. Side effect:
- * the first meal of the day ticks today's pending "Food log" system occurrence done (the
- * deterministic title test, mirroring the weigh-in pattern).
+ * Record one meal from the user's words and/or a photo. Parse is best-effort — on any failure
+ * the raw text is still stored (meal = hint or 'other', items empty) so nothing they said is
+ * lost. A photo uploads to private Storage FIRST (capture-first: items stay empty unless a
+ * caption was given — the engine can't read images yet, backlog §F; photo_ref makes every photo
+ * retroactively parseable). Side effect: the first meal of the day ticks today's pending
+ * "Food log" system occurrence done (the deterministic title test, mirroring weigh-in).
  */
 export async function logMeal(
   userId: string,
-  input: { text: string; meal?: MealKind; date?: string },
+  input: { text?: string; meal?: MealKind; date?: string; photo?: string },
 ): Promise<NutritionLog> {
   const text = (input.text ?? '').trim().slice(0, 500);
-  if (!text) throw new Error('empty meal text');
   const date = input.date ?? today();
+  if (!text && !input.photo) throw new Error('a meal needs words or a photo');
+
+  // Photo first — if the upload fails the user gets a clean error before any row exists.
+  let photoRef: string | null = null;
+  if (input.photo) photoRef = await putMealPhoto(userId, date, input.photo);
 
   let meal: MealKind = input.meal && isMeal(input.meal) ? input.meal : 'other';
   let items: NutritionLog['items'] = [];
   let flags: NutritionLog['flags'] = {};
   let confidence: number | null = null;
   let rawOut = '';
-  try {
-    const res = await runJobBySlug(userId, 'parse-meal', { meal_text: text, meal_hint: input.meal ?? '' });
-    rawOut = res.formatted ?? res.raw ?? '';
-    const parsed = JSON.parse(rawOut) as Record<string, unknown>;
-    if (!input.meal && isMeal(parsed.meal)) meal = parsed.meal; // an explicit user choice outranks the model
-    if (Array.isArray(parsed.items)) {
-      items = (parsed.items as Array<Record<string, unknown>>)
-        .filter((i) => i && typeof i.name === 'string' && (i.name as string).trim())
-        .slice(0, 12)
-        .map((i) => ({
-          name: (i.name as string).trim(),
-          ...(typeof i.qty === 'number' && i.qty > 0 ? { qty: i.qty } : {}),
-          ...(typeof i.unit === 'string' && (i.unit as string).trim() ? { unit: (i.unit as string).trim() } : {}),
-        }));
+  if (text) {
+    // Caption present → parse it (photo-only meals skip the parse: the engine can't see images yet).
+    try {
+      const res = await runJobBySlug(userId, 'parse-meal', { meal_text: text, meal_hint: input.meal ?? '' });
+      rawOut = res.formatted ?? res.raw ?? '';
+      const parsed = JSON.parse(rawOut) as Record<string, unknown>;
+      if (!input.meal && isMeal(parsed.meal)) meal = parsed.meal; // an explicit user choice outranks the model
+      if (Array.isArray(parsed.items)) {
+        items = (parsed.items as Array<Record<string, unknown>>)
+          .filter((i) => i && typeof i.name === 'string' && (i.name as string).trim())
+          .slice(0, 12)
+          .map((i) => ({
+            name: (i.name as string).trim(),
+            ...(typeof i.qty === 'number' && i.qty > 0 ? { qty: i.qty } : {}),
+            ...(typeof i.unit === 'string' && (i.unit as string).trim() ? { unit: (i.unit as string).trim() } : {}),
+          }));
+      }
+      const f = parsed.flags as Record<string, unknown> | undefined;
+      flags = { ...(f?.alcohol === true ? { alcohol: true } : {}), ...(f?.caffeine === true ? { caffeine: true } : {}) };
+      if (typeof parsed.confidence === 'number') confidence = Math.max(0, Math.min(1, parsed.confidence));
+    } catch (e) {
+      console.warn('[nutrition] parse-meal failed — storing raw text only:', e);
     }
-    const f = parsed.flags as Record<string, unknown> | undefined;
-    flags = { ...(f?.alcohol === true ? { alcohol: true } : {}), ...(f?.caffeine === true ? { caffeine: true } : {}) };
-    if (typeof parsed.confidence === 'number') confidence = Math.max(0, Math.min(1, parsed.confidence));
-  } catch (e) {
-    console.warn('[nutrition] parse-meal failed — storing raw text only:', e);
   }
 
   const row = await insertNutritionLog(userId, {
     date,
     meal,
     items,
-    input_method: 'text',
+    input_method: photoRef ? 'photo' : 'text',
     ai_confidence: confidence,
-    raw_text: text,
+    raw_text: text || null,
     flags,
+    photo_ref: photoRef,
   });
 
   // Best-effort: tick today's pending Food log row (never fails the meal write).
@@ -83,7 +94,7 @@ export async function logMeal(
     kind: 'parse_meal',
     input: { text, meal_hint: input.meal ?? null },
     output: { raw: rawOut.slice(0, 2000) },
-    meta: { meal, items: items.length, flags, confidence },
+    meta: { meal, items: items.length, flags, confidence, photo: !!photoRef },
   });
   return row;
 }
@@ -95,11 +106,17 @@ export async function getNutritionSummary(userId: string, days = 7): Promise<Nut
   return summarizeNutrition(await listNutritionLogs(userId, from, to), days);
 }
 
-/** Recent meals, newest first (the UI list + retrieval detail). */
+/** Recent meals, newest first, with short-lived signed photo URLs attached (UI list). */
 export async function listRecentMeals(userId: string, days = 7): Promise<NutritionLog[]> {
   const to = today();
   const from = new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
-  return listNutritionLogs(userId, from, to);
+  const rows = await listNutritionLogs(userId, from, to);
+  try {
+    return await signMealPhotoUrls(rows);
+  } catch (e) {
+    console.warn('[nutrition] photo URL signing failed — returning rows without photos:', e);
+    return rows;
+  }
 }
 
 export type BaselineRead =

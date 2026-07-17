@@ -371,6 +371,7 @@ export interface NutritionLog {
   photo_ref?: string;
   raw_text?: string | null; // the user's own words — always kept (0013)
   flags?: { alcohol?: boolean; caffeine?: boolean }; // ONLY from explicit mentions, never inferred (0013)
+  photo_url?: string | null; // display-only: short-lived signed URL attached at read time (never stored)
 }
 
 /** Deterministic Observe-phase read over nutrition_logs — the coach's food-log summary. */

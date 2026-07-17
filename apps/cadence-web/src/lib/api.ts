@@ -271,14 +271,15 @@ export interface Meal {
   items: { name: string; qty?: number; unit?: string }[];
   raw_text?: string | null;
   flags?: { alcohol?: boolean; caffeine?: boolean };
+  photo_url?: string | null; // short-lived signed URL when the meal was snapped
 }
 
-/** Record one meal in the user's words — parse-meal structures it; nothing is ever judged. */
-export async function logMeal(text: string, meal?: MealKind): Promise<Meal> {
+/** Record one meal — their words, a photo, or both. Nothing is ever judged. */
+export async function logMeal(text: string, meal?: MealKind, photo?: string): Promise<Meal> {
   const res = await fetch(`${BASE}/nutrition/meals`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ text, ...(meal ? { meal } : {}) }),
+    body: JSON.stringify({ ...(text ? { text } : {}), ...(meal ? { meal } : {}), ...(photo ? { photo } : {}) }),
   });
   if (!res.ok) throw Object.assign(new Error(`meal log failed: ${res.status}`), { status: res.status });
   return res.json();

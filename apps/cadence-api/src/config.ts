@@ -60,10 +60,11 @@ export const cadenceConfig = {
   /** Direct Postgres connection (Supabase pooler) — app data, `cadence` schema. */
   databaseUrl: buildDbUrl(),
 
-  /** Supabase auth config — only for validating JWTs once real auth lands. */
+  /** Supabase config — anon key validates JWTs; service key is server-only (Storage: meal photos). */
   supabase: {
     url: process.env.CADENCE_SUPABASE_URL ?? '',
     anonKey: process.env.CADENCE_SUPABASE_ANON_KEY ?? '',
+    serviceRoleKey: process.env.CADENCE_SUPABASE_SERVICE_ROLE_KEY ?? '',
   },
 
   /** AI Admin entities Cadence drives (optional until provisioned + synced). */
