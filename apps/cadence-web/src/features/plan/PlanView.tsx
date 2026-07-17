@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Orb } from '../../components/Orb.tsx';
 import { OccurrenceSheet } from './OccurrenceSheet.tsx';
 import { AdjustSheet } from './AdjustSheet.tsx';
+import { TodayDashboard } from '../today/TodayDashboard.tsx';
 import {
   getPlan,
   setOccurrence,
@@ -12,23 +13,31 @@ import {
 } from '../../lib/api.ts';
 
 /**
- * The "Today / Your week" TAB CONTENT — rendered inside MainTabs' .app shell (no header or
- * .app wrapper of its own since the tab-bar shell owns the chrome). Renders the rolling week,
- * check-off, session sheets, and the weekly proposal banner. "Adjust my plan" is a slim pill
- * in the week-label row that pops the AdjustSheet (steer → preview → confirm; the sheet owns
- * that flow) — suggest-never-auto-apply as always.
+ * The "Today" TAB — rendered inside MainTabs' .app shell (no header of its own). A pinned
+ * `Today | Week` segment (S6) switches between two views over one loaded plan:
+ *   • Today → the Visual Today dashboard (module cards: rhythm, macro rings, consistency rings,
+ *     dot rows, counts, milestones) — the default, "plan for today"-first.
+ *   • Week  → the rolling week list with per-day check-off.
+ * Both share the coach proposal banner, the session sheets, and "Adjust my plan" (a slim pill
+ * that pops the AdjustSheet: steer → preview → confirm) — suggest-never-auto-apply as always.
+ * `reloadKey` bumps when a log/meal/adjust lands so the dashboard's aux fetches refresh.
  */
 export function PlanView() {
   const [data, setData] = useState<PlanViewData | null>(null);
+  const [view, setView] = useState<'today' | 'week'>('today');
   const [note, setNote] = useState('');
   const [proposalBusy, setProposalBusy] = useState(false);
   const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSteer, setAdjustSteer] = useState(''); // pre-filled request (nutrition baseline → Adjust)
+  const [reloadKey, setReloadKey] = useState(0); // bumps → dashboard refetches /progress + /nutrition/day
 
   useEffect(() => {
     getPlan().then(setData).catch(() => setData({ hasPlan: false, stage: 'new', activities: [], week: [], consistency: { kept: 0, window: 7 } }));
   }, []);
+
+  const refresh = () => getPlan().then(setData).catch(() => {});
+  const bump = () => setReloadKey((k) => k + 1);
 
   async function acceptProp() {
     if (proposalBusy) return;
@@ -40,6 +49,7 @@ export function PlanView() {
       if (r.status === 'committed') {
         setNote(r.note?.trim() || 'Updated your plan to fit how this stretch has been going.');
         setData(await getPlan());
+        bump();
       } else {
         setNote("I couldn't adjust it just now — give it another try in a bit.");
       }
@@ -62,7 +72,7 @@ export function PlanView() {
         : d,
     );
     await setOccurrence(o.occurrence_id, next).catch(() => {});
-    getPlan().then(setData).catch(() => {}); // reconcile + refresh consistency
+    refresh(); // reconcile + refresh consistency
   }
 
   if (!data) {
@@ -123,6 +133,10 @@ export function PlanView() {
 
   return (
     <>
+      <div className="seg" role="tablist" aria-label="Today or week">
+        <button className={`seg-btn${view === 'today' ? ' seg-on' : ''}`} role="tab" aria-selected={view === 'today'} onClick={() => setView('today')}>Today</button>
+        <button className={`seg-btn${view === 'week' ? ' seg-on' : ''}`} role="tab" aria-selected={view === 'week'} onClick={() => setView('week')}>Week</button>
+      </div>
       <div className="scrollbody">
         {data.pendingProposal && (
           <div className="plan-proposal">
@@ -158,47 +172,54 @@ export function PlanView() {
             <button className="plan-note-x" onClick={() => setNote('')} aria-label="Dismiss">×</button>
           </div>
         )}
-        <div className="consist">
-          <Orb />
-          <div className="consist-t">
-            <b>{kept === 0 ? 'A fresh week' : `You showed up ${kept} of ${window} days`}</b>
-            <span>{kept === 0 ? 'Check things off as you go — a missed day is just information.' : 'Keep your rhythm — no pressure, no resets.'}</span>
-          </div>
-        </div>
 
-        {today && (
-          <div className="plan-day plan-today">
-            <div className="pd-head">
-              <b>Today</b>
-              <span>{today.weekday} {today.dayNum}</span>
+        {view === 'today' ? (
+          <TodayDashboard plan={data} reloadKey={reloadKey} onCheck={set} onOpen={setSheetOcc} />
+        ) : (
+          <>
+            <div className="consist">
+              <Orb />
+              <div className="consist-t">
+                <b>{kept === 0 ? 'A fresh week' : `You showed up ${kept} of ${window} days`}</b>
+                <span>{kept === 0 ? 'Check things off as you go — a missed day is just information.' : 'Keep your rhythm — no pressure, no resets.'}</span>
+              </div>
             </div>
-            {today.occurrences.length === 0 ? (
-              <div className="pd-empty">Nothing scheduled today — rest counts too.</div>
-            ) : (
-              today.occurrences.map((o) => <Item key={o.occurrence_id} o={o} />)
+
+            {today && (
+              <div className="plan-day plan-today">
+                <div className="pd-head">
+                  <b>Today</b>
+                  <span>{today.weekday} {today.dayNum}</span>
+                </div>
+                {today.occurrences.length === 0 ? (
+                  <div className="pd-empty">Nothing scheduled today — rest counts too.</div>
+                ) : (
+                  today.occurrences.map((o) => <Item key={o.occurrence_id} o={o} />)
+                )}
+              </div>
             )}
-          </div>
-        )}
 
-        <div className="plan-week-row">
-          <div className="plan-week-label">The week ahead</div>
-          <button className="adjust-pill" onClick={() => { setAdjustSteer(''); setAdjustOpen(true); }}>Adjust my plan</button>
-        </div>
-        {rest.map((d) => (
-          <div className="plan-day" key={d.date}>
-            <div className="pd-head">
-              <b>{d.weekday}</b>
-              <span>{d.dayNum}</span>
+            <div className="plan-week-row">
+              <div className="plan-week-label">The week ahead</div>
+              <button className="adjust-pill" onClick={() => { setAdjustSteer(''); setAdjustOpen(true); }}>Adjust my plan</button>
             </div>
-            {d.occurrences.length === 0 ? <div className="pd-empty">—</div> : d.occurrences.map((o) => <Item key={o.occurrence_id} o={o} />)}
-          </div>
-        ))}
+            {rest.map((d) => (
+              <div className="plan-day" key={d.date}>
+                <div className="pd-head">
+                  <b>{d.weekday}</b>
+                  <span>{d.dayNum}</span>
+                </div>
+                {d.occurrences.length === 0 ? <div className="pd-empty">—</div> : d.occurrences.map((o) => <Item key={o.occurrence_id} o={o} />)}
+              </div>
+            ))}
+          </>
+        )}
       </div>
       {sheetOcc && (
         <OccurrenceSheet
           occurrenceId={sheetOcc}
           onClose={() => setSheetOcc(null)}
-          onLogged={() => getPlan().then(setData).catch(() => {})}
+          onLogged={() => { refresh(); bump(); }}
           onProposeChange={(steer) => {
             // Baseline → Adjust bridge: the suggested change rides the normal steer→preview→confirm flow.
             setSheetOcc(null);
@@ -213,7 +234,8 @@ export function PlanView() {
           onClose={() => setAdjustOpen(false)}
           onCommitted={(n) => {
             setNote(n);
-            getPlan().then(setData).catch(() => {});
+            refresh();
+            bump();
           }}
         />
       )}

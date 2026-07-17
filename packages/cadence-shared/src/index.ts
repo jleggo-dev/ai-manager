@@ -293,10 +293,10 @@ export interface SeriesPoint {
  *  which cards exist derives from the user's actual goals + logged data (variable content,
  *  stable renderer); an LLM spec layer can later emit the same shapes. */
 export type ProgressCard =
-  | { kind: 'latest_vs_target'; title: string; unit: string; latest: number | null; start: number | null; target: number; series: SeriesPoint[] }
-  | { kind: 'count'; title: string; goal_id: string; current: number; target: number; unit: string }
-  | { kind: 'countdown'; title: string; end: string; days_left: number; milestones_done: number; milestones_total: number }
-  | { kind: 'consistency'; title: string; kept: number; window: number };
+  | { kind: 'latest_vs_target'; area: GoalArea; title: string; unit: string; latest: number | null; start: number | null; target: number; series: SeriesPoint[] }
+  | { kind: 'count'; area: GoalArea; title: string; goal_id: string; current: number; target: number; unit: string }
+  | { kind: 'countdown'; area: GoalArea; title: string; end: string; days_left: number; milestones_done: number; milestones_total: number }
+  | { kind: 'consistency'; area: GoalArea; title: string; kept: number; window: number };
 
 /** A per-activity trend derived from session logs (pace, top load). */
 export interface ProgressTrend {

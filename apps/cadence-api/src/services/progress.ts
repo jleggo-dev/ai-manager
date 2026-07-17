@@ -126,6 +126,7 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
       const startKg = baseline.weight_kg?.start ?? (weightSeries.length ? weightSeries[0]!.value : null);
       cards.push({
         kind: 'latest_vs_target',
+        area: g.area,
         title: g.title,
         unit: userUnit,
         latest: latestKg !== null ? toUserUnit(latestKg) : null,
@@ -136,6 +137,7 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
     } else if (g.type === 'target' && typeof target === 'number' && COUNTABLE_UNIT.test(unit)) {
       cards.push({
         kind: 'count',
+        area: g.area,
         title: g.title,
         goal_id: g.goal_id,
         current: await countGoalCompletions(userId, g.goal_id),
@@ -147,6 +149,7 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
       const ms = g.milestones ?? [];
       cards.push({
         kind: 'countdown',
+        area: g.area,
         title: g.title,
         end: g.timeframe.end,
         days_left: days,
@@ -157,7 +160,7 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
       const now = new Date();
       const past = await listOccurrences(userId, iso(Date.now() - 6 * 86_400_000), iso(Date.now()));
       const { kept, window } = rollingConsistency(past as never, now, 7);
-      cards.push({ kind: 'consistency', title: g.title, kept, window });
+      cards.push({ kind: 'consistency', area: g.area, title: g.title, kept, window });
     }
   }
 
@@ -167,7 +170,7 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
     await listNutritionLogs(userId, iso(Date.now() - 6 * 86_400_000), iso(Date.now())),
     7,
   ).days_logged;
-  if (foodDays > 0) cards.push({ kind: 'consistency', title: 'Food log', kept: foodDays, window: 7 });
+  if (foodDays > 0) cards.push({ kind: 'consistency', area: 'nourishment', title: 'Food log', kept: foodDays, window: 7 });
 
   /* Activity trends — only titles with ≥2 honest points (sparse-but-honest rule) */
   const trends: ProgressTrend[] = [];

@@ -410,6 +410,55 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 @keyframes mic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(224, 122, 95, .4); } 50% { box-shadow: 0 0 0 6px rgba(224, 122, 95, 0); } }
 @media (prefers-reduced-motion: reduce) { .mic-on { animation: none; } }
 
+/* ── The Visual Today — module dashboard (N4) ────────────────── */
+/* Pinned Today|Week segment under the header — a pill toggle, the selected side lifted. */
+.seg { display: flex; gap: 4px; margin: 0 20px 10px; padding: 3px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 12px; }
+.seg-btn { flex: 1; padding: 7px 0; border-radius: 9px; font-family: var(--display); font-weight: 700; font-size: 13px; letter-spacing: -.01em; color: var(--text-dim); }
+.seg-on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(44, 40, 32, .08); }
+
+/* Card header row shared by dashboard cards. */
+.dash-h { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.dash-h b { font-family: var(--display); font-weight: 700; font-size: 15px; }
+.dash-h span { font-size: 10.5px; color: var(--text-mute); font-family: var(--mono); }
+
+/* Rhythm card: the day's occurrences as a checklist, with a quiet module glyph per row. */
+.dash-rhythm .occ:last-of-type { margin-bottom: 0; }
+.occ-mod { flex: 0 0 auto; display: grid; place-items: center; }
+.occ-mod-nutrition { color: var(--dawn-3); }
+.occ-mod-weigh { color: var(--sage); }
+.occ-mod-session { color: var(--forest); }
+.occ-done .occ-mod, .occ-skip .occ-mod { opacity: .45; }
+.dash-next { margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--text-dim); }
+.dash-next b { font-weight: 600; color: var(--text); }
+
+/* Observe card + snap shortcut. */
+.dash-observe { display: flex; flex-direction: column; gap: 6px; }
+.dash-snap { margin-top: 12px; width: 100%; padding: 9px 0; border-radius: 11px; background: rgba(139, 168, 142, .14); border: 1px solid rgba(139, 168, 142, .32); color: var(--forest); font-size: 12.5px; font-weight: 600; }
+.dash-snap:hover { background: rgba(139, 168, 142, .22); }
+
+/* Rings (consistency + macro) — a track circle with a colored arc, center holds the number. */
+.ring { position: relative; display: inline-grid; place-items: center; flex: 0 0 auto; }
+.ring-center { position: absolute; inset: 0; display: grid; place-items: center; }
+.ring-n { font-family: var(--display); font-weight: 800; font-size: 18px; letter-spacing: -.02em; color: var(--text); }
+.ring-n i { font-style: normal; font-size: 12px; font-weight: 600; color: var(--text-mute); }
+.dash-ringcard { display: flex; align-items: center; gap: 16px; }
+.dash-ringcard-t { min-width: 0; }
+.dash-ringcard-t .prog-sub { margin-top: 3px; }
+
+/* Dot rows — kept days filled, the rest neutral (never red). */
+.dotrow { display: flex; gap: 6px; margin: 8px 0 4px; }
+.dot { width: 13px; height: 13px; border-radius: 50%; flex: 0 0 auto; }
+
+/* Macro rings — one per macro, "Xg left" caption, kcal quiet beneath. */
+.macro-rings { display: flex; flex-direction: column; gap: 12px; }
+.macro-rings-row { display: flex; justify-content: space-around; gap: 8px; }
+.macro-ring { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.macro-ring-n { font-family: var(--display); font-weight: 800; font-size: 16px; letter-spacing: -.02em; color: var(--text); }
+.macro-ring-l { font-size: 12px; font-weight: 600; color: var(--text); }
+.macro-ring-c { font-size: 10.5px; color: var(--text-mute); }
+.macro-kcal { display: flex; justify-content: space-between; align-items: baseline; font-size: 11.5px; color: var(--text-dim); border-top: 1px solid var(--line-soft); padding-top: 9px; font-variant-numeric: tabular-nums; }
+.macro-kcal-left { color: var(--text-mute); }
+
 /* ── Session sheet (Prescribe → Log → Adapt) ─────────────────── */
 .occ-open { text-align: left; }
 .occ-open:hover .occ-title { color: var(--forest); }

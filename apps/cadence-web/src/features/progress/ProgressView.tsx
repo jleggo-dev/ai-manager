@@ -1,47 +1,15 @@
 import { useEffect, useState } from 'react';
-import type { ProgressCard, ProgressTrend, SeriesPoint } from '@cadence/shared';
+import type { ProgressCard, ProgressTrend } from '@cadence/shared';
 import { getProgress, addGoalEvent } from '../../lib/api.ts';
+import { Sparkline, CountBar } from '../../components/viz.tsx';
 
 /**
  * The Progress tab — "variable, coach-shaped" content that derives entirely from the user's
  * own goals and logged data (a no-fitness user simply has no fitness cards). Cards per goal,
  * trend sparklines per activity with ≥2 honest points, and a History feed. All numbers are
- * computed server-side (services/progress.ts); no LLM anywhere in this surface.
+ * computed server-side (services/progress.ts); no LLM anywhere in this surface. The inline-SVG
+ * sparkline/bar primitives are shared with the Today dashboard (components/viz.tsx).
  */
-
-/** Tiny inline-SVG sparkline: min/max-normalized polyline + emphasized endpoint. */
-function Sparkline({ series, good }: { series: SeriesPoint[]; good: 'up' | 'down' }) {
-  const W = 132;
-  const H = 34;
-  const P = 3;
-  if (series.length < 2) return null;
-  const vals = series.map((p) => p.value);
-  const min = Math.min(...vals);
-  const max = Math.max(...vals);
-  const span = max - min || 1;
-  const x = (i: number) => P + (i / (series.length - 1)) * (W - 2 * P);
-  const y = (v: number) => H - P - ((v - min) / span) * (H - 2 * P);
-  const pts = series.map((p, i) => `${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
-  const last = series[series.length - 1]!;
-  const first = series[0]!;
-  const improving = good === 'up' ? last.value >= first.value : last.value <= first.value;
-  const stroke = improving ? 'var(--forest)' : 'var(--dawn-4)';
-  return (
-    <svg className="spark" viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden>
-      <polyline points={pts} fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={x(series.length - 1)} cy={y(last.value)} r="2.6" fill={stroke} />
-    </svg>
-  );
-}
-
-function CountBar({ current, target }: { current: number; target: number }) {
-  const pct = Math.max(0, Math.min(100, target > 0 ? (current / target) * 100 : 0));
-  return (
-    <div className="countbar">
-      <div className="countbar-fill" style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
 
 export function ProgressView() {
   const [data, setData] = useState<Awaited<ReturnType<typeof getProgress>> | null>(null);
