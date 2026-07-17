@@ -354,6 +354,8 @@ export interface Macros {
   protein_g?: number;
   carbs_g?: number;
   fat_g?: number;
+  /** Who produced these numbers: AI estimate ('ai') or the user's own correction ('user'). */
+  source?: 'ai' | 'user';
 }
 
 export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | 'other';
@@ -362,7 +364,7 @@ export interface NutritionLog {
   log_id: string;
   date: string;
   meal: MealKind;
-  items: { name: string; qty?: number; unit?: string }[];
+  items: { name: string; qty?: number; unit?: string; est?: Macros }[];
   macros: Macros;
   input_method: 'photo' | 'voice' | 'text' | 'manual';
   ai_confidence?: number;

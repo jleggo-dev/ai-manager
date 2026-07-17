@@ -65,10 +65,21 @@ export function runJob(cadenceUserId: string, jobId: string, variables: Record<s
   );
 }
 
-/** Run a templated job by SLUG (resolves slug→job→id internally; self-instrumented diagnostics). */
-export function runJobBySlug(cadenceUserId: string, slug: string, variables: Record<string, unknown>) {
+/** Run a templated job by SLUG (resolves slug→job→id internally; self-instrumented diagnostics).
+ *  opts.images: https URLs (short-lived signed Storage URLs) attached as vision content parts —
+ *  the engine appends them AFTER template interpolation and logs URL refs, never image bytes. */
+export function runJobBySlug(
+  cadenceUserId: string,
+  slug: string,
+  variables: Record<string, unknown>,
+  opts: { images?: string[] } = {},
+) {
   return withAim(cadenceUserId, () =>
-    executeJob(slug, { callingApplication: CALLING_APP, variables: { ...clockVars(), ...variables } }),
+    executeJob(slug, {
+      callingApplication: CALLING_APP,
+      variables: { ...clockVars(), ...variables },
+      ...(opts.images?.length ? { images: opts.images } : {}),
+    }),
   );
 }
 

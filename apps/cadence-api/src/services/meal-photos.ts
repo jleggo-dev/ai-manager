@@ -31,6 +31,13 @@ export async function putMealPhoto(userId: string, date: string, dataUrl: string
   return path;
 }
 
+/** Sign ONE photo_ref (e.g. to hand a just-uploaded photo to the vision parser). */
+export async function signMealPhotoUrl(photoRef: string, ttlSeconds = 600): Promise<string> {
+  const { data, error } = await cadenceServiceClient().storage.from(BUCKET).createSignedUrl(photoRef, ttlSeconds);
+  if (error || !data?.signedUrl) throw new Error(`photo sign failed: ${error?.message ?? 'no url'}`);
+  return data.signedUrl;
+}
+
 /** Attach short-lived signed URLs to rows that carry a photo_ref (display-only field). */
 export async function signMealPhotoUrls(rows: NutritionLog[]): Promise<NutritionLog[]> {
   const refs = rows.filter((r) => r.photo_ref);

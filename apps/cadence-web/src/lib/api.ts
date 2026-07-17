@@ -264,14 +264,56 @@ export async function addGoalEvent(goalId: string, label: string): Promise<void>
 
 /* ── Nutrition (Observe phase) ─────────────────────────────────── */
 export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | 'other';
+export interface MealMacros {
+  kcal?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  source?: 'ai' | 'user';
+}
 export interface Meal {
   log_id: string;
   date: string;
   meal: MealKind;
-  items: { name: string; qty?: number; unit?: string }[];
+  items: { name: string; qty?: number; unit?: string; est?: MealMacros }[];
   raw_text?: string | null;
   flags?: { alcohol?: boolean; caffeine?: boolean };
   photo_url?: string | null; // short-lived signed URL when the meal was snapped
+  macros?: MealMacros; // AI-documented estimates (or the user's correction)
+  ai_confidence?: number | null;
+  provisional?: boolean; // low-confidence estimate — listed, but outside totals until confirmed
+}
+
+export interface NutritionDayData {
+  date: string;
+  meals: Meal[];
+  totals: MealMacros; // confirmed only
+  provisional_totals: MealMacros;
+  confirmed_count: number;
+  provisional_count: number;
+  targets: MealMacros | null;
+  left: MealMacros | null;
+}
+
+/** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. */
+export async function getNutritionDay(date?: string): Promise<NutritionDayData | null> {
+  const res = await fetch(`${BASE}/nutrition/day${date ? `?date=${date}` : ''}`, { headers: headers() });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+/** Tap-to-confirm/correct a meal — a bare confirm graduates the AI's numbers into the totals. */
+export async function patchMeal(
+  logId: string,
+  patch: { confirm?: boolean; meal?: MealKind; macros?: MealMacros },
+): Promise<Meal | null> {
+  const res = await fetch(`${BASE}/nutrition/meals/${logId}`, {
+    method: 'PATCH',
+    headers: headers(),
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) return null;
+  return res.json();
 }
 
 /** Record one meal — their words, a photo, or both. Nothing is ever judged. */

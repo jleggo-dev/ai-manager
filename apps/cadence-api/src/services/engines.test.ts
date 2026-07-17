@@ -10,6 +10,7 @@ import { matchGoal } from './plan-match.ts';
 import { startingPointGaps } from './intake.ts';
 import { summarizeNutrition, renderNutritionLine } from './nutrition-summarize.ts';
 import { parsePhotoDataUrl, MAX_PHOTO_BYTES } from './photo-validate.ts';
+import { sanitizeMacros, sumDay, computeLeft } from './nutrition-day.ts';
 
 type GoalLite = Pick<Goal, 'area' | 'type' | 'status'>;
 
@@ -389,5 +390,43 @@ describe('photo-validate (meal photos — capture-first)', () => {
     const over = parsePhotoDataUrl(jpeg(MAX_PHOTO_BYTES + 1));
     expect(!over.ok && over.reason === 'too_large').toBe(true);
     expect(parsePhotoDataUrl(jpeg(MAX_PHOTO_BYTES)).ok).toBe(true);
+  });
+});
+
+describe('nutrition-day (S1/S5 — estimates honestly, totals deterministically)', () => {
+  it('sanitizeMacros rounds (kcal→10s, grams→1), caps, drops junk, and never returns zeros', () => {
+    expect(sanitizeMacros({ kcal: 324, protein_g: 17.6, carbs_g: -5, fat_g: 'x' })).toEqual({
+      kcal: 320,
+      protein_g: 18,
+    });
+    expect(sanitizeMacros({ kcal: 99999 })).toEqual({ kcal: 6000 });
+    expect(sanitizeMacros({})).toBeNull();
+    expect(sanitizeMacros(null)).toBeNull();
+  });
+
+  it('sanitizeMacros: kcal under 5 rounds to 0 and the whole estimate drops to null', () => {
+    expect(sanitizeMacros({ kcal: 3 })).toBeNull();
+  });
+
+  it('sumDay splits confirmed vs provisional and ignores macro-less meals', () => {
+    const day = sumDay([
+      { macros: { kcal: 400, protein_g: 30 }, provisional: false },
+      { macros: { kcal: 320, fat_g: 12 }, provisional: true },
+      { macros: {}, provisional: false }, // photo-only, unparsed → list-only
+      { macros: { kcal: 200, protein_g: 10 }, provisional: false },
+    ]);
+    expect(day.totals).toEqual({ kcal: 600, protein_g: 40 });
+    expect(day.provisional_totals).toEqual({ kcal: 320, fat_g: 12 });
+    expect(day.confirmed_count).toBe(2);
+    expect(day.provisional_count).toBe(1);
+  });
+
+  it('computeLeft clamps at 0, only covers set targets, and is null without targets', () => {
+    expect(computeLeft(null, { kcal: 500 })).toBeNull();
+    expect(computeLeft({ kcal: 2000, protein_g: 120 }, { kcal: 600, protein_g: 130 })).toEqual({
+      kcal: 1400,
+      protein_g: 0, // over target → 0 left, never negative
+    });
+    expect(computeLeft({ kcal: null, fat_g: 60 }, { fat_g: 25 })).toEqual({ fat_g: 35 });
   });
 });

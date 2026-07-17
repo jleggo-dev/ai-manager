@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
-import { logMeal, getNutritionSummary, listRecentMeals, getBaselineRead } from '../services/nutrition.ts';
+import { logMeal, getNutritionSummary, listRecentMeals, getBaselineRead, getNutritionDay, patchMeal } from '../services/nutrition.ts';
 import type { MealKind } from '@cadence/shared';
 
 const router = Router();
@@ -46,6 +46,38 @@ router.get('/summary', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /nutrition/summary]', err);
     res.status(500).json({ error: 'failed to summarize' });
+  }
+});
+
+/** GET /nutrition/day?date=YYYY-MM-DD — one day's meals + deterministic totals (confirmed vs
+ *  provisional) + targets/left when the user has confirmed targets (N3). Defaults to today. */
+router.get('/day', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date ?? '')) ? String(req.query.date) : undefined;
+  try {
+    res.json(await getNutritionDay(userId, date));
+  } catch (err) {
+    console.error('[GET /nutrition/day]', err);
+    res.status(500).json({ error: 'failed to build the day' });
+  }
+});
+
+/** PATCH /nutrition/meals/:id — tap-to-confirm/correct. The user's word wins: any correction
+ *  (or a bare confirm) graduates the row into the day's totals. */
+router.patch('/meals/:id', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const row = await patchMeal(userId, String(req.params.id), {
+      meal: req.body?.meal,
+      items: req.body?.items,
+      macros: req.body?.macros,
+      confirm: req.body?.confirm === true,
+    });
+    if (!row) return void res.status(404).json({ error: 'meal not found (or nothing to change)' });
+    res.json(row);
+  } catch (err) {
+    console.error('[PATCH /nutrition/meals/:id]', err);
+    res.status(500).json({ error: 'failed to update meal' });
   }
 });
 

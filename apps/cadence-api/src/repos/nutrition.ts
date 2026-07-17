@@ -18,17 +18,47 @@ export async function insertNutritionLog(
     raw_text?: string | null;
     flags?: NutritionLog['flags'];
     photo_ref?: string | null;
+    macros?: NutritionLog['macros'] | null;
+    provisional?: boolean;
   },
 ): Promise<NutritionLog> {
   const [out] = await sql<NutritionLog[]>`
     insert into cadence.nutrition_logs
-      (user_id, date, meal, items, input_method, ai_confidence, raw_text, flags, photo_ref)
+      (user_id, date, meal, items, input_method, ai_confidence, raw_text, flags, photo_ref, macros, provisional)
     values (
       ${userId}, ${row.date}, ${row.meal}, ${json(row.items ?? [])}, ${row.input_method},
-      ${row.ai_confidence ?? null}, ${row.raw_text ?? null}, ${json(row.flags ?? {})}, ${row.photo_ref ?? null}
+      ${row.ai_confidence ?? null}, ${row.raw_text ?? null}, ${json(row.flags ?? {})}, ${row.photo_ref ?? null},
+      ${json(row.macros ?? {})}, ${row.provisional ?? false}
     )
     returning ${COLS}`;
   return out!;
+}
+
+/**
+ * Correction/confirmation update (dual-keyed — a foreign id must miss). Only the provided fields
+ * change; the user's word always wins, so callers set ai_confidence/provisional accordingly.
+ */
+export async function updateNutritionLog(
+  userId: string,
+  logId: string,
+  patch: {
+    meal?: NutritionLog['meal'];
+    items?: NutritionLog['items'];
+    macros?: NutritionLog['macros'];
+    ai_confidence?: number | null;
+    provisional?: boolean;
+  },
+): Promise<NutritionLog | null> {
+  const [out] = await sql<NutritionLog[]>`
+    update cadence.nutrition_logs set
+      meal = coalesce(${patch.meal ?? null}, meal),
+      items = coalesce(${patch.items ? json(patch.items) : null}, items),
+      macros = coalesce(${patch.macros ? json(patch.macros) : null}, macros),
+      ai_confidence = coalesce(${patch.ai_confidence ?? null}, ai_confidence),
+      provisional = coalesce(${patch.provisional ?? null}, provisional)
+    where user_id = ${userId} and log_id = ${logId}
+    returning ${COLS}`;
+  return out ?? null;
 }
 
 /** Meals in [fromDate, toDate], newest first (date, then entry time). Dual-keyed on user_id. */

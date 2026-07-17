@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SessionItem } from '@cadence/shared';
-import { getOccurrenceDetail, logOccurrence, recordWeighIn, logMeal, getRecentMeals, getBaselineRead, type OccurrenceDetail, type Meal, type MealKind, type BaselineRead } from '../../lib/api.ts';
+import { getOccurrenceDetail, logOccurrence, recordWeighIn, logMeal, getRecentMeals, getBaselineRead, getNutritionDay, patchMeal, type OccurrenceDetail, type Meal, type MealKind, type MealMacros, type BaselineRead, type NutritionDayData } from '../../lib/api.ts';
 import { Orb } from '../../components/Orb.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
 
@@ -28,6 +28,18 @@ const ytSearch = (q: string) => `https://www.youtube.com/results?search_query=${
 
 const isFoodRow = (d: OccurrenceDetail | null): boolean =>
   !!d && d.kind === 'system' && /food|meal|nutrition/i.test(d.title);
+
+/** "~320 kcal · P18 C34 F12" — estimates wear a ~ on purpose. */
+function macroLine(m?: MealMacros): string {
+  if (!m?.kcal && !m?.protein_g && !m?.carbs_g && !m?.fat_g) return '';
+  const bits: string[] = [];
+  if (m.kcal) bits.push(`~${m.kcal} kcal`);
+  const pcf = [m.protein_g ? `P${Math.round(m.protein_g)}` : '', m.carbs_g ? `C${Math.round(m.carbs_g)}` : '', m.fat_g ? `F${Math.round(m.fat_g)}` : '']
+    .filter(Boolean)
+    .join(' ');
+  if (pcf) bits.push(pcf);
+  return bits.join(' · ');
+}
 
 /** Sensible default meal for right now — the user can always switch it. */
 const mealForNow = (): MealKind => {
@@ -83,7 +95,28 @@ export function OccurrenceSheet({
   const [mealBusy, setMealBusy] = useState(false);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [mealPhoto, setMealPhoto] = useState<string | null>(null); // downscaled data URL, ready to send
+  const [day, setDay] = useState<NutritionDayData | null>(null); // today's totals (confirmed vs provisional)
+  const [confirming, setConfirming] = useState<string | null>(null); // log_id mid tap-to-confirm
   const [daysLogged, setDaysLogged] = useState(0); // distinct dates in the last 7d — the phase gate
+
+  async function refreshDay(forDate?: string) {
+    const d = await getNutritionDay(forDate).catch(() => null);
+    if (d) {
+      setDay(d);
+      setMeals(d.meals);
+    }
+  }
+
+  async function confirmMeal(logId: string) {
+    if (confirming) return;
+    setConfirming(logId);
+    try {
+      await patchMeal(logId, { confirm: true });
+      await refreshDay(detail?.date);
+    } finally {
+      setConfirming(null);
+    }
+  }
 
   async function pickPhoto(file: File | null | undefined) {
     if (!file || mealBusy) return;
@@ -117,9 +150,10 @@ export function OccurrenceSheet({
     setLogErr('');
     try {
       const m = await logMeal(text, mealKind, mealPhoto ?? undefined);
-      setMeals([m, ...meals]);
+      setMeals([m, ...meals]); // instant feedback; the day refresh reconciles totals
       setMealText('');
       setMealPhoto(null);
+      void refreshDay(detail.date);
       if (detail.status === 'pending') setDetail({ ...detail, status: 'done' }); // server ticked the row
       onLogged?.();
     } catch {
@@ -185,15 +219,14 @@ export function OccurrenceSheet({
     };
   }, [occurrenceId]);
 
-  // Food rows: load the day's meals so the sheet shows what's already been logged.
+  // Food rows: the day rollup drives the list + totals; the 7d fetch only feeds the phase gate.
   useEffect(() => {
     if (!isFoodRow(detail)) return;
     let alive = true;
+    void refreshDay(detail!.date);
     getRecentMeals(7)
       .then((ms) => {
-        if (!alive) return;
-        setMeals(ms.filter((m) => m.date === detail!.date));
-        setDaysLogged(new Set(ms.map((m) => m.date)).size); // client-side gate check — no extra request
+        if (alive) setDaysLogged(new Set(ms.map((m) => m.date)).size);
       })
       .catch(() => {});
     return () => {
@@ -293,14 +326,38 @@ export function OccurrenceSheet({
             ) : isFoodRow(detail) ? (
               /* Observe phase: meals accumulate all day (open even when already ticked done). */
               <div className="logbox" style={{ borderTop: 'none', paddingTop: 0 }}>
-                <div className="logbox-label">What did you eat? Your words are enough.</div>
+                <div className="logbox-label">What did you eat? Say it or snap it — I'll read what I can.</div>
+                {day && (day.confirmed_count > 0 || day.provisional_count > 0) && (
+                  <div className="day-totals">
+                    <b>Today{macroLine(day.totals) ? `: ${macroLine(day.totals)}` : ''}</b>
+                    {day.provisional_count > 0 && (
+                      <span className="day-totals-prov">
+                        {day.provisional_totals.kcal ? ` + ~${day.provisional_totals.kcal} kcal` : ` + ${day.provisional_count} meal${day.provisional_count === 1 ? '' : 's'}`} unconfirmed
+                      </span>
+                    )}
+                  </div>
+                )}
                 {meals.length > 0 && (
                   <div className="meal-list">
                     {meals.map((m) => (
-                      <div className="meal-item" key={m.log_id}>
+                      <div className={`meal-item${m.provisional ? ' meal-prov' : ''}`} key={m.log_id}>
                         <span className="meal-kind">{m.meal}</span>
                         {m.photo_url && <img className="meal-thumb" src={m.photo_url} alt="" loading="lazy" />}
-                        <span className="meal-what">{m.items.map((i) => i.name).join(', ') || m.raw_text || (m.photo_url ? '📷 photo' : '')}</span>
+                        <span className="meal-what">
+                          {m.items.map((i) => i.name).join(', ') || m.raw_text || (m.photo_url ? '📷 photo' : '')}
+                          {macroLine(m.macros) && <span className="meal-est"> · {macroLine(m.macros)}</span>}
+                        </span>
+                        {m.provisional && (
+                          <button
+                            className="meal-confirm"
+                            onClick={() => confirmMeal(m.log_id)}
+                            disabled={confirming === m.log_id}
+                            title="Looks right — count it"
+                            aria-label="Confirm this meal's estimates"
+                          >
+                            {confirming === m.log_id ? '…' : '✓'}
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -335,7 +392,7 @@ export function OccurrenceSheet({
                   <div className="photo-preview">
                     <img src={mealPhoto} alt="your plate" />
                     <button className="photo-clear" onClick={() => setMealPhoto(null)} disabled={mealBusy} aria-label="Remove photo">×</button>
-                    <span className="photo-hint">Add a few words if you like — I can't read plates yet, but the photo is kept.</span>
+                    <span className="photo-hint">I'll read what I can from the photo — estimates, not judgments. A few words help.</span>
                   </div>
                 )}
                 <div className="weigh-row">
