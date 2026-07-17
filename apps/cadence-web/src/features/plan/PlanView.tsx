@@ -24,6 +24,7 @@ export function PlanView() {
   const [proposalBusy, setProposalBusy] = useState(false);
   const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustSteer, setAdjustSteer] = useState(''); // pre-filled request (nutrition baseline → Adjust)
 
   useEffect(() => {
     getPlan().then(setData).catch(() => setData({ hasPlan: false, stage: 'new', activities: [], week: [], consistency: { kept: 0, window: 7 } }));
@@ -181,7 +182,7 @@ export function PlanView() {
 
         <div className="plan-week-row">
           <div className="plan-week-label">The week ahead</div>
-          <button className="adjust-pill" onClick={() => setAdjustOpen(true)}>Adjust my plan</button>
+          <button className="adjust-pill" onClick={() => { setAdjustSteer(''); setAdjustOpen(true); }}>Adjust my plan</button>
         </div>
         {rest.map((d) => (
           <div className="plan-day" key={d.date}>
@@ -198,10 +199,17 @@ export function PlanView() {
           occurrenceId={sheetOcc}
           onClose={() => setSheetOcc(null)}
           onLogged={() => getPlan().then(setData).catch(() => {})}
+          onProposeChange={(steer) => {
+            // Baseline → Adjust bridge: the suggested change rides the normal steer→preview→confirm flow.
+            setSheetOcc(null);
+            setAdjustSteer(steer);
+            setAdjustOpen(true);
+          }}
         />
       )}
       {adjustOpen && (
         <AdjustSheet
+          initialSteer={adjustSteer}
           onClose={() => setAdjustOpen(false)}
           onCommitted={(n) => {
             setNote(n);

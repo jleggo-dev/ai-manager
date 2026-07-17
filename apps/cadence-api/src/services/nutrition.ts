@@ -9,6 +9,7 @@
  */
 import { runJobBySlug } from '../ai/aim.ts';
 import { insertNutritionLog, listNutritionLogs } from '../repos/nutrition.ts';
+import { listGoalsByStatus } from '../repos/goals.ts';
 import { findPendingFoodLogOccurrence, setOccurrenceStatus } from '../repos/occurrences.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { logAi } from './ai-log.ts';
@@ -99,4 +100,49 @@ export async function listRecentMeals(userId: string, days = 7): Promise<Nutriti
   const to = today();
   const from = new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
   return listNutritionLogs(userId, from, to);
+}
+
+export type BaselineRead =
+  | { ready: false; days_logged: number; days_needed: number }
+  | { ready: true; read: string; suggestion: string; rationale: string };
+
+const OBSERVE_DAYS_NEEDED = 7;
+
+/**
+ * The Baseline moment (module arc): after ~7 OBSERVED days, the coach gives their pattern read
+ * and proposes exactly ONE gradual change. The gate is deterministic (distinct logged days);
+ * the read is grounded in the actual log; the change is suggest-never-auto-apply — the caller
+ * hands `suggestion` to the replan steer, and the existing preview→confirm flow owns the commit.
+ */
+export async function getBaselineRead(userId: string): Promise<BaselineRead> {
+  const to = today();
+  const from = new Date(Date.now() - 13 * 86_400_000).toISOString().slice(0, 10); // 14d window: a slow logger still crosses the gate
+  const meals = await listNutritionLogs(userId, from, to);
+  const summary = summarizeNutrition(meals, 14);
+  if (summary.days_logged < OBSERVE_DAYS_NEEDED) {
+    return { ready: false, days_logged: summary.days_logged, days_needed: OBSERVE_DAYS_NEEDED };
+  }
+
+  const goals = await listGoalsByStatus(userId, ['confirmed', 'committed']);
+  const res = await runJobBySlug(userId, 'nutrition-baseline', {
+    summary: JSON.stringify(summary),
+    meals: JSON.stringify(
+      meals.map((m) => ({ date: m.date, meal: m.meal, items: m.items.map((i) => i.name), flags: m.flags })),
+    ),
+    goals: JSON.stringify(goals.map((g) => ({ title: g.title, area: g.area, type: g.type }))),
+  });
+  const raw = res.formatted ?? res.raw ?? '';
+  const parsed = JSON.parse(raw) as { read?: unknown; suggestion?: unknown; rationale?: unknown };
+  const read = typeof parsed.read === 'string' ? parsed.read.trim() : '';
+  const suggestion = typeof parsed.suggestion === 'string' ? parsed.suggestion.trim().slice(0, 300) : '';
+  const rationale = typeof parsed.rationale === 'string' ? parsed.rationale.trim() : '';
+  if (!read || !suggestion) throw new Error('nutrition-baseline returned an incomplete read');
+
+  void logAi(userId, {
+    kind: 'nutrition_baseline',
+    input: { summary },
+    output: { raw: raw.slice(0, 2000) },
+    meta: { days_logged: summary.days_logged },
+  });
+  return { ready: true, read, suggestion, rationale };
 }

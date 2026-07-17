@@ -292,6 +292,17 @@ export async function getRecentMeals(days = 7): Promise<Meal[]> {
   return body.meals ?? [];
 }
 
+export type BaselineRead =
+  | { ready: false; days_logged: number; days_needed: number }
+  | { ready: true; read: string; suggestion: string; rationale: string };
+
+/** The Baseline moment — the coach's pattern read + ONE gradual change (7+ observed days). */
+export async function getBaselineRead(): Promise<BaselineRead> {
+  const res = await fetch(`${BASE}/nutrition/baseline`, { method: 'POST', headers: headers() });
+  if (!res.ok) throw Object.assign(new Error(`baseline failed: ${res.status}`), { status: res.status });
+  return res.json();
+}
+
 /** Weigh-in capture (deterministic, no LLM) — stores the series point + updates baseline. */
 export async function recordWeighIn(id: string, weight: number, unit: 'kg' | 'lb'): Promise<{ weight_kg: number }> {
   const res = await fetch(`${BASE}/plan/occurrences/${id}/weigh-in`, {

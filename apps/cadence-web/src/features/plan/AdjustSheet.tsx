@@ -10,8 +10,16 @@ import { Orb } from '../../components/Orb.tsx';
  * week → confirm or "Not now". The sheet owns the whole lifecycle; the parent just refreshes
  * on commit. Voice input on the steer box (MicButton).
  */
-export function AdjustSheet({ onClose, onCommitted }: { onClose: () => void; onCommitted: (note: string) => void }) {
-  const [steer, setSteer] = useState('');
+export function AdjustSheet({
+  onClose,
+  onCommitted,
+  initialSteer,
+}: {
+  onClose: () => void;
+  onCommitted: (note: string) => void;
+  initialSteer?: string; // pre-filled request (e.g. the nutrition baseline's suggested change)
+}) {
+  const [steer, setSteer] = useState(initialSteer ?? '');
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<{ activities: PendingPlanActivity[]; note: string } | null>(null);
   const [msg, setMsg] = useState('');

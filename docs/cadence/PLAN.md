@@ -1390,6 +1390,28 @@ Driven by a live "Jeffrey" walkthrough that surfaced real gaps between capture a
   a committed plan with a Food-log row) and the capture-sheet browser walk (preview server down) —
   both thin binds over verified paths. On `feat/cadence`.
 
+- **Nutrition cut 2 — the Baseline moment (2026-07-17):** the arc's transition OUT of
+  observation, composed entirely from existing machinery. `nutrition-baseline` (Coach-tier job
+  #15): meals + deterministic summary + goals → `{ read, suggestion, rationale }` — 2-3 warm
+  pattern sentences (must name something genuinely good; never calories/macros/shame) + exactly
+  ONE small gradual change phrased as a request the user could say. Deterministically GATED:
+  `getBaselineRead` returns `ready:false` under 7 distinct logged days (14-day window so slow
+  loggers still cross); POST /nutrition/baseline; `nutrition_baseline` ai_log kind. **The bridge:**
+  the Food-log sheet computes days-logged client-side from the meals it already fetched (zero
+  extra requests) → at 7+ shows "A week of watching is done — want my read?" → renders read +
+  suggestion → "Weave it into my plan →" hands the suggestion to PlanView's AdjustSheet as
+  `initialSteer` (new prop) — the change rides the EXISTING steer→preview→confirm replan flow;
+  suggest-never-auto-apply, zero new commit paths. **Verified:** tsc×2; vitest 42/42; sync-jobs
+  1 created + 14 updated / 0; scratch live smoke — seeded 7 observed days → read grounded in the
+  actual log ("coffee and sometimes eggs… takeout pizza paired with your IPAs") + one change
+  ("add a banana or another piece of fruit alongside your toast one more morning") + rationale;
+  PLUS closed the two previously-unexercised paths: an eating goal's synthesis emitted
+  `Food log [system] FREQ=DAILY` with no eating-change activities (observation honored), and
+  `logMeal` auto-ticked the pending Food-log occurrence (pending→done). Honest wart: the
+  suggestion embellished "toast" to "sourdough toast" (never stated) — cosmetic, the change
+  itself was grounded; the prompt's use-their-words rule could be tightened later. On
+  `feat/cadence`.
+
 ### Final step (post-finalization) — the agentic retrieval loop: the coach answers its own questions
 
 **Framing (decided 2026-07-07):** the current context engine is a *workable, shippable* model, not a

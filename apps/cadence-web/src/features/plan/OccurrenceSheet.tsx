@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SessionItem } from '@cadence/shared';
-import { getOccurrenceDetail, logOccurrence, recordWeighIn, logMeal, getRecentMeals, type OccurrenceDetail, type Meal, type MealKind } from '../../lib/api.ts';
+import { getOccurrenceDetail, logOccurrence, recordWeighIn, logMeal, getRecentMeals, getBaselineRead, type OccurrenceDetail, type Meal, type MealKind, type BaselineRead } from '../../lib/api.ts';
 import { Orb } from '../../components/Orb.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
 
@@ -39,10 +39,12 @@ export function OccurrenceSheet({
   occurrenceId,
   onClose,
   onLogged,
+  onProposeChange,
 }: {
   occurrenceId: string;
   onClose: () => void;
   onLogged?: () => void; // parent refreshes the week so the row shows done
+  onProposeChange?: (steer: string) => void; // hand the baseline's suggested change to the Adjust flow
 }) {
   const [detail, setDetail] = useState<OccurrenceDetail | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'gone' | 'error'>('loading');
@@ -55,6 +57,22 @@ export function OccurrenceSheet({
   const [mealKind, setMealKind] = useState<MealKind>(mealForNow());
   const [mealBusy, setMealBusy] = useState(false);
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [daysLogged, setDaysLogged] = useState(0); // distinct dates in the last 7d — the phase gate
+  const [baseline, setBaseline] = useState<BaselineRead | null>(null);
+  const [baselineBusy, setBaselineBusy] = useState(false);
+
+  async function fetchBaseline() {
+    if (baselineBusy) return;
+    setBaselineBusy(true);
+    setLogErr('');
+    try {
+      setBaseline(await getBaselineRead());
+    } catch {
+      setLogErr("Couldn't put the read together just now — try again in a moment.");
+    } finally {
+      setBaselineBusy(false);
+    }
+  }
 
   async function submitMeal() {
     const text = mealText.trim();
@@ -136,7 +154,9 @@ export function OccurrenceSheet({
     let alive = true;
     getRecentMeals(7)
       .then((ms) => {
-        if (alive) setMeals(ms.filter((m) => m.date === detail!.date));
+        if (!alive) return;
+        setMeals(ms.filter((m) => m.date === detail!.date));
+        setDaysLogged(new Set(ms.map((m) => m.date)).size); // client-side gate check — no extra request
       })
       .catch(() => {});
     return () => {
@@ -272,6 +292,31 @@ export function OccurrenceSheet({
                   </button>
                 </div>
                 {logErr && <div className="auth-error">{logErr}</div>}
+
+                {/* The Baseline moment: 7+ observed days → the coach's read + ONE gradual change,
+                    which feeds the existing Adjust (steer → preview → confirm) flow. */}
+                {daysLogged >= 7 && !baseline && (
+                  <button className="baseline-cta" onClick={fetchBaseline} disabled={baselineBusy}>
+                    {baselineBusy ? 'Reading your week…' : 'A week of watching is done — want my read?'}
+                  </button>
+                )}
+                {baseline?.ready === true && (
+                  <div className="baseline-box">
+                    <div className="sess-note">
+                      <Orb />
+                      <span>{baseline.read}</span>
+                    </div>
+                    <div className="baseline-sug">
+                      <b>One small change:</b> {baseline.suggestion}
+                      {baseline.rationale ? <span className="baseline-why"> — {baseline.rationale}</span> : null}
+                    </div>
+                    {onProposeChange && (
+                      <button className="lockbtn" onClick={() => onProposeChange(baseline.suggestion)}>
+                        Weave it into my plan →
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ) : detail.kind === 'system' && /weigh/i.test(detail.title) && detail.status === 'pending' ? (
               <div className="logbox" style={{ borderTop: 'none', paddingTop: 0 }}>

@@ -9,7 +9,8 @@ export type AiLogKind =
   | 'assess_goal'
   | 'prescribe_session'
   | 'parse_session_log'
-  | 'parse_meal';
+  | 'parse_meal'
+  | 'nutrition_baseline';
 
 /**
  * Durable log of a behind-the-scenes AI call (see migration 0004). Best-effort: a logging

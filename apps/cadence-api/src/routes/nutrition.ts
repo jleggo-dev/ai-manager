@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
-import { logMeal, getNutritionSummary, listRecentMeals } from '../services/nutrition.ts';
+import { logMeal, getNutritionSummary, listRecentMeals, getBaselineRead } from '../services/nutrition.ts';
 import type { MealKind } from '@cadence/shared';
 
 const router = Router();
@@ -43,6 +43,21 @@ router.get('/summary', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /nutrition/summary]', err);
     res.status(500).json({ error: 'failed to summarize' });
+  }
+});
+
+/**
+ * POST /nutrition/baseline — the Baseline moment: the coach's pattern read + ONE gradual change.
+ * Deterministically gated on 7+ observed days (200 with ready:false below the gate — the UI shows
+ * progress, not an error). POST because it runs a coach-tier LLM call.
+ */
+router.post('/baseline', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    res.json(await getBaselineRead(userId));
+  } catch (err) {
+    console.error('[POST /nutrition/baseline]', err);
+    res.status(500).json({ error: 'failed to build the read' });
   }
 });
 
