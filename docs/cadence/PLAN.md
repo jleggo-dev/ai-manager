@@ -528,7 +528,9 @@ HealthKit (the deciding constraint, §7/§8). The path:
   `nutrition_logs` writes (raw_text always kept) + deterministic summary feeding dossier,
   `get_food_log` retrieval, replan `recent_activity.food_log`, and the Food-log capture sheet;
   synthesis holds eating changes until 7+ logged days, then ONE at a time. See the dated batch
-  entry. REMAINING: per-topic thread continuity; `users.macro_targets` day view; photo input.
+  entry. Photo input SHIPPED capture-first 2026-07-17. REMAINING: per-topic thread continuity;
+  vision parse + `macro_targets` day view + rings — now fully specced in "SPEC — Nutrition v2 +
+  the Visual Today" (phases N1–N4).
 - **Adaptation (Phase 7).** Tripwires → `situation_assess` → disrupted mode (additive temp
   plan) / check-in / replan (`cadence-replan` workflow exists).
 
@@ -562,11 +564,11 @@ HealthKit (the deciding constraint, §7/§8). The path:
 - **Native iOS (Capacitor) + HealthKit** — Phase 7; capability seam already scaffolded.
 
 **F. AI Admin enhancements this exercise surfaced (proposed — MEMORY-ARCHITECTURE.md §5)**
-- **Multimodal content parts in the provider layer** (surfaced by meal photos, 2026-07-17): every
-  integration (devs-ai, devs-ai-v2, gemini) sends `content: string` only — no image parts — so no
-  job/chat/raw path can carry a photo to a vision model. Cadence ships photo capture-first
-  (Storage + photo_ref) and skips machine reading; when the engine gains image input, parse-meal
-  can read plates — and every photo logged since day one is retroactively parseable via photo_ref.
+- **Multimodal content parts in the provider layer** — PROMOTED to a concrete plan (2026-07-17):
+  Devs.ai accepts `ComplexMessageContent` (`{type:'url'|'id'}` image parts), so this is
+  implementable now, not blocked upstream. Full design + phasing in the "SPEC — Nutrition v2 +
+  the Visual Today" section (S2, phase N1). Until built, Cadence's photos stay capture-first;
+  photo_ref keeps every plate retroactively parseable.
 - Engine-owned chat finalization (so no consumer can bypass logging).
 - First-class per-user **context/memory store** primitive (TTL + provenance).
 - Cache-aware "stable prefix + dynamic tail" prompt assembly.
@@ -1465,6 +1467,127 @@ Driven by a live "Jeffrey" walkthrough that surfaced real gaps between capture a
   errors. Not exercisable in the automated browser: the OS file/camera picker itself (needs a real
   device) — the downscale path is standard canvas code and the server pipeline is proven. On
   `feat/cadence`.
+
+## SPEC — Nutrition v2 + the Visual Today (2026-07-17 · not yet built)
+
+> User direction (from MyFitnessPal screenshots): keep the MACRO view (rings, targets, "Xg left");
+> make Today visual and "plan for today"-first instead of a week list; the dashboard must span
+> module types (fitness, nutrition, habits, reading, spiritual — whatever the user's goals are);
+> the AI DISCOVERS/DOCUMENTS nutrition details instead of MFP's database-search-and-pick; ignore
+> the Steps card (HealthKit later). Spec first, build after sign-off per phase.
+
+### S1. Philosophy reconciliation — estimates, honestly
+
+The Observe phase keeps "never invent" (it's about learning how you eat, not measuring). But the
+ORIGINAL schema anticipated the next step all along: `nutrition_logs.macros`, `ai_confidence`,
+`provisional` ("below confirm threshold → excluded from totals", §B2) and `users.macro_targets`
+have existed since 0001. Nutrition v2 activates them with three rules:
+1. **Estimates are labeled estimates** — rounded values, `~` prefix in UI, per-meal confidence;
+   below the threshold (default 0.5, tunable) the row is `provisional`: shown, but EXCLUDED from
+   the day's totals until the user taps to confirm or edit. The user's correction always wins
+   (sets confidence 1, provisional false, `macros.source='user'`).
+2. **MFP inverts to us**: they search a database and pick a serving; we let you say/snap the meal
+   and the AI documents it — the human corrects instead of data-enters.
+3. **Brand guard**: "Xg left" framing (count what's left, never what broke); hitting a target says
+   "target reached", over-target never turns red or scolds; no calorie-first moralizing — kcal is
+   shown quietly, macros lead.
+
+### S2. Vision through AI Admin — UNBLOCKED (engine work, promoted from backlog §F)
+
+Devs.ai accepts `ComplexMessageContent` arrays — `prompt: [{type:'text',text}, {type:'url',url}]`
+or `{type:'id', id}` after `POST /v1/files` (docs.devs.ai/api-spec). So plate-reading can flow
+through the auditable machinery; my earlier "engine is text-only" was the provider layer's
+implementation, not an upstream limit. Grounding (read today):
+- v1 client `sendChatMessage` already types `prompt: string | unknown[]` → parts likely pass
+  through the chats path unmodified.
+- Job execution calls `llmClient.chatCompletion(model, msgs)` — v1 hits `/api/v1/chat/completions`
+  (OpenAI-compat; upstream compat endpoints accept `content: parts[]`), v2 builds
+  `/api/v2/responses` bodies from string-content `ChatMessage`s in `request-builder.ts` — that
+  builder is the one real gap.
+
+Engine changes (AI Admin — its own repo conventions, tests, prepush):
+- **E1** Canonical `ContentPart = {type:'text',text} | {type:'image_url',url}` in engine types;
+  `ChatMessage.content: string | ContentPart[]`.
+- **E2** Request builders map parts per provider dialect: v2 → Responses `input_text`/`input_image`;
+  v1 compat → OpenAI-style content array; native chats path → devs.ai `{type:'url'}`.
+- **E3** `executeJob(slug, { images?: string[] })` — URLs appended as image parts AFTER template
+  interpolation (templates stay text; no `{{image}}` pseudo-variables). Diagnostics/ai_log record
+  the URL REFERENCES, never base64 payloads.
+- **E4** Vision-capable model check: broker default gpt-4.1-mini is vision-capable — confirm via
+  the live catalog (`list-v2-models`) during N1, with gpt-4o as the verified fallback.
+- **E5** Tests: builder unit tests + one live smoke (an image containing only the words "eggs and
+  toast" must come back as those items — proves the image round-trip without needing real food).
+- **Non-goal (cut 1)**: the file-ID upload path. Cadence already mints short-lived signed Storage
+  URLs — `{type:'url'}` with a 1h signed URL is the zero-new-infra route. If N1's smoke shows
+  Devs.ai can't fetch them reliably, fall back to `POST /v1/files` + `{type:'id'}`.
+
+### S3. parse-meal v2 — vision + macro documentation
+
+- Accepts `meal_text` (optional), one image (optional; at least one of the two), `meal_hint`.
+- Output grows: per-item optional `est {kcal, protein_g, carbs_g, fat_g}`, meal-level
+  `est_macros` totals, `confidence`. Portion honesty: from a photo, qty only when visually
+  unambiguous; estimates ROUNDED (no false precision); unknown → omitted, never guessed.
+- Service: totals land in `nutrition_logs.macros` (+ `ai_confidence`, `provisional` per S1).
+- **Retro-backfill**: a script re-parses photo-only rows (`photo_ref` set, `items=[]`) — every
+  plate snapped since capture-first shipped becomes data the day vision lands.
+- **Correction**: `PATCH /nutrition/meals/:id` (items, macros, meal kind) — the tap-to-confirm/
+  edit path that graduates provisional rows into totals.
+
+### S4. Targets the coach discovers (`users.macro_targets`)
+
+- New coach-tier job `nutrition-targets`: baseline (age/height/weight incl. start), goals (weight
+  target, movement load), observed-week summary → proposed `{kcal?, protein_g?, carbs_g?, fat_g?}`
+  + a short rationale in coach voice ("protein up because two strength days…").
+- **Gates**: only offered after the observe window (≥7 logged days) AND an eating/weight goal
+  exists. Suggest-never-auto-apply: surfaces as an extension of the existing Baseline moment
+  ("want my read?" → read + one change + PROPOSED TARGETS), user confirms/edits → saved. A
+  Settings editor covers later tweaks. No confirmed targets → no rings, observe card persists.
+
+### S5. Daily rollup — `GET /nutrition/day?date=`
+
+`{ meals[], totals, provisional_totals, targets?, left? }` — pure deterministic sums
+(unit-tested; confirmed rows only in `totals`), `left` clamped at ≥0. This endpoint feeds the
+rings and the coach (`get_food_log` gains the day totals line once targets exist).
+
+### S6. The Visual Today — a module dashboard, not a week list
+
+Principle (same as Progress): **stable chrome, cards derive from the user's own goals** — a
+books-and-prayer user never sees a macro ring. Today tab becomes a card dashboard; the week list
+moves behind a `Today | Week` segment (MFP-style pager dots considered; segment is simpler v1).
+
+Card registry — deterministic eligibility by (area, goal type, data presence); inline SVG only:
+1. **Today's rhythm** (always, first) — the day's occurrences as a visual checklist: module icon,
+   time chip, done/skip states. The anchor card.
+2. **Nutrition** — pre-targets: observe card (7-dot days-logged row, today's meal count, snap
+   shortcut); post-targets: MACRO RINGS (carbs/fat/protein, "Xg left" captions, kcal quiet).
+3. **Movement** — weekly consistency ring + next-session chip; pace/load sparkline when ≥2 points.
+4. **Counts** (books etc.) — progress bar (20/100) + "+1".
+5. **Practice/mind** — 7-day dot row (done / rest / missed-as-neutral — never red).
+6. **Weight** — sparkline + latest vs target (only when a weight goal or weigh-ins exist).
+7. **Milestone countdown** — days left + next stepping-stone.
+Data: compose from existing `GET /plan` + `/progress` + `/nutrition/day` client-side first; add an
+aggregate endpoint only if phone latency demands it. No LLM anywhere in the dashboard.
+Explicitly out: Steps (HealthKit later), social feed, ads (obviously).
+
+### S7. Phasing + verification
+
+| Phase | Scope | Size | Verify |
+|---|---|---|---|
+| **N1** | Engine vision E1–E5 (AI Admin repo) | M | backend unit tests; live words-in-image smoke; catalog vision check |
+| **N2** | parse-meal v2 + macros/provisional + `GET /nutrition/day` + PATCH correction + photo backfill | M | unit sums; live photo→items; ai_log shows URL ref not blob |
+| **N3** | nutrition-targets job + Baseline-moment proposal + Settings editor | S–M | propose→edit→confirm→rings math; gates hold (no goal → no offer) |
+| **N4** | Visual Today (cards, segment toggle, rings/dots/sparks) | L | browser across 3 personas: runner+food, books-only, mind-only — each sees only their cards; zero console errors |
+
+Order rationale: N1 unblocks everything AI; N2 makes photos meaningful; N3 unlocks rings; N4 is
+the visible payoff and lands last so the rings/dots have real data behind them.
+
+### S8. Open decisions (recommendations bold)
+
+1. Ring center: **macros lead, kcal as a quiet number below** (MFP parity without calorie-first).
+2. Provisional threshold: **0.5 default**, tunable per user later.
+3. Image transport: **signed URL first**; file-ID fallback only if the N1 smoke fails.
+4. Target proposal surface: **extend the Baseline moment** (one coached moment, not a new one).
+5. Week view: **segment toggle** v1; swipe pager if the segment feels buried.
 
 ### Final step (post-finalization) — the agentic retrieval loop: the coach answers its own questions
 
