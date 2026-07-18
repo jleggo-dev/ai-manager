@@ -6,8 +6,7 @@
  * or from registered LLM model IDs (model mode).
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import useConfirm from '../../hooks/useConfirm';
+import { useState, useEffect } from 'react';
 import {
   Stack,
   Group,
@@ -59,8 +58,11 @@ import AiProfileCard from '../molecules/AiProfileCard';
 import FailoverConfigModal from '../molecules/FailoverConfigModal';
 import ManageLlmsModal from './ManageLlmsModal';
 import TestChatPanel from './ai-profiles/TestChatPanel';
+import { useAiProfilesData } from './ai-profiles/hooks/useAiProfilesData';
+import { useProfileListFilters } from './ai-profiles/hooks/useProfileListFilters';
+import { useProfileBulkActions } from './ai-profiles/hooks/useProfileBulkActions';
 import * as api from '../../services/api';
-import type { AiProfile, Provider, LlmModel } from '../../types/api';
+import type { AiProfile, LlmModel } from '../../types/api';
 import {
   DEVS_AI_BUILTIN_TOOL_OPTIONS,
   DEVS_AI_V2_BUILTIN_TOOL_OPTIONS,
@@ -94,10 +96,7 @@ interface ToolJobFormRow {
 }
 
 export default function AiProfileManager() {
-  const confirm = useConfirm();
-  const [profiles, setProfiles] = useState<AiProfile[]>([]);
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { profiles, providers, loading, loadData, handleDelete, handleToggleDefault } = useAiProfilesData();
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<AiProfile | null>(null);
   const [availableAis, setAvailableAis] = useState<ProviderAi[]>([]);
@@ -136,27 +135,6 @@ export default function AiProfileManager() {
     is_active: true,
     runtime_options: DEFAULT_RUNTIME_OPTIONS,
   });
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [profilesResult, providersResult] = await Promise.all([api.listAiProfiles(), api.listProviders()]);
-      setProfiles(profilesResult.data);
-      setProviders(providersResult.data);
-    } catch (err: unknown) {
-      notifications.show({
-        title: 'Error',
-        message: err instanceof Error ? err.message : String(err),
-        color: 'red',
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   useEffect(() => {
     if (!modalOpened) return;
@@ -407,145 +385,25 @@ export default function AiProfileManager() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (
-      !(await confirm({
-        title: 'Delete AI profile',
-        message: "This can't be undone.",
-      }))
-    )
-      return;
-    try {
-      await api.deleteAiProfile(id);
-      notifications.show({
-        title: 'Deleted',
-        message: 'AI profile removed',
-        color: 'orange',
-      });
-      await loadData();
-    } catch (err: unknown) {
-      notifications.show({
-        title: 'Error',
-        message: err instanceof Error ? err.message : String(err),
-        color: 'red',
-      });
-    }
-  }
-
-  /** Toggle the is_default flag on a profile (only-one-default pattern) */
-  async function handleToggleDefault(id: string, setAsDefault: boolean) {
-    try {
-      if (setAsDefault) {
-        await api.setAiProfileDefault(id);
-        notifications.show({
-          title: 'Default Set',
-          message: 'This profile is now the default',
-          color: 'yellow',
-        });
-      } else {
-        await api.clearAiProfileDefault(id);
-        notifications.show({
-          title: 'Default Cleared',
-          message: 'Default profile removed',
-          color: 'gray',
-        });
-      }
-      await loadData();
-    } catch (err: unknown) {
-      notifications.show({
-        title: 'Error',
-        message: err instanceof Error ? err.message : String(err),
-        color: 'red',
-      });
-    }
-  }
-
   /* â”€â”€ Toolbar: search, filter, sort, group-by â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-  const [search, setSearch] = useState('');
-  const [filterProvider, setFilterProvider] = useState('all');
-  const [filterMode, setFilterMode] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [sortBy, setSortBy] = useState('name-asc');
-  const [groupBy, setGroupBy] = useState('none');
-
-  const providerFilterOptions = useMemo(() => {
-    const seen = new Map();
-    for (const p of profiles) {
-      const prov = p.provider;
-      if (prov?.id && !seen.has(prov.id)) seen.set(prov.id, prov.name || prov.type);
-    }
-    return [
-      { value: 'all', label: 'All providers' },
-      ...Array.from(seen.entries()).map(([id, name]) => ({
-        value: id,
-        label: name,
-      })),
-    ];
-  }, [profiles]);
-
-  const filteredAndGroupedProfiles = useMemo(() => {
-    const term = search.toLowerCase().trim();
-    let list = profiles;
-
-    if (term) {
-      list = list.filter((p) => {
-        const haystack = [p.name, p.description, p.external_ai_id, p.provider?.name, p.provider?.type]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        return haystack.includes(term);
-      });
-    }
-    if (filterProvider !== 'all') {
-      list = list.filter((p) => p.provider?.id === filterProvider);
-    }
-    if (filterMode !== 'all') {
-      list = list.filter((p) => (p.mode || 'completion') === filterMode);
-    }
-    if (filterStatus !== 'all') {
-      const wantActive = filterStatus === 'active';
-      list = list.filter((p) => p.is_active === wantActive);
-    }
-
-    const sortFn =
-      (
-        {
-          'name-asc': (a: AiProfile, b: AiProfile) => (a.name || '').localeCompare(b.name || ''),
-          'name-desc': (a: AiProfile, b: AiProfile) => (b.name || '').localeCompare(a.name || ''),
-          newest: (a: AiProfile, b: AiProfile) =>
-            new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
-          oldest: (a: AiProfile, b: AiProfile) =>
-            new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime(),
-          provider: (a: AiProfile, b: AiProfile) => (a.provider?.name || '').localeCompare(b.provider?.name || ''),
-        } as Record<string, (a: AiProfile, b: AiProfile) => number>
-      )[sortBy] || null;
-    if (sortFn) list = [...list].sort(sortFn);
-
-    if (groupBy === 'none') return { type: 'flat' as const, items: list };
-
-    const groups = new Map<string, { label: string; items: AiProfile[] }>();
-    for (const p of list) {
-      let key: string;
-      let label: string;
-      if (groupBy === 'provider') {
-        key = p.provider?.id || 'unknown';
-        label = p.provider?.name || 'Unknown Provider';
-      } else {
-        key = p.mode || 'completion';
-        label = key === 'chat' ? 'Chat' : 'Completion';
-      }
-      if (!groups.has(key)) groups.set(key, { label, items: [] });
-      groups.get(key)?.items.push(p);
-    }
-    return { type: 'grouped' as const, groups: Array.from(groups.values()) };
-  }, [profiles, search, filterProvider, filterMode, filterStatus, sortBy, groupBy]);
-
-  const isFiltered = search || filterProvider !== 'all' || filterMode !== 'all' || filterStatus !== 'all';
-  const visibleCount =
-    filteredAndGroupedProfiles.type === 'flat'
-      ? filteredAndGroupedProfiles.items.length
-      : filteredAndGroupedProfiles.groups.reduce((sum, g) => sum + g.items.length, 0);
-
+  const {
+    search,
+    setSearch,
+    filterProvider,
+    setFilterProvider,
+    filterMode,
+    setFilterMode,
+    filterStatus,
+    setFilterStatus,
+    sortBy,
+    setSortBy,
+    groupBy,
+    setGroupBy,
+    providerFilterOptions,
+    filteredAndGroupedProfiles,
+    isFiltered,
+    visibleCount,
+  } = useProfileListFilters(profiles);
   const selectedProviderType = providers.find((p) => p.id === form.provider_id)?.type || '';
   const isModelOnlyProvider = isModelOnlyProviderType(selectedProviderType);
   const effectiveProfileType = isModelOnlyProvider ? 'model' : profileType;
@@ -617,17 +475,7 @@ export default function AiProfileManager() {
     });
   }
 
-  const [viewMode, setViewMode] = useState('list');
-  const [checkedProfileIds, setCheckedProfileIds] = useState<Set<string>>(new Set());
-
-  function toggleProfileChecked(id: string) {
-    setCheckedProfileIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  const { viewMode, setViewMode, checkedProfileIds, toggleProfileChecked, toggleSelectAll } = useProfileBulkActions();
 
   if (loading)
     return (
@@ -775,15 +623,11 @@ export default function AiProfileManager() {
                       checked={checkedProfileIds.size > 0 && checkedProfileIds.size === visibleCount}
                       indeterminate={checkedProfileIds.size > 0 && checkedProfileIds.size < visibleCount}
                       onChange={() => {
-                        if (checkedProfileIds.size === visibleCount) {
-                          setCheckedProfileIds(new Set());
-                        } else {
-                          const allVisible =
-                            filteredAndGroupedProfiles.type === 'flat'
-                              ? filteredAndGroupedProfiles.items.map((p) => p.id)
-                              : filteredAndGroupedProfiles.groups.flatMap((g) => g.items.map((p) => p.id));
-                          setCheckedProfileIds(new Set(allVisible));
-                        }
+                        const allVisible =
+                          filteredAndGroupedProfiles.type === 'flat'
+                            ? filteredAndGroupedProfiles.items.map((p) => p.id)
+                            : filteredAndGroupedProfiles.groups.flatMap((g) => g.items.map((p) => p.id));
+                        toggleSelectAll(allVisible);
                       }}
                     />
                   </Table.Th>
