@@ -179,7 +179,7 @@ unprotected by any automated gate.** These items are not optional preamble — t
 
 ---
 
-### 4.1 Phase 1 — P0 application-code items
+### 4.1 Phase 1 — P0 application-code items — **complete** (BE-01 PR #9, FE-01 PR #8, FE-02 PR #7)
 
 These are the highest-severity, highest-blast-radius items. They can start **in parallel** with
 each other (BE-01, FE-01, FE-02 touch entirely different files/products) as soon as Phase 0's
@@ -188,11 +188,11 @@ merge until INFRA-01 has landed, since none of these are safely verifiable witho
 
 | ID | Item | Area | Priority | Effort | Risk | Depends on | Status |
 |---|---|---|---|---|---|---|---|
-| **BE-01** | Split `backend/src/ai-manager/index.ts` (2,071 lines, 21 exported fns, 5 responsibilities, no direct tests) | Backend | P0 | L (phased, 5 steps) | High | Test-first step; should land before/alongside INFRA-02 | — |
+| **BE-01** | Split `backend/src/ai-manager/index.ts` (2,071 lines, 21 exported fns, 5 responsibilities, no direct tests) | Backend | P0 | L (phased, 5 steps) | High | Test-first step; should land before/alongside INFRA-02 | **Done** (PR #9, merged to `feat/cadence`) |
 | **FE-01** | Split `ProcessingJobManager.tsx` (5,497 lines, 14 components) **and** add a max-file-line lint rule so it can't regrow | Frontend | P0 | L (7 phased steps, ~1-2 weeks) | High | Test-first step | **Done** (PR #8, merged to `feat/cadence`) |
 | **FE-02** | Split `AiProfileManager.tsx` (2,466 lines, 2 components incl. an embedded chat client) | Frontend | P0 | L (~1 week) | Medium | Test-first step; independent of FE-01 | **Done** (PR #7, merged to `feat/cadence`) |
 
-#### BE-01 — Split `ai-manager/index.ts` [P0]
+#### BE-01 — Split `ai-manager/index.ts` [P0] — **Done** (PR #9)
 
 **Current problem:** One file exports 21 top-level async functions spanning 5 distinct
 responsibilities: job execution (`executeJob`/`executeJobById`/`executeRawPrompt`), chat-session
@@ -225,6 +225,13 @@ automatically. Should land before any Cadence-side refactor of `@ai-admin/core`'
 since Cadence consumes this in-process.
 
 *Full detail: report 01 §4 ("P0 — `backend/src/ai-manager/index.ts`").*
+
+**Done notes (PR #9):** Barrel `index.ts` (~60 lines) re-exports from the five modules above;
+`splitRowsByByteCap` now tracks a running byte total (SD4 O(n²) fix, planned exception). Public
+import path preserved for backend routes and `@ai-admin/core`. Direct unit tests in
+`backend/test/ai-manager-unit.test.ts` (20 cases). Additive export of previously-private
+`resolveProfileToolDefinitions` via the barrel — non-breaking. Live e2e suite not re-run in
+supervisor review (env-limited); Phase 1 P0 (BE-01, FE-01, FE-02) is complete.
 
 #### FE-01 — Split `ProcessingJobManager.tsx` + add a max-file-line lint rule [P0] — **Done** (PR #8)
 
