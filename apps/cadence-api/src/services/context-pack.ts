@@ -55,8 +55,14 @@ async function brokerSelect(userId: string, intent: CoachIntent): Promise<{ call
     const parsed = JSON.parse(res.formatted ?? res.raw ?? '{}') as { calls?: unknown; reason?: unknown };
     const raw = Array.isArray(parsed.calls) ? parsed.calls : [];
     const calls: FnCall[] = raw
-      .filter((c): c is { fn: string; params?: unknown } => !!c && typeof (c as { fn?: unknown }).fn === 'string' && !!RETRIEVAL_FUNCTIONS[(c as { fn: string }).fn])
-      .map((c) => ({ fn: c.fn, params: c.params && typeof c.params === 'object' ? (c.params as Record<string, unknown>) : {} }));
+      .filter(
+        (c): c is { fn: string; params?: unknown } =>
+          !!c && typeof (c as { fn?: unknown }).fn === 'string' && !!RETRIEVAL_FUNCTIONS[(c as { fn: string }).fn],
+      )
+      .map((c) => ({
+        fn: c.fn,
+        params: c.params && typeof c.params === 'object' ? (c.params as Record<string, unknown>) : {},
+      }));
     if (!calls.length) return null;
     return { calls, reason: typeof parsed.reason === 'string' ? parsed.reason : '' };
   } catch (e) {
@@ -66,7 +72,11 @@ async function brokerSelect(userId: string, intent: CoachIntent): Promise<{ call
 }
 
 /** Step 2: Broker summarizes the executed results into a grounding block. Null on failure. */
-async function brokerSummarize(userId: string, intent: CoachIntent, results: Record<string, unknown>): Promise<string | null> {
+async function brokerSummarize(
+  userId: string,
+  intent: CoachIntent,
+  results: Record<string, unknown>,
+): Promise<string | null> {
   try {
     const res = await runJobBySlug(userId, 'pack-summarize', { intent, results: JSON.stringify(results) });
     const text = (res.formatted ?? res.raw ?? '').trim();
@@ -107,7 +117,8 @@ export async function buildContextPack(
   // 1. SELECT — Broker, with deterministic fallback.
   const sel = await brokerSelect(userId, intent);
   const usedBrokerSelect = sel !== null;
-  const calls: FnCall[] = sel?.calls ?? (INTENT_SELECTION[intent] ?? INTENT_SELECTION.ongoing).map((fn) => ({ fn, params: {} }));
+  const calls: FnCall[] =
+    sel?.calls ?? (INTENT_SELECTION[intent] ?? INTENT_SELECTION.ongoing).map((fn) => ({ fn, params: {} }));
   // Safety net: always retrieve identity + constraints even if the Broker didn't pick them.
   const have = new Set(calls.map((c) => c.fn));
   for (const m of MANDATORY) if (!have.has(m) && RETRIEVAL_FUNCTIONS[m]) calls.push({ fn: m, params: {} });

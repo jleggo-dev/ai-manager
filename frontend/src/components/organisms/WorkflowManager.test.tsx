@@ -144,8 +144,7 @@ describe('WorkflowManager', () => {
     await screen.findByText('Content Pipeline');
     const actionButtons = container.querySelectorAll('button.mantine-ActionIcon-root[data-variant="subtle"]');
     const deleteBtn = Array.from(actionButtons).find((btn) => btn.querySelector('.tabler-icon-trash')) as
-      | HTMLElement
-      | undefined;
+      HTMLElement | undefined;
     expect(deleteBtn).toBeTruthy();
     fireEvent.click(deleteBtn as HTMLElement);
     expect(await screen.findByText('Delete Workflow')).toBeInTheDocument();
@@ -159,8 +158,7 @@ describe('WorkflowManager', () => {
 
     const actionButtons = container.querySelectorAll('button.mantine-ActionIcon-root[data-variant="subtle"]');
     const deleteBtn = Array.from(actionButtons).find((btn) => btn.querySelector('.tabler-icon-trash')) as
-      | HTMLElement
-      | undefined;
+      HTMLElement | undefined;
     expect(deleteBtn).toBeTruthy();
     fireEvent.click(deleteBtn as HTMLElement);
     await screen.findByText('Delete Workflow');

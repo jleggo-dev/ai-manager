@@ -33,7 +33,12 @@ export async function previewLock(userId: string): Promise<PlanFlowResult> {
 
   const goalIds = goals.map((gg) => gg.goal_id);
   const note = s.note ?? '';
-  await setPendingPlan(userId, { activities: s.activities!, note, goal_ids: goalIds, created_at: new Date().toISOString() });
+  await setPendingPlan(userId, {
+    activities: s.activities!,
+    note,
+    goal_ids: goalIds,
+    created_at: new Date().toISOString(),
+  });
 
   return { status: 'proposed', proposal: { activities: s.activities!, note } };
 }

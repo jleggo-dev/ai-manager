@@ -45,7 +45,10 @@ async function turnSelect(userId: string, message: string): Promise<{ calls: FnC
         (c): c is { fn: string; params?: unknown } =>
           !!c && typeof (c as { fn?: unknown }).fn === 'string' && !!RETRIEVAL_FUNCTIONS[(c as { fn: string }).fn],
       )
-      .map((c) => ({ fn: c.fn, params: c.params && typeof c.params === 'object' ? (c.params as Record<string, unknown>) : {} }));
+      .map((c) => ({
+        fn: c.fn,
+        params: c.params && typeof c.params === 'object' ? (c.params as Record<string, unknown>) : {},
+      }));
     return { calls, reason: typeof parsed.reason === 'string' ? parsed.reason : '' };
   } catch (e) {
     console.error('[context-select] failed, skipping just-in-time retrieval:', e);
@@ -66,7 +69,8 @@ export async function injectTurnContext(userId: string, sessionId: string, messa
     updateTrace(userId, {
       turnSelect: {
         calls: sel?.calls ?? [],
-        reason: sel?.reason || (sel === null ? '(select failed — skipped)' : '(standing pack already covers this turn)'),
+        reason:
+          sel?.reason || (sel === null ? '(select failed — skipped)' : '(standing pack already covers this turn)'),
         injected: false,
         provenance: [],
         fallback: sel === null,
@@ -114,7 +118,10 @@ export async function injectTurnContext(userId: string, sessionId: string, messa
 
   // Step 3 — inject as a non-triggering context turn right before the user's message.
   if (!injected) return;
-  const block = [`Fetched for this turn (${fns.join(', ')})${sel.reason ? ` — ${sel.reason}` : ''}:`, parts.join('\n')].join('\n');
+  const block = [
+    `Fetched for this turn (${fns.join(', ')})${sel.reason ? ` — ${sel.reason}` : ''}:`,
+    parts.join('\n'),
+  ].join('\n');
   await injectCoachContext(userId, sessionId, block, { source: 'turn-context', version: 1 }).catch((e) =>
     console.error('[turn-context inject]', e),
   );

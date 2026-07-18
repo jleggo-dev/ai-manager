@@ -1,5 +1,12 @@
 import { sql, json } from '../db/sql.ts';
-import type { Activity, Occurrence, OccurrenceLog, OccurrenceSession, OccurrenceStatus, Provenance } from '@cadence/shared';
+import type {
+  Activity,
+  Occurrence,
+  OccurrenceLog,
+  OccurrenceSession,
+  OccurrenceStatus,
+  Provenance,
+} from '@cadence/shared';
 
 export interface NewOccurrence {
   activity_id: string;
@@ -22,11 +29,7 @@ export async function upsertOccurrences(rows: NewOccurrence[]): Promise<void> {
     on conflict (activity_id, date) do nothing`;
 }
 
-export async function listOccurrences(
-  userId: string,
-  fromDate: string,
-  toDate: string,
-): Promise<Occurrence[]> {
+export async function listOccurrences(userId: string, fromDate: string, toDate: string): Promise<Occurrence[]> {
   // Explicit columns, deliberately EXCLUDING session/log jsonb — this feeds the week view,
   // consistency, and replan context, none of which need the (potentially large) payloads.
   // The occurrence-detail path (getOccurrenceWithActivity) fetches them.
@@ -150,8 +153,24 @@ export async function listRecentLogsByTitle(
 export async function listLoggedForProgress(
   userId: string,
   fromDate: string,
-): Promise<Array<{ date: string; title: string; kind: Activity['kind']; value: Record<string, number> | null; log: OccurrenceLog | null }>> {
-  return sql<Array<{ date: string; title: string; kind: Activity['kind']; value: Record<string, number> | null; log: OccurrenceLog | null }>>`
+): Promise<
+  Array<{
+    date: string;
+    title: string;
+    kind: Activity['kind'];
+    value: Record<string, number> | null;
+    log: OccurrenceLog | null;
+  }>
+> {
+  return sql<
+    Array<{
+      date: string;
+      title: string;
+      kind: Activity['kind'];
+      value: Record<string, number> | null;
+      log: OccurrenceLog | null;
+    }>
+  >`
     select to_char(o.date, 'YYYY-MM-DD') as date, a.title, a.kind, o.value, o.log
     from cadence.occurrences o
     join cadence.activities a on a.activity_id = o.activity_id

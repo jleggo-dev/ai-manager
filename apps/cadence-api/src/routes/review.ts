@@ -9,7 +9,17 @@ import { assessGoal } from '../services/goal-assess.ts';
 
 const GOAL_AREAS = ['movement', 'nourishment', 'mind', 'practice'];
 const GOAL_TYPES = ['milestone', 'target', 'recurring'];
-const EQUIP_CATEGORIES = ['footwear', 'cardio', 'strength', 'accessory', 'reading', 'practice', 'craft', 'study', 'other'];
+const EQUIP_CATEGORIES = [
+  'footwear',
+  'cardio',
+  'strength',
+  'accessory',
+  'reading',
+  'practice',
+  'craft',
+  'study',
+  'other',
+];
 
 const router = Router();
 router.use(requireCadenceUser);
@@ -28,7 +38,15 @@ router.get('/', async (req: Request, res: Response) => {
     // Lock is gated only by the HARD cap (the focus budget is a soft, non-blocking signal — see
     // services/lock.ts); the weighted load still rides in `guardrail` for a gentle nudge later.
     const lockable = goals.some((g) => g.status === 'confirmed') && !guardrail.exceedsHardCap;
-    res.json({ name: user?.name ?? '', goals, equipment, baseline: user?.baseline ?? {}, guardrail, confirmable, lockable });
+    res.json({
+      name: user?.name ?? '',
+      goals,
+      equipment,
+      baseline: user?.baseline ?? {},
+      guardrail,
+      confirmable,
+      lockable,
+    });
   } catch (err) {
     console.error('[GET /review]', err);
     res.status(500).json({ error: 'Failed to load review' });
@@ -106,7 +124,10 @@ router.post('/goals', async (req: Request, res: Response) => {
     // invisible to replan AND eaten by the next capture churn (deleteCapturedWithoutMilestones);
     // a goal the user typed in Settings must be neither.
     const g = await insertGoal(userId, {
-      title, area, type, measure,
+      title,
+      area,
+      type,
+      measure,
       status: confirm === true ? 'confirmed' : 'captured',
       source: 'manual',
     });

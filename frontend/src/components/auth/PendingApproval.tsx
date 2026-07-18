@@ -30,8 +30,8 @@ export default function PendingApproval({ status, email, onSignOut, onRefresh }:
             >
               {isSuspended ? (
                 <Text size="sm">
-                  Your account{email ? ` (${email})` : ''} has been suspended. Contact a workspace administrator if
-                  you believe this is a mistake.
+                  Your account{email ? ` (${email})` : ''} has been suspended. Contact a workspace administrator if you
+                  believe this is a mistake.
                 </Text>
               ) : (
                 <Text size="sm">

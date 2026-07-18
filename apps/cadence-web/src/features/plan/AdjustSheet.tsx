@@ -73,7 +73,9 @@ export function AdjustSheet({
             <b>{preview ? "Here's the adjustment I'd make" : 'Adjust my plan'}</b>
             <span>{preview ? '' : 'Committed, not locked — it bends to fit how you’re doing.'}</span>
           </div>
-          <button className="sheet-x" onClick={onClose} aria-label="Close">×</button>
+          <button className="sheet-x" onClick={onClose} aria-label="Close">
+            ×
+          </button>
         </div>
 
         {!preview ? (
@@ -105,7 +107,9 @@ export function AdjustSheet({
             )}
             <div className="proposal-levers" style={{ marginTop: 10 }}>
               {preview.activities.map((a, i) => (
-                <span className="lever-chip" key={i}>{a.title} · {a.cadence}</span>
+                <span className="lever-chip" key={i}>
+                  {a.title} · {a.cadence}
+                </span>
               ))}
             </div>
             {msg && <div className="auth-error">{msg}</div>}

@@ -3209,7 +3209,11 @@ function BuildRulesTab({
       };
       if (!selectedJob) return;
       await api.updateProcessingJob(selectedJob, { config });
-      notifications.show({ title: 'Saved', message: 'System prompt, prompt template, and rules updated', color: 'green' });
+      notifications.show({
+        title: 'Saved',
+        message: 'System prompt, prompt template, and rules updated',
+        color: 'green',
+      });
       await onRefresh();
     } catch (err: unknown) {
       notifications.show({ title: 'Error', message: err instanceof Error ? err.message : String(err), color: 'red' });

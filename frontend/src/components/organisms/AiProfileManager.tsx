@@ -6,9 +6,9 @@
  * or from registered LLM model IDs (model mode).
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import useConfirm from "../../hooks/useConfirm";
-import { getSessionUser } from "../../lib/auth-session";
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import useConfirm from '../../hooks/useConfirm';
+import { getSessionUser } from '../../lib/auth-session';
 import {
   Stack,
   Group,
@@ -37,9 +37,9 @@ import {
   Checkbox,
   Menu,
   CopyButton,
-} from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import { notifications } from "@mantine/notifications";
+} from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
+import { notifications } from '@mantine/notifications';
 import {
   IconPlus,
   IconAlertCircle,
@@ -58,12 +58,12 @@ import {
   IconStar,
   IconStarFilled,
   IconCheck,
-} from "@tabler/icons-react";
-import AiProfileCard from "../molecules/AiProfileCard";
-import FailoverConfigModal from "../molecules/FailoverConfigModal";
-import ManageLlmsModal from "./ManageLlmsModal";
-import * as api from "../../services/api";
-import type { AiProfile, Provider, LlmModel } from "../../types/api";
+} from '@tabler/icons-react';
+import AiProfileCard from '../molecules/AiProfileCard';
+import FailoverConfigModal from '../molecules/FailoverConfigModal';
+import ManageLlmsModal from './ManageLlmsModal';
+import * as api from '../../services/api';
+import type { AiProfile, Provider, LlmModel } from '../../types/api';
 import {
   DEVS_AI_BUILTIN_TOOL_OPTIONS,
   DEVS_AI_V2_BUILTIN_TOOL_OPTIONS,
@@ -71,8 +71,8 @@ import {
   DEVS_AI_V2_THREAD_MODE_OPTIONS,
   DEFAULT_RUNTIME_OPTIONS,
   normaliseRuntimeOptions,
-} from "../../lib/runtime-options";
-import { isModelOnlyProviderType } from "../../lib/provider-types";
+} from '../../lib/runtime-options';
+import { isModelOnlyProviderType } from '../../lib/provider-types';
 
 interface ProviderAi {
   id?: string;
@@ -145,45 +145,37 @@ export default function AiProfileManager() {
   const [editing, setEditing] = useState<AiProfile | null>(null);
   const [availableAis, setAvailableAis] = useState<ProviderAi[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
-  const [modalOpened, { open: openModal, close: closeModal }] =
-    useDisclosure(false);
+  const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
 
   /* Test chat state */
   const [chatProfile, setChatProfile] = useState<AiProfile | null>(null);
-  const [chatOpened, { open: openChat, close: closeChat }] =
-    useDisclosure(false);
+  const [chatOpened, { open: openChat, close: closeChat }] = useDisclosure(false);
 
   /* Manage LLMs modal state */
-  const [llmsOpened, { open: openLlms, close: closeLlms }] =
-    useDisclosure(false);
+  const [llmsOpened, { open: openLlms, close: closeLlms }] = useDisclosure(false);
 
   /* Failover config modal state */
-  const [failoverProfile, setFailoverProfile] = useState<AiProfile | null>(
-    null,
-  );
-  const [failoverOpened, { open: openFailover, close: closeFailover }] =
-    useDisclosure(false);
+  const [failoverProfile, setFailoverProfile] = useState<AiProfile | null>(null);
+  const [failoverOpened, { open: openFailover, close: closeFailover }] = useDisclosure(false);
 
   /* Profile type toggle: 'agent' or 'model' */
-  const [profileType, setProfileType] = useState("agent");
-  const [mode, setMode] = useState("completion");
+  const [profileType, setProfileType] = useState('agent');
+  const [mode, setMode] = useState('completion');
   const [availableModels, setAvailableModels] = useState<LlmModel[]>([]);
 
   /* MCP tools state (fetched dynamically from Devs.ai for saved profiles) */
   const [mcpTools, setMcpTools] = useState<McpTool[]>([]);
   const [toolAuthStatus, setToolAuthStatus] = useState<ToolAuthEntry[]>([]);
   const [mcpLoading, setMcpLoading] = useState(false);
-  const [processingJobs, setProcessingJobs] = useState<
-    Array<{ slug: string; name: string }>
-  >([]);
+  const [processingJobs, setProcessingJobs] = useState<Array<{ slug: string; name: string }>>([]);
   const [toolJobs, setToolJobs] = useState<ToolJobFormRow[]>([]);
 
   /* Form state */
   const [form, setForm] = useState({
-    provider_id: "",
-    external_ai_id: "",
-    name: "",
-    description: "",
+    provider_id: '',
+    external_ai_id: '',
+    name: '',
+    description: '',
     is_active: true,
     runtime_options: DEFAULT_RUNTIME_OPTIONS,
   });
@@ -191,17 +183,14 @@ export default function AiProfileManager() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [profilesResult, providersResult] = await Promise.all([
-        api.listAiProfiles(),
-        api.listProviders(),
-      ]);
+      const [profilesResult, providersResult] = await Promise.all([api.listAiProfiles(), api.listProviders()]);
       setProfiles(profilesResult.data);
       setProviders(providersResult.data);
     } catch (err: unknown) {
       notifications.show({
-        title: "Error",
+        title: 'Error',
         message: err instanceof Error ? err.message : String(err),
-        color: "red",
+        color: 'red',
       });
     } finally {
       setLoading(false);
@@ -218,9 +207,7 @@ export default function AiProfileManager() {
       .listProcessingJobs({ limit: 200 })
       .then((result) => {
         setProcessingJobs(
-          (result.data || [])
-            .map((j) => ({ slug: j.slug, name: j.name }))
-            .filter((j) => Boolean(j.slug)),
+          (result.data || []).map((j) => ({ slug: j.slug, name: j.name })).filter((j) => Boolean(j.slug)),
         );
       })
       .catch(() => setProcessingJobs([]));
@@ -236,27 +223,24 @@ export default function AiProfileManager() {
 
     let cancelled = false;
 
-    const providerType =
-      providers.find((p) => p.id === selectedProvider)?.type || "";
+    const providerType = providers.find((p) => p.id === selectedProvider)?.type || '';
 
-    const useModelList =
-      isModelOnlyProviderType(providerType) || profileType === "model";
+    const useModelList = isModelOnlyProviderType(providerType) || profileType === 'model';
 
     if (useModelList) {
       setAvailableAis([]);
       api
         .listProviderModels(selectedProvider)
         .then((models) => {
-          if (!cancelled)
-            setAvailableModels(Array.isArray(models) ? models : []);
+          if (!cancelled) setAvailableModels(Array.isArray(models) ? models : []);
         })
         .catch(() => {
           if (!cancelled) {
             setAvailableModels([]);
             notifications.show({
-              title: "Warning",
-              message: "Could not fetch models from provider",
-              color: "yellow",
+              title: 'Warning',
+              message: 'Could not fetch models from provider',
+              color: 'yellow',
             });
           }
         });
@@ -265,7 +249,7 @@ export default function AiProfileManager() {
       };
     }
 
-    if (profileType === "agent") {
+    if (profileType === 'agent') {
       setAvailableModels([]);
       api
         .listProviderAis(selectedProvider)
@@ -276,9 +260,9 @@ export default function AiProfileManager() {
           if (!cancelled) {
             setAvailableAis([]);
             notifications.show({
-              title: "Warning",
-              message: "Could not fetch AIs from provider",
-              color: "yellow",
+              title: 'Warning',
+              message: 'Could not fetch AIs from provider',
+              color: 'yellow',
             });
           }
         });
@@ -287,16 +271,15 @@ export default function AiProfileManager() {
       api
         .listProviderModels(selectedProvider)
         .then((models) => {
-          if (!cancelled)
-            setAvailableModels(Array.isArray(models) ? models : []);
+          if (!cancelled) setAvailableModels(Array.isArray(models) ? models : []);
         })
         .catch(() => {
           if (!cancelled) {
             setAvailableModels([]);
             notifications.show({
-              title: "Warning",
-              message: "Could not fetch models from provider",
-              color: "yellow",
+              title: 'Warning',
+              message: 'Could not fetch models from provider',
+              color: 'yellow',
             });
           }
         });
@@ -309,43 +292,42 @@ export default function AiProfileManager() {
 
   /* When provider changes, update state and clear external_ai_id */
   function handleProviderChange(providerId: string | null) {
-    const providerType = providers.find((p) => p.id === providerId)?.type || "";
+    const providerType = providers.find((p) => p.id === providerId)?.type || '';
     const modelOnly = isModelOnlyProviderType(providerType);
-    if (modelOnly && profileType !== "model") {
-      setProfileType("model");
-      const providerLabel =
-        providers.find((p) => p.id === providerId)?.name || providerType;
+    if (modelOnly && profileType !== 'model') {
+      setProfileType('model');
+      const providerLabel = providers.find((p) => p.id === providerId)?.name || providerType;
       notifications.show({
-        title: "Model-only Provider",
+        title: 'Model-only Provider',
         message: `${providerLabel} profiles use model mode only.`,
-        color: "blue",
+        color: 'blue',
       });
     }
     setSelectedProvider(providerId);
     setForm((prev) => ({
       ...prev,
-      provider_id: providerId || "",
-      external_ai_id: "",
+      provider_id: providerId || '',
+      external_ai_id: '',
     }));
   }
 
   /* When profile type toggles, update state and clear external_ai_id */
   function handleProfileTypeChange(type: string) {
     setProfileType(type);
-    setForm((prev) => ({ ...prev, external_ai_id: "" }));
+    setForm((prev) => ({ ...prev, external_ai_id: '' }));
   }
 
   function openCreate() {
     setEditing(null);
-    setProfileType("agent");
-    setMode("completion");
+    setProfileType('agent');
+    setMode('completion');
     setMcpTools([]);
     setToolAuthStatus([]);
     setForm({
-      provider_id: "",
-      external_ai_id: "",
-      name: "",
-      description: "",
+      provider_id: '',
+      external_ai_id: '',
+      name: '',
+      description: '',
       is_active: true,
       runtime_options: DEFAULT_RUNTIME_OPTIONS,
     });
@@ -357,7 +339,7 @@ export default function AiProfileManager() {
   }
 
   async function loadMcpTools(profileId: string, providerType: string) {
-    if (providerType !== "devs-ai") {
+    if (providerType !== 'devs-ai') {
       setMcpTools([]);
       setToolAuthStatus([]);
       return;
@@ -366,12 +348,10 @@ export default function AiProfileManager() {
     try {
       const [tools, authStatus] = await Promise.all([
         api.listProfileTools(profileId).catch((): McpTool[] => []),
-        api
-          .listProfileToolAuthStatus(profileId)
-          .catch((): ToolAuthEntry[] => []),
+        api.listProfileToolAuthStatus(profileId).catch((): ToolAuthEntry[] => []),
       ]);
       const allTools: McpTool[] = Array.isArray(tools) ? tools : [];
-      const mcpOnly = allTools.filter((t) => t.type === "MCP_SERVER");
+      const mcpOnly = allTools.filter((t) => t.type === 'MCP_SERVER');
       setMcpTools(mcpOnly);
       setToolAuthStatus(Array.isArray(authStatus) ? authStatus : []);
     } catch {
@@ -384,24 +364,17 @@ export default function AiProfileManager() {
 
   function openEdit(profile: AiProfile) {
     setEditing(profile);
-    const resolvedProviderId =
-      profile.provider_id || profile.provider?.id || "";
+    const resolvedProviderId = profile.provider_id || profile.provider?.id || '';
     const resolvedProviderType =
-      providers.find((p) => p.id === resolvedProviderId)?.type ||
-      profile.provider?.type ||
-      "";
-    setProfileType(
-      isModelOnlyProviderType(resolvedProviderType)
-        ? "model"
-        : profile.profile_type || "agent",
-    );
-    setMode(profile.mode || "completion");
+      providers.find((p) => p.id === resolvedProviderId)?.type || profile.provider?.type || '';
+    setProfileType(isModelOnlyProviderType(resolvedProviderType) ? 'model' : profile.profile_type || 'agent');
+    setMode(profile.mode || 'completion');
     setSelectedProvider(resolvedProviderId || null);
     setForm({
       provider_id: resolvedProviderId,
-      external_ai_id: profile.external_ai_id || "",
-      name: profile.name || "",
-      description: profile.description || "",
+      external_ai_id: profile.external_ai_id || '',
+      name: profile.name || '',
+      description: profile.description || '',
       is_active: profile.is_active !== false,
       runtime_options: normaliseRuntimeOptions(profile.runtime_options),
     });
@@ -409,9 +382,9 @@ export default function AiProfileManager() {
     setToolJobs(
       Array.isArray(cfg.toolJobs)
         ? cfg.toolJobs.map((t) => ({
-            jobSlug: t.jobSlug || "",
-            exposeAs: t.exposeAs || "",
-            description: t.description || "",
+            jobSlug: t.jobSlug || '',
+            exposeAs: t.exposeAs || '',
+            description: t.description || '',
           }))
         : [],
     );
@@ -435,48 +408,42 @@ export default function AiProfileManager() {
     e.preventDefault();
     try {
       setSaving(true);
-      const providerType =
-        providers.find((p) => p.id === form.provider_id)?.type || "";
+      const providerType = providers.find((p) => p.id === form.provider_id)?.type || '';
       const payload: Record<string, unknown> = {
         ...form,
-        profile_type: isModelOnlyProviderType(providerType)
-          ? "model"
-          : profileType,
+        profile_type: isModelOnlyProviderType(providerType) ? 'model' : profileType,
         mode,
         runtime_options: normaliseRuntimeOptions(form.runtime_options),
       };
-      if (mode === "chat") {
-        const priorConfig =
-          (editing?.config as Record<string, unknown> | undefined) || {};
+      if (mode === 'chat') {
+        const priorConfig = (editing?.config as Record<string, unknown> | undefined) || {};
         payload.config = {
           ...priorConfig,
-          toolJobs: toolJobs.filter(
-            (t) => t.jobSlug.trim() && t.exposeAs.trim(),
-          ),
+          toolJobs: toolJobs.filter((t) => t.jobSlug.trim() && t.exposeAs.trim()),
         };
       }
       if (editing) {
         await api.updateAiProfile(editing.id, payload);
         notifications.show({
-          title: "Updated",
-          message: "AI profile updated",
-          color: "green",
+          title: 'Updated',
+          message: 'AI profile updated',
+          color: 'green',
         });
       } else {
         await api.createAiProfile(payload);
         notifications.show({
-          title: "Created",
-          message: "AI profile created",
-          color: "green",
+          title: 'Created',
+          message: 'AI profile created',
+          color: 'green',
         });
       }
       closeModal();
       await loadData();
     } catch (err: unknown) {
       notifications.show({
-        title: "Error",
+        title: 'Error',
         message: err instanceof Error ? err.message : String(err),
-        color: "red",
+        color: 'red',
       });
     } finally {
       setSaving(false);
@@ -486,7 +453,7 @@ export default function AiProfileManager() {
   async function handleDelete(id: string) {
     if (
       !(await confirm({
-        title: "Delete AI profile",
+        title: 'Delete AI profile',
         message: "This can't be undone.",
       }))
     )
@@ -494,16 +461,16 @@ export default function AiProfileManager() {
     try {
       await api.deleteAiProfile(id);
       notifications.show({
-        title: "Deleted",
-        message: "AI profile removed",
-        color: "orange",
+        title: 'Deleted',
+        message: 'AI profile removed',
+        color: 'orange',
       });
       await loadData();
     } catch (err: unknown) {
       notifications.show({
-        title: "Error",
+        title: 'Error',
         message: err instanceof Error ? err.message : String(err),
-        color: "red",
+        color: 'red',
       });
     }
   }
@@ -514,45 +481,44 @@ export default function AiProfileManager() {
       if (setAsDefault) {
         await api.setAiProfileDefault(id);
         notifications.show({
-          title: "Default Set",
-          message: "This profile is now the default",
-          color: "yellow",
+          title: 'Default Set',
+          message: 'This profile is now the default',
+          color: 'yellow',
         });
       } else {
         await api.clearAiProfileDefault(id);
         notifications.show({
-          title: "Default Cleared",
-          message: "Default profile removed",
-          color: "gray",
+          title: 'Default Cleared',
+          message: 'Default profile removed',
+          color: 'gray',
         });
       }
       await loadData();
     } catch (err: unknown) {
       notifications.show({
-        title: "Error",
+        title: 'Error',
         message: err instanceof Error ? err.message : String(err),
-        color: "red",
+        color: 'red',
       });
     }
   }
 
   /* ── Toolbar: search, filter, sort, group-by ──────────────── */
-  const [search, setSearch] = useState("");
-  const [filterProvider, setFilterProvider] = useState("all");
-  const [filterMode, setFilterMode] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [sortBy, setSortBy] = useState("name-asc");
-  const [groupBy, setGroupBy] = useState("none");
+  const [search, setSearch] = useState('');
+  const [filterProvider, setFilterProvider] = useState('all');
+  const [filterMode, setFilterMode] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [sortBy, setSortBy] = useState('name-asc');
+  const [groupBy, setGroupBy] = useState('none');
 
   const providerFilterOptions = useMemo(() => {
     const seen = new Map();
     for (const p of profiles) {
       const prov = p.provider;
-      if (prov?.id && !seen.has(prov.id))
-        seen.set(prov.id, prov.name || prov.type);
+      if (prov?.id && !seen.has(prov.id)) seen.set(prov.id, prov.name || prov.type);
     }
     return [
-      { value: "all", label: "All providers" },
+      { value: 'all', label: 'All providers' },
       ...Array.from(seen.entries()).map(([id, name]) => ({
         value: id,
         label: name,
@@ -566,93 +532,66 @@ export default function AiProfileManager() {
 
     if (term) {
       list = list.filter((p) => {
-        const haystack = [
-          p.name,
-          p.description,
-          p.external_ai_id,
-          p.provider?.name,
-          p.provider?.type,
-        ]
+        const haystack = [p.name, p.description, p.external_ai_id, p.provider?.name, p.provider?.type]
           .filter(Boolean)
-          .join(" ")
+          .join(' ')
           .toLowerCase();
         return haystack.includes(term);
       });
     }
-    if (filterProvider !== "all") {
+    if (filterProvider !== 'all') {
       list = list.filter((p) => p.provider?.id === filterProvider);
     }
-    if (filterMode !== "all") {
-      list = list.filter((p) => (p.mode || "completion") === filterMode);
+    if (filterMode !== 'all') {
+      list = list.filter((p) => (p.mode || 'completion') === filterMode);
     }
-    if (filterStatus !== "all") {
-      const wantActive = filterStatus === "active";
+    if (filterStatus !== 'all') {
+      const wantActive = filterStatus === 'active';
       list = list.filter((p) => p.is_active === wantActive);
     }
 
     const sortFn =
       (
         {
-          "name-asc": (a: AiProfile, b: AiProfile) =>
-            (a.name || "").localeCompare(b.name || ""),
-          "name-desc": (a: AiProfile, b: AiProfile) =>
-            (b.name || "").localeCompare(a.name || ""),
+          'name-asc': (a: AiProfile, b: AiProfile) => (a.name || '').localeCompare(b.name || ''),
+          'name-desc': (a: AiProfile, b: AiProfile) => (b.name || '').localeCompare(a.name || ''),
           newest: (a: AiProfile, b: AiProfile) =>
-            new Date(b.created_at || 0).getTime() -
-            new Date(a.created_at || 0).getTime(),
+            new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
           oldest: (a: AiProfile, b: AiProfile) =>
-            new Date(a.created_at || 0).getTime() -
-            new Date(b.created_at || 0).getTime(),
-          provider: (a: AiProfile, b: AiProfile) =>
-            (a.provider?.name || "").localeCompare(b.provider?.name || ""),
+            new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime(),
+          provider: (a: AiProfile, b: AiProfile) => (a.provider?.name || '').localeCompare(b.provider?.name || ''),
         } as Record<string, (a: AiProfile, b: AiProfile) => number>
       )[sortBy] || null;
     if (sortFn) list = [...list].sort(sortFn);
 
-    if (groupBy === "none") return { type: "flat" as const, items: list };
+    if (groupBy === 'none') return { type: 'flat' as const, items: list };
 
     const groups = new Map<string, { label: string; items: AiProfile[] }>();
     for (const p of list) {
       let key: string;
       let label: string;
-      if (groupBy === "provider") {
-        key = p.provider?.id || "unknown";
-        label = p.provider?.name || "Unknown Provider";
+      if (groupBy === 'provider') {
+        key = p.provider?.id || 'unknown';
+        label = p.provider?.name || 'Unknown Provider';
       } else {
-        key = p.mode || "completion";
-        label = key === "chat" ? "Chat" : "Completion";
+        key = p.mode || 'completion';
+        label = key === 'chat' ? 'Chat' : 'Completion';
       }
       if (!groups.has(key)) groups.set(key, { label, items: [] });
       groups.get(key)?.items.push(p);
     }
-    return { type: "grouped" as const, groups: Array.from(groups.values()) };
-  }, [
-    profiles,
-    search,
-    filterProvider,
-    filterMode,
-    filterStatus,
-    sortBy,
-    groupBy,
-  ]);
+    return { type: 'grouped' as const, groups: Array.from(groups.values()) };
+  }, [profiles, search, filterProvider, filterMode, filterStatus, sortBy, groupBy]);
 
-  const isFiltered =
-    search ||
-    filterProvider !== "all" ||
-    filterMode !== "all" ||
-    filterStatus !== "all";
+  const isFiltered = search || filterProvider !== 'all' || filterMode !== 'all' || filterStatus !== 'all';
   const visibleCount =
-    filteredAndGroupedProfiles.type === "flat"
+    filteredAndGroupedProfiles.type === 'flat'
       ? filteredAndGroupedProfiles.items.length
-      : filteredAndGroupedProfiles.groups.reduce(
-          (sum, g) => sum + g.items.length,
-          0,
-        );
+      : filteredAndGroupedProfiles.groups.reduce((sum, g) => sum + g.items.length, 0);
 
-  const selectedProviderType =
-    providers.find((p) => p.id === form.provider_id)?.type || "";
+  const selectedProviderType = providers.find((p) => p.id === form.provider_id)?.type || '';
   const isModelOnlyProvider = isModelOnlyProviderType(selectedProviderType);
-  const effectiveProfileType = isModelOnlyProvider ? "model" : profileType;
+  const effectiveProfileType = isModelOnlyProvider ? 'model' : profileType;
 
   /* Build select options from available AIs (Devs.ai format) */
   const aiOptions = availableAis.map((ai) => ({
@@ -666,7 +605,7 @@ export default function AiProfileManager() {
     const activeModels = availableModels.filter((m) => m.is_active);
     const groups: Record<string, { value: string; label: string }[]> = {};
     for (const m of activeModels) {
-      const g = m.category || "Other";
+      const g = m.category || 'Other';
       if (!groups[g]) groups[g] = [];
       groups[g].push({
         value: m.model_id,
@@ -683,10 +622,7 @@ export default function AiProfileManager() {
 
   function toggleDevsAiV2Tool(toolKey: string, enabled: boolean) {
     setForm((prev) => {
-      const runtimeOptions = normaliseRuntimeOptions(
-        prev.runtime_options,
-        selectedProviderType,
-      );
+      const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options, selectedProviderType);
       const currentTools = runtimeOptions.devs_ai_v2.built_in_tools;
       const nextTools: string[] = enabled
         ? Array.from(new Set<string>([...currentTools, toolKey]))
@@ -724,10 +660,8 @@ export default function AiProfileManager() {
     });
   }
 
-  const [viewMode, setViewMode] = useState("list");
-  const [checkedProfileIds, setCheckedProfileIds] = useState<Set<string>>(
-    new Set(),
-  );
+  const [viewMode, setViewMode] = useState('list');
+  const [checkedProfileIds, setCheckedProfileIds] = useState<Set<string>>(new Set());
 
   function toggleProfileChecked(id: string) {
     setCheckedProfileIds((prev) => {
@@ -758,11 +692,7 @@ export default function AiProfileManager() {
     <Stack gap="md">
       {/* Action bar */}
       <Group justify="flex-end">
-        <Button
-          variant="light"
-          leftSection={<IconSettings size={16} />}
-          onClick={openLlms}
-        >
+        <Button variant="light" leftSection={<IconSettings size={16} />} onClick={openLlms}>
           Manage LLMs
         </Button>
         <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
@@ -775,11 +705,7 @@ export default function AiProfileManager() {
         <TextInput
           placeholder="Search profiles..."
           leftSection={<IconSearch size={14} />}
-          rightSection={
-            search ? (
-              <CloseButton size="sm" onClick={() => setSearch("")} />
-            ) : null
-          }
+          rightSection={search ? <CloseButton size="sm" onClick={() => setSearch('')} /> : null}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           size="sm"
@@ -789,7 +715,7 @@ export default function AiProfileManager() {
           size="sm"
           data={providerFilterOptions}
           value={filterProvider}
-          onChange={(v) => setFilterProvider(v || "all")}
+          onChange={(v) => setFilterProvider(v || 'all')}
           w={160}
           allowDeselect={false}
         />
@@ -798,9 +724,9 @@ export default function AiProfileManager() {
           value={filterMode}
           onChange={setFilterMode}
           data={[
-            { label: "All", value: "all" },
-            { label: "Completion", value: "completion" },
-            { label: "Chat", value: "chat" },
+            { label: 'All', value: 'all' },
+            { label: 'Completion', value: 'completion' },
+            { label: 'Chat', value: 'chat' },
           ]}
         />
         <SegmentedControl
@@ -808,23 +734,23 @@ export default function AiProfileManager() {
           value={filterStatus}
           onChange={setFilterStatus}
           data={[
-            { label: "All", value: "all" },
-            { label: "Active", value: "active" },
-            { label: "Inactive", value: "inactive" },
+            { label: 'All', value: 'all' },
+            { label: 'Active', value: 'active' },
+            { label: 'Inactive', value: 'inactive' },
           ]}
         />
         <Select
           size="sm"
           placeholder="Sort"
           data={[
-            { value: "name-asc", label: "Name A–Z" },
-            { value: "name-desc", label: "Name Z–A" },
-            { value: "newest", label: "Newest first" },
-            { value: "oldest", label: "Oldest first" },
-            { value: "provider", label: "Provider" },
+            { value: 'name-asc', label: 'Name A–Z' },
+            { value: 'name-desc', label: 'Name Z–A' },
+            { value: 'newest', label: 'Newest first' },
+            { value: 'oldest', label: 'Oldest first' },
+            { value: 'provider', label: 'Provider' },
           ]}
           value={sortBy}
-          onChange={(v) => setSortBy(v || "name-asc")}
+          onChange={(v) => setSortBy(v || 'name-asc')}
           w={140}
           allowDeselect={false}
         />
@@ -832,20 +758,20 @@ export default function AiProfileManager() {
           size="sm"
           placeholder="Group by"
           data={[
-            { value: "none", label: "No grouping" },
-            { value: "provider", label: "Group by provider" },
-            { value: "mode", label: "Group by mode" },
+            { value: 'none', label: 'No grouping' },
+            { value: 'provider', label: 'Group by provider' },
+            { value: 'mode', label: 'Group by mode' },
           ]}
           value={groupBy}
-          onChange={(v) => setGroupBy(v || "none")}
+          onChange={(v) => setGroupBy(v || 'none')}
           w={160}
           allowDeselect={false}
         />
         <Group gap={4}>
           <Tooltip label="Card view">
             <ActionIcon
-              variant={viewMode === "grid" ? "filled" : "subtle"}
-              onClick={() => setViewMode("grid")}
+              variant={viewMode === 'grid' ? 'filled' : 'subtle'}
+              onClick={() => setViewMode('grid')}
               size="sm"
             >
               <IconLayoutGrid size={16} />
@@ -853,8 +779,8 @@ export default function AiProfileManager() {
           </Tooltip>
           <Tooltip label="List view">
             <ActionIcon
-              variant={viewMode === "list" ? "filled" : "subtle"}
-              onClick={() => setViewMode("list")}
+              variant={viewMode === 'list' ? 'filled' : 'subtle'}
+              onClick={() => setViewMode('list')}
               size="sm"
             >
               <IconList size={16} />
@@ -867,29 +793,21 @@ export default function AiProfileManager() {
       <Text size="sm" c="dimmed">
         {isFiltered
           ? `Showing ${visibleCount} of ${profiles.length} profiles`
-          : `${profiles.length} profile${profiles.length !== 1 ? "s" : ""}`}
+          : `${profiles.length} profile${profiles.length !== 1 ? 's' : ''}`}
       </Text>
 
       {/* Profile display */}
       {profiles.length === 0 ? (
-        <Alert
-          icon={<IconAlertCircle size={16} />}
-          color="blue"
-          variant="light"
-        >
+        <Alert icon={<IconAlertCircle size={16} />} color="blue" variant="light">
           No AI profiles configured. Add one to assign to processing jobs.
         </Alert>
       ) : visibleCount === 0 ? (
-        <Alert
-          icon={<IconAlertCircle size={16} />}
-          color="gray"
-          variant="light"
-        >
+        <Alert icon={<IconAlertCircle size={16} />} color="gray" variant="light">
           No profiles match your filters.
         </Alert>
-      ) : viewMode === "list" ? (
+      ) : viewMode === 'list' ? (
         /* ── List / Table View ── */
-        <Paper withBorder radius="md" style={{ overflow: "hidden" }}>
+        <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
           <ScrollArea>
             <Table striped highlightOnHover>
               <Table.Thead>
@@ -897,26 +815,16 @@ export default function AiProfileManager() {
                   <Table.Th style={{ width: 36 }}>
                     <Checkbox
                       size="xs"
-                      checked={
-                        checkedProfileIds.size > 0 &&
-                        checkedProfileIds.size === visibleCount
-                      }
-                      indeterminate={
-                        checkedProfileIds.size > 0 &&
-                        checkedProfileIds.size < visibleCount
-                      }
+                      checked={checkedProfileIds.size > 0 && checkedProfileIds.size === visibleCount}
+                      indeterminate={checkedProfileIds.size > 0 && checkedProfileIds.size < visibleCount}
                       onChange={() => {
                         if (checkedProfileIds.size === visibleCount) {
                           setCheckedProfileIds(new Set());
                         } else {
                           const allVisible =
-                            filteredAndGroupedProfiles.type === "flat"
-                              ? filteredAndGroupedProfiles.items.map(
-                                  (p) => p.id,
-                                )
-                              : filteredAndGroupedProfiles.groups.flatMap((g) =>
-                                  g.items.map((p) => p.id),
-                                );
+                            filteredAndGroupedProfiles.type === 'flat'
+                              ? filteredAndGroupedProfiles.items.map((p) => p.id)
+                              : filteredAndGroupedProfiles.groups.flatMap((g) => g.items.map((p) => p.id));
                           setCheckedProfileIds(new Set(allVisible));
                         }
                       }}
@@ -934,7 +842,7 @@ export default function AiProfileManager() {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {(filteredAndGroupedProfiles.type === "flat"
+                {(filteredAndGroupedProfiles.type === 'flat'
                   ? filteredAndGroupedProfiles.items
                   : filteredAndGroupedProfiles.groups.flatMap((g) => g.items)
                 ).map((p) => (
@@ -942,9 +850,9 @@ export default function AiProfileManager() {
                     key={p.id}
                     bg={
                       checkedProfileIds.has(p.id)
-                        ? "var(--mantine-color-blue-0)"
+                        ? 'var(--mantine-color-blue-0)'
                         : p.is_default
-                          ? "var(--mantine-color-yellow-0)"
+                          ? 'var(--mantine-color-yellow-0)'
                           : undefined
                     }
                   >
@@ -961,12 +869,7 @@ export default function AiProfileManager() {
                           {p.name}
                         </Text>
                         {p.is_default && (
-                          <Badge
-                            size="xs"
-                            variant="filled"
-                            color="yellow"
-                            c="dark"
-                          >
+                          <Badge size="xs" variant="filled" color="yellow" c="dark">
                             Default
                           </Badge>
                         )}
@@ -975,72 +878,47 @@ export default function AiProfileManager() {
                     <Table.Td>
                       <CopyButton value={p.id}>
                         {({ copied, copy }) => (
-                          <Tooltip
-                            label={copied ? "Copied!" : "Copy profile ID"}
-                            withArrow
-                          >
+                          <Tooltip label={copied ? 'Copied!' : 'Copy profile ID'} withArrow>
                             <Text
                               size="xs"
-                              c={copied ? "teal" : "dimmed"}
+                              c={copied ? 'teal' : 'dimmed'}
                               style={{
-                                cursor: "pointer",
-                                fontFamily: "monospace",
+                                cursor: 'pointer',
+                                fontFamily: 'monospace',
                               }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 copy();
                               }}
                             >
-                              {p.id.slice(0, 8)}…{" "}
-                              {copied && (
-                                <IconCheck
-                                  size={10}
-                                  style={{ verticalAlign: "middle" }}
-                                />
-                              )}
+                              {p.id.slice(0, 8)}…{' '}
+                              {copied && <IconCheck size={10} style={{ verticalAlign: 'middle' }} />}
                             </Text>
                           </Tooltip>
                         )}
                       </CopyButton>
                     </Table.Td>
                     <Table.Td>
-                      <Text size="xs">{p.provider?.name || "—"}</Text>
+                      <Text size="xs">{p.provider?.name || '—'}</Text>
                     </Table.Td>
                     <Table.Td>
-                      <Text
-                        size="xs"
-                        ff="monospace"
-                        truncate
-                        style={{ maxWidth: 160 }}
-                      >
+                      <Text size="xs" ff="monospace" truncate style={{ maxWidth: 160 }}>
                         {p.external_ai_id}
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Badge
-                        size="xs"
-                        variant="light"
-                        color={p.profile_type === "model" ? "violet" : "teal"}
-                      >
-                        {p.profile_type === "model" ? "Model" : "Agent"}
+                      <Badge size="xs" variant="light" color={p.profile_type === 'model' ? 'violet' : 'teal'}>
+                        {p.profile_type === 'model' ? 'Model' : 'Agent'}
                       </Badge>
                     </Table.Td>
                     <Table.Td>
-                      <Badge
-                        size="xs"
-                        variant="light"
-                        color={p.mode === "chat" ? "orange" : "teal"}
-                      >
-                        {p.mode === "chat" ? "Chat" : "Completion"}
+                      <Badge size="xs" variant="light" color={p.mode === 'chat' ? 'orange' : 'teal'}>
+                        {p.mode === 'chat' ? 'Chat' : 'Completion'}
                       </Badge>
                     </Table.Td>
                     <Table.Td>
-                      <Badge
-                        size="xs"
-                        variant="light"
-                        color={p.is_active ? "green" : "gray"}
-                      >
-                        {p.is_active ? "Active" : "Inactive"}
+                      <Badge size="xs" variant="light" color={p.is_active ? 'green' : 'gray'}>
+                        {p.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </Table.Td>
                     <Table.Td>
@@ -1055,28 +933,17 @@ export default function AiProfileManager() {
                       )}
                     </Table.Td>
                     <Table.Td>
-                      <Menu
-                        shadow="md"
-                        width={160}
-                        position="bottom-end"
-                        withinPortal
-                      >
+                      <Menu shadow="md" width={160} position="bottom-end" withinPortal>
                         <Menu.Target>
                           <ActionIcon variant="subtle" size="sm">
                             <IconDotsVertical size={14} />
                           </ActionIcon>
                         </Menu.Target>
                         <Menu.Dropdown>
-                          <Menu.Item
-                            leftSection={<IconEdit size={14} />}
-                            onClick={() => openEdit(p)}
-                          >
+                          <Menu.Item leftSection={<IconEdit size={14} />} onClick={() => openEdit(p)}>
                             Edit
                           </Menu.Item>
-                          <Menu.Item
-                            leftSection={<IconMessageCircle size={14} />}
-                            onClick={() => openTestChat(p)}
-                          >
+                          <Menu.Item leftSection={<IconMessageCircle size={14} />} onClick={() => openTestChat(p)}>
                             Test chat
                           </Menu.Item>
                           <Menu.Item
@@ -1086,18 +953,10 @@ export default function AiProfileManager() {
                             Failover
                           </Menu.Item>
                           <Menu.Item
-                            leftSection={
-                              p.is_default ? (
-                                <IconStarFilled size={14} />
-                              ) : (
-                                <IconStar size={14} />
-                              )
-                            }
-                            onClick={() =>
-                              handleToggleDefault(p.id, !p.is_default)
-                            }
+                            leftSection={p.is_default ? <IconStarFilled size={14} /> : <IconStar size={14} />}
+                            onClick={() => handleToggleDefault(p.id, !p.is_default)}
                           >
-                            {p.is_default ? "Remove default" : "Set default"}
+                            {p.is_default ? 'Remove default' : 'Set default'}
                           </Menu.Item>
                           <Menu.Divider />
                           <Menu.Item
@@ -1116,7 +975,7 @@ export default function AiProfileManager() {
             </Table>
           </ScrollArea>
         </Paper>
-      ) : filteredAndGroupedProfiles.type === "flat" ? (
+      ) : filteredAndGroupedProfiles.type === 'flat' ? (
         /* ── Card view (flat) ── */
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
           {filteredAndGroupedProfiles.items.map((p) => (
@@ -1142,21 +1001,16 @@ export default function AiProfileManager() {
       )}
 
       {/* Create / Edit Modal */}
-      <Modal
-        opened={modalOpened}
-        onClose={closeModal}
-        title={editing ? "Edit AI Profile" : "New AI Profile"}
-        size="md"
-      >
+      <Modal opened={modalOpened} onClose={closeModal} title={editing ? 'Edit AI Profile' : 'New AI Profile'} size="md">
         <form onSubmit={handleSubmit}>
           <Stack gap="sm">
             {/* Profile type toggle — Agent vs Model */}
             <SegmentedControl
-              value={isModelOnlyProvider ? "model" : profileType}
+              value={isModelOnlyProvider ? 'model' : profileType}
               onChange={handleProfileTypeChange}
               data={[
-                { label: "AI Agent", value: "agent" },
-                { label: "AI Model", value: "model" },
+                { label: 'AI Agent', value: 'agent' },
+                { label: 'AI Model', value: 'model' },
               ]}
               disabled={!!editing || isModelOnlyProvider}
               fullWidth
@@ -1164,25 +1018,25 @@ export default function AiProfileManager() {
 
             <Text size="xs" c="dimmed">
               {isModelOnlyProvider
-                ? "Google Gemini uses model IDs directly (no provider-side agent objects)."
-                : profileType === "agent"
-                  ? "AI Agents are Devs.ai-configured agents with custom instructions and knowledge."
-                  : "AI Models are raw LLM models accessed directly via model ID through the completions API."}
+                ? 'Google Gemini uses model IDs directly (no provider-side agent objects).'
+                : profileType === 'agent'
+                  ? 'AI Agents are Devs.ai-configured agents with custom instructions and knowledge.'
+                  : 'AI Models are raw LLM models accessed directly via model ID through the completions API.'}
             </Text>
 
             <SegmentedControl
               value={mode}
               onChange={setMode}
               data={[
-                { label: "Completion", value: "completion" },
-                { label: "Chat", value: "chat" },
+                { label: 'Completion', value: 'completion' },
+                { label: 'Chat', value: 'chat' },
               ]}
               fullWidth
             />
             <Text size="xs" c="dimmed">
-              {mode === "chat"
-                ? "Chat mode uses streaming responses for real-time interaction."
-                : "Completion mode returns the full response in a single request."}
+              {mode === 'chat'
+                ? 'Chat mode uses streaming responses for real-time interaction.'
+                : 'Completion mode returns the full response in a single request.'}
             </Text>
 
             <Select
@@ -1197,7 +1051,7 @@ export default function AiProfileManager() {
             />
 
             {/* Agent mode: show AI select or manual input */}
-            {effectiveProfileType === "agent" &&
+            {effectiveProfileType === 'agent' &&
               (aiOptions.length > 0 ? (
                 <Select
                   label="Available AI"
@@ -1208,8 +1062,8 @@ export default function AiProfileManager() {
                     const ai = availableAis.find((a) => (a.id || a.aiId) === v);
                     setForm((prev) => ({
                       ...prev,
-                      external_ai_id: v || "",
-                      name: prev.name || ai?.name || "",
+                      external_ai_id: v || '',
+                      name: prev.name || ai?.name || '',
                     }));
                   }}
                   searchable
@@ -1230,7 +1084,7 @@ export default function AiProfileManager() {
               ))}
 
             {/* Model mode: show model select from registered models */}
-            {effectiveProfileType === "model" &&
+            {effectiveProfileType === 'model' &&
               (modelOptions.length > 0 ? (
                 <Select
                   data-testid="profile-model-select"
@@ -1242,8 +1096,8 @@ export default function AiProfileManager() {
                     const model = availableModels.find((m) => m.model_id === v);
                     setForm((prev) => ({
                       ...prev,
-                      external_ai_id: v || "",
-                      name: prev.name || model?.display_name || "",
+                      external_ai_id: v || '',
+                      name: prev.name || model?.display_name || '',
                     }));
                   }}
                   searchable
@@ -1263,37 +1117,29 @@ export default function AiProfileManager() {
                 />
               ))}
 
-            {!form.external_ai_id &&
-              selectedProvider &&
-              effectiveProfileType === "agent" && (
-                <Text size="xs" c="dimmed">
-                  If the provider list is empty, enter the AI ID manually above.
-                </Text>
-              )}
+            {!form.external_ai_id && selectedProvider && effectiveProfileType === 'agent' && (
+              <Text size="xs" c="dimmed">
+                If the provider list is empty, enter the AI ID manually above.
+              </Text>
+            )}
 
             {!form.external_ai_id &&
               selectedProvider &&
-              effectiveProfileType === "model" &&
+              effectiveProfileType === 'model' &&
               availableModels.length === 0 && (
                 <Text size="xs" c="dimmed">
-                  No models registered for this provider. Use &quot;Manage
-                  LLMs&quot; to add models, or enter a model ID manually.
+                  No models registered for this provider. Use &quot;Manage LLMs&quot; to add models, or enter a model ID
+                  manually.
                 </Text>
               )}
 
-            <Paper
-              withBorder
-              p="sm"
-              radius="sm"
-              style={{ borderLeft: "3px solid var(--mantine-color-orange-5)" }}
-            >
+            <Paper withBorder p="sm" radius="sm" style={{ borderLeft: '3px solid var(--mantine-color-orange-5)' }}>
               <Stack gap="xs">
                 <Text size="sm" fw={600} c="orange.7">
                   Failover (optional)
                 </Text>
                 <Text size="xs" c="dimmed">
-                  Failover activates when the primary model fails or returns
-                  empty content.
+                  Failover activates when the primary model fails or returns empty content.
                 </Text>
                 {editing?.failover_provider && (
                   <Group gap="xs">
@@ -1301,8 +1147,7 @@ export default function AiProfileManager() {
                       Active
                     </Badge>
                     <Text size="xs">
-                      {editing.failover_provider.name} —{" "}
-                      <code>{editing.failover_external_ai_id}</code>
+                      {editing.failover_provider.name} — <code>{editing.failover_external_ai_id}</code>
                     </Text>
                   </Group>
                 )}
@@ -1317,9 +1162,7 @@ export default function AiProfileManager() {
                       openFailoverConfig(editing);
                     }}
                   >
-                    {editing.failover_provider_id
-                      ? "Edit Failover"
-                      : "Configure Failover"}
+                    {editing.failover_provider_id ? 'Edit Failover' : 'Configure Failover'}
                   </Button>
                 ) : (
                   <Text size="xs" c="dimmed" fs="italic">
@@ -1329,365 +1172,279 @@ export default function AiProfileManager() {
               </Stack>
             </Paper>
 
-            {selectedProviderType === "devs-ai" &&
-              effectiveProfileType === "model" && (
-                <Paper withBorder p="sm" radius="sm">
-                  <Stack gap="xs">
-                    <Text size="sm" fw={600}>
-                      Devs.ai Runtime Options
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      Enable built-in tools and chat options for this model
-                      profile.
-                    </Text>
-                    {DEVS_AI_BUILTIN_TOOL_OPTIONS.map((tool) => (
-                      <Switch
-                        key={tool.key}
-                        size="sm"
-                        label={tool.label}
-                        checked={normaliseRuntimeOptions(
-                          form.runtime_options,
-                        ).devs_ai.built_in_tools.includes(tool.key)}
-                        onChange={(e) =>
-                          toggleDevsAiTool(tool.key, e.currentTarget.checked)
-                        }
-                      />
-                    ))}
+            {selectedProviderType === 'devs-ai' && effectiveProfileType === 'model' && (
+              <Paper withBorder p="sm" radius="sm">
+                <Stack gap="xs">
+                  <Text size="sm" fw={600}>
+                    Devs.ai Runtime Options
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Enable built-in tools and chat options for this model profile.
+                  </Text>
+                  {DEVS_AI_BUILTIN_TOOL_OPTIONS.map((tool) => (
                     <Switch
+                      key={tool.key}
                       size="sm"
-                      label="Generate Citations"
-                      checked={
-                        normaliseRuntimeOptions(form.runtime_options).devs_ai
-                          .generate_citations
-                      }
-                      onChange={(e) => {
-                        const checked = e.currentTarget.checked;
-                        setForm((prev) => {
-                          const runtimeOptions = normaliseRuntimeOptions(
-                            prev.runtime_options,
-                          );
-                          return {
-                            ...prev,
-                            runtime_options: {
-                              ...runtimeOptions,
-                              devs_ai: {
-                                ...runtimeOptions.devs_ai,
-                                generate_citations: checked,
-                              },
-                            },
-                          };
-                        });
-                      }}
+                      label={tool.label}
+                      checked={normaliseRuntimeOptions(form.runtime_options).devs_ai.built_in_tools.includes(tool.key)}
+                      onChange={(e) => toggleDevsAiTool(tool.key, e.currentTarget.checked)}
                     />
-                    <Switch
-                      size="sm"
-                      label="Parallel Tool Calls"
-                      description="Allow the AI to invoke multiple tools simultaneously"
-                      checked={
-                        normaliseRuntimeOptions(form.runtime_options).devs_ai
-                          .parallel_tool_calls
-                      }
-                      onChange={(e) => {
-                        const checked = e.currentTarget.checked;
-                        setForm((prev) => {
-                          const runtimeOptions = normaliseRuntimeOptions(
-                            prev.runtime_options,
-                          );
-                          return {
-                            ...prev,
-                            runtime_options: {
-                              ...runtimeOptions,
-                              devs_ai: {
-                                ...runtimeOptions.devs_ai,
-                                parallel_tool_calls: checked,
-                              },
+                  ))}
+                  <Switch
+                    size="sm"
+                    label="Generate Citations"
+                    checked={normaliseRuntimeOptions(form.runtime_options).devs_ai.generate_citations}
+                    onChange={(e) => {
+                      const checked = e.currentTarget.checked;
+                      setForm((prev) => {
+                        const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options);
+                        return {
+                          ...prev,
+                          runtime_options: {
+                            ...runtimeOptions,
+                            devs_ai: {
+                              ...runtimeOptions.devs_ai,
+                              generate_citations: checked,
                             },
-                          };
-                        });
-                      }}
-                    />
+                          },
+                        };
+                      });
+                    }}
+                  />
+                  <Switch
+                    size="sm"
+                    label="Parallel Tool Calls"
+                    description="Allow the AI to invoke multiple tools simultaneously"
+                    checked={normaliseRuntimeOptions(form.runtime_options).devs_ai.parallel_tool_calls}
+                    onChange={(e) => {
+                      const checked = e.currentTarget.checked;
+                      setForm((prev) => {
+                        const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options);
+                        return {
+                          ...prev,
+                          runtime_options: {
+                            ...runtimeOptions,
+                            devs_ai: {
+                              ...runtimeOptions.devs_ai,
+                              parallel_tool_calls: checked,
+                            },
+                          },
+                        };
+                      });
+                    }}
+                  />
 
-                    {/* MCP Server Tools (dynamic, fetched from Devs.ai) */}
-                    {editing && (
-                      <>
-                        <Text size="sm" fw={600} mt="sm">
-                          MCP Server Tools
+                  {/* MCP Server Tools (dynamic, fetched from Devs.ai) */}
+                  {editing && (
+                    <>
+                      <Text size="sm" fw={600} mt="sm">
+                        MCP Server Tools
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        External integrations (Gmail, Slack, etc.) configured on this AI agent in Devs.ai. OAuth status
+                        shows whether the user has authorized access.
+                      </Text>
+                      {mcpLoading && (
+                        <Center>
+                          <Loader size="sm" />
+                        </Center>
+                      )}
+                      {!mcpLoading && mcpTools.length === 0 && (
+                        <Text size="xs" c="dimmed" fs="italic">
+                          No MCP server tools configured on this agent. Configure them in the Devs.ai dashboard.
                         </Text>
-                        <Text size="xs" c="dimmed">
-                          External integrations (Gmail, Slack, etc.) configured
-                          on this AI agent in Devs.ai. OAuth status shows
-                          whether the user has authorized access.
-                        </Text>
-                        {mcpLoading && (
-                          <Center>
-                            <Loader size="sm" />
-                          </Center>
-                        )}
-                        {!mcpLoading && mcpTools.length === 0 && (
-                          <Text size="xs" c="dimmed" fs="italic">
-                            No MCP server tools configured on this agent.
-                            Configure them in the Devs.ai dashboard.
-                          </Text>
-                        )}
-                        {!mcpLoading &&
-                          mcpTools.map((tool) => {
-                            const authEntry = toolAuthStatus.find(
-                              (a) => a.name === tool.name,
-                            );
-                            const isConnected = !!authEntry;
-                            return (
-                              <Group
-                                key={tool.id}
-                                gap="xs"
-                                justify="space-between"
-                              >
-                                <Group gap="xs">
-                                  <Text size="sm">{tool.name}</Text>
-                                  <Badge
-                                    size="xs"
-                                    variant="light"
-                                    color={isConnected ? "green" : "orange"}
-                                  >
-                                    {isConnected
-                                      ? "Connected"
-                                      : "Not connected"}
-                                  </Badge>
-                                </Group>
-                                {!isConnected && (
-                                  <Button
-                                    size="compact-xs"
-                                    variant="light"
-                                    onClick={async () => {
-                                      try {
-                                        const result =
-                                          await api.initiateToolOAuth(
-                                            editing.id,
-                                            tool.id,
-                                          );
-                                        if (result?.authUrl) {
-                                          window.open(
-                                            String(result.authUrl),
-                                            "_blank",
-                                            "noopener",
-                                          );
-                                          notifications.show({
-                                            title: "OAuth",
-                                            message:
-                                              "Authorization window opened. Complete the flow, then refresh.",
-                                            color: "blue",
-                                          });
-                                        }
-                                      } catch (err: unknown) {
-                                        notifications.show({
-                                          title: "OAuth Error",
-                                          message:
-                                            err instanceof Error
-                                              ? err.message
-                                              : String(err),
-                                          color: "red",
-                                        });
-                                      }
-                                    }}
-                                  >
-                                    Connect
-                                  </Button>
-                                )}
-                                {isConnected && (
-                                  <Button
-                                    size="compact-xs"
-                                    variant="subtle"
-                                    color="red"
-                                    onClick={async () => {
-                                      try {
-                                        await api.deleteToolOAuthToken(
-                                          editing.id,
-                                          tool.id,
-                                        );
-                                        notifications.show({
-                                          title: "Disconnected",
-                                          message: `${tool.name} OAuth token removed`,
-                                          color: "yellow",
-                                        });
-                                        loadMcpTools(editing.id, "devs-ai");
-                                      } catch (err: unknown) {
-                                        notifications.show({
-                                          title: "Error",
-                                          message:
-                                            err instanceof Error
-                                              ? err.message
-                                              : String(err),
-                                          color: "red",
-                                        });
-                                      }
-                                    }}
-                                  >
-                                    Disconnect
-                                  </Button>
-                                )}
+                      )}
+                      {!mcpLoading &&
+                        mcpTools.map((tool) => {
+                          const authEntry = toolAuthStatus.find((a) => a.name === tool.name);
+                          const isConnected = !!authEntry;
+                          return (
+                            <Group key={tool.id} gap="xs" justify="space-between">
+                              <Group gap="xs">
+                                <Text size="sm">{tool.name}</Text>
+                                <Badge size="xs" variant="light" color={isConnected ? 'green' : 'orange'}>
+                                  {isConnected ? 'Connected' : 'Not connected'}
+                                </Badge>
                               </Group>
-                            );
-                          })}
-                        {editing && !mcpLoading && (
-                          <Button
-                            size="compact-xs"
-                            variant="subtle"
-                            leftSection={<IconRefresh size={14} />}
-                            onClick={() => loadMcpTools(editing.id, "devs-ai")}
-                          >
-                            Refresh tools
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </Stack>
-                </Paper>
-              )}
+                              {!isConnected && (
+                                <Button
+                                  size="compact-xs"
+                                  variant="light"
+                                  onClick={async () => {
+                                    try {
+                                      const result = await api.initiateToolOAuth(editing.id, tool.id);
+                                      if (result?.authUrl) {
+                                        window.open(String(result.authUrl), '_blank', 'noopener');
+                                        notifications.show({
+                                          title: 'OAuth',
+                                          message: 'Authorization window opened. Complete the flow, then refresh.',
+                                          color: 'blue',
+                                        });
+                                      }
+                                    } catch (err: unknown) {
+                                      notifications.show({
+                                        title: 'OAuth Error',
+                                        message: err instanceof Error ? err.message : String(err),
+                                        color: 'red',
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Connect
+                                </Button>
+                              )}
+                              {isConnected && (
+                                <Button
+                                  size="compact-xs"
+                                  variant="subtle"
+                                  color="red"
+                                  onClick={async () => {
+                                    try {
+                                      await api.deleteToolOAuthToken(editing.id, tool.id);
+                                      notifications.show({
+                                        title: 'Disconnected',
+                                        message: `${tool.name} OAuth token removed`,
+                                        color: 'yellow',
+                                      });
+                                      loadMcpTools(editing.id, 'devs-ai');
+                                    } catch (err: unknown) {
+                                      notifications.show({
+                                        title: 'Error',
+                                        message: err instanceof Error ? err.message : String(err),
+                                        color: 'red',
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Disconnect
+                                </Button>
+                              )}
+                            </Group>
+                          );
+                        })}
+                      {editing && !mcpLoading && (
+                        <Button
+                          size="compact-xs"
+                          variant="subtle"
+                          leftSection={<IconRefresh size={14} />}
+                          onClick={() => loadMcpTools(editing.id, 'devs-ai')}
+                        >
+                          Refresh tools
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </Stack>
+              </Paper>
+            )}
 
-            {selectedProviderType === "devs-ai-v2" &&
-              effectiveProfileType === "model" && (
-                <Paper withBorder p="sm" radius="sm">
-                  <Stack gap="xs">
-                    <Text size="sm" fw={600}>
-                      Devs.ai v2 Runtime Options
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      Responses API v2 — built-in tools, chat mode, and
-                      threading behavior.
-                    </Text>
-                    {DEVS_AI_V2_BUILTIN_TOOL_OPTIONS.map((tool) => (
-                      <Switch
-                        key={tool.key}
-                        size="sm"
-                        label={tool.label}
-                        checked={normaliseRuntimeOptions(
-                          form.runtime_options,
-                          "devs-ai-v2",
-                        ).devs_ai_v2.built_in_tools.includes(tool.key)}
-                        onChange={(e) =>
-                          toggleDevsAiV2Tool(tool.key, e.currentTarget.checked)
-                        }
-                      />
-                    ))}
-                    <Select
-                      label="Chat mode"
-                      size="xs"
-                      data={[...DEVS_AI_V2_CHAT_MODE_OPTIONS]}
-                      value={
-                        normaliseRuntimeOptions(
-                          form.runtime_options,
-                          "devs-ai-v2",
-                        ).devs_ai_v2.chat_mode
-                      }
-                      onChange={(val) => {
-                        if (!val) return;
-                        setForm((prev) => {
-                          const runtimeOptions = normaliseRuntimeOptions(
-                            prev.runtime_options,
-                            "devs-ai-v2",
-                          );
-                          return {
-                            ...prev,
-                            runtime_options: {
-                              ...runtimeOptions,
-                              devs_ai_v2: {
-                                ...runtimeOptions.devs_ai_v2,
-                                chat_mode: val as "execute" | "chat" | "plan",
-                              },
-                            },
-                          };
-                        });
-                      }}
-                    />
-                    <Select
-                      label="Thread mode"
-                      size="xs"
-                      data={[...DEVS_AI_V2_THREAD_MODE_OPTIONS]}
-                      value={
-                        normaliseRuntimeOptions(
-                          form.runtime_options,
-                          "devs-ai-v2",
-                        ).devs_ai_v2.thread_mode
-                      }
-                      onChange={(val) => {
-                        if (!val) return;
-                        setForm((prev) => {
-                          const runtimeOptions = normaliseRuntimeOptions(
-                            prev.runtime_options,
-                            "devs-ai-v2",
-                          );
-                          return {
-                            ...prev,
-                            runtime_options: {
-                              ...runtimeOptions,
-                              devs_ai_v2: {
-                                ...runtimeOptions.devs_ai_v2,
-                                thread_mode: val as
-                                  | "collect"
-                                  | "steer"
-                                  | "interrupt"
-                                  | "force",
-                              },
-                            },
-                          };
-                        });
-                      }}
-                    />
+            {selectedProviderType === 'devs-ai-v2' && effectiveProfileType === 'model' && (
+              <Paper withBorder p="sm" radius="sm">
+                <Stack gap="xs">
+                  <Text size="sm" fw={600}>
+                    Devs.ai v2 Runtime Options
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Responses API v2 — built-in tools, chat mode, and threading behavior.
+                  </Text>
+                  {DEVS_AI_V2_BUILTIN_TOOL_OPTIONS.map((tool) => (
                     <Switch
+                      key={tool.key}
                       size="sm"
-                      label="Parallel Tool Calls"
-                      checked={
-                        normaliseRuntimeOptions(
-                          form.runtime_options,
-                          "devs-ai-v2",
-                        ).devs_ai_v2.parallel_tool_calls
-                      }
-                      onChange={(e) => {
-                        const checked = e.currentTarget.checked;
-                        setForm((prev) => {
-                          const runtimeOptions = normaliseRuntimeOptions(
-                            prev.runtime_options,
-                            "devs-ai-v2",
-                          );
-                          return {
-                            ...prev,
-                            runtime_options: {
-                              ...runtimeOptions,
-                              devs_ai_v2: {
-                                ...runtimeOptions.devs_ai_v2,
-                                parallel_tool_calls: checked,
-                              },
-                            },
-                          };
-                        });
-                      }}
+                      label={tool.label}
+                      checked={normaliseRuntimeOptions(
+                        form.runtime_options,
+                        'devs-ai-v2',
+                      ).devs_ai_v2.built_in_tools.includes(tool.key)}
+                      onChange={(e) => toggleDevsAiV2Tool(tool.key, e.currentTarget.checked)}
                     />
-                  </Stack>
-                </Paper>
-              )}
+                  ))}
+                  <Select
+                    label="Chat mode"
+                    size="xs"
+                    data={[...DEVS_AI_V2_CHAT_MODE_OPTIONS]}
+                    value={normaliseRuntimeOptions(form.runtime_options, 'devs-ai-v2').devs_ai_v2.chat_mode}
+                    onChange={(val) => {
+                      if (!val) return;
+                      setForm((prev) => {
+                        const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options, 'devs-ai-v2');
+                        return {
+                          ...prev,
+                          runtime_options: {
+                            ...runtimeOptions,
+                            devs_ai_v2: {
+                              ...runtimeOptions.devs_ai_v2,
+                              chat_mode: val as 'execute' | 'chat' | 'plan',
+                            },
+                          },
+                        };
+                      });
+                    }}
+                  />
+                  <Select
+                    label="Thread mode"
+                    size="xs"
+                    data={[...DEVS_AI_V2_THREAD_MODE_OPTIONS]}
+                    value={normaliseRuntimeOptions(form.runtime_options, 'devs-ai-v2').devs_ai_v2.thread_mode}
+                    onChange={(val) => {
+                      if (!val) return;
+                      setForm((prev) => {
+                        const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options, 'devs-ai-v2');
+                        return {
+                          ...prev,
+                          runtime_options: {
+                            ...runtimeOptions,
+                            devs_ai_v2: {
+                              ...runtimeOptions.devs_ai_v2,
+                              thread_mode: val as 'collect' | 'steer' | 'interrupt' | 'force',
+                            },
+                          },
+                        };
+                      });
+                    }}
+                  />
+                  <Switch
+                    size="sm"
+                    label="Parallel Tool Calls"
+                    checked={normaliseRuntimeOptions(form.runtime_options, 'devs-ai-v2').devs_ai_v2.parallel_tool_calls}
+                    onChange={(e) => {
+                      const checked = e.currentTarget.checked;
+                      setForm((prev) => {
+                        const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options, 'devs-ai-v2');
+                        return {
+                          ...prev,
+                          runtime_options: {
+                            ...runtimeOptions,
+                            devs_ai_v2: {
+                              ...runtimeOptions.devs_ai_v2,
+                              parallel_tool_calls: checked,
+                            },
+                          },
+                        };
+                      });
+                    }}
+                  />
+                </Stack>
+              </Paper>
+            )}
 
-            {selectedProviderType === "google-gemini" && (
+            {selectedProviderType === 'google-gemini' && (
               <Paper withBorder p="sm" radius="sm">
                 <Stack gap="xs">
                   <Text size="sm" fw={600}>
                     Google Gemini Runtime Options
                   </Text>
                   <Text size="xs" c="dimmed">
-                    Grounding with Google Search allows the model to retrieve
-                    web results when needed.
+                    Grounding with Google Search allows the model to retrieve web results when needed.
                   </Text>
                   <Switch
                     size="sm"
                     label="Grounding with Google Search"
-                    checked={
-                      normaliseRuntimeOptions(form.runtime_options)
-                        .google_gemini.grounding_with_google_search
-                    }
+                    checked={normaliseRuntimeOptions(form.runtime_options).google_gemini.grounding_with_google_search}
                     onChange={(e) => {
                       const checked = e.currentTarget.checked;
                       setForm((prev) => {
-                        const runtimeOptions = normaliseRuntimeOptions(
-                          prev.runtime_options,
-                        );
+                        const runtimeOptions = normaliseRuntimeOptions(prev.runtime_options);
                         return {
                           ...prev,
                           runtime_options: {
@@ -1705,16 +1462,15 @@ export default function AiProfileManager() {
               </Paper>
             )}
 
-            {mode === "chat" && (
+            {mode === 'chat' && (
               <Paper withBorder p="sm" radius="sm">
                 <Stack gap="sm">
                   <Text size="sm" fw={600}>
                     Jobs as tools
                   </Text>
                   <Text size="xs" c="dimmed">
-                    Expose processing jobs as model-callable tools. AI Admin
-                    runs the linked job server-side when the model invokes the
-                    tool (devs-ai v1 tool.call or devs-ai-v2 function_call).
+                    Expose processing jobs as model-callable tools. AI Admin runs the linked job server-side when the
+                    model invokes the tool (devs-ai v1 tool.call or devs-ai-v2 function_call).
                   </Text>
                   {toolJobs.length === 0 && (
                     <Text size="xs" c="dimmed">
@@ -1722,11 +1478,7 @@ export default function AiProfileManager() {
                     </Text>
                   )}
                   {toolJobs.map((row, index) => (
-                    <Group
-                      key={`tool-job-${index}`}
-                      align="flex-end"
-                      wrap="nowrap"
-                    >
+                    <Group key={`tool-job-${index}`} align="flex-end" wrap="nowrap">
                       <Select
                         label="Processing job"
                         placeholder="Select job"
@@ -1738,11 +1490,7 @@ export default function AiProfileManager() {
                         }))}
                         value={row.jobSlug || null}
                         onChange={(value) =>
-                          setToolJobs((prev) =>
-                            prev.map((r, i) =>
-                              i === index ? { ...r, jobSlug: value || "" } : r,
-                            ),
-                          )
+                          setToolJobs((prev) => prev.map((r, i) => (i === index ? { ...r, jobSlug: value || '' } : r)))
                         }
                       />
                       <TextInput
@@ -1752,11 +1500,7 @@ export default function AiProfileManager() {
                         value={row.exposeAs}
                         onChange={(e) =>
                           setToolJobs((prev) =>
-                            prev.map((r, i) =>
-                              i === index
-                                ? { ...r, exposeAs: e.currentTarget.value }
-                                : r,
-                            ),
+                            prev.map((r, i) => (i === index ? { ...r, exposeAs: e.currentTarget.value } : r)),
                           )
                         }
                       />
@@ -1767,11 +1511,7 @@ export default function AiProfileManager() {
                         value={row.description}
                         onChange={(e) =>
                           setToolJobs((prev) =>
-                            prev.map((r, i) =>
-                              i === index
-                                ? { ...r, description: e.currentTarget.value }
-                                : r,
-                            ),
+                            prev.map((r, i) => (i === index ? { ...r, description: e.currentTarget.value } : r)),
                           )
                         }
                       />
@@ -1779,11 +1519,7 @@ export default function AiProfileManager() {
                         color="red"
                         variant="subtle"
                         aria-label="Remove tool job"
-                        onClick={() =>
-                          setToolJobs((prev) =>
-                            prev.filter((_, i) => i !== index),
-                          )
-                        }
+                        onClick={() => setToolJobs((prev) => prev.filter((_, i) => i !== index))}
                       >
                         <IconTrash size={16} />
                       </ActionIcon>
@@ -1793,12 +1529,7 @@ export default function AiProfileManager() {
                     variant="light"
                     size="xs"
                     leftSection={<IconPlus size={14} />}
-                    onClick={() =>
-                      setToolJobs((prev) => [
-                        ...prev,
-                        { jobSlug: "", exposeAs: "", description: "" },
-                      ])
-                    }
+                    onClick={() => setToolJobs((prev) => [...prev, { jobSlug: '', exposeAs: '', description: '' }])}
                   >
                     Add tool job
                   </Button>
@@ -1809,23 +1540,15 @@ export default function AiProfileManager() {
             <TextInput
               data-testid="profile-name-input"
               label="Profile Name"
-              placeholder={
-                effectiveProfileType === "agent"
-                  ? "e.g. GPT-5.2 Generic"
-                  : "e.g. Claude 4 Sonnet"
-              }
+              placeholder={effectiveProfileType === 'agent' ? 'e.g. GPT-5.2 Generic' : 'e.g. Claude 4 Sonnet'}
               value={form.name}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, name: e.target.value }))
-              }
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               required
             />
             <Textarea
               label="Description (optional)"
               value={form.description}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, description: e.target.value }))
-              }
+              onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
               minRows={2}
             />
             <Switch
@@ -1841,7 +1564,7 @@ export default function AiProfileManager() {
                 Cancel
               </Button>
               <Button type="submit" loading={saving}>
-                {editing ? "Update" : "Create"}
+                {editing ? 'Update' : 'Create'}
               </Button>
             </Group>
           </Stack>
@@ -1852,25 +1575,17 @@ export default function AiProfileManager() {
       <Drawer
         opened={chatOpened}
         onClose={closeChat}
-        title={`Test Chat — ${chatProfile?.name || ""}`}
+        title={`Test Chat — ${chatProfile?.name || ''}`}
         position="right"
         size="lg"
       >
         {chatProfile && (
-          <TestChatPanel
-            profileId={chatProfile.id}
-            profileName={chatProfile.name}
-            profile={chatProfile}
-          />
+          <TestChatPanel profileId={chatProfile.id} profileName={chatProfile.name} profile={chatProfile} />
         )}
       </Drawer>
 
       {/* Manage LLMs Modal */}
-      <ManageLlmsModal
-        opened={llmsOpened}
-        onClose={closeLlms}
-        providers={providers}
-      />
+      <ManageLlmsModal opened={llmsOpened} onClose={closeLlms} providers={providers} />
 
       {/* Failover Config Modal */}
       <FailoverConfigModal
@@ -1891,28 +1606,23 @@ export default function AiProfileManager() {
    TEST CHAT PANEL — simple chat interface to test AI profiles
    ══════════════════════════════════════════════════════════════ */
 
-function TestChatPanel({
-  profileId,
-  profileName,
-  profile,
-}: TestChatPanelProps) {
+function TestChatPanel({ profileId, profileName, profile }: TestChatPanelProps) {
   const [messages, setMessages] = useState<TestChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [systemPrompt, setSystemPrompt] = useState("");
+  const [input, setInput] = useState('');
+  const [systemPrompt, setSystemPrompt] = useState('');
   const [sending, setSending] = useState(false);
   const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [pendingAuth, setPendingAuth] = useState<PendingAuth | null>(null);
   const chatSessionIdRef = useRef<string | null>(null);
-  const activeReaderRef =
-    useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const activeReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({
         top: scrollRef.current.scrollHeight,
-        behavior: "smooth",
+        behavior: 'smooth',
       });
     }
   }, [messages]);
@@ -1932,65 +1642,58 @@ function TestChatPanel({
     };
   }, []);
 
-  const providerType = String(profile?.provider?.type || "")
+  const providerType = String(profile?.provider?.type || '')
     .trim()
     .toLowerCase();
   const rtOpts = profile?.runtime_options ?? {};
   const devsAiRaw = rtOpts.devs_ai;
-  const devsAiOptions = (
-    devsAiRaw && typeof devsAiRaw === "object" ? devsAiRaw : {}
-  ) as Record<string, unknown>;
+  const devsAiOptions = (devsAiRaw && typeof devsAiRaw === 'object' ? devsAiRaw : {}) as Record<string, unknown>;
   const geminiRaw = rtOpts.google_gemini;
-  const geminiOptions = (
-    geminiRaw && typeof geminiRaw === "object" ? geminiRaw : {}
-  ) as Record<string, unknown>;
+  const geminiOptions = (geminiRaw && typeof geminiRaw === 'object' ? geminiRaw : {}) as Record<string, unknown>;
   const enabledToolIds: string[] = Array.isArray(devsAiOptions.built_in_tools)
-    ? (devsAiOptions.built_in_tools as unknown[])
-        .map((t) => String(t || "").trim())
-        .filter(Boolean)
+    ? (devsAiOptions.built_in_tools as unknown[]).map((t) => String(t || '').trim()).filter(Boolean)
     : [];
 
   function buildToolsPresetPrompt() {
-    if (providerType === "devs-ai") {
-      const toolList =
-        enabledToolIds.length > 0 ? enabledToolIds.join(", ") : "none";
+    if (providerType === 'devs-ai') {
+      const toolList = enabledToolIds.length > 0 ? enabledToolIds.join(', ') : 'none';
       return [
-        "Run a runtime-tools smoke test for this profile.",
+        'Run a runtime-tools smoke test for this profile.',
         `Enabled tools configured on this profile: ${toolList}.`,
-        "If web_search is enabled, run one web lookup and include at least one source URL.",
-        "If python is enabled, run a tiny calculation (e.g., 37*19) and include the result.",
-        "If spreadsheet is enabled, show a tiny 2-row table transformed into CSV.",
-        "If memory is enabled, store a short key/value and confirm it was saved.",
-        "If sandbox is enabled, run a trivial sandbox action and summarize outcome.",
-        "Return compact JSON with: toolsDetected, toolsUsed, checks, and notes.",
-      ].join("\n");
+        'If web_search is enabled, run one web lookup and include at least one source URL.',
+        'If python is enabled, run a tiny calculation (e.g., 37*19) and include the result.',
+        'If spreadsheet is enabled, show a tiny 2-row table transformed into CSV.',
+        'If memory is enabled, store a short key/value and confirm it was saved.',
+        'If sandbox is enabled, run a trivial sandbox action and summarize outcome.',
+        'Return compact JSON with: toolsDetected, toolsUsed, checks, and notes.',
+      ].join('\n');
     }
 
-    if (providerType === "google-gemini") {
+    if (providerType === 'google-gemini') {
       const grounding = geminiOptions?.grounding_with_google_search === true;
       return grounding
         ? [
-            "Run a grounding smoke test.",
+            'Run a grounding smoke test.',
             'Use Google Search grounding to answer: "What is the latest official news about Gemini API pricing?"',
-            "Include citation URLs and state that grounding was used.",
-          ].join("\n")
+            'Include citation URLs and state that grounding was used.',
+          ].join('\n')
         : [
-            "Run a non-grounded response smoke test.",
+            'Run a non-grounded response smoke test.',
             'Answer this from model knowledge only: "Summarize what grounding in Gemini means in 3 bullets."',
-            "Do not use web lookups.",
-          ].join("\n");
+            'Do not use web lookups.',
+          ].join('\n');
     }
 
     return [
-      "Run a basic tool/runtime smoke test for this profile.",
-      "Describe whether any provider runtime options seem active in this response.",
-    ].join("\n");
+      'Run a basic tool/runtime smoke test for this profile.',
+      'Describe whether any provider runtime options seem active in this response.',
+    ].join('\n');
   }
 
   /** Friendly tool name extracted from MCP tool type like mcp__<id>__listFiles */
   function friendlyToolName(toolType: string | null | undefined) {
-    if (!toolType) return "unknown tool";
-    const parts = toolType.split("__");
+    if (!toolType) return 'unknown tool';
+    const parts = toolType.split('__');
     return parts.length >= 3 ? parts[parts.length - 1] : toolType;
   }
 
@@ -2005,25 +1708,25 @@ function TestChatPanel({
    * Returns the accumulated assistant text content.
    */
   async function processStream(response: Response) {
-    if (!response.body) throw new Error("No response body");
+    if (!response.body) throw new Error('No response body');
     const reader = response.body.getReader();
     activeReaderRef.current = reader;
     const decoder = new TextDecoder();
-    let assistantContent = "";
-    let buffer = "";
+    let assistantContent = '';
+    let buffer = '';
     let lastMessageId = null;
 
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
+        if (!line.startsWith('data: ')) continue;
         const dataStr = line.slice(6).trim();
-        if (dataStr === "[DONE]") continue;
+        if (dataStr === '[DONE]') continue;
 
         let parsed;
         try {
@@ -2033,15 +1736,14 @@ function TestChatPanel({
         }
 
         /* ── tool.call: AI wants to invoke a tool ── */
-        if (parsed.type === "tool.call") {
+        if (parsed.type === 'tool.call') {
           lastMessageId = parsed.messageId || lastMessageId;
           const calls = parsed.calls || [];
           for (const call of calls) {
-            const requiresAuth =
-              call.type?.includes("mcp") && call.arguments?.requiresUserAction;
+            const requiresAuth = call.type?.includes('mcp') && call.arguments?.requiresUserAction;
             addToolMessage({
-              role: "tool",
-              toolEvent: "invocation",
+              role: 'tool',
+              toolEvent: 'invocation',
               toolName: friendlyToolName(call.type),
               toolCallId: call.id,
               arguments: call.arguments,
@@ -2053,11 +1755,11 @@ function TestChatPanel({
         }
 
         /* ── tool.message: result of a tool call ── */
-        if (parsed.type === "tool.message") {
+        if (parsed.type === 'tool.message') {
           const meta = parsed.metadata || {};
           addToolMessage({
-            role: "tool",
-            toolEvent: "result",
+            role: 'tool',
+            toolEvent: 'result',
             toolCallId: parsed.toolCallId,
             status: parsed.status,
             output: parsed.output,
@@ -2075,13 +1777,13 @@ function TestChatPanel({
         }
 
         /* ── message.complete: usage info ── */
-        if (parsed.type === "message.complete") {
+        if (parsed.type === 'message.complete') {
           lastMessageId = parsed.messageId || lastMessageId;
           continue;
         }
 
         /* ── message.created: new message in the conversation ── */
-        if (parsed.type === "message.created") {
+        if (parsed.type === 'message.created') {
           lastMessageId = parsed.messageId || lastMessageId;
           continue;
         }
@@ -2090,16 +1792,14 @@ function TestChatPanel({
         const delta =
           parsed.choices?.[0]?.delta?.content ||
           parsed.candidates?.[0]?.content?.parts?.[0]?.text ||
-          (typeof parsed.content === "string"
-            ? parsed.content
-            : parsed.content?.text) ||
-          "";
+          (typeof parsed.content === 'string' ? parsed.content : parsed.content?.text) ||
+          '';
 
         if (delta && delta.trim()) {
           assistantContent += delta;
           setMessages((prev) => {
             const last = prev[prev.length - 1];
-            if (last?.role === "assistant" && last.streaming) {
+            if (last?.role === 'assistant' && last.streaming) {
               const updated = [...prev];
               updated[updated.length - 1] = {
                 ...last,
@@ -2107,10 +1807,7 @@ function TestChatPanel({
               };
               return updated;
             }
-            return [
-              ...prev,
-              { role: "assistant", content: assistantContent, streaming: true },
-            ];
+            return [...prev, { role: 'assistant', content: assistantContent, streaming: true }];
           });
         }
       }
@@ -2124,18 +1821,18 @@ function TestChatPanel({
     const textToSend = String(nextText ?? input).trim();
     if (!textToSend || sending || isStreaming) return;
 
-    const userMsg: TestChatMessage = { role: "user", content: textToSend };
+    const userMsg: TestChatMessage = { role: 'user', content: textToSend };
     setMessages((prev) => [...prev, userMsg]);
-    if (!nextText) setInput("");
+    if (!nextText) setInput('');
 
-    if (profile?.mode === "chat") {
+    if (profile?.mode === 'chat') {
       setIsStreaming(true);
       try {
         let sessionId = chatSessionId;
         if (!sessionId) {
           const session = await api.createChatSession({
             aiProfileId: profileId,
-            userId: getSessionUser()?.id || "admin-test",
+            userId: getSessionUser()?.id || 'admin-test',
             systemPrompt: systemPrompt || undefined,
           });
           sessionId = session.sessionId ?? session.id ?? null;
@@ -2143,21 +1840,12 @@ function TestChatPanel({
         }
         if (!sessionId) return;
 
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "", streaming: true },
-        ]);
+        setMessages((prev) => [...prev, { role: 'assistant', content: '', streaming: true }]);
 
         const response = await api.sendChatMessageStream(sessionId, textToSend);
         if (!response.ok) {
-          const errBody = await response
-            .json()
-            .catch((): Record<string, unknown> => ({}));
-          throw new Error(
-            String(
-              errBody.error || `Stream request failed (${response.status})`,
-            ),
-          );
+          const errBody = await response.json().catch((): Record<string, unknown> => ({}));
+          throw new Error(String(errBody.error || `Stream request failed (${response.status})`));
         }
 
         await processStream(response);
@@ -2167,26 +1855,23 @@ function TestChatPanel({
           let lastIdx = -1;
           for (let i = updated.length - 1; i >= 0; i--) {
             const msg = updated[i];
-            if (msg && msg.role === "assistant" && msg.streaming) {
+            if (msg && msg.role === 'assistant' && msg.streaming) {
               lastIdx = i;
               break;
             }
           }
           const target = lastIdx >= 0 ? updated[lastIdx] : undefined;
-          if (lastIdx >= 0 && target)
-            updated[lastIdx] = { ...target, streaming: false };
+          if (lastIdx >= 0 && target) updated[lastIdx] = { ...target, streaming: false };
           return updated;
         });
       } catch (err: unknown) {
         activeReaderRef.current = null;
         setMessages((prev) => {
-          const cleaned = prev.filter(
-            (m) => !(m.role === "assistant" && m.streaming && !m.content),
-          );
+          const cleaned = prev.filter((m) => !(m.role === 'assistant' && m.streaming && !m.content));
           return [
             ...cleaned,
             {
-              role: "error",
+              role: 'error',
               content: `Error: ${err instanceof Error ? err.message : String(err)}`,
             },
           ];
@@ -2205,7 +1890,7 @@ function TestChatPanel({
         setMessages((prev) => [
           ...prev,
           {
-            role: "assistant",
+            role: 'assistant',
             content: data.content,
             meta: {
               duration: data.durationMs,
@@ -2218,7 +1903,7 @@ function TestChatPanel({
         setMessages((prev) => [
           ...prev,
           {
-            role: "error",
+            role: 'error',
             content: `Error: ${err instanceof Error ? err.message : String(err)}`,
           },
         ]);
@@ -2242,7 +1927,7 @@ function TestChatPanel({
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -2258,30 +1943,16 @@ function TestChatPanel({
     setIsStreaming(true);
     setPendingAuth(null);
     try {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "", streaming: true },
+      setMessages((prev) => [...prev, { role: 'assistant', content: '', streaming: true }]);
+      const response = await api.submitChatToolOutputs(chatSessionId, pendingAuth.messageId, [
+        {
+          toolCallId: pendingAuth.toolCallId,
+          output: 'OAuth authorization completed by user.',
+        },
       ]);
-      const response = await api.submitChatToolOutputs(
-        chatSessionId,
-        pendingAuth.messageId,
-        [
-          {
-            toolCallId: pendingAuth.toolCallId,
-            output: "OAuth authorization completed by user.",
-          },
-        ],
-      );
       if (!response.ok) {
-        const errBody = await response
-          .json()
-          .catch((): Record<string, unknown> => ({}));
-        throw new Error(
-          String(
-            errBody.error ||
-              `Tool output submission failed (${response.status})`,
-          ),
-        );
+        const errBody = await response.json().catch((): Record<string, unknown> => ({}));
+        throw new Error(String(errBody.error || `Tool output submission failed (${response.status})`));
       }
       await processStream(response);
       setMessages((prev) => {
@@ -2289,27 +1960,21 @@ function TestChatPanel({
         let lastIdx = -1;
         for (let i = updated.length - 1; i >= 0; i--) {
           const msg = updated[i];
-          if (msg && msg.role === "assistant" && msg.streaming) {
+          if (msg && msg.role === 'assistant' && msg.streaming) {
             lastIdx = i;
             break;
           }
         }
         const target = lastIdx >= 0 ? updated[lastIdx] : undefined;
-        if (lastIdx >= 0 && target)
-          updated[lastIdx] = { ...target, streaming: false };
+        if (lastIdx >= 0 && target) updated[lastIdx] = { ...target, streaming: false };
         return updated;
       });
     } catch (err: unknown) {
       activeReaderRef.current = null;
       const errMsg = err instanceof Error ? err.message : String(err);
       setMessages((prev) => {
-        const cleaned = prev.filter(
-          (m) => !(m.role === "assistant" && m.streaming && !m.content),
-        );
-        return [
-          ...cleaned,
-          { role: "error", content: `Error resuming: ${errMsg}` },
-        ];
+        const cleaned = prev.filter((m) => !(m.role === 'assistant' && m.streaming && !m.content));
+        return [...cleaned, { role: 'error', content: `Error resuming: ${errMsg}` }];
       });
     } finally {
       setIsStreaming(false);
@@ -2318,9 +1983,9 @@ function TestChatPanel({
 
   /** Render a tool event message (invocation or result) */
   function renderToolMessage(msg: TestChatMessage, i: number) {
-    const isInvocation = msg.toolEvent === "invocation";
-    const isResult = msg.toolEvent === "result";
-    const isError = isResult && msg.status === "error";
+    const isInvocation = msg.toolEvent === 'invocation';
+    const isResult = msg.toolEvent === 'result';
+    const isError = isResult && msg.status === 'error';
 
     return (
       <Paper
@@ -2328,8 +1993,8 @@ function TestChatPanel({
         p="xs"
         radius="sm"
         withBorder
-        bg={isError ? "red.0" : "grape.0"}
-        style={{ borderLeft: "3px solid var(--mantine-color-grape-5)" }}
+        bg={isError ? 'red.0' : 'grape.0'}
+        style={{ borderLeft: '3px solid var(--mantine-color-grape-5)' }}
       >
         <Group gap="xs" mb={4}>
           <Badge size="xs" variant="filled" color="grape">
@@ -2347,12 +2012,8 @@ function TestChatPanel({
           )}
           {isResult && (
             <>
-              <Badge
-                size="xs"
-                variant="light"
-                color={isError ? "red" : "green"}
-              >
-                {msg.status || "success"}
+              <Badge size="xs" variant="light" color={isError ? 'red' : 'green'}>
+                {msg.status || 'success'}
               </Badge>
             </>
           )}
@@ -2362,10 +2023,10 @@ function TestChatPanel({
             block
             style={{
               fontSize: 10,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
               maxHeight: 120,
-              overflow: "auto",
+              overflow: 'auto',
             }}
           >
             {JSON.stringify(msg.arguments, null, 2)}
@@ -2376,49 +2037,38 @@ function TestChatPanel({
             block
             style={{
               fontSize: 10,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
               maxHeight: 200,
-              overflow: "auto",
+              overflow: 'auto',
             }}
           >
-            {typeof msg.output === "string"
-              ? msg.output
-              : JSON.stringify(msg.output, null, 2)}
+            {typeof msg.output === 'string' ? msg.output : JSON.stringify(msg.output, null, 2)}
           </Code>
         )}
-        {isResult &&
-          msg.requiresUserAction &&
-          pendingAuth &&
-          pendingAuth.toolCallId === msg.toolCallId && (
-            <Group gap="xs" mt="xs">
-              {pendingAuth.authUrl && (
-                <Button
-                  size="compact-xs"
-                  variant="light"
-                  color="blue"
-                  onClick={() =>
-                    window.open(
-                      pendingAuth.authUrl ?? undefined,
-                      "_blank",
-                      "noopener",
-                    )
-                  }
-                >
-                  Authorize
-                </Button>
-              )}
+        {isResult && msg.requiresUserAction && pendingAuth && pendingAuth.toolCallId === msg.toolCallId && (
+          <Group gap="xs" mt="xs">
+            {pendingAuth.authUrl && (
               <Button
                 size="compact-xs"
                 variant="light"
-                color="green"
-                onClick={handleResumeAfterAuth}
-                disabled={isStreaming}
+                color="blue"
+                onClick={() => window.open(pendingAuth.authUrl ?? undefined, '_blank', 'noopener')}
               >
-                Resume after auth
+                Authorize
               </Button>
-            </Group>
-          )}
+            )}
+            <Button
+              size="compact-xs"
+              variant="light"
+              color="green"
+              onClick={handleResumeAfterAuth}
+              disabled={isStreaming}
+            >
+              Resume after auth
+            </Button>
+          </Group>
+        )}
       </Paper>
     );
   }
@@ -2432,7 +2082,7 @@ function TestChatPanel({
         onChange={(e) => setSystemPrompt(e.target.value)}
         minRows={2}
         maxRows={4}
-        styles={{ input: { fontFamily: "monospace", fontSize: 12 } }}
+        styles={{ input: { fontFamily: 'monospace', fontSize: 12 } }}
       />
 
       <Group justify="space-between" align="center">
@@ -2440,7 +2090,7 @@ function TestChatPanel({
           Preset uses this profile&apos;s configured runtime/tool options.
         </Text>
         <Group gap="xs">
-          {profile?.mode === "chat" && chatSessionId && (
+          {profile?.mode === 'chat' && chatSessionId && (
             <Button
               size="xs"
               variant="light"
@@ -2481,33 +2131,21 @@ function TestChatPanel({
               </Center>
             )}
             {messages.map((msg, i) =>
-              msg.role === "tool" ? (
+              msg.role === 'tool' ? (
                 renderToolMessage(msg, i)
               ) : (
                 <Paper
                   key={msg.id || `msg-${i}`}
                   p="xs"
                   radius="sm"
-                  withBorder={msg.role !== "user"}
-                  bg={
-                    msg.role === "user"
-                      ? "blue.0"
-                      : msg.role === "error"
-                        ? "red.0"
-                        : undefined
-                  }
+                  withBorder={msg.role !== 'user'}
+                  bg={msg.role === 'user' ? 'blue.0' : msg.role === 'error' ? 'red.0' : undefined}
                 >
                   <Group gap="xs" mb={4}>
                     <Badge
                       size="xs"
                       variant="light"
-                      color={
-                        msg.role === "user"
-                          ? "blue"
-                          : msg.role === "error"
-                            ? "red"
-                            : "green"
-                      }
+                      color={msg.role === 'user' ? 'blue' : msg.role === 'error' ? 'red' : 'green'}
                     >
                       {msg.role}
                     </Badge>
@@ -2518,9 +2156,7 @@ function TestChatPanel({
                         </Badge>
                         {msg.meta.usage && (
                           <Badge size="xs" variant="outline">
-                            {msg.meta.usage.prompt_tokens +
-                              msg.meta.usage.completion_tokens}{" "}
-                            tokens
+                            {msg.meta.usage.prompt_tokens + msg.meta.usage.completion_tokens} tokens
                           </Badge>
                         )}
                       </>
@@ -2530,10 +2166,10 @@ function TestChatPanel({
                     block
                     style={{
                       fontSize: 11,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
                       maxHeight: 300,
-                      overflow: "auto",
+                      overflow: 'auto',
                     }}
                   >
                     {msg.content}

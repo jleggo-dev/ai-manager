@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react';
-import type { Goal, Equipment, Baseline, Constraint, GoalArea, GoalType, EquipmentCategory, GoalMilestone, GoalAssessment, PendingPlanActivity } from '@cadence/shared';
+import type {
+  Goal,
+  Equipment,
+  Baseline,
+  Constraint,
+  GoalArea,
+  GoalType,
+  EquipmentCategory,
+  GoalMilestone,
+  GoalAssessment,
+  PendingPlanActivity,
+} from '@cadence/shared';
 import {
   getReview,
   getPlan,
@@ -33,7 +44,9 @@ const LABELS: Record<Step, string> = { goals: 'Goals', you: 'About you', gear: '
  * visible), preserving the order goals first appear. Unlinked/system items (a weekly check-in,
  * whole-plan foundational work) fall into a "Foundations" group that sinks to the bottom.
  */
-function groupByGoal(activities: PendingPlanActivity[]): { key: string; title: string; items: PendingPlanActivity[] }[] {
+function groupByGoal(
+  activities: PendingPlanActivity[],
+): { key: string; title: string; items: PendingPlanActivity[] }[] {
   const groups: { key: string; title: string; items: PendingPlanActivity[] }[] = [];
   const index = new Map<string, number>();
   for (const a of activities) {
@@ -78,7 +91,17 @@ function measurePhrase(m?: Goal['measure']): string {
   const verb = m.direction === 'increase' ? 'Reach' : m.direction === 'decrease' ? 'Reduce to' : 'Toward';
   return `${verb} ${val}`;
 }
-const EQUIP_CATS: EquipmentCategory[] = ['footwear', 'cardio', 'strength', 'accessory', 'reading', 'practice', 'craft', 'study', 'other'];
+const EQUIP_CATS: EquipmentCategory[] = [
+  'footwear',
+  'cardio',
+  'strength',
+  'accessory',
+  'reading',
+  'practice',
+  'craft',
+  'study',
+  'other',
+];
 const EQUIP_LABELS: Record<EquipmentCategory, string> = {
   footwear: 'Footwear',
   cardio: 'Cardio',
@@ -94,7 +117,12 @@ const LB_TO_KG = 0.453592;
 
 const Trash = () => (
   <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden>
-    <path className="stroke" d="M3 4h10M6.5 4V2.8h3V4M4.5 4l.6 9h5.8l.6-9" strokeLinecap="round" strokeLinejoin="round" />
+    <path
+      className="stroke"
+      d="M3 4h10M6.5 4V2.8h3V4M4.5 4l.6 9h5.8l.6-9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
@@ -125,7 +153,9 @@ export function ReviewScreen({
   const [assessments, setAssessments] = useState<Record<string, GoalAssessment>>({});
 
   useEffect(() => {
-    getReview().then(setData).catch(() => setMsg("I couldn't load this — give it a second and try again."));
+    getReview()
+      .then(setData)
+      .catch(() => setMsg("I couldn't load this — give it a second and try again."));
   }, []);
 
   const idx = ORDER.indexOf(step);
@@ -153,7 +183,9 @@ export function ReviewScreen({
         {head}
         <div className="app">
           <div className="scrollbody">
-            <div className="screen-sub" style={{ marginTop: 16 }}>{msg || 'Loading…'}</div>
+            <div className="screen-sub" style={{ marginTop: 16 }}>
+              {msg || 'Loading…'}
+            </div>
           </div>
         </div>
       </>
@@ -200,7 +232,14 @@ export function ReviewScreen({
     if (!Number.isFinite(displayVal) || displayVal <= 0) return;
     const kg = round1(wUnit === 'lbs' ? displayVal * LB_TO_KG : displayVal);
     if (!plausibleKg(kg)) return; // reject implausible weights — a fat-finger can't persist as 5078kg
-    patchBaseline({ weight_kg: { current: kg, start: baseline.weight_kg?.start ?? kg, source: 'manual', updated_at: new Date().toISOString() } });
+    patchBaseline({
+      weight_kg: {
+        current: kg,
+        start: baseline.weight_kg?.start ?? kg,
+        source: 'manual',
+        updated_at: new Date().toISOString(),
+      },
+    });
   };
 
   // Height: stored canonically in cm; edit in cm or ft/in (default ft/in when they weigh in lbs).
@@ -256,7 +295,8 @@ export function ReviewScreen({
       .filter((m) => m.label && !have.has(m.label.toLowerCase()))
       .map((m) => ({ id: crypto.randomUUID(), label: m.label, target_date: m.target_date }));
     const patch: Partial<Goal> = { milestones: [...existing, ...added] };
-    if (a.suggested_target) patch.measure = { ...g.measure, target: a.suggested_target.value, unit: a.suggested_target.unit };
+    if (a.suggested_target)
+      patch.measure = { ...g.measure, target: a.suggested_target.value, unit: a.suggested_target.unit };
     if (a.suggested_end) patch.timeframe = { ...g.timeframe, end: a.suggested_end };
     setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, ...patch } : x)));
     updateGoal(g.goal_id, patch).catch(() => {});
@@ -293,7 +333,9 @@ export function ReviewScreen({
       } else {
         if (await recoverIfAlreadyCommitted()) return;
         const why = r.violations?.join('; ');
-        setMsg(why ? `I couldn't put it together yet: ${why}` : `Something went wrong on my end — try again in a moment.`);
+        setMsg(
+          why ? `I couldn't put it together yet: ${why}` : `Something went wrong on my end — try again in a moment.`,
+        );
       }
       setData(await getReview());
     } catch {
@@ -351,168 +393,284 @@ export function ReviewScreen({
               {goals.map((g) => {
                 const a = assessments[g.goal_id];
                 return (
-                <div className="wiz-card" key={g.goal_id}>
-                  <div className="wiz-row">
-                    <textarea
-                      className="wiz-in wiz-title"
-                      rows={2}
-                      value={g.title}
-                      onChange={(e) => setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, title: e.target.value } : x)))}
-                      onBlur={(e) => updateGoal(g.goal_id, { title: e.target.value })}
-                    />
-                    <button className="wiz-del" onClick={() => { setGoals(goals.filter((x) => x.goal_id !== g.goal_id)); deleteGoal(g.goal_id); }} aria-label="Remove goal">
-                      <Trash />
-                    </button>
-                  </div>
-                  <div className="wiz-fields">
-                    <select
-                      className="wiz-sel"
-                      value={g.area}
-                      onChange={(e) => { const area = e.target.value as GoalArea; setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, area } : x))); updateGoal(g.goal_id, { area }); }}
-                    >
-                      {GOAL_AREAS.map((a) => <option key={a} value={a}>{AREA_LABELS[a]}</option>)}
-                    </select>
-                    <select
-                      className="wiz-sel"
-                      value={g.type}
-                      onChange={(e) => { const type = e.target.value as GoalType; setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, type } : x))); updateGoal(g.goal_id, { type }); }}
-                    >
-                      {GOAL_TYPES.map((c) => <option key={c} value={c}>{TYPE_LABELS[c]}</option>)}
-                    </select>
-                  </div>
-                  <div className="wiz-typehint">{TYPE_HINTS[g.type]}</div>
-                  {/* Measure fields are contextual to the goal TYPE — a number only makes sense for a
+                  <div className="wiz-card" key={g.goal_id}>
+                    <div className="wiz-row">
+                      <textarea
+                        className="wiz-in wiz-title"
+                        rows={2}
+                        value={g.title}
+                        onChange={(e) =>
+                          setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, title: e.target.value } : x)))
+                        }
+                        onBlur={(e) => updateGoal(g.goal_id, { title: e.target.value })}
+                      />
+                      <button
+                        className="wiz-del"
+                        onClick={() => {
+                          setGoals(goals.filter((x) => x.goal_id !== g.goal_id));
+                          deleteGoal(g.goal_id);
+                        }}
+                        aria-label="Remove goal"
+                      >
+                        <Trash />
+                      </button>
+                    </div>
+                    <div className="wiz-fields">
+                      <select
+                        className="wiz-sel"
+                        value={g.area}
+                        onChange={(e) => {
+                          const area = e.target.value as GoalArea;
+                          setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, area } : x)));
+                          updateGoal(g.goal_id, { area });
+                        }}
+                      >
+                        {GOAL_AREAS.map((a) => (
+                          <option key={a} value={a}>
+                            {AREA_LABELS[a]}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        className="wiz-sel"
+                        value={g.type}
+                        onChange={(e) => {
+                          const type = e.target.value as GoalType;
+                          setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, type } : x)));
+                          updateGoal(g.goal_id, { type });
+                        }}
+                      >
+                        {GOAL_TYPES.map((c) => (
+                          <option key={c} value={c}>
+                            {TYPE_LABELS[c]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="wiz-typehint">{TYPE_HINTS[g.type]}</div>
+                    {/* Measure fields are contextual to the goal TYPE — a number only makes sense for a
                       target; a milestone wants a date; a recurring goal neither. Target goals show a
                       plain-English preview of the measure above the editable direction/number/unit. */}
-                  {g.type === 'target' && (
-                    <>
-                      {measurePhrase(g.measure) && <div className="wiz-measure-preview">{measurePhrase(g.measure)}</div>}
-                      <div className="wiz-fields">
-                        <select
-                          className="wiz-sel"
-                          value={g.measure?.direction ?? ''}
-                          onChange={(e) => {
-                            const direction: 'increase' | 'decrease' | undefined =
-                              e.target.value === 'increase' ? 'increase' : e.target.value === 'decrease' ? 'decrease' : undefined;
-                            const measure = { ...g.measure, direction };
-                            setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, measure } : x)));
-                            updateGoal(g.goal_id, { measure });
-                          }}
-                        >
-                          <option value="">toward</option>
-                          <option value="decrease">reduce to</option>
-                          <option value="increase">reach</option>
-                        </select>
-                        <input
-                          className="wiz-in wiz-target"
-                          placeholder="number"
-                          value={g.measure?.target != null ? String(g.measure.target) : ''}
-                          onChange={(e) => setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, measure: { ...x.measure, target: e.target.value } } : x)))}
-                          onBlur={(e) => updateGoal(g.goal_id, { measure: { ...g.measure, target: e.target.value } })}
-                        />
-                        <input
-                          className="wiz-in wiz-unit"
-                          placeholder="unit (lbs, min…)"
-                          value={g.measure?.unit ?? ''}
-                          onChange={(e) => setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, measure: { ...x.measure, unit: e.target.value } } : x)))}
-                          onBlur={(e) => updateGoal(g.goal_id, { measure: { ...g.measure, unit: e.target.value } })}
-                        />
-                      </div>
-                      {/* Where they are TODAY on this metric — the intake fact the plan calibrates from.
-                          Capture fills it when stated in chat; this is the hand-fix when it wasn't. */}
-                      <div className="wiz-fields">
-                        <span className="wiz-now-label">starting from</span>
-                        <input
-                          className="wiz-in wiz-target"
-                          placeholder="where you are now"
-                          value={g.measure?.start != null ? String(g.measure.start) : ''}
-                          onChange={(e) => setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, measure: { ...x.measure, start: e.target.value } } : x)))}
-                          onBlur={(e) => updateGoal(g.goal_id, { measure: { ...g.measure, start: e.target.value } })}
-                        />
-                      </div>
-                    </>
-                  )}
-                  {g.type === 'milestone' && (
-                    <label className="wiz-field wiz-datefield">
-                      <span>Target date</span>
-                      <input
-                        className="wiz-in"
-                        type="date"
-                        value={(g.timeframe?.end ?? '').slice(0, 10)}
-                        onChange={(e) => setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, timeframe: { ...x.timeframe, end: e.target.value } } : x)))}
-                        onBlur={(e) => updateGoal(g.goal_id, { timeframe: { ...g.timeframe, end: e.target.value } })}
-                      />
-                    </label>
-                  )}
-                  {g.type === 'recurring' && (
-                    <div className="wiz-hint">No number needed — you’ll set how often at “Set your rhythm.”</div>
-                  )}
-
-                  {/* Stepping-stones toward the goal (coach-proposed or hand-added), each editable. */}
-                  {(g.milestones?.length ?? 0) > 0 && (
-                    <div className="wiz-miles">
-                      {g.milestones!.map((m, i) => (
-                        <div className="wiz-mile" key={m.id || i}>
+                    {g.type === 'target' && (
+                      <>
+                        {measurePhrase(g.measure) && (
+                          <div className="wiz-measure-preview">{measurePhrase(g.measure)}</div>
+                        )}
+                        <div className="wiz-fields">
+                          <select
+                            className="wiz-sel"
+                            value={g.measure?.direction ?? ''}
+                            onChange={(e) => {
+                              const direction: 'increase' | 'decrease' | undefined =
+                                e.target.value === 'increase'
+                                  ? 'increase'
+                                  : e.target.value === 'decrease'
+                                    ? 'decrease'
+                                    : undefined;
+                              const measure = { ...g.measure, direction };
+                              setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, measure } : x)));
+                              updateGoal(g.goal_id, { measure });
+                            }}
+                          >
+                            <option value="">toward</option>
+                            <option value="decrease">reduce to</option>
+                            <option value="increase">reach</option>
+                          </select>
                           <input
-                            className="wiz-in"
-                            placeholder="stepping-stone"
-                            value={m.label}
-                            onChange={(e) => setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, milestones: (x.milestones ?? []).map((y, j) => (j === i ? { ...y, label: e.target.value } : y)) } : x)))}
-                            onBlur={() => updateGoal(g.goal_id, { milestones: g.milestones })}
+                            className="wiz-in wiz-target"
+                            placeholder="number"
+                            value={g.measure?.target != null ? String(g.measure.target) : ''}
+                            onChange={(e) =>
+                              setGoals(
+                                goals.map((x) =>
+                                  x.goal_id === g.goal_id
+                                    ? { ...x, measure: { ...x.measure, target: e.target.value } }
+                                    : x,
+                                ),
+                              )
+                            }
+                            onBlur={(e) => updateGoal(g.goal_id, { measure: { ...g.measure, target: e.target.value } })}
                           />
                           <input
-                            className="wiz-in wiz-miledate"
-                            type="date"
-                            value={(m.target_date ?? '').slice(0, 10)}
-                            onChange={(e) => setMilestones(g, (g.milestones ?? []).map((y, j) => (j === i ? { ...y, target_date: e.target.value } : y)))}
+                            className="wiz-in wiz-unit"
+                            placeholder="unit (lbs, min…)"
+                            value={g.measure?.unit ?? ''}
+                            onChange={(e) =>
+                              setGoals(
+                                goals.map((x) =>
+                                  x.goal_id === g.goal_id
+                                    ? { ...x, measure: { ...x.measure, unit: e.target.value } }
+                                    : x,
+                                ),
+                              )
+                            }
+                            onBlur={(e) => updateGoal(g.goal_id, { measure: { ...g.measure, unit: e.target.value } })}
                           />
-                          <button className="wiz-del" onClick={() => setMilestones(g, (g.milestones ?? []).filter((_, j) => j !== i))} aria-label="Remove stepping-stone"><Trash /></button>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                        {/* Where they are TODAY on this metric — the intake fact the plan calibrates from.
+                          Capture fills it when stated in chat; this is the hand-fix when it wasn't. */}
+                        <div className="wiz-fields">
+                          <span className="wiz-now-label">starting from</span>
+                          <input
+                            className="wiz-in wiz-target"
+                            placeholder="where you are now"
+                            value={g.measure?.start != null ? String(g.measure.start) : ''}
+                            onChange={(e) =>
+                              setGoals(
+                                goals.map((x) =>
+                                  x.goal_id === g.goal_id
+                                    ? { ...x, measure: { ...x.measure, start: e.target.value } }
+                                    : x,
+                                ),
+                              )
+                            }
+                            onBlur={(e) => updateGoal(g.goal_id, { measure: { ...g.measure, start: e.target.value } })}
+                          />
+                        </div>
+                      </>
+                    )}
+                    {g.type === 'milestone' && (
+                      <label className="wiz-field wiz-datefield">
+                        <span>Target date</span>
+                        <input
+                          className="wiz-in"
+                          type="date"
+                          value={(g.timeframe?.end ?? '').slice(0, 10)}
+                          onChange={(e) =>
+                            setGoals(
+                              goals.map((x) =>
+                                x.goal_id === g.goal_id
+                                  ? { ...x, timeframe: { ...x.timeframe, end: e.target.value } }
+                                  : x,
+                              ),
+                            )
+                          }
+                          onBlur={(e) => updateGoal(g.goal_id, { timeframe: { ...g.timeframe, end: e.target.value } })}
+                        />
+                      </label>
+                    )}
+                    {g.type === 'recurring' && (
+                      <div className="wiz-hint">No number needed — you’ll set how often at “Set your rhythm.”</div>
+                    )}
 
-                  {a ? (
-                    <div className={`goal-assess ga-${a.verdict}`}>
-                      <div className="ga-badge">{VERDICT_LABELS[a.verdict]}</div>
-                      {a.assessment && <div className="ga-text">{a.assessment}</div>}
-                      {a.suggested_target && <div className="ga-sug">Suggested target: {a.suggested_target.value} {a.suggested_target.unit}</div>}
-                      {a.suggested_end && <div className="ga-sug">Suggested date: {a.suggested_end}</div>}
-                      {a.milestones.length > 0 && (
-                        <ul className="ga-miles">
-                          {a.milestones.map((m, i) => (
-                            <li key={i}><b>{m.label}</b>{m.target_date ? ` · ${m.target_date}` : ''}</li>
-                          ))}
-                        </ul>
-                      )}
-                      {(a.intake?.length ?? 0) > 0 && (
-                        <div className="ga-intake">
-                          <div className="ga-intake-t">Worth talking through with your coach:</div>
-                          <ul>
-                            {a.intake!.map((q, i) => (
-                              <li key={i}>{q}</li>
+                    {/* Stepping-stones toward the goal (coach-proposed or hand-added), each editable. */}
+                    {(g.milestones?.length ?? 0) > 0 && (
+                      <div className="wiz-miles">
+                        {g.milestones!.map((m, i) => (
+                          <div className="wiz-mile" key={m.id || i}>
+                            <input
+                              className="wiz-in"
+                              placeholder="stepping-stone"
+                              value={m.label}
+                              onChange={(e) =>
+                                setGoals(
+                                  goals.map((x) =>
+                                    x.goal_id === g.goal_id
+                                      ? {
+                                          ...x,
+                                          milestones: (x.milestones ?? []).map((y, j) =>
+                                            j === i ? { ...y, label: e.target.value } : y,
+                                          ),
+                                        }
+                                      : x,
+                                  ),
+                                )
+                              }
+                              onBlur={() => updateGoal(g.goal_id, { milestones: g.milestones })}
+                            />
+                            <input
+                              className="wiz-in wiz-miledate"
+                              type="date"
+                              value={(m.target_date ?? '').slice(0, 10)}
+                              onChange={(e) =>
+                                setMilestones(
+                                  g,
+                                  (g.milestones ?? []).map((y, j) =>
+                                    j === i ? { ...y, target_date: e.target.value } : y,
+                                  ),
+                                )
+                              }
+                            />
+                            <button
+                              className="wiz-del"
+                              onClick={() =>
+                                setMilestones(
+                                  g,
+                                  (g.milestones ?? []).filter((_, j) => j !== i),
+                                )
+                              }
+                              aria-label="Remove stepping-stone"
+                            >
+                              <Trash />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {a ? (
+                      <div className={`goal-assess ga-${a.verdict}`}>
+                        <div className="ga-badge">{VERDICT_LABELS[a.verdict]}</div>
+                        {a.assessment && <div className="ga-text">{a.assessment}</div>}
+                        {a.suggested_target && (
+                          <div className="ga-sug">
+                            Suggested target: {a.suggested_target.value} {a.suggested_target.unit}
+                          </div>
+                        )}
+                        {a.suggested_end && <div className="ga-sug">Suggested date: {a.suggested_end}</div>}
+                        {a.milestones.length > 0 && (
+                          <ul className="ga-miles">
+                            {a.milestones.map((m, i) => (
+                              <li key={i}>
+                                <b>{m.label}</b>
+                                {m.target_date ? ` · ${m.target_date}` : ''}
+                              </li>
                             ))}
                           </ul>
+                        )}
+                        {(a.intake?.length ?? 0) > 0 && (
+                          <div className="ga-intake">
+                            <div className="ga-intake-t">Worth talking through with your coach:</div>
+                            <ul>
+                              {a.intake!.map((q, i) => (
+                                <li key={i}>{q}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <div className="ga-actions">
+                          <button className="ga-apply" onClick={() => applyAssessment(g, a)}>
+                            Use these
+                          </button>
+                          <button className="ga-dismiss" onClick={() => dismissAssess(g.goal_id)}>
+                            Dismiss
+                          </button>
                         </div>
-                      )}
-                      <div className="ga-actions">
-                        <button className="ga-apply" onClick={() => applyAssessment(g, a)}>Use these</button>
-                        <button className="ga-dismiss" onClick={() => dismissAssess(g.goal_id)}>Dismiss</button>
                       </div>
-                    </div>
-                  ) : (
-                    <button className="goal-assess-btn" onClick={() => runAssess(g.goal_id)} disabled={assessing === g.goal_id}>
-                      {assessing === g.goal_id ? 'Getting the coach’s read…' : 'Is this realistic? Get the coach’s read →'}
-                    </button>
-                  )}
-                </div>
+                    ) : (
+                      <button
+                        className="goal-assess-btn"
+                        onClick={() => runAssess(g.goal_id)}
+                        disabled={assessing === g.goal_id}
+                      >
+                        {assessing === g.goal_id
+                          ? 'Getting the coach’s read…'
+                          : 'Is this realistic? Get the coach’s read →'}
+                      </button>
+                    )}
+                  </div>
                 );
               })}
               <button
                 className="wiz-add"
                 onClick={async () => {
                   // manage mode inserts as CONFIRMED: replan-visible + immune to capture churn.
-                  const g = await addGoal({ title: 'New goal', area: 'practice', type: 'recurring', ...(mode === 'manage' ? { confirm: true } : {}) });
+                  const g = await addGoal({
+                    title: 'New goal',
+                    area: 'practice',
+                    type: 'recurring',
+                    ...(mode === 'manage' ? { confirm: true } : {}),
+                  });
                   setGoals([...goals, g]);
                 }}
               >
@@ -538,23 +696,53 @@ export function ReviewScreen({
                 <div className="wiz-fields wiz-body" style={{ marginTop: 10 }}>
                   <label className="wiz-field">
                     <span>Age</span>
-                    <input className="wiz-in" type="number" value={baseline.age ?? ''} onChange={(e) => patchBaseline({ age: e.target.value ? Number(e.target.value) : undefined })} />
+                    <input
+                      className="wiz-in"
+                      type="number"
+                      value={baseline.age ?? ''}
+                      onChange={(e) => patchBaseline({ age: e.target.value ? Number(e.target.value) : undefined })}
+                    />
                   </label>
                   <label className="wiz-field">
                     <span>Height</span>
                     <div className="wiz-weight">
                       {hUnit === 'ft' ? (
                         <>
-                          <input className="wiz-in" type="number" inputMode="numeric" placeholder="ft" value={ftShown}
-                            onChange={(e) => setHFtDraft({ ft: e.target.value, in: inShown })} onBlur={commitHeightFt} />
-                          <input className="wiz-in" type="number" inputMode="numeric" placeholder="in" value={inShown}
-                            onChange={(e) => setHFtDraft({ ft: ftShown, in: e.target.value })} onBlur={commitHeightFt} />
+                          <input
+                            className="wiz-in"
+                            type="number"
+                            inputMode="numeric"
+                            placeholder="ft"
+                            value={ftShown}
+                            onChange={(e) => setHFtDraft({ ft: e.target.value, in: inShown })}
+                            onBlur={commitHeightFt}
+                          />
+                          <input
+                            className="wiz-in"
+                            type="number"
+                            inputMode="numeric"
+                            placeholder="in"
+                            value={inShown}
+                            onChange={(e) => setHFtDraft({ ft: ftShown, in: e.target.value })}
+                            onBlur={commitHeightFt}
+                          />
                         </>
                       ) : (
-                        <input className="wiz-in" type="number" inputMode="numeric" placeholder="cm" value={cmShown}
-                          onChange={(e) => setHCmDraft(e.target.value)} onBlur={commitHeightCm} />
+                        <input
+                          className="wiz-in"
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="cm"
+                          value={cmShown}
+                          onChange={(e) => setHCmDraft(e.target.value)}
+                          onBlur={commitHeightCm}
+                        />
                       )}
-                      <select className="wiz-sel" value={hUnit} onChange={(e) => patchBaseline({ height_unit: e.target.value as 'cm' | 'ft' })}>
+                      <select
+                        className="wiz-sel"
+                        value={hUnit}
+                        onChange={(e) => patchBaseline({ height_unit: e.target.value as 'cm' | 'ft' })}
+                      >
                         <option value="cm">cm</option>
                         <option value="ft">ft/in</option>
                       </select>
@@ -563,8 +751,19 @@ export function ReviewScreen({
                   <label className="wiz-field">
                     <span>Weight</span>
                     <div className="wiz-weight">
-                      <input className="wiz-in" type="number" inputMode="decimal" value={wShown} onChange={(e) => setWeightDraft(e.target.value)} onBlur={commitWeight} />
-                      <select className="wiz-sel" value={wUnit} onChange={(e) => patchBaseline({ weight_unit: e.target.value as 'kg' | 'lbs' })}>
+                      <input
+                        className="wiz-in"
+                        type="number"
+                        inputMode="decimal"
+                        value={wShown}
+                        onChange={(e) => setWeightDraft(e.target.value)}
+                        onBlur={commitWeight}
+                      />
+                      <select
+                        className="wiz-sel"
+                        value={wUnit}
+                        onChange={(e) => patchBaseline({ weight_unit: e.target.value as 'kg' | 'lbs' })}
+                      >
                         <option value="kg">kg</option>
                         <option value="lbs">lbs</option>
                       </select>
@@ -581,37 +780,113 @@ export function ReviewScreen({
                       className="wiz-in"
                       placeholder="e.g. left knee · burnout · night shifts"
                       value={c.label}
-                      onChange={(e) => { const constraints = baseline.constraints.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)); setBaseline({ ...baseline, constraints }); }}
+                      onChange={(e) => {
+                        const constraints = baseline.constraints.map((x, j) =>
+                          j === i ? { ...x, label: e.target.value } : x,
+                        );
+                        setBaseline({ ...baseline, constraints });
+                      }}
                       onBlur={() => updateBaseline({ constraints: baseline.constraints })}
                     />
                     <label className="wiz-check">
-                      <input type="checkbox" checked={c.plan_around} onChange={(e) => patchBaseline({ constraints: baseline.constraints.map((x, j) => (j === i ? { ...x, plan_around: e.target.checked } : x)) })} />
+                      <input
+                        type="checkbox"
+                        checked={c.plan_around}
+                        onChange={(e) =>
+                          patchBaseline({
+                            constraints: baseline.constraints.map((x, j) =>
+                              j === i ? { ...x, plan_around: e.target.checked } : x,
+                            ),
+                          })
+                        }
+                      />
                       plan around it
                     </label>
-                    <button className="wiz-del" onClick={() => patchBaseline({ constraints: baseline.constraints.filter((_, j) => j !== i) })} aria-label="Remove"><Trash /></button>
+                    <button
+                      className="wiz-del"
+                      onClick={() => patchBaseline({ constraints: baseline.constraints.filter((_, j) => j !== i) })}
+                      aria-label="Remove"
+                    >
+                      <Trash />
+                    </button>
                   </div>
                 </div>
               ))}
-              <button className="wiz-add" onClick={() => patchBaseline({ constraints: [...(baseline.constraints ?? []), { id: '', label: '', kind: 'other', plan_around: true } as Constraint] })}>+ Add one</button>
+              <button
+                className="wiz-add"
+                onClick={() =>
+                  patchBaseline({
+                    constraints: [
+                      ...(baseline.constraints ?? []),
+                      { id: '', label: '', kind: 'other', plan_around: true } as Constraint,
+                    ],
+                  })
+                }
+              >
+                + Add one
+              </button>
             </div>
           )}
 
           {step === 'gear' && (
             <div className="wiz-list">
-              <div className="screen-sub">What you're working with — a barbell, a journal, running shoes. Remove anything wrong, add what's missing.</div>
+              <div className="screen-sub">
+                What you're working with — a barbell, a journal, running shoes. Remove anything wrong, add what's
+                missing.
+              </div>
               {equipment.length === 0 && <div className="wiz-empty">No tools noted yet.</div>}
               {equipment.map((eq) => (
                 <div className="wiz-card wiz-card-tight" key={eq.equipment_id}>
                   <div className="wiz-row">
-                    <input className="wiz-in" value={eq.name} onChange={(e) => setEquip(equipment.map((x) => (x.equipment_id === eq.equipment_id ? { ...x, name: e.target.value } : x)))} onBlur={(e) => updateEquipment(eq.equipment_id, { name: e.target.value })} />
-                    <select className="wiz-sel" value={eq.category} onChange={(e) => { const category = e.target.value as EquipmentCategory; setEquip(equipment.map((x) => (x.equipment_id === eq.equipment_id ? { ...x, category } : x))); updateEquipment(eq.equipment_id, { category }); }}>
-                      {EQUIP_CATS.map((c) => <option key={c} value={c}>{EQUIP_LABELS[c]}</option>)}
+                    <input
+                      className="wiz-in"
+                      value={eq.name}
+                      onChange={(e) =>
+                        setEquip(
+                          equipment.map((x) =>
+                            x.equipment_id === eq.equipment_id ? { ...x, name: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      onBlur={(e) => updateEquipment(eq.equipment_id, { name: e.target.value })}
+                    />
+                    <select
+                      className="wiz-sel"
+                      value={eq.category}
+                      onChange={(e) => {
+                        const category = e.target.value as EquipmentCategory;
+                        setEquip(equipment.map((x) => (x.equipment_id === eq.equipment_id ? { ...x, category } : x)));
+                        updateEquipment(eq.equipment_id, { category });
+                      }}
+                    >
+                      {EQUIP_CATS.map((c) => (
+                        <option key={c} value={c}>
+                          {EQUIP_LABELS[c]}
+                        </option>
+                      ))}
                     </select>
-                    <button className="wiz-del" onClick={() => { setEquip(equipment.filter((x) => x.equipment_id !== eq.equipment_id)); deleteEquipmentItem(eq.equipment_id); }} aria-label="Remove"><Trash /></button>
+                    <button
+                      className="wiz-del"
+                      onClick={() => {
+                        setEquip(equipment.filter((x) => x.equipment_id !== eq.equipment_id));
+                        deleteEquipmentItem(eq.equipment_id);
+                      }}
+                      aria-label="Remove"
+                    >
+                      <Trash />
+                    </button>
                   </div>
                 </div>
               ))}
-              <button className="wiz-add" onClick={async () => { const e = await addEquipment({ name: 'New item', category: 'other' }); setEquip([...equipment, e]); }}>+ Add a tool</button>
+              <button
+                className="wiz-add"
+                onClick={async () => {
+                  const e = await addEquipment({ name: 'New item', category: 'other' });
+                  setEquip([...equipment, e]);
+                }}
+              >
+                + Add a tool
+              </button>
             </div>
           )}
 
@@ -619,9 +894,38 @@ export function ReviewScreen({
             <div className="wiz-list">
               <div className="screen-title">Ready to set your rhythm</div>
               <div className="screen-sub">I'll build your plan from this — and it can always bend later.</div>
-              <div className="confirm-sec"><div className="cs-t"><b>{goals.length} goal{goals.length === 1 ? '' : 's'}</b><span>{goals.map((g) => g.title).join(' · ') || '—'}</span></div></div>
-              <div className="confirm-sec"><div className="cs-t"><b>About you</b><span>{[data.name, baseline.age && `${baseline.age} yrs`, wKg != null && `${wShown} ${wUnit}`, (baseline.constraints ?? []).length && `working around ${baseline.constraints.length} thing${baseline.constraints.length === 1 ? '' : 's'}`].filter(Boolean).join(' · ') || '—'}</span></div></div>
-              <div className="confirm-sec"><div className="cs-t"><b>{equipment.length} tool{equipment.length === 1 ? '' : 's'}</b><span>{equipment.map((e) => e.name).join(', ') || '—'}</span></div></div>
+              <div className="confirm-sec">
+                <div className="cs-t">
+                  <b>
+                    {goals.length} goal{goals.length === 1 ? '' : 's'}
+                  </b>
+                  <span>{goals.map((g) => g.title).join(' · ') || '—'}</span>
+                </div>
+              </div>
+              <div className="confirm-sec">
+                <div className="cs-t">
+                  <b>About you</b>
+                  <span>
+                    {[
+                      data.name,
+                      baseline.age && `${baseline.age} yrs`,
+                      wKg != null && `${wShown} ${wUnit}`,
+                      (baseline.constraints ?? []).length &&
+                        `working around ${baseline.constraints.length} thing${baseline.constraints.length === 1 ? '' : 's'}`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || '—'}
+                  </span>
+                </div>
+              </div>
+              <div className="confirm-sec">
+                <div className="cs-t">
+                  <b>
+                    {equipment.length} tool{equipment.length === 1 ? '' : 's'}
+                  </b>
+                  <span>{equipment.map((e) => e.name).join(', ') || '—'}</span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -631,12 +935,18 @@ export function ReviewScreen({
               <div className="screen-sub">{preview.note || "Take a look — nothing's set until you say go."}</div>
               {groupByGoal(preview.activities).map((grp) => (
                 <div className="prev-group" key={grp.key}>
-                  <div className="prev-group-h">{grp.key === '__foundations__' ? grp.title : `Toward ${grp.title}`}</div>
+                  <div className="prev-group-h">
+                    {grp.key === '__foundations__' ? grp.title : `Toward ${grp.title}`}
+                  </div>
                   {grp.items.map((a, i) => (
                     <div className="confirm-sec" key={i}>
                       <div className="cs-t">
                         <b>{a.title}</b>
-                        <span>{[a.cadence, a.time_of_day, a.duration_min ? `${a.duration_min} min` : null].filter(Boolean).join(' · ') || '—'}</span>
+                        <span>
+                          {[a.cadence, a.time_of_day, a.duration_min ? `${a.duration_min} min` : null]
+                            .filter(Boolean)
+                            .join(' · ') || '—'}
+                        </span>
                         {a.why && <div className="cs-why">{a.why}</div>}
                       </div>
                     </div>
@@ -650,22 +960,36 @@ export function ReviewScreen({
         <div className="lockbar">
           {step !== 'lock' ? (
             <div className="wiz-nav">
-              <button className="wiz-back" onClick={back}>{idx === 0 ? (mode === 'manage' ? 'Close' : 'Coach') : 'Back'}</button>
+              <button className="wiz-back" onClick={back}>
+                {idx === 0 ? (mode === 'manage' ? 'Close' : 'Coach') : 'Back'}
+              </button>
               {mode === 'manage' && idx === ORDER.length - 1 ? (
-                <button className="lockbtn" onClick={onBack}>Done ✓</button>
+                <button className="lockbtn" onClick={onBack}>
+                  Done ✓
+                </button>
               ) : (
-                <button className="lockbtn" onClick={next}>Continue →</button>
+                <button className="lockbtn" onClick={next}>
+                  Continue →
+                </button>
               )}
             </div>
           ) : preview ? (
             <div className="wiz-nav">
-              <button className="wiz-back" onClick={doDismissPreview} disabled={busy}>Not yet</button>
-              <button className="lockbtn" onClick={doConfirmLock} disabled={busy}>{busy ? 'Setting your rhythm…' : 'Set your rhythm'}</button>
+              <button className="wiz-back" onClick={doDismissPreview} disabled={busy}>
+                Not yet
+              </button>
+              <button className="lockbtn" onClick={doConfirmLock} disabled={busy}>
+                {busy ? 'Setting your rhythm…' : 'Set your rhythm'}
+              </button>
             </div>
           ) : (
             <div className="wiz-nav">
-              <button className="wiz-back" onClick={back}>Back</button>
-              <button className="lockbtn" onClick={doPreview} disabled={busy}>{busy ? 'Putting it together…' : 'See my rhythm →'}</button>
+              <button className="wiz-back" onClick={back}>
+                Back
+              </button>
+              <button className="lockbtn" onClick={doPreview} disabled={busy}>
+                {busy ? 'Putting it together…' : 'See my rhythm →'}
+              </button>
             </div>
           )}
           {msg && <div className="lock-msg">{msg}</div>}

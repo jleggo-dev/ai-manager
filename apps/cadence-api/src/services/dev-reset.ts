@@ -11,8 +11,19 @@ import { purgeMealPhotos } from './meal-photos.ts';
 
 // Every per-user table in the cadence schema (all keyed by user_id).
 export const DEV_CHILD_TABLES = [
-  'activities', 'ai_log', 'context_pack', 'conversations', 'episodes', 'equipment',
-  'goal_events', 'goals', 'meal_plans', 'nutrition_logs', 'occurrences', 'plans', 'recipes',
+  'activities',
+  'ai_log',
+  'context_pack',
+  'conversations',
+  'episodes',
+  'equipment',
+  'goal_events',
+  'goals',
+  'meal_plans',
+  'nutrition_logs',
+  'occurrences',
+  'plans',
+  'recipes',
 ] as const;
 
 // ensureUser lives in repos/users.ts now (the auth middleware needs it too); re-export so the

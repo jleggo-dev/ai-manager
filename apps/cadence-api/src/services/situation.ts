@@ -76,8 +76,13 @@ export async function assessIfDue(userId: string): Promise<void> {
   if (!out?.recommend_replan) return;
 
   const proposal: PendingProposal = {
-    reason: typeof out.reason === 'string' && out.reason.trim() ? out.reason.trim() : 'Your coach noticed a shift worth adjusting for.',
-    suggested_levers: Array.isArray(out.suggested_levers) ? out.suggested_levers.filter((l): l is string => typeof l === 'string') : [],
+    reason:
+      typeof out.reason === 'string' && out.reason.trim()
+        ? out.reason.trim()
+        : 'Your coach noticed a shift worth adjusting for.',
+    suggested_levers: Array.isArray(out.suggested_levers)
+      ? out.suggested_levers.filter((l): l is string => typeof l === 'string')
+      : [],
     created_at: new Date().toISOString(),
   };
   await setPendingProposal(userId, proposal);

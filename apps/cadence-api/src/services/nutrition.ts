@@ -209,7 +209,9 @@ export type BaselineRead =
 
 /** Deterministic gate: targets are only WORTH proposing for an eating-focused or weight goal. */
 const WEIGHTY_MEASURE = /\b(kg|lbs?|weight)\b/i;
-function wantsTargets(goals: Array<{ area?: string; type?: string; measure?: { unit?: string; metric?: string } }>): boolean {
+function wantsTargets(
+  goals: Array<{ area?: string; type?: string; measure?: { unit?: string; metric?: string } }>,
+): boolean {
   return goals.some(
     (g) =>
       g.area === 'nourishment' ||
@@ -235,10 +237,7 @@ export async function getBaselineRead(userId: string): Promise<BaselineRead> {
     return { ready: false, days_logged: summary.days_logged, days_needed: OBSERVE_DAYS_NEEDED };
   }
 
-  const [goals, user] = await Promise.all([
-    listGoalsByStatus(userId, ['confirmed', 'committed']),
-    getUser(userId),
-  ]);
+  const [goals, user] = await Promise.all([listGoalsByStatus(userId, ['confirmed', 'committed']), getUser(userId)]);
   // Propose targets only when a goal warrants them AND none are set yet (Settings owns edits).
   const hasTargets = !!user?.macro_targets && Object.keys(user.macro_targets).length > 0;
   const propose = !hasTargets && wantsTargets(goals);
@@ -275,7 +274,14 @@ export async function getBaselineRead(userId: string): Promise<BaselineRead> {
     output: { raw: raw.slice(0, 2000) },
     meta: { days_logged: summary.days_logged, proposed_targets: !!proposedTargets },
   });
-  return { ready: true, read, suggestion, rationale, proposed_targets: proposedTargets, targets_rationale: targetsRationale };
+  return {
+    ready: true,
+    read,
+    suggestion,
+    rationale,
+    proposed_targets: proposedTargets,
+    targets_rationale: targetsRationale,
+  };
 }
 
 /** Confirm/edit daily targets (suggest-never-auto-apply: only ever called by the user's tap). */

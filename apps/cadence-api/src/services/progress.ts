@@ -11,7 +11,14 @@
  * where the prompt said distance_km) — the alias normalizer folds known keys to canonical
  * metrics with unit conversion and IGNORES unknowns; it never guesses.
  */
-import type { HistoryEntry, OccurrenceLog, ProgressCard, ProgressData, ProgressTrend, SeriesPoint } from '@cadence/shared';
+import type {
+  HistoryEntry,
+  OccurrenceLog,
+  ProgressCard,
+  ProgressData,
+  ProgressTrend,
+  SeriesPoint,
+} from '@cadence/shared';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser } from '../repos/users.ts';
 import { listLoggedForProgress } from '../repos/occurrences.ts';
@@ -28,16 +35,22 @@ const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 /* ── Metric alias normalizer ───────────────────────────────────────────── */
 
 /** Fold a raw value/rollup map into canonical metrics. Unknown keys are ignored, never guessed. */
-export function canonicalMetrics(raw: Record<string, number> | null | undefined): { distance_km?: number; duration_min?: number; weight_kg?: number } {
+export function canonicalMetrics(raw: Record<string, number> | null | undefined): {
+  distance_km?: number;
+  duration_min?: number;
+  weight_kg?: number;
+} {
   const out: { distance_km?: number; duration_min?: number; weight_kg?: number } = {};
   if (!raw) return out;
   for (const [k, v] of Object.entries(raw)) {
     if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) continue;
     const key = k.toLowerCase();
     if (key === 'distance_km' || key === 'km') out.distance_km = (out.distance_km ?? 0) + v;
-    else if (key === 'distance_m' || key === 'meters' || key === 'metres') out.distance_km = (out.distance_km ?? 0) + v / 1000;
+    else if (key === 'distance_m' || key === 'meters' || key === 'metres')
+      out.distance_km = (out.distance_km ?? 0) + v / 1000;
     else if (key === 'distance_mi' || key === 'miles') out.distance_km = (out.distance_km ?? 0) + v * 1.609344;
-    else if (key === 'duration_min' || key === 'time_min' || key === 'minutes') out.duration_min = (out.duration_min ?? 0) + v;
+    else if (key === 'duration_min' || key === 'time_min' || key === 'minutes')
+      out.duration_min = (out.duration_min ?? 0) + v;
     else if (key === 'duration_sec' || key === 'seconds') out.duration_min = (out.duration_min ?? 0) + v / 60;
     else if (key === 'weight_kg') out.weight_kg = v;
     else if (key === 'weight_lb' || key === 'weight_lbs') out.weight_kg = v / LB_PER_KG;
@@ -122,7 +135,9 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
     const unit = (g.measure?.unit ?? '').trim();
     const target = g.measure?.target;
     if (g.type === 'target' && typeof target === 'number' && WEIGHTY_UNIT.test(unit)) {
-      const latestKg = weightSeries.length ? weightSeries[weightSeries.length - 1]!.value : baseline.weight_kg?.current ?? null;
+      const latestKg = weightSeries.length
+        ? weightSeries[weightSeries.length - 1]!.value
+        : (baseline.weight_kg?.current ?? null);
       const startKg = baseline.weight_kg?.start ?? (weightSeries.length ? weightSeries[0]!.value : null);
       cards.push({
         kind: 'latest_vs_target',
@@ -145,7 +160,10 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
         unit: unit || 'done',
       });
     } else if (g.type === 'milestone' && g.timeframe?.end) {
-      const days = Math.max(0, Math.ceil((new Date(g.timeframe.end + 'T00:00:00Z').getTime() - Date.now()) / 86_400_000));
+      const days = Math.max(
+        0,
+        Math.ceil((new Date(g.timeframe.end + 'T00:00:00Z').getTime() - Date.now()) / 86_400_000),
+      );
       const ms = g.milestones ?? [];
       cards.push({
         kind: 'countdown',
@@ -170,12 +188,14 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
     await listNutritionLogs(userId, iso(Date.now() - 6 * 86_400_000), iso(Date.now())),
     7,
   ).days_logged;
-  if (foodDays > 0) cards.push({ kind: 'consistency', area: 'nourishment', title: 'Food log', kept: foodDays, window: 7 });
+  if (foodDays > 0)
+    cards.push({ kind: 'consistency', area: 'nourishment', title: 'Food log', kept: foodDays, window: 7 });
 
   /* Activity trends — only titles with ≥2 honest points (sparse-but-honest rule) */
   const trends: ProgressTrend[] = [];
   for (const [title, series] of paceByTitle) {
-    if (series.length >= 2) trends.push({ title, metric: 'pace_min_per_km', label: 'Pace', unit: 'min/km', series, direction_good: 'down' });
+    if (series.length >= 2)
+      trends.push({ title, metric: 'pace_min_per_km', label: 'Pace', unit: 'min/km', series, direction_good: 'down' });
   }
   for (const [title, series] of loadByTitle) {
     if (series.length >= 2) {
@@ -195,7 +215,14 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
     ...rows
       .filter((r) => r.log?.summary)
       .map((r): HistoryEntry => ({ at: r.date, kind: 'session', title: r.title, detail: r.log!.summary })),
-    ...events.map((e): HistoryEntry => ({ at: e.at.slice(0, 10), kind: 'event', title: e.label, detail: (e.meta as { activity_title?: string } | null)?.activity_title ? `logged with ${(e.meta as { activity_title?: string }).activity_title}` : 'accomplishment' })),
+    ...events.map((e): HistoryEntry => ({
+      at: e.at.slice(0, 10),
+      kind: 'event',
+      title: e.label,
+      detail: (e.meta as { activity_title?: string } | null)?.activity_title
+        ? `logged with ${(e.meta as { activity_title?: string }).activity_title}`
+        : 'accomplishment',
+    })),
   ]
     .sort((a, b) => (a.at < b.at ? 1 : -1))
     .slice(0, 40);

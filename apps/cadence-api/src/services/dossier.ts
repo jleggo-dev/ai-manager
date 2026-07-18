@@ -51,9 +51,7 @@ export async function compileDossier(input: DossierInput): Promise<string> {
     if (b.weight_kg) bits.push(`weight ${b.weight_kg.current}kg (start ${b.weight_kg.start})`);
     if (b.constraints?.length)
       bits.push(
-        `working around: ${b.constraints
-          .map((c) => `${c.label}${c.plan_around ? ' [plan-around]' : ''}`)
-          .join('; ')}`,
+        `working around: ${b.constraints.map((c) => `${c.label}${c.plan_around ? ' [plan-around]' : ''}`).join('; ')}`,
       );
     if (bits.length) lines.push(`Baseline: ${bits.join(' · ')}`);
   }
@@ -105,7 +103,8 @@ export async function compileDossier(input: DossierInput): Promise<string> {
     }
   }
 
-  if (consistencyPct !== null) lines.push(`Consistency (last ${lastN}d): ${consistencyPct}% (${done}/${occ.length} showed up)`);
+  if (consistencyPct !== null)
+    lines.push(`Consistency (last ${lastN}d): ${consistencyPct}% (${done}/${occ.length} showed up)`);
 
   // Observe-phase food log (pure repo+summarize path — no LLM in the dossier graph). One line,
   // only when something is logged; days_logged doubles as the module's phase signal for the coach.

@@ -42,8 +42,7 @@ export function Welcome({ onStart }: { onStart: () => void }) {
         <div className="w-word">Cadence</div>
         {stage === 'intro' ? (
           <p className="w-tag">
-            <span className="accent">Just talk</span> — I'll help you build the routine you
-            actually want.
+            <span className="accent">Just talk</span> — I'll help you build the routine you actually want.
           </p>
         ) : (
           <p className="w-tag w-ask">What should I call you?</p>

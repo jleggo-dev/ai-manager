@@ -11,7 +11,13 @@ interface Turn {
 
 const SendIcon = () => (
   <svg width="17" height="17" viewBox="0 0 17 17" aria-hidden>
-    <path className="stroke" d="M2 8.5h11M8.5 4l5 4.5-5 4.5" stroke="#fff" strokeLinecap="round" strokeLinejoin="round" />
+    <path
+      className="stroke"
+      d="M2 8.5h11M8.5 4l5 4.5-5 4.5"
+      stroke="#fff"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
@@ -155,26 +161,26 @@ export function OnboardingChat({
   const inner = (
     <>
       <div className="chat">
-          {!restored ? (
-            <div className="chat-loading">
-              <span className="typing">
-                <i />
-                <i />
-                <i />
-              </span>
+        {!restored ? (
+          <div className="chat-loading">
+            <span className="typing">
+              <i />
+              <i />
+              <i />
+            </span>
+          </div>
+        ) : (
+          <div className="ai-row">
+            <Orb />
+            <div className="bubble ai">
+              {intent === 'ongoing'
+                ? "Hey — good to see you 👋 How's your rhythm feeling? If something needs to shift — more, less, a different day — say the word and I'll adjust your plan."
+                : "Hi — I'm your Cadence coach 👋 Tell me what you'd like to work on — a first 10k, eating better, a steadier mind, the daily pages — and I'll take notes as we talk. What's on your mind?"}
             </div>
-          ) : (
-            <div className="ai-row">
-              <Orb />
-              <div className="bubble ai">
-                {intent === 'ongoing'
-                  ? "Hey — good to see you 👋 How's your rhythm feeling? If something needs to shift — more, less, a different day — say the word and I'll adjust your plan."
-                  : "Hi — I'm your Cadence coach 👋 Tell me what you'd like to work on — a first 10k, eating better, a steadier mind, the daily pages — and I'll take notes as we talk. What's on your mind?"}
-              </div>
-            </div>
-          )}
-          {restored &&
-            turns.map((t, i) =>
+          </div>
+        )}
+        {restored &&
+          turns.map((t, i) =>
             t.role === 'coach' ? (
               <div className="ai-row" key={i}>
                 <Orb />
@@ -194,29 +200,29 @@ export function OnboardingChat({
               </div>
             ),
           )}
-          <div ref={endRef} />
-        </div>
-        <div className="composer">
-          <textarea
-            ref={taRef}
-            className="field"
-            rows={1}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              // Enter sends; Shift+Enter inserts a newline (so multi-line messages are easy to compose).
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            placeholder="Message your coach…"
-          />
-          <MicButton value={input} onChange={setInput} disabled={streaming} />
-          <button className="send" onClick={send} disabled={streaming} aria-label="Send">
-            <SendIcon />
-          </button>
-        </div>
+        <div ref={endRef} />
+      </div>
+      <div className="composer">
+        <textarea
+          ref={taRef}
+          className="field"
+          rows={1}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter sends; Shift+Enter inserts a newline (so multi-line messages are easy to compose).
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
+          placeholder="Message your coach…"
+        />
+        <MicButton value={input} onChange={setInput} disabled={streaming} />
+        <button className="send" onClick={send} disabled={streaming} aria-label="Send">
+          <SendIcon />
+        </button>
+      </div>
     </>
   );
 

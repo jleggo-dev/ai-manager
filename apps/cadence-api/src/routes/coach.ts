@@ -1,6 +1,13 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
-import { openCoachSession, injectCoachContext, sendCoachMessage, recordCoachReply, getCoachPersona, getCoachHistory } from '../ai/aim.ts';
+import {
+  openCoachSession,
+  injectCoachContext,
+  sendCoachMessage,
+  recordCoachReply,
+  getCoachPersona,
+  getCoachHistory,
+} from '../ai/aim.ts';
 import { runCaptureExtract } from '../services/capture.ts';
 import { assembleTurn } from '../services/coach-context.ts';
 import { buildContextPack } from '../services/context-pack.ts';

@@ -75,7 +75,14 @@ export interface PlanFlowResult {
  */
 export async function synthesizeAndVet(
   userId: string,
-  opts: { goals: Goal[]; baseline: unknown; equipment: unknown[]; currentPlan?: unknown; recentActivity?: unknown; userSteer?: string },
+  opts: {
+    goals: Goal[];
+    baseline: unknown;
+    equipment: unknown[];
+    currentPlan?: unknown;
+    recentActivity?: unknown;
+    userSteer?: string;
+  },
 ): Promise<SynthesizeResult> {
   // 1. Synthesize (Coach) — evolves the plan when currentPlan/recentActivity are provided.
   // user_steer is empty-safe: the lock flow never sets it and the template treats '' as absent.
@@ -89,7 +96,9 @@ export async function synthesizeAndVet(
     user_steer: (opts.userSteer ?? '').trim().slice(0, 500),
   });
   const synth = parseJson(synthRes.formatted ?? synthRes.raw ?? '');
-  const normalized = (Array.isArray(synth?.activities) ? (synth!.activities as Partial<Activity>[]) : []).map(normalizeActivity);
+  const normalized = (Array.isArray(synth?.activities) ? (synth!.activities as Partial<Activity>[]) : []).map(
+    normalizeActivity,
+  );
   const note = typeof synth?.note === 'string' ? synth.note.trim() : '';
   if (normalized.length === 0) return { status: 'vetoed', violations: ['synthesize_plan returned no activities'] };
 
@@ -166,7 +175,14 @@ export async function commitActivities(
   if (old) await deleteFuturePendingOccurrences(old.plan_id, new Date().toISOString().slice(0, 10));
   const occurrences = await ensureHorizon(userId, occurrenceDays);
 
-  return { status: 'committed', planId: plan.plan_id, version, activities: activities.length, occurrences, note: opts.note };
+  return {
+    status: 'committed',
+    planId: plan.plan_id,
+    version,
+    activities: activities.length,
+    occurrences,
+    note: opts.note,
+  };
 }
 
 /**

@@ -71,7 +71,11 @@ export function normalizeBaseline(raw: Record<string, unknown>): Record<string, 
 }
 
 /** Normalize a goal title for fuzzy comparison: lowercase, punctuation→spaces, collapsed. */
-export const normTitle = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+export const normTitle = (s: string): string =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 
 /**
  * Two normalized titles are "the same goal" when identical, or one contains the other — this

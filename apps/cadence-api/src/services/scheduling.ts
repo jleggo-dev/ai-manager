@@ -64,12 +64,7 @@ function weekStartSun(d: Date): Date {
  * are measured from `anchorISO` (defaults to `fromISO` for one-off/legacy callers). Never fires
  * before the anchor (no occurrences before the plan starts).
  */
-export function expandRecurrence(
-  recurrence: string,
-  fromISO: string,
-  toISO: string,
-  anchorISO?: string,
-): string[] {
+export function expandRecurrence(recurrence: string, fromISO: string, toISO: string, anchorISO?: string): string[] {
   const { freq, interval, byday, bymonthday } = parseRecurrence(recurrence);
   if (freq === 'NONE') return [];
 
@@ -110,7 +105,10 @@ export function describeRecurrence(recurrence: string): string {
   }
   if (freq === 'WEEKLY') {
     const days = byday.length
-      ? [...byday].sort((a, b) => a - b).map((n) => DOW_NAME[n]).join(', ')
+      ? [...byday]
+          .sort((a, b) => a - b)
+          .map((n) => DOW_NAME[n])
+          .join(', ')
       : '';
     if (interval === 1) return days || 'Weekly';
     if (interval === 2) return days ? `Every other week · ${days}` : 'Every other week';
@@ -124,8 +122,20 @@ export function describeRecurrence(recurrence: string): string {
 }
 
 const DAY_ABBR: Record<string, string> = {
-  sunday: 'SU', monday: 'MO', tuesday: 'TU', wednesday: 'WE', thursday: 'TH', friday: 'FR', saturday: 'SA',
-  sun: 'SU', mon: 'MO', tue: 'TU', wed: 'WE', thu: 'TH', fri: 'FR', sat: 'SA',
+  sunday: 'SU',
+  monday: 'MO',
+  tuesday: 'TU',
+  wednesday: 'WE',
+  thursday: 'TH',
+  friday: 'FR',
+  saturday: 'SA',
+  sun: 'SU',
+  mon: 'MO',
+  tue: 'TU',
+  wed: 'WE',
+  thu: 'TH',
+  fri: 'FR',
+  sat: 'SA',
 };
 
 /**

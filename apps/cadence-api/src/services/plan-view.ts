@@ -66,7 +66,14 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
     // "resume the coach chat" for a user with no committed plan.
     const [conversation, goals] = await Promise.all([getLatestConversation(userId), listGoals(userId)]);
     const stage = conversation || goals.length > 0 ? 'in_progress' : 'new';
-    return { hasPlan: false, stage, activities: [], week: [], consistency: { kept: 0, window: weekDays }, pendingProposal: null };
+    return {
+      hasPlan: false,
+      stage,
+      activities: [],
+      week: [],
+      consistency: { kept: 0, window: weekDays },
+      pendingProposal: null,
+    };
   }
 
   const activities = await listActivities(plan.plan_id);
@@ -77,7 +84,13 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
   const days: PlanViewDay[] = [];
   for (let i = 0; i < weekDays; i++) {
     const d = new Date(base + i * 86_400_000);
-    days.push({ date: iso(d), weekday: WEEKDAY[d.getUTCDay()]!, dayNum: d.getUTCDate(), isToday: i === 0, occurrences: [] });
+    days.push({
+      date: iso(d),
+      weekday: WEEKDAY[d.getUTCDay()]!,
+      dayNum: d.getUTCDate(),
+      isToday: i === 0,
+      occurrences: [],
+    });
   }
   const dayByDate = new Map(days.map((dd) => [dd.date, dd]));
 

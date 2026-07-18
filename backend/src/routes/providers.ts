@@ -332,7 +332,9 @@ router.post('/:id/models/sync', async (req: Request, res: Response) => {
         discoveredModelIds = [...DEVS_AI_SEED_MODEL_IDS];
       }
     } else {
-      return res.status(400).json({ error: 'Model discovery is supported for Google Gemini, Devs.ai, and Devs.ai v2 providers' });
+      return res
+        .status(400)
+        .json({ error: 'Model discovery is supported for Google Gemini, Devs.ai, and Devs.ai v2 providers' });
     }
 
     const unique = [...new Set(discoveredModelIds.filter(Boolean))]

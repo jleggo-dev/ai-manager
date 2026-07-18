@@ -86,7 +86,10 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
       return { plan, activities };
     },
     render(r) {
-      const { plan, activities } = r as { plan: Record<string, unknown> | null; activities: Array<Record<string, unknown>> };
+      const { plan, activities } = r as {
+        plan: Record<string, unknown> | null;
+        activities: Array<Record<string, unknown>>;
+      };
       if (!plan) return '';
       const lines = activities.map((a) => {
         const sched = a.schedule as { recurrence?: unknown } | undefined;
@@ -163,16 +166,30 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
       };
     },
     render(r) {
-      const { cards, trends } = r as { cards: ProgressCard[]; trends: Array<{ title: string; label: string; unit: string; first?: { value: number }; last?: { value: number } }> };
+      const { cards, trends } = r as {
+        cards: ProgressCard[];
+        trends: Array<{
+          title: string;
+          label: string;
+          unit: string;
+          first?: { value: number };
+          last?: { value: number };
+        }>;
+      };
       const lines: string[] = [];
       for (const c of cards) {
         if (c.kind === 'count') lines.push(`- ${c.title}: ${c.current}/${c.target} ${c.unit}`);
-        else if (c.kind === 'latest_vs_target') lines.push(`- ${c.title}: now ${c.latest ?? '?'} ${c.unit} (started ${c.start ?? '?'}, target ${c.target})`);
-        else if (c.kind === 'countdown') lines.push(`- ${c.title}: ${c.days_left} days out; stepping-stones ${c.milestones_done}/${c.milestones_total}`);
+        else if (c.kind === 'latest_vs_target')
+          lines.push(`- ${c.title}: now ${c.latest ?? '?'} ${c.unit} (started ${c.start ?? '?'}, target ${c.target})`);
+        else if (c.kind === 'countdown')
+          lines.push(
+            `- ${c.title}: ${c.days_left} days out; stepping-stones ${c.milestones_done}/${c.milestones_total}`,
+          );
         else if (c.kind === 'consistency') lines.push(`- ${c.title}: showed up ${c.kept} of ${c.window} days`);
       }
       for (const t of trends) {
-        if (t.first && t.last) lines.push(`- ${t.title} ${t.label.toLowerCase()}: ${t.first.value} → ${t.last.value} ${t.unit}`);
+        if (t.first && t.last)
+          lines.push(`- ${t.title} ${t.label.toLowerCase()}: ${t.first.value} → ${t.last.value} ${t.unit}`);
       }
       return lines.length ? `Goal progress (computed):\n${lines.join('\n')}` : '';
     },
@@ -185,7 +202,7 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_constraints: {
     name: 'get_constraints',
     description:
-      "Things the user is working around — physical (an injury) or life (burnout, grief, a night shift) — with plan-around flags. Safety-critical for planning.",
+      'Things the user is working around — physical (an injury) or life (burnout, grief, a night shift) — with plan-around flags. Safety-critical for planning.',
     domains: ['baseline'],
     async run(userId) {
       const u = await getUser(userId);
@@ -196,7 +213,9 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
       if (!cons.length) return '';
       const list = cons
         // Legacy rows may still carry {area, condition} instead of label.
-        .map((c) => `${String(c.label ?? [c.area, c.condition].filter(Boolean).join(' — '))}${c.plan_around ? ' [plan-around]' : ''}`.trim())
+        .map((c) =>
+          `${String(c.label ?? [c.area, c.condition].filter(Boolean).join(' — '))}${c.plan_around ? ' [plan-around]' : ''}`.trim(),
+        )
         .join('; ');
       return `What we work around: ${list}`;
     },
@@ -261,7 +280,9 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
       if (!meals.length) return 'Food log: nothing logged in the last 7 days.';
       const recent = meals
         .slice(0, 10)
-        .map((m) => `- ${m.date} ${m.meal}: ${m.items.map((i) => i.name).join(', ') || (m.raw_text ?? '').slice(0, 60)}`)
+        .map(
+          (m) => `- ${m.date} ${m.meal}: ${m.items.map((i) => i.name).join(', ') || (m.raw_text ?? '').slice(0, 60)}`,
+        )
         .join('\n');
       return [renderNutritionLine(summary), recent].filter(Boolean).join('\n');
     },

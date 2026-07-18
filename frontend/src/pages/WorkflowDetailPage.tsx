@@ -175,8 +175,7 @@ export default function WorkflowDetailPage({ onNavigate, pageParams }: Props) {
   }
 
   const inputVariables = detail.config?.inputVariables as
-    | { name: string; label?: string; description?: string; required?: boolean }[]
-    | undefined;
+    { name: string; label?: string; description?: string; required?: boolean }[] | undefined;
 
   return (
     <Stack gap="md">

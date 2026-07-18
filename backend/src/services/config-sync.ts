@@ -2,22 +2,10 @@
  * Config-as-code sync — idempotent upsert of profiles, jobs, workflows by slug.
  */
 
-import {
-  createAiProfile,
-  updateAiProfile,
-  getAiProfileBySlug,
-} from "../models/ai-profiles.ts";
-import {
-  createProcessingJob,
-  updateProcessingJob,
-  getProcessingJobBySlug,
-} from "../models/processing-jobs.ts";
-import {
-  createWorkflow,
-  updateWorkflow,
-  getWorkflowBySlug,
-} from "../models/workflows.ts";
-import { errorMessage } from "../lib/error-message.ts";
+import { createAiProfile, updateAiProfile, getAiProfileBySlug } from '../models/ai-profiles.ts';
+import { createProcessingJob, updateProcessingJob, getProcessingJobBySlug } from '../models/processing-jobs.ts';
+import { createWorkflow, updateWorkflow, getWorkflowBySlug } from '../models/workflows.ts';
+import { errorMessage } from '../lib/error-message.ts';
 
 export interface SyncConfig {
   profiles?: Array<Record<string, unknown>>;
@@ -26,9 +14,9 @@ export interface SyncConfig {
 }
 
 export interface SyncDiffEntry {
-  entity: "profile" | "job" | "workflow";
+  entity: 'profile' | 'job' | 'workflow';
   slug: string;
-  action: "create" | "update" | "skip" | "error";
+  action: 'create' | 'update' | 'skip' | 'error';
   error?: string;
 }
 
@@ -40,10 +28,7 @@ export interface SyncResult {
   errors: number;
 }
 
-export async function syncConfig(
-  config: SyncConfig,
-  dryRun = false,
-): Promise<SyncResult> {
+export async function syncConfig(config: SyncConfig, dryRun = false): Promise<SyncResult> {
   const diff: SyncDiffEntry[] = [];
   let created = 0;
   let updated = 0;
@@ -53,10 +38,10 @@ export async function syncConfig(
     const slug = item.slug as string;
     if (!slug) {
       diff.push({
-        entity: "profile",
-        slug: "(missing)",
-        action: "error",
-        error: "slug required",
+        entity: 'profile',
+        slug: '(missing)',
+        action: 'error',
+        error: 'slug required',
       });
       errors++;
       continue;
@@ -65,9 +50,9 @@ export async function syncConfig(
       const existing = await getAiProfileBySlug(slug);
       if (dryRun) {
         diff.push({
-          entity: "profile",
+          entity: 'profile',
           slug,
-          action: existing ? "update" : "create",
+          action: existing ? 'update' : 'create',
         });
         if (existing) updated++;
         else created++;
@@ -75,18 +60,18 @@ export async function syncConfig(
       }
       if (existing) {
         await updateAiProfile(existing.id, item as never);
-        diff.push({ entity: "profile", slug, action: "update" });
+        diff.push({ entity: 'profile', slug, action: 'update' });
         updated++;
       } else {
         await createAiProfile(item as never);
-        diff.push({ entity: "profile", slug, action: "create" });
+        diff.push({ entity: 'profile', slug, action: 'create' });
         created++;
       }
     } catch (err) {
       diff.push({
-        entity: "profile",
+        entity: 'profile',
         slug,
-        action: "error",
+        action: 'error',
         error: errorMessage(err),
       });
       errors++;
@@ -97,10 +82,10 @@ export async function syncConfig(
     const slug = item.slug as string;
     if (!slug) {
       diff.push({
-        entity: "job",
-        slug: "(missing)",
-        action: "error",
-        error: "slug required",
+        entity: 'job',
+        slug: '(missing)',
+        action: 'error',
+        error: 'slug required',
       });
       errors++;
       continue;
@@ -109,9 +94,9 @@ export async function syncConfig(
       const existing = await getProcessingJobBySlug(slug);
       if (dryRun) {
         diff.push({
-          entity: "job",
+          entity: 'job',
           slug,
-          action: existing ? "update" : "create",
+          action: existing ? 'update' : 'create',
         });
         if (existing) updated++;
         else created++;
@@ -119,18 +104,18 @@ export async function syncConfig(
       }
       if (existing) {
         await updateProcessingJob(existing.id, item as never);
-        diff.push({ entity: "job", slug, action: "update" });
+        diff.push({ entity: 'job', slug, action: 'update' });
         updated++;
       } else {
         await createProcessingJob(item as never);
-        diff.push({ entity: "job", slug, action: "create" });
+        diff.push({ entity: 'job', slug, action: 'create' });
         created++;
       }
     } catch (err) {
       diff.push({
-        entity: "job",
+        entity: 'job',
         slug,
-        action: "error",
+        action: 'error',
         error: errorMessage(err),
       });
       errors++;
@@ -141,10 +126,10 @@ export async function syncConfig(
     const slug = item.slug as string;
     if (!slug) {
       diff.push({
-        entity: "workflow",
-        slug: "(missing)",
-        action: "error",
-        error: "slug required",
+        entity: 'workflow',
+        slug: '(missing)',
+        action: 'error',
+        error: 'slug required',
       });
       errors++;
       continue;
@@ -153,9 +138,9 @@ export async function syncConfig(
       const existing = await getWorkflowBySlug(slug);
       if (dryRun) {
         diff.push({
-          entity: "workflow",
+          entity: 'workflow',
           slug,
-          action: existing ? "update" : "create",
+          action: existing ? 'update' : 'create',
         });
         if (existing) updated++;
         else created++;
@@ -163,18 +148,18 @@ export async function syncConfig(
       }
       if (existing) {
         await updateWorkflow(existing.id, item as never);
-        diff.push({ entity: "workflow", slug, action: "update" });
+        diff.push({ entity: 'workflow', slug, action: 'update' });
         updated++;
       } else {
         await createWorkflow(item as never);
-        diff.push({ entity: "workflow", slug, action: "create" });
+        diff.push({ entity: 'workflow', slug, action: 'create' });
         created++;
       }
     } catch (err) {
       diff.push({
-        entity: "workflow",
+        entity: 'workflow',
         slug,
-        action: "error",
+        action: 'error',
         error: errorMessage(err),
       });
       errors++;

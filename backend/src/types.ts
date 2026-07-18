@@ -1,19 +1,19 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Request, Response, NextFunction } from "express";
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Request, Response, NextFunction } from 'express';
 
 /* ── Auth ──────────────────────────────────────────────────── */
 
-export type AuthMode = "jwt" | "api_key";
+export type AuthMode = 'jwt' | 'api_key';
 
 interface JwtAuthContext {
-  mode: "jwt";
+  mode: 'jwt';
   workspaceId: string | null;
   userId: string;
   userClient: SupabaseClient;
 }
 
 interface ApiKeyAuthContext {
-  mode: "api_key";
+  mode: 'api_key';
   workspaceId: string;
   apiKeyId: string;
   userId?: string;
@@ -51,19 +51,15 @@ export interface RateLimits {
 
 /* ── Express helpers ───────────────────────────────────────── */
 
-export type AsyncRequestHandler = (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => Promise<void | Response>;
+export type AsyncRequestHandler = (req: Request, res: Response, next: NextFunction) => Promise<void | Response>;
 
 /* ── Workspace Roles ───────────────────────────────────────── */
 
-export type WorkspaceRole = "owner" | "admin" | "member";
+export type WorkspaceRole = 'owner' | 'admin' | 'member';
 
 /* ── Account approval (profiles) ───────────────────────────── */
 
-export type AccountStatus = "pending" | "approved" | "suspended";
+export type AccountStatus = 'pending' | 'approved' | 'suspended';
 
 export interface ProfileRow {
   id: string;
@@ -102,12 +98,10 @@ export interface ChatCompletionResponse {
  * diagnostics log URL references instead of blobs). Providers map this canonical shape to
  * their own dialect (OpenAI-compat `image_url:{url}`, Responses `input_image`, etc.).
  */
-export type ContentPart =
-  | { type: "text"; text: string }
-  | { type: "image_url"; url: string };
+export type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; url: string };
 
 export interface ChatMessage {
-  role: "system" | "user" | "assistant";
+  role: 'system' | 'user' | 'assistant';
   /** Plain string for text-only messages (the overwhelmingly common case); parts for vision. */
   content: string | ContentPart[];
 }
@@ -403,7 +397,7 @@ export interface HealthCheckRunRow {
   id: string;
   health_check_id: string;
   workspace_id: string;
-  status: "pass" | "fail" | "timeout" | "error";
+  status: 'pass' | 'fail' | 'timeout' | 'error';
   response_time_ms?: number | null;
   error_message?: string | null;
   raw_response?: string | null;
@@ -527,7 +521,7 @@ export interface WidgetHealthCheckRunRow {
   id: string;
   widget_health_check_id: string;
   workspace_id: string;
-  status: "pass" | "fail" | "timeout" | "error" | "warning";
+  status: 'pass' | 'fail' | 'timeout' | 'error' | 'warning';
   response_time_ms: number | null;
   page_load_time_ms: number | null;
   widget_load_time_ms: number | null;
@@ -556,11 +550,8 @@ export interface TriggerRow {
   slug: string;
   name: string;
   description?: string | null;
-  trigger_type:
-    | "external_clock"
-    | "session.message.created"
-    | "workflow.step.completed";
-  target_type: "job" | "workflow";
+  trigger_type: 'external_clock' | 'session.message.created' | 'workflow.step.completed';
+  target_type: 'job' | 'workflow';
   target_slug: string;
   config?: Record<string, unknown> | null;
   is_active: boolean;

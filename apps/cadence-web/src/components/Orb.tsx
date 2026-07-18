@@ -37,7 +37,14 @@ export function Orb({ className, hero = false }: { className?: string; hero?: bo
         )}
       </defs>
       <g filter={hero ? `url(#${rough})` : undefined}>
-        <path className="arch-arc" d="M 30,80 A 30 30 0 0 1 90 80" fill="none" stroke={`url(#${grad})`} strokeWidth="12" strokeLinecap="round" />
+        <path
+          className="arch-arc"
+          d="M 30,80 A 30 30 0 0 1 90 80"
+          fill="none"
+          stroke={`url(#${grad})`}
+          strokeWidth="12"
+          strokeLinecap="round"
+        />
         <path className="arch-dome" d="M 45,80 A 15 15 0 0 1 75 80" fill={`url(#${grad})`} />
         <rect className="arch-bar" x="20" y="86" width="80" height="8" rx="4" fill="var(--forest)" />
       </g>
