@@ -75,10 +75,26 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (v1SessionId) await request(app).delete(`/api/chat-sessions/${v1SessionId}`).set(authHeaders()).catch(() => {});
-  if (v2SessionId) await request(app).delete(`/api/chat-sessions/${v2SessionId}`).set(authHeaders()).catch(() => {});
-  if (v2ProfileId) await request(app).delete(`/api/ai-profiles/${v2ProfileId}`).set(authHeaders()).catch(() => {});
-  if (v2ProviderId) await request(app).delete(`/api/providers/${v2ProviderId}`).set(authHeaders()).catch(() => {});
+  if (v1SessionId)
+    await request(app)
+      .delete(`/api/chat-sessions/${v1SessionId}`)
+      .set(authHeaders())
+      .catch(() => {});
+  if (v2SessionId)
+    await request(app)
+      .delete(`/api/chat-sessions/${v2SessionId}`)
+      .set(authHeaders())
+      .catch(() => {});
+  if (v2ProfileId)
+    await request(app)
+      .delete(`/api/ai-profiles/${v2ProfileId}`)
+      .set(authHeaders())
+      .catch(() => {});
+  if (v2ProviderId)
+    await request(app)
+      .delete(`/api/providers/${v2ProviderId}`)
+      .set(authHeaders())
+      .catch(() => {});
 });
 
 describe('devs-ai-v2 lifecycle routes', () => {
@@ -97,10 +113,15 @@ describe('devs-ai-v2 lifecycle routes', () => {
     expect(res.body.error).toMatch(/devs-ai-v2/i);
   });
 
+  /* The route wraps the "no v2 response id" internal error through safeClientError()
+     (src/lib/safe-error.ts), which only lets allowlisted "safe domain" messages
+     through to the client and otherwise masks everything else with a generic
+     fallback — so the client-facing message is the fallback text, not the raw
+     internal error. Assert on the fallback wording rather than the masked detail. */
   it('rejects cancel on v2 session without provider_metadata', async () => {
     const res = await request(app).post(`/api/chat-sessions/${v2SessionId}/cancel`).set(authHeaders());
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/no v2 response/i);
+    expect(res.body.error).toMatch(/failed to cancel v2 response/i);
   });
 
   it('rejects reconnect-stream on v2 session without provider_metadata', async () => {
@@ -109,7 +130,7 @@ describe('devs-ai-v2 lifecycle routes', () => {
       .set(authHeaders())
       .send({});
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/no v2 response/i);
+    expect(res.body.error).toMatch(/failed to reconnect v2 stream/i);
   });
 
   it('accepts cancel route when provider_metadata has response id (provider call may fail in test env)', async () => {
