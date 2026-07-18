@@ -110,6 +110,7 @@ router.post('/', validateBody(createAiProfileSchema), async (req: Request, res: 
       profile_type,
       mode,
       runtime_options,
+      config,
     } = req.body;
 
     const provider = await getProvider(provider_id);
@@ -142,6 +143,7 @@ router.post('/', validateBody(createAiProfileSchema), async (req: Request, res: 
         string,
         unknown
       >,
+      ...(config !== undefined && { config }),
     });
 
     return res.status(201).json(row);
@@ -199,6 +201,7 @@ const PROFILE_UPDATABLE_FIELDS = new Set([
   'profile_type',
   'mode',
   'runtime_options',
+  'config',
 ]);
 
 router.put('/:id', validateBody(updateAiProfileSchema), async (req: Request, res: Response) => {

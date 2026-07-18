@@ -115,6 +115,36 @@ describe('E2E: Calling Application Flow', () => {
     expect((ca ?? []).length).toBeGreaterThanOrEqual(1);
   });
 
+  it('re-upserting the same calling application id is idempotent (no PGRST coercion error)', async () => {
+    /* Regression test: upsertCallingApplication() used ignoreDuplicates:true +
+       .select().single(), which throws a PGRST "cannot coerce to a single JSON
+       object" error on a repeat call — ON CONFLICT DO NOTHING returns 0 rows,
+       which .single() rejects even though the upsert itself is a legitimate
+       no-op. Both calls below must succeed and agree on the same row. */
+    const id = uniqueSlug('e2e-ca-repeat');
+
+    const first = await request(app)
+      .post('/api/calling-applications')
+      .set(authHeaders())
+      .send({ id, display_name: 'Repeat Upsert Test' });
+    expect(first.status).toBe(201);
+    expect(first.body.id).toBe(id);
+
+    const second = await request(app)
+      .post('/api/calling-applications')
+      .set(authHeaders())
+      .send({ id, display_name: 'Repeat Upsert Test (ignored on conflict)' });
+    expect(second.status).toBe(201);
+    expect(second.body.id).toBe(id);
+    /* display_name is only set on insert; the second call's value must be ignored. */
+    expect(second.body.display_name).toBe('Repeat Upsert Test');
+
+    await request(app)
+      .delete(`/api/calling-applications/${id}`)
+      .set(authHeaders())
+      .catch(() => {});
+  });
+
   it('chat sessions list filters by calling_application', async () => {
     const appName = `e2e-test:ca-filter-${Date.now()}`;
 
