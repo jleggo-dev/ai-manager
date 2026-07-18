@@ -11,6 +11,11 @@ vi.mock('./lib/auth-session', () => ({
   setWorkspaceId: vi.fn(),
   signOut: vi.fn(() => Promise.resolve()),
   clearAuthSession: vi.fn(),
+  // App.tsx gates rendering on this; default to 'approved' so token-bearing
+  // tests reach the app shell without every test having to override it.
+  getAccountStatus: vi.fn(() => 'approved'),
+  onAccountStatusChange: vi.fn(() => () => {}),
+  refreshBootstrap: vi.fn(() => Promise.resolve(null)),
 }));
 
 vi.mock('./services/api', () => ({
