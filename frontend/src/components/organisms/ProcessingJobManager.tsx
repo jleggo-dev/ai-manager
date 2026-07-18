@@ -75,7 +75,6 @@ import {
   IconChartBar,
   IconLock,
   IconDeviceFloppy,
-  IconSelector,
   IconSearch,
   IconDotsVertical,
   IconBrain,
@@ -88,6 +87,9 @@ import DiagnosticsTab from './DiagnosticsTab';
 import VariablesReference from './processing-jobs/VariablesReference';
 import ResponseSchemaViewer from './processing-jobs/ResponseSchemaViewer';
 import RuleSetSchemaEditor from './processing-jobs/RuleSetSchemaEditor';
+import StatusIcon from '../atoms/StatusIcon';
+import ScoreBadge from '../atoms/ScoreBadge';
+import SortHeader from '../atoms/SortHeader';
 
 import type {
   ExpectedSchema,
@@ -3654,27 +3656,6 @@ function SchemaValidationPanel({
 
   const validation = validateResponseSchema(formattedText, expectedSchema);
 
-  /** Icon for field status */
-  function StatusIcon({ status }: { status: string }) {
-    if (status === 'pass')
-      return (
-        <ThemeIcon size="xs" radius="xl" color="green" variant="filled">
-          <IconCheck size={10} />
-        </ThemeIcon>
-      );
-    if (status === 'warning')
-      return (
-        <ThemeIcon size="xs" radius="xl" color="yellow" variant="filled">
-          <IconAlertTriangle size={10} />
-        </ThemeIcon>
-      );
-    return (
-      <ThemeIcon size="xs" radius="xl" color="red" variant="filled">
-        <IconCircleX size={10} />
-      </ThemeIcon>
-    );
-  }
-
   /** Format a field value for display (truncate long arrays/strings) */
   function formatValue(val: unknown) {
     if (val === null || val === undefined)
@@ -4430,21 +4411,6 @@ function computeAnalytics(
 }
 
 /** Score badge with colour coding based on percentage */
-function ScoreBadge({ value, label, size = 'xl' }: { value: number | null | undefined; label: string; size?: string }) {
-  if (value == null)
-    return (
-      <Badge size={size} variant="light" color="gray">
-        {label}: N/A
-      </Badge>
-    );
-  const color = value >= 90 ? 'green' : value >= 70 ? 'teal' : value >= 50 ? 'yellow' : 'red';
-  return (
-    <Badge size={size} variant="filled" color={color}>
-      {label}: {value}%
-    </Badge>
-  );
-}
-
 /** Format milliseconds for display */
 function fmtMs(ms: number | null | undefined) {
   if (ms == null) return '—';
@@ -4583,29 +4549,6 @@ function AnalyticsTab({
       return sortDir === 'desc' ? -cmp : cmp;
     });
     return sorted;
-  }
-
-  /** Clickable sort header */
-  function SortHeader({ col, label, width }: { col: string; label: string; width?: number }) {
-    const active = sortCol === col;
-    return (
-      <Table.Th style={{ width, cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort(col)}>
-        <Group gap={4} wrap="nowrap">
-          <Text size="xs" fw={600}>
-            {label}
-          </Text>
-          {active ? (
-            sortDir === 'asc' ? (
-              <IconArrowUp size={12} />
-            ) : (
-              <IconArrowDown size={12} />
-            )
-          ) : (
-            <IconSelector size={12} color="var(--mantine-color-gray-4)" />
-          )}
-        </Group>
-      </Table.Th>
-    );
   }
 
   return (
@@ -5106,10 +5049,37 @@ function AnalyticsTab({
                           aria-label="Select all fields"
                         />
                       </Table.Th>
-                      <SortHeader col="field" label="Field" />
-                      <SortHeader col="required" label="Required" width={90} />
-                      <SortHeader col="count" label="Populated" width={100} />
-                      <SortHeader col="rate" label="Coverage" width={100} />
+                      <SortHeader
+                        col="field"
+                        label="Field"
+                        active={sortCol === 'field'}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      />
+                      <SortHeader
+                        col="required"
+                        label="Required"
+                        width={90}
+                        active={sortCol === 'required'}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      />
+                      <SortHeader
+                        col="count"
+                        label="Populated"
+                        width={100}
+                        active={sortCol === 'count'}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      />
+                      <SortHeader
+                        col="rate"
+                        label="Coverage"
+                        width={100}
+                        active={sortCol === 'rate'}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      />
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
