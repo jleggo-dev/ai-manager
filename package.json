@@ -7,7 +7,11 @@
     "frontend",
     "packages/types",
     "packages/client",
-    "packages/edge"
+    "packages/edge",
+    "packages/core",
+    "packages/cadence-shared",
+    "apps/cadence-api",
+    "apps/cadence-web"
   ],
   "scripts": {
     "dev": "npm run dev:backend & npm run dev:frontend",

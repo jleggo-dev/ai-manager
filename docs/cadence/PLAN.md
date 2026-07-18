@@ -63,7 +63,12 @@ migrations/cadence/0001_init.sql       — Cadence DB DDL (its own Supabase proj
 docs/cadence/PLAN.md                   — this file
 ```
 
-Root `package.json` workspaces updated to `["backend","frontend","packages/*","apps/*"]`.
+Root `package.json` workspaces updated to include `packages/core`, `packages/cadence-shared`,
+`apps/cadence-api`, and `apps/cadence-web` (explicit entries alongside the pre-existing
+`backend`/`frontend`/`packages/{types,client,edge}`, not a glob — see INFRA-01 in
+`refactoring_plan.md`). `npm ls --workspaces` from repo root confirms all 9 workspaces resolve
+with no `extraneous`/`invalid` markers, and `package-lock.json` was regenerated from a clean
+install to match.
 
 ## 4. AI Admin entities to provision (config-as-code)
 
@@ -378,9 +383,15 @@ orchestrates explicitly where convenient, but is not blocked.
   *Mitigation:* documented in `apps/cadence-api/.env.example`; fail fast in `config.ts`.
 - **Two Supabase projects.** Easy to point the wrong client at the wrong DB.
   *Mitigation:* `cadenceDb()` vs the engine's own client are distinct; never share.
-- **`tsc`/CI scope.** New workspaces aren't in the root `typecheck`/`lint` scripts, so
-  they won't break AI Admin CI — but also aren't covered. *Mitigation:* add
-  `@cadence/*` to CI once Phase 1 compiles.
+- **`tsc`/CI scope.** The Cadence workspaces are now correctly registered under root
+  `workspaces` (INFRA-01, `refactoring_plan.md`) and typecheck/resolve cleanly (`npm run
+  typecheck --workspace=@cadence/api`/`@cadence/web` both pass with zero errors as of this
+  fix). They are still **not** wired into the root `typecheck`/`lint`/`test`/`ci` scripts
+  (those remain scoped to `backend`/`frontend` only) and there is still no CI pipeline at all
+  (`.github/workflows` does not exist). *Mitigation:* tracked as INFRA-02/INFRA-03 in
+  `refactoring_plan.md` — extend root scripts to `--workspaces --if-present` and add a
+  path-filtered GitHub Actions workflow (report-only rollout first) before relying on this as
+  an automated gate.
 - **HealthKit realism.** Needs Mac + Xcode + Apple Developer account + a physical
   iPhone. *Mitigation:* the capability seam + web no-op lets all non-native work
   proceed on-device immediately; defer HealthKit to Phase 7.
