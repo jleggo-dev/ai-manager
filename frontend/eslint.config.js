@@ -69,4 +69,36 @@ export default [
       'no-console': 'off',
     },
   },
+  // FE-01: prevent organism/page files from regrowing into god-components.
+  // Threshold is intentionally below the historical ProcessingJobManager size.
+  // Known oversized files are overridden below as separately-tracked backlog —
+  // do NOT add new files to that list; split them instead.
+  {
+    files: ['src/components/organisms/**/*.{ts,tsx}', 'src/pages/**/*.{ts,tsx}'],
+    rules: {
+      'max-lines': ['error', { max: 500, skipBlankLines: true, skipComments: true }],
+    },
+  },
+  {
+    // Backlog (verified failing max-lines@500 when this rule was added — FE-01 report):
+    // organisms: AiProfileManager, DiagnosticsTab, processing-jobs/{AnalyticsTab,JobsTab,RuleSetsTab,SchemaValidationPanel}
+    // pages: AiMatcherPage, HealthCheckProfilesPage, HealthCheckWidgetPage, HealthDashboardPage, LovableGuidePage, SettingsPage
+    files: [
+      'src/components/organisms/AiProfileManager.tsx',
+      'src/components/organisms/DiagnosticsTab.tsx',
+      'src/components/organisms/processing-jobs/AnalyticsTab.tsx',
+      'src/components/organisms/processing-jobs/JobsTab.tsx',
+      'src/components/organisms/processing-jobs/RuleSetsTab.tsx',
+      'src/components/organisms/processing-jobs/SchemaValidationPanel.tsx',
+      'src/pages/AiMatcherPage.tsx',
+      'src/pages/HealthCheckProfilesPage.tsx',
+      'src/pages/HealthCheckWidgetPage.tsx',
+      'src/pages/HealthDashboardPage.tsx',
+      'src/pages/LovableGuidePage.tsx',
+      'src/pages/SettingsPage.tsx',
+    ],
+    rules: {
+      'max-lines': 'off',
+    },
+  },
 ];
