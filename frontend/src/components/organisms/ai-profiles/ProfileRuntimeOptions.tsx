@@ -162,10 +162,9 @@ export default function ProfileRuntimeOptions({
                 key={tool.key}
                 size="sm"
                 label={tool.label}
-                checked={normaliseRuntimeOptions(
-                  runtimeOptions,
-                  'devs-ai-v2',
-                ).devs_ai_v2.built_in_tools.includes(tool.key)}
+                checked={normaliseRuntimeOptions(runtimeOptions, 'devs-ai-v2').devs_ai_v2.built_in_tools.includes(
+                  tool.key,
+                )}
                 onChange={(e) => toggleDevsAiV2Tool(tool.key, e.currentTarget.checked)}
               />
             ))}

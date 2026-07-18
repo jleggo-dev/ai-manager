@@ -1,5 +1,20 @@
 ﻿import { useState, useEffect } from 'react';
-import { Stack, Group, Button, Text, Badge, TextInput, Select, Textarea, Loader, Center, Alert, Paper, Grid, Title } from '@mantine/core';
+import {
+  Stack,
+  Group,
+  Button,
+  Text,
+  Badge,
+  TextInput,
+  Select,
+  Textarea,
+  Loader,
+  Center,
+  Alert,
+  Paper,
+  Grid,
+  Title,
+} from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconAlertTriangle, IconWand, IconEye, IconPlayerPlay } from '@tabler/icons-react';
 import * as api from '../../../services/api';

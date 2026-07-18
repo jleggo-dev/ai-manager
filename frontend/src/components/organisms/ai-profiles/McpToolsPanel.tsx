@@ -31,15 +31,21 @@ interface McpToolsPanelProps {
   onRefresh: (profileId: string) => void;
 }
 
-export default function McpToolsPanel({ editing, mcpTools, toolAuthStatus, mcpLoading, onRefresh }: McpToolsPanelProps) {
+export default function McpToolsPanel({
+  editing,
+  mcpTools,
+  toolAuthStatus,
+  mcpLoading,
+  onRefresh,
+}: McpToolsPanelProps) {
   return (
     <>
       <Text size="sm" fw={600} mt="sm">
         MCP Server Tools
       </Text>
       <Text size="xs" c="dimmed">
-        External integrations (Gmail, Slack, etc.) configured on this AI agent in Devs.ai. OAuth status shows
-        whether the user has authorized access.
+        External integrations (Gmail, Slack, etc.) configured on this AI agent in Devs.ai. OAuth status shows whether
+        the user has authorized access.
       </Text>
       {mcpLoading && (
         <Center>

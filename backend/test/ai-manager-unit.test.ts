@@ -139,7 +139,7 @@ import {
 import { getProcessingJobBySlug, getProcessingJob, updateProcessingJob } from '../src/models/processing-jobs.ts';
 import { getAiProfileWithKeys } from '../src/models/ai-profiles.ts';
 import { createLlmClientForProvider } from '../src/integrations/client-factory.ts';
-import { createChatSession, getChatSession, createChatMessage, listChatMessages } from '../src/models/chat-sessions.ts';
+import { createChatSession, getChatSession, createChatMessage } from '../src/models/chat-sessions.ts';
 import { applyFormattingRules } from '../src/services/formatting-rules.ts';
 
 const asProviderRow = (overrides: Partial<ProviderRow> = {}): ProviderRow =>
