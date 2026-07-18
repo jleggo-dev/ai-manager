@@ -189,7 +189,7 @@ merge until INFRA-01 has landed, since none of these are safely verifiable witho
 | ID | Item | Area | Priority | Effort | Risk | Depends on | Status |
 |---|---|---|---|---|---|---|---|
 | **BE-01** | Split `backend/src/ai-manager/index.ts` (2,071 lines, 21 exported fns, 5 responsibilities, no direct tests) | Backend | P0 | L (phased, 5 steps) | High | Test-first step; should land before/alongside INFRA-02 | — |
-| **FE-01** | Split `ProcessingJobManager.tsx` (5,497 lines, 14 components) **and** add a max-file-line lint rule so it can't regrow | Frontend | P0 | L (7 phased steps, ~1-2 weeks) | High | Test-first step | — |
+| **FE-01** | Split `ProcessingJobManager.tsx` (5,497 lines, 14 components) **and** add a max-file-line lint rule so it can't regrow | Frontend | P0 | L (7 phased steps, ~1-2 weeks) | High | Test-first step | **Done** (PR #8, merged to `feat/cadence`) |
 | **FE-02** | Split `AiProfileManager.tsx` (2,466 lines, 2 components incl. an embedded chat client) | Frontend | P0 | L (~1 week) | Medium | Test-first step; independent of FE-01 | **Done** (PR #7, merged to `feat/cadence`) |
 
 #### BE-01 — Split `ai-manager/index.ts` [P0]
@@ -226,7 +226,7 @@ since Cadence consumes this in-process.
 
 *Full detail: report 01 §4 ("P0 — `backend/src/ai-manager/index.ts`").*
 
-#### FE-01 — Split `ProcessingJobManager.tsx` + add a max-file-line lint rule [P0]
+#### FE-01 — Split `ProcessingJobManager.tsx` + add a max-file-line lint rule [P0] — **Done** (PR #8)
 
 **Current problem:** 5,497 lines, 14 component definitions in one file, two of which are defined
 *inside* other components (`StatusIcon` nested in `SchemaValidationPanel`, `SortHeader` nested in
@@ -265,6 +265,12 @@ Should land before/alongside FE-06 (`services/api.ts` split), since the new hook
 non-monolithic API home to import from.
 
 *Full detail: report 02 §4.1.*
+
+**Done notes (PR #8):** Orchestrator `ProcessingJobManager.tsx` is ~108 lines; tabs/hooks live under
+`processing-jobs/`; atoms `StatusIcon`/`SortHeader`/`ScoreBadge` shared; interpolation consolidated
+to `lib/interpolate.ts`; organism/page `max-lines@500` active with backlog overrides refreshed
+after FE-02 (stale `AiProfileManager.tsx` override removed). Leftover oversized extracts logged in
+§4.8 — do not re-open FE-01 for those.
 
 #### FE-02 — Split `AiProfileManager.tsx` [P0] — **Done** (PR #7)
 
@@ -465,6 +471,17 @@ are not lost. Neither blocks FE-02 Done.
 |---|---|---|---|---|---|---|
 | **FE-11** | Extract `useTestChatStream` from `ai-profiles/TestChatPanel.tsx` (~675 lines) — isolate SSE parsing / OAuth-resume logic from rendering; leave the panel as a thin view | Frontend | P2 | M | Medium (streaming/OAuth paths) | Not Started |
 | **FE-12** | Research architectural overlap between AI Admin `TestChatPanel` streaming/session UI and Cadence web coach chat (SSE + session lifecycle) — decide whether a shared client helper is worth extracting later (research only; not a merge of the two UIs) | Frontend / Cadence | P3 | S (research) | Low | Not Started |
+
+### 4.8 Newly discovered / deferred — FE-01 supervisor review (PR #8)
+
+Logged so max-lines backlog overrides have tickets. **Not** re-listing pages already covered by
+FE-03…FE-08 / FE-P2 (`AiMatcherPage`, `SettingsPage`, `HealthCheck*`, `LovableGuidePage`,
+`DiagnosticsTab`, etc.), and **not** duplicating FE-11/FE-12 (`TestChatPanel`).
+
+| ID | Item | Area | Priority | Effort | Risk | Status |
+|---|---|---|---|---|---|---|
+| **FE-13** | Further split oversized `processing-jobs/` extracts still over `max-lines@500`: `JobsTab` (~908), `AnalyticsTab` (~987), `SchemaValidationPanel` (~632), `RuleSetsTab` (~579) — keep the FE-01 overrides until each drops under the threshold | Frontend | P2 | L | Medium | Not Started |
+| **FE-14** | Split `ai-profiles/ProfileFormModal.tsx` (~530 lines) further (form subpanels / sections) so it can leave the max-lines override list — leftover from FE-02 structural split, surfaced when FE-01's rule landed on current `feat/cadence` | Frontend | P2 | M | Low | Not Started |
 
 ---
 
