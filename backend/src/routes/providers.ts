@@ -26,6 +26,7 @@ import {
   isGoogleGeminiCatalogModel,
 } from '../services/llm-models-seed.ts';
 import { validateBody } from '../middleware/validate.ts';
+import { requireRole } from '../middleware/require-role.ts';
 import { createProviderSchema, updateProviderSchema } from '../schemas/providers.ts';
 import { sanitizeProvider } from '../lib/sanitize.ts';
 import { z } from 'zod';
@@ -97,25 +98,30 @@ router.get('/', async (req: Request, res: Response) => {
    POST /api/providers — create a new provider
    ================================================================ */
 
-router.post('/', validateBody(createProviderSchema), async (req: Request, res: Response) => {
-  try {
-    const { name, type, base_url, api_key, is_active, request_timeout_ms } = req.body;
+router.post(
+  '/',
+  requireRole('owner', 'admin'),
+  validateBody(createProviderSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const { name, type, base_url, api_key, is_active, request_timeout_ms } = req.body;
 
-    const row = await createProvider({
-      name,
-      type: type || 'devs-ai',
-      base_url,
-      api_key,
-      is_active: is_active !== false,
-      ...(request_timeout_ms !== undefined && { request_timeout_ms: Number(request_timeout_ms) || null }),
-    });
+      const row = await createProvider({
+        name,
+        type: type || 'devs-ai',
+        base_url,
+        api_key,
+        is_active: is_active !== false,
+        ...(request_timeout_ms !== undefined && { request_timeout_ms: Number(request_timeout_ms) || null }),
+      });
 
-    return res.status(201).json(sanitizeProvider(row));
-  } catch (err) {
-    console.error('[POST /providers]', err);
-    return res.status(500).json({ error: 'Failed to create provider' });
-  }
-});
+      return res.status(201).json(sanitizeProvider(row));
+    } catch (err) {
+      console.error('[POST /providers]', err);
+      return res.status(500).json({ error: 'Failed to create provider' });
+    }
+  },
+);
 
 /* ================================================================
    GET /api/providers/:id
@@ -134,21 +140,26 @@ router.get('/:id', async (req: Request, res: Response) => {
    PUT /api/providers/:id
    ================================================================ */
 
-router.put('/:id', validateBody(updateProviderSchema), async (req: Request, res: Response) => {
-  try {
-    const updated = await updateProvider(req.params.id as string, req.body);
-    return res.json(sanitizeProvider(updated));
-  } catch (err) {
-    console.error('[PUT /providers/:id]', err);
-    return res.status(500).json({ error: 'Failed to update provider' });
-  }
-});
+router.put(
+  '/:id',
+  requireRole('owner', 'admin'),
+  validateBody(updateProviderSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const updated = await updateProvider(req.params.id as string, req.body);
+      return res.json(sanitizeProvider(updated));
+    } catch (err) {
+      console.error('[PUT /providers/:id]', err);
+      return res.status(500).json({ error: 'Failed to update provider' });
+    }
+  },
+);
 
 /* ================================================================
    DELETE /api/providers/:id
    ================================================================ */
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
     const profiles = await listAiProfiles(undefined, { limit: 200 });
@@ -173,7 +184,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
    POST /api/providers/:id/test — test provider connectivity
    ================================================================ */
 
-router.post('/:id/test', async (req: Request, res: Response) => {
+router.post('/:id/test', requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     const provider = await getProvider(req.params.id as string);
 
@@ -272,7 +283,7 @@ router.get('/:id/models', async (req: Request, res: Response) => {
   POST /api/providers/:id/models/sync — discover provider models
   and upsert them into llm_models for this provider
    ================================================================ */
-router.post('/:id/models/sync', async (req: Request, res: Response) => {
+router.post('/:id/models/sync', requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     const provider = await getProvider(req.params.id as string);
     let discoveredModelIds: string[] = [];
@@ -379,61 +390,71 @@ router.post('/:id/models/sync', async (req: Request, res: Response) => {
    batch { models: [{ model_id, display_name, category }, ...] }
    ================================================================ */
 
-router.post('/:id/models', validateBody(addModelsSchema), async (req: Request, res: Response) => {
-  try {
-    const providerId = req.params.id as string;
+router.post(
+  '/:id/models',
+  requireRole('owner', 'admin'),
+  validateBody(addModelsSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const providerId = req.params.id as string;
 
-    /* Batch mode: array of models */
-    if (Array.isArray(req.body.models)) {
-      const results = await bulkCreateLlmModels(providerId, req.body.models);
-      return res.status(201).json(results);
+      /* Batch mode: array of models */
+      if (Array.isArray(req.body.models)) {
+        const results = await bulkCreateLlmModels(providerId, req.body.models);
+        return res.status(201).json(results);
+      }
+
+      /* Single mode */
+      const { model_id, display_name, category, is_active } = req.body;
+      if (!model_id) {
+        return res.status(400).json({ error: 'model_id is required' });
+      }
+
+      const row = await createLlmModel({
+        provider_id: providerId,
+        model_id,
+        display_name: display_name || model_id,
+        category: category || 'Other',
+        is_active: is_active !== false,
+      });
+
+      return res.status(201).json(row);
+    } catch (err) {
+      console.error('[POST /providers/:id/models]', err);
+      return res.status(500).json({ error: 'Failed to add model' });
     }
-
-    /* Single mode */
-    const { model_id, display_name, category, is_active } = req.body;
-    if (!model_id) {
-      return res.status(400).json({ error: 'model_id is required' });
-    }
-
-    const row = await createLlmModel({
-      provider_id: providerId,
-      model_id,
-      display_name: display_name || model_id,
-      category: category || 'Other',
-      is_active: is_active !== false,
-    });
-
-    return res.status(201).json(row);
-  } catch (err) {
-    console.error('[POST /providers/:id/models]', err);
-    return res.status(500).json({ error: 'Failed to add model' });
-  }
-});
+  },
+);
 
 /* ================================================================
    PUT /api/providers/:providerId/models/:modelId — update a model
    ================================================================ */
 
-router.put('/:providerId/models/:modelId', validateBody(updateModelSchema), async (req: Request, res: Response) => {
-  try {
-    const { display_name, category, is_active } = req.body;
-    const updated = await updateLlmModel(req.params.modelId as string, {
-      ...(display_name !== undefined && { display_name }),
-      ...(category !== undefined && { category }),
-      ...(is_active !== undefined && { is_active }),
-    });
-    return res.json(updated);
-  } catch (err) {
-    console.error('[PUT /providers/:providerId/models/:modelId]', err);
-    return res.status(500).json({ error: 'Failed to update model' });
-  }
-});
+router.put(
+  '/:providerId/models/:modelId',
+  requireRole('owner', 'admin'),
+  validateBody(updateModelSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const { display_name, category, is_active } = req.body;
+      const updated = await updateLlmModel(req.params.modelId as string, {
+        ...(display_name !== undefined && { display_name }),
+        ...(category !== undefined && { category }),
+        ...(is_active !== undefined && { is_active }),
+      });
+      return res.json(updated);
+    } catch (err) {
+      console.error('[PUT /providers/:providerId/models/:modelId]', err);
+      return res.status(500).json({ error: 'Failed to update model' });
+    }
+  },
+);
 
 /* ================================================================
    DELETE /api/providers/:providerId/models/:modelId — remove a model
    ================================================================ */
 
-router.delete('/:providerId/models/:modelId', async (req: Request, res: Response) => {
+router.delete('/:providerId/models/:modelId', requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     await deleteLlmModel(req.params.modelId as string);
     return res.status(204).end();

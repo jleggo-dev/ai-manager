@@ -1,13 +1,4 @@
-﻿import {
-  Stack,
-  Group,
-  Text,
-  Badge,
-  Alert,
-  Paper,
-  ScrollArea,
-  Table,
-} from '@mantine/core';
+﻿import { Stack, Group, Text, Badge, Alert, Paper, ScrollArea, Table } from '@mantine/core';
 import { IconAlertTriangle, IconCircleX } from '@tabler/icons-react';
 import StatusIcon from '../../atoms/StatusIcon';
 import type {

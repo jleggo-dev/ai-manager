@@ -324,7 +324,7 @@ per item / per area intro).
 | ID | Item | Effort | Risk | Notes |
 |---|---|---|---|---|
 | **BE-02** | Extract one shared `services/sse-line-reader.ts`; replace the 4 copy-pasted SSE line-buffering blocks in `chat-sessions.ts` + the 1 in `v2-stream-events.ts` | M | Medium | Part of **CROSS-02**; write characterization tests reproducing the original R1 chunk-split regression first |
-| **BE-03** | RBAC gap — wire `requireRole('owner','admin')` into the 8 route files currently unguarded (`providers.ts`, `ai-profiles.ts`, `app-settings.ts`, `processing-jobs.ts`, `workflows.ts`, `calling-applications.ts`, `api-keys.ts` JWT path, plus `diagnostic-logs.ts`/`user-credentials.ts` at lower sensitivity) | S per file | Low | Cheapest, highest-value item in the whole plan — additive middleware, easy to test, easy to revert. **Recommended as the literal first PR to land in Phase 2.** |
+| **BE-03** ✅ **Done** (`refactor/be-03-rbac`) | RBAC gap — wire `requireRole('owner','admin')` into the 8 route files currently unguarded (`providers.ts`, `ai-profiles.ts`, `app-settings.ts`, `processing-jobs.ts`, `workflows.ts`, `calling-applications.ts`, `api-keys.ts` JWT path, plus `diagnostic-logs.ts`/`user-credentials.ts` at lower sensitivity) | S per file | Low | Cheapest, highest-value item in the whole plan — additive middleware, easy to test, easy to revert. **Recommended as the literal first PR to land in Phase 2.** **Done notes:** gated all 33 mutating routes (POST/PUT/PATCH/DELETE) across the 6 core CRUD files + `api-keys.ts` JWT path; GETs left member-readable (the "don't over-gate reads" constraint). Test-first: `backend/test/rbac-route-guards.test.ts` (22 cases, mocked ctx — member→403 on every gated router, GET→not-403, api-keys JWT gate + existing api_key-mode block intact); flipped 7 red→green. `rbac.test.ts` names corrected (the admin test key clears the gate, so its assertions were passing but mislabeled "any member can…"). **Two scope decisions deferred (need product sign-off, see §4.6):** (a) `diagnostic-logs.ts` GET-gating — NOT applied; all-GET sensitive-read surface, the plan itself flags it as a product decision; (b) `user-credentials.ts` — NOT gated; it's correctly user-scoped (report 01 marks it "needs gate? N"), so admin-gating would break members managing their own keys. Verify: backend `tsc` 0; live route tests are env-gated (run in CI). |
 | **BE-04** | Split `services/formatting-rules.ts` (1,049 lines) into `formatting-rules/{index,rules/*,validators}.ts` | M | Low | Strong existing test file reduces risk; fully independent of BE-01 |
 | **BE-05** | Split `services/widget-health-checker.ts` (542 lines, one 392-line function) into `browser-session.ts`/`widget-interaction.ts`/`result-assembly.ts` | M | Medium | Puppeteer/timing tests are flakier — budget de-flaking time |
 | **BE-06** | Section-comment (then optionally split) `integrations/devs-ai/client.ts` (532 lines, ~28 methods across 5 API surfaces) | S→M | Low | Start with the zero-risk section-comment step |
@@ -489,6 +489,17 @@ FE-03…FE-08 / FE-P2 (`AiMatcherPage`, `SettingsPage`, `HealthCheck*`, `Lovable
 |---|---|---|---|---|---|---|
 | **FE-13** | Further split oversized `processing-jobs/` extracts still over `max-lines@500`: `JobsTab` (~908), `AnalyticsTab` (~987), `SchemaValidationPanel` (~632), `RuleSetsTab` (~579) — keep the FE-01 overrides until each drops under the threshold | Frontend | P2 | L | Medium | Not Started |
 | **FE-14** | Split `ai-profiles/ProfileFormModal.tsx` (~530 lines) further (form subpanels / sections) so it can leave the max-lines override list — leftover from FE-02 structural split, surfaced when FE-01's rule landed on current `feat/cadence` | Frontend | P2 | M | Low | Not Started |
+
+### 4.9 Newly discovered / deferred — BE-03 supervisor review (`refactor/be-03-rbac`)
+
+Two GET-side scope calls the plan itself flagged as product decisions (risk register: "RBAC fix accidentally
+over-gates a route that should stay member-readable"). BE-03 deliberately did NOT gate these; they need
+sign-off before any change. Neither blocks BE-03 Done (which gated only mutating routes).
+
+| ID | Item | Area | Priority | Effort | Risk | Status |
+|---|---|---|---|---|---|---|
+| **BE-03a** | Product decision: should `diagnostic-logs.ts` GET routes be gated to owner/admin? They may contain sensitive prompt/response content (report 01 marks "needs gate? Y"), but they are reads — gating them is a UX/policy call, not pure engineering. If yes: add `router.use(requireRole('owner','admin'))` (all its routes are reads of the same sensitivity) + a negative test. | Backend | P2 | S | Low (once decided) | Not Started — needs product sign-off |
+| **BE-03b** | Confirm `user-credentials.ts` should stay **un-gated** (a member managing their OWN provider keys is legitimate; it is already `user_id`-scoped and report 01 marks "needs gate? N"). Logged only so a future audit doesn't re-flag it as a gap and "fix" it into a broken member flow. | Backend | P3 | — | — | Won't Fix (by design) unless product says otherwise |
 
 ---
 

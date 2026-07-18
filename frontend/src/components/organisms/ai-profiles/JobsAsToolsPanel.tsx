@@ -59,9 +59,7 @@ export default function JobsAsToolsPanel({ toolJobs, setToolJobs, processingJobs
               style={{ flex: 1 }}
               value={row.exposeAs}
               onChange={(e) =>
-                setToolJobs((prev) =>
-                  prev.map((r, i) => (i === index ? { ...r, exposeAs: e.currentTarget.value } : r)),
-                )
+                setToolJobs((prev) => prev.map((r, i) => (i === index ? { ...r, exposeAs: e.currentTarget.value } : r)))
               }
             />
             <TextInput

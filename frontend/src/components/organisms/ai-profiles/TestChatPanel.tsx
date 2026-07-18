@@ -523,7 +523,13 @@ export default function TestChatPanel({ profileId, profileName, profile }: TestC
                 Authorize
               </Button>
             )}
-            <Button size="compact-xs" variant="light" color="green" onClick={handleResumeAfterAuth} disabled={isStreaming}>
+            <Button
+              size="compact-xs"
+              variant="light"
+              color="green"
+              onClick={handleResumeAfterAuth}
+              disabled={isStreaming}
+            >
               Resume after auth
             </Button>
           </Group>

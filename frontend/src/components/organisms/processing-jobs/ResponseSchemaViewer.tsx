@@ -22,7 +22,11 @@ import { IconChevronDown, IconCopy } from '@tabler/icons-react';
 import { buildFieldSnippet, buildFullSchemaSnippet, copyToClipboard } from './schemaSnippets';
 import type { ExpectedSchema, SchemaFieldDefExtended } from './types';
 
-export default function ResponseSchemaViewer({ expectedSchema }: { expectedSchema: ExpectedSchema | null | undefined }) {
+export default function ResponseSchemaViewer({
+  expectedSchema,
+}: {
+  expectedSchema: ExpectedSchema | null | undefined;
+}) {
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
 

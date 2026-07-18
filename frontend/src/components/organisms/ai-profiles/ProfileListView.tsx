@@ -44,8 +44,7 @@ import AiProfileCard from '../../molecules/AiProfileCard';
 import type { AiProfile } from '../../../types/api';
 
 type FilteredAndGrouped =
-  | { type: 'flat'; items: AiProfile[] }
-  | { type: 'grouped'; groups: Array<{ label: string; items: AiProfile[] }> };
+  { type: 'flat'; items: AiProfile[] } | { type: 'grouped'; groups: Array<{ label: string; items: AiProfile[] }> };
 
 export interface ProfileListViewProps {
   profiles: AiProfile[];

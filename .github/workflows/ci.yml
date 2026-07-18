@@ -68,6 +68,11 @@ jobs:
       AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY }}
       CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.CREDENTIAL_ENCRYPTION_KEY }}
       DEVS_AI_API_KEY: ${{ secrets.DEVS_AI_API_KEY }}
+      # backend/test/setup.ts authenticates every integration test with this API key (its own
+      # error message promises "CI sets TEST_API_KEY automatically"); it was never actually
+      # wired here, so all 35 setup.ts-importing suites threw at import. Must be an owner/admin
+      # -role key provisioned in the AI Manager test Supabase project (BE-03 gates admin routes).
+      TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
