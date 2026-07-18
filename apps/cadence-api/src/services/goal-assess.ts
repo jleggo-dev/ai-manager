@@ -29,7 +29,13 @@ export async function assessGoal(userId: string, goalId: string): Promise<GoalAs
   const user = await getUser(userId);
 
   const res = await runJobBySlug(userId, 'assess-goal', {
-    goal: JSON.stringify({ title: goal.title, area: goal.area, type: goal.type, measure: goal.measure, timeframe: goal.timeframe }),
+    goal: JSON.stringify({
+      title: goal.title,
+      area: goal.area,
+      type: goal.type,
+      measure: goal.measure,
+      timeframe: goal.timeframe,
+    }),
     baseline: JSON.stringify(user?.baseline ?? {}),
   });
   const p = parseJson(res.formatted ?? res.raw ?? '');
@@ -37,7 +43,9 @@ export async function assessGoal(userId: string, goalId: string): Promise<GoalAs
 
   const st = p.suggested_target as { value?: unknown; unit?: unknown } | null | undefined;
   const assessment: GoalAssessment = {
-    verdict: VERDICTS.has(p.verdict as GoalAssessment['verdict']) ? (p.verdict as GoalAssessment['verdict']) : 'stretch',
+    verdict: VERDICTS.has(p.verdict as GoalAssessment['verdict'])
+      ? (p.verdict as GoalAssessment['verdict'])
+      : 'stretch',
     assessment: typeof p.assessment === 'string' ? p.assessment.trim() : '',
     suggested_target:
       st && typeof st === 'object' && typeof st.value === 'number'
@@ -46,7 +54,10 @@ export async function assessGoal(userId: string, goalId: string): Promise<GoalAs
     suggested_end: typeof p.suggested_end === 'string' && ISO_DATE.test(p.suggested_end) ? p.suggested_end : null,
     milestones: Array.isArray(p.milestones)
       ? (p.milestones as unknown[])
-          .filter((m): m is { label: string; target_date?: unknown } => !!m && typeof (m as { label?: unknown }).label === 'string')
+          .filter(
+            (m): m is { label: string; target_date?: unknown } =>
+              !!m && typeof (m as { label?: unknown }).label === 'string',
+          )
           .map((m) => ({
             label: String(m.label).trim(),
             target_date: typeof m.target_date === 'string' && ISO_DATE.test(m.target_date) ? m.target_date : undefined,
@@ -56,6 +67,11 @@ export async function assessGoal(userId: string, goalId: string): Promise<GoalAs
       : [],
   };
 
-  void logAi(userId, { kind: 'assess_goal', input: { goalId, title: goal.title }, output: assessment, meta: { verdict: assessment.verdict } });
+  void logAi(userId, {
+    kind: 'assess_goal',
+    input: { goalId, title: goal.title },
+    output: assessment,
+    meta: { verdict: assessment.verdict },
+  });
   return assessment;
 }

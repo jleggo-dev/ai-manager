@@ -18,7 +18,10 @@ export function ProgressView() {
   const [addLabel, setAddLabel] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const load = () => getProgress().then(setData).catch(() => setErr(true));
+  const load = () =>
+    getProgress()
+      .then(setData)
+      .catch(() => setErr(true));
   useEffect(() => {
     load();
   }, []);
@@ -40,7 +43,9 @@ export function ProgressView() {
   if (err) {
     return (
       <div className="scrollbody">
-        <div className="wiz-empty" style={{ marginTop: 24 }}>Couldn't load your progress just now — hop to another tab and back.</div>
+        <div className="wiz-empty" style={{ marginTop: 24 }}>
+          Couldn't load your progress just now — hop to another tab and back.
+        </div>
       </div>
     );
   }
@@ -48,7 +53,11 @@ export function ProgressView() {
     return (
       <div className="scrollbody">
         <div className="chat-loading">
-          <span className="typing"><i /><i /><i /></span>
+          <span className="typing">
+            <i />
+            <i />
+            <i />
+          </span>
         </div>
       </div>
     );
@@ -58,14 +67,18 @@ export function ProgressView() {
 
   const Card = ({ c }: { c: ProgressCard }) => {
     if (c.kind === 'latest_vs_target') {
-      const dir = c.start !== null && c.latest !== null ? (c.latest < c.start ? '↓' : c.latest > c.start ? '↑' : '→') : '';
+      const dir =
+        c.start !== null && c.latest !== null ? (c.latest < c.start ? '↓' : c.latest > c.start ? '↑' : '→') : '';
       return (
         <div className="prog-card">
           <div className="prog-title">{c.title}</div>
           <div className="prog-big">
-            {c.latest ?? '—'} <span className="prog-unit">{c.unit}</span> {dir && <span className="prog-dir">{dir}</span>}
+            {c.latest ?? '—'} <span className="prog-unit">{c.unit}</span>{' '}
+            {dir && <span className="prog-dir">{dir}</span>}
           </div>
-          <div className="prog-sub">{c.start !== null ? `started ${c.start}` : 'no starting point yet'} · target {c.target}</div>
+          <div className="prog-sub">
+            {c.start !== null ? `started ${c.start}` : 'no starting point yet'} · target {c.target}
+          </div>
           {c.series.length >= 2 && <Sparkline series={c.series} good="down" />}
         </div>
       );
@@ -75,7 +88,10 @@ export function ProgressView() {
         <div className="prog-card">
           <div className="prog-title">{c.title}</div>
           <div className="prog-big">
-            {c.current}<span className="prog-unit">/{c.target} {c.unit}</span>
+            {c.current}
+            <span className="prog-unit">
+              /{c.target} {c.unit}
+            </span>
           </div>
           <CountBar current={c.current} target={c.target} />
           {addFor === c.goal_id ? (
@@ -89,10 +105,20 @@ export function ProgressView() {
                 disabled={busy}
                 autoFocus
               />
-              <button className="logbox-btn" onClick={() => submitAdd(c.goal_id)} disabled={busy || !addLabel.trim()}>Add</button>
+              <button className="logbox-btn" onClick={() => submitAdd(c.goal_id)} disabled={busy || !addLabel.trim()}>
+                Add
+              </button>
             </div>
           ) : (
-            <button className="prog-addbtn" onClick={() => { setAddFor(c.goal_id); setAddLabel(''); }}>+ add one</button>
+            <button
+              className="prog-addbtn"
+              onClick={() => {
+                setAddFor(c.goal_id);
+                setAddLabel('');
+              }}
+            >
+              + add one
+            </button>
           )}
         </div>
       );
@@ -102,10 +128,12 @@ export function ProgressView() {
         <div className="prog-card">
           <div className="prog-title">{c.title}</div>
           <div className="prog-big">
-            {c.days_left}<span className="prog-unit"> days out</span>
+            {c.days_left}
+            <span className="prog-unit"> days out</span>
           </div>
           <div className="prog-sub">
-            {c.milestones_total > 0 ? `stepping-stones ${c.milestones_done}/${c.milestones_total} · ` : ''}{c.end}
+            {c.milestones_total > 0 ? `stepping-stones ${c.milestones_done}/${c.milestones_total} · ` : ''}
+            {c.end}
           </div>
         </div>
       );
@@ -114,7 +142,8 @@ export function ProgressView() {
       <div className="prog-card">
         <div className="prog-title">{c.title}</div>
         <div className="prog-big">
-          {c.kept}<span className="prog-unit"> of {c.window} days</span>
+          {c.kept}
+          <span className="prog-unit"> of {c.window} days</span>
         </div>
         <div className="prog-sub">this week — a missed day is information, not failure</div>
       </div>
@@ -125,30 +154,47 @@ export function ProgressView() {
     <div className="scrollbody">
       {empty ? (
         <>
-          <div className="screen-title" style={{ marginTop: 10 }}>Progress</div>
-          <div className="screen-sub">Keep logging sessions and weigh-ins — your trends and wins will show up here as real data accumulates.</div>
+          <div className="screen-title" style={{ marginTop: 10 }}>
+            Progress
+          </div>
+          <div className="screen-sub">
+            Keep logging sessions and weigh-ins — your trends and wins will show up here as real data accumulates.
+          </div>
         </>
       ) : (
         <>
-          {data.cards.map((c, i) => <Card key={i} c={c} />)}
+          {data.cards.map((c, i) => (
+            <Card key={i} c={c} />
+          ))}
 
-          {data.trends.length > 0 && <div className="plan-week-label" style={{ marginTop: 16 }}>Trends</div>}
+          {data.trends.length > 0 && (
+            <div className="plan-week-label" style={{ marginTop: 16 }}>
+              Trends
+            </div>
+          )}
           {data.trends.map((t: ProgressTrend, i) => (
             <div className="prog-card" key={`t${i}`}>
               <div className="prog-title">{t.title}</div>
               <div className="prog-trend-row">
                 <div>
                   <div className="prog-big">
-                    {t.series[t.series.length - 1]!.value}<span className="prog-unit"> {t.unit}</span>
+                    {t.series[t.series.length - 1]!.value}
+                    <span className="prog-unit"> {t.unit}</span>
                   </div>
-                  <div className="prog-sub">{t.label.toLowerCase()} · was {t.series[0]!.value} {t.unit}</div>
+                  <div className="prog-sub">
+                    {t.label.toLowerCase()} · was {t.series[0]!.value} {t.unit}
+                  </div>
                 </div>
                 <Sparkline series={t.series} good={t.direction_good} />
               </div>
             </div>
           ))}
 
-          {data.history.length > 0 && <div className="plan-week-label" style={{ marginTop: 16 }}>History</div>}
+          {data.history.length > 0 && (
+            <div className="plan-week-label" style={{ marginTop: 16 }}>
+              History
+            </div>
+          )}
           {data.history.map((h, i) => (
             <div className="hist-row" key={`h${i}`}>
               <span className={`hist-dot${h.kind === 'event' ? ' hist-dot-event' : ''}`} />

@@ -3,7 +3,16 @@
  * from CADENCE_DEV_USER_ID, so no token is required; later, set the Supabase JWT via
  * setAuthToken. NEVER calls AI Admin directly and NEVER holds aim_sk_.
  */
-import type { Goal, Equipment, Baseline, GoalAssessment, PendingPlanActivity, OccurrenceSession, OccurrenceLog, ProgressData } from '@cadence/shared';
+import type {
+  Goal,
+  Equipment,
+  Baseline,
+  GoalAssessment,
+  PendingPlanActivity,
+  OccurrenceSession,
+  OccurrenceLog,
+  ProgressData,
+} from '@cadence/shared';
 
 const BASE = import.meta.env.VITE_CADENCE_API_BASE ?? '/api';
 
@@ -192,7 +201,11 @@ export async function getPlan(): Promise<PlanViewData> {
 }
 
 export async function setOccurrence(id: string, status: 'pending' | 'done' | 'skipped'): Promise<void> {
-  await fetch(`${BASE}/plan/occurrences/${id}`, { method: 'POST', headers: headers(), body: JSON.stringify({ status }) });
+  await fetch(`${BASE}/plan/occurrences/${id}`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ status }),
+  });
 }
 
 /* ── Occurrence session detail (the Prescribe → Log → Adapt sheet) ─── */
@@ -318,7 +331,11 @@ export async function patchMeal(
 
 /** Confirm/edit daily macro targets (the user's tap; unlocks "left" + rings). */
 export async function setMacroTargets(targets: MealMacros): Promise<MealMacros | null> {
-  const res = await fetch(`${BASE}/nutrition/targets`, { method: 'PUT', headers: headers(), body: JSON.stringify(targets) });
+  const res = await fetch(`${BASE}/nutrition/targets`, {
+    method: 'PUT',
+    headers: headers(),
+    body: JSON.stringify(targets),
+  });
   if (!res.ok) return null;
   return (await res.json()).targets;
 }
@@ -378,7 +395,13 @@ export async function recordWeighIn(id: string, weight: number, unit: 'kg' | 'lb
 }
 
 /** Confirm the previewed "Adjust my plan" adjustment (or run it fresh if nothing was previewed). */
-export async function replan(): Promise<{ status: string; version?: number; activities?: number; note?: string; violations?: string[] }> {
+export async function replan(): Promise<{
+  status: string;
+  version?: number;
+  activities?: number;
+  note?: string;
+  violations?: string[];
+}> {
   const res = await fetch(`${BASE}/plan/replan`, { method: 'POST', headers: headers() });
   return res.json();
 }
@@ -411,7 +434,13 @@ export async function dismissReplanPreview(): Promise<void> {
  * the banner's `reason` + `suggested_levers` are already shown before Accept, so that IS the
  * consent moment; a second preview here would just be redundant friction.
  */
-export async function acceptProposal(): Promise<{ status: string; version?: number; activities?: number; note?: string; violations?: string[] }> {
+export async function acceptProposal(): Promise<{
+  status: string;
+  version?: number;
+  activities?: number;
+  note?: string;
+  violations?: string[];
+}> {
   const res = await fetch(`${BASE}/plan/proposal/accept`, { method: 'POST', headers: headers() });
   return res.json();
 }
@@ -482,7 +511,11 @@ export async function deleteEquipmentItem(id: string): Promise<void> {
   await fetch(`${BASE}/review/equipment/${id}`, { method: 'DELETE', headers: headers() });
 }
 export async function addEquipment(fields: Partial<Equipment>): Promise<Equipment> {
-  const res = await fetch(`${BASE}/review/equipment`, { method: 'POST', headers: headers(), body: JSON.stringify(fields) });
+  const res = await fetch(`${BASE}/review/equipment`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(fields),
+  });
   if (!res.ok) throw new Error(`addEquipment failed: ${res.status}`);
   return res.json();
 }
@@ -514,7 +547,13 @@ export interface DevTrace {
     provenance: Array<{ fn: string; rows: number; params: Record<string, unknown>; at?: string }>;
     fallback?: boolean;
   } | null;
-  coach?: { user: string; reply: string; model: string | null; promptTokens: number | null; completionTokens: number | null } | null;
+  coach?: {
+    user: string;
+    reply: string;
+    model: string | null;
+    promptTokens: number | null;
+    completionTokens: number | null;
+  } | null;
   capture?: unknown;
 }
 

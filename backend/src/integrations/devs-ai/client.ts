@@ -9,13 +9,8 @@
  * Auth:     Authorization: Bearer {apiKey}
  */
 
-import type {
-  ChatMessage,
-  ChatCompletionResponse,
-  ChatCompletionChoice,
-  PatchedResponse,
-} from "../../types.ts";
-import { toOpenAiWireMessages } from "../../lib/message-content.ts";
+import type { ChatMessage, ChatCompletionResponse, ChatCompletionChoice, PatchedResponse } from '../../types.ts';
+import { toOpenAiWireMessages } from '../../lib/message-content.ts';
 
 type DevsAiEntity = Record<string, unknown>;
 
@@ -44,7 +39,7 @@ export class DevsAiClient {
   apiKey: string;
 
   constructor(baseUrl: string, apiKey: string) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.apiKey = apiKey;
   }
 
@@ -53,7 +48,7 @@ export class DevsAiClient {
   /** Build the standard auth headers. */
   _headers(extra: Record<string, string> = {}): Record<string, string> {
     return {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       Authorization: `Bearer ${this.apiKey}`,
       ...extra,
     };
@@ -77,7 +72,7 @@ export class DevsAiClient {
     }
     if (body && extra.rawBody === true) {
       options.body = body as BodyInit;
-      delete (options.headers as Record<string, string>)["Content-Type"];
+      delete (options.headers as Record<string, string>)['Content-Type'];
     }
 
     let controller: AbortController | undefined;
@@ -93,7 +88,7 @@ export class DevsAiClient {
     try {
       response = await fetch(url, options);
     } catch (err: unknown) {
-      if ((err as Error).name === "AbortError") {
+      if ((err as Error).name === 'AbortError') {
         throw new Error(`Devs.ai API request timed out after ${timeoutMs}ms`, {
           cause: err,
         });
@@ -109,9 +104,8 @@ export class DevsAiClient {
     }
 
     if (response.status === 204) return null as T;
-    const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("application/json"))
-      return response.json() as Promise<T>;
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) return response.json() as Promise<T>;
     const text = await response.text();
     if (!text) return null as T;
     try {
@@ -126,10 +120,8 @@ export class DevsAiClient {
   /**
    * List all AIs visible to the authenticated user.
    */
-  async listAIs(
-    scope: "ALL" | "OWNED" | "SHARED" = "ALL",
-  ): Promise<DevsAiEntity[]> {
-    return this._request<DevsAiEntity[]>("GET", `/api/v1/me/ai?scope=${scope}`);
+  async listAIs(scope: 'ALL' | 'OWNED' | 'SHARED' = 'ALL'): Promise<DevsAiEntity[]> {
+    return this._request<DevsAiEntity[]>('GET', `/api/v1/me/ai?scope=${scope}`);
   }
 
   /**
@@ -137,26 +129,26 @@ export class DevsAiClient {
    * Tries common model-list endpoints and normalizes responses.
    */
   async listModels(): Promise<string[]> {
-    const paths = ["/api/v1/models", "/v1/models"];
+    const paths = ['/api/v1/models', '/v1/models'];
     let lastErr: Error | null = null;
 
     for (const path of paths) {
       try {
-        const payload = await this._request("GET", path);
+        const payload = await this._request('GET', path);
         return normalizeModelListPayload(payload);
       } catch (err: unknown) {
         lastErr = err as Error;
       }
     }
 
-    throw lastErr || new Error("Unable to list models from Devs.ai");
+    throw lastErr || new Error('Unable to list models from Devs.ai');
   }
 
   /**
    * Get details for a specific AI.
    */
   async getAI(aiId: string): Promise<DevsAiEntity> {
-    return this._request("GET", `/api/v1/ai/${aiId}`);
+    return this._request('GET', `/api/v1/ai/${aiId}`);
   }
 
   /* ── Chat Completions ──────────────────────────────────────── */
@@ -171,8 +163,8 @@ export class DevsAiClient {
   ): Promise<ChatCompletionResponse> {
     const { timeoutMs, ...chatBody } = options;
     const data = await this._request<DevsAiRawCompletion>(
-      "POST",
-      "/api/v1/chat/completions",
+      'POST',
+      '/api/v1/chat/completions',
       {
         model,
         // Multimodal parts are mapped to the OpenAI-compat wire dialect; plain text passes through.
@@ -185,17 +177,14 @@ export class DevsAiClient {
 
     if (!data.usage) {
       console.debug(
-        "[DevsAiClient] chatCompletion response has no usage field — token tracking unavailable for this call",
+        '[DevsAiClient] chatCompletion response has no usage field — token tracking unavailable for this call',
       );
     } else {
       data.usage = {
         prompt_tokens: data.usage.prompt_tokens ?? null,
         completion_tokens: data.usage.completion_tokens ?? null,
         total_tokens:
-          data.usage.total_tokens ??
-          ((data.usage.prompt_tokens || 0) +
-            (data.usage.completion_tokens || 0) ||
-            null),
+          data.usage.total_tokens ?? ((data.usage.prompt_tokens || 0) + (data.usage.completion_tokens || 0) || null),
       };
     }
 
@@ -223,7 +212,7 @@ export class DevsAiClient {
     let response: globalThis.Response;
     try {
       response = await fetch(`${this.baseUrl}/api/v1/chat/completions`, {
-        method: "POST",
+        method: 'POST',
         headers: this._headers(),
         body: JSON.stringify({
           model,
@@ -235,11 +224,8 @@ export class DevsAiClient {
       });
     } catch (err: unknown) {
       if (timer) clearTimeout(timer);
-      if ((err as Error).name === "AbortError") {
-        throw new Error(
-          `Devs.ai streaming completion timed out after ${timeoutMs}ms`,
-          { cause: err },
-        );
+      if ((err as Error).name === 'AbortError') {
+        throw new Error(`Devs.ai streaming completion timed out after ${timeoutMs}ms`, { cause: err });
       }
       throw err;
     }
@@ -247,9 +233,7 @@ export class DevsAiClient {
     if (!response.ok) {
       if (timer) clearTimeout(timer);
       const errorText = await response.text();
-      throw new Error(
-        `Devs.ai streaming completion error (${response.status}): ${errorText}`,
-      );
+      throw new Error(`Devs.ai streaming completion error (${response.status}): ${errorText}`);
     }
 
     (response as PatchedResponse)._abortTimer = timer;
@@ -263,7 +247,7 @@ export class DevsAiClient {
    * Create a new chat session for an AI agent.
    */
   async createChatSession(aiId: string): Promise<DevsAiEntity> {
-    return this._request("POST", `/api/v1/ai/${aiId}/chats`);
+    return this._request('POST', `/api/v1/ai/${aiId}/chats`);
   }
 
   /**
@@ -293,14 +277,14 @@ export class DevsAiClient {
     let response: globalThis.Response;
     try {
       response = await fetch(url, {
-        method: "POST",
+        method: 'POST',
         headers: this._headers(),
         body: JSON.stringify(body),
         signal: controller?.signal,
       });
     } catch (err: unknown) {
       if (timer) clearTimeout(timer);
-      if ((err as Error).name === "AbortError") {
+      if ((err as Error).name === 'AbortError') {
         throw new Error(`Devs.ai chat message timed out after ${timeoutMs}ms`, {
           cause: err,
         });
@@ -311,9 +295,7 @@ export class DevsAiClient {
     if (!response.ok) {
       if (timer) clearTimeout(timer);
       const errorText = await response.text();
-      throw new Error(
-        `Devs.ai chat message error (${response.status}): ${errorText}`,
-      );
+      throw new Error(`Devs.ai chat message error (${response.status}): ${errorText}`);
     }
 
     (response as PatchedResponse)._abortTimer = timer;
@@ -325,31 +307,28 @@ export class DevsAiClient {
    * Get a chat session with full message history.
    */
   async getChatSession(chatId: string): Promise<DevsAiEntity> {
-    return this._request("GET", `/api/v1/chats/${chatId}`);
+    return this._request('GET', `/api/v1/chats/${chatId}`);
   }
 
   /**
    * Reset (clear) a chat session's conversation history.
    */
   async resetChatSession(chatId: string): Promise<DevsAiEntity> {
-    return this._request("PUT", `/api/v1/chats/${chatId}/reset`);
+    return this._request('PUT', `/api/v1/chats/${chatId}/reset`);
   }
 
   /**
    * Delete a chat session.
    */
   async deleteChatSession(chatId: string): Promise<null> {
-    return this._request("DELETE", `/api/v1/chats/${chatId}`);
+    return this._request('DELETE', `/api/v1/chats/${chatId}`);
   }
 
   /**
    * List all chat sessions for an AI agent.
    */
   async listChatSessions(aiId: string): Promise<DevsAiEntity[]> {
-    const payload = await this._request<{ data?: DevsAiEntity[] }>(
-      "GET",
-      `/api/v1/ai/${aiId}/chats`,
-    );
+    const payload = await this._request<{ data?: DevsAiEntity[] }>('GET', `/api/v1/ai/${aiId}/chats`);
     return Array.isArray(payload?.data) ? payload.data : [];
   }
 
@@ -359,44 +338,42 @@ export class DevsAiClient {
    * List all tools configured on an AI agent.
    */
   async listTools(aiId: string): Promise<DevsAiEntity[]> {
-    return this._request("GET", `/api/v1/ai/${aiId}/tools`);
+    return this._request('GET', `/api/v1/ai/${aiId}/tools`);
   }
 
   /**
    * List MCP server tools configured on an AI agent.
    */
   async listMcpTools(aiId: string): Promise<DevsAiEntity[]> {
-    return this._request("GET", `/api/v1/ai/${aiId}/tools/mcp`);
+    return this._request('GET', `/api/v1/ai/${aiId}/tools/mcp`);
   }
 
   /**
    * List OAuth status for all tools on an AI agent.
    */
   async listToolAuthStatus(aiId: string): Promise<DevsAiEntity[]> {
-    return this._request("GET", `/api/v1/ai/${aiId}/tools/auth`);
+    return this._request('GET', `/api/v1/ai/${aiId}/tools/auth`);
   }
 
   /**
    * Check OAuth status for a specific tool.
    */
-  async getToolOAuthStatus(
-    toolId: string,
-  ): Promise<{ hasToken: boolean; scopes?: string }> {
-    return this._request("GET", `/api/v1/tools/${toolId}/oauth-status`);
+  async getToolOAuthStatus(toolId: string): Promise<{ hasToken: boolean; scopes?: string }> {
+    return this._request('GET', `/api/v1/tools/${toolId}/oauth-status`);
   }
 
   /**
    * Initiate an OAuth flow for a tool (returns an authorization URL).
    */
   async initiateToolOAuth(toolId: string): Promise<{ authUrl: string }> {
-    return this._request("POST", `/api/v1/tools/${toolId}/oauth-initiate`);
+    return this._request('POST', `/api/v1/tools/${toolId}/oauth-initiate`);
   }
 
   /**
    * Delete (revoke) OAuth token for a tool.
    */
   async deleteToolOAuthToken(toolId: string): Promise<null> {
-    return this._request("DELETE", `/api/v1/tools/${toolId}/oauth-token`);
+    return this._request('DELETE', `/api/v1/tools/${toolId}/oauth-token`);
   }
 
   /**
@@ -408,7 +385,7 @@ export class DevsAiClient {
     oauthDiscovery?: unknown;
     requiresToolSave?: boolean;
   }> {
-    return this._request("POST", "/api/v1/tools/mcp/preview", config);
+    return this._request('POST', '/api/v1/tools/mcp/preview', config);
   }
 
   /**
@@ -435,18 +412,15 @@ export class DevsAiClient {
     let response: globalThis.Response;
     try {
       response = await fetch(url, {
-        method: "POST",
+        method: 'POST',
         headers: this._headers(),
         body: JSON.stringify(body),
         signal: controller?.signal,
       });
     } catch (err: unknown) {
       if (timer) clearTimeout(timer);
-      if ((err as Error).name === "AbortError") {
-        throw new Error(
-          `Devs.ai tool output submission timed out after ${timeoutMs}ms`,
-          { cause: err },
-        );
+      if ((err as Error).name === 'AbortError') {
+        throw new Error(`Devs.ai tool output submission timed out after ${timeoutMs}ms`, { cause: err });
       }
       throw err;
     }
@@ -454,9 +428,7 @@ export class DevsAiClient {
     if (!response.ok) {
       if (timer) clearTimeout(timer);
       const errorText = await response.text();
-      throw new Error(
-        `Devs.ai tool output error (${response.status}): ${errorText}`,
-      );
+      throw new Error(`Devs.ai tool output error (${response.status}): ${errorText}`);
     }
 
     (response as PatchedResponse)._abortTimer = timer;
@@ -483,15 +455,12 @@ export class DevsAiClient {
     url: string;
     status: string;
   }> {
-    const blob =
-      fileData instanceof Blob
-        ? fileData
-        : new Blob([new Uint8Array(fileData)], { type: mimeType });
+    const blob = fileData instanceof Blob ? fileData : new Blob([new Uint8Array(fileData)], { type: mimeType });
     const form = new FormData();
-    form.append("file", blob, fileName);
-    form.append("source", "USER");
+    form.append('file', blob, fileName);
+    form.append('source', 'USER');
 
-    return this._request("POST", `/api/v1/chats/${chatId}/files`, form, {
+    return this._request('POST', `/api/v1/chats/${chatId}/files`, form, {
       rawBody: true,
     });
   }
@@ -500,10 +469,7 @@ export class DevsAiClient {
    * List all files (USER-uploaded and SYSTEM-generated) in a chat session.
    */
   async listChatFiles(chatId: string): Promise<ChatFileRecord[]> {
-    const payload = await this._request<{ data?: ChatFileRecord[] }>(
-      "GET",
-      `/api/v1/chats/${chatId}/files`,
-    );
+    const payload = await this._request<{ data?: ChatFileRecord[] }>('GET', `/api/v1/chats/${chatId}/files`);
     return Array.isArray(payload?.data) ? payload.data : [];
   }
 
@@ -516,66 +482,50 @@ export class DevsAiClient {
     mimeType: string;
     metadata?: Record<string, unknown>;
   }): Promise<DevsAiEntity> {
-    return this._request("POST", "/api/v1/files", fileInfo);
+    return this._request('POST', '/api/v1/files', fileInfo);
   }
 
   /* ── Data Sources ─────────────────────────────────────────── */
 
   /** List datasources attached to an AI agent. */
   async listAiDataSources(aiId: string): Promise<DevsAiEntity[]> {
-    const payload = await this._request<{ data?: DevsAiEntity[] }>(
-      "GET",
-      `/api/v1/ai/${aiId}/data-sources`,
-    );
+    const payload = await this._request<{ data?: DevsAiEntity[] }>('GET', `/api/v1/ai/${aiId}/data-sources`);
     return Array.isArray(payload?.data) ? payload.data : [];
   }
 
   /** Delete a datasource by id. */
   async deleteDataSource(dataSourceId: string): Promise<null> {
-    return this._request("DELETE", `/api/v1/data-sources/${dataSourceId}`);
+    return this._request('DELETE', `/api/v1/data-sources/${dataSourceId}`);
   }
 
   /** Create API datasource for an AI agent. */
-  async createApiDataSource(
-    aiId: string,
-    name: string,
-    data: Record<string, unknown>,
-  ): Promise<DevsAiEntity> {
-    return this._request("POST", `/api/v1/ai/${aiId}/data-sources/api`, {
+  async createApiDataSource(aiId: string, name: string, data: Record<string, unknown>): Promise<DevsAiEntity> {
+    return this._request('POST', `/api/v1/ai/${aiId}/data-sources/api`, {
       name,
       data,
     });
   }
 
   /** Trigger datasource refresh/indexing. */
-  async refreshDataSource(
-    dataSourceId: string,
-    forceRefresh: boolean = true,
-  ): Promise<DevsAiEntity> {
-    const force = forceRefresh ? "true" : "false";
-    return this._request(
-      "PUT",
-      `/api/v1/data-sources/${dataSourceId}/refresh?forceRefresh=${force}`,
-    );
+  async refreshDataSource(dataSourceId: string, forceRefresh: boolean = true): Promise<DevsAiEntity> {
+    const force = forceRefresh ? 'true' : 'false';
+    return this._request('PUT', `/api/v1/data-sources/${dataSourceId}/refresh?forceRefresh=${force}`);
   }
 }
 
 /**
  * Convenience: create a client from environment-based config.
  */
-export function createDevsAiClient(devsAiConfig: {
-  baseUrl: string;
-  apiKey: string;
-}): DevsAiClient {
+export function createDevsAiClient(devsAiConfig: { baseUrl: string; apiKey: string }): DevsAiClient {
   return new DevsAiClient(devsAiConfig.baseUrl, devsAiConfig.apiKey);
 }
 
 function extractModelId(row: unknown): string | undefined {
-  if (typeof row === "string") return row;
-  if (typeof row === "object" && row !== null) {
+  if (typeof row === 'string') return row;
+  if (typeof row === 'object' && row !== null) {
     const r = row as Record<string, unknown>;
     const id = r.id ?? r.model ?? r.name;
-    return typeof id === "string" ? id : undefined;
+    return typeof id === 'string' ? id : undefined;
   }
   return undefined;
 }
@@ -585,7 +535,7 @@ function normalizeModelListPayload(payload: unknown): string[] {
     return payload.map(extractModelId).filter((v): v is string => Boolean(v));
   }
 
-  if (typeof payload !== "object" || payload === null) return [];
+  if (typeof payload !== 'object' || payload === null) return [];
   const obj = payload as Record<string, unknown>;
 
   const data = Array.isArray(obj.data) ? (obj.data as unknown[]) : [];

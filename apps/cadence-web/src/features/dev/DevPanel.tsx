@@ -54,7 +54,13 @@ export function DevPanel() {
   const [t, setT] = useState<DevTrace | null>(null);
   const [log, setLog] = useState<AiLogEntry[]>([]);
   const [err, setErr] = useState('');
-  const [open, setOpen] = useState<Record<Section, boolean>>({ ctx: true, prompts: true, coach: true, broker: true, history: false });
+  const [open, setOpen] = useState<Record<Section, boolean>>({
+    ctx: true,
+    prompts: true,
+    coach: true,
+    broker: true,
+    history: false,
+  });
   const toggle = (k: Section) => setOpen((o) => ({ ...o, [k]: !o[k] }));
 
   useEffect(() => {
@@ -88,10 +94,12 @@ export function DevPanel() {
         </span>
       </h3>
 
-      {err && <div className="devcard-b" style={{ color: 'var(--danger)' }}>{err}</div>}
-      {empty && !err && (
-        <div className="devnote">No activity yet — send a message in the phone and this fills in.</div>
+      {err && (
+        <div className="devcard-b" style={{ color: 'var(--danger)' }}>
+          {err}
+        </div>
       )}
+      {empty && !err && <div className="devnote">No activity yet — send a message in the phone and this fills in.</div>}
 
       <Card title="1 · Context data (pulled)" tone="green" open={open.ctx} onToggle={() => toggle('ctx')}>
         {ctx ? (
@@ -159,8 +167,12 @@ export function DevPanel() {
             </div>
             {e.kind === 'coach' ? (
               <>
-                <div className="devlog-line"><b>you</b> {String((e.input as { user?: string })?.user ?? '')}</div>
-                <div className="devlog-line"><b>coach</b> {String((e.output as { reply?: string })?.reply ?? '')}</div>
+                <div className="devlog-line">
+                  <b>you</b> {String((e.input as { user?: string })?.user ?? '')}
+                </div>
+                <div className="devlog-line">
+                  <b>coach</b> {String((e.output as { reply?: string })?.reply ?? '')}
+                </div>
               </>
             ) : (
               <Pre dump>{json(e.output ?? e.input)}</Pre>

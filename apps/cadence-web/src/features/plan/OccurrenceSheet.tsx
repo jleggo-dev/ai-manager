@@ -1,6 +1,22 @@
 import { useEffect, useState } from 'react';
 import type { SessionItem } from '@cadence/shared';
-import { getOccurrenceDetail, logOccurrence, recordWeighIn, logMeal, getRecentMeals, getBaselineRead, getNutritionDay, patchMeal, setMacroTargets, type OccurrenceDetail, type Meal, type MealKind, type MealMacros, type BaselineRead, type NutritionDayData } from '../../lib/api.ts';
+import {
+  getOccurrenceDetail,
+  logOccurrence,
+  recordWeighIn,
+  logMeal,
+  getRecentMeals,
+  getBaselineRead,
+  getNutritionDay,
+  patchMeal,
+  setMacroTargets,
+  type OccurrenceDetail,
+  type Meal,
+  type MealKind,
+  type MealMacros,
+  type BaselineRead,
+  type NutritionDayData,
+} from '../../lib/api.ts';
 import { Orb } from '../../components/Orb.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
 
@@ -24,7 +40,8 @@ function qty(i: SessionItem): string {
   return parts.join(' · ');
 }
 
-const ytSearch = (q: string) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q.replace(/\s+/g, ' ').trim())}`;
+const ytSearch = (q: string) =>
+  `https://www.youtube.com/results?search_query=${encodeURIComponent(q.replace(/\s+/g, ' ').trim())}`;
 
 const isFoodRow = (d: OccurrenceDetail | null): boolean =>
   !!d && d.kind === 'system' && /food|meal|nutrition/i.test(d.title);
@@ -34,7 +51,11 @@ function leftLine(m?: MealMacros | null): string {
   if (!m) return '';
   const bits: string[] = [];
   if (m.kcal != null) bits.push(`${m.kcal} kcal`);
-  const pcf = [m.protein_g != null ? `P${Math.round(m.protein_g)}` : '', m.carbs_g != null ? `C${Math.round(m.carbs_g)}` : '', m.fat_g != null ? `F${Math.round(m.fat_g)}` : '']
+  const pcf = [
+    m.protein_g != null ? `P${Math.round(m.protein_g)}` : '',
+    m.carbs_g != null ? `C${Math.round(m.carbs_g)}` : '',
+    m.fat_g != null ? `F${Math.round(m.fat_g)}` : '',
+  ]
     .filter(Boolean)
     .join(' ');
   if (pcf) bits.push(pcf);
@@ -46,7 +67,11 @@ function macroLine(m?: MealMacros): string {
   if (!m?.kcal && !m?.protein_g && !m?.carbs_g && !m?.fat_g) return '';
   const bits: string[] = [];
   if (m.kcal) bits.push(`~${m.kcal} kcal`);
-  const pcf = [m.protein_g ? `P${Math.round(m.protein_g)}` : '', m.carbs_g ? `C${Math.round(m.carbs_g)}` : '', m.fat_g ? `F${Math.round(m.fat_g)}` : '']
+  const pcf = [
+    m.protein_g ? `P${Math.round(m.protein_g)}` : '',
+    m.carbs_g ? `C${Math.round(m.carbs_g)}` : '',
+    m.fat_g ? `F${Math.round(m.fat_g)}` : '',
+  ]
     .filter(Boolean)
     .join(' ');
   if (pcf) bits.push(pcf);
@@ -198,7 +223,11 @@ export function OccurrenceSheet({
     try {
       await recordWeighIn(detail.occurrence_id, w, weightUnit);
       const shown = `${w} ${weightUnit}`;
-      setDetail({ ...detail, status: 'done', log: { items: [], summary: `Weighed in at ${shown}.`, raw_text: shown, logged_at: new Date().toISOString() } });
+      setDetail({
+        ...detail,
+        status: 'done',
+        log: { items: [], summary: `Weighed in at ${shown}.`, raw_text: shown, logged_at: new Date().toISOString() },
+      });
       onLogged?.();
     } catch {
       setLogErr("That didn't save — check the number and try again.");
@@ -271,11 +300,17 @@ export function OccurrenceSheet({
         <div className="sheet-grab" aria-hidden />
         {state === 'loading' ? (
           <div className="sheet-loading">
-            <span className="typing"><i /><i /><i /></span>
+            <span className="typing">
+              <i />
+              <i />
+              <i />
+            </span>
             <span className="sheet-loading-t">Putting your session together…</span>
           </div>
         ) : state === 'gone' ? (
-          <div className="sheet-msg">This session moved with your new plan — close this and take a fresh look at your week.</div>
+          <div className="sheet-msg">
+            This session moved with your new plan — close this and take a fresh look at your week.
+          </div>
         ) : state === 'error' ? (
           <div className="sheet-msg">Something hiccuped loading this session — close and tap it again.</div>
         ) : detail ? (
@@ -284,12 +319,18 @@ export function OccurrenceSheet({
               <div className="sheet-title">
                 <b>{detail.title}</b>
                 <span>
-                  {[detail.date, detail.schedule?.time_of_day, detail.schedule?.duration_min ? `${detail.schedule.duration_min} min` : null]
+                  {[
+                    detail.date,
+                    detail.schedule?.time_of_day,
+                    detail.schedule?.duration_min ? `${detail.schedule.duration_min} min` : null,
+                  ]
                     .filter(Boolean)
                     .join(' · ')}
                 </span>
               </div>
-              <button className="sheet-x" onClick={onClose} aria-label="Close">×</button>
+              <button className="sheet-x" onClick={onClose} aria-label="Close">
+                ×
+              </button>
             </div>
 
             {/* Why this session exists — the commitment's stored rationale (persisted at commit). */}
@@ -314,7 +355,12 @@ export function OccurrenceSheet({
                         </div>
                         {it.detail && <div className="sess-detail">{it.detail}</div>}
                         {it.video_query && (
-                          <a className="vid-link" href={ytSearch(it.video_query)} target="_blank" rel="noopener noreferrer">
+                          <a
+                            className="vid-link"
+                            href={ytSearch(it.video_query)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
                             ▶ how-to: {it.video_query}
                           </a>
                         )}
@@ -359,7 +405,10 @@ export function OccurrenceSheet({
                     <b>Today{macroLine(day.totals) ? `: ${macroLine(day.totals)}` : ''}</b>
                     {day.provisional_count > 0 && (
                       <span className="day-totals-prov">
-                        {day.provisional_totals.kcal ? ` + ~${day.provisional_totals.kcal} kcal` : ` + ${day.provisional_count} meal${day.provisional_count === 1 ? '' : 's'}`} unconfirmed
+                        {day.provisional_totals.kcal
+                          ? ` + ~${day.provisional_totals.kcal} kcal`
+                          : ` + ${day.provisional_count} meal${day.provisional_count === 1 ? '' : 's'}`}{' '}
+                        unconfirmed
                       </span>
                     )}
                     {leftLine(day.left) && <div className="day-left">{leftLine(day.left)}</div>}
@@ -401,7 +450,11 @@ export function OccurrenceSheet({
                   />
                   <MicButton value={mealText} onChange={setMealText} disabled={mealBusy} />
                   {/* capture="environment" opens the rear camera on phones; a file picker on desktop. */}
-                  <label className={`photo-btn${mealPhoto ? ' photo-on' : ''}`} title="Snap your plate" aria-label="Add a photo">
+                  <label
+                    className={`photo-btn${mealPhoto ? ' photo-on' : ''}`}
+                    title="Snap your plate"
+                    aria-label="Add a photo"
+                  >
                     📷
                     <input
                       type="file"
@@ -419,12 +472,26 @@ export function OccurrenceSheet({
                 {mealPhoto && (
                   <div className="photo-preview">
                     <img src={mealPhoto} alt="your plate" />
-                    <button className="photo-clear" onClick={() => setMealPhoto(null)} disabled={mealBusy} aria-label="Remove photo">×</button>
-                    <span className="photo-hint">I'll read what I can from the photo — estimates, not judgments. A few words help.</span>
+                    <button
+                      className="photo-clear"
+                      onClick={() => setMealPhoto(null)}
+                      disabled={mealBusy}
+                      aria-label="Remove photo"
+                    >
+                      ×
+                    </button>
+                    <span className="photo-hint">
+                      I'll read what I can from the photo — estimates, not judgments. A few words help.
+                    </span>
                   </div>
                 )}
                 <div className="weigh-row">
-                  <select className="wiz-sel" value={mealKind} onChange={(e) => setMealKind(e.target.value as MealKind)} disabled={mealBusy}>
+                  <select
+                    className="wiz-sel"
+                    value={mealKind}
+                    onChange={(e) => setMealKind(e.target.value as MealKind)}
+                    disabled={mealBusy}
+                  >
                     <option value="breakfast">breakfast</option>
                     <option value="lunch">lunch</option>
                     <option value="dinner">dinner</option>
@@ -432,7 +499,11 @@ export function OccurrenceSheet({
                     <option value="drink">drink</option>
                     <option value="other">other</option>
                   </select>
-                  <button className="logbox-btn meal-btn" onClick={submitMeal} disabled={mealBusy || (!mealText.trim() && !mealPhoto)}>
+                  <button
+                    className="logbox-btn meal-btn"
+                    onClick={submitMeal}
+                    disabled={mealBusy || (!mealText.trim() && !mealPhoto)}
+                  >
                     {mealBusy ? 'Writing it down…' : 'Log this meal'}
                   </button>
                 </div>
@@ -464,15 +535,23 @@ export function OccurrenceSheet({
                     {baseline.proposed_targets && !targetsSet && (
                       <div className="baseline-targets">
                         <div className="baseline-targets-t">Daily targets I'd start you at</div>
-                        <div className="baseline-targets-n">{macroLine(baseline.proposed_targets).replace(/~/g, '')}</div>
+                        <div className="baseline-targets-n">
+                          {macroLine(baseline.proposed_targets).replace(/~/g, '')}
+                        </div>
                         {baseline.targets_rationale && <div className="baseline-why">{baseline.targets_rationale}</div>}
-                        <button className="lockbtn" onClick={() => applyTargets(baseline.proposed_targets!)} disabled={targetsBusy}>
+                        <button
+                          className="lockbtn"
+                          onClick={() => applyTargets(baseline.proposed_targets!)}
+                          disabled={targetsBusy}
+                        >
                           {targetsBusy ? 'Setting…' : 'Use these targets'}
                         </button>
                         <div className="baseline-targets-edit">You can fine-tune them anytime in Settings.</div>
                       </div>
                     )}
-                    {targetsSet && <div className="baseline-targets-done">Targets set — your day now shows what's left. ✓</div>}
+                    {targetsSet && (
+                      <div className="baseline-targets-done">Targets set — your day now shows what's left. ✓</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -489,7 +568,11 @@ export function OccurrenceSheet({
                     placeholder={weightUnit === 'lb' ? 'e.g. 195' : 'e.g. 88.5'}
                     disabled={logBusy}
                   />
-                  <button className="wiz-sel" onClick={() => setWeightUnit(weightUnit === 'lb' ? 'kg' : 'lb')} disabled={logBusy}>
+                  <button
+                    className="wiz-sel"
+                    onClick={() => setWeightUnit(weightUnit === 'lb' ? 'kg' : 'lb')}
+                    disabled={logBusy}
+                  >
                     {weightUnit} ⇄
                   </button>
                 </div>
@@ -501,9 +584,13 @@ export function OccurrenceSheet({
             ) : detail.kind === 'system' ? (
               <div className="sheet-msg">A quick built-in check-in — just tap it done when it happens.</div>
             ) : detail.status !== 'pending' ? (
-              <div className="sheet-msg">This one's already {detail.status === 'done' ? 'done — nice.' : `marked ${detail.status}.`}</div>
+              <div className="sheet-msg">
+                This one's already {detail.status === 'done' ? 'done — nice.' : `marked ${detail.status}.`}
+              </div>
             ) : (
-              <div className="sheet-msg">I couldn't put this session together just now — close and tap it again in a moment.</div>
+              <div className="sheet-msg">
+                I couldn't put this session together just now — close and tap it again in a moment.
+              </div>
             )}
           </>
         ) : null}

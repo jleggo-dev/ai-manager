@@ -27,7 +27,9 @@ declare global {
  */
 export async function requireCadenceUser(req: Request, res: Response, next: NextFunction) {
   if (cadenceConfig.devUserId) {
-    const slug = String(req.headers['x-cadence-dev-user'] ?? '').trim().toLowerCase();
+    const slug = String(req.headers['x-cadence-dev-user'] ?? '')
+      .trim()
+      .toLowerCase();
     if (slug && cadenceConfig.devAccounts[slug]) {
       req.cadenceUserId = cadenceConfig.devAccounts[slug];
       next();

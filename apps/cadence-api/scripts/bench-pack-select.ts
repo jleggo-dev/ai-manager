@@ -24,7 +24,6 @@ async function main() {
     const provs = await listProviders({ limit: 50 });
     const v2 = provs.find((p) => p.type === 'devs-ai-v2');
     if (!v2) throw new Error('no v2 provider');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const client = createLlmClientForProvider(v2) as any;
 
     const text = expectedSchemaFieldsToJsonSchema(SCHEMA);

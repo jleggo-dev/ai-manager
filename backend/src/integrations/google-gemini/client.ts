@@ -5,13 +5,8 @@
  * Uses API key auth via `?key=...` query param.
  */
 
-import type {
-  ChatMessage,
-  ChatCompletionResponse,
-  ChatCompletionUsage,
-  PatchedResponse,
-} from "../../types.ts";
-import { contentText, hasImageParts } from "../../lib/message-content.ts";
+import type { ChatMessage, ChatCompletionResponse, ChatCompletionUsage, PatchedResponse } from '../../types.ts';
+import { contentText, hasImageParts } from '../../lib/message-content.ts';
 
 interface GeminiContent {
   role: string;
@@ -48,44 +43,35 @@ interface GeminiGenerateResponse {
   };
 }
 
-function trimSlash(url: string = ""): string {
-  return String(url || "").replace(/\/+$/, "");
+function trimSlash(url: string = ''): string {
+  return String(url || '').replace(/\/+$/, '');
 }
 
-function toGeminiMessages(
-  messages: ChatMessage[] = [],
-  options: Record<string, unknown> = {},
-): GeminiPayload {
+function toGeminiMessages(messages: ChatMessage[] = [], options: Record<string, unknown> = {}): GeminiPayload {
   const contents: GeminiContent[] = [];
   const systemParts: Array<{ text: string }> = [];
 
   for (const msg of messages || []) {
-    if (hasImageParts(msg?.content ?? "")) {
+    if (hasImageParts(msg?.content ?? '')) {
       // Gemini inline images need base64 inlineData (a different transport than URL parts);
       // until that lands, image parts are dropped here and the text still goes through.
-      console.debug(
-        "[gemini] image content parts dropped — this client is text-only for now",
-      );
+      console.debug('[gemini] image content parts dropped — this client is text-only for now');
     }
-    const text = contentText(msg?.content ?? "").trim();
+    const text = contentText(msg?.content ?? '').trim();
     if (!text) continue;
 
-    if (msg.role === "system") {
+    if (msg.role === 'system') {
       systemParts.push({ text });
       continue;
     }
 
-    const role = msg.role === "assistant" ? "model" : "user";
+    const role = msg.role === 'assistant' ? 'model' : 'user';
     contents.push({ role, parts: [{ text }] });
   }
 
   const payload: GeminiPayload = {
-    contents:
-      contents.length > 0
-        ? contents
-        : [{ role: "user", parts: [{ text: "" }] }],
-    systemInstruction:
-      systemParts.length > 0 ? { parts: systemParts } : undefined,
+    contents: contents.length > 0 ? contents : [{ role: 'user', parts: [{ text: '' }] }],
+    systemInstruction: systemParts.length > 0 ? { parts: systemParts } : undefined,
   };
 
   if (options.groundingWithGoogleSearch === true) {
@@ -98,9 +84,9 @@ function toGeminiMessages(
 function joinCandidateText(candidate: GeminiCandidate | null): string {
   const parts = candidate?.content?.parts || [];
   return parts
-    .map((p) => (typeof p?.text === "string" ? p.text : ""))
+    .map((p) => (typeof p?.text === 'string' ? p.text : ''))
     .filter(Boolean)
-    .join("\n")
+    .join('\n')
     .trim();
 }
 
@@ -109,9 +95,7 @@ export class GoogleGeminiClient {
   apiKey: string;
 
   constructor(baseUrl: string, apiKey: string) {
-    this.baseUrl = trimSlash(
-      baseUrl || "https://generativelanguage.googleapis.com",
-    );
+    this.baseUrl = trimSlash(baseUrl || 'https://generativelanguage.googleapis.com');
     this.apiKey = apiKey;
   }
 
@@ -135,25 +119,21 @@ export class GoogleGeminiClient {
         ...options,
         signal: controller?.signal,
         headers: {
-          "x-goog-api-key": this.apiKey,
-          "Content-Type": "application/json",
+          'x-goog-api-key': this.apiKey,
+          'Content-Type': 'application/json',
           ...((options.headers as Record<string, string>) || {}),
         },
       });
     } catch (err: unknown) {
-      if ((err as Error).name === "AbortError") {
-        throw new Error(
-          `Google Gemini request timed out after ${timeoutMs}ms`,
-          { cause: err },
-        );
+      if ((err as Error).name === 'AbortError') {
+        throw new Error(`Google Gemini request timed out after ${timeoutMs}ms`, { cause: err });
       }
       throw err;
     } finally {
       if (timer) clearTimeout(timer);
     }
     const text = await res.text();
-    let json: { error?: { message?: string }; [key: string]: unknown } | null =
-      null;
+    let json: { error?: { message?: string }; [key: string]: unknown } | null = null;
     if (text) {
       try {
         json = JSON.parse(text);
@@ -174,22 +154,19 @@ export class GoogleGeminiClient {
     options: Record<string, unknown> = {},
   ): Promise<ChatCompletionResponse> {
     const { timeoutMs, ...chatOpts } = options;
-    const requestedModel = String(model || "").trim();
-    const resolvedModel =
-      await this.resolveGenerateContentModel(requestedModel);
+    const requestedModel = String(model || '').trim();
+    const resolvedModel = await this.resolveGenerateContentModel(requestedModel);
     const payload = toGeminiMessages(messages, chatOpts);
     const data = await this.request<GeminiGenerateResponse>(
       `/v1beta/models/${encodeURIComponent(resolvedModel)}:generateContent`,
       {
-        method: "POST",
+        method: 'POST',
         body: JSON.stringify(payload),
         timeoutMs: timeoutMs as number | undefined,
       },
     );
 
-    const candidate: GeminiCandidate | null = Array.isArray(data?.candidates)
-      ? (data.candidates[0] ?? null)
-      : null;
+    const candidate: GeminiCandidate | null = Array.isArray(data?.candidates) ? (data.candidates[0] ?? null) : null;
     const content = joinCandidateText(candidate);
     const usage: ChatCompletionUsage | null = data?.usageMetadata
       ? {
@@ -204,8 +181,7 @@ export class GoogleGeminiClient {
       choices: [
         {
           message: { content },
-          finish_reason:
-            String(candidate?.finishReason || "").toLowerCase() || null,
+          finish_reason: String(candidate?.finishReason || '').toLowerCase() || null,
         },
       ],
       usage,
@@ -224,9 +200,7 @@ export class GoogleGeminiClient {
     options: Record<string, unknown> = {},
   ): Promise<globalThis.Response> {
     const { timeoutMs, ...chatOpts } = options;
-    const resolvedModel = await this.resolveGenerateContentModel(
-      String(model || "").trim(),
-    );
+    const resolvedModel = await this.resolveGenerateContentModel(String(model || '').trim());
     const payload = toGeminiMessages(messages, chatOpts);
     const path = `/v1beta/models/${encodeURIComponent(resolvedModel)}:streamGenerateContent?alt=sse`;
     const url = `${this.baseUrl}${path}`;
@@ -241,17 +215,17 @@ export class GoogleGeminiClient {
     let res: globalThis.Response;
     try {
       res = await fetch(url, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "x-goog-api-key": this.apiKey,
-          "Content-Type": "application/json",
+          'x-goog-api-key': this.apiKey,
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
         signal: controller?.signal,
       });
     } catch (err: unknown) {
       if (timer) clearTimeout(timer);
-      if ((err as Error).name === "AbortError") {
+      if ((err as Error).name === 'AbortError') {
         throw new Error(`Google Gemini stream timed out after ${timeoutMs}ms`, {
           cause: err,
         });
@@ -262,9 +236,7 @@ export class GoogleGeminiClient {
     if (!res.ok) {
       if (timer) clearTimeout(timer);
       const text = await res.text();
-      throw new Error(
-        `Google Gemini stream failed: ${text || `HTTP ${res.status}`}`,
-      );
+      throw new Error(`Google Gemini stream failed: ${text || `HTTP ${res.status}`}`);
     }
 
     (res as PatchedResponse)._abortTimer = timer;
@@ -273,42 +245,35 @@ export class GoogleGeminiClient {
   }
 
   async listModels(): Promise<GeminiModel[]> {
-    const data = await this.request<GeminiModelsResponse>("/v1beta/models", {
-      method: "GET",
+    const data = await this.request<GeminiModelsResponse>('/v1beta/models', {
+      method: 'GET',
     });
     return Array.isArray(data?.models) ? data.models : [];
   }
 
   async resolveGenerateContentModel(requestedModel: string): Promise<string> {
-    const requested = String(requestedModel || "").trim();
+    const requested = String(requestedModel || '').trim();
     if (!requested) return requested;
 
     const models = await this.listModels();
     const callable = (models || [])
       .filter(
         (m: GeminiModel) =>
-          Array.isArray(m?.supportedGenerationMethods) &&
-          m.supportedGenerationMethods.includes("generateContent"),
+          Array.isArray(m?.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'),
       )
-      .map((m: GeminiModel) => String(m?.name || "").trim())
-      .filter((name: string) => name.startsWith("models/"))
-      .map((name: string) => name.replace(/^models\//, ""));
+      .map((m: GeminiModel) => String(m?.name || '').trim())
+      .filter((name: string) => name.startsWith('models/'))
+      .map((name: string) => name.replace(/^models\//, ''));
 
     if (callable.includes(requested)) return requested;
 
-    const exactLatest = callable.find(
-      (id: string) => id === `${requested}-latest`,
-    );
+    const exactLatest = callable.find((id: string) => id === `${requested}-latest`);
     if (exactLatest) return exactLatest;
 
-    const exactPreview = callable.find((id: string) =>
-      id.startsWith(`${requested}-preview`),
-    );
+    const exactPreview = callable.find((id: string) => id.startsWith(`${requested}-preview`));
     if (exactPreview) return exactPreview;
 
-    const exactNumbered = callable.find(
-      (id: string) => id.startsWith(`${requested}-`) && /\d/.test(id),
-    );
+    const exactNumbered = callable.find((id: string) => id.startsWith(`${requested}-`) && /\d/.test(id));
     if (exactNumbered) return exactNumbered;
 
     return requested;

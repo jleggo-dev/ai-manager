@@ -179,29 +179,21 @@ describe('capture selectCapturedGoals (§6.1 — no duplicate goal cards)', () =
   const titles = (gs: { title?: string }[]) => gs.map((g) => g.title);
 
   it('collapses intra-run near-duplicates to one, keeping the first seen', () => {
-    const kept = selectCapturedGoals(
-      [{ title: 'Run a 10k' }, { title: 'Run a 10k this spring' }],
-      new Set(),
-      [],
-    );
+    const kept = selectCapturedGoals([{ title: 'Run a 10k' }, { title: 'Run a 10k this spring' }], new Set(), []);
     expect(titles(kept)).toEqual(['Run a 10k']);
   });
 
   it('keeps genuinely distinct goals that merely share a word', () => {
-    const kept = selectCapturedGoals(
-      [{ title: 'Run a 10k' }, { title: 'Run a marathon' }],
-      new Set(),
-      [],
-    );
+    const kept = selectCapturedGoals([{ title: 'Run a 10k' }, { title: 'Run a marathon' }], new Set(), []);
     expect(titles(kept)).toEqual(['Run a 10k', 'Run a marathon']);
   });
 
   it('drops an EXACT match of a confirmed/committed goal, but not a mere superstring', () => {
     const confirmed = new Set([normTitle('Run a 10k')]);
     // exact-confirmed dropped; the distinct new goal kept
-    expect(titles(selectCapturedGoals([{ title: 'Run a 10k' }, { title: 'Meditate daily' }], confirmed, []))).toEqual(
-      ['Meditate daily'],
-    );
+    expect(titles(selectCapturedGoals([{ title: 'Run a 10k' }, { title: 'Meditate daily' }], confirmed, []))).toEqual([
+      'Meditate daily',
+    ]);
     // a superstring of a confirmed goal is a NEW, more specific goal — confirmed match is exact-only
     expect(titles(selectCapturedGoals([{ title: 'Run a 10k this spring' }], confirmed, []))).toEqual([
       'Run a 10k this spring',
@@ -294,7 +286,12 @@ describe('plan matchGoal (§6.3 — commitments link to their objective)', () =>
 describe('intake startingPointGaps (dynamic intake — "where are you now?")', () => {
   type G = Parameters<typeof startingPointGaps>[0][number];
   const g = (over: Partial<G>): G =>
-    ({ title: 'Run a faster 5k', type: 'target', measure: { metric: '5k time', target: 30, unit: 'min' }, ...over }) as G;
+    ({
+      title: 'Run a faster 5k',
+      type: 'target',
+      measure: { metric: '5k time', target: 30, unit: 'min' },
+      ...over,
+    }) as G;
 
   it('flags a target goal with a target but no start', () => {
     expect(startingPointGaps([g({})])).toEqual([{ title: 'Run a faster 5k', metric: '5k time' }]);
@@ -342,7 +339,10 @@ describe('nutrition summarize (Observe phase — §5.6 module arc)', () => {
   it('ranks top items case-insensitively and caps at 5', () => {
     const rows = [
       row({ items: [{ name: 'Eggs' }, { name: 'coffee' }] }),
-      row({ date: '2026-07-15', items: [{ name: 'eggs' }, { name: 'a' }, { name: 'b' }, { name: 'c' }, { name: 'd' }] }),
+      row({
+        date: '2026-07-15',
+        items: [{ name: 'eggs' }, { name: 'a' }, { name: 'b' }, { name: 'c' }, { name: 'd' }],
+      }),
     ];
     const s = summarizeNutrition(rows, 7);
     expect(s.top_items[0]).toEqual({ name: 'eggs', count: 2 });
@@ -381,7 +381,12 @@ describe('photo-validate (meal photos — capture-first)', () => {
   });
 
   it('rejects non-image payloads, junk, and svg (never trusted)', () => {
-    for (const bad of ['data:text/plain;base64,aGk=', 'data:image/svg+xml;base64,aGk=', 'not a data url', 'data:image/jpeg;base64,!!!']) {
+    for (const bad of [
+      'data:text/plain;base64,aGk=',
+      'data:image/svg+xml;base64,aGk=',
+      'not a data url',
+      'data:image/jpeg;base64,!!!',
+    ]) {
       expect(parsePhotoDataUrl(bad).ok).toBe(false);
     }
   });

@@ -15,9 +15,13 @@ export interface DomainStat {
 async function stat(domain: string, table: 'goals' | 'equipment' | 'occurrences', userId: string): Promise<DomainStat> {
   try {
     let rows;
-    if (table === 'goals') rows = await sql`select count(*)::int n, max(created_at) latest from cadence.goals where user_id = ${userId}`;
-    else if (table === 'equipment') rows = await sql`select count(*)::int n, max(created_at) latest from cadence.equipment where user_id = ${userId}`;
-    else rows = await sql`select count(*)::int n, max(created_at) latest from cadence.occurrences where user_id = ${userId}`;
+    if (table === 'goals')
+      rows = await sql`select count(*)::int n, max(created_at) latest from cadence.goals where user_id = ${userId}`;
+    else if (table === 'equipment')
+      rows = await sql`select count(*)::int n, max(created_at) latest from cadence.equipment where user_id = ${userId}`;
+    else
+      rows =
+        await sql`select count(*)::int n, max(created_at) latest from cadence.occurrences where user_id = ${userId}`;
     const r = rows[0] as { n: number; latest: string | null } | undefined;
     return { domain, rows: r?.n ?? 0, latest: r?.latest ?? null };
   } catch {
@@ -26,7 +30,11 @@ async function stat(domain: string, table: 'goals' | 'equipment' | 'occurrences'
 }
 
 export async function getDomainStats(userId: string): Promise<DomainStat[]> {
-  return Promise.all([stat('goals', 'goals', userId), stat('equipment', 'equipment', userId), stat('occurrences', 'occurrences', userId)]);
+  return Promise.all([
+    stat('goals', 'goals', userId),
+    stat('equipment', 'equipment', userId),
+    stat('occurrences', 'occurrences', userId),
+  ]);
 }
 
 /** Render the catalog as a compact doc the Broker can reason over (P2). */

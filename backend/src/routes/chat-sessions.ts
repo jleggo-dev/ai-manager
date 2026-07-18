@@ -123,11 +123,7 @@ async function runInternalToolJobLoop(options: {
         internalToolNames: options.internalToolNames,
         pendingInternalToolCalls: options.pendingInternalToolCalls,
         fulfilledCallIds,
-        onV2Metadata: (patch: {
-          previous_response_id?: string;
-          conversation_id?: string;
-          last_sequence?: number;
-        }) => {
+        onV2Metadata: (patch: { previous_response_id?: string; conversation_id?: string; last_sequence?: number }) => {
           updateV2ProviderMetadata(options.sessionId, patch).catch((err) =>
             console.warn('[chat-sessions] Failed to persist v2 provider_metadata:', errorMessage(err)),
           );
@@ -160,7 +156,10 @@ async function runInternalToolJobLoop(options: {
         }
       }
 
-      if (selectUnfulfilledToolCalls(options.pendingInternalToolCalls, options.internalToolNames, fulfilledCallIds).length === 0) {
+      if (
+        selectUnfulfilledToolCalls(options.pendingInternalToolCalls, options.internalToolNames, fulfilledCallIds)
+          .length === 0
+      ) {
         break;
       }
     } catch (toolErr) {
@@ -444,11 +443,7 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
       internalToolNames,
       pendingInternalToolCalls,
       fulfilledCallIds,
-      onV2Metadata: (patch: {
-        previous_response_id?: string;
-        conversation_id?: string;
-        last_sequence?: number;
-      }) => {
+      onV2Metadata: (patch: { previous_response_id?: string; conversation_id?: string; last_sequence?: number }) => {
         updateV2ProviderMetadata(sessionId, patch).catch((err) =>
           console.warn('[chat-sessions] Failed to persist v2 provider_metadata:', errorMessage(err)),
         );
@@ -578,9 +573,7 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
       if (abortTimer) clearTimeout(abortTimer);
     }
 
-    if (
-      selectUnfulfilledToolCalls(pendingInternalToolCalls, internalToolNames, new Set()).length > 0
-    ) {
+    if (selectUnfulfilledToolCalls(pendingInternalToolCalls, internalToolNames, new Set()).length > 0) {
       await runInternalToolJobLoop({
         res,
         decoder,
@@ -910,7 +903,8 @@ router.post('/:id/reconnect-stream', validateBody(reconnectStreamSchema), async 
     const acquired = await acquireSessionLock(req.params.id as string, candidateLockId);
     if (!acquired) {
       return res.status(409).json({
-        error: 'Session is currently processing another message. Wait for the current stream to complete before reconnecting.',
+        error:
+          'Session is currently processing another message. Wait for the current stream to complete before reconnecting.',
       });
     }
     lockMessageId = candidateLockId;
@@ -968,10 +962,12 @@ router.post('/:id/reconnect-stream', validateBody(reconnectStreamSchema), async 
               updateV2ProviderMetadata(sessionId, {
                 previous_response_id: parsed.responseId as string,
                 conversation_id: (parsed.conversationId as string) || undefined,
-                last_sequence:
-                  parsed.lastSequence != null ? Number(parsed.lastSequence) : undefined,
+                last_sequence: parsed.lastSequence != null ? Number(parsed.lastSequence) : undefined,
               }).catch((metaErr) =>
-                console.warn('[chat-sessions/reconnect-stream] Failed to persist provider_metadata:', errorMessage(metaErr)),
+                console.warn(
+                  '[chat-sessions/reconnect-stream] Failed to persist provider_metadata:',
+                  errorMessage(metaErr),
+                ),
               );
             }
           } catch {

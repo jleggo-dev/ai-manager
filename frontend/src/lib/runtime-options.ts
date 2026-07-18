@@ -132,11 +132,21 @@ export function normaliseRuntimeOptions(raw: unknown = {}, providerType: string 
   const normalizedType = String(providerType || '').toLowerCase();
   if (normalizedType === 'google-gemini') {
     options.devs_ai = { built_in_tools: [], generate_citations: false, parallel_tool_calls: false };
-    options.devs_ai_v2 = { built_in_tools: [], parallel_tool_calls: true, chat_mode: 'execute', thread_mode: 'collect' };
+    options.devs_ai_v2 = {
+      built_in_tools: [],
+      parallel_tool_calls: true,
+      chat_mode: 'execute',
+      thread_mode: 'collect',
+    };
   }
   if (normalizedType === 'devs-ai') {
     options.google_gemini = { grounding_with_google_search: false };
-    options.devs_ai_v2 = { built_in_tools: [], parallel_tool_calls: true, chat_mode: 'execute', thread_mode: 'collect' };
+    options.devs_ai_v2 = {
+      built_in_tools: [],
+      parallel_tool_calls: true,
+      chat_mode: 'execute',
+      thread_mode: 'collect',
+    };
   }
   if (normalizedType === 'devs-ai-v2') {
     options.devs_ai = { built_in_tools: [], generate_citations: false, parallel_tool_calls: false };

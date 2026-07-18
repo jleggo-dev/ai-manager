@@ -46,8 +46,7 @@ import type {
 } from '../types/api';
 
 type UnifiedDashboardItem =
-  | (HcDashboardItem & { checkType: 'api' })
-  | (WidgetHcDashboardItem & { checkType: 'widget' });
+  (HcDashboardItem & { checkType: 'api' }) | (WidgetHcDashboardItem & { checkType: 'widget' });
 
 interface HealthDashboardPageProps {
   onNavigate: (key: string, params?: Record<string, unknown>) => void;

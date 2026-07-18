@@ -66,7 +66,12 @@ export function detectTripwires(s: TripwireSnapshot): Tripwire[] {
     fired.push('missed_threshold');
   }
 
-  if (s.consistencyRate != null && s.outcomeDelta != null && s.consistencyRate >= t.highConsistency && s.outcomeDelta <= 0) {
+  if (
+    s.consistencyRate != null &&
+    s.outcomeDelta != null &&
+    s.consistencyRate >= t.highConsistency &&
+    s.outcomeDelta <= 0
+  ) {
     fired.push('consistency_outcome_divergence');
   }
 

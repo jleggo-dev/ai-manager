@@ -106,9 +106,7 @@ export function validateAgainstExpectedSchema(
       required: !!def.required,
       populated,
       typeCorrect,
-      value: populated
-        ? (Array.isArray(val) ? val.join(', ') : String(val)).slice(0, 100)
-        : null,
+      value: populated ? (Array.isArray(val) ? val.join(', ') : String(val)).slice(0, 100) : null,
     });
   }
 
@@ -121,10 +119,7 @@ export function validateAgainstExpectedSchema(
 }
 
 /** True when JSON is valid and all required schema fields are present with correct types. */
-export function expectedSchemaPasses(
-  text: string,
-  expectedSchema: ExpectedSchemaInput | null | undefined,
-): boolean {
+export function expectedSchemaPasses(text: string, expectedSchema: ExpectedSchemaInput | null | undefined): boolean {
   const fields = expectedSchema?.fields;
   if (!fields || Object.keys(fields).length === 0) return true;
   const v = validateAgainstExpectedSchema(text, expectedSchema);

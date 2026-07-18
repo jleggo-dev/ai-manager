@@ -31,7 +31,9 @@ export function getToolJobsFromProfile(profile: AiProfileRow | null | undefined)
 /** Build Devs.ai-compatible tool definitions from job input variables. */
 export async function buildToolDefinitions(
   toolJobs: ToolJobBinding[],
-): Promise<Array<{ type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }>> {
+): Promise<
+  Array<{ type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }>
+> {
   const tools: Array<{
     type: 'function';
     function: { name: string; description: string; parameters: Record<string, unknown> };

@@ -15,7 +15,11 @@ import { safeClientError } from '../lib/safe-error.ts';
 const router = Router();
 
 const createTriggerSchema = z.object({
-  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/),
+  slug: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[a-z0-9-]+$/),
   name: z.string().min(1).max(255),
   description: z.string().max(2000).optional(),
   trigger_type: z.enum(['external_clock', 'session.message.created', 'workflow.step.completed']).optional(),

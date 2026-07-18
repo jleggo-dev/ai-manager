@@ -7,7 +7,6 @@
 import { sql } from '../src/db/sql.ts';
 import { insertPlan } from '../src/repos/plans.ts';
 import { insertActivities } from '../src/repos/activities.ts';
-import { listOccurrences } from '../src/repos/occurrences.ts';
 import { ensureHorizon } from '../src/services/plan-horizon.ts';
 import { resetUserData } from '../src/services/dev-reset.ts';
 import { cadenceConfig } from '../src/config.ts';

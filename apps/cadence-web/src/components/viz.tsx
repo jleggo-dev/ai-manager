@@ -28,7 +28,14 @@ export function Sparkline({ series, good }: { series: SeriesPoint[]; good: 'up' 
   const stroke = improving ? 'var(--forest)' : 'var(--dawn-4)';
   return (
     <svg className="spark" viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden>
-      <polyline points={pts} fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       <circle cx={x(series.length - 1)} cy={y(last.value)} r="2.6" fill={stroke} />
     </svg>
   );
@@ -107,7 +114,15 @@ const MACRO_RINGS = [
 
 /** MyFitnessPal-style macro rings — one ring per macro, filling as you eat toward the target;
  *  the caption counts DOWN what's left (never what you're over). kcal sits quietly beneath. */
-export function MacroRings({ totals, targets, left }: { totals: MealMacros; targets: MealMacros; left: MealMacros | null }) {
+export function MacroRings({
+  totals,
+  targets,
+  left,
+}: {
+  totals: MealMacros;
+  targets: MealMacros;
+  left: MealMacros | null;
+}) {
   return (
     <div className="macro-rings">
       <div className="macro-rings-row">
@@ -129,8 +144,12 @@ export function MacroRings({ totals, targets, left }: { totals: MealMacros; targ
       </div>
       {targets.kcal != null && (
         <div className="macro-kcal">
-          <span>{Math.round(totals.kcal ?? 0)} / {Math.round(targets.kcal)} kcal</span>
-          <span className="macro-kcal-left">{Math.round(left?.kcal ?? Math.max(0, targets.kcal - (totals.kcal ?? 0)))} left</span>
+          <span>
+            {Math.round(totals.kcal ?? 0)} / {Math.round(targets.kcal)} kcal
+          </span>
+          <span className="macro-kcal-left">
+            {Math.round(left?.kcal ?? Math.max(0, targets.kcal - (totals.kcal ?? 0)))} left
+          </span>
         </div>
       )}
     </div>

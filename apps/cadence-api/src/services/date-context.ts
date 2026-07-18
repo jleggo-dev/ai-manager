@@ -22,7 +22,13 @@ function todayLabel(): { iso: string; label: string } {
   // clockVars(). Without timeZone: 'UTC' here, this label can name the wrong weekday.
   return {
     iso: d.toISOString().slice(0, 10),
-    label: d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }),
+    label: d.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }),
   };
 }
 

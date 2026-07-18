@@ -16,10 +16,7 @@ export interface StartingPointGap {
 
 const WEIGHTY = /\b(kg|lbs?|weight)\b/i;
 
-export function startingPointGaps(
-  goals: Array<Pick<Goal, 'title' | 'type' | 'measure'>>,
-  max = 3,
-): StartingPointGap[] {
+export function startingPointGaps(goals: Array<Pick<Goal, 'title' | 'type' | 'measure'>>, max = 3): StartingPointGap[] {
   const gaps: StartingPointGap[] = [];
   for (const g of goals) {
     if (g.type !== 'target') continue; // milestones ride assessment; recurring habits have no number

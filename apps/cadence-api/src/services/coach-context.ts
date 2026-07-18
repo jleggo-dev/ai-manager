@@ -33,7 +33,12 @@ export async function onboardingReadiness(userId: string): Promise<string> {
     listGoalsByStatus(userId, ['captured', 'confirmed', 'committed']),
     listEquipment(userId),
   ]);
-  const b = (user?.baseline ?? {}) as { age?: number; height_cm?: number; weight_kg?: unknown; constraints?: unknown[] };
+  const b = (user?.baseline ?? {}) as {
+    age?: number;
+    height_cm?: number;
+    weight_kg?: unknown;
+    constraints?: unknown[];
+  };
   const bodyRelevant = goals.some(
     (g) =>
       g.area === 'movement' ||
@@ -54,7 +59,9 @@ export async function onboardingReadiness(userId: string): Promise<string> {
     (b.weight_kg != null ? have : need).push('current weight');
   }
   const consCount = Array.isArray(b.constraints) ? b.constraints.length : 0;
-  (consCount ? have : need).push(consCount ? `${consCount} thing(s) to work around` : 'anything to work around (injury/life)');
+  (consCount ? have : need).push(
+    consCount ? `${consCount} thing(s) to work around` : 'anything to work around (injury/life)',
+  );
   (equipment.length ? have : need).push(`tools/equipment (${equipment.length})`);
   (user?.home_location ? have : need).push('home location + timezone');
 
@@ -70,7 +77,9 @@ export async function onboardingReadiness(userId: string): Promise<string> {
       ? 'This goal is body-related, so age, height, and current weight matter for a safe, realistic plan — gather the missing ones (one at a time) before pointing them to Review.'
       : 'This goal does not need body metrics — do not ask for weight or height unless the user brings them up.',
     ...(gaps.length
-      ? ['For each numeric goal, a coach’s first question is where they are today — ask for the missing starting point in their own words (one at a time, never as a form).']
+      ? [
+          'For each numeric goal, a coach’s first question is where they are today — ask for the missing starting point in their own words (one at a time, never as a form).',
+        ]
       : []),
   ].join('\n');
 }

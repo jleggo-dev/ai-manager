@@ -81,7 +81,12 @@ export function sumDay(rows: Array<Pick<NutritionLog, 'macros' | 'provisional'>>
       if (typeof v === 'number' && v > 0) bucket[k] = (bucket[k] ?? 0) + v;
     }
   }
-  return { totals, provisional_totals: provisional, confirmed_count: confirmedCount, provisional_count: provisionalCount };
+  return {
+    totals,
+    provisional_totals: provisional,
+    confirmed_count: confirmedCount,
+    provisional_count: provisionalCount,
+  };
 }
 
 /**

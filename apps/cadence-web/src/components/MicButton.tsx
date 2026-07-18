@@ -15,7 +15,8 @@ type SpeechRecognitionLike = {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
-  onresult: ((e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
+  onresult:
+    ((e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
   onend: (() => void) | null;
   onerror: ((e: { error: string }) => void) | null;
   start: () => void;
@@ -24,18 +25,35 @@ type SpeechRecognitionLike = {
 };
 
 function getRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
-  const w = window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
+  const w = window as unknown as {
+    SpeechRecognition?: new () => SpeechRecognitionLike;
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+  };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
 const MicIcon = ({ active }: { active: boolean }) => (
   <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden>
     <rect x="5.2" y="1.5" width="4.6" height="8" rx="2.3" fill={active ? '#fff' : 'currentColor'} />
-    <path className="stroke" d="M3 7.5a4.5 4.5 0 0 0 9 0M7.5 12v2" stroke={active ? '#fff' : 'currentColor'} fill="none" strokeLinecap="round" />
+    <path
+      className="stroke"
+      d="M3 7.5a4.5 4.5 0 0 0 9 0M7.5 12v2"
+      stroke={active ? '#fff' : 'currentColor'}
+      fill="none"
+      strokeLinecap="round"
+    />
   </svg>
 );
 
-export function MicButton({ value, onChange, disabled }: { value: string; onChange: (next: string) => void; disabled?: boolean }) {
+export function MicButton({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  disabled?: boolean;
+}) {
   const [supported] = useState(() => getRecognitionCtor() !== null);
   const [listening, setListening] = useState(false);
   const recRef = useRef<SpeechRecognitionLike | null>(null);

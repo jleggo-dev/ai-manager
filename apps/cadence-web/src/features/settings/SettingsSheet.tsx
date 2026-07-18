@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase.ts';
-import { deleteMyData, isDevMode, getDevAccount, resetAccount, getNutritionDay, setMacroTargets, clearMacroTargets, type MealMacros } from '../../lib/api.ts';
+import {
+  deleteMyData,
+  isDevMode,
+  getDevAccount,
+  resetAccount,
+  getNutritionDay,
+  setMacroTargets,
+  clearMacroTargets,
+  type MealMacros,
+} from '../../lib/api.ts';
 
 const MK = [
   { k: 'kcal', label: 'Calories', unit: 'kcal' },
@@ -96,10 +105,20 @@ function NutritionTargets() {
           </label>
         ))}
       </div>
-      {note && <div className="sheet-msg" style={{ padding: '2px 0 6px' }}>{note}</div>}
+      {note && (
+        <div className="sheet-msg" style={{ padding: '2px 0 6px' }}>
+          {note}
+        </div>
+      )}
       <div className="set-targets-actions">
-        <button className="lockbtn" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save targets'}</button>
-        {has && <button className="set-danger-btn" onClick={clear} disabled={busy}>Clear</button>}
+        <button className="lockbtn" onClick={save} disabled={busy}>
+          {busy ? 'Saving…' : 'Save targets'}
+        </button>
+        {has && (
+          <button className="set-danger-btn" onClick={clear} disabled={busy}>
+            Clear
+          </button>
+        )}
       </div>
     </div>
   );
@@ -133,7 +152,9 @@ export function SettingsSheet({
     setMsg('');
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
-      setMsg(error ? "Couldn't send the reset email — try again in a moment." : `Password reset link sent to ${email}.`);
+      setMsg(
+        error ? "Couldn't send the reset email — try again in a moment." : `Password reset link sent to ${email}.`,
+      );
     } finally {
       setBusy(false);
     }
@@ -144,7 +165,11 @@ export function SettingsSheet({
     setBusy(true);
     setMsg('');
     try {
-      const ok = dev ? (await resetAccount().then(() => true).catch(() => false)) : await deleteMyData('start over');
+      const ok = dev
+        ? await resetAccount()
+            .then(() => true)
+            .catch(() => false)
+        : await deleteMyData('start over');
       if (ok) {
         window.location.reload(); // stage resolves to 'new' → Welcome
         return;
@@ -165,13 +190,21 @@ export function SettingsSheet({
         <div className="sheet-head">
           <div className="sheet-title">
             <b>Settings</b>
-            <span>{dev ? `dev · ${getDevAccount()}` : email ?? ''}</span>
+            <span>{dev ? `dev · ${getDevAccount()}` : (email ?? '')}</span>
           </div>
-          <button className="sheet-x" onClick={onClose} aria-label="Close">×</button>
+          <button className="sheet-x" onClick={onClose} aria-label="Close">
+            ×
+          </button>
         </div>
 
         <div className="sheet-body">
-          <button className="set-row" onClick={() => { onClose(); onManage(); }}>
+          <button
+            className="set-row"
+            onClick={() => {
+              onClose();
+              onManage();
+            }}
+          >
             <b>Edit goals & equipment</b>
             <span>Add, tweak, or retire what the plan is built from</span>
           </button>
@@ -191,17 +224,23 @@ export function SettingsSheet({
             </>
           )}
 
-          {msg && <div className="auth-notice" style={{ marginTop: 4 }}>{msg}</div>}
+          {msg && (
+            <div className="auth-notice" style={{ marginTop: 4 }}>
+              {msg}
+            </div>
+          )}
 
           <div className="set-danger">
             <div className="set-danger-t">Danger zone</div>
             {!danger ? (
-              <button className="set-danger-btn" onClick={() => setDanger(true)}>Start over…</button>
+              <button className="set-danger-btn" onClick={() => setDanger(true)}>
+                Start over…
+              </button>
             ) : (
               <>
                 <div className="sheet-msg" style={{ padding: '2px 0 8px' }}>
                   This erases your goals, plan, history, and conversations — everything you've built here.
-                  {dev ? '' : ' Your login survives; you\'d onboard from scratch.'} Type <b>start over</b> to confirm.
+                  {dev ? '' : " Your login survives; you'd onboard from scratch."} Type <b>start over</b> to confirm.
                 </div>
                 <div className="prog-add">
                   <input

@@ -5,7 +5,11 @@ import type { Goal } from '@cadence/shared';
  * unit-testable in isolation, like capture-normalize.ts.
  */
 
-const normGoalTitle = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const normGoalTitle = (s: string): string =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 
 /**
  * Map a synthesized activity's stated goal_title back to the confirmed goal it serves. The Coach

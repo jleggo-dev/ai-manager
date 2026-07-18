@@ -21,7 +21,9 @@ export function summarizeNutrition(rows: Row[], windowDays = 7): NutritionSummar
     if (r.flags?.alcohol) alcoholDays.add(d);
     if (r.flags?.caffeine) caffeineDays.add(d);
     for (const it of r.items ?? []) {
-      const name = String(it?.name ?? '').trim().toLowerCase();
+      const name = String(it?.name ?? '')
+        .trim()
+        .toLowerCase();
       if (name) itemCounts.set(name, (itemCounts.get(name) ?? 0) + 1);
     }
   }
@@ -46,11 +48,14 @@ export function summarizeNutrition(rows: Row[], windowDays = 7): NutritionSummar
 /** One compact line for dossier/retrieval rendering; '' when nothing is logged. */
 export function renderNutritionLine(s: NutritionSummary): string {
   if (!s.days_logged) return '';
-  const bits = [
-    `${s.days_logged} of last ${s.window_days} days logged`,
-    `~${s.meals_per_logged_day} meals/day`,
-  ];
-  if (s.top_items.length) bits.push(`often: ${s.top_items.slice(0, 3).map((t) => t.name).join(', ')}`);
+  const bits = [`${s.days_logged} of last ${s.window_days} days logged`, `~${s.meals_per_logged_day} meals/day`];
+  if (s.top_items.length)
+    bits.push(
+      `often: ${s.top_items
+        .slice(0, 3)
+        .map((t) => t.name)
+        .join(', ')}`,
+    );
   if (s.alcohol_days) bits.push(`alcohol on ${s.alcohol_days} day${s.alcohol_days === 1 ? '' : 's'}`);
   return `Food log (observe): ${bits.join(' · ')}.`;
 }

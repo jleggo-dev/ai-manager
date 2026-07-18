@@ -38,8 +38,7 @@ function parseJson(text: string): Record<string, unknown> | null {
 
 const str = (v: unknown, max = 200): string | undefined =>
   typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined;
-const num = (v: unknown): number | undefined =>
-  typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined;
+const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined);
 
 /**
  * App-side contract assertion (the normalizeActivity pattern): coerce whatever the model
@@ -90,7 +89,9 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
  * Compact log lines for the prescribe prompt — a few rendered sentences, not raw JSON, so the
  * coach reads history the way a human would ("2026-07-13 — presses 15×50 lb, felt easy").
  */
-function renderLogLines(rows: Array<{ date: string; log: { summary: string; items: Array<{ felt?: string }> } }>): string {
+function renderLogLines(
+  rows: Array<{ date: string; log: { summary: string; items: Array<{ felt?: string }> } }>,
+): string {
   if (rows.length === 0) return '[]';
   return rows
     .map((r) => {
@@ -131,7 +132,9 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
       target: occ.target ?? undefined,
       how_to: occ.how_to ?? undefined,
     }),
-    goals: JSON.stringify(goals.map((g) => ({ title: g.title, area: g.area, type: g.type, measure: g.measure, timeframe: g.timeframe }))),
+    goals: JSON.stringify(
+      goals.map((g) => ({ title: g.title, area: g.area, type: g.type, measure: g.measure, timeframe: g.timeframe })),
+    ),
     baseline: JSON.stringify(user?.baseline ?? {}),
     equipment: JSON.stringify(equipment.map((e) => ({ name: e.name, category: e.category }))),
     recent_logs: renderLogLines(history),
@@ -158,7 +161,10 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
  * still returns its stored session/log. Returns null when the occurrence isn't this user's
  * (route → 404; happens legitimately after a replan deletes future pending rows).
  */
-export async function getOccurrenceDetail(userId: string, occurrenceId: string): Promise<OccurrenceWithActivity | null> {
+export async function getOccurrenceDetail(
+  userId: string,
+  occurrenceId: string,
+): Promise<OccurrenceWithActivity | null> {
   const occ = await getOccurrenceWithActivity(userId, occurrenceId);
   if (!occ) return null;
 

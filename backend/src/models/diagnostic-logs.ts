@@ -193,7 +193,8 @@ export async function getDiagTokenUsageStats(filters: DiagnosticFilters = {}): P
       byModel[modelKey].totalTokens += usage.total_tokens || 0;
     }
 
-    if (!byUser[userId]) byUser[userId] = { calls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0, withUsage: 0 };
+    if (!byUser[userId])
+      byUser[userId] = { calls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0, withUsage: 0 };
     byUser[userId].calls += 1;
     if (hasUsage) {
       byUser[userId].withUsage += 1;

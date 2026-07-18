@@ -19,7 +19,9 @@ export function AccountSwitcher() {
 
   async function doReset() {
     if (busy) return;
-    if (!window.confirm(`Reset ${DEV_ACCOUNT_LABELS[current]}? This clears all its data — goals, plan, and chat history.`)) {
+    if (
+      !window.confirm(`Reset ${DEV_ACCOUNT_LABELS[current]}? This clears all its data — goals, plan, and chat history.`)
+    ) {
       return;
     }
     setBusy(true);

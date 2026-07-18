@@ -91,10 +91,7 @@ export function runJobBySlug(
  * per-user dossier is passed as `systemPrompt`; the engine appends it to the job's
  * persona. Returns AI Admin sessionId.
  */
-export function openCoachSession(
-  cadenceUserId: string,
-  opts: { workflowSlug?: string; systemPrompt?: string } = {},
-) {
+export function openCoachSession(cadenceUserId: string, opts: { workflowSlug?: string; systemPrompt?: string } = {}) {
   return withAim(cadenceUserId, () =>
     openChatSession(cadenceConfig.aim.coachJobSlug, {
       userId: cadenceUserId,
@@ -180,9 +177,7 @@ export function injectCoachContext(
     context,
     '</context>',
   ].join('\n');
-  return withAim(cadenceUserId, () =>
-    createChatMessage({ chat_session_id: sessionId, role: 'user', content: block }),
-  );
+  return withAim(cadenceUserId, () => createChatMessage({ chat_session_id: sessionId, role: 'user', content: block }));
 }
 
 /** Read a session's stored chat history (for the full-conversation capture window). */

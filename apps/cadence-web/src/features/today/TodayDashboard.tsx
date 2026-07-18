@@ -80,8 +80,12 @@ export function TodayDashboard({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    getProgress().then(setProgress).catch(() => setProgress({ cards: [], trends: [], history: [] }));
-    getNutritionDay().then(setNutrition).catch(() => setNutrition(null));
+    getProgress()
+      .then(setProgress)
+      .catch(() => setProgress({ cards: [], trends: [], history: [] }));
+    getNutritionDay()
+      .then(setNutrition)
+      .catch(() => setNutrition(null));
     getRecentMeals(7)
       .then((ms) => setRecentDays(new Set(ms.map((m) => m.date)).size))
       .catch(() => {});
@@ -95,7 +99,9 @@ export function TodayDashboard({
       await addGoalEvent(goalId, label);
       setAddFor(null);
       setAddLabel('');
-      getProgress().then(setProgress).catch(() => {});
+      getProgress()
+        .then(setProgress)
+        .catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -106,8 +112,7 @@ export function TodayDashboard({
   const nextUp = plan.week
     .filter((d) => !d.isToday)
     .flatMap((d) => d.occurrences.filter((o) => o.status === 'pending').map((o) => ({ o, d })))[0] as
-    | { o: PlanOccurrence; d: PlanDay }
-    | undefined;
+    { o: PlanOccurrence; d: PlanDay } | undefined;
 
   const cards = [...(progress?.cards ?? [])].sort((a, b) => rank(a) - rank(b));
   const trends = progress?.trends ?? [];
@@ -117,7 +122,8 @@ export function TodayDashboard({
   // The API returns `{}` (not null) for an unset user, and `{}` is truthy — so gate on an
   // ACTUAL macro value. No real target → the observe card, never empty "0g left" rings.
   const targets =
-    nutrition?.targets && (nutrition.targets.kcal || nutrition.targets.protein_g || nutrition.targets.carbs_g || nutrition.targets.fat_g)
+    nutrition?.targets &&
+    (nutrition.targets.kcal || nutrition.targets.protein_g || nutrition.targets.carbs_g || nutrition.targets.fat_g)
       ? nutrition.targets
       : null;
   const nutritionEngaged = !!nutrition && (!!targets || nutrition.meals.length > 0 || recentDays > 0 || hasFoodInPlan);
@@ -128,7 +134,11 @@ export function TodayDashboard({
     const openable = o.kind === 'user' || isFood(o.title) || isWeigh(o.title);
     return (
       <div className={`occ${done ? ' occ-done' : ''}${skipped ? ' occ-skip' : ''}`}>
-        <button className="occ-check" onClick={() => onCheck(o, done ? 'pending' : 'done')} aria-label={done ? 'Mark not done' : 'Mark done'}>
+        <button
+          className="occ-check"
+          onClick={() => onCheck(o, done ? 'pending' : 'done')}
+          aria-label={done ? 'Mark not done' : 'Mark done'}
+        >
           {done ? '✓' : skipped ? '–' : ''}
         </button>
         <span className={`occ-mod occ-mod-${occMod(o)}`}>
@@ -161,11 +171,16 @@ export function TodayDashboard({
         return (
           <div className="prog-card dash-ringcard">
             <Ring fraction={c.window > 0 ? c.kept / c.window : 0} color="var(--forest)" size={70}>
-              <span className="ring-n">{c.kept}<i>/{c.window}</i></span>
+              <span className="ring-n">
+                {c.kept}
+                <i>/{c.window}</i>
+              </span>
             </Ring>
             <div className="dash-ringcard-t">
               <div className="prog-title">{c.title}</div>
-              <div className="prog-sub">{c.kept === 0 ? 'a fresh week' : `showed up ${c.kept} of ${c.window} days`}</div>
+              <div className="prog-sub">
+                {c.kept === 0 ? 'a fresh week' : `showed up ${c.kept} of ${c.window} days`}
+              </div>
             </div>
           </div>
         );
@@ -175,7 +190,11 @@ export function TodayDashboard({
         <div className="prog-card">
           <div className="prog-title">{c.title}</div>
           <DotRow dots={dots} color="var(--sage)" />
-          <div className="prog-sub">{c.kept === 0 ? 'a fresh week — a missed day is information, not failure' : `${c.kept} of ${c.window} days this week`}</div>
+          <div className="prog-sub">
+            {c.kept === 0
+              ? 'a fresh week — a missed day is information, not failure'
+              : `${c.kept} of ${c.window} days this week`}
+          </div>
         </div>
       );
     }
@@ -184,7 +203,10 @@ export function TodayDashboard({
         <div className="prog-card">
           <div className="prog-title">{c.title}</div>
           <div className="prog-big">
-            {c.current}<span className="prog-unit">/{c.target} {c.unit}</span>
+            {c.current}
+            <span className="prog-unit">
+              /{c.target} {c.unit}
+            </span>
           </div>
           <CountBar current={c.current} target={c.target} />
           {addFor === c.goal_id ? (
@@ -198,25 +220,39 @@ export function TodayDashboard({
                 disabled={busy}
                 autoFocus
               />
-              <button className="logbox-btn" onClick={() => submitAdd(c.goal_id)} disabled={busy || !addLabel.trim()}>Add</button>
+              <button className="logbox-btn" onClick={() => submitAdd(c.goal_id)} disabled={busy || !addLabel.trim()}>
+                Add
+              </button>
             </div>
           ) : (
-            <button className="prog-addbtn" onClick={() => { setAddFor(c.goal_id); setAddLabel(''); }}>+ add one</button>
+            <button
+              className="prog-addbtn"
+              onClick={() => {
+                setAddFor(c.goal_id);
+                setAddLabel('');
+              }}
+            >
+              + add one
+            </button>
           )}
         </div>
       );
     }
     if (c.kind === 'latest_vs_target') {
-      const dir = c.start !== null && c.latest !== null ? (c.latest < c.start ? '↓' : c.latest > c.start ? '↑' : '→') : '';
+      const dir =
+        c.start !== null && c.latest !== null ? (c.latest < c.start ? '↓' : c.latest > c.start ? '↑' : '→') : '';
       return (
         <div className="prog-card">
           <div className="prog-title">{c.title}</div>
           <div className="prog-trend-row">
             <div>
               <div className="prog-big">
-                {c.latest ?? '—'} <span className="prog-unit">{c.unit}</span> {dir && <span className="prog-dir">{dir}</span>}
+                {c.latest ?? '—'} <span className="prog-unit">{c.unit}</span>{' '}
+                {dir && <span className="prog-dir">{dir}</span>}
               </div>
-              <div className="prog-sub">{c.start !== null ? `started ${c.start}` : 'no start yet'} · target {c.target}</div>
+              <div className="prog-sub">
+                {c.start !== null ? `started ${c.start}` : 'no start yet'} · target {c.target}
+              </div>
             </div>
             {c.series.length >= 2 && <Sparkline series={c.series} good="down" />}
           </div>
@@ -229,12 +265,15 @@ export function TodayDashboard({
       <div className="prog-card">
         <div className="prog-title">{c.title}</div>
         <div className="prog-big">
-          {c.days_left}<span className="prog-unit"> days out</span>
+          {c.days_left}
+          <span className="prog-unit"> days out</span>
         </div>
         {stones && (
           <>
             <CountBar current={c.milestones_done} target={c.milestones_total} />
-            <div className="prog-sub">stepping-stones {c.milestones_done}/{c.milestones_total} · {c.end}</div>
+            <div className="prog-sub">
+              stepping-stones {c.milestones_done}/{c.milestones_total} · {c.end}
+            </div>
           </>
         )}
         {!stones && <div className="prog-sub">{c.end}</div>}
@@ -289,18 +328,25 @@ export function TodayDashboard({
       )}
 
       {/* 3–7 — everything else derives from /progress, ordered by the S6 registry. */}
-      {cards.map((c, i) => <DashCard key={i} c={c} />)}
+      {cards.map((c, i) => (
+        <DashCard key={i} c={c} />
+      ))}
 
       {/* Movement trends (pace / top load) — self-contained sparklines, no goal-matching needed. */}
       {trends.map((t, i) => (
         <div className="prog-card" key={`t${i}`}>
           <div className="prog-trend-row">
             <div>
-              <div className="prog-title" style={{ marginBottom: 2 }}>{t.title}</div>
-              <div className="prog-big" style={{ fontSize: 20 }}>
-                {t.series[t.series.length - 1]!.value}<span className="prog-unit"> {t.unit}</span>
+              <div className="prog-title" style={{ marginBottom: 2 }}>
+                {t.title}
               </div>
-              <div className="prog-sub">{t.label.toLowerCase()} · was {t.series[0]!.value}</div>
+              <div className="prog-big" style={{ fontSize: 20 }}>
+                {t.series[t.series.length - 1]!.value}
+                <span className="prog-unit"> {t.unit}</span>
+              </div>
+              <div className="prog-sub">
+                {t.label.toLowerCase()} · was {t.series[0]!.value}
+              </div>
             </div>
             <Sparkline series={t.series} good={t.direction_good} />
           </div>

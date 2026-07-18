@@ -8,7 +8,13 @@ import { listNutritionLogs } from '../repos/nutrition.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { rollingConsistency } from './metrics.ts';
 import { describeRecurrence } from './scheduling.ts';
-import { synthesizeVetCommit, synthesizeAndVet, commitActivities, type CommitResult, type PlanFlowResult } from './plan-synthesis.ts';
+import {
+  synthesizeVetCommit,
+  synthesizeAndVet,
+  commitActivities,
+  type CommitResult,
+  type PlanFlowResult,
+} from './plan-synthesis.ts';
 import type { Goal } from '@cadence/shared';
 
 const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10);
@@ -33,7 +39,14 @@ async function recentActivity(userId: string, days = 14) {
     missed: count('missed'),
     scheduled: occ.length,
     ...(nutrition.meals_logged
-      ? { food_log: { days_logged: nutrition.days_logged, meals_per_logged_day: nutrition.meals_per_logged_day, top_items: nutrition.top_items, alcohol_days: nutrition.alcohol_days } }
+      ? {
+          food_log: {
+            days_logged: nutrition.days_logged,
+            meals_per_logged_day: nutrition.meals_per_logged_day,
+            top_items: nutrition.top_items,
+            alcohol_days: nutrition.alcohol_days,
+          },
+        }
       : {}),
   };
 }
@@ -51,7 +64,11 @@ async function gatherReplanInputs(userId: string): Promise<ReplanInputs | null> 
   const goals = await listGoalsByStatus(userId, ['committed', 'confirmed']);
   if (goals.length === 0) return null;
 
-  const [user, equipment, activePlan] = await Promise.all([getUser(userId), listEquipment(userId), getActivePlan(userId)]);
+  const [user, equipment, activePlan] = await Promise.all([
+    getUser(userId),
+    listEquipment(userId),
+    getActivePlan(userId),
+  ]);
   const baseline = user?.baseline ?? {};
   const activities = activePlan ? await listActivities(activePlan.plan_id) : [];
 
@@ -103,7 +120,12 @@ export async function previewReplan(userId: string, steer?: string): Promise<Pla
 
   const goalIds = inputs.goals.map((g) => g.goal_id);
   const note = s.note ?? '';
-  await setPendingPlan(userId, { activities: s.activities!, note, goal_ids: goalIds, created_at: new Date().toISOString() });
+  await setPendingPlan(userId, {
+    activities: s.activities!,
+    note,
+    goal_ids: goalIds,
+    created_at: new Date().toISOString(),
+  });
 
   return { status: 'proposed', proposal: { activities: s.activities!, note } };
 }
@@ -123,7 +145,11 @@ export async function confirmReplan(userId: string): Promise<PlanFlowResult> {
     if (!pending) return { status: 'vetoed', violations: ['Failed to prepare a plan to commit.'] };
   }
 
-  const r = await commitActivities(userId, { activities: pending.activities, note: pending.note, goalIds: pending.goal_ids });
+  const r = await commitActivities(userId, {
+    activities: pending.activities,
+    note: pending.note,
+    goalIds: pending.goal_ids,
+  });
   if (r.status === 'committed') {
     await setPendingPlan(userId, null);
     await setPendingProposal(userId, null);

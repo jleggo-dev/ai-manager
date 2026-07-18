@@ -1078,7 +1078,8 @@ export const RULE_REGISTRY: Record<string, RuleEntry> = {
   'coerce-types': {
     fn: coerceTypes,
     label: 'Coerce Types',
-    description: 'Normalize top-level field types (string→number, string→boolean). On failure emits { verified: false }.',
+    description:
+      'Normalize top-level field types (string→number, string→boolean). On failure emits { verified: false }.',
     hasOptions: true,
     streamingSafe: false,
     streamingNote: 'Requires full JSON. Applied post-stream after trim-to-json.',
@@ -1086,7 +1087,8 @@ export const RULE_REGISTRY: Record<string, RuleEntry> = {
   'constrain-enum': {
     fn: constrainEnum,
     label: 'Constrain Enum',
-    description: 'Assert field values are in an allowed set. On failure emits { verified: false, reason: "enum_violation" }.',
+    description:
+      'Assert field values are in an allowed set. On failure emits { verified: false, reason: "enum_violation" }.',
     hasOptions: true,
     streamingSafe: false,
     streamingNote: 'Requires full JSON. Applied post-stream.',

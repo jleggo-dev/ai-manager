@@ -1,6 +1,15 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
-import { logMeal, getNutritionSummary, listRecentMeals, getBaselineRead, getNutritionDay, patchMeal, setTargets, clearTargets } from '../services/nutrition.ts';
+import {
+  logMeal,
+  getNutritionSummary,
+  listRecentMeals,
+  getBaselineRead,
+  getNutritionDay,
+  patchMeal,
+  setTargets,
+  clearTargets,
+} from '../services/nutrition.ts';
 import type { MealKind } from '@cadence/shared';
 
 const router = Router();
@@ -13,7 +22,8 @@ router.post('/meals', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
   const meal = MEALS.includes(req.body?.meal) ? (req.body.meal as MealKind) : undefined;
-  const photo = typeof req.body?.photo === 'string' && req.body.photo.startsWith('data:image/') ? req.body.photo : undefined;
+  const photo =
+    typeof req.body?.photo === 'string' && req.body.photo.startsWith('data:image/') ? req.body.photo : undefined;
   if (!text && !photo) return void res.status(400).json({ error: 'a meal needs words or a photo' });
   try {
     res.json(await logMeal(userId, { text: text || undefined, meal, photo }));

@@ -153,16 +153,44 @@ function LovableTab({ onNavigate }: { onNavigate: (key: string, params?: Record<
       <StepCard n={1} title="Download the integration pack">
         <Text size="sm">These files tell Lovable&apos;s AI how to connect to AI Admin. Download all four.</Text>
         <Stack gap="xs" mt="xs">
-          <Button component="a" href={HANDBOOK_URL} download={HANDBOOK_FILENAME} leftSection={<IconDownload size={18} />} variant="filled" fullWidth>
+          <Button
+            component="a"
+            href={HANDBOOK_URL}
+            download={HANDBOOK_FILENAME}
+            leftSection={<IconDownload size={18} />}
+            variant="filled"
+            fullWidth
+          >
             Integration handbook (.md)
           </Button>
-          <Button component="a" href={EDGE_FN_URL} download={EDGE_FN_FILENAME} leftSection={<IconDownload size={18} />} variant="light" fullWidth>
+          <Button
+            component="a"
+            href={EDGE_FN_URL}
+            download={EDGE_FN_FILENAME}
+            leftSection={<IconDownload size={18} />}
+            variant="light"
+            fullWidth
+          >
             Edge Function starter code (.ts)
           </Button>
-          <Button component="a" href={BUILDER_URL} download={BUILDER_FILENAME} leftSection={<IconDownload size={18} />} variant="light" fullWidth>
+          <Button
+            component="a"
+            href={BUILDER_URL}
+            download={BUILDER_FILENAME}
+            leftSection={<IconDownload size={18} />}
+            variant="light"
+            fullWidth
+          >
             Workflow builder reference (.md)
           </Button>
-          <Button component="a" href={TEST_SPEC_URL} download={TEST_SPEC_FILENAME} leftSection={<IconDownload size={18} />} variant="light" fullWidth>
+          <Button
+            component="a"
+            href={TEST_SPEC_URL}
+            download={TEST_SPEC_FILENAME}
+            leftSection={<IconDownload size={18} />}
+            variant="light"
+            fullWidth
+          >
             Test page spec (.md)
           </Button>
         </Stack>
@@ -171,13 +199,16 @@ function LovableTab({ onNavigate }: { onNavigate: (key: string, params?: Record<
       {/* Step 2 */}
       <StepCard n={2} title="Upload to Lovable and add project instructions">
         <Text size="sm">
-          Upload all four files to your Lovable project. Tell Lovable: <strong>&quot;Store these files in a /docs folder.&quot;</strong>
+          Upload all four files to your Lovable project. Tell Lovable:{' '}
+          <strong>&quot;Store these files in a /docs folder.&quot;</strong>
         </Text>
         <Text size="sm" c="dimmed" mt={4}>
-          These files are versioned. If you update AI Admin, re-download the latest from this page to keep your integration docs current.
+          These files are versioned. If you update AI Admin, re-download the latest from this page to keep your
+          integration docs current.
         </Text>
         <Text size="sm" mt="xs">
-          Then open your <strong>project instructions</strong> (settings area where Lovable keeps standing rules) and paste this:
+          Then open your <strong>project instructions</strong> (settings area where Lovable keeps standing rules) and
+          paste this:
         </Text>
         <Code block style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} mt="sm">
           {standingInstructions}
@@ -190,11 +221,28 @@ function LovableTab({ onNavigate }: { onNavigate: (key: string, params?: Record<
         <Text size="sm">
           Create an API key in <strong>Settings → API keys</strong>, then paste it and your AI Admin URL below.
         </Text>
-        <Button variant="subtle" size="xs" leftSection={<IconSettings size={16} />} onClick={() => onNavigate?.('settings', { tab: 'api-keys' })}>
+        <Button
+          variant="subtle"
+          size="xs"
+          leftSection={<IconSettings size={16} />}
+          onClick={() => onNavigate?.('settings', { tab: 'api-keys' })}
+        >
           Open Settings → API keys
         </Button>
-        <TextInput label="Your AI Admin API key" placeholder="aim_sk_…" value={apiKey} onChange={(e) => setApiKey(e.currentTarget.value)} size="sm" />
-        <TextInput label="Your AI Admin URL" placeholder="https://your-ai-admin-domain.com" value={baseUrl} onChange={(e) => setBaseUrl(e.currentTarget.value)} size="sm" />
+        <TextInput
+          label="Your AI Admin API key"
+          placeholder="aim_sk_…"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.currentTarget.value)}
+          size="sm"
+        />
+        <TextInput
+          label="Your AI Admin URL"
+          placeholder="https://your-ai-admin-domain.com"
+          value={baseUrl}
+          onChange={(e) => setBaseUrl(e.currentTarget.value)}
+          size="sm"
+        />
         <Code block style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} mt="xs">
           {masterPrompt}
         </Code>
@@ -203,7 +251,9 @@ function LovableTab({ onNavigate }: { onNavigate: (key: string, params?: Record<
 
       {/* Step 4 */}
       <StepCard n={4} title="Test it">
-        <Text size="sm" fw={600}>Create two test jobs in AI Admin</Text>
+        <Text size="sm" fw={600}>
+          Create two test jobs in AI Admin
+        </Text>
         <List size="sm" spacing={4}>
           <List.Item>
             <strong>Job 1 — smoke test:</strong> Open <strong>Jobs</strong>, create a job with the prompt{' '}
@@ -214,27 +264,49 @@ function LovableTab({ onNavigate }: { onNavigate: (key: string, params?: Record<
             <Code>{'Write one friendly sentence about {{topic}}. Keep the style {{tone}}.'}</Code> Copy the job ID.
           </List.Item>
         </List>
-        <Button variant="subtle" size="xs" leftSection={<IconListCheck size={16} />} onClick={() => onNavigate?.('processing-jobs')}>
+        <Button
+          variant="subtle"
+          size="xs"
+          leftSection={<IconListCheck size={16} />}
+          onClick={() => onNavigate?.('processing-jobs')}
+        >
           Open Jobs
         </Button>
         <Divider my="xs" />
-        <Text size="sm" fw={600}>Prompt Lovable to build a test page</Text>
+        <Text size="sm" fw={600}>
+          Prompt Lovable to build a test page
+        </Text>
         <Code block style={{ fontSize: 12, whiteSpace: 'pre-wrap' }} mt="xs">
           Build an integration test page following the spec in /docs/{TEST_SPEC_FILENAME}
         </Code>
-        <CopyBlock value={`Build an integration test page following the spec in /docs/${TEST_SPEC_FILENAME}`} label="Copy test page prompt" />
+        <CopyBlock
+          value={`Build an integration test page following the spec in /docs/${TEST_SPEC_FILENAME}`}
+          label="Copy test page prompt"
+        />
         <Divider my="xs" />
-        <Text size="sm" fw={600}>Verification checklist</Text>
-        <Text size="sm" c="dimmed" mb={4}>In Lovable (test page):</Text>
+        <Text size="sm" fw={600}>
+          Verification checklist
+        </Text>
+        <Text size="sm" c="dimmed" mb={4}>
+          In Lovable (test page):
+        </Text>
         <List size="sm" spacing={4}>
-          <List.Item>Smoke test shows <strong>SMOKE_OK</strong></List.Item>
+          <List.Item>
+            Smoke test shows <strong>SMOKE_OK</strong>
+          </List.Item>
           <List.Item>Variable test response matches the topic and tone you entered</List.Item>
           <List.Item>Streaming test shows text appearing gradually (not all at once)</List.Item>
         </List>
-        <Text size="sm" c="dimmed" mt="sm" mb={4}>In AI Admin:</Text>
+        <Text size="sm" c="dimmed" mt="sm" mb={4}>
+          In AI Admin:
+        </Text>
         <List size="sm" spacing={4}>
-          <List.Item><strong>Jobs</strong> → click your test job → recent test runs appear</List.Item>
-          <List.Item><strong>Diagnostics</strong> → requests from your calling application show up</List.Item>
+          <List.Item>
+            <strong>Jobs</strong> → click your test job → recent test runs appear
+          </List.Item>
+          <List.Item>
+            <strong>Diagnostics</strong> → requests from your calling application show up
+          </List.Item>
         </List>
       </StepCard>
     </Stack>
@@ -306,46 +378,108 @@ function CursorTab({ onNavigate }: { onNavigate: (key: string, params?: Record<s
           <Text component="a" href="https://agentskills.io" target="_blank" rel="noreferrer" c="indigo" td="underline">
             agentskills.io
           </Text>{' '}
-          open standard — they also work in Claude Code, Codex, Windsurf, Goose, and 40+ other agents. See the Claude tab for Claude-specific instructions.
+          open standard — they also work in Claude Code, Codex, Windsurf, Goose, and 40+ other agents. See the Claude
+          tab for Claude-specific instructions.
         </Text>
       </Alert>
 
       {/* Step 1 */}
       <StepCard n={1} title="Download the skills and reference docs">
         <Text size="sm">
-          Skills auto-activate when you ask Cursor to add AI features or write prompt templates. Download and place them in your project or your global Cursor skills folder.
+          Skills auto-activate when you ask Cursor to add AI features or write prompt templates. Download and place them
+          in your project or your global Cursor skills folder.
         </Text>
         <Text size="xs" c="dimmed" mt={4}>
-          Project skills (shared with team): <Code>.cursor/skills/</Code> &nbsp;|&nbsp; Personal skills (all your projects):{' '}
-          <Code>~/.cursor/skills/</Code>
+          Project skills (shared with team): <Code>.cursor/skills/</Code> &nbsp;|&nbsp; Personal skills (all your
+          projects): <Code>~/.cursor/skills/</Code>
         </Text>
         <Stack gap="xs" mt="sm">
-          <Text size="xs" fw={600} c="dimmed" tt="uppercase">Skills (auto-activate in Cursor)</Text>
-          <Button component="a" href={INTEGRATION_SKILL_URL} download="SKILL.md" leftSection={<IconDownload size={18} />} variant="filled" fullWidth>
+          <Text size="xs" fw={600} c="dimmed" tt="uppercase">
+            Skills (auto-activate in Cursor)
+          </Text>
+          <Button
+            component="a"
+            href={INTEGRATION_SKILL_URL}
+            download="SKILL.md"
+            leftSection={<IconDownload size={18} />}
+            variant="filled"
+            fullWidth
+          >
             ai-admin-integration / SKILL.md
           </Button>
-          <Button component="a" href={PROMPT_SKILL_URL} download="SKILL.md" leftSection={<IconDownload size={18} />} variant="filled" fullWidth>
+          <Button
+            component="a"
+            href={PROMPT_SKILL_URL}
+            download="SKILL.md"
+            leftSection={<IconDownload size={18} />}
+            variant="filled"
+            fullWidth
+          >
             prompt-engineering / SKILL.md
           </Button>
-          <Button component="a" href={PROMPT_FRAMEWORKS_URL} download="frameworks.md" leftSection={<IconDownload size={18} />} variant="light" fullWidth>
+          <Button
+            component="a"
+            href={PROMPT_FRAMEWORKS_URL}
+            download="frameworks.md"
+            leftSection={<IconDownload size={18} />}
+            variant="light"
+            fullWidth
+          >
             prompt-engineering / references / frameworks.md
           </Button>
-          <Button component="a" href={PROMPT_AUDIT_URL} download="audit-checklist.md" leftSection={<IconDownload size={18} />} variant="light" fullWidth>
+          <Button
+            component="a"
+            href={PROMPT_AUDIT_URL}
+            download="audit-checklist.md"
+            leftSection={<IconDownload size={18} />}
+            variant="light"
+            fullWidth
+          >
             prompt-engineering / references / audit-checklist.md
           </Button>
         </Stack>
         <Stack gap="xs" mt="sm">
-          <Text size="xs" fw={600} c="dimmed" tt="uppercase">Reference docs (read on demand)</Text>
-          <Button component="a" href={INTEGRATION_DOC_URL} download="INTEGRATION.md" leftSection={<IconDownload size={18} />} variant="subtle" fullWidth>
+          <Text size="xs" fw={600} c="dimmed" tt="uppercase">
+            Reference docs (read on demand)
+          </Text>
+          <Button
+            component="a"
+            href={INTEGRATION_DOC_URL}
+            download="INTEGRATION.md"
+            leftSection={<IconDownload size={18} />}
+            variant="subtle"
+            fullWidth
+          >
             Integration guide (.md)
           </Button>
-          <Button component="a" href={API_DOC_URL} download="API.md" leftSection={<IconDownload size={18} />} variant="subtle" fullWidth>
+          <Button
+            component="a"
+            href={API_DOC_URL}
+            download="API.md"
+            leftSection={<IconDownload size={18} />}
+            variant="subtle"
+            fullWidth
+          >
             API reference (.md)
           </Button>
-          <Button component="a" href={BUILDER_URL} download={BUILDER_FILENAME} leftSection={<IconDownload size={18} />} variant="subtle" fullWidth>
+          <Button
+            component="a"
+            href={BUILDER_URL}
+            download={BUILDER_FILENAME}
+            leftSection={<IconDownload size={18} />}
+            variant="subtle"
+            fullWidth
+          >
             Workflow builder reference (.md)
           </Button>
-          <Button component="a" href={MANIFEST_URL} download="manifest.json" leftSection={<IconDownload size={18} />} variant="subtle" fullWidth>
+          <Button
+            component="a"
+            href={MANIFEST_URL}
+            download="manifest.json"
+            leftSection={<IconDownload size={18} />}
+            variant="subtle"
+            fullWidth
+          >
             Section-level manifest (.json)
           </Button>
         </Stack>
@@ -354,7 +488,8 @@ function CursorTab({ onNavigate }: { onNavigate: (key: string, params?: Record<s
       {/* Step 2 */}
       <StepCard n={2} title="Install skills into Cursor">
         <Text size="sm">
-          Place each downloaded <Code>SKILL.md</Code> and its <Code>references/</Code> folder into the matching directory:
+          Place each downloaded <Code>SKILL.md</Code> and its <Code>references/</Code> folder into the matching
+          directory:
         </Text>
         <Code block style={{ fontSize: 12 }} mt="xs">
           {`# Project skills (shared with team via git)
@@ -371,7 +506,8 @@ function CursorTab({ onNavigate }: { onNavigate: (key: string, params?: Record<s
 ~/.cursor/skills/   (same structure)`}
         </Code>
         <Text size="sm" c="dimmed" mt="xs">
-          If you cloned this AI Admin repo, these skills are already installed at <Code>.cursor/skills/</Code> — no download needed.
+          If you cloned this AI Admin repo, these skills are already installed at <Code>.cursor/skills/</Code> — no
+          download needed.
         </Text>
         <Button
           variant="subtle"
@@ -386,8 +522,8 @@ function CursorTab({ onNavigate }: { onNavigate: (key: string, params?: Record<s
       {/* Step 3 */}
       <StepCard n={3} title="Add a Cursor rule to your target project">
         <Text size="sm">
-          In the project you are building with Cursor, create a rule file at{' '}
-          <Code>.cursor/rules/ai-admin.mdc</Code>. This gives Cursor standing context about the integration without you having to repeat it every chat.
+          In the project you are building with Cursor, create a rule file at <Code>.cursor/rules/ai-admin.mdc</Code>.
+          This gives Cursor standing context about the integration without you having to repeat it every chat.
         </Text>
         <Text size="sm" c="dimmed" mt={4}>
           Enter your AI Admin URL to personalise the rule:
@@ -409,20 +545,25 @@ function CursorTab({ onNavigate }: { onNavigate: (key: string, params?: Record<s
       {/* Step 4 */}
       <StepCard n={4} title="Start your first AI feature">
         <Text size="sm">
-          Paste this into a new Cursor chat to orient it before asking for a feature. The skills will activate automatically from there.
+          Paste this into a new Cursor chat to orient it before asking for a feature. The skills will activate
+          automatically from there.
         </Text>
         <Code block style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} mt="xs">
           {firstPrompt}
         </Code>
         <CopyBlock value={firstPrompt} label="Copy first-chat prompt" />
         <Divider my="xs" />
-        <Text size="sm" fw={600}>Verify the skills are working</Text>
+        <Text size="sm" fw={600}>
+          Verify the skills are working
+        </Text>
         <List size="sm" spacing={4} mt={4}>
           <List.Item>
-            Ask Cursor: <em>&quot;I want to add a processing job that summarizes documents. What should I do?&quot;</em> — it should reference AI Admin patterns.
+            Ask Cursor: <em>&quot;I want to add a processing job that summarizes documents. What should I do?&quot;</em>{' '}
+            — it should reference AI Admin patterns.
           </List.Item>
           <List.Item>
-            Ask Cursor: <em>&quot;Help me write a prompt template for extracting company info as JSON.&quot;</em> — it should apply the prompt engineering skill.
+            Ask Cursor: <em>&quot;Help me write a prompt template for extracting company info as JSON.&quot;</em> — it
+            should apply the prompt engineering skill.
           </List.Item>
         </List>
       </StepCard>
@@ -485,7 +626,8 @@ function ClaudeTab({ onNavigate }: { onNavigate: (key: string, params?: Record<s
           <Text component="a" href="https://agentskills.io" target="_blank" rel="noreferrer" c="violet" td="underline">
             agentskills.io
           </Text>{' '}
-          open standard — the same files also work in Cursor, Codex, Windsurf, and others. See the Cursor tab for Cursor-specific install paths.
+          open standard — the same files also work in Cursor, Codex, Windsurf, and others. See the Cursor tab for
+          Cursor-specific install paths.
         </Text>
       </Alert>
 
@@ -493,36 +635,100 @@ function ClaudeTab({ onNavigate }: { onNavigate: (key: string, params?: Record<s
       <StepCard n={1} title="Download the skills and reference docs">
         <Text size="sm">Skills auto-activate in Claude Code when you ask about AI integration or prompt design.</Text>
         <Text size="xs" c="dimmed" mt={4}>
-          Project skills (shared with team): <Code>.claude/skills/</Code> &nbsp;|&nbsp; Personal skills (all your projects):{' '}
-          <Code>~/.claude/skills/</Code>
+          Project skills (shared with team): <Code>.claude/skills/</Code> &nbsp;|&nbsp; Personal skills (all your
+          projects): <Code>~/.claude/skills/</Code>
         </Text>
         <Stack gap="xs" mt="sm">
-          <Text size="xs" fw={600} c="dimmed" tt="uppercase">Skills (auto-activate)</Text>
-          <Button component="a" href={INTEGRATION_SKILL_URL} download="SKILL.md" leftSection={<IconDownload size={18} />} variant="filled" color="violet" fullWidth>
+          <Text size="xs" fw={600} c="dimmed" tt="uppercase">
+            Skills (auto-activate)
+          </Text>
+          <Button
+            component="a"
+            href={INTEGRATION_SKILL_URL}
+            download="SKILL.md"
+            leftSection={<IconDownload size={18} />}
+            variant="filled"
+            color="violet"
+            fullWidth
+          >
             ai-admin-integration / SKILL.md
           </Button>
-          <Button component="a" href={PROMPT_SKILL_URL} download="SKILL.md" leftSection={<IconDownload size={18} />} variant="filled" color="violet" fullWidth>
+          <Button
+            component="a"
+            href={PROMPT_SKILL_URL}
+            download="SKILL.md"
+            leftSection={<IconDownload size={18} />}
+            variant="filled"
+            color="violet"
+            fullWidth
+          >
             prompt-engineering / SKILL.md
           </Button>
-          <Button component="a" href={PROMPT_FRAMEWORKS_URL} download="frameworks.md" leftSection={<IconDownload size={18} />} variant="light" color="violet" fullWidth>
+          <Button
+            component="a"
+            href={PROMPT_FRAMEWORKS_URL}
+            download="frameworks.md"
+            leftSection={<IconDownload size={18} />}
+            variant="light"
+            color="violet"
+            fullWidth
+          >
             prompt-engineering / references / frameworks.md
           </Button>
-          <Button component="a" href={PROMPT_AUDIT_URL} download="audit-checklist.md" leftSection={<IconDownload size={18} />} variant="light" color="violet" fullWidth>
+          <Button
+            component="a"
+            href={PROMPT_AUDIT_URL}
+            download="audit-checklist.md"
+            leftSection={<IconDownload size={18} />}
+            variant="light"
+            color="violet"
+            fullWidth
+          >
             prompt-engineering / references / audit-checklist.md
           </Button>
         </Stack>
         <Stack gap="xs" mt="sm">
-          <Text size="xs" fw={600} c="dimmed" tt="uppercase">Reference docs (read on demand)</Text>
-          <Button component="a" href={INTEGRATION_DOC_URL} download="INTEGRATION.md" leftSection={<IconDownload size={18} />} variant="subtle" fullWidth>
+          <Text size="xs" fw={600} c="dimmed" tt="uppercase">
+            Reference docs (read on demand)
+          </Text>
+          <Button
+            component="a"
+            href={INTEGRATION_DOC_URL}
+            download="INTEGRATION.md"
+            leftSection={<IconDownload size={18} />}
+            variant="subtle"
+            fullWidth
+          >
             Integration guide (.md)
           </Button>
-          <Button component="a" href={API_DOC_URL} download="API.md" leftSection={<IconDownload size={18} />} variant="subtle" fullWidth>
+          <Button
+            component="a"
+            href={API_DOC_URL}
+            download="API.md"
+            leftSection={<IconDownload size={18} />}
+            variant="subtle"
+            fullWidth
+          >
             API reference (.md)
           </Button>
-          <Button component="a" href={BUILDER_URL} download={BUILDER_FILENAME} leftSection={<IconDownload size={18} />} variant="subtle" fullWidth>
+          <Button
+            component="a"
+            href={BUILDER_URL}
+            download={BUILDER_FILENAME}
+            leftSection={<IconDownload size={18} />}
+            variant="subtle"
+            fullWidth
+          >
             Workflow builder reference (.md)
           </Button>
-          <Button component="a" href={MANIFEST_URL} download="manifest.json" leftSection={<IconDownload size={18} />} variant="subtle" fullWidth>
+          <Button
+            component="a"
+            href={MANIFEST_URL}
+            download="manifest.json"
+            leftSection={<IconDownload size={18} />}
+            variant="subtle"
+            fullWidth
+          >
             Section-level manifest (.json)
           </Button>
         </Stack>
@@ -531,7 +737,8 @@ function ClaudeTab({ onNavigate }: { onNavigate: (key: string, params?: Record<s
       {/* Step 2 */}
       <StepCard n={2} title="Install skills into Claude Code">
         <Text size="sm">
-          Place each downloaded <Code>SKILL.md</Code> and its <Code>references/</Code> folder into the matching directory:
+          Place each downloaded <Code>SKILL.md</Code> and its <Code>references/</Code> folder into the matching
+          directory:
         </Text>
         <Code block style={{ fontSize: 12 }} mt="xs">
           {`# Project skills (shared with team via git)
@@ -560,8 +767,9 @@ function ClaudeTab({ onNavigate }: { onNavigate: (key: string, params?: Record<s
       {/* Step 3 */}
       <StepCard n={3} title="Add AI Admin context to your CLAUDE.md">
         <Text size="sm">
-          In the project you are building with Claude Code, add the following block to your{' '}
-          <Code>CLAUDE.md</Code> file (create it at the project root if it doesn&apos;t exist). This gives Claude persistent context about the integration.
+          In the project you are building with Claude Code, add the following block to your <Code>CLAUDE.md</Code> file
+          (create it at the project root if it doesn&apos;t exist). This gives Claude persistent context about the
+          integration.
         </Text>
         <TextInput
           label="Your AI Admin URL"
@@ -579,21 +787,23 @@ function ClaudeTab({ onNavigate }: { onNavigate: (key: string, params?: Record<s
 
       {/* Step 4 */}
       <StepCard n={4} title="Start your first AI feature">
-        <Text size="sm">
-          Paste this into a new Claude Code session to orient it before asking for a feature:
-        </Text>
+        <Text size="sm">Paste this into a new Claude Code session to orient it before asking for a feature:</Text>
         <Code block style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} mt="xs">
           {firstPrompt}
         </Code>
         <CopyBlock value={firstPrompt} label="Copy first-session prompt" />
         <Divider my="xs" />
-        <Text size="sm" fw={600}>Verify the skills are working</Text>
+        <Text size="sm" fw={600}>
+          Verify the skills are working
+        </Text>
         <List size="sm" spacing={4} mt={4}>
           <List.Item>
-            Ask Claude: <em>&quot;I want to add a processing job that summarizes documents. What should I do?&quot;</em> — it should reference AI Admin patterns.
+            Ask Claude: <em>&quot;I want to add a processing job that summarizes documents. What should I do?&quot;</em>{' '}
+            — it should reference AI Admin patterns.
           </List.Item>
           <List.Item>
-            Ask Claude: <em>&quot;Help me write a prompt template for extracting company info as JSON.&quot;</em> — it should apply the prompt engineering skill.
+            Ask Claude: <em>&quot;Help me write a prompt template for extracting company info as JSON.&quot;</em> — it
+            should apply the prompt engineering skill.
           </List.Item>
         </List>
       </StepCard>
@@ -627,7 +837,9 @@ export default function LovableGuidePage({ onNavigate }: LovableGuidePageProps) 
           <Tabs.Tab value="cursor" leftSection={<IconBrandVscode size={16} />}>
             <Group gap={6}>
               Cursor
-              <Badge size="xs" variant="light" color="indigo">+ Windsurf, Codex…</Badge>
+              <Badge size="xs" variant="light" color="indigo">
+                + Windsurf, Codex…
+              </Badge>
             </Group>
           </Tabs.Tab>
           <Tabs.Tab value="claude" leftSection={<IconRobot size={16} />}>

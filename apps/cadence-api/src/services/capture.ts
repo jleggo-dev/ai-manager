@@ -1,7 +1,7 @@
 import { runJob } from '../ai/aim.ts';
 import { cadenceConfig } from '../config.ts';
 import type { CaptureExtractResult, GoalArea, GoalType, EquipmentCategory } from '@cadence/shared';
-import { insertGoal, listGoalsByStatus, deleteGoalsByStatus, deleteCapturedWithoutMilestones } from '../repos/goals.ts';
+import { insertGoal, listGoalsByStatus, deleteCapturedWithoutMilestones } from '../repos/goals.ts';
 import { insertEquipment, deleteAllEquipment } from '../repos/equipment.ts';
 import { mergeBaseline, setName } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
@@ -44,7 +44,9 @@ const LEGACY_AREA: Record<string, GoalArea> = {
 };
 
 function coerceArea(raw: unknown, coerced: string[]): GoalArea {
-  const s = String(raw ?? '').trim().toLowerCase();
+  const s = String(raw ?? '')
+    .trim()
+    .toLowerCase();
   if ((GOAL_AREAS as string[]).includes(s)) return s as GoalArea;
   const mapped = LEGACY_AREA[s];
   coerced.push(`area "${s || '(empty)'}" → ${mapped ?? 'practice'}`);
@@ -77,9 +79,7 @@ export async function runCaptureExtract(
 
   const out: CaptureExtractResult = {
     goals: Array.isArray(parsed.goals) ? (parsed.goals as CaptureExtractResult['goals']) : [],
-    equipment: Array.isArray(parsed.equipment)
-      ? (parsed.equipment as CaptureExtractResult['equipment'])
-      : [],
+    equipment: Array.isArray(parsed.equipment) ? (parsed.equipment as CaptureExtractResult['equipment']) : [],
     baseline_updates:
       parsed.baseline_updates && typeof parsed.baseline_updates === 'object'
         ? (parsed.baseline_updates as CaptureExtractResult['baseline_updates'])

@@ -45,10 +45,7 @@ export function parseEvalCases(job: ProcessingJobRow): EvalCase[] {
 }
 
 /** Run eval cases against a job; applies formatting rules + require-keys if configured. */
-export async function runJobEval(
-  job: ProcessingJobRow,
-  callingApplication: string,
-): Promise<EvalResult> {
+export async function runJobEval(job: ProcessingJobRow, callingApplication: string): Promise<EvalResult> {
   const cases = parseEvalCases(job);
   const results: EvalCaseResult[] = [];
   const formattingRules = (job.config?.formattingRules as FormattingRule[]) || [];

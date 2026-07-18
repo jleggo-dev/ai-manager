@@ -55,7 +55,12 @@ function CoachApp({ session }: { session: Session | null }) {
       {screen === 'loading' ? (
         <Loading />
       ) : screen === 'welcome' ? (
-        <Welcome onStart={() => { setCoachIntent('onboarding'); setScreen('onboarding'); }} />
+        <Welcome
+          onStart={() => {
+            setCoachIntent('onboarding');
+            setScreen('onboarding');
+          }}
+        />
       ) : screen === 'onboarding' ? (
         <OnboardingChat intent={coachIntent} onReview={() => setScreen('review')} />
       ) : screen === 'review' ? (
@@ -117,7 +122,17 @@ export function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  if (!ready) return <PhoneFrame><Loading /></PhoneFrame>;
-  if (!DEV_MODE && !session) return <PhoneFrame><AuthScreen /></PhoneFrame>;
+  if (!ready)
+    return (
+      <PhoneFrame>
+        <Loading />
+      </PhoneFrame>
+    );
+  if (!DEV_MODE && !session)
+    return (
+      <PhoneFrame>
+        <AuthScreen />
+      </PhoneFrame>
+    );
   return <CoachApp session={session} />;
 }

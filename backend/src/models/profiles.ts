@@ -114,9 +114,7 @@ export async function setProfileStatus(
 }
 
 /** Enrich profile rows with auth.users metadata via admin API. */
-export async function enrichProfilesWithAuthMeta(
-  profiles: ProfileRow[],
-): Promise<AdminUserListItem[]> {
+export async function enrichProfilesWithAuthMeta(profiles: ProfileRow[]): Promise<AdminUserListItem[]> {
   if (!profiles.length) return [];
 
   const svcClient = svc();
@@ -160,11 +158,7 @@ export async function enrichProfilesWithAuthMeta(
 /** Add approved user to default workspace as member if not already a member. */
 export async function ensureDefaultWorkspaceMembership(userId: string): Promise<void> {
   const client = svc();
-  const { data: defWs, error: wErr } = await client
-    .from('workspaces')
-    .select('id')
-    .eq('slug', 'default')
-    .maybeSingle();
+  const { data: defWs, error: wErr } = await client.from('workspaces').select('id').eq('slug', 'default').maybeSingle();
   if (wErr) throw new Error(wErr.message);
   if (!defWs?.id) throw new Error('Default workspace missing');
 

@@ -45,11 +45,7 @@ export async function getActiveFootwear(userId: string): Promise<Equipment | nul
   return row ?? null;
 }
 
-export async function updateWear(
-  userId: string,
-  equipmentId: string,
-  wear: EquipmentWear,
-): Promise<void> {
+export async function updateWear(userId: string, equipmentId: string, wear: EquipmentWear): Promise<void> {
   await sql`
     update cadence.equipment set wear = ${json(wear)}
     where user_id = ${userId} and equipment_id = ${equipmentId}`;
