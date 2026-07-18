@@ -8,13 +8,8 @@ import { listNutritionLogs } from '../repos/nutrition.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { rollingConsistency } from './metrics.ts';
 import { describeRecurrence } from './scheduling.ts';
-import {
-  synthesizeVetCommit,
-  synthesizeAndVet,
-  commitActivities,
-  type CommitResult,
-  type PlanFlowResult,
-} from './plan-synthesis.ts';
+import { synthesizeVetCommit, synthesizeAndVet, type CommitResult, type PlanFlowResult } from './plan-synthesis.ts';
+import { confirmPendingPlan } from './plan-commit-flow.ts';
 import type { Goal } from '@cadence/shared';
 
 const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10);
@@ -136,25 +131,15 @@ export async function previewReplan(userId: string, steer?: string): Promise<Pla
  * preview wasn't called.
  */
 export async function confirmReplan(userId: string): Promise<PlanFlowResult> {
-  let pending = (await getUser(userId))?.pending_plan;
-
-  if (!pending) {
-    const preview = await previewReplan(userId);
-    if (preview.status !== 'proposed') return preview;
-    pending = (await getUser(userId))?.pending_plan;
-    if (!pending) return { status: 'vetoed', violations: ['Failed to prepare a plan to commit.'] };
-  }
-
-  const r = await commitActivities(userId, {
-    activities: pending.activities,
-    note: pending.note,
-    goalIds: pending.goal_ids,
-  });
-  if (r.status === 'committed') {
-    await setPendingPlan(userId, null);
-    await setPendingProposal(userId, null);
-  }
-  return r;
+  return confirmPendingPlan(
+    userId,
+    () => previewReplan(userId),
+    async () => {
+      // Re-plan's post-commit: clear both the preview and any lingering weekly proposal banner.
+      await setPendingPlan(userId, null);
+      await setPendingProposal(userId, null);
+    },
+  );
 }
 
 /** Discard the pending re-plan preview without committing. */

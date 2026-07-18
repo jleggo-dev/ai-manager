@@ -1,8 +1,14 @@
+// Naming note (API-01): "lock" is the deliberately-retained INTERNAL verb for committing a plan —
+// previewLock/confirmLock/dismissLock, POST /plan/lock. It is NOT a nomenclature violation (no
+// user-facing copy says "lock"; the brand's "Set your rhythm" language lives in the UI). The goal
+// STATUS this flips into is `committed` (the post-rename value); the verb and the status name
+// differ on purpose and both are correct. Don't "fix" one to match the other.
 import { listGoalsByStatus, setGoalStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
 import { getUser, setPendingPlan } from '../repos/users.ts';
 import { evaluateGuardrail } from './goal-guardrail.ts';
-import { synthesizeAndVet, commitActivities, type PlanFlowResult } from './plan-synthesis.ts';
+import { synthesizeAndVet, type PlanFlowResult } from './plan-synthesis.ts';
+import { confirmPendingPlan } from './plan-commit-flow.ts';
 
 /**
  * First half of capture → confirm → preview → lock (spec §6.1, §6.3, §C8.6): deterministic
@@ -50,26 +56,16 @@ export async function previewLock(userId: string): Promise<PlanFlowResult> {
  * because preview wasn't called; it only ever commits a plan that's actually been vetted.
  */
 export async function confirmLock(userId: string, occurrenceDays = 14): Promise<PlanFlowResult> {
-  let pending = (await getUser(userId))?.pending_plan;
-
-  if (!pending) {
-    const preview = await previewLock(userId);
-    if (preview.status !== 'proposed') return preview; // vetoed / needs_focus — surface as-is
-    pending = (await getUser(userId))?.pending_plan;
-    if (!pending) return { status: 'vetoed', violations: ['Failed to prepare a plan to commit.'] };
-  }
-
-  const r = await commitActivities(userId, {
-    activities: pending.activities,
-    note: pending.note,
-    goalIds: pending.goal_ids,
+  return confirmPendingPlan(
+    userId,
+    () => previewLock(userId),
+    async (pending) => {
+      // First lock's post-commit: flip the confirmed goals → committed, clear the preview.
+      for (const goalId of pending.goal_ids) await setGoalStatus(userId, goalId, 'committed');
+      await setPendingPlan(userId, null);
+    },
     occurrenceDays,
-  });
-  if (r.status === 'committed') {
-    for (const goalId of pending.goal_ids) await setGoalStatus(userId, goalId, 'committed');
-    await setPendingPlan(userId, null);
-  }
-  return r;
+  );
 }
 
 /** Discard the pending preview without committing — the user goes back to Review to adjust. */

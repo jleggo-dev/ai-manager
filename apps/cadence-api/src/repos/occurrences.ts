@@ -1,4 +1,4 @@
-import { sql, json } from '../db/sql.ts';
+import { sql, json, type SqlExecutor } from '../db/sql.ts';
 import type {
   Activity,
   Occurrence,
@@ -102,8 +102,12 @@ export async function setOccurrenceSessionIfEmpty(
  * they're replaced by the new plan's schedule. Past + done/skipped occurrences are kept (that's
  * the user's history, and it feeds consistency). Returns the number removed.
  */
-export async function deleteFuturePendingOccurrences(planId: string, fromDate: string): Promise<number> {
-  const res = await sql`
+export async function deleteFuturePendingOccurrences(
+  planId: string,
+  fromDate: string,
+  db: SqlExecutor = sql, // the sql.begin() tx handle when called inside commitActivities' transaction
+): Promise<number> {
+  const res = await db`
     delete from cadence.occurrences o
     using cadence.activities a
     where o.activity_id = a.activity_id

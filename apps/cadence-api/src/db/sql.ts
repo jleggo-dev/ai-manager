@@ -13,6 +13,14 @@ export const sql = postgres(cadenceConfig.databaseUrl, {
 });
 
 /**
+ * A tagged-template query executor: either the base client above, or the transaction handle
+ * passed to a `sql.begin(async (tx) => …)` callback. porsager types `TransactionSql` as a
+ * restricted sibling of `Sql` (not a subtype), so repo functions that can run either standalone
+ * OR inside a transaction (commitActivities' atomic commit — API-01) accept this union.
+ */
+export type SqlExecutor = typeof sql | postgres.TransactionSql;
+
+/**
  * jsonb helper: `sql.json` with a relaxed input type. Our domain objects are
  * plain JSON-serializable but don't structurally match porsager's index-signature
  * `JSONValue`, so we assert at this single seam.
