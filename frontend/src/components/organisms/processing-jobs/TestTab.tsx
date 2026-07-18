@@ -19,6 +19,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import { IconWand, IconEye, IconPlayerPlay, IconAlertTriangle } from '@tabler/icons-react';
 import * as api from '../../../services/api';
+import { interpolateTemplate } from '../../../lib/interpolate';
 import type { ProcessingJob } from '../../../types/api';
 import type { TestResult, FormattingStepResult } from './types';
 import { getJobConfig } from './types';
@@ -105,11 +106,8 @@ export default function TestTab({
 
   /** Build the composed prompt from the template + current variable values */
   function composePromptFromVars(vars: Record<string, string>) {
-    let composed = promptTemplate;
-    for (const [key, val] of Object.entries(vars || variables)) {
-      composed = composed.split(`{{${key}}}`).join(val || `{{${key}}}`);
-    }
-    setComposedPrompt(composed);
+    const { text } = interpolateTemplate(promptTemplate, vars || variables);
+    setComposedPrompt(text);
   }
 
   /** Update a variable and recompose the prompt */

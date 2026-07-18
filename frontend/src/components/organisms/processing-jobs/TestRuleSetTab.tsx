@@ -3,6 +3,7 @@ import { Stack, Group, Button, Text, Badge, TextInput, Select, Textarea, Loader,
 import { notifications } from '@mantine/notifications';
 import { IconAlertTriangle, IconWand, IconEye, IconPlayerPlay } from '@tabler/icons-react';
 import * as api from '../../../services/api';
+import { interpolateTemplate } from '../../../lib/interpolate';
 import type { ProcessingJob } from '../../../types/api';
 import type { RuleSet, FormattingStepResult, TestResult } from './types';
 import { getJobConfig } from './types';
@@ -49,19 +50,13 @@ export default function TestRuleSetTab({
       vars[v.name] = activeRuleSet.testData?.[v.name] || '';
     }
     setVariables(vars);
-    let composed = activeRuleSet.promptTemplate || '';
-    for (const [key, val] of Object.entries(vars)) {
-      composed = composed.split(`{{${key}}}`).join(val || `{{${key}}}`);
-    }
-    setComposedPrompt(composed);
+    const { text } = interpolateTemplate(activeRuleSet.promptTemplate || '', vars);
+    setComposedPrompt(text);
   }, [selectedRuleSetKey, activeRuleSet]);
 
   function composePrompt(vars: Record<string, string>, rs: RuleSet | null) {
-    let composed = rs?.promptTemplate || '';
-    for (const [key, val] of Object.entries(vars || {})) {
-      composed = composed.split(`{{${key}}}`).join(val || `{{${key}}}`);
-    }
-    setComposedPrompt(composed);
+    const { text } = interpolateTemplate(rs?.promptTemplate || '', vars || {});
+    setComposedPrompt(text);
   }
 
   function handleVarChange(name: string, value: string) {
