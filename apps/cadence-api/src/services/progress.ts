@@ -11,7 +11,7 @@
  * where the prompt said distance_km) — the alias normalizer folds known keys to canonical
  * metrics with unit conversion and IGNORES unknowns; it never guesses.
  */
-import type { Goal, HistoryEntry, OccurrenceLog, ProgressCard, ProgressData, ProgressTrend, SeriesPoint } from '@cadence/shared';
+import type { HistoryEntry, OccurrenceLog, ProgressCard, ProgressData, ProgressTrend, SeriesPoint } from '@cadence/shared';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser } from '../repos/users.ts';
 import { listLoggedForProgress } from '../repos/occurrences.ts';

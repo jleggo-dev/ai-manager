@@ -1,7 +1,7 @@
 import { runJob } from '../ai/aim.ts';
 import { cadenceConfig } from '../config.ts';
 import type { CaptureExtractResult, GoalArea, GoalType, EquipmentCategory } from '@cadence/shared';
-import { insertGoal, listGoalsByStatus, deleteGoalsByStatus, deleteCapturedWithoutMilestones } from '../repos/goals.ts';
+import { insertGoal, listGoalsByStatus, deleteCapturedWithoutMilestones } from '../repos/goals.ts';
 import { insertEquipment, deleteAllEquipment } from '../repos/equipment.ts';
 import { mergeBaseline, setName } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';

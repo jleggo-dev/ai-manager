@@ -12,12 +12,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 dotenv.config({ path: path.join(repoRoot, 'backend/.env') });
 dotenv.config({ path: path.join(repoRoot, 'apps/cadence-api/.env') });
 
-function req(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing required env: ${name}`);
-  return v;
-}
-
 /**
  * Build the Postgres connection string. Prefer a complete CADENCE_DATABASE_URL
  * (must contain '@'); otherwise assemble it from CADENCE_DB_PASSWORD plus the

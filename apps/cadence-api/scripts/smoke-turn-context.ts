@@ -32,7 +32,6 @@ async function say(sessionId: string, message: string): Promise<void> {
     body: JSON.stringify({ message }),
   });
   const reader = res.body!.getReader();
-  const dec = new TextDecoder();
   for (;;) {
     const { done } = await reader.read();
     if (done) break;
