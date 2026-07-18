@@ -129,9 +129,9 @@ unprotected by any automated gate.** These items are not optional preamble — t
 
 | ID | Item | Priority | Effort | Risk | Depends on | Status |
 |---|---|---|---|---|---|---|
-| **INFRA-01** | Fix root `workspaces` array + regenerate `package-lock.json` | **P0** | S | Medium | — | Not Started |
-| **INFRA-02** | Add GitHub Actions CI (path-filtered, report-only rollout first) | **P0** | M | Medium | INFRA-01 | Not Started |
-| **INFRA-03** | Extend root scripts (`--workspaces --if-present`) + add vitest to `apps/cadence-web`, `packages/core`, `packages/cadence-shared` | P1 | S per workspace | Low | INFRA-01 | Not Started |
+| **INFRA-01** | Fix root `workspaces` array + regenerate `package-lock.json` | **P0** | S | Medium | — | **Done** (PR #3, merged to `feat/cadence`) |
+| **INFRA-02** | Add GitHub Actions CI (path-filtered, report-only rollout first) | **P0** | M | Medium | INFRA-01 | **Done** (PR #4, merged to `feat/cadence`) |
+| **INFRA-03** | Extend root scripts (`--workspaces --if-present`) + add vitest to `apps/cadence-web`, `packages/core`, `packages/cadence-shared` | P1 | S per workspace | Low | INFRA-01 | **Done** (PR #4, merged to `feat/cadence`) |
 | **INFRA-04** | Add ESLint configs to `apps/*`/`packages/*`; align ESLint major versions; add `.prettierrc.json`; expand format globs | P1 | M | Low | INFRA-01 | Not Started |
 | **INFRA-05** | Fix pre-commit hooks — commit an actual `.husky/pre-commit`, expand `lint-staged` globs to cover Cadence | P1 | S | Low | INFRA-04 | Not Started |
 
@@ -431,6 +431,22 @@ swap (SD6), path-param UUID validation, dead-code passes, `.claude/launch.json`/
 naming-collision rename, and repositioning `packages/client`/`edge`/`types` with a one-line README
 clarifying they're external-integrator reference code, not dead scaffolding (see report 05 §4.7 —
 **do not delete these three packages**, they're correctly functioning, just misleadingly framed).
+
+### 4.6 Newly discovered — surfaced by running CI for real (INFRA-02/03 dry-run)
+
+None of these were fixed by the INFRA-02/03 implementer, per the plan's scope-creep guardrail
+(§6.4) — each was confirmed pre-existing on unmodified `feat/cadence` via `git stash` before being
+logged here as its own backlog item.
+
+| ID | Item | Area | Priority | Effort | Risk | Status |
+|---|---|---|---|---|---|---|
+| **CI-01** | 4 backend e2e tests fail against live credentials/live LLM output: a 401 from an expired/rotated Devs.ai key (`e2e-devs-ai-v2-tools`), a stale assertion against real model output (`devs-ai-v2-lifecycle`), and a Supabase `calling_application` upsert `PGRST` coercion error (`e2e-live-provider-chat`) | Backend | P1 | S per test | Low | Not Started |
+| **CI-02** | Frontend `npm run lint` fails immediately — `eslint-plugin-react-hooks` requires `zod-validation-error/v4`, unresolvable in the current dependency tree | Frontend | P1 | S | Low | Not Started |
+| **CI-03** | Frontend `npm test`: 7 failures in `services/api.test.ts` — its `vi.mock('../lib/auth-session')` mock is missing `handleAccountGateApiError`, which the real module now exports (mock drifted from implementation) | Frontend | P1 | S | Low | Not Started |
+| **CI-04** | `npm run format:check` already flagged 186 files before INFRA-03 (no `.prettierrc` ever pinned, per report 06); INFRA-03's widened glob surfaces ~90 more from Cadence on top. Superseded by/fold into **INFRA-04** (align + pin Prettier config, then run `prettier --write` once repo-wide) — do not fix piecemeal | Cross-cutting | P1 | M (one-time repo-wide reformat) | Low (formatting-only) | Folded into INFRA-04 |
+| **CI-05** | Frontend `build` fails in some local sandboxes because `backend/.env` has `VITE_DEV_API_KEY` set — this is an intentional security guard (a real key must never leak into a `VITE_*` var, see `CLAUDE.md`), not a code bug. Confirmed identical on unmodified `feat/cadence`; won't reproduce in actual CI since that var is a local-dev-only convenience never set in the CI environment. **No fix needed** — logged only so a future agent doesn't rediscover and "fix" it into a weaker guard | Infra/local-dev | P3 | — | — | Won't Fix (by design) |
+
+*Full detail: subagent report for INFRA-02/03 (2026-07-18).*
 
 ---
 
