@@ -23,7 +23,7 @@ import {
   type PendingToolCall,
   type ToolJobBinding,
 } from '../services/tool-jobs.ts';
-import { executeJobById } from './index.ts';
+import { executeJobById } from './job-execution.ts';
 import type { AiProfileRow } from '../types.ts';
 
 /**
