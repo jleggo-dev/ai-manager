@@ -34,11 +34,15 @@
     "prepare": "husky || true"
   },
   "lint-staged": {
-    "backend/{src,test}/**/*.ts": [
+    "{backend,apps/cadence-api}/{src,test}/**/*.ts": [
       "prettier --write",
       "eslint --fix"
     ],
-    "frontend/src/**/*.{ts,tsx}": [
+    "{frontend,apps/cadence-web}/src/**/*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "packages/{core,cadence-shared}/src/**/*.ts": [
       "prettier --write",
       "eslint --fix"
     ],
