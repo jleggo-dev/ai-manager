@@ -186,11 +186,11 @@ each other (BE-01, FE-01, FE-02 touch entirely different files/products) as soon
 report-only CI exists — they should not wait for Phase 0 to be fully "required," but they must not
 merge until INFRA-01 has landed, since none of these are safely verifiable without it.
 
-| ID | Item | Area | Priority | Effort | Risk | Depends on |
-|---|---|---|---|---|---|---|
-| **BE-01** | Split `backend/src/ai-manager/index.ts` (2,071 lines, 21 exported fns, 5 responsibilities, no direct tests) | Backend | P0 | L (phased, 5 steps) | High | Test-first step; should land before/alongside INFRA-02 |
-| **FE-01** | Split `ProcessingJobManager.tsx` (5,497 lines, 14 components) **and** add a max-file-line lint rule so it can't regrow | Frontend | P0 | L (7 phased steps, ~1-2 weeks) | High | Test-first step |
-| **FE-02** | Split `AiProfileManager.tsx` (2,466 lines, 2 components incl. an embedded chat client) | Frontend | P0 | L (~1 week) | Medium | Test-first step; independent of FE-01 |
+| ID | Item | Area | Priority | Effort | Risk | Depends on | Status |
+|---|---|---|---|---|---|---|---|
+| **BE-01** | Split `backend/src/ai-manager/index.ts` (2,071 lines, 21 exported fns, 5 responsibilities, no direct tests) | Backend | P0 | L (phased, 5 steps) | High | Test-first step; should land before/alongside INFRA-02 | — |
+| **FE-01** | Split `ProcessingJobManager.tsx` (5,497 lines, 14 components) **and** add a max-file-line lint rule so it can't regrow | Frontend | P0 | L (7 phased steps, ~1-2 weeks) | High | Test-first step | — |
+| **FE-02** | Split `AiProfileManager.tsx` (2,466 lines, 2 components incl. an embedded chat client) | Frontend | P0 | L (~1 week) | Medium | Test-first step; independent of FE-01 | **Done** (PR #7, merged to `feat/cadence`) |
 
 #### BE-01 — Split `ai-manager/index.ts` [P0]
 
@@ -266,7 +266,7 @@ non-monolithic API home to import from.
 
 *Full detail: report 02 §4.1.*
 
-#### FE-02 — Split `AiProfileManager.tsx` [P0]
+#### FE-02 — Split `AiProfileManager.tsx` [P0] — **Done** (PR #7)
 
 **Current problem:** 2,466 lines, 2 top-level components. The main component
 (1,754 lines) mixes profile CRUD, list filter/search/sort/group-by state, card/table view toggle,
@@ -291,6 +291,10 @@ re-measure, target both resulting files under 600 lines.
 code paths.
 
 **Dependencies:** none — fully independent of FE-01, can run in parallel.
+
+**Landed (PR #7):** orchestrator ~100 lines; `TestChatPanel` (~675, move-only — `useTestChatStream`
+deferred as **FE-11**); hooks + `McpToolsPanel` + `ProfileFormModal` / `ProfileListView` /
+`JobsAsToolsPanel` / `ProfileRuntimeOptions` to hit size targets. Streaming/tool-auth/bulk tests added.
 
 *Full detail: report 02 §4.2.*
 
@@ -451,6 +455,16 @@ logged here as its own backlog item.
 | **CI-05** | Frontend `build` fails in some local sandboxes because `backend/.env` has `VITE_DEV_API_KEY` set — this is an intentional security guard (a real key must never leak into a `VITE_*` var, see `CLAUDE.md`), not a code bug. Confirmed identical on unmodified `feat/cadence`; won't reproduce in actual CI since that var is a local-dev-only convenience never set in the CI environment. **No fix needed** — logged only so a future agent doesn't rediscover and "fix" it into a weaker guard | Infra/local-dev | P3 | — | — | Won't Fix (by design) |
 
 *Full detail: subagent report for INFRA-02/03 (2026-07-18).*
+
+### 4.7 Newly discovered / deferred — FE-02 supervisor review (PR #7)
+
+Logged from the FE-02 implementer (intentionally out of scope for the structural split) so they
+are not lost. Neither blocks FE-02 Done.
+
+| ID | Item | Area | Priority | Effort | Risk | Status |
+|---|---|---|---|---|---|---|
+| **FE-11** | Extract `useTestChatStream` from `ai-profiles/TestChatPanel.tsx` (~675 lines) — isolate SSE parsing / OAuth-resume logic from rendering; leave the panel as a thin view | Frontend | P2 | M | Medium (streaming/OAuth paths) | Not Started |
+| **FE-12** | Research architectural overlap between AI Admin `TestChatPanel` streaming/session UI and Cadence web coach chat (SSE + session lifecycle) — decide whether a shared client helper is worth extracting later (research only; not a merge of the two UIs) | Frontend / Cadence | P3 | S (research) | Low | Not Started |
 
 ---
 
