@@ -41,7 +41,6 @@ import {
   IconPlus,
   IconAlertCircle,
   IconSettings,
-  IconRefresh,
   IconSearch,
   IconArrowsShuffle,
   IconLayoutGrid,
@@ -58,6 +57,7 @@ import AiProfileCard from '../molecules/AiProfileCard';
 import FailoverConfigModal from '../molecules/FailoverConfigModal';
 import ManageLlmsModal from './ManageLlmsModal';
 import TestChatPanel from './ai-profiles/TestChatPanel';
+import McpToolsPanel, { type McpTool, type ToolAuthEntry } from './ai-profiles/McpToolsPanel';
 import { useAiProfilesData } from './ai-profiles/hooks/useAiProfilesData';
 import { useProfileListFilters } from './ai-profiles/hooks/useProfileListFilters';
 import { useProfileBulkActions } from './ai-profiles/hooks/useProfileBulkActions';
@@ -77,16 +77,6 @@ interface ProviderAi {
   id?: string;
   aiId?: string;
   name?: string;
-}
-
-interface McpTool {
-  id: string;
-  name: string;
-  type: string;
-}
-
-interface ToolAuthEntry {
-  name: string;
 }
 
 interface ToolJobFormRow {
@@ -1037,103 +1027,13 @@ export default function AiProfileManager() {
 
                   {/* MCP Server Tools (dynamic, fetched from Devs.ai) */}
                   {editing && (
-                    <>
-                      <Text size="sm" fw={600} mt="sm">
-                        MCP Server Tools
-                      </Text>
-                      <Text size="xs" c="dimmed">
-                        External integrations (Gmail, Slack, etc.) configured on this AI agent in Devs.ai. OAuth status
-                        shows whether the user has authorized access.
-                      </Text>
-                      {mcpLoading && (
-                        <Center>
-                          <Loader size="sm" />
-                        </Center>
-                      )}
-                      {!mcpLoading && mcpTools.length === 0 && (
-                        <Text size="xs" c="dimmed" fs="italic">
-                          No MCP server tools configured on this agent. Configure them in the Devs.ai dashboard.
-                        </Text>
-                      )}
-                      {!mcpLoading &&
-                        mcpTools.map((tool) => {
-                          const authEntry = toolAuthStatus.find((a) => a.name === tool.name);
-                          const isConnected = !!authEntry;
-                          return (
-                            <Group key={tool.id} gap="xs" justify="space-between">
-                              <Group gap="xs">
-                                <Text size="sm">{tool.name}</Text>
-                                <Badge size="xs" variant="light" color={isConnected ? 'green' : 'orange'}>
-                                  {isConnected ? 'Connected' : 'Not connected'}
-                                </Badge>
-                              </Group>
-                              {!isConnected && (
-                                <Button
-                                  size="compact-xs"
-                                  variant="light"
-                                  onClick={async () => {
-                                    try {
-                                      const result = await api.initiateToolOAuth(editing.id, tool.id);
-                                      if (result?.authUrl) {
-                                        window.open(String(result.authUrl), '_blank', 'noopener');
-                                        notifications.show({
-                                          title: 'OAuth',
-                                          message: 'Authorization window opened. Complete the flow, then refresh.',
-                                          color: 'blue',
-                                        });
-                                      }
-                                    } catch (err: unknown) {
-                                      notifications.show({
-                                        title: 'OAuth Error',
-                                        message: err instanceof Error ? err.message : String(err),
-                                        color: 'red',
-                                      });
-                                    }
-                                  }}
-                                >
-                                  Connect
-                                </Button>
-                              )}
-                              {isConnected && (
-                                <Button
-                                  size="compact-xs"
-                                  variant="subtle"
-                                  color="red"
-                                  onClick={async () => {
-                                    try {
-                                      await api.deleteToolOAuthToken(editing.id, tool.id);
-                                      notifications.show({
-                                        title: 'Disconnected',
-                                        message: `${tool.name} OAuth token removed`,
-                                        color: 'yellow',
-                                      });
-                                      loadMcpTools(editing.id, 'devs-ai');
-                                    } catch (err: unknown) {
-                                      notifications.show({
-                                        title: 'Error',
-                                        message: err instanceof Error ? err.message : String(err),
-                                        color: 'red',
-                                      });
-                                    }
-                                  }}
-                                >
-                                  Disconnect
-                                </Button>
-                              )}
-                            </Group>
-                          );
-                        })}
-                      {editing && !mcpLoading && (
-                        <Button
-                          size="compact-xs"
-                          variant="subtle"
-                          leftSection={<IconRefresh size={14} />}
-                          onClick={() => loadMcpTools(editing.id, 'devs-ai')}
-                        >
-                          Refresh tools
-                        </Button>
-                      )}
-                    </>
+                    <McpToolsPanel
+                      editing={editing}
+                      mcpTools={mcpTools}
+                      toolAuthStatus={toolAuthStatus}
+                      mcpLoading={mcpLoading}
+                      onRefresh={() => loadMcpTools(editing.id, 'devs-ai')}
+                    />
                   )}
                 </Stack>
               </Paper>
