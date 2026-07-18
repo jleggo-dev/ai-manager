@@ -19,6 +19,16 @@
  */
 export type GoalArea = 'movement' | 'nourishment' | 'mind' | 'practice';
 
+/** The canonical `GoalArea` values, kept in one place so a Broker-extraction
+ *  guard (`isGoalArea`) and any UI area picker never drift from the type above. */
+export const GOAL_AREAS: readonly GoalArea[] = ['movement', 'nourishment', 'mind', 'practice'];
+
+/** Narrows an untrusted value (e.g. raw Broker/model output) to a `GoalArea` —
+ *  "the app asserts before committing, never trusts raw model output" (see file header). */
+export function isGoalArea(value: unknown): value is GoalArea {
+  return typeof value === 'string' && (GOAL_AREAS as readonly string[]).includes(value);
+}
+
 /**
  * Something the user is working around — physical or not (BRAND.md: "What we work
  * around"). A torn ACL, burnout, grief, and a night shift all fit. `plan_around: true`

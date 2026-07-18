@@ -6,7 +6,15 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "description": "In-process surface for the AI Admin engine (Coach chat + Broker jobs + lifecycle). Consumed by Cadence's Node backend.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
   }
 }
