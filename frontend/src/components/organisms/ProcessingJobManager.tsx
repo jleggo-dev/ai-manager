@@ -90,6 +90,7 @@ import RuleSetSchemaEditor from './processing-jobs/RuleSetSchemaEditor';
 import StatusIcon from '../atoms/StatusIcon';
 import ScoreBadge from '../atoms/ScoreBadge';
 import SortHeader from '../atoms/SortHeader';
+import { useProcessingJobsData } from './processing-jobs/useProcessingJobsData';
 
 import type {
   ExpectedSchema,
@@ -115,24 +116,29 @@ import type {
 import { getJobConfig } from './processing-jobs/types';
 
 export default function ProcessingJobManager() {
-  const [jobs, setJobs] = useState<ProcessingJob[]>([]);
-  const [jobGroups, setJobGroups] = useState<ProcessingJobGroup[]>([]);
-  const [aiProfiles, setAiProfiles] = useState<AiProfile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    jobs,
+    jobGroups,
+    aiProfiles,
+    availableRules,
+    callingApps,
+    setCallingApps,
+    loading,
+    selectedJob,
+    setSelectedJob,
+    selectedJobFull,
+    setSelectedJobFull,
+    loadData,
+  } = useProcessingJobsData();
+
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<ProcessingJob | null>(null);
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
   const [activeTab, setActiveTab] = useState('jobs');
-  const [selectedJob, setSelectedJob] = useState<string | null>(null);
-  const [selectedJobFull, setSelectedJobFull] = useState<ProcessingJob | null>(null);
   const [deleteTargetJob, setDeleteTargetJob] = useState<ProcessingJob | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
-
-  /* Available formatting rules from backend */
-  const [availableRules, setAvailableRules] = useState<FormattingRule[]>([]);
-  const [callingApps, setCallingApps] = useState<CallingApplication[]>([]);
 
   const [form, setForm] = useState<ProcessingJobFormData>({
     name: '',
@@ -142,45 +148,6 @@ export default function ProcessingJobManager() {
     is_active: true,
     calling_application_id: null,
   });
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [jobsResult, groupsData, profilesResult, rulesData, callingAppsResult] = await Promise.all([
-        api.listProcessingJobs(),
-        api.listProcessingJobGroups(),
-        api.listAiProfiles(),
-        api.listFormattingRules(),
-        api.listCallingApplications(),
-      ]);
-      setJobs(jobsResult.data || []);
-      setJobGroups(groupsData || []);
-      setAiProfiles(profilesResult.data || []);
-      setAvailableRules((rulesData as unknown as FormattingRule[]) || []);
-      setCallingApps(callingAppsResult.data || []);
-    } catch (err: unknown) {
-      notifications.show({ title: 'Error', message: err instanceof Error ? err.message : String(err), color: 'red' });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  /* Load full job detail when a job is selected */
-  useEffect(() => {
-    if (!selectedJob) {
-      setSelectedJobFull(null);
-      return;
-    }
-    setSelectedJobFull(null);
-    api
-      .getProcessingJob(selectedJob)
-      .then(setSelectedJobFull)
-      .catch(() => setSelectedJobFull(null));
-  }, [selectedJob]);
 
   function openCreate() {
     setEditing(null);
