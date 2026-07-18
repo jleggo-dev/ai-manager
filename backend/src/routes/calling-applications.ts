@@ -15,6 +15,7 @@ import {
   deleteCallingApplication,
 } from '../models/calling-applications.ts';
 import { validateBody } from '../middleware/validate.ts';
+import { requireRole } from '../middleware/require-role.ts';
 import { createCallingApplicationSchema, updateCallingApplicationSchema } from '../schemas/calling-applications.ts';
 import { parsePagination, buildPaginatedResponse } from '../lib/pagination.ts';
 
@@ -45,37 +46,47 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 /* POST /api/calling-applications (manual create / upsert) */
-router.post('/', validateBody(createCallingApplicationSchema), async (req: Request, res: Response) => {
-  try {
-    const { id, display_name } = req.body;
-    if (!id) return res.status(400).json({ error: 'id is required' });
-    const row = await upsertCallingApplication(id, display_name);
-    return res.status(201).json(row);
-  } catch (err) {
-    console.error('[POST /calling-applications]', err);
-    return res.status(500).json({ error: 'Failed to create calling application' });
-  }
-});
+router.post(
+  '/',
+  requireRole('owner', 'admin'),
+  validateBody(createCallingApplicationSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const { id, display_name } = req.body;
+      if (!id) return res.status(400).json({ error: 'id is required' });
+      const row = await upsertCallingApplication(id, display_name);
+      return res.status(201).json(row);
+    } catch (err) {
+      console.error('[POST /calling-applications]', err);
+      return res.status(500).json({ error: 'Failed to create calling application' });
+    }
+  },
+);
 
 const CA_ALLOWED_FIELDS = new Set(['display_name']);
 
 /* PUT /api/calling-applications/:id (rename) */
-router.put('/:id', validateBody(updateCallingApplicationSchema), async (req: Request, res: Response) => {
-  try {
-    const filtered: Record<string, unknown> = {};
-    for (const key of Object.keys(req.body)) {
-      if (CA_ALLOWED_FIELDS.has(key)) filtered[key] = req.body[key];
+router.put(
+  '/:id',
+  requireRole('owner', 'admin'),
+  validateBody(updateCallingApplicationSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const filtered: Record<string, unknown> = {};
+      for (const key of Object.keys(req.body)) {
+        if (CA_ALLOWED_FIELDS.has(key)) filtered[key] = req.body[key];
+      }
+      const row = await updateCallingApplication(req.params.id as string, filtered);
+      return res.json(row);
+    } catch (err) {
+      console.error('[PUT /calling-applications/:id]', err);
+      return res.status(500).json({ error: 'Failed to update calling application' });
     }
-    const row = await updateCallingApplication(req.params.id as string, filtered);
-    return res.json(row);
-  } catch (err) {
-    console.error('[PUT /calling-applications/:id]', err);
-    return res.status(500).json({ error: 'Failed to update calling application' });
-  }
-});
+  },
+);
 
 /* DELETE /api/calling-applications/:id */
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     await deleteCallingApplication(req.params.id as string);
     return res.status(204).end();

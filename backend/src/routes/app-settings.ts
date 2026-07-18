@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { listSettings, getSetting, upsertSetting, deleteSetting } from '../models/app-settings.ts';
 import { validateBody } from '../middleware/validate.ts';
+import { requireRole } from '../middleware/require-role.ts';
 
 const updateSettingSchema = z.object({
   value: z.unknown().refine((v) => v !== undefined, { message: 'value is required' }),
@@ -31,18 +32,23 @@ router.get('/:key', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:key', validateBody(updateSettingSchema), async (req: Request, res: Response) => {
-  try {
-    const { value, description } = req.body;
-    const updated = await upsertSetting(req.params.key as string, value, description);
-    return res.json(updated);
-  } catch (err) {
-    console.error('[PUT /settings/:key]', err);
-    return res.status(500).json({ error: 'Failed to update setting' });
-  }
-});
+router.put(
+  '/:key',
+  requireRole('owner', 'admin'),
+  validateBody(updateSettingSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const { value, description } = req.body;
+      const updated = await upsertSetting(req.params.key as string, value, description);
+      return res.json(updated);
+    } catch (err) {
+      console.error('[PUT /settings/:key]', err);
+      return res.status(500).json({ error: 'Failed to update setting' });
+    }
+  },
+);
 
-router.delete('/:key', async (req: Request, res: Response) => {
+router.delete('/:key', requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     await deleteSetting(req.params.key as string);
     return res.json({ ok: true });

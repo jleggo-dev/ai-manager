@@ -30,6 +30,7 @@ import { errorMessage } from '../lib/error-message.ts';
 import { safeClientError, safeStatusError } from '../lib/safe-error.ts';
 import type { ChatMessage } from '../types.ts';
 import { validateBody } from '../middleware/validate.ts';
+import { requireRole } from '../middleware/require-role.ts';
 import { createAiProfileSchema, updateAiProfileSchema } from '../schemas/ai-profiles.ts';
 import { parsePagination, buildPaginatedResponse } from '../lib/pagination.ts';
 import { z } from 'zod';
@@ -96,65 +97,70 @@ router.get('/', async (req: Request, res: Response) => {
    POST /api/ai-profiles
    ================================================================ */
 
-router.post('/', validateBody(createAiProfileSchema), async (req: Request, res: Response) => {
-  try {
-    const {
-      provider_id,
-      external_ai_id,
-      failover_provider_id,
-      failover_external_ai_id,
-      failover_runtime_options,
-      name,
-      description,
-      is_active,
-      profile_type,
-      mode,
-      runtime_options,
-      config,
-    } = req.body;
+router.post(
+  '/',
+  requireRole('owner', 'admin'),
+  validateBody(createAiProfileSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const {
+        provider_id,
+        external_ai_id,
+        failover_provider_id,
+        failover_external_ai_id,
+        failover_runtime_options,
+        name,
+        description,
+        is_active,
+        profile_type,
+        mode,
+        runtime_options,
+        config,
+      } = req.body;
 
-    const provider = await getProvider(provider_id);
+      const provider = await getProvider(provider_id);
 
-    let resolvedType = profile_type || 'agent';
-    if (provider?.type === 'google-gemini') {
-      resolvedType = 'model';
+      let resolvedType = profile_type || 'agent';
+      if (provider?.type === 'google-gemini') {
+        resolvedType = 'model';
+      }
+
+      const failover = normaliseFailoverFields(failover_provider_id, failover_external_ai_id);
+
+      if (failover.failover_provider_id) {
+        const fp = await getProvider(failover.failover_provider_id);
+        if (!fp) return res.status(400).json({ error: `Failover provider ${failover.failover_provider_id} not found` });
+      }
+
+      const resolvedMode = mode || 'completion';
+
+      const row = await createAiProfile({
+        provider_id,
+        external_ai_id,
+        ...failover,
+        ...(failover_runtime_options !== undefined && { failover_runtime_options }),
+        name,
+        description: description || null,
+        is_active: is_active !== false,
+        profile_type: resolvedType,
+        mode: resolvedMode,
+        runtime_options: normaliseAiProfileRuntimeOptions(provider?.type, runtime_options) as unknown as Record<
+          string,
+          unknown
+        >,
+        ...(config !== undefined && { config }),
+      });
+
+      return res.status(201).json(row);
+    } catch (err) {
+      if (errorMessage(err).includes('failover_provider_id') || errorMessage(err).includes('failover_external_ai_id')) {
+        return res.status(400).json({ error: safeClientError(err, 'Invalid failover configuration') });
+      }
+      console.error('[POST /ai-profiles]', err);
+      return res.status(500).json({ error: 'Failed to create AI profile' });
     }
-
-    const failover = normaliseFailoverFields(failover_provider_id, failover_external_ai_id);
-
-    if (failover.failover_provider_id) {
-      const fp = await getProvider(failover.failover_provider_id);
-      if (!fp) return res.status(400).json({ error: `Failover provider ${failover.failover_provider_id} not found` });
-    }
-
-    const resolvedMode = mode || 'completion';
-
-    const row = await createAiProfile({
-      provider_id,
-      external_ai_id,
-      ...failover,
-      ...(failover_runtime_options !== undefined && { failover_runtime_options }),
-      name,
-      description: description || null,
-      is_active: is_active !== false,
-      profile_type: resolvedType,
-      mode: resolvedMode,
-      runtime_options: normaliseAiProfileRuntimeOptions(provider?.type, runtime_options) as unknown as Record<
-        string,
-        unknown
-      >,
-      ...(config !== undefined && { config }),
-    });
-
-    return res.status(201).json(row);
-  } catch (err) {
-    if (errorMessage(err).includes('failover_provider_id') || errorMessage(err).includes('failover_external_ai_id')) {
-      return res.status(400).json({ error: safeClientError(err, 'Invalid failover configuration') });
-    }
-    console.error('[POST /ai-profiles]', err);
-    return res.status(500).json({ error: 'Failed to create AI profile' });
-  }
-});
+  },
+);
 
 /* ================================================================
    GET /api/ai-profiles/default — get the current default profile
@@ -204,75 +210,82 @@ const PROFILE_UPDATABLE_FIELDS = new Set([
   'config',
 ]);
 
-router.put('/:id', validateBody(updateAiProfileSchema), async (req: Request, res: Response) => {
-  try {
-    /* Handle the is_default flag with the only-one-default pattern */
-    if (req.body.is_default === true) {
-      await setDefaultAiProfile(req.params.id as string);
-    } else if (req.body.is_default === false) {
-      await clearDefaultAiProfile(req.params.id as string);
-    }
+router.put(
+  '/:id',
+  requireRole('owner', 'admin'),
+  validateBody(updateAiProfileSchema),
+  async (req: Request, res: Response) => {
+    try {
+      /* Handle the is_default flag with the only-one-default pattern */
+      if (req.body.is_default === true) {
+        await setDefaultAiProfile(req.params.id as string);
+      } else if (req.body.is_default === false) {
+        await clearDefaultAiProfile(req.params.id as string);
+      }
 
-    /* Allow-list: only permit known fields into the DB update */
-    const otherUpdates: Record<string, unknown> = {};
-    for (const key of Object.keys(req.body)) {
-      if (PROFILE_UPDATABLE_FIELDS.has(key)) otherUpdates[key] = req.body[key];
-    }
-    const hasOtherUpdates = Object.keys(otherUpdates).length > 0;
+      /* Allow-list: only permit known fields into the DB update */
+      const otherUpdates: Record<string, unknown> = {};
+      for (const key of Object.keys(req.body)) {
+        if (PROFILE_UPDATABLE_FIELDS.has(key)) otherUpdates[key] = req.body[key];
+      }
+      const hasOtherUpdates = Object.keys(otherUpdates).length > 0;
 
-    if (hasOtherUpdates) {
-      if ('provider_id' in otherUpdates || 'profile_type' in otherUpdates || 'mode' in otherUpdates) {
-        const current = await getAiProfile(req.params.id as string);
-        const providerId = (otherUpdates.provider_id as string | undefined) || current.provider_id;
-        if (providerId) {
-          const provider = await getProvider(providerId);
-          if (provider?.type === 'google-gemini') {
-            otherUpdates.profile_type = 'model';
+      if (hasOtherUpdates) {
+        if ('provider_id' in otherUpdates || 'profile_type' in otherUpdates || 'mode' in otherUpdates) {
+          const current = await getAiProfile(req.params.id as string);
+          const providerId = (otherUpdates.provider_id as string | undefined) || current.provider_id;
+          if (providerId) {
+            const provider = await getProvider(providerId);
+            if (provider?.type === 'google-gemini') {
+              otherUpdates.profile_type = 'model';
+            }
           }
         }
-      }
-      if ('failover_provider_id' in otherUpdates || 'failover_external_ai_id' in otherUpdates) {
-        const failover = normaliseFailoverFields(
-          otherUpdates.failover_provider_id,
-          otherUpdates.failover_external_ai_id,
-        );
-        if (failover.failover_provider_id) {
-          const fp = await getProvider(failover.failover_provider_id);
-          if (!fp)
-            return res.status(400).json({ error: `Failover provider ${failover.failover_provider_id} not found` });
+        if ('failover_provider_id' in otherUpdates || 'failover_external_ai_id' in otherUpdates) {
+          const failover = normaliseFailoverFields(
+            otherUpdates.failover_provider_id,
+            otherUpdates.failover_external_ai_id,
+          );
+          if (failover.failover_provider_id) {
+            const fp = await getProvider(failover.failover_provider_id);
+            if (!fp)
+              return res.status(400).json({ error: `Failover provider ${failover.failover_provider_id} not found` });
+          }
+          Object.assign(otherUpdates, failover);
         }
-        Object.assign(otherUpdates, failover);
+        if ('runtime_options' in otherUpdates || 'provider_id' in otherUpdates) {
+          const current = await getAiProfile(req.params.id as string);
+          const providerId = (otherUpdates.provider_id as string | undefined) || current.provider_id;
+          const provider = providerId ? await getProvider(providerId) : null;
+          otherUpdates.runtime_options = normaliseAiProfileRuntimeOptions(
+            provider?.type || current?.provider?.type,
+            (otherUpdates.runtime_options as Record<string, unknown> | undefined) ??
+              current.runtime_options ??
+              undefined,
+          );
+        }
+        const updated = await updateAiProfile(req.params.id as string, otherUpdates);
+        return res.json(updated);
       }
-      if ('runtime_options' in otherUpdates || 'provider_id' in otherUpdates) {
-        const current = await getAiProfile(req.params.id as string);
-        const providerId = (otherUpdates.provider_id as string | undefined) || current.provider_id;
-        const provider = providerId ? await getProvider(providerId) : null;
-        otherUpdates.runtime_options = normaliseAiProfileRuntimeOptions(
-          provider?.type || current?.provider?.type,
-          (otherUpdates.runtime_options as Record<string, unknown> | undefined) ?? current.runtime_options ?? undefined,
-        );
-      }
-      const updated = await updateAiProfile(req.params.id as string, otherUpdates);
-      return res.json(updated);
-    }
 
-    /* If only is_default was changed, return the refreshed profile */
-    const refreshed = await getAiProfile(req.params.id as string);
-    return res.json(refreshed);
-  } catch (err) {
-    if (errorMessage(err).includes('failover_provider_id') || errorMessage(err).includes('failover_external_ai_id')) {
-      return res.status(400).json({ error: safeClientError(err, 'Invalid failover configuration') });
+      /* If only is_default was changed, return the refreshed profile */
+      const refreshed = await getAiProfile(req.params.id as string);
+      return res.json(refreshed);
+    } catch (err) {
+      if (errorMessage(err).includes('failover_provider_id') || errorMessage(err).includes('failover_external_ai_id')) {
+        return res.status(400).json({ error: safeClientError(err, 'Invalid failover configuration') });
+      }
+      console.error('[PUT /ai-profiles/:id]', err);
+      return res.status(500).json({ error: 'Failed to update AI profile' });
     }
-    console.error('[PUT /ai-profiles/:id]', err);
-    return res.status(500).json({ error: 'Failed to update AI profile' });
-  }
-});
+  },
+);
 
 /* ================================================================
    DELETE /api/ai-profiles/:id
    ================================================================ */
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
     const { listProcessingJobs } = await import('../models/processing-jobs.ts');
@@ -297,77 +310,82 @@ router.delete('/:id', async (req: Request, res: Response) => {
    Sends a user message and returns the raw AI response.
    ================================================================ */
 
-router.post('/:id/test-chat', validateBody(testChatSchema), async (req: Request, res: Response) => {
-  try {
-    const { message, systemPrompt } = req.body;
-
-    const profile = await getAiProfileWithKeys(req.params.id as string);
-    if (!profile?.provider) {
-      return res.status(400).json({ error: 'AI profile has no linked provider' });
-    }
-
-    const provider = profile.provider;
-    const client = createLlmClientForProvider(provider);
-    const chatOptions = buildProviderChatOptions(provider.type, profile.runtime_options ?? undefined);
-
-    const messages: ChatMessage[] = [];
-    if (systemPrompt) {
-      messages.push({ role: 'system', content: systemPrompt });
-    }
-    messages.push({ role: 'user', content: message });
-
-    const primaryModel = profile.external_ai_id;
-    const failoverProvider = profile.failover_provider;
-    const failoverAiId = String(profile.failover_external_ai_id || '').trim();
-    const hasFailover = failoverProvider && failoverAiId;
-
-    const timeoutMs = await resolveTestChatTimeout(provider);
-
-    const t0 = Date.now();
-    let modelUsed = primaryModel;
-    let failoverUsed = false;
-    let data: ChatCompletionResponse | null = null;
-    let content = '';
-
+router.post(
+  '/:id/test-chat',
+  requireRole('owner', 'admin'),
+  validateBody(testChatSchema),
+  async (req: Request, res: Response) => {
     try {
-      data = await client.chatCompletion(primaryModel, messages, { ...chatOptions, timeoutMs });
-      content = data.choices?.[0]?.message?.content || '';
-      if (!String(content || '').trim()) {
-        throw new Error(`Primary model "${primaryModel}" returned empty response content`);
+      const { message, systemPrompt } = req.body;
+
+      const profile = await getAiProfileWithKeys(req.params.id as string);
+      if (!profile?.provider) {
+        return res.status(400).json({ error: 'AI profile has no linked provider' });
       }
-    } catch (primaryErr) {
-      if (!hasFailover) throw primaryErr;
-      const foClient = createLlmClientForProvider(failoverProvider);
-      const foRuntimeOpts = (profile.failover_runtime_options || profile.runtime_options) ?? undefined;
-      const foChatOpts = buildProviderChatOptions(failoverProvider.type, foRuntimeOpts);
-      const foTimeoutMs = await resolveTestChatTimeout(failoverProvider);
-      data = await foClient.chatCompletion(failoverAiId, messages, { ...foChatOpts, timeoutMs: foTimeoutMs });
-      content = data.choices?.[0]?.message?.content || '';
-      if (!String(content || '').trim()) {
-        throw new Error(
-          `Primary model "${primaryModel}" failed and failover "${failoverAiId}" on "${failoverProvider.name}" returned empty`,
-          { cause: primaryErr },
-        );
+
+      const provider = profile.provider;
+      const client = createLlmClientForProvider(provider);
+      const chatOptions = buildProviderChatOptions(provider.type, profile.runtime_options ?? undefined);
+
+      const messages: ChatMessage[] = [];
+      if (systemPrompt) {
+        messages.push({ role: 'system', content: systemPrompt });
       }
-      modelUsed = failoverAiId;
-      failoverUsed = true;
+      messages.push({ role: 'user', content: message });
+
+      const primaryModel = profile.external_ai_id;
+      const failoverProvider = profile.failover_provider;
+      const failoverAiId = String(profile.failover_external_ai_id || '').trim();
+      const hasFailover = failoverProvider && failoverAiId;
+
+      const timeoutMs = await resolveTestChatTimeout(provider);
+
+      const t0 = Date.now();
+      let modelUsed = primaryModel;
+      let failoverUsed = false;
+      let data: ChatCompletionResponse | null = null;
+      let content = '';
+
+      try {
+        data = await client.chatCompletion(primaryModel, messages, { ...chatOptions, timeoutMs });
+        content = data.choices?.[0]?.message?.content || '';
+        if (!String(content || '').trim()) {
+          throw new Error(`Primary model "${primaryModel}" returned empty response content`);
+        }
+      } catch (primaryErr) {
+        if (!hasFailover) throw primaryErr;
+        const foClient = createLlmClientForProvider(failoverProvider);
+        const foRuntimeOpts = (profile.failover_runtime_options || profile.runtime_options) ?? undefined;
+        const foChatOpts = buildProviderChatOptions(failoverProvider.type, foRuntimeOpts);
+        const foTimeoutMs = await resolveTestChatTimeout(failoverProvider);
+        data = await foClient.chatCompletion(failoverAiId, messages, { ...foChatOpts, timeoutMs: foTimeoutMs });
+        content = data.choices?.[0]?.message?.content || '';
+        if (!String(content || '').trim()) {
+          throw new Error(
+            `Primary model "${primaryModel}" failed and failover "${failoverAiId}" on "${failoverProvider.name}" returned empty`,
+            { cause: primaryErr },
+          );
+        }
+        modelUsed = failoverAiId;
+        failoverUsed = true;
+      }
+
+      const durationMs = Date.now() - t0;
+
+      return res.json({
+        content,
+        durationMs,
+        model: data.model || modelUsed,
+        failoverUsed,
+        usage: data.usage,
+        finishReason: data.choices?.[0]?.finish_reason,
+      });
+    } catch (err) {
+      console.error('[POST /ai-profiles/:id/test-chat]', err);
+      return res.status(500).json({ error: 'Test chat failed' });
     }
-
-    const durationMs = Date.now() - t0;
-
-    return res.json({
-      content,
-      durationMs,
-      model: data.model || modelUsed,
-      failoverUsed,
-      usage: data.usage,
-      finishReason: data.choices?.[0]?.finish_reason,
-    });
-  } catch (err) {
-    console.error('[POST /ai-profiles/:id/test-chat]', err);
-    return res.status(500).json({ error: 'Test chat failed' });
-  }
-});
+  },
+);
 
 /* ================================================================
    Tool Discovery & MCP OAuth — Devs.ai only
@@ -458,7 +476,7 @@ router.get('/:id/tools/:toolId/oauth-status', async (req: Request, res: Response
 
 /* ── POST /api/ai-profiles/:id/tools/:toolId/oauth-initiate ── */
 
-router.post('/:id/tools/:toolId/oauth-initiate', async (req: Request, res: Response) => {
+router.post('/:id/tools/:toolId/oauth-initiate', requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     const { client } = await resolveDevsAiClient(req.params.id as string);
     const result = await client.initiateToolOAuth(req.params.toolId as string);
@@ -472,7 +490,7 @@ router.post('/:id/tools/:toolId/oauth-initiate', async (req: Request, res: Respo
 
 /* ── DELETE /api/ai-profiles/:id/tools/:toolId/oauth-token ─── */
 
-router.delete('/:id/tools/:toolId/oauth-token', async (req: Request, res: Response) => {
+router.delete('/:id/tools/:toolId/oauth-token', requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     const { client } = await resolveDevsAiClient(req.params.id as string);
     await client.deleteToolOAuthToken(req.params.toolId as string);
