@@ -363,6 +363,7 @@ per item / per area intro).
 >   (PR #19). Public `@cadence/shared` import path unchanged.
 > - **FE-08** — extract `useHealthCheckProfilesData` from `HealthCheckProfilesPage` (PR #20).
 >   Pure helpers in `lib/health-check-profiles.ts`; page is a thin render shell; first page/hook tests added.
+> - **BE-05** — split widget-health-checker into browser/interaction/result modules (PR #26).
 > - **CI green-up** (PR #21) — Prettier-fix `aim.test.ts` (was failing `format:check`); gate
 >   `e2e-live-provider-chat` in Actions unless `RUN_LIVE_PROVIDER_E2E=1` (repo Variable). Local
 >   `npm test` still runs live provider e2e by default. **CI-01** Devs.ai v1 key rotation remains a
@@ -371,7 +372,7 @@ per item / per area intro).
 >   `createSseLineBuffer` in `@ai-admin/core` (completes **CROSS-02** cadence half; same contract
 >   as BE-02). Characterization tests: core 9/9 + coach-stream 8/8.
 >
-> Not yet started: BE-05..06, FE-03..06, FE-10, API-04, API-06, WEB-01..04, CROSS-01, CROSS-03.
+> Not yet started: BE-06, FE-03..06, FE-10, API-04, API-06, WEB-01..04, CROSS-01, CROSS-03.
 
 #### Backend (report 01)
 
@@ -380,7 +381,7 @@ per item / per area intro).
 | **BE-02** ✅ **Done** (`refactor/be-02-sse-line-reader`, PR #18) | Extract one shared `services/sse-line-reader.ts`; replace the 4 copy-pasted SSE line-buffering blocks in `chat-sessions.ts` + the 1 in `v2-stream-events.ts` | M | Medium | Part of **CROSS-02**; write characterization tests reproducing the original R1 chunk-split regression first. **Done notes:** `createSseLineBuffer` / `pushSseChunk` in `backend/src/services/sse-line-reader.ts`; wired into 4 `chat-sessions.ts` loops + Devs.ai v2 path (`sse-transform.ts` / `client.ts` — the live buffering site; not `v2-stream-events.ts`). Structural only. Verify: `npm test -- sse-line-buffer` 9/9. Cadence half + shared core buffer landed via **API-03** (same contract; backend keeps its local module). |
 | **BE-03** ✅ **Done** (`refactor/be-03-rbac`) | RBAC gap — wire `requireRole('owner','admin')` into the 8 route files currently unguarded (`providers.ts`, `ai-profiles.ts`, `app-settings.ts`, `processing-jobs.ts`, `workflows.ts`, `calling-applications.ts`, `api-keys.ts` JWT path, plus `diagnostic-logs.ts`/`user-credentials.ts` at lower sensitivity) | S per file | Low | Cheapest, highest-value item in the whole plan — additive middleware, easy to test, easy to revert. **Recommended as the literal first PR to land in Phase 2.** **Done notes:** gated all 33 mutating routes (POST/PUT/PATCH/DELETE) across the 6 core CRUD files + `api-keys.ts` JWT path; GETs left member-readable (the "don't over-gate reads" constraint). Test-first: `backend/test/rbac-route-guards.test.ts` (22 cases, mocked ctx — member→403 on every gated router, GET→not-403, api-keys JWT gate + existing api_key-mode block intact); flipped 7 red→green. `rbac.test.ts` names corrected (the admin test key clears the gate, so its assertions were passing but mislabeled "any member can…"). **Two scope decisions deferred (need product sign-off, see §4.6):** (a) `diagnostic-logs.ts` GET-gating — NOT applied; all-GET sensitive-read surface, the plan itself flags it as a product decision; (b) `user-credentials.ts` — NOT gated; it's correctly user-scoped (report 01 marks it "needs gate? N"), so admin-gating would break members managing their own keys. Verify: backend `tsc` 0; live route tests are env-gated (run in CI). |
 | **BE-04** ✅ **Done** (`refactor/be-04-split-formatting-rules`, PR #14) | Split `services/formatting-rules.ts` (1,049 lines) into `formatting-rules/{index,rules/*,validators}.ts` | M | Low | Strong existing test file reduces risk; fully independent of BE-01. **Done notes:** thin re-export at `services/formatting-rules.ts` preserves public import path; module lives in `formatting-rules/{index,validators,rules/{strip-tags,trim,csv,json,case}}.ts`. Structural split only — no behavior changes. Verify: `npm test --workspace=backend -- formatting-rules` 51/51; backend `tsc --noEmit` clean. |
-| **BE-05** | Split `services/widget-health-checker.ts` (542 lines, one 392-line function) into `browser-session.ts`/`widget-interaction.ts`/`result-assembly.ts` | M | Medium | Puppeteer/timing tests are flakier — budget de-flaking time |
+| **BE-05** ✅ **Done** (`refactor/be-05-split-widget-health-checker`, PR #26) | Split `services/widget-health-checker.ts` (542 lines, one 392-line function) into `browser-session.ts`/`widget-interaction.ts`/`result-assembly.ts` | M | Medium | Puppeteer/timing tests are flakier — budget de-flaking time. **Done notes:** thin re-export at `services/widget-health-checker.ts`; modules in `widget-health-checker/{index,browser-session,widget-interaction,result-assembly,log,timings}.ts`. Structural split + env-overridable settle/retry delays for fast unit tests (production defaults unchanged). Verify: `npx vitest run widget-health-checker` 34/34 (~2s); backend `tsc --noEmit` clean. |
 | **BE-06** | Section-comment (then optionally split) `integrations/devs-ai/client.ts` (532 lines, ~28 methods across 5 API surfaces) | S→M | Low | Start with the zero-risk section-comment step |
 
 #### Frontend (report 02)
