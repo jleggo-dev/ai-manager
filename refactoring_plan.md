@@ -335,8 +335,10 @@ per item / per area intro).
 > - **API-05** — smoke tests + CoachDiag provenance comment for the AI Admin `aim.ts` seam (PR #13).
 >   Mocks `@ai-admin/core`; 16/16 vitest cases cover `withAim`/auth, `clockVars` UTC pairing,
 >   CoachDiag finalization, and coach session surface.
+> - **BE-04** — split `services/formatting-rules.ts` into `formatting-rules/{index,validators,rules/*}`
+>   with a thin compatibility re-export (PR #14). Structural only; 51/51 formatting-rules tests pass.
 >
-> Not yet started: BE-02, BE-04..06, FE-03..08, FE-10, API-02..04, API-06, WEB-01..04, PKG-01/02, CROSS-01..03.
+> Not yet started: BE-02, BE-05..06, FE-03..08, FE-10, API-02..04, API-06, WEB-01..04, PKG-01/02, CROSS-01..03.
 
 #### Backend (report 01)
 
@@ -344,7 +346,7 @@ per item / per area intro).
 |---|---|---|---|---|
 | **BE-02** | Extract one shared `services/sse-line-reader.ts`; replace the 4 copy-pasted SSE line-buffering blocks in `chat-sessions.ts` + the 1 in `v2-stream-events.ts` | M | Medium | Part of **CROSS-02**; write characterization tests reproducing the original R1 chunk-split regression first |
 | **BE-03** ✅ **Done** (`refactor/be-03-rbac`) | RBAC gap — wire `requireRole('owner','admin')` into the 8 route files currently unguarded (`providers.ts`, `ai-profiles.ts`, `app-settings.ts`, `processing-jobs.ts`, `workflows.ts`, `calling-applications.ts`, `api-keys.ts` JWT path, plus `diagnostic-logs.ts`/`user-credentials.ts` at lower sensitivity) | S per file | Low | Cheapest, highest-value item in the whole plan — additive middleware, easy to test, easy to revert. **Recommended as the literal first PR to land in Phase 2.** **Done notes:** gated all 33 mutating routes (POST/PUT/PATCH/DELETE) across the 6 core CRUD files + `api-keys.ts` JWT path; GETs left member-readable (the "don't over-gate reads" constraint). Test-first: `backend/test/rbac-route-guards.test.ts` (22 cases, mocked ctx — member→403 on every gated router, GET→not-403, api-keys JWT gate + existing api_key-mode block intact); flipped 7 red→green. `rbac.test.ts` names corrected (the admin test key clears the gate, so its assertions were passing but mislabeled "any member can…"). **Two scope decisions deferred (need product sign-off, see §4.6):** (a) `diagnostic-logs.ts` GET-gating — NOT applied; all-GET sensitive-read surface, the plan itself flags it as a product decision; (b) `user-credentials.ts` — NOT gated; it's correctly user-scoped (report 01 marks it "needs gate? N"), so admin-gating would break members managing their own keys. Verify: backend `tsc` 0; live route tests are env-gated (run in CI). |
-| **BE-04** | Split `services/formatting-rules.ts` (1,049 lines) into `formatting-rules/{index,rules/*,validators}.ts` | M | Low | Strong existing test file reduces risk; fully independent of BE-01 |
+| **BE-04** ✅ **Done** (`refactor/be-04-split-formatting-rules`, PR #14) | Split `services/formatting-rules.ts` (1,049 lines) into `formatting-rules/{index,rules/*,validators}.ts` | M | Low | Strong existing test file reduces risk; fully independent of BE-01. **Done notes:** thin re-export at `services/formatting-rules.ts` preserves public import path; module lives in `formatting-rules/{index,validators,rules/{strip-tags,trim,csv,json,case}}.ts`. Structural split only — no behavior changes. Verify: `npm test --workspace=backend -- formatting-rules` 51/51; backend `tsc --noEmit` clean. |
 | **BE-05** | Split `services/widget-health-checker.ts` (542 lines, one 392-line function) into `browser-session.ts`/`widget-interaction.ts`/`result-assembly.ts` | M | Medium | Puppeteer/timing tests are flakier — budget de-flaking time |
 | **BE-06** | Section-comment (then optionally split) `integrations/devs-ai/client.ts` (532 lines, ~28 methods across 5 API surfaces) | S→M | Low | Start with the zero-risk section-comment step |
 
