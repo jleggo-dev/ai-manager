@@ -1,0 +1,37 @@
+---
+description: Never commit/push directly to main — always branch + PR + review before merge
+alwaysApply: true
+---
+
+# Branch + PR required — no direct pushes to `main`
+
+`main` is deployed straight to production (Vercel). GitHub branch protection is **not**
+available on this repo's plan, so this rule is the enforcement mechanism — treat it as
+non-negotiable, not a suggestion.
+
+## Rule
+
+For any code change (backend, frontend, `apps/cadence-web`, `apps/cadence-api`, `packages/*`,
+config that affects runtime behavior):
+
+1. **Never `git push origin HEAD` (or any push) directly to `main`.** Create a feature/fix
+   branch first: `git checkout -b fix/short-description` (or `feat/…`).
+2. Follow [development-workflow](../skills/development-workflow/SKILL.md) in order: code →
+   local review/lint/typecheck → test → commit → push branch → **open a PR** → wait for CI →
+   **TL/architect review** (`pr-tl-review` skill) → fix if requested → merge only when checks
+   pass and review is resolved.
+3. Only merge into `main` via `gh pr merge` (or the user explicitly merging), never by pushing
+   commits to `main` directly.
+
+## Narrow exceptions (ask first if unsure)
+
+- Pure documentation-only edits (`docs/**`, `*.md`) with no code/behavior change.
+- The user explicitly says "push straight to main" / "skip the PR" for this specific change —
+  even then, still run lint/typecheck/tests first and say out loud that the PR gate is being
+  skipped.
+
+## If you already pushed to `main` without a PR
+
+Don't force-push or rewrite history to hide it. Say so plainly, then either open a follow-up PR
+for retroactive review or do an explicit retroactive review pass on the diff — don't silently
+move on.
