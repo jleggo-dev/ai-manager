@@ -33,7 +33,7 @@ export function useProcessingJobsData() {
       setJobs(jobsResult.data || []);
       setJobGroups(groupsData || []);
       setAiProfiles(profilesResult.data || []);
-      setAvailableRules((rulesData as unknown as FormattingRule[]) || []);
+      setAvailableRules(rulesData || []);
       setCallingApps(callingAppsResult.data || []);
     } catch (err: unknown) {
       notifications.show({ title: 'Error', message: err instanceof Error ? err.message : String(err), color: 'red' });
