@@ -5,7 +5,7 @@ vi.mock('../lib/auth-session', () => ({
   getWorkspaceId: vi.fn(() => 'test-workspace-id'),
   getSessionUser: vi.fn(() => null),
   // Mirrors the real implementation's ACCOUNT_PENDING/ACCOUNT_SUSPENDED gate so
-  // request() (services/api.ts) can call it without a "not a function" crash.
+  // request() (services/api/client.ts) can call it without a "not a function" crash.
   handleAccountGateApiError: vi.fn((err: unknown) => {
     const code = (err as { data?: { code?: string } })?.data?.code;
     return code === 'ACCOUNT_PENDING' || code === 'ACCOUNT_SUSPENDED';

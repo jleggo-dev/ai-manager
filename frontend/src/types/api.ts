@@ -373,6 +373,17 @@ export interface ProcessingJobConfig {
   [key: string]: unknown;
 }
 
+/* ── Formatting rules catalogue (GET /processing-jobs/formatting-rules) ── */
+
+export interface AvailableFormattingRule {
+  type: string;
+  label: string;
+  description: string;
+  hasOptions: boolean;
+  streamingSafe: boolean;
+  streamingNote: string;
+}
+
 /* ── AI Matcher result types ────────────────────────────── */
 
 export interface TokenUsage {
