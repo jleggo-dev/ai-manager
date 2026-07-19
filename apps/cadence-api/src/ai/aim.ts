@@ -111,7 +111,20 @@ export function sendCoachMessage(cadenceUserId: string, sessionId: string, messa
   return withAim(cadenceUserId, () => sendChatMessage(sessionId, message, {}));
 }
 
-/** Structural subset of the engine's DiagnosticSession that the coach route finalizes. */
+/**
+ * Structural subset of AI Admin's `DiagnosticSession` that the coach route finalizes.
+ *
+ * Provenance (unpinned structural contract — see API-05 / docs/refactor-analysis/03-cadence-api.md):
+ *   - Real type: `DiagnosticSession` in `backend/src/services/ai-diagnostics.ts`
+ *     (`endLlmTimer(request, response)` + `complete(status, errMsg?)`).
+ *   - Produced by: `sendChatMessage` → `{ diagnosticSession }` via `@ai-admin/core`
+ *     (package version in `packages/core/package.json`; not re-exported as a named type).
+ *   - Consumed here by `recordCoachReply` after the SSE stream completes.
+ *
+ * Kept as a local structural subset so Cadence does not import the diagnostics module.
+ * If upstream renames/requires args on those two methods, update this interface and the
+ * `recordCoachReply` cases in `aim.test.ts` — TypeScript will not catch a widening break.
+ */
 interface CoachDiag {
   endLlmTimer(request: Record<string, unknown>, response: Record<string, unknown>): void;
   complete(status: 'success' | 'error' | 'timeout', err?: string | null): Promise<unknown>;
