@@ -205,7 +205,7 @@ export function OnboardingChat({
       {chrome === 'onboarding' && (
         <div className="chat-disclaimer">
           <Orb />
-          <span>Cadence is AI and can make mistakes. Please double-check what I say.</span>
+          <span>I'm AI and can make mistakes — please double-check what I say.</span>
         </div>
       )}
     </div>
