@@ -377,16 +377,11 @@ per item / per area intro).
 > - **FE-04** — split `SettingsPage` into `pages/settings/*` tab files (`refactor/fe-04-split-settings-page`).
 >   API-key create/copy/revoke tests + `isAdminRole` gate on create/delete (matches backend).
 > - **FE-06** — split `services/api.ts` into domain modules + barrel (`refactor/fe-06-split-api-client`).
-> - **FE-03** — split `AiMatcherPage` into molecules/hooks/`lib/ai-matcher.ts`; prompt composition
->   via `lib/interpolate.ts` (`composeMatcherPrompt`). Page dropped from eslint `max-lines` override
->   (PR #32).
+> - **API-04** — test-first nutrition backfill: extract `parseMealResult`/`wantsTargets`, unit +
+>   DB integration tests for `logMeal` fallback/provisional and `getBaselineRead` cost-control /
+>   propose gates (`refactor/api-04-nutrition-tests`).
 >
-> - **CROSS-01** — `Broker`→`Scribe` rename across cadence-shared / cadence-api / cadence-web
->   (+ core package header) (PR #30). DevTrace fields `scribeSelect`/`scribeSummarize`;
->   `broker-contracts.ts` → `scribe-contracts.ts`. Persisted mode strings `broker-curated`/
->   `broker-partial` and profile slug `cadence-broker` left unchanged (audit trail / live IDs).
->
-> Not yet started: FE-10, API-04, API-06, WEB-01..04, CROSS-03.
+> Not yet started: FE-03, FE-10, API-06, WEB-01..04, CROSS-01, CROSS-03.
 
 #### Backend (report 01)
 
@@ -402,7 +397,7 @@ per item / per area intro).
 
 | ID | Item | Effort | Risk | Notes |
 |---|---|---|---|---|
-| **FE-03** ✅ **Done** (`refactor/fe-03-split-ai-matcher-page`, PR #32) | Split `AiMatcherPage.tsx` (1,061 lines); replace its inline `composePrompt` with `lib/interpolate.ts` | M | Medium | **Done notes:** pure helpers in `lib/ai-matcher.ts` (`composeMatcherPrompt` → `interpolateTemplate`, schema validation, slot payload shaping); molecules under `components/molecules/ai-matcher/` (`AiSlotCard`, `JsonFieldTable`, `ResultCard`, `MatcherResultsSection`); hooks `useAiMatcherSlots` / `useAiMatcherExecution` / `useAiMatcherPrompt`; page is a thin shell (~190 lines, dropped from eslint `max-lines` override). Tests: `ai-matcher.test.ts` + page smoke (slot add/remove + single-slot run). Structural only — empty-string `{{var}}` now follows canonical interpolator (replaces with `''` instead of leaving the placeholder). |
+| **FE-03** | Split `AiMatcherPage.tsx` (1,061 lines); replace its inline `composePrompt` with `lib/interpolate.ts` | M | Medium | No tests today on a page that fires real provider calls — add smoke tests first |
 | **FE-04** ✅ **Done** (`refactor/fe-04-split-settings-page`, PR #24) | Split `SettingsPage.tsx` (910 lines) into one file per tab (already logically decomposed, mechanical only); resolve the `_workspaceRole` unused-param question on the API-keys revoke action | S-M | Low/Medium on the API-key flow specifically | Add a test for API-key create/copy/revoke first — untested, security-relevant. **Done notes:** tabs/cards moved to `pages/settings/{SystemTab,LlmDefaultsTab,RateLimitsTab,BackendUrlCard,ApiKeysTab,UserCredentialsTab,DataManagementTab}.tsx`; shell keeps Tabs routing. `_workspaceRole` resolved by wiring `isAdminRole(workspaceRole)` so create/delete match backend `requireRole('owner','admin')` (members still list keys). Tests: `SettingsPage.test.tsx` cover list/create+copy-secret/revoke + member gating. Dropped `SettingsPage` from eslint `max-lines` override. |
 | **FE-05** 🚫 **Won't Fix / Removed** (`refactor/remove-widget-health-checker`) | Split `HealthCheckWidgetPage.tsx` (820 lines); consolidate its `STATUS_COLORS` duplication (3rd occurrence, see FE-11) | M | Low | **Cancelled:** page deleted with the unused widget health checker feature. `STATUS_COLORS` remaining occurrences stay under FE-11. |
 | **FE-06** ✅ **Done** (`refactor/fe-06-split-api-client`, PR #28) | Split `services/api.ts` (815 lines, 100 functions) into `services/api/{providers,ai-profiles,processing-jobs,workflows,health-checks,settings,workspaces}.ts` behind a barrel | M | Low | Should land before/alongside FE-01/FE-02 so their new hooks have a non-monolithic home. **Done notes:** `services/api.ts` is a thin barrel; shared `request`/`getApiAuthHeaders` in `api/client.ts`; domains also include `calling-applications`, `chat-sessions`, `admin`. `listFormattingRules` now returns `AvailableFormattingRule[]` (removes the organism `as unknown as` cast). Rebased onto widget-health removal (no widget API surface). Call-site import paths unchanged. Verify: frontend `tsc` 0; `api.test.ts` 15/15; ProcessingJobManager tests green. |
@@ -418,7 +413,7 @@ per item / per area intro).
 | **API-01** ✅ **Done** (`refactor/api-01-plan-commit-tx`) | Plan-commit pipeline: wrap `commitActivities` in `sql.begin()` (currently un-transactional — a mid-flight crash leaves a user with **no active plan**); extract the duplicated preview-fallback skeleton shared by `lock.ts`/`replan.ts`; resolve the `lock`/`committed` naming drift | M | Medium | **Test-first is a hard blocker** — zero tests exist on this path today; write integration tests (first-lock happy path, `needs_focus`, re-plan dismiss/re-preview, self-sufficient commit, `plan_vet` rejection) before touching it. **Done notes:** `commitActivities` now runs supersede→insertPlan→insertActivities→delete-stale-occurrences inside `sql.begin()` (repos gained an optional `SqlExecutor` param — base client or tx handle — added to `db/sql.ts`); `ensureHorizon` stays outside (idempotent). Shared `services/plan-commit-flow.ts#confirmPendingPlan` now backs both `confirmLock`/`confirmReplan`. Naming drift resolved by **documenting** (header comment in `lock.ts`: "lock" is the retained internal verb; not a nomenclature violation) rather than renaming — lower blast radius. **Also built the §6 DB test harness** (dedicated test user + `resetUserData` fixtures) — the first real integration coverage in `apps/cadence-api`. Tests mock only the AI seam (`ai/aim.ts`) so they're deterministic and never load `@ai-admin/core` (the cadence CI job lacks AI-Manager secrets by design). Verify: tsc 0; **56/56 vitest pass against the live Cadence DB** incl. the atomicity case (mid-flight `insertActivities` throw → prior active plan survives, the fix), v1→v2 supersede, `confirmLock` via the shared skeleton (goal→committed), and vetoed-leaves-DB-untouched. `describe.skipIf(!CADENCE DB)` keeps the cadence CI job green whether or not the CADENCE_* secrets are set (add them to run the integration tests in CI too — mirrors the AI-Admin secrets). |
 | **API-02** ✅ **Done** (`refactor/api-02-session-split`, PR #16) | Split `services/session.ts` (297 lines, 3 unrelated responsibilities: generation/weigh-in/log-parsing) | M | Low | Unit-test `normalizeSession`'s bounds + URL-stripping regex first — it's a security/UX backstop against model-invented clickable URLs. **Done notes:** thin barrel at `session.ts`; modules are `session-normalize` (pure + exported `coachingPhase`/`str`/`num`), `session-generate`, `session-log`, `weigh-in`. `routes/plan.ts` imports the concrete modules. Structural split only — no behavior changes. Verify: 8/8 `session-normalize` vitest; cadence-api `tsc --noEmit` clean. |
 | **API-03** ✅ **Done** (`refactor/api-03-coach-stream`) | Extract `routes/coach.ts`'s SSE-relay-and-accumulate loop into a standalone, unit-testable `services/coach-stream.ts` | M | Medium | Part of **CROSS-02**; write characterization tests with a synthetic `ReadableStream` covering both upstream frame shapes first. **Done notes:** `relayAndAccumulate` + `applySseDataPayload`/`applySseLine` in `apps/cadence-api/src/services/coach-stream.ts`; route thins to call it. Incremental line buffer lives in `packages/core/src/sse-line-reader.ts` (`createSseLineBuffer` / `pushSseChunk`, exported from `@ai-admin/core`) — same contract as BE-02. Verify: core `sse-line-reader` 9/9; cadence-api `coach-stream` 8/8 (OpenAI deltas, v2 `message.complete`, chunk-split frames, client drop while draining). |
-| **API-04** | Test-first backfill on `services/nutrition.ts` — extract `parseMealResult`/`wantsTargets` as named pure functions, unit-test them, integration-test `logMeal`'s fallback guarantee and `getBaselineRead`'s cost-control gate | M | Low | |
+| **API-04** ✅ **Done** (`refactor/api-04-nutrition-tests`, PR #33) | Test-first backfill on `services/nutrition.ts` — extract `parseMealResult`/`wantsTargets` as named pure functions, unit-test them, integration-test `logMeal`'s fallback guarantee and `getBaselineRead`'s cost-control gate | M | Low | **Done notes:** pure helpers live in `nutrition-parse.ts` (`parseMealResult`, `wantsTargets`, `PROVISIONAL_BELOW`, `isMeal`) — no DB/aim import so CI without `CADENCE_*` can run unit tests; `nutrition.ts` re-exports + uses them. Unit tests in `nutrition-parse.test.ts` (valid/malformed/partial/confidence clamp + wantsTargets matrix). DB integration in `nutrition-service.test.ts` (AI seam mocked): parse-fail still persists raw text + empty items; provisional below 0.5; baseline `<7` days → `ready:false` with **zero** LLM calls; `propose_targets` yes only when wantsTargets ∧ no existing targets. Harness fix: `resetUserData` now clears `macro_targets` (start-over / observe-from-zero). Verify: 16/16 vitest (9 unit + 7 DB); cadence-api `tsc`/`lint` clean. |
 | **API-05** ✅ **Done** (`refactor/api-05-aim-seam-tests`, PR #13) | Add a smoke test + provenance comment to `ai/aim.ts` — the load-bearing AI Admin seam, currently zero tests, with an unpinned structural contract (`CoachDiag`) against `@ai-admin/core`'s real return type | S | Low | **Done notes:** `aim.test.ts` mocks `@ai-admin/core` + config; pins `withAim` RequestAuthContext, `clockVars` UTC day/`day_of_week` pairing (incl. near-boundary), coach session surface, and `recordCoachReply` CoachDiag `endLlmTimer`/`complete` contracts. Provenance comment on local `CoachDiag` subset documents the unpinned structural link to AI Admin's `DiagnosticSession`. Verify: 16/16 vitest pass; scope stayed `aim.test.ts` + comment in `aim.ts`. |
 | **API-06** | Extract shared `services/retrieval/select-and-run.ts` (`validateCalls`/`executeCalls`) from the duplicated `context-pack.ts`/`turn-context.ts` pipelines; add the resilience-contract test for `buildContextPack`'s 3-way fallback | M | Low | |
 
@@ -442,20 +437,24 @@ per item / per area intro).
 
 ### 4.3 Cross-cutting items (span multiple areas — assign to one owner, coordinate with affected area owners)
 
-#### CROSS-01 — `Broker` → `Scribe` rename [P1] — ✅ **Done** (`refactor/cross-01-broker-to-scribe`, PR #30)
+#### CROSS-01 — `Broker` → `Scribe` rename [P1]
 
-**Current problem:** BRAND.md's `Broker`→`Scribe` rename (canonical internal name; dated 2026-07-04)
-had not propagated to the three packages that export/consume the concept: `apps/cadence-web`
-(`DevTrace.brokerSelect`/`brokerSummarize`, DevPanel "Broker responses"), `apps/cadence-api`
-(`dev-trace.ts` producer + `context-pack.ts`), and `packages/cadence-shared` (JSDoc / `broker-contracts.ts`).
+**Current problem:** BRAND.md's `Broker`→`Scribe` rename (internal-name-only; dated 2026-07-04) has
+propagated to **none** of the three packages that reference the concept: `apps/cadence-web`
+(`lib/api.ts:508-509`'s `DevTrace.brokerSelect`/`brokerSummarize`, `DevPanel.tsx:133`),
+`apps/cadence-api` (`services/dev-trace.ts` and ~18 other files, per grep), and
+`packages/cadence-shared` (module-level JSDoc still titled "§C4 Broker job contracts"). Everywhere
+else `Broker` is used correctly per CLAUDE.md's table (it's the retained internal/code name — only
+the UI-facing `Scribe` name was supposed to move, and it has, correctly, everywhere user-visible).
+The specific violation is the **exported, consumed type field names** (`brokerSelect`/
+`brokerSummarize`), which are dev-only-surfaced today (`?dev=1`) but will get harder to fix the more
+call sites accrue.
 
-**Done notes:** Coordinated rename in one PR: `DevTrace.scribeSelect`/`scribeSummarize` (api + web),
-producer helpers `scribeSelect`/`scribeSummarize` in `context-pack.ts`, DevPanel section
-"4 · Scribe responses", `broker-contracts.ts` → `scribe-contracts.ts` + barrel/package descriptions,
-`@ai-admin/core` engine banner. Left unchanged on purpose: persisted pack mode strings
-(`broker-curated` / `broker-partial`), AI Admin profile slug `cadence-broker`, and narrative docs
-(`/docs/cadence/PLAN.md` historical Broker wording). Verify: cadence-shared 3/3 vitest; tsc clean
-on shared/api/web/core.
+**Migration steps:** one coordinated PR (or tightly-sequenced set) touching all three packages at
+once: rename the `DevTrace` fields in `packages/cadence-shared`, update `apps/cadence-api`'s
+`dev-trace.ts` producer, update `apps/cadence-web`'s `lib/api.ts` consumer + `DevPanel.tsx`'s
+render. Do this as its own item, separate from WEB-02's mechanical `lib/api.ts` file-split, so the
+rename's diff is reviewable on its own.
 
 **Priority/Effort/Risk:** P1 / S once scoped / Low (dev-only surface today — fix while the blast
 radius is small).
@@ -751,9 +750,8 @@ This plan is "done" (or rather, has earned the right to be considered a complete
       their top-5 highest-risk paths per reports 03/04's "first N tests" lists.
 - [ ] SD2/SD3 (frontend/backend type drift) no longer reproduces — verified by the contract-test
       added under FE-10, not just by manual inspection.
-- [x] `Broker`→`Scribe` rename (CROSS-01) is complete across DevTrace exports + shared contracts
-      (`scribeSelect`/`scribeSummarize`, `scribe-contracts.ts`); persisted `broker-*` mode strings
-      and `cadence-broker` profile slug intentionally retained.
+- [ ] `Broker`→`Scribe` rename (CROSS-01) is complete across all three packages, verified by a
+      repo-wide grep returning zero remaining `broker`-named exports.
 - [ ] This document's status tracking (§6.5) shows every P0/P1 item as `Verified`.
 
 ---
