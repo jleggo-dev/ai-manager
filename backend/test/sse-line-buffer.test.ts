@@ -1,25 +1,24 @@
 import { describe, it, expect } from 'vitest';
+import { createSseLineBuffer, pushSseChunk } from '../src/services/sse-line-reader.ts';
 
+/** Characterization helper — same chunk-split contract as production call sites. */
 function processChunks(chunks: string[]): { lines: string[]; remaining: string } {
-  let lineBuffer = '';
+  const state = createSseLineBuffer();
   const allLines: string[] = [];
   for (const chunk of chunks) {
-    lineBuffer += chunk;
-    const lines = lineBuffer.split('\n');
-    lineBuffer = lines.pop() ?? '';
-    allLines.push(...lines);
+    allLines.push(...pushSseChunk(state, chunk));
   }
-  return { lines: allLines, remaining: lineBuffer };
+  return { lines: allLines, remaining: state.buffer };
 }
 
-describe('SSE line buffer (processChunks)', () => {
+describe('SSE line buffer (sse-line-reader)', () => {
   it('handles complete lines in a single chunk', () => {
     const result = processChunks(['line1\nline2\n']);
     expect(result.lines).toEqual(['line1', 'line2']);
     expect(result.remaining).toBe('');
   });
 
-  it('reassembles a line split across two chunks', () => {
+  it('reassembles a line split across two chunks (R1 regression)', () => {
     const result = processChunks(['hel', 'lo\n']);
     expect(result.lines).toEqual(['hello']);
     expect(result.remaining).toBe('');
@@ -55,13 +54,32 @@ describe('SSE line buffer (processChunks)', () => {
     expect(result.remaining).toBe('');
   });
 
-  it('handles JSON split mid-object across chunks', () => {
+  it('handles JSON split mid-object across chunks (R1 regression)', () => {
     const result = processChunks([
       'data: {"conte',
       'nt":"he',
       'llo"}\n\n',
     ]);
     expect(result.lines).toEqual(['data: {"content":"hello"}', '']);
+    expect(result.remaining).toBe('');
+  });
+
+  it('reassembles multi-event payload split on arbitrary boundaries', () => {
+    const payload = 'data: {"a":1}\n\ndata: {"b":2}\n\ndata: [DONE]\n\n';
+    // Split every 7 chars to force many mid-line boundaries
+    const chunks: string[] = [];
+    for (let i = 0; i < payload.length; i += 7) {
+      chunks.push(payload.slice(i, i + 7));
+    }
+    const result = processChunks(chunks);
+    expect(result.lines).toEqual([
+      'data: {"a":1}',
+      '',
+      'data: {"b":2}',
+      '',
+      'data: [DONE]',
+      '',
+    ]);
     expect(result.remaining).toBe('');
   });
 });
