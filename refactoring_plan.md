@@ -332,8 +332,11 @@ per item / per area intro).
 > - **FE-09** — auth `onAuthStateChange` unsubscribe on App unmount (PR #12). SD5 listener leak fixed;
 >   `initAuthSession` returns an unsubscribe handle; App effect cleanup (incl. cancelled-init race)
 >   and unit tests cover it.
+> - **API-05** — smoke tests + CoachDiag provenance comment for the AI Admin `aim.ts` seam (PR #13).
+>   Mocks `@ai-admin/core`; 16/16 vitest cases cover `withAim`/auth, `clockVars` UTC pairing,
+>   CoachDiag finalization, and coach session surface.
 >
-> Not yet started: BE-02, BE-04..06, FE-03..08, FE-10, API-02..06, WEB-01..04, PKG-01/02, CROSS-01..03.
+> Not yet started: BE-02, BE-04..06, FE-03..08, FE-10, API-02..04, API-06, WEB-01..04, PKG-01/02, CROSS-01..03.
 
 #### Backend (report 01)
 
@@ -366,7 +369,7 @@ per item / per area intro).
 | **API-02** | Split `services/session.ts` (297 lines, 3 unrelated responsibilities: generation/weigh-in/log-parsing) | M | Low | Unit-test `normalizeSession`'s bounds + URL-stripping regex first — it's a security/UX backstop against model-invented clickable URLs |
 | **API-03** | Extract `routes/coach.ts`'s SSE-relay-and-accumulate loop into a standalone, unit-testable `services/coach-stream.ts` | M | Medium | Part of **CROSS-02**; write characterization tests with a synthetic `ReadableStream` covering both upstream frame shapes first |
 | **API-04** | Test-first backfill on `services/nutrition.ts` — extract `parseMealResult`/`wantsTargets` as named pure functions, unit-test them, integration-test `logMeal`'s fallback guarantee and `getBaselineRead`'s cost-control gate | M | Low | |
-| **API-05** | Add a smoke test + provenance comment to `ai/aim.ts` — the load-bearing AI Admin seam, currently zero tests, with an unpinned structural contract (`CoachDiag`) against `@ai-admin/core`'s real return type | S | Low | Small, isolated, disproportionately high-leverage given 9+ files depend on this one being correct |
+| **API-05** ✅ **Done** (`refactor/api-05-aim-seam-tests`, PR #13) | Add a smoke test + provenance comment to `ai/aim.ts` — the load-bearing AI Admin seam, currently zero tests, with an unpinned structural contract (`CoachDiag`) against `@ai-admin/core`'s real return type | S | Low | **Done notes:** `aim.test.ts` mocks `@ai-admin/core` + config; pins `withAim` RequestAuthContext, `clockVars` UTC day/`day_of_week` pairing (incl. near-boundary), coach session surface, and `recordCoachReply` CoachDiag `endLlmTimer`/`complete` contracts. Provenance comment on local `CoachDiag` subset documents the unpinned structural link to AI Admin's `DiagnosticSession`. Verify: 16/16 vitest pass; scope stayed `aim.test.ts` + comment in `aim.ts`. |
 | **API-06** | Extract shared `services/retrieval/select-and-run.ts` (`validateCalls`/`executeCalls`) from the duplicated `context-pack.ts`/`turn-context.ts` pipelines; add the resilience-contract test for `buildContextPack`'s 3-way fallback | M | Low | |
 
 #### Cadence web (report 04)
