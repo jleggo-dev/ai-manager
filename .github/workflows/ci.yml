@@ -73,7 +73,8 @@ jobs:
       # wired here, so all 35 setup.ts-importing suites threw at import. Must be an owner/admin
       # -role key provisioned in the AI Manager test Supabase project (BE-03 gates admin routes).
       TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
-      # Opt-in: e2e-live-provider-chat.test.ts is skipped in CI unless this is "1".
+      # Opt-in: live Devs.ai provider e2e suites are skipped in CI unless this is "1".
+      # Covers e2e-live-provider-chat.test.ts and e2e-devs-ai-v2-tools.test.ts.
       # Upstream Devs.ai v2 500s were flaking otherwise-green PRs (CI-01). Set a repo
       # Variable RUN_LIVE_PROVIDER_E2E=1 only when you want those live smokes in Actions.
       # Local `npm test` still runs them by default.
