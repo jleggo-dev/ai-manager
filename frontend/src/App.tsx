@@ -146,12 +146,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+
     initAuthSession()
-      .then(() => {
+      .then((unsub) => {
+        if (cancelled) {
+          unsub();
+          return;
+        }
+        unsubscribe = unsub;
         setSessionUserProfile(getSessionUser());
         if (getAccountStatus() === 'approved') return loadWorkspaceOptions();
       })
-      .finally(() => setAuthReady(true));
+      .finally(() => {
+        if (!cancelled) setAuthReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, [loadWorkspaceOptions]);
 
   useEffect(() => {
