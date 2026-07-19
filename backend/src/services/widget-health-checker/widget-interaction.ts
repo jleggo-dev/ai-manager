@@ -7,9 +7,7 @@ import type { Page, Frame, ElementHandle, JSHandle } from 'puppeteer-core';
 import type { WidgetHealthCheckRow } from '../../types.ts';
 import { SETTLE_DELAY_MS } from './browser-session.ts';
 import { whcLog } from './log.ts';
-
-const STABILITY_CHECK_MS = 500;
-const STABILITY_THRESHOLD = 3;
+import { POST_ENTER_DELAY_MS, STABILITY_CHECK_MS, STABILITY_THRESHOLD } from './timings.ts';
 
 async function findWithFallback(context: Page | Frame, selectorList: string, timeoutMs: number): Promise<string> {
   const selectors = selectorList
@@ -188,7 +186,7 @@ export async function sendProbeAndAwaitResponse(
 
   whcLog('info', check.id, 'Submitting message');
   await inputEl.press('Enter');
-  await new Promise((r) => setTimeout(r, 2_000));
+  await new Promise((r) => setTimeout(r, POST_ENTER_DELAY_MS));
 
   const countAfterEnter = await frame.evaluate((sel: string) => document.querySelectorAll(sel).length, selectorGroup);
 

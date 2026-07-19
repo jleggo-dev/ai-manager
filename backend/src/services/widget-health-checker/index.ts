@@ -60,6 +60,7 @@ import {
   emptyErrorResult,
 } from './result-assembly.ts';
 import { whcLog } from './log.ts';
+import { ATTEMPT_RETRY_BASE_MS, TRANSIENT_RETRY_BASE_MS } from './timings.ts';
 
 export type { WidgetHealthCheckResult };
 
@@ -221,7 +222,7 @@ async function executeWithRetry(
       whcLog('info', check.id, `Transient error (attempt ${attempt}), auto-retrying`, {
         error: lastResult.errorMessage,
       });
-      await new Promise((r) => setTimeout(r, 3000 * transientRetries));
+      await new Promise((r) => setTimeout(r, TRANSIENT_RETRY_BASE_MS * transientRetries));
       continue;
     }
 
@@ -229,7 +230,7 @@ async function executeWithRetry(
       whcLog('info', check.id, `Attempt ${attempt}/${configuredAttempts} failed, retrying`, {
         status: lastResult.status,
       });
-      await new Promise((r) => setTimeout(r, 2000 * attempt));
+      await new Promise((r) => setTimeout(r, ATTEMPT_RETRY_BASE_MS * attempt));
       continue;
     }
 

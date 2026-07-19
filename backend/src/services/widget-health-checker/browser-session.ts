@@ -6,9 +6,9 @@
 import type { Browser, Page } from 'puppeteer-core';
 import { launchBrowser } from '../../lib/browser.ts';
 import { whcLog } from './log.ts';
+import { HARD_TIMEOUT_BUFFER_MS, SETTLE_DELAY_MS } from './timings.ts';
 
-export const HARD_TIMEOUT_BUFFER_MS = 30_000;
-export const SETTLE_DELAY_MS = 3_000;
+export { HARD_TIMEOUT_BUFFER_MS, SETTLE_DELAY_MS };
 
 export interface BrowserSession {
   browser: Browser;

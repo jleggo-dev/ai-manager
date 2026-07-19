@@ -1,5 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Collapse production settle/retry sleeps so the suite finishes in seconds, not minutes.
+// Values stay > slow-threshold (1ms) used by the warning test.
+vi.hoisted(() => {
+  process.env.WIDGET_HC_SETTLE_MS = '2';
+  process.env.WIDGET_HC_STABILITY_CHECK_MS = '1';
+  process.env.WIDGET_HC_POST_ENTER_MS = '0';
+  process.env.WIDGET_HC_TRANSIENT_RETRY_BASE_MS = '0';
+  process.env.WIDGET_HC_ATTEMPT_RETRY_BASE_MS = '0';
+});
+
 vi.mock('../src/lib/url-validator.ts', () => ({
   validateSafeUrl: vi.fn().mockResolvedValue(new URL('https://example.com')),
 }));
