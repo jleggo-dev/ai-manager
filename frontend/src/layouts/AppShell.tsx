@@ -19,7 +19,6 @@ import {
   IconHeartRateMonitor,
   IconKey,
   IconStethoscope,
-  IconWorldWww,
 } from '@tabler/icons-react';
 import styles from './AppShell.module.css';
 import type { SessionUser } from '../lib/auth-session';
@@ -68,7 +67,6 @@ const HEALTH_NAV_SECTIONS: NavSection[] = [
       { key: 'hc-providers', label: 'Provider Keys', icon: IconKey },
       { key: 'hc-profiles', label: 'Profiles', icon: IconBrain },
       { key: 'hc-checks', label: 'API Health', icon: IconStethoscope },
-      { key: 'hc-widget-checks', label: 'Widget Health', icon: IconWorldWww },
     ],
   },
 ];

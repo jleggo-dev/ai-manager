@@ -20,7 +20,6 @@ import userCredentialsRouter from './routes/user-credentials.ts';
 import workflowsRouter from './routes/workflows.ts';
 import userDataRouter from './routes/user-data.ts';
 import healthChecksRouter from './routes/health-checks.ts';
-import widgetHealthChecksRouter from './routes/widget-health-checks.ts';
 import cronRouter from './routes/cron.ts';
 import triggersRouter from './routes/triggers.ts';
 import syncRouter from './routes/sync.ts';
@@ -128,13 +127,6 @@ app.get('/api/health', async (_req: Request, res: Response) => {
   res.json({ status: allOk ? 'ok' : 'degraded', version: API_VERSION });
 });
 
-app.get('/api/health/chromium', async (_req: Request, res: Response) => {
-  const { probeBrowserAvailability, getBrowserDiagnostics } = await import('./lib/browser.ts');
-  const diag = getBrowserDiagnostics();
-  const available = await probeBrowserAvailability();
-  res.json({ available, ...diag });
-});
-
 app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/cron', cronRouter);
 
@@ -157,7 +149,6 @@ app.use('/api/user-credentials', userCredentialsRouter);
 app.use('/api/workflows', workflowsRouter);
 app.use('/api/user-data', userDataRouter);
 app.use('/api/health-checks', healthChecksRouter);
-app.use('/api/widget-health-checks', widgetHealthChecksRouter);
 app.use('/api/triggers', triggersRouter);
 app.use('/api/sync', syncRouter);
 

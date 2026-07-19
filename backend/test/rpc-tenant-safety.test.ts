@@ -113,27 +113,6 @@ describe('RPC tenant safety — hc_daily_run_summary', () => {
   });
 });
 
-describe('RPC tenant safety — widget_hc_daily_run_summary', () => {
-  beforeEach(() => {
-    mockRpc.mockClear();
-  });
-
-  it('getWidgetDailyRunSummary passes p_workspace_id', async () => {
-    const { getWidgetDailyRunSummary } = await import('../src/models/widget-health-checks.ts');
-
-    await runWithAuth(apiKeyCtx(WORKSPACE_A), async () => {
-      await getWidgetDailyRunSummary('whc-1', '2026-01-01', '2026-01-31');
-    });
-
-    expect(mockRpc).toHaveBeenCalledWith('widget_hc_daily_run_summary', {
-      p_check_id: 'whc-1',
-      p_start: '2026-01-01',
-      p_end: '2026-01-31',
-      p_workspace_id: WORKSPACE_A,
-    });
-  });
-});
-
 describe('calling_applications onConflict', () => {
   it('upsert uses workspace_id,id composite conflict target', async () => {
     const fs = await import('fs');

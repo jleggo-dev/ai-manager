@@ -7,10 +7,6 @@ import { seedLlmModels } from './services/llm-models-seed.ts';
 import { seedSettings } from './services/settings-seed.ts';
 import { errorMessage } from './lib/error-message.ts';
 import { startHealthCheckScheduler, stopHealthCheckScheduler } from './services/health-check-scheduler.ts';
-import {
-  startWidgetHealthCheckScheduler,
-  stopWidgetHealthCheckScheduler,
-} from './services/widget-health-check-scheduler.ts';
 import type { RequestAuthContext } from './types.ts';
 
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
@@ -77,7 +73,6 @@ async function main() {
       console.log('  [scheduler] Serverless detected — using Vercel Cron (/api/cron/tick) instead of setInterval');
     } else {
       startHealthCheckScheduler();
-      startWidgetHealthCheckScheduler();
     }
   });
 
@@ -85,7 +80,6 @@ async function main() {
     console.log(`\n  ${signal} received, shutting down gracefully...`);
     ready = false;
     stopHealthCheckScheduler();
-    stopWidgetHealthCheckScheduler();
     server.close(() => {
       console.log('  Server closed.');
       process.exit(0);

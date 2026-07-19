@@ -1,10 +1,9 @@
 /**
- * Unit tests for the outage cadence acceleration logic in
- * listDueChecks() and listDueWidgetChecks().
+ * Unit tests for the outage cadence acceleration logic in listDueChecks().
  *
  * We mock getServiceSupabase() to return a fluent-API stub so we can
- * control the rows returned by the health_checks / widget_health_checks
- * and incident tables without needing a live database.
+ * control the rows returned by the health_checks and incident tables
+ * without needing a live database.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -64,7 +63,6 @@ vi.mock('../src/lib/crypto.ts', () => ({
 }));
 
 import { listDueChecks } from '../src/models/health-checks.ts';
-import { listDueWidgetChecks } from '../src/models/widget-health-checks.ts';
 
 /* ── Helpers ──────────────────────────────────────────────── */
 
@@ -84,33 +82,6 @@ function makeApiCheck(overrides: Partial<MockRow> = {}): MockRow {
     created_at: '2024-01-01',
     updated_at: '2024-01-01',
     health_check_profile: { id: 'prof-1', provider: { id: 'p-1' } },
-    ...overrides,
-  };
-}
-
-function makeWidgetCheck(overrides: Partial<MockRow> = {}): MockRow {
-  return {
-    id: 'wchk-1',
-    workspace_id: 'ws-1',
-    name: 'Widget Check',
-    url: 'https://example.com',
-    test_message: 'hello',
-    cadence_minutes: 15,
-    outage_cadence_minutes: 2,
-    is_active: true,
-    last_run_at: new Date(now - 3 * 60_000).toISOString(), // 3 min ago
-    max_retries: 1,
-    launcher_selector: '',
-    iframe_selector: '',
-    input_selector: '',
-    send_selector: '',
-    response_selector: '',
-    error_patterns: [],
-    page_load_timeout_ms: 15000,
-    response_timeout_ms: 45000,
-    capture_screenshot: false,
-    created_at: '2024-01-01',
-    updated_at: '2024-01-01',
     ...overrides,
   };
 }
@@ -209,88 +180,5 @@ describe('listDueChecks — outage cadence acceleration', () => {
     expect(due).toHaveLength(1);
     const firstDue = due[0] as (typeof due)[number];
     expect(firstDue.id).toBe('chk-1');
-  });
-});
-
-/* ── Tests: Widget health checks ─────────────────────────── */
-
-describe('listDueWidgetChecks — outage cadence acceleration', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('uses outage_cadence_minutes when an open incident exists (check becomes due)', async () => {
-    const check = makeWidgetCheck({ last_run_at: new Date(now - 3 * 60_000).toISOString() });
-
-    mockSb = buildSupabaseMock({
-      widget_health_checks: [check],
-      widget_health_check_incidents: [makeIncident('wchk-1', 'widget_health_check_id')],
-    });
-
-    const due = await listDueWidgetChecks();
-    expect(due).toHaveLength(1);
-    const firstDue = due[0] as (typeof due)[number];
-    expect(firstDue.id).toBe('wchk-1');
-  });
-
-  it('uses normal cadence_minutes when no open incident (check not yet due)', async () => {
-    const check = makeWidgetCheck({ last_run_at: new Date(now - 3 * 60_000).toISOString() });
-
-    mockSb = buildSupabaseMock({
-      widget_health_checks: [check],
-      widget_health_check_incidents: [],
-    });
-
-    const due = await listDueWidgetChecks();
-    expect(due).toHaveLength(0);
-  });
-
-  it('still returns checks with no last_run_at regardless of incident state', async () => {
-    const check = makeWidgetCheck({ last_run_at: null });
-
-    mockSb = buildSupabaseMock({
-      widget_health_checks: [check],
-      widget_health_check_incidents: [],
-    });
-
-    const due = await listDueWidgetChecks();
-    expect(due).toHaveLength(1);
-  });
-
-  it('does not accelerate when incident is resolved', async () => {
-    const check = makeWidgetCheck({ last_run_at: new Date(now - 3 * 60_000).toISOString() });
-    const resolvedIncident = {
-      ...makeIncident('wchk-1', 'widget_health_check_id'),
-      resolved_at: new Date().toISOString(),
-    };
-
-    mockSb = buildSupabaseMock({
-      widget_health_checks: [check],
-      widget_health_check_incidents: [resolvedIncident],
-    });
-
-    const due = await listDueWidgetChecks();
-    expect(due).toHaveLength(0);
-  });
-
-  it('correctly handles mixed checks — one with incident, one without', async () => {
-    const checkWithIncident = makeWidgetCheck({
-      id: 'wchk-1',
-      last_run_at: new Date(now - 3 * 60_000).toISOString(),
-    });
-    const checkWithout = makeWidgetCheck({
-      id: 'wchk-2',
-      last_run_at: new Date(now - 3 * 60_000).toISOString(),
-    });
-
-    mockSb = buildSupabaseMock({
-      widget_health_checks: [checkWithIncident, checkWithout],
-      widget_health_check_incidents: [makeIncident('wchk-1', 'widget_health_check_id')],
-    });
-
-    const due = await listDueWidgetChecks();
-    expect(due).toHaveLength(1);
-    const firstDue = due[0] as (typeof due)[number];
-    expect(firstDue.id).toBe('wchk-1');
   });
 });

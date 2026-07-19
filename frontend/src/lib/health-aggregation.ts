@@ -8,7 +8,7 @@ const EMPTY_TOTALS: UptimeTotals = {
   warning: 0,
 };
 
-/** Sum pass/fail/timeout/error/warning across API + widget check histories. */
+/** Sum pass/fail/timeout/error/warning across check histories. */
 export function aggregateUptimeTotals(history: CheckUptimeHistory[]): UptimeTotals {
   return history.reduce(
     (acc, h) => ({

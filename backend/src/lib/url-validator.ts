@@ -6,8 +6,7 @@
  * resolves DNS and validates resolved IPs, supports optional
  * domain allowlists.
  *
- * Extracted from attachment-resolver.ts for reuse across
- * widget health checks and other URL-consuming features.
+ * Used by attachment-resolver and other URL-consuming features.
  */
 
 import { resolve4, resolve6 } from 'node:dns/promises';

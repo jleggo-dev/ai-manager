@@ -28,11 +28,6 @@ import type {
   HcRun,
   HcIncident,
   HcDashboardItem,
-  WidgetHcCheck,
-  WidgetHcRun,
-  WidgetHcIncident,
-  WidgetHcDashboardItem,
-  WidgetHcTimeouts,
   CheckUptimeHistory,
   RunListResponse,
   FailurePatterns,
@@ -66,11 +61,6 @@ export type {
   HcRun,
   HcIncident,
   HcDashboardItem,
-  WidgetHcCheck,
-  WidgetHcRun,
-  WidgetHcIncident,
-  WidgetHcDashboardItem,
-  WidgetHcTimeouts,
   CheckUptimeHistory,
 } from '../types/api';
 
@@ -804,76 +794,10 @@ export function getHcDashboard(): Promise<{ data: HcDashboardItem[] }> {
   return request('/api/health-checks/dashboard');
 }
 
-/* ── Widget Health Checks ────────────────────────────────── */
-
-export function listWidgetHcChecks(): Promise<{ data: WidgetHcCheck[] }> {
-  return request('/api/widget-health-checks');
-}
-
-export function createWidgetHcCheck(data: Partial<WidgetHcCheck>): Promise<WidgetHcCheck> {
-  return request('/api/widget-health-checks', { method: 'POST', body: JSON.stringify(data) });
-}
-
-export function updateWidgetHcCheck(id: string, data: Partial<WidgetHcCheck>): Promise<WidgetHcCheck> {
-  return request(`/api/widget-health-checks/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-}
-
-export function deleteWidgetHcCheck(id: string): Promise<void> {
-  return request(`/api/widget-health-checks/${id}`, { method: 'DELETE' });
-}
-
-export function runWidgetHcCheck(id: string): Promise<WidgetHcRun> {
-  return request(`/api/widget-health-checks/${id}/run`, { method: 'POST' });
-}
-
-export function listWidgetHcRuns(id: string): Promise<{ data: WidgetHcRun[] }> {
-  return request(`/api/widget-health-checks/${id}/runs`);
-}
-
-export function getWidgetRunScreenshot(runId: string): Promise<{ url: string }> {
-  return request(`/api/widget-health-checks/runs/${runId}/screenshot`);
-}
-
-export function listWidgetHcIncidents(id: string): Promise<{ data: WidgetHcIncident[] }> {
-  return request(`/api/widget-health-checks/${id}/incidents`);
-}
-
-export function getWidgetHcDashboard(): Promise<{ data: WidgetHcDashboardItem[] }> {
-  return request('/api/widget-health-checks/dashboard');
-}
-
-export async function getWidgetHcGlobalTimeouts(): Promise<WidgetHcTimeouts> {
-  try {
-    const setting = await getSettingByKey('widget_hc_timeouts');
-    return setting.value as unknown as WidgetHcTimeouts;
-  } catch {
-    return {
-      page_load_timeout_ms: 60000,
-      widget_load_timeout_ms: 30000,
-      response_timeout_ms: 60000,
-      slow_page_load_ms: 15000,
-      slow_widget_load_ms: 10000,
-      slow_response_ms: 30000,
-    };
-  }
-}
-
-export function saveWidgetHcGlobalTimeouts(timeouts: WidgetHcTimeouts): Promise<AppSetting> {
-  return upsertSetting(
-    'widget_hc_timeouts',
-    timeouts,
-    'Global timeout defaults for widget health checks (overridable per-check)',
-  );
-}
-
 /* ── Uptime History ──────────────────────────────────────── */
 
 export function getHcUptimeHistory(days = 365): Promise<{ data: CheckUptimeHistory[] }> {
   return request(`/api/health-checks/uptime-history?days=${days}`);
-}
-
-export function getWidgetHcUptimeHistory(days = 365): Promise<{ data: CheckUptimeHistory[] }> {
-  return request(`/api/widget-health-checks/uptime-history?days=${days}`);
 }
 
 /* ── Filtered Run Listing ────────────────────────────────── */
@@ -901,13 +825,6 @@ export function listHcRunsFiltered(checkId: string, params?: RunFilterParams): P
   return request(buildRunQuery(checkId, '/api/health-checks', params));
 }
 
-export function listWidgetHcRunsFiltered(
-  checkId: string,
-  params?: RunFilterParams,
-): Promise<RunListResponse<WidgetHcRun>> {
-  return request(buildRunQuery(checkId, '/api/widget-health-checks', params));
-}
-
 /* ── Failure Patterns ────────────────────────────────────── */
 
 export function getHcFailurePatterns(checkId: string, from?: string, to?: string): Promise<FailurePatterns> {
@@ -916,14 +833,6 @@ export function getHcFailurePatterns(checkId: string, from?: string, to?: string
   if (to) qs.set('to', to);
   const query = qs.toString();
   return request(`/api/health-checks/${checkId}/failure-patterns${query ? `?${query}` : ''}`);
-}
-
-export function getWidgetHcFailurePatterns(checkId: string, from?: string, to?: string): Promise<FailurePatterns> {
-  const qs = new URLSearchParams();
-  if (from) qs.set('from', from);
-  if (to) qs.set('to', to);
-  const query = qs.toString();
-  return request(`/api/widget-health-checks/${checkId}/failure-patterns${query ? `?${query}` : ''}`);
 }
 
 /* ── Admin user management ───────────────────────────────── */

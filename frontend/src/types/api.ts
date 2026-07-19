@@ -401,85 +401,6 @@ export interface AiMatcherSlotResult {
   error?: string;
 }
 
-/* ── Widget Health Check types ───────────────────────────── */
-
-export interface WidgetHcCheck {
-  id: string;
-  workspace_id: string;
-  name: string;
-  url: string;
-  test_message: string;
-  cadence_minutes: number;
-  outage_cadence_minutes: number;
-  is_active: boolean;
-  last_run_at?: string | null;
-  max_retries: number;
-  shadow_host_selector: string;
-  launcher_selector: string;
-  iframe_selector: string;
-  input_selector: string;
-  send_selector: string;
-  response_selector: string;
-  error_patterns: string[];
-  page_load_timeout_ms: number | null;
-  widget_load_timeout_ms: number | null;
-  response_timeout_ms: number | null;
-  capture_screenshot: boolean;
-  healthStatus?: HealthStatus;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface WidgetHcRun {
-  id: string;
-  widget_health_check_id: string;
-  workspace_id: string;
-  status: 'pass' | 'fail' | 'timeout' | 'error' | 'warning';
-  response_time_ms?: number | null;
-  page_load_time_ms?: number | null;
-  widget_load_time_ms?: number | null;
-  ai_response_time_ms?: number | null;
-  error_message?: string | null;
-  raw_response?: string | null;
-  has_screenshot?: boolean;
-  created_at: string;
-}
-
-export interface WidgetHcTimeouts {
-  page_load_timeout_ms: number;
-  widget_load_timeout_ms: number;
-  response_timeout_ms: number;
-  slow_page_load_ms: number;
-  slow_widget_load_ms: number;
-  slow_response_ms: number;
-}
-
-export interface WidgetHcIncident {
-  id: string;
-  widget_health_check_id: string;
-  workspace_id: string;
-  started_at: string;
-  resolved_at?: string | null;
-  duration_seconds?: number | null;
-  failed_run_count: number;
-  last_error?: string | null;
-  created_at: string;
-}
-
-export interface WidgetHcDashboardItem {
-  id: string;
-  name: string;
-  url: string;
-  cadenceMinutes: number;
-  outageCadenceMinutes: number;
-  isActive: boolean;
-  lastRunAt: string | null;
-  semaphore: HcSemaphore;
-  lastRun: WidgetHcRun | null;
-  recentRuns: WidgetHcRun[];
-  activeIncident: WidgetHcIncident | null;
-}
-
 /* ── Uptime History ──────────────────────────────────────── */
 
 export interface UptimeDay {
@@ -503,7 +424,7 @@ export interface UptimeTotals {
 export interface CheckUptimeHistory {
   checkId: string;
   checkName: string;
-  checkType: 'api' | 'widget';
+  checkType: 'api';
   uptimePercent: number | null;
   totals: UptimeTotals;
   dailyStats: UptimeDay[];
