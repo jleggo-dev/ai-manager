@@ -83,9 +83,10 @@ export default [
     // Backlog (verified failing max-lines@500 after FE-01 + FE-02 merges — do not expand casually):
     // organisms: DiagnosticsTab, ai-profiles/{ProfileFormModal,TestChatPanel},
     //   processing-jobs/{AnalyticsTab,JobsTab,RuleSetsTab,SchemaValidationPanel}
-    // pages: AiMatcherPage, HealthCheckWidgetPage, HealthDashboardPage, LovableGuidePage, SettingsPage
+    // pages: AiMatcherPage, HealthCheckWidgetPage, HealthDashboardPage, LovableGuidePage
     // Note: AiProfileManager.tsx was removed after FE-02 split (orchestrator is well under 500).
     // HealthCheckProfilesPage dropped after FE-08 hook extraction (page is well under 500).
+    // SettingsPage dropped after FE-04 tab split (shell + settings/* are well under 500).
     // TestChatPanel size follow-up is FE-11; do not duplicate that ticket here.
     files: [
       'src/components/organisms/DiagnosticsTab.tsx',
@@ -99,7 +100,6 @@ export default [
       'src/pages/HealthCheckWidgetPage.tsx',
       'src/pages/HealthDashboardPage.tsx',
       'src/pages/LovableGuidePage.tsx',
-      'src/pages/SettingsPage.tsx',
     ],
     rules: {
       'max-lines': 'off',

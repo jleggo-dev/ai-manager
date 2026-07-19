@@ -371,8 +371,10 @@ per item / per area intro).
 > - **API-03** — extract coach SSE relay into `services/coach-stream.ts` + shared
 >   `createSseLineBuffer` in `@ai-admin/core` (completes **CROSS-02** cadence half; same contract
 >   as BE-02). Characterization tests: core 9/9 + coach-stream 8/8.
+> - **FE-04** — split `SettingsPage` into `pages/settings/*` tab files (`refactor/fe-04-split-settings-page`).
+>   API-key create/copy/revoke tests + `isAdminRole` gate on create/delete (matches backend).
 >
-> Not yet started: BE-06, FE-03..06, FE-10, API-04, API-06, WEB-01..04, CROSS-01, CROSS-03.
+> Not yet started: BE-06, FE-03, FE-05..06, FE-10, API-04, API-06, WEB-01..04, CROSS-01, CROSS-03.
 
 #### Backend (report 01)
 
@@ -389,7 +391,7 @@ per item / per area intro).
 | ID | Item | Effort | Risk | Notes |
 |---|---|---|---|---|
 | **FE-03** | Split `AiMatcherPage.tsx` (1,061 lines); replace its inline `composePrompt` with `lib/interpolate.ts` | M | Medium | No tests today on a page that fires real provider calls — add smoke tests first |
-| **FE-04** | Split `SettingsPage.tsx` (910 lines) into one file per tab (already logically decomposed, mechanical only); resolve the `_workspaceRole` unused-param question on the API-keys revoke action | S-M | Low/Medium on the API-key flow specifically | Add a test for API-key create/copy/revoke first — untested, security-relevant |
+| **FE-04** ✅ **Done** (`refactor/fe-04-split-settings-page`, PR #24) | Split `SettingsPage.tsx` (910 lines) into one file per tab (already logically decomposed, mechanical only); resolve the `_workspaceRole` unused-param question on the API-keys revoke action | S-M | Low/Medium on the API-key flow specifically | Add a test for API-key create/copy/revoke first — untested, security-relevant. **Done notes:** tabs/cards moved to `pages/settings/{SystemTab,LlmDefaultsTab,RateLimitsTab,BackendUrlCard,ApiKeysTab,UserCredentialsTab,DataManagementTab}.tsx`; shell keeps Tabs routing. `_workspaceRole` resolved by wiring `isAdminRole(workspaceRole)` so create/delete match backend `requireRole('owner','admin')` (members still list keys). Tests: `SettingsPage.test.tsx` cover list/create+copy-secret/revoke + member gating. Dropped `SettingsPage` from eslint `max-lines` override. |
 | **FE-05** | Split `HealthCheckWidgetPage.tsx` (820 lines); consolidate its `STATUS_COLORS` duplication (3rd occurrence, see FE-11) | M | Low | |
 | **FE-06** | Split `services/api.ts` (815 lines, 100 functions) into `services/api/{providers,ai-profiles,processing-jobs,workflows,health-checks,settings,workspaces}.ts` behind a barrel | M | Low | Should land before/alongside FE-01/FE-02 so their new hooks have a non-monolithic home |
 | **FE-07** ✅ **Done** (`refactor/fe-07-health-aggregation`) | Extract `HealthDashboardPage.tsx`'s aggregation `useMemo` blocks into a pure, independently-testable `lib/health-aggregation.ts` | S-M | Low | **Done notes:** pure helpers in `frontend/src/lib/health-aggregation.ts` (`aggregateUptimeTotals`, `sortHistoryByUptimeAsc`, `countActiveIncidents`, `overallUptimePercent`, `formatOverallUptimePercent`); page keeps thin `useMemo` wrappers. Detail-view `sortedItems` left in the page (UI sort, not cross-check rollup). Unit tests in `health-aggregation.test.ts`. |
