@@ -319,6 +319,19 @@ Once Phase 0 exists (at least in report-only form) and Phase 1 is underway, thes
 with high parallelism — nearly all are independent files. A few internal orderings matter (noted
 per item / per area intro).
 
+> **Phase 2 progress (updated 2026-07-18).** Merged to `feat/cadence` so far:
+> - **BE-03** — RBAC route guards (PR #10). Side effect: the `ai-admin/backend` CI job is now
+>   **green for the first time** — the missing repo secrets (`TEST_API_KEY`, `AI_MANAGER_SUPABASE_*`,
+>   `CREDENTIAL_ENCRYPTION_KEY`, `DEVS_AI_API_KEY`) were added and `ci.yml` now wires `TEST_API_KEY`.
+>   Follow-ups logged: **BE-03a** (diagnostic-logs GET-gating — needs product sign-off), **BE-03b**
+>   (user-credentials stays un-gated).
+> - **API-01** — atomic plan commit + shared confirm skeleton + the repo's first **DB integration
+>   harness** (PR #11). 56/56 vitest pass against a live Cadence DB locally; the 6 new DB tests
+>   `skipIf` no `CADENCE_*` secrets, so the cadence CI job stays green — **add `CADENCE_DATABASE_URL`
+>   + `CADENCE_SUPABASE_*` to run them in CI too** (mirrors the AI-Admin secrets).
+>
+> Not yet started: BE-02, BE-04..06, FE-03..10, API-02..06, WEB-01..04, PKG-01/02, CROSS-01..03.
+
 #### Backend (report 01)
 
 | ID | Item | Effort | Risk | Notes |
