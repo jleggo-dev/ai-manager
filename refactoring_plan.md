@@ -329,8 +329,11 @@ per item / per area intro).
 >   harness** (PR #11). 56/56 vitest pass against a live Cadence DB locally; the 6 new DB tests
 >   `skipIf` no `CADENCE_*` secrets, so the cadence CI job stays green — **add `CADENCE_DATABASE_URL`
 >   + `CADENCE_SUPABASE_*` to run them in CI too** (mirrors the AI-Admin secrets).
+> - **FE-09** — auth `onAuthStateChange` unsubscribe on App unmount (PR #12). SD5 listener leak fixed;
+>   `initAuthSession` returns an unsubscribe handle; App effect cleanup (incl. cancelled-init race)
+>   and unit tests cover it.
 >
-> Not yet started: BE-02, BE-04..06, FE-03..10, API-02..06, WEB-01..04, PKG-01/02, CROSS-01..03.
+> Not yet started: BE-02, BE-04..06, FE-03..08, FE-10, API-02..06, WEB-01..04, PKG-01/02, CROSS-01..03.
 
 #### Backend (report 01)
 
@@ -352,7 +355,7 @@ per item / per area intro).
 | **FE-06** | Split `services/api.ts` (815 lines, 100 functions) into `services/api/{providers,ai-profiles,processing-jobs,workflows,health-checks,settings,workspaces}.ts` behind a barrel | M | Low | Should land before/alongside FE-01/FE-02 so their new hooks have a non-monolithic home |
 | **FE-07** | Extract `HealthDashboardPage.tsx`'s aggregation `useMemo` blocks into a pure, independently-testable `lib/health-aggregation.ts` | S-M | Low | |
 | **FE-08** | Extract a `useHealthCheckProfilesData` hook from `HealthCheckProfilesPage.tsx` (624 lines, no tests) | M | Low | |
-| **FE-09** | Fix `lib/auth-session.ts`'s unsubscribed `onAuthStateChange` listener (SD5, still valid) — return the unsubscribe handle, wire it into `App.tsx`'s effect cleanup | S | Low | Small, isolated, high-value — good "do anytime" item, no dependencies |
+| **FE-09** ✅ **Done** (`refactor/fe-09-auth-listener-cleanup`, PR #12) | Fix `lib/auth-session.ts`'s unsubscribed `onAuthStateChange` listener (SD5, still valid) — return the unsubscribe handle, wire it into `App.tsx`'s effect cleanup | S | Low | **Done notes:** `initAuthSession` now returns `() => void` (noop when bypass/unconfigured); App effect stores the handle and unsubscribes on cleanup, including the cancelled-before-resolve race for StrictMode/HMR. Tests: auth-session unsubscribe + App unmount. Scope stayed frontend auth-session + App only. |
 | **FE-10** | Fix frontend/backend type drift — `CallingApplication`/`DiagnosticLog` vs. their backend `*Row` counterparts (SD2/SD3, confirmed still open, grown since original review) | S(fix)/M(if backend coordination needed) | Medium (shared contract) | **Cross-cutting — coordinate with whoever owns BE-01's `types.ts` split.** Needs a product decision: are the frontend's extra `CallingApplication` fields a frontend bug or a missing backend column? Add a lightweight contract test afterward so this can't silently regress again. |
 
 #### Cadence API (report 03)
