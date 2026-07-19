@@ -1,6 +1,6 @@
 # AI Manager Monorepo — Refactoring Plan
 
-**Status:** Draft for review · **Owner:** whoever runs the orchestrator role (see §6) · **Last synthesized:** Jul 18, 2026
+**Status:** Draft for review · **Owner:** whoever runs the orchestrator role (see §6) · **Last synthesized:** Jul 19, 2026
 
 This is the master, living refactoring plan for the `ai-manager` monorepo (AI Admin + Cadence).
 It was built by six independent audit agents, each assigned one area of the codebase, each
@@ -319,7 +319,7 @@ Once Phase 0 exists (at least in report-only form) and Phase 1 is underway, thes
 with high parallelism — nearly all are independent files. A few internal orderings matter (noted
 per item / per area intro).
 
-> **Phase 2 progress (updated 2026-07-18).** Merged to `feat/cadence` so far:
+> **Phase 2 progress (updated 2026-07-19).** Merged to `feat/cadence` so far:
 > - **BE-03** — RBAC route guards (PR #10). Side effect: the `ai-admin/backend` CI job is now
 >   **green for the first time** — the missing repo secrets (`TEST_API_KEY`, `AI_MANAGER_SUPABASE_*`,
 >   `CREDENTIAL_ENCRYPTION_KEY`, `DEVS_AI_API_KEY`) were added and `ci.yml` now wires `TEST_API_KEY`.
@@ -343,14 +343,17 @@ per item / per area intro).
 >   Structural only; 8/8 `session-normalize` vitest cases (bounds + URL-strip backstop).
 > - **PKG-01** — remove `getServiceSupabase` from `@ai-admin/core` exports; hot/cold-path grouping
 >   (PR #17). Documented in `docs/cadence/PLAN.md`; core typecheck + 4/4 vitest green.
+> - **BE-02** — shared `services/sse-line-reader.ts` for backend SSE line buffering (PR #18).
+>   Structural extract only; 9/9 `sse-line-buffer` vitest. **CROSS-02** still open:
+>   `packages/core` incremental parser + cadence-api `coach.ts` / **API-03**.
 >
-> Not yet started: BE-02, BE-05..06, FE-03..06, FE-08, FE-10, API-03..04, API-06, WEB-01..04, PKG-02, CROSS-01..03.
+> Not yet started: BE-05..06, FE-03..06, FE-08, FE-10, API-03..04, API-06, WEB-01..04, PKG-02, CROSS-01..03.
 
 #### Backend (report 01)
 
 | ID | Item | Effort | Risk | Notes |
 |---|---|---|---|---|
-| **BE-02** | Extract one shared `services/sse-line-reader.ts`; replace the 4 copy-pasted SSE line-buffering blocks in `chat-sessions.ts` + the 1 in `v2-stream-events.ts` | M | Medium | Part of **CROSS-02**; write characterization tests reproducing the original R1 chunk-split regression first |
+| **BE-02** ✅ **Done** (`refactor/be-02-sse-line-reader`, PR #18) | Extract one shared `services/sse-line-reader.ts`; replace the 4 copy-pasted SSE line-buffering blocks in `chat-sessions.ts` + the 1 in `v2-stream-events.ts` | M | Medium | Part of **CROSS-02**; write characterization tests reproducing the original R1 chunk-split regression first. **Done notes:** `createSseLineBuffer` / `pushSseChunk` in `backend/src/services/sse-line-reader.ts`; wired into 4 `chat-sessions.ts` loops + Devs.ai v2 path (`sse-transform.ts` / `client.ts` — the live buffering site; not `v2-stream-events.ts`). Structural only. Verify: `npm test -- sse-line-buffer` 9/9. **CROSS-02 remaining:** extract incremental SSE parser into `packages/core` and have cadence-api `coach.ts` / **API-03** call it. |
 | **BE-03** ✅ **Done** (`refactor/be-03-rbac`) | RBAC gap — wire `requireRole('owner','admin')` into the 8 route files currently unguarded (`providers.ts`, `ai-profiles.ts`, `app-settings.ts`, `processing-jobs.ts`, `workflows.ts`, `calling-applications.ts`, `api-keys.ts` JWT path, plus `diagnostic-logs.ts`/`user-credentials.ts` at lower sensitivity) | S per file | Low | Cheapest, highest-value item in the whole plan — additive middleware, easy to test, easy to revert. **Recommended as the literal first PR to land in Phase 2.** **Done notes:** gated all 33 mutating routes (POST/PUT/PATCH/DELETE) across the 6 core CRUD files + `api-keys.ts` JWT path; GETs left member-readable (the "don't over-gate reads" constraint). Test-first: `backend/test/rbac-route-guards.test.ts` (22 cases, mocked ctx — member→403 on every gated router, GET→not-403, api-keys JWT gate + existing api_key-mode block intact); flipped 7 red→green. `rbac.test.ts` names corrected (the admin test key clears the gate, so its assertions were passing but mislabeled "any member can…"). **Two scope decisions deferred (need product sign-off, see §4.6):** (a) `diagnostic-logs.ts` GET-gating — NOT applied; all-GET sensitive-read surface, the plan itself flags it as a product decision; (b) `user-credentials.ts` — NOT gated; it's correctly user-scoped (report 01 marks it "needs gate? N"), so admin-gating would break members managing their own keys. Verify: backend `tsc` 0; live route tests are env-gated (run in CI). |
 | **BE-04** ✅ **Done** (`refactor/be-04-split-formatting-rules`, PR #14) | Split `services/formatting-rules.ts` (1,049 lines) into `formatting-rules/{index,rules/*,validators}.ts` | M | Low | Strong existing test file reduces risk; fully independent of BE-01. **Done notes:** thin re-export at `services/formatting-rules.ts` preserves public import path; module lives in `formatting-rules/{index,validators,rules/{strip-tags,trim,csv,json,case}}.ts`. Structural split only — no behavior changes. Verify: `npm test --workspace=backend -- formatting-rules` 51/51; backend `tsc --noEmit` clean. |
 | **BE-05** | Split `services/widget-health-checker.ts` (542 lines, one 392-line function) into `browser-session.ts`/`widget-interaction.ts`/`result-assembly.ts` | M | Medium | Puppeteer/timing tests are flakier — budget de-flaking time |
@@ -431,11 +434,15 @@ least 5 separate times across `backend/src/routes/chat-sessions.ts` (4×) and
 unused, in `packages/client/src/index.ts`'s `parseSseText`. Every copy is a place the fix can be
 forgotten the next time the upstream format changes.
 
-**Migration steps:** (1) BE-02 extracts one shared reader for the backend's own 5 occurrences; (2)
+**Migration steps:** (1) ✅ **BE-02 done** (PR #18) — shared reader for the backend's occurrences
+(`chat-sessions.ts` ×4 + Devs.ai v2 `sse-transform`/`client`); (2)
 separately, extract an incremental SSE parser into `packages/core` (recommended over depending on
 `packages/client`, since that package's `parseSseText` is a whole-string, not incremental, API) and
 have `apps/cadence-api/src/routes/coach.ts` (API-03) call it instead of hand-rolling its own; (3)
 add a unit test replaying a chunk-split payload against the extracted utility in both places.
+
+**Status:** Backend half (**BE-02**) merged; remaining is `packages/core` + cadence-api `coach.ts` /
+**API-03**.
 
 **Priority/Effort/Risk:** P1 / M / Low (streaming behavior is easy to regression-test with recorded
 fixtures — the risk is in *not* doing this, not in doing it).
