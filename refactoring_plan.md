@@ -341,8 +341,10 @@ per item / per area intro).
 >   (PR #15). Unit-tested rollups; page keeps thin `useMemo` wrappers.
 > - **API-02** — split `services/session.ts` into generate/log/weigh-in + normalize modules (PR #16).
 >   Structural only; 8/8 `session-normalize` vitest cases (bounds + URL-strip backstop).
+> - **PKG-01** — remove `getServiceSupabase` from `@ai-admin/core` exports; hot/cold-path grouping
+>   (PR #17). Documented in `docs/cadence/PLAN.md`; core typecheck + 4/4 vitest green.
 >
-> Not yet started: BE-02, BE-05..06, FE-03..06, FE-08, FE-10, API-03..04, API-06, WEB-01..04, PKG-01/02, CROSS-01..03.
+> Not yet started: BE-02, BE-05..06, FE-03..06, FE-08, FE-10, API-03..04, API-06, WEB-01..04, PKG-02, CROSS-01..03.
 
 #### Backend (report 01)
 
@@ -391,7 +393,7 @@ per item / per area intro).
 
 | ID | Item | Effort | Risk | Notes |
 |---|---|---|---|---|
-| **PKG-01** (= INFRA-06) | Remove unused, high-privilege `getServiceSupabase` export from `packages/core`; reorganize remaining exports into hot-path vs. cold-path/provisioning groups | S | Low | Zero call sites confirmed via grep — pure removal, cannot regress |
+| **PKG-01** ✅ **Done** (`refactor/pkg-01-core-exports`, PR #17) (= INFRA-06) | Remove unused, high-privilege `getServiceSupabase` export from `packages/core`; reorganize remaining exports into hot-path vs. cold-path/provisioning groups | S | Low | **Done notes:** dropped `getServiceSupabase` re-export (zero `@ai-admin/core` consumers); remaining surface grouped hot-path vs provisioning/cold-path with header comments; `docs/cadence/PLAN.md` §2 documents the contract. Verify: core `tsc --noEmit` clean; 4/4 vitest. |
 | **PKG-02** (= INFRA-07) | Split `packages/cadence-shared/src/index.ts` (565 lines, 11 concern groups already delimited by banner comments) into `src/types/{baseline,goals,equipment,plan,occurrence,progress,nutrition,episode,conversation,broker-contracts,tripwires}.ts` + barrel | M | Low | Report 05 §4.4 gives the exact line-range-to-file mapping already derived from the file's own existing structure — this is close to a mechanical move |
 
 ---
