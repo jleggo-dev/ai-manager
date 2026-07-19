@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 
 /**
- * The centered phone chrome (device shell, notch, status bar, home indicator) from the concept
- * mockups. Extracted so both the signed-in app and the pre-auth AuthScreen render inside the same
- * frame. Children fill the screen area between the status bar and the home indicator.
+ * App shell shared by auth and the signed-in coach. On desktop this is the centered mockup chrome
+ * (bezel, notch, status bar, home indicator). On narrow viewports (≤480px) CSS strips that chrome
+ * so the same tree fills the real device as a native-feeling app — no doubled status bars, no page scroll.
  */
 export function PhoneFrame({ children }: { children: ReactNode }) {
   return (
