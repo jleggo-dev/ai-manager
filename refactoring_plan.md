@@ -39,6 +39,11 @@ source report that contains the full current-problem/target-design/migration-ste
    files; `apps/cadence-api` has one. Both are also invisible to CI (see #2).
 5. Read §5 for the phased backlog, §6 for how the actual refactor work should be assigned,
    reviewed, and merged by multiple agents under supervision.
+6. **CI gate between batches:** do not start the next parallel batch (and do not merge) while
+   integration-branch / PR CI is red. INFRA-02 "report-only" means GitHub branch protection may
+   not yet *require* the check — orchestrators and supervisors must still treat failing jobs as
+   blockers (or quarantine them with an explicit human action item). Ship process:
+   [`.cursor/skills/development-workflow/SKILL.md`](.cursor/skills/development-workflow/SKILL.md).
 
 ---
 
@@ -165,6 +170,14 @@ unprotected by any automated gate.** These items are not optional preamble — t
 
 **Migration steps:** (1) land after INFRA-01/INFRA-03; (2) land the workflow in **report-only mode** first (no required-status-check) to inventory real failures across all 9 workspaces without blocking anyone; (3) fix what surfaces; (4) flip to required once green.
 
+**Report-only vs. merge/batch gate:** "report-only" means the check is **not yet required for
+GitHub branch protection**. It does **not** mean "ignore red and keep merging." Orchestrators and
+supervisors MUST still treat failing CI jobs as blockers for merge and for starting the next
+parallel batch, unless remaining failures are **explicitly quarantined** with a human action item
+(e.g. key rotation). Intentionally skipped jobs need a documented reason; leaving jobs red and
+moving on is forbidden. See §6.3 and
+[`.cursor/skills/development-workflow/SKILL.md`](.cursor/skills/development-workflow/SKILL.md).
+
 **Test-first requirement:** open one throwaway PR touching only `apps/cadence-web/` and confirm the `ai-admin` job is skipped; one touching only `backend/` and confirm the reverse.
 
 **Risk note:** Medium — not because the workflow is risky, but because turning on CI for the first time against a 5-year-old, never-collectively-checked codebase will surface a real backlog. The report-only rollout is the mitigation, not optional polish.
@@ -184,7 +197,8 @@ unprotected by any automated gate.** These items are not optional preamble — t
 These are the highest-severity, highest-blast-radius items. They can start **in parallel** with
 each other (BE-01, FE-01, FE-02 touch entirely different files/products) as soon as Phase 0's
 report-only CI exists — they should not wait for Phase 0 to be fully "required," but they must not
-merge until INFRA-01 has landed, since none of these are safely verifiable without it.
+merge until INFRA-01 has landed, since none of these are safely verifiable without it. Report-only
+still requires green (or quarantined) CI before merge and before the next batch — see §6.3.
 
 | ID | Item | Area | Priority | Effort | Risk | Depends on | Status |
 |---|---|---|---|---|---|---|---|
@@ -596,25 +610,35 @@ guardrails for that.
 |---|---|
 | **Orchestrator** | Owns this document as living state. Assigns backlog items to implementer agents, respecting the phase/dependency ordering in §4. Resolves cross-item conflicts (e.g., two items wanting to touch the same file). Decides when a phase is "done enough" to open the next phase's parallelism. Escalation point when a supervisor and implementer disagree. |
 | **Implementer agent** | Owns exactly one backlog item (or, for P2/P3 bundles, one *cluster* of related items in the same file/module — never split a single file's changes across two implementers concurrently). Works on its own branch. Follows the item's test-first requirement literally — writes/confirms the test before changing production code. Self-verifies (typecheck + lint + full existing test suite + new tests) before opening a PR. Keeps "pure refactor" commits separate from any incidental fix commits discovered along the way (see §6.4). |
-| **Supervisor agent** | Independent from the implementer that wrote the PR (never self-review). Reviews against: (a) the specific item's target design in this document/the area report, (b) the "no behavior change" contract for pure refactors (§6.4), (c) this repo's existing `pre-push-review`/`pr-tl-review` skill checklists, (d) CI is green. Rejects or requests changes if the test-first requirement wasn't honored, scope crept beyond the item's stated boundary, or the migration skipped a stated step. Updates the item's Status in this document. |
+| **Supervisor agent** | Independent from the implementer that wrote the PR (never self-review). Reviews against: (a) the specific item's target design in this document/the area report, (b) the "no behavior change" contract for pure refactors (§6.4), (c) this repo's existing `pre-push-review`/`pr-tl-review` skill checklists, (d) CI is green (or failures explicitly quarantined — report-only does **not** excuse red). Rejects or requests changes if the test-first requirement wasn't honored, scope crept beyond the item's stated boundary, the migration skipped a stated step, or CI is still failing without a documented quarantine. Updates the item's Status in this document. |
 
 A single agent (human or AI) may hold more than one role over time, but never the implementer *and*
 supervisor role on the *same* PR.
 
 ### 6.2 Per-item workflow
 
+Aligned with
+[`.cursor/skills/development-workflow/SKILL.md`](.cursor/skills/development-workflow/SKILL.md)
+(Code → Review → Fix? → Test → Fix? → Commit/CI → Fix until green → PR → Review → Fix? → Merge →
+confirm base green → Done). Prod/release verification is a later gate, not required on every batch.
+
 ```
 1. Orchestrator assigns item X (status → "Assigned", branch name recorded)
 2. Implementer reads: this doc's entry for X + the full write-up in the linked area report
 3. Implementer writes/confirms the test-first requirement against CURRENT behavior (status → "In Progress")
 4. Implementer executes the stated migration steps, one commit per step where the item lists steps
-5. Implementer self-verifies: typecheck, lint, full existing test suite, new tests — all green
-6. Implementer opens a PR scoped to exactly this item (status → "In Review")
-7. Supervisor reviews against §6.1(c); CI must be green
-   7a. If changes requested → status → "Changes Requested", back to step 4
-   7b. If approved → merge
-8. Status → "Done". Orchestrator re-checks whether merging X unblocks any item that listed X as a dependency.
-9. A follow-up smoke pass (manual or scripted, per the item's risk rating) happens for any item rated Medium/High risk → status → "Verified"
+5. Implementer self-verifies locally: typecheck, lint, full existing test suite, new tests — all green
+6. Implementer commits/pushes and opens a PR scoped to exactly this item (status → "In Review"); CI runs
+7. Implementer (and supervisor gate) fix until CI is green — or remaining failures are explicitly
+   quarantined with a human action item. Never leave jobs red and move on.
+8. Supervisor reviews against §6.1; CI must still be green (report-only ≠ ignore red)
+   8a. If changes requested → status → "Changes Requested", back to step 4; re-enter CI gate
+   8b. If approved and checks pass → merge
+9. Status → "Done". Orchestrator confirms integration branch (`feat/cadence` during this refactor)
+   CI is green (or quarantined) before starting the next parallel batch / assigning overlapping work.
+10. Orchestrator re-checks whether merging X unblocks any item that listed X as a dependency.
+11. A follow-up smoke pass (manual or scripted, per the item's risk rating) happens for any item
+    rated Medium/High risk → status → "Verified" (prod/release verification remains a later gate).
 ```
 
 ### 6.3 Concurrency & sequencing rules
@@ -622,9 +646,15 @@ supervisor role on the *same* PR.
 - **One item = one branch = one PR.** Never let two implementer agents hold open branches that
   touch the same file concurrently — the orchestrator checks this document's Status column before
   assigning a new item that overlaps a file already "In Progress"/"In Review" elsewhere.
+- **CI gate between parallel batches.** Do **not** start the next parallel batch until CI on the
+  integration branch (`feat/cadence` during this refactor) is green, or remaining failures are
+  explicitly quarantined with a human action item (e.g. key rotation). Report-only CI still means
+  jobs must pass or be intentionally skipped — "report-only" does **not** mean ignore red and keep
+  merging.
 - **Respect the phase gates in §4**, but *within* a phase, maximize parallelism — Phase 1's three
   P0 items (BE-01, FE-01, FE-02) are entirely independent files/products and should run as three
-  concurrent implementer agents, not sequentially.
+  concurrent implementer agents, not sequentially — **subject to the CI gate above** between
+  batches of concurrent work.
 - **Respect intra-item step ordering.** Multi-step items (BE-01's 5 steps, FE-01's 7 steps) are
   written as an ordered sequence for a reason (lowest-coupling extractions first, so each step
   de-risks the next) — a single implementer agent should carry one multi-step item through to
@@ -635,7 +665,8 @@ supervisor role on the *same* PR.
   own corner and hoping the others land in order.
 - **Phase 0's INFRA-01/INFRA-02 block real verification of everything downstream.** No Phase 1/2/3
   item should be considered "Verified" (only "Done") until INFRA-02's CI is at least in report-only
-  mode and actually running against that item's changed files.
+  mode and actually running against that item's changed files — and those runs must be green or
+  quarantined before the next batch starts.
 
 ### 6.4 Guardrails
 
@@ -652,6 +683,9 @@ supervisor role on the *same* PR.
   refactor looks.
 - **Small, reviewable PRs.** This repo already has `make-pr-easy-to-review`/`review-and-ship`
   conventions — use them. No single PR should implement more than one backlog item.
+- **CI green (or quarantined) before merge and before the next batch.** Same rule as §6.3 —
+  supervisors must not approve-and-merge past red checks; orchestrators must not launch the next
+  parallel batch while integration-branch CI is red without an explicit quarantine + human owner.
 - **Rollback = revert one PR.** Because every item lands as its own small, behind-tests PR, rollback
   is always "revert this one commit/PR," never "unwind half a giant refactor branch." This is *why*
   the phased, small-PR structure was chosen over one big refactor branch.

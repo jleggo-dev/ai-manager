@@ -1,13 +1,13 @@
 ---
 name: pr-tl-review
-description: Team-lead and architect review of an AI Admin pull request — security, performance, build risk, and maintainability. Use at step 6 of the development workflow, when reviewing a PR before merge, or when the user asks for TL review, architect review, or merge readiness on a branch.
+description: Team-lead and architect review of an AI Admin pull request — security, performance, build risk, and maintainability. Use at step 9 of the development workflow, when reviewing a PR before merge, or when the user asks for TL review, architect review, or merge readiness on a branch.
 ---
 
 # PR team-lead review (AI Admin)
 
 Review the **entire PR** (all commits vs base branch), not only the latest commit. Produce a written verdict before merge.
 
-Pair with [development-workflow](../development-workflow/SKILL.md) steps 6–8.
+Pair with [development-workflow](../development-workflow/SKILL.md) steps 7–11 (CI green → TL review → fix → merge).
 
 ## Gather context
 
@@ -68,7 +68,8 @@ Flag **should-fix** unless user-visible latency or cost impact is clear (**block
 | `test/**` included in backend `tsc` | Local-only errors can block CI |
 | Monorepo imports | Wrong workspace paths |
 
-Require green PR checks or explain why a failing check is unrelated/flaky.
+Require green PR checks. A failing check is a **blocker** unless intentionally skipped/quarantined
+with a documented reason and human action item. Report-only CI does **not** mean ignore red.
 
 ## Maintainability
 
@@ -105,5 +106,5 @@ Require green PR checks or explain why a failing check is unrelated/flaky.
 
 ## After review
 
-- **Changes requested** → implement fixes → return to [development-workflow](../development-workflow/SKILL.md) step 2.
-- **Approve** + green CI → proceed to merge (step 9).
+- **Changes requested** → implement fixes → return to [development-workflow](../development-workflow/SKILL.md) step 2, then re-enter the CI gate (step 7).
+- **Approve** + green CI → proceed to merge (step 11); confirm integration branch green before the next batch (step 12).
