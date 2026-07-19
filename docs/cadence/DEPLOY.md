@@ -48,10 +48,14 @@ manifest, Cadence deploys as two single-purpose projects. Same Services mechanis
 separate, no root-config contention.
 
 **Vercel project: `cadence-api`**
-- **Root Directory:** `apps/cadence-api`, with *"Include files outside the root directory"* ON — the
-  in-process engine imports `../../../backend/src/*`, so `backend/` + `packages/` must ride along.
-- **Product mode:** Services (long-running), so the Express `app.listen` server stays up. Start
-  command is the package's `npm start` (`node --import tsx src/index.ts`) — there is no build step.
+- **Root Directory:** `apps/cadence-api`. Config: `apps/cadence-api/vercel.json` (new `services`
+  key — required for new Vercel projects; do **not** rely on the repo-root
+  `experimentalServices` manifest, which AI Admin owns and new projects reject).
+- Install from the monorepo root (`npm install --prefix ../..` in that vercel.json) so
+  `@ai-admin/core`, `@cadence/shared`, and `backend/` resolve. The in-process engine imports
+  `../../../backend/src/*`.
+- **Product mode:** Services / Express. Start command is the package's `npm start`
+  (`node --import tsx src/index.ts`) — there is no separate build step.
 - Serves routes at the domain root (`/coach`, `/plan`, `/progress`, `/me`, …), so unlike AI Admin's
   `/_/backend` service it needs **no** prefix-stripping middleware.
 
@@ -67,11 +71,9 @@ Same-origin from the browser → no CORS, and keep `VITE_CADENCE_API_BASE=/api`.
 `VITE_CADENCE_API_BASE` at the absolute API URL and add CORS to cadence-api — the rewrite is cleaner
 and matches dev.)
 
-> **Experimental-feature caveat:** Vercel Services is an experimental product mode. The first link
-> may need one iteration on the Root-Directory / include-outside-root / start-command settings, and
-> if a single-service `vercel.json` is needed beyond the project settings, it's best added *after*
-> that first link, when the dashboard confirms the exact schema. Everything above is the intended
-> shape, verified against how AI Admin's backend is configured — not yet against a live Cadence deploy.
+> **Services note:** New Vercel projects require the stable `services` key (see
+> `apps/cadence-api/vercel.json`). The root `experimentalServices` block is AI Admin–only and will
+> error if a Cadence project accidentally uses Root Directory `./`.
 
 **Env (server-side — real secrets; set in the host's env, never committed):**
 `CADENCE_SUPABASE_SERVICE_ROLE_KEY`, `CADENCE_DB_PASSWORD` (or `CADENCE_DATABASE_URL`),
