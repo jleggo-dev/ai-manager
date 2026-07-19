@@ -77,6 +77,10 @@ export {
 
 export type { RequestAuthContext } from '../../../backend/src/types.ts';
 
+/* ── SSE line buffering (incremental; CROSS-02 shared contract with BE-02) ── */
+export { createSseLineBuffer, pushSseChunk } from './sse-line-reader.ts';
+export type { SseLineBuffer } from './sse-line-reader.ts';
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * PROVISIONING (cold path) — scripts only (`apps/cadence-api/scripts/*`)
  * Do not import from request handlers / aim.ts.

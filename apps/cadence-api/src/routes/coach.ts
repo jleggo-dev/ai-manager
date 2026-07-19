@@ -10,11 +10,14 @@ import {
 } from '../ai/aim.ts';
 import { runCaptureExtract } from '../services/capture.ts';
 import { assembleTurn } from '../services/coach-context.ts';
+import { relayAndAccumulate } from '../services/coach-stream.ts';
 import { buildContextPack } from '../services/context-pack.ts';
 import { ensureDateStamped } from '../services/date-context.ts';
 import { getTrace, updateTrace } from '../services/dev-trace.ts';
 import { logAi, recentAiLog } from '../services/ai-log.ts';
 import { ensureHorizon } from '../services/plan-horizon.ts';
+import { createConversation, getLatestConversation, touchConversation } from '../repos/conversations.ts';
+import { getActivePlan, getFirstPlanCommitAt } from '../repos/plans.ts';
 
 /** Build the capture window from the FULL conversation (user + coach turns), excluding the
  *  injected <context> turn. Falls back to the latest message if history can't be read. */
@@ -31,8 +34,6 @@ async function captureWindow(userId: string, sessionId: string, latest: string):
     return latest;
   }
 }
-import { createConversation, getLatestConversation, touchConversation } from '../repos/conversations.ts';
-import { getActivePlan, getFirstPlanCommitAt } from '../repos/plans.ts';
 
 const router = Router();
 router.use(requireCadenceUser);
@@ -157,65 +158,27 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     // accumulating the assistant content + usage, so we can log the turn + diagnostics
     // to AI Admin after the stream (the in-process path must do this bookkeeping itself).
     const t0 = Date.now();
-    let firstTokenMs: number | null = null;
-    let content = '';
-    let promptTokens: number | null = null;
-    let completionTokens: number | null = null;
-    let model: string | null = null;
-    let responseId: string | null = null;
-    let clientDropped = false;
-    let lineBuffer = '';
-    const reader = response.body?.getReader();
-    if (reader) {
-      const decoder = new TextDecoder();
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        if (firstTokenMs === null) firstTokenMs = Date.now() - t0;
-        // Relay only while the client is connected; keep reading regardless so the turn
-        // finishes server-side (v2 completes the response) even after a client drop.
-        if (clientAlive) {
-          try {
-            res.write(chunk);
-          } catch {
-            clientAlive = false;
-            clientDropped = true;
-          }
-        } else {
-          clientDropped = true;
+    const {
+      content,
+      promptTokens,
+      completionTokens,
+      model,
+      responseId,
+      firstTokenMs,
+      clientDropped,
+    } = await relayAndAccumulate(response.body, {
+      isClientAlive: () => clientAlive,
+      writeChunk: (chunk) => {
+        try {
+          res.write(chunk);
+        } catch {
+          clientAlive = false;
+          return false;
         }
-        lineBuffer += chunk;
-        const lines = lineBuffer.split('\n');
-        lineBuffer = lines.pop() ?? '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
-          try {
-            const p = JSON.parse(data);
-            const delta = p.choices?.[0]?.delta?.content;
-            if (typeof delta === 'string') content += delta;
-            // OpenAI-style usage/model arrive on the final chunk (Devs.ai completion stream).
-            if (p.usage) {
-              promptTokens = p.usage.prompt_tokens ?? promptTokens;
-              completionTokens = p.usage.completion_tokens ?? completionTokens;
-            }
-            if (typeof p.model === 'string' && !model) model = p.model;
-            // v2 surfaces the Responses API id on `v2.response.created` + `message.complete`.
-            if (typeof p.responseId === 'string' && !responseId) responseId = p.responseId;
-            if (p.type === 'message.complete') {
-              promptTokens = p.inputTokens ?? p.estimatedInputTokens ?? promptTokens;
-              completionTokens = p.outputTokens ?? p.estimatedOutputTokens ?? completionTokens;
-              if (p.modelId) model = p.modelId;
-              if (!content && (p.text ?? p.content)) content = p.text ?? p.content;
-            }
-          } catch {
-            /* ignore non-JSON keepalives */
-          }
-        }
-      }
-    }
+      },
+    });
+    // writeChunk may have flipped clientAlive on a failed write; also honor stream result.
+    if (clientDropped) clientAlive = false;
     if (clientAlive) {
       try {
         res.end();
