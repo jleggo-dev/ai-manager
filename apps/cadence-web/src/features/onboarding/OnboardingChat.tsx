@@ -44,11 +44,14 @@ export function OnboardingChat({
   const [captured, setCaptured] = useState(0);
   const [restored, setRestored] = useState(false); // false until the server history loads
   const sessionId = useRef<string | null>(null);
-  const endRef = useRef<HTMLDivElement | null>(null);
+  const chatRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // Scroll only the chat pane — scrollIntoView would pan the page/shell on mobile.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const chat = chatRef.current;
+    if (!chat) return;
+    chat.scrollTop = chat.scrollHeight;
   }, [turns]);
 
   // Auto-grow the composer to fit what's typed, up to ~5 rows (the CSS max-height); only past that
@@ -160,7 +163,7 @@ export function OnboardingChat({
 
   const inner = (
     <>
-      <div className="chat">
+      <div className="chat" ref={chatRef}>
         {!restored ? (
           <div className="chat-loading">
             <span className="typing">
@@ -200,7 +203,6 @@ export function OnboardingChat({
               </div>
             ),
           )}
-        <div ref={endRef} />
       </div>
       <div className="composer">
         <textarea

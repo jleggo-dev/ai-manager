@@ -21,6 +21,6 @@ describe('PhoneFrame', () => {
     );
 
     const probe = screen.getByTestId('probe');
-    expect(container.querySelector('.glass')?.contains(probe)).toBe(true);
+    expect(container.querySelector('.screen')?.contains(probe)).toBe(true);
   });
 });

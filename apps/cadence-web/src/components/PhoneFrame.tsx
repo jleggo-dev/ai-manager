@@ -1,11 +1,41 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 /**
  * App shell shared by auth and the signed-in coach. On desktop this is the centered mockup chrome
  * (bezel, notch, status bar, home indicator). On narrow viewports (≤480px) CSS strips that chrome
  * so the same tree fills the real device as a native-feeling app — no doubled status bars, no page scroll.
+ *
+ * On mobile, pin height/top to the visual viewport so iOS keyboard focus doesn't pan the page
+ * (the name field, composer, etc. shrink the shell instead of scrolling it).
  */
 export function PhoneFrame({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    const root = document.documentElement;
+
+    const sync = () => {
+      const vv = window.visualViewport;
+      if (!vv) {
+        root.style.setProperty('--app-height', `${window.innerHeight}px`);
+        root.style.setProperty('--app-top', '0px');
+        return;
+      }
+      root.style.setProperty('--app-height', `${vv.height}px`);
+      root.style.setProperty('--app-top', `${vv.offsetTop}px`);
+    };
+
+    sync();
+    window.visualViewport?.addEventListener('resize', sync);
+    window.visualViewport?.addEventListener('scroll', sync);
+    window.addEventListener('resize', sync);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', sync);
+      window.visualViewport?.removeEventListener('scroll', sync);
+      window.removeEventListener('resize', sync);
+      root.style.removeProperty('--app-height');
+      root.style.removeProperty('--app-top');
+    };
+  }, []);
+
   return (
     <div className="device">
       <div className="glass">
@@ -25,7 +55,7 @@ export function PhoneFrame({ children }: { children: ReactNode }) {
             </svg>
           </span>
         </div>
-        {children}
+        <div className="screen">{children}</div>
         <div className="home-ind" />
       </div>
     </div>
