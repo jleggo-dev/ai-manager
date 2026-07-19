@@ -338,7 +338,7 @@ per item / per area intro).
 > - **BE-04** — split `services/formatting-rules.ts` into `formatting-rules/{index,validators,rules/*}`
 >   with a thin compatibility re-export (PR #14). Structural only; 51/51 formatting-rules tests pass.
 >
-> Not yet started: BE-02, BE-05..06, FE-03..08, FE-10, API-02..04, API-06, WEB-01..04, PKG-01/02, CROSS-01..03.
+> Not yet started: BE-02, BE-05..06, FE-03..06, FE-08, FE-10, API-02..04, API-06, WEB-01..04, PKG-01/02, CROSS-01..03.
 
 #### Backend (report 01)
 
@@ -358,7 +358,7 @@ per item / per area intro).
 | **FE-04** | Split `SettingsPage.tsx` (910 lines) into one file per tab (already logically decomposed, mechanical only); resolve the `_workspaceRole` unused-param question on the API-keys revoke action | S-M | Low/Medium on the API-key flow specifically | Add a test for API-key create/copy/revoke first — untested, security-relevant |
 | **FE-05** | Split `HealthCheckWidgetPage.tsx` (820 lines); consolidate its `STATUS_COLORS` duplication (3rd occurrence, see FE-11) | M | Low | |
 | **FE-06** | Split `services/api.ts` (815 lines, 100 functions) into `services/api/{providers,ai-profiles,processing-jobs,workflows,health-checks,settings,workspaces}.ts` behind a barrel | M | Low | Should land before/alongside FE-01/FE-02 so their new hooks have a non-monolithic home |
-| **FE-07** | Extract `HealthDashboardPage.tsx`'s aggregation `useMemo` blocks into a pure, independently-testable `lib/health-aggregation.ts` | S-M | Low | |
+| **FE-07** ✅ **Done** (`refactor/fe-07-health-aggregation`) | Extract `HealthDashboardPage.tsx`'s aggregation `useMemo` blocks into a pure, independently-testable `lib/health-aggregation.ts` | S-M | Low | **Done notes:** pure helpers in `frontend/src/lib/health-aggregation.ts` (`aggregateUptimeTotals`, `sortHistoryByUptimeAsc`, `countActiveIncidents`, `overallUptimePercent`, `formatOverallUptimePercent`); page keeps thin `useMemo` wrappers. Detail-view `sortedItems` left in the page (UI sort, not cross-check rollup). Unit tests in `health-aggregation.test.ts`. |
 | **FE-08** | Extract a `useHealthCheckProfilesData` hook from `HealthCheckProfilesPage.tsx` (624 lines, no tests) | M | Low | |
 | **FE-09** ✅ **Done** (`refactor/fe-09-auth-listener-cleanup`, PR #12) | Fix `lib/auth-session.ts`'s unsubscribed `onAuthStateChange` listener (SD5, still valid) — return the unsubscribe handle, wire it into `App.tsx`'s effect cleanup | S | Low | **Done notes:** `initAuthSession` now returns `() => void` (noop when bypass/unconfigured); App effect stores the handle and unsubscribes on cleanup, including the cancelled-before-resolve race for StrictMode/HMR. Tests: auth-session unsubscribe + App unmount. Scope stayed frontend auth-session + App only. |
 | **FE-10** | Fix frontend/backend type drift — `CallingApplication`/`DiagnosticLog` vs. their backend `*Row` counterparts (SD2/SD3, confirmed still open, grown since original review) | S(fix)/M(if backend coordination needed) | Medium (shared contract) | **Cross-cutting — coordinate with whoever owns BE-01's `types.ts` split.** Needs a product decision: are the frontend's extra `CallingApplication` fields a frontend bug or a missing backend column? Add a lightweight contract test afterward so this can't silently regress again. |
