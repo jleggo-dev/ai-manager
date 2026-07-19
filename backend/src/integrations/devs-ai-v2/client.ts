@@ -11,6 +11,7 @@ import type { ChatMessage, ChatCompletionResponse, PatchedResponse } from '../..
 import type { V2ResponseObject } from './types.ts';
 import { messagesToV2Request, extractV2ResponseText, mapV2Usage } from './request-builder.ts';
 import { createSseTransformState, transformV2SseChunk } from './sse-transform.ts';
+import { createSseLineBuffer } from '../../services/sse-line-reader.ts';
 
 export class DevsAiV2Client {
   baseUrl: string;
@@ -248,7 +249,7 @@ export class DevsAiV2Client {
     abort: { timer?: ReturnType<typeof setTimeout>; controller?: AbortController },
   ): globalThis.Response {
     const state = createSseTransformState();
-    const lineBuffer = { value: '' };
+    const lineBuffer = createSseLineBuffer();
     const upstreamBody = upstream.body;
     if (!upstreamBody) {
       throw new Error('Devs.ai v2 streaming response has no body');
@@ -263,8 +264,8 @@ export class DevsAiV2Client {
           while (true) {
             const { value, done } = await reader.read();
             if (done) {
-              if (lineBuffer.value.trim()) {
-                const remainder = transformV2SseChunk(`${lineBuffer.value}\n`, state, { value: '' });
+              if (lineBuffer.buffer.trim()) {
+                const remainder = transformV2SseChunk(`${lineBuffer.buffer}\n`, state, createSseLineBuffer());
                 if (remainder) ctrl.enqueue(new TextEncoder().encode(remainder));
               }
               if (!state.fullText) {
