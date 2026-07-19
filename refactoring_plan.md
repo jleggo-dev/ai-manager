@@ -347,7 +347,7 @@ per item / per area intro).
 >   Structural extract only; 9/9 `sse-line-buffer` vitest. **CROSS-02** still open:
 >   `packages/core` incremental parser + cadence-api `coach.ts` / **API-03**.
 > - **PKG-02** — split `packages/cadence-shared/src/index.ts` into 11 typed modules + barrel
->   (`refactor/pkg-02-cadence-shared-split`). Public `@cadence/shared` import path unchanged.
+>   (PR #19). Public `@cadence/shared` import path unchanged.
 >
 > Not yet started: BE-05..06, FE-03..06, FE-08, FE-10, API-03..04, API-06, WEB-01..04, CROSS-01..03.
 
@@ -399,7 +399,7 @@ per item / per area intro).
 | ID | Item | Effort | Risk | Notes |
 |---|---|---|---|---|
 | **PKG-01** ✅ **Done** (`refactor/pkg-01-core-exports`, PR #17) (= INFRA-06) | Remove unused, high-privilege `getServiceSupabase` export from `packages/core`; reorganize remaining exports into hot-path vs. cold-path/provisioning groups | S | Low | **Done notes:** dropped `getServiceSupabase` re-export (zero `@ai-admin/core` consumers); remaining surface grouped hot-path vs provisioning/cold-path with header comments; `docs/cadence/PLAN.md` §2 documents the contract. Verify: core `tsc --noEmit` clean; 4/4 vitest. |
-| **PKG-02** ✅ **Done** (`refactor/pkg-02-cadence-shared-split`) (= INFRA-07) | Split `packages/cadence-shared/src/index.ts` (565 lines, 11 concern groups already delimited by banner comments) into `src/types/{baseline,goals,equipment,plan,occurrence,progress,nutrition,episode,conversation,broker-contracts,tripwires}.ts` + barrel | M | Low | Report 05 §4.4 gives the exact line-range-to-file mapping already derived from the file's own existing structure — this is close to a mechanical move. **Done notes:** verbatim move into 11 `src/types/*.ts` modules with one-way cross-imports (`goals`/`progress` → `baseline`; `episode` → `equipment`/`plan`; `broker-contracts` → domain types); thin barrel at `src/index.ts` preserves the package top-level doc comment and public `@cadence/shared` surface. No consumer import-path changes; no deep-path imports found. Verify: cadence-shared `tsc` + 3/3 vitest + lint clean; `apps/cadence-api` and `apps/cadence-web` `tsc --noEmit` clean. |
+| **PKG-02** ✅ **Done** (`refactor/pkg-02-cadence-shared-split`, PR #19) (= INFRA-07) | Split `packages/cadence-shared/src/index.ts` (565 lines, 11 concern groups already delimited by banner comments) into `src/types/{baseline,goals,equipment,plan,occurrence,progress,nutrition,episode,conversation,broker-contracts,tripwires}.ts` + barrel | M | Low | Report 05 §4.4 gives the exact line-range-to-file mapping already derived from the file's own existing structure — this is close to a mechanical move. **Done notes:** verbatim move into 11 `src/types/*.ts` modules with one-way cross-imports (`goals`/`progress` → `baseline`; `episode` → `equipment`/`plan`; `broker-contracts` → domain types); thin barrel at `src/index.ts` preserves the package top-level doc comment and public `@cadence/shared` surface. No consumer import-path changes; no deep-path imports found. Verify: cadence-shared `tsc` + 3/3 vitest + lint clean; `apps/cadence-api` and `apps/cadence-web` `tsc --noEmit` clean. |
 
 ---
 
