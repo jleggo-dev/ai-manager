@@ -6,6 +6,7 @@
  */
 
 import type { ChatMessage, ChatCompletionResponse, ChatCompletionUsage, PatchedResponse } from '../../types.ts';
+import { contentText, hasImageParts } from '../../lib/message-content.ts';
 
 interface GeminiContent {
   role: string;
@@ -51,7 +52,12 @@ function toGeminiMessages(messages: ChatMessage[] = [], options: Record<string, 
   const systemParts: Array<{ text: string }> = [];
 
   for (const msg of messages || []) {
-    const text = String(msg?.content || '').trim();
+    if (hasImageParts(msg?.content ?? '')) {
+      // Gemini inline images need base64 inlineData (a different transport than URL parts);
+      // until that lands, image parts are dropped here and the text still goes through.
+      console.debug('[gemini] image content parts dropped — this client is text-only for now');
+    }
+    const text = contentText(msg?.content ?? '').trim();
     if (!text) continue;
 
     if (msg.role === 'system') {
@@ -220,7 +226,9 @@ export class GoogleGeminiClient {
     } catch (err: unknown) {
       if (timer) clearTimeout(timer);
       if ((err as Error).name === 'AbortError') {
-        throw new Error(`Google Gemini stream timed out after ${timeoutMs}ms`, { cause: err });
+        throw new Error(`Google Gemini stream timed out after ${timeoutMs}ms`, {
+          cause: err,
+        });
       }
       throw err;
     }
@@ -237,7 +245,9 @@ export class GoogleGeminiClient {
   }
 
   async listModels(): Promise<GeminiModel[]> {
-    const data = await this.request<GeminiModelsResponse>('/v1beta/models', { method: 'GET' });
+    const data = await this.request<GeminiModelsResponse>('/v1beta/models', {
+      method: 'GET',
+    });
     return Array.isArray(data?.models) ? data.models : [];
   }
 

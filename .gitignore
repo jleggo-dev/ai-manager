@@ -46,3 +46,6 @@ frontend/dist/
 
 # Local screenshots from widget health checks
 **/screenshots/
+
+# Husky's own auto-generated internal shims (not actual hooks - see .husky/pre-commit)
+.husky/_

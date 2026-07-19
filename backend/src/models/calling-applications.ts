@@ -37,17 +37,25 @@ export async function getCallingApplication(id: string): Promise<CallingApplicat
 /**
  * Upsert a calling application. If the id already exists, this is a no-op
  * (display_name is only set on insert; admins rename explicitly).
+ *
+ * `ignoreDuplicates: true` makes Postgres run `ON CONFLICT DO NOTHING`, which
+ * returns zero rows on a conflict — `.select().single()` would then throw a
+ * PGRST "cannot coerce to a single JSON object" error even though the upsert
+ * itself succeeded. Fetch the existing row explicitly in that case instead.
  */
 export async function upsertCallingApplication(id: string, displayName?: string): Promise<CallingApplicationRow> {
-  const { data: row, error } = await tenantFrom(TABLE)
+  const { data: rows, error } = await tenantFrom(TABLE)
     .upsert(tenantInsertPayload({ id, display_name: displayName || id }), {
       onConflict: 'workspace_id,id',
       ignoreDuplicates: true,
     })
-    .select()
-    .single();
+    .select();
   if (error) throw new Error(`Calling application upsert error: ${error.message}`);
-  return row;
+  if (rows && rows.length > 0) return rows[0];
+
+  const existing = await getCallingApplication(id);
+  if (existing) return existing;
+  throw new Error(`Calling application upsert error: no row returned or found for id "${id}"`);
 }
 
 /** Update display_name (admin rename). */

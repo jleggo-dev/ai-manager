@@ -7,34 +7,42 @@
     "frontend",
     "packages/types",
     "packages/client",
-    "packages/edge"
+    "packages/edge",
+    "packages/core",
+    "packages/cadence-shared",
+    "apps/cadence-api",
+    "apps/cadence-web"
   ],
   "scripts": {
     "dev": "npm run dev:backend & npm run dev:frontend",
     "dev:backend": "npm run dev --workspace=backend",
     "dev:frontend": "npm run dev --workspace=frontend",
-    "build": "npm run build --workspace=frontend",
+    "build": "npm run build --workspaces --if-present",
     "start": "npm run start --workspace=backend",
-    "test": "npm run test --workspace=backend",
-    "lint": "npm run lint --workspace=backend && npm run lint --workspace=frontend",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
     "vercel:build:frontend": "npm run lint --workspace=frontend && npm run build --workspace=frontend",
-    "lint:fix": "npm run lint:fix --workspace=backend && npm run lint:fix --workspace=frontend",
-    "format": "prettier --write \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\"",
-    "format:check": "prettier --check \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\"",
-    "typecheck": "npm run typecheck --workspace=backend && npm run typecheck --workspace=frontend",
+    "lint:fix": "npm run lint:fix --workspaces --if-present",
+    "format": "prettier --write \"{backend,frontend,packages/core,packages/cadence-shared,apps/cadence-api,apps/cadence-web}/src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"{backend,frontend,packages/core,packages/cadence-shared,apps/cadence-api,apps/cadence-web}/src/**/*.{ts,tsx}\"",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "migrate:supabase-data": "npm run migrate:data --workspace=backend",
     "test:e2e": "npx vitest run --config e2e/vitest.config.ts",
     "test:e2e:full": "bash scripts/run-e2e.sh",
     "ci": "npm run typecheck && npm run format:check && npm run lint && npm test",
-    "prepush": "npm run typecheck && npm run format:check && npm run lint && npm run build --workspace=backend && npm run vercel:build:frontend && npm test",
+    "prepush": "npm run typecheck && npm run format:check && npm run lint && npm run build --workspaces --if-present && npm run vercel:build:frontend && npm test",
     "prepare": "husky || true"
   },
   "lint-staged": {
-    "backend/{src,test}/**/*.ts": [
+    "{backend,apps/cadence-api}/{src,test}/**/*.ts": [
       "prettier --write",
       "eslint --fix"
     ],
-    "frontend/src/**/*.{ts,tsx}": [
+    "{frontend,apps/cadence-web}/src/**/*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "packages/{core,cadence-shared}/src/**/*.ts": [
       "prettier --write",
       "eslint --fix"
     ],

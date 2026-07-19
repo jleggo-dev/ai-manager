@@ -5,6 +5,7 @@
  */
 
 import type { V2StreamEvent } from './types.ts';
+import { pushSseChunk, type SseLineBuffer } from '../../services/sse-line-reader.ts';
 
 export interface SseTransformState {
   fullText: string;
@@ -125,10 +126,8 @@ export function transformV2SseDataLine(dataStr: string, state: SseTransformState
 }
 
 /** Transform a raw SSE chunk from v2 into OpenAI-compatible SSE text. */
-export function transformV2SseChunk(chunk: string, state: SseTransformState, lineBuffer: { value: string }): string {
-  lineBuffer.value += chunk;
-  const lines = lineBuffer.value.split('\n');
-  lineBuffer.value = lines.pop() ?? '';
+export function transformV2SseChunk(chunk: string, state: SseTransformState, lineBuffer: SseLineBuffer): string {
+  const lines = pushSseChunk(lineBuffer, chunk);
 
   const output: string[] = [];
   for (const line of lines) {

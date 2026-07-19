@@ -169,8 +169,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     }
 
     if (profileStatus !== 'approved') {
-      const code =
-        profileStatus === 'suspended' ? ACCOUNT_STATUS_CODES.suspended : ACCOUNT_STATUS_CODES.pending;
+      const code = profileStatus === 'suspended' ? ACCOUNT_STATUS_CODES.suspended : ACCOUNT_STATUS_CODES.pending;
       const message =
         profileStatus === 'suspended'
           ? 'Your account has been suspended. Contact an administrator.'

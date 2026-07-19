@@ -382,8 +382,7 @@ router.post('/:id/run', async (req: Request, res: Response) => {
 
     const fullCheck = await serviceGetHealthCheck(req.params.id as string);
     const profile = fullCheck.health_check_profile as
-      | (HealthCheckProfileRow & { hc_provider_key?: HealthCheckProviderKeyRow })
-      | undefined;
+      (HealthCheckProfileRow & { hc_provider_key?: HealthCheckProviderKeyRow }) | undefined;
     if (!profile) {
       return res.status(400).json({ error: 'Health check profile not found' });
     }

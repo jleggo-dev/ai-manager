@@ -1,0 +1,35 @@
+{
+  "name": "@cadence/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cadence Node backend. Owns Cadence's Supabase DB + deterministic engines; consumes AI Admin in-process via @ai-admin/core.",
+  "scripts": {
+    "dev": "node --import tsx --watch-path=src src/index.ts",
+    "start": "node --import tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0"
+  },
+  "dependencies": {
+    "@ai-admin/core": "*",
+    "@cadence/shared": "*",
+    "@supabase/supabase-js": "^2",
+    "dotenv": "^16",
+    "express": "^4",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.6.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.0",
+    "@typescript-eslint/parser": "^8.59.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.3.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}

@@ -1,0 +1,129 @@
+/**
+ * API-02 — characterization tests for the pure session-normalize helpers.
+ * Bounds + video_query URL strip are a security/UX backstop against model-invented links.
+ */
+import { describe, it, expect } from 'vitest';
+import { coachingPhase, normalizeSession } from './session-normalize.ts';
+
+describe('coachingPhase', () => {
+  it('maps log counts to discover / calibrate / progress', () => {
+    expect(coachingPhase(0)).toBe('discover');
+    expect(coachingPhase(1)).toBe('calibrate');
+    expect(coachingPhase(2)).toBe('calibrate');
+    expect(coachingPhase(3)).toBe('progress');
+    expect(coachingPhase(10)).toBe('progress');
+  });
+});
+
+describe('normalizeSession', () => {
+  it('returns null when raw is null or blocks is missing', () => {
+    expect(normalizeSession(null)).toBeNull();
+    expect(normalizeSession({})).toBeNull();
+    expect(normalizeSession({ blocks: 'nope' })).toBeNull();
+  });
+
+  it('returns null when no usable blocks survive (empty / nameless items)', () => {
+    expect(normalizeSession({ blocks: [] })).toBeNull();
+    expect(normalizeSession({ blocks: [{ label: 'Main', items: [] }] })).toBeNull();
+    expect(normalizeSession({ blocks: [{ label: 'Main', items: [{ name: '' }] }] })).toBeNull();
+    expect(normalizeSession({ blocks: [{ label: 'Main', items: [{ name: '   ' }] }] })).toBeNull();
+  });
+
+  it('keeps a well-formed session and stamps version + generated_at', () => {
+    const session = normalizeSession({
+      note: 'Ease into volume.',
+      blocks: [
+        {
+          label: 'Main',
+          items: [{ name: 'Goblet squat', sets: 3, reps: 8, load: '40 lb', detail: 'Brace hard' }],
+        },
+      ],
+    });
+    expect(session).not.toBeNull();
+    expect(session!.version).toBe(1);
+    expect(session!.note).toBe('Ease into volume.');
+    expect(session!.generated_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(session!.blocks).toHaveLength(1);
+    expect(session!.blocks[0]).toEqual({
+      label: 'Main',
+      items: [
+        {
+          name: 'Goblet squat',
+          sets: 3,
+          reps: 8,
+          load: '40 lb',
+          duration_min: undefined,
+          distance_km: undefined,
+          detail: 'Brace hard',
+          video_query: null,
+        },
+      ],
+    });
+  });
+
+  it('defaults block label to Session when missing', () => {
+    const session = normalizeSession({
+      blocks: [{ items: [{ name: 'Run' }] }],
+    });
+    expect(session).not.toBeNull();
+    expect(session!.blocks[0]?.label).toBe('Session');
+  });
+
+  it('truncates to MAX_BLOCKS (6) and MAX_ITEMS (12)', () => {
+    const blocks = Array.from({ length: 8 }, (_, bi) => ({
+      label: `B${bi}`,
+      items: Array.from({ length: 15 }, (_, ii) => ({ name: `item-${bi}-${ii}` })),
+    }));
+    const session = normalizeSession({ blocks });
+    expect(session).not.toBeNull();
+    expect(session!.blocks).toHaveLength(6);
+    for (const b of session!.blocks) {
+      expect(b.items).toHaveLength(12);
+    }
+  });
+
+  it('strips model-invented video_query URLs (http, youtube, www)', () => {
+    const session = normalizeSession({
+      blocks: [
+        {
+          label: 'Main',
+          items: [
+            { name: 'Deadlift', video_query: 'https://youtube.com/watch?v=abc' },
+            { name: 'Press', video_query: 'http://youtu.be/xyz' },
+            { name: 'Row', video_query: 'www.example.com/row' },
+            { name: 'Squat', video_query: 'YOUTUBE.COM/shorts/1' },
+            { name: 'Hinge', video_query: 'romanian deadlift cue' },
+          ],
+        },
+      ],
+    });
+    expect(session).not.toBeNull();
+    const queries = session!.blocks[0]!.items.map((i) => i.video_query);
+    expect(queries).toEqual([null, null, null, null, 'romanian deadlift cue']);
+  });
+
+  it('drops non-positive / non-finite numeric fields', () => {
+    const session = normalizeSession({
+      blocks: [
+        {
+          label: 'Main',
+          items: [
+            {
+              name: 'Easy jog',
+              sets: 0,
+              reps: -1,
+              duration_min: Number.NaN,
+              distance_km: Infinity,
+            },
+          ],
+        },
+      ],
+    });
+    expect(session).not.toBeNull();
+    const item = session!.blocks[0]!.items[0]!;
+    expect(item.sets).toBeUndefined();
+    expect(item.reps).toBeUndefined();
+    expect(item.duration_min).toBeUndefined();
+    expect(item.distance_km).toBeUndefined();
+  });
+});

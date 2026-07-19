@@ -1,0 +1,140 @@
+﻿# CI - INFRA-02 (see refactoring_plan.md Section 4.0 and
+# docs/refactor-analysis/06-build-ci-test-infra.md Section 4.4).
+#
+# Path-filtered into two INDEPENDENT jobs so a Cadence-only PR never needs AI Admin's
+# Supabase secrets and vice versa - the two products use two SEPARATE Supabase projects
+# (CLAUDE.md, migrations/cadence/0001_init.sql header). Each job's `env:` block only
+# references that product's own secrets; never both in the same job.
+#
+# Rollout status: REPORT-ONLY. This workflow is not (yet) configured as a required status
+# check in branch protection - that is a deliberate, separate step the plan calls for once
+# the real failure backlog this surfaces has been triaged. Every job below still runs and
+# reports its real pass/fail status; nothing here is set up to silently no-op.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # Determines which product(s) a change actually touches, so the ai-admin/cadence jobs
+  # below can skip entirely (not just pass trivially) when irrelevant.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      ai-admin: ${{ steps.filter.outputs.ai-admin }}
+      cadence: ${{ steps.filter.outputs.cadence }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            ai-admin:
+              - 'backend/**'
+              - 'frontend/**'
+              - 'packages/types/**'
+              - 'packages/client/**'
+              - 'packages/edge/**'
+              - 'package.json'
+              - 'package-lock.json'
+            cadence:
+              - 'apps/**'
+              - 'packages/core/**'
+              - 'packages/cadence-shared/**'
+              - 'config/ai-admin/**'
+              - 'migrations/cadence/**'
+              - 'package.json'
+              - 'package-lock.json'
+
+  # AI Admin's own workspaces - gated on AI Admin's Supabase project + Devs.ai secrets ONLY.
+  ai-admin:
+    name: ai-admin / ${{ matrix.workspace }}
+    needs: changes
+    if: needs.changes.outputs.ai-admin == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [backend, frontend]
+    env:
+      AI_MANAGER_SUPABASE_URL: ${{ secrets.AI_MANAGER_SUPABASE_URL }}
+      AI_MANAGER_SUPABASE_ANON_KEY: ${{ secrets.AI_MANAGER_SUPABASE_ANON_KEY }}
+      AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY }}
+      CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.CREDENTIAL_ENCRYPTION_KEY }}
+      DEVS_AI_API_KEY: ${{ secrets.DEVS_AI_API_KEY }}
+      # backend/test/setup.ts authenticates every integration test with this API key (its own
+      # error message promises "CI sets TEST_API_KEY automatically"); it was never actually
+      # wired here, so all 35 setup.ts-importing suites threw at import. Must be an owner/admin
+      # -role key provisioned in the AI Manager test Supabase project (BE-03 gates admin routes).
+      TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
+      # Opt-in: live Devs.ai provider e2e suites are skipped in CI unless this is "1".
+      # Covers e2e-live-provider-chat.test.ts and e2e-devs-ai-v2-tools.test.ts.
+      # Upstream Devs.ai v2 500s were flaking otherwise-green PRs (CI-01). Set a repo
+      # Variable RUN_LIVE_PROVIDER_E2E=1 only when you want those live smokes in Actions.
+      # Local `npm test` still runs them by default.
+      RUN_LIVE_PROVIDER_E2E: ${{ vars.RUN_LIVE_PROVIDER_E2E }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck --workspace=${{ matrix.workspace }}
+      # ESLint configs exist for backend/frontend today; --if-present keeps this step a
+      # no-op (not a failure) for any future ai-admin workspace that doesn't have one yet.
+      - run: npm run lint --workspace=${{ matrix.workspace }} --if-present
+      - run: npm run test --workspace=${{ matrix.workspace }} --if-present
+      - run: npm run build --workspace=${{ matrix.workspace }} --if-present
+
+  # Cadence's own workspaces - gated on Cadence's (reused "Spartan Tracker") Supabase
+  # project secrets ONLY. Never receives an AI_MANAGER_* / DEVS_AI_* secret.
+  cadence:
+    name: cadence / ${{ matrix.workspace }}
+    needs: changes
+    if: needs.changes.outputs.cadence == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [apps/cadence-api, apps/cadence-web, packages/core, packages/cadence-shared]
+    env:
+      CADENCE_SUPABASE_URL: ${{ secrets.CADENCE_SUPABASE_URL }}
+      CADENCE_SUPABASE_ANON_KEY: ${{ secrets.CADENCE_SUPABASE_ANON_KEY }}
+      CADENCE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.CADENCE_SUPABASE_SERVICE_ROLE_KEY }}
+      CADENCE_DATABASE_URL: ${{ secrets.CADENCE_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck --workspace=${{ matrix.workspace }}
+      # No cadence workspace has an ESLint config yet (INFRA-04) - --if-present skips
+      # this step gracefully rather than failing on a missing script.
+      - run: npm run lint --workspace=${{ matrix.workspace }} --if-present
+      - run: npm run test --workspace=${{ matrix.workspace }} --if-present
+      - run: npm run build --workspace=${{ matrix.workspace }} --if-present
+
+  # Formatting spans both products' source trees but touches no secrets either way, so it
+  # runs whenever EITHER filter matches rather than needing a third secret-scoped job.
+  format-check:
+    name: format:check
+    needs: changes
+    if: needs.changes.outputs.ai-admin == 'true' || needs.changes.outputs.cadence == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check

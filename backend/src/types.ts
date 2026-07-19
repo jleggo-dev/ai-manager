@@ -92,9 +92,18 @@ export interface ChatCompletionResponse {
   raw?: unknown;
 }
 
+/**
+ * One part of a multimodal chat message. `image_url` must be an https URL the provider can
+ * fetch (e.g. a short-lived signed URL) — never inline base64 (keeps requests small and
+ * diagnostics log URL references instead of blobs). Providers map this canonical shape to
+ * their own dialect (OpenAI-compat `image_url:{url}`, Responses `input_image`, etc.).
+ */
+export type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; url: string };
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  /** Plain string for text-only messages (the overwhelmingly common case); parts for vision. */
+  content: string | ContentPart[];
 }
 
 export interface LlmClient {
@@ -469,70 +478,6 @@ export interface Attachment {
   url: string;
   mimeType: string;
   fileName: string;
-}
-
-/* ── Widget Health Check types ───────────────────────────── */
-
-export interface WidgetHealthCheckRow {
-  id: string;
-  workspace_id: string;
-  name: string;
-  url: string;
-  test_message: string;
-  cadence_minutes: number;
-  outage_cadence_minutes: number;
-  is_active: boolean;
-  last_run_at: string | null;
-  max_retries: number;
-  shadow_host_selector: string;
-  launcher_selector: string;
-  iframe_selector: string;
-  input_selector: string;
-  send_selector: string;
-  response_selector: string;
-  error_patterns: string[];
-  page_load_timeout_ms: number | null;
-  widget_load_timeout_ms: number | null;
-  response_timeout_ms: number | null;
-  capture_screenshot: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface WidgetHcTimeouts {
-  page_load_timeout_ms: number;
-  widget_load_timeout_ms: number;
-  response_timeout_ms: number;
-  slow_page_load_ms: number;
-  slow_widget_load_ms: number;
-  slow_response_ms: number;
-}
-
-export interface WidgetHealthCheckRunRow {
-  id: string;
-  widget_health_check_id: string;
-  workspace_id: string;
-  status: 'pass' | 'fail' | 'timeout' | 'error' | 'warning';
-  response_time_ms: number | null;
-  page_load_time_ms: number | null;
-  widget_load_time_ms: number | null;
-  ai_response_time_ms: number | null;
-  error_message: string | null;
-  raw_response: string | null;
-  screenshot_path: string | null;
-  created_at: string;
-}
-
-export interface WidgetHealthCheckIncidentRow {
-  id: string;
-  widget_health_check_id: string;
-  workspace_id: string;
-  started_at: string;
-  resolved_at: string | null;
-  duration_seconds: number | null;
-  failed_run_count: number;
-  last_error: string | null;
-  created_at: string;
 }
 
 export interface TriggerRow {

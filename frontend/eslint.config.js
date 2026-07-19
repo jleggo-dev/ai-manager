@@ -44,25 +44,68 @@ export default [
       ...js.configs.recommended.rules,
       ...react.configs.recommended.rules,
       ...react.configs['jsx-runtime'].rules,
-      ...reactHooks.configs.recommended.rules,
       ...tseslint.configs.recommended.rules,
 
-      'react-hooks/set-state-in-effect': 'warn',
+      // eslint-plugin-react-hooks@7's "recommended" preset also enables the new React
+      // Compiler rule bundle (static-components/purity/immutability/etc, mostly at
+      // "error"), which is out of scope for this legacy codebase to adopt wholesale.
+      // Keep only the two traditional hooks rules until that's a deliberate follow-up.
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
       'react/jsx-no-target-blank': 'warn',
       'react/prop-types': 'off',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
 
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': ['warn', {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-        caughtErrorsIgnorePattern: '^_',
-      }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
       '@typescript-eslint/no-non-null-assertion': 'warn',
 
       'no-unused-vars': 'off',
       'no-undef': 'off',
       'no-console': 'off',
+    },
+  },
+  // FE-01: prevent organism/page files from regrowing into god-components.
+  // Threshold is intentionally below the historical ProcessingJobManager size.
+  // Known oversized files are overridden below as separately-tracked backlog —
+  // do NOT add new files to that list; split them instead.
+  {
+    files: ['src/components/organisms/**/*.{ts,tsx}', 'src/pages/**/*.{ts,tsx}'],
+    rules: {
+      'max-lines': ['error', { max: 500, skipBlankLines: true, skipComments: true }],
+    },
+  },
+  {
+    // Backlog (verified failing max-lines@500 after FE-01 + FE-02 merges — do not expand casually):
+    // organisms: DiagnosticsTab, ai-profiles/{ProfileFormModal,TestChatPanel},
+    //   processing-jobs/{AnalyticsTab,JobsTab,RuleSetsTab,SchemaValidationPanel}
+    // pages: HealthDashboardPage, LovableGuidePage
+    // Note: AiProfileManager.tsx was removed after FE-02 split (orchestrator is well under 500).
+    // HealthCheckProfilesPage dropped after FE-08 hook extraction (page is well under 500).
+    // SettingsPage dropped after FE-04 tab split (shell + settings/* are well under 500).
+    // HealthCheckWidgetPage removed with widget health checker feature (FE-05 cancelled).
+    // AiMatcherPage dropped after FE-03 split (page shell + molecules/hooks under 500).
+    // TestChatPanel size follow-up is FE-11; do not duplicate that ticket here.
+    files: [
+      'src/components/organisms/DiagnosticsTab.tsx',
+      'src/components/organisms/ai-profiles/ProfileFormModal.tsx',
+      'src/components/organisms/ai-profiles/TestChatPanel.tsx',
+      'src/components/organisms/processing-jobs/AnalyticsTab.tsx',
+      'src/components/organisms/processing-jobs/JobsTab.tsx',
+      'src/components/organisms/processing-jobs/RuleSetsTab.tsx',
+      'src/components/organisms/processing-jobs/SchemaValidationPanel.tsx',
+      'src/pages/HealthDashboardPage.tsx',
+      'src/pages/LovableGuidePage.tsx',
+    ],
+    rules: {
+      'max-lines': 'off',
     },
   },
 ];

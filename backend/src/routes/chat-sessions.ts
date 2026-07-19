@@ -62,6 +62,7 @@ import {
   selectUnfulfilledToolCalls,
   type ChatStreamAccum,
 } from '../services/v2-stream-events.ts';
+import { createSseLineBuffer, pushSseChunk } from '../services/sse-line-reader.ts';
 
 const MAX_SSE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -116,18 +117,14 @@ async function runInternalToolJobLoop(options: {
 
       options.pendingInternalToolCalls.length = 0;
       const toolReader = toolBody.getReader();
-      let lineBuffer = '';
+      const lineBuffer = createSseLineBuffer();
 
       const ingestOpts = {
         isV2Session: options.isV2Session,
         internalToolNames: options.internalToolNames,
         pendingInternalToolCalls: options.pendingInternalToolCalls,
         fulfilledCallIds,
-        onV2Metadata: (patch: {
-          previous_response_id?: string;
-          conversation_id?: string;
-          last_sequence?: number;
-        }) => {
+        onV2Metadata: (patch: { previous_response_id?: string; conversation_id?: string; last_sequence?: number }) => {
           updateV2ProviderMetadata(options.sessionId, patch).catch((err) =>
             console.warn('[chat-sessions] Failed to persist v2 provider_metadata:', errorMessage(err)),
           );
@@ -144,9 +141,7 @@ async function runInternalToolJobLoop(options: {
         const chunk = options.decoder.decode(value, { stream: true });
         options.res.write(chunk);
 
-        lineBuffer += chunk;
-        const lines = lineBuffer.split('\n');
-        lineBuffer = lines.pop() ?? '';
+        const lines = pushSseChunk(lineBuffer, chunk);
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const dataStr = line.slice(6).trim();
@@ -160,7 +155,10 @@ async function runInternalToolJobLoop(options: {
         }
       }
 
-      if (selectUnfulfilledToolCalls(options.pendingInternalToolCalls, options.internalToolNames, fulfilledCallIds).length === 0) {
+      if (
+        selectUnfulfilledToolCalls(options.pendingInternalToolCalls, options.internalToolNames, fulfilledCallIds)
+          .length === 0
+      ) {
         break;
       }
     } catch (toolErr) {
@@ -444,11 +442,7 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
       internalToolNames,
       pendingInternalToolCalls,
       fulfilledCallIds,
-      onV2Metadata: (patch: {
-        previous_response_id?: string;
-        conversation_id?: string;
-        last_sequence?: number;
-      }) => {
+      onV2Metadata: (patch: { previous_response_id?: string; conversation_id?: string; last_sequence?: number }) => {
         updateV2ProviderMetadata(sessionId, patch).catch((err) =>
           console.warn('[chat-sessions] Failed to persist v2 provider_metadata:', errorMessage(err)),
         );
@@ -474,7 +468,7 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
     const reader = body.getReader();
     const decoder = new TextDecoder();
 
-    let lineBuffer = '';
+    const lineBuffer = createSseLineBuffer();
     try {
       while (true) {
         const { value, done } = await reader.read();
@@ -483,9 +477,7 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
         const chunk = decoder.decode(value, { stream: true });
         if (firstTokenMs === null) firstTokenMs = Date.now() - t0;
 
-        lineBuffer += chunk;
-        const lines = lineBuffer.split('\n');
-        lineBuffer = lines.pop() ?? '';
+        const lines = pushSseChunk(lineBuffer, chunk);
 
         if (!hasStreamRules) {
           res.write(chunk);
@@ -578,9 +570,7 @@ router.post('/:id/messages', validateBody(sendMessageSchema), async (req: Reques
       if (abortTimer) clearTimeout(abortTimer);
     }
 
-    if (
-      selectUnfulfilledToolCalls(pendingInternalToolCalls, internalToolNames, new Set()).length > 0
-    ) {
+    if (selectUnfulfilledToolCalls(pendingInternalToolCalls, internalToolNames, new Set()).length > 0) {
       await runInternalToolJobLoop({
         res,
         decoder,
@@ -801,7 +791,7 @@ router.post('/:id/tool-outputs', validateBody(toolOutputsSchema), async (req: Re
     const reader = body.getReader();
     const decoder = new TextDecoder();
 
-    let lineBuffer = '';
+    const lineBuffer = createSseLineBuffer();
     try {
       while (true) {
         const { value, done } = await reader.read();
@@ -809,9 +799,7 @@ router.post('/:id/tool-outputs', validateBody(toolOutputsSchema), async (req: Re
         const chunk = decoder.decode(value, { stream: true });
         res.write(chunk);
 
-        lineBuffer += chunk;
-        const lines = lineBuffer.split('\n');
-        lineBuffer = lines.pop() ?? '';
+        const lines = pushSseChunk(lineBuffer, chunk);
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const dataStr = line.slice(6).trim();
@@ -910,7 +898,8 @@ router.post('/:id/reconnect-stream', validateBody(reconnectStreamSchema), async 
     const acquired = await acquireSessionLock(req.params.id as string, candidateLockId);
     if (!acquired) {
       return res.status(409).json({
-        error: 'Session is currently processing another message. Wait for the current stream to complete before reconnecting.',
+        error:
+          'Session is currently processing another message. Wait for the current stream to complete before reconnecting.',
       });
     }
     lockMessageId = candidateLockId;
@@ -946,7 +935,7 @@ router.post('/:id/reconnect-stream', validateBody(reconnectStreamSchema), async 
 
     const reader = body.getReader();
     const decoder = new TextDecoder();
-    let lineBuffer = '';
+    const lineBuffer = createSseLineBuffer();
 
     try {
       while (true) {
@@ -955,9 +944,7 @@ router.post('/:id/reconnect-stream', validateBody(reconnectStreamSchema), async 
         const chunk = decoder.decode(value, { stream: true });
         res.write(chunk);
 
-        lineBuffer += chunk;
-        const lines = lineBuffer.split('\n');
-        lineBuffer = lines.pop() ?? '';
+        const lines = pushSseChunk(lineBuffer, chunk);
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const dataStr = line.slice(6).trim();
@@ -968,10 +955,12 @@ router.post('/:id/reconnect-stream', validateBody(reconnectStreamSchema), async 
               updateV2ProviderMetadata(sessionId, {
                 previous_response_id: parsed.responseId as string,
                 conversation_id: (parsed.conversationId as string) || undefined,
-                last_sequence:
-                  parsed.lastSequence != null ? Number(parsed.lastSequence) : undefined,
+                last_sequence: parsed.lastSequence != null ? Number(parsed.lastSequence) : undefined,
               }).catch((metaErr) =>
-                console.warn('[chat-sessions/reconnect-stream] Failed to persist provider_metadata:', errorMessage(metaErr)),
+                console.warn(
+                  '[chat-sessions/reconnect-stream] Failed to persist provider_metadata:',
+                  errorMessage(metaErr),
+                ),
               );
             }
           } catch {

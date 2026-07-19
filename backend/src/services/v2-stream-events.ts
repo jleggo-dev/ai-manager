@@ -17,19 +17,11 @@ export interface IngestSseOptions {
   internalToolNames: Set<string>;
   pendingInternalToolCalls: PendingToolCall[];
   fulfilledCallIds: Set<string>;
-  onV2Metadata?: (patch: {
-    previous_response_id?: string;
-    conversation_id?: string;
-    last_sequence?: number;
-  }) => void;
+  onV2Metadata?: (patch: { previous_response_id?: string; conversation_id?: string; last_sequence?: number }) => void;
   onSystemMessageId?: (id: string) => void;
 }
 
-function upsertPendingCall(
-  pending: PendingToolCall[],
-  toolCallId: string,
-  patch: Partial<PendingToolCall>,
-): void {
+function upsertPendingCall(pending: PendingToolCall[], toolCallId: string, patch: Partial<PendingToolCall>): void {
   const existing = pending.find((t) => t.toolCallId === toolCallId);
   if (existing) {
     if (patch.name) existing.name = patch.name;
@@ -76,13 +68,15 @@ function ingestV2FunctionCallEvent(parsed: Record<string, unknown>, opts: Ingest
   const type = String(parsed.type || '');
 
   if (type === 'response.output_item.added' || type === 'response.output_item.done') {
-    const item = parsed.item as {
-      type?: string;
-      name?: string;
-      call_id?: string;
-      id?: string;
-      arguments?: string;
-    } | undefined;
+    const item = parsed.item as
+      | {
+          type?: string;
+          name?: string;
+          call_id?: string;
+          id?: string;
+          arguments?: string;
+        }
+      | undefined;
     if (item?.type === 'function_call') {
       const toolCallId = item.call_id || item.id;
       if (toolCallId) {

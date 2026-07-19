@@ -319,7 +319,15 @@ async function applySessionFromSupabase(accessToken: string, user: SupabaseUserL
   }
 }
 
-export async function initAuthSession(): Promise<void> {
+/** No-op unsubscribe when auth is bypassed or Supabase is not configured. */
+const noopUnsubscribe = (): void => {};
+
+/**
+ * Bootstrap session state and subscribe to Supabase auth changes.
+ * Returns an unsubscribe function — callers (e.g. App.tsx) must invoke it on cleanup
+ * so remounts / StrictMode / HMR do not stack listeners (SD5).
+ */
+export async function initAuthSession(): Promise<() => void> {
   if (isDevAuthBypassActive()) {
     sessionUser = {
       id: '00000000-0000-0000-0000-000000000000',
@@ -327,10 +335,10 @@ export async function initAuthSession(): Promise<void> {
       display_name: 'Dev (API key)',
     };
     setAccountStatus('approved');
-    return;
+    return noopUnsubscribe;
   }
 
-  if (!supabase) return;
+  if (!supabase) return noopUnsubscribe;
 
   const {
     data: { session },
@@ -341,7 +349,9 @@ export async function initAuthSession(): Promise<void> {
     clearAuthSession();
   }
 
-  supabase.auth.onAuthStateChange(async (event, refreshedSession) => {
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange(async (event, refreshedSession) => {
     if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && refreshedSession?.access_token) {
       await applySessionFromSupabase(refreshedSession.access_token, refreshedSession.user);
       if (event === 'SIGNED_IN') clearAuthHashFromUrl();
@@ -357,6 +367,8 @@ export async function initAuthSession(): Promise<void> {
       persistAccessToken(refreshedSession.access_token);
     }
   });
+
+  return () => subscription.unsubscribe();
 }
 
 /** Handle API 403 account gate responses from the backend. */

@@ -6,11 +6,8 @@ import * as api from '../services/api';
 
 vi.mock('../services/api', () => ({
   getHcDashboard: vi.fn(),
-  getWidgetHcDashboard: vi.fn(),
   getHcUptimeHistory: vi.fn(),
-  getWidgetHcUptimeHistory: vi.fn(),
   runHcCheck: vi.fn(),
-  runWidgetHcCheck: vi.fn(),
 }));
 
 vi.mock('@mantine/notifications', () => ({
@@ -94,14 +91,11 @@ describe('HealthDashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (api.getHcDashboard as ReturnType<typeof vi.fn>).mockResolvedValue(mockDashboard);
-    (api.getWidgetHcDashboard as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
     (api.getHcUptimeHistory as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
-    (api.getWidgetHcUptimeHistory as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
   });
 
   it('renders loading state initially', () => {
     (api.getHcDashboard as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
-    (api.getWidgetHcDashboard as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
     const { container } = renderPage();
     expect(container.querySelector('.mantine-Loader-root')).toBeInTheDocument();
   });
@@ -173,7 +167,6 @@ describe('HealthDashboardPage', () => {
 
   it('renders empty state when no checks', async () => {
     (api.getHcDashboard as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
-    (api.getWidgetHcDashboard as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
     renderPage();
     expect(await screen.findByText(/No health checks configured/)).toBeInTheDocument();
   });

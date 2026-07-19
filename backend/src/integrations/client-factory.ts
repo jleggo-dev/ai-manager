@@ -7,7 +7,9 @@ import type { ProviderRow } from '../types.ts';
 export type LlmClientInstance = DevsAiClient | DevsAiV2Client | GoogleGeminiClient;
 
 function createClientForType(type: string, baseUrl: string, apiKey: string): LlmClientInstance {
-  const normalized = String(type || '').trim().toLowerCase();
+  const normalized = String(type || '')
+    .trim()
+    .toLowerCase();
   if (normalized === 'devs-ai-v2') return new DevsAiV2Client(baseUrl, apiKey);
   if (normalized === 'google-gemini') return new GoogleGeminiClient(baseUrl, apiKey);
   if (normalized === 'devs-ai' || !normalized) return new DevsAiClient(baseUrl, apiKey);
@@ -29,10 +31,7 @@ export function createLlmClientForProvider(provider: ProviderRow): LlmClientInst
  * Create an LLM client using the user's personal API key when available,
  * falling back to the provider-level key. Works for any provider type.
  */
-export async function createLlmClientForUser(
-  provider: ProviderRow,
-  userId: string | null,
-): Promise<LlmClientInstance> {
+export async function createLlmClientForUser(provider: ProviderRow, userId: string | null): Promise<LlmClientInstance> {
   const apiKey = await resolveApiKeyForUser(userId, provider);
   if (!apiKey) {
     throw new Error(`Provider "${provider.name}" has no API key configured`);
@@ -48,7 +47,9 @@ export async function createDevsAiClientForUser(provider: ProviderRow, userId: s
   if (!apiKey) {
     throw new Error(`Provider "${provider.name}" has no API key configured`);
   }
-  const type = String(provider?.type || '').trim().toLowerCase();
+  const type = String(provider?.type || '')
+    .trim()
+    .toLowerCase();
   if (type !== 'devs-ai' && type !== '') {
     throw new Error(`createDevsAiClientForUser requires devs-ai provider, got "${provider.type}"`);
   }
@@ -66,7 +67,11 @@ export async function createDevsAiV2ClientForUser(
   if (!apiKey) {
     throw new Error(`Provider "${provider.name}" has no API key configured`);
   }
-  if (String(provider.type || '').trim().toLowerCase() !== 'devs-ai-v2') {
+  if (
+    String(provider.type || '')
+      .trim()
+      .toLowerCase() !== 'devs-ai-v2'
+  ) {
     throw new Error(`createDevsAiV2ClientForUser requires devs-ai-v2 provider, got "${provider.type}"`);
   }
   return new DevsAiV2Client(provider.base_url, apiKey);

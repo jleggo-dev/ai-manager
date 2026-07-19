@@ -4,13 +4,18 @@ import { MantineProvider } from '@mantine/core';
 import { ModalsProvider } from '@mantine/modals';
 
 vi.mock('./lib/auth-session', () => ({
-  initAuthSession: vi.fn(() => Promise.resolve()),
+  initAuthSession: vi.fn(() => Promise.resolve(() => {})),
   getAccessToken: vi.fn(() => null),
   getSessionUser: vi.fn(() => null),
   getWorkspaceId: vi.fn(() => null),
   setWorkspaceId: vi.fn(),
   signOut: vi.fn(() => Promise.resolve()),
   clearAuthSession: vi.fn(),
+  // App.tsx gates rendering on this; default to 'approved' so token-bearing
+  // tests reach the app shell without every test having to override it.
+  getAccountStatus: vi.fn(() => 'approved'),
+  onAccountStatusChange: vi.fn(() => () => {}),
+  refreshBootstrap: vi.fn(() => Promise.resolve(null)),
 }));
 
 vi.mock('./services/api', () => ({
@@ -89,7 +94,7 @@ function renderApp() {
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (authSession.initAuthSession as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (authSession.initAuthSession as ReturnType<typeof vi.fn>).mockResolvedValue(() => {});
     (authSession.getAccessToken as ReturnType<typeof vi.fn>).mockReturnValue(null);
     (authSession.getSessionUser as ReturnType<typeof vi.fn>).mockReturnValue(null);
     (authSession.getWorkspaceId as ReturnType<typeof vi.fn>).mockReturnValue(null);
@@ -101,8 +106,26 @@ describe('App', () => {
     unmount();
   });
 
+  it('unsubscribes the auth session listener on unmount', async () => {
+    const unsubscribe = vi.fn();
+    (authSession.initAuthSession as ReturnType<typeof vi.fn>).mockResolvedValue(unsubscribe);
+
+    const { unmount } = renderApp();
+
+    await waitFor(() => {
+      expect(authSession.initAuthSession).toHaveBeenCalled();
+    });
+    // Allow the init promise to settle and stash the unsubscribe handle.
+    await waitFor(() => {
+      expect(unsubscribe).not.toHaveBeenCalled();
+    });
+
+    unmount();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
   it('shows loading spinner during auth initialization', () => {
-    (authSession.initAuthSession as ReturnType<typeof vi.fn>).mockReturnValue(new Promise<void>(() => {}));
+    (authSession.initAuthSession as ReturnType<typeof vi.fn>).mockReturnValue(new Promise<() => void>(() => {}));
 
     const { container } = renderApp();
 

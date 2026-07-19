@@ -1,0 +1,141 @@
+import type { OccurrenceStatus, PendingProposal } from '@cadence/shared';
+import { getActivePlan } from '../repos/plans.ts';
+import { listActivities } from '../repos/activities.ts';
+import { listOccurrences } from '../repos/occurrences.ts';
+import { getUser } from '../repos/users.ts';
+import { getLatestConversation } from '../repos/conversations.ts';
+import { listGoals } from '../repos/goals.ts';
+import { ensureHorizon } from './plan-horizon.ts';
+import { describeRecurrence } from './scheduling.ts';
+import { rollingConsistency } from './metrics.ts';
+
+const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+export interface PlanViewOccurrence {
+  occurrence_id: string;
+  activity_id: string;
+  title: string;
+  kind: 'user' | 'system';
+  status: OccurrenceStatus;
+  time_of_day?: string;
+}
+export interface PlanViewDay {
+  date: string; // YYYY-MM-DD
+  weekday: string; // 'Mon'
+  dayNum: number; // 6
+  isToday: boolean;
+  occurrences: PlanViewOccurrence[];
+}
+export interface PlanViewActivity {
+  activity_id: string;
+  title: string;
+  kind: 'user' | 'system';
+  cadence: string; // humanized, e.g. "Every other day"
+  recurrence: string;
+  time_of_day?: string;
+  duration_min?: number;
+}
+export interface PlanView {
+  hasPlan: boolean;
+  // Lets the frontend tell a genuinely new user (show Welcome) apart from one who's mid-onboarding
+  // (skip straight to the coach chat, which restores their session) — `hasPlan` alone can't.
+  stage: 'new' | 'in_progress' | 'committed';
+  version?: number;
+  committedAt?: string;
+  activities: PlanViewActivity[];
+  week: PlanViewDay[];
+  consistency: { kept: number; window: number }; // "showed up N of 7 days" — never a streak
+  pendingProposal: PendingProposal | null; // a coach-proposed re-plan awaiting accept/dismiss
+}
+
+const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10);
+
+/**
+ * Assemble the ongoing "Today / Your week" view from the active plan. Tops up the rolling horizon
+ * first so the week is always materialized, then groups this week's occurrences by day and reports
+ * rolling-window consistency (days you showed up, never a streak that resets).
+ */
+export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanView> {
+  await ensureHorizon(userId).catch(() => {
+    /* best-effort top-up; view still renders from what's materialized */
+  });
+  const plan = await getActivePlan(userId);
+  if (!plan) {
+    // Started but hasn't locked yet (an open conversation, or goals captured some other way)
+    // vs. never touched the app — the ONLY signal that distinguishes "bounce to Welcome" from
+    // "resume the coach chat" for a user with no committed plan.
+    const [conversation, goals] = await Promise.all([getLatestConversation(userId), listGoals(userId)]);
+    const stage = conversation || goals.length > 0 ? 'in_progress' : 'new';
+    return {
+      hasPlan: false,
+      stage,
+      activities: [],
+      week: [],
+      consistency: { kept: 0, window: weekDays },
+      pendingProposal: null,
+    };
+  }
+
+  const activities = await listActivities(plan.plan_id);
+  const actById = new Map(activities.map((a) => [a.activity_id, a]));
+
+  const now = new Date();
+  const base = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const days: PlanViewDay[] = [];
+  for (let i = 0; i < weekDays; i++) {
+    const d = new Date(base + i * 86_400_000);
+    days.push({
+      date: iso(d),
+      weekday: WEEKDAY[d.getUTCDay()]!,
+      dayNum: d.getUTCDate(),
+      isToday: i === 0,
+      occurrences: [],
+    });
+  }
+  const dayByDate = new Map(days.map((dd) => [dd.date, dd]));
+
+  const from = days[0]!.date;
+  const to = days[days.length - 1]!.date;
+  const occ = await listOccurrences(userId, from, to);
+  for (const o of occ) {
+    const day = dayByDate.get(iso(o.date));
+    const a = actById.get(o.activity_id);
+    if (day && a) {
+      day.occurrences.push({
+        occurrence_id: o.occurrence_id,
+        activity_id: o.activity_id,
+        title: a.title,
+        kind: a.kind,
+        status: o.status,
+        time_of_day: a.schedule?.time_of_day,
+      });
+    }
+  }
+  for (const day of days) {
+    day.occurrences.sort((x, y) => (x.time_of_day ?? '99').localeCompare(y.time_of_day ?? '99'));
+  }
+
+  // Rolling-window consistency over the LAST 7 days (days with ≥1 completion).
+  const past = await listOccurrences(userId, iso(new Date(base - 6 * 86_400_000)), iso(new Date(base)));
+  const { kept, window } = rollingConsistency(past as never, now, 7);
+  const user = await getUser(userId);
+
+  return {
+    hasPlan: true,
+    stage: 'committed',
+    version: plan.version,
+    committedAt: plan.generated_at,
+    activities: activities.map((a) => ({
+      activity_id: a.activity_id,
+      title: a.title,
+      kind: a.kind,
+      cadence: describeRecurrence(a.schedule?.recurrence ?? ''),
+      recurrence: a.schedule?.recurrence ?? '',
+      time_of_day: a.schedule?.time_of_day,
+      duration_min: a.schedule?.duration_min,
+    })),
+    week: days,
+    consistency: { kept, window },
+    pendingProposal: user?.pending_proposal ?? null,
+  };
+}

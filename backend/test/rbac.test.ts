@@ -19,7 +19,9 @@ describe('Authorization & Access Control', () => {
     expect(res.body).toHaveProperty('error');
   });
 
-  it('any workspace member can create a provider', async () => {
+  // BE-03: provider mutations now require owner/admin. `authHeaders()` is an owner/admin key, so
+  // these still succeed; the member→403 contract is covered by test/rbac-route-guards.test.ts.
+  it('an owner/admin can create a provider', async () => {
     const name = uniqueName('rbac-create');
     const res = await request(app).post('/api/providers').set(authHeaders()).send({
       name,
@@ -33,7 +35,7 @@ describe('Authorization & Access Control', () => {
     providerId = res.body.id;
   });
 
-  it('any workspace member can update a provider', async () => {
+  it('an owner/admin can update a provider', async () => {
     expect(providerId).toBeTruthy();
     const updatedName = uniqueName('rbac-updated');
     const res = await request(app).put(`/api/providers/${providerId}`).set(authHeaders()).send({ name: updatedName });
@@ -41,14 +43,15 @@ describe('Authorization & Access Control', () => {
     expect(res.body.name).toBe(updatedName);
   });
 
-  it('any workspace member can delete a provider', async () => {
+  it('an owner/admin can delete a provider', async () => {
     expect(providerId).toBeTruthy();
     const res = await request(app).delete(`/api/providers/${providerId}`).set(authHeaders());
     expect(res.status).toBe(204);
     providerId = null;
   });
 
-  it('authenticated request reaches Zod validation (no role gate)', async () => {
+  it('an owner/admin passes the role gate and reaches Zod validation', async () => {
+    // BE-03: ai-profiles POST is now role-gated; an owner/admin key clears it, then hits validation.
     const res = await request(app).post('/api/ai-profiles').set(authHeaders()).send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toBeDefined();

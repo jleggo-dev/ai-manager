@@ -64,28 +64,4 @@ describe('Uptime History API', () => {
       }
     });
   });
-
-  describe('GET /api/widget-health-checks/uptime-history', () => {
-    it('returns 200 with an array of widget check histories', async () => {
-      const res = await request(app).get('/api/widget-health-checks/uptime-history').set(authHeaders());
-
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.data)).toBe(true);
-
-      for (const item of res.body.data) {
-        expect(item).toHaveProperty('checkId');
-        expect(item).toHaveProperty('checkName');
-        expect(item.checkType).toBe('widget');
-        expect(typeof item.totals).toBe('object');
-        expect(Array.isArray(item.dailyStats)).toBe(true);
-      }
-    });
-
-    it('respects the days query parameter', async () => {
-      const res = await request(app).get('/api/widget-health-checks/uptime-history?days=14').set(authHeaders());
-
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.data)).toBe(true);
-    });
-  });
 });

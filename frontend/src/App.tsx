@@ -21,7 +21,6 @@ import HealthDashboardPage from './pages/HealthDashboardPage';
 import HealthCheckProvidersPage from './pages/HealthCheckProvidersPage';
 import HealthCheckProfilesPage from './pages/HealthCheckProfilesPage';
 import HealthCheckConfigPage from './pages/HealthCheckConfigPage';
-import HealthCheckWidgetPage from './pages/HealthCheckWidgetPage';
 
 import {
   initAuthSession,
@@ -64,7 +63,6 @@ const PAGES: Record<string, ComponentType<PageComponentProps>> = {
   'hc-providers': HealthCheckProvidersPage,
   'hc-profiles': HealthCheckProfilesPage,
   'hc-checks': HealthCheckConfigPage,
-  'hc-widget-checks': HealthCheckWidgetPage,
 };
 
 const DEFAULT_PAGE: Record<AppMode, string> = {
@@ -146,12 +144,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+
     initAuthSession()
-      .then(() => {
+      .then((unsub) => {
+        if (cancelled) {
+          unsub();
+          return;
+        }
+        unsubscribe = unsub;
         setSessionUserProfile(getSessionUser());
         if (getAccountStatus() === 'approved') return loadWorkspaceOptions();
       })
-      .finally(() => setAuthReady(true));
+      .finally(() => {
+        if (!cancelled) setAuthReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, [loadWorkspaceOptions]);
 
   useEffect(() => {

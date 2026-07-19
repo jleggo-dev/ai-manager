@@ -1,6 +1,22 @@
+const subscriptionUnsubscribe = vi.fn();
+const onAuthStateChange = vi.fn(() => ({
+  data: { subscription: { unsubscribe: subscriptionUnsubscribe } },
+}));
+const getSession = vi.fn(async () => ({ data: { session: null } }));
+
+/** Mutable so individual tests can enable a fake Supabase client. */
+let supabaseClient: {
+  auth: {
+    getSession: typeof getSession;
+    onAuthStateChange: typeof onAuthStateChange;
+  };
+} | null = null;
+
 vi.mock('./supabase', () => ({
-  supabase: null,
-  isSupabaseConfigured: () => false,
+  get supabase() {
+    return supabaseClient;
+  },
+  isSupabaseConfigured: () => Boolean(supabaseClient),
   clearAuthHashFromUrl: vi.fn(),
 }));
 vi.mock('./api-url', () => ({ resolveApiUrl: (p: string) => p }));
@@ -12,6 +28,11 @@ let store: Record<string, string>;
 
 beforeEach(() => {
   store = {};
+  supabaseClient = null;
+  subscriptionUnsubscribe.mockClear();
+  onAuthStateChange.mockClear();
+  getSession.mockClear();
+  getSession.mockResolvedValue({ data: { session: null } });
   vi.stubGlobal('sessionStorage', {
     getItem: vi.fn((k: string) => store[k] ?? null),
     setItem: vi.fn((k: string, v: string) => {
@@ -117,5 +138,31 @@ describe('auth-session', () => {
     expect(getWorkspaceId()).toBeNull();
 
     expect(getAccessToken()).toBeNull();
+  });
+
+  it('initAuthSession returns an unsubscribe that removes the onAuthStateChange listener', async () => {
+    supabaseClient = {
+      auth: {
+        getSession,
+        onAuthStateChange,
+      },
+    };
+
+    const { initAuthSession } = await loadModule();
+    const unsubscribe = await initAuthSession();
+
+    expect(onAuthStateChange).toHaveBeenCalledTimes(1);
+    expect(subscriptionUnsubscribe).not.toHaveBeenCalled();
+
+    unsubscribe();
+    expect(subscriptionUnsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('initAuthSession returns a no-op unsubscribe when Supabase is not configured', async () => {
+    const { initAuthSession } = await loadModule();
+    const unsubscribe = await initAuthSession();
+    expect(typeof unsubscribe).toBe('function');
+    expect(() => unsubscribe()).not.toThrow();
+    expect(onAuthStateChange).not.toHaveBeenCalled();
   });
 });

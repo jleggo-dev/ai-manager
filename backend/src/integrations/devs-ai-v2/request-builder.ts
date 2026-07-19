@@ -1,5 +1,9 @@
 import type { ChatMessage } from '../../types.ts';
-import { expectedSchemaFieldsToJsonSchema, type ExpectedSchemaInput } from '../../services/expected-schema-to-json-schema.ts';
+import { contentText } from '../../lib/message-content.ts';
+import {
+  expectedSchemaFieldsToJsonSchema,
+  type ExpectedSchemaInput,
+} from '../../services/expected-schema-to-json-schema.ts';
 
 export interface V2CreateResponseBody {
   input: string | unknown[];
@@ -32,7 +36,8 @@ export function messagesToV2Request(
 
   for (const msg of messages) {
     if (msg.role === 'system') {
-      systemParts.push(msg.content);
+      // System messages are text-only in the Responses dialect; image parts (if any) are dropped.
+      systemParts.push(contentText(msg.content));
     } else if (msg.role === 'assistant') {
       // v2 accepts a bare {role, content: string} item for a NEW user turn, but a replayed
       // assistant/model-output item (multi-turn chat history) must carry the full "message"
@@ -45,10 +50,18 @@ export function messagesToV2Request(
         role: 'assistant',
         id: `hist_asst_${assistantItemSeq++}`,
         status: 'completed',
-        content: [{ type: 'output_text', text: msg.content }],
+        content: [{ type: 'output_text', text: contentText(msg.content) }],
       });
-    } else {
+    } else if (typeof msg.content === 'string') {
       inputItems.push({ role: msg.role, content: msg.content });
+    } else {
+      // Multimodal user turn → Responses content parts (vision).
+      inputItems.push({
+        role: msg.role,
+        content: msg.content.map((p) =>
+          p.type === 'text' ? { type: 'input_text', text: p.text } : { type: 'input_image', image_url: p.url },
+        ),
+      });
     }
   }
 
@@ -60,7 +73,9 @@ export function messagesToV2Request(
     model,
     stream: Boolean(options.stream),
     input:
-      inputItems.length === 1 && inputItems[0]?.role === 'user'
+      // The bare-string shortcut only applies to a single PLAIN-TEXT user turn; a parts
+      // array must stay inside an input-items array or the API rejects the body.
+      inputItems.length === 1 && inputItems[0]?.role === 'user' && typeof inputItems[0].content === 'string'
         ? (inputItems[0].content as string)
         : inputItems,
     store: options.store !== false,
@@ -106,7 +121,12 @@ export function normalizeToolsForV2(tools: unknown[]): unknown[] {
 }
 
 /** Extract assistant text from a completed v2 Response object. */
-export function extractV2ResponseText(response: { output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> }): string {
+export function extractV2ResponseText(response: {
+  output?: Array<{
+    type?: string;
+    content?: Array<{ type?: string; text?: string }>;
+  }>;
+}): string {
   const parts: string[] = [];
   for (const item of response.output || []) {
     if (item.type !== 'message') continue;
@@ -118,7 +138,13 @@ export function extractV2ResponseText(response: { output?: Array<{ type?: string
 }
 
 /** Map v2 usage to OpenAI-compatible usage shape. */
-export function mapV2Usage(usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number } | null) {
+export function mapV2Usage(
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+  } | null,
+) {
   if (!usage) return null;
   return {
     prompt_tokens: usage.input_tokens ?? null,

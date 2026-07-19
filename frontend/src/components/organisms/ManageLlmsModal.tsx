@@ -126,7 +126,8 @@ export default function ManageLlmsModal({ opened, onClose, providers }: ManageLl
 
   const providerOptions = (providers || []).map((p: Provider) => ({ value: p.id, label: `${p.name} (${p.type})` }));
   const selectedProviderRow = (providers || []).find((p: Provider) => p.id === selectedProvider) || null;
-  const syncableProvider = selectedProviderRow && ['google-gemini', 'devs-ai', 'devs-ai-v2'].includes(selectedProviderRow.type);
+  const syncableProvider =
+    selectedProviderRow && ['google-gemini', 'devs-ai', 'devs-ai-v2'].includes(selectedProviderRow.type);
 
   /* Auto-select first provider when modal opens */
   useEffect(() => {
