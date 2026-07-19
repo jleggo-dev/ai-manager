@@ -5,6 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import react from 'eslint-plugin-react';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
+import { fileRule, functionRule } from '../eslint.config.sizes.mjs';
 
 export default [
   { ignores: ['dist', 'public/integration'] },
@@ -69,40 +70,38 @@ export default [
       'no-console': 'off',
     },
   },
-  // FE-01: prevent organism/page files from regrowing into god-components.
-  // Threshold is intentionally below the historical ProcessingJobManager size.
-  // Known oversized files are overridden below as separately-tracked backlog —
-  // do NOT add new files to that list; split them instead.
+  // Repo-wide size gates (generalizes FE-01 from organisms/pages to all source; tests may be long).
+  // Offenders are allowlisted below = the refactor backlog; every split PR deletes an entry, target
+  // is zero. NEVER add a new file to the allowlist to pass CI — split it instead.
   {
-    files: ['src/components/organisms/**/*.{ts,tsx}', 'src/pages/**/*.{ts,tsx}'],
-    rules: {
-      'max-lines': ['error', { max: 500, skipBlankLines: true, skipComments: true }],
-    },
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['**/*.test.{ts,tsx}'],
+    rules: { ...fileRule },
   },
   {
-    // Backlog (verified failing max-lines@500 after FE-01 + FE-02 merges — do not expand casually):
-    // organisms: DiagnosticsTab, ai-profiles/{ProfileFormModal,TestChatPanel},
-    //   processing-jobs/{AnalyticsTab,JobsTab,RuleSetsTab,SchemaValidationPanel}
-    // pages: AiMatcherPage, HealthCheckWidgetPage, HealthDashboardPage, LovableGuidePage, SettingsPage
-    // Note: AiProfileManager.tsx was removed after FE-02 split (orchestrator is well under 500).
-    // HealthCheckProfilesPage dropped after FE-08 hook extraction (page is well under 500).
-    // TestChatPanel size follow-up is FE-11; do not duplicate that ticket here.
+    files: ['src/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: { ...functionRule },
+  },
+  // Size-gate backlog — grandfathered offenders (refactoring_plan.md FE-03/04/05/06/11/13/14).
+  // Each split PR deletes an entry; the target is zero. NEVER add a new file here — split it.
+  {
     files: [
-      'src/components/organisms/DiagnosticsTab.tsx',
-      'src/components/organisms/ai-profiles/ProfileFormModal.tsx',
-      'src/components/organisms/ai-profiles/TestChatPanel.tsx',
-      'src/components/organisms/processing-jobs/AnalyticsTab.tsx',
-      'src/components/organisms/processing-jobs/JobsTab.tsx',
-      'src/components/organisms/processing-jobs/RuleSetsTab.tsx',
-      'src/components/organisms/processing-jobs/SchemaValidationPanel.tsx',
-      'src/pages/AiMatcherPage.tsx',
-      'src/pages/HealthCheckWidgetPage.tsx',
+      'src/services/api.ts', // FE-06 (~971 lines)
+      'src/pages/AiMatcherPage.tsx', // FE-03
+      'src/pages/SettingsPage.tsx', // FE-04
+      'src/pages/HealthCheckWidgetPage.tsx', // FE-05
       'src/pages/HealthDashboardPage.tsx',
       'src/pages/LovableGuidePage.tsx',
-      'src/pages/SettingsPage.tsx',
+      'src/hooks/useHealthCheckProfilesData.ts',
+      'src/components/organisms/DiagnosticsTab.tsx',
+      'src/components/organisms/ai-profiles/ProfileFormModal.tsx', // FE-14
+      'src/components/organisms/ai-profiles/TestChatPanel.tsx', // FE-11
+      'src/components/organisms/processing-jobs/AnalyticsTab.tsx', // FE-13
+      'src/components/organisms/processing-jobs/JobsTab.tsx', // FE-13
+      'src/components/organisms/processing-jobs/RuleSetsTab.tsx', // FE-13
+      'src/components/organisms/processing-jobs/SchemaValidationPanel.tsx', // FE-13
     ],
-    rules: {
-      'max-lines': 'off',
-    },
+    rules: { 'max-lines': 'off', 'max-lines-per-function': 'off' },
   },
 ];

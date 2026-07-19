@@ -5,6 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import react from 'eslint-plugin-react';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
+import { fileRule, functionRule } from '../../eslint.config.sizes.mjs';
 
 export default [
   { ignores: ['dist', 'node_modules'] },
@@ -76,5 +77,26 @@ export default [
       'no-undef': 'off',
       'no-console': 'off',
     },
+  },
+  // Repo-wide size gates (source only; tests may be long). Offenders allowlisted below = backlog.
+  // File-cap on all source; function-cap on .ts logic only (JSX render bodies run long by nature).
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['**/*.test.{ts,tsx}'],
+    rules: { ...fileRule },
+  },
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: { ...functionRule },
+  },
+  // Size-gate backlog — grandfathered offenders (refactoring_plan.md WEB-01/WEB-03). Each split
+  // PR deletes an entry; the target is zero. NEVER add a new file here — split it instead.
+  {
+    files: [
+      'src/features/review/ReviewScreen.tsx', // WEB-01 (~1000 lines)
+      'src/features/plan/OccurrenceSheet.tsx', // WEB-03 (~600 lines)
+    ],
+    rules: { 'max-lines': 'off', 'max-lines-per-function': 'off' },
   },
 ];

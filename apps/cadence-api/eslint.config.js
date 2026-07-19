@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
 import globals from 'globals';
+import { sizeRules } from '../../eslint.config.sizes.mjs';
 
 export default [
   {
@@ -54,6 +55,12 @@ export default [
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
     },
+  },
+  // Repo-wide size gates (source only; tests may be long). No offenders today — keep it that way.
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: { ...sizeRules },
   },
   {
     ignores: ['dist/', 'node_modules/'],

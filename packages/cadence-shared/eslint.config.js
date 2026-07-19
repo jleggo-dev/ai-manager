@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
 import globals from 'globals';
+import { sizeRules } from '../../eslint.config.sizes.mjs';
 
 export default [
   {
@@ -37,6 +38,11 @@ export default [
       'no-unused-vars': 'off',
       'no-undef': 'off',
     },
+  },
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: { ...sizeRules },
   },
   {
     ignores: ['dist/', 'node_modules/'],

@@ -139,6 +139,7 @@ unprotected by any automated gate.** These items are not optional preamble — t
 | **INFRA-03** | Extend root scripts (`--workspaces --if-present`) + add vitest to `apps/cadence-web`, `packages/core`, `packages/cadence-shared` | P1 | S per workspace | Low | INFRA-01 | **Done** (PR #4, merged to `feat/cadence`) |
 | **INFRA-04** | Add ESLint configs to `apps/*`/`packages/*`; align ESLint major versions; add `.prettierrc.json`; expand format globs | P1 | M | Low | INFRA-01 | **Done** (PR #5, merged to `feat/cadence`) |
 | **INFRA-05** | Fix pre-commit hooks — commit an actual `.husky/pre-commit`, expand `lint-staged` globs to cover Cadence | P1 | S | Low | INFRA-04 | **Done** (PR #5, merged to `feat/cadence`) |
+| **INFRA-08** | Repo-wide code-size gates — generalize FE-01's `max-lines` to all 6 workspaces (`eslint.config.sizes.mjs`: file 500 / fn 150, fn on `.ts` only) + per-workspace allowlist-as-backlog + `CLAUDE.md` convention. Fulfills §5.1. | P1 | S | Low | INFRA-04 | **Done** (this PR) — offenders: backend 5, frontend 14, cadence-web 2; cadence-api + packages exception-free. `complexity` deferred (noisy). Negative-tested: a fresh 523-line file fails both rules. |
 
 #### INFRA-01 — Fix workspace wiring [P0]
 
@@ -564,11 +565,17 @@ sign-off before any change. Neither blocks BE-03 Done (which gated only mutating
 These came out of every report's "systemic recommendations" section. Treat them as standing
 workstreams that run alongside the phased backlog above, not one-time tickets:
 
-1. **Prevent regrowth, don't just fix size once.** FE-01's max-file-line lint rule is the concrete
-   mechanism; pair it with a one-paragraph convention note (in `CLAUDE.md` or a new
-   `frontend/CONTRIBUTING.md`) stating "new tabs/major UI sections get their own file from day
-   one." This is the single most important process fix in this plan — `ProcessingJobManager.tsx`
-   already proved a file-level fix without a structural guardrail doesn't hold.
+1. **Prevent regrowth, don't just fix size once.** ✅ **DONE (INFRA-08, 2026-07-19).** FE-01's
+   frontend-organisms-only `max-lines` rule is now generalized repo-wide: `max-lines` 500 (all
+   source, all 6 workspaces) + `max-lines-per-function` 150 (`.ts` logic; `.tsx` render bodies are
+   file-capped only, since JSX runs long). Thresholds centralized in `eslint.config.sizes.mjs`;
+   enforced at `error` via existing CI (`--max-warnings 0`) + pre-commit. Current offenders (backend
+   5, frontend 14, cadence-web 2; cadence-api + both packages are exception-free) are allowlisted
+   per-workspace = the shrinking backlog, each split PR deletes one. Convention note added to
+   `CLAUDE.md` ("new route/tab/section = its own file day one; never add to the allowlist to pass
+   CI"). Cyclomatic `complexity` deliberately deferred (too noisy on this legacy code — its own
+   future ticket). This was the single most important process fix — `ProcessingJobManager.tsx`
+   already proved a file-level fix without a structural guardrail doesn't hold (it regrew +1,420).
 2. **Version-control the database schema.** No AI Admin `.sql` migration tooling exists (AR5), and
    `001`-`005` are missing entirely despite being referenced in `README.md`. This isn't just
    tooling hygiene — it means *this plan itself* can't independently verify tenant-isolation/RLS
