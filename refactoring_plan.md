@@ -377,13 +377,16 @@ per item / per area intro).
 > - **FE-04** — split `SettingsPage` into `pages/settings/*` tab files (`refactor/fe-04-split-settings-page`).
 >   API-key create/copy/revoke tests + `isAdminRole` gate on create/delete (matches backend).
 > - **FE-06** — split `services/api.ts` into domain modules + barrel (`refactor/fe-06-split-api-client`).
+> - **FE-03** — split `AiMatcherPage` into molecules/hooks/`lib/ai-matcher.ts`; prompt composition
+>   via `lib/interpolate.ts` (`composeMatcherPrompt`). Page dropped from eslint `max-lines` override
+>   (PR #32).
 >
 > - **CROSS-01** — `Broker`→`Scribe` rename across cadence-shared / cadence-api / cadence-web
 >   (+ core package header) (PR #30). DevTrace fields `scribeSelect`/`scribeSummarize`;
 >   `broker-contracts.ts` → `scribe-contracts.ts`. Persisted mode strings `broker-curated`/
 >   `broker-partial` and profile slug `cadence-broker` left unchanged (audit trail / live IDs).
 >
-> Not yet started: FE-03, FE-10, API-04, API-06, WEB-01..04, CROSS-03.
+> Not yet started: FE-10, API-04, API-06, WEB-01..04, CROSS-03.
 
 #### Backend (report 01)
 
@@ -399,7 +402,7 @@ per item / per area intro).
 
 | ID | Item | Effort | Risk | Notes |
 |---|---|---|---|---|
-| **FE-03** | Split `AiMatcherPage.tsx` (1,061 lines); replace its inline `composePrompt` with `lib/interpolate.ts` | M | Medium | No tests today on a page that fires real provider calls — add smoke tests first |
+| **FE-03** ✅ **Done** (`refactor/fe-03-split-ai-matcher-page`, PR #32) | Split `AiMatcherPage.tsx` (1,061 lines); replace its inline `composePrompt` with `lib/interpolate.ts` | M | Medium | **Done notes:** pure helpers in `lib/ai-matcher.ts` (`composeMatcherPrompt` → `interpolateTemplate`, schema validation, slot payload shaping); molecules under `components/molecules/ai-matcher/` (`AiSlotCard`, `JsonFieldTable`, `ResultCard`, `MatcherResultsSection`); hooks `useAiMatcherSlots` / `useAiMatcherExecution` / `useAiMatcherPrompt`; page is a thin shell (~190 lines, dropped from eslint `max-lines` override). Tests: `ai-matcher.test.ts` + page smoke (slot add/remove + single-slot run). Structural only — empty-string `{{var}}` now follows canonical interpolator (replaces with `''` instead of leaving the placeholder). |
 | **FE-04** ✅ **Done** (`refactor/fe-04-split-settings-page`, PR #24) | Split `SettingsPage.tsx` (910 lines) into one file per tab (already logically decomposed, mechanical only); resolve the `_workspaceRole` unused-param question on the API-keys revoke action | S-M | Low/Medium on the API-key flow specifically | Add a test for API-key create/copy/revoke first — untested, security-relevant. **Done notes:** tabs/cards moved to `pages/settings/{SystemTab,LlmDefaultsTab,RateLimitsTab,BackendUrlCard,ApiKeysTab,UserCredentialsTab,DataManagementTab}.tsx`; shell keeps Tabs routing. `_workspaceRole` resolved by wiring `isAdminRole(workspaceRole)` so create/delete match backend `requireRole('owner','admin')` (members still list keys). Tests: `SettingsPage.test.tsx` cover list/create+copy-secret/revoke + member gating. Dropped `SettingsPage` from eslint `max-lines` override. |
 | **FE-05** 🚫 **Won't Fix / Removed** (`refactor/remove-widget-health-checker`) | Split `HealthCheckWidgetPage.tsx` (820 lines); consolidate its `STATUS_COLORS` duplication (3rd occurrence, see FE-11) | M | Low | **Cancelled:** page deleted with the unused widget health checker feature. `STATUS_COLORS` remaining occurrences stay under FE-11. |
 | **FE-06** ✅ **Done** (`refactor/fe-06-split-api-client`, PR #28) | Split `services/api.ts` (815 lines, 100 functions) into `services/api/{providers,ai-profiles,processing-jobs,workflows,health-checks,settings,workspaces}.ts` behind a barrel | M | Low | Should land before/alongside FE-01/FE-02 so their new hooks have a non-monolithic home. **Done notes:** `services/api.ts` is a thin barrel; shared `request`/`getApiAuthHeaders` in `api/client.ts`; domains also include `calling-applications`, `chat-sessions`, `admin`. `listFormattingRules` now returns `AvailableFormattingRule[]` (removes the organism `as unknown as` cast). Rebased onto widget-health removal (no widget API surface). Call-site import paths unchanged. Verify: frontend `tsc` 0; `api.test.ts` 15/15; ProcessingJobManager tests green. |
