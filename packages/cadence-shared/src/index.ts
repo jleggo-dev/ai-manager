@@ -1,8 +1,8 @@
 /**
  * @cadence/shared — Cadence domain types.
  *
- * Source of truth: cadence-spec.md §5 (data model) and §C4 (Broker job
- * contracts). IDs are app-generated. The Broker extracts into these shapes;
+ * Source of truth: cadence-spec.md §5 (data model) and §C4 (Scribe job
+ * contracts). IDs are app-generated. The Scribe extracts into these shapes;
  * the app asserts them before committing (never trust raw model output).
  *
  * Types are split by concern under `./types/`; this barrel re-exports the full
@@ -18,5 +18,5 @@ export * from './types/progress.ts';
 export * from './types/nutrition.ts';
 export * from './types/episode.ts';
 export * from './types/conversation.ts';
-export * from './types/broker-contracts.ts';
+export * from './types/scribe-contracts.ts';
 export * from './types/tripwires.ts';
