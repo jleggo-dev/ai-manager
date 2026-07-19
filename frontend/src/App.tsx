@@ -21,7 +21,6 @@ import HealthDashboardPage from './pages/HealthDashboardPage';
 import HealthCheckProvidersPage from './pages/HealthCheckProvidersPage';
 import HealthCheckProfilesPage from './pages/HealthCheckProfilesPage';
 import HealthCheckConfigPage from './pages/HealthCheckConfigPage';
-import HealthCheckWidgetPage from './pages/HealthCheckWidgetPage';
 
 import {
   initAuthSession,
@@ -64,7 +63,6 @@ const PAGES: Record<string, ComponentType<PageComponentProps>> = {
   'hc-providers': HealthCheckProvidersPage,
   'hc-profiles': HealthCheckProfilesPage,
   'hc-checks': HealthCheckConfigPage,
-  'hc-widget-checks': HealthCheckWidgetPage,
 };
 
 const DEFAULT_PAGE: Record<AppMode, string> = {

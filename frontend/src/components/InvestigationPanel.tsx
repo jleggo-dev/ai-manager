@@ -20,17 +20,16 @@ import {
   CopyButton,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
-import { IconFilter, IconCopy, IconCheck, IconPhoto } from '@tabler/icons-react';
+import { IconFilter, IconCopy, IconCheck } from '@tabler/icons-react';
 import * as api from '../services/api';
-import type { HcRun, WidgetHcRun, HcIncident, WidgetHcIncident, FailurePatterns } from '../types/api';
+import type { HcRun, HcIncident, FailurePatterns } from '../types/api';
 
 interface InvestigationPanelProps {
   checkId: string;
-  checkType: 'api' | 'widget';
 }
 
-type AnyRun = HcRun | WidgetHcRun;
-type AnyIncident = HcIncident | WidgetHcIncident;
+type AnyRun = HcRun;
+type AnyIncident = HcIncident;
 
 const STATUS_COLORS: Record<string, string> = {
   pass: 'green',
@@ -71,49 +70,9 @@ function durationStr(seconds: number | null | undefined): string {
   return `${h}h ${m}m`;
 }
 
-function ScreenshotButton({ runId }: { runId: string }) {
-  const [imgSrc, setImgSrc] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const handleClick = async () => {
-    if (imgSrc) {
-      setImgSrc(null);
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await api.getWidgetRunScreenshot(runId);
-      setImgSrc(res.url);
-    } catch {
-      /* no screenshot */
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <>
-      <Tooltip label={imgSrc ? 'Hide screenshot' : 'View screenshot'}>
-        <ActionIcon variant="subtle" size="xs" onClick={handleClick} loading={loading}>
-          <IconPhoto size={14} />
-        </ActionIcon>
-      </Tooltip>
-      {imgSrc && (
-        <Box mt="xs">
-          <img
-            src={imgSrc}
-            alt="Failure screenshot"
-            style={{ maxWidth: '100%', borderRadius: 4, border: '1px solid #dee2e6' }}
-          />
-        </Box>
-      )}
-    </>
-  );
-}
-
 /* ══════════════════════════════════════════════════════════ */
 
-export default function InvestigationPanel({ checkId, checkType }: InvestigationPanelProps) {
+export default function InvestigationPanel({ checkId }: InvestigationPanelProps) {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [runs, setRuns] = useState<AnyRun[]>([]);
@@ -147,10 +106,7 @@ export default function InvestigationPanel({ checkId, checkType }: Investigation
       setRunsError(null);
       try {
         const params = buildFilterParams();
-        const res =
-          checkType === 'widget'
-            ? await api.listWidgetHcRunsFiltered(checkId, params)
-            : await api.listHcRunsFiltered(checkId, params);
+        const res = await api.listHcRunsFiltered(checkId, params);
         if (!cancelled) {
           setRuns(res.data);
           setTotalRuns(res.total);
@@ -165,7 +121,7 @@ export default function InvestigationPanel({ checkId, checkType }: Investigation
       cancelled = true;
       controller.abort();
     };
-  }, [checkId, checkType, buildFilterParams]);
+  }, [checkId, buildFilterParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,8 +129,7 @@ export default function InvestigationPanel({ checkId, checkType }: Investigation
       setIncidentsLoading(true);
       setIncidentsError(null);
       try {
-        const res =
-          checkType === 'widget' ? await api.listWidgetHcIncidents(checkId) : await api.listHcIncidents(checkId);
+        const res = await api.listHcIncidents(checkId);
         if (!cancelled) setIncidents(res.data);
       } catch (err) {
         if (!cancelled) setIncidentsError(err instanceof Error ? err.message : 'Failed to load incidents');
@@ -185,7 +140,7 @@ export default function InvestigationPanel({ checkId, checkType }: Investigation
     return () => {
       cancelled = true;
     };
-  }, [checkId, checkType]);
+  }, [checkId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,10 +150,7 @@ export default function InvestigationPanel({ checkId, checkType }: Investigation
       try {
         const from = dateRange[0]?.toISOString().slice(0, 10);
         const to = dateRange[1]?.toISOString().slice(0, 10);
-        const res =
-          checkType === 'widget'
-            ? await api.getWidgetHcFailurePatterns(checkId, from, to)
-            : await api.getHcFailurePatterns(checkId, from, to);
+        const res = await api.getHcFailurePatterns(checkId, from, to);
         if (!cancelled) setPatterns(res);
       } catch (err) {
         if (!cancelled) setPatternsError(err instanceof Error ? err.message : 'Failed to load patterns');
@@ -209,7 +161,7 @@ export default function InvestigationPanel({ checkId, checkType }: Investigation
     return () => {
       cancelled = true;
     };
-  }, [checkId, checkType, dateRange]);
+  }, [checkId, dateRange]);
 
   useEffect(() => {
     setPage(1);
@@ -292,7 +244,6 @@ export default function InvestigationPanel({ checkId, checkType }: Investigation
                     <Table.Th>Timestamp</Table.Th>
                     <Table.Th>Latency</Table.Th>
                     <Table.Th>Error</Table.Th>
-                    {checkType === 'widget' && <Table.Th w={40} />}
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -320,15 +271,10 @@ export default function InvestigationPanel({ checkId, checkType }: Investigation
                             {run.error_message ?? '—'}
                           </Text>
                         </Table.Td>
-                        {checkType === 'widget' && (
-                          <Table.Td onClick={(e) => e.stopPropagation()}>
-                            {'has_screenshot' in run && run.has_screenshot && <ScreenshotButton runId={run.id} />}
-                          </Table.Td>
-                        )}
                       </Table.Tr>
                       {expandedRunId === run.id && (
                         <Table.Tr key={`${run.id}-detail`}>
-                          <Table.Td colSpan={checkType === 'widget' ? 5 : 4}>
+                          <Table.Td colSpan={4}>
                             <Stack gap="xs" p="xs">
                               {run.error_message && (
                                 <Group gap="xs" align="flex-start">

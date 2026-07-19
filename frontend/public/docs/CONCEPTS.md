@@ -14,7 +14,7 @@ This document explains the building blocks of AI Admin: what each entity is, how
 | [Rule Sets](#rule-sets) | Multiple invokable prompts in one job |
 | [Workflows](#workflows) | Multi-step pipelines with variable pipeline |
 | [Choosing the Right Pattern](#choosing-the-right-pattern) | Job vs workflow vs chat decision |
-| [Health Monitoring](#health-monitoring) | API and widget health checks |
+| [Health Monitoring](#health-monitoring) | API health checks |
 | [Key Relationships](#key-relationships) | Quick reference diagram |
 
 ---
@@ -430,7 +430,7 @@ Pair with `POST /api/processing-jobs/:id/eval` to run golden test cases before p
 
 > **Summary:** API-based and browser-based health checks with profiles, runs, incidents, and uptime dashboards.
 
-AI Admin includes a built-in health monitoring system that continuously verifies your AI providers and embedded chat widgets are operational. It tracks uptime, detects outages, and surfaces failure patterns — all scoped to the workspace like everything else.
+AI Admin includes a built-in health monitoring system that continuously verifies your AI providers are operational. It tracks uptime, detects outages, and surfaces failure patterns — all scoped to the workspace like everything else.
 
 ### How the Monitoring Stack Fits Together
 
@@ -445,7 +445,6 @@ Workspace
  │    ├── Runs              (individual check executions)
  │    └── Incidents         (outage tracking with state machine)
  │
- └── Widget Health Checks   (Puppeteer-based browser automation)
       ├── Runs              (individual check executions + screenshots)
       └── Incidents         (outage tracking with state machine)
 ```
@@ -505,39 +504,14 @@ A **health check** is a scheduled API-based monitor. It periodically sends a tes
 
 **Local / long-running server:** An in-process scheduler polls every 60 seconds, compares `last_run_at` against each check's cadence, and runs due checks. During an active incident, the outage cadence is used instead, enabling more frequent probing while the provider is down.
 
-**Serverless (Vercel):** The in-process scheduler is disabled. Due checks run only when an external cron hits `GET /api/cron/tick/health` or `GET /api/cron/tick/widget` with `Authorization: Bearer CRON_SECRET`. See [API.md — Scheduled runs](API.md#scheduled-runs-vercel-cron). Manual runs remain available via `POST /api/health-checks/:id/run`.
+**Serverless (Vercel):** The in-process scheduler is disabled. Due checks run only when an external cron hits `GET /api/cron/tick/health` with `Authorization: Bearer CRON_SECRET`. See [API.md — Scheduled runs](API.md#scheduled-runs-vercel-cron). Manual runs remain available via `POST /api/health-checks/:id/run`.
 
 ---
 
-### Widget Health Checks (Browser-Based)
-
-A **widget health check** uses Puppeteer to automate a real browser session against an embedded chat widget. This catches issues that API-only checks miss: broken iframes, Shadow DOM rendering failures, JavaScript errors, and unresponsive send buttons.
-
-| Field | Purpose |
-|-------|---------|
-| **Name** | Human-readable label |
-| **URL** | The page containing the chat widget |
-| **Test Message** | The message typed into the widget's input field |
-| **Shadow Host Selector** | CSS selector for the Shadow DOM host element |
-| **Launcher Selector** | CSS selector for the widget's open/launch button |
-| **Iframe Selector** | CSS selector for the widget's iframe (if applicable) |
-| **Input Selector** | CSS selector for the text input inside the widget |
-| **Send Selector** | CSS selector for the send button |
-| **Response Selector** | CSS selector for the response container |
-| **Error Patterns** | Array of strings to detect in the response as errors (up to 20) |
-| **Page Load Timeout** | How long to wait for the page to load (5s–600s) |
-| **Response Timeout** | How long to wait for a reply after sending (10s–600s) |
-| **Capture Screenshot** | Whether to save a screenshot on failure |
-| **Max Retries** | How many retries before marking a failure (1–3) |
-| **Cadence / Outage Cadence** | Same scheduling model as API health checks |
-
-Widget checks support Shadow DOM traversal — the checker can pierce a shadow root to find the widget's internal elements. Screenshots captured on failure are uploaded to Supabase Storage (`widget-hc-screenshots` bucket) and stripped from list responses to keep payloads small. Each run includes a `has_screenshot` flag; retrieve the image via a dedicated endpoint that returns a time-limited signed URL.
-
----
 
 ### Runs
 
-A **run** is a single execution of a health check (API or widget). Every run records:
+A **run** is a single execution of a health check. Every run records:
 
 | Field | Purpose |
 |-------|---------|
@@ -545,10 +519,9 @@ A **run** is a single execution of a health check (API or widget). Every run rec
 | **Response Time (ms)** | End-to-end latency of the check |
 | **Error Message** | Description of the failure (null on pass) |
 | **Raw Response** | The AI's reply (for API checks) |
-| **Screenshot** | PNG uploaded to Supabase Storage at failure time (widget checks only; retrieved via signed URL) |
 | **Created At** | When the run was recorded |
 
-Run history supports server-side filtering by status, date range, limit, and offset. Query parameters are validated with Zod schemas. Daily aggregation RPCs (`hc_daily_run_summary`, `widget_hc_daily_run_summary`) pre-compute pass/fail/timeout/error counts per day for dashboard visualizations.
+Run history supports server-side filtering by status, date range, limit, and offset. Query parameters are validated with Zod schemas. Daily aggregation RPC (`hc_daily_run_summary`) pre-compute pass/fail/timeout/error counts per day for dashboard visualizations.
 
 ---
 
@@ -599,7 +572,7 @@ The health monitoring dashboard provides at-a-glance status and historical analy
 | **Down** | Last run failed, or an incident is currently open |
 | **Unknown** | No runs recorded yet |
 
-This logic lives in a shared `computeHealthStatus()` function used by both API and widget health check routes.
+This logic lives in a shared `computeHealthStatus()` function used by health check routes.
 
 **Uptime History** — Daily run aggregates over a configurable window (up to 365 days), with per-check uptime percentages. Visualized as a heatmap on the frontend.
 
@@ -622,7 +595,6 @@ This logic lives in a shared `computeHealthStatus()` function used by both API a
 - A **provider key** gives the health checker its own credentials for a provider
 - A **health check profile** identifies which model/agent to probe
 - A **health check** schedules periodic API probes against a profile
-- A **widget health check** schedules browser-based probes against an embedded widget
 - **Runs** record each individual check execution
 - **Incidents** track outage windows from first failure to recovery
 - A **workspace** owns all of the above and isolates them from other teams

@@ -44,7 +44,7 @@ Constants: `backend/src/constants/workspace-roles.ts` (`WORKSPACE_ROLES`, `WORKS
 AI Admin includes a built-in health monitoring system for your AI providers and embedded chat widgets.
 
 - **API Health Checks** — Periodically send a test message to each AI model/agent and verify a valid response. Configurable cadence with faster probing during outages.
-- **Widget Health Checks** — Puppeteer-based browser automation that opens your chat widget, sends a message through the real UI, and checks for a response. Supports Shadow DOM traversal, configurable CSS selectors, and failure screenshots.
+- **API Health Checks** — Continuously verify AI providers and profiles with scheduled probes, incident tracking, and uptime dashboards.
 - **Incident Tracking** — Automatic outage detection with a state machine that opens an incident on first failure and resolves it on recovery. Tracks duration and failure counts.
 - **Dashboard & Analytics** — Per-check health status (healthy / degraded / down / unknown), uptime heatmaps over 365 days, and failure pattern analysis grouped by error message and hour of day.
 
