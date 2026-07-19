@@ -91,7 +91,6 @@ function runStatusColor(status: string): string {
   }
 }
 
-
 function semaphoreOrder(s: string): number {
   switch (s) {
     case 'red':
@@ -431,7 +430,6 @@ export default function HealthDashboardPage({
               {items.map((item) => (
                 <Card key={item.id} withBorder shadow="sm" padding="md" radius="md">
                   <Stack gap="sm">
-
                     <Group justify="space-between" align="flex-start">
                       <Group gap="sm" wrap="nowrap">
                         <div
@@ -513,13 +511,7 @@ export default function HealthDashboardPage({
                       <Button
                         variant="subtle"
                         size="compact-xs"
-                        rightSection={
-                          expanded[item.id] ? (
-                            <IconChevronUp size={14} />
-                          ) : (
-                            <IconChevronDown size={14} />
-                          )
-                        }
+                        rightSection={expanded[item.id] ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
                         onClick={() => toggleExpand(item.id)}
                       >
                         Recent runs
