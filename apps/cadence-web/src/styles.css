@@ -43,18 +43,29 @@ svg { stroke-width: 1.9; } .stroke { stroke: currentColor; fill: none; }
 .app { flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; min-height: 0; }
 
 /* Real phone: drop the fake iPhone chrome and fill the viewport like a native app.
-   Desktop keeps the centered 390×760 mockup for demos / X-ray. */
+   Desktop keeps the centered 390×760 mockup for demos / X-ray.
+
+   Use 100svh (not dvh): on iOS Safari, dvh is taller than the visible area while the
+   URL/tool bars are showing, so the document can still scroll. position:fixed on body
+   is what actually kills rubber-band page scroll on iOS. */
 @media (max-width: 480px) {
-  html, body {
+  html {
     height: 100%;
-    height: 100dvh;
-    max-height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
   }
   body {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    height: 100svh;
+    max-height: 100svh;
     min-height: 0;
     padding: 0;
+    margin: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
     align-items: stretch;
     justify-content: stretch;
   }
@@ -62,18 +73,20 @@ svg { stroke-width: 1.9; } .stroke { stroke: currentColor; fill: none; }
     display: block;
     width: 100%;
     height: 100%;
-    height: 100dvh;
     overflow: hidden;
   }
   .device {
+    position: fixed;
+    inset: 0;
     width: 100%;
     height: 100%;
-    height: 100dvh;
-    max-height: 100dvh;
+    height: 100svh;
+    max-height: 100svh;
     border-radius: 0;
     padding: 0;
     background: none;
     box-shadow: none;
+    overflow: hidden;
   }
   .glass {
     inset: 0;
@@ -90,6 +103,13 @@ svg { stroke-width: 1.9; } .stroke { stroke: currentColor; fill: none; }
     width: 100%;
     height: 100%;
     gap: 0;
+  }
+  /* Keep flick-scroll inside chat/lists — don't chain it up to the document. */
+  .chat,
+  .scrollbody,
+  .welcome,
+  .sheet-body {
+    overscroll-behavior: contain;
   }
 }
 
