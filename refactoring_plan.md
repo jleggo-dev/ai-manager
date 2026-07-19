@@ -378,7 +378,12 @@ per item / per area intro).
 >   API-key create/copy/revoke tests + `isAdminRole` gate on create/delete (matches backend).
 > - **FE-06** — split `services/api.ts` into domain modules + barrel (`refactor/fe-06-split-api-client`).
 >
-> Not yet started: FE-03, FE-10, API-04, API-06, WEB-01..04, CROSS-01, CROSS-03.
+> - **CROSS-01** — `Broker`→`Scribe` rename across cadence-shared / cadence-api / cadence-web
+>   (+ core package header) (PR #30). DevTrace fields `scribeSelect`/`scribeSummarize`;
+>   `broker-contracts.ts` → `scribe-contracts.ts`. Persisted mode strings `broker-curated`/
+>   `broker-partial` and profile slug `cadence-broker` left unchanged (audit trail / live IDs).
+>
+> Not yet started: FE-03, FE-10, API-04, API-06, WEB-01..04, CROSS-03.
 
 #### Backend (report 01)
 
@@ -434,24 +439,20 @@ per item / per area intro).
 
 ### 4.3 Cross-cutting items (span multiple areas — assign to one owner, coordinate with affected area owners)
 
-#### CROSS-01 — `Broker` → `Scribe` rename [P1]
+#### CROSS-01 — `Broker` → `Scribe` rename [P1] — ✅ **Done** (`refactor/cross-01-broker-to-scribe`, PR #30)
 
-**Current problem:** BRAND.md's `Broker`→`Scribe` rename (internal-name-only; dated 2026-07-04) has
-propagated to **none** of the three packages that reference the concept: `apps/cadence-web`
-(`lib/api.ts:508-509`'s `DevTrace.brokerSelect`/`brokerSummarize`, `DevPanel.tsx:133`),
-`apps/cadence-api` (`services/dev-trace.ts` and ~18 other files, per grep), and
-`packages/cadence-shared` (module-level JSDoc still titled "§C4 Broker job contracts"). Everywhere
-else `Broker` is used correctly per CLAUDE.md's table (it's the retained internal/code name — only
-the UI-facing `Scribe` name was supposed to move, and it has, correctly, everywhere user-visible).
-The specific violation is the **exported, consumed type field names** (`brokerSelect`/
-`brokerSummarize`), which are dev-only-surfaced today (`?dev=1`) but will get harder to fix the more
-call sites accrue.
+**Current problem:** BRAND.md's `Broker`→`Scribe` rename (canonical internal name; dated 2026-07-04)
+had not propagated to the three packages that export/consume the concept: `apps/cadence-web`
+(`DevTrace.brokerSelect`/`brokerSummarize`, DevPanel "Broker responses"), `apps/cadence-api`
+(`dev-trace.ts` producer + `context-pack.ts`), and `packages/cadence-shared` (JSDoc / `broker-contracts.ts`).
 
-**Migration steps:** one coordinated PR (or tightly-sequenced set) touching all three packages at
-once: rename the `DevTrace` fields in `packages/cadence-shared`, update `apps/cadence-api`'s
-`dev-trace.ts` producer, update `apps/cadence-web`'s `lib/api.ts` consumer + `DevPanel.tsx`'s
-render. Do this as its own item, separate from WEB-02's mechanical `lib/api.ts` file-split, so the
-rename's diff is reviewable on its own.
+**Done notes:** Coordinated rename in one PR: `DevTrace.scribeSelect`/`scribeSummarize` (api + web),
+producer helpers `scribeSelect`/`scribeSummarize` in `context-pack.ts`, DevPanel section
+"4 · Scribe responses", `broker-contracts.ts` → `scribe-contracts.ts` + barrel/package descriptions,
+`@ai-admin/core` engine banner. Left unchanged on purpose: persisted pack mode strings
+(`broker-curated` / `broker-partial`), AI Admin profile slug `cadence-broker`, and narrative docs
+(`/docs/cadence/PLAN.md` historical Broker wording). Verify: cadence-shared 3/3 vitest; tsc clean
+on shared/api/web/core.
 
 **Priority/Effort/Risk:** P1 / S once scoped / Low (dev-only surface today — fix while the blast
 radius is small).
@@ -747,8 +748,9 @@ This plan is "done" (or rather, has earned the right to be considered a complete
       their top-5 highest-risk paths per reports 03/04's "first N tests" lists.
 - [ ] SD2/SD3 (frontend/backend type drift) no longer reproduces — verified by the contract-test
       added under FE-10, not just by manual inspection.
-- [ ] `Broker`→`Scribe` rename (CROSS-01) is complete across all three packages, verified by a
-      repo-wide grep returning zero remaining `broker`-named exports.
+- [x] `Broker`→`Scribe` rename (CROSS-01) is complete across DevTrace exports + shared contracts
+      (`scribeSelect`/`scribeSummarize`, `scribe-contracts.ts`); persisted `broker-*` mode strings
+      and `cadence-broker` profile slug intentionally retained.
 - [ ] This document's status tracking (§6.5) shows every P0/P1 item as `Verified`.
 
 ---

@@ -538,8 +538,8 @@ export interface DevTrace {
     data: Record<string, unknown>;
     rendered: string;
   } | null;
-  brokerSelect?: { calls: Array<{ fn: string; params: Record<string, unknown> }>; reason: string } | null;
-  brokerSummarize?: { output: string } | null;
+  scribeSelect?: { calls: Array<{ fn: string; params: Record<string, unknown> }>; reason: string } | null;
+  scribeSummarize?: { output: string } | null;
   turnSelect?: {
     calls: Array<{ fn: string; params: Record<string, unknown> }>;
     reason: string;

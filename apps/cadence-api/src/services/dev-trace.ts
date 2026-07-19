@@ -14,9 +14,9 @@ export interface DevTrace {
     data: Record<string, unknown>;
     rendered: string;
   } | null;
-  brokerSelect?: { calls: Array<{ fn: string; params: Record<string, unknown> }>; reason: string } | null;
-  brokerSummarize?: { output: string } | null;
-  /** Per-turn just-in-time retrieval (§4.3): which registry fns the Broker chose for THIS turn,
+  scribeSelect?: { calls: Array<{ fn: string; params: Record<string, unknown> }>; reason: string } | null;
+  scribeSummarize?: { output: string } | null;
+  /** Per-turn just-in-time retrieval (§4.3): which registry fns the Scribe chose for THIS turn,
    *  whether anything was injected, and the executed provenance (fn + rows). Recorded every turn
    *  — including the empty case — so the X-ray shows the turn WAS assessed. */
   turnSelect?: {
@@ -24,7 +24,7 @@ export interface DevTrace {
     reason: string;
     injected: boolean;
     provenance: Array<{ fn: string; rows: number; params: Record<string, unknown>; at?: string }>;
-    fallback?: boolean; // the Broker select failed and we skipped just-in-time retrieval
+    fallback?: boolean; // the Scribe select failed and we skipped just-in-time retrieval
   } | null;
   coach?: {
     user: string;
@@ -49,7 +49,7 @@ export function getTrace(userId: string): DevTrace | null {
 
 /** Drop a user's in-memory trace — called on dev reset so the X-ray doesn't show stale activity
  *  from before the wipe (the DB tables clear, but this map lives in-process and would otherwise
- *  keep serving the pre-reset context/prompts/coach/broker cards). */
+ *  keep serving the pre-reset context/prompts/coach/scribe cards). */
 export function clearTrace(userId: string): void {
   traces.delete(userId);
 }
