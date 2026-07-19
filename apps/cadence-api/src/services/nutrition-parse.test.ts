@@ -3,7 +3,7 @@
  * Covers parse-meal shaping (valid / malformed / partial / confidence clamp) and wantsTargets.
  */
 import { describe, it, expect } from 'vitest';
-import { parseMealResult, wantsTargets } from './nutrition.ts';
+import { parseMealResult, wantsTargets } from './nutrition-parse.ts';
 
 describe('parseMealResult', () => {
   it('shapes a well-formed parse-meal blob', () => {
