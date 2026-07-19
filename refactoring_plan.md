@@ -348,8 +348,11 @@ per item / per area intro).
 >   `packages/core` incremental parser + cadence-api `coach.ts` / **API-03**.
 > - **PKG-02** — split `packages/cadence-shared/src/index.ts` into 11 typed modules + barrel
 >   (PR #19). Public `@cadence/shared` import path unchanged.
+> - **FE-08** — extract `useHealthCheckProfilesData` from `HealthCheckProfilesPage` (branch
+>   `refactor/fe-08-use-health-check-profiles-data`). Pure helpers in `lib/health-check-profiles.ts`;
+>   page is a thin render shell; first page/hook tests added.
 >
-> Not yet started: BE-05..06, FE-03..06, FE-08, FE-10, API-03..04, API-06, WEB-01..04, CROSS-01..03.
+> Not yet started: BE-05..06, FE-03..06, FE-10, API-03..04, API-06, WEB-01..04, CROSS-01..03.
 
 #### Backend (report 01)
 
@@ -370,7 +373,7 @@ per item / per area intro).
 | **FE-05** | Split `HealthCheckWidgetPage.tsx` (820 lines); consolidate its `STATUS_COLORS` duplication (3rd occurrence, see FE-11) | M | Low | |
 | **FE-06** | Split `services/api.ts` (815 lines, 100 functions) into `services/api/{providers,ai-profiles,processing-jobs,workflows,health-checks,settings,workspaces}.ts` behind a barrel | M | Low | Should land before/alongside FE-01/FE-02 so their new hooks have a non-monolithic home |
 | **FE-07** ✅ **Done** (`refactor/fe-07-health-aggregation`) | Extract `HealthDashboardPage.tsx`'s aggregation `useMemo` blocks into a pure, independently-testable `lib/health-aggregation.ts` | S-M | Low | **Done notes:** pure helpers in `frontend/src/lib/health-aggregation.ts` (`aggregateUptimeTotals`, `sortHistoryByUptimeAsc`, `countActiveIncidents`, `overallUptimePercent`, `formatOverallUptimePercent`); page keeps thin `useMemo` wrappers. Detail-view `sortedItems` left in the page (UI sort, not cross-check rollup). Unit tests in `health-aggregation.test.ts`. |
-| **FE-08** | Extract a `useHealthCheckProfilesData` hook from `HealthCheckProfilesPage.tsx` (624 lines, no tests) | M | Low | |
+| **FE-08** ✅ **Done** (`refactor/fe-08-use-health-check-profiles-data`) | Extract a `useHealthCheckProfilesData` hook from `HealthCheckProfilesPage.tsx` (624 lines, no tests) | M | Low | **Done notes:** hook owns list CRUD, form state, key auto-resolve, and agent/model fetching (`hooks/useHealthCheckProfilesData.ts`); pure helpers in `lib/health-check-profiles.ts` (`filterEligibleProviders`, `filterKeysForProvider`, `buildAiOptions`, `buildModelOptions`, …); page is a thin render shell (~340 lines, dropped from eslint `max-lines` override). Tests: `health-check-profiles.test.ts` + page smoke (list/empty/create modal/delete). Structural only — no behavior changes beyond `aria-label` on edit/delete actions. |
 | **FE-09** ✅ **Done** (`refactor/fe-09-auth-listener-cleanup`, PR #12) | Fix `lib/auth-session.ts`'s unsubscribed `onAuthStateChange` listener (SD5, still valid) — return the unsubscribe handle, wire it into `App.tsx`'s effect cleanup | S | Low | **Done notes:** `initAuthSession` now returns `() => void` (noop when bypass/unconfigured); App effect stores the handle and unsubscribes on cleanup, including the cancelled-before-resolve race for StrictMode/HMR. Tests: auth-session unsubscribe + App unmount. Scope stayed frontend auth-session + App only. |
 | **FE-10** | Fix frontend/backend type drift — `CallingApplication`/`DiagnosticLog` vs. their backend `*Row` counterparts (SD2/SD3, confirmed still open, grown since original review) | S(fix)/M(if backend coordination needed) | Medium (shared contract) | **Cross-cutting — coordinate with whoever owns BE-01's `types.ts` split.** Needs a product decision: are the frontend's extra `CallingApplication` fields a frontend bug or a missing backend column? Add a lightweight contract test afterward so this can't silently regress again. |
 
