@@ -1,0 +1,237 @@
+/**
+ * API-04 — integration tests for nutrition orchestration (logMeal fallback + provisional
+ * gating; getBaselineRead day-count cost-control gate + propose_targets gating).
+ *
+ * Same harness as API-01: real Cadence Postgres + mocked AI seam (`ai/aim.ts`). Skips cleanly
+ * when no CADENCE_* DB env is configured.
+ */
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.env') });
+
+const HAS_DB = !!(process.env.CADENCE_DATABASE_URL || process.env.CADENCE_DB_PASSWORD);
+const d = HAS_DB ? describe : describe.skip;
+
+/** Dedicated synthetic user — isolated from plan-commit and demo accounts. */
+const USER = '00000000-0000-4000-a000-00000000a104';
+
+vi.mock('../ai/aim.ts', () => ({ runJob: vi.fn(), runJobBySlug: vi.fn() }));
+
+let sql: (typeof import('../db/sql.ts'))['sql'];
+let logMeal: (typeof import('./nutrition.ts'))['logMeal'];
+let getBaselineRead: (typeof import('./nutrition.ts'))['getBaselineRead'];
+let insertNutritionLog: (typeof import('../repos/nutrition.ts'))['insertNutritionLog'];
+let listNutritionLogs: (typeof import('../repos/nutrition.ts'))['listNutritionLogs'];
+let insertGoal: (typeof import('../repos/goals.ts'))['insertGoal'];
+let setMacroTargets: (typeof import('../repos/users.ts'))['setMacroTargets'];
+let resetUserData: (typeof import('./dev-reset.ts'))['resetUserData'];
+let runJobBySlug: ReturnType<typeof vi.fn>;
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** YYYY-MM-DD for `daysAgo` calendar days before today (UTC). */
+function daysAgo(n: number): string {
+  return new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+}
+
+async function seedLoggedDays(count: number): Promise<void> {
+  for (let i = 0; i < count; i++) {
+    await insertNutritionLog(USER, {
+      date: daysAgo(i),
+      meal: 'lunch',
+      items: [{ name: `meal-day-${i}` }],
+      input_method: 'text',
+      raw_text: `seed day ${i}`,
+      macros: { kcal: 500, protein_g: 30, source: 'user' },
+      provisional: false,
+    });
+  }
+}
+
+d('API-04 — nutrition service (DB)', () => {
+  beforeAll(async () => {
+    ({ sql } = await import('../db/sql.ts'));
+    ({ logMeal, getBaselineRead } = await import('./nutrition.ts'));
+    ({ insertNutritionLog, listNutritionLogs } = await import('../repos/nutrition.ts'));
+    ({ insertGoal } = await import('../repos/goals.ts'));
+    ({ setMacroTargets } = await import('../repos/users.ts'));
+    ({ resetUserData } = await import('./dev-reset.ts'));
+    ({ runJobBySlug } = (await import('../ai/aim.ts')) as unknown as {
+      runJobBySlug: ReturnType<typeof vi.fn>;
+    });
+  });
+
+  afterAll(async () => {
+    if (resetUserData) await resetUserData(USER);
+    if (sql) await sql.end({ timeout: 5 });
+  });
+
+  beforeEach(async () => {
+    await resetUserData(USER);
+  });
+
+  afterEach(() => {
+    runJobBySlug.mockReset();
+  });
+
+  it('logMeal persists raw text with empty items when parse-meal fails (never lose their words)', async () => {
+    runJobBySlug.mockResolvedValueOnce({ formatted: 'NOT_JSON{{{' });
+
+    const row = await logMeal(USER, { text: 'oats and berries', meal: 'breakfast', date: today() });
+
+    expect(row.raw_text).toBe('oats and berries');
+    expect(row.meal).toBe('breakfast');
+    expect(row.items).toEqual([]);
+    expect(row.macros).toEqual({});
+    expect(row.provisional).toBe(false);
+    expect(row.ai_confidence).toBeNull();
+
+    const listed = await listNutritionLogs(USER, today(), today());
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.raw_text).toBe('oats and berries');
+  });
+
+  it('logMeal marks low-confidence macros provisional (< 0.5)', async () => {
+    runJobBySlug.mockResolvedValueOnce({
+      formatted: JSON.stringify({
+        meal: 'lunch',
+        items: [{ name: 'burrito' }],
+        confidence: 0.3,
+        est_macros: { kcal: 700, protein_g: 35, carbs_g: 80, fat_g: 25 },
+      }),
+    });
+
+    const row = await logMeal(USER, { text: 'a burrito', date: today() });
+    expect(row.provisional).toBe(true);
+    expect(row.ai_confidence).toBe(0.3);
+    expect(row.macros?.kcal).toBe(700);
+    expect(row.macros?.source).toBe('ai');
+    expect(row.items).toEqual([{ name: 'burrito' }]);
+  });
+
+  it('logMeal does not mark high-confidence macros provisional', async () => {
+    runJobBySlug.mockResolvedValueOnce({
+      formatted: JSON.stringify({
+        meal: 'dinner',
+        items: [{ name: 'salmon' }],
+        confidence: 0.9,
+        est_macros: { kcal: 450, protein_g: 40 },
+      }),
+    });
+
+    const row = await logMeal(USER, { text: 'salmon', date: today() });
+    expect(row.provisional).toBe(false);
+    expect(row.ai_confidence).toBe(0.9);
+  });
+
+  it('getBaselineRead returns ready:false under 7 logged days and never calls the LLM', async () => {
+    await seedLoggedDays(3);
+
+    const result = await getBaselineRead(USER);
+
+    expect(result).toEqual({ ready: false, days_logged: 3, days_needed: 7 });
+    expect(runJobBySlug).not.toHaveBeenCalled();
+  });
+
+  it('getBaselineRead proposes targets only when wantsTargets and none are set', async () => {
+    await seedLoggedDays(7);
+    await insertGoal(USER, {
+      title: 'Eat more protein',
+      area: 'nourishment',
+      type: 'milestone',
+      status: 'confirmed',
+      measure: { metric: 'protein', target: 140, unit: 'g' },
+      timeframe: {},
+      source: 'manual',
+    });
+
+    runJobBySlug.mockResolvedValueOnce({
+      formatted: JSON.stringify({
+        read: 'You usually skip breakfast.',
+        suggestion: 'Add protein at the first meal.',
+        rationale: 'Seven days of sparse mornings.',
+        proposed_targets: { kcal: 2200, protein_g: 140, carbs_g: 220, fat_g: 70 },
+        targets_rationale: 'Anchored to your logged volume.',
+      }),
+    });
+
+    const result = await getBaselineRead(USER);
+    expect(result.ready).toBe(true);
+    if (!result.ready) throw new Error('expected ready');
+    expect(result.proposed_targets?.kcal).toBe(2200);
+    expect(result.targets_rationale).toBeTruthy();
+
+    expect(runJobBySlug).toHaveBeenCalledTimes(1);
+    const vars = runJobBySlug.mock.calls[0]?.[2] as { propose_targets?: string };
+    expect(vars.propose_targets).toBe('yes');
+  });
+
+  it('getBaselineRead skips proposing when targets already exist (Settings owns edits)', async () => {
+    await seedLoggedDays(7);
+    await insertGoal(USER, {
+      title: 'Eat more protein',
+      area: 'nourishment',
+      type: 'milestone',
+      status: 'confirmed',
+      measure: { metric: 'protein', target: 140, unit: 'g' },
+      timeframe: {},
+      source: 'manual',
+    });
+    await setMacroTargets(USER, { kcal: 2000, protein_g: 120 });
+
+    runJobBySlug.mockResolvedValueOnce({
+      formatted: JSON.stringify({
+        read: 'Steady logging.',
+        suggestion: 'Keep the midday protein habit.',
+        rationale: 'Already on targets.',
+        proposed_targets: { kcal: 9999, protein_g: 200 },
+        targets_rationale: 'should be discarded',
+      }),
+    });
+
+    const result = await getBaselineRead(USER);
+    expect(result.ready).toBe(true);
+    if (!result.ready) throw new Error('expected ready');
+    expect(result.proposed_targets).toBeNull();
+    expect(result.targets_rationale).toBeNull();
+
+    const vars = runJobBySlug.mock.calls[0]?.[2] as { propose_targets?: string };
+    expect(vars.propose_targets).toBe('no');
+  });
+
+  it('getBaselineRead skips proposing when no eating/weight goal warrants targets', async () => {
+    await seedLoggedDays(7);
+    await insertGoal(USER, {
+      title: 'Run a 5k',
+      area: 'movement',
+      type: 'target',
+      status: 'confirmed',
+      measure: { metric: 'distance', target: 5, unit: 'km' },
+      timeframe: {},
+      source: 'manual',
+    });
+
+    runJobBySlug.mockResolvedValueOnce({
+      formatted: JSON.stringify({
+        read: 'Movement-first week.',
+        suggestion: 'Keep the easy runs.',
+        rationale: 'No nutrition goal.',
+        proposed_targets: { kcal: 2200, protein_g: 140 },
+        targets_rationale: 'should be discarded',
+      }),
+    });
+
+    const result = await getBaselineRead(USER);
+    expect(result.ready).toBe(true);
+    if (!result.ready) throw new Error('expected ready');
+    expect(result.proposed_targets).toBeNull();
+
+    const vars = runJobBySlug.mock.calls[0]?.[2] as { propose_targets?: string };
+    expect(vars.propose_targets).toBe('no');
+  });
+});

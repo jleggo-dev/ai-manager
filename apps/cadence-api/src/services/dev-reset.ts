@@ -44,9 +44,10 @@ export async function resetUserData(userId: string): Promise<void> {
     await sql`delete from cadence.${sql(t)} where user_id = ${userId}`;
   }
   // name is NOT NULL (default ''); "" is treated as "no name captured" by the context pack.
+  // macro_targets cleared too — observe phase starts with no rings / no "left".
   await sql`
     update cadence.users
-    set name = '', baseline = ${json({})}, last_assessed_at = null, pending_proposal = null,
-        pending_plan = null, updated_at = now()
+    set name = '', baseline = ${json({})}, macro_targets = ${json({})},
+        last_assessed_at = null, pending_proposal = null, pending_plan = null, updated_at = now()
     where id = ${userId}`;
 }
