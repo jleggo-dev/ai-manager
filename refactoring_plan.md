@@ -24,21 +24,20 @@ source report that contains the full current-problem/target-design/migration-ste
 
 ## 0. TL;DR for anyone about to start work
 
-1. **Nothing in this repo is on fire.** No file mixes 3+ responsibilities *and* has a live
-   security/correctness defect. The debt is concentrated (6-7 files) and the newer product
-   (Cadence) is unusually clean for its age. This is a tractable refactor, not a rewrite.
-2. **The scariest finding isn't a file, it's the safety net.** Root `package.json`'s `workspaces`
-   array excludes 100% of Cadence's code. `npm install` on a clean machine would delete
-   `@ai-admin/core`/`@cadence/shared`/`@cadence/api`/`@cadence/web`. No CI exists at all. Every
-   other item in this plan is protected by nothing until **Phase 0 (§5.0)** lands.
-3. **Five files carry most of the code-level risk:** `backend/src/ai-manager/index.ts` (2,071
-   lines), `frontend/src/components/organisms/ProcessingJobManager.tsx` (5,497 lines),
-   `frontend/src/components/organisms/AiProfileManager.tsx` (2,466 lines), plus the RBAC gap (18 of
-   21 backend route files unguarded) and the frontend/backend type-drift (SD2/SD3, still open).
-4. **Cadence's biggest risk isn't code quality, it's coverage.** `apps/cadence-web` has zero test
-   files; `apps/cadence-api` has one. Both are also invisible to CI (see #2).
-5. Read §5 for the phased backlog, §6 for how the actual refactor work should be assigned,
-   reviewed, and merged by multiple agents under supervision.
+1. **Nothing in this repo is on fire.** Phase 0 (workspaces + CI + lint/hooks) and Phase 1 P0s
+   (BE-01 / FE-01 / FE-02) are merged. Most Phase 2 P1s through batches 3–6 are also Done
+   (see §4.2 progress). Remaining P1 work is concentrated in Cadence web + a few cross-cuts.
+2. **Safety net exists, but is still report-only.** INFRA-01…05 landed (PRs #3–#5). Path-filtered
+   CI runs on every PR; treat red jobs as merge blockers even though branch protection may not
+   yet *require* the check. **INFRA-08** (repo-wide `max-lines` gates) is open as PR #23 — not
+   merged to `feat/cadence` yet.
+3. **Still-open product risk:** frontend/backend type drift (SD2/SD3 → **FE-10**). The old
+   monoliths and RBAC gap are gone (splits + BE-03 Done).
+4. **Cadence coverage is improving but uneven.** `apps/cadence-api` now has real suites (plan
+   commit, nutrition, coach-stream, aim seam). `apps/cadence-web` still has almost no feature
+   tests — WEB-01…04 are the remaining Phase 2 web P1s.
+5. Read §4.2 for the accurate remaining backlog, §5 for durable goals, §6 for multi-agent
+   orchestration.
 6. **CI gate between batches:** do not start the next parallel batch (and do not merge) while
    integration-branch / PR CI is red. INFRA-02 "report-only" means GitHub branch protection may
    not yet *require* the check — orchestrators and supervisors must still treat failing jobs as
@@ -103,16 +102,16 @@ numbers verbatim.
 
 ## 3. Cross-Cutting Findings (span 2+ areas — call these out explicitly so no implementer re-derives them in isolation)
 
-| Finding | Where it shows up | Consolidated as |
-|---|---|---|
-| **Root `package.json` workspaces exclude all of Cadence; `npm install` would delete Cadence's linked packages** | Reports 05 §1, 06 §1 (independently confirmed) | **INFRA-01** |
-| **Frontend/backend type drift (`CallingApplication`/`DiagnosticLog` vs. their `*Row` counterparts)** — SD2/SD3, confirmed still open and grown (+12-13%) since the original review | Reports 01 §5, 02 §3/§5, 05 §5 | **FE-10** |
-| **`Broker` → `Scribe` rename (dated 2026-07-04 per BRAND.md) never propagated** | Report 03 §4 (`registry.ts`), Report 04 §4/§5 (`lib/api.ts`, `DevPanel.tsx`), Report 05 (`cadence-shared` JSDoc still says "Broker job contracts") | **CROSS-01** |
-| **SSE line-buffering/parsing logic independently reimplemented 3+ times**, each guarding the same TCP-chunk-split bug class | Report 01 §4 (4× in `chat-sessions.ts` + `v2-stream-events.ts`), Report 03 §3 (`coach.ts`), Report 05 §3 (`packages/client`'s `parseSseText` unused by `coach.ts`) | **CROSS-02** |
-| **Template-interpolation logic reimplemented independently** instead of using canonical helpers | Report 02 §1.4/§4.1 (3× inside frontend) | tracked as FE-01/FE-03 sub-tasks, no separate cross-repo instance found |
-| **No data-fetching cache layer anywhere React is used** — hand-rolled `useState`+`useEffect`+manual error notification, duplicated fetches | Report 02 §6 (AI Admin frontend), Report 04 §6 (Cadence web) | **CROSS-03** |
-| **Zero automated test coverage exactly where business/security risk is highest** — the biggest files, the plan-commit path, the auth listener, the AI Admin seam | All six reports | pervasive theme, tracked per-item below with explicit test-first requirements |
-| **Two-Supabase-projects architecture (AI Admin's own project vs. Cadence's reused "Spartan Tracker" project)** has implications for CI secret-scoping | Report 06 §4.4 | folded into **INFRA-02**'s design |
+| Finding | Where it shows up | Consolidated as | Status |
+|---|---|---|---|
+| **Root `package.json` workspaces exclude all of Cadence; `npm install` would delete Cadence's linked packages** | Reports 05 §1, 06 §1 (independently confirmed) | **INFRA-01** | ✅ Done (PR #3) |
+| **Frontend/backend type drift (`CallingApplication`/`DiagnosticLog` vs. their `*Row` counterparts)** — SD2/SD3 | Reports 01 §5, 02 §3/§5, 05 §5 | **FE-10** | **Still open** |
+| **`Broker` → `Scribe` rename (exported DevTrace field names + shared contracts module)** | Report 03/04/05 | **CROSS-01** | ✅ Done (PR #30) |
+| **SSE line-buffering/parsing logic independently reimplemented 3+ times** | Reports 01/03/05 | **CROSS-02** | ✅ Done (BE-02 #18 + API-03 #25) |
+| **Template-interpolation logic reimplemented independently** instead of using canonical helpers | Report 02 §1.4/§4.1 (3× inside frontend) | FE-01/FE-03 sub-tasks | ✅ Done with those items |
+| **No data-fetching cache layer anywhere React is used** — hand-rolled `useState`+`useEffect`+manual error notification, duplicated fetches | Report 02 §6 (AI Admin frontend), Report 04 §6 (Cadence web) | **CROSS-03** | Still open (pilot with WEB-04) |
+| **Zero automated test coverage exactly where business/security risk is highest** | All six reports | pervasive theme | Partially closed (API-01/04/05, FE-09, …); Cadence web still thin |
+| **Two-Supabase-projects architecture** has implications for CI secret-scoping | Report 06 §4.4 | folded into **INFRA-02** | ✅ Done (path-filtered jobs) |
 
 ---
 
@@ -139,6 +138,7 @@ unprotected by any automated gate.** These items are not optional preamble — t
 | **INFRA-03** | Extend root scripts (`--workspaces --if-present`) + add vitest to `apps/cadence-web`, `packages/core`, `packages/cadence-shared` | P1 | S per workspace | Low | INFRA-01 | **Done** (PR #4, merged to `feat/cadence`) |
 | **INFRA-04** | Add ESLint configs to `apps/*`/`packages/*`; align ESLint major versions; add `.prettierrc.json`; expand format globs | P1 | M | Low | INFRA-01 | **Done** (PR #5, merged to `feat/cadence`) |
 | **INFRA-05** | Fix pre-commit hooks — commit an actual `.husky/pre-commit`, expand `lint-staged` globs to cover Cadence | P1 | S | Low | INFRA-04 | **Done** (PR #5, merged to `feat/cadence`) |
+| **INFRA-08** | Repo-wide code-size gates — generalize FE-01's `max-lines` to all workspaces (`eslint.config.sizes.mjs`) + allowlist-as-backlog + `CLAUDE.md` convention | P1 | S | Low | INFRA-04 | **In Review** (PR #23) — not yet on `feat/cadence` |
 
 #### INFRA-01 — Fix workspace wiring [P0]
 
@@ -376,7 +376,8 @@ per item / per area intro).
 >   as BE-02). Characterization tests: core 9/9 + coach-stream 8/8.
 > - **FE-04** — split `SettingsPage` into `pages/settings/*` tab files (`refactor/fe-04-split-settings-page`).
 >   API-key create/copy/revoke tests + `isAdminRole` gate on create/delete (matches backend).
-> - **FE-06** — split `services/api.ts` into domain modules + barrel (`refactor/fe-06-split-api-client`).
+> - **FE-06** — split `services/api.ts` into domain modules + barrel (PR #28).
+> - **BE-06** — split Devs.ai v1 client into per-surface modules (PR #29).
 > - **FE-03** — split `AiMatcherPage` into molecules/hooks/`lib/ai-matcher.ts`; prompt composition
 >   via `lib/interpolate.ts` (`composeMatcherPrompt`). Page dropped from eslint `max-lines` override
 >   (PR #32).
@@ -387,8 +388,20 @@ per item / per area intro).
 > - **API-04** — test-first nutrition backfill: extract `parseMealResult`/`wantsTargets`, unit +
 >   DB integration tests for `logMeal` fallback/provisional and `getBaselineRead` cost-control /
 >   propose gates (`refactor/api-04-nutrition-tests`, PR #33).
+> - **Docs restore** (PR #34) — re-applied FE-03/CROSS-01 progress after #33 squash overwrote the blurb.
 >
-> Not yet started: FE-10, API-06, WEB-01..04, CROSS-03.
+> **Remaining Phase 2 P1 (accurate as of PR #34 + this reconcile):**
+> - **FE-10** — CallingApplication / DiagnosticLog type drift (SD2/SD3); needs product call on extra FE fields
+> - **API-06** — shared `select-and-run` extract + `buildContextPack` resilience test
+> - **WEB-01** (L) — ReviewScreen split + unit-conversion tests (hard blocker)
+> - **WEB-02** (M) — cadence-web `lib/api.ts` domain split (CROSS-01 rename already Done — unblocked)
+> - **WEB-03** (L) — OccurrenceSheet panel split
+> - **WEB-04** (M) — Today/Progress/Plan card dedup (natural CROSS-03 pilot host)
+> - **CROSS-03** — TanStack Query pilot (opportunistic; prefer with WEB-04, not a big-bang)
+>
+> **Recommended batch 7 (3 independent, high-leverage S–M):** **WEB-02** · **API-06** · **FE-10**
+> (if FE-10 product decision blocks, swap in **FE-14** or **WEB-04**). Leave WEB-01/WEB-03 for a
+> dedicated L batch; leave CROSS-03 until WEB-04.
 
 #### Backend (report 01)
 
@@ -411,7 +424,7 @@ per item / per area intro).
 | **FE-07** ✅ **Done** (`refactor/fe-07-health-aggregation`) | Extract `HealthDashboardPage.tsx`'s aggregation `useMemo` blocks into a pure, independently-testable `lib/health-aggregation.ts` | S-M | Low | **Done notes:** pure helpers in `frontend/src/lib/health-aggregation.ts` (`aggregateUptimeTotals`, `sortHistoryByUptimeAsc`, `countActiveIncidents`, `overallUptimePercent`, `formatOverallUptimePercent`); page keeps thin `useMemo` wrappers. Detail-view `sortedItems` left in the page (UI sort, not cross-check rollup). Unit tests in `health-aggregation.test.ts`. |
 | **FE-08** ✅ **Done** (`refactor/fe-08-use-health-check-profiles-data`, PR #20) | Extract a `useHealthCheckProfilesData` hook from `HealthCheckProfilesPage.tsx` (624 lines, no tests) | M | Low | **Done notes:** hook owns list CRUD, form state, key auto-resolve, and agent/model fetching (`hooks/useHealthCheckProfilesData.ts`); pure helpers in `lib/health-check-profiles.ts` (`filterEligibleProviders`, `filterKeysForProvider`, `buildAiOptions`, `buildModelOptions`, …); page is a thin render shell (~340 lines, dropped from eslint `max-lines` override). Tests: `health-check-profiles.test.ts` + page smoke (list/empty/create modal/delete). Structural only — no behavior changes beyond `aria-label` on edit/delete actions. |
 | **FE-09** ✅ **Done** (`refactor/fe-09-auth-listener-cleanup`, PR #12) | Fix `lib/auth-session.ts`'s unsubscribed `onAuthStateChange` listener (SD5, still valid) — return the unsubscribe handle, wire it into `App.tsx`'s effect cleanup | S | Low | **Done notes:** `initAuthSession` now returns `() => void` (noop when bypass/unconfigured); App effect stores the handle and unsubscribes on cleanup, including the cancelled-before-resolve race for StrictMode/HMR. Tests: auth-session unsubscribe + App unmount. Scope stayed frontend auth-session + App only. |
-| **FE-10** | Fix frontend/backend type drift — `CallingApplication`/`DiagnosticLog` vs. their backend `*Row` counterparts (SD2/SD3, confirmed still open, grown since original review) | S(fix)/M(if backend coordination needed) | Medium (shared contract) | **Cross-cutting — coordinate with whoever owns BE-01's `types.ts` split.** Needs a product decision: are the frontend's extra `CallingApplication` fields a frontend bug or a missing backend column? Add a lightweight contract test afterward so this can't silently regress again. |
+| **FE-10** | Fix frontend/backend type drift — `CallingApplication`/`DiagnosticLog` vs. their backend `*Row` counterparts (SD2/SD3, confirmed still open) | S(fix)/M(if backend coordination needed) | Medium (shared contract) | **Not Started.** FE `CallingApplication` still has `name`/`slug`/`description`/`is_active` absent from `CallingApplicationRow`; `DiagnosticLog` shape also diverges. Needs a product decision: are the frontend's extra fields a FE bug or a missing backend column? Add a lightweight contract test afterward so this can't silently regress again. |
 
 #### Cadence API (report 03)
 
@@ -422,14 +435,14 @@ per item / per area intro).
 | **API-03** ✅ **Done** (`refactor/api-03-coach-stream`) | Extract `routes/coach.ts`'s SSE-relay-and-accumulate loop into a standalone, unit-testable `services/coach-stream.ts` | M | Medium | Part of **CROSS-02**; write characterization tests with a synthetic `ReadableStream` covering both upstream frame shapes first. **Done notes:** `relayAndAccumulate` + `applySseDataPayload`/`applySseLine` in `apps/cadence-api/src/services/coach-stream.ts`; route thins to call it. Incremental line buffer lives in `packages/core/src/sse-line-reader.ts` (`createSseLineBuffer` / `pushSseChunk`, exported from `@ai-admin/core`) — same contract as BE-02. Verify: core `sse-line-reader` 9/9; cadence-api `coach-stream` 8/8 (OpenAI deltas, v2 `message.complete`, chunk-split frames, client drop while draining). |
 | **API-04** ✅ **Done** (`refactor/api-04-nutrition-tests`, PR #33) | Test-first backfill on `services/nutrition.ts` — extract `parseMealResult`/`wantsTargets` as named pure functions, unit-test them, integration-test `logMeal`'s fallback guarantee and `getBaselineRead`'s cost-control gate | M | Low | **Done notes:** pure helpers live in `nutrition-parse.ts` (`parseMealResult`, `wantsTargets`, `PROVISIONAL_BELOW`, `isMeal`) — no DB/aim import so CI without `CADENCE_*` can run unit tests; `nutrition.ts` re-exports + uses them. Unit tests in `nutrition-parse.test.ts` (valid/malformed/partial/confidence clamp + wantsTargets matrix). DB integration in `nutrition-service.test.ts` (AI seam mocked): parse-fail still persists raw text + empty items; provisional below 0.5; baseline `<7` days → `ready:false` with **zero** LLM calls; `propose_targets` yes only when wantsTargets ∧ no existing targets. Harness fix: `resetUserData` now clears `macro_targets` (start-over / observe-from-zero). Verify: 16/16 vitest (9 unit + 7 DB); cadence-api `tsc`/`lint` clean. |
 | **API-05** ✅ **Done** (`refactor/api-05-aim-seam-tests`, PR #13) | Add a smoke test + provenance comment to `ai/aim.ts` — the load-bearing AI Admin seam, currently zero tests, with an unpinned structural contract (`CoachDiag`) against `@ai-admin/core`'s real return type | S | Low | **Done notes:** `aim.test.ts` mocks `@ai-admin/core` + config; pins `withAim` RequestAuthContext, `clockVars` UTC day/`day_of_week` pairing (incl. near-boundary), coach session surface, and `recordCoachReply` CoachDiag `endLlmTimer`/`complete` contracts. Provenance comment on local `CoachDiag` subset documents the unpinned structural link to AI Admin's `DiagnosticSession`. Verify: 16/16 vitest pass; scope stayed `aim.test.ts` + comment in `aim.ts`. |
-| **API-06** | Extract shared `services/retrieval/select-and-run.ts` (`validateCalls`/`executeCalls`) from the duplicated `context-pack.ts`/`turn-context.ts` pipelines; add the resilience-contract test for `buildContextPack`'s 3-way fallback | M | Low | |
+| **API-06** | Extract shared `services/retrieval/select-and-run.ts` (`validateCalls`/`executeCalls`) from the duplicated `context-pack.ts`/`turn-context.ts` pipelines; add the resilience-contract test for `buildContextPack`'s 3-way fallback | M | Low | **Not Started.** |
 
 #### Cadence web (report 04)
 
 | ID | Item | Effort | Risk | Notes |
 |---|---|---|---|---|
 | **WEB-01** | Split `ReviewScreen.tsx` (648 lines, 4-step wizard + unit-conversion math + commit flow) into `useReviewWizard`/`useDraftField`/`unitConversion.ts` + 4 step components | L | Medium | **Test-first is a hard blocker**: unit-conversion round-trips and the `plausibleKg` 20-500 clamp guard a *previously-shipped data-corruption bug* per the code's own comment |
-| **WEB-02** | Split `lib/api.ts` (497 lines, 6 unrelated domains) into `lib/api/{http,coach,plan,occurrence,nutrition,review,dev}.ts` behind a barrel; extract the SSE parser into a testable unit | M | Low | The `Broker`→`Scribe` rename inside this file is **CROSS-01**, not this item — do the mechanical split first, coordinate the rename separately |
+| **WEB-02** | Split `lib/api.ts` (~536 lines, 6 unrelated domains) into `lib/api/{http,coach,plan,occurrence,nutrition,review,dev}.ts` behind a barrel; extract the SSE parser into a testable unit | M | Low | **Unblocked:** CROSS-01 rename already landed (PR #30) — this item is the mechanical split only |
 | **WEB-03** | Split `OccurrenceSheet.tsx` (487 lines, 5 unrelated domains behind one occurrence id) into `useOccurrenceDetail` + `SessionLogPanel`/`MealLogPanel`+`useMealLog`/`BaselineReadPanel`/`WeighInPanel` | L | Medium | Touches meal-photo-capture and weigh-in — unrecoverable-if-broken user input; extract pure formatters + add tests first, manual QA pass per extracted panel |
 | **WEB-04** | De-duplicate `TodayDashboard`'s `DashCard`/`RhythmRow` against `ProgressView`'s near-identical `Card` and `PlanView`'s near-identical `Item` into shared `ProgressCards.tsx`/`OccurrenceRow.tsx`/`useGoalEventAdd.ts` | M | Low-Medium | Snapshot both implementations' current output *before* merging — they may have already silently drifted |
 
@@ -444,27 +457,17 @@ per item / per area intro).
 
 ### 4.3 Cross-cutting items (span multiple areas — assign to one owner, coordinate with affected area owners)
 
-#### CROSS-01 — `Broker` → `Scribe` rename [P1]
+#### CROSS-01 — `Broker` → `Scribe` rename [P1] — ✅ **Done** (PR #30)
 
-**Current problem:** BRAND.md's `Broker`→`Scribe` rename (internal-name-only; dated 2026-07-04) has
-propagated to **none** of the three packages that reference the concept: `apps/cadence-web`
-(`lib/api.ts:508-509`'s `DevTrace.brokerSelect`/`brokerSummarize`, `DevPanel.tsx:133`),
-`apps/cadence-api` (`services/dev-trace.ts` and ~18 other files, per grep), and
-`packages/cadence-shared` (module-level JSDoc still titled "§C4 Broker job contracts"). Everywhere
-else `Broker` is used correctly per CLAUDE.md's table (it's the retained internal/code name — only
-the UI-facing `Scribe` name was supposed to move, and it has, correctly, everywhere user-visible).
-The specific violation is the **exported, consumed type field names** (`brokerSelect`/
-`brokerSummarize`), which are dev-only-surfaced today (`?dev=1`) but will get harder to fix the more
-call sites accrue.
+**Was:** BRAND.md's `Broker`→`Scribe` rename had not propagated to exported DevTrace field names
+(`brokerSelect`/`brokerSummarize`) or the shared contracts module title.
 
-**Migration steps:** one coordinated PR (or tightly-sequenced set) touching all three packages at
-once: rename the `DevTrace` fields in `packages/cadence-shared`, update `apps/cadence-api`'s
-`dev-trace.ts` producer, update `apps/cadence-web`'s `lib/api.ts` consumer + `DevPanel.tsx`'s
-render. Do this as its own item, separate from WEB-02's mechanical `lib/api.ts` file-split, so the
-rename's diff is reviewable on its own.
-
-**Priority/Effort/Risk:** P1 / S once scoped / Low (dev-only surface today — fix while the blast
-radius is small).
+**Done notes:** coordinated rename across `packages/cadence-shared` (`broker-contracts.ts` →
+`scribe-contracts.ts`), `apps/cadence-api` (`dev-trace.ts` + producers), `apps/cadence-web`
+(`lib/api.ts` + `DevPanel.tsx`). DevTrace fields are now `scribeSelect`/`scribeSummarize`.
+Intentionally left unchanged: persisted pack mode strings (`broker-curated`/`broker-partial`) and
+live profile slug `cadence-broker` (audit trail / live IDs). WEB-02 mechanical `lib/api.ts` split
+remains a separate open item.
 
 #### CROSS-02 — Consolidate SSE parsing/line-buffering [P1]
 
@@ -585,33 +588,28 @@ sign-off before any change. Neither blocks BE-03 Done (which gated only mutating
 These came out of every report's "systemic recommendations" section. Treat them as standing
 workstreams that run alongside the phased backlog above, not one-time tickets:
 
-1. **Prevent regrowth, don't just fix size once.** FE-01's max-file-line lint rule is the concrete
-   mechanism; pair it with a one-paragraph convention note (in `CLAUDE.md` or a new
-   `frontend/CONTRIBUTING.md`) stating "new tabs/major UI sections get their own file from day
-   one." This is the single most important process fix in this plan — `ProcessingJobManager.tsx`
-   already proved a file-level fix without a structural guardrail doesn't hold.
+1. **Prevent regrowth, don't just fix size once.** FE-01's organism/page `max-lines` rule is live.
+   **INFRA-08** (PR #23, In Review) generalizes it repo-wide via `eslint.config.sizes.mjs` +
+   allowlist-as-backlog + `CLAUDE.md` convention. Until that merges, only frontend organisms/pages
+   are gated — do not treat size debt as solved workspace-wide.
 2. **Version-control the database schema.** No AI Admin `.sql` migration tooling exists (AR5), and
    `001`-`005` are missing entirely despite being referenced in `README.md`. This isn't just
    tooling hygiene — it means *this plan itself* can't independently verify tenant-isolation/RLS
    correctness from source, which caps how much confidence any RBAC finding here can carry.
    Tracked as INFRA-P2's migration-tooling item, but flagged here because it's a trust
    precondition for BE-03 (the RBAC fix), not just a nice-to-have.
-3. **Adopt structured logging before, not after, BE-01.** `ai-manager/index.ts`'s biggest
-   operational risk during its split is silent behavior change in long-running chat/job flows;
-   `console.log` is markedly harder to correlate across newly-split modules than a structured
-   logger with a threaded `sessionId`/`jobId` would be.
+3. **Adopt structured logging.** BE-01 already landed without it; still valuable for correlating
+   chat/job flows across the split modules (`sessionId`/`jobId`). Opportunistic, not a Phase 2
+   blocker.
 4. **Finish, don't restart, the Zod/pagination rollout.** AR1/AR3 are both "mostly done" on the
    backend — remaining gaps are path-param validation and a handful of `.limit(1000)`-capped model
    functions. Cadence API's gap is different (route validation was never started) — treat these as
    two separate, smaller efforts, not one shared ticket.
-5. **Backfill tests in inverse proportion to blast radius, not file size.** Every area report
-   converges on the same shape of gap: pure helper functions are well-tested everywhere in this
-   repo; the orchestration/integration layer around them is not. Prioritize test-first work on
-   plan-commit (API-01), the AI Admin seam (API-05, BE-01's step 1), and the two frontend P0s'
-   test-first steps before chasing coverage-percentage numbers anywhere else.
-6. **Stand up one lightweight DB test harness for Cadence API**, reusing the `dev-reset.ts`
-   machinery that already exists for dev-account resets as test fixtures — this unblocks API-01,
-   API-02, API-04, API-06 all at once rather than each item solving fixtures independently.
+5. **Backfill tests in inverse proportion to blast radius, not file size.** API-01 / API-04 /
+   API-05 / FE-09 and the Phase 1 P0 test-first steps largely landed. Remaining highest-leverage
+   gaps: Cadence web (WEB-01…04) and FE-10's contract test.
+6. **Cadence API DB test harness** — ✅ stood up with API-01 (`resetUserData` fixtures). Reuse it
+   for API-06 rather than inventing a second harness.
 7. **Add a lightweight type-contract check** (a small script diffing declared field names between
    paired backend/frontend types, or a fixture-response test) so FE-10's fix can't silently
    regress the way SD2/SD3 already did once.
@@ -721,10 +719,8 @@ Every item ID in §4 should carry one of these statuses, updated by whichever ro
 
 `Not Started` → `Assigned` → `In Progress` → `In Review` → `Changes Requested` (loops back to `In Progress`) → `Done` → `Verified`
 
-The tables in §4 currently show `Not Started` for the Phase 0 items as placeholders; as work
-begins, update the Status cell in place (or add a Status column to the Phase 1/2/3 tables) rather
-than tracking status in a separate document — this file is meant to be the single source of truth
-an orchestrator and its supervisors both read from.
+Update Status cells in place as items move; this file is the single source of truth. Phase 0–1 and
+most Phase 2 P1s are Done — see §4.2 "Remaining Phase 2 P1" for what is actually still open.
 
 ---
 
@@ -734,7 +730,7 @@ an orchestrator and its supervisors both read from.
 |---|---|---|---|
 | Turning on CI for the first time (INFRA-02) surfaces a large backlog of pre-existing failures in `apps/cadence-api`/`apps/cadence-web`, which have never been collectively checked | High | Medium (delays, not breakage) | Report-only rollout before required status; budget explicit time for the "fix everything CI newly reveals" tail |
 | BE-01's split of `ai-manager/index.ts` silently changes behavior in a long-running chat/job flow (the highest-blast-radius item in the plan) | Medium | High (both AI Admin and Cadence depend on this file's shape) | Hard test-first gate before any extraction; phase into 5 steps, each independently revertible; land structured logging (§5 item 3) before, not after |
-| Cross-package rename (CROSS-01) lands partially — one package renamed, others not, in an inconsistent intermediate state | Medium | Low (dev-only surface today) | Assign to a single owner/coordinated PR chain, not independent parallel agents; fix now while blast radius is one dev tool |
+| Cross-package rename (CROSS-01) lands partially — one package renamed, others not, in an inconsistent intermediate state | ~~Medium~~ Mitigated | Low | ✅ Landed as single PR #30; residual risk is only if someone reintroduces `brokerSelect`/`brokerSummarize` field names |
 | RBAC fix (BE-03) accidentally over-gates a route that should stay member-readable (e.g., a GET list endpoint) | Low | Medium (breaks a legitimate user flow) | Per-route negative tests (member gets 403 on gated routes) *and* explicit product sign-off on which GETs, if any, should also be gated (e.g. `diagnostic-logs.ts` may contain sensitive content) |
 | Production credentials needed for config-drift detection (INFRA-P2) get exposed to a PR-triggered workflow instead of a scheduled one | Low (if followed as designed) | High (prod credential leak) | Explicitly scope drift-detection secrets to a *scheduled* job only, never a PR-triggered one, per report 06 §4.7 |
 | Two Supabase projects (AI Admin's own + Cadence's reused "Spartan Tracker") means a naive single CI job could require secrets it shouldn't have access to | Medium | Medium | INFRA-02's path-filtered, two-job design scopes secrets per job/product explicitly |
@@ -747,18 +743,18 @@ an orchestrator and its supervisors both read from.
 This plan is "done" (or rather, has earned the right to be considered a completed refactoring pass
 — new debt will always accrue) when:
 
-- [ ] `npm ls --workspaces` from repo root lists all 9 real workspaces with zero `extraneous`/`invalid`.
+- [x] `npm ls --workspaces` from repo root lists all 9 real workspaces with zero `extraneous`/`invalid`. (INFRA-01)
 - [ ] `.github/workflows/ci.yml` exists, is a required status check, and its `cadence` job has run
-      green against real Cadence changes (not just report-only).
-- [ ] Zero files remain in the P0 list (§4.1); the max-file-line lint rule from FE-01 is active and
-      enforced in CI.
-- [ ] `requireRole` is wired into every mutating admin-sensitive backend route (BE-03's full list).
+      green against real Cadence changes (not just report-only). *(workflow exists + runs; required-check flip still open)*
+- [x] Zero files remain in the P0 list (§4.1); FE-01 organism/page `max-lines` is active.
+      *(Repo-wide generalization = INFRA-08, PR #23 In Review.)*
+- [x] `requireRole` is wired into every mutating admin-sensitive backend route (BE-03's full list).
 - [ ] `apps/cadence-web` and `apps/cadence-api` each have real (not placeholder) test coverage on
-      their top-5 highest-risk paths per reports 03/04's "first N tests" lists.
+      their top-5 highest-risk paths per reports 03/04's "first N tests" lists. *(API side largely yes; web still no.)*
 - [ ] SD2/SD3 (frontend/backend type drift) no longer reproduces — verified by the contract-test
       added under FE-10, not just by manual inspection.
-- [ ] `Broker`→`Scribe` rename (CROSS-01) is complete across all three packages, verified by a
-      repo-wide grep returning zero remaining `broker`-named exports.
+- [x] `Broker`→`Scribe` rename (CROSS-01) complete for exported DevTrace fields + contracts module
+      (PR #30). Persisted `broker-*` mode strings / `cadence-broker` slug intentionally retained.
 - [ ] This document's status tracking (§6.5) shows every P0/P1 item as `Verified`.
 
 ---
