@@ -7,14 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const {
-  WORKSPACE_ID,
-  CALLING_APP,
-  COACH_JOB_SLUG,
-  USER,
-  SENTINEL_API_KEY_ID,
-  core,
-} = vi.hoisted(() => {
+const { WORKSPACE_ID, CALLING_APP, COACH_JOB_SLUG, USER, SENTINEL_API_KEY_ID, core } = vi.hoisted(() => {
   const WORKSPACE_ID = '11111111-1111-4111-a111-111111111111';
   const CALLING_APP = 'platform:cadence';
   const COACH_JOB_SLUG = 'cadence-coach-chat';
@@ -45,11 +38,9 @@ const {
       })),
       recordAssistantMessage: vi.fn(async () => undefined),
       createChatMessage: vi.fn(async (_msg: ChatMsg) => ({ id: 'msg-1' })),
-      getProcessingJobBySlug: vi.fn(
-        async (_slug: string): Promise<{ config: { systemPrompt?: string } } | null> => ({
-          config: { systemPrompt: 'You are Cadence.' },
-        }),
-      ),
+      getProcessingJobBySlug: vi.fn(async (_slug: string): Promise<{ config: { systemPrompt?: string } } | null> => ({
+        config: { systemPrompt: 'You are Cadence.' },
+      })),
       getChatHistory: vi.fn(async () => [{ role: 'user', content: 'hi' }]),
       purgeRemoteChatsForUser: vi.fn(async () => undefined),
     },
