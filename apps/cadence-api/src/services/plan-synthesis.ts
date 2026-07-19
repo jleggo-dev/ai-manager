@@ -1,5 +1,6 @@
 import { runJob } from '../ai/aim.ts';
 import { cadenceConfig } from '../config.ts';
+import { sql } from '../db/sql.ts';
 import { getActivePlan, supersedeActivePlans, insertPlan } from '../repos/plans.ts';
 import { insertActivities } from '../repos/activities.ts';
 import { deleteFuturePendingOccurrences } from '../repos/occurrences.ts';
@@ -167,19 +168,30 @@ export async function commitActivities(
     completion_source: a.completion_source,
   }));
 
-  const old = await getActivePlan(userId);
-  const version = (old?.version ?? 0) + 1;
-  await supersedeActivePlans(userId);
-  const plan = await insertPlan(userId, { goal_ids: opts.goalIds, version, status: 'active' });
-  const activities = await insertActivities(userId, plan.plan_id, proposed);
-  if (old) await deleteFuturePendingOccurrences(old.plan_id, new Date().toISOString().slice(0, 10));
+  const today = new Date().toISOString().slice(0, 10);
+  // Atomic (API-01): supersede → insert the new version → insert its activities → clear the old
+  // plan's stale future occurrences must be all-or-nothing. Before this, a crash between
+  // supersedeActivePlans and insertPlan left the user with NO active plan at all; sql.begin()
+  // rolls the whole set back on any failure, so a commit either fully lands or not at all.
+  const { plan, version, activityCount } = await sql.begin(async (tx) => {
+    const old = await getActivePlan(userId, tx);
+    const v = (old?.version ?? 0) + 1;
+    await supersedeActivePlans(userId, tx);
+    const p = await insertPlan(userId, { goal_ids: opts.goalIds, version: v, status: 'active' }, tx);
+    const acts = await insertActivities(userId, p.plan_id, proposed, tx);
+    if (old) await deleteFuturePendingOccurrences(old.plan_id, today, tx);
+    return { plan: p, version: v, activityCount: acts.length };
+  });
+
+  // ensureHorizon is a separate, idempotent top-up (safe to re-run) — deliberately OUTSIDE the
+  // transaction so materializing the rolling horizon can't hold the commit's write locks open.
   const occurrences = await ensureHorizon(userId, occurrenceDays);
 
   return {
     status: 'committed',
     planId: plan.plan_id,
     version,
-    activities: activities.length,
+    activities: activityCount,
     occurrences,
     note: opts.note,
   };

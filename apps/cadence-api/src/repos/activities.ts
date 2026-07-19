@@ -1,4 +1,4 @@
-import { sql, json } from '../db/sql.ts';
+import { sql, json, type SqlExecutor } from '../db/sql.ts';
 import type { Activity } from '@cadence/shared';
 
 export async function listActivities(planId: string): Promise<Activity[]> {
@@ -10,10 +10,11 @@ export async function insertActivities(
   userId: string,
   planId: string,
   activities: Partial<Activity>[],
+  db: SqlExecutor = sql, // the sql.begin() tx handle when called inside commitActivities' transaction
 ): Promise<Activity[]> {
   const out: Activity[] = [];
   for (const a of activities) {
-    const [row] = await sql<Activity[]>`
+    const [row] = await db<Activity[]>`
       insert into cadence.activities
         (user_id, plan_id, goal_id, title, kind, category, schedule, target, completion_source, why, how_to)
       values (
