@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "description": "In-process surface for the AI Admin engine (Coach chat + Broker jobs + lifecycle). Consumed by Cadence's Node backend.",
+  "description": "In-process surface for the AI Admin engine (Coach chat + Scribe jobs + lifecycle). Consumed by Cadence's Node backend.",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
