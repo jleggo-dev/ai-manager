@@ -47,6 +47,10 @@ field name; `resources`/`limits` for constraints; streaks that reset to zero; we
 
 ## Engineering conventions
 
+- **Ship / agent workflow:** follow
+  [`.cursor/skills/development-workflow/SKILL.md`](.cursor/skills/development-workflow/SKILL.md)
+  (CI must be green — or intentionally skipped with a documented reason — before merge and before
+  the next refactor batch). Multi-agent refactor gates: [`refactoring_plan.md`](refactoring_plan.md) §6.
 - Secrets: NEVER put `aim_sk_` keys in client code, `VITE_*` vars, or committed `.env` files.
   `.env` is gitignored; `.env.example` is tracked with placeholders only.
 - Job prompt changes in `config/ai-admin/ai-admin.config.json` are NOT live until synced

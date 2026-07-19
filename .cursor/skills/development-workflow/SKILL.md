@@ -1,27 +1,36 @@
 ---
 name: development-workflow
-description: End-to-end AI Admin development workflow from implementation through QA, PR, team-lead review, fix loop, and merge. Use when finishing a feature, before commit/push, opening or updating a PR, or when the user asks for the dev workflow, ship checklist, or merge readiness.
+description: End-to-end AI Admin development workflow from implementation through QA, PR, CI-green gate, team-lead review, fix loop, and merge. Use when finishing a feature, before commit/push, opening or updating a PR, or when the user asks for the dev workflow, ship checklist, or merge readiness.
 ---
 
 # AI Admin development workflow
 
-Follow these steps **in order** for every feature or fix. Do not skip ahead to push/merge until the current step passes.
+Follow these steps **in order** for every feature, fix, or refactor batch. Do not skip ahead to
+merge — and do not start the next batch — while CI is red.
 
 ```
-Implement → Review & lint → Tests → Regression → PR → TL review → Fix → (loop) → Merge
+Code → Review → Fix? → Test (local) → Fix? → Commit/push (CI on PR)
+  → Fix until CI green → PR open/updated → Review → Fix? → Merge (checks pass)
+  → Confirm base branch green → (prod/release later) → Done
 ```
 
-## Step 1 — Develop
+**Source of truth for ship gates.** Child skills detail commands/checklists; this skill owns the
+order and the non-negotiable CI rules.
+
+---
+
+## Step 1 — Code
 
 - Implement the smallest correct diff; match existing conventions in touched files.
-- Keep scope tight — exclude unrelated work (e.g. Cadence `apps/`, `config/cadence` unless explicitly in scope).
+- Keep scope tight — exclude unrelated work (e.g. Cadence `apps/`, `config/cadence` unless
+  explicitly in scope).
 - Backend behavior belongs in `backend/`; do not compensate only in the frontend.
 
 **Exit:** Code compiles locally; you can describe what changed and why.
 
 ---
 
-## Step 2 — Review before commit (ESLint + architecture)
+## Step 2 — Review (lint + architecture)
 
 ### Automated
 
@@ -48,7 +57,13 @@ Apply [pre-push-review](../pre-push-review/SKILL.md). Confirm:
 
 ---
 
-## Step 3 — Tests for new code
+## Step 3 — Fix (if review found issues)
+
+Address blockers from step 2. Re-run lint/typecheck. Loop until exit criteria for step 2 hold.
+
+---
+
+## Step 4 — Test (local)
 
 ### Write tests
 
@@ -73,36 +88,43 @@ npm test -- --workspace=frontend   # if frontend tests exist for the change
 npm run test:e2e
 ```
 
-Live E2E tests (e.g. `e2e-devs-ai-v2-*.test.ts`) need `DEVS_AI_API_KEY` / Supabase — skip with clear note if unset; do not treat skip as pass for risky paths.
+Live E2E tests (e.g. `e2e-devs-ai-v2-*.test.ts`) need `DEVS_AI_API_KEY` / Supabase — skip with clear
+note if unset; do not treat skip as pass for risky paths.
 
-**Exit:** New behavior has tests; new and affected tests pass.
+### Regression + functional gate
 
----
-
-## Step 4 — Regression + functional gate
-
-Full pre-push gate (matches Vercel backend + frontend builds):
+Full pre-push gate (matches Vercel backend + frontend builds) — see
+[pre-push-qa](../pre-push-qa/SKILL.md):
 
 ```powershell
 npm run prepush
 ```
 
-`prepush` runs: `typecheck` → `format:check` → `lint` → backend `tsc` → frontend lint + Vite build → full backend test suite.
+`prepush` runs: `typecheck` → `format:check` → `lint` → backend `tsc` → frontend lint + Vite
+build → full backend test suite.
 
-**Local frontend build note:** Unset `VITE_DEV_API_KEY` before build if Vite errors about secrets in the client bundle.
+**Local frontend build note:** Unset `VITE_DEV_API_KEY` before build if Vite errors about secrets
+in the client bundle.
 
-**Exit:** `prepush` exits 0.
+**Exit:** New behavior has tests; new/affected tests pass; `prepush` exits 0.
 
 ---
 
-## Step 5 — Commit, push, create PR
+## Step 5 — Fix (if local tests failed)
 
-Only after steps 2–4 pass.
+Fix root causes; re-run the failing suite and then full `npm run prepush`. Do not push with a red
+local gate.
+
+---
+
+## Step 6 — Commit → CI runs on the PR
+
+Only after steps 2–5 pass.
 
 1. `git status` / `git diff` — confirm staged files match the task.
 2. Commit with a clear message (why, not only what).
 3. `git push -u origin HEAD`
-4. Create or update PR:
+4. Open or update a PR so GitHub Actions can run (if not already open):
 
 ```powershell
 gh pr create --title "..." --body "..."
@@ -111,23 +133,46 @@ gh pr create --title "..." --body "..."
 
 Include in PR body: summary, test plan checklist, any env/migration notes.
 
-**Exit:** PR URL exists; CI triggered.
+**Exit:** PR URL exists; CI triggered on the PR.
 
 ---
 
-## Step 6 — Team lead / architect PR review
+## Step 7 — Fix until CI is green
+
+Watch PR checks (`gh pr checks` or CI watcher). **Every job that runs must pass**, or be
+**intentionally skipped** with a documented reason (e.g. quarantined flaky suite + human action
+item such as key rotation).
+
+- Never leave jobs **red** and move on to the next task or batch.
+- "Report-only" CI (not yet a required branch-protection check) still means jobs must pass or be
+  honestly skipped — it does **not** mean "ignore red and keep merging."
+- Fix, push, re-check until green (or documented skip). Loop as needed.
+
+**Exit:** All non-skipped PR checks green; any skip has a written reason + owner.
+
+---
+
+## Step 8 — Create/update PR (if not already open for CI)
+
+If step 6 only pushed without a PR, open it now. Keep the PR description current after CI fixes.
+
+**Exit:** PR ready for human/TL review; description matches final diff.
+
+---
+
+## Step 9 — Team lead / architect PR review
 
 Act as TL on the **full PR diff** (all commits), not only the latest.
 
 Apply [pr-tl-review](../pr-tl-review/SKILL.md).
 
-### 6a — Security, performance, build (mandatory)
+### 9a — Security, performance, build (mandatory)
 
 | Lens | Check |
 |------|--------|
 | **Security** | Auth on new routes; no API keys in client; RLS/tenant; user credential isolation; SSRF/path injection in attachments |
 | **Performance** | N+1 queries; unbounded loops (SSE, tool rounds); large payloads in hot paths |
-| **Build / CI** | Vercel services (`backend` tsc, `frontend` vite); both workspaces; no broken exports; interface syntax in TSX |
+| **Build / CI** | Vercel services (`backend` tsc, `frontend` vite); both workspaces; no broken exports; interface syntax in TSX; **PR checks green** |
 
 Also watch: `chat-sessions` locks/409, provider metadata, jobs-as-tools loops.
 
@@ -135,38 +180,60 @@ Also watch: `chat-sessions` locks/409, provider metadata, jobs-as-tools loops.
 
 ---
 
-## Step 7 — Fix PR issues
+## Step 10 — Fix (if review requested changes)
 
-Address all **blockers** and agreed **should-fix** items from step 6.
+Address all **blockers** and agreed **should-fix** items. After fixes: return through steps 2–4
+locally as needed, push, and **re-enter step 7** until CI is green again.
 
-**Exit:** Fixes committed on the same branch.
-
----
-
-## Step 8 — Loop until clean
-
-Return to **step 2** (lint + architecture review), then **3–4** (tests + `prepush`), push updates, re-run **step 6**.
-
-Repeat until:
-
-- `npm run prepush` passes
-- TL review has no blockers
-- PR CI green (`gh pr checks` or CI watcher)
-
-**Do not merge while CI is failing or blockers remain.**
+**Exit:** Fixes committed; CI green; no open blockers.
 
 ---
 
-## Step 9 — Merge
+## Step 11 — Merge only when PR checks pass
 
-When PR is approved and CI is green:
+When PR is approved **and** CI is green (or remaining failures are explicitly quarantined with a
+documented human action item):
 
 ```powershell
 gh pr merge --squash
 # or merge strategy your team uses
 ```
 
+**Do not merge while CI is failing or blockers remain.**
+
 Post-merge: note any ops steps (migrations, env vars, provider setup) for the user.
+
+---
+
+## Step 12 — Confirm base branch green before the next batch
+
+During the Cadence/refactor effort the integration branch is `feat/cadence` (otherwise the team's
+current base).
+
+Before starting the **next** parallel batch or assigning the next backlog item:
+
+1. Confirm the integration branch's latest CI is green (or failures are quarantined with a human
+   action item — not silently ignored).
+2. Multi-agent refactor orchestration: **do not start the next parallel batch until CI on the
+   integration branch is green** under that same rule.
+
+See [refactoring_plan.md](../../../refactoring_plan.md) §6 for orchestrator/supervisor rules.
+
+**Exit:** Base/integration branch is green (or explicitly quarantined); safe to assign next work.
+
+---
+
+## Step 13 — Prod / release verification (later gate)
+
+Deploy/smoke verification in prod or a release environment is a **later** gate. It does **not**
+block every refactor batch merge, but it must happen before calling a release "shipped."
+
+---
+
+## Step 14 — Done
+
+Item/batch is complete for merge purposes when steps 1–12 are satisfied. Mark backlog status
+(`Done` / later `Verified` after smoke) per the living plan when applicable.
 
 ---
 
@@ -177,9 +244,10 @@ Post-merge: note any ops steps (migrations, env vars, provider setup) for the us
 | `npm run lint` | Step 2 |
 | `npm run typecheck` | Step 2 |
 | `npm run prepush` | Step 4 (and after each fix loop) |
-| `npm test` | Steps 3–4 |
-| `npm run test:e2e` | Step 3 when chat/API/integration touched |
+| `npm test` | Steps 4–5 |
+| `npm run test:e2e` | Step 4 when chat/API/integration touched |
 | `npm run ci` | Stricter than prepush (no Vite build); optional extra gate |
+| `gh pr checks` | Steps 7, 11, 12 |
 
 ## Child skills
 
@@ -187,4 +255,4 @@ Post-merge: note any ops steps (migrations, env vars, provider setup) for the us
 |-------|------|
 | [pre-push-review](../pre-push-review/SKILL.md) | 2 — diff/architecture checklist |
 | [pre-push-qa](../pre-push-qa/SKILL.md) | 4 — prepush commands detail |
-| [pr-tl-review](../pr-tl-review/SKILL.md) | 6 — TL security/performance/build review |
+| [pr-tl-review](../pr-tl-review/SKILL.md) | 9 — TL security/performance/build review |
