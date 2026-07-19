@@ -47,7 +47,7 @@ export interface Goal {
   status: GoalStatus;
   linked_equipment: string[];
   source: 'captured' | 'manual';
-  confidence?: number; // Broker extraction confidence
+  confidence?: number; // Scribe extraction confidence
 }
 
 /** assess_goal — the coach's realism read on ONE goal + proposed stepping-stones (§6.2).

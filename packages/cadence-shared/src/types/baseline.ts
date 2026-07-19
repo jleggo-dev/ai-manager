@@ -11,11 +11,11 @@
  */
 export type GoalArea = 'movement' | 'nourishment' | 'mind' | 'practice';
 
-/** The canonical `GoalArea` values, kept in one place so a Broker-extraction
+/** The canonical `GoalArea` values, kept in one place so a Scribe-extraction
  *  guard (`isGoalArea`) and any UI area picker never drift from the type above. */
 export const GOAL_AREAS: readonly GoalArea[] = ['movement', 'nourishment', 'mind', 'practice'];
 
-/** Narrows an untrusted value (e.g. raw Broker/model output) to a `GoalArea` —
+/** Narrows an untrusted value (e.g. raw Scribe/model output) to a `GoalArea` —
  *  "the app asserts before committing, never trusts raw model output" (see file header). */
 export function isGoalArea(value: unknown): value is GoalArea {
   return typeof value === 'string' && (GOAL_AREAS as readonly string[]).includes(value);
