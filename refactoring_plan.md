@@ -379,9 +379,9 @@ per item / per area intro).
 > - **FE-06** — split `services/api.ts` into domain modules + barrel (`refactor/fe-06-split-api-client`).
 >
 > - **CROSS-01** — `Broker`→`Scribe` rename across cadence-shared / cadence-api / cadence-web
->   (+ core package header). DevTrace fields `scribeSelect`/`scribeSummarize`; `broker-contracts.ts`
->   → `scribe-contracts.ts`. Persisted mode strings `broker-curated`/`broker-partial` and profile
->   slug `cadence-broker` left unchanged (audit trail / live IDs).
+>   (+ core package header) (PR #30). DevTrace fields `scribeSelect`/`scribeSummarize`;
+>   `broker-contracts.ts` → `scribe-contracts.ts`. Persisted mode strings `broker-curated`/
+>   `broker-partial` and profile slug `cadence-broker` left unchanged (audit trail / live IDs).
 >
 > Not yet started: FE-03, FE-10, API-04, API-06, WEB-01..04, CROSS-03.
 
@@ -439,7 +439,7 @@ per item / per area intro).
 
 ### 4.3 Cross-cutting items (span multiple areas — assign to one owner, coordinate with affected area owners)
 
-#### CROSS-01 — `Broker` → `Scribe` rename [P1] — ✅ **Done** (`refactor/cross-01-broker-to-scribe`)
+#### CROSS-01 — `Broker` → `Scribe` rename [P1] — ✅ **Done** (`refactor/cross-01-broker-to-scribe`, PR #30)
 
 **Current problem:** BRAND.md's `Broker`→`Scribe` rename (canonical internal name; dated 2026-07-04)
 had not propagated to the three packages that export/consume the concept: `apps/cadence-web`
