@@ -1,8 +1,8 @@
-// Import config first so env (backend/.env + cadence .env) loads before the engine.
+// Local / `npm start` entry. Vercel loads `src/app.ts` (default export) instead.
+import app from './app.ts';
 import { cadenceConfig } from './config.ts';
-import { createApp } from './app.ts';
 
-const app = createApp();
-app.listen(cadenceConfig.port, () => {
-  console.log(`[cadence-api] listening on :${cadenceConfig.port}`);
+const port = Number(process.env.PORT) || cadenceConfig.port;
+app.listen(port, () => {
+  console.log(`[cadence-api] listening on :${port}`);
 });
