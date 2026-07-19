@@ -32,7 +32,7 @@ Cadence backend (Node / Express)               apps/cadence-api
    │    scheduling · token-budget · tripwires · shoe-mileage · nudges · weather
    ├─ dossier compiler (§4.3 context packet)
    └─ AI Admin engine, IN-PROCESS  ───────────►  @ai-admin/core  (packages/core)
-        runWithAuth(ctx) → openChatSession / sendChatMessage / executeJobById
+        runWithAuth(ctx) → hot-path chat / jobs (see packages/core/src/index.ts)
                                    │
                                    ▼
                       Devs.ai (Coach)  +  Gemini (Broker)
@@ -43,11 +43,20 @@ The client never reaches AI Admin or providers directly. All AI flows through
 scoped to Cadence's workspace, forwarding the Cadence user id) and calls the
 engine in-process.
 
+**`@ai-admin/core` surface** (canonical list: `packages/core/src/index.ts`):
+
+| Group | Who may import | Symbols (summary) |
+|---|---|---|
+| **Hot path** | `apps/cadence-api` runtime (`src/ai/aim.ts`, routes/services) | Broker: `executeJob`, `executeJobById`, `executeRawPrompt`, `uploadApiDataSourcesChunked`. Coach: `openChatSession`, `resumeChatSession`, `sendChatMessage`, `submitChatToolOutputs`, `recordAssistantMessage`, lifecycle helpers, `getChatHistory`, … Model-layer: `createChatMessage` (context inject). Jobs: `getProcessingJobBySlug`. Tenant: `runWithAuth`, `getAuthContext`, `effectiveUserId`, `tenantFrom`, `tenantClient`, `RequestAuthContext`. |
+| **Provisioning (cold path)** | `apps/cadence-api/scripts/*` only | AI profiles: `getAiProfile`, `getAiProfileBySlug`, `updateAiProfile`. Jobs CRUD: `createProcessingJob`, `updateProcessingJob`, `getProcessingJob`. |
+
+Not exported (intentionally): `getServiceSupabase` — service-role client that bypasses RLS. Backend may import it from `backend/src/db/service-supabase.ts`; Cadence must use `runWithAuth` + tenant helpers.
+
 ## 3. Monorepo layout (scaffolded)
 
 ```
 packages/
-  core/            @ai-admin/core      — in-process engine surface (re-exports backend engine + runWithAuth)
+  core/            @ai-admin/core      — in-process engine surface (hot-path + provisioning re-exports; see §2)
   cadence-shared/  @cadence/shared     — domain types (spec §5) + Broker job contracts (spec §C4)
 apps/
   cadence-api/     @cadence/api        — Node backend; owns Cadence DB; consumes @ai-admin/core
