@@ -131,6 +131,8 @@ svg { stroke-width: 1.9; } .stroke { stroke: currentColor; fill: none; }
 
 /* ── App header ──────────────────────────────────────────────── */
 .app-head { padding: 6px 20px 14px; display: flex; align-items: center; justify-content: space-between; }
+/* Wordmark-less header (Today/Progress): the gear alone, pinned right. */
+.app-head-min { justify-content: flex-end; padding-top: 12px; }
 .app-head .wordmark { font-family: var(--display); font-weight: 800; font-size: 19px; letter-spacing: -.02em; display: flex; align-items: center; gap: 9px; }
 .app-head .wordmark .orb { width: 22px; height: 22px; }
 .counter { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 999px; background: rgba(44, 85, 69, .1); border: 1px solid rgba(44, 85, 69, .22); }
@@ -148,31 +150,56 @@ svg { stroke-width: 1.9; } .stroke { stroke: currentColor; fill: none; }
 .tag.sys { color: var(--forest); background: rgba(44, 85, 69, .12); }
 .tag.cat { color: var(--dawn-3); background: rgba(224, 122, 95, .12); }
 
-/* ── Chat ────────────────────────────────────────────────────── */
-.chat { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 4px 20px 4px; overflow-y: auto; }
-.bubble { max-width: 84%; font-size: 13.5px; line-height: 1.5; padding: 11px 14px; border-radius: 18px; }
-.bubble.ai { background: var(--surface); border: 1px solid var(--line-soft); border-bottom-left-radius: 6px; }
-.bubble.me { background: linear-gradient(135deg, var(--dawn-4), var(--dawn-3)); border-bottom-right-radius: 6px; color: #fff; align-self: flex-end; }
-.ai-row { display: flex; gap: 9px; align-items: flex-end; max-width: 90%; align-self: flex-start; }
-.ai-row .orb { width: 24px; height: 24px; margin-bottom: 2px; }
+/* ── Chat (Claude-style: the coach speaks in the open, only the user gets a bubble) ─── */
+.chatscreen { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* Top padding clears the floating gear/Review pill; bottom padding clears the floating composer. */
+.chat { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 18px; padding: 56px 20px 122px; overflow-y: auto; }
+.coach-msg { align-self: flex-start; max-width: 100%; font-size: 16px; line-height: 1.6; color: var(--text); white-space: pre-wrap; }
+.bubble { max-width: 84%; font-size: 15px; line-height: 1.5; padding: 11px 15px; border-radius: 18px; }
+.bubble.me { background: linear-gradient(135deg, var(--dawn-4), var(--dawn-3)); border-bottom-right-radius: 6px; color: #fff; align-self: flex-end; white-space: pre-wrap; }
 .capture { align-self: center; display: inline-flex; align-items: center; gap: 8px; background: rgba(139, 168, 142, .14); border: 1px solid rgba(139, 168, 142, .32); color: var(--forest); font-size: 11.5px; padding: 6px 12px; border-radius: 999px; font-weight: 600; }
 .chat-loading { flex: 1; display: grid; place-items: center; padding: 40px 0; }
 .typing { display: inline-flex; gap: 4px; align-items: center; }
 .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-mute); animation: blink 1.4s infinite; }
 .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
 @keyframes blink { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
-.composer { padding: 10px 16px 14px; display: flex; align-items: flex-end; gap: 10px; }
-.composer .field { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 10px 16px;
-  color: var(--text); font-size: 13px; font-family: inherit; line-height: 1.45; outline: none;
-  resize: none; max-height: 122px; overflow-y: hidden; /* JS grows to ~5 rows, then flips to scroll */
+
+/* Floating top controls (translucent, over the chat) */
+.float-gear { position: absolute; top: 12px; left: 12px; z-index: 20; width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center; color: var(--text-dim); background: rgba(255, 255, 255, .72);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: 1px solid var(--line-soft);
+  box-shadow: 0 8px 20px -10px rgba(44, 40, 32, .3); }
+.float-review { position: absolute; top: 13px; right: 12px; z-index: 20; display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px; border-radius: 999px; background: rgba(255, 255, 255, .72);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: 1px solid rgba(44, 85, 69, .22);
+  box-shadow: 0 8px 20px -10px rgba(44, 40, 32, .3); }
+.float-review .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--forest); animation: pulse 1.8s ease-in-out infinite; }
+.float-review b { font-family: var(--mono); font-size: 14px; color: var(--forest); }
+.float-review span { font-size: 12px; color: var(--forest); font-weight: 600; }
+
+/* Floating composer — the chat text fades out behind its top edge (scrim) */
+.composer-wrap { position: absolute; left: 0; right: 0; bottom: 0; z-index: 15; display: flex; flex-direction: column; gap: 6px;
+  padding: 0 14px 12px; pointer-events: none; }
+.composer-wrap::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; top: -34px;
+  background: linear-gradient(to top, var(--ink) 60%, transparent); pointer-events: none; }
+.composer { position: relative; pointer-events: auto; display: flex; align-items: flex-end; gap: 4px;
+  background: rgba(255, 255, 255, .88); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border: 1px solid var(--line-soft); border-radius: 26px; padding: 5px 6px;
+  box-shadow: 0 12px 34px -14px rgba(44, 40, 32, .32); }
+.composer .field { flex: 1; background: transparent; border: none; border-radius: 20px; padding: 9px 6px 9px 14px;
+  color: var(--text); font-size: 15px; font-family: inherit; line-height: 1.45; outline: none;
+  resize: none; max-height: 132px; overflow-y: hidden; /* JS grows to ~5 rows, then flips to scroll */
   scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
-.composer .field:focus { border-color: var(--forest); }
 .composer .field::placeholder { color: var(--text-mute); }
 /* Thin, arrow-less scrollbar — only visible once the field is scrolling (past ~5 rows). */
 .composer .field::-webkit-scrollbar { width: 8px; }
 .composer .field::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
 .composer .field::-webkit-scrollbar-thumb:hover { background: var(--line); }
 .composer .send { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto; background: linear-gradient(135deg, var(--dawn-2), var(--dawn-3)); box-shadow: 0 6px 16px -4px rgba(224, 122, 95, .45); }
+.composer .mic { width: 38px; height: 38px; }
+.chat-disclaimer { pointer-events: auto; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 2px 10px; }
+.chat-disclaimer .orb { width: 18px; height: 18px; flex: 0 0 auto; }
+.chat-disclaimer span { font-size: 11px; color: var(--text-mute); line-height: 1.35; text-align: center; }
 
 /* ── Goal card ───────────────────────────────────────────────── */
 .goalcard { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 16px; padding: 13px; margin-bottom: 10px; }
@@ -329,7 +356,7 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 /* ── Welcome / first run ─────────────────────────────────────── */
 .welcome { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 24px 24px 28px; overflow-x: hidden; overflow-y: auto; }
 .welcome .hero { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-.app-head, .stepper, .composer, .cta, .w-name { flex-shrink: 0; }
+.app-head, .composer, .cta, .w-name { flex-shrink: 0; }
 .welcome .hero .orb { width: 84px; height: 84px; }
 .welcome .w-word { font-family: var(--display); font-weight: 800; font-size: 36px; letter-spacing: -.02em; margin-top: 22px; }
 .welcome .w-tag { color: var(--text-dim); font-size: 15px; line-height: 1.55; margin-top: 14px; max-width: 30ch; }
@@ -618,11 +645,3 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 /* Reference dumps (persona, raw JSON, capture, log rows): boxed so they don't dominate the panel;
    these are the ONLY blocks that keep an inner scroll, and only because you rarely read them fully. */
 .devpre.dump { max-height: 220px; overflow: auto; }
-
-/* ── Flow stepper ────────────────────────────────────────────── */
-.stepper { display: flex; align-items: center; gap: 7px; padding: 0 20px 12px; }
-.stepper .st { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-mute); font-weight: 600; }
-.stepper .st .sd { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-family: var(--mono); font-size: 10px; background: var(--surface-2); border: 1px solid var(--line-soft); color: var(--text-mute); }
-.stepper .st.active { color: var(--text); } .stepper .st.active .sd { background: linear-gradient(135deg, var(--dawn-2), var(--dawn-3)); color: #fff; border: none; }
-.stepper .st.done .sd { background: rgba(139, 168, 142, .28); color: var(--forest); border-color: transparent; }
-.stepper .line { flex: 1; height: 1px; background: var(--line-soft); }

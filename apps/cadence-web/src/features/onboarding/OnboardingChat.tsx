@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { openCoachSession, sendCoachMessage, getReview, getCurrentCoach } from '../../lib/api.ts';
-import { Stepper } from '../../components/Stepper.tsx';
 import { Orb } from '../../components/Orb.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
 
@@ -21,20 +20,34 @@ const SendIcon = () => (
   </svg>
 );
 
+const GearIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 17 17" aria-hidden>
+    <circle className="stroke" cx="8.5" cy="8.5" r="2.6" />
+    <path
+      className="stroke"
+      d="M8.5 1.6v2M8.5 13.4v2M1.6 8.5h2M13.4 8.5h2M3.6 3.6l1.4 1.4M12 12l1.4 1.4M13.4 3.6L12 5M5 12l-1.4 1.4"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 /**
- * The coach chat. Two chromes: 'onboarding' (mockup screen 01 — wordmark header, goal counter
- * → Review, stepper, own .app wrapper) and 'none' (bare chat + composer for the Coach TAB,
- * which lives inside MainTabs' .app shell). Streams the Coach over SSE; the Broker captures
- * goals/equipment in the background. Honors the server's freshness verdict: a `stale` restore
- * starts a fresh thread and does NOT render the old transcript (a visible transcript the new
- * session can't see reads as amnesia). 409-safe: send disabled while streaming.
+ * The coach chat, Claude-style: the coach speaks in the open (plain full-width text, no bubble);
+ * only the user's turns get a bubble, so the type can breathe. Two chromes: 'onboarding' (floating
+ * Review pill + the AI disclaimer footer, its own full-screen shell) and 'none' (the Coach TAB,
+ * hosted inside MainTabs' .app shell, with a floating settings gear via `onSettings`). Streams the
+ * Coach over SSE; the Scribe captures goals/equipment in the background. Honors the server's
+ * freshness verdict: a `stale` restore starts a fresh thread and does NOT render the old transcript
+ * (a visible transcript the new session can't see reads as amnesia). 409-safe: send disabled while streaming.
  */
 export function OnboardingChat({
   onReview,
+  onSettings,
   intent = 'onboarding',
   chrome = 'onboarding',
 }: {
   onReview?: () => void;
+  onSettings?: () => void;
   intent?: 'onboarding' | 'ongoing';
   chrome?: 'onboarding' | 'none';
 }) {
@@ -161,49 +174,10 @@ export function OnboardingChat({
     }
   }
 
-  const inner = (
-    <>
-      <div className="chat" ref={chatRef}>
-        {!restored ? (
-          <div className="chat-loading">
-            <span className="typing">
-              <i />
-              <i />
-              <i />
-            </span>
-          </div>
-        ) : (
-          <div className="ai-row">
-            <Orb />
-            <div className="bubble ai">
-              {intent === 'ongoing'
-                ? "Hey — good to see you 👋 How's your rhythm feeling? If something needs to shift — more, less, a different day — say the word and I'll adjust your plan."
-                : "Hi — I'm your Cadence coach 👋 Tell me what you'd like to work on — a first 10k, eating better, a steadier mind, the daily pages — and I'll take notes as we talk. What's on your mind?"}
-            </div>
-          </div>
-        )}
-        {restored &&
-          turns.map((t, i) =>
-            t.role === 'coach' ? (
-              <div className="ai-row" key={i}>
-                <Orb />
-                <div className="bubble ai">
-                  {t.text || (
-                    <span className="typing">
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="bubble me" key={i}>
-                {t.text}
-              </div>
-            ),
-          )}
-      </div>
+  // The composer floats over the chat; when the field is empty we show the mic (voice-first),
+  // and it swaps to the send arrow the moment there's something to send (Claude-style).
+  const composer = (
+    <div className="composer-wrap">
       <div className="composer">
         <textarea
           ref={taRef}
@@ -220,33 +194,73 @@ export function OnboardingChat({
           }}
           placeholder="Message your coach…"
         />
-        <MicButton value={input} onChange={setInput} disabled={streaming} />
-        <button className="send" onClick={send} disabled={streaming} aria-label="Send">
-          <SendIcon />
-        </button>
+        {input.trim() ? (
+          <button className="send" onClick={send} disabled={streaming} aria-label="Send">
+            <SendIcon />
+          </button>
+        ) : (
+          <MicButton value={input} onChange={setInput} disabled={streaming} />
+        )}
       </div>
-    </>
+      {chrome === 'onboarding' && (
+        <div className="chat-disclaimer">
+          <Orb />
+          <span>Cadence is AI and can make mistakes. Please double-check what I say.</span>
+        </div>
+      )}
+    </div>
   );
 
-  // Tab chrome ('none'): bare chat + composer, hosted by MainTabs' .app shell.
-  if (chrome === 'none') return inner;
-
-  // Onboarding chrome: wordmark header + goal counter + stepper + own .app wrapper.
   return (
-    <>
-      <div className="app-head">
-        <div className="wordmark">
-          <Orb />
-          Cadence
-        </div>
-        <button className="counter" onClick={onReview} title="Confirm what I heard & set your rhythm">
+    <div className="chatscreen">
+      {onSettings && (
+        <button className="float-gear" onClick={onSettings} aria-label="Settings" title="Settings">
+          <GearIcon />
+        </button>
+      )}
+      {chrome === 'onboarding' && (
+        <button className="float-review" onClick={onReview} title="Confirm what I heard & set your rhythm">
           {captured > 0 && <span className="pulse" />}
           <b>{captured}</b>
           <span>{captured === 1 ? 'goal' : 'goals'} · Review →</span>
         </button>
+      )}
+      <div className="chat" ref={chatRef}>
+        {!restored ? (
+          <div className="chat-loading">
+            <span className="typing">
+              <i />
+              <i />
+              <i />
+            </span>
+          </div>
+        ) : (
+          <div className="coach-msg">
+            {intent === 'ongoing'
+              ? "Hey — good to see you 👋 How's your rhythm feeling? If something needs to shift — more, less, a different day — say the word and I'll adjust your plan."
+              : "Hi — I'm your Cadence coach 👋 Tell me what you'd like to work on — a first 10k, eating better, a steadier mind, the daily pages — and I'll take notes as we talk. What's on your mind?"}
+          </div>
+        )}
+        {restored &&
+          turns.map((t, i) =>
+            t.role === 'coach' ? (
+              <div className="coach-msg" key={i}>
+                {t.text || (
+                  <span className="typing">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="bubble me" key={i}>
+                {t.text}
+              </div>
+            ),
+          )}
       </div>
-      <Stepper active={0} />
-      <div className="app">{inner}</div>
-    </>
+      {composer}
+    </div>
   );
 }

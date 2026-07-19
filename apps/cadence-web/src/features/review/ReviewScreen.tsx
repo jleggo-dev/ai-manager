@@ -29,7 +29,6 @@ import {
   updateName,
   type ReviewData,
 } from '../../lib/api.ts';
-import { Stepper } from '../../components/Stepper.tsx';
 import { Orb } from '../../components/Orb.tsx';
 
 type Step = 'goals' | 'you' | 'gear' | 'lock';
@@ -173,7 +172,6 @@ export function ReviewScreen({
           <span>{mode === 'manage' ? '✕ close' : 'coach'}</span>
         </button>
       </div>
-      {mode === 'onboard' && <Stepper active={step === 'lock' ? 2 : 1} />}
     </>
   );
 
