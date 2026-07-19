@@ -35,15 +35,15 @@ import {
 import PageHeader from '../components/atoms/PageHeader';
 import UptimePieChart from '../components/UptimePieChart';
 import UptimeHeatmap from '../components/UptimeHeatmap';
+import {
+  aggregateUptimeTotals,
+  countActiveIncidents,
+  formatOverallUptimePercent,
+  overallUptimePercent,
+  sortHistoryByUptimeAsc,
+} from '../lib/health-aggregation';
 import * as api from '../services/api';
-import type {
-  HcDashboardItem,
-  HcRun,
-  WidgetHcDashboardItem,
-  WidgetHcRun,
-  CheckUptimeHistory,
-  UptimeTotals,
-} from '../types/api';
+import type { HcDashboardItem, HcRun, WidgetHcDashboardItem, WidgetHcRun, CheckUptimeHistory } from '../types/api';
 
 type UnifiedDashboardItem =
   (HcDashboardItem & { checkType: 'api' }) | (WidgetHcDashboardItem & { checkType: 'widget' });
@@ -234,24 +234,9 @@ export default function HealthDashboardPage({
 
   /* ── Derived data ───────────────────────────────────────── */
 
-  const aggregateTotals = useMemo<UptimeTotals>(() => {
-    return uptimeHistory.reduce(
-      (acc, h) => ({
-        pass: acc.pass + h.totals.pass,
-        fail: acc.fail + h.totals.fail,
-        timeout: acc.timeout + h.totals.timeout,
-        error: acc.error + h.totals.error,
-        warning: acc.warning + (h.totals.warning ?? 0),
-      }),
-      { pass: 0, fail: 0, timeout: 0, error: 0, warning: 0 },
-    );
-  }, [uptimeHistory]);
-
-  const sortedHistoryItems = useMemo(() => {
-    return [...uptimeHistory].sort((a, b) => (a.uptimePercent ?? 101) - (b.uptimePercent ?? 101));
-  }, [uptimeHistory]);
-
-  const activeIncidentCount = useMemo(() => items.filter((i) => i.activeIncident).length, [items]);
+  const aggregateTotals = useMemo(() => aggregateUptimeTotals(uptimeHistory), [uptimeHistory]);
+  const sortedHistoryItems = useMemo(() => sortHistoryByUptimeAsc(uptimeHistory), [uptimeHistory]);
+  const activeIncidentCount = useMemo(() => countActiveIncidents(items), [items]);
 
   const sortedItems = useMemo(() => {
     const sorted = [...items].sort((a, b) => {
@@ -354,22 +339,8 @@ export default function HealthDashboardPage({
               <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
                 Overall Uptime
               </Text>
-              <Text
-                size="xl"
-                fw={700}
-                c={
-                  aggregateTotals.pass + aggregateTotals.fail + aggregateTotals.timeout + aggregateTotals.error === 0
-                    ? 'dimmed'
-                    : undefined
-                }
-              >
-                {(() => {
-                  const total =
-                    aggregateTotals.pass + aggregateTotals.fail + aggregateTotals.timeout + aggregateTotals.error;
-                  return total > 0
-                    ? `${(Math.round((aggregateTotals.pass / total) * 10_000) / 100).toFixed(2)}%`
-                    : 'N/A';
-                })()}
+              <Text size="xl" fw={700} c={overallUptimePercent(aggregateTotals) == null ? 'dimmed' : undefined}>
+                {formatOverallUptimePercent(aggregateTotals)}
               </Text>
             </Paper>
             <Paper withBorder p="md" radius="md">
