@@ -158,25 +158,18 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     // accumulating the assistant content + usage, so we can log the turn + diagnostics
     // to AI Admin after the stream (the in-process path must do this bookkeeping itself).
     const t0 = Date.now();
-    const {
-      content,
-      promptTokens,
-      completionTokens,
-      model,
-      responseId,
-      firstTokenMs,
-      clientDropped,
-    } = await relayAndAccumulate(response.body, {
-      isClientAlive: () => clientAlive,
-      writeChunk: (chunk) => {
-        try {
-          res.write(chunk);
-        } catch {
-          clientAlive = false;
-          return false;
-        }
-      },
-    });
+    const { content, promptTokens, completionTokens, model, responseId, firstTokenMs, clientDropped } =
+      await relayAndAccumulate(response.body, {
+        isClientAlive: () => clientAlive,
+        writeChunk: (chunk) => {
+          try {
+            res.write(chunk);
+          } catch {
+            clientAlive = false;
+            return false;
+          }
+        },
+      });
     // writeChunk may have flipped clientAlive on a failed write; also honor stream result.
     if (clientDropped) clientAlive = false;
     if (clientAlive) {

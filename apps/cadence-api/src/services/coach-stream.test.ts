@@ -3,11 +3,7 @@
  * Covers both upstream frame shapes and the R1 TCP chunk-split regression.
  */
 import { describe, it, expect, vi } from 'vitest';
-import {
-  applySseDataPayload,
-  createCoachStreamAccumulateState,
-  relayAndAccumulate,
-} from './coach-stream.ts';
+import { applySseDataPayload, createCoachStreamAccumulateState, relayAndAccumulate } from './coach-stream.ts';
 
 /** Build a ReadableStream from UTF-8 text chunks (simulates TCP framing). */
 function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
@@ -49,10 +45,7 @@ describe('applySseDataPayload — OpenAI-style delta frames', () => {
 describe('applySseDataPayload — v2 message.complete frames', () => {
   it('takes text + tokens from message.complete when no deltas arrived', () => {
     const state = createCoachStreamAccumulateState();
-    applySseDataPayload(
-      state,
-      JSON.stringify({ type: 'v2.response.created', responseId: 'resp_abc' }),
-    );
+    applySseDataPayload(state, JSON.stringify({ type: 'v2.response.created', responseId: 'resp_abc' }));
     applySseDataPayload(
       state,
       JSON.stringify({
@@ -114,8 +107,7 @@ describe('relayAndAccumulate', () => {
   });
 
   it('accumulates message.complete when chunks split mid-JSON', async () => {
-    const payload =
-      'data: {"type":"message.complete","text":"ok","inputTokens":1,"outputTokens":1,"modelId":"v2"}\n\n';
+    const payload = 'data: {"type":"message.complete","text":"ok","inputTokens":1,"outputTokens":1,"modelId":"v2"}\n\n';
     const chunks = [payload.slice(0, 20), payload.slice(20)];
 
     const result = await relayAndAccumulate(streamFromChunks(chunks));

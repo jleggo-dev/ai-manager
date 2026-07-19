@@ -75,9 +75,7 @@ export function applySseDataPayload(state: CoachStreamAccumulateState, data: str
     if (typeof p.responseId === 'string' && !state.responseId) state.responseId = p.responseId;
     if (p.type === 'message.complete') {
       state.promptTokens =
-        (p.inputTokens as number | undefined) ??
-        (p.estimatedInputTokens as number | undefined) ??
-        state.promptTokens;
+        (p.inputTokens as number | undefined) ?? (p.estimatedInputTokens as number | undefined) ?? state.promptTokens;
       state.completionTokens =
         (p.outputTokens as number | undefined) ??
         (p.estimatedOutputTokens as number | undefined) ??

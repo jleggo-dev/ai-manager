@@ -67,14 +67,7 @@ describe('@ai-admin/core SSE line buffer (sse-line-reader)', () => {
       chunks.push(payload.slice(i, i + 7));
     }
     const result = processChunks(chunks);
-    expect(result.lines).toEqual([
-      'data: {"a":1}',
-      '',
-      'data: {"b":2}',
-      '',
-      'data: [DONE]',
-      '',
-    ]);
+    expect(result.lines).toEqual(['data: {"a":1}', '', 'data: {"b":2}', '', 'data: [DONE]', '']);
     expect(result.remaining).toBe('');
   });
 });
