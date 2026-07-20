@@ -11,7 +11,7 @@ merge — and do not start the next batch — while CI is red.
 ```
 Code → Review → Fix? → Test (local) → Fix? → Commit/push (CI on PR)
   → Fix until CI green → PR open/updated → Review → Fix? → Merge (checks pass)
-  → Confirm base branch green → (prod/release later) → Done
+  → Confirm base branch green → Post-merge test-data cleanup → (prod/release later) → Done
 ```
 
 **Source of truth for ship gates.** Child skills detail commands/checklists; this skill owns the
@@ -223,6 +223,37 @@ See [refactoring_plan.md](../../../refactoring_plan.md) §6 for orchestrator/sup
 
 ---
 
+## Step 12b — Post-merge test-data cleanup (before Done / next batch)
+
+After merge (and before marking Done or starting the next refactor batch), clear **local/dev
+scratch and E2E leftovers** so the next demo/onboarding pass starts clean. Prefer existing
+scripts; never wipe production or real-auth users.
+
+### What to clean
+
+| Surface | Safe target | Command (repo root, PowerShell) |
+|---------|-------------|-----------------------------------|
+| Cadence scratch accounts (`account-1` / `account-2`) | Allowlisted UUIDs only | `npm run cleanup:cadence-dev-accounts` |
+| AI Admin E2E leftovers | `calling_application` / `display_name` LIKE `e2e%` only | Dry-run: `npx tsx backend/scripts/cleanup-e2e-test-data.ts` then `npm run cleanup:e2e-ai-admin` |
+| Both | Same as above | `npm run cleanup:test-data` |
+
+Also useful: `node --import tsx apps/cadence-api/scripts/account.ts list` (inventory) /
+`reset <slug>`; in-app `POST /dev/reset` when `CADENCE_DEV_USER_ID` is set.
+
+### Safeties
+
+- Requires local `.env` credentials (`apps/cadence-api/.env`, `backend/.env`). **Never commit
+  secrets; never print full keys.**
+- Cadence reset only touches allowlisted scratch accounts — not real JWT users.
+- AI Admin cleanup only deletes `e2e%` tagged rows (sessions, diagnostic logs, calling apps).
+- If you cannot tell **dev vs production**, or the workspace/project looks wrong — **stop and
+  ask** rather than guessing a destructive wipe.
+
+**Exit:** Scratch accounts at zero rows (or intentionally kept for a demo); E2E inventory dry-run
+shows nothing left (or leftovers documented).
+
+---
+
 ## Step 13 — Prod / release verification (later gate)
 
 Deploy/smoke verification in prod or a release environment is a **later** gate. It does **not**
@@ -232,8 +263,10 @@ block every refactor batch merge, but it must happen before calling a release "s
 
 ## Step 14 — Done
 
-Item/batch is complete for merge purposes when steps 1–12 are satisfied. Mark backlog status
-(`Done` / later `Verified` after smoke) per the living plan when applicable.
+Item/batch is complete for merge purposes when steps 1–12 are satisfied **and** step 12b
+test-data cleanup has run (or was explicitly skipped with a written reason, e.g. intentional
+demo seed kept). Mark backlog status (`Done` / later `Verified` after smoke) per the living
+plan when applicable.
 
 ---
 
@@ -246,6 +279,7 @@ Item/batch is complete for merge purposes when steps 1–12 are satisfied. Mark 
 | `npm run prepush` | Step 4 (and after each fix loop) |
 | `npm test` | Steps 4–5 |
 | `npm run test:e2e` | Step 4 when chat/API/integration touched |
+| `npm run cleanup:test-data` | Step 12b — Cadence scratch accounts + AI Admin `e2e%` leftovers |
 | `npm run ci` | Stricter than prepush (no Vite build); optional extra gate |
 | `gh pr checks` | Steps 7, 11, 12 |
 

@@ -107,4 +107,5 @@ with a documented reason and human action item. Report-only CI does **not** mean
 ## After review
 
 - **Changes requested** → implement fixes → return to [development-workflow](../development-workflow/SKILL.md) step 2, then re-enter the CI gate (step 7).
-- **Approve** + green CI → proceed to merge (step 11); confirm integration branch green before the next batch (step 12).
+- **Approve** + green CI → proceed to merge (step 11); confirm integration branch green (step 12);
+  run **step 12b** test-data cleanup (`npm run cleanup:test-data`) before Done / next batch.
