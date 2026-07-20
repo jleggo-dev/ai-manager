@@ -35,7 +35,8 @@ source report that contains the full current-problem/target-design/migration-ste
    (splits + BE-03 Done).
 4. **Cadence coverage is improving but uneven.** `apps/cadence-api` now has real suites (plan
    commit, nutrition, coach-stream, aim seam). `apps/cadence-web` gained ReviewScreen (WEB-01),
-   OccurrenceSheet (WEB-03), and Today/Progress/Plan card-row coverage (WEB-04); **CROSS-03** remains open.
+   OccurrenceSheet (WEB-03), and Today/Progress/Plan card-row coverage (WEB-04); **CROSS-03** AI Admin
+   half Done (providers list); Cadence nutrition-day half still open.
 5. Read §4.2 for the accurate remaining backlog, §5 for durable goals, §6 for multi-agent
    orchestration.
 6. **CI gate between batches:** do not start the next parallel batch (and do not merge) while
@@ -109,7 +110,7 @@ numbers verbatim.
 | **`Broker` → `Scribe` rename (exported DevTrace field names + shared contracts module)** | Report 03/04/05 | **CROSS-01** | ✅ Done (PR #30) |
 | **SSE line-buffering/parsing logic independently reimplemented 3+ times** | Reports 01/03/05 | **CROSS-02** | ✅ Done (BE-02 #18 + API-03 #25) |
 | **Template-interpolation logic reimplemented independently** instead of using canonical helpers | Report 02 §1.4/§4.1 (3× inside frontend) | FE-01/FE-03 sub-tasks | ✅ Done with those items |
-| **No data-fetching cache layer anywhere React is used** — hand-rolled `useState`+`useEffect`+manual error notification, duplicated fetches | Report 02 §6 (AI Admin frontend), Report 04 §6 (Cadence web) | **CROSS-03** | Still open — deferred past WEB-04 (see CROSS-03 notes) |
+| **No data-fetching cache layer anywhere React is used** — hand-rolled `useState`+`useEffect`+manual error notification, duplicated fetches | Report 02 §6 (AI Admin frontend), Report 04 §6 (Cadence web) | **CROSS-03** | AI Admin half ✅ (providers list); Cadence half still open (nutrition-day) |
 | **Zero automated test coverage exactly where business/security risk is highest** | All six reports | pervasive theme | Partially closed (API-01/04/05, FE-09, …); Cadence web still thin |
 | **Two-Supabase-projects architecture** has implications for CI secret-scoping | Report 06 §4.4 | folded into **INFRA-02** | ✅ Done (path-filtered jobs) |
 
@@ -398,17 +399,17 @@ per item / per area intro).
 >   `unitConversion` (plausibleKg 20–500 clamp / corruption fallback) + preview/lock recovery
 >   (`refactor/web-01-review-screen`, PR #45). Dropped from eslint `max-lines` allowlist.
 >
-> **Remaining Phase 2 P1 (accurate as of WEB-04 + PRs #44/#45):**
+> **Remaining Phase 2 P1 (accurate as of CROSS-03 AI Admin half):**
 > - **WEB-01** ✅ Done (PR #45) — ReviewScreen wizard split + unit-conversion tests
 > - **WEB-03** ✅ Done (PR #44) — OccurrenceSheet panel split
 > - **WEB-04** ✅ Done — Today/Progress/Plan card/row dedup
-> - **CROSS-03** — TanStack Query pilot still open; **not** landed with WEB-04 (see CROSS-03 backlog note)
+> - **CROSS-03** — AI Admin half ✅ (providers list + QueryClientProvider); Cadence half still open
+>   (nutrition-day across TodayDashboard / SettingsSheet / OccurrenceSheet)
 >
 > **Batch 7:** **WEB-02** ✅ (PR #41) · **FE-10** ✅ (PR #42) · **API-06** ✅ (PR #40).
 > **Batch 8:** **WEB-03** ✅ (PR #44) · **WEB-01** ✅ (PR #45) · **WEB-04** ✅ (card/row dedup).
-> CROSS-03 deferred — needs an explicit decision to add `@tanstack/react-query` + `QueryClientProvider`,
-> and the nutrition-day triplication spans `SettingsSheet` / `OccurrenceSheet` (sibling-owned / P2),
-> so a WEB-04-only pilot would not collapse the real duplication without touching those surfaces.
+> **CROSS-03 AI Admin:** `@tanstack/react-query` + providers-list pilot (`refactor/cross-03-ai-admin-react-query`).
+> Cadence nutrition-day pilot remains sibling-owned.
 
 #### Backend (report 01)
 
@@ -508,18 +509,23 @@ duplication (`apps/cadence-web`'s nutrition-day fetch is independently triplicat
 `frontend/`'s error-notification boilerplate repeats ~40+ times).
 
 **Recommendation:** don't do this as a repo-wide migration. Pilot it on **one** surface per product
-as part of an already-planned refactor — `frontend/`'s pilot should be FE-01 (`ProcessingJobManager.tsx`'s split naturally wants new hooks; make them `useQuery`/`useMutation`-based from the start rather than retrofitting later), and `apps/cadence-web`'s pilot was originally slated with WEB-04.
-
-**Backlog note (after WEB-04):** TanStack Query was **not** piloted in WEB-04. Reasons: (1) introducing
-`@tanstack/react-query` + app-level `QueryClientProvider` is a dependency/architecture decision that
-should be explicit, not a drive-by; (2) the nutrition-day triplication lives across `TodayDashboard`,
-`SettingsSheet`, and `OccurrenceSheet` — the latter two are sibling/P2 surfaces, so a WEB-04-only
-`useQuery` would not collapse the real duplication without expanding scope. Next host candidates:
-a dedicated CROSS-03 PR that wires the provider + one `nutritionDay` query key shared by those three
-call sites, or FE-01's hook split on the AI Admin frontend.
+— expand from there once the pattern proves out, rather than a big-bang migration.
 
 **Priority/Effort/Risk:** P1 (as a decision to make now) / L (as a full migration, not being
 recommended) / Low if piloted narrowly as above.
+
+**AI Admin half — Done** (`refactor/cross-03-ai-admin-react-query`):
+- Added `@tanstack/react-query`; `QueryClientProvider` in `frontend/src/main.tsx`.
+- Shared defaults in `frontend/src/lib/query-client.ts` (staleTime 30s, gcTime 5m, retry 1,
+  `refetchOnWindowFocus: false`) — Cadence nutrition-day pilot should mirror unless documented.
+- Conventions: `frontend/docs/tanstack-query.md` + query-key factories in `lib/query-keys.ts`.
+- **Pilot surface:** `GET /api/providers` via `useProvidersQuery` — shared by `ProviderManager`
+  and `useAiProfilesData` (Providers ↔ AI Profiles nav). Invalidate `providerKeys.all` after
+  create/update/delete.
+
+**Cadence half — Still open:** nutrition-day triplication across `TodayDashboard` /
+`SettingsSheet` / `OccurrenceSheet` (sibling-owned; was deferred past WEB-04). Align defaults
+with AI Admin's `query-client.ts` when landing.
 
 ---
 

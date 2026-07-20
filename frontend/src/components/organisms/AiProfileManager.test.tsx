@@ -2,6 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import AiProfileManager from './AiProfileManager';
 import * as api from '../../services/api';
+import { QueryWrapper } from '../../test/query-wrapper';
 
 /* jsdom doesn't implement scrollTo; TestChatPanel's auto-scroll effect needs a no-op. */
 Element.prototype.scrollTo = vi.fn() as unknown as typeof Element.prototype.scrollTo;
@@ -122,9 +123,11 @@ const mockProfiles = [
 
 function renderComponent() {
   return render(
-    <MantineProvider>
-      <AiProfileManager />
-    </MantineProvider>,
+    <QueryWrapper>
+      <MantineProvider>
+        <AiProfileManager />
+      </MantineProvider>
+    </QueryWrapper>,
   );
 }
 

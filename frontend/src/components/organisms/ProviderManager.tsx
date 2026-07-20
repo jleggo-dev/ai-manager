@@ -3,9 +3,11 @@
  * ----------------------------
  * Lists providers with CRUD actions, test connectivity,
  * and create/edit forms via modal.
+ *
+ * CROSS-03: providers list via TanStack Query (`useProvidersQuery`); invalidate after mutate.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import useConfirm from '../../hooks/useConfirm';
 import {
   Stack,
@@ -25,32 +27,26 @@ import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { IconPlus, IconTrash, IconEdit, IconPlugConnected, IconAlertCircle } from '@tabler/icons-react';
 import ProviderForm from '../molecules/ProviderForm';
+import { useInvalidateProviders, useProvidersQuery } from '../../hooks/useProvidersQuery';
 import * as api from '../../services/api';
 import type { Provider } from '../../types/api';
 
 export default function ProviderManager() {
   const confirm = useConfirm();
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: providers = [], isLoading, isError, error } = useProvidersQuery();
+  const invalidateProviders = useInvalidateProviders();
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Provider | null>(null);
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
 
-  const loadProviders = useCallback(async () => {
-    try {
-      setLoading(true);
-      const result = await api.listProviders();
-      setProviders(result.data);
-    } catch (err: unknown) {
-      notifications.show({ title: 'Error', message: err instanceof Error ? err.message : String(err), color: 'red' });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    loadProviders();
-  }, [loadProviders]);
+    if (!isError) return;
+    notifications.show({
+      title: 'Error',
+      message: error instanceof Error ? error.message : String(error),
+      color: 'red',
+    });
+  }, [isError, error]);
 
   async function handleSubmit(form: Record<string, unknown>) {
     try {
@@ -64,7 +60,7 @@ export default function ProviderManager() {
       }
       closeModal();
       setEditing(null);
-      await loadProviders();
+      await invalidateProviders();
     } catch (err: unknown) {
       notifications.show({ title: 'Error', message: err instanceof Error ? err.message : String(err), color: 'red' });
     } finally {
@@ -77,7 +73,7 @@ export default function ProviderManager() {
     try {
       await api.deleteProvider(id);
       notifications.show({ title: 'Deleted', message: 'Provider removed', color: 'orange' });
-      await loadProviders();
+      await invalidateProviders();
     } catch (err: unknown) {
       notifications.show({ title: 'Error', message: err instanceof Error ? err.message : String(err), color: 'red' });
     }
@@ -100,7 +96,7 @@ export default function ProviderManager() {
     }
   }
 
-  if (loading)
+  if (isLoading)
     return (
       <Center py="xl">
         <Loader />
@@ -172,7 +168,6 @@ export default function ProviderManager() {
         ))
       )}
 
-      {/* Create / Edit Modal */}
       <Modal
         opened={modalOpened}
         onClose={() => {
