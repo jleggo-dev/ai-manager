@@ -4,6 +4,7 @@
  *   seed  <slug|uuid>  — ensure the users row exists
  *   reset <slug|uuid>  — wipe ALL cadence data for the account (keeps the users row; nulls the
  *                        name, empties the baseline) so it can be onboarded fresh
+ *   reset-all          — reset every allowlisted scratch account (post-merge cleanup)
  * Run: node --import tsx apps/cadence-api/scripts/account.ts <cmd> [slug]   e.g. reset account-1
  */
 import { sql } from '../src/db/sql.ts';
@@ -45,8 +46,14 @@ async function main() {
     const id = resolve(arg);
     await reset(id);
     console.log(`✓ reset ${arg} → ${id} (all data cleared, name + baseline reset — ready for fresh onboarding)`);
+  } else if (cmd === 'reset-all') {
+    for (const [slug, id] of Object.entries(cadenceConfig.devAccounts)) {
+      await reset(id);
+      console.log(`✓ reset ${slug} → ${id}`);
+    }
+    console.log('✓ reset-all complete (scratch accounts only — not real auth users)');
   } else {
-    console.log('usage: account.ts <list|seed|reset> [slug|uuid]');
+    console.log('usage: account.ts <list|seed|reset|reset-all> [slug|uuid]');
   }
   await sql.end();
 }
