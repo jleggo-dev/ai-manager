@@ -5,6 +5,25 @@ Cadence deploys **separately from AI Admin**, on Vercel. AI Admin keeps its own 
 invariant holds: dependencies flow one way (Cadence → AI Admin), so AI Admin deploys and runs
 with Cadence absent. See [project_ai_manager_monorepo] memory / CLAUDE.md for the boundary rule.
 
+> **INFRA-P2 (2026-07-20):** Report 06 §4.6 asked whether Cadence Vercel config was aspirational.
+> It is **not** — both app configs exist and the web rewrite already points at a live API host.
+> This doc is the source of truth; `docs/cadence/PLAN.md` §11 defers here for compute model.
+
+## Live Vercel targets (config-as-code)
+
+| Product | Vercel project role | Root Directory | Config file | Compute |
+|---|---|---|---|---|
+| **AI Admin** (monorepo root) | Combined frontend + backend Services | `./` (repo root) | [`vercel.json`](../../vercel.json) (`experimentalServices`) | Vite SPA + long-running backend at `/_/backend` |
+| **cadence-web** | Static SPA (+ `/api` rewrite) | `apps/cadence-web` | [`apps/cadence-web/vercel.json`](../../apps/cadence-web/vercel.json) | Vite static |
+| **cadence-api** | Long-running Express Service | `apps/cadence-api` | [`apps/cadence-api/vercel.json`](../../apps/cadence-api/vercel.json) (`services`) | Express Service (not classic serverless) |
+
+**cadence-web → API rewrite (checked into config):** `/api/:path*` →
+`https://ai-manager-cadence-api-2f4j.vercel.app/:path*` (update this host in
+`apps/cadence-web/vercel.json` if the API project domain changes).
+
+**Do not** put Cadence into the repo-root `experimentalServices` block — new Vercel projects
+reject that key, and AI Admin already owns the root project.
+
 ## Two pieces, and why they differ
 
 | Piece | What | Build/run context |
@@ -86,4 +105,6 @@ and matches dev.)
 - Vercel deploys from the connected branch (usually `main`). `feat/cadence` must merge to `main`
   before a production deploy tracks it.
 - Cadence's data is the `cadence` schema in the shared Supabase project (reused from Spartan
-  Tracker); migrations in `migrations/cadence/` apply via `apps/cadence-api/scripts/apply-migration-*.ts`.
+  Tracker); migrations in `migrations/cadence/` apply via `apps/cadence-api/scripts/apply-migration-*.ts`
+  today. Consolidation plan (Supabase CLI, retire one-offs): [`docs/infra/MIGRATION-TOOLING.md`](../infra/MIGRATION-TOOLING.md).
+- Config-as-code drift (scheduled dry-run, no PR secrets): [`docs/infra/CONFIG-DRIFT.md`](../infra/CONFIG-DRIFT.md).

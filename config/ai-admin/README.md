@@ -23,10 +23,15 @@ must point at entities that already exist. So fill the `<PLACEHOLDER>` tokens in
 2. **Register the calling app** — `POST /api/calling-applications` with
    `platform:cadence` (400s on every call without it).
 3. **Sync profiles** — `node backend/scripts/ai-admin-sync.mjs config/ai-admin/ai-admin.config.json --dry-run`
-   to preview, then without `--dry-run`. Copy the created profile UUIDs into the jobs'
-   `ai_profile_id` and the workflow's `ai_profile_id`.
-4. **Sync jobs** — re-run sync. Copy job UUIDs into the workflow `steps[].processing_job_id`.
-5. **Sync the workflow** — re-run sync.
+   to preview (content-aware: `skip` = already matches, `update`/`create` = would write), then
+   without `--dry-run`. Copy the created profile UUIDs into the jobs' `ai_profile_id` and the
+   workflow's `ai_profile_id`.
+4. **Sync jobs (preferred for day-to-day prompt edits)** —
+   `node --import tsx apps/cadence-api/scripts/sync-jobs.ts` (jobs only — does not clobber live
+   profile model pointers). Preview / CI:
+   `… sync-jobs.ts --dry-run --fail-on-drift`. See [`docs/infra/CONFIG-DRIFT.md`](../../docs/infra/CONFIG-DRIFT.md).
+5. **Sync the workflow** — re-run `ai-admin-sync.mjs` once job UUIDs are filled into
+   `steps[].processing_job_id`.
 6. **Wire env** — put the resulting profile/job ids + `AIM_WORKSPACE_ID` into
    `apps/cadence-api/.env` (see its `.env.example`).
 
