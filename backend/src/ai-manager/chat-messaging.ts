@@ -384,9 +384,11 @@ export async function submitV2ToolOutputs(
 
   const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
   const timeoutMs = await resolveTimeoutMs({}, provider);
+  // Devs.ai /resume expects camelCase toolOutputs (toolCallId/status/output), not tool_outputs.
   const v2Outputs = outputs.map((o) => ({
-    tool_call_id: o.toolCallId,
+    toolCallId: o.toolCallId,
     output: o.output,
+    status: 'success' as const,
   }));
   const sseResponse = await client.resumeResponseStream(responseId, v2Outputs, {
     timeoutMs,

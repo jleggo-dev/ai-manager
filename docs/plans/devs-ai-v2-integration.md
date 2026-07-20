@@ -14,7 +14,7 @@ Key revisions incorporated below:
 1. **Adapter-first design** — `DevsAiV2Client implements LlmClient`; avoid parallel `provider.type === 'devs-ai-v2'` branches in `executeJobById` / `sendChatMessage` where the adapter suffices.
 2. **`expectedSchema` converter required** — job `config.expectedSchema.fields` is AI Admin's custom format, NOT JSON Schema; must convert before `text.format.json_schema`.
 3. **Basic v2 chat is nearly free** — `sendChatMessage` model path (`chatCompletionStream` at line ~1043) works once the adapter re-emits SSE shapes the route already parses.
-4. **Tool loop is Phase B, not trivial** — v2 uses `/resume` + `function_call_output`; v1 uses `/tool-outputs` + `systemMessageId`. Parallel implementation required.
+4. **Tool loop is Phase B, not trivial** — v2 uses `POST /responses/{id}/resume` with camelCase `toolOutputs: [{ toolCallId, status, output }]` (not snake_case `tool_outputs` / OpenAI `function_call_output`); v1 uses `/tool-outputs` + `systemMessageId`. Parallel implementation required.
 5. **Lazy thread open** — no remote call at `openChatSession` for v2; create thread on first message.
 6. **`provider_metadata jsonb`** on `chat_sessions` for `previous_response_id`, `conversation_id`, `last_sequence` (Phase B+).
 7. **Revised estimate:** Phase A 3–4d, Phase B 5–7d (tool loop), Phase C 3–4d → **~11–15 days total**.
