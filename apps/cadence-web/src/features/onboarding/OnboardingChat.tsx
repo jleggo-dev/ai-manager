@@ -1,12 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import { openCoachSession, sendCoachMessage, getReview, getCurrentCoach } from '../../lib/api.ts';
+import { useEffect, useRef } from 'react';
 import { Orb } from '../../components/Orb.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
-
-interface Turn {
-  role: 'user' | 'coach';
-  text: string;
-}
+import { useCoachChat } from './useCoachChat.ts';
 
 const SendIcon = () => (
   <svg width="17" height="17" viewBox="0 0 17 17" aria-hidden>
@@ -36,9 +31,8 @@ const GearIcon = () => (
  * only the user's turns get a bubble, so the type can breathe. Two chromes: 'onboarding' (floating
  * Review pill + the AI disclaimer footer, its own full-screen shell) and 'none' (the Coach TAB,
  * hosted inside MainTabs' .app shell, with a floating settings gear via `onSettings`). Streams the
- * Coach over SSE; the Scribe captures goals/equipment in the background. Honors the server's
- * freshness verdict: a `stale` restore starts a fresh thread and does NOT render the old transcript
- * (a visible transcript the new session can't see reads as amnesia). 409-safe: send disabled while streaming.
+ * Coach over SSE; the Scribe captures goals/equipment in the background. Session/stream logic
+ * lives in `useCoachChat` so drop-recovery is unit-testable without this chrome.
  */
 export function OnboardingChat({
   onReview,
@@ -51,12 +45,7 @@ export function OnboardingChat({
   intent?: 'onboarding' | 'ongoing';
   chrome?: 'onboarding' | 'none';
 }) {
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [input, setInput] = useState('');
-  const [streaming, setStreaming] = useState(false);
-  const [captured, setCaptured] = useState(0);
-  const [restored, setRestored] = useState(false); // false until the server history loads
-  const sessionId = useRef<string | null>(null);
+  const { turns, input, setInput, streaming, captured, restored, send } = useCoachChat({ intent });
   const chatRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -67,9 +56,7 @@ export function OnboardingChat({
     chat.scrollTop = chat.scrollHeight;
   }, [turns]);
 
-  // Auto-grow the composer to fit what's typed, up to ~5 rows (the CSS max-height); only past that
-  // does it scroll. Keep overflow HIDDEN while growing so no scrollbar shows until it's actually
-  // needed (Claude-style) — measure with it hidden, then flip to auto only when we hit the cap.
+  // Auto-grow the composer to fit what's typed, up to ~5 rows (the CSS max-height).
   useEffect(() => {
     const ta = taRef.current;
     if (!ta) return;
@@ -81,101 +68,6 @@ export function OnboardingChat({
     if (overflowing) ta.style.overflowY = 'auto';
   }, [input]);
 
-  // Restore the conversation from the server (source of truth) before painting, so a returning
-  // user sees their history appear in one go — not the fresh greeting flashing then filling in.
-  useEffect(() => {
-    getCurrentCoach()
-      .then((c) => {
-        // A stale thread (idle >7d, or onboarding chatter after the plan committed) is NOT
-        // adopted: leave sessionId null so the next send opens a fresh session with a fresh
-        // dossier, and show the greeting instead of a transcript the new session can't see.
-        if (c.sessionId && !c.stale) {
-          sessionId.current = c.sessionId;
-          setTurns(c.messages.map((m) => ({ role: m.role, text: m.content })));
-        }
-      })
-      .catch(() => {
-        /* fresh start */
-      })
-      .finally(() => {
-        // Unconditional: goals can exist without a session (e.g. App.tsx routed here on
-        // stage 'in_progress' from captured goals alone) — the counter must reflect the
-        // server's real count either way, not just when a chat session happened to restore.
-        refreshCaptured();
-        setRestored(true);
-      });
-  }, []);
-
-  async function refreshCaptured() {
-    try {
-      const r = await getReview();
-      setCaptured(r.goals.length);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  // Pull the authoritative conversation back from the server to HEAL a dropped turn: the
-  // coach reply is persisted server-side even if our stream connection died. Polls briefly
-  // because the server finalizes the turn shortly after the model finishes.
-  async function recoverFromServer(): Promise<boolean> {
-    for (let i = 0; i < 6; i++) {
-      await new Promise((r) => setTimeout(r, 800));
-      try {
-        const c = await getCurrentCoach();
-        const last = c.messages[c.messages.length - 1];
-        if (c.sessionId && last?.role === 'coach' && last.content.trim()) {
-          sessionId.current = c.sessionId;
-          setTurns(c.messages.map((m) => ({ role: m.role, text: m.content })));
-          return true;
-        }
-      } catch {
-        /* retry */
-      }
-    }
-    return false;
-  }
-
-  function fillLastCoach(text: string) {
-    setTurns((t) => {
-      const last = t[t.length - 1];
-      if (last?.role === 'coach' && !last.text) return [...t.slice(0, -1), { ...last, text }];
-      return [...t, { role: 'coach', text }];
-    });
-  }
-
-  async function send() {
-    const text = input.trim();
-    if (!text || streaming) return;
-    setInput('');
-    setTurns((t) => [...t, { role: 'user', text }, { role: 'coach', text: '' }]);
-    setStreaming(true);
-    try {
-      if (!sessionId.current) sessionId.current = (await openCoachSession({ intent })).sessionId;
-      const { completed } = await sendCoachMessage(sessionId.current, text, (delta) => {
-        // Pure update — never mutate the existing turn (StrictMode double-invokes
-        // updaters in dev, which doubled every delta when we mutated in place).
-        setTurns((t) => {
-          const last = t[t.length - 1];
-          if (!last || last.role !== 'coach') return t;
-          return [...t.slice(0, -1), { ...last, text: last.text + delta }];
-        });
-      });
-      // Dropped mid-reply: the server finished + persisted it — recover instead of losing it.
-      if (!completed && !(await recoverFromServer())) {
-        fillLastCoach('⚠️ Connection dropped — send again to continue.');
-      }
-    } catch {
-      // Network error: try to recover a server-side reply; never show raw errors in coach voice.
-      if (!(await recoverFromServer())) fillLastCoach('Something hiccuped on my end — say that again?');
-    } finally {
-      setStreaming(false);
-      setTimeout(refreshCaptured, 900); // capture runs fire-and-forget on the server
-    }
-  }
-
-  // The composer floats over the chat; when the field is empty we show the mic (voice-first),
-  // and it swaps to the send arrow the moment there's something to send (Claude-style).
   const composer = (
     <div className="composer-wrap">
       <div className="composer">
@@ -186,7 +78,6 @@ export function OnboardingChat({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            // Enter sends; Shift+Enter inserts a newline (so multi-line messages are easy to compose).
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               send();
