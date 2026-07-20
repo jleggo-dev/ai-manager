@@ -30,8 +30,9 @@ source report that contains the full current-problem/target-design/migration-ste
 2. **Safety net exists, but is still report-only.** INFRA-01…05 landed (PRs #3–#5). Path-filtered
    CI runs on every PR; treat red jobs as merge blockers even though branch protection may not
    yet *require* the check. **INFRA-08** (repo-wide `max-lines` gates) lands via PR #23.
-3. **Still-open product risk:** frontend/backend type drift (SD2/SD3 → **FE-10**). The old
-   monoliths and RBAC gap are gone (splits + BE-03 Done).
+3. **Frontend/backend type drift (SD2/SD3 → FE-10) is closed** (PR #42) — contracts match the live
+   schema; paired FE/BE contract tests guard regression. The old monoliths and RBAC gap are gone
+   (splits + BE-03 Done).
 4. **Cadence coverage is improving but uneven.** `apps/cadence-api` now has real suites (plan
    commit, nutrition, coach-stream, aim seam). `apps/cadence-web` still has almost no feature
    tests — WEB-01…04 are the remaining Phase 2 web P1s.
@@ -104,7 +105,7 @@ numbers verbatim.
 | Finding | Where it shows up | Consolidated as | Status |
 |---|---|---|---|
 | **Root `package.json` workspaces exclude all of Cadence; `npm install` would delete Cadence's linked packages** | Reports 05 §1, 06 §1 (independently confirmed) | **INFRA-01** | ✅ Done (PR #3) |
-| **Frontend/backend type drift (`CallingApplication`/`DiagnosticLog` vs. their `*Row` counterparts)** — SD2/SD3 | Reports 01 §5, 02 §3/§5, 05 §5 | **FE-10** | **Still open** |
+| **Frontend/backend type drift (`CallingApplication`/`DiagnosticLog` vs. their `*Row` counterparts)** — SD2/SD3 | Reports 01 §5, 02 §3/§5, 05 §5 | **FE-10** | ✅ Done (PR #42) |
 | **`Broker` → `Scribe` rename (exported DevTrace field names + shared contracts module)** | Report 03/04/05 | **CROSS-01** | ✅ Done (PR #30) |
 | **SSE line-buffering/parsing logic independently reimplemented 3+ times** | Reports 01/03/05 | **CROSS-02** | ✅ Done (BE-02 #18 + API-03 #25) |
 | **Template-interpolation logic reimplemented independently** instead of using canonical helpers | Report 02 §1.4/§4.1 (3× inside frontend) | FE-01/FE-03 sub-tasks | ✅ Done with those items |
@@ -391,16 +392,16 @@ per item / per area intro).
 > - **WEB-02** — split cadence-web `lib/api.ts` into domain modules + barrel; extract coach SSE
 >   parser (`lib/api/coach-sse.ts`) with characterization tests (PR #41).
 >
-> **Remaining Phase 2 P1 (accurate as of WEB-02):**
-> - **FE-10** — CallingApplication / DiagnosticLog type drift (SD2/SD3); needs product call on extra FE fields
+> **Remaining Phase 2 P1 (accurate as of PR #42 + WEB-02):**
+> - **FE-10** ✅ Done (PR #42) — CallingApplication / DiagnosticLog aligned to live schema + contract tests
+> - **API-06** — shared `select-and-run` extract + `buildContextPack` resilience test
 > - **WEB-01** (L) — ReviewScreen split + unit-conversion tests (hard blocker)
 > - **WEB-03** (L) — OccurrenceSheet panel split
 > - **WEB-04** (M) — Today/Progress/Plan card dedup (natural CROSS-03 pilot host)
 > - **CROSS-03** — TanStack Query pilot (opportunistic; prefer with WEB-04, not a big-bang)
 >
-> **Recommended batch 7 (remaining):** **API-06** · **FE-10** (if FE-10 product decision blocks,
-> swap in **FE-14** or **WEB-04**). Leave WEB-01/WEB-03 for a dedicated L batch; leave CROSS-03
-> until WEB-04.
+> **Batch 7:** **WEB-02** ✅ (PR #41) · **FE-10** ✅ (PR #42) · **API-06** remaining. Leave
+> WEB-01/WEB-03 for a dedicated L batch; leave CROSS-03 until WEB-04.
 
 #### Backend (report 01)
 
@@ -423,7 +424,7 @@ per item / per area intro).
 | **FE-07** ✅ **Done** (`refactor/fe-07-health-aggregation`) | Extract `HealthDashboardPage.tsx`'s aggregation `useMemo` blocks into a pure, independently-testable `lib/health-aggregation.ts` | S-M | Low | **Done notes:** pure helpers in `frontend/src/lib/health-aggregation.ts` (`aggregateUptimeTotals`, `sortHistoryByUptimeAsc`, `countActiveIncidents`, `overallUptimePercent`, `formatOverallUptimePercent`); page keeps thin `useMemo` wrappers. Detail-view `sortedItems` left in the page (UI sort, not cross-check rollup). Unit tests in `health-aggregation.test.ts`. |
 | **FE-08** ✅ **Done** (`refactor/fe-08-use-health-check-profiles-data`, PR #20) | Extract a `useHealthCheckProfilesData` hook from `HealthCheckProfilesPage.tsx` (624 lines, no tests) | M | Low | **Done notes:** hook owns list CRUD, form state, key auto-resolve, and agent/model fetching (`hooks/useHealthCheckProfilesData.ts`); pure helpers in `lib/health-check-profiles.ts` (`filterEligibleProviders`, `filterKeysForProvider`, `buildAiOptions`, `buildModelOptions`, …); page is a thin render shell (~340 lines, dropped from eslint `max-lines` override). Tests: `health-check-profiles.test.ts` + page smoke (list/empty/create modal/delete). Structural only — no behavior changes beyond `aria-label` on edit/delete actions. |
 | **FE-09** ✅ **Done** (`refactor/fe-09-auth-listener-cleanup`, PR #12) | Fix `lib/auth-session.ts`'s unsubscribed `onAuthStateChange` listener (SD5, still valid) — return the unsubscribe handle, wire it into `App.tsx`'s effect cleanup | S | Low | **Done notes:** `initAuthSession` now returns `() => void` (noop when bypass/unconfigured); App effect stores the handle and unsubscribes on cleanup, including the cancelled-before-resolve race for StrictMode/HMR. Tests: auth-session unsubscribe + App unmount. Scope stayed frontend auth-session + App only. |
-| **FE-10** | Fix frontend/backend type drift — `CallingApplication`/`DiagnosticLog` vs. their backend `*Row` counterparts (SD2/SD3, confirmed still open) | S(fix)/M(if backend coordination needed) | Medium (shared contract) | **Not Started.** FE `CallingApplication` still has `name`/`slug`/`description`/`is_active` absent from `CallingApplicationRow`; `DiagnosticLog` shape also diverges. Needs a product decision: are the frontend's extra fields a FE bug or a missing backend column? Add a lightweight contract test afterward so this can't silently regress again. |
+| **FE-10** ✅ **Done** (`refactor/fe-10-type-drift`, PR #42) | Fix frontend/backend type drift — `CallingApplication`/`DiagnosticLog` vs. their backend `*Row` counterparts (SD2/SD3) | S | Medium (shared contract) | **Done notes:** No product decision needed — e2e schema + `ai-diagnostics` persistence are source of truth. Dropped FE phantom `CallingApplication` fields (`name`/`slug`/`description`/`is_active`). Fixed `DiagnosticLogRow` to include real columns (`request_payload`, `supabase_timing`, `llm_request`, `formatting_timing`, `error_message`, `api_key_id`) and remove phantom `input_text`/`output_text`/`formatted_text`. FE `DiagnosticLog` aligned + nested UI shapes; removed duplicate local type in processing-jobs. Contract tests: `frontend/src/types/api.contract.test.ts` + `backend/test/type-contracts.test.ts`. |
 
 #### Cadence API (report 03)
 
@@ -612,13 +613,13 @@ workstreams that run alongside the phased backlog above, not one-time tickets:
    functions. Cadence API's gap is different (route validation was never started) — treat these as
    two separate, smaller efforts, not one shared ticket.
 5. **Backfill tests in inverse proportion to blast radius, not file size.** API-01 / API-04 /
-   API-05 / FE-09 and the Phase 1 P0 test-first steps largely landed. Remaining highest-leverage
-   gaps: Cadence web (WEB-01…04) and FE-10's contract test.
+   API-05 / FE-09 / FE-10 and the Phase 1 P0 test-first steps largely landed. Remaining
+   highest-leverage gaps: Cadence web (WEB-01…04).
 6. **Cadence API DB test harness** — ✅ stood up with API-01 (`resetUserData` fixtures). Reuse it
    for API-06 rather than inventing a second harness.
-7. **Add a lightweight type-contract check** (a small script diffing declared field names between
-   paired backend/frontend types, or a fixture-response test) so FE-10's fix can't silently
-   regress the way SD2/SD3 already did once.
+7. **Lightweight type-contract check** — ✅ landed with FE-10 (PR #42): paired fixture-response
+   tests in `frontend/src/types/api.contract.test.ts` and `backend/test/type-contracts.test.ts`,
+   keyed to e2e-schema-validation column lists.
 8. **Keep `docs/cadence/PLAN.md` honest.** It currently states the workspace fix (INFRA-01) is
    already done (`:66`) while separately carrying a risk note (`:381-383`) that it isn't — update
    this doc as part of INFRA-01's PR, and treat "the plan doc says X is done" as something to
@@ -757,8 +758,8 @@ This plan is "done" (or rather, has earned the right to be considered a complete
 - [x] `requireRole` is wired into every mutating admin-sensitive backend route (BE-03's full list).
 - [ ] `apps/cadence-web` and `apps/cadence-api` each have real (not placeholder) test coverage on
       their top-5 highest-risk paths per reports 03/04's "first N tests" lists. *(API side largely yes; web still no.)*
-- [ ] SD2/SD3 (frontend/backend type drift) no longer reproduces — verified by the contract-test
-      added under FE-10, not just by manual inspection.
+- [x] SD2/SD3 (frontend/backend type drift) no longer reproduces — verified by FE-10 contract
+      tests (PR #42), not just by manual inspection.
 - [x] `Broker`→`Scribe` rename (CROSS-01) complete for exported DevTrace fields + contracts module
       (PR #30). Persisted `broker-*` mode strings / `cadence-broker` slug intentionally retained.
 - [ ] This document's status tracking (§6.5) shows every P0/P1 item as `Verified`.
