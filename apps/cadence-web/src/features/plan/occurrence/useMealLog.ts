@@ -1,37 +1,36 @@
 import { useEffect, useState } from 'react';
 import {
-  getNutritionDay,
   getRecentMeals,
   logMeal,
   patchMeal,
   type Meal,
   type MealKind,
-  type NutritionDayData,
   type OccurrenceDetail,
 } from '../../../lib/api.ts';
+import { useInvalidateNutritionDay, useNutritionDay } from '../../../lib/query/index.ts';
 import { downscalePhoto, mealForNow } from './format.ts';
 
 /**
  * Meal / nutrition observe-phase state: day rollup, photo downscale, confirm, and log submit.
- * Highest-blast-radius extract — structural move only; keep call order identical to the sheet.
+ * Day rollup comes from the shared TanStack nutrition-day query (CROSS-03); mutations invalidate
+ * that key so Today / Settings refresh without a duplicate fetch path.
  */
 export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDetail) => void, onLogged?: () => void) {
   const [mealText, setMealText] = useState('');
   const [mealKind, setMealKind] = useState<MealKind>(mealForNow());
   const [mealBusy, setMealBusy] = useState(false);
-  const [meals, setMeals] = useState<Meal[]>([]);
   const [mealPhoto, setMealPhoto] = useState<string | null>(null);
-  const [day, setDay] = useState<NutritionDayData | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [daysLogged, setDaysLogged] = useState(0);
   const [logErr, setLogErr] = useState('');
 
-  async function refreshDay(forDate?: string) {
-    const d = await getNutritionDay(forDate).catch(() => null);
-    if (d) {
-      setDay(d);
-      setMeals(d.meals);
-    }
+  const { data: day = null, refetch } = useNutritionDay(detail.date);
+  const invalidateNutritionDay = useInvalidateNutritionDay();
+  const meals: Meal[] = day?.meals ?? [];
+
+  async function refreshDay(_forDate?: string) {
+    await invalidateNutritionDay();
+    await refetch();
   }
 
   async function confirmMeal(logId: string) {
@@ -61,11 +60,10 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     setMealBusy(true);
     setLogErr('');
     try {
-      const m = await logMeal(text, mealKind, mealPhoto ?? undefined);
-      setMeals([m, ...meals]);
+      await logMeal(text, mealKind, mealPhoto ?? undefined);
       setMealText('');
       setMealPhoto(null);
-      void refreshDay(detail.date);
+      await refreshDay(detail.date);
       if (detail.status === 'pending') setDetail({ ...detail, status: 'done' });
       onLogged?.();
     } catch {
@@ -75,10 +73,9 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     }
   }
 
-  // Food rows: the day rollup drives the list + totals; the 7d fetch only feeds the phase gate.
+  // 7d fetch only feeds the baseline phase gate (not the shared day rollup).
   useEffect(() => {
     let alive = true;
-    void refreshDay(detail.date);
     getRecentMeals(7)
       .then((ms) => {
         if (alive) setDaysLogged(new Set(ms.map((m) => m.date)).size);
@@ -87,7 +84,6 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail.occurrence_id]);
 
   return {

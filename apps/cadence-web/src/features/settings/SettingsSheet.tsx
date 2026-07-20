@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase.ts';
+import { useInvalidateNutritionDay, useNutritionDay } from '../../lib/query/index.ts';
 import {
   deleteMyData,
   isDevMode,
   getDevAccount,
   resetAccount,
-  getNutritionDay,
   setMacroTargets,
   clearMacroTargets,
   type MealMacros,
@@ -22,7 +22,7 @@ const MK = [
  * Daily macro-target editor (N3 "later tweaks"). Collapsed until opened; loads current targets,
  * lets the user set/adjust each field, and clear them entirely (back to observe-style). Only
  * appears once targets exist OR the user opens it — a books-only user never sees macro chrome
- * here either.
+ * here either. Targets load via the shared nutrition-day query (CROSS-03).
  */
 function NutritionTargets() {
   const [open, setOpen] = useState(false);
@@ -30,16 +30,19 @@ function NutritionTargets() {
   const [has, setHas] = useState<boolean | null>(null); // null = not loaded yet
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
+  const { data: day, isError, isFetched } = useNutritionDay();
+  const invalidateNutritionDay = useInvalidateNutritionDay();
 
   useEffect(() => {
-    getNutritionDay()
-      .then((d) => {
-        const t = d?.targets ?? null;
-        setHas(!!t && Object.keys(t).length > 0);
-        if (t) setVals(Object.fromEntries(MK.map(({ k }) => [k, t[k] != null ? String(t[k]) : ''])));
-      })
-      .catch(() => setHas(false));
-  }, []);
+    if (!isFetched) return;
+    if (isError) {
+      setHas(false);
+      return;
+    }
+    const t = day?.targets ?? null;
+    setHas(!!t && Object.keys(t).length > 0);
+    if (t) setVals(Object.fromEntries(MK.map(({ k }) => [k, t[k] != null ? String(t[k]) : ''])));
+  }, [day, isError, isFetched]);
 
   if (has === null || (!has && !open)) {
     // Hidden until it exists; a subtle way in for users who want to set them manually.
@@ -65,6 +68,7 @@ function NutritionTargets() {
       if (saved) {
         setHas(true);
         setNote('Saved — your day now shows what’s left.');
+        await invalidateNutritionDay();
       } else setNote('Those numbers didn’t look right — check the ranges and try again.');
     } finally {
       setBusy(false);
@@ -80,6 +84,7 @@ function NutritionTargets() {
         setHas(false);
         setOpen(false);
         setVals({});
+        await invalidateNutritionDay();
       }
     } finally {
       setBusy(false);

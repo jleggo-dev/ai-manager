@@ -15,6 +15,7 @@ export function useNutritionBaseline(refreshDay: (forDate?: string) => Promise<v
     try {
       if (await setMacroTargets(t)) {
         setTargetsSet(true);
+        // refreshDay invalidates the shared nutritionDay query (CROSS-03).
         await refreshDay(detailDate);
       }
     } finally {
