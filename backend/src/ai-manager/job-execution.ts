@@ -11,25 +11,17 @@ import { upsertCallingApplication } from '../models/calling-applications.ts';
 import { hydrateAiProfileProviderKeys } from '../models/ai-profiles.ts';
 import { DevsAiClient } from '../integrations/devs-ai/client.ts';
 import type { ExpectedSchemaInput } from '../services/expected-schema-to-json-schema.ts';
-import { createLlmClientForProvider, type LlmClientInstance } from '../integrations/client-factory.ts';
-import { applyFormattingRules } from '../services/formatting-rules.ts';
+import { createLlmClientForProvider } from '../integrations/client-factory.ts';
 import { DiagnosticSession, shouldRunDiagnostics } from '../services/ai-diagnostics.ts';
 import { buildProviderChatOptions } from '../services/ai-profile-runtime-options.ts';
-import { getSetting } from '../models/app-settings.ts';
 import { resolveAttachmentsAsText } from '../services/attachment-resolver.ts';
 import { getConfig } from '../config.ts';
 import { errorMessage } from '../lib/error-message.ts';
-import { withImageParts } from '../lib/message-content.ts';
-import type {
-  AiManagerResult,
-  Attachment,
-  ChatCompletionResponse,
-  ChatCompletionUsage,
-  ChatMessage,
-  FormattingRule,
-  ProcessingJobRow,
-  ProviderRow,
-} from '../types.ts';
+import type { AiManagerResult, Attachment, FormattingRule, ProcessingJobRow, ProviderRow } from '../types.ts';
+import { interpolateTemplate } from './job-execution-utils.ts';
+import { runJobLlmAndFormat } from './job-execution-run.ts';
+
+export { interpolateTemplate, resolveTimeoutMs } from './job-execution-utils.ts';
 
 interface ExecuteJobOptions {
   callingApplication?: string;
@@ -185,9 +177,6 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
     const chatOptions = buildProviderChatOptions(provider.type, profile.runtime_options ?? undefined, {
       expectedSchema: providerTypeNorm === 'devs-ai-v2' ? (jobConfig.expectedSchema ?? undefined) : undefined,
     });
-    const failoverProvider: ProviderRow | undefined = profile.failover_provider ?? undefined;
-    const failoverAiId = String(profile.failover_external_ai_id || '').trim();
-    const hasFailover = enableFailover && !modelOverride && failoverProvider && failoverAiId;
 
     if (fullDiagnostics) diag.endSupabaseTimer('resolve-ai-client', true);
 
@@ -218,181 +207,24 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
      *  images ride as content parts the provider layer maps to its dialect. */
     const imageUrls = images.filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u));
 
-    /* ── 5. Call the LLM ──────────────────────────────────── */
-    const effectiveTimeoutMs = await resolveTimeoutMs(advancedConfig, provider);
-    if (fullDiagnostics) diag.addMetadata('effectiveTimeoutMs', effectiveTimeoutMs);
+    const result = await runJobLlmAndFormat({
+      client,
+      provider,
+      profile,
+      job,
+      jobConfig,
+      advancedConfig,
+      chatOptions,
+      primaryModel,
+      finalPrompt,
+      imageUrls,
+      enableFailover,
+      modelOverride,
+      fullDiagnostics,
+      diag,
+      t0,
+    });
 
-    if (fullDiagnostics) diag.startLlmTimer();
-
-    const messages: ChatMessage[] = [{ role: 'user', content: withImageParts(finalPrompt, imageUrls) }];
-    let modelUsed = primaryModel;
-    let failoverUsed = false;
-    let primaryErrorMessage = '';
-
-    let data: ChatCompletionResponse | null = null;
-    let rawContent = '';
-    let usage: ChatCompletionUsage | null = null;
-    let finishReason: string | null = null;
-
-    async function callWithClient(
-      llmClient: LlmClientInstance,
-      modelId: string,
-      msgs: ChatMessage[],
-      opts: Record<string, unknown>,
-      timeout: number,
-    ): Promise<{
-      resp: ChatCompletionResponse;
-      content: string;
-      nextUsage: ChatCompletionUsage | null;
-      nextFinishReason: string | null;
-    }> {
-      const resp = await llmClient.chatCompletion(modelId, msgs, {
-        ...opts,
-        timeoutMs: timeout,
-      });
-      const content = resp.choices?.[0]?.message?.content || '';
-      return {
-        resp,
-        content,
-        nextUsage: resp.usage ?? null,
-        nextFinishReason: resp.choices?.[0]?.finish_reason ?? null,
-      };
-    }
-
-    const tried: string[] = [];
-
-    try {
-      tried.push(primaryModel);
-      const out = await callWithClient(client, primaryModel, messages, chatOptions, effectiveTimeoutMs);
-      if (!String(out.content || '').trim()) {
-        throw new Error(`Model "${primaryModel}" returned empty response content`);
-      }
-      data = out.resp;
-      rawContent = out.content;
-      usage = out.nextUsage;
-      finishReason = out.nextFinishReason;
-    } catch (primaryErr: unknown) {
-      primaryErrorMessage = errorMessage(primaryErr);
-
-      let failoverErr: Error | null = null;
-      if (hasFailover && failoverProvider) {
-        try {
-          const failoverClient = createLlmClientForProvider(failoverProvider);
-          const failoverRuntimeOpts = profile.failover_runtime_options ?? profile.runtime_options ?? undefined;
-          const failoverChatOpts = buildProviderChatOptions(failoverProvider.type, failoverRuntimeOpts, {
-            // The failover must carry the same native schema as the primary — omitting
-            // it made a v2 failover answer schema-less on jobs that expect one.
-            expectedSchema:
-              String(failoverProvider.type || '')
-                .trim()
-                .toLowerCase() === 'devs-ai-v2'
-                ? (jobConfig.expectedSchema ?? undefined)
-                : undefined,
-          });
-          const failoverTimeoutMs = await resolveTimeoutMs(advancedConfig, failoverProvider);
-          tried.push(failoverAiId);
-
-          const out = await callWithClient(failoverClient, failoverAiId, messages, failoverChatOpts, failoverTimeoutMs);
-          if (!String(out.content || '').trim()) {
-            throw new Error(`Failover model "${failoverAiId}" returned empty response content`, { cause: primaryErr });
-          }
-          data = out.resp;
-          rawContent = out.content;
-          usage = out.nextUsage;
-          finishReason = out.nextFinishReason;
-          modelUsed = failoverAiId;
-          failoverUsed = true;
-        } catch (err: unknown) {
-          failoverErr = err as Error;
-        }
-      }
-
-      if (!String(rawContent || '').trim()) {
-        if (failoverErr) {
-          throw new Error(
-            `Primary model "${primaryModel}" failed and failover "${failoverAiId}" on provider "${failoverProvider?.name}" also failed: ${failoverErr.message}`,
-            { cause: primaryErr },
-          );
-        } else {
-          throw primaryErr;
-        }
-      }
-    }
-
-    const actualProvider = failoverUsed && failoverProvider ? failoverProvider : provider;
-
-    if (fullDiagnostics) {
-      diag.endLlmTimer(
-        {
-          model: modelUsed,
-          provider: actualProvider.name,
-          promptContent: finalPrompt,
-          promptLength: finalPrompt.length,
-          ...(imageUrls.length ? { imageUrls } : {}),
-        },
-        {
-          rawContent,
-          rawLength: rawContent.length,
-          usage,
-          finishReason,
-        },
-      );
-    }
-
-    /* ── 6. Apply formatting rules ────────────────────────── */
-    if (fullDiagnostics) diag.startFormattingTimer();
-
-    /* Formatting rules ALWAYS run when defined — even with a native v2 json_schema.
-       The Devs.ai v2 shim accepts text.format but does not reliably enforce it for
-       every model (observed: gpt-4.1-mini returns ```json fences WITH a strict schema
-       accepted), and the failover model may answer without the schema. The rules are
-       deterministic app-side transforms (no LLM cost): on clean output they're no-ops;
-       on fenced/dirty output they're the backstop that keeps the contract. */
-    const formattingRules: FormattingRule[] = jobConfig.formattingRules || [];
-    const { formatted, steps } = applyFormattingRules(rawContent, formattingRules);
-
-    if (fullDiagnostics) diag.endFormattingTimer(formattingRules.length);
-
-    /* ── 7. Build result ──────────────────────────────────── */
-    const durationMs = Date.now() - t0;
-
-    const result: AiManagerResult = {
-      raw: rawContent,
-      formatted,
-      formattingSteps: steps,
-      messageSent: finalPrompt,
-      metadata: {
-        durationMs,
-        model: data?.model || modelUsed,
-        usage,
-        finishReason,
-        jobSlug: job.slug,
-        jobName: job.name,
-        aiProfile: profile.name,
-        provider: provider.name,
-        ...(imageUrls.length ? { imageCount: imageUrls.length } : {}),
-      },
-    };
-
-    /* ── 8. Finalise diagnostics (fire-and-forget) ──────────── */
-    if (fullDiagnostics) {
-      diag.addMetadata('formattedLength', formatted.length);
-      diag.addMetadata('rawLength', rawContent.length);
-      diag.addMetadata('primaryModel', primaryModel);
-      diag.addMetadata('failoverUsed', failoverUsed);
-      diag.addMetadata('modelOverride', modelOverride || null);
-      diag.addMetadata('enableFailover', enableFailover !== false);
-      diag.addMetadata('modelsTried', tried);
-      diag.addMetadata('chatOptions', chatOptions);
-      if (hasFailover) {
-        diag.addMetadata('failoverModel', failoverAiId);
-        diag.addMetadata('failoverProviderName', failoverProvider?.name || null);
-        diag.addMetadata('failoverProviderType', failoverProvider?.type || null);
-      }
-      if (primaryErrorMessage) {
-        diag.addMetadata('primaryModelError', primaryErrorMessage);
-      }
-    }
     diag.complete('success').catch((diagErr: unknown) => {
       console.warn('[AI Manager] Non-blocking diagnostics write failed:', errorMessage(diagErr));
     });
@@ -439,38 +271,4 @@ export async function executeRawPrompt(
       provider: 'env-default',
     },
   };
-}
-
-/**
- * Resolve the effective timeout (ms) for an LLM call.
- * Priority: per-job override → provider setting → system default.
- * Exported for chat-messaging (same priority rules).
- */
-export async function resolveTimeoutMs(
-  advancedConfig: Record<string, unknown>,
-  provider: ProviderRow,
-): Promise<number> {
-  const timeoutConfig = advancedConfig?.timeout as Record<string, unknown> | undefined;
-  const jobTimeout = Number(timeoutConfig?.llmTimeoutMs || advancedConfig?.timeoutMs) || 0;
-  if (jobTimeout > 0) return jobTimeout;
-
-  const providerTimeout = Number(provider?.request_timeout_ms) || 0;
-  if (providerTimeout > 0) return providerTimeout;
-
-  const setting = await getSetting('default_llm_timeout_ms');
-  return Number((setting?.value as Record<string, unknown>)?.value) || 300_000;
-}
-
-const MAX_VARIABLE_LENGTH = 10_000;
-
-/** Replace {{variableName}} placeholders with actual values. Exported for chat-messaging. */
-export function interpolateTemplate(template: string, variables: Record<string, unknown>): string {
-  return template.replace(/\{\{([\w.-]+)\}\}/g, (match: string, key: string): string => {
-    if (variables[key] === undefined) return match;
-    let value = String(variables[key]);
-    if (value.length > MAX_VARIABLE_LENGTH) {
-      value = value.slice(0, MAX_VARIABLE_LENGTH) + '... [truncated]';
-    }
-    return `<user_input name="${key}">${value}</user_input>`;
-  });
 }

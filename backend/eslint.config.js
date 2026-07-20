@@ -57,8 +57,7 @@ export default [
     files: [
       'src/routes/chat-sessions.ts', // 1190 lines — largest file in the backend
       'src/ai-manager/chat-session-lifecycle.ts',
-      'src/ai-manager/chat-messaging.ts', // sendChatMessage() ~206 lines
-      'src/ai-manager/job-execution.ts', // executeJobById() ~237 lines
+      // chat-messaging.ts + job-execution.ts cleared from allowlist (Phase 3 residual)
       // widget-health-checker.ts removed with the feature (PR #27) — do not re-add.
     ],
     rules: { 'max-lines': 'off', 'max-lines-per-function': 'off' },
