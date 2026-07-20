@@ -63,14 +63,11 @@ export default [
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
 
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': [
-        'warn',
-        {
-          argsIgnorePattern: '^_',
-          varsIgnorePattern: '^_',
-          caughtErrorsIgnorePattern: '^_',
-        },
-      ],
+      '@typescript-eslint/no-unused-vars': ['warn', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+      }],
       // Same rationale as apps/cadence-api/eslint.config.js — existing code already uses
       // `!` deliberately in several places; enabling this now would be an out-of-scope
       // refactor rather than a small fix.
@@ -81,7 +78,7 @@ export default [
       'no-console': 'off',
     },
   },
-  // Repo-wide size gates (source only; tests may be long). Offenders allowlisted below = backlog.
+  // Repo-wide size gates (source only; tests may be long).
   // File-cap on all source; function-cap on .ts logic only (JSX render bodies run long by nature).
   {
     files: ['src/**/*.{ts,tsx}'],
@@ -93,12 +90,6 @@ export default [
     ignores: ['**/*.test.ts'],
     rules: { ...functionRule },
   },
-  // Size-gate backlog — grandfathered offenders (refactoring_plan.md WEB-01). Each split
-  // PR deletes an entry; the target is zero. NEVER add a new file here — split it instead.
-  {
-    files: [
-      'src/features/review/ReviewScreen.tsx', // WEB-01 (~1000 lines)
-    ],
-    rules: { 'max-lines': 'off', 'max-lines-per-function': 'off' },
-  },
+  // Size-gate backlog is empty for cadence-web (WEB-01 + WEB-03 cleared). NEVER add a new
+  // grandfather entry — split the file instead.
 ];
