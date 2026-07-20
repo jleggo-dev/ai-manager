@@ -34,6 +34,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app, authHeaders } from './setup.ts';
+import { filterRealProviderProfiles, type ProfileLite, type ProviderLite } from './helpers/real-providers.ts';
 
 const TEST_USER_ID = '00000000-0000-4000-8000-0000000000b1';
 const CALLING_APP = 'e2e-test:live-provider-chat';
@@ -143,9 +144,13 @@ beforeAll(async () => {
     console.warn('[live-provider-chat] skipped in CI (set RUN_LIVE_PROVIDER_E2E=1 to enable live provider smokes)');
     return;
   }
-  const res = await request(app).get('/api/ai-profiles?limit=200').set(authHeaders());
-  expect(res.status).toBe(200);
-  profiles = (res.body.data || []) as ApiProfile[];
+  const [profRes, provRes] = await Promise.all([
+    request(app).get('/api/ai-profiles?limit=200').set(authHeaders()),
+    request(app).get('/api/providers?limit=100').set(authHeaders()),
+  ]);
+  expect(profRes.status).toBe(200);
+  const providers = provRes.status === 200 ? ((provRes.body.data || []) as ProviderLite[]) : [];
+  profiles = filterRealProviderProfiles((profRes.body.data || []) as ProfileLite[], providers) as ApiProfile[];
   expect(profiles.length).toBeGreaterThan(0);
 });
 

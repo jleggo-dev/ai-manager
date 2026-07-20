@@ -19,6 +19,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app, authHeaders, uniqueName, uniqueSlug } from './setup.ts';
+import { isRealProvider, type ProviderLite } from './helpers/real-providers.ts';
 
 const TEST_USER_ID = '00000000-0000-4000-8000-0000000000d1';
 const CALLING_APP = 'e2e-test:devs-ai-v2-tools';
@@ -35,7 +36,7 @@ interface ApiProfile {
   profile_type?: string | null;
   external_ai_id?: string | null;
   config?: Record<string, unknown> | null;
-  provider?: { type?: string | null } | null;
+  provider?: { id?: string | null; name?: string | null; type?: string | null } | null;
 }
 
 let v2Profile: ApiProfile | undefined;
@@ -103,18 +104,26 @@ function sawV2FunctionCall(events: Array<Record<string, unknown>>): boolean {
 
 /** Use an existing v2 chat profile, or provision provider + profile for live testing. */
 async function ensureV2ChatProfile(): Promise<ApiProfile | undefined> {
-  const profRes = await request(app).get('/api/ai-profiles?limit=200').set(authHeaders());
+  const [profRes, provRes] = await Promise.all([
+    request(app).get('/api/ai-profiles?limit=200').set(authHeaders()),
+    request(app).get('/api/providers?limit=100').set(authHeaders()),
+  ]);
   expect(profRes.status).toBe(200);
-  const existing = ((profRes.body.data || []) as ApiProfile[]).find(
-    (p) => p.provider?.type === 'devs-ai-v2' && p.mode === 'chat' && Boolean(p.external_ai_id),
-  );
+  expect(provRes.status).toBe(200);
+  const providers = (provRes.body.data || []) as Array<ProviderLite & { is_active?: boolean }>;
+  const providersById = new Map(providers.map((p) => [p.id, p]));
+  const existing = ((profRes.body.data || []) as ApiProfile[]).find((p) => {
+    if (p.provider?.type !== 'devs-ai-v2' || p.mode !== 'chat' || !p.external_ai_id) return false;
+    const providerId = p.provider?.id ?? (p as { provider_id?: string }).provider_id ?? '';
+    const full = providersById.get(providerId);
+    return isRealProvider({
+      name: p.provider?.name ?? full?.name,
+      base_url: full?.base_url,
+    });
+  });
   if (existing) return existing;
 
-  const provRes = await request(app).get('/api/providers?limit=100').set(authHeaders());
-  expect(provRes.status).toBe(200);
-  let v2Provider = ((provRes.body.data || []) as Array<{ id: string; type: string; is_active?: boolean }>).find(
-    (p) => p.type === 'devs-ai-v2' && p.is_active !== false,
-  );
+  let v2Provider = providers.find((p) => p.type === 'devs-ai-v2' && p.is_active !== false && isRealProvider(p));
 
   if (!v2Provider) {
     const apiKey = process.env.DEVS_AI_API_KEY || process.env.TEST_DEVS_AI_API_KEY || '';

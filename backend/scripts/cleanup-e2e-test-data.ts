@@ -57,7 +57,6 @@ const PROFILE_NAME_PATTERNS = [
   'Tenant Profile %',
   'Bad Provider Profile %',
   'Default Candidate %',
-  'HC Profile%',
 ] as const;
 
 const JOB_NAME_PATTERNS = [
@@ -155,6 +154,32 @@ function assertNoProtectedProviders(rows: NamedRow[]): void {
   process.exit(1);
 }
 
+/** Providers pointed at *.example.com (and similar) — leftovers from fixture suites. */
+async function selectMockHostProviders(sb: SupabaseClient): Promise<NamedRow[]> {
+  const patterns = ['%example.com%', '%localhost%', '%.test%', '%.invalid%', '%.local%'];
+  const byId = new Map<string, NamedRow>();
+  for (const pattern of patterns) {
+    let offset = 0;
+    for (;;) {
+      const { data, error } = await sb
+        .from('providers')
+        .select('id, name, base_url')
+        .ilike('base_url', pattern)
+        .range(offset, offset + PAGE - 1);
+      if (error) throw new Error(`providers mock-host select (${pattern}): ${error.message}`);
+      if (!data?.length) break;
+      for (const row of data) {
+        const name = row.name as string;
+        if (PROTECTED_PROVIDER_NAMES.has(name)) continue;
+        byId.set(row.id as string, { id: row.id as string, name });
+      }
+      if (data.length < PAGE) break;
+      offset += PAGE;
+    }
+  }
+  return [...byId.values()];
+}
+
 async function main(): Promise<void> {
   const apply = process.argv.includes('--yes');
   const soft = process.argv.includes('--soft') || process.env.SKIP_TEST_DATA_CLEANUP === '1';
@@ -169,9 +194,7 @@ async function main(): Promise<void> {
     ? envOrEmpty('AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY')
     : requireEnv('AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !key) {
-    console.warn(
-      '[cleanup-e2e] soft skip: AI_MANAGER_SUPABASE_URL / AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY not set',
-    );
+    console.warn('[cleanup-e2e] soft skip: AI_MANAGER_SUPABASE_URL / AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY not set');
     return;
   }
 
@@ -181,12 +204,17 @@ async function main(): Promise<void> {
   console.log(`[cleanup-e2e] AI Admin host: ${host}`);
   console.log(`[cleanup-e2e] filter: ${E2E_PREFIX} (e2e-test:*, e2e-diag-*, …)`);
   console.log('[cleanup-e2e] provider/profile/job name patterns: Lifecycle*, E2E *, * Test *, …');
+  console.log('[cleanup-e2e] also removes non-protected providers with mock hosts (*.example.com, localhost, …)');
 
   const sessions = await countLike(sb, 'chat_sessions', 'calling_application', E2E_PREFIX);
   const logs = await countLike(sb, 'diagnostic_logs', 'calling_application', E2E_PREFIX);
   const apps = await countLike(sb, 'calling_applications', 'display_name', E2E_PREFIX);
 
-  const junkProviders = await selectByNamePatterns(sb, 'providers', PROVIDER_NAME_PATTERNS);
+  const namedJunkProviders = await selectByNamePatterns(sb, 'providers', PROVIDER_NAME_PATTERNS);
+  const mockHostProviders = await selectMockHostProviders(sb);
+  const junkProviderById = new Map<string, NamedRow>();
+  for (const p of [...namedJunkProviders, ...mockHostProviders]) junkProviderById.set(p.id, p);
+  const junkProviders = [...junkProviderById.values()];
   assertNoProtectedProviders(junkProviders);
   const junkProfiles = await selectByNamePatterns(sb, 'ai_profiles', PROFILE_NAME_PATTERNS);
   const junkJobs = await selectByNamePatterns(sb, 'processing_jobs', JOB_NAME_PATTERNS);

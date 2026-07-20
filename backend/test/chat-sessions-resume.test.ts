@@ -14,6 +14,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app, authHeaders } from './setup.ts';
 import { getServiceSupabase } from '../src/db/service-supabase.ts';
+import { findDevsChatProfile } from './helpers/real-providers.ts';
 
 const NON_EXISTENT_UUID = '00000000-0000-4000-a000-000000000000';
 const TEST_USER_ID = '00000000-0000-0000-0000-0000000000aa';
@@ -24,27 +25,8 @@ let workspaceId: string | null = null;
 /* Sessions opened/inserted during the run — cleaned up in afterAll. */
 const createdSessionIds: string[] = [];
 
-interface ApiProfile {
-  id: string;
-  mode?: string | null;
-  external_ai_id?: string | null;
-  profile_type?: string | null;
-  provider?: { type?: string | null } | null;
-}
-
-/** Find a real devs-ai, chat-mode agent profile in the caller's workspace. */
-async function findDevsChatProfile(): Promise<ApiProfile | null> {
-  const res = await request(app).get('/api/ai-profiles?limit=100').set(authHeaders());
-  if (res.status !== 200) return null;
-  const rows: ApiProfile[] = res.body.data || [];
-  const isDevsChat = (p: ApiProfile) =>
-    p?.provider?.type === 'devs-ai' && p?.mode === 'chat' && Boolean(p?.external_ai_id);
-  /* Prefer agent profiles (map to a Devs.ai chat session); fall back to any devs-ai chat profile. */
-  return rows.find((p) => isDevsChat(p) && p.profile_type === 'agent') ?? rows.find(isDevsChat) ?? null;
-}
-
 beforeAll(async () => {
-  const profile = await findDevsChatProfile();
+  const profile = await findDevsChatProfile(app, authHeaders);
   if (profile) {
     devsProfileId = profile.id;
     const { data } = await getServiceSupabase()
