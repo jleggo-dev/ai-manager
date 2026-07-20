@@ -27,8 +27,8 @@ source report that contains the full current-problem/target-design/migration-ste
 1. **Nothing in this repo is on fire.** Phase 0, Phase 1 P0s (BE-01 / FE-01 / FE-02), and
    **Phase 2 P1 are complete** on `main` (batches 7–8 closed; CROSS-03 both halves #49/#50).
    **Batch 9 is Done** (FE-14 #56 · CI-08 #53 · CI-09 #55; cleanup-after-tests #54). **Phase 3 /
-   batch 10 is in progress** (FE-11 · CI-06 · API-P2 slice). See §4.2 for the closed log and the
-   remaining (mostly P2/P3 + human) backlog.
+   batch 10 is in progress** (FE-11 · API-P2 slice; **CI-06 Done** #60). See §4.2 for the closed
+   log and the remaining (mostly P2/P3 + human) backlog.
 2. **Safety net exists, but is still report-only.** INFRA-01…05 landed (PRs #3–#5). Path-filtered
    CI runs on every PR; treat red jobs as merge blockers even though branch protection may not
    yet *require* the check (**INFRA-02 required-check flip still open**). **INFRA-08** (repo-wide
@@ -420,7 +420,7 @@ merge log (originally via `feat/cadence`, then `main`):
 >
 > **Phase 3 / batch 10** 🔄 **in progress** (orchestrator-assigned):
 > - **FE-11** — extract `useTestChatStream` from `TestChatPanel` (§4.7)
-> - **CI-06** — ESLint nearest-config load-bearing behavior guard/docs (§4.6)
+> - **CI-06** ✅ **Done** — ESLint nearest-config guard/docs (PR #60; §4.6)
 > - **API-P2** slice — dead `dossier` / `rollingConsistency` metrics tests (§4.4)
 >
 > **Remaining backlog (accurate as of 2026-07-20 — not Phase 2 P1):**
@@ -557,7 +557,7 @@ hand-rolled until a follow-on.
 ### 4.4 Phase 3 — P2 items (condensed; full detail lives in the area reports)
 
 **Open after Phase 2 P1** (batches 7–8 + CROSS-03 closed). **Batch 9 is Done**; **batch 10 is in
-progress** (FE-11 · CI-06 · API-P2 slice — see §4.2). Remaining Phase 3 clusters stay available for
+progress** (FE-11 · API-P2; **CI-06 Done** #60 — see §4.2). Remaining Phase 3 clusters stay available for
 later batches.
 
 | ID | Area | Items | Pointer |
@@ -592,7 +592,7 @@ logged here as its own backlog item.
 | **CI-03** | Frontend `npm test`: 7 failures in `services/api.test.ts` — its `vi.mock('../lib/auth-session')` mock is missing `handleAccountGateApiError`, which the real module now exports (mock drifted from implementation) | Frontend | P1 | S | Low | **Done** (PR #6, merged to `feat/cadence`) — same drift also found independently in `App.test.tsx`'s separate mock of the same module, fixed there too |
 | **CI-09** | `Devs.ai v2 resume error (400): Unrecognized key "tool_outputs"` surfaced during `e2e-devs-ai-v2-tools` debugging (PR #6) in the tool-fulfillment continuation call — doesn't currently fail the test (the flow recovers), but the resume request body shape for that endpoint looks wrong and deserves its own investigation | Backend | P2 | S-M | Low-Medium (live provider integration) | **Done** (PR #55) — `buildV2ResumeBody` sends camelCase `toolOutputs`/`toolCallId`/`status` |
 | **CI-04** | `npm run format:check` already flagged 186 files before INFRA-03 (no `.prettierrc` ever pinned, per report 06); INFRA-03's widened glob surfaces ~90 more from Cadence on top. Superseded by/fold into **INFRA-04** (align + pin Prettier config, then run `prettier --write` once repo-wide) — do not fix piecemeal | Cross-cutting | P1 | M (one-time repo-wide reformat) | Low (formatting-only) | **Done** (PR #5 — pinned `singleQuote`+`printWidth:120`, 84-file reformat, verified cosmetic-only) |
-| **CI-06** | ESLint flat config resolves the *nearest* `eslint.config.js` to the linted file even when invoked from repo root — undocumented, load-bearing behavior for `lint-staged`; a future ESLint major bump could silently break it with no test coverage | Infra | P3 | S | Low | Not Started |
+| **CI-06** | ESLint flat config resolves the *nearest* `eslint.config.js` to the linted file even when invoked from repo root — undocumented, load-bearing behavior for `lint-staged`; a future ESLint major bump could silently break it with no test coverage | Infra | P3 | S | Low | **Done** (PR #60) — comments + `npm run test:eslint-nearest-config` in format-check CI |
 | **CI-07** | `@typescript-eslint/no-non-null-assertion` disabled repo-wide for `apps/cadence-api`/`apps/cadence-web` (both use `!` deliberately/extensively) and `react/no-unescaped-entities` disabled for `apps/cadence-web` (clashes with the brand's mandated contractions) — both are lint-suppressed rather than fixed; worth their own tickets if the team wants stricter enforcement later | Cadence | P3 | M (would require real fixes, not just re-enabling) | Low | Not Started |
 | **CI-08** | Windows-only: `core.autocrlf=true` locally can reintroduce CRLF on `git checkout --`, which Prettier's `endOfLine: lf` default then flags as a formatting diff — not a repo bug, but a `.gitattributes` (`* text=auto eol=lf`) would make this deterministic across contributors' OSes | Infra | P3 | S | Low | **Done** (PR #53) — root `.gitattributes` with `* text=auto eol=lf` + short comment; no mass renormalize |
 | **CI-05** | Frontend `build` fails in some local sandboxes because `backend/.env` has `VITE_DEV_API_KEY` set — this is an intentional security guard (a real key must never leak into a `VITE_*` var, see `CLAUDE.md`), not a code bug. Confirmed identical on unmodified `feat/cadence`; won't reproduce in actual CI since that var is a local-dev-only convenience never set in the CI environment. **No fix needed** — logged only so a future agent doesn't rediscover and "fix" it into a weaker guard | Infra/local-dev | P3 | — | — | Won't Fix (by design) |
