@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Orb } from '../../components/Orb.tsx';
-import { OccurrenceRow } from '../../components/OccurrenceRow.tsx';
 import { OccurrenceSheet } from './OccurrenceSheet.tsx';
 import { AdjustSheet } from './AdjustSheet.tsx';
 import { TodayDashboard } from '../today/TodayDashboard.tsx';
+import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
+import { PlanWeekPanel } from './PlanWeekPanel.tsx';
 import {
   getPlan,
   setOccurrence,
@@ -119,10 +119,6 @@ export function PlanView() {
   const rest = data.week.filter((d) => !d.isToday);
   const { kept, window } = data.consistency;
 
-  const weekRow = (o: PlanOccurrence) => (
-    <OccurrenceRow key={o.occurrence_id} o={o} variant="week" onCheck={set} onOpen={setSheetOcc} />
-  );
-
   return (
     <>
       <div className="seg" role="tablist" aria-label="Today or week">
@@ -145,98 +141,30 @@ export function PlanView() {
       </div>
       <div className="scrollbody">
         {data.pendingProposal && (
-          <div className="plan-proposal">
-            <Orb />
-            <div className="plan-proposal-t">
-              <b>Your coach has a suggestion</b>
-              <span>{data.pendingProposal.reason}</span>
-              {data.pendingProposal.suggested_levers.length > 0 && (
-                <div className="proposal-levers">
-                  {data.pendingProposal.suggested_levers.map((lever, i) => (
-                    <span className="lever-chip" key={i}>
-                      {lever}
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="proposal-actions">
-                <button className="proposal-accept" onClick={acceptProp} disabled={proposalBusy}>
-                  {proposalBusy ? 'Adjusting…' : 'Adjust my plan'}
-                </button>
-                <button className="proposal-dismiss" onClick={dismissProp} disabled={proposalBusy}>
-                  Not now
-                </button>
-              </div>
-            </div>
-          </div>
+          <PlanProposalBanner
+            proposal={data.pendingProposal}
+            busy={proposalBusy}
+            onAccept={acceptProp}
+            onDismiss={dismissProp}
+          />
         )}
-        {note && (
-          <div className="plan-note">
-            <Orb />
-            <div className="plan-note-t">
-              <b>Your coach adjusted your plan</b>
-              <span>{note}</span>
-            </div>
-            <button className="plan-note-x" onClick={() => setNote('')} aria-label="Dismiss">
-              ×
-            </button>
-          </div>
-        )}
+        {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
         {view === 'today' ? (
           <TodayDashboard plan={data} reloadKey={reloadKey} onCheck={set} onOpen={setSheetOcc} />
         ) : (
-          <>
-            <div className="consist">
-              <Orb />
-              <div className="consist-t">
-                <b>{kept === 0 ? 'A fresh week' : `You showed up ${kept} of ${window} days`}</b>
-                <span>
-                  {kept === 0
-                    ? 'Check things off as you go — a missed day is just information.'
-                    : 'Keep your rhythm — no pressure, no resets.'}
-                </span>
-              </div>
-            </div>
-
-            {today && (
-              <div className="plan-day plan-today">
-                <div className="pd-head">
-                  <b>Today</b>
-                  <span>
-                    {today.weekday} {today.dayNum}
-                  </span>
-                </div>
-                {today.occurrences.length === 0 ? (
-                  <div className="pd-empty">Nothing scheduled today — rest counts too.</div>
-                ) : (
-                  today.occurrences.map((o) => weekRow(o))
-                )}
-              </div>
-            )}
-
-            <div className="plan-week-row">
-              <div className="plan-week-label">The week ahead</div>
-              <button
-                className="adjust-pill"
-                onClick={() => {
-                  setAdjustSteer('');
-                  setAdjustOpen(true);
-                }}
-              >
-                Adjust my plan
-              </button>
-            </div>
-            {rest.map((d) => (
-              <div className="plan-day" key={d.date}>
-                <div className="pd-head">
-                  <b>{d.weekday}</b>
-                  <span>{d.dayNum}</span>
-                </div>
-                {d.occurrences.length === 0 ? <div className="pd-empty">—</div> : d.occurrences.map((o) => weekRow(o))}
-              </div>
-            ))}
-          </>
+          <PlanWeekPanel
+            today={today}
+            rest={rest}
+            kept={kept}
+            windowDays={window}
+            onCheck={set}
+            onOpen={setSheetOcc}
+            onAdjust={() => {
+              setAdjustSteer('');
+              setAdjustOpen(true);
+            }}
+          />
         )}
       </div>
       {sheetOcc && (
