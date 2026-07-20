@@ -82,6 +82,7 @@ import {
   getCoachHistory,
   getCoachPersona,
   purgeUserAiData,
+  AimError,
 } from './aim.ts';
 
 const EXPECTED_AUTH = {
@@ -119,9 +120,11 @@ describe('ai/aim.ts ΓÇö AI Admin seam (API-05)', () => {
       expect(authArg()).toEqual(EXPECTED_AUTH);
     });
 
-    it('propagates engine/auth errors to the caller', async () => {
+    it('wraps engine/auth errors as AimError with a classified kind', async () => {
       core.runWithAuth.mockRejectedValueOnce(new Error('auth context failed'));
-      await expect(withAim(USER, async () => 'never')).rejects.toThrow('auth context failed');
+      const err = await withAim(USER, async () => 'never').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(AimError);
+      expect(err).toMatchObject({ kind: 'config', message: 'auth context failed' });
     });
   });
 
@@ -186,9 +189,11 @@ describe('ai/aim.ts ΓÇö AI Admin seam (API-05)', () => {
       );
     });
 
-    it('propagates job-execution failures', async () => {
+    it('wraps job-execution failures as AimError', async () => {
       core.executeJobById.mockRejectedValueOnce(new Error('job boom'));
-      await expect(runJob(USER, 'job-1', {})).rejects.toThrow('job boom');
+      const err = await runJob(USER, 'job-1', {}).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(AimError);
+      expect(err).toMatchObject({ kind: 'unknown', message: 'job boom' });
     });
   });
 
@@ -302,7 +307,7 @@ describe('ai/aim.ts ΓÇö AI Admin seam (API-05)', () => {
       expect(diag.complete).toHaveBeenCalledWith('success');
     });
 
-    it('surfaces diag.complete failures to the caller', async () => {
+    it('surfaces diag.complete failures as AimError', async () => {
       const diag = {
         endLlmTimer: vi.fn(),
         complete: vi.fn(async () => {
@@ -317,7 +322,7 @@ describe('ai/aim.ts ΓÇö AI Admin seam (API-05)', () => {
           diag,
           metrics: { promptTokens: 1, completionTokens: 1 },
         }),
-      ).rejects.toThrow('diag persist failed');
+      ).rejects.toMatchObject({ name: 'AimError', message: 'diag persist failed' });
     });
   });
 

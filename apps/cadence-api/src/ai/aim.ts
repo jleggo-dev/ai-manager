@@ -22,6 +22,10 @@ import {
   type RequestAuthContext,
 } from '@ai-admin/core';
 import { cadenceConfig } from '../config.ts';
+import { rejectAsAimError } from './aim-errors.ts';
+
+export { AimError } from './aim-errors.ts';
+export type { AimErrorKind } from './aim-errors.ts';
 
 function aimContext(cadenceUserId: string): RequestAuthContext {
   return {
@@ -35,9 +39,9 @@ function aimContext(cadenceUserId: string): RequestAuthContext {
   };
 }
 
-/** Run any engine call inside Cadence's AI Admin auth context. */
+/** Run any engine call inside Cadence's AI Admin auth context. Failures surface as AimError. */
 export function withAim<T>(cadenceUserId: string, fn: () => Promise<T>): Promise<T> {
-  return runWithAuth(aimContext(cadenceUserId), fn);
+  return runWithAuth(aimContext(cadenceUserId), fn).catch(rejectAsAimError);
 }
 
 const CALLING_APP = cadenceConfig.aim.callingApplication;

@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { resetUserData } from '../services/dev-reset.ts';
 import { clearTrace } from '../services/dev-trace.ts';
-import { purgeUserAiData } from '../ai/aim.ts';
+import { AimError, purgeUserAiData } from '../ai/aim.ts';
 
 const router = Router();
 router.use(requireCadenceUser);
@@ -26,8 +26,12 @@ router.delete('/data', async (req: Request, res: Response) => {
     clearTrace(userId);
     res.json({ ok: true });
   } catch (err) {
-    console.error('[DELETE /me/data]', err);
-    res.status(500).json({ error: 'start over failed — nothing was partially deleted locally; try again' });
+    const aim = AimError.fromUnknown(err);
+    console.error('[DELETE /me/data]', aim.kind, aim.message);
+    res.status(aim.httpStatus).json({
+      error: 'start over failed — nothing was partially deleted locally; try again',
+      kind: aim.kind,
+    });
   }
 });
 
