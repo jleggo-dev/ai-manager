@@ -15,6 +15,15 @@ export interface NewOccurrence {
   status?: OccurrenceStatus;
 }
 
+/**
+ * Week / consistency / replan list row — matches `listOccurrences` SELECT (no session/log jsonb).
+ * Callers that need the prescription or post-session report use `getOccurrenceWithActivity`.
+ */
+export type OccurrenceListRow = Pick<
+  Occurrence,
+  'occurrence_id' | 'activity_id' | 'date' | 'status' | 'value' | 'provenance' | 'weather'
+>;
+
 /** Bulk insert scheduled occurrences (idempotent on (activity_id, date)). */
 export async function upsertOccurrences(rows: NewOccurrence[]): Promise<void> {
   if (rows.length === 0) return;
@@ -29,11 +38,11 @@ export async function upsertOccurrences(rows: NewOccurrence[]): Promise<void> {
     on conflict (activity_id, date) do nothing`;
 }
 
-export async function listOccurrences(userId: string, fromDate: string, toDate: string): Promise<Occurrence[]> {
+export async function listOccurrences(userId: string, fromDate: string, toDate: string): Promise<OccurrenceListRow[]> {
   // Explicit columns, deliberately EXCLUDING session/log jsonb — this feeds the week view,
   // consistency, and replan context, none of which need the (potentially large) payloads.
   // The occurrence-detail path (getOccurrenceWithActivity) fetches them.
-  return sql<Occurrence[]>`
+  return sql<OccurrenceListRow[]>`
     select occurrence_id, activity_id, date, status, value, provenance, weather
     from cadence.occurrences
     where user_id = ${userId} and date >= ${fromDate} and date <= ${toDate}`;

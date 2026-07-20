@@ -4,6 +4,7 @@
  * (which also marks done + provenance and gives History a legible entry for free), and updates
  * baseline.weight_kg.current WITHOUT clobbering .start (jsonb || is shallow — merge app-side).
  */
+import type { Baseline, WeightTrend } from '@cadence/shared';
 import { getOccurrenceWithActivity, recordOccurrenceLog } from '../repos/occurrences.ts';
 import { getUser, mergeBaseline } from '../repos/users.ts';
 
@@ -36,11 +37,17 @@ export async function recordWeighIn(
   if (!ok) return null;
 
   const user = await getUser(userId);
-  const prev = (user?.baseline as { weight_kg?: Record<string, unknown> } | null)?.weight_kg ?? {};
-  await mergeBaseline(userId, {
-    weight_kg: { ...prev, current: kg, source: 'self_report' },
-    weight_unit: unit,
-  } as never);
+  const prev = user?.baseline?.weight_kg;
+  const start = typeof prev?.start === 'number' ? prev.start : kg;
+  const weight_kg: WeightTrend = {
+    current: kg,
+    start,
+    source: 'manual',
+    updated_at: logged_at.slice(0, 10),
+  };
+  // Baseline stores display UOM as 'lbs' (plural); the weigh-in route accepts 'lb'.
+  const weight_unit: NonNullable<Baseline['weight_unit']> = unit === 'lb' ? 'lbs' : 'kg';
+  await mergeBaseline(userId, { weight_kg, weight_unit });
 
   return { weight_kg: kg };
 }
