@@ -1,1 +1,4 @@
+# CI-06: lint-staged runs `eslint --fix` from repo root. ESLint must keep resolving the
+# *nearest* workspace eslint.config.js to each staged file (no root config). Guard:
+# `npm run test:eslint-nearest-config`.
 npx lint-staged

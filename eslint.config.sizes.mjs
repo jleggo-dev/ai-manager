@@ -4,6 +4,11 @@
 // every workspace's ESLint config, so CI (`eslint . --max-warnings 0`) and the pre-commit hook
 // fail any PR that lands — or regrows — an oversized file or function. No reviewer vigilance needed.
 //
+// CI-06 (load-bearing for lint-staged): there is no root eslint.config.js. ESLint flat config
+// resolves the *nearest* eslint.config.js to each linted file even when `eslint --fix` is
+// invoked from the monorepo root (as husky/lint-staged does). Do not add a root config without
+// updating lint-staged; guard: `npm run test:eslint-nearest-config`.
+//
 // HOW TO USE: `import { sizeRules } from '<rel>/eslint.config.sizes.mjs'` in a workspace
 // eslint.config.js and spread `...sizeRules` into its main files block. Grandfathered offenders go
 // in a SEPARATE block that sets these rules to 'off' for specific files — that allowlist IS the

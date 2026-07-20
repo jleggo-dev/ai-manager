@@ -43,6 +43,9 @@ jobs:
               - 'packages/edge/**'
               - 'package.json'
               - 'package-lock.json'
+              - 'eslint.config.sizes.mjs'
+              - 'scripts/**'
+              - '.husky/**'
             cadence:
               - 'apps/**'
               - 'packages/core/**'
@@ -51,6 +54,9 @@ jobs:
               - 'migrations/cadence/**'
               - 'package.json'
               - 'package-lock.json'
+              - 'eslint.config.sizes.mjs'
+              - 'scripts/**'
+              - '.husky/**'
 
   # AI Admin's own workspaces - gated on AI Admin's Supabase project + Devs.ai secrets ONLY.
   ai-admin:
@@ -138,3 +144,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run format:check
+      # CI-06: assert ESLint still resolves nearest workspace eslint.config.js from repo root
+      # (load-bearing for lint-staged; no root eslint config by design).
+      - run: npm run test:eslint-nearest-config
