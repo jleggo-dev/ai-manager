@@ -412,15 +412,16 @@ work. Historical merge log (originally via `feat/cadence`, then `main`):
 >   Cadence nutrition-day (`refactor/cross-03-cadence-react-query`, #50)
 >
 > **Remaining backlog (accurate as of 2026-07-20 — not Phase 2 P1):**
-> - **FE-11 / FE-13 / FE-14** — deferred FE size splits (P2; §4.7–4.8)
+> - **FE-11 / FE-13** — deferred FE size splits (P2; §4.7–4.8)
+> - **FE-14** ✅ **Done** — `ProfileFormModal` split (PR #56; §4.8)
 > - **BE-03a** — diagnostic-logs GET gating (needs product sign-off; §4.9)
 > - **CI-01** — rotate Devs.ai v1 key + flip `DEVS_AI_V1_KEY_KNOWN_EXPIRED` (human; §4.6)
-> - **CI-08** — `.gitattributes` `eol=lf` for Windows CRLF determinism (P3; §4.6)
-> - **CI-09** — Devs.ai v2 `tool_outputs` resume body investigation (P2; §4.6)
+> - **CI-08** ✅ **Done** — `.gitattributes` `eol=lf` (PR #53; P3; §4.6)
+> - **CI-09** ✅ **Done** — camelCase `toolOutputs` on Devs.ai v2 `/resume` (PR #55; §4.6)
 > - **Phase 3 P2** — condensed area lists in §4.4
 > - **INFRA-02** — flip CI from report-only to required branch-protection check (§4.0 / §8)
 >
-> Do **not** start batch 9 until the orchestrator explicitly opens Phase 3 / deferred work.
+> Do **not** start the next deferred batch until the orchestrator explicitly opens it.
 
 #### Backend (report 01)
 
@@ -582,7 +583,7 @@ logged here as its own backlog item.
 | **CI-04** | `npm run format:check` already flagged 186 files before INFRA-03 (no `.prettierrc` ever pinned, per report 06); INFRA-03's widened glob surfaces ~90 more from Cadence on top. Superseded by/fold into **INFRA-04** (align + pin Prettier config, then run `prettier --write` once repo-wide) — do not fix piecemeal | Cross-cutting | P1 | M (one-time repo-wide reformat) | Low (formatting-only) | **Done** (PR #5 — pinned `singleQuote`+`printWidth:120`, 84-file reformat, verified cosmetic-only) |
 | **CI-06** | ESLint flat config resolves the *nearest* `eslint.config.js` to the linted file even when invoked from repo root — undocumented, load-bearing behavior for `lint-staged`; a future ESLint major bump could silently break it with no test coverage | Infra | P3 | S | Low | Not Started |
 | **CI-07** | `@typescript-eslint/no-non-null-assertion` disabled repo-wide for `apps/cadence-api`/`apps/cadence-web` (both use `!` deliberately/extensively) and `react/no-unescaped-entities` disabled for `apps/cadence-web` (clashes with the brand's mandated contractions) — both are lint-suppressed rather than fixed; worth their own tickets if the team wants stricter enforcement later | Cadence | P3 | M (would require real fixes, not just re-enabling) | Low | Not Started |
-| **CI-08** | Windows-only: `core.autocrlf=true` locally can reintroduce CRLF on `git checkout --`, which Prettier's `endOfLine: lf` default then flags as a formatting diff — not a repo bug, but a `.gitattributes` (`* text=auto eol=lf`) would make this deterministic across contributors' OSes | Infra | P3 | S | Low | Not Started |
+| **CI-08** | Windows-only: `core.autocrlf=true` locally can reintroduce CRLF on `git checkout --`, which Prettier's `endOfLine: lf` default then flags as a formatting diff — not a repo bug, but a `.gitattributes` (`* text=auto eol=lf`) would make this deterministic across contributors' OSes | Infra | P3 | S | Low | **Done** (PR #53) — root `.gitattributes` with `* text=auto eol=lf` + short comment; no mass renormalize |
 | **CI-05** | Frontend `build` fails in some local sandboxes because `backend/.env` has `VITE_DEV_API_KEY` set — this is an intentional security guard (a real key must never leak into a `VITE_*` var, see `CLAUDE.md`), not a code bug. Confirmed identical on unmodified `feat/cadence`; won't reproduce in actual CI since that var is a local-dev-only convenience never set in the CI environment. **No fix needed** — logged only so a future agent doesn't rediscover and "fix" it into a weaker guard | Infra/local-dev | P3 | — | — | Won't Fix (by design) |
 
 *Full detail: subagent report for INFRA-02/03 (2026-07-18).*
@@ -606,7 +607,7 @@ FE-03…FE-08 / FE-P2 (`AiMatcherPage`, `SettingsPage`, `HealthCheck*`, `Lovable
 | ID | Item | Area | Priority | Effort | Risk | Status |
 |---|---|---|---|---|---|---|
 | **FE-13** | Further split oversized `processing-jobs/` extracts still over `max-lines@500`: `JobsTab` (~908), `AnalyticsTab` (~987), `SchemaValidationPanel` (~632), `RuleSetsTab` (~579) — keep the FE-01 overrides until each drops under the threshold | Frontend | P2 | L | Medium | Not Started |
-| **FE-14** | Split `ai-profiles/ProfileFormModal.tsx` (~530 lines) further (form subpanels / sections) so it can leave the max-lines override list — leftover from FE-02 structural split, surfaced when FE-01's rule landed on current `feat/cadence` | Frontend | P2 | M | Low | Not Started |
+| **FE-14** ✅ **Done** (`refactor/fe-14-profile-form-modal`, PR #56) | Split `ai-profiles/ProfileFormModal.tsx` (~530 lines) further (form subpanels / sections) so it can leave the max-lines override list — leftover from FE-02 structural split, surfaced when FE-01's rule landed on current `feat/cadence` | Frontend | P2 | M | Low | **Done** — extracted `ProfileFormIdentityFields`, `ProfileFailoverSection`, `ProfileFormDetailsFields`; allowlist entry removed; modal ~372 lines under gate |
 
 ### 4.9 Newly discovered / deferred — BE-03 supervisor review (`refactor/be-03-rbac`)
 
