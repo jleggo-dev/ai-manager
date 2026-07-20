@@ -5,30 +5,21 @@
  * submit tool outputs, and manage Devs.ai v2 stream metadata / cancel / reconnect.
  */
 
-import { getProcessingJob } from '../models/processing-jobs.ts';
-import { getWorkflowStepByKey } from '../models/workflows.ts';
 import { DevsAiClient } from '../integrations/devs-ai/client.ts';
 import { DevsAiV2Client } from '../integrations/devs-ai-v2/client.ts';
-import type { ExpectedSchemaInput } from '../services/expected-schema-to-json-schema.ts';
 import { DiagnosticSession, shouldRunDiagnostics } from '../services/ai-diagnostics.ts';
-import { buildProviderChatOptions } from '../services/ai-profile-runtime-options.ts';
 import { getAuthContext, effectiveUserId } from '../db/tenant.ts';
-import { resolveAttachments, resolveAttachmentsAsText } from '../services/attachment-resolver.ts';
-import { resolveProfileToolDefinitions } from './tool-fulfillment.ts';
-import { resolveTimeoutMs, interpolateTemplate } from './job-execution.ts';
-import {
-  getSessionProviderWithKey,
-  resolveSessionClient,
-  getCompletedWorkflowSteps,
-} from './chat-session-lifecycle.ts';
-import { maybeCompactSession, buildCompactedHistory, getSummarizerConfig } from '../services/session-compaction.ts';
+import { resolveTimeoutMs } from './job-execution-utils.ts';
+import { getSessionProviderWithKey, resolveSessionClient } from './chat-session-lifecycle.ts';
+import { maybeCompactSession } from '../services/session-compaction.ts';
 import {
   getChatSession as dbGetSession,
   updateChatSession as dbUpdateSession,
   createChatMessage,
-  listChatMessages,
 } from '../models/chat-sessions.ts';
-import type { Attachment, ChatMessage, FormattingRule, ProcessingJobRow, WorkflowStepConfig } from '../types.ts';
+import type { Attachment, FormattingRule } from '../types.ts';
+import { resolveChatInvocation } from './chat-messaging-resolve.ts';
+import { openChatSendStream } from './chat-messaging-stream.ts';
 
 interface SendChatMessageOptions {
   attachments?: Attachment[];
@@ -53,22 +44,8 @@ interface SendChatMessageResult {
 }
 
 interface JobConfig {
-  systemPrompt?: string | null;
-  promptTemplate?: string;
-  formattingRules?: FormattingRule[];
   expectedResponseFormat?: string | null;
-  expectedSchema?: ExpectedSchemaInput | null;
-  applyFormattingRules?: boolean;
   advanced?: Record<string, unknown>;
-  ruleSets?: RuleSetConfig[];
-}
-
-interface RuleSetConfig {
-  key: string;
-  name: string;
-  description?: string | null;
-  promptTemplate?: string;
-  formattingRules?: FormattingRule[];
 }
 
 /**
@@ -106,95 +83,12 @@ export async function sendChatMessage(
 
   const client = await resolveSessionClient(session, provider);
 
-  const providerType = session.provider_type;
+  const providerType = session.provider_type ?? provider.type;
   const timeoutMs = options.timeoutMs || (await resolveTimeoutMs({}, provider));
   const attachments: Attachment[] = options.attachments || [];
 
-  let resolvedMessage = message;
-  let workflowStepId: string | null = null;
-  let stepFormattingRules: FormattingRule[] | null = null;
-  let stepOutputMappings: Record<string, string> | null = null;
-  let ruleSetKey: string | null = null;
-  let resolvedJob: ProcessingJobRow | null = null;
-
-  if (options.stepKey && session.workflow_id) {
-    /* ── Mode 2: Workflow step invocation ── */
-    const step = await getWorkflowStepByKey(session.workflow_id, options.stepKey);
-    if (!step) throw new Error(`Workflow step "${options.stepKey}" not found`);
-
-    const job = step.processing_job;
-    if (!job) throw new Error(`Workflow step "${options.stepKey}" has no linked processing job`);
-
-    const template: string | undefined = (job.config as JobConfig | undefined)?.promptTemplate;
-    if (!template) throw new Error(`Processing job "${job.name}" has no prompt template configured`);
-
-    if (step.depends_on && step.depends_on.length > 0) {
-      const completedSteps = await getCompletedWorkflowSteps(sessionId, session.workflow_id);
-      const unmet = step.depends_on.filter((dep: string) => !completedSteps.has(dep));
-      if (unmet.length > 0) {
-        throw new Error(`Step "${options.stepKey}" depends on incomplete steps: ${unmet.join(', ')}`);
-      }
-    }
-
-    const stepConfig = (step.config || {}) as WorkflowStepConfig;
-    const inputMappings = stepConfig.inputMappings || {};
-    const accumulated = (session.workflow_variables || {}) as Record<string, unknown>;
-
-    const mergedVars: Record<string, unknown> = {};
-    for (const [jobVar, workflowVar] of Object.entries(inputMappings)) {
-      if (accumulated[workflowVar] !== undefined) {
-        mergedVars[jobVar] = accumulated[workflowVar];
-      }
-    }
-    Object.assign(mergedVars, options.variables || {});
-
-    resolvedMessage = interpolateTemplate(template, mergedVars);
-    workflowStepId = step.id;
-    stepFormattingRules = (job.config as JobConfig | undefined)?.formattingRules ?? null;
-    stepOutputMappings =
-      stepConfig.outputMappings && Object.keys(stepConfig.outputMappings).length > 0 ? stepConfig.outputMappings : null;
-    resolvedJob = job;
-  } else if (options.ruleSetKey) {
-    /* ── Mode 3: Rule set invocation ── */
-    const job = session.processing_job_id ? await getProcessingJob(session.processing_job_id) : null;
-    if (!job) {
-      throw new Error(
-        'ruleSetKey requires the chat session to be opened with a processing job (use jobSlug or jobId when opening the session).',
-      );
-    }
-
-    const ruleSets: RuleSetConfig[] | undefined = (job.config as JobConfig | undefined)?.ruleSets;
-    if (!Array.isArray(ruleSets) || ruleSets.length === 0) {
-      throw new Error(`Processing job "${job.name}" has no rule sets configured.`);
-    }
-
-    const ruleSet = ruleSets.find((rs) => rs.key === options.ruleSetKey);
-    if (!ruleSet) {
-      throw new Error(
-        `Rule set "${options.ruleSetKey}" not found in job "${job.name}". Available: ${ruleSets.map((rs) => rs.key).join(', ')}`,
-      );
-    }
-
-    if (!ruleSet.promptTemplate?.trim()) {
-      throw new Error(`Rule set "${options.ruleSetKey}" has no prompt template configured.`);
-    }
-
-    resolvedMessage = interpolateTemplate(ruleSet.promptTemplate, options.variables || {});
-    ruleSetKey = ruleSet.key;
-    stepFormattingRules = ruleSet.formattingRules || null;
-    resolvedJob = job;
-  } else if (session.processing_job_id) {
-    /* ── Mode 1 (free-form): load job for diagnostics if session is linked ── */
-    try {
-      resolvedJob = await getProcessingJob(session.processing_job_id);
-    } catch {
-      /* non-fatal — diagnostics just won't fire */
-    }
-  }
-
-  if (!resolvedMessage) {
-    throw new Error('No message content resolved — provide a message, stepKey, or ruleSetKey');
-  }
+  const { resolvedMessage, workflowStepId, stepFormattingRules, stepOutputMappings, ruleSetKey, resolvedJob } =
+    await resolveChatInvocation(session, sessionId, message, options);
 
   /* ── Set up diagnostics ──────────────────────────────────── */
   let diagnosticSession: DiagnosticSession | null = null;
@@ -235,74 +129,21 @@ export async function sendChatMessage(
   await maybeCompactSession(session, session.calling_application || 'unknown');
   const refreshedSession = (await dbGetSession(sessionId)) || session;
 
-  let sseResponse: globalThis.Response;
   if (diagnosticSession) diagnosticSession.startLlmTimer();
 
-  if (providerType === 'devs-ai' && session.external_chat_id) {
-    let prompt: string | unknown[];
-    const textContent =
-      session.message_count === 0 && session.system_prompt
-        ? `${session.system_prompt}\n\n---\n\n${resolvedMessage}`
-        : resolvedMessage;
-
-    if (attachments.length > 0) {
-      const fileRefs = await resolveAttachments(session.external_chat_id, attachments, client as DevsAiClient);
-      prompt = [{ type: 'text', text: textContent }, ...fileRefs];
-    } else {
-      prompt = textContent;
-    }
-
-    sseResponse = await (client as DevsAiClient).messageChatSession(session.external_chat_id, prompt, {
-      timeoutMs,
-      tools: await resolveProfileToolDefinitions(refreshedSession.ai_profile),
-    });
-  } else if (typeof client.chatCompletionStream === 'function') {
-    let enrichedContent = resolvedMessage;
-    if (attachments.length > 0) {
-      const textFiles = await resolveAttachmentsAsText(attachments);
-      if (textFiles.length > 0) {
-        const fileBlock = textFiles.map((f) => `--- ${f.fileName} ---\n${f.content}`).join('\n\n');
-        enrichedContent = `${fileBlock}\n\n---\n\n${enrichedContent}`;
-      }
-    }
-    const historyRaw = await listChatMessages(sessionId);
-    const historyMessages = buildCompactedHistory(refreshedSession, historyRaw, getSummarizerConfig(refreshedSession));
-    const chatMessages: ChatMessage[] = historyMessages.map((m) => ({
-      role: m.role as 'system' | 'user' | 'assistant',
-      content: m.content,
-    }));
-    if (enrichedContent !== resolvedMessage && chatMessages.length > 0) {
-      const lastMsg = chatMessages[chatMessages.length - 1];
-      if (lastMsg) lastMsg.content = enrichedContent;
-    }
-    const chatOptions = buildProviderChatOptions(provider.type, profile?.runtime_options || {}, {
-      previousResponseId: (
-        refreshedSession.provider_metadata as {
-          previous_response_id?: string;
-        } | null
-      )?.previous_response_id,
-      conversationId: (
-        refreshedSession.provider_metadata as {
-          conversation_id?: string;
-        } | null
-      )?.conversation_id,
-      expectedSchema:
-        providerType === 'devs-ai-v2' ? (resolvedJob?.config as JobConfig | undefined)?.expectedSchema : undefined,
-    });
-    const profileTools = await resolveProfileToolDefinitions(refreshedSession.ai_profile);
-    const mergedTools = [
-      ...(Array.isArray(chatOptions.tools) ? (chatOptions.tools as unknown[]) : []),
-      ...(Array.isArray(profileTools) ? profileTools : []),
-    ];
-    const modelId = String(profile?.external_ai_id || '').trim();
-    sseResponse = await client.chatCompletionStream(modelId, chatMessages, {
-      ...chatOptions,
-      ...(mergedTools.length > 0 ? { tools: mergedTools } : {}),
-      timeoutMs,
-    });
-  } else {
-    throw new Error(`Unsupported provider type "${providerType}" for chat streaming`);
-  }
+  const sseResponse = await openChatSendStream({
+    sessionId,
+    session,
+    refreshedSession,
+    client,
+    provider,
+    profile,
+    providerType,
+    resolvedMessage,
+    resolvedJob,
+    attachments,
+    timeoutMs,
+  });
 
   const expectedResponseFormat: string | null =
     (resolvedJob?.config as JobConfig | undefined)?.expectedResponseFormat ?? null;
