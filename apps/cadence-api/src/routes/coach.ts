@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import {
+  AimError,
   openCoachSession,
   injectCoachContext,
   sendCoachMessage,
@@ -64,8 +65,9 @@ router.post('/sessions', async (req: Request, res: Response) => {
     );
     res.json({ sessionId: session.sessionId, externalChatId: session.externalChatId });
   } catch (err) {
-    console.error('[POST /coach/sessions]', err);
-    res.status(500).json({ error: 'Failed to open session' });
+    const aim = AimError.fromUnknown(err);
+    console.error('[POST /coach/sessions]', aim.kind, aim.message);
+    res.status(aim.httpStatus).json({ error: 'Failed to open session', kind: aim.kind });
   }
 });
 
@@ -111,7 +113,9 @@ router.get('/current', async (req: Request, res: Response) => {
       .map((m) => ({ role: m.role === 'assistant' ? 'coach' : 'user', content: m.content ?? '' }));
     res.json({ sessionId: conv.ai_session_id, messages, stale, staleReason });
   } catch (err) {
-    console.error('[GET /coach/current]', err);
+    const aim = AimError.fromUnknown(err);
+    console.error('[GET /coach/current]', aim.kind, aim.message);
+    // Soft-fail: a blank restore is better than a hard error on the chat entry path.
     res.json({ sessionId: null, messages: [], stale: false });
   }
 });
@@ -212,11 +216,12 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       .then((r) => updateTrace(userId, { capture: r }))
       .catch((e) => console.error('[capture_extract]', e));
   } catch (err) {
-    console.error('[POST /coach/sessions/:id/messages]', err);
+    const aim = AimError.fromUnknown(err);
+    console.error('[POST /coach/sessions/:id/messages]', aim.kind, aim.message);
     if (!res.headersSent) {
-      res.status(500).json({ error: 'stream failed' });
+      res.status(aim.httpStatus).json({ error: 'stream failed', kind: aim.kind });
     } else {
-      res.write(`data: ${JSON.stringify({ error: 'stream failed' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: 'stream failed', kind: aim.kind })}\n\n`);
       res.end();
     }
   }
@@ -245,7 +250,8 @@ router.get('/log', async (req: Request, res: Response) => {
   try {
     res.json({ entries: await recentAiLog(userId, 30) });
   } catch (err) {
-    console.error('[GET /coach/log]', err);
+    const aim = AimError.fromUnknown(err);
+    console.error('[GET /coach/log]', aim.kind, aim.message);
     res.json({ entries: [] });
   }
 });
