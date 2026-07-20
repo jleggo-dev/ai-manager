@@ -1,6 +1,6 @@
 # AI Manager Monorepo — Refactoring Plan
 
-**Status:** Draft for review · **Owner:** whoever runs the orchestrator role (see §6) · **Last synthesized:** Jul 19, 2026
+**Status:** Draft for review · **Owner:** whoever runs the orchestrator role (see §6) · **Last synthesized:** Jul 20, 2026
 
 This is the master, living refactoring plan for the `ai-manager` monorepo (AI Admin + Cadence).
 It was built by six independent audit agents, each assigned one area of the codebase, each
@@ -24,21 +24,23 @@ source report that contains the full current-problem/target-design/migration-ste
 
 ## 0. TL;DR for anyone about to start work
 
-1. **Nothing in this repo is on fire.** Phase 0 (workspaces + CI + lint/hooks) and Phase 1 P0s
-   (BE-01 / FE-01 / FE-02) are merged. Most Phase 2 P1s through batches 3–6 are also Done
-   (see §4.2 progress). Remaining P1 work is concentrated in Cadence web + a few cross-cuts.
+1. **Nothing in this repo is on fire.** Phase 0, Phase 1 P0s (BE-01 / FE-01 / FE-02), and
+   **Phase 2 P1 are complete** on `main` (batches 7–8 closed; CROSS-03 both halves #49/#50). See
+   §4.2 for the closed log and the remaining (mostly P2/P3 + human) backlog — do **not** start
+   batch 9 until the orchestrator explicitly opens Phase 3 / deferred work.
 2. **Safety net exists, but is still report-only.** INFRA-01…05 landed (PRs #3–#5). Path-filtered
    CI runs on every PR; treat red jobs as merge blockers even though branch protection may not
-   yet *require* the check. **INFRA-08** (repo-wide `max-lines` gates) lands via PR #23.
+   yet *require* the check (**INFRA-02 required-check flip still open**). **INFRA-08** (repo-wide
+   `max-lines` gates) landed via PR #23.
 3. **Frontend/backend type drift (SD2/SD3 → FE-10) is closed** (PR #42) — contracts match the live
    schema; paired FE/BE contract tests guard regression. The old monoliths and RBAC gap are gone
    (splits + BE-03 Done).
 4. **Cadence coverage is improving but uneven.** `apps/cadence-api` now has real suites (plan
-   commit, nutrition, coach-stream, aim seam). `apps/cadence-web` gained ReviewScreen (WEB-01),
-   OccurrenceSheet (WEB-03), and Today/Progress/Plan card-row coverage (WEB-04); **CROSS-03** ✅ Done
-   (AI Admin providers list + Cadence nutrition-day pilots).
-5. Read §4.2 for the accurate remaining backlog, §5 for durable goals, §6 for multi-agent
-   orchestration.
+   commit, nutrition, coach-stream, aim seam). `apps/cadence-web` gained ReviewScreen (WEB-01 #45),
+   OccurrenceSheet (WEB-03 #44), card-row dedup (WEB-04 #46), and TanStack nutrition-day
+   (**CROSS-03** ✅ Done both halves — AI Admin #49 + Cadence #50).
+5. Read §4.2 remaining backlog (FE-11/13/14, BE-03a, CI-01/08/09, Phase 3 P2, INFRA-02
+   required-check flip), §5 for durable goals, §6 for multi-agent orchestration.
 6. **CI gate between batches:** do not start the next parallel batch (and do not merge) while
    integration-branch / PR CI is red. INFRA-02 "report-only" means GitHub branch protection may
    not yet *require* the check — orchestrators and supervisors must still treat failing jobs as
@@ -110,8 +112,8 @@ numbers verbatim.
 | **`Broker` → `Scribe` rename (exported DevTrace field names + shared contracts module)** | Report 03/04/05 | **CROSS-01** | ✅ Done (PR #30) |
 | **SSE line-buffering/parsing logic independently reimplemented 3+ times** | Reports 01/03/05 | **CROSS-02** | ✅ Done (BE-02 #18 + API-03 #25) |
 | **Template-interpolation logic reimplemented independently** instead of using canonical helpers | Report 02 §1.4/§4.1 (3× inside frontend) | FE-01/FE-03 sub-tasks | ✅ Done with those items |
-| **No data-fetching cache layer anywhere React is used** — hand-rolled `useState`+`useEffect`+manual error notification, duplicated fetches | Report 02 §6 (AI Admin frontend), Report 04 §6 (Cadence web) | **CROSS-03** | ✅ Done — AI Admin providers list (#49) + Cadence nutrition-day (`refactor/cross-03-cadence-react-query`) |
-| **Zero automated test coverage exactly where business/security risk is highest** | All six reports | pervasive theme | Partially closed (API-01/04/05, FE-09, …); Cadence web still thin |
+| **No data-fetching cache layer anywhere React is used** — hand-rolled `useState`+`useEffect`+manual error notification, duplicated fetches | Report 02 §6 (AI Admin frontend), Report 04 §6 (Cadence web) | **CROSS-03** | ✅ Done both halves — AI Admin providers list (#49) + Cadence nutrition-day (#50) |
+| **Zero automated test coverage exactly where business/security risk is highest** | All six reports | pervasive theme | Partially closed (API-01/04/05, FE-09, WEB-01…04, CROSS-03, …); Phase 3 WEB-P2/API-P2 still open |
 | **Two-Supabase-projects architecture** has implications for CI secret-scoping | Report 06 §4.4 | folded into **INFRA-02** | ✅ Done (path-filtered jobs) |
 
 ---
@@ -328,13 +330,13 @@ deferred as **FE-11**); hooks + `McpToolsPanel` + `ProfileFormModal` / `ProfileL
 
 ---
 
-### 4.2 Phase 2 — P1 items
+### 4.2 Phase 2 — P1 items — **complete**
 
-Once Phase 0 exists (at least in report-only form) and Phase 1 is underway, these can be assigned
-with high parallelism — nearly all are independent files. A few internal orderings matter (noted
-per item / per area intro).
+All Phase 2 P1 backlog items below are **Done** on `main`. Batches 7–8 are closed; CROSS-03 both
+halves landed (#49/#50). Do **not** start batch 9 until the orchestrator opens Phase 3 / deferred
+work. Historical merge log (originally via `feat/cadence`, then `main`):
 
-> **Phase 2 progress (updated 2026-07-19).** Merged to `feat/cadence` so far:
+> **Phase 2 progress (updated 2026-07-20).** Merged (originally to `feat/cadence`, now on `main`):
 > - **BE-03** — RBAC route guards (PR #10). Side effect: the `ai-admin/backend` CI job is now
 >   **green for the first time** — the missing repo secrets (`TEST_API_KEY`, `AI_MANAGER_SUPABASE_*`,
 >   `CREDENTIAL_ENCRYPTION_KEY`, `DEVS_AI_API_KEY`) were added and `ci.yml` now wires `TEST_API_KEY`.
@@ -398,17 +400,27 @@ per item / per area intro).
 > - **WEB-01** — split `ReviewScreen` into wizard hooks + 4 step components; test-first
 >   `unitConversion` (plausibleKg 20–500 clamp / corruption fallback) + preview/lock recovery
 >   (`refactor/web-01-review-screen`, PR #45). Dropped from eslint `max-lines` allowlist.
+> - **WEB-04** — dedupe Today/Progress/Plan cards and rows into shared components
+>   (`refactor/web-04-card-dedup`, PR #46).
+> - **CROSS-03** — TanStack Query pilots: AI Admin providers list (PR #49) + Cadence nutrition-day
+>   (PR #50). Both halves Done.
 >
-> **Remaining Phase 2 P1 (accurate as of CROSS-03 AI Admin half):**
-> - **WEB-01** ✅ Done (PR #45) — ReviewScreen wizard split + unit-conversion tests
-> - **WEB-03** ✅ Done (PR #44) — OccurrenceSheet panel split
-> - **WEB-04** ✅ Done — Today/Progress/Plan card/row dedup
-> - **CROSS-03** ✅ Done — AI Admin providers list (#49) + Cadence nutrition-day pilot
+> **Phase 2 P1 closed.** Batches 7–8 and CROSS-03:
+> - **Batch 7** ✅ closed — **WEB-02** (PR #41) · **FE-10** (PR #42) · **API-06** (PR #40)
+> - **Batch 8** ✅ closed — **WEB-03** (PR #44) · **WEB-01** (PR #45) · **WEB-04** (PR #46)
+> - **CROSS-03** ✅ Done both halves — AI Admin (`refactor/cross-03-ai-admin-react-query`, #49) +
+>   Cadence nutrition-day (`refactor/cross-03-cadence-react-query`, #50)
 >
-> **Batch 7:** **WEB-02** ✅ (PR #41) · **FE-10** ✅ (PR #42) · **API-06** ✅ (PR #40).
-> **Batch 8:** **WEB-03** ✅ (PR #44) · **WEB-01** ✅ (PR #45) · **WEB-04** ✅ (card/row dedup).
-> **CROSS-03:** AI Admin (`refactor/cross-03-ai-admin-react-query`, #49) + Cadence nutrition-day
-> (`refactor/cross-03-cadence-react-query`) both landed.
+> **Remaining backlog (accurate as of 2026-07-20 — not Phase 2 P1):**
+> - **FE-11 / FE-13 / FE-14** — deferred FE size splits (P2; §4.7–4.8)
+> - **BE-03a** — diagnostic-logs GET gating (needs product sign-off; §4.9)
+> - **CI-01** — rotate Devs.ai v1 key + flip `DEVS_AI_V1_KEY_KNOWN_EXPIRED` (human; §4.6)
+> - **CI-08** — `.gitattributes` `eol=lf` for Windows CRLF determinism (P3; §4.6)
+> - **CI-09** — Devs.ai v2 `tool_outputs` resume body investigation (P2; §4.6)
+> - **Phase 3 P2** — condensed area lists in §4.4
+> - **INFRA-02** — flip CI from report-only to required branch-protection check (§4.0 / §8)
+>
+> Do **not** start batch 9 until the orchestrator explicitly opens Phase 3 / deferred work.
 
 #### Backend (report 01)
 
@@ -451,7 +463,7 @@ per item / per area intro).
 | **WEB-01** ✅ **Done** (`refactor/web-01-review-screen`, PR #45) | Split `ReviewScreen.tsx` (648 lines, 4-step wizard + unit-conversion math + commit flow) into `useReviewWizard`/`useDraftField`/`unitConversion.ts` + 4 step components | L | Medium | **Done notes:** test-first `unitConversion.ts` (`plausibleKg` 20–500, corrupted-current→start fallback, kg↔lbs / cm↔ft-in round-trips, draft parsers) + `groupByGoal` + `useReviewWizard` preview/lock/`recoverIfAlreadyCommitted` characterization tests (27). Steps: `GoalsStep`/`AboutYouStep`/`GearStep`/`LockStep`; shell ~158 lines. Dropped from eslint `max-lines` allowlist. Structural only. Verify: cadence-web vitest 41/41; lint/typecheck/build clean. |
 | **WEB-02** ✅ **Done** (`refactor/web-02-split-api`, PR #41) | Split `lib/api.ts` (~536 lines, 6 unrelated domains) into `lib/api/{http,coach,plan,occurrence,nutrition,review,dev}.ts` behind a barrel; extract the SSE parser into a testable unit | M | Low | **Done notes:** thin barrel at `lib/api.ts`; domains under `lib/api/*`; coach stream parsing in `coach-sse.ts` (`createCoachSseParseState` / `pushCoachSseChunk` / `applyCoachSseData`) with 8 characterization tests (chunk-split, skip `message.complete`/`v2.response.created`, `[DONE]`, keepalives). Dev-account selectors live in `http.ts` (auth headers; avoids http↔dev cycle). Call-site import paths unchanged. Verify: cadence-web `tsc` + vitest (coach-sse + existing). |
 | **WEB-03** ✅ **Done** (`refactor/web-03-occurrence-sheet`, PR #44) | Split `OccurrenceSheet.tsx` (487 lines, 5 unrelated domains behind one occurrence id) into `useOccurrenceDetail` + `SessionLogPanel`/`MealLogPanel`+`useMealLog`/`BaselineReadPanel`/`WeighInPanel` | L | Medium | **Done notes:** thin dispatcher at `OccurrenceSheet.tsx`; modules under `features/plan/occurrence/` (`format`, hooks, panels). Pure formatters + `isFoodRow`/`isWeighInPending` + resize math tested (`format.test.ts`); dispatcher covers 404→gone + food/weigh/session routing (`OccurrenceSheet.test.tsx`). Structural only — meal-photo/weigh-in call order preserved. Removed from eslint size-gate grandfather. Verify: cadence-web lint/tsc/vitest 27/27 + build. |
-| **WEB-04** ✅ **Done** (`refactor/web-04-card-dedup`) | De-duplicate `TodayDashboard`'s `DashCard`/`RhythmRow` against `ProgressView`'s near-identical `Card` and `PlanView`'s near-identical `Item` into shared `ProgressCards.tsx`/`OccurrenceRow.tsx`/`useGoalEventAdd.ts` | M | Low-Medium | **Done notes:** extracted `components/ProgressCards.tsx` (`ProgressCardView` + `ProgressTrendCard`, `variant: 'dashboard' | 'progress'` preserves intentional pre-dedup drift), `components/OccurrenceRow.tsx` (`dashboard` | `week`), `features/today/useGoalEventAdd.ts`, `features/today/rank.ts` (+ tests), `occurrence-mod.ts` helpers. Behavior tests lock card kinds + occurrence row. CROSS-03 TanStack pilot **not** included (see CROSS-03 backlog note). Verify: cadence-web vitest + tsc + lint. |
+| **WEB-04** ✅ **Done** (`refactor/web-04-card-dedup`, PR #46) | De-duplicate `TodayDashboard`'s `DashCard`/`RhythmRow` against `ProgressView`'s near-identical `Card` and `PlanView`'s near-identical `Item` into shared `ProgressCards.tsx`/`OccurrenceRow.tsx`/`useGoalEventAdd.ts` | M | Low-Medium | **Done notes:** extracted `components/ProgressCards.tsx` (`ProgressCardView` + `ProgressTrendCard`, `variant: 'dashboard' | 'progress'` preserves intentional pre-dedup drift), `components/OccurrenceRow.tsx` (`dashboard` | `week`), `features/today/useGoalEventAdd.ts`, `features/today/rank.ts` (+ tests), `occurrence-mod.ts` helpers. Behavior tests lock card kinds + occurrence row. CROSS-03 TanStack pilot landed separately (#49/#50). Verify: cadence-web vitest + tsc + lint. |
 
 #### Shared packages & seam (report 05)
 
@@ -500,7 +512,7 @@ desired.
 **Priority/Effort/Risk:** P1 / M / Low (streaming behavior is easy to regression-test with recorded
 fixtures — the risk is in *not* doing this, not in doing it).
 
-#### CROSS-03 — Adopt a data-fetching cache layer (TanStack Query) [P1, opportunistic] — ✅ **Done**
+#### CROSS-03 — Adopt a data-fetching cache layer (TanStack Query) [P1, opportunistic] — ✅ **Done** (both halves: #49 / #50)
 
 **Current problem:** both React clients (`frontend/` and `apps/cadence-web/`) hand-roll
 `useState`+`useEffect`+manual error-notification for every data fetch, with real, measurable
@@ -510,29 +522,31 @@ duplication (`apps/cadence-web`'s nutrition-day fetch was independently triplica
 **Recommendation:** don't do this as a repo-wide migration. Pilot it on **one** surface per product
 — expand from there once the pattern proves out, rather than a big-bang migration.
 
-**Cadence web half — Done** (`refactor/cross-03-cadence-react-query`): Option 1 nutrition-day pilot.
-`@tanstack/react-query` + root `QueryClientProvider` (`staleTime: 30s`, `refetchOnWindowFocus: false`,
-`retry: 1`). Shared `queryKeys.nutritionDay` + `useNutritionDay` / `invalidateNutritionDay` migrate
-`TodayDashboard`, `SettingsSheet` (`NutritionTargets`), and Occurrence meal path (`useMealLog`).
-Invalidate after meal log / confirm, macro target save/clear, and weigh-in. Not a big-bang — other
-Cadence fetches stay hand-rolled until a follow-on.
-
 **Priority/Effort/Risk:** P1 / L (full migration not recommended) / Low when piloted narrowly.
 
-**AI Admin half — Done** (`refactor/cross-03-ai-admin-react-query`):
+**AI Admin half — Done** (`refactor/cross-03-ai-admin-react-query`, PR #49):
 - Added `@tanstack/react-query`; `QueryClientProvider` in `frontend/src/main.tsx`.
 - Shared defaults in `frontend/src/lib/query-client.ts` (staleTime 30s, gcTime 5m, retry 1,
-  `refetchOnWindowFocus: false`) — Cadence nutrition-day pilot should mirror unless documented.
+  `refetchOnWindowFocus: false`).
 - Conventions: `frontend/docs/tanstack-query.md` + query-key factories in `lib/query-keys.ts`.
 - **Pilot surface:** `GET /api/providers` via `useProvidersQuery` — shared by `ProviderManager`
   and `useAiProfilesData` (Providers ↔ AI Profiles nav). Invalidate `providerKeys.all` after
   create/update/delete.
 
-**Cadence half — Done** (`refactor/cross-03-cadence-react-query`): see nutrition-day pilot notes above.
+**Cadence half — Done** (`refactor/cross-03-cadence-react-query`, PR #50): Option 1 nutrition-day
+pilot. `@tanstack/react-query` + root `QueryClientProvider` (defaults aligned with AI Admin:
+`staleTime: 30s`, `refetchOnWindowFocus: false`, `retry: 1`). Shared `queryKeys.nutritionDay` +
+`useNutritionDay` / `invalidateNutritionDay` migrate `TodayDashboard`, `SettingsSheet`
+(`NutritionTargets`), and Occurrence meal path (`useMealLog`). Invalidate after meal log /
+confirm, macro target save/clear, and weigh-in. Not a big-bang — other Cadence fetches stay
+hand-rolled until a follow-on.
 
 ---
 
 ### 4.4 Phase 3 — P2 items (condensed; full detail lives in the area reports)
+
+**Next work after Phase 2 P1** (batches 7–8 + CROSS-03 closed). Do not start as "batch 9"
+until the orchestrator assigns Phase 3 clusters.
 
 | ID | Area | Items | Pointer |
 |---|---|---|---|
@@ -637,8 +651,9 @@ workstreams that run alongside the phased backlog above, not one-time tickets:
    functions. Cadence API's gap is different (route validation was never started) — treat these as
    two separate, smaller efforts, not one shared ticket.
 5. **Backfill tests in inverse proportion to blast radius, not file size.** API-01 / API-04 /
-   API-05 / FE-09 / FE-10 and the Phase 1 P0 test-first steps largely landed. Remaining
-   highest-leverage gaps: Cadence web (WEB-01…04).
+   API-05 / FE-09 / FE-10, Phase 1 P0 test-first steps, and Cadence web WEB-01…04 / CROSS-03
+   pilots largely landed. Remaining highest-leverage gaps shift to Phase 3 WEB-P2 / API-P2
+   surfaces and expanding TanStack beyond the pilots.
 6. **Cadence API DB test harness** — ✅ stood up with API-01 (`resetUserData` fixtures). Reuse it
    for API-06 rather than inventing a second harness.
 7. **Lightweight type-contract check** — ✅ landed with FE-10 (PR #42): paired fixture-response
@@ -751,7 +766,8 @@ Every item ID in §4 should carry one of these statuses, updated by whichever ro
 `Not Started` → `Assigned` → `In Progress` → `In Review` → `Changes Requested` (loops back to `In Progress`) → `Done` → `Verified`
 
 Update Status cells in place as items move; this file is the single source of truth. Phase 0–1 and
-most Phase 2 P1s are Done — see §4.2 "Remaining Phase 2 P1" for what is actually still open.
+**Phase 2 P1 are Done** — see §4.2 remaining backlog for deferred P2/P3 + human items (FE-11/13/14,
+BE-03a, CI-01/08/09, Phase 3 P2, INFRA-02 required-check flip). Do not start batch 9 until assigned.
 
 ---
 
@@ -776,16 +792,20 @@ This plan is "done" (or rather, has earned the right to be considered a complete
 
 - [x] `npm ls --workspaces` from repo root lists all 9 real workspaces with zero `extraneous`/`invalid`. (INFRA-01)
 - [ ] `.github/workflows/ci.yml` exists, is a required status check, and its `cadence` job has run
-      green against real Cadence changes (not just report-only). *(workflow exists + runs; required-check flip still open)*
+      green against real Cadence changes (not just report-only). *(workflow exists + runs;
+      **INFRA-02 required-check flip still open**)*
 - [x] Zero files remain in the P0 list (§4.1); FE-01 organism/page `max-lines` is active.
       *(Repo-wide generalization = INFRA-08, PR #23.)*
 - [x] `requireRole` is wired into every mutating admin-sensitive backend route (BE-03's full list).
 - [ ] `apps/cadence-web` and `apps/cadence-api` each have real (not placeholder) test coverage on
-      their top-5 highest-risk paths per reports 03/04's "first N tests" lists. *(API side largely yes; web still no.)*
+      their top-5 highest-risk paths per reports 03/04's "first N tests" lists. *(API side largely
+      yes; web now has ReviewScreen / OccurrenceSheet / card-row / nutrition-day query coverage —
+      top-5 list not fully closed.)*
 - [x] SD2/SD3 (frontend/backend type drift) no longer reproduces — verified by FE-10 contract
       tests (PR #42), not just by manual inspection.
 - [x] `Broker`→`Scribe` rename (CROSS-01) complete for exported DevTrace fields + contracts module
       (PR #30). Persisted `broker-*` mode strings / `cadence-broker` slug intentionally retained.
+- [x] Phase 2 P1 items (including CROSS-03 both halves #49/#50) are `Done` in §4.2.
 - [ ] This document's status tracking (§6.5) shows every P0/P1 item as `Verified`.
 
 ---
@@ -795,8 +815,8 @@ This plan is "done" (or rather, has earned the right to be considered a complete
 - **Rewriting or replacing any product.** Every report independently concluded this is a tractable
   refactor, not a rewrite candidate — no recommendation in this plan proposes replacing an
   architecture, only reorganizing/testing/gating the existing one.
-- **A full TanStack Query migration.** Recommended as a narrow pilot (CROSS-03), not a repo-wide
-  effort — revisit scope after the pilot.
+- **A full TanStack Query migration.** CROSS-03 pilots Done (#49/#50); still not a repo-wide
+  effort — expand opportunistically after the pilots prove out.
 - **A full CSS Modules/Tailwind migration for `apps/cadence-web`'s stylesheet.** Flagged (WEB-P2)
   as a "before it crosses ~800-1000 lines" watch item, not current work.
 - **Deleting `packages/client`/`packages/edge`/`packages/types`.** These are correctly-functioning
