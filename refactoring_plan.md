@@ -391,17 +391,20 @@ per item / per area intro).
 > - **Docs restore** (PR #34) — re-applied FE-03/CROSS-01 progress after #33 squash overwrote the blurb.
 > - **WEB-02** — split cadence-web `lib/api.ts` into domain modules + barrel; extract coach SSE
 >   parser (`lib/api/coach-sse.ts`) with characterization tests (PR #41).
+> - **WEB-03** — split `OccurrenceSheet` into `useOccurrenceDetail` + session/meal/baseline/weigh-in
+>   panels under `features/plan/occurrence/`; pure formatters + dispatcher tests; removed from
+>   eslint size-gate grandfather list (`refactor/web-03-occurrence-sheet`, PR #44).
 >
-> **Remaining Phase 2 P1 (accurate as of PR #42 + WEB-02):**
+> **Remaining Phase 2 P1 (accurate as of PR #44):**
 > - **FE-10** ✅ Done (PR #42) — CallingApplication / DiagnosticLog aligned to live schema + contract tests
-> - **API-06** — shared `select-and-run` extract + `buildContextPack` resilience test
+> - **API-06** ✅ Done — shared `select-and-run` extract + `buildContextPack` resilience test
+> - **WEB-02** ✅ Done (PR #41)
+> - **WEB-03** ✅ Done (PR #44)
 > - **WEB-01** (L) — ReviewScreen split + unit-conversion tests (hard blocker)
-> - **WEB-03** (L) — OccurrenceSheet panel split
 > - **WEB-04** (M) — Today/Progress/Plan card dedup (natural CROSS-03 pilot host)
 > - **CROSS-03** — TanStack Query pilot (opportunistic; prefer with WEB-04, not a big-bang)
 >
-> **Batch 7:** **WEB-02** ✅ (PR #41) · **FE-10** ✅ (PR #42) · **API-06** remaining. Leave
-> WEB-01/WEB-03 for a dedicated L batch; leave CROSS-03 until WEB-04.
+> **Batch 8:** **WEB-03** ✅ (PR #44). Leave WEB-01 for a dedicated L batch; leave CROSS-03 until WEB-04.
 
 #### Backend (report 01)
 
@@ -443,7 +446,7 @@ per item / per area intro).
 |---|---|---|---|---|
 | **WEB-01** | Split `ReviewScreen.tsx` (648 lines, 4-step wizard + unit-conversion math + commit flow) into `useReviewWizard`/`useDraftField`/`unitConversion.ts` + 4 step components | L | Medium | **Test-first is a hard blocker**: unit-conversion round-trips and the `plausibleKg` 20-500 clamp guard a *previously-shipped data-corruption bug* per the code's own comment |
 | **WEB-02** ✅ **Done** (`refactor/web-02-split-api`, PR #41) | Split `lib/api.ts` (~536 lines, 6 unrelated domains) into `lib/api/{http,coach,plan,occurrence,nutrition,review,dev}.ts` behind a barrel; extract the SSE parser into a testable unit | M | Low | **Done notes:** thin barrel at `lib/api.ts`; domains under `lib/api/*`; coach stream parsing in `coach-sse.ts` (`createCoachSseParseState` / `pushCoachSseChunk` / `applyCoachSseData`) with 8 characterization tests (chunk-split, skip `message.complete`/`v2.response.created`, `[DONE]`, keepalives). Dev-account selectors live in `http.ts` (auth headers; avoids http↔dev cycle). Call-site import paths unchanged. Verify: cadence-web `tsc` + vitest (coach-sse + existing). |
-| **WEB-03** | Split `OccurrenceSheet.tsx` (487 lines, 5 unrelated domains behind one occurrence id) into `useOccurrenceDetail` + `SessionLogPanel`/`MealLogPanel`+`useMealLog`/`BaselineReadPanel`/`WeighInPanel` | L | Medium | Touches meal-photo-capture and weigh-in — unrecoverable-if-broken user input; extract pure formatters + add tests first, manual QA pass per extracted panel |
+| **WEB-03** ✅ **Done** (`refactor/web-03-occurrence-sheet`, PR #44) | Split `OccurrenceSheet.tsx` (487 lines, 5 unrelated domains behind one occurrence id) into `useOccurrenceDetail` + `SessionLogPanel`/`MealLogPanel`+`useMealLog`/`BaselineReadPanel`/`WeighInPanel` | L | Medium | **Done notes:** thin dispatcher at `OccurrenceSheet.tsx`; modules under `features/plan/occurrence/` (`format`, hooks, panels). Pure formatters + `isFoodRow`/`isWeighInPending` + resize math tested (`format.test.ts`); dispatcher covers 404→gone + food/weigh/session routing (`OccurrenceSheet.test.tsx`). Structural only — meal-photo/weigh-in call order preserved. Removed from eslint size-gate grandfather. Verify: cadence-web lint/tsc/vitest 27/27 + build. |
 | **WEB-04** | De-duplicate `TodayDashboard`'s `DashCard`/`RhythmRow` against `ProgressView`'s near-identical `Card` and `PlanView`'s near-identical `Item` into shared `ProgressCards.tsx`/`OccurrenceRow.tsx`/`useGoalEventAdd.ts` | M | Low-Medium | Snapshot both implementations' current output *before* merging — they may have already silently drifted |
 
 #### Shared packages & seam (report 05)
