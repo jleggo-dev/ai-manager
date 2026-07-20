@@ -199,7 +199,7 @@ describe('AiProfileManager', () => {
 
 /**
  * Builds a fake `Response` whose `body.getReader()` replays the given raw
- * SSE text as a single chunk, matching the shape `TestChatPanel.processStream`
+ * SSE text as a single chunk, matching the shape `useTestChatStream` / `processStream`
  * expects from `api.sendChatMessageStream` / `api.submitChatToolOutputs`.
  */
 function makeSseResponse(sseText: string, ok = true) {
