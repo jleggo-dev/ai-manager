@@ -91,7 +91,7 @@ describe('E2E: Calling Application Flow', () => {
   it('rejects session creation without callingApplication', async () => {
     const res = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
       jobId,
-      userId: '00000000-0000-0000-0000-e2ecatest001',
+      userId: '00000000-0000-4000-8000-0000000000e4',
     });
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('callingApplication');
@@ -102,7 +102,7 @@ describe('E2E: Calling Application Flow', () => {
 
     const res = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
       jobId,
-      userId: '00000000-0000-0000-0000-e2ecatest002',
+      userId: '00000000-0000-4000-8000-0000000000e5',
       callingApplication: appName,
     });
     expect([201, 400, 500]).toContain(res.status);
@@ -150,7 +150,7 @@ describe('E2E: Calling Application Flow', () => {
 
     const createRes = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
       jobId,
-      userId: '00000000-0000-0000-0000-e2ecatest003',
+      userId: '00000000-0000-4000-8000-0000000000e6',
       callingApplication: appName,
     });
     expect([201, 400, 500]).toContain(createRes.status);

@@ -7,17 +7,20 @@
  *   2. Open a real Devs.ai chat session
  *   3. Close it (remote chat + row preserved)
  *   4. Resume it → remote validated, reactivated, history restored
- *   5. Continue the conversation (must NOT 409)
+ *   5. Continue the conversation (must NOT 409 / must NOT 404)
  *   6. Resume-after-delete → 404
  *   7. Compliance: user-data session deletion purges the remote chat
  *
  * Live cases skip when no Devs.ai chat profile is present in the workspace.
+ * Not gated by RUN_LIVE_PROVIDER_E2E — resume/close is core API behavior; only
+ * the optional live-provider smoke suites are opt-in in CI.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app, authHeaders } from './setup.ts';
 import { getServiceSupabase } from '../src/db/service-supabase.ts';
 import { findDevsChatProfile } from './helpers/real-providers.ts';
+import { LIVE_SSE_REQUEST_TIMEOUT_MS, LIVE_SSE_TEST_TIMEOUT_MS, retryTransient, sleep } from './helpers/e2e-harness.ts';
 
 const TEST_USER_ID = '00000000-0000-4000-8000-0000000000a1';
 const COMPLIANCE_USER_ID = '00000000-0000-4000-8000-0000000000a2';
@@ -83,10 +86,14 @@ afterAll(async () => {
 describe('E2E: Resume chat lifecycle (Devs.ai)', () => {
   it('opens a real Devs.ai chat session', async () => {
     if (!devsProfileId) return;
-    const res = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
-      aiProfileId: devsProfileId,
-      userId: TEST_USER_ID,
-      callingApplication: CALLING_APP,
+    const res = await retryTransient('open resume-chat session', async () => {
+      const r = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
+        aiProfileId: devsProfileId,
+        userId: TEST_USER_ID,
+        callingApplication: CALLING_APP,
+      });
+      if (r.status >= 500) throw new Error(`open session ${r.status}: ${JSON.stringify(r.body)}`);
+      return r;
     });
     expect(res.status).toBe(201);
     sessionId = res.body.sessionId ?? res.body.id;
@@ -102,21 +109,34 @@ describe('E2E: Resume chat lifecycle (Devs.ai)', () => {
 
   it('resumes the closed session and reactivates it', async () => {
     if (!sessionId) return;
-    const res = await request(app).post('/api/chat-sessions/resume').set(authHeaders()).send({ sessionId });
+    const res = await retryTransient('resume closed session', async () => {
+      const r = await request(app).post('/api/chat-sessions/resume').set(authHeaders()).send({ sessionId });
+      if (r.status >= 500) throw new Error(`resume ${r.status}: ${JSON.stringify(r.body)}`);
+      return r;
+    });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('active');
     expect(res.body.sessionId).toBe(sessionId);
     expect(Array.isArray(res.body.messages)).toBe(true);
   });
 
-  it('continues the conversation after resume (must NOT 409)', async () => {
-    if (!sessionId) return;
-    const res = await request(app)
-      .post(`/api/chat-sessions/${sessionId}/messages`)
-      .set(authHeaders())
-      .send({ message: 'Continue after resume' });
-    expect(res.status).not.toBe(409);
-  });
+  it(
+    'continues the conversation after resume (must NOT 409)',
+    async () => {
+      if (!sessionId) return;
+      /* Brief settle so resume's reactivate write is visible before lock acquire. */
+      await sleep(500);
+      const res = await request(app)
+        .post(`/api/chat-sessions/${sessionId}/messages`)
+        .set(authHeaders())
+        .timeout({ deadline: LIVE_SSE_REQUEST_TIMEOUT_MS, response: LIVE_SSE_REQUEST_TIMEOUT_MS })
+        .send({ message: 'Continue after resume' });
+      /* 409 = lock leak; 404 = session reaped (soft-cleanup race) — both are failures. */
+      expect(res.status).not.toBe(409);
+      expect(res.status).not.toBe(404);
+    },
+    LIVE_SSE_TEST_TIMEOUT_MS,
+  );
 
   it('resume-after-delete returns 404', async () => {
     if (!sessionId) return;
@@ -131,55 +151,65 @@ describe('E2E: Resume chat lifecycle (Devs.ai)', () => {
 describe('E2E: Resume preserves conversation (history + AI memory)', () => {
   const CODE_WORD = 'PINEAPPLE42';
 
-  it('starts a chat, exchanges a message, closes, resumes, and the AI still remembers context', async () => {
-    if (!devsProfileId) return;
+  it(
+    'starts a chat, exchanges a message, closes, resumes, and the AI still remembers context',
+    async () => {
+      if (!devsProfileId) return;
 
-    /* 1. Start the chat. */
-    const openRes = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
-      aiProfileId: devsProfileId,
-      userId: TEST_USER_ID,
-      callingApplication: CALLING_APP,
-    });
-    expect(openRes.status).toBe(201);
-    contextSessionId = openRes.body.sessionId ?? openRes.body.id;
-    expect(contextSessionId).toBeTruthy();
+      /* 1. Start the chat. */
+      const openRes = await retryTransient('open context session', async () => {
+        const r = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
+          aiProfileId: devsProfileId,
+          userId: TEST_USER_ID,
+          callingApplication: CALLING_APP,
+        });
+        if (r.status >= 500) throw new Error(`open ${r.status}`);
+        return r;
+      });
+      expect(openRes.status).toBe(201);
+      contextSessionId = openRes.body.sessionId ?? openRes.body.id;
+      expect(contextSessionId).toBeTruthy();
 
-    /* 2. Turn 1 — give the AI a fact to remember. */
-    const turn1 = await request(app)
-      .post(`/api/chat-sessions/${contextSessionId}/messages`)
-      .set(authHeaders())
-      .send({ message: `Remember this exact code word for later: ${CODE_WORD}. Reply with only: OK` });
-    expect(turn1.status).toBe(200);
+      /* 2. Turn 1 — give the AI a fact to remember. */
+      const turn1 = await request(app)
+        .post(`/api/chat-sessions/${contextSessionId}/messages`)
+        .set(authHeaders())
+        .timeout({ deadline: LIVE_SSE_REQUEST_TIMEOUT_MS, response: LIVE_SSE_REQUEST_TIMEOUT_MS })
+        .send({ message: `Remember this exact code word for later: ${CODE_WORD}. Reply with only: OK` });
+      expect(turn1.status).toBe(200);
 
-    /* Let the async user/assistant message persistence settle. */
-    await new Promise((r) => setTimeout(r, 2000));
+      /* Let the async user/assistant message persistence settle. */
+      await sleep(2000);
 
-    /* 3. Close the chat. */
-    const closeRes = await request(app).put(`/api/chat-sessions/${contextSessionId}/close`).set(authHeaders());
-    expect(closeRes.status).toBe(200);
-    expect(closeRes.body.status).toBe('closed');
+      /* 3. Close the chat. */
+      const closeRes = await request(app).put(`/api/chat-sessions/${contextSessionId}/close`).set(authHeaders());
+      expect(closeRes.status).toBe(200);
+      expect(closeRes.body.status).toBe('closed');
 
-    /* 4. Resume — local history must be restored (our turn-1 message is back). */
-    const resumeRes = await request(app)
-      .post('/api/chat-sessions/resume')
-      .set(authHeaders())
-      .send({ sessionId: contextSessionId });
-    expect(resumeRes.status).toBe(200);
-    expect(resumeRes.body.status).toBe('active');
-    const restored = (resumeRes.body.messages || []) as Array<{ role: string; content: string }>;
-    const userTurns = restored.filter((m) => m.role === 'user');
-    expect(userTurns.some((m) => (m.content || '').includes(CODE_WORD))).toBe(true);
+      /* 4. Resume — local history must be restored (our turn-1 message is back). */
+      const resumeRes = await request(app)
+        .post('/api/chat-sessions/resume')
+        .set(authHeaders())
+        .send({ sessionId: contextSessionId });
+      expect(resumeRes.status).toBe(200);
+      expect(resumeRes.body.status).toBe('active');
+      const restored = (resumeRes.body.messages || []) as Array<{ role: string; content: string }>;
+      const userTurns = restored.filter((m) => m.role === 'user');
+      expect(userTurns.some((m) => (m.content || '').includes(CODE_WORD))).toBe(true);
 
-    /* 5. Continue on the resumed session — the AI must recall the code word
-       from the provider-side chat history (proves a true resume, not a new chat). */
-    const turn2 = await request(app)
-      .post(`/api/chat-sessions/${contextSessionId}/messages`)
-      .set(authHeaders())
-      .send({ message: 'What exact code word did I give you earlier? Reply with only the code word.' });
-    expect(turn2.status).toBe(200);
-    const reply = parseSseText(turn2.text);
-    expect(reply.toUpperCase()).toContain(CODE_WORD);
-  });
+      /* 5. Continue on the resumed session — the AI must recall the code word
+         from the provider-side chat history (proves a true resume, not a new chat). */
+      const turn2 = await request(app)
+        .post(`/api/chat-sessions/${contextSessionId}/messages`)
+        .set(authHeaders())
+        .timeout({ deadline: LIVE_SSE_REQUEST_TIMEOUT_MS, response: LIVE_SSE_REQUEST_TIMEOUT_MS })
+        .send({ message: 'What exact code word did I give you earlier? Reply with only the code word.' });
+      expect(turn2.status).toBe(200);
+      const reply = parseSseText(turn2.text);
+      expect(reply.toUpperCase()).toContain(CODE_WORD);
+    },
+    LIVE_SSE_TEST_TIMEOUT_MS,
+  );
 });
 
 describe('E2E: Compliance remote purge on user-data deletion', () => {

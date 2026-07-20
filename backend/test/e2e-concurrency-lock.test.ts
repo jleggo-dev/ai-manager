@@ -60,7 +60,7 @@ beforeAll(async () => {
 
   const sRes = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
     jobId,
-    userId: '00000000-0000-0000-0000-e2elocktest1',
+    userId: '00000000-0000-4000-8000-0000000000e2',
     callingApplication: 'e2e-test:concurrency-lock',
   });
   if (sRes.status === 201) {

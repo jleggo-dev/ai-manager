@@ -31,9 +31,7 @@ afterAll(async () => {
 
 describe('Cursor-based Pagination', () => {
   it('returns the standard pagination envelope { data, pagination }', async () => {
-    const res = await request(app)
-      .get('/api/providers')
-      .set(authHeaders());
+    const res = await request(app).get('/api/providers').set(authHeaders());
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('data');
@@ -46,9 +44,7 @@ describe('Cursor-based Pagination', () => {
   });
 
   it('respects a custom limit parameter', async () => {
-    const res = await request(app)
-      .get('/api/providers?limit=2')
-      .set(authHeaders());
+    const res = await request(app).get('/api/providers?limit=2').set(authHeaders());
 
     expect(res.status).toBe(200);
     expect(res.body.pagination.limit).toBe(2);
@@ -56,32 +52,24 @@ describe('Cursor-based Pagination', () => {
   });
 
   it('caps limit at the MAX_LIMIT (200)', async () => {
-    const res = await request(app)
-      .get('/api/providers?limit=9999')
-      .set(authHeaders());
+    const res = await request(app).get('/api/providers?limit=9999').set(authHeaders());
 
     expect(res.status).toBe(200);
     expect(res.body.pagination.limit).toBe(200);
   });
 
   it('falls back to default limit for zero or negative values', async () => {
-    const resZero = await request(app)
-      .get('/api/providers?limit=0')
-      .set(authHeaders());
+    const resZero = await request(app).get('/api/providers?limit=0').set(authHeaders());
     expect(resZero.status).toBe(200);
     expect(resZero.body.pagination.limit).toBe(50);
 
-    const resNeg = await request(app)
-      .get('/api/providers?limit=-5')
-      .set(authHeaders());
+    const resNeg = await request(app).get('/api/providers?limit=-5').set(authHeaders());
     expect(resNeg.status).toBe(200);
     expect(resNeg.body.pagination.limit).toBe(50);
   });
 
   it('supports cursor-based forward navigation', async () => {
-    const page1 = await request(app)
-      .get('/api/providers?limit=2')
-      .set(authHeaders());
+    const page1 = await request(app).get('/api/providers?limit=2').set(authHeaders());
 
     expect(page1.status).toBe(200);
 
@@ -90,9 +78,7 @@ describe('Cursor-based Pagination', () => {
     }
 
     const cursor = encodeURIComponent(page1.body.pagination.next_cursor);
-    const page2 = await request(app)
-      .get(`/api/providers?limit=2&cursor=${cursor}`)
-      .set(authHeaders());
+    const page2 = await request(app).get(`/api/providers?limit=2&cursor=${cursor}`).set(authHeaders());
 
     expect(page2.status).toBe(200);
     expect(page2.body.data.length).toBeGreaterThan(0);
@@ -104,26 +90,26 @@ describe('Cursor-based Pagination', () => {
   });
 
   it('returns results from the beginning when cursor is empty', async () => {
-    const withCursor = await request(app)
-      .get('/api/providers?cursor=')
-      .set(authHeaders());
-
-    const withoutCursor = await request(app)
-      .get('/api/providers')
-      .set(authHeaders());
+    /* Fire both reads together so concurrent suite inserts cannot change the
+       first page between sequential awaits (flake: first-id mismatch). */
+    const [withCursor, withoutCursor] = await Promise.all([
+      request(app).get('/api/providers?cursor=').set(authHeaders()),
+      request(app).get('/api/providers').set(authHeaders()),
+    ]);
 
     expect(withCursor.status).toBe(200);
     expect(withoutCursor.status).toBe(200);
+    expect(withCursor.body.pagination.limit).toBe(withoutCursor.body.pagination.limit);
 
-    if (withCursor.body.data.length > 0 && withoutCursor.body.data.length > 0) {
-      expect(withCursor.body.data[0].id).toBe(withoutCursor.body.data[0].id);
-    }
+    /* Compare relative order of *our* seeded providers only — global first-id
+       equality is racy when other tests create providers into the shared DB. */
+    const seedSet = new Set(seedProviderIds);
+    const seedOrder = (rows: Array<{ id: string }>) => rows.map((r) => r.id).filter((id) => seedSet.has(id));
+    expect(seedOrder(withCursor.body.data)).toEqual(seedOrder(withoutCursor.body.data));
   });
 
   it('returns 400 for an invalid cursor format', async () => {
-    const res = await request(app)
-      .get('/api/providers?cursor=not-a-valid-cursor-!!!!')
-      .set(authHeaders());
+    const res = await request(app).get('/api/providers?cursor=not-a-valid-cursor-!!!!').set(authHeaders());
 
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty('error');
@@ -131,16 +117,10 @@ describe('Cursor-based Pagination', () => {
   });
 
   it('returns a consistent pagination shape across different endpoints', async () => {
-    const endpoints = [
-      '/api/providers',
-      '/api/ai-profiles',
-      '/api/processing-jobs',
-    ];
+    const endpoints = ['/api/providers', '/api/ai-profiles', '/api/processing-jobs'];
 
     for (const endpoint of endpoints) {
-      const res = await request(app)
-        .get(endpoint)
-        .set(authHeaders());
+      const res = await request(app).get(endpoint).set(authHeaders());
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty('data');
