@@ -10,24 +10,25 @@ import {
   setTargets,
   clearTargets,
 } from '../services/nutrition.ts';
-import type { MealKind } from '@cadence/shared';
+import { BodyValidationError, parseBody, logMealBodySchema, macroTargetsBodySchema } from '../validation/body.ts';
 
 const router = Router();
 router.use(requireCadenceUser);
 
-const MEALS: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
-
 /** POST /nutrition/meals — one meal, in their words and/or a photo (Observe phase; never judged). */
 router.post('/meals', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
-  const meal = MEALS.includes(req.body?.meal) ? (req.body.meal as MealKind) : undefined;
-  const photo =
-    typeof req.body?.photo === 'string' && req.body.photo.startsWith('data:image/') ? req.body.photo : undefined;
-  if (!text && !photo) return void res.status(400).json({ error: 'a meal needs words or a photo' });
   try {
-    res.json(await logMeal(userId, { text: text || undefined, meal, photo }));
+    const body = parseBody(logMealBodySchema, req.body);
+    res.json(
+      await logMeal(userId, {
+        text: body.text || undefined,
+        meal: body.meal,
+        photo: body.photo,
+      }),
+    );
   } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     const msg = err instanceof Error ? err.message : '';
     if (/invalid photo/.test(msg)) return void res.status(400).json({ error: msg });
     console.error('[POST /nutrition/meals]', err);
@@ -110,8 +111,10 @@ router.post('/baseline', async (req: Request, res: Response) => {
 router.put('/targets', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
-    res.json({ targets: await setTargets(userId, req.body) });
+    const body = parseBody(macroTargetsBodySchema, req.body);
+    res.json({ targets: await setTargets(userId, body) });
   } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     const msg = err instanceof Error ? err.message : '';
     if (/no valid targets/.test(msg)) return void res.status(400).json({ error: 'no valid targets' });
     console.error('[PUT /nutrition/targets]', err);

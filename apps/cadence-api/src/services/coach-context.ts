@@ -62,7 +62,7 @@ export async function onboardingReadiness(userId: string): Promise<string> {
   (consCount ? have : need).push(
     consCount ? `${consCount} thing(s) to work around` : 'anything to work around (injury/life)',
   );
-  (equipment.length ? have : need).push(`tools/equipment (${equipment.length})`);
+  (equipment.length ? have : need).push(`equipment (${equipment.length})`);
   (user?.home_location ? have : need).push('home location + timezone');
 
   // Goal-specific intake (deterministic): a target goal without a starting point is an open
