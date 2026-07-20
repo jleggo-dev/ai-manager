@@ -36,6 +36,7 @@
     "cleanup:test-data": "npm run cleanup:cadence-dev-accounts && npm run cleanup:e2e-ai-admin",
     "ci": "npm run typecheck && npm run format:check && npm run lint && npm test",
     "prepush": "npm run typecheck && npm run format:check && npm run lint && npm run build --workspaces --if-present && npm run vercel:build:frontend && npm test",
+    "test:eslint-nearest-config": "node scripts/assert-eslint-nearest-config.mjs",
     "prepare": "husky || true"
   },
   "lint-staged": {
