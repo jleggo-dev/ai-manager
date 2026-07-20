@@ -47,6 +47,17 @@ field name; `resources`/`limits` for constraints; streaks that reset to zero; we
 
 ## Engineering conventions
 
+- **File & function size — small by default, enforced in CI.** ESLint gates every workspace:
+  `max-lines` 500 (all source) and `max-lines-per-function` 150 (`.ts` logic; `.tsx` render bodies
+  are file-capped only). Thresholds live in one place: [`eslint.config.sizes.mjs`](eslint.config.sizes.mjs).
+  These run at `error`, so CI (`eslint . --max-warnings 0`) and the pre-commit hook reject any PR
+  that lands — or regrows — an oversized file/function. **A new route/tab/major UI section, or a
+  distinct responsibility, gets its OWN file from day one; extract a hook/helper/sub-component
+  before a file or function grows.** Grandfathered offenders are listed per workspace
+  `eslint.config.js` (`'max-lines': 'off'` blocks) — that allowlist IS the refactor backlog; each
+  split PR deletes an entry, the target is zero, and you must **never add a new file to it to pass
+  CI — split the file instead.** (`ProcessingJobManager.tsx` proved a one-time size fix without a
+  guardrail doesn't hold: it grew back 1,420 lines larger.)
 - **Ship / agent workflow:** follow
   [`.cursor/skills/development-workflow/SKILL.md`](.cursor/skills/development-workflow/SKILL.md)
   (CI must be green — or intentionally skipped with a documented reason — before merge and before

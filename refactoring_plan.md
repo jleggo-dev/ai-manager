@@ -29,8 +29,7 @@ source report that contains the full current-problem/target-design/migration-ste
    (see §4.2 progress). Remaining P1 work is concentrated in Cadence web + a few cross-cuts.
 2. **Safety net exists, but is still report-only.** INFRA-01…05 landed (PRs #3–#5). Path-filtered
    CI runs on every PR; treat red jobs as merge blockers even though branch protection may not
-   yet *require* the check. **INFRA-08** (repo-wide `max-lines` gates) is open as PR #23 — not
-   merged to `feat/cadence` yet.
+   yet *require* the check. **INFRA-08** (repo-wide `max-lines` gates) lands via PR #23.
 3. **Still-open product risk:** frontend/backend type drift (SD2/SD3 → **FE-10**). The old
    monoliths and RBAC gap are gone (splits + BE-03 Done).
 4. **Cadence coverage is improving but uneven.** `apps/cadence-api` now has real suites (plan
@@ -138,7 +137,7 @@ unprotected by any automated gate.** These items are not optional preamble — t
 | **INFRA-03** | Extend root scripts (`--workspaces --if-present`) + add vitest to `apps/cadence-web`, `packages/core`, `packages/cadence-shared` | P1 | S per workspace | Low | INFRA-01 | **Done** (PR #4, merged to `feat/cadence`) |
 | **INFRA-04** | Add ESLint configs to `apps/*`/`packages/*`; align ESLint major versions; add `.prettierrc.json`; expand format globs | P1 | M | Low | INFRA-01 | **Done** (PR #5, merged to `feat/cadence`) |
 | **INFRA-05** | Fix pre-commit hooks — commit an actual `.husky/pre-commit`, expand `lint-staged` globs to cover Cadence | P1 | S | Low | INFRA-04 | **Done** (PR #5, merged to `feat/cadence`) |
-| **INFRA-08** | Repo-wide code-size gates — generalize FE-01's `max-lines` to all workspaces (`eslint.config.sizes.mjs`) + allowlist-as-backlog + `CLAUDE.md` convention | P1 | S | Low | INFRA-04 | **In Review** (PR #23) — not yet on `feat/cadence` |
+| **INFRA-08** | Repo-wide code-size gates — generalize FE-01's `max-lines` to all 6 workspaces (`eslint.config.sizes.mjs`: file 500 / fn 150, fn on `.ts` only) + per-workspace allowlist-as-backlog + `CLAUDE.md` convention. Fulfills §5.1. | P1 | S | Low | INFRA-04 | **Done** (PR #23) — offenders after merge onto main: backend 4, frontend 10, cadence-web 2; cadence-api + packages exception-free. Widget-health allowlist entries deleted with the feature. `complexity` deferred (noisy). |
 
 #### INFRA-01 — Fix workspace wiring [P0]
 
@@ -588,10 +587,17 @@ sign-off before any change. Neither blocks BE-03 Done (which gated only mutating
 These came out of every report's "systemic recommendations" section. Treat them as standing
 workstreams that run alongside the phased backlog above, not one-time tickets:
 
-1. **Prevent regrowth, don't just fix size once.** FE-01's organism/page `max-lines` rule is live.
-   **INFRA-08** (PR #23, In Review) generalizes it repo-wide via `eslint.config.sizes.mjs` +
-   allowlist-as-backlog + `CLAUDE.md` convention. Until that merges, only frontend organisms/pages
-   are gated — do not treat size debt as solved workspace-wide.
+1. **Prevent regrowth, don't just fix size once.** ✅ **DONE (INFRA-08, PR #23).** FE-01's
+   frontend-organisms-only `max-lines` rule is now generalized repo-wide: `max-lines` 500 (all
+   source, all 6 workspaces) + `max-lines-per-function` 150 (`.ts` logic; `.tsx` render bodies are
+   file-capped only, since JSX runs long). Thresholds centralized in `eslint.config.sizes.mjs`;
+   enforced at `error` via existing CI (`--max-warnings 0`) + pre-commit. Current offenders (backend
+   4, frontend 10, cadence-web 2; cadence-api + both packages are exception-free) are allowlisted
+   per-workspace = the shrinking backlog, each split PR deletes one. Convention note added to
+   `CLAUDE.md` ("new route/tab/section = its own file day one; never add to the allowlist to pass
+   CI"). Cyclomatic `complexity` deliberately deferred (too noisy on this legacy code — its own
+   future ticket). This was the single most important process fix — `ProcessingJobManager.tsx`
+   already proved a file-level fix without a structural guardrail doesn't hold (it regrew +1,420).
 2. **Version-control the database schema.** No AI Admin `.sql` migration tooling exists (AR5), and
    `001`-`005` are missing entirely despite being referenced in `README.md`. This isn't just
    tooling hygiene — it means *this plan itself* can't independently verify tenant-isolation/RLS
@@ -747,7 +753,7 @@ This plan is "done" (or rather, has earned the right to be considered a complete
 - [ ] `.github/workflows/ci.yml` exists, is a required status check, and its `cadence` job has run
       green against real Cadence changes (not just report-only). *(workflow exists + runs; required-check flip still open)*
 - [x] Zero files remain in the P0 list (§4.1); FE-01 organism/page `max-lines` is active.
-      *(Repo-wide generalization = INFRA-08, PR #23 In Review.)*
+      *(Repo-wide generalization = INFRA-08, PR #23.)*
 - [x] `requireRole` is wired into every mutating admin-sensitive backend route (BE-03's full list).
 - [ ] `apps/cadence-web` and `apps/cadence-api` each have real (not placeholder) test coverage on
       their top-5 highest-risk paths per reports 03/04's "first N tests" lists. *(API side largely yes; web still no.)*

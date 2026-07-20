@@ -5,6 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import react from 'eslint-plugin-react';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
+import { fileRule, functionRule } from '../eslint.config.sizes.mjs';
 
 export default [
   { ignores: ['dist', 'public/integration'] },
@@ -72,40 +73,38 @@ export default [
       'no-console': 'off',
     },
   },
-  // FE-01: prevent organism/page files from regrowing into god-components.
-  // Threshold is intentionally below the historical ProcessingJobManager size.
-  // Known oversized files are overridden below as separately-tracked backlog —
-  // do NOT add new files to that list; split them instead.
+  // Repo-wide size gates (generalizes FE-01 from organisms/pages to all source; tests may be long).
+  // Offenders are allowlisted below = the refactor backlog; every split PR deletes an entry, target
+  // is zero. NEVER add a new file to the allowlist to pass CI — split it instead.
   {
-    files: ['src/components/organisms/**/*.{ts,tsx}', 'src/pages/**/*.{ts,tsx}'],
-    rules: {
-      'max-lines': ['error', { max: 500, skipBlankLines: true, skipComments: true }],
-    },
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['**/*.test.{ts,tsx}'],
+    rules: { ...fileRule },
   },
   {
-    // Backlog (verified failing max-lines@500 after FE-01 + FE-02 merges — do not expand casually):
-    // organisms: DiagnosticsTab, ai-profiles/{ProfileFormModal,TestChatPanel},
-    //   processing-jobs/{AnalyticsTab,JobsTab,RuleSetsTab,SchemaValidationPanel}
-    // pages: HealthDashboardPage, LovableGuidePage
-    // Note: AiProfileManager.tsx was removed after FE-02 split (orchestrator is well under 500).
-    // HealthCheckProfilesPage dropped after FE-08 hook extraction (page is well under 500).
-    // SettingsPage dropped after FE-04 tab split (shell + settings/* are well under 500).
-    // HealthCheckWidgetPage removed with widget health checker feature (FE-05 cancelled).
-    // AiMatcherPage dropped after FE-03 split (page shell + molecules/hooks under 500).
-    // TestChatPanel size follow-up is FE-11; do not duplicate that ticket here.
+    files: ['src/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: { ...functionRule },
+  },
+  // Size-gate backlog — grandfathered offenders still over max-lines@500 after FE-03/04/06/08 and
+  // widget-health removal (FE-05 cancelled). Each split PR deletes an entry; target is zero.
+  // Dropped (under threshold or deleted): api.ts (FE-06), AiMatcherPage (FE-03), SettingsPage
+  // (FE-04), HealthCheckWidgetPage (removed with widget health checker). Remaining → FE-11/13/14
+  // + HealthDashboard/LovableGuide. useHealthCheckProfilesData is under file-cap but over the new
+  // function-cap (FE-08 moved page bulk into one hook) — keep until a follow-up split.
+  {
     files: [
+      'src/hooks/useHealthCheckProfilesData.ts', // FE-08 leftover — fn ~294 > 150
       'src/components/organisms/DiagnosticsTab.tsx',
-      'src/components/organisms/ai-profiles/ProfileFormModal.tsx',
-      'src/components/organisms/ai-profiles/TestChatPanel.tsx',
-      'src/components/organisms/processing-jobs/AnalyticsTab.tsx',
-      'src/components/organisms/processing-jobs/JobsTab.tsx',
-      'src/components/organisms/processing-jobs/RuleSetsTab.tsx',
-      'src/components/organisms/processing-jobs/SchemaValidationPanel.tsx',
+      'src/components/organisms/ai-profiles/ProfileFormModal.tsx', // FE-14
+      'src/components/organisms/ai-profiles/TestChatPanel.tsx', // FE-11
+      'src/components/organisms/processing-jobs/AnalyticsTab.tsx', // FE-13
+      'src/components/organisms/processing-jobs/JobsTab.tsx', // FE-13
+      'src/components/organisms/processing-jobs/RuleSetsTab.tsx', // FE-13
+      'src/components/organisms/processing-jobs/SchemaValidationPanel.tsx', // FE-13
       'src/pages/HealthDashboardPage.tsx',
       'src/pages/LovableGuidePage.tsx',
     ],
-    rules: {
-      'max-lines': 'off',
-    },
+    rules: { 'max-lines': 'off', 'max-lines-per-function': 'off' },
   },
 ];
