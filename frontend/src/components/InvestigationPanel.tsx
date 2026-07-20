@@ -23,6 +23,8 @@ import { DatePickerInput } from '@mantine/dates';
 import { IconFilter, IconCopy, IconCheck } from '@tabler/icons-react';
 import * as api from '../services/api';
 import type { HcRun, HcIncident, FailurePatterns } from '../types/api';
+import { CHECK_RUN_STATUS_COLORS } from '../constants/checkRunStatus';
+import { formatTimestampShort } from '../lib/format';
 
 interface InvestigationPanelProps {
   checkId: string;
@@ -31,35 +33,7 @@ interface InvestigationPanelProps {
 type AnyRun = HcRun;
 type AnyIncident = HcIncident;
 
-const STATUS_COLORS: Record<string, string> = {
-  pass: 'green',
-  warning: 'yellow',
-  fail: 'red',
-  timeout: 'orange',
-  error: 'red',
-};
-
 const PAGE_SIZE = 25;
-
-function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
-function _relativeTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 60_000) return 'just now';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return `${Math.floor(diff / 86_400_000)}d ago`;
-}
 
 function durationStr(seconds: number | null | undefined): string {
   if (seconds == null) return '—';
@@ -254,13 +228,13 @@ export default function InvestigationPanel({ checkId }: InvestigationPanelProps)
                         onClick={() => setExpandedRunId(expandedRunId === run.id ? null : run.id)}
                       >
                         <Table.Td>
-                          <Badge size="xs" variant="filled" color={STATUS_COLORS[run.status] ?? 'gray'}>
+                          <Badge size="xs" variant="filled" color={CHECK_RUN_STATUS_COLORS[run.status] ?? 'gray'}>
                             {run.status}
                           </Badge>
                         </Table.Td>
                         <Table.Td>
                           <Tooltip label={new Date(run.created_at).toISOString()} fz="xs">
-                            <Text size="xs">{formatTimestamp(run.created_at)}</Text>
+                            <Text size="xs">{formatTimestampShort(run.created_at)}</Text>
                           </Tooltip>
                         </Table.Td>
                         <Table.Td>
@@ -350,11 +324,11 @@ export default function InvestigationPanel({ checkId }: InvestigationPanelProps)
                 {incidents.map((inc) => (
                   <Table.Tr key={inc.id}>
                     <Table.Td>
-                      <Text size="xs">{formatTimestamp(inc.started_at)}</Text>
+                      <Text size="xs">{formatTimestampShort(inc.started_at)}</Text>
                     </Table.Td>
                     <Table.Td>
                       {inc.resolved_at ? (
-                        <Text size="xs">{formatTimestamp(inc.resolved_at)}</Text>
+                        <Text size="xs">{formatTimestampShort(inc.resolved_at)}</Text>
                       ) : (
                         <Badge size="xs" color="red" variant="filled">
                           Ongoing
