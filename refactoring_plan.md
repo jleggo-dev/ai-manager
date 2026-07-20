@@ -29,9 +29,10 @@ source report that contains the full current-problem/target-design/migration-ste
    **Batch 9 is Done** (FE-14 #56 · CI-08 #53 · CI-09 #55; cleanup-after-tests #54). **Phase 3 /
    batch 10 is in progress** (FE-11 · API-P2 slice; **CI-06 Done** #60). See §4.2 for the closed
    log and the remaining (mostly P2/P3 + human) backlog.
-2. **Safety net exists, but is still report-only.** INFRA-01…05 landed (PRs #3–#5). Path-filtered
-   CI runs on every PR; treat red jobs as merge blockers even though branch protection may not
-   yet *require* the check (**INFRA-02 required-check flip still open**). **INFRA-08** (repo-wide
+2. **Safety net is required on `main`.** INFRA-01…05 landed (PRs #3–#5). Path-filtered CI runs on
+   every PR; GitHub branch protection now **requires** status checks to pass before merging
+   (**INFRA-02 required-check flip Done** — user-confirmed 2026-07-20; `gh api …/protection`
+   returns 403 on this plan so check names are not listed here). **INFRA-08** (repo-wide
    `max-lines` gates) landed via PR #23.
 3. **Frontend/backend type drift (SD2/SD3 → FE-10) is closed** (PR #42) — contracts match the live
    schema; paired FE/BE contract tests guard regression. The old monoliths and RBAC gap are gone
@@ -40,12 +41,12 @@ source report that contains the full current-problem/target-design/migration-ste
    commit, nutrition, coach-stream, aim seam). `apps/cadence-web` gained ReviewScreen (WEB-01 #45),
    OccurrenceSheet (WEB-03 #44), card-row dedup (WEB-04 #46), and TanStack nutrition-day
    (**CROSS-03** ✅ Done both halves — AI Admin #49 + Cadence #50).
-5. Read §4.2 remaining backlog (FE-11/13, BE-03a, CI-01 human, Phase 3 P2 / batch 10 in flight,
-   INFRA-02 required-check flip), §5 for durable goals, §6 for multi-agent orchestration.
+5. Read §4.2 remaining backlog (FE-11/13, BE-03a, CI-01 human, Phase 3 P2 / batch 10 in flight),
+   §5 for durable goals, §6 for multi-agent orchestration.
 6. **CI gate between batches:** do not start the next parallel batch (and do not merge) while
-   integration-branch / PR CI is red. INFRA-02 "report-only" means GitHub branch protection may
-   not yet *require* the check — orchestrators and supervisors must still treat failing jobs as
-   blockers (or quarantine them with an explicit human action item). Ship process:
+   integration-branch / PR CI is red. Branch protection on `main` now **requires** status checks
+   (INFRA-02 flip Done) — failing jobs are merge blockers; quarantine only with an explicit
+   human action item. Ship process:
    [`.cursor/skills/development-workflow/SKILL.md`](.cursor/skills/development-workflow/SKILL.md).
 
 ---
@@ -138,7 +139,7 @@ unprotected by any automated gate.** These items are not optional preamble — t
 | ID | Item | Priority | Effort | Risk | Depends on | Status |
 |---|---|---|---|---|---|---|
 | **INFRA-01** | Fix root `workspaces` array + regenerate `package-lock.json` | **P0** | S | Medium | — | **Done** (PR #3, merged to `feat/cadence`) |
-| **INFRA-02** | Add GitHub Actions CI (path-filtered, report-only rollout first) | **P0** | M | Medium | INFRA-01 | **Done** (PR #4, merged to `feat/cadence`) |
+| **INFRA-02** | Add GitHub Actions CI (path-filtered, report-only rollout first → required) | **P0** | M | Medium | INFRA-01 | **Done** (workflow PR #4; **required-check flip Done** 2026-07-20, user-confirmed) |
 | **INFRA-03** | Extend root scripts (`--workspaces --if-present`) + add vitest to `apps/cadence-web`, `packages/core`, `packages/cadence-shared` | P1 | S per workspace | Low | INFRA-01 | **Done** (PR #4, merged to `feat/cadence`) |
 | **INFRA-04** | Add ESLint configs to `apps/*`/`packages/*`; align ESLint major versions; add `.prettierrc.json`; expand format globs | P1 | M | Low | INFRA-01 | **Done** (PR #5, merged to `feat/cadence`) |
 | **INFRA-05** | Fix pre-commit hooks — commit an actual `.husky/pre-commit`, expand `lint-staged` globs to cover Cadence | P1 | S | Low | INFRA-04 | **Done** (PR #5, merged to `feat/cadence`) |
@@ -172,19 +173,18 @@ unprotected by any automated gate.** These items are not optional preamble — t
 
 **Target state:** a path-filtered workflow with two independent jobs (`ai-admin`, `cadence`) so a Cadence-only PR never needs AI Admin's Supabase secrets and vice versa — the two products use **separate Supabase projects**. See report 06 §4.4 for a complete, ready-to-adapt workflow YAML (change-detection job via `dorny/paths-filter`, matrix over workspaces, secrets scoped per job).
 
-**Migration steps:** (1) land after INFRA-01/INFRA-03; (2) land the workflow in **report-only mode** first (no required-status-check) to inventory real failures across all 9 workspaces without blocking anyone; (3) fix what surfaces; (4) flip to required once green.
+**Migration steps:** (1) land after INFRA-01/INFRA-03; (2) land the workflow in **report-only mode** first (no required-status-check) to inventory real failures across all 9 workspaces without blocking anyone; (3) fix what surfaces; (4) flip to required once green. **Steps (1)–(4) complete** — workflow landed PR #4; required-check flip Done 2026-07-20 (user-confirmed; `gh api repos/:owner/:repo/branches/main/protection` returns 403 on this plan, so required check names are not listed).
 
-**Report-only vs. merge/batch gate:** "report-only" means the check is **not yet required for
-GitHub branch protection**. It does **not** mean "ignore red and keep merging." Orchestrators and
-supervisors MUST still treat failing CI jobs as blockers for merge and for starting the next
-parallel batch, unless remaining failures are **explicitly quarantined** with a human action item
-(e.g. key rotation). Intentionally skipped jobs need a documented reason; leaving jobs red and
-moving on is forbidden. See §6.3 and
+**Merge/batch gate (post-flip):** Branch protection on `main` now requires status checks to pass
+before merging. Orchestrators and supervisors MUST still treat failing CI jobs as blockers for
+merge and for starting the next parallel batch, unless remaining failures are **explicitly
+quarantined** with a human action item (e.g. key rotation). Intentionally skipped jobs need a
+documented reason; leaving jobs red and moving on is forbidden. See §6.3 and
 [`.cursor/skills/development-workflow/SKILL.md`](.cursor/skills/development-workflow/SKILL.md).
 
 **Test-first requirement:** open one throwaway PR touching only `apps/cadence-web/` and confirm the `ai-admin` job is skipped; one touching only `backend/` and confirm the reverse.
 
-**Risk note:** Medium — not because the workflow is risky, but because turning on CI for the first time against a 5-year-old, never-collectively-checked codebase will surface a real backlog. The report-only rollout is the mitigation, not optional polish.
+**Risk note:** Medium — not because the workflow is risky, but because turning on CI for the first time against a 5-year-old, never-collectively-checked codebase will surface a real backlog. The report-only rollout was the mitigation; the required flip is now Done.
 
 *Full detail: report 06 §4.4.*
 
@@ -431,7 +431,7 @@ merge log (originally via `feat/cadence`, then `main`):
 > - **CI-08** ✅ **Done** — `.gitattributes` `eol=lf` (PR #53; P3; §4.6)
 > - **CI-09** ✅ **Done** — camelCase `toolOutputs` on Devs.ai v2 `/resume` (PR #55; §4.6)
 > - **Phase 3 P2** — condensed area lists in §4.4 (batch 10 in flight)
-> - **INFRA-02** — flip CI from report-only to required branch-protection check (§4.0 / §8)
+> - **INFRA-02** ✅ **Done** — required branch-protection flip (user-confirmed 2026-07-20; §4.0 / §8)
 
 #### Backend (report 01)
 
@@ -691,7 +691,7 @@ guardrails for that.
 |---|---|
 | **Orchestrator** | Owns this document as living state. Assigns backlog items to implementer agents, respecting the phase/dependency ordering in §4. Resolves cross-item conflicts (e.g., two items wanting to touch the same file). Decides when a phase is "done enough" to open the next phase's parallelism. Escalation point when a supervisor and implementer disagree. |
 | **Implementer agent** | Owns exactly one backlog item (or, for P2/P3 bundles, one *cluster* of related items in the same file/module — never split a single file's changes across two implementers concurrently). Works on its own branch. Follows the item's test-first requirement literally — writes/confirms the test before changing production code. Self-verifies (typecheck + lint + full existing test suite + new tests) before opening a PR. Keeps "pure refactor" commits separate from any incidental fix commits discovered along the way (see §6.4). |
-| **Supervisor agent** | Independent from the implementer that wrote the PR (never self-review). Reviews against: (a) the specific item's target design in this document/the area report, (b) the "no behavior change" contract for pure refactors (§6.4), (c) this repo's existing `pre-push-review`/`pr-tl-review` skill checklists, (d) CI is green (or failures explicitly quarantined — report-only does **not** excuse red). Rejects or requests changes if the test-first requirement wasn't honored, scope crept beyond the item's stated boundary, the migration skipped a stated step, or CI is still failing without a documented quarantine. Updates the item's Status in this document. |
+| **Supervisor agent** | Independent from the implementer that wrote the PR (never self-review). Reviews against: (a) the specific item's target design in this document/the area report, (b) the "no behavior change" contract for pure refactors (§6.4), (c) this repo's existing `pre-push-review`/`pr-tl-review` skill checklists, (d) CI is green (or failures explicitly quarantined — required checks on `main` do **not** excuse red). Rejects or requests changes if the test-first requirement wasn't honored, scope crept beyond the item's stated boundary, the migration skipped a stated step, or CI is still failing without a documented quarantine. Updates the item's Status in this document. |
 
 A single agent (human or AI) may hold more than one role over time, but never the implementer *and*
 supervisor role on the *same* PR.
@@ -712,7 +712,7 @@ confirm base green → Done). Prod/release verification is a later gate, not req
 6. Implementer commits/pushes and opens a PR scoped to exactly this item (status → "In Review"); CI runs
 7. Implementer (and supervisor gate) fix until CI is green — or remaining failures are explicitly
    quarantined with a human action item. Never leave jobs red and move on.
-8. Supervisor reviews against §6.1; CI must still be green (report-only ≠ ignore red)
+8. Supervisor reviews against §6.1; CI must still be green (required on `main` ≠ ignore red)
    8a. If changes requested → status → "Changes Requested", back to step 4; re-enter CI gate
    8b. If approved and checks pass → merge
 9. Status → "Done". Orchestrator confirms integration branch (`feat/cadence` during this refactor)
@@ -728,10 +728,10 @@ confirm base green → Done). Prod/release verification is a later gate, not req
   touch the same file concurrently — the orchestrator checks this document's Status column before
   assigning a new item that overlaps a file already "In Progress"/"In Review" elsewhere.
 - **CI gate between parallel batches.** Do **not** start the next parallel batch until CI on the
-  integration branch (`feat/cadence` during this refactor) is green, or remaining failures are
-  explicitly quarantined with a human action item (e.g. key rotation). Report-only CI still means
-  jobs must pass or be intentionally skipped — "report-only" does **not** mean ignore red and keep
-  merging.
+  integration branch (`feat/cadence` during this refactor) / PR is green, or remaining failures are
+  explicitly quarantined with a human action item (e.g. key rotation). Branch protection on `main`
+  now **requires** status checks (INFRA-02 flip Done) — red jobs block merge; intentionally skipped
+  jobs still need a documented reason.
 - **Respect the phase gates in §4**, but *within* a phase, maximize parallelism — Phase 1's three
   P0 items (BE-01, FE-01, FE-02) are entirely independent files/products and should run as three
   concurrent implementer agents, not sequentially — **subject to the CI gate above** between
@@ -779,8 +779,8 @@ Every item ID in §4 should carry one of these statuses, updated by whichever ro
 
 Update Status cells in place as items move; this file is the single source of truth. Phase 0–1 and
 **Phase 2 P1 are Done**; **batch 9 is Done**; **Phase 3 / batch 10 is in progress**. See §4.2
-remaining backlog for deferred P2/P3 + human items (FE-11/13, BE-03a, CI-01 human, Phase 3 P2,
-INFRA-02 required-check flip).
+remaining backlog for deferred P2/P3 + human items (FE-11/13, BE-03a, CI-01 human, Phase 3 P2).
+**INFRA-02** required-check flip is Done (2026-07-20).
 
 ---
 
@@ -804,9 +804,9 @@ This plan is "done" (or rather, has earned the right to be considered a complete
 — new debt will always accrue) when:
 
 - [x] `npm ls --workspaces` from repo root lists all 9 real workspaces with zero `extraneous`/`invalid`. (INFRA-01)
-- [ ] `.github/workflows/ci.yml` exists, is a required status check, and its `cadence` job has run
-      green against real Cadence changes (not just report-only). *(workflow exists + runs;
-      **INFRA-02 required-check flip still open**)*
+- [x] `.github/workflows/ci.yml` exists, is a required status check on `main`, and its `cadence`
+      job has run green against real Cadence changes. *(INFRA-02 workflow PR #4; **required-check
+      flip Done** 2026-07-20, user-confirmed — `gh api …/protection` 403 on this plan.)*
 - [x] Zero files remain in the P0 list (§4.1); FE-01 organism/page `max-lines` is active.
       *(Repo-wide generalization = INFRA-08, PR #23.)*
 - [x] `requireRole` is wired into every mutating admin-sensitive backend route (BE-03's full list).

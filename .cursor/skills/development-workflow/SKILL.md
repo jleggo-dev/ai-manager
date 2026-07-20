@@ -159,8 +159,7 @@ Watch PR checks (`gh pr checks` or CI watcher). **Every job that runs must pass*
 item such as key rotation).
 
 - Never leave jobs **red** and move on to the next task or batch.
-- "Report-only" CI (not yet a required branch-protection check) still means jobs must pass or be
-  honestly skipped — it does **not** mean "ignore red and keep merging."
+- CI is a **required** branch-protection gate on `main` (INFRA-02 flip Done) — failing checks block merge.
 - Fix, push, re-check until green (or documented skip). Loop as needed.
 
 **Exit:** All non-skipped PR checks green; any skip has a written reason + owner.

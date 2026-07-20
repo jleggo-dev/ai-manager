@@ -6,10 +6,11 @@
 # (CLAUDE.md, migrations/cadence/0001_init.sql header). Each job's `env:` block only
 # references that product's own secrets; never both in the same job.
 #
-# Rollout status: REPORT-ONLY. This workflow is not (yet) configured as a required status
-# check in branch protection - that is a deliberate, separate step the plan calls for once
-# the real failure backlog this surfaces has been triaged. Every job below still runs and
-# reports its real pass/fail status; nothing here is set up to silently no-op.
+# Rollout status: REQUIRED on `main` (INFRA-02 flip Done 2026-07-20 — user-confirmed;
+# branch-protection API may 403 on free/private plans). Path-filtered jobs: `changes`,
+# `ai-admin / {backend,frontend}`, `cadence / {apps/cadence-api,apps/cadence-web,
+# packages/core,packages/cadence-shared}`, `format:check`. Jobs that do not match the
+# path filter are skipped; every job that runs still reports real pass/fail.
 name: CI
 
 on:
