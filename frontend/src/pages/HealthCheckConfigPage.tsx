@@ -36,6 +36,7 @@ import InvestigationPanel from '../components/InvestigationPanel';
 import * as api from '../services/api';
 import type { HcCheck, HcProfile } from '../types/api';
 import { HEALTH_STATUS_CONFIG } from '../constants/healthStatus';
+import { CHECK_RUN_STATUS_COLORS } from '../constants/checkRunStatus';
 
 interface HealthCheckConfigPageProps {
   onNavigate: (key: string, params?: Record<string, unknown>) => void;
@@ -51,14 +52,6 @@ function relativeTime(iso: string | null | undefined): string {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  pass: 'green',
-  warning: 'yellow',
-  fail: 'red',
-  timeout: 'orange',
-  error: 'red',
-};
 
 const CADENCE_OPTIONS = [
   { value: '1', label: '1 min' },
@@ -200,7 +193,7 @@ export default function HealthCheckConfigPage(_props: HealthCheckConfigPageProps
       notifications.show({
         title: 'Run Complete',
         message: `Status: ${result.status}${result.response_time_ms ? ` (${result.response_time_ms}ms)` : ''}`,
-        color: STATUS_COLORS[result.status] || 'gray',
+        color: CHECK_RUN_STATUS_COLORS[result.status] || 'gray',
       });
       await loadData();
     } catch (err: unknown) {

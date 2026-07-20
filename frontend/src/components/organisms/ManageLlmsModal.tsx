@@ -36,6 +36,7 @@ import { notifications } from '@mantine/notifications';
 import { IconTrash, IconPlus, IconSearch, IconUpload, IconRefresh } from '@tabler/icons-react';
 import * as api from '../../services/api';
 import type { Provider, LlmModel } from '../../types/api';
+import { formatTimestamp } from '../../lib/format';
 
 /* ── Category auto-detection (mirrors backend seed logic) ──────── */
 const CATEGORY_RULES = [
@@ -94,12 +95,6 @@ function getLatestModelUpdate(models: LlmModel[] = []) {
   dates.sort((a, b) => b.getTime() - a.getTime());
   const latest = dates[0];
   return latest ? latest.toISOString() : '';
-}
-
-function formatTimestamp(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
 }
 
 interface ManageLlmsModalProps {
