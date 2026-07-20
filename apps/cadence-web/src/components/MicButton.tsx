@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { capabilities } from '../lib/capability/index.ts';
+import type { DictationSession } from '../lib/capability/index.ts';
 
 /**
- * Voice input via the Web Speech API. Feature-detected: renders NOTHING where the API is
- * missing (Firefox) or the origin isn't secure (works on localhost; not http://<lan-ip>) —
+ * Voice input via the capability seam (Web Speech API on web). Feature-detected:
+ * renders NOTHING where dictation isn't available (Firefox, insecure origins) —
  * on real phones the OS keyboard's dictation covers those cases anyway.
  *
  * Composition rule (the classic double-type bug): never append deltas. Capture the field's
@@ -10,27 +12,6 @@ import { useEffect, useRef, useState } from 'react';
  * Android Chrome auto-ends on silence and fires onend WITHOUT onerror — button state syncs
  * there. abort() on unmount and when the caller signals send.
  */
-
-type SpeechRecognitionLike = {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  onresult:
-    ((e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
-  onend: (() => void) | null;
-  onerror: ((e: { error: string }) => void) | null;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-};
-
-function getRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
-  const w = window as unknown as {
-    SpeechRecognition?: new () => SpeechRecognitionLike;
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-  };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-}
 
 const MicIcon = ({ active }: { active: boolean }) => (
   <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden>
@@ -54,9 +35,9 @@ export function MicButton({
   onChange: (next: string) => void;
   disabled?: boolean;
 }) {
-  const [supported] = useState(() => getRecognitionCtor() !== null);
+  const [supported] = useState(() => capabilities.dictation.isAvailable());
   const [listening, setListening] = useState(false);
-  const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const recRef = useRef<DictationSession | null>(null);
   const baseRef = useRef('');
   const aliveRef = useRef(true);
   // Keep the latest value visible to the closure without re-creating the recognizer.
@@ -79,9 +60,9 @@ export function MicButton({
   }
 
   function start() {
-    const Ctor = getRecognitionCtor();
-    if (!Ctor || disabled) return;
-    const rec = new Ctor();
+    if (disabled) return;
+    const rec = capabilities.dictation.createSession();
+    if (!rec) return;
     recRef.current = rec;
     baseRef.current = valueRef.current ? valueRef.current.replace(/\s+$/, '') + ' ' : '';
     let finals = '';

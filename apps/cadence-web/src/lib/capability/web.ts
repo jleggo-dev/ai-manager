@@ -1,8 +1,18 @@
-import type { Capabilities } from './index.ts';
+import type { Capabilities, DictationSession } from './index.ts';
+
+type SpeechRecognitionCtor = new () => DictationSession;
+
+function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
 
 /**
- * Web no-op capabilities. HealthKit/push/native-location are unreachable in a
- * pure web/PWA context, so these degrade gracefully. The native (Capacitor)
+ * Web capabilities. HealthKit/push are unreachable in a pure web/PWA context;
+ * location and dictation use browser APIs when present. The native (Capacitor)
  * implementation replaces this object on iOS.
  */
 export const webCapabilities: Capabilities = {
@@ -28,5 +38,12 @@ export const webCapabilities: Capabilities = {
           { enableHighAccuracy: false, timeout: 5000 },
         );
       }),
+  },
+  dictation: {
+    isAvailable: () => getSpeechRecognitionCtor() !== null,
+    createSession: () => {
+      const Ctor = getSpeechRecognitionCtor();
+      return Ctor ? new Ctor() : null;
+    },
   },
 };

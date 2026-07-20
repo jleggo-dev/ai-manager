@@ -1,9 +1,9 @@
 /**
  * Native capability seam (spec §8). Build PWA-first; ALL native-only calls
- * (HealthKit, push) go through this interface. The web build uses a no-op
- * implementation; the Capacitor iOS build swaps in a native implementation
- * WITHOUT touching app logic. This is the deciding-constraint isolation that
- * keeps one codebase.
+ * (HealthKit, push, dictation) go through this interface. The web build uses a
+ * browser/no-op implementation; the Capacitor iOS build swaps in a native
+ * implementation WITHOUT touching app logic. This is the deciding-constraint
+ * isolation that keeps one codebase.
  */
 
 export interface Workout {
@@ -32,8 +32,38 @@ export interface LocationCapability {
   getCoarseLocation(): Promise<{ lat: number; lon: number } | null>;
 }
 
+/**
+ * Speech-to-text for the composer mic. Web uses the Web Speech API; a future
+ * Capacitor `native.ts` can swap in platform STT without touching MicButton.
+ */
+export type DictationResultEvent = {
+  resultIndex: number;
+  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
+};
+
+export interface DictationSession {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: DictationResultEvent) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+export interface DictationCapability {
+  isAvailable(): boolean;
+  createSession(): DictationSession | null;
+}
+
 export interface Capabilities {
   health: HealthCapability;
   push: PushCapability;
   location: LocationCapability;
+  dictation: DictationCapability;
 }
+
+/** Active capability set for this build (web today; Capacitor swaps the export later). */
+export { webCapabilities as capabilities } from './web.ts';
