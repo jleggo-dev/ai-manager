@@ -63,11 +63,14 @@ export default [
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
 
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': ['warn', {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-        caughtErrorsIgnorePattern: '^_',
-      }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
       // Same rationale as apps/cadence-api/eslint.config.js — existing code already uses
       // `!` deliberately in several places; enabling this now would be an out-of-scope
       // refactor rather than a small fix.
@@ -90,12 +93,11 @@ export default [
     ignores: ['**/*.test.ts'],
     rules: { ...functionRule },
   },
-  // Size-gate backlog — grandfathered offenders (refactoring_plan.md WEB-01/WEB-03). Each split
+  // Size-gate backlog — grandfathered offenders (refactoring_plan.md WEB-01). Each split
   // PR deletes an entry; the target is zero. NEVER add a new file here — split it instead.
   {
     files: [
       'src/features/review/ReviewScreen.tsx', // WEB-01 (~1000 lines)
-      'src/features/plan/OccurrenceSheet.tsx', // WEB-03 (~600 lines)
     ],
     rules: { 'max-lines': 'off', 'max-lines-per-function': 'off' },
   },
