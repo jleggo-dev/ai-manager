@@ -13,6 +13,7 @@
 import type { CoachIntent, CoachTopic } from './coach-context.ts';
 import { intentFraming, onboardingReadiness } from './coach-context.ts';
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
+import { validateCalls, executeCalls, type FnCall } from './retrieval/select-and-run.ts';
 import { renderCatalogDoc } from './retrieval/catalog.ts';
 import { runJobBySlug } from '../ai/aim.ts';
 import { insertContextPack, type ProvenanceEntry } from '../repos/context-pack.ts';
@@ -42,27 +43,13 @@ export interface ContextPack {
   expiresAt: string;
 }
 
-interface FnCall {
-  fn: string;
-  params: Record<string, unknown>;
-}
-
 /** Step 1: Scribe chooses functions from the catalog. Returns null on any failure. */
 async function scribeSelect(userId: string, intent: CoachIntent): Promise<{ calls: FnCall[]; reason: string } | null> {
   try {
     const catalog = await renderCatalogDoc(userId);
     const res = await runJobBySlug(userId, 'pack-select', { intent, catalog });
     const parsed = JSON.parse(res.formatted ?? res.raw ?? '{}') as { calls?: unknown; reason?: unknown };
-    const raw = Array.isArray(parsed.calls) ? parsed.calls : [];
-    const calls: FnCall[] = raw
-      .filter(
-        (c): c is { fn: string; params?: unknown } =>
-          !!c && typeof (c as { fn?: unknown }).fn === 'string' && !!RETRIEVAL_FUNCTIONS[(c as { fn: string }).fn],
-      )
-      .map((c) => ({
-        fn: c.fn,
-        params: c.params && typeof c.params === 'object' ? (c.params as Record<string, unknown>) : {},
-      }));
+    const calls = validateCalls(parsed.calls);
     if (!calls.length) return null;
     return { calls, reason: typeof parsed.reason === 'string' ? parsed.reason : '' };
   } catch (e) {
@@ -125,19 +112,10 @@ export async function buildContextPack(
   const selectReason = sel?.reason || '(deterministic selection)';
 
   // 2. EXECUTE — the semantic layer, governed app-side (model never runs queries).
-  const results: Record<string, unknown> = {};
-  const provenance: ProvenanceEntry[] = [];
-  for (const { fn, params } of calls) {
-    const f = RETRIEVAL_FUNCTIONS[fn];
-    if (!f) continue;
-    try {
-      const result = await f.run(userId, params);
-      results[fn] = result;
-      provenance.push({ fn, params, rows: f.rows(result), at: builtAt });
-    } catch (e) {
-      console.error(`[context-pack] ${fn} failed:`, e);
-    }
-  }
+  const { results, provenance } = await executeCalls(userId, calls, {
+    at: builtAt,
+    logLabel: 'context-pack',
+  });
   if (intent === 'onboarding') results.onboarding_readiness = await onboardingReadiness(userId);
 
   // 3. SUMMARIZE — Scribe, with deterministic fallback.

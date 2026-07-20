@@ -16,17 +16,12 @@
  * nothing is still visibly assessed.
  */
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
+import { validateCalls, executeCalls, type FnCall } from './retrieval/select-and-run.ts';
 import { renderCatalogDoc } from './retrieval/catalog.ts';
 import { runJobBySlug } from '../ai/aim.ts';
 import { injectCoachContext } from '../ai/aim.ts';
 import { updateTrace } from './dev-trace.ts';
 import { logAi } from './ai-log.ts';
-import type { ProvenanceEntry } from '../repos/context-pack.ts';
-
-interface FnCall {
-  fn: string;
-  params: Record<string, unknown>;
-}
 
 /**
  * Step 1 — Broker turn-select: given THIS turn + the function catalog, choose which registry
@@ -39,16 +34,7 @@ async function turnSelect(userId: string, message: string): Promise<{ calls: FnC
     const catalog = await renderCatalogDoc(userId);
     const res = await runJobBySlug(userId, 'context-select', { turn: message, catalog });
     const parsed = JSON.parse(res.formatted ?? res.raw ?? '{}') as { calls?: unknown; reason?: unknown };
-    const raw = Array.isArray(parsed.calls) ? parsed.calls : [];
-    const calls: FnCall[] = raw
-      .filter(
-        (c): c is { fn: string; params?: unknown } =>
-          !!c && typeof (c as { fn?: unknown }).fn === 'string' && !!RETRIEVAL_FUNCTIONS[(c as { fn: string }).fn],
-      )
-      .map((c) => ({
-        fn: c.fn,
-        params: c.params && typeof c.params === 'object' ? (c.params as Record<string, unknown>) : {},
-      }));
+    const calls = validateCalls(parsed.calls);
     return { calls, reason: typeof parsed.reason === 'string' ? parsed.reason : '' };
   } catch (e) {
     console.error('[context-select] failed, skipping just-in-time retrieval:', e);
@@ -88,19 +74,15 @@ export async function injectTurnContext(userId: string, sessionId: string, messa
 
   // Step 2 — EXECUTE the chosen functions app-side (the semantic layer; model never runs queries).
   const at = new Date().toISOString();
+  const { results, provenance } = await executeCalls(userId, sel.calls, {
+    at,
+    logLabel: 'turn-context',
+  });
   const parts: string[] = [];
-  const provenance: ProvenanceEntry[] = [];
-  for (const { fn, params } of sel.calls) {
+  for (const { fn } of provenance) {
     const f = RETRIEVAL_FUNCTIONS[fn];
-    if (!f) continue;
-    try {
-      const result = await f.run(userId, params);
-      const rendered = f.render(result);
-      if (rendered) parts.push(rendered);
-      provenance.push({ fn, params, rows: f.rows(result), at });
-    } catch (e) {
-      console.error(`[turn-context] ${fn} failed:`, e);
-    }
+    const rendered = f?.render(results[fn]);
+    if (rendered) parts.push(rendered);
   }
 
   const fns = provenance.map((p) => p.fn);
