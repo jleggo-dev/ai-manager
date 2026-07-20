@@ -388,19 +388,20 @@ per item / per area intro).
 >   DB integration tests for `logMeal` fallback/provisional and `getBaselineRead` cost-control /
 >   propose gates (`refactor/api-04-nutrition-tests`, PR #33).
 > - **Docs restore** (PR #34) — re-applied FE-03/CROSS-01 progress after #33 squash overwrote the blurb.
+> - **WEB-02** — split cadence-web `lib/api.ts` into domain modules + barrel; extract coach SSE
+>   parser (`lib/api/coach-sse.ts`) with characterization tests (PR #41).
 >
-> **Remaining Phase 2 P1 (accurate as of PR #34 + this reconcile):**
+> **Remaining Phase 2 P1 (accurate as of WEB-02):**
 > - **FE-10** — CallingApplication / DiagnosticLog type drift (SD2/SD3); needs product call on extra FE fields
 > - **API-06** — shared `select-and-run` extract + `buildContextPack` resilience test
 > - **WEB-01** (L) — ReviewScreen split + unit-conversion tests (hard blocker)
-> - **WEB-02** (M) — cadence-web `lib/api.ts` domain split (CROSS-01 rename already Done — unblocked)
 > - **WEB-03** (L) — OccurrenceSheet panel split
 > - **WEB-04** (M) — Today/Progress/Plan card dedup (natural CROSS-03 pilot host)
 > - **CROSS-03** — TanStack Query pilot (opportunistic; prefer with WEB-04, not a big-bang)
 >
-> **Recommended batch 7 (3 independent, high-leverage S–M):** **WEB-02** · **API-06** · **FE-10**
-> (if FE-10 product decision blocks, swap in **FE-14** or **WEB-04**). Leave WEB-01/WEB-03 for a
-> dedicated L batch; leave CROSS-03 until WEB-04.
+> **Recommended batch 7 (remaining):** **API-06** · **FE-10** (if FE-10 product decision blocks,
+> swap in **FE-14** or **WEB-04**). Leave WEB-01/WEB-03 for a dedicated L batch; leave CROSS-03
+> until WEB-04.
 
 #### Backend (report 01)
 
@@ -441,7 +442,7 @@ per item / per area intro).
 | ID | Item | Effort | Risk | Notes |
 |---|---|---|---|---|
 | **WEB-01** | Split `ReviewScreen.tsx` (648 lines, 4-step wizard + unit-conversion math + commit flow) into `useReviewWizard`/`useDraftField`/`unitConversion.ts` + 4 step components | L | Medium | **Test-first is a hard blocker**: unit-conversion round-trips and the `plausibleKg` 20-500 clamp guard a *previously-shipped data-corruption bug* per the code's own comment |
-| **WEB-02** | Split `lib/api.ts` (~536 lines, 6 unrelated domains) into `lib/api/{http,coach,plan,occurrence,nutrition,review,dev}.ts` behind a barrel; extract the SSE parser into a testable unit | M | Low | **Unblocked:** CROSS-01 rename already landed (PR #30) — this item is the mechanical split only |
+| **WEB-02** ✅ **Done** (`refactor/web-02-split-api`, PR #41) | Split `lib/api.ts` (~536 lines, 6 unrelated domains) into `lib/api/{http,coach,plan,occurrence,nutrition,review,dev}.ts` behind a barrel; extract the SSE parser into a testable unit | M | Low | **Done notes:** thin barrel at `lib/api.ts`; domains under `lib/api/*`; coach stream parsing in `coach-sse.ts` (`createCoachSseParseState` / `pushCoachSseChunk` / `applyCoachSseData`) with 8 characterization tests (chunk-split, skip `message.complete`/`v2.response.created`, `[DONE]`, keepalives). Dev-account selectors live in `http.ts` (auth headers; avoids http↔dev cycle). Call-site import paths unchanged. Verify: cadence-web `tsc` + vitest (coach-sse + existing). |
 | **WEB-03** | Split `OccurrenceSheet.tsx` (487 lines, 5 unrelated domains behind one occurrence id) into `useOccurrenceDetail` + `SessionLogPanel`/`MealLogPanel`+`useMealLog`/`BaselineReadPanel`/`WeighInPanel` | L | Medium | Touches meal-photo-capture and weigh-in — unrecoverable-if-broken user input; extract pure formatters + add tests first, manual QA pass per extracted panel |
 | **WEB-04** | De-duplicate `TodayDashboard`'s `DashCard`/`RhythmRow` against `ProgressView`'s near-identical `Card` and `PlanView`'s near-identical `Item` into shared `ProgressCards.tsx`/`OccurrenceRow.tsx`/`useGoalEventAdd.ts` | M | Low-Medium | Snapshot both implementations' current output *before* merging — they may have already silently drifted |
 
@@ -466,7 +467,7 @@ per item / per area intro).
 (`lib/api.ts` + `DevPanel.tsx`). DevTrace fields are now `scribeSelect`/`scribeSummarize`.
 Intentionally left unchanged: persisted pack mode strings (`broker-curated`/`broker-partial`) and
 live profile slug `cadence-broker` (audit trail / live IDs). WEB-02 mechanical `lib/api.ts` split
-remains a separate open item.
+landed separately (PR #41).
 
 #### CROSS-02 — Consolidate SSE parsing/line-buffering [P1]
 
