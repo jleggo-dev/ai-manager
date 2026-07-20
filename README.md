@@ -25,7 +25,12 @@ Disable or do not rely on email/password for this app; the UI only offers Google
 
 ### Workspaces, roles, and `user_settings`
 
-Apply migration `005_user_settings_display_name.sql` so `user_settings` has a `display_name` column (filled from Google on `/api/auth/bootstrap`). A follow-up RLS policy lets workspace peers **read** each other’s `user_settings` rows (for future member lists); only your own row remains writable under the existing policy.
+AI Admin SQL migrations live under `migrations/` starting at **`006_profiles_auth_approval.sql`**
+through `012_…` (apply in order via the Supabase SQL editor today). Files `001`–`005` are
+**missing from git** (historical gap — see [`docs/infra/MIGRATION-TOOLING.md`](docs/infra/MIGRATION-TOOLING.md));
+do not look for `005_user_settings_display_name.sql` on disk. Fresh environments need a baseline
+dump or an already-provisioned project until that reconstruction lands. Cadence migrations are
+separate under `migrations/cadence/`.
 
 **Workspace roles** live on `workspace_members.role` (not on `user_settings`):
 

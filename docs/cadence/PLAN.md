@@ -419,7 +419,7 @@ orchestrates explicitly where convenient, but is not blocked.
 
 ## Remaining to confirm
 - Exact build-rule `options` shapes (verify vs. `backend/src/services/formatting-rules.ts`).
-- Whether cadence-api streaming + Broker triggers need a long-running host vs. Vercel functions (§11).
+- ~~Whether cadence-api streaming needs a long-running host vs. Vercel functions~~ — **decided:** Vercel Services (see [`DEPLOY.md`](DEPLOY.md)).
 
 ## 10. Immediate next steps
 
@@ -430,16 +430,17 @@ orchestrates explicitly where convenient, but is not blocked.
 
 ## 11. Deployment & native (iOS)
 
-**Web + API → Vercel.** `cadence-web` deploys as a static SPA. `cadence-api` deploys
-as Vercel functions — consistent with how AI Admin's `backend` already runs there
-(`vercel.json`, `/_/backend` base, daily crons).
+> **Canonical deploy doc:** [`docs/cadence/DEPLOY.md`](DEPLOY.md) (INFRA-P2). The bullets
+> below are the product summary; if they disagree with DEPLOY.md, **believe DEPLOY.md**.
 
-**Caveat — streaming + always-on work on serverless.** The Coach SSE hot path and the
-Broker's always-on scans are an awkward fit for short-lived functions:
-- **SSE:** keep Coach replies within the function's max duration, or move cadence-api to
-  a long-running host (Render/Fly/Railway) if turns get long. Decide before Phase 3.
-- **Broker triggers:** run as **Vercel Cron → AI Admin trigger endpoints** (the v1.4.0
-  trigger mechanism), not an in-process scheduler — matches AI Admin's own pattern.
+**Web + API → Vercel (two projects).** `cadence-web` is a static Vite SPA
+(`apps/cadence-web/vercel.json`). `cadence-api` is a **long-running Vercel Service**
+(`apps/cadence-api/vercel.json` `services` key) — same compute model as AI Admin’s backend,
+**not** a classic short-lived serverless function. Repo-root `vercel.json` stays AI Admin–only.
+
+**Why Services (not functions) for the API:** (a) `postgres.js` pool, (b) Coach SSE streams,
+(c) in-process `@ai-admin/core` cold-load. Broker / scheduled work still prefers
+**Vercel Cron → AI Admin trigger endpoints** where applicable — matches AI Admin’s pattern.
 
 **iOS app — yes, and it must be native for HealthKit.** A pure PWA cannot reach
 HealthKit (the deciding constraint, §7/§8). The path:

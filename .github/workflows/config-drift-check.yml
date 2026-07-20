@@ -1,0 +1,56 @@
+# Config-as-code drift check (INFRA-P2 / report 06 §4.7)
+#
+# SECURITY — PRODUCTION CREDENTIALS
+# ---------------------------------
+# This workflow is the ONLY place that may reference AI Admin production sync
+# secrets (AI_ADMIN_API_KEY / AI_ADMIN_BASE_URL for the live instance).
+#
+# NEVER add those secrets to `.github/workflows/ci.yml` or any workflow that
+# runs on `pull_request` / fork PRs. A PR-triggered job that can read prod
+# sync keys is a credential-leak vector (refactoring_plan risk register).
+#
+# Triggers: schedule + manual only. No `pull_request`. No `push`.
+#
+# Setup (one-time, repo admin):
+#   1. Add repo secrets: AI_ADMIN_API_KEY (aim_sk_…, jobs-sync capable),
+#      AI_ADMIN_BASE_URL (e.g. https://ai-manager-alpha-seven.vercel.app —
+#      the script appends /_/backend when needed).
+#   2. Optional: restrict the secrets to this workflow via GitHub Environments
+#      (create env `config-drift` with no PR access).
+#   3. Until secrets exist, the job fails closed on missing key (exit 1) —
+#      that is intentional; do not weaken to "skip if unset" on a schedule
+#      that is meant to catch silent prompt drift.
+#
+# Local equivalent:
+#   node --import tsx apps/cadence-api/scripts/sync-jobs.ts --dry-run --fail-on-drift
+#
+name: Config drift check
+
+on:
+  schedule:
+    # Daily 14:00 UTC — catches silent prompt/config divergence within ~1 day
+    - cron: '0 14 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cadence-jobs-drift:
+    name: cadence jobs dry-run drift
+    runs-on: ubuntu-latest
+    # Optional environment gate — uncomment after creating `config-drift` in repo settings:
+    # environment: config-drift
+    env:
+      AI_ADMIN_API_KEY: ${{ secrets.AI_ADMIN_API_KEY }}
+      AI_ADMIN_BASE_URL: ${{ secrets.AI_ADMIN_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install (workspaces)
+        run: npm ci
+      - name: Dry-run sync jobs (fail on drift)
+        run: node --import tsx apps/cadence-api/scripts/sync-jobs.ts --dry-run --fail-on-drift
