@@ -1,157 +1,45 @@
 /**
- * Model – Health Checks
- * ----------------------
- * CRUD for health_check_provider_keys, health_check_profiles,
- * health_checks, health_check_runs, and health_check_incidents.
+ * Model – Health Checks + Runs
+ * -----------------------------
+ * CRUD for health_checks / health_check_runs, aggregation RPCs, and
+ * service-role helpers used by the scheduler and Run Now.
+ *
+ * Provider keys, profiles, and incidents live in sibling modules;
+ * this file re-exports them so existing `models/health-checks.ts`
+ * import sites stay stable.
  */
 
-import {
-  tenantFrom,
-  tenantInsertPayload,
-  tenantClient,
-  getAuthContext,
-  effectiveUserId,
-  requireWorkspaceId,
-} from '../db/tenant.ts';
+import { tenantFrom, tenantInsertPayload, tenantClient, requireWorkspaceId } from '../db/tenant.ts';
 import { getServiceSupabase } from '../db/service-supabase.ts';
-import { encryptSecret, decryptSecret } from '../lib/crypto.ts';
-import type {
-  HealthCheckProviderKeyRow,
-  HealthCheckProfileRow,
-  HealthCheckRow,
-  HealthCheckRunRow,
-  HealthCheckIncidentRow,
-} from '../types.ts';
+import type { HealthCheckRow, HealthCheckRunRow, HealthCheckProfileRow } from '../types.ts';
+import type { RunListOptions } from './run-list-options.ts';
 
-async function resolveUserId(): Promise<string> {
-  const uid = effectiveUserId(getAuthContext());
-  if (uid) return uid;
+export type { RunListOptions };
 
-  const wsId = requireWorkspaceId();
-  const { data } = await getServiceSupabase()
-    .from('workspace_members')
-    .select('user_id, role')
-    .eq('workspace_id', wsId)
-    .in('role', ['owner', 'admin'])
-    .order('role', { ascending: true })
-    .limit(1)
-    .single();
-  if (data?.user_id) return data.user_id as string;
+export {
+  createProviderKey,
+  updateProviderKey,
+  listProviderKeys,
+  getProviderKey,
+  deleteProviderKey,
+} from './health-check-provider-keys.ts';
 
-  throw new Error('Cannot determine user identity for provider key ownership');
-}
+export {
+  createHcProfile,
+  updateHcProfile,
+  listHcProfiles,
+  getHcProfile,
+  deleteHcProfile,
+} from './health-check-profiles.ts';
 
-function decryptKeyRow(row: HealthCheckProviderKeyRow): HealthCheckProviderKeyRow {
-  if (row?.api_key) {
-    try {
-      return { ...row, api_key: decryptSecret(row.api_key) };
-    } catch {
-      return row;
-    }
-  }
-  return row;
-}
-
-/* ── Provider Keys ────────────────────────────────────────── */
-
-export async function createProviderKey(data: Partial<HealthCheckProviderKeyRow>): Promise<HealthCheckProviderKeyRow> {
-  const userId = await resolveUserId();
-  const payload: Record<string, unknown> = { ...data, user_id: userId, updated_at: new Date().toISOString() };
-  if (payload.api_key) payload.api_key = encryptSecret(payload.api_key as string);
-  const { data: row, error } = await tenantFrom('health_check_provider_keys')
-    .insert(tenantInsertPayload(payload))
-    .select('*, provider:providers(*)')
-    .single();
-  if (error) throw new Error(`HC provider key insert error: ${error.message}`);
-  return decryptKeyRow(row);
-}
-
-export async function updateProviderKey(
-  id: string,
-  updates: Partial<HealthCheckProviderKeyRow>,
-): Promise<HealthCheckProviderKeyRow> {
-  const payload: Record<string, unknown> = { ...updates, updated_at: new Date().toISOString() };
-  if (payload.api_key) payload.api_key = encryptSecret(payload.api_key as string);
-  const { data: row, error } = await tenantFrom('health_check_provider_keys')
-    .update(payload)
-    .eq('id', id)
-    .select('*, provider:providers(*)')
-    .single();
-  if (error) throw new Error(`HC provider key update error: ${error.message}`);
-  return decryptKeyRow(row);
-}
-
-export async function listProviderKeys(): Promise<HealthCheckProviderKeyRow[]> {
-  const { data, error } = await tenantFrom('health_check_provider_keys')
-    .select('*, provider:providers(*)')
-    .order('created_at', { ascending: false });
-  if (error) throw new Error(`HC provider key list error: ${error.message}`);
-  return (data || []).map(decryptKeyRow);
-}
-
-export async function getProviderKey(id: string): Promise<HealthCheckProviderKeyRow> {
-  const { data: row, error } = await tenantFrom('health_check_provider_keys')
-    .select('*, provider:providers(*)')
-    .eq('id', id)
-    .single();
-  if (error) throw new Error(`HC provider key get error: ${error.message}`);
-  return decryptKeyRow(row);
-}
-
-export async function deleteProviderKey(id: string): Promise<void> {
-  const { error } = await tenantFrom('health_check_provider_keys').delete().eq('id', id);
-  if (error) throw new Error(`HC provider key delete error: ${error.message}`);
-}
-
-/* ── Profiles ─────────────────────────────────────────────── */
-
-export async function createHcProfile(data: Partial<HealthCheckProfileRow>): Promise<HealthCheckProfileRow> {
-  const payload: Record<string, unknown> = { ...data, updated_at: new Date().toISOString() };
-  const { data: row, error } = await tenantFrom('health_check_profiles')
-    .insert(tenantInsertPayload(payload))
-    .select('*, provider:providers(*), hc_provider_key:health_check_provider_keys(*)')
-    .single();
-  if (error) throw new Error(`HC profile insert error: ${error.message}`);
-  return row;
-}
-
-export async function updateHcProfile(
-  id: string,
-  updates: Partial<HealthCheckProfileRow>,
-): Promise<HealthCheckProfileRow> {
-  const payload: Record<string, unknown> = { ...updates, updated_at: new Date().toISOString() };
-  const { data: row, error } = await tenantFrom('health_check_profiles')
-    .update(payload)
-    .eq('id', id)
-    .select('*, provider:providers(*), hc_provider_key:health_check_provider_keys(*)')
-    .single();
-  if (error) throw new Error(`HC profile update error: ${error.message}`);
-  return row;
-}
-
-export async function listHcProfiles(): Promise<HealthCheckProfileRow[]> {
-  const { data, error } = await tenantFrom('health_check_profiles')
-    .select('*, provider:providers(*), hc_provider_key:health_check_provider_keys(*)')
-    .order('created_at', { ascending: false });
-  if (error) throw new Error(`HC profile list error: ${error.message}`);
-  return data || [];
-}
-
-export async function getHcProfile(id: string): Promise<HealthCheckProfileRow> {
-  const { data: row, error } = await tenantFrom('health_check_profiles')
-    .select('*, provider:providers(*), hc_provider_key:health_check_provider_keys(*)')
-    .eq('id', id)
-    .single();
-  if (error) throw new Error(`HC profile get error: ${error.message}`);
-  return row;
-}
-
-export async function deleteHcProfile(id: string): Promise<void> {
-  const { error } = await tenantFrom('health_check_profiles').delete().eq('id', id);
-  if (error) throw new Error(`HC profile delete error: ${error.message}`);
-}
-
-/* ── Health Checks ────────────────────────────────────────── */
+export {
+  listIncidents,
+  getOpenIncident,
+  serviceGetOpenIncident,
+  serviceOpenIncident,
+  serviceUpdateIncident,
+  serviceResolveIncident,
+} from './health-check-incidents.ts';
 
 const HC_CHECK_SELECT =
   '*, health_check_profile:health_check_profiles(*, provider:providers(*), hc_provider_key:health_check_provider_keys(*))';
@@ -196,8 +84,6 @@ export async function deleteHealthCheck(id: string): Promise<void> {
   if (error) throw new Error(`Health check delete error: ${error.message}`);
 }
 
-/* ── Health Check Runs ────────────────────────────────────── */
-
 export async function insertRun(data: Omit<HealthCheckRunRow, 'id' | 'created_at'>): Promise<HealthCheckRunRow> {
   const { data: row, error } = await tenantFrom('health_check_runs')
     .insert(tenantInsertPayload(data))
@@ -206,9 +92,6 @@ export async function insertRun(data: Omit<HealthCheckRunRow, 'id' | 'created_at
   if (error) throw new Error(`HC run insert error: ${error.message}`);
   return row;
 }
-
-import type { RunListOptions } from './run-list-options.ts';
-export type { RunListOptions };
 
 export async function listRuns(healthCheckId: string, options: RunListOptions = {}): Promise<HealthCheckRunRow[]> {
   const limit = options.limit || 50;
@@ -244,8 +127,6 @@ export async function countRuns(
   return count ?? 0;
 }
 
-/* ── Daily Aggregation (RPC) ──────────────────────────────── */
-
 export interface DailyRunSummaryRow {
   run_date: string;
   total_runs: number;
@@ -270,8 +151,6 @@ export async function getDailyRunSummary(
   return (data as DailyRunSummaryRow[]) || [];
 }
 
-/* ── Failure Patterns (RPC) ───────────────────────────────── */
-
 export interface FailurePatternsResult {
   error_groups: { error_message: string; count: number }[];
   hourly_distribution: { hour: number; count: number }[];
@@ -292,35 +171,6 @@ export async function getFailurePatterns(
   if (error) throw new Error(`hc_failure_patterns RPC error: ${error.message}`);
   return (data as FailurePatternsResult) ?? { error_groups: [], hourly_distribution: [] };
 }
-
-/* ── Incidents ────────────────────────────────────────────── */
-
-export async function listIncidents(
-  healthCheckId: string,
-  options: { limit?: number } = {},
-): Promise<HealthCheckIncidentRow[]> {
-  const limit = options.limit || 20;
-  const { data, error } = await tenantFrom('health_check_incidents')
-    .select('*')
-    .eq('health_check_id', healthCheckId)
-    .order('started_at', { ascending: false })
-    .limit(limit);
-  if (error) throw new Error(`HC incident list error: ${error.message}`);
-  return data || [];
-}
-
-export async function getOpenIncident(healthCheckId: string): Promise<HealthCheckIncidentRow | null> {
-  const { data, error } = await tenantFrom('health_check_incidents')
-    .select('*')
-    .eq('health_check_id', healthCheckId)
-    .is('resolved_at', null)
-    .order('started_at', { ascending: false })
-    .limit(1);
-  if (error) throw new Error(`HC incident get error: ${error.message}`);
-  return data?.[0] || null;
-}
-
-/* ── Service-role helpers (used by the scheduler and Run Now) ── */
 
 export async function serviceGetHealthCheck(
   id: string,
@@ -382,59 +232,4 @@ export async function serviceUpdateCheckLastRun(id: string): Promise<void> {
     .update({ last_run_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) throw new Error(`HC update last_run_at error: ${error.message}`);
-}
-
-export async function serviceGetOpenIncident(healthCheckId: string): Promise<HealthCheckIncidentRow | null> {
-  const sb = getServiceSupabase();
-  const { data, error } = await sb
-    .from('health_check_incidents')
-    .select('*')
-    .eq('health_check_id', healthCheckId)
-    .is('resolved_at', null)
-    .order('started_at', { ascending: false })
-    .limit(1);
-  if (error) throw new Error(`serviceGetOpenIncident error: ${error.message}`);
-  return data?.[0] || null;
-}
-
-export async function serviceOpenIncident(
-  healthCheckId: string,
-  workspaceId: string,
-  errorMessage: string | null,
-): Promise<HealthCheckIncidentRow> {
-  const sb = getServiceSupabase();
-  const { data: row, error } = await sb
-    .from('health_check_incidents')
-    .insert({
-      health_check_id: healthCheckId,
-      workspace_id: workspaceId,
-      last_error: errorMessage,
-    })
-    .select()
-    .single();
-  if (error) throw new Error(`serviceOpenIncident error: ${error.message}`);
-  return row;
-}
-
-export async function serviceUpdateIncident(
-  incidentId: string,
-  updates: Partial<HealthCheckIncidentRow>,
-): Promise<void> {
-  const sb = getServiceSupabase();
-  const { error } = await sb.from('health_check_incidents').update(updates).eq('id', incidentId);
-  if (error) throw new Error(`serviceUpdateIncident error: ${error.message}`);
-}
-
-export async function serviceResolveIncident(incidentId: string, startedAt: string): Promise<void> {
-  const now = new Date();
-  const durationSeconds = Math.round((now.getTime() - new Date(startedAt).getTime()) / 1000);
-  const sb = getServiceSupabase();
-  const { error } = await sb
-    .from('health_check_incidents')
-    .update({
-      resolved_at: now.toISOString(),
-      duration_seconds: durationSeconds,
-    })
-    .eq('id', incidentId);
-  if (error) throw new Error(`serviceResolveIncident error: ${error.message}`);
 }

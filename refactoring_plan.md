@@ -422,6 +422,7 @@ merge log (originally via `feat/cadence`, then `main`):
 > - **FE-11** ✅ **Done** — extract `useTestChatStream` from `TestChatPanel` (PR #63; §4.7)
 > - **CI-06** ✅ **Done** — ESLint nearest-config guard/docs (PR #60; §4.6)
 > - **API-P2** slice — dead `dossier` / `rollingConsistency` metrics tests (§4.4)
+> - **BE-P2** ✅ **Done** — types + health-checks splits (PR #81; §4.4)
 >
 > **Remaining backlog (accurate as of 2026-07-20 — not Phase 2 P1):**
 > - **FE-13** ✅ **Done** — deferred FE size splits (`JobsTab` / `AnalyticsTab` / `SchemaValidationPanel` / `RuleSetsTab`; §4.8)
@@ -563,7 +564,7 @@ later batches.
 
 | ID | Area | Items | Pointer |
 |---|---|---|---|
-| BE-P2 | Backend | `types.ts` split (505 lines, 45 types — mechanical, do early since it touches nearly everything); `models/health-checks.ts`+`routes/health-checks.ts` split by table; opportunistic splits for `ai-profiles.ts`/`providers.ts`/`processing-jobs.ts`/`workflows.ts` routes | Report 01 §4 (P2 sections) |
+| **BE-P2** ✅ **Done** (`refactor/phase3-be-p2`, PR #81) | Backend | **Done:** `types.ts` → domain modules (`types/auth`, `config`, `llm`, `db/*`) + barrel re-export (call sites unchanged); `models/health-checks` split by table (`provider-keys` / `profiles` / `incidents`; checks+runs stay in `health-checks.ts` with re-exports); `routes/health-checks` split into table-scoped sub-routers + thin composer. **Deferred (opportunistic, still under size gate):** `ai-profiles` / `providers` / `processing-jobs` / `workflows` route splits — revisit only if a file grows past the gate. Structural only. | Report 01 §4 (P2 sections) |
 | FE-P2 | Frontend | 16 files in the 250-624 line range (`LovableGuidePage.tsx`, `DiagnosticsTab.tsx`, `InvestigationPanel.tsx`, `WorkflowExecutionLog.tsx`, `WorkflowEditorPage.tsx`, `FailoverConfigModal.tsx`, `WorkflowTestSimulator.tsx`, `StepVariableMapper.tsx`, `ManageLlmsModal.tsx`, `HealthCheckConfigPage.tsx`, `WorkflowDetailPage.tsx`, `HealthCheckProvidersPage.tsx`, `WorkflowVariablePanel.tsx`, `WorkflowManager.tsx`) + the `STATUS_COLORS`/`formatTimestamp` triplication consolidation | Report 02 §4 (4.11-4.23), §6 |
 | **API-P2** 🟡 **Partial** | Cadence API | **Done (#65 + #75):** dead dossier/completion; `rollingConsistency` tests + type narrow; registry `render`/`rows` tests; `capture.ts`/`situation.ts` unit tests; Zod pilot (`validation/body.ts` on nutrition meals/targets); nomenclature `locked`→`committed` in registry + `tools/equipment`→`equipment` in coach-context. **Still open:** `repos/occurrences.ts` slim return type / further `as never` cleanup; expand Zod to remaining routes (plan/review/progress) | Report 03 §3 (P2 sections) |
 | **WEB-P2** 🟡 **Partial** | Cadence web | **Done (#77–#80):** `NutritionTargets` extract + start-over phrase-gate tests; `useCoachChat` SSE-drop recovery hook; AuthScreen + App/`screenFromPlanStage` tests; dictation capability seam + MicButton; CSS Modules migration ADR. **Still open:** PlanView/ProgressView residual (paired WEB-04 largely done); full CSS Modules migration when styles.css ~800+ | Report 04 §3 (P2 section) |
