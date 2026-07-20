@@ -25,9 +25,10 @@ source report that contains the full current-problem/target-design/migration-ste
 ## 0. TL;DR for anyone about to start work
 
 1. **Nothing in this repo is on fire.** Phase 0, Phase 1 P0s (BE-01 / FE-01 / FE-02), and
-   **Phase 2 P1 are complete** on `main` (batches 7–8 closed; CROSS-03 both halves #49/#50). See
-   §4.2 for the closed log and the remaining (mostly P2/P3 + human) backlog — do **not** start
-   batch 9 until the orchestrator explicitly opens Phase 3 / deferred work.
+   **Phase 2 P1 are complete** on `main` (batches 7–8 closed; CROSS-03 both halves #49/#50).
+   **Batch 9 is Done** (FE-14 #56 · CI-08 #53 · CI-09 #55; cleanup-after-tests #54). **Phase 3 /
+   batch 10 is in progress** (FE-11 · CI-06 · API-P2 slice). See §4.2 for the closed log and the
+   remaining (mostly P2/P3 + human) backlog.
 2. **Safety net exists, but is still report-only.** INFRA-01…05 landed (PRs #3–#5). Path-filtered
    CI runs on every PR; treat red jobs as merge blockers even though branch protection may not
    yet *require* the check (**INFRA-02 required-check flip still open**). **INFRA-08** (repo-wide
@@ -39,8 +40,8 @@ source report that contains the full current-problem/target-design/migration-ste
    commit, nutrition, coach-stream, aim seam). `apps/cadence-web` gained ReviewScreen (WEB-01 #45),
    OccurrenceSheet (WEB-03 #44), card-row dedup (WEB-04 #46), and TanStack nutrition-day
    (**CROSS-03** ✅ Done both halves — AI Admin #49 + Cadence #50).
-5. Read §4.2 remaining backlog (FE-11/13/14, BE-03a, CI-01/08/09, Phase 3 P2, INFRA-02
-   required-check flip), §5 for durable goals, §6 for multi-agent orchestration.
+5. Read §4.2 remaining backlog (FE-11/13, BE-03a, CI-01 human, Phase 3 P2 / batch 10 in flight,
+   INFRA-02 required-check flip), §5 for durable goals, §6 for multi-agent orchestration.
 6. **CI gate between batches:** do not start the next parallel batch (and do not merge) while
    integration-branch / PR CI is red. INFRA-02 "report-only" means GitHub branch protection may
    not yet *require* the check — orchestrators and supervisors must still treat failing jobs as
@@ -333,8 +334,8 @@ deferred as **FE-11**); hooks + `McpToolsPanel` + `ProfileFormModal` / `ProfileL
 ### 4.2 Phase 2 — P1 items — **complete**
 
 All Phase 2 P1 backlog items below are **Done** on `main`. Batches 7–8 are closed; CROSS-03 both
-halves landed (#49/#50). Do **not** start batch 9 until the orchestrator opens Phase 3 / deferred
-work. Historical merge log (originally via `feat/cadence`, then `main`):
+halves landed (#49/#50). **Batch 9 is Done**; **Phase 3 / batch 10 is in progress**. Historical
+merge log (originally via `feat/cadence`, then `main`):
 
 > **Phase 2 progress (updated 2026-07-20).** Merged (originally to `feat/cadence`, now on `main`):
 > - **BE-03** — RBAC route guards (PR #10). Side effect: the `ai-admin/backend` CI job is now
@@ -411,17 +412,26 @@ work. Historical merge log (originally via `feat/cadence`, then `main`):
 > - **CROSS-03** ✅ Done both halves — AI Admin (`refactor/cross-03-ai-admin-react-query`, #49) +
 >   Cadence nutrition-day (`refactor/cross-03-cadence-react-query`, #50)
 >
+> **Batch 9** ✅ closed (deferred / allowlist / CI leftovers after Phase 2):
+> - **FE-14** ✅ **Done** — `ProfileFormModal` split (PR #56; §4.8)
+> - **CI-08** ✅ **Done** — `.gitattributes` `eol=lf` (PR #53; P3; §4.6)
+> - **CI-09** ✅ **Done** — camelCase `toolOutputs` on Devs.ai v2 `/resume` (PR #55; §4.6)
+> - Cleanup-after-successful-tests (+ lifecycle providers) ✅ **Done** (PR #54)
+>
+> **Phase 3 / batch 10** 🔄 **in progress** (orchestrator-assigned):
+> - **FE-11** — extract `useTestChatStream` from `TestChatPanel` (§4.7)
+> - **CI-06** — ESLint nearest-config load-bearing behavior guard/docs (§4.6)
+> - **API-P2** slice — dead `dossier` / `rollingConsistency` metrics tests (§4.4)
+>
 > **Remaining backlog (accurate as of 2026-07-20 — not Phase 2 P1):**
-> - **FE-11 / FE-13** — deferred FE size splits (P2; §4.7–4.8)
+> - **FE-11 / FE-13** — deferred FE size splits (P2; §4.7–4.8); FE-11 in batch 10
 > - **FE-14** ✅ **Done** — `ProfileFormModal` split (PR #56; §4.8)
 > - **BE-03a** — diagnostic-logs GET gating (needs product sign-off; §4.9)
 > - **CI-01** — rotate Devs.ai v1 key + flip `DEVS_AI_V1_KEY_KNOWN_EXPIRED` (human; §4.6)
 > - **CI-08** ✅ **Done** — `.gitattributes` `eol=lf` (PR #53; P3; §4.6)
 > - **CI-09** ✅ **Done** — camelCase `toolOutputs` on Devs.ai v2 `/resume` (PR #55; §4.6)
-> - **Phase 3 P2** — condensed area lists in §4.4
+> - **Phase 3 P2** — condensed area lists in §4.4 (batch 10 in flight)
 > - **INFRA-02** — flip CI from report-only to required branch-protection check (§4.0 / §8)
->
-> Do **not** start the next deferred batch until the orchestrator explicitly opens it.
 
 #### Backend (report 01)
 
@@ -546,8 +556,9 @@ hand-rolled until a follow-on.
 
 ### 4.4 Phase 3 — P2 items (condensed; full detail lives in the area reports)
 
-**Next work after Phase 2 P1** (batches 7–8 + CROSS-03 closed). Do not start as "batch 9"
-until the orchestrator assigns Phase 3 clusters.
+**Open after Phase 2 P1** (batches 7–8 + CROSS-03 closed). **Batch 9 is Done**; **batch 10 is in
+progress** (FE-11 · CI-06 · API-P2 slice — see §4.2). Remaining Phase 3 clusters stay available for
+later batches.
 
 | ID | Area | Items | Pointer |
 |---|---|---|---|
@@ -767,8 +778,9 @@ Every item ID in §4 should carry one of these statuses, updated by whichever ro
 `Not Started` → `Assigned` → `In Progress` → `In Review` → `Changes Requested` (loops back to `In Progress`) → `Done` → `Verified`
 
 Update Status cells in place as items move; this file is the single source of truth. Phase 0–1 and
-**Phase 2 P1 are Done** — see §4.2 remaining backlog for deferred P2/P3 + human items (FE-11/13/14,
-BE-03a, CI-01/08/09, Phase 3 P2, INFRA-02 required-check flip). Do not start batch 9 until assigned.
+**Phase 2 P1 are Done**; **batch 9 is Done**; **Phase 3 / batch 10 is in progress**. See §4.2
+remaining backlog for deferred P2/P3 + human items (FE-11/13, BE-03a, CI-01 human, Phase 3 P2,
+INFRA-02 required-check flip).
 
 ---
 
