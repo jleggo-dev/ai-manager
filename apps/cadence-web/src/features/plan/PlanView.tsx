@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Orb } from '../../components/Orb.tsx';
+import { OccurrenceRow } from '../../components/OccurrenceRow.tsx';
 import { OccurrenceSheet } from './OccurrenceSheet.tsx';
 import { AdjustSheet } from './AdjustSheet.tsx';
 import { TodayDashboard } from '../today/TodayDashboard.tsx';
@@ -118,39 +119,9 @@ export function PlanView() {
   const rest = data.week.filter((d) => !d.isToday);
   const { kept, window } = data.consistency;
 
-  const Item = ({ o }: { o: PlanOccurrence }) => {
-    const done = o.status === 'done';
-    const skipped = o.status === 'skipped';
-    // user rows open the session sheet; weigh-in / food-log system rows open their capture sheets.
-    const openable = o.kind === 'user' || /weigh|food|meal|nutrition/i.test(o.title);
-    return (
-      <div className={`occ${done ? ' occ-done' : ''}${skipped ? ' occ-skip' : ''}`}>
-        <button
-          className="occ-check"
-          onClick={() => set(o, done ? 'pending' : 'done')}
-          aria-label={done ? 'Mark not done' : 'Mark done'}
-        >
-          {done ? '✓' : skipped ? '–' : ''}
-        </button>
-        {openable ? (
-          <button className="occ-body occ-open" onClick={() => setSheetOcc(o.occurrence_id)} title="See the session">
-            <span className="occ-title">{o.title}</span>
-            {o.time_of_day && <span className="occ-time">{o.time_of_day}</span>}
-          </button>
-        ) : (
-          <div className="occ-body">
-            <span className="occ-title">{o.title}</span>
-            {o.time_of_day && <span className="occ-time">{o.time_of_day}</span>}
-          </div>
-        )}
-        {!done && (
-          <button className="occ-skipbtn" onClick={() => set(o, skipped ? 'pending' : 'skipped')}>
-            {skipped ? 'undo' : 'skip'}
-          </button>
-        )}
-      </div>
-    );
-  };
+  const weekRow = (o: PlanOccurrence) => (
+    <OccurrenceRow key={o.occurrence_id} o={o} variant="week" onCheck={set} onOpen={setSheetOcc} />
+  );
 
   return (
     <>
@@ -239,7 +210,7 @@ export function PlanView() {
                 {today.occurrences.length === 0 ? (
                   <div className="pd-empty">Nothing scheduled today — rest counts too.</div>
                 ) : (
-                  today.occurrences.map((o) => <Item key={o.occurrence_id} o={o} />)
+                  today.occurrences.map((o) => weekRow(o))
                 )}
               </div>
             )}
@@ -262,11 +233,7 @@ export function PlanView() {
                   <b>{d.weekday}</b>
                   <span>{d.dayNum}</span>
                 </div>
-                {d.occurrences.length === 0 ? (
-                  <div className="pd-empty">—</div>
-                ) : (
-                  d.occurrences.map((o) => <Item key={o.occurrence_id} o={o} />)
-                )}
+                {d.occurrences.length === 0 ? <div className="pd-empty">—</div> : d.occurrences.map((o) => weekRow(o))}
               </div>
             ))}
           </>
