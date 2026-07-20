@@ -412,7 +412,8 @@ work. Historical merge log (originally via `feat/cadence`, then `main`):
 >   Cadence nutrition-day (`refactor/cross-03-cadence-react-query`, #50)
 >
 > **Remaining backlog (accurate as of 2026-07-20 — not Phase 2 P1):**
-> - **FE-11 / FE-13 / FE-14** — deferred FE size splits (P2; §4.7–4.8)
+> - **FE-11 / FE-13** — deferred FE size splits (P2; §4.7–4.8)
+> - **FE-14** ✅ **Done** — `ProfileFormModal` split (PR #56; §4.8)
 > - **BE-03a** — diagnostic-logs GET gating (needs product sign-off; §4.9)
 > - **CI-01** — rotate Devs.ai v1 key + flip `DEVS_AI_V1_KEY_KNOWN_EXPIRED` (human; §4.6)
 > - **CI-08** ✅ **Done** — `.gitattributes` `eol=lf` (PR #53; P3; §4.6)
@@ -606,7 +607,7 @@ FE-03…FE-08 / FE-P2 (`AiMatcherPage`, `SettingsPage`, `HealthCheck*`, `Lovable
 | ID | Item | Area | Priority | Effort | Risk | Status |
 |---|---|---|---|---|---|---|
 | **FE-13** | Further split oversized `processing-jobs/` extracts still over `max-lines@500`: `JobsTab` (~908), `AnalyticsTab` (~987), `SchemaValidationPanel` (~632), `RuleSetsTab` (~579) — keep the FE-01 overrides until each drops under the threshold | Frontend | P2 | L | Medium | Not Started |
-| **FE-14** | Split `ai-profiles/ProfileFormModal.tsx` (~530 lines) further (form subpanels / sections) so it can leave the max-lines override list — leftover from FE-02 structural split, surfaced when FE-01's rule landed on current `feat/cadence` | Frontend | P2 | M | Low | Not Started |
+| **FE-14** ✅ **Done** (`refactor/fe-14-profile-form-modal`, PR #56) | Split `ai-profiles/ProfileFormModal.tsx` (~530 lines) further (form subpanels / sections) so it can leave the max-lines override list — leftover from FE-02 structural split, surfaced when FE-01's rule landed on current `feat/cadence` | Frontend | P2 | M | Low | **Done** — extracted `ProfileFormIdentityFields`, `ProfileFailoverSection`, `ProfileFormDetailsFields`; allowlist entry removed; modal ~372 lines under gate |
 
 ### 4.9 Newly discovered / deferred — BE-03 supervisor review (`refactor/be-03-rbac`)
 
