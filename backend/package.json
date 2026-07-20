@@ -7,8 +7,9 @@
     "dev": "node --import tsx --watch-path=src src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && npx tsx scripts/cleanup-e2e-test-data.ts --yes --soft",
     "test:watch": "vitest",
+    "test:no-cleanup": "vitest run",
     "migrate:data": "node --import tsx scripts/migrate-supabase-data.mts",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0"

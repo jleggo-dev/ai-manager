@@ -14,8 +14,13 @@
  * Usage (from repo root, PowerShell):
  *   npx tsx backend/scripts/cleanup-e2e-test-data.ts          # dry-run (counts)
  *   npx tsx backend/scripts/cleanup-e2e-test-data.ts --yes    # apply deletes
+ *   npx tsx backend/scripts/cleanup-e2e-test-data.ts --yes --soft
+ *     # apply, but exit 0 if Supabase env is missing (used after successful tests)
  *
- * Requires backend/.env: AI_MANAGER_SUPABASE_URL + AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY.
+ * Opt out of post-test cleanup: SKIP_TEST_DATA_CLEANUP=1
+ *
+ * Requires backend/.env: AI_MANAGER_SUPABASE_URL + AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY
+ * (unless --soft / SKIP_TEST_DATA_CLEANUP).
  */
 import dotenv from 'dotenv';
 import path from 'node:path';
@@ -69,8 +74,12 @@ const JOB_NAME_PATTERNS = [
 /** Exact display names that must never be deleted even if a pattern somehow matched. */
 const PROTECTED_PROVIDER_NAMES = new Set(['Devs.ai', 'Devs.ai v2', 'Google Gemini']);
 
+function envOrEmpty(name: string): string {
+  return process.env[name]?.trim() || '';
+}
+
 function requireEnv(name: string): string {
-  const v = process.env[name]?.trim();
+  const v = envOrEmpty(name);
   if (!v) {
     console.error(`Missing ${name} (load backend/.env)`);
     process.exit(1);
@@ -148,8 +157,24 @@ function assertNoProtectedProviders(rows: NamedRow[]): void {
 
 async function main(): Promise<void> {
   const apply = process.argv.includes('--yes');
-  const url = requireEnv('AI_MANAGER_SUPABASE_URL');
-  const key = requireEnv('AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY');
+  const soft = process.argv.includes('--soft') || process.env.SKIP_TEST_DATA_CLEANUP === '1';
+
+  if (process.env.SKIP_TEST_DATA_CLEANUP === '1') {
+    console.log('[cleanup-e2e] SKIP_TEST_DATA_CLEANUP=1 — skipping');
+    return;
+  }
+
+  const url = soft ? envOrEmpty('AI_MANAGER_SUPABASE_URL') : requireEnv('AI_MANAGER_SUPABASE_URL');
+  const key = soft
+    ? envOrEmpty('AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY')
+    : requireEnv('AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) {
+    console.warn(
+      '[cleanup-e2e] soft skip: AI_MANAGER_SUPABASE_URL / AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY not set',
+    );
+    return;
+  }
+
   const host = new URL(url).host;
   const sb = createClient(url, key);
 
