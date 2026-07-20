@@ -1,48 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Stack,
-  Group,
-  Text,
-  Badge,
-  Button,
-  Table,
-  Center,
-  Loader,
-  Modal,
-  TextInput,
-  PasswordInput,
-  Switch,
-  Select,
-  Alert,
-  ActionIcon,
-  Tooltip,
-} from '@mantine/core';
+import { Stack, Center, Loader, Alert, Button } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { IconKey, IconPlus, IconEdit, IconTrash, IconAlertCircle } from '@tabler/icons-react';
+import { IconPlus, IconAlertCircle } from '@tabler/icons-react';
 import PageHeader from '../components/atoms/PageHeader';
 import * as api from '../services/api';
 import type { Provider, HcProviderKey } from '../types/api';
+import { AddProviderKeyModal } from './health-check-providers/AddProviderKeyModal';
+import { DeleteProviderKeyModal } from './health-check-providers/DeleteProviderKeyModal';
+import { EditProviderKeyModal } from './health-check-providers/EditProviderKeyModal';
+import { ProvidersKeysTable } from './health-check-providers/ProvidersKeysTable';
+import { EMPTY_FORM, type KeyFormState } from './health-check-providers/types';
 
 interface HealthCheckProvidersPageProps {
   onNavigate: (key: string, params?: Record<string, unknown>) => void;
   pageParams: Record<string, unknown>;
   workspaceRole?: string | null;
 }
-
-interface KeyFormState {
-  provider_id: string;
-  name: string;
-  api_key: string;
-  is_active: boolean;
-}
-
-const EMPTY_FORM: KeyFormState = {
-  provider_id: '',
-  name: '',
-  api_key: '',
-  is_active: true,
-};
 
 export default function HealthCheckProvidersPage({
   onNavigate: _onNavigate,
@@ -87,6 +61,11 @@ export default function HealthCheckProvidersPage({
 
   function handleOpenAdd() {
     setForm(EMPTY_FORM);
+    openAdd();
+  }
+
+  function handleConfigureKey(providerId: string) {
+    setForm({ ...EMPTY_FORM, provider_id: providerId });
     openAdd();
   }
 
@@ -214,67 +193,6 @@ export default function HealthCheckProvidersPage({
     label: `${p.name} (${p.type})`,
   }));
 
-  const rows = providers.map((provider) => {
-    const hcKey = getKeyForProvider(provider.id);
-    return (
-      <Table.Tr key={provider.id}>
-        <Table.Td>{provider.name}</Table.Td>
-        <Table.Td>
-          <Badge variant="light" size="sm">
-            {provider.type}
-          </Badge>
-        </Table.Td>
-        <Table.Td>
-          {hcKey ? (
-            <Group gap="xs">
-              <IconKey size={14} />
-              <Text size="sm">{hcKey.name}</Text>
-            </Group>
-          ) : (
-            <Text size="sm" c="dimmed">
-              —
-            </Text>
-          )}
-        </Table.Td>
-        <Table.Td>
-          {hcKey ? (
-            <Badge color={hcKey.is_active ? 'green' : 'gray'} variant="filled" size="sm">
-              {hcKey.is_active ? 'Active' : 'Inactive'}
-            </Badge>
-          ) : (
-            <Button
-              variant="subtle"
-              size="xs"
-              leftSection={<IconPlus size={14} />}
-              onClick={() => {
-                setForm({ ...EMPTY_FORM, provider_id: provider.id });
-                openAdd();
-              }}
-            >
-              Configure Key
-            </Button>
-          )}
-        </Table.Td>
-        <Table.Td>
-          {hcKey && (
-            <Group gap="xs">
-              <Tooltip label="Edit">
-                <ActionIcon variant="subtle" onClick={() => handleOpenEdit(hcKey)}>
-                  <IconEdit size={16} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label="Delete">
-                <ActionIcon variant="subtle" color="red" onClick={() => handleOpenDelete(hcKey)}>
-                  <IconTrash size={16} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-          )}
-        </Table.Td>
-      </Table.Tr>
-    );
-  });
-
   return (
     <Stack>
       <PageHeader title="Provider Keys">
@@ -283,131 +201,41 @@ export default function HealthCheckProvidersPage({
         </Button>
       </PageHeader>
 
-      <Table striped highlightOnHover>
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Provider Name</Table.Th>
-            <Table.Th>Provider Type</Table.Th>
-            <Table.Th>HC Key Name</Table.Th>
-            <Table.Th>Status</Table.Th>
-            <Table.Th>Actions</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>{rows}</Table.Tbody>
-      </Table>
+      <ProvidersKeysTable
+        providers={providers}
+        getKeyForProvider={getKeyForProvider}
+        onConfigureKey={handleConfigureKey}
+        onEdit={handleOpenEdit}
+        onDelete={handleOpenDelete}
+      />
 
-      {/* Add Modal */}
-      <Modal opened={addOpened} onClose={closeAdd} title="Add Provider Key" centered>
-        <Stack>
-          <Select
-            label="Provider"
-            placeholder="Select a provider"
-            data={providerSelectData}
-            value={form.provider_id}
-            onChange={(val) => setForm((prev) => ({ ...prev, provider_id: val ?? '' }))}
-            required
-          />
-          <TextInput
-            label="Name"
-            placeholder="Key name"
-            value={form.name}
-            onChange={(e) => {
-              const v = e.currentTarget.value;
-              setForm((prev) => ({ ...prev, name: v }));
-            }}
-            required
-          />
-          <PasswordInput
-            label="API Key"
-            placeholder="Enter API key"
-            value={form.api_key}
-            onChange={(e) => {
-              const v = e.currentTarget.value;
-              setForm((prev) => ({ ...prev, api_key: v }));
-            }}
-            required
-          />
-          <Switch
-            label="Active"
-            checked={form.is_active}
-            onChange={(e) => {
-              const v = e.currentTarget.checked;
-              setForm((prev) => ({ ...prev, is_active: v }));
-            }}
-          />
-          <Group justify="flex-end" mt="md">
-            <Button variant="default" onClick={closeAdd}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreate} loading={submitting}>
-              Create
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+      <AddProviderKeyModal
+        opened={addOpened}
+        onClose={closeAdd}
+        form={form}
+        setForm={setForm}
+        providerSelectData={providerSelectData}
+        onCreate={handleCreate}
+        submitting={submitting}
+      />
 
-      {/* Edit Modal */}
-      <Modal opened={editOpened} onClose={closeEdit} title="Edit Provider Key" centered>
-        <Stack>
-          <Select label="Provider" data={providerSelectData} value={form.provider_id} disabled />
-          <TextInput
-            label="Name"
-            placeholder="Key name"
-            value={form.name}
-            onChange={(e) => {
-              const v = e.currentTarget.value;
-              setForm((prev) => ({ ...prev, name: v }));
-            }}
-            required
-          />
-          <PasswordInput
-            label="API Key"
-            placeholder="Leave blank to keep current"
-            value={form.api_key}
-            onChange={(e) => {
-              const v = e.currentTarget.value;
-              setForm((prev) => ({ ...prev, api_key: v }));
-            }}
-          />
-          <Switch
-            label="Active"
-            checked={form.is_active}
-            onChange={(e) => {
-              const v = e.currentTarget.checked;
-              setForm((prev) => ({ ...prev, is_active: v }));
-            }}
-          />
-          <Group justify="flex-end" mt="md">
-            <Button variant="default" onClick={closeEdit}>
-              Cancel
-            </Button>
-            <Button onClick={handleUpdate} loading={submitting}>
-              Save
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+      <EditProviderKeyModal
+        opened={editOpened}
+        onClose={closeEdit}
+        form={form}
+        setForm={setForm}
+        providerSelectData={providerSelectData}
+        onUpdate={handleUpdate}
+        submitting={submitting}
+      />
 
-      {/* Delete Confirmation Modal */}
-      <Modal opened={deleteOpened} onClose={closeDelete} title="Delete Provider Key" centered>
-        <Stack>
-          <Text>
-            Are you sure you want to delete the key{' '}
-            <Text span fw={600}>
-              {deletingKey?.name}
-            </Text>
-            ? This action cannot be undone.
-          </Text>
-          <Group justify="flex-end" mt="md">
-            <Button variant="default" onClick={closeDelete}>
-              Cancel
-            </Button>
-            <Button color="red" onClick={handleDelete} loading={submitting}>
-              Delete
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+      <DeleteProviderKeyModal
+        opened={deleteOpened}
+        onClose={closeDelete}
+        deletingKey={deletingKey}
+        onDelete={handleDelete}
+        submitting={submitting}
+      />
     </Stack>
   );
 }
