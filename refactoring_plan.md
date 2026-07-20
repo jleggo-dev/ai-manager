@@ -41,7 +41,7 @@ source report that contains the full current-problem/target-design/migration-ste
    commit, nutrition, coach-stream, aim seam). `apps/cadence-web` gained ReviewScreen (WEB-01 #45),
    OccurrenceSheet (WEB-03 #44), card-row dedup (WEB-04 #46), and TanStack nutrition-day
    (**CROSS-03** ✅ Done both halves — AI Admin #49 + Cadence #50).
-5. Read §4.2 remaining backlog (FE-13, BE-03a, CI-01 human, Phase 3 P2 / batch 10 in flight),
+5. Read §4.2 remaining backlog (FE-13, CI-01 human, Phase 3 P2 / batch 10 in flight),
    §5 for durable goals, §6 for multi-agent orchestration.
 6. **CI gate between batches:** do not start the next parallel batch (and do not merge) while
    integration-branch / PR CI is red. Branch protection on `main` now **requires** status checks
@@ -341,7 +341,7 @@ merge log (originally via `feat/cadence`, then `main`):
 > - **BE-03** — RBAC route guards (PR #10). Side effect: the `ai-admin/backend` CI job is now
 >   **green for the first time** — the missing repo secrets (`TEST_API_KEY`, `AI_MANAGER_SUPABASE_*`,
 >   `CREDENTIAL_ENCRYPTION_KEY`, `DEVS_AI_API_KEY`) were added and `ci.yml` now wires `TEST_API_KEY`.
->   Follow-ups logged: **BE-03a** (diagnostic-logs GET-gating — needs product sign-off), **BE-03b**
+>   Follow-ups logged: **BE-03a** ✅ Done (diagnostic-logs GET-gating), **BE-03b**
 >   (user-credentials stays un-gated).
 > - **API-01** — atomic plan commit + shared confirm skeleton + the repo's first **DB integration
 >   harness** (PR #11). 56/56 vitest pass against a live Cadence DB locally; the 6 new DB tests
@@ -427,7 +427,7 @@ merge log (originally via `feat/cadence`, then `main`):
 > - **FE-13** — deferred FE size splits (P2; §4.8)
 > - **FE-11** ✅ **Done** — `useTestChatStream` extract (PR #63; §4.7)
 > - **FE-14** ✅ **Done** — `ProfileFormModal` split (PR #56; §4.8)
-> - **BE-03a** — diagnostic-logs GET gating (needs product sign-off; §4.9)
+> - **BE-03a** ✅ **Done** — diagnostic-logs GET gating (owner/admin; §4.9)
 > - **CI-01** — rotate Devs.ai v1 key + flip `DEVS_AI_V1_KEY_KNOWN_EXPIRED` (human; §4.6)
 > - **CI-08** ✅ **Done** — `.gitattributes` `eol=lf` (PR #53; P3; §4.6)
 > - **CI-09** ✅ **Done** — camelCase `toolOutputs` on Devs.ai v2 `/resume` (PR #55; §4.6)
@@ -629,7 +629,7 @@ sign-off before any change. Neither blocks BE-03 Done (which gated only mutating
 
 | ID | Item | Area | Priority | Effort | Risk | Status |
 |---|---|---|---|---|---|---|
-| **BE-03a** | Product decision: should `diagnostic-logs.ts` GET routes be gated to owner/admin? They may contain sensitive prompt/response content (report 01 marks "needs gate? Y"), but they are reads — gating them is a UX/policy call, not pure engineering. If yes: add `router.use(requireRole('owner','admin'))` (all its routes are reads of the same sensitivity) + a negative test. | Backend | P2 | S | Low (once decided) | Not Started — needs product sign-off |
+| **BE-03a** ✅ **Done** (`refactor/be-03a-diagnostic-logs-rbac`) | Product decision: should `diagnostic-logs.ts` GET routes be gated to owner/admin? They may contain sensitive prompt/response content (report 01 marks "needs gate? Y"), but they are reads — gating them is a UX/policy call, not pure engineering. If yes: add `router.use(requireRole('owner','admin'))` (all its routes are reads of the same sensitivity) + a negative test. | Backend | P2 | S | Low (once decided) | **Done** — product signed off owner/admin for GETs (same as BE-03 mutating gates); `router.use(requireRole('owner','admin'))` on `diagnostic-logs.ts` (GET + DELETE); negative tests in `rbac-route-guards.test.ts` (member→403, owner/admin→not-403) |
 | **BE-03b** | Confirm `user-credentials.ts` should stay **un-gated** (a member managing their OWN provider keys is legitimate; it is already `user_id`-scoped and report 01 marks "needs gate? N"). Logged only so a future audit doesn't re-flag it as a gap and "fix" it into a broken member flow. | Backend | P3 | — | — | Won't Fix (by design) unless product says otherwise |
 
 ---
@@ -780,8 +780,8 @@ Every item ID in §4 should carry one of these statuses, updated by whichever ro
 
 Update Status cells in place as items move; this file is the single source of truth. Phase 0–1 and
 **Phase 2 P1 are Done**; **batch 9 is Done**; **Phase 3 / batch 10 is in progress**. See §4.2
-remaining backlog for deferred P2/P3 + human items (FE-13, BE-03a, CI-01 human, Phase 3 P2).
-**INFRA-02** required-check flip is Done (2026-07-20). **FE-11** Done (PR #63).
+remaining backlog for deferred P2/P3 + human items (FE-13, CI-01 human, Phase 3 P2).
+**INFRA-02** required-check flip is Done (2026-07-20). **FE-11** Done (PR #63). **BE-03a** Done.
 
 ---
 

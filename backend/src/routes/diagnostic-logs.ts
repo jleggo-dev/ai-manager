@@ -3,6 +3,9 @@
  * --------------------------
  * API endpoints for viewing and managing AI diagnostic logs.
  * Part of the AI Manager module.
+ *
+ * BE-03a: all routes (GET + DELETE) require owner/admin — logs may contain
+ * sensitive prompt/response content.
  */
 
 import { Router, Request, Response } from 'express';
@@ -14,8 +17,10 @@ import {
   getDiagTokenUsageStats,
 } from '../models/diagnostic-logs.ts';
 import { parsePagination, buildPaginatedResponse } from '../lib/pagination.ts';
+import { requireRole } from '../middleware/require-role.ts';
 
 const router = Router();
+router.use(requireRole('owner', 'admin'));
 
 /**
  * GET /api/diagnostic-logs

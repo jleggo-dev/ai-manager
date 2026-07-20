@@ -1,17 +1,18 @@
 /**
- * BE-03 — RBAC route guards.
+ * BE-03 / BE-03a — RBAC route guards.
  *
- * Asserts that mutating routes (POST/PUT/PATCH/DELETE) on the admin-sensitive AI Admin routers
- * require an owner/admin role, while GET/list routes stay member-readable (the plan's explicit
- * "don't over-gate the reads" constraint). Written test-first: before the middleware was wired,
- * a `member`-role caller reached the handler (400/500), not a 403 — these tests make the 200/400→403
- * flip visible and lock it against regression.
+ * BE-03: mutating routes (POST/PUT/PATCH/DELETE) on the admin-sensitive AI Admin routers
+ * require an owner/admin role, while most GET/list routes stay member-readable (the plan's
+ * "don't over-gate the reads" constraint).
+ *
+ * BE-03a (product decision): `diagnostic-logs` is the exception — GETs (and DELETEs) require
+ * owner/admin because logs may contain sensitive prompt/response content.
  *
  * The `requireRole` api_key branch returns 403 from `ctx.apiKeyRole` directly (no DB), so the
  * mutating-route assertions need no Supabase mock. GET-open assertions reach the handler, so
  * `tenantFrom` is stubbed to a fast chainable that never touches the network. api-keys.ts gates the
  * JWT path (it already blocks api_key mode outright), so its member case uses a JWT ctx + a mocked
- * workspace_members lookup.
+ * workspace_members lookup. diagnostic-logs model is stubbed so admin GETs do not hit the network.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
@@ -78,6 +79,20 @@ vi.mock('../src/db/service-supabase.ts', () => ({
   }),
 }));
 
+vi.mock('../src/models/diagnostic-logs.ts', () => ({
+  listDiagnosticLogs: vi.fn(async () => []),
+  getDiagnosticLog: vi.fn(async () => ({ id: 'log-1' })),
+  deleteDiagnosticLog: vi.fn(async () => undefined),
+  clearDiagnosticLogs: vi.fn(async () => undefined),
+  getDiagTokenUsageStats: vi.fn(async () => ({
+    sampleSize: 0,
+    totals: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    byJob: {},
+    byModel: {},
+    byUser: {},
+  })),
+}));
+
 // Routers under test (imported after mocks are declared).
 import appSettingsRouter from '../src/routes/app-settings.ts';
 import callingApplicationsRouter from '../src/routes/calling-applications.ts';
@@ -86,6 +101,7 @@ import aiProfilesRouter from '../src/routes/ai-profiles.ts';
 import processingJobsRouter from '../src/routes/processing-jobs.ts';
 import workflowsRouter from '../src/routes/workflows.ts';
 import apiKeysRouter from '../src/routes/api-keys.ts';
+import diagnosticLogsRouter from '../src/routes/diagnostic-logs.ts';
 
 function mount(router: express.Router, base: string) {
   const app = express();
@@ -207,6 +223,55 @@ describe('BE-03 RBAC route guards', () => {
       storedCtx = jwtCtx();
       membershipRole = 'member';
       const res = await request(mount(apiKeysRouter, '/api-keys')).get('/api-keys/');
+      expect(res.status).not.toBe(403);
+    });
+  });
+
+  /** BE-03a — diagnostic-logs GETs (and DELETEs) require owner/admin. */
+  describe('diagnostic-logs (BE-03a)', () => {
+    const app = () => mount(diagnosticLogsRouter, '/diagnostic-logs');
+
+    it('blocks a member (api_key) on GET list with 403', async () => {
+      storedCtx = apiKeyCtx('member');
+      const res = await request(app()).get('/diagnostic-logs/');
+      expect(res.status).toBe(403);
+    });
+
+    it('blocks a member (api_key) on GET token-stats with 403', async () => {
+      storedCtx = apiKeyCtx('member');
+      const res = await request(app()).get('/diagnostic-logs/token-stats');
+      expect(res.status).toBe(403);
+    });
+
+    it('blocks a member (api_key) on GET by id with 403', async () => {
+      storedCtx = apiKeyCtx('member');
+      const res = await request(app()).get('/diagnostic-logs/log-1');
+      expect(res.status).toBe(403);
+    });
+
+    it('lets an admin (api_key) read the list (not 403)', async () => {
+      storedCtx = apiKeyCtx('admin');
+      const res = await request(app()).get('/diagnostic-logs/');
+      expect(res.status).not.toBe(403);
+    });
+
+    it('lets an owner (api_key) read token-stats (not 403)', async () => {
+      storedCtx = apiKeyCtx('owner');
+      const res = await request(app()).get('/diagnostic-logs/token-stats');
+      expect(res.status).not.toBe(403);
+    });
+
+    it('blocks a member (JWT) on GET list with 403', async () => {
+      storedCtx = jwtCtx();
+      membershipRole = 'member';
+      const res = await request(app()).get('/diagnostic-logs/');
+      expect(res.status).toBe(403);
+    });
+
+    it('lets an admin (JWT) past the role gate on GET list', async () => {
+      storedCtx = jwtCtx();
+      membershipRole = 'admin';
+      const res = await request(app()).get('/diagnostic-logs/');
       expect(res.status).not.toBe(403);
     });
   });
