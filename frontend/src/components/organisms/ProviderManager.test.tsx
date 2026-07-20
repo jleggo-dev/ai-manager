@@ -2,6 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import ProviderManager from './ProviderManager';
 import * as api from '../../services/api';
+import { QueryWrapper } from '../../test/query-wrapper';
 
 vi.mock('../../services/api', () => ({
   listProviders: vi.fn(),
@@ -58,9 +59,11 @@ const paginatedProviders = {
 
 function renderComponent() {
   return render(
-    <MantineProvider>
-      <ProviderManager />
-    </MantineProvider>,
+    <QueryWrapper>
+      <MantineProvider>
+        <ProviderManager />
+      </MantineProvider>
+    </QueryWrapper>,
   );
 }
 
@@ -72,11 +75,9 @@ describe('ProviderManager', () => {
 
   it('renders provider list from mocked API data', async () => {
     renderComponent();
-    await waitFor(() => {
-      expect(api.listProviders).toHaveBeenCalledTimes(1);
-    });
-    expect(screen.getByText('Devs.ai Corporate')).toBeInTheDocument();
+    expect(await screen.findByText('Devs.ai Corporate')).toBeInTheDocument();
     expect(screen.getByText('Google Gemini')).toBeInTheDocument();
+    expect(api.listProviders).toHaveBeenCalled();
   });
 
   it('shows loading state initially', () => {

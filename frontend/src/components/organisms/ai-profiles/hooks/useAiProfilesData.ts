@@ -4,26 +4,29 @@
  * Owns the AI Profiles list CRUD concern: fetching profiles/providers and the
  * delete / toggle-default operations. Extracted from AiProfileManager.tsx (FE-02)
  * as a structural, behavior-preserving move.
+ *
+ * CROSS-03: providers list shares TanStack Query cache with ProviderManager
+ * (`useProvidersQuery`); profiles remain a local fetch until a later pilot.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { notifications } from '@mantine/notifications';
 import useConfirm from '../../../../hooks/useConfirm';
+import { useProvidersQuery } from '../../../../hooks/useProvidersQuery';
 import * as api from '../../../../services/api';
-import type { AiProfile, Provider } from '../../../../types/api';
+import type { AiProfile } from '../../../../types/api';
 
 export function useAiProfilesData() {
   const confirm = useConfirm();
+  const { data: providers = [], isLoading: providersLoading } = useProvidersQuery();
   const [profiles, setProfiles] = useState<AiProfile[]>([]);
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [profilesLoading, setProfilesLoading] = useState(true);
 
-  const loadData = useCallback(async () => {
+  const loadProfiles = useCallback(async () => {
     try {
-      setLoading(true);
-      const [profilesResult, providersResult] = await Promise.all([api.listAiProfiles(), api.listProviders()]);
+      setProfilesLoading(true);
+      const profilesResult = await api.listAiProfiles();
       setProfiles(profilesResult.data);
-      setProviders(providersResult.data);
     } catch (err: unknown) {
       notifications.show({
         title: 'Error',
@@ -31,13 +34,17 @@ export function useAiProfilesData() {
         color: 'red',
       });
     } finally {
-      setLoading(false);
+      setProfilesLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadProfiles();
+  }, [loadProfiles]);
+
+  const loadData = useCallback(async () => {
+    await loadProfiles();
+  }, [loadProfiles]);
 
   async function handleDelete(id: string) {
     if (
@@ -95,7 +102,7 @@ export function useAiProfilesData() {
   return {
     profiles,
     providers,
-    loading,
+    loading: profilesLoading || providersLoading,
     loadData,
     handleDelete,
     handleToggleDefault,
