@@ -17,13 +17,15 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app, authHeaders, uniqueName, uniqueSlug } from './setup.ts';
+import { sleep } from './helpers/e2e-harness.ts';
 
 let providerId: string;
 let profileId: string;
 let jobId: string;
 let sessionId: string;
 
-const TEST_USER_ID = '00000000-0000-0000-0000-e2etestuser1';
+/** Valid UUID — prior `…e2etestuser1` was rejected by Postgres uuid columns. */
+const TEST_USER_ID = '00000000-0000-4000-8000-0000000000e1';
 const CALLING_APP = 'e2e-test:session-lifecycle';
 
 beforeAll(async () => {
@@ -119,7 +121,7 @@ describe('E2E: Chat Session Lifecycle', () => {
 
   it('second message does NOT 409 (lock was released)', async () => {
     if (!sessionId) return;
-    await new Promise((r) => setTimeout(r, 1000));
+    await sleep(1000);
 
     const res = await request(app)
       .post(`/api/chat-sessions/${sessionId}/messages`)

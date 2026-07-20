@@ -8,16 +8,22 @@
  *   - providers / ai_profiles / processing_jobs matching e2e/lifecycle name patterns
  *     (e.g. "V1 Lifecycle Provider 1784…", "E2E Lock Profile …")
  *
+ * Soft cleanup (`--soft`, used after successful vitest) age-gates deletes so a
+ * finishing CI job does not wipe in-flight rows from a parallel Actions run
+ * sharing the same Supabase project. Full cleanup (`--yes` without `--soft`)
+ * deletes matching rows regardless of age.
+ *
  * Never deletes by provider `type` alone (that would wipe real Devs.ai / Gemini / v2).
  * Never touches production calling apps (e.g. platform:cadence) or real user sessions.
  *
  * Usage (from repo root, PowerShell):
  *   npx tsx backend/scripts/cleanup-e2e-test-data.ts          # dry-run (counts)
- *   npx tsx backend/scripts/cleanup-e2e-test-data.ts --yes    # apply deletes
+ *   npx tsx backend/scripts/cleanup-e2e-test-data.ts --yes    # apply deletes (no age gate)
  *   npx tsx backend/scripts/cleanup-e2e-test-data.ts --yes --soft
- *     # apply, but exit 0 if Supabase env is missing (used after successful tests)
+ *     # apply, age-gated; exit 0 if Supabase env is missing (used after successful tests)
  *
  * Opt out of post-test cleanup: SKIP_TEST_DATA_CLEANUP=1
+ * Soft min age override (ms): E2E_CLEANUP_MIN_AGE_MS (default 1200000 = 20 min)
  *
  * Requires backend/.env: AI_MANAGER_SUPABASE_URL + AI_MANAGER_SUPABASE_SERVICE_ROLE_KEY
  * (unless --soft / SKIP_TEST_DATA_CLEANUP).
@@ -32,6 +38,8 @@ dotenv.config({ path: path.join(repoRoot, 'backend/.env') });
 
 const E2E_PREFIX = 'e2e%';
 const PAGE = 500;
+/** Soft cleanup default: leave rows younger than 20 minutes for concurrent CI. */
+const DEFAULT_SOFT_MIN_AGE_MS = 20 * 60 * 1000;
 
 /**
  * PostgREST `ilike` patterns for ephemeral test names from backend/test/*.
@@ -86,17 +94,42 @@ function requireEnv(name: string): string {
   return v;
 }
 
-async function countLike(sb: SupabaseClient, table: string, column: string, pattern: string): Promise<number> {
-  const { count, error } = await sb.from(table).select('*', { count: 'exact', head: true }).like(column, pattern);
+/** ISO cutoff for soft age-gate; null means delete matching rows of any age. */
+function resolveOlderThanIso(soft: boolean): string | null {
+  if (!soft) return null;
+  const raw = envOrEmpty('E2E_CLEANUP_MIN_AGE_MS');
+  const minAgeMs = raw ? Number.parseInt(raw, 10) : DEFAULT_SOFT_MIN_AGE_MS;
+  const age = Number.isFinite(minAgeMs) && minAgeMs >= 0 ? minAgeMs : DEFAULT_SOFT_MIN_AGE_MS;
+  return new Date(Date.now() - age).toISOString();
+}
+
+async function countLike(
+  sb: SupabaseClient,
+  table: string,
+  column: string,
+  pattern: string,
+  olderThanIso: string | null,
+): Promise<number> {
+  let q = sb.from(table).select('*', { count: 'exact', head: true }).like(column, pattern);
+  if (olderThanIso) q = q.lt('created_at', olderThanIso);
+  const { count, error } = await q;
   if (error) throw new Error(`${table} count: ${error.message}`);
   return count ?? 0;
 }
 
 /** Delete in pages until none remain (PostgREST max rows per request). */
-async function deleteLike(sb: SupabaseClient, table: string, column: string, pattern: string): Promise<number> {
+async function deleteLike(
+  sb: SupabaseClient,
+  table: string,
+  column: string,
+  pattern: string,
+  olderThanIso: string | null,
+): Promise<number> {
   let deleted = 0;
   for (;;) {
-    const { data, error: selErr } = await sb.from(table).select('id').like(column, pattern).limit(PAGE);
+    let q = sb.from(table).select('id').like(column, pattern).limit(PAGE);
+    if (olderThanIso) q = q.lt('created_at', olderThanIso);
+    const { data, error: selErr } = await q;
     if (selErr) throw new Error(`${table} select: ${selErr.message}`);
     if (!data?.length) break;
     const ids = data.map((r) => r.id as string);
@@ -108,26 +141,33 @@ async function deleteLike(sb: SupabaseClient, table: string, column: string, pat
   return deleted;
 }
 
-type NamedRow = { id: string; name: string };
+type NamedRow = { id: string; name: string; created_at?: string };
 
 async function selectByNamePatterns(
   sb: SupabaseClient,
   table: string,
   patterns: readonly string[],
+  olderThanIso: string | null,
 ): Promise<NamedRow[]> {
   const byId = new Map<string, NamedRow>();
   for (const pattern of patterns) {
     let offset = 0;
     for (;;) {
-      const { data, error } = await sb
+      let q = sb
         .from(table)
-        .select('id, name')
+        .select('id, name, created_at')
         .ilike('name', pattern)
         .range(offset, offset + PAGE - 1);
+      if (olderThanIso) q = q.lt('created_at', olderThanIso);
+      const { data, error } = await q;
       if (error) throw new Error(`${table} select (${pattern}): ${error.message}`);
       if (!data?.length) break;
       for (const row of data) {
-        byId.set(row.id as string, { id: row.id as string, name: row.name as string });
+        byId.set(row.id as string, {
+          id: row.id as string,
+          name: row.name as string,
+          created_at: row.created_at as string | undefined,
+        });
       }
       if (data.length < PAGE) break;
       offset += PAGE;
@@ -155,23 +195,32 @@ function assertNoProtectedProviders(rows: NamedRow[]): void {
 }
 
 /** Providers pointed at *.example.com (and similar) — leftovers from fixture suites. */
-async function selectMockHostProviders(sb: SupabaseClient): Promise<NamedRow[]> {
+async function selectMockHostProviders(
+  sb: SupabaseClient,
+  olderThanIso: string | null,
+): Promise<NamedRow[]> {
   const patterns = ['%example.com%', '%localhost%', '%.test%', '%.invalid%', '%.local%'];
   const byId = new Map<string, NamedRow>();
   for (const pattern of patterns) {
     let offset = 0;
     for (;;) {
-      const { data, error } = await sb
+      let q = sb
         .from('providers')
-        .select('id, name, base_url')
+        .select('id, name, base_url, created_at')
         .ilike('base_url', pattern)
         .range(offset, offset + PAGE - 1);
+      if (olderThanIso) q = q.lt('created_at', olderThanIso);
+      const { data, error } = await q;
       if (error) throw new Error(`providers mock-host select (${pattern}): ${error.message}`);
       if (!data?.length) break;
       for (const row of data) {
         const name = row.name as string;
         if (PROTECTED_PROVIDER_NAMES.has(name)) continue;
-        byId.set(row.id as string, { id: row.id as string, name });
+        byId.set(row.id as string, {
+          id: row.id as string,
+          name,
+          created_at: row.created_at as string | undefined,
+        });
       }
       if (data.length < PAGE) break;
       offset += PAGE;
@@ -198,6 +247,7 @@ async function main(): Promise<void> {
     return;
   }
 
+  const olderThanIso = resolveOlderThanIso(process.argv.includes('--soft'));
   const host = new URL(url).host;
   const sb = createClient(url, key);
 
@@ -205,34 +255,40 @@ async function main(): Promise<void> {
   console.log(`[cleanup-e2e] filter: ${E2E_PREFIX} (e2e-test:*, e2e-diag-*, …)`);
   console.log('[cleanup-e2e] provider/profile/job name patterns: Lifecycle*, E2E *, * Test *, …');
   console.log('[cleanup-e2e] also removes non-protected providers with mock hosts (*.example.com, localhost, …)');
+  if (olderThanIso) {
+    console.log(`[cleanup-e2e] soft age-gate: only rows with created_at < ${olderThanIso}`);
+  } else {
+    console.log('[cleanup-e2e] age-gate: off (full wipe of matching patterns)');
+  }
 
-  const sessions = await countLike(sb, 'chat_sessions', 'calling_application', E2E_PREFIX);
-  const logs = await countLike(sb, 'diagnostic_logs', 'calling_application', E2E_PREFIX);
-  const apps = await countLike(sb, 'calling_applications', 'display_name', E2E_PREFIX);
+  const sessions = await countLike(sb, 'chat_sessions', 'calling_application', E2E_PREFIX, olderThanIso);
+  const logs = await countLike(sb, 'diagnostic_logs', 'calling_application', E2E_PREFIX, olderThanIso);
+  const apps = await countLike(sb, 'calling_applications', 'display_name', E2E_PREFIX, olderThanIso);
 
-  const namedJunkProviders = await selectByNamePatterns(sb, 'providers', PROVIDER_NAME_PATTERNS);
-  const mockHostProviders = await selectMockHostProviders(sb);
+  const namedJunkProviders = await selectByNamePatterns(sb, 'providers', PROVIDER_NAME_PATTERNS, olderThanIso);
+  const mockHostProviders = await selectMockHostProviders(sb, olderThanIso);
   const junkProviderById = new Map<string, NamedRow>();
   for (const p of [...namedJunkProviders, ...mockHostProviders]) junkProviderById.set(p.id, p);
   const junkProviders = [...junkProviderById.values()];
   assertNoProtectedProviders(junkProviders);
-  const junkProfiles = await selectByNamePatterns(sb, 'ai_profiles', PROFILE_NAME_PATTERNS);
-  const junkJobs = await selectByNamePatterns(sb, 'processing_jobs', JOB_NAME_PATTERNS);
+  const junkProfiles = await selectByNamePatterns(sb, 'ai_profiles', PROFILE_NAME_PATTERNS, olderThanIso);
+  const junkJobs = await selectByNamePatterns(sb, 'processing_jobs', JOB_NAME_PATTERNS, olderThanIso);
 
   /* Profiles tied to junk providers but maybe not matching a profile name pattern */
   const junkProviderIds = new Set(junkProviders.map((p) => p.id));
   const { data: linkedProfiles, error: linkErr } = junkProviderIds.size
     ? await sb
         .from('ai_profiles')
-        .select('id, name, provider_id')
+        .select('id, name, provider_id, created_at')
         .in('provider_id', [...junkProviderIds])
-    : { data: [] as { id: string; name: string; provider_id: string }[], error: null };
+    : { data: [] as { id: string; name: string; provider_id: string; created_at?: string }[], error: null };
   if (linkErr) throw new Error(`ai_profiles by provider: ${linkErr.message}`);
 
   const profileById = new Map<string, NamedRow>();
   for (const p of junkProfiles) profileById.set(p.id, p);
   for (const p of linkedProfiles || []) {
-    profileById.set(p.id, { id: p.id, name: p.name });
+    if (olderThanIso && p.created_at && p.created_at >= olderThanIso) continue;
+    profileById.set(p.id, { id: p.id, name: p.name, created_at: p.created_at });
   }
   const allJunkProfiles = [...profileById.values()];
 
@@ -256,9 +312,9 @@ async function main(): Promise<void> {
   }
 
   // Sessions / logs first so calling_applications rows are not left referenced.
-  const delSessions = await deleteLike(sb, 'chat_sessions', 'calling_application', E2E_PREFIX);
-  const delLogs = await deleteLike(sb, 'diagnostic_logs', 'calling_application', E2E_PREFIX);
-  const delApps = await deleteLike(sb, 'calling_applications', 'display_name', E2E_PREFIX);
+  const delSessions = await deleteLike(sb, 'chat_sessions', 'calling_application', E2E_PREFIX, olderThanIso);
+  const delLogs = await deleteLike(sb, 'diagnostic_logs', 'calling_application', E2E_PREFIX, olderThanIso);
+  const delApps = await deleteLike(sb, 'calling_applications', 'display_name', E2E_PREFIX, olderThanIso);
 
   // Jobs → profiles → providers. Deleting a provider CASCADE-deletes its ai_profiles
   // (and those CASCADE chat_sessions); jobs referencing profiles become SET NULL.
