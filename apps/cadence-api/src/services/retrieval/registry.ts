@@ -56,7 +56,7 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
 
   get_objectives: {
     name: 'get_objectives',
-    description: 'Active high-level objectives (captured/confirmed/locked goals) with measure + status.',
+    description: 'Active high-level objectives (captured/confirmed/committed goals) with measure + status.',
     domains: ['goals'],
     async run(userId) {
       return listGoalsByStatus(userId, ['captured', 'confirmed', 'committed']);
