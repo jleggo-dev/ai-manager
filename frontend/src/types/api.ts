@@ -128,13 +128,10 @@ export interface AppSetting {
   workspace_id: string;
 }
 
+/** Mirrors backend `CallingApplicationRow` / `calling_applications` columns. */
 export interface CallingApplication {
   id: string;
-  name: string;
-  slug: string;
-  description?: string | null;
-  display_name?: string;
-  is_active: boolean;
+  display_name: string;
   workspace_id: string;
   created_at: string;
 }
@@ -187,21 +184,78 @@ export interface WorkflowStep {
   workspace_id?: string;
 }
 
+/** Nested JSON shapes commonly written by `ai-diagnostics` and read by UI tabs. */
+export interface DiagnosticLlmTiming {
+  durationMs?: number;
+  model?: string;
+  provider?: string;
+}
+
+export interface DiagnosticLlmRequest {
+  promptContent?: string;
+  promptLength?: number;
+  model?: string;
+  provider?: string;
+}
+
+export interface DiagnosticLlmResponse {
+  rawContent?: string;
+  rawLength?: number;
+  finishReason?: string;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+}
+
+export interface DiagnosticFormattingTiming {
+  durationMs?: number;
+  rulesApplied?: number;
+}
+
+export interface DiagnosticSupabaseTimingOp {
+  durationMs?: number;
+  operation?: string;
+  success?: boolean;
+  error?: string;
+}
+
+/** Common `metadata` keys written by diagnostic sessions (plus open bag). */
+export interface DiagnosticMetadata {
+  failoverUsed?: string | boolean;
+  primaryModel?: string;
+  failoverModel?: string;
+  failoverProviderName?: string;
+  failoverProviderType?: string;
+  primaryModelError?: string;
+  streamModel?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Mirrors backend `DiagnosticLogRow` / `diagnostic_logs` columns.
+ * Nested JSON fields are narrowed for UI consumption.
+ */
 export interface DiagnosticLog {
   id: string;
-  processing_job_id?: string;
-  chat_session_id?: string;
-  calling_application?: string;
+  processing_job_id?: string | null;
+  chat_session_id?: string | null;
+  calling_application?: string | null;
   status: string;
-  total_duration_ms?: number;
-  request_payload?: Record<string, unknown>;
-  supabase_timing?: Record<string, unknown>[];
-  llm_timing?: Record<string, unknown>;
-  llm_request?: Record<string, unknown>;
-  llm_response?: Record<string, unknown>;
-  formatting_timing?: Record<string, unknown>;
-  error_message?: string;
-  metadata?: Record<string, unknown>;
+  user_id?: string | null;
+  auth_mode?: string | null;
+  api_key_id?: string | null;
+  request_payload?: Record<string, unknown> | null;
+  supabase_timing?: DiagnosticSupabaseTimingOp[] | null;
+  llm_timing?: DiagnosticLlmTiming | null;
+  llm_request?: DiagnosticLlmRequest | null;
+  llm_response?: DiagnosticLlmResponse | null;
+  formatting_timing?: DiagnosticFormattingTiming | null;
+  total_duration_ms?: number | null;
+  error_message?: string | null;
+  metadata?: DiagnosticMetadata | null;
+  workspace_id: string;
   created_at: string;
 }
 

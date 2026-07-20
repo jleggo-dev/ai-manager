@@ -21,58 +21,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import { IconChevronRight, IconX, IconAlertTriangle, IconCircleX, IconRefresh } from '@tabler/icons-react';
 import * as api from '../../services/api';
-import type { ProcessingJob } from '../../types/api';
-
-interface SupabaseTimingOp {
-  durationMs: number;
-  operation: string;
-  success: boolean;
-  error?: string;
-}
-
-interface DiagnosticLogEntry {
-  id: string;
-  status: string;
-  calling_application?: string;
-  created_at: string;
-  total_duration_ms?: number;
-  error_message?: string | null;
-  metadata?: {
-    failoverUsed?: string | boolean;
-    primaryModel?: string;
-    failoverModel?: string;
-    failoverProviderName?: string;
-    failoverProviderType?: string;
-    primaryModelError?: string;
-  };
-  supabase_timing?: SupabaseTimingOp[];
-  llm_timing?: {
-    durationMs: number;
-    model: string;
-    provider: string;
-  };
-  llm_request?: {
-    promptContent?: string;
-    promptLength?: number;
-    model?: string;
-    provider?: string;
-  };
-  llm_response?: {
-    rawContent?: string;
-    rawLength?: number;
-    finishReason?: string;
-    usage?: {
-      prompt_tokens?: number;
-      completion_tokens?: number;
-      total_tokens?: number;
-    };
-  };
-  formatting_timing?: {
-    durationMs: number;
-    rulesApplied: number;
-  };
-  request_payload?: Record<string, unknown>;
-}
+import type { DiagnosticLog, DiagnosticSupabaseTimingOp, ProcessingJob } from '../../types/api';
 
 interface DiagnosticsConfig {
   enabled?: boolean;
@@ -86,16 +35,16 @@ interface DiagnosticsTabProps {
 
 export default function DiagnosticsTab({ selectedJob, selectedJobFull }: DiagnosticsTabProps) {
   const confirm = useConfirm();
-  const [logs, setLogs] = useState<DiagnosticLogEntry[]>([]);
+  const [logs, setLogs] = useState<DiagnosticLog[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedLog, setSelectedLog] = useState<DiagnosticLogEntry | null>(null);
+  const [selectedLog, setSelectedLog] = useState<DiagnosticLog | null>(null);
 
   const loadLogs = useCallback(async () => {
     if (!selectedJob) return;
     try {
       setLoading(true);
       const result = await api.listDiagnosticLogs({ processingJobId: selectedJob, limit: 50 });
-      setLogs(result.data as unknown as DiagnosticLogEntry[]);
+      setLogs(result.data);
     } catch (err: unknown) {
       notifications.show({ title: 'Error', message: err instanceof Error ? err.message : String(err), color: 'red' });
     } finally {
@@ -297,7 +246,7 @@ export default function DiagnosticsTab({ selectedJob, selectedJobFull }: Diagnos
                         Supabase Operations
                       </Text>
                       {(Array.isArray(selectedLog.supabase_timing) ? selectedLog.supabase_timing : []).map(
-                        (op: SupabaseTimingOp, i: number) => (
+                        (op: DiagnosticSupabaseTimingOp, i: number) => (
                           <Group key={`op-${i}`} gap="xs" mb={2}>
                             <Badge size="xs" color={op.success ? 'green' : 'red'} variant="light">
                               {op.durationMs}ms

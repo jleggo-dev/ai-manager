@@ -441,9 +441,8 @@ function DiagnosticDetail({ diagnostic }: { diagnostic: DiagnosticLog | null }) 
   }
 
   const meta = diagnostic.metadata ?? {};
-  const llmTiming = diagnostic.llm_timing as Record<string, unknown> | null;
-  const llmResponse = diagnostic.llm_response as Record<string, unknown> | null;
-  const usage = (llmResponse?.usage ?? {}) as Record<string, unknown>;
+  const llmTiming = diagnostic.llm_timing;
+  const usage = diagnostic.llm_response?.usage ?? {};
 
   return (
     <Stack gap="xs">
@@ -458,7 +457,7 @@ function DiagnosticDetail({ diagnostic }: { diagnostic: DiagnosticLog | null }) 
         )}
         {llmTiming && (
           <Badge size="xs" variant="light" color="violet">
-            LLM: {formatMs(llmTiming.durationMs as number | undefined)}
+            LLM: {formatMs(llmTiming.durationMs)}
           </Badge>
         )}
         {usage.prompt_tokens != null && (

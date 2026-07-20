@@ -81,7 +81,12 @@ const mockJob = {
   updated_at: '2024-01-01',
 };
 
-const mockCallingApp = { id: 'app-1', display_name: 'app-1', is_active: true, workspace_id: 'ws-1' };
+const mockCallingApp = {
+  id: 'app-1',
+  display_name: 'app-1',
+  workspace_id: 'ws-1',
+  created_at: '2024-01-01T00:00:00Z',
+};
 
 function renderComponent() {
   return render(
