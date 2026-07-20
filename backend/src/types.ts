@@ -285,12 +285,12 @@ export interface LlmModelRow {
   updated_at: string;
 }
 
+/** Mirrors `calling_applications` columns (see e2e-schema-validation). */
 export interface CallingApplicationRow {
   id: string;
   display_name: string;
   workspace_id: string;
   created_at: string;
-  updated_at?: string;
 }
 
 export interface AppSettingRow {
@@ -302,20 +302,28 @@ export interface AppSettingRow {
   updated_at: string;
 }
 
+/**
+ * Mirrors `diagnostic_logs` columns (see e2e-schema-validation).
+ * JSONB columns stay as `Record` at the row boundary; the frontend may
+ * narrow nested shapes for UI consumption.
+ */
 export interface DiagnosticLogRow {
   id: string;
   processing_job_id?: string | null;
   chat_session_id?: string | null;
   calling_application?: string | null;
   status: string;
-  auth_mode?: string | null;
   user_id?: string | null;
-  input_text?: string | null;
-  output_text?: string | null;
-  formatted_text?: string | null;
-  total_duration_ms?: number | null;
+  auth_mode?: string | null;
+  api_key_id?: string | null;
+  request_payload?: Record<string, unknown> | null;
+  supabase_timing?: Record<string, unknown>[] | null;
   llm_timing?: Record<string, unknown> | null;
+  llm_request?: Record<string, unknown> | null;
   llm_response?: Record<string, unknown> | null;
+  formatting_timing?: Record<string, unknown> | null;
+  total_duration_ms?: number | null;
+  error_message?: string | null;
   metadata?: Record<string, unknown> | null;
   workspace_id: string;
   created_at: string;

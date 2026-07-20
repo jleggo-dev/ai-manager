@@ -94,7 +94,15 @@ export default function JobFormModal({
                   .replace(/(^-|-$)/g, '');
                 if (!trimmed) return null;
                 const newItem = { value: trimmed, label: trimmed };
-                setCallingApps((prev) => [...prev, { id: trimmed, display_name: trimmed } as CallingApplication]);
+                setCallingApps((prev) => [
+                  ...prev,
+                  {
+                    id: trimmed,
+                    display_name: trimmed,
+                    workspace_id: '',
+                    created_at: new Date().toISOString(),
+                  },
+                ]);
                 setForm((prev: ProcessingJobFormData) => ({ ...prev, calling_application_id: trimmed }));
                 return newItem;
               },

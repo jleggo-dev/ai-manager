@@ -203,26 +203,6 @@ export function getJobConfig(job: ProcessingJob | null): ProcessingJobConfig {
   return (job?.config ?? {}) as ProcessingJobConfig;
 }
 
-/**
- * Local shape for a diagnostic log entry as consumed by the analytics/advanced
- * tabs. NOTE: this intentionally mirrors the pre-existing local type from
- * ProcessingJobManager.tsx, which is a narrower/differently-named shape than
- * `types/api.ts`'s own `DiagnosticLog` (tracked separately as FE-10 — not
- * addressed here as this is a pure structural move).
- */
-export interface DiagnosticLog {
-  status?: string;
-  llm_timing?: { durationMs?: number; model?: string; provider?: string };
-  total_duration_ms?: number;
-  llm_response?: {
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
-    rawContent?: string;
-    finishReason?: string;
-  };
-  llm_request?: { model?: string; provider?: string };
-  metadata?: { primaryModel?: string; failoverUsed?: string | boolean };
-}
-
 export interface AdvancedConfig {
   diagnostics: { enabled: boolean; mode: string };
   timeout: { llmTimeoutMs: number; totalTimeoutMs: number };

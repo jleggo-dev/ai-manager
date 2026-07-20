@@ -31,7 +31,7 @@ import {
   IconActivity,
 } from '@tabler/icons-react';
 import * as api from '../../../services/api';
-import type { ProcessingJob } from '../../../types/api';
+import type { DiagnosticLog, ProcessingJob } from '../../../types/api';
 import type {
   ExpectedSchema,
   SchemaFieldDefExtended,
@@ -39,7 +39,6 @@ import type {
   SchemaValidationResult,
   FieldFrequency,
   AnalyticsData,
-  DiagnosticLog,
 } from './types';
 import { getJobConfig } from './types';
 import ScoreBadge from '../../atoms/ScoreBadge';
@@ -393,7 +392,7 @@ export default function AnalyticsTab({
     try {
       setLoading(true);
       const result = await api.listDiagnosticLogs({ processingJobId: selectedJob, limit: 50 });
-      setLogs(result.data as unknown as DiagnosticLog[]);
+      setLogs(result.data);
     } catch (err: unknown) {
       notifications.show({ title: 'Error', message: err instanceof Error ? err.message : String(err), color: 'red' });
     } finally {
