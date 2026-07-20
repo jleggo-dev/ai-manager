@@ -34,8 +34,8 @@ source report that contains the full current-problem/target-design/migration-ste
    schema; paired FE/BE contract tests guard regression. The old monoliths and RBAC gap are gone
    (splits + BE-03 Done).
 4. **Cadence coverage is improving but uneven.** `apps/cadence-api` now has real suites (plan
-   commit, nutrition, coach-stream, aim seam). `apps/cadence-web` gained ReviewScreen coverage
-   via WEB-01; WEB-03…04 remain the open Phase 2 web P1s.
+   commit, nutrition, coach-stream, aim seam). `apps/cadence-web` gained ReviewScreen (WEB-01)
+   and OccurrenceSheet (WEB-03) coverage; **WEB-04** remains the open Phase 2 web P1.
 5. Read §4.2 for the accurate remaining backlog, §5 for durable goals, §6 for multi-agent
    orchestration.
 6. **CI gate between batches:** do not start the next parallel batch (and do not merge) while
@@ -391,17 +391,19 @@ per item / per area intro).
 > - **Docs restore** (PR #34) — re-applied FE-03/CROSS-01 progress after #33 squash overwrote the blurb.
 > - **WEB-02** — split cadence-web `lib/api.ts` into domain modules + barrel; extract coach SSE
 >   parser (`lib/api/coach-sse.ts`) with characterization tests (PR #41).
+> - **WEB-03** — split `OccurrenceSheet` into `useOccurrenceDetail` + session/meal/baseline/weigh-in
+>   panels under `features/plan/occurrence/`; pure formatters + dispatcher tests; removed from
+>   eslint size-gate grandfather list (`refactor/web-03-occurrence-sheet`, PR #44).
 > - **WEB-01** — split `ReviewScreen` into wizard hooks + 4 step components; test-first
 >   `unitConversion` (plausibleKg 20–500 clamp / corruption fallback) + preview/lock recovery
 >   (`refactor/web-01-review-screen`, PR #45). Dropped from eslint `max-lines` allowlist.
 >
 > **Remaining Phase 2 P1 (accurate as of PR #45):**
-> - **WEB-03** (L) — OccurrenceSheet panel split
 > - **WEB-04** (M) — Today/Progress/Plan card dedup (natural CROSS-03 pilot host)
 > - **CROSS-03** — TanStack Query pilot (opportunistic; prefer with WEB-04, not a big-bang)
 >
 > **Batch 7:** **WEB-02** ✅ (PR #41) · **FE-10** ✅ (PR #42) · **API-06** ✅ (PR #40).
-> **Batch 8:** **WEB-01** ✅ (PR #45). Remaining L/M web: WEB-03 / WEB-04 (+ CROSS-03 with WEB-04).
+> **Batch 8:** **WEB-03** ✅ (PR #44) · **WEB-01** ✅ (PR #45). Remaining: WEB-04 (+ CROSS-03).
 
 #### Backend (report 01)
 
@@ -443,7 +445,7 @@ per item / per area intro).
 |---|---|---|---|---|
 | **WEB-01** ✅ **Done** (`refactor/web-01-review-screen`, PR #45) | Split `ReviewScreen.tsx` (648 lines, 4-step wizard + unit-conversion math + commit flow) into `useReviewWizard`/`useDraftField`/`unitConversion.ts` + 4 step components | L | Medium | **Done notes:** test-first `unitConversion.ts` (`plausibleKg` 20–500, corrupted-current→start fallback, kg↔lbs / cm↔ft-in round-trips, draft parsers) + `groupByGoal` + `useReviewWizard` preview/lock/`recoverIfAlreadyCommitted` characterization tests (27). Steps: `GoalsStep`/`AboutYouStep`/`GearStep`/`LockStep`; shell ~158 lines. Dropped from eslint `max-lines` allowlist. Structural only. Verify: cadence-web vitest 41/41; lint/typecheck/build clean. |
 | **WEB-02** ✅ **Done** (`refactor/web-02-split-api`, PR #41) | Split `lib/api.ts` (~536 lines, 6 unrelated domains) into `lib/api/{http,coach,plan,occurrence,nutrition,review,dev}.ts` behind a barrel; extract the SSE parser into a testable unit | M | Low | **Done notes:** thin barrel at `lib/api.ts`; domains under `lib/api/*`; coach stream parsing in `coach-sse.ts` (`createCoachSseParseState` / `pushCoachSseChunk` / `applyCoachSseData`) with 8 characterization tests (chunk-split, skip `message.complete`/`v2.response.created`, `[DONE]`, keepalives). Dev-account selectors live in `http.ts` (auth headers; avoids http↔dev cycle). Call-site import paths unchanged. Verify: cadence-web `tsc` + vitest (coach-sse + existing). |
-| **WEB-03** | Split `OccurrenceSheet.tsx` (487 lines, 5 unrelated domains behind one occurrence id) into `useOccurrenceDetail` + `SessionLogPanel`/`MealLogPanel`+`useMealLog`/`BaselineReadPanel`/`WeighInPanel` | L | Medium | Touches meal-photo-capture and weigh-in — unrecoverable-if-broken user input; extract pure formatters + add tests first, manual QA pass per extracted panel |
+| **WEB-03** ✅ **Done** (`refactor/web-03-occurrence-sheet`, PR #44) | Split `OccurrenceSheet.tsx` (487 lines, 5 unrelated domains behind one occurrence id) into `useOccurrenceDetail` + `SessionLogPanel`/`MealLogPanel`+`useMealLog`/`BaselineReadPanel`/`WeighInPanel` | L | Medium | **Done notes:** thin dispatcher at `OccurrenceSheet.tsx`; modules under `features/plan/occurrence/` (`format`, hooks, panels). Pure formatters + `isFoodRow`/`isWeighInPending` + resize math tested (`format.test.ts`); dispatcher covers 404→gone + food/weigh/session routing (`OccurrenceSheet.test.tsx`). Structural only — meal-photo/weigh-in call order preserved. Removed from eslint size-gate grandfather. Verify: cadence-web lint/tsc/vitest 27/27 + build. |
 | **WEB-04** | De-duplicate `TodayDashboard`'s `DashCard`/`RhythmRow` against `ProgressView`'s near-identical `Card` and `PlanView`'s near-identical `Item` into shared `ProgressCards.tsx`/`OccurrenceRow.tsx`/`useGoalEventAdd.ts` | M | Low-Medium | Snapshot both implementations' current output *before* merging — they may have already silently drifted |
 
 #### Shared packages & seam (report 05)
