@@ -41,7 +41,7 @@ source report that contains the full current-problem/target-design/migration-ste
    commit, nutrition, coach-stream, aim seam). `apps/cadence-web` gained ReviewScreen (WEB-01 #45),
    OccurrenceSheet (WEB-03 #44), card-row dedup (WEB-04 #46), and TanStack nutrition-day
    (**CROSS-03** ✅ Done both halves — AI Admin #49 + Cadence #50).
-5. Read §4.2 remaining backlog (FE-11/13, BE-03a, CI-01 human, Phase 3 P2 / batch 10 in flight),
+5. Read §4.2 remaining backlog (FE-13, BE-03a, CI-01 human, Phase 3 P2 / batch 10 in flight),
    §5 for durable goals, §6 for multi-agent orchestration.
 6. **CI gate between batches:** do not start the next parallel batch (and do not merge) while
    integration-branch / PR CI is red. Branch protection on `main` now **requires** status checks
@@ -419,12 +419,13 @@ merge log (originally via `feat/cadence`, then `main`):
 > - Cleanup-after-successful-tests (+ lifecycle providers) ✅ **Done** (PR #54)
 >
 > **Phase 3 / batch 10** 🔄 **in progress** (orchestrator-assigned):
-> - **FE-11** — extract `useTestChatStream` from `TestChatPanel` (§4.7)
+> - **FE-11** ✅ **Done** — extract `useTestChatStream` from `TestChatPanel` (PR #63; §4.7)
 > - **CI-06** ✅ **Done** — ESLint nearest-config guard/docs (PR #60; §4.6)
 > - **API-P2** slice — dead `dossier` / `rollingConsistency` metrics tests (§4.4)
 >
 > **Remaining backlog (accurate as of 2026-07-20 — not Phase 2 P1):**
-> - **FE-11 / FE-13** — deferred FE size splits (P2; §4.7–4.8); FE-11 in batch 10
+> - **FE-13** — deferred FE size splits (P2; §4.8)
+> - **FE-11** ✅ **Done** — `useTestChatStream` extract (PR #63; §4.7)
 > - **FE-14** ✅ **Done** — `ProfileFormModal` split (PR #56; §4.8)
 > - **BE-03a** — diagnostic-logs GET gating (needs product sign-off; §4.9)
 > - **CI-01** — rotate Devs.ai v1 key + flip `DEVS_AI_V1_KEY_KNOWN_EXPIRED` (human; §4.6)
@@ -606,7 +607,7 @@ are not lost. Neither blocks FE-02 Done.
 
 | ID | Item | Area | Priority | Effort | Risk | Status |
 |---|---|---|---|---|---|---|
-| **FE-11** | Extract `useTestChatStream` from `ai-profiles/TestChatPanel.tsx` (~675 lines) — isolate SSE parsing / OAuth-resume logic from rendering; leave the panel as a thin view | Frontend | P2 | M | Medium (streaming/OAuth paths) | Not Started |
+| **FE-11** ✅ **Done** (`refactor/fe-11-use-test-chat-stream`, PR #63) | Extract `useTestChatStream` from `ai-profiles/TestChatPanel.tsx` (~675 lines) — isolate SSE parsing / OAuth-resume logic from rendering; leave the panel as a thin view | Frontend | P2 | M | Medium (streaming/OAuth paths) | **Done** — hook + `lib/test-chat-stream` helpers; panel ~290 lines; dropped eslint max-lines override; unit + existing streaming/tool-auth tests |
 | **FE-12** | Research architectural overlap between AI Admin `TestChatPanel` streaming/session UI and Cadence web coach chat (SSE + session lifecycle) — decide whether a shared client helper is worth extracting later (research only; not a merge of the two UIs) | Frontend / Cadence | P3 | S (research) | Low | Not Started |
 
 ### 4.8 Newly discovered / deferred — FE-01 supervisor review (PR #8)
@@ -779,8 +780,8 @@ Every item ID in §4 should carry one of these statuses, updated by whichever ro
 
 Update Status cells in place as items move; this file is the single source of truth. Phase 0–1 and
 **Phase 2 P1 are Done**; **batch 9 is Done**; **Phase 3 / batch 10 is in progress**. See §4.2
-remaining backlog for deferred P2/P3 + human items (FE-11/13, BE-03a, CI-01 human, Phase 3 P2).
-**INFRA-02** required-check flip is Done (2026-07-20).
+remaining backlog for deferred P2/P3 + human items (FE-13, BE-03a, CI-01 human, Phase 3 P2).
+**INFRA-02** required-check flip is Done (2026-07-20). **FE-11** Done (PR #63).
 
 ---
 
