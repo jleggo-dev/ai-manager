@@ -234,7 +234,7 @@ scripts; never wipe production or real-auth users.
 | Surface | Safe target | Command (repo root, PowerShell) |
 |---------|-------------|-----------------------------------|
 | Cadence scratch accounts (`account-1` / `account-2`) | Allowlisted UUIDs only | `npm run cleanup:cadence-dev-accounts` |
-| AI Admin E2E leftovers | `calling_application` / `display_name` LIKE `e2e%` only | Dry-run: `npx tsx backend/scripts/cleanup-e2e-test-data.ts` then `npm run cleanup:e2e-ai-admin` |
+| AI Admin E2E leftovers | `calling_application` / `display_name` LIKE `e2e%`; plus providers/profiles/jobs matching lifecycle & test name patterns (never by `type` alone) | Dry-run: `npx tsx backend/scripts/cleanup-e2e-test-data.ts` then `npm run cleanup:e2e-ai-admin` |
 | Both | Same as above | `npm run cleanup:test-data` |
 
 Also useful: `node --import tsx apps/cadence-api/scripts/account.ts list` (inventory) /
@@ -245,7 +245,10 @@ Also useful: `node --import tsx apps/cadence-api/scripts/account.ts list` (inven
 - Requires local `.env` credentials (`apps/cadence-api/.env`, `backend/.env`). **Never commit
   secrets; never print full keys.**
 - Cadence reset only touches allowlisted scratch accounts — not real JWT users.
-- AI Admin cleanup only deletes `e2e%` tagged rows (sessions, diagnostic logs, calling apps).
+- AI Admin cleanup deletes `e2e%` tagged rows (sessions, diagnostic logs, calling apps) **and**
+  ephemeral providers/profiles/jobs whose **names** match test patterns (e.g. `V1 Lifecycle
+  Provider*`, `E2E * Provider*`). It does **not** delete by provider type — real `Devs.ai`,
+  `Devs.ai v2`, and `Google Gemini` rows are protected by exact-name guard.
 - If you cannot tell **dev vs production**, or the workspace/project looks wrong — **stop and
   ask** rather than guessing a destructive wipe.
 
@@ -279,7 +282,7 @@ plan when applicable.
 | `npm run prepush` | Step 4 (and after each fix loop) |
 | `npm test` | Steps 4–5 |
 | `npm run test:e2e` | Step 4 when chat/API/integration touched |
-| `npm run cleanup:test-data` | Step 12b — Cadence scratch accounts + AI Admin `e2e%` leftovers |
+| `npm run cleanup:test-data` | Step 12b — Cadence scratch accounts + AI Admin `e2e%` / lifecycle-provider leftovers |
 | `npm run ci` | Stricter than prepush (no Vite build); optional extra gate |
 | `gh pr checks` | Steps 7, 11, 12 |
 

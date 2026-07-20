@@ -7,6 +7,8 @@ const TEST_USER_ID = '00000000-0000-4000-8000-0000000000c1';
 
 let v2ProviderId: string;
 let v2ProfileId: string;
+let v1ProviderId: string;
+let v1ProfileId: string;
 let v1SessionId: string;
 let v2SessionId: string;
 
@@ -46,23 +48,25 @@ beforeAll(async () => {
       api_key: 'test-key-v1-lifecycle',
     });
   expect(v1Prov.status).toBe(201);
+  v1ProviderId = v1Prov.body.id;
 
   const v1Prof = await request(app)
     .post('/api/ai-profiles')
     .set(authHeaders())
     .send({
       name: uniqueName('V1 Lifecycle Profile'),
-      provider_id: v1Prov.body.id,
+      provider_id: v1ProviderId,
       external_ai_id: 'test-model',
       mode: 'completion',
       profile_type: 'model',
     });
   expect(v1Prof.status).toBe(201);
+  v1ProfileId = v1Prof.body.id;
 
   const openV1 = await request(app)
     .post('/api/chat-sessions')
     .set(authHeaders())
-    .send({ aiProfileId: v1Prof.body.id, userId: TEST_USER_ID, callingApplication: 'e2e-test:v2-lifecycle' });
+    .send({ aiProfileId: v1ProfileId, userId: TEST_USER_ID, callingApplication: 'e2e-test:v2-lifecycle' });
   expect(openV1.status).toBe(201);
   v1SessionId = openV1.body.sessionId;
 
@@ -75,26 +79,28 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (v1SessionId)
+  /* Sessions → profiles → providers. V1 rows were previously leaked (never deleted). */
+  for (const sessionId of [v1SessionId, v2SessionId]) {
+    if (!sessionId) continue;
     await request(app)
-      .delete(`/api/chat-sessions/${v1SessionId}`)
+      .delete(`/api/chat-sessions/${sessionId}`)
       .set(authHeaders())
       .catch(() => {});
-  if (v2SessionId)
+  }
+  for (const profileId of [v1ProfileId, v2ProfileId]) {
+    if (!profileId) continue;
     await request(app)
-      .delete(`/api/chat-sessions/${v2SessionId}`)
+      .delete(`/api/ai-profiles/${profileId}`)
       .set(authHeaders())
       .catch(() => {});
-  if (v2ProfileId)
+  }
+  for (const providerId of [v1ProviderId, v2ProviderId]) {
+    if (!providerId) continue;
     await request(app)
-      .delete(`/api/ai-profiles/${v2ProfileId}`)
+      .delete(`/api/providers/${providerId}`)
       .set(authHeaders())
       .catch(() => {});
-  if (v2ProviderId)
-    await request(app)
-      .delete(`/api/providers/${v2ProviderId}`)
-      .set(authHeaders())
-      .catch(() => {});
+  }
 });
 
 describe('devs-ai-v2 lifecycle routes', () => {
