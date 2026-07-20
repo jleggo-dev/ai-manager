@@ -29,7 +29,7 @@ source report that contains the full current-problem/target-design/migration-ste
    **Batch 9 is Done** (FE-14 #56 · CI-08 #53 · CI-09 #55; cleanup-after-tests #54). **Phase 3 /
    batch 10 Cadence+BE residual closed** (API-P2 #88 · WEB-P2 #89 · BE allowlist slim #90;
    **CI-06 Done** #60). See §4.2 / §4.4 for the closed log and remaining deferrals (CI-07, CSS
-   Modules watch, chat-sessions/lifecycle allowlist, FE-P2 densest pages).
+   Modules watch, chat-sessions/lifecycle allowlist).
 2. **Safety net is required on `main`.** INFRA-01…05 landed (PRs #3–#5). Path-filtered CI runs on
    every PR; GitHub branch protection now **requires** status checks to pass before merging
    (**INFRA-02 required-check flip Done** — user-confirmed 2026-07-20; `gh api …/protection`
@@ -116,7 +116,7 @@ numbers verbatim.
 | **SSE line-buffering/parsing logic independently reimplemented 3+ times** | Reports 01/03/05 | **CROSS-02** | ✅ Done (BE-02 #18 + API-03 #25) |
 | **Template-interpolation logic reimplemented independently** instead of using canonical helpers | Report 02 §1.4/§4.1 (3× inside frontend) | FE-01/FE-03 sub-tasks | ✅ Done with those items |
 | **No data-fetching cache layer anywhere React is used** — hand-rolled `useState`+`useEffect`+manual error notification, duplicated fetches | Report 02 §6 (AI Admin frontend), Report 04 §6 (Cadence web) | **CROSS-03** | ✅ Done both halves — AI Admin providers list (#49) + Cadence nutrition-day (#50) |
-| **Zero automated test coverage exactly where business/security risk is highest** | All six reports | pervasive theme | Partially closed (API-01/04/05, FE-09, WEB-01…04, CROSS-03, API-P2/WEB-P2 Done #88/#89, …); FE-P2 densest pages + CI-07 still open |
+| **Zero automated test coverage exactly where business/security risk is highest** | All six reports | pervasive theme | Partially closed (API-01/04/05, FE-09, WEB-01…04, CROSS-03, API-P2/WEB-P2 Done #88/#89, FE-P2 densest Done #85/#87/#91–#94/#96–#100, …); CI-07 still open |
 | **Two-Supabase-projects architecture** has implications for CI secret-scoping | Report 06 §4.4 | folded into **INFRA-02** | ✅ Done (path-filtered jobs) |
 
 ---
@@ -424,9 +424,9 @@ merge log (originally via `feat/cadence`, then `main`):
 > - **CI-06** ✅ **Done** — ESLint nearest-config guard/docs (PR #60; §4.6)
 > - **API-P2** slice — dead `dossier` / `rollingConsistency` metrics tests (§4.4)
 > - **BE-P2** ✅ **Done** — types + health-checks splits (PR #81; §4.4)
-> - **FE-P2** 🟡 **Partial** — frontend size-gate allowlist cleared (#69 LovableGuide, #71 HealthDashboard,
->   #72 DiagnosticsTab, #73 useHealthCheckProfilesData); STATUS_COLORS/`formatTimestamp` consolidation Done (#82).
->   Remaining densest FE-P2 files still open (Workflow*, FailoverConfigModal, InvestigationPanel residual size, …).
+> - **FE-P2** ✅ **Done** — allowlist cleared (#69/#71/#72/#73); STATUS_COLORS/`formatTimestamp` (#82);
+>   densest residual shells split (#85 WorkflowExecutionLog, #87 FailoverConfigModal, #91 ManageLlmsModal,
+>   #92 HealthCheck config/providers, #93 InvestigationPanel, #94/#96–#100 workflow-editor cluster).
 >
 > **Remaining backlog (accurate as of 2026-07-20 — not Phase 2 P1):**
 > - **FE-13** ✅ **Done** — deferred FE size splits (`JobsTab` / `AnalyticsTab` / `SchemaValidationPanel` / `RuleSetsTab`; §4.8)
@@ -570,7 +570,7 @@ chat-sessions/lifecycle allowlist).
 | ID | Area | Items | Pointer |
 |---|---|---|---|
 | **BE-P2** ✅ **Done** (`refactor/phase3-be-p2`, PR #81) | Backend | **Done:** `types.ts` → domain modules (`types/auth`, `config`, `llm`, `db/*`) + barrel re-export (call sites unchanged); `models/health-checks` split by table (`provider-keys` / `profiles` / `incidents`; checks+runs stay in `health-checks.ts` with re-exports); `routes/health-checks` split into table-scoped sub-routers + thin composer. **Allowlist residual (#90):** `chat-messaging` + `job-execution` cleared from size grandfather; **still allowlisted:** `chat-session-lifecycle.ts`, `routes/chat-sessions.ts`. **Deferred (opportunistic, still under size gate):** `ai-profiles` / `providers` / `processing-jobs` / `workflows` route splits — revisit only if a file grows past the gate. Structural only. | Report 01 §4 (P2 sections) |
-| **FE-P2** 🟡 **Partial** | Frontend | **Allowlist cleared (#69/#71/#72/#73):** `LovableGuidePage` → `pages/lovable-guide/*`; `HealthDashboardPage` → `pages/health-dashboard/*`; `DiagnosticsTab` → `organisms/diagnostics/*`; `useHealthCheckProfilesData` → `hooks/health-check-profiles/*` (fn-cap). Frontend eslint size-gate grandfather block removed. **STATUS_COLORS/`formatTimestamp` (#82 Done).** **Still open (size-only densest):** `InvestigationPanel`, `WorkflowExecutionLog`, `FailoverConfigModal`, `WorkflowEditorPage`, `WorkflowTestSimulator`, `StepVariableMapper`, `ManageLlmsModal`, `HealthCheckConfigPage`, `WorkflowDetailPage`, `HealthCheckProvidersPage`, `WorkflowVariablePanel`, `WorkflowManager` | Report 02 §4 (4.11-4.23), §6 |
+| **FE-P2** ✅ **Done** | Frontend | **Allowlist cleared (#69/#71/#72/#73).** **STATUS_COLORS/`formatTimestamp` (#82).** **Densest residual shells split (structural only):** #85 `WorkflowExecutionLog` → `organisms/workflow-execution-log/*`; #87 `FailoverConfigModal` → `molecules/failover-config/*`; #91 `ManageLlmsModal` → `organisms/manage-llms/*`; #92 `HealthCheckConfigPage`/`HealthCheckProvidersPage` → `pages/health-check-{config,providers}/*`; #93 `InvestigationPanel` → `components/investigation/*`; #94 `WorkflowEditorPage`; #96 `WorkflowTestSimulator`; #97 `StepVariableMapper`; #98 `WorkflowDetailPage`; #99 `WorkflowVariablePanel`; #100 `WorkflowManager` (colocated folders; original import paths stay thin shells). | Report 02 §4 (4.11-4.23), §6 |
 | **API-P2** ✅ **Done** | Cadence API | **Done (#65 + #75 + #88):** dead dossier/completion; `rollingConsistency` tests + type narrow; registry `render`/`rows` tests; `capture.ts`/`situation.ts` unit tests; Zod on nutrition + plan/review/progress writes; `OccurrenceListRow` slim return from `listOccurrences`; weigh-in typed Baseline merge (no `as never`); nomenclature `locked`→`committed` in registry + `tools/equipment`→`equipment` in coach-context. | Report 03 §3 (P2 sections) |
 | **WEB-P2** ✅ **Done** | Cadence web | **Done (#77–#80 + #89):** `NutritionTargets` extract + start-over phrase-gate tests; `useCoachChat` SSE-drop recovery hook; AuthScreen + App/`screenFromPlanStage` tests; dictation capability seam + MicButton; CSS Modules migration ADR; PlanView → `PlanProposalBanner` + `PlanWeekPanel` (ProgressView already thin). **Deferred:** full CSS Modules/Tailwind migration until `styles.css` approaches ~800+ (ADR stands). | Report 04 §3 (P2 section) |
 | INFRA-P2 ✅ **Done** (`refactor/phase3-infra-p2-deploy-drift-migrations`) | Infra | Vercel deploy-target clarity for Cadence; config-as-code drift detection for `ai-admin.config.json` (dry-run mode + scheduled drift-check job); migration tooling consolidation (adopt Supabase CLI for both products, reconstruct missing `001`-`005`) | **Done** — deploy matrix in [`docs/cadence/DEPLOY.md`](docs/cadence/DEPLOY.md) + PLAN §11 deferral; content-aware dry-run + `--fail-on-drift` on `sync-jobs.ts` / `ai-admin-sync.mjs`; schedule-only [`.github/workflows/config-drift-check.yml`](.github/workflows/config-drift-check.yml) (no PR secrets); consolidation plan [`docs/infra/MIGRATION-TOOLING.md`](docs/infra/MIGRATION-TOOLING.md) + [`docs/infra/CONFIG-DRIFT.md`](docs/infra/CONFIG-DRIFT.md). Baseline `001`–`005` reconstruct + Supabase CLI cutover remain follow-on phases in the migration doc. | Report 06 §4.6-§4.8 |
@@ -785,9 +785,8 @@ Every item ID in §4 should carry one of these statuses, updated by whichever ro
 `Not Started` → `Assigned` → `In Progress` → `In Review` → `Changes Requested` (loops back to `In Progress`) → `Done` → `Verified`
 
 Update Status cells in place as items move; this file is the single source of truth. Phase 0–1 and
-**Phase 2 P1 are Done**; **batch 9 is Done**; **Phase 3 / batch 10 is in progress**. See §4.2
-remaining backlog for deferred P2/P3 items (Phase 3 P2; FE-13 Done; FE allowlist cleared via FE-P2
-#69/#71/#72/#73).
+**Phase 2 P1 are Done**; **batch 9 is Done**; **Phase 3 FE-P2 densest + Cadence/BE residual closed**. See §4.2
+remaining backlog for deferred P2/P3 items (CI-07, CSS Modules watch, chat-sessions/lifecycle allowlist).
 **INFRA-02** required-check flip is Done (2026-07-20). **FE-11** Done (PR #63). **FE-13** Done. **BE-03a** Done. **CI-01** Done.
 
 ---
