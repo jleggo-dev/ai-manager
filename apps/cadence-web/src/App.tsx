@@ -10,6 +10,7 @@ import { AuthScreen } from './features/auth/AuthScreen.tsx';
 import { PhoneFrame } from './components/PhoneFrame.tsx';
 import { getPlan, setAuthToken, isDevMode } from './lib/api.ts';
 import { supabase } from './lib/supabase.ts';
+import { screenFromPlanStage } from './screenFromPlanStage.ts';
 
 type Screen = 'loading' | 'welcome' | 'onboarding' | 'review' | 'plan';
 
@@ -45,7 +46,7 @@ function CoachApp({ session }: { session: Session | null }) {
   useEffect(() => {
     getPlan()
       .then((p) => {
-        setScreen(p.stage === 'committed' ? 'plan' : p.stage === 'in_progress' ? 'onboarding' : 'welcome');
+        setScreen(screenFromPlanStage(p.stage));
       })
       .catch(() => setScreen('welcome'));
   }, []);
