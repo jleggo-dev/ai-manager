@@ -117,7 +117,7 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
 
   // Rolling-window consistency over the LAST 7 days (days with ≥1 completion).
   const past = await listOccurrences(userId, iso(new Date(base - 6 * 86_400_000)), iso(new Date(base)));
-  const { kept, window } = rollingConsistency(past as never, now, 7);
+  const { kept, window } = rollingConsistency(past, now, 7);
   const user = await getUser(userId);
 
   return {

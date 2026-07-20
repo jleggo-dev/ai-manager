@@ -62,7 +62,7 @@ apps/
   cadence-api/     @cadence/api        — Node backend; owns Cadence DB; consumes @ai-admin/core
     src/ai/aim.ts        ← the in-process adapter (THE load-bearing seam)
     src/routes/{coach,plan,health}.ts
-    src/services/{capture,dossier,token-budget}.ts
+    src/services/{capture,token-budget,metrics,context-pack}.ts
     src/auth/middleware.ts · src/db/supabase.ts · src/config.ts
   cadence-web/     @cadence/web        — Vite/React PWA
     src/lib/capability/{index,web}.ts  ← native seam + web no-op (§8)
@@ -102,12 +102,12 @@ Plus a one-time `POST /api/calling-applications` for `platform:cadence`.
 
 Per spec §4.2, these stay out of the models. Scaffolded as stubs in `cadence-api`:
 
-- **Token budget** (`services/token-budget.ts`) — green/amber/red tiers (§4.3). ✅
+- **Token budget** (`services/token-budget.ts`) — green/amber/red tiers (§4.3); pure + unit-tested, **not yet wired** into Coach turn-context. ✅ (engine) / ⏳ (hot-path adopt)
 - **Goal guardrail** (`services/goal-guardrail.ts`) — hard cap 50 + weighted focus budget (§6.2/§A1). ✅
 - **Scheduling** (`services/scheduling.ts`) — RRULE subset → dated occurrences. ✅
-- **Shoe-mileage** (`services/shoe-mileage.ts` pure + `services/completion.ts` action) — accrue run distance to active footwear; `retire_soon` ~85% (§5.3). ✅
+- **Shoe-mileage** (`services/shoe-mileage.ts` pure) — accrue run distance math + `retire_soon` ~85% (§5.3). ✅ DB action (`completion.addRunMileage`) removed as unwired — wire into `logOccurrence` when run distance is on the completion path. ⏳
 - **Tripwires** (`services/tripwires.ts`) — timezone/location/missed/divergence/weather/streak (§B4); empty ⇒ no Broker call. ✅
-- **Dossier compiler** (`services/dossier.ts`) — renders the §4.3 packet (baseline + active goals + equipment + plan + adherence) from the DB. ✅
+- **Context packet** — Coach grounding via retrieval/`context-pack` (dead `services/dossier.ts` compiler deleted; duplicated retrieval renderers). ✅
 - **Nudge engine** — schedule off activity times; dedupe HealthKit auto-completions; channel routing. ⏳ to add.
 - **Weather** — deterministic API keyed on location+time for outdoor occurrences (§B1). ⏳ to add.
 
@@ -135,9 +135,9 @@ structured store is the source of truth; every session is reassembled from the D
 - The engine sources the bound job's `config.systemPrompt` as the native `role:'system'`
   message and **appends the app-sent dossier** to it (`openChatSession`, the
   `[jobSystemPrompt, systemPrompt].join` change in `backend/src/ai-manager/index.ts`). So the
-  app sends only **data** (the dossier); AI Admin owns the prompt. `coach-context.ts` builds
-  just the runtime context (intent guide + `compileDossier()`: baseline, active goals+progress,
-  equipment, current plan, recent adherence). **P0 (done): this context is no longer the system
+  app sends only **data** (the dossier); AI Admin owns the prompt. `coach-context` / retrieval
+  builds just the runtime context (intent guide + baseline, active goals+progress,
+  equipment, current plan, recent consistency). **P0 (done): this context is no longer the system
   prompt** — `routes/coach.ts` opens a persona-only session (`openCoachSession` → `aim.coachJobSlug`)
   and injects the context as a separate provenance-stamped turn (`buildCoachContext` →
   `injectCoachContext`), keeping the persona prefix cacheable and the context refreshable.
@@ -348,7 +348,7 @@ hostile-input test (instructions-as-data).
 *AC: a sample transcript yields goals/equipment JSON matching §5.2/§5.3; "ignore instructions" input is treated as data (§C8.4).*
 
 **Phase 3 — Coach chat loop + capture persistence.** Persist `conversations` mapping;
-compile the §4.3 packet in `dossier.ts`; stream SSE; upsert captured records → counter/chips.
+compile the §4.3 context packet (retrieval/`context-pack`); stream SSE; upsert captured records → counter/chips.
 *AC: a multi-turn conversation streams and stays coherent with injected dossier; 409-safe send (§C8.5).*
 
 **Phase 4 — Capture → confirm → lock.** Confirm gates + goal-cap guardrail (§6.2);
