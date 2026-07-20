@@ -528,9 +528,7 @@ Cadence fetches stay hand-rolled until a follow-on.
   and `useAiProfilesData` (Providers ↔ AI Profiles nav). Invalidate `providerKeys.all` after
   create/update/delete.
 
-**Cadence half — Still open:** nutrition-day triplication across `TodayDashboard` /
-`SettingsSheet` / `OccurrenceSheet` (sibling-owned; was deferred past WEB-04). Align defaults
-with AI Admin's `query-client.ts` when landing.
+**Cadence half — Done** (`refactor/cross-03-cadence-react-query`): see nutrition-day pilot notes above.
 
 ---
 
