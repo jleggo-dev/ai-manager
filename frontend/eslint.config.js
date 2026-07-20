@@ -90,17 +90,13 @@ export default [
   // widget-health removal (FE-05 cancelled). Each split PR deletes an entry; target is zero.
   // Dropped (under threshold or deleted): api.ts (FE-06), AiMatcherPage (FE-03), SettingsPage
   // (FE-04), HealthCheckWidgetPage (removed with widget health checker), ProfileFormModal (FE-14),
-  // TestChatPanel (FE-11). Remaining → FE-13 + HealthDashboard/LovableGuide.
+  // TestChatPanel (FE-11), JobsTab/AnalyticsTab/SchemaValidationPanel/RuleSetsTab (FE-13).
   // useHealthCheckProfilesData is under file-cap but over the new function-cap (FE-08 moved page
   // bulk into one hook) — keep until a follow-up split.
   {
     files: [
       'src/hooks/useHealthCheckProfilesData.ts', // FE-08 leftover — fn ~294 > 150
       'src/components/organisms/DiagnosticsTab.tsx',
-      'src/components/organisms/processing-jobs/AnalyticsTab.tsx', // FE-13
-      'src/components/organisms/processing-jobs/JobsTab.tsx', // FE-13
-      'src/components/organisms/processing-jobs/RuleSetsTab.tsx', // FE-13
-      'src/components/organisms/processing-jobs/SchemaValidationPanel.tsx', // FE-13
       'src/pages/HealthDashboardPage.tsx',
       'src/pages/LovableGuidePage.tsx',
     ],

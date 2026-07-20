@@ -41,7 +41,7 @@ source report that contains the full current-problem/target-design/migration-ste
    commit, nutrition, coach-stream, aim seam). `apps/cadence-web` gained ReviewScreen (WEB-01 #45),
    OccurrenceSheet (WEB-03 #44), card-row dedup (WEB-04 #46), and TanStack nutrition-day
    (**CROSS-03** ✅ Done both halves — AI Admin #49 + Cadence #50).
-5. Read §4.2 remaining backlog (FE-13, Phase 3 P2 / batch 10 in flight),
+5. Read §4.2 remaining backlog (Phase 3 P2 / batch 10 in flight; FE-13 Done),
    §5 for durable goals, §6 for multi-agent orchestration.
 6. **CI gate between batches:** do not start the next parallel batch (and do not merge) while
    integration-branch / PR CI is red. Branch protection on `main` now **requires** status checks
@@ -424,7 +424,7 @@ merge log (originally via `feat/cadence`, then `main`):
 > - **API-P2** slice — dead `dossier` / `rollingConsistency` metrics tests (§4.4)
 >
 > **Remaining backlog (accurate as of 2026-07-20 — not Phase 2 P1):**
-> - **FE-13** — deferred FE size splits (P2; §4.8)
+> - **FE-13** ✅ **Done** — deferred FE size splits (`JobsTab` / `AnalyticsTab` / `SchemaValidationPanel` / `RuleSetsTab`; §4.8)
 > - **FE-11** ✅ **Done** — `useTestChatStream` extract (PR #63; §4.7)
 > - **FE-14** ✅ **Done** — `ProfileFormModal` split (PR #56; §4.8)
 > - **BE-03a** ✅ **Done** — diagnostic-logs GET gating (owner/admin; §4.9)
@@ -618,7 +618,7 @@ FE-03…FE-08 / FE-P2 (`AiMatcherPage`, `SettingsPage`, `HealthCheck*`, `Lovable
 
 | ID | Item | Area | Priority | Effort | Risk | Status |
 |---|---|---|---|---|---|---|
-| **FE-13** | Further split oversized `processing-jobs/` extracts still over `max-lines@500`: `JobsTab` (~908), `AnalyticsTab` (~987), `SchemaValidationPanel` (~632), `RuleSetsTab` (~579) — keep the FE-01 overrides until each drops under the threshold | Frontend | P2 | L | Medium | Not Started |
+| **FE-13** ✅ **Done** (`refactor/fe-13-processing-jobs-size`) | Further split oversized `processing-jobs/` extracts still over `max-lines@500`: `JobsTab`, `AnalyticsTab`, `SchemaValidationPanel`, `RuleSetsTab` — keep the FE-01 overrides until each drops under the threshold | Frontend | P2 | L | Medium | **Done** — structural extracts only; all four under 500; FE-13 allowlist entries removed |
 | **FE-14** ✅ **Done** (`refactor/fe-14-profile-form-modal`, PR #56) | Split `ai-profiles/ProfileFormModal.tsx` (~530 lines) further (form subpanels / sections) so it can leave the max-lines override list — leftover from FE-02 structural split, surfaced when FE-01's rule landed on current `feat/cadence` | Frontend | P2 | M | Low | **Done** — extracted `ProfileFormIdentityFields`, `ProfileFailoverSection`, `ProfileFormDetailsFields`; allowlist entry removed; modal ~372 lines under gate |
 
 ### 4.9 Newly discovered / deferred — BE-03 supervisor review (`refactor/be-03-rbac`)
@@ -780,8 +780,8 @@ Every item ID in §4 should carry one of these statuses, updated by whichever ro
 
 Update Status cells in place as items move; this file is the single source of truth. Phase 0–1 and
 **Phase 2 P1 are Done**; **batch 9 is Done**; **Phase 3 / batch 10 is in progress**. See §4.2
-remaining backlog for deferred P2/P3 items (FE-13, Phase 3 P2).
-**INFRA-02** required-check flip is Done (2026-07-20). **FE-11** Done (PR #63). **BE-03a** Done. **CI-01** Done.
+remaining backlog for deferred P2/P3 items (Phase 3 P2; FE-13 Done).
+**INFRA-02** required-check flip is Done (2026-07-20). **FE-11** Done (PR #63). **FE-13** Done. **BE-03a** Done. **CI-01** Done.
 
 ---
 
