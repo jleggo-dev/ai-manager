@@ -41,3 +41,21 @@ export interface V2StreamEvent {
   response?: Partial<V2ResponseObject>;
   usage?: V2ResponseUsage;
 }
+
+/**
+ * Body item for POST /api/v2/responses/{id}/resume `toolOutputs`.
+ * Devs.ai extension schema (camelCase) — not OpenAI `function_call_output` / `tool_outputs`.
+ * @see https://docs.devs.ai/api-spec — Resume a response
+ */
+export type V2ResumeToolOutputStatus = 'success' | 'error' | 'cancelled';
+
+export interface V2ResumeToolOutput {
+  toolCallId: string;
+  output: string;
+  status?: V2ResumeToolOutputStatus;
+}
+
+export interface V2ResumeRequestBody {
+  reason?: string;
+  toolOutputs?: V2ResumeToolOutput[];
+}

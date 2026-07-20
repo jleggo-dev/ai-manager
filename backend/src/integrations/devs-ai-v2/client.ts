@@ -8,10 +8,24 @@
  */
 
 import type { ChatMessage, ChatCompletionResponse, PatchedResponse } from '../../types.ts';
-import type { V2ResponseObject } from './types.ts';
+import type { V2ResponseObject, V2ResumeRequestBody, V2ResumeToolOutput } from './types.ts';
 import { messagesToV2Request, extractV2ResponseText, mapV2Usage } from './request-builder.ts';
 import { createSseTransformState, transformV2SseChunk } from './sse-transform.ts';
 import { createSseLineBuffer } from '../../services/sse-line-reader.ts';
+
+/** Build the Devs.ai v2 /resume JSON body (camelCase `toolOutputs`, not `tool_outputs`). */
+export function buildV2ResumeBody(toolOutputs?: V2ResumeToolOutput[], reason?: string): V2ResumeRequestBody {
+  const body: V2ResumeRequestBody = {};
+  if (reason) body.reason = reason;
+  if (toolOutputs && toolOutputs.length > 0) {
+    body.toolOutputs = toolOutputs.map((o) => ({
+      toolCallId: o.toolCallId,
+      output: o.output,
+      status: o.status ?? 'success',
+    }));
+  }
+  return body;
+}
 
 export class DevsAiV2Client {
   baseUrl: string;
@@ -205,10 +219,15 @@ export class DevsAiV2Client {
     return this._wrapUpstreamSse(upstream, { timer, controller });
   }
 
+  /**
+   * Resume a paused v2 response (tool-fulfillment continuation).
+   * Body shape is Devs.ai's extension schema: `{ toolOutputs: [{ toolCallId, status, output }] }`.
+   * Snake_case `tool_outputs` is rejected with 400 Unrecognized key.
+   */
   async resumeResponse(
     responseId: string,
-    toolOutputs?: Array<{ tool_call_id: string; output: string }>,
-    options: { timeoutMs?: number } = {},
+    toolOutputs?: V2ResumeToolOutput[],
+    options: { timeoutMs?: number; reason?: string } = {},
   ): Promise<globalThis.Response> {
     const url = `${this.baseUrl}/api/v2/responses/${responseId}/resume`;
     let controller: AbortController | undefined;
@@ -222,7 +241,7 @@ export class DevsAiV2Client {
     const response = await fetch(url, {
       method: 'POST',
       headers: this._headers({ Accept: 'text/event-stream' }),
-      body: JSON.stringify({ tool_outputs: toolOutputs || [] }),
+      body: JSON.stringify(buildV2ResumeBody(toolOutputs, options.reason)),
       signal: controller?.signal,
     });
 
@@ -238,8 +257,8 @@ export class DevsAiV2Client {
   /** Resume with tool outputs and re-emit SSE in chat-compatible shape. */
   async resumeResponseStream(
     responseId: string,
-    toolOutputs: Array<{ tool_call_id: string; output: string }>,
-    options: { timeoutMs?: number } = {},
+    toolOutputs: V2ResumeToolOutput[],
+    options: { timeoutMs?: number; reason?: string } = {},
   ): Promise<globalThis.Response> {
     return this.resumeResponse(responseId, toolOutputs, options);
   }
