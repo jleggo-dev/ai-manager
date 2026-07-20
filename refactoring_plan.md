@@ -27,8 +27,9 @@ source report that contains the full current-problem/target-design/migration-ste
 1. **Nothing in this repo is on fire.** Phase 0, Phase 1 P0s (BE-01 / FE-01 / FE-02), and
    **Phase 2 P1 are complete** on `main` (batches 7–8 closed; CROSS-03 both halves #49/#50).
    **Batch 9 is Done** (FE-14 #56 · CI-08 #53 · CI-09 #55; cleanup-after-tests #54). **Phase 3 /
-   batch 10 is in progress** (FE-11 · API-P2 slice; **CI-06 Done** #60). See §4.2 for the closed
-   log and the remaining (mostly P2/P3 + human) backlog.
+   batch 10 Cadence+BE residual closed** (API-P2 #88 · WEB-P2 #89 · BE allowlist slim #90;
+   **CI-06 Done** #60). See §4.2 / §4.4 for the closed log and remaining deferrals (CI-07, CSS
+   Modules watch, chat-sessions/lifecycle allowlist, FE-P2 densest pages).
 2. **Safety net is required on `main`.** INFRA-01…05 landed (PRs #3–#5). Path-filtered CI runs on
    every PR; GitHub branch protection now **requires** status checks to pass before merging
    (**INFRA-02 required-check flip Done** — user-confirmed 2026-07-20; `gh api …/protection`
