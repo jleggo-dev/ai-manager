@@ -1,0 +1,4 @@
+# Normalize text files to LF so Prettier (endOfLine: lf) and `npm run format:check`
+# stay deterministic across Windows/macOS/Linux. Overrides local `core.autocrlf=true`,
+# which can otherwise reintroduce CRLF on checkout and trip formatting CI.
+* text=auto eol=lf
