@@ -52,8 +52,10 @@ Vite fails if `VITE_DEV_API_KEY` is set during production build. Unset it or rem
    documented reason) before merge and before starting the next refactor batch.
 5. Then [pr-tl-review](../pr-tl-review/SKILL.md) (workflow step 9).
 6. After merge: [development-workflow](../development-workflow/SKILL.md) **step 12b** —
-   `npm run cleanup:test-data` (Cadence scratch accounts + AI Admin `e2e%` rows). Do not start
-   the next batch with stale test data still in the shared dev DBs.
+   `npm run cleanup:test-data` (Cadence scratch accounts + AI Admin `e2e%` / lifecycle-provider leftovers).
+   Successful local backend/`test:e2e` runs already soft-clean AI Admin leftovers; step 12b still
+   resets Cadence scratch accounts. Do not start the next batch with stale test data still in the
+   shared dev DBs.
 
 ## On failure
 

@@ -17,6 +17,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app, authHeaders } from './setup.ts';
 import { getServiceSupabase } from '../src/db/service-supabase.ts';
+import { findDevsChatProfile } from './helpers/real-providers.ts';
 
 const TEST_USER_ID = '00000000-0000-4000-8000-0000000000a1';
 const COMPLIANCE_USER_ID = '00000000-0000-4000-8000-0000000000a2';
@@ -59,25 +60,8 @@ function parseSseText(raw: string): string {
   return text;
 }
 
-interface ApiProfile {
-  id: string;
-  mode?: string | null;
-  external_ai_id?: string | null;
-  profile_type?: string | null;
-  provider?: { type?: string | null } | null;
-}
-
-async function findDevsChatProfile(): Promise<ApiProfile | null> {
-  const res = await request(app).get('/api/ai-profiles?limit=100').set(authHeaders());
-  if (res.status !== 200) return null;
-  const rows: ApiProfile[] = res.body.data || [];
-  const isDevsChat = (p: ApiProfile) =>
-    p?.provider?.type === 'devs-ai' && p?.mode === 'chat' && Boolean(p?.external_ai_id);
-  return rows.find((p) => isDevsChat(p) && p.profile_type === 'agent') ?? rows.find(isDevsChat) ?? null;
-}
-
 beforeAll(async () => {
-  const profile = await findDevsChatProfile();
+  const profile = await findDevsChatProfile(app, authHeaders);
   devsProfileId = profile?.id ?? null;
 });
 
@@ -118,10 +102,7 @@ describe('E2E: Resume chat lifecycle (Devs.ai)', () => {
 
   it('resumes the closed session and reactivates it', async () => {
     if (!sessionId) return;
-    const res = await request(app)
-      .post('/api/chat-sessions/resume')
-      .set(authHeaders())
-      .send({ sessionId });
+    const res = await request(app).post('/api/chat-sessions/resume').set(authHeaders()).send({ sessionId });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('active');
     expect(res.body.sessionId).toBe(sessionId);
@@ -141,10 +122,7 @@ describe('E2E: Resume chat lifecycle (Devs.ai)', () => {
     if (!sessionId) return;
     const delRes = await request(app).delete(`/api/chat-sessions/${sessionId}`).set(authHeaders());
     expect(delRes.status).toBe(204);
-    const resumeRes = await request(app)
-      .post('/api/chat-sessions/resume')
-      .set(authHeaders())
-      .send({ sessionId });
+    const resumeRes = await request(app).post('/api/chat-sessions/resume').set(authHeaders()).send({ sessionId });
     expect(resumeRes.status).toBe(404);
     sessionId = null;
   });
@@ -205,7 +183,7 @@ describe('E2E: Resume preserves conversation (history + AI memory)', () => {
 });
 
 describe('E2E: Compliance remote purge on user-data deletion', () => {
-  it('purges the remote Devs.ai chat when deleting a user\'s sessions', async () => {
+  it("purges the remote Devs.ai chat when deleting a user's sessions", async () => {
     if (!devsProfileId) return;
     const openRes = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
       aiProfileId: devsProfileId,
@@ -228,9 +206,7 @@ describe('E2E: Compliance remote purge on user-data deletion', () => {
     }
 
     /* The session row should be gone after purge. */
-    const getRes = await request(app)
-      .get(`/api/chat-sessions/${complianceSessionId}`)
-      .set(authHeaders());
+    const getRes = await request(app).get(`/api/chat-sessions/${complianceSessionId}`).set(authHeaders());
     expect(getRes.status).toBe(404);
   });
 });

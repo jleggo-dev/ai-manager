@@ -61,8 +61,9 @@ field name; `resources`/`limits` for constraints; streaks that reset to zero; we
 - **Ship / agent workflow:** follow
   [`.cursor/skills/development-workflow/SKILL.md`](.cursor/skills/development-workflow/SKILL.md)
   (CI must be green — or intentionally skipped with a documented reason — before merge and before
-  the next refactor batch). After merge: `npm run cleanup:test-data` (step 12b — Cadence scratch
-  accounts + AI Admin `e2e%` leftovers; never a production wipe). Multi-agent refactor gates:
+  the next refactor batch). Successful backend/`test:e2e` runs soft-clean AI Admin e2e leftovers
+  on exit 0; after merge still run `npm run cleanup:test-data` (step 12b — Cadence scratch
+  accounts + AI Admin `e2e%` / lifecycle-provider leftovers; never a production wipe). Multi-agent refactor gates:
   [`refactoring_plan.md`](refactoring_plan.md) §6.
 - Secrets: NEVER put `aim_sk_` keys in client code, `VITE_*` vars, or committed `.env` files.
   `.env` is gitignored; `.env.example` is tracked with placeholders only.

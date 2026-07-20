@@ -35,11 +35,20 @@ describe('Health Checks API', () => {
 
   let testProviderId: string;
 
-  it('GET /api/providers — find a provider to use', async () => {
-    const res = await request(app).get('/api/providers').set(authHeaders());
+  it('GET /api/providers — find a stable provider to use', async () => {
+    const res = await request(app).get('/api/providers?limit=100').set(authHeaders());
     expect(res.status).toBe(200);
     expect(res.body.data.length).toBeGreaterThan(0);
-    testProviderId = res.body.data[0].id;
+    /* Prefer a long-lived provider — list is newest-first, so data[0] is often an
+       ephemeral e2e provider that another file's afterAll CASCADE-deletes mid-suite. */
+    const rows: Array<{ id: string; name?: string; type?: string }> = res.body.data || [];
+    const stable =
+      rows.find((p) => p.name === 'Devs.ai' || p.name === 'Devs.ai v2' || p.name === 'Google Gemini') ||
+      rows.find((p) => p.type === 'devs-ai' || p.type === 'devs-ai-v2' || p.type === 'google-gemini') ||
+      rows[0];
+    expect(stable?.id).toBeTruthy();
+    if (!stable?.id) throw new Error('No provider available for health-checks tests');
+    testProviderId = stable.id;
   });
 
   /* ── Provider Keys CRUD ────────────────────────────────────── */

@@ -9,7 +9,7 @@ Follow these steps **in order** for every feature, fix, or refactor batch. Do no
 merge — and do not start the next batch — while CI is red.
 
 ```
-Code → Review → Fix? → Test (local) → Fix? → Commit/push (CI on PR)
+Code → Review → Fix? → Test (local; AI Admin e2e cleanup on success) → Fix? → Commit/push (CI on PR)
   → Fix until CI green → PR open/updated → Review → Fix? → Merge (checks pass)
   → Confirm base branch green → Post-merge test-data cleanup → (prod/release later) → Done
 ```
@@ -91,6 +91,21 @@ npm run test:e2e
 Live E2E tests (e.g. `e2e-devs-ai-v2-*.test.ts`) need `DEVS_AI_API_KEY` / Supabase — skip with clear
 note if unset; do not treat skip as pass for risky paths.
 
+### Automatic cleanup after successful tests
+
+Backend and root E2E scripts run AI Admin leftover cleanup **only when the suite exits 0**
+(`vitest run && cleanup…`). Failed runs skip cleanup so junk remains for debugging.
+
+| Command | Cleanup on success |
+|---------|-------------------|
+| `npm run test --workspace=backend` (or `npm run test:backend`) | `cleanup:e2e-ai-admin:soft` (e2e% rows + lifecycle/test-named providers/profiles/jobs) |
+| `npm run test:e2e` | same soft cleanup |
+| `npm run test:no-cleanup --workspace=backend` | none (debug) |
+| `SKIP_TEST_DATA_CLEANUP=1` on any of the above | skip cleanup even on success |
+
+Cadence scratch-account reset is **not** part of the post-test hook — use full
+`npm run cleanup:test-data` after merge (step 12b) or when you intentionally want account-1/2 wiped.
+
 ### Regression + functional gate
 
 Full pre-push gate (matches Vercel backend + frontend builds) — see
@@ -101,7 +116,7 @@ npm run prepush
 ```
 
 `prepush` runs: `typecheck` → `format:check` → `lint` → backend `tsc` → frontend lint + Vite
-build → full backend test suite.
+build → full backend test suite (which cleans AI Admin e2e leftovers on success).
 
 **Local frontend build note:** Unset `VITE_DEV_API_KEY` before build if Vite errors about secrets
 in the client bundle.
@@ -229,12 +244,16 @@ After merge (and before marking Done or starting the next refactor batch), clear
 scratch and E2E leftovers** so the next demo/onboarding pass starts clean. Prefer existing
 scripts; never wipe production or real-auth users.
 
+Successful local backend / `test:e2e` runs already clean AI Admin e2e leftovers (step 4). Still
+run the **full** wipe here so Cadence scratch accounts are reset and any junk from failed test
+runs or manual UI experiments is cleared.
+
 ### What to clean
 
 | Surface | Safe target | Command (repo root, PowerShell) |
 |---------|-------------|-----------------------------------|
 | Cadence scratch accounts (`account-1` / `account-2`) | Allowlisted UUIDs only | `npm run cleanup:cadence-dev-accounts` |
-| AI Admin E2E leftovers | `calling_application` / `display_name` LIKE `e2e%` only | Dry-run: `npx tsx backend/scripts/cleanup-e2e-test-data.ts` then `npm run cleanup:e2e-ai-admin` |
+| AI Admin E2E leftovers | `calling_application` / `display_name` LIKE `e2e%`; plus providers/profiles/jobs matching lifecycle & test name patterns (never by `type` alone) | Dry-run: `npx tsx backend/scripts/cleanup-e2e-test-data.ts` then `npm run cleanup:e2e-ai-admin` |
 | Both | Same as above | `npm run cleanup:test-data` |
 
 Also useful: `node --import tsx apps/cadence-api/scripts/account.ts list` (inventory) /
@@ -245,7 +264,10 @@ Also useful: `node --import tsx apps/cadence-api/scripts/account.ts list` (inven
 - Requires local `.env` credentials (`apps/cadence-api/.env`, `backend/.env`). **Never commit
   secrets; never print full keys.**
 - Cadence reset only touches allowlisted scratch accounts — not real JWT users.
-- AI Admin cleanup only deletes `e2e%` tagged rows (sessions, diagnostic logs, calling apps).
+- AI Admin cleanup deletes `e2e%` tagged rows (sessions, diagnostic logs, calling apps) **and**
+  ephemeral providers/profiles/jobs whose **names** match test patterns (e.g. `V1 Lifecycle
+  Provider*`, `E2E * Provider*`). It does **not** delete by provider type — real `Devs.ai`,
+  `Devs.ai v2`, and `Google Gemini` rows are protected by exact-name guard.
 - If you cannot tell **dev vs production**, or the workspace/project looks wrong — **stop and
   ask** rather than guessing a destructive wipe.
 
@@ -277,9 +299,10 @@ plan when applicable.
 | `npm run lint` | Step 2 |
 | `npm run typecheck` | Step 2 |
 | `npm run prepush` | Step 4 (and after each fix loop) |
-| `npm test` | Steps 4–5 |
-| `npm run test:e2e` | Step 4 when chat/API/integration touched |
-| `npm run cleanup:test-data` | Step 12b — Cadence scratch accounts + AI Admin `e2e%` leftovers |
+| `npm test` | Steps 4–5 (backend suite auto-cleans AI Admin e2e leftovers on success) |
+| `npm run test:backend` | Step 4 — backend only (+ soft e2e cleanup on success) |
+| `npm run test:e2e` | Step 4 when chat/API/integration touched (+ soft e2e cleanup on success) |
+| `npm run cleanup:test-data` | Step 12b — Cadence scratch accounts + AI Admin `e2e%` / lifecycle-provider leftovers |
 | `npm run ci` | Stricter than prepush (no Vite build); optional extra gate |
 | `gh pr checks` | Steps 7, 11, 12 |
 
