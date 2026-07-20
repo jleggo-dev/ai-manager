@@ -608,7 +608,7 @@ are not lost. Neither blocks FE-02 Done.
 | ID | Item | Area | Priority | Effort | Risk | Status |
 |---|---|---|---|---|---|---|
 | **FE-11** ✅ **Done** (`refactor/fe-11-use-test-chat-stream`, PR #63) | Extract `useTestChatStream` from `ai-profiles/TestChatPanel.tsx` (~675 lines) — isolate SSE parsing / OAuth-resume logic from rendering; leave the panel as a thin view | Frontend | P2 | M | Medium (streaming/OAuth paths) | **Done** — hook + `lib/test-chat-stream` helpers; panel ~290 lines; dropped eslint max-lines override; unit + existing streaming/tool-auth tests |
-| **FE-12** | Research architectural overlap between AI Admin `TestChatPanel` streaming/session UI and Cadence web coach chat (SSE + session lifecycle) — decide whether a shared client helper is worth extracting later (research only; not a merge of the two UIs) | Frontend / Cadence | P3 | S (research) | Low | Not Started |
+| **FE-12** ✅ **Done** (`docs/fe-12-chat-overlap`) | Research architectural overlap between AI Admin `TestChatPanel` streaming/session UI and Cadence web coach chat (SSE + session lifecycle) — decide whether a shared client helper is worth extracting later (research only; not a merge of the two UIs) | Frontend / Cadence | P3 | S (research) | Low | **Done** — decision: do **not** share a chat client package / merge UIs; keep Test Chat + Cadence coach separate. Optional later: tiny pure SSE line-buffer util only if a third consumer appears. Write-up: [`docs/frontend/FE-12-testchat-cadence-chat-overlap.md`](docs/frontend/FE-12-testchat-cadence-chat-overlap.md) |
 
 ### 4.8 Newly discovered / deferred — FE-01 supervisor review (PR #8)
 
