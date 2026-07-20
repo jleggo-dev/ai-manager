@@ -109,7 +109,7 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
     async run(userId, params) {
       const days = Math.min(90, Math.max(1, Number(params?.days ?? 7)));
       const { from, to } = isoRange(days);
-      const occ = (await listOccurrences(userId, from, to)) as Array<{ status?: string }>;
+      const occ = await listOccurrences(userId, from, to);
       const scheduled = occ.length;
       const done = occ.filter((o) => o.status === 'done').length;
       return { days, scheduled, done, pct: scheduled ? Math.round((done / scheduled) * 100) : null };

@@ -128,7 +128,8 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
   /* Goal cards — deterministic type/unit mapping */
   const cards: ProgressCard[] = [];
   const baseline = (user?.baseline ?? {}) as { weight_kg?: { current?: number; start?: number }; weight_unit?: string };
-  const userUnit = baseline.weight_unit === 'lb' ? 'lb' : 'kg';
+  // Baseline.weight_unit is 'kg' | 'lbs'; older weigh-ins may still store 'lb'.
+  const userUnit = baseline.weight_unit === 'lbs' || baseline.weight_unit === 'lb' ? 'lb' : 'kg';
   const toUserUnit = (kg: number) => (userUnit === 'lb' ? round1(kg * LB_PER_KG) : round1(kg));
 
   for (const g of goals) {

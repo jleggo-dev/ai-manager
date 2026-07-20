@@ -1,25 +1,21 @@
 import { Router, type Request, type Response } from 'express';
-import { randomUUID } from 'node:crypto';
+import type { Baseline, Goal } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { listGoalsByStatus, setGoalStatus, insertGoal, updateGoal, deleteGoal } from '../repos/goals.ts';
 import { listEquipment, insertEquipment, updateEquipment, deleteEquipment } from '../repos/equipment.ts';
 import { getUser, mergeBaseline, setName } from '../repos/users.ts';
 import { evaluateGuardrail } from '../services/goal-guardrail.ts';
 import { assessGoal } from '../services/goal-assess.ts';
-
-const GOAL_AREAS = ['movement', 'nourishment', 'mind', 'practice'];
-const GOAL_TYPES = ['milestone', 'target', 'recurring'];
-const EQUIP_CATEGORIES = [
-  'footwear',
-  'cardio',
-  'strength',
-  'accessory',
-  'reading',
-  'practice',
-  'craft',
-  'study',
-  'other',
-];
+import {
+  BodyValidationError,
+  parseBody,
+  patchGoalBodySchema,
+  createGoalBodySchema,
+  patchEquipmentBodySchema,
+  createEquipmentBodySchema,
+  patchProfileBodySchema,
+  patchBaselineBodySchema,
+} from '../validation/body.ts';
 
 const router = Router();
 router.use(requireCadenceUser);
@@ -71,13 +67,19 @@ router.post('/confirm', async (req: Request, res: Response) => {
 /** PATCH /review/goals/:id — edit a captured goal. */
 router.patch('/goals/:id', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const { title, area, type, measure, timeframe, milestones } = req.body ?? {};
-  if (area && !GOAL_AREAS.includes(area)) return void res.status(400).json({ error: 'bad area' });
-  if (type && !GOAL_TYPES.includes(type)) return void res.status(400).json({ error: 'bad type' });
   try {
-    await updateGoal(userId, req.params.id as string, { title, area, type, measure, timeframe, milestones });
+    const body = parseBody(patchGoalBodySchema, req.body);
+    await updateGoal(userId, req.params.id as string, {
+      title: body.title,
+      area: body.area,
+      type: body.type,
+      measure: body.measure as Goal['measure'],
+      timeframe: body.timeframe as Goal['timeframe'],
+      milestones: body.milestones as Goal['milestones'],
+    });
     res.json({ ok: true });
   } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[PATCH /review/goals]', err);
     res.status(500).json({ error: 'update failed' });
   }
@@ -115,24 +117,22 @@ router.delete('/goals/:id', async (req: Request, res: Response) => {
 /** POST /review/goals — add a goal the AI missed. */
 router.post('/goals', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const { title, area, type, measure, confirm } = req.body ?? {};
-  if (!title || !GOAL_AREAS.includes(area) || !GOAL_TYPES.includes(type)) {
-    return void res.status(400).json({ error: 'title, valid area, valid type required' });
-  }
   try {
+    const body = parseBody(createGoalBodySchema, req.body);
     // confirm:true → insert as CONFIRMED (Settings "manage" mode): captured goals are both
     // invisible to replan AND eaten by the next capture churn (deleteCapturedWithoutMilestones);
     // a goal the user typed in Settings must be neither.
     const g = await insertGoal(userId, {
-      title,
-      area,
-      type,
-      measure,
-      status: confirm === true ? 'confirmed' : 'captured',
+      title: body.title,
+      area: body.area,
+      type: body.type,
+      measure: body.measure as Goal['measure'],
+      status: body.confirm === true ? 'confirmed' : 'captured',
       source: 'manual',
     });
     res.json(g);
   } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /review/goals]', err);
     res.status(500).json({ error: 'add failed' });
   }
@@ -141,12 +141,12 @@ router.post('/goals', async (req: Request, res: Response) => {
 /** PATCH /review/equipment/:id — edit equipment. */
 router.patch('/equipment/:id', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const { name, category } = req.body ?? {};
-  if (category && !EQUIP_CATEGORIES.includes(category)) return void res.status(400).json({ error: 'bad category' });
   try {
-    await updateEquipment(userId, req.params.id as string, { name, category });
+    const body = parseBody(patchEquipmentBodySchema, req.body);
+    await updateEquipment(userId, req.params.id as string, { name: body.name, category: body.category });
     res.json({ ok: true });
   } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[PATCH /review/equipment]', err);
     res.status(500).json({ error: 'update failed' });
   }
@@ -167,14 +167,12 @@ router.delete('/equipment/:id', async (req: Request, res: Response) => {
 /** POST /review/equipment — add equipment. */
 router.post('/equipment', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const { name, category } = req.body ?? {};
-  if (!name || !EQUIP_CATEGORIES.includes(category)) {
-    return void res.status(400).json({ error: 'name + valid category required' });
-  }
   try {
-    const e = await insertEquipment(userId, { name, category, owned: true });
+    const body = parseBody(createEquipmentBodySchema, req.body);
+    const e = await insertEquipment(userId, { name: body.name, category: body.category, owned: true });
     res.json(e);
   } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /review/equipment]', err);
     res.status(500).json({ error: 'add failed' });
   }
@@ -183,12 +181,12 @@ router.post('/equipment', async (req: Request, res: Response) => {
 /** PATCH /review/profile — edit the user's name. */
 router.patch('/profile', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const name = typeof req.body?.name === 'string' ? req.body.name : null;
-  if (name === null) return void res.status(400).json({ error: 'name (string) required' });
   try {
+    const { name } = parseBody(patchProfileBodySchema, req.body);
     await setName(userId, name);
     res.json({ ok: true });
   } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[PATCH /review/profile]', err);
     res.status(500).json({ error: 'update failed' });
   }
@@ -197,19 +195,12 @@ router.patch('/profile', async (req: Request, res: Response) => {
 /** PATCH /review/baseline — edit "who I am": age/height/weight + what we work around. */
 router.patch('/baseline', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const patch = { ...(req.body ?? {}) } as Record<string, unknown>;
-  if (Array.isArray(patch.constraints)) {
-    patch.constraints = (patch.constraints as Array<Record<string, unknown>>).map((c) => ({
-      id: (c.id as string) || randomUUID(),
-      label: String(c.label ?? ''),
-      kind: c.kind === 'physical' || c.kind === 'life' || c.kind === 'other' ? c.kind : 'other',
-      plan_around: !!c.plan_around,
-    }));
-  }
   try {
-    await mergeBaseline(userId, patch);
+    const patch = parseBody(patchBaselineBodySchema, req.body);
+    await mergeBaseline(userId, patch as Partial<Baseline>);
     res.json({ ok: true });
   } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[PATCH /review/baseline]', err);
     res.status(500).json({ error: 'update failed' });
   }

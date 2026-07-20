@@ -9,6 +9,14 @@ import { logOccurrence } from '../services/session-log.ts';
 import { recordWeighIn } from '../services/weigh-in.ts';
 import { setPendingProposal } from '../repos/users.ts';
 import { setOccurrenceStatus } from '../repos/occurrences.ts';
+import {
+  BodyValidationError,
+  parseBody,
+  replanSteerBodySchema,
+  occurrenceLogBodySchema,
+  weighInBodySchema,
+  occurrenceStatusBodySchema,
+} from '../validation/body.ts';
 
 const router = Router();
 router.use(requireCadenceUser);
@@ -40,12 +48,12 @@ router.get('/', async (req: Request, res: Response) => {
  */
 router.post('/replan/preview', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  // Optional free-text steer — the user's own requested change ("one run day isn't enough").
-  const steer = typeof req.body?.steer === 'string' ? req.body.steer.trim().slice(0, 500) : undefined;
   try {
+    const { steer } = parseBody(replanSteerBodySchema, req.body);
     const r = await previewReplan(userId, steer);
     res.status(r.status === 'proposed' ? 200 : 422).json(r);
   } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/replan/preview]', err);
     res.status(500).json({ error: 'preview failed' });
   }
@@ -129,13 +137,13 @@ router.get('/occurrences/:id', async (req: Request, res: Response) => {
  */
 router.post('/occurrences/:id/log', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const text = typeof req.body?.text === 'string' ? req.body.text : '';
-  if (!text.trim()) return void res.status(400).json({ error: 'text required' });
   try {
+    const { text } = parseBody(occurrenceLogBodySchema, req.body);
     const r = await logOccurrence(userId, req.params.id as string, text);
     if (!r) return void res.status(404).json({ error: 'occurrence not found' });
     res.json(r);
   } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/occurrences/:id/log]', err);
     res.status(500).json({ error: 'log failed' });
   }
@@ -148,31 +156,27 @@ router.post('/occurrences/:id/log', async (req: Request, res: Response) => {
  */
 router.post('/occurrences/:id/weigh-in', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const weight = Number(req.body?.weight);
-  const unit = req.body?.unit === 'lb' ? 'lb' : req.body?.unit === 'kg' ? 'kg' : null;
-  if (!Number.isFinite(weight) || weight <= 0 || !unit) {
-    return void res.status(400).json({ error: 'weight (number) and unit (kg|lb) required' });
-  }
   try {
+    const { weight, unit } = parseBody(weighInBodySchema, req.body);
     const r = await recordWeighIn(userId, req.params.id as string, weight, unit);
     if (!r) return void res.status(404).json({ error: 'not a weigh-in occurrence (or implausible weight)' });
     res.json(r);
   } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/occurrences/:id/weigh-in]', err);
     res.status(500).json({ error: 'weigh-in failed' });
   }
 });
 
 /** POST /plan/occurrences/:id — check off (or un-check) a scheduled occurrence. */
-const OCC_STATUSES = new Set(['pending', 'done', 'skipped']);
 router.post('/occurrences/:id', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const status = req.body?.status;
-  if (!OCC_STATUSES.has(status)) return void res.status(400).json({ error: 'status must be pending|done|skipped' });
   try {
+    const { status } = parseBody(occurrenceStatusBodySchema, req.body);
     await setOccurrenceStatus(userId, req.params.id as string, status);
     res.json({ ok: true });
   } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/occurrences]', err);
     res.status(500).json({ error: 'update failed' });
   }
