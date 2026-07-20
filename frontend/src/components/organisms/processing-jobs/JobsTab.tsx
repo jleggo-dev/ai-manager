@@ -1,120 +1,20 @@
-﻿import { useState, useMemo } from 'react';
-import {
-  Stack,
-  Group,
-  Button,
-  Card,
-  Text,
-  Badge,
-  ActionIcon,
-  Tooltip,
-  Modal,
-  TextInput,
-  Select,
-  Checkbox,
-  Alert,
-  Paper,
-  ScrollArea,
-  Table,
-  SegmentedControl,
-  Collapse,
-  UnstyledButton,
-  CloseButton,
-  Menu,
-  CopyButton,
-} from '@mantine/core';
+import { useState, useMemo } from 'react';
+import { Stack, Group, Button, Text, Badge, Modal, Select, Alert, Paper, Menu } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import {
-  IconPlus,
-  IconEdit,
-  IconTrash,
-  IconChevronDown,
-  IconSearch,
-  IconAlertCircle,
-  IconApps,
-  IconSettings,
-  IconCheck,
-  IconX,
-  IconBrain,
-  IconFolder,
-  IconLayoutGrid,
-  IconList,
-  IconDotsVertical,
-} from '@tabler/icons-react';
+import { IconPlus, IconAlertCircle, IconSettings, IconCheck, IconX, IconBrain, IconFolder } from '@tabler/icons-react';
 import { slugify } from '../../../lib/slugify';
 import useConfirm from '../../../hooks/useConfirm';
 import * as api from '../../../services/api';
 import type { ProcessingJob, ProcessingJobGroup, AiProfile, CallingApplication } from '../../../types/api';
-import type { CallingAppEntry } from './types';
-import { getJobConfig } from './types';
 import { useJobBulkActions } from './useJobBulkActions';
+import { buildJobsByCallingApp } from './jobsGrouping';
+import JobsListView from './JobsListView';
+import JobsCardView from './JobsCardView';
+import JobsToolbar from './JobsToolbar';
 
 /* ══════════════════════════════════════════════════════════════
    JOBS TAB
    ══════════════════════════════════════════════════════════════ */
-
-function getCallingAppMeta(job: ProcessingJob, callingAppsLookup: Map<string, CallingApplication>) {
-  const colId = job?.calling_application_id || null;
-  const appId = colId || 'unknown-calling-application';
-  const registered = callingAppsLookup?.get(appId);
-  return {
-    appId,
-    appName: registered?.display_name || appId,
-    isUnknown: !colId,
-  };
-}
-
-function buildJobsByCallingApp(
-  jobs: ProcessingJob[],
-  subgroups: ProcessingJobGroup[],
-  callingAppsLookup: Map<string, CallingApplication>,
-) {
-  const appMap = new Map<string, CallingAppEntry>();
-  const subgroupById = new Map<string, ProcessingJobGroup>((subgroups || []).map((g) => [g.id, g]));
-
-  for (const job of jobs || []) {
-    const meta = getCallingAppMeta(job, callingAppsLookup);
-    if (!appMap.has(meta.appId)) {
-      appMap.set(meta.appId, { ...meta, jobs: [], grouped: [], ungrouped: [], totalJobs: 0 });
-    }
-    const entry = appMap.get(meta.appId);
-    if (entry) entry.jobs.push(job);
-  }
-
-  const apps: CallingAppEntry[] = [];
-  for (const app of appMap.values()) {
-    const appGroups = (subgroups || [])
-      .filter((group) => group.app_id === app.appId)
-      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name));
-
-    const grouped = appGroups.map((group) => ({ group, jobs: [] as ProcessingJob[] }));
-    const ungrouped: ProcessingJob[] = [];
-    for (const job of app.jobs) {
-      const subgroupId = getJobConfig(job).subgroupId || null;
-      const subgroup = subgroupId ? subgroupById.get(subgroupId) : null;
-      if (!subgroup || subgroup.app_id !== app.appId) {
-        ungrouped.push(job);
-        continue;
-      }
-      const target = grouped.find((entry) => entry.group.id === subgroup.id);
-      if (target) target.jobs.push(job);
-      else ungrouped.push(job);
-    }
-
-    apps.push({
-      ...app,
-      grouped,
-      ungrouped,
-      totalJobs: app.jobs.length,
-    });
-  }
-
-  return apps.sort((a, b) => {
-    if (a.isUnknown) return 1;
-    if (b.isUnknown) return -1;
-    return a.appName.localeCompare(b.appName);
-  });
-}
 
 export default function JobsTab({
   jobs,
@@ -343,103 +243,6 @@ export default function JobsTab({
     return checkedIds.size > 0 && checkedIds.has(jobId) ? checkedIds.size : 1;
   }
 
-  function renderJobCard(job: ProcessingJob) {
-    const dimmed = isJobFiltered && !matchingJobIds.has(job.id);
-    const isChecked = checkedIds.has(job.id);
-    return (
-      <Card
-        key={job.id}
-        padding="sm"
-        withBorder
-        draggable
-        onDragStart={() => setDraggingJobId(job.id)}
-        onDragEnd={() => setDraggingJobId(null)}
-        style={{
-          cursor: 'pointer',
-          backgroundColor: isChecked
-            ? 'var(--mantine-color-blue-0)'
-            : selectedJob === job.id
-              ? 'var(--mantine-color-gray-0)'
-              : undefined,
-          borderLeft:
-            selectedJob === job.id
-              ? '3px solid var(--mantine-color-blue-5)'
-              : isChecked
-                ? '3px solid var(--mantine-color-blue-3)'
-                : '3px solid transparent',
-          opacity: dimmed ? 0.35 : draggingJobId === job.id ? 0.6 : 1,
-          transition: 'opacity 150ms ease, background-color 150ms ease',
-        }}
-        onClick={() => onSelect(job.id)}
-      >
-        <Group justify="space-between" wrap="nowrap">
-          <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-            <Checkbox
-              size="xs"
-              checked={isChecked}
-              onChange={() => toggleChecked(job.id)}
-              onClick={(e) => e.stopPropagation()}
-            />
-            <Text fw={600} size="sm" truncate>
-              {job.name}
-            </Text>
-            <Badge size="xs" variant="outline">
-              {job.slug}
-            </Badge>
-            <CopyButton value={job.id}>
-              {({ copied, copy }) => (
-                <Tooltip label={copied ? 'Copied' : 'Copy job ID'} withArrow>
-                  <Badge
-                    size="xs"
-                    variant="dot"
-                    color={copied ? 'teal' : 'gray'}
-                    style={{ cursor: 'pointer', userSelect: 'none' }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      copy();
-                    }}
-                  >
-                    {job.id.slice(0, 8)}…
-                  </Badge>
-                </Tooltip>
-              )}
-            </CopyButton>
-            <Badge size="xs" variant="light" color={job.is_active ? 'green' : 'gray'}>
-              {job.is_active ? 'Active' : 'Inactive'}
-            </Badge>
-          </Group>
-          <Group gap={4} wrap="nowrap">
-            <Menu shadow="md" width={200} position="bottom-end" withinPortal>
-              <Menu.Target>
-                <ActionIcon variant="subtle" size="sm" onClick={(e) => e.stopPropagation()}>
-                  <IconDotsVertical size={14} />
-                </ActionIcon>
-              </Menu.Target>
-              <Menu.Dropdown onClick={(e) => e.stopPropagation()}>
-                <Menu.Item leftSection={<IconBrain size={14} />} onClick={() => openPicker('profile', job.id)}>
-                  Change AI profile {pickerCount(job.id) > 1 ? `(${pickerCount(job.id)})` : ''}
-                </Menu.Item>
-                <Menu.Item leftSection={<IconFolder size={14} />} onClick={() => openPicker('group', job.id)}>
-                  Move to group {pickerCount(job.id) > 1 ? `(${pickerCount(job.id)})` : ''}
-                </Menu.Item>
-                <Menu.Divider />
-                <Menu.Item leftSection={<IconEdit size={14} />} onClick={() => onEdit(job)}>
-                  Edit
-                </Menu.Item>
-                <Menu.Item leftSection={<IconTrash size={14} />} color="red" onClick={() => onDelete(job)}>
-                  Delete
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
-          </Group>
-        </Group>
-        <Text size="xs" c="dimmed" mt={4} ml={28}>
-          AI: {job.ai_profile?.name || 'Not assigned'} — {job.description || 'No description'}
-        </Text>
-      </Card>
-    );
-  }
-
   return (
     <Stack gap="md">
       <Group justify="flex-end">
@@ -448,71 +251,18 @@ export default function JobsTab({
         </Button>
       </Group>
 
-      {/* Search, filter, sort toolbar */}
-      <Group gap="sm" wrap="wrap">
-        <TextInput
-          placeholder="Search jobs..."
-          leftSection={<IconSearch size={14} />}
-          rightSection={jobSearch ? <CloseButton size="sm" onClick={() => setJobSearch('')} /> : null}
-          value={jobSearch}
-          onChange={(e) => setJobSearch(e.target.value)}
-          size="sm"
-          style={{ flex: 1, minWidth: 180 }}
-        />
-        <SegmentedControl
-          size="xs"
-          value={jobFilterStatus}
-          onChange={setJobFilterStatus}
-          data={[
-            { label: 'All', value: 'all' },
-            { label: 'Active', value: 'active' },
-            { label: 'Inactive', value: 'inactive' },
-          ]}
-        />
-        <SegmentedControl
-          size="xs"
-          value={jobFilterMode}
-          onChange={setJobFilterMode}
-          data={[
-            { label: 'All', value: 'all' },
-            { label: 'Completion', value: 'completion' },
-            { label: 'Chat', value: 'chat' },
-          ]}
-        />
-        <Select
-          size="sm"
-          data={[
-            { value: 'default', label: 'Default order' },
-            { value: 'name-asc', label: 'Name A–Z' },
-            { value: 'name-desc', label: 'Name Z–A' },
-            { value: 'newest', label: 'Newest first' },
-          ]}
-          value={jobSortBy}
-          onChange={(v) => setJobSortBy(v || 'default')}
-          w={150}
-          allowDeselect={false}
-        />
-        <Group gap={4}>
-          <Tooltip label="Card view">
-            <ActionIcon
-              variant={viewMode === 'card' ? 'filled' : 'subtle'}
-              onClick={() => setViewMode('card')}
-              size="sm"
-            >
-              <IconLayoutGrid size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="List view">
-            <ActionIcon
-              variant={viewMode === 'list' ? 'filled' : 'subtle'}
-              onClick={() => setViewMode('list')}
-              size="sm"
-            >
-              <IconList size={16} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
-      </Group>
+      <JobsToolbar
+        jobSearch={jobSearch}
+        jobFilterStatus={jobFilterStatus}
+        jobFilterMode={jobFilterMode}
+        jobSortBy={jobSortBy}
+        viewMode={viewMode}
+        onSearchChange={setJobSearch}
+        onFilterStatusChange={setJobFilterStatus}
+        onFilterModeChange={setJobFilterMode}
+        onSortByChange={setJobSortBy}
+        onViewModeChange={setViewMode}
+      />
 
       {isJobFiltered && (
         <Text size="sm" c="dimmed">
@@ -593,312 +343,47 @@ export default function JobsTab({
           No processing jobs configured. Create one and assign an AI profile.
         </Alert>
       ) : viewMode === 'list' ? (
-        /* ── List / Table View ── */
-        <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
-          <ScrollArea>
-            <Table striped highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th style={{ width: 36 }}>
-                    <Checkbox
-                      size="xs"
-                      checked={checkedIds.size > 0 && checkedIds.size === matchCount}
-                      indeterminate={checkedIds.size > 0 && checkedIds.size < matchCount}
-                      onChange={() => {
-                        if (checkedIds.size === matchCount) {
-                          clearChecked();
-                        } else {
-                          setCheckedIds(new Set([...matchingJobIds]));
-                        }
-                      }}
-                    />
-                  </Table.Th>
-                  <Table.Th>Name</Table.Th>
-                  <Table.Th>Slug</Table.Th>
-                  <Table.Th>ID</Table.Th>
-                  <Table.Th>App</Table.Th>
-                  <Table.Th>Group</Table.Th>
-                  <Table.Th>AI Profile</Table.Th>
-                  <Table.Th>Mode</Table.Th>
-                  <Table.Th>Status</Table.Th>
-                  <Table.Th style={{ width: 80 }}>Actions</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {(() => {
-                  const allFlat = apps.flatMap((app) => {
-                    const fromGroups = app.grouped.flatMap((g) =>
-                      g.jobs.map((j) => ({ ...j, _appName: app.appName, _groupName: g.group.name })),
-                    );
-                    const fromUngrouped = app.ungrouped.map((j) => ({
-                      ...j,
-                      _appName: app.appName,
-                      _groupName: null,
-                    }));
-                    return [...fromGroups, ...fromUngrouped];
-                  });
-                  const visible = isJobFiltered ? allFlat.filter((j) => matchingJobIds.has(j.id)) : allFlat;
-                  return visible.map((job) => (
-                    <Table.Tr
-                      key={job.id}
-                      style={{ cursor: 'pointer' }}
-                      bg={
-                        checkedIds.has(job.id)
-                          ? 'var(--mantine-color-blue-0)'
-                          : selectedJob === job.id
-                            ? 'var(--mantine-color-gray-0)'
-                            : undefined
-                      }
-                      onClick={() => onSelect(job.id)}
-                    >
-                      <Table.Td onClick={(e) => e.stopPropagation()}>
-                        <Checkbox size="xs" checked={checkedIds.has(job.id)} onChange={() => toggleChecked(job.id)} />
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="xs" fw={600} truncate style={{ maxWidth: 200 }}>
-                          {job.name}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge size="xs" variant="outline">
-                          {job.slug}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <CopyButton value={job.id}>
-                          {({ copied, copy }) => (
-                            <Tooltip label={copied ? 'Copied' : 'Copy job ID'} withArrow>
-                              <Text
-                                size="xs"
-                                c={copied ? 'teal' : 'dimmed'}
-                                style={{ cursor: 'pointer', fontFamily: 'monospace' }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  copy();
-                                }}
-                              >
-                                {job.id.slice(0, 8)}…{' '}
-                                {copied && <IconCheck size={10} style={{ verticalAlign: 'middle' }} />}
-                              </Text>
-                            </Tooltip>
-                          )}
-                        </CopyButton>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="xs">{job._appName}</Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="xs" c={job._groupName ? undefined : 'dimmed'}>
-                          {job._groupName || '—'}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="xs">{job.ai_profile?.name || '—'}</Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge
-                          size="xs"
-                          variant="light"
-                          color={(job.ai_profile?.mode || 'completion') === 'chat' ? 'orange' : 'teal'}
-                        >
-                          {(job.ai_profile?.mode || 'completion') === 'chat' ? 'Chat' : 'Completion'}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge size="xs" variant="light" color={job.is_active ? 'green' : 'gray'}>
-                          {job.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td onClick={(e) => e.stopPropagation()}>
-                        <Menu shadow="md" width={220} position="bottom-end" withinPortal>
-                          <Menu.Target>
-                            <ActionIcon variant="subtle" size="sm">
-                              <IconDotsVertical size={14} />
-                            </ActionIcon>
-                          </Menu.Target>
-                          <Menu.Dropdown>
-                            <Menu.Item
-                              leftSection={<IconBrain size={14} />}
-                              onClick={() => openPicker('profile', job.id)}
-                            >
-                              Change AI profile {pickerCount(job.id) > 1 ? `(${pickerCount(job.id)})` : ''}
-                            </Menu.Item>
-                            <Menu.Item
-                              leftSection={<IconFolder size={14} />}
-                              onClick={() => openPicker('group', job.id)}
-                            >
-                              Move to group {pickerCount(job.id) > 1 ? `(${pickerCount(job.id)})` : ''}
-                            </Menu.Item>
-                            <Menu.Divider />
-                            <Menu.Item leftSection={<IconEdit size={14} />} onClick={() => onEdit(job)}>
-                              Edit
-                            </Menu.Item>
-                            <Menu.Item leftSection={<IconTrash size={14} />} color="red" onClick={() => onDelete(job)}>
-                              Delete
-                            </Menu.Item>
-                          </Menu.Dropdown>
-                        </Menu>
-                      </Table.Td>
-                    </Table.Tr>
-                  ));
-                })()}
-              </Table.Tbody>
-            </Table>
-          </ScrollArea>
-        </Paper>
+        <JobsListView
+          apps={apps}
+          isJobFiltered={isJobFiltered}
+          matchingJobIds={matchingJobIds}
+          checkedIds={checkedIds}
+          matchCount={matchCount}
+          selectedJob={selectedJob}
+          pickerCount={pickerCount}
+          onSelect={onSelect}
+          onToggleChecked={toggleChecked}
+          onClearChecked={clearChecked}
+          onSetCheckedIds={setCheckedIds}
+          onOpenPicker={openPicker}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
       ) : (
-        apps.map((app) => (
-          <Paper key={app.appId} withBorder radius="md" style={{ overflow: 'hidden' }}>
-            <UnstyledButton onClick={() => toggleApp(app.appId)} style={{ width: '100%' }} p="sm">
-              <Group justify="space-between">
-                <Group gap="sm">
-                  <IconApps size={18} color="var(--mantine-color-blue-5)" />
-                  <Text fw={600} size="sm">
-                    {app.appName}
-                  </Text>
-                  <Badge size="xs" variant="light" color="blue">
-                    {app.totalJobs} job{app.totalJobs !== 1 ? 's' : ''}
-                  </Badge>
-                  <Badge size="xs" variant="outline" color="gray">
-                    {app.appId}
-                  </Badge>
-                  {!app.isUnknown && (
-                    <Tooltip label="Rename this application" withArrow>
-                      <ActionIcon
-                        size="xs"
-                        variant="subtle"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          renameCallingApp(app.appId);
-                        }}
-                      >
-                        <IconEdit size={12} />
-                      </ActionIcon>
-                    </Tooltip>
-                  )}
-                </Group>
-                <IconChevronDown
-                  size={16}
-                  style={{
-                    transition: 'transform 200ms',
-                    transform: isJobFiltered || (expandedApps[app.appId] ?? true) ? 'rotate(180deg)' : 'rotate(0deg)',
-                  }}
-                />
-              </Group>
-            </UnstyledButton>
-            <Collapse in={isJobFiltered || (expandedApps[app.appId] ?? true)}>
-              <Stack gap="sm" p="sm">
-                <Group justify="space-between">
-                  <Text size="xs" c="dimmed">
-                    Sub-groups are user-managed buckets under this calling application.
-                  </Text>
-                  <Button size="xs" variant="light" onClick={() => createGroup(app.appId)}>
-                    New Group
-                  </Button>
-                </Group>
-
-                {app.grouped.map(({ group, jobs: groupJobs }: { group: ProcessingJobGroup; jobs: ProcessingJob[] }) => (
-                  <Paper
-                    key={group.id}
-                    withBorder
-                    p="sm"
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={async () => {
-                      if (!draggingJobId) return;
-                      await assignSubgroup(draggingJobId, group.id);
-                    }}
-                  >
-                    <Group justify="space-between" mb="xs" wrap="nowrap">
-                      <UnstyledButton onClick={() => toggleSubgroup(`group:${group.id}`)} style={{ flex: 1 }}>
-                        <Group gap="xs">
-                          <IconChevronDown
-                            size={14}
-                            style={{
-                              transition: 'transform 200ms',
-                              transform:
-                                isJobFiltered || (expandedSubgroups[`group:${group.id}`] ?? true)
-                                  ? 'rotate(180deg)'
-                                  : 'rotate(0deg)',
-                            }}
-                          />
-                          <Badge size="sm" color="grape" variant="light">
-                            {group.name}
-                          </Badge>
-                          <Badge size="xs" variant="outline">
-                            {groupJobs.length}
-                          </Badge>
-                        </Group>
-                      </UnstyledButton>
-                      <Group gap={4}>
-                        <ActionIcon variant="subtle" size="sm" onClick={() => editGroup(group)}>
-                          <IconEdit size={14} />
-                        </ActionIcon>
-                        <ActionIcon variant="subtle" size="sm" color="red" onClick={() => removeGroup(group)}>
-                          <IconTrash size={14} />
-                        </ActionIcon>
-                      </Group>
-                    </Group>
-                    <Collapse in={isJobFiltered || (expandedSubgroups[`group:${group.id}`] ?? true)}>
-                      <Stack gap="xs">
-                        {groupJobs.length === 0 ? (
-                          <Text size="xs" c="dimmed">
-                            Drag a job here
-                          </Text>
-                        ) : (
-                          groupJobs.map(renderJobCard)
-                        )}
-                      </Stack>
-                    </Collapse>
-                  </Paper>
-                ))}
-
-                <Paper
-                  withBorder
-                  p="sm"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={async () => {
-                    if (!draggingJobId) return;
-                    await assignSubgroup(draggingJobId, null);
-                  }}
-                >
-                  <UnstyledButton onClick={() => toggleSubgroup(`ungrouped:${app.appId}`)} style={{ width: '100%' }}>
-                    <Group justify="space-between" mb="xs">
-                      <Group gap="xs">
-                        <IconChevronDown
-                          size={14}
-                          style={{
-                            transition: 'transform 200ms',
-                            transform:
-                              isJobFiltered || (expandedSubgroups[`ungrouped:${app.appId}`] ?? true)
-                                ? 'rotate(180deg)'
-                                : 'rotate(0deg)',
-                          }}
-                        />
-                        <Badge size="sm" color="gray" variant="light">
-                          Ungrouped
-                        </Badge>
-                        <Badge size="xs" variant="outline">
-                          {app.ungrouped.length}
-                        </Badge>
-                      </Group>
-                    </Group>
-                  </UnstyledButton>
-                  <Collapse in={isJobFiltered || (expandedSubgroups[`ungrouped:${app.appId}`] ?? true)}>
-                    <Stack gap="xs">
-                      {app.ungrouped.length === 0 ? (
-                        <Text size="xs" c="dimmed">
-                          No ungrouped jobs
-                        </Text>
-                      ) : (
-                        app.ungrouped.map(renderJobCard)
-                      )}
-                    </Stack>
-                  </Collapse>
-                </Paper>
-              </Stack>
-            </Collapse>
-          </Paper>
-        ))
+        <JobsCardView
+          apps={apps}
+          isJobFiltered={isJobFiltered}
+          matchingJobIds={matchingJobIds}
+          expandedApps={expandedApps}
+          expandedSubgroups={expandedSubgroups}
+          draggingJobId={draggingJobId}
+          checkedIds={checkedIds}
+          selectedJob={selectedJob}
+          pickerCount={pickerCount}
+          onToggleApp={toggleApp}
+          onToggleSubgroup={toggleSubgroup}
+          onRenameCallingApp={renameCallingApp}
+          onCreateGroup={createGroup}
+          onEditGroup={editGroup}
+          onRemoveGroup={removeGroup}
+          onAssignSubgroup={assignSubgroup}
+          onSelect={onSelect}
+          onToggleChecked={toggleChecked}
+          onSetDraggingJobId={setDraggingJobId}
+          onOpenPicker={openPicker}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
       )}
 
       {/* ── Picker modal for AI profile / group selection ── */}
