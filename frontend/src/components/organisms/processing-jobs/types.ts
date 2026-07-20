@@ -17,13 +17,8 @@ export interface ExpectedSchema {
   fields?: Record<string, SchemaFieldDefExtended>;
 }
 
-export interface FormattingRule {
-  type: string;
-  label: string;
-  description: string;
-  streamingSafe: boolean;
-  streamingNote: string;
-}
+/** Catalogue entry from listFormattingRules — aliases the shared API type. */
+export type { AvailableFormattingRule as FormattingRule } from '../../../types/api';
 
 export interface AppliedRule {
   type: string;

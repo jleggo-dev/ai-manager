@@ -72,7 +72,6 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 **Semantic validation** (ref checks) runs after Zod parsing. Examples:
 - `ai_profile_id` must reference an existing AI profile within the workspace
 - `processing_job_id` on workflow steps must reference an existing processing job
-- Widget health check URLs are validated for safety (HTTPS, no private IPs)
 - Workflow step `depends_on` values must reference existing step keys with no cycles
 
 **Warnings**: Successful create/update responses may include a `"warnings"` array of non-blocking advisory strings (e.g. `"Multiple steps share sort_order 1"`).
@@ -794,18 +793,15 @@ Executes the health check immediately and records the result.
 
 ### Scheduled runs (Vercel Cron)
 
-On **serverless deploys** (Vercel), the in-process 60-second scheduler is **not** started. Health and widget checks run only when an external cron hits the tick endpoints below. `vercel.json` configures these paths on a **daily** schedule (`0 0 * * *` — once at 00:00 UTC). Vercel Hobby allows only daily crons; after upgrading to Pro, increase frequency (e.g. `0 * * * *` hourly) to better match check `cadence_minutes`.
+On **serverless deploys** (Vercel), the in-process 60-second scheduler is **not** started. Health checks run only when an external cron hits the tick endpoint below. `vercel.json` configures these paths on a **daily** schedule (`0 0 * * *` — once at 00:00 UTC). Vercel Hobby allows only daily crons; after upgrading to Pro, increase frequency (e.g. `0 * * * *` hourly) to better match check `cadence_minutes`.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/cron/tick/health` | `Bearer CRON_SECRET` | Run all due API health checks |
-| GET | `/api/cron/tick/widget` | `Bearer CRON_SECRET` | Run all due widget health checks |
 
 **Auth**: Set `CRON_SECRET` in the deployment environment. Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`. All other callers receive `401`.
 
 **Response** (health): `{ ok: true, healthChecks: number, errors: number }`  
-**Response** (widget): `{ ok: true, widgetChecks: number, errors: number }`
-
 **Local dev**: Long-running `npm run dev:backend` starts an in-process scheduler (poll every 60s) instead of requiring cron hits.
 
 ---
@@ -927,216 +923,6 @@ Returns all checks with semaphore status, last run, recent runs, and active inci
 
 ---
 
-## Widget Health Checks
-
-Admin-only endpoints for widget-based (Puppeteer/browser) health checks. Operates on embedded chat widgets via headless browser automation.
-
-All endpoints require `Authorization: Bearer <token>` and `X-Workspace-Id: <UUID>`.
-All endpoints require **owner** or **admin** role.
-All `:id` parameters are validated as UUID (400 on invalid format).
-
-### Widget Checks (CRUD)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/widget-health-checks/` | List all widget checks (enriched with healthStatus) |
-| POST | `/api/widget-health-checks/` | Create widget check (auto-runs if Puppeteer available) |
-| GET | `/api/widget-health-checks/:id` | Get single widget check |
-| PUT | `/api/widget-health-checks/:id` | Update widget check |
-| DELETE | `/api/widget-health-checks/:id` | Delete widget check (204) |
-
-#### GET /api/widget-health-checks/
-**Response**:
-```json
-{
-  "data": [
-    {
-      "id": "<UUID>",
-      "name": "Support Widget",
-      "url": "https://example.com/support",
-      "cadence_minutes": 10,
-      "is_active": true,
-      "healthStatus": "healthy | degraded | down | unknown"
-    }
-  ]
-}
-```
-
-#### POST /api/widget-health-checks/
-**Body**:
-```json
-{
-  "name": "string (1-200 chars)",
-  "url": "valid URL (max 2000 chars)",
-  "test_message": "string (1-2000 chars, optional)",
-  "cadence_minutes": 10,
-  "outage_cadence_minutes": 5,
-  "is_active": true,
-  "max_retries": 2,
-  "shadow_host_selector": "CSS selector (max 500, optional)",
-  "launcher_selector": "CSS selector (max 500, optional)",
-  "iframe_selector": "CSS selector (max 500, optional)",
-  "input_selector": "CSS selector (max 500, optional)",
-  "send_selector": "CSS selector (max 500, optional)",
-  "response_selector": "CSS selector (max 500, optional)",
-  "error_patterns": ["string (max 200)", "..."],
-  "page_load_timeout_ms": 60000,
-  "widget_load_timeout_ms": 30000,
-  "response_timeout_ms": 60000,
-  "capture_screenshot": true
-}
-```
-**Response** (201): Created widget check object.
-**Side effect**: Triggers an initial run asynchronously if Puppeteer is available.
-
-#### GET /api/widget-health-checks/:id
-**Response**: Full widget check object.
-
-#### PUT /api/widget-health-checks/:id
-**Body** (all optional): Same fields as create body.
-**Response**: Updated widget check object.
-
-#### DELETE /api/widget-health-checks/:id
-**Response**: 204 No Content.
-
----
-
-### Manual Run
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/widget-health-checks/:id/run` | Trigger a manual widget health check |
-
-#### POST /api/widget-health-checks/:id/run
-Launches a headless browser, navigates to the widget URL, sends the test message, and records the result.
-**Response**: Run result object (screenshot stripped from response body).
-**Errors**: 503 if Puppeteer is not available in the current environment.
-
----
-
-### Run History & Screenshots
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/widget-health-checks/:id/runs` | Paginated run history (screenshots stripped) |
-| GET | `/api/widget-health-checks/runs/:runId/screenshot` | Get screenshot for a specific run |
-| GET | `/api/widget-health-checks/:id/incidents` | List incidents for a widget check |
-| GET | `/api/widget-health-checks/:id/failure-patterns` | Failure pattern analysis |
-
-#### GET /api/widget-health-checks/:id/runs
-**Query params**:
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `limit` | int | 50 | Max results (1–200) |
-| `offset` | int | 0 | Skip N results |
-| `status` | string | — | Comma-separated: `pass,fail,timeout,error` |
-| `from` | string | — | ISO datetime or `YYYY-MM-DD` |
-| `to` | string | — | ISO datetime or `YYYY-MM-DD` |
-
-**Response**:
-```json
-{
-  "data": [
-    {
-      "id": "<UUID>",
-      "widget_health_check_id": "<UUID>",
-      "status": "pass | fail | timeout | error",
-      "latency_ms": 4500,
-      "response_text": "...",
-      "error_message": null,
-      "created_at": "2026-01-01T00:10:00Z"
-    }
-  ],
-  "total": 87
-}
-```
-**Note**: Screenshot data is stripped from list responses. Each run includes a `has_screenshot: boolean` flag. Use the dedicated screenshot endpoint below to retrieve the image.
-
-#### GET /api/widget-health-checks/runs/:runId/screenshot
-Returns the screenshot captured during a widget check run.
-
-Returns a **signed URL** (valid 5 minutes) for the screenshot stored in Supabase Storage.
-**Response**:
-```json
-{ "url": "https://…/storage/v1/object/sign/widget-hc-screenshots/…?token=…" }
-```
-**Errors**: 404 if no screenshot is available for the run.
-
-#### GET /api/widget-health-checks/:id/incidents
-**Query**: `?limit=20` (max 100, default 20)
-**Response**: `{ "data": [IncidentRow, ...] }`
-
-#### GET /api/widget-health-checks/:id/failure-patterns
-**Query params**:
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `from` | string | 30 days ago | Start date (`YYYY-MM-DD` or ISO datetime) |
-| `to` | string | today | End date (`YYYY-MM-DD` or ISO datetime) |
-
-**Response**: Failure pattern analysis object.
-
----
-
-### Dashboard & Uptime
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/widget-health-checks/dashboard` | Dashboard overview with semaphore status |
-| GET | `/api/widget-health-checks/uptime-history` | Daily uptime statistics |
-
-#### GET /api/widget-health-checks/dashboard
-Returns all widget checks with semaphore status, last run, recent runs, and active incidents.
-**Response**:
-```json
-{
-  "data": [
-    {
-      "id": "<UUID>",
-      "name": "Support Widget",
-      "url": "https://example.com/support",
-      "cadenceMinutes": 10,
-      "outageCadenceMinutes": 5,
-      "isActive": true,
-      "lastRunAt": "2026-01-01T00:10:00Z",
-      "semaphore": "green | yellow | red | gray",
-      "lastRun": { ... },
-      "recentRuns": [ ... ],
-      "activeIncident": null
-    }
-  ]
-}
-```
-
-**Semaphore logic**: Same as API health checks (green/yellow/red/gray).
-
-#### GET /api/widget-health-checks/uptime-history
-**Query**: `?days=365` (1–365, default 365)
-**Response**:
-```json
-{
-  "data": [
-    {
-      "checkId": "<UUID>",
-      "checkName": "Support Widget",
-      "checkType": "widget",
-      "uptimePercent": 98.50,
-      "totals": { "pass": 4200, "fail": 50, "timeout": 15, "error": 5 },
-      "dailyStats": [
-        {
-          "date": "2026-01-01",
-          "totalRuns": 144,
-          "passCount": 142,
-          "failCount": 1,
-          "timeoutCount": 1,
-          "errorCount": 0
-        }
-      ]
-    }
-  ]
-}
-```
-
----
 
 ## JWT-Only Endpoints
 

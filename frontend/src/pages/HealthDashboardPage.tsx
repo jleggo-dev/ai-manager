@@ -43,10 +43,9 @@ import {
   sortHistoryByUptimeAsc,
 } from '../lib/health-aggregation';
 import * as api from '../services/api';
-import type { HcDashboardItem, HcRun, WidgetHcDashboardItem, WidgetHcRun, CheckUptimeHistory } from '../types/api';
+import type { HcDashboardItem, HcRun, CheckUptimeHistory } from '../types/api';
 
-type UnifiedDashboardItem =
-  (HcDashboardItem & { checkType: 'api' }) | (WidgetHcDashboardItem & { checkType: 'widget' });
+type UnifiedDashboardItem = HcDashboardItem;
 
 interface HealthDashboardPageProps {
   onNavigate: (key: string, params?: Record<string, unknown>) => void;
@@ -56,7 +55,7 @@ interface HealthDashboardPageProps {
 
 type ViewMode = 'graph' | 'detail';
 type DetailMode = 'cards' | 'list';
-type SortField = 'name' | 'type' | 'status' | 'lastRun' | 'latency' | 'cadence';
+type SortField = 'name' | 'status' | 'lastRun' | 'latency' | 'cadence';
 type SortDir = 'asc' | 'desc';
 
 const SEMAPHORE_HEX: Record<string, string> = {
@@ -90,11 +89,6 @@ function runStatusColor(status: string): string {
     default:
       return 'gray';
   }
-}
-
-function truncateUrl(url: string, max = 30): string {
-  if (url.length <= max) return url;
-  return url.slice(0, max) + '…';
 }
 
 function semaphoreOrder(s: string): number {
@@ -162,14 +156,8 @@ export default function HealthDashboardPage({
 
   const fetchDashboard = useCallback(async () => {
     try {
-      const [apiRes, widgetRes] = await Promise.allSettled([api.getHcDashboard(), api.getWidgetHcDashboard()]);
-      const apiItems: UnifiedDashboardItem[] =
-        apiRes.status === 'fulfilled' ? apiRes.value.data.map((i) => ({ ...i, checkType: 'api' as const })) : [];
-      const widgetItems: UnifiedDashboardItem[] =
-        widgetRes.status === 'fulfilled'
-          ? widgetRes.value.data.map((i) => ({ ...i, checkType: 'widget' as const }))
-          : [];
-      setItems([...apiItems, ...widgetItems]);
+      const apiRes = await api.getHcDashboard();
+      setItems(apiRes.data);
     } catch (err) {
       notifications.show({
         title: 'Failed to load dashboard',
@@ -184,10 +172,8 @@ export default function HealthDashboardPage({
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const [apiRes, widgetRes] = await Promise.allSettled([api.getHcUptimeHistory(), api.getWidgetHcUptimeHistory()]);
-      const apiData = apiRes.status === 'fulfilled' ? apiRes.value.data : [];
-      const widgetData = widgetRes.status === 'fulfilled' ? widgetRes.value.data : [];
-      setUptimeHistory([...apiData, ...widgetData]);
+      const apiRes = await api.getHcUptimeHistory();
+      setUptimeHistory(apiRes.data);
     } catch {
       /* silently fail; graph view will show empty state */
     } finally {
@@ -204,11 +190,10 @@ export default function HealthDashboardPage({
 
   /* ── Handlers ───────────────────────────────────────────── */
 
-  const handleRunNow = async (id: string, checkType: 'api' | 'widget') => {
+  const handleRunNow = async (id: string) => {
     setRunningId(id);
     try {
-      if (checkType === 'widget') await api.runWidgetHcCheck(id);
-      else await api.runHcCheck(id);
+      await api.runHcCheck(id);
       notifications.show({ title: 'Health check triggered', message: 'Run started successfully', color: 'green' });
       await fetchDashboard();
     } catch (err) {
@@ -244,9 +229,6 @@ export default function HealthDashboardPage({
       switch (sortField) {
         case 'name':
           cmp = a.name.localeCompare(b.name);
-          break;
-        case 'type':
-          cmp = a.checkType.localeCompare(b.checkType);
           break;
         case 'status':
           cmp = semaphoreOrder(a.semaphore) - semaphoreOrder(b.semaphore);
@@ -382,12 +364,9 @@ export default function HealthDashboardPage({
           ) : (
             <Stack gap="md">
               {sortedHistoryItems.map((h) => (
-                <Paper key={`${h.checkType}-${h.checkId}`} withBorder p="md" radius="md">
+                <Paper key={h.checkId} withBorder p="md" radius="md">
                   <Group justify="space-between" mb="sm">
                     <Group gap="sm">
-                      <Badge size="xs" variant="outline" color={h.checkType === 'widget' ? 'violet' : 'blue'}>
-                        {h.checkType === 'widget' ? 'Widget' : 'API'}
-                      </Badge>
                       <Text fw={600} size="sm">
                         {h.checkName}
                       </Text>
@@ -449,17 +428,8 @@ export default function HealthDashboardPage({
             /* ── Card grid (original layout) ───────────────── */
             <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
               {items.map((item) => (
-                <Card key={`${item.checkType}-${item.id}`} withBorder shadow="sm" padding="md" radius="md">
+                <Card key={item.id} withBorder shadow="sm" padding="md" radius="md">
                   <Stack gap="sm">
-                    <Badge
-                      size="xs"
-                      variant="outline"
-                      color={item.checkType === 'widget' ? 'violet' : 'blue'}
-                      style={{ alignSelf: 'flex-start' }}
-                    >
-                      {item.checkType === 'widget' ? 'Widget' : 'API'}
-                    </Badge>
-
                     <Group justify="space-between" align="flex-start">
                       <Group gap="sm" wrap="nowrap">
                         <div
@@ -475,14 +445,9 @@ export default function HealthDashboardPage({
                           <Text fw={600} size="sm" lineClamp={1}>
                             {item.name}
                           </Text>
-                          {item.checkType === 'api' && (item.profileName || item.providerName) && (
+                          {(item.profileName || item.providerName) && (
                             <Text size="xs" c="dimmed" lineClamp={1}>
                               {[item.profileName, item.providerName].filter(Boolean).join(' · ')}
-                            </Text>
-                          )}
-                          {item.checkType === 'widget' && (
-                            <Text size="xs" c="dimmed" lineClamp={1}>
-                              {truncateUrl(item.url)}
                             </Text>
                           )}
                         </div>
@@ -505,16 +470,6 @@ export default function HealthDashboardPage({
                             Response
                           </Text>
                           <Text size="sm">{item.lastRun.response_time_ms} ms</Text>
-                          {item.checkType === 'widget' &&
-                            item.lastRun &&
-                            'page_load_time_ms' in item.lastRun &&
-                            item.lastRun.page_load_time_ms != null && (
-                              <Text size="xs" c="dimmed">
-                                Page {item.lastRun.page_load_time_ms}ms
-                                {' / '}Widget {item.lastRun.widget_load_time_ms ?? '—'}ms
-                                {' / '}AI {item.lastRun.ai_response_time_ms ?? '—'}ms
-                              </Text>
-                            )}
                         </div>
                       )}
                       <div>
@@ -548,7 +503,7 @@ export default function HealthDashboardPage({
                           size="sm"
                           aria-label="Run now"
                           loading={runningId === item.id}
-                          onClick={() => handleRunNow(item.id, item.checkType)}
+                          onClick={() => handleRunNow(item.id)}
                         >
                           <IconPlayerPlay size={14} />
                         </ActionIcon>
@@ -556,20 +511,14 @@ export default function HealthDashboardPage({
                       <Button
                         variant="subtle"
                         size="compact-xs"
-                        rightSection={
-                          expanded[`${item.checkType}-${item.id}`] ? (
-                            <IconChevronUp size={14} />
-                          ) : (
-                            <IconChevronDown size={14} />
-                          )
-                        }
-                        onClick={() => toggleExpand(`${item.checkType}-${item.id}`)}
+                        rightSection={expanded[item.id] ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
+                        onClick={() => toggleExpand(item.id)}
                       >
                         Recent runs
                       </Button>
                     </Group>
 
-                    <Collapse in={!!expanded[`${item.checkType}-${item.id}`]}>
+                    <Collapse in={!!expanded[item.id]}>
                       {item.recentRuns.length === 0 ? (
                         <Text size="xs" c="dimmed">
                           No runs yet
@@ -585,7 +534,7 @@ export default function HealthDashboardPage({
                             </Table.Tr>
                           </Table.Thead>
                           <Table.Tbody>
-                            {item.recentRuns.map((run: HcRun | WidgetHcRun) => (
+                            {item.recentRuns.map((run: HcRun) => (
                               <Table.Tr key={run.id}>
                                 <Table.Td>
                                   <Badge size="xs" variant="light" color={runStatusColor(run.status)}>
@@ -599,15 +548,6 @@ export default function HealthDashboardPage({
                                   <Text size="xs">
                                     {run.response_time_ms != null ? `${run.response_time_ms} ms` : '—'}
                                   </Text>
-                                  {'page_load_time_ms' in run && run.page_load_time_ms != null && (
-                                    <Text size="xs" c="dimmed">
-                                      P:{run.page_load_time_ms}
-                                      {' W:'}
-                                      {run.widget_load_time_ms ?? '—'}
-                                      {' A:'}
-                                      {run.ai_response_time_ms ?? '—'}
-                                    </Text>
-                                  )}
                                 </Table.Td>
                                 <Table.Td>
                                   {run.error_message ? (
@@ -640,13 +580,6 @@ export default function HealthDashboardPage({
                     <SortableHeader
                       field="name"
                       label="Name"
-                      sortField={sortField}
-                      sortDir={sortDir}
-                      onSort={handleSort}
-                    />
-                    <SortableHeader
-                      field="type"
-                      label="Type"
                       sortField={sortField}
                       sortDir={sortDir}
                       onSort={handleSort}
@@ -685,7 +618,7 @@ export default function HealthDashboardPage({
                 </Table.Thead>
                 <Table.Tbody>
                   {sortedItems.map((item) => (
-                    <Table.Tr key={`${item.checkType}-${item.id}`}>
+                    <Table.Tr key={item.id}>
                       <Table.Td>
                         <Group gap="sm" wrap="nowrap">
                           <div
@@ -701,11 +634,6 @@ export default function HealthDashboardPage({
                             {item.name}
                           </Text>
                         </Group>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge size="xs" variant="outline" color={item.checkType === 'widget' ? 'violet' : 'blue'}>
-                          {item.checkType === 'widget' ? 'Widget' : 'API'}
-                        </Badge>
                       </Table.Td>
                       <Table.Td>
                         <Badge size="xs" variant="light" color={item.isActive ? 'green' : 'gray'}>
@@ -751,7 +679,7 @@ export default function HealthDashboardPage({
                             color="blue"
                             size="sm"
                             loading={runningId === item.id}
-                            onClick={() => handleRunNow(item.id, item.checkType)}
+                            onClick={() => handleRunNow(item.id)}
                           >
                             <IconPlayerPlay size={14} />
                           </ActionIcon>

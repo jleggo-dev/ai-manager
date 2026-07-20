@@ -8,6 +8,13 @@
  * model as e2e-live-provider-chat.test.ts).
  *
  * Requires a real devs-ai-v2 provider API key in the test workspace.
+ *
+ * CI gating (flake / upstream Devs.ai noise)
+ * ------------------------------------------
+ * Same opt-in as `e2e-live-provider-chat.test.ts`: under CI this suite is SKIPPED
+ * unless `RUN_LIVE_PROVIDER_E2E=1` (repo Variable). Upstream 500s / "Failed to
+ * send chat message" were failing otherwise-green FE PRs with no backend change
+ * (CI-01 class). Local `npm test` still runs by default.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
@@ -16,6 +23,10 @@ import { app, authHeaders, uniqueName, uniqueSlug } from './setup.ts';
 const TEST_USER_ID = '00000000-0000-4000-8000-0000000000d1';
 const CALLING_APP = 'e2e-test:devs-ai-v2-tools';
 const TOOL_EXPOSE_AS = 'echo_ping';
+
+const isCi = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+const runLiveProviderE2E =
+  !isCi || process.env.RUN_LIVE_PROVIDER_E2E === '1' || process.env.RUN_LIVE_PROVIDER_E2E === 'true';
 
 interface ApiProfile {
   id: string;
@@ -164,6 +175,10 @@ async function ensureV2ChatProfile(): Promise<ApiProfile | undefined> {
 }
 
 beforeAll(async () => {
+  if (!runLiveProviderE2E) {
+    console.warn('[e2e-devs-ai-v2-tools] skipped in CI (set RUN_LIVE_PROVIDER_E2E=1 to enable)');
+    return;
+  }
   v2Profile = await ensureV2ChatProfile();
   if (!v2Profile) {
     console.warn('[e2e-devs-ai-v2-tools] no devs-ai-v2 provider/profile — tests will skip');
@@ -201,6 +216,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (!runLiveProviderE2E) return;
   if (sessionId) {
     await request(app)
       .delete(`/api/chat-sessions/${sessionId}`)
@@ -233,7 +249,7 @@ afterAll(async () => {
   }
 });
 
-describe('E2E: devs-ai-v2 jobs-as-tools (live)', () => {
+describe.skipIf(!runLiveProviderE2E)('E2E: devs-ai-v2 jobs-as-tools (live)', () => {
   it('fulfills an internal tool job and continues the v2 stream', async () => {
     if (!v2Profile) return;
 

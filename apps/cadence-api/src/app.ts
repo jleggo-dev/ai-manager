@@ -1,3 +1,6 @@
+// Load env before any route/service module reads process.env (Vercel entry is this file).
+import './config.ts';
+
 import express from 'express';
 import healthRoutes from './routes/health.ts';
 import coachRoutes from './routes/coach.ts';
@@ -23,3 +26,7 @@ export function createApp() {
 
   return app;
 }
+
+/** Vercel Express/Services entry: default export must be the app (or a server). */
+const app = createApp();
+export default app;

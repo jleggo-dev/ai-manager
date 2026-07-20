@@ -30,7 +30,7 @@
  * HOT PATH — request-time surface (Cadence API runtime / aim.ts)
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Engine: Broker (templated jobs) ─────────────────────────── */
+/* ── Engine: Scribe (templated jobs) ─────────────────────────── */
 export {
   executeJob,
   executeJobById,
@@ -76,6 +76,10 @@ export {
 } from '../../../backend/src/db/tenant.ts';
 
 export type { RequestAuthContext } from '../../../backend/src/types.ts';
+
+/* ── SSE line buffering (incremental; CROSS-02 shared contract with BE-02) ── */
+export { createSseLineBuffer, pushSseChunk } from './sse-line-reader.ts';
+export type { SseLineBuffer } from './sse-line-reader.ts';
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * PROVISIONING (cold path) — scripts only (`apps/cadence-api/scripts/*`)

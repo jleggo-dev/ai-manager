@@ -2,7 +2,7 @@
  * Retrieval-function registry — the SEMANTIC LAYER (MEMORY-ARCHITECTURE.md §4.1).
  *
  * A bounded set of safe, parameterized queries over the structured store. The model
- * (later, the Broker in P2) *selects* functions; the app *executes* them. No free SQL.
+ * (later, the Scribe in P2) *selects* functions; the app *executes* them. No free SQL.
  * Each function knows how to run, render a compact section, and report a row count for
  * provenance.
  */

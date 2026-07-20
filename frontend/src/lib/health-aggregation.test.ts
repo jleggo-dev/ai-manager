@@ -31,18 +31,18 @@ describe('aggregateUptimeTotals', () => {
     });
   });
 
-  it('sums totals across API and widget checks', () => {
+  it('sums totals across multiple checks', () => {
     const history = [
       makeHistory({
         checkId: 'a',
-        checkName: 'API',
+        checkName: 'API A',
         checkType: 'api',
         totals: { pass: 10, fail: 1, timeout: 2, error: 0, warning: 3 },
       }),
       makeHistory({
-        checkId: 'w',
-        checkName: 'Widget',
-        checkType: 'widget',
+        checkId: 'b',
+        checkName: 'API B',
+        checkType: 'api',
         totals: { pass: 5, fail: 4, timeout: 0, error: 1, warning: 1 },
       }),
     ];

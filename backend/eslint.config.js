@@ -29,11 +29,14 @@ export default [
       ...tseslint.configs.recommended.rules,
 
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': ['warn', {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-        caughtErrorsIgnorePattern: '^_',
-      }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
       '@typescript-eslint/no-non-null-assertion': 'warn',
 
       'no-unused-vars': 'off',
@@ -56,7 +59,7 @@ export default [
       'src/ai-manager/chat-session-lifecycle.ts',
       'src/ai-manager/chat-messaging.ts', // sendChatMessage() ~206 lines
       'src/ai-manager/job-execution.ts', // executeJobById() ~237 lines
-      'src/services/widget-health-checker.ts', // BE-05 split candidate (one ~392-line fn)
+      // widget-health-checker.ts removed with the feature (PR #27) — do not re-add.
     ],
     rules: { 'max-lines': 'off', 'max-lines-per-function': 'off' },
   },

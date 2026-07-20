@@ -9,7 +9,7 @@
  *     TARGET_SUPABASE_URL, TARGET_SUPABASE_SERVICE_ROLE_KEY
  *
  *   node scripts/sync-supabase-storage.mjs
- *   node scripts/sync-supabase-storage.mjs --bucket widget-hc-screenshots
+ *   node scripts/sync-supabase-storage.mjs --bucket <bucket-name>
  *
  * Loads backend/.env for TARGET_* if TARGET vars unset.
  * Loads backend/.env.replica for SOURCE_* if SOURCE vars unset (copy from .env.replica.example).
@@ -69,7 +69,7 @@ if (sourceUrl === targetUrl) {
 const bucketArg = process.argv.find((a) => a.startsWith('--bucket='));
 const singleBucket = bucketArg ? bucketArg.slice('--bucket='.length) : null;
 
-const DEFAULT_BUCKETS = ['widget-hc-screenshots'];
+const DEFAULT_BUCKETS = []; // pass --bucket=<name>; no default buckets after widget-hc removal
 
 const source = createClient(sourceUrl, sourceKey);
 const target = createClient(targetUrl, targetKey);

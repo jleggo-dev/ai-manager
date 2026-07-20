@@ -19,20 +19,6 @@ describe('Investigation Features', () => {
     });
   });
 
-  describe('GET /api/widget-health-checks/', () => {
-    it('returns healthStatus field for each widget check', async () => {
-      const res = await request(app).get('/api/widget-health-checks/').set(authHeaders());
-
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.data)).toBe(true);
-
-      for (const check of res.body.data) {
-        expect(check).toHaveProperty('healthStatus');
-        expect(['healthy', 'degraded', 'down', 'unknown']).toContain(check.healthStatus);
-      }
-    });
-  });
-
   /* ── Filtered Runs ─────────────────────────────────────── */
 
   describe('GET /api/health-checks/:id/runs (filters)', () => {
@@ -75,21 +61,6 @@ describe('Investigation Features', () => {
     });
   });
 
-  describe('GET /api/widget-health-checks/:id/runs (filters)', () => {
-    it('returns total alongside data', async () => {
-      const listRes = await request(app).get('/api/widget-health-checks/').set(authHeaders());
-      if (listRes.body.data.length === 0) return;
-
-      const checkId = listRes.body.data[0].id;
-      const res = await request(app).get(`/api/widget-health-checks/${checkId}/runs`).set(authHeaders());
-
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('data');
-      expect(res.body).toHaveProperty('total');
-      expect(typeof res.body.total).toBe('number');
-    });
-  });
-
   /* ── Failure Patterns ──────────────────────────────────── */
 
   describe('GET /api/health-checks/:id/failure-patterns', () => {
@@ -118,22 +89,6 @@ describe('Investigation Features', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty('error_groups');
-    });
-  });
-
-  describe('GET /api/widget-health-checks/:id/failure-patterns', () => {
-    it('returns error_groups and hourly_distribution', async () => {
-      const listRes = await request(app).get('/api/widget-health-checks/').set(authHeaders());
-      if (listRes.body.data.length === 0) return;
-
-      const checkId = listRes.body.data[0].id;
-      const res = await request(app).get(`/api/widget-health-checks/${checkId}/failure-patterns`).set(authHeaders());
-
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('error_groups');
-      expect(res.body).toHaveProperty('hourly_distribution');
-      expect(Array.isArray(res.body.error_groups)).toBe(true);
-      expect(Array.isArray(res.body.hourly_distribution)).toBe(true);
     });
   });
 });

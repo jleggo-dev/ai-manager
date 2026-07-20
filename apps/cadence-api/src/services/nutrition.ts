@@ -15,15 +15,12 @@ import { findPendingFoodLogOccurrence, setOccurrenceStatus } from '../repos/occu
 import { putMealPhoto, signMealPhotoUrl, signMealPhotoUrls } from './meal-photos.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
+import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW } from './nutrition-parse.ts';
 import { logAi } from './ai-log.ts';
 import type { Macros, MacroTargets, MealKind, NutritionLog, NutritionSummary } from '@cadence/shared';
 
-/** Below this parse confidence, macro estimates are PROVISIONAL: shown, but excluded from the
- *  day's totals until the user taps to confirm (spec S1; tunable later via macro_targets). */
-const PROVISIONAL_BELOW = 0.5;
-
-const MEALS: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
-const isMeal = (v: unknown): v is MealKind => MEALS.includes(v as MealKind);
+export { parseMealResult, wantsTargets, PROVISIONAL_BELOW, isMeal } from './nutrition-parse.ts';
+export type { ParsedMealResult } from './nutrition-parse.ts';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -64,27 +61,12 @@ export async function logMeal(
       { images },
     );
     rawOut = res.formatted ?? res.raw ?? '';
-    const parsed = JSON.parse(rawOut) as Record<string, unknown>;
-    if (!input.meal && isMeal(parsed.meal)) meal = parsed.meal; // an explicit user choice outranks the model
-    if (Array.isArray(parsed.items)) {
-      items = (parsed.items as Array<Record<string, unknown>>)
-        .filter((i) => i && typeof i.name === 'string' && (i.name as string).trim())
-        .slice(0, 12)
-        .map((i) => {
-          const est = sanitizeMacros(i.est);
-          return {
-            name: (i.name as string).trim(),
-            ...(typeof i.qty === 'number' && i.qty > 0 ? { qty: i.qty } : {}),
-            ...(typeof i.unit === 'string' && (i.unit as string).trim() ? { unit: (i.unit as string).trim() } : {}),
-            ...(est ? { est } : {}),
-          };
-        });
-    }
-    const f = parsed.flags as Record<string, unknown> | undefined;
-    flags = { ...(f?.alcohol === true ? { alcohol: true } : {}), ...(f?.caffeine === true ? { caffeine: true } : {}) };
-    if (typeof parsed.confidence === 'number') confidence = Math.max(0, Math.min(1, parsed.confidence));
-    const est = sanitizeMacros(parsed.est_macros);
-    if (est) macros = { ...est, source: 'ai' };
+    const shaped = parseMealResult(rawOut, input.meal && isMeal(input.meal) ? input.meal : undefined);
+    meal = shaped.meal;
+    items = shaped.items;
+    flags = shaped.flags;
+    macros = shaped.macros;
+    confidence = shaped.confidence;
   } catch (e) {
     console.warn('[nutrition] parse-meal failed — storing the meal without a parse:', e);
   }
@@ -206,19 +188,6 @@ export type BaselineRead =
       proposed_targets: Macros | null;
       targets_rationale: string | null;
     };
-
-/** Deterministic gate: targets are only WORTH proposing for an eating-focused or weight goal. */
-const WEIGHTY_MEASURE = /\b(kg|lbs?|weight)\b/i;
-function wantsTargets(
-  goals: Array<{ area?: string; type?: string; measure?: { unit?: string; metric?: string } }>,
-): boolean {
-  return goals.some(
-    (g) =>
-      g.area === 'nourishment' ||
-      (g.type === 'target' &&
-        (WEIGHTY_MEASURE.test(String(g.measure?.unit ?? '')) || WEIGHTY_MEASURE.test(String(g.measure?.metric ?? '')))),
-  );
-}
 
 const OBSERVE_DAYS_NEEDED = 7;
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getReview, updateName } from '../../lib/api.ts';
 import { Orb } from '../../components/Orb.tsx';
 
@@ -13,6 +13,7 @@ export function Welcome({ onStart }: { onStart: () => void }) {
   const [stage, setStage] = useState<Stage>('intro');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  const nameRef = useRef<HTMLInputElement | null>(null);
 
   // Prefill if this account already has a name (e.g. after switching to the "ongoing" account).
   useEffect(() => {
@@ -22,6 +23,13 @@ export function Welcome({ onStart }: { onStart: () => void }) {
         /* fresh account */
       });
   }, []);
+
+  // Focus the name field without letting iOS pan/scroll the page into place (PhoneFrame
+  // already shrinks to the visual viewport when the keyboard opens).
+  useEffect(() => {
+    if (stage !== 'name') return;
+    nameRef.current?.focus({ preventScroll: true });
+  }, [stage]);
 
   async function start() {
     if (busy) return;
@@ -51,6 +59,7 @@ export function Welcome({ onStart }: { onStart: () => void }) {
       {stage === 'name' && (
         <div className="w-name">
           <input
+            ref={nameRef}
             className="field"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -58,7 +67,6 @@ export function Welcome({ onStart }: { onStart: () => void }) {
             placeholder="Your name"
             aria-label="Your name"
             autoComplete="given-name"
-            autoFocus
           />
         </div>
       )}

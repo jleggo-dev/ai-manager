@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Orb } from '../../components/Orb.tsx';
 import { PlanView } from '../plan/PlanView.tsx';
 import { OnboardingChat } from '../onboarding/OnboardingChat.tsx';
 import { ProgressView } from '../progress/ProgressView.tsx';
@@ -69,18 +68,18 @@ export function MainTabs({ email }: { email: string | null }) {
 
   return (
     <>
-      <div className="app-head">
-        <div className="wordmark">
-          <Orb />
-          Cadence
+      {/* The Coach tab is an immersive full-screen chat (its own floating settings gear), so it
+          drops this header; Today/Progress keep a slim header that now carries only the gear. */}
+      {tab !== 'coach' && (
+        <div className="app-head app-head-min">
+          <button className="gear" onClick={() => setSettingsOpen(true)} aria-label="Settings" title="Settings">
+            <GearIcon />
+          </button>
         </div>
-        <button className="gear" onClick={() => setSettingsOpen(true)} aria-label="Settings" title="Settings">
-          <GearIcon />
-        </button>
-      </div>
+      )}
       <div className="app">
         {tab === 'today' && <PlanView />}
-        {tab === 'coach' && <OnboardingChat intent="ongoing" chrome="none" />}
+        {tab === 'coach' && <OnboardingChat intent="ongoing" chrome="none" onSettings={() => setSettingsOpen(true)} />}
         {tab === 'progress' && <ProgressView />}
         <nav className="tabbar" aria-label="Main">
           <button className={`tab${tab === 'today' ? ' tab-on' : ''}`} onClick={() => setTab('today')}>

@@ -442,7 +442,7 @@ function CheckRow({ check, profileName, expanded, onExpand, onEdit, onDelete, on
         <Table.Td colSpan={8} p={0} style={{ border: expanded ? undefined : 'none' }}>
           <Collapse in={expanded}>
             <Box p="md">
-              <InvestigationPanel checkId={check.id} checkType="api" />
+              <InvestigationPanel checkId={check.id} />
             </Box>
           </Collapse>
         </Table.Td>

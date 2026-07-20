@@ -24,7 +24,9 @@ async function main() {
   try {
     await clean();
     await insertGoal(DEV, { title: 'Spartan Beast in October', category: 'fitness', type: 'milestone' } as never);
-    await mergeBaseline(DEV, { injuries: [{ area: 'left knee', condition: 'patellar tendinopathy', plan_around: true }] } as never);
+    await mergeBaseline(DEV, {
+      injuries: [{ area: 'left knee', condition: 'patellar tendinopathy', plan_around: true }],
+    } as never);
 
     await buildContextPack(DEV, 'onboarding');
     const t = getTrace(DEV);
@@ -32,12 +34,15 @@ async function main() {
 
     console.log('trace.context.mode :', t?.context?.mode);
     console.log('trace.provenance   :', t?.context?.provenance?.map((p) => `${p.fn}(${p.rows})`).join(', '));
-    console.log('trace.brokerSelect :', t?.brokerSelect?.reason ?? '(fallback)');
-    console.log('trace.brokerSumm   :', (t?.brokerSummarize?.output || '(fallback)').slice(0, 70).replace(/\n/g, ' '));
+    console.log('trace.scribeSelect :', t?.scribeSelect?.reason ?? '(fallback)');
+    console.log('trace.scribeSumm   :', (t?.scribeSummarize?.output || '(fallback)').slice(0, 70).replace(/\n/g, ' '));
     console.log('trace.data keys    :', Object.keys(t?.context?.data ?? {}).join(', '));
     console.log('persona first line :', (persona || '(none)').split('\n')[0]);
 
-    const check = (l: string, c: boolean) => { console.log(`${c ? '✓' : '✗'} ${l}`); if (!c) ok = false; };
+    const check = (l: string, c: boolean) => {
+      console.log(`${c ? '✓' : '✗'} ${l}`);
+      if (!c) ok = false;
+    };
     check('context recorded', !!t?.context);
     check('provenance has fns', (t?.context?.provenance?.length ?? 0) > 0);
     check('data captured', Object.keys(t?.context?.data ?? {}).length > 0);
