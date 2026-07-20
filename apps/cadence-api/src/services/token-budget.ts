@@ -1,6 +1,9 @@
 /**
  * Token-budget tiers (spec §4.3) — pure deterministic app code, no LLM.
- * Drives summarize-and-roll and JIT-injection decisions on the Coach hot path.
+ *
+ * Not yet wired into the Coach hot path — no production caller tracks usedTokens /
+ * maxTokens yet. Kept (and unit-tested) so summarize-and-roll / JIT trim can adopt
+ * it when turn-context budgeting lands; see docs/cadence/MEMORY-ARCHITECTURE.md.
  */
 export type BudgetTier = 'green' | 'amber' | 'red';
 

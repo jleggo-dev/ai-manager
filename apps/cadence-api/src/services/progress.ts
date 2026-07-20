@@ -177,7 +177,7 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
     } else if (g.type === 'recurring') {
       const now = new Date();
       const past = await listOccurrences(userId, iso(Date.now() - 6 * 86_400_000), iso(Date.now()));
-      const { kept, window } = rollingConsistency(past as never, now, 7);
+      const { kept, window } = rollingConsistency(past, now, 7);
       cards.push({ kind: 'consistency', area: g.area, title: g.title, kept, window });
     }
   }

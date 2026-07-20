@@ -22,7 +22,7 @@ async function recentActivity(userId: string, days = 14) {
   const to = iso(new Date(base));
   const occ = await listOccurrences(userId, from, to);
   const count = (s: string) => occ.filter((o) => o.status === s).length;
-  const { kept, window } = rollingConsistency(occ as never, now, 7);
+  const { kept, window } = rollingConsistency(occ, now, 7);
   // Observe-phase food signal: days_logged is the nutrition module's phase gate — synthesis
   // holds off on eating changes below ~7 logged days, then introduces ONE at a time.
   const nutrition = summarizeNutrition(await listNutritionLogs(userId, from, to), days);

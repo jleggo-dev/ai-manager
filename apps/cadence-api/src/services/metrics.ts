@@ -1,4 +1,3 @@
-import { listOccurrences } from '../repos/occurrences.ts';
 import type { Occurrence } from '@cadence/shared';
 
 /**
@@ -7,24 +6,8 @@ import type { Occurrence } from '@cadence/shared';
  * computes these; the LLM only narrates them (it never tallies).
  */
 
-export interface ConsistencyWindow {
-  from: string;
-  to: string;
-  done: number;
-  total: number;
-  rate: number | null; // 0..1 over the window
-}
-
-/** Completed vs scheduled over a window — "how you showed up" (was `adherence`). */
-export async function consistency(userId: string, lastNDays = 7): Promise<ConsistencyWindow> {
-  const now = new Date();
-  const from = new Date(now.getTime() - lastNDays * 86_400_000).toISOString().slice(0, 10);
-  const to = now.toISOString().slice(0, 10);
-  const occ = await listOccurrences(userId, from, to);
-  const done = occ.filter((o) => o.status === 'done').length;
-  const total = occ.length;
-  return { from, to, done, total, rate: total ? done / total : null };
-}
+/** Slim shape `rollingConsistency` needs — listOccurrences omits session/log. */
+export type ConsistencyOccurrence = Pick<Occurrence, 'date' | 'status'>;
 
 /**
  * Rolling-window consistency: how many of the last `windowDays` days had ≥1 completed
@@ -32,7 +15,7 @@ export async function consistency(userId: string, lastNDays = 7): Promise<Consis
  * lowers the ratio, it NEVER resets progress to zero ("hearth, not scoreboard"). Pure.
  */
 export function rollingConsistency(
-  occurrences: Occurrence[],
+  occurrences: ConsistencyOccurrence[],
   today = new Date(),
   windowDays = 7,
 ): { kept: number; window: number } {

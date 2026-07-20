@@ -5,8 +5,8 @@
  * Run: node --import tsx apps/cadence-api/scripts/smoke-repos.ts
  */
 import { insertGoal, listGoals } from '../src/repos/goals.ts';
-import { insertEquipment, listEquipment, getActiveFootwear } from '../src/repos/equipment.ts';
-import { addRunMileage } from '../src/services/completion.ts';
+import { insertEquipment, listEquipment, getActiveFootwear, updateWear } from '../src/repos/equipment.ts';
+import { applyRun } from '../src/services/shoe-mileage.ts';
 import { createConversation } from '../src/repos/conversations.ts';
 import { sql } from '../src/db/sql.ts';
 
@@ -48,12 +48,15 @@ async function main() {
       'km=' + active?.wear?.accumulated_km,
     );
 
-    const updated = await addRunMileage(DEV, 5.2);
+    // Shoe mileage action (was services/completion.addRunMileage — removed as unwired;
+    // wire into logOccurrence when run distance is available on the completion path).
+    const shoeWear = active?.wear?.tracks_mileage ? applyRun(active.wear, 5.2) : null;
+    if (shoeWear && active) await updateWear(DEV, active.equipment_id, shoeWear);
     console.log(
-      '✓ addRunMileage(5.2)   ',
-      'km=' + updated?.accumulated_km,
-      'status=' + updated?.status,
-      updated?.accumulated_km === 417.2 ? '(expected 417.2 ✓)' : '(UNEXPECTED)',
+      '✓ applyRun(5.2)+updateWear',
+      'km=' + shoeWear?.accumulated_km,
+      'status=' + shoeWear?.status,
+      shoeWear?.accumulated_km === 417.2 ? '(expected 417.2 ✓)' : '(UNEXPECTED)',
     );
 
     const convo = await createConversation(DEV, 'smoke-session-' + Date.now(), null);
