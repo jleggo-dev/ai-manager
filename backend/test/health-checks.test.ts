@@ -47,7 +47,8 @@ describe('Health Checks API', () => {
       rows.find((p) => p.type === 'devs-ai' || p.type === 'devs-ai-v2' || p.type === 'google-gemini') ||
       rows[0];
     expect(stable?.id).toBeTruthy();
-    testProviderId = stable!.id;
+    if (!stable?.id) throw new Error('No provider available for health-checks tests');
+    testProviderId = stable.id;
   });
 
   /* ── Provider Keys CRUD ────────────────────────────────────── */
