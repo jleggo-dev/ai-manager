@@ -1,4 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import type { OccurrenceDetail } from '../../lib/api.ts';
 import { OccurrenceSheet } from './OccurrenceSheet.tsx';
 
@@ -36,6 +38,13 @@ const base = (partial: Partial<OccurrenceDetail>): OccurrenceDetail => ({
   ...partial,
 });
 
+function renderWithQuery(ui: ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 0 } },
+  });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
 describe('OccurrenceSheet dispatcher', () => {
   beforeEach(() => {
     getOccurrenceDetail.mockReset();
@@ -45,14 +54,14 @@ describe('OccurrenceSheet dispatcher', () => {
 
   it('maps 404 to the "moved with your new plan" gone copy', async () => {
     getOccurrenceDetail.mockRejectedValue(Object.assign(new Error('gone'), { status: 404 }));
-    render(<OccurrenceSheet occurrenceId="missing" onClose={() => {}} />);
+    renderWithQuery(<OccurrenceSheet occurrenceId="missing" onClose={() => {}} />);
 
     expect(await screen.findByText(/This session moved with your new plan/)).toBeInTheDocument();
   });
 
   it('maps non-404 fetch failures to the generic error copy', async () => {
     getOccurrenceDetail.mockRejectedValue(Object.assign(new Error('boom'), { status: 500 }));
-    render(<OccurrenceSheet occurrenceId="bad" onClose={() => {}} />);
+    renderWithQuery(<OccurrenceSheet occurrenceId="bad" onClose={() => {}} />);
 
     expect(await screen.findByText(/Something hiccuped loading this session/)).toBeInTheDocument();
   });
@@ -69,7 +78,7 @@ describe('OccurrenceSheet dispatcher', () => {
         },
       }),
     );
-    render(<OccurrenceSheet occurrenceId="sess" onClose={() => {}} />);
+    renderWithQuery(<OccurrenceSheet occurrenceId="sess" onClose={() => {}} />);
 
     expect(await screen.findByText('Press')).toBeInTheDocument();
     expect(screen.getByText('3×8')).toBeInTheDocument();
@@ -78,7 +87,7 @@ describe('OccurrenceSheet dispatcher', () => {
 
   it('routes a food system row to the meal log panel', async () => {
     getOccurrenceDetail.mockResolvedValue(base({ kind: 'system', title: 'Log your meals' }));
-    render(<OccurrenceSheet occurrenceId="food" onClose={() => {}} />);
+    renderWithQuery(<OccurrenceSheet occurrenceId="food" onClose={() => {}} />);
 
     expect(await screen.findByText(/What did you eat/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Log this meal' })).toBeInTheDocument();
@@ -87,7 +96,7 @@ describe('OccurrenceSheet dispatcher', () => {
 
   it('routes a pending weigh-in to the weigh-in panel', async () => {
     getOccurrenceDetail.mockResolvedValue(base({ kind: 'system', title: 'Weigh in', status: 'pending' }));
-    render(<OccurrenceSheet occurrenceId="weigh" onClose={() => {}} />);
+    renderWithQuery(<OccurrenceSheet occurrenceId="weigh" onClose={() => {}} />);
 
     expect(await screen.findByText(/What's the scale saying today/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText('e.g. 195')).toBeInTheDocument();

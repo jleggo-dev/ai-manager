@@ -6,22 +6,16 @@ import { ProgressCardView, ProgressTrendCard } from '../../components/ProgressCa
 import { isFoodTitle } from '../../components/occurrence-mod.ts';
 import { rankProgressCard } from './rank.ts';
 import { useGoalEventAdd } from './useGoalEventAdd.ts';
-import {
-  getProgress,
-  getNutritionDay,
-  getRecentMeals,
-  type PlanViewData,
-  type PlanOccurrence,
-  type PlanDay,
-  type NutritionDayData,
-} from '../../lib/api.ts';
+import { useNutritionDay } from '../../lib/query/index.ts';
+import { getProgress, getRecentMeals, type PlanViewData, type PlanOccurrence, type PlanDay } from '../../lib/api.ts';
 
 /**
  * The Visual Today — a module dashboard, not a week list. STABLE CHROME, VARIABLE CONTENT: every
  * card is gated by (area, goal type, data presence), so a books-and-prayer user never sees a
  * macro ring and a runner-with-food sees rings + a consistency ring but no reading bar. Composed
  * ENTIRELY client-side from /plan (passed in) + /progress + /nutrition/day — no LLM, no new
- * aggregate endpoint (S6). Shared card/row renderers live in components/ (WEB-04).
+ * aggregate endpoint (S6). Shared card/row renderers live in components/ (WEB-04). Nutrition day
+ * comes from the shared TanStack query (CROSS-03); progress still refreshes via `reloadKey`.
  */
 
 export function TodayDashboard({
@@ -36,8 +30,8 @@ export function TodayDashboard({
   onOpen: (occId: string) => void;
 }) {
   const [progress, setProgress] = useState<ProgressData | null>(null);
-  const [nutrition, setNutrition] = useState<NutritionDayData | null>(null);
   const [recentDays, setRecentDays] = useState(0);
+  const { data: nutrition = null } = useNutritionDay();
 
   const refreshProgress = () =>
     getProgress()
@@ -50,9 +44,6 @@ export function TodayDashboard({
     getProgress()
       .then(setProgress)
       .catch(() => setProgress({ cards: [], trends: [], history: [] }));
-    getNutritionDay()
-      .then(setNutrition)
-      .catch(() => setNutrition(null));
     getRecentMeals(7)
       .then((ms) => setRecentDays(new Set(ms.map((m) => m.date)).size))
       .catch(() => {});
