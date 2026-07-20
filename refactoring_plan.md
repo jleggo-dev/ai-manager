@@ -41,7 +41,7 @@ source report that contains the full current-problem/target-design/migration-ste
    commit, nutrition, coach-stream, aim seam). `apps/cadence-web` gained ReviewScreen (WEB-01 #45),
    OccurrenceSheet (WEB-03 #44), card-row dedup (WEB-04 #46), and TanStack nutrition-day
    (**CROSS-03** ✅ Done both halves — AI Admin #49 + Cadence #50).
-5. Read §4.2 remaining backlog (FE-13, CI-01 human, Phase 3 P2 / batch 10 in flight),
+5. Read §4.2 remaining backlog (FE-13, Phase 3 P2 / batch 10 in flight),
    §5 for durable goals, §6 for multi-agent orchestration.
 6. **CI gate between batches:** do not start the next parallel batch (and do not merge) while
    integration-branch / PR CI is red. Branch protection on `main` now **requires** status checks
@@ -373,8 +373,8 @@ merge log (originally via `feat/cadence`, then `main`):
 >   health dashboard retained. **FE-05** cancelled (page deleted with the feature).
 > - **CI green-up** (PR #21) — Prettier-fix `aim.test.ts` (was failing `format:check`); gate
 >   `e2e-live-provider-chat` in Actions unless `RUN_LIVE_PROVIDER_E2E=1` (repo Variable). Local
->   `npm test` still runs live provider e2e by default. **CI-01** Devs.ai v1 key rotation remains a
->   human action (`DEVS_AI_V1_KEY_KNOWN_EXPIRED`).
+>   `npm test` still runs live provider e2e by default. **CI-01** ✅ Done — human rotated Devs.ai
+>   v1 key; `DEVS_AI_V1_KEY_KNOWN_EXPIRED = false`.
 > - **API-03** — extract coach SSE relay into `services/coach-stream.ts` + shared
 >   `createSseLineBuffer` in `@ai-admin/core` (completes **CROSS-02** cadence half; same contract
 >   as BE-02). Characterization tests: core 9/9 + coach-stream 8/8.
@@ -428,7 +428,7 @@ merge log (originally via `feat/cadence`, then `main`):
 > - **FE-11** ✅ **Done** — `useTestChatStream` extract (PR #63; §4.7)
 > - **FE-14** ✅ **Done** — `ProfileFormModal` split (PR #56; §4.8)
 > - **BE-03a** ✅ **Done** — diagnostic-logs GET gating (owner/admin; §4.9)
-> - **CI-01** — rotate Devs.ai v1 key + flip `DEVS_AI_V1_KEY_KNOWN_EXPIRED` (human; §4.6)
+> - **CI-01** ✅ **Done** — human rotated Devs.ai v1 key; `DEVS_AI_V1_KEY_KNOWN_EXPIRED = false` (§4.6)
 > - **CI-08** ✅ **Done** — `.gitattributes` `eol=lf` (PR #53; P3; §4.6)
 > - **CI-09** ✅ **Done** — camelCase `toolOutputs` on Devs.ai v2 `/resume` (PR #55; §4.6)
 > - **Phase 3 P2** — condensed area lists in §4.4 (batch 10 in flight)
@@ -588,7 +588,7 @@ logged here as its own backlog item.
 
 | ID | Item | Area | Priority | Effort | Risk | Status |
 |---|---|---|---|---|---|---|
-| **CI-01** | 4 backend e2e tests fail (revised diagnosis, see PR #6): 2 in `devs-ai-v2-lifecycle` had stale assertions (fixed), a real `calling_applications` upsert `PGRST` coercion bug (fixed) and a real `ai-profiles` bug where `config` was silently dropped on create/update, breaking jobs-as-tools entirely (fixed, verified 3/3 live), and `e2e-live-provider-chat`'s devs-ai (v1) case has a genuinely expired upstream key (quarantined via `it.skipIf(DEVS_AI_V1_KEY_KNOWN_EXPIRED)`, needs a human to rotate the key and flip the flag). **Follow-up (PR #21):** whole live-provider suite is skipped in CI unless `RUN_LIVE_PROVIDER_E2E=1` (flaky Devs.ai v2 500s); local runs unchanged. | Backend | P1 | S per test | Low | **Done** (PR #6 + #21) — **human still needed:** rotate Devs.ai v1 key and set `DEVS_AI_V1_KEY_KNOWN_EXPIRED = false` |
+| **CI-01** | 4 backend e2e tests fail (revised diagnosis, see PR #6): 2 in `devs-ai-v2-lifecycle` had stale assertions (fixed), a real `calling_applications` upsert `PGRST` coercion bug (fixed) and a real `ai-profiles` bug where `config` was silently dropped on create/update, breaking jobs-as-tools entirely (fixed, verified 3/3 live), and `e2e-live-provider-chat`'s devs-ai (v1) case had a genuinely expired upstream key (quarantined via `it.skipIf(DEVS_AI_V1_KEY_KNOWN_EXPIRED)`). **Follow-up (PR #21):** whole live-provider suite is skipped in CI unless `RUN_LIVE_PROVIDER_E2E=1` (flaky Devs.ai v2 500s); local runs unchanged. | Backend | P1 | S per test | Low | **Done** (PR #6 + #21 + un-quarantine) — human rotated Devs.ai v1 key; `DEVS_AI_V1_KEY_KNOWN_EXPIRED = false` |
 | **CI-02** | Frontend `npm run lint` fails immediately — `eslint-plugin-react-hooks` requires `zod-validation-error/v4`, unresolvable in the current dependency tree | Frontend | P1 | S | Low | **Done** (PR #5 — bumped to `^7.1.1`) |
 | **CI-03** | Frontend `npm test`: 7 failures in `services/api.test.ts` — its `vi.mock('../lib/auth-session')` mock is missing `handleAccountGateApiError`, which the real module now exports (mock drifted from implementation) | Frontend | P1 | S | Low | **Done** (PR #6, merged to `feat/cadence`) — same drift also found independently in `App.test.tsx`'s separate mock of the same module, fixed there too |
 | **CI-09** | `Devs.ai v2 resume error (400): Unrecognized key "tool_outputs"` surfaced during `e2e-devs-ai-v2-tools` debugging (PR #6) in the tool-fulfillment continuation call — doesn't currently fail the test (the flow recovers), but the resume request body shape for that endpoint looks wrong and deserves its own investigation | Backend | P2 | S-M | Low-Medium (live provider integration) | **Done** (PR #55) — `buildV2ResumeBody` sends camelCase `toolOutputs`/`toolCallId`/`status` |
@@ -780,8 +780,8 @@ Every item ID in §4 should carry one of these statuses, updated by whichever ro
 
 Update Status cells in place as items move; this file is the single source of truth. Phase 0–1 and
 **Phase 2 P1 are Done**; **batch 9 is Done**; **Phase 3 / batch 10 is in progress**. See §4.2
-remaining backlog for deferred P2/P3 + human items (FE-13, CI-01 human, Phase 3 P2).
-**INFRA-02** required-check flip is Done (2026-07-20). **FE-11** Done (PR #63). **BE-03a** Done.
+remaining backlog for deferred P2/P3 items (FE-13, Phase 3 P2).
+**INFRA-02** required-check flip is Done (2026-07-20). **FE-11** Done (PR #63). **BE-03a** Done. **CI-01** Done.
 
 ---
 

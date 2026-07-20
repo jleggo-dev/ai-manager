@@ -52,22 +52,19 @@ const runLiveProviderE2E =
   !isCi || process.env.RUN_LIVE_PROVIDER_E2E === '1' || process.env.RUN_LIVE_PROVIDER_E2E === 'true';
 
 /**
- * KNOWN-RED, LIVE-CREDENTIAL ISSUE (not a code bug) — CI-01
- * ----------------------------------------------------------
- * The "devs-ai" (v1) provider row configured in this workspace consistently
- * gets `401 Unauthorized: {"message":"Unauthorized"}` straight from the real
- * Devs.ai API (see backend/src/integrations/devs-ai/client.ts _request()).
- * Ruled out as a decryption regression: the "devs-ai-v2" iteration below uses
- * the exact same decrypt-then-call path (models/providers.ts → decryptSecret)
- * against a *different* provider row and gets real model output back, so the
- * decrypt pipeline itself is proven fine in this same test run — this key is
- * specifically expired/rotated upstream.
+ * CI-01 — Devs.ai v1 live-credential quarantine (cleared 2026-07-20)
+ * ------------------------------------------------------------------
+ * Historically the "devs-ai" (v1) provider row returned
+ * `401 Unauthorized: {"message":"Unauthorized"}` from the real Devs.ai API
+ * while "devs-ai-v2" (same decrypt path) worked — an expired upstream key,
+ * not a decryption regression. Human rotated the stored v1 key; flag is
+ * `false` so the live case runs again.
  *
- * To re-enable: rotate the stored API key for the "devs-ai" (v1) provider in
- * this workspace (Providers page or `POST /api/providers/:id`) to a live
- * Devs.ai key, then flip this back to `false`.
+ * If v1 starts failing with 401 again: set this back to `true`, quarantine
+ * via `it.skipIf` below, and rotate the key on the Providers page (or
+ * `POST /api/providers/:id`) before flipping back to `false`.
  */
-const DEVS_AI_V1_KEY_KNOWN_EXPIRED = true;
+const DEVS_AI_V1_KEY_KNOWN_EXPIRED = false;
 
 interface ApiProfile {
   id: string;
