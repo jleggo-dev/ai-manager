@@ -122,7 +122,8 @@ export async function syncConfig(config: SyncConfig, dryRun = false): Promise<Sy
       compareFields: JOB_COMPARE_FIELDS,
       getBySlug: async (slug) => (await getProcessingJobBySlug(slug)) as Record<string, unknown> | null,
       create: (row) => createProcessingJob(row as never),
-      update: (id, row) => updateProcessingJob(id, row as never),
+      /* Repo is source of truth: replace config so absent nested keys are deleted */
+      update: (id, row) => updateProcessingJob(id, row as never, { replaceConfig: true }),
       counters,
       diff,
     });
