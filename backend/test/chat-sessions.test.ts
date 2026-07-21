@@ -54,9 +54,7 @@ afterAll(async () => {
 
   const jobsRes = await request(app).get('/api/processing-jobs').set(authHeaders());
   if (jobsRes.status === 200) {
-    const testJobs = (jobsRes.body.data || []).filter(
-      (j: { slug: string; id: string }) => j.slug === jobSlug,
-    );
+    const testJobs = (jobsRes.body.data || []).filter((j: { slug: string; id: string }) => j.slug === jobSlug);
     for (const j of testJobs) {
       await request(app).delete(`/api/processing-jobs/${j.id}`).set(authHeaders());
     }
@@ -72,9 +70,7 @@ afterAll(async () => {
 
 describe('Chat Sessions', () => {
   it('lists chat sessions', async () => {
-    const res = await request(app)
-      .get('/api/chat-sessions')
-      .set(authHeaders());
+    const res = await request(app).get('/api/chat-sessions').set(authHeaders());
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('data');
     expect(Array.isArray(res.body.data)).toBe(true);
@@ -82,14 +78,11 @@ describe('Chat Sessions', () => {
   });
 
   it('creates a chat session', async () => {
-    const res = await request(app)
-      .post('/api/chat-sessions')
-      .set(authHeaders())
-      .send({
-        jobSlug: jobSlug,
-        userId: '00000000-0000-0000-0000-000000000001',
-        callingApplication: 'integration-test',
-      });
+    const res = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
+      jobSlug: jobSlug,
+      userId: '00000000-0000-0000-0000-000000000001',
+      callingApplication: 'integration-test',
+    });
 
     /*
      * Session creation calls the external AI provider via openChatSession.
@@ -104,10 +97,7 @@ describe('Chat Sessions', () => {
   });
 
   it('rejects creation with missing userId', async () => {
-    const res = await request(app)
-      .post('/api/chat-sessions')
-      .set(authHeaders())
-      .send({});
+    const res = await request(app).post('/api/chat-sessions').set(authHeaders()).send({});
     expect(res.status).toBe(400);
   });
 
@@ -122,26 +112,20 @@ describe('Chat Sessions', () => {
 
   it('gets a session by ID', async () => {
     if (!sessionId) return;
-    const res = await request(app)
-      .get(`/api/chat-sessions/${sessionId}`)
-      .set(authHeaders());
+    const res = await request(app).get(`/api/chat-sessions/${sessionId}`).set(authHeaders());
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('messages');
   });
 
   it('returns 404 for non-existent session', async () => {
-    const res = await request(app)
-      .get(`/api/chat-sessions/${NON_EXISTENT_UUID}`)
-      .set(authHeaders());
+    const res = await request(app).get(`/api/chat-sessions/${NON_EXISTENT_UUID}`).set(authHeaders());
     expect(res.status).toBe(404);
     expect(res.body).toHaveProperty('error');
   });
 
   it('gets message history for a session', async () => {
     if (!sessionId) return;
-    const res = await request(app)
-      .get(`/api/chat-sessions/${sessionId}/messages`)
-      .set(authHeaders());
+    const res = await request(app).get(`/api/chat-sessions/${sessionId}/messages`).set(authHeaders());
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body) || res.body?.messages !== undefined).toBe(true);
   });
@@ -164,18 +148,13 @@ describe('Chat Sessions', () => {
 
   it('rejects message without content', async () => {
     if (!sessionId) return;
-    const res = await request(app)
-      .post(`/api/chat-sessions/${sessionId}/messages`)
-      .set(authHeaders())
-      .send({});
+    const res = await request(app).post(`/api/chat-sessions/${sessionId}/messages`).set(authHeaders()).send({});
     expect(res.status).toBe(400);
   });
 
   it('closes a chat session', async () => {
     if (!sessionId) return;
-    const res = await request(app)
-      .put(`/api/chat-sessions/${sessionId}/close`)
-      .set(authHeaders());
+    const res = await request(app).put(`/api/chat-sessions/${sessionId}/close`).set(authHeaders());
     expect([200, 500]).toContain(res.status);
     if (res.status === 200) {
       expect(res.body).toHaveProperty('status');
@@ -184,25 +163,19 @@ describe('Chat Sessions', () => {
 
   it('resets a chat session', async () => {
     if (!sessionId) return;
-    const res = await request(app)
-      .put(`/api/chat-sessions/${sessionId}/reset`)
-      .set(authHeaders());
+    const res = await request(app).put(`/api/chat-sessions/${sessionId}/reset`).set(authHeaders());
     expect([200, 500]).toContain(res.status);
   });
 
   it('lists sessions with pagination', async () => {
-    const res = await request(app)
-      .get('/api/chat-sessions?limit=1')
-      .set(authHeaders());
+    const res = await request(app).get('/api/chat-sessions?limit=1').set(authHeaders());
     expect(res.status).toBe(200);
     expect(res.body.pagination.limit).toBe(1);
     expect(res.body.data.length).toBeLessThanOrEqual(1);
   });
 
   it('filters sessions by status', async () => {
-    const res = await request(app)
-      .get('/api/chat-sessions?status=active')
-      .set(authHeaders());
+    const res = await request(app).get('/api/chat-sessions?status=active').set(authHeaders());
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('data');
     for (const s of res.body.data) {
@@ -211,17 +184,13 @@ describe('Chat Sessions', () => {
   });
 
   it('filters sessions by aiProfileId', async () => {
-    const res = await request(app)
-      .get(`/api/chat-sessions?aiProfileId=${profileId}`)
-      .set(authHeaders());
+    const res = await request(app).get(`/api/chat-sessions?aiProfileId=${profileId}`).set(authHeaders());
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('data');
   });
 
   it('does not leak api_key in session responses', async () => {
-    const res = await request(app)
-      .get('/api/chat-sessions')
-      .set(authHeaders());
+    const res = await request(app).get('/api/chat-sessions').set(authHeaders());
     expect(res.status).toBe(200);
     const json = JSON.stringify(res.body);
     expect(json).not.toContain('test-key-cs');
@@ -229,63 +198,48 @@ describe('Chat Sessions', () => {
 
   it('gets session diagnostics', async () => {
     if (!sessionId) return;
-    const res = await request(app)
-      .get(`/api/chat-sessions/${sessionId}/diagnostics`)
-      .set(authHeaders());
+    const res = await request(app).get(`/api/chat-sessions/${sessionId}/diagnostics`).set(authHeaders());
     expect([200, 500]).toContain(res.status);
   });
 
   it('deletes a chat session', async () => {
     if (!sessionId) return;
-    const res = await request(app)
-      .delete(`/api/chat-sessions/${sessionId}`)
-      .set(authHeaders());
+    const res = await request(app).delete(`/api/chat-sessions/${sessionId}`).set(authHeaders());
     expect(res.status).toBe(204);
     const deletedId = sessionId;
     sessionId = null;
 
-    const getRes = await request(app)
-      .get(`/api/chat-sessions/${deletedId}`)
-      .set(authHeaders());
+    const getRes = await request(app).get(`/api/chat-sessions/${deletedId}`).set(authHeaders());
     expect(getRes.status).toBe(404);
   });
 
   describe('Calling application enforcement (400)', () => {
     it('rejects session creation when callingApplication is missing', async () => {
-      const res = await request(app)
-        .post('/api/chat-sessions')
-        .set(authHeaders())
-        .send({
-          jobSlug: jobSlug,
-          userId: '00000000-0000-0000-0000-000000000099',
-        });
+      const res = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
+        jobSlug: jobSlug,
+        userId: '00000000-0000-0000-0000-000000000099',
+      });
 
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/callingApplication is required/i);
     });
 
     it('rejects session creation when callingApplication is empty string', async () => {
-      const res = await request(app)
-        .post('/api/chat-sessions')
-        .set(authHeaders())
-        .send({
-          jobSlug: jobSlug,
-          userId: '00000000-0000-0000-0000-000000000099',
-          callingApplication: '',
-        });
+      const res = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
+        jobSlug: jobSlug,
+        userId: '00000000-0000-0000-0000-000000000099',
+        callingApplication: '',
+      });
 
       expect(res.status).toBe(400);
     });
 
     it('accepts session creation when callingApplication is provided', async () => {
-      const res = await request(app)
-        .post('/api/chat-sessions')
-        .set(authHeaders())
-        .send({
-          jobSlug: jobSlug,
-          userId: '00000000-0000-0000-0000-000000000099',
-          callingApplication: 'test:enforcement-check',
-        });
+      const res = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
+        jobSlug: jobSlug,
+        userId: '00000000-0000-0000-0000-000000000099',
+        callingApplication: 'test:enforcement-check',
+      });
 
       // Should NOT be 400 for missing callingApplication
       // (may be 201 or 500 depending on LLM provider connectivity)
@@ -296,18 +250,45 @@ describe('Chat Sessions', () => {
     });
   });
 
+  describe('Close idempotency', () => {
+    let closeSessionId: string | null = null;
+
+    beforeAll(async () => {
+      const res = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
+        jobSlug: jobSlug,
+        userId: '00000000-0000-0000-0000-000000000003',
+        callingApplication: 'close-idempotency-test',
+      });
+      if (res.status === 201) closeSessionId = res.body.id ?? res.body.sessionId ?? null;
+    });
+
+    afterAll(async () => {
+      if (closeSessionId) {
+        await request(app).delete(`/api/chat-sessions/${closeSessionId}`).set(authHeaders());
+      }
+    });
+
+    it('closes an active session, then close again succeeds (idempotent)', async () => {
+      if (!closeSessionId) return;
+      const first = await request(app).put(`/api/chat-sessions/${closeSessionId}/close`).set(authHeaders());
+      expect(first.status).toBe(200);
+      expect(first.body.status).toBe('closed');
+
+      const second = await request(app).put(`/api/chat-sessions/${closeSessionId}/close`).set(authHeaders());
+      expect(second.status).toBe(200);
+      expect(second.body.status).toBe('closed');
+    });
+  });
+
   describe('Concurrency guard (409)', () => {
     let guardSessionId: string | null = null;
 
     beforeAll(async () => {
-      const res = await request(app)
-        .post('/api/chat-sessions')
-        .set(authHeaders())
-        .send({
-          jobSlug: jobSlug,
-          userId: '00000000-0000-0000-0000-000000000002',
-          callingApplication: 'concurrency-test',
-        });
+      const res = await request(app).post('/api/chat-sessions').set(authHeaders()).send({
+        jobSlug: jobSlug,
+        userId: '00000000-0000-0000-0000-000000000002',
+        callingApplication: 'concurrency-test',
+      });
       if (res.status === 201) guardSessionId = res.body.id;
     });
 
