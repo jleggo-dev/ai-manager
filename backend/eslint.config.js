@@ -55,8 +55,8 @@ export default [
   // entry; the target is zero. NEVER add a new file here to pass CI — split it instead.
   {
     files: [
-      'src/routes/chat-sessions.ts', // 1190 lines — largest file in the backend
-      'src/ai-manager/chat-session-lifecycle.ts',
+      'src/routes/chat-sessions.ts', // ~1190 lines — largest file in the backend
+      'src/ai-manager/chat-session-lifecycle.ts', // ~580 after leaf peel to chat-session-client.ts
       // chat-messaging.ts + job-execution.ts cleared from allowlist (Phase 3 residual)
       // widget-health-checker.ts removed with the feature (PR #27) — do not re-add.
     ],

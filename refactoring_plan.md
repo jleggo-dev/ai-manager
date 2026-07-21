@@ -29,7 +29,8 @@ source report that contains the full current-problem/target-design/migration-ste
    **Batch 9 is Done** (FE-14 #56 · CI-08 #53 · CI-09 #55; cleanup-after-tests #54). **Phase 3 /
    batch 10 Cadence+BE residual closed** (API-P2 #88 · WEB-P2 #89 · BE allowlist slim #90;
    **CI-06 Done** #60). See §4.2 / §4.4 for the closed log and remaining deferrals (CI-07, CSS
-   Modules watch, chat-sessions/lifecycle allowlist).
+   Modules watch, chat-sessions/lifecycle allowlist — **Partial**: test-lock #103 + first leaf
+   peel `chat-session-client.ts`; both files still grandfathered).
 2. **Safety net is required on `main`.** INFRA-01…05 landed (PRs #3–#5). Path-filtered CI runs on
    every PR; GitHub branch protection now **requires** status checks to pass before merging
    (**INFRA-02 required-check flip Done** — user-confirmed 2026-07-20; `gh api …/protection`
@@ -565,11 +566,11 @@ hand-rolled until a follow-on.
 **Open after Phase 2 P1** (batches 7–8 + CROSS-03 closed). **Batch 9 is Done**; **batch 10** closed
 the FE allowlist / FE-11 / CI-06 track and the Phase 3 residual Cadence+BE size/Zod slices
 (#88–#90). Remaining Phase 3 items are intentional deferrals (CI-07, CSS Modules watch,
-chat-sessions/lifecycle allowlist).
+chat-sessions/lifecycle allowlist — **Partial**, see BE-P2 notes).
 
 | ID | Area | Items | Pointer |
 |---|---|---|---|
-| **BE-P2** ✅ **Done** (`refactor/phase3-be-p2`, PR #81) | Backend | **Done:** `types.ts` → domain modules (`types/auth`, `config`, `llm`, `db/*`) + barrel re-export (call sites unchanged); `models/health-checks` split by table (`provider-keys` / `profiles` / `incidents`; checks+runs stay in `health-checks.ts` with re-exports); `routes/health-checks` split into table-scoped sub-routers + thin composer. **Allowlist residual (#90):** `chat-messaging` + `job-execution` cleared from size grandfather; **still allowlisted:** `chat-session-lifecycle.ts`, `routes/chat-sessions.ts`. **Deferred (opportunistic, still under size gate):** `ai-profiles` / `providers` / `processing-jobs` / `workflows` route splits — revisit only if a file grows past the gate. Structural only. | Report 01 §4 (P2 sections) |
+| **BE-P2** ✅ **Done** (`refactor/phase3-be-p2`, PR #81) | Backend | **Done:** `types.ts` → domain modules (`types/auth`, `config`, `llm`, `db/*`) + barrel re-export (call sites unchanged); `models/health-checks` split by table (`provider-keys` / `profiles` / `incidents`; checks+runs stay in `health-checks.ts` with re-exports); `routes/health-checks` split into table-scoped sub-routers + thin composer. **Allowlist residual (#90):** `chat-messaging` + `job-execution` cleared from size grandfather; **still allowlisted:** `chat-session-lifecycle.ts`, `routes/chat-sessions.ts`. **Follow-on (low-risk chat-sessions series):** behavior-lock tests (#103 — resume/close/soft age-gate); first peel extracts leaf helpers to `chat-session-client.ts` (re-exported from lifecycle; callers unchanged). Lifecycle still ~580 lines / routes ~1190 — next: further lifecycle peels (close/reset/purge handlers), then `routes/chat-sessions.ts` split (separate pass). **Deferred (opportunistic, still under size gate):** `ai-profiles` / `providers` / `processing-jobs` / `workflows` route splits — revisit only if a file grows past the gate. Structural only. | Report 01 §4 (P2 sections) |
 | **FE-P2** ✅ **Done** | Frontend | **Allowlist cleared (#69/#71/#72/#73).** **STATUS_COLORS/`formatTimestamp` (#82).** **Densest residual shells split (structural only):** #85 `WorkflowExecutionLog` → `organisms/workflow-execution-log/*`; #87 `FailoverConfigModal` → `molecules/failover-config/*`; #91 `ManageLlmsModal` → `organisms/manage-llms/*`; #92 `HealthCheckConfigPage`/`HealthCheckProvidersPage` → `pages/health-check-{config,providers}/*`; #93 `InvestigationPanel` → `components/investigation/*`; #94 `WorkflowEditorPage`; #96 `WorkflowTestSimulator`; #97 `StepVariableMapper`; #98 `WorkflowDetailPage`; #99 `WorkflowVariablePanel`; #100 `WorkflowManager` (colocated folders; original import paths stay thin shells). | Report 02 §4 (4.11-4.23), §6 |
 | **API-P2** ✅ **Done** | Cadence API | **Done (#65 + #75 + #88):** dead dossier/completion; `rollingConsistency` tests + type narrow; registry `render`/`rows` tests; `capture.ts`/`situation.ts` unit tests; Zod on nutrition + plan/review/progress writes; `OccurrenceListRow` slim return from `listOccurrences`; weigh-in typed Baseline merge (no `as never`); nomenclature `locked`→`committed` in registry + `tools/equipment`→`equipment` in coach-context. | Report 03 §3 (P2 sections) |
 | **WEB-P2** ✅ **Done** | Cadence web | **Done (#77–#80 + #89):** `NutritionTargets` extract + start-over phrase-gate tests; `useCoachChat` SSE-drop recovery hook; AuthScreen + App/`screenFromPlanStage` tests; dictation capability seam + MicButton; CSS Modules migration ADR; PlanView → `PlanProposalBanner` + `PlanWeekPanel` (ProgressView already thin). **Deferred:** full CSS Modules/Tailwind migration until `styles.css` approaches ~800+ (ADR stands). | Report 04 §3 (P2 section) |
@@ -786,7 +787,8 @@ Every item ID in §4 should carry one of these statuses, updated by whichever ro
 
 Update Status cells in place as items move; this file is the single source of truth. Phase 0–1 and
 **Phase 2 P1 are Done**; **batch 9 is Done**; **Phase 3 FE-P2 densest + Cadence/BE residual closed**. See §4.2
-remaining backlog for deferred P2/P3 items (CI-07, CSS Modules watch, chat-sessions/lifecycle allowlist).
+remaining backlog for deferred P2/P3 items (CI-07, CSS Modules watch, chat-sessions/lifecycle
+allowlist — **Partial** after #103 test-lock + lifecycle leaf peel; both files still grandfathered).
 **INFRA-02** required-check flip is Done (2026-07-20). **FE-11** Done (PR #63). **FE-13** Done. **BE-03a** Done. **CI-01** Done.
 
 ---
