@@ -94,7 +94,7 @@ export function SettingsSheet({
             <>
               <button className="set-row" onClick={sendReset} disabled={busy || !email}>
                 <b>Change password</b>
-                <span>We'll email you a secure reset link</span>
+                <span>{"We'll email you a secure reset link"}</span>
               </button>
               <button className="set-row" onClick={() => supabase.auth.signOut()}>
                 <b>Sign out</b>
@@ -118,7 +118,7 @@ export function SettingsSheet({
             ) : (
               <>
                 <div className="sheet-msg" style={{ padding: '2px 0 8px' }}>
-                  This erases your goals, plan, history, and conversations — everything you've built here.
+                  {"This erases your goals, plan, history, and conversations — everything you've built here."}
                   {dev ? '' : " Your login survives; you'd onboard from scratch."} Type <b>start over</b> to confirm.
                 </div>
                 <div className="prog-add">

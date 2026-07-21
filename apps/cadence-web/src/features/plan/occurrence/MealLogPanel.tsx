@@ -26,7 +26,7 @@ export function MealLogPanel({
 
   return (
     <div className="logbox" style={{ borderTop: 'none', paddingTop: 0 }}>
-      <div className="logbox-label">What did you eat? Say it or snap it — I'll read what I can.</div>
+      <div className="logbox-label">{"What did you eat? Say it or snap it — I'll read what I can."}</div>
       {meal.day && (meal.day.confirmed_count > 0 || meal.day.provisional_count > 0) && (
         <div className="day-totals">
           <b>Today{macroLine(meal.day.totals) ? `: ${macroLine(meal.day.totals)}` : ''}</b>
@@ -108,7 +108,7 @@ export function MealLogPanel({
             ×
           </button>
           <span className="photo-hint">
-            I'll read what I can from the photo — estimates, not judgments. A few words help.
+            {"I'll read what I can from the photo — estimates, not judgments. A few words help."}
           </span>
         </div>
       )}

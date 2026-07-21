@@ -46,7 +46,7 @@ export function WeighInPanel({
 
   return (
     <div className="logbox" style={{ borderTop: 'none', paddingTop: 0 }}>
-      <div className="logbox-label">What's the scale saying today?</div>
+      <div className="logbox-label">{"What's the scale saying today?"}</div>
       <div className="weigh-row">
         <input
           className="wiz-in"

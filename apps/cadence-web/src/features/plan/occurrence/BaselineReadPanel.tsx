@@ -52,7 +52,7 @@ export function BaselineReadPanel({
           )}
           {baseline.proposed_targets && !targetsSet && (
             <div className="baseline-targets">
-              <div className="baseline-targets-t">Daily targets I'd start you at</div>
+              <div className="baseline-targets-t">{"Daily targets I'd start you at"}</div>
               <div className="baseline-targets-n">{macroLine(baseline.proposed_targets).replace(/~/g, '')}</div>
               {baseline.targets_rationale && <div className="baseline-why">{baseline.targets_rationale}</div>}
               <button
@@ -65,7 +65,9 @@ export function BaselineReadPanel({
               <div className="baseline-targets-edit">You can fine-tune them anytime in Settings.</div>
             </div>
           )}
-          {targetsSet && <div className="baseline-targets-done">Targets set — your day now shows what's left. ✓</div>}
+          {targetsSet && (
+            <div className="baseline-targets-done">{"Targets set — your day now shows what's left. ✓"}</div>
+          )}
         </div>
       )}
     </>
