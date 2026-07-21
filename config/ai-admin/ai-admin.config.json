@@ -206,7 +206,7 @@
     {
       "slug": "parse-meal",
       "name": "parse_meal",
-      "ai_profile_id": "<CADENCE_BROKER_PROFILE_UUID>",
+      "ai_profile_id": "61541478-fd03-4bc8-8e03-ec5284eb66c3",
       "description": "Nutrition Observe phase (§5.6/§B2). One meal in the user's words -> structured items + flags. Never invents quantities or macros.",
       "config": {
         "expectedResponseFormat": "json",

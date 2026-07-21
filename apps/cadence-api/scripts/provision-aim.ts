@@ -101,10 +101,15 @@ async function main() {
     }
   }
 
-  // 5. Jobs (resolve ai_profile_id by slug). Keep in lockstep with scripts/sync-jobs.ts
+  // 5. Jobs (resolve placeholder ai_profile_id by slug). Keep in lockstep with scripts/sync-jobs.ts
   // (assess-goal was missing here — a fresh provision silently mis-tiered it to the broker).
+  // Explicit UUIDs (e.g. parse-meal → Gemini 3.1 Pro) are preserved.
   const coachJobs = new Set(['synthesize-plan', 'weekly-readout', 'disrupted-plan', 'assess-goal', 'prescribe-session']);
-  for (const j of cfg.jobs) j.ai_profile_id = coachJobs.has(j.slug) ? coachId : brokerId;
+  const isPlaceholder = (v: unknown) => typeof v === 'string' && /^<[^>]+>$/.test(v);
+  for (const j of cfg.jobs) {
+    if (!isPlaceholder(j.ai_profile_id)) continue;
+    j.ai_profile_id = coachJobs.has(j.slug) ? coachId : brokerId;
+  }
   console.log('sync jobs →', JSON.stringify(await api('POST', '/api/sync', { jobs: cfg.jobs })));
   const jobIds: Record<string, string | null> = {};
   for (const slug of ['capture-extract', 'plan-vet', 'situation-assess', 'context-select', 'synthesize-plan', 'weekly-readout', 'surface-insights', 'disrupted-plan']) {

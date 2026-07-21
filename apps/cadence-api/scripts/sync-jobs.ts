@@ -73,8 +73,10 @@ async function main() {
   const brokerId = await idBySlug('/api/ai-profiles', 'cadence-broker');
   if (!coachId || !brokerId) throw new Error(`missing profile ids coach=${coachId} broker=${brokerId}`);
 
-  // Resolve ai_profile_id by slug the same way provision-aim does — coach jobs → coach,
-  // everything else → broker. Profiles themselves are NOT synced here (deliberate).
+  // Resolve placeholder ai_profile_id tokens the same way provision-aim does — coach jobs →
+  // coach, everything else → broker. Explicit UUIDs (e.g. parse-meal → Gemini 3.1 Pro) are
+  // left alone so UI-chosen live profiles are not overwritten. Profiles themselves are NOT
+  // synced here (deliberate).
   const coachJobs = new Set([
     'synthesize-plan',
     'weekly-readout',
@@ -82,7 +84,11 @@ async function main() {
     'assess-goal',
     'prescribe-session',
   ]);
-  for (const j of cfg.jobs) j.ai_profile_id = coachJobs.has(j.slug) ? coachId : brokerId;
+  const isPlaceholder = (v: unknown) => typeof v === 'string' && /^<[^>]+>$/.test(v);
+  for (const j of cfg.jobs) {
+    if (!isPlaceholder(j.ai_profile_id)) continue;
+    j.ai_profile_id = coachJobs.has(j.slug) ? coachId : brokerId;
+  }
 
   const r = await api('POST', '/api/sync', { jobs: cfg.jobs, dryRun });
   console.log(dryRun ? 'sync jobs dry-run →' : 'sync jobs →', JSON.stringify(r));
