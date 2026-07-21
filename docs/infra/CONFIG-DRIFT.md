@@ -22,6 +22,11 @@
 3. **`ai-admin-sync.mjs --fail-on-drift`** — same exit semantics for full config files; loads `backend/.env`; appends `/_/backend` for Vercel hosts.
 4. **Scheduled workflow** `.github/workflows/config-drift-check.yml` — `schedule` + `workflow_dispatch` **only**. Never `pull_request`. Secrets stay out of `ci.yml`.
 
+## Job `config` write semantics (intentional)
+
+- **`PUT /api/processing-jobs/:id`** still **deep-merges** `config` so partial UI/API patches keep sibling keys.
+- **`POST /api/sync` / `sync-jobs.ts`** **replaces** `config` wholesale (`replaceConfig: true`). Nested keys removed in `ai-admin.config.json` (e.g. `expectedSchema.fields.needs`) are deleted on live — deep-merge alone never removed them and left permanent drift after sync.
+
 ## Operator setup
 
 1. Add GitHub Actions secrets `AI_ADMIN_API_KEY` and `AI_ADMIN_BASE_URL` (live AI Admin).

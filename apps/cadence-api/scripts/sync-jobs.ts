@@ -4,6 +4,9 @@
  * gemini-3.5-flash, set by set-broker-v2.ts) is preserved. Use after editing job config
  * such as adding expectedSchema for native structured output.
  *
+ * Job `config` is replaced wholesale on update (not deep-merged), so nested keys
+ * removed in the repo are deleted on live. See docs/infra/CONFIG-DRIFT.md.
+ *
  * Run:
  *   node --import tsx apps/cadence-api/scripts/sync-jobs.ts
  *   node --import tsx apps/cadence-api/scripts/sync-jobs.ts --dry-run

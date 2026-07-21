@@ -20,14 +20,27 @@ export async function createProcessingJob(data: Partial<ProcessingJobRow>): Prom
   return row;
 }
 
+export interface UpdateProcessingJobOptions {
+  /**
+   * When true, write `updates.config` as-is (repo / sync source of truth).
+   * Default false: deep-merge so partial UI patches keep sibling config keys.
+   */
+  replaceConfig?: boolean;
+}
+
 /**
  * Update an existing processing job.
  * When `config` is included in updates, it is DEEP-MERGED with the
- * existing config to avoid accidentally wiping out other config fields.
+ * existing config to avoid accidentally wiping out other config fields —
+ * unless `options.replaceConfig` is set (config-as-code sync).
  */
-export async function updateProcessingJob(id: string, updates: Partial<ProcessingJobRow>): Promise<ProcessingJobRow> {
-  /* If the update includes a partial config, deep-merge it with the existing row */
-  if (updates.config && typeof updates.config === 'object') {
+export async function updateProcessingJob(
+  id: string,
+  updates: Partial<ProcessingJobRow>,
+  options?: UpdateProcessingJobOptions,
+): Promise<ProcessingJobRow> {
+  /* Partial UI patches deep-merge; sync passes replaceConfig so removals stick */
+  if (updates.config && typeof updates.config === 'object' && !options?.replaceConfig) {
     const { data: existing, error: fetchErr } = await tenantFrom(TABLE).select('config').eq('id', id).single();
     if (fetchErr) throw new Error(`Processing Job fetch for merge error: ${fetchErr.message}`);
 
