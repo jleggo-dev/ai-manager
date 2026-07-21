@@ -22,7 +22,9 @@ Pre-push review
 - [ ] frontend/public/ synced if docs or skills changed (via prebuild)
 - [ ] Tests added or updated for non-trivial backend behavior
 - [ ] npm run lint && npm run typecheck passed
-- [ ] npm run prepush passed (step 4)
+- [ ] npm run prepush passed (workflow step 4)
+- [ ] After push: product CI green (`CI gate` + jobs that ran; ignore Vercel Hobby rate-limit)
+      before merge / next batch — docs-only path-skip ≠ app healthy
 ```
 
 ## High-risk areas (extra scrutiny)
@@ -37,9 +39,15 @@ Pre-push review
 
 ## Severity labels in review notes
 
-- **Blocker** — must fix before push (build break, data loss, auth bypass)
+- **Blocker** — must fix before push/merge (build break, data loss, auth bypass, red CI)
 - **Should fix** — correct before merge if time allows
 - **Nit** — optional follow-up
+
+CI is not optional: failing **product** PR or base-branch checks (`CI gate` / non-skipped
+`ai-admin` / `cadence` / `format:check`) block merge and block starting the next refactor batch.
+Vercel Hobby rate-limit red is not a product failure. Docs-only path-skip green is not “app
+healthy.” See [development-workflow](../development-workflow/SKILL.md) steps 7, 11–12 and
+[ci-signals-and-merge-batching](../../rules/ci-signals-and-merge-batching.mdc).
 
 ## Common regressions (this repo)
 

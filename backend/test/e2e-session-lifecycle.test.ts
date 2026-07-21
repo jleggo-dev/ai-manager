@@ -17,15 +17,15 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app, authHeaders, uniqueName, uniqueSlug } from './setup.ts';
-import { sleep } from './helpers/e2e-harness.ts';
+import { e2eScopedUserId, sleep } from './helpers/e2e-harness.ts';
 
 let providerId: string;
 let profileId: string;
 let jobId: string;
 let sessionId: string;
 
-/** Valid UUID — prior `…e2etestuser1` was rejected by Postgres uuid columns. */
-const TEST_USER_ID = '00000000-0000-4000-8000-0000000000e1';
+/** Run-scoped UUID — parallel CI jobs sharing Supabase must not collide. */
+const TEST_USER_ID = e2eScopedUserId('e1');
 const CALLING_APP = 'e2e-test:session-lifecycle';
 
 beforeAll(async () => {

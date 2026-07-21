@@ -17,11 +17,15 @@ config that affects runtime behavior):
 1. **Never `git push origin HEAD` (or any push) directly to `main`.** Create a feature/fix
    branch first: `git checkout -b fix/short-description` (or `feat/…`).
 2. Follow [development-workflow](../skills/development-workflow/SKILL.md) in order: code →
-   local review/lint/typecheck → test → commit → push branch → **open a PR** → wait for CI →
-   **TL/architect review** (`pr-tl-review` skill) → fix if requested → merge only when checks
-   pass and review is resolved.
+   local review/lint/typecheck → test → commit → push branch → **open a PR** → wait for
+   **GitHub Actions product CI** (`CI gate` + the jobs that ran for this PR) →
+   **TL/architect review** (`pr-tl-review` skill) → fix if requested → merge only when those
+   checks pass and review is resolved. See [ci-signals-and-merge-batching](./ci-signals-and-merge-batching.mdc)
+   for what counts as green (Vercel Hobby rate-limit red is **not** a blocker; docs-only
+   path-skip green is **not** “app healthy”).
 3. Only merge into `main` via `gh pr merge` (or the user explicitly merging), never by pushing
-   commits to `main` directly.
+   commits to `main` directly. **Batch** related work; after a merge that runs backend e2e,
+   wait for `main`’s `CI gate` before the next such merge (avoid micro-merge storms).
 
 ## Narrow exceptions (ask first if unsure)
 

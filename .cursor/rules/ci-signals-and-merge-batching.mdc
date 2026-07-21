@@ -1,0 +1,70 @@
+---
+description: How to read CI checks, when to merge, and how to batch merges to main (Hobby Vercel + path-filtered GHA)
+alwaysApply: true
+---
+
+# CI signals + merge batching
+
+Pair with [development-workflow](../skills/development-workflow/SKILL.md) and
+[branch-and-pr-required](./branch-and-pr-required.mdc). This rule stops agents from
+shipping on false greens or flooding Hobby Vercel.
+
+## What is green enough to merge
+
+1. **Watch GitHub Actions product CI**, not Vercel deploy status.
+2. Prefer the always-run check named **`CI gate`** (workflow `CI`). It fails if any
+   product job that ran failed; skipped path-filter jobs are OK.
+3. **Also** confirm the product jobs that *should* have run for this PR actually ran
+   and passed (e.g. `ai-admin / backend` for backend changes). Do not treat a green
+   `CI gate` alone as proof the app was tested when every matrix job was **skipped**.
+
+## What is NOT a merge blocker (on this repo)
+
+- **Vercel red** for Hobby **build rate-limit** / upgrade upsell — ignore; do **not**
+  ask the user to change Vercel Hobby settings, upgrade plans, or reconfigure deploy
+  hooks to “fix CI.”
+- **Vercel Preview Comments** noise unrelated to compile/test failure.
+
+## What is NOT proof the app is healthy
+
+- **Docs-only / skills-only / plan-markdown PRs** where `ai-admin/*`, `cadence/*`, and
+  `format:check` are all **skipped** — path-filter green ≠ app healthy. Merge is fine
+  for pure docs; do **not** claim product CI validated runtime behavior.
+- A single skipped product matrix while the other product ran — that only validates
+  the paths that ran.
+
+## Product CI red = stop
+
+If `CI gate` is red, or any non-skipped `ai-admin / *`, `cadence / *`, or
+`format:check` job is red:
+
+- **Do not merge.**
+- **Do not start the next refactor batch** on the assumption main is fine.
+- Fix or quarantine with a written reason + owner (see development-workflow step 7).
+
+Config-drift / ops workflows are separate from product `CI`; treat them on their own
+merits — do not confuse drift red with Vercel rate-limit red.
+
+## Batch merges to `main` (required habit)
+
+Micro-merging many tiny PRs back-to-back:
+
+- Trips **Vercel Hobby deploy rate limits** (noise, not actionable here).
+- Overlaps **backend e2e** jobs against the **same shared Supabase** test project and
+  causes flakes (session 404s, deleted.sessions === 0, duplicate workflow slugs).
+
+**Do this instead:**
+
+1. Open / land **few coherent PRs** (or one batched PR) rather than a stream of
+   single-file micro-PRs when the work is related.
+2. After merging to `main`, **wait for the `main` push `CI` / `CI gate` to go green**
+   before merging the next PR that runs `ai-admin / backend` (or any job that hits the
+   shared test DB).
+3. Never parallel-merge a pile of frontend/backend PRs “because each PR was green”
+   without checking that `main` itself stayed green between merges.
+
+## Do not patch GitHub rulesets via API
+
+Branch-protection / ruleset API often 403s on this plan. Encode process in Cursor
+rules + skills; do not try to “fix” merge gates by mutating GitHub rulesets unless
+the user explicitly asks.

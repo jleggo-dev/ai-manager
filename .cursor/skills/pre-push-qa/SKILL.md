@@ -48,14 +48,15 @@ Vite fails if `VITE_DEV_API_KEY` is set during production build. Unset it or rem
 2. Run `npm run prepush` (step 4). Local green is required before push — not optional.
 3. If you edited `docs/` or `.cursor/skills/`, `prebuild` syncs to `frontend/public/` during frontend build.
 4. Commit/push and open/update PR so CI runs (workflow steps 6–7). Local `prepush` does **not**
-   replace GitHub Actions — PR checks must still go green (or be intentionally skipped with a
-   documented reason) before merge and before starting the next refactor batch.
+   replace GitHub Actions — watch **`CI gate`** and the product jobs that ran for this PR.
+   Ignore Vercel Hobby rate-limit reds. Docs-only path-skip green ≠ app healthy. Product CI must
+   be green (or intentionally quarantined) before merge and before the next refactor batch.
 5. Then [pr-tl-review](../pr-tl-review/SKILL.md) (workflow step 9).
 6. After merge: [development-workflow](../development-workflow/SKILL.md) **step 12b** —
    `npm run cleanup:test-data` (Cadence scratch accounts + AI Admin `e2e%` / lifecycle-provider leftovers).
    Successful local backend/`test:e2e` runs already soft-clean AI Admin leftovers; step 12b still
    resets Cadence scratch accounts. Do not start the next batch with stale test data still in the
-   shared dev DBs.
+   shared dev DBs. Wait for `main`’s `CI gate` before merging another backend-e2e PR.
 
 ## On failure
 
