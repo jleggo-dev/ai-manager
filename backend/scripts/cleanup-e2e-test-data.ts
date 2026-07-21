@@ -32,14 +32,13 @@ import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { resolveOlderThanIso } from './lib/e2e-cleanup-age-gate.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 dotenv.config({ path: path.join(repoRoot, 'backend/.env') });
 
 const E2E_PREFIX = 'e2e%';
 const PAGE = 500;
-/** Soft cleanup default: leave rows younger than 20 minutes for concurrent CI. */
-const DEFAULT_SOFT_MIN_AGE_MS = 20 * 60 * 1000;
 
 /**
  * PostgREST `ilike` patterns for ephemeral test names from backend/test/*.
@@ -92,15 +91,6 @@ function requireEnv(name: string): string {
     process.exit(1);
   }
   return v;
-}
-
-/** ISO cutoff for soft age-gate; null means delete matching rows of any age. */
-function resolveOlderThanIso(soft: boolean): string | null {
-  if (!soft) return null;
-  const raw = envOrEmpty('E2E_CLEANUP_MIN_AGE_MS');
-  const minAgeMs = raw ? Number.parseInt(raw, 10) : DEFAULT_SOFT_MIN_AGE_MS;
-  const age = Number.isFinite(minAgeMs) && minAgeMs >= 0 ? minAgeMs : DEFAULT_SOFT_MIN_AGE_MS;
-  return new Date(Date.now() - age).toISOString();
 }
 
 async function countLike(
@@ -195,10 +185,7 @@ function assertNoProtectedProviders(rows: NamedRow[]): void {
 }
 
 /** Providers pointed at *.example.com (and similar) — leftovers from fixture suites. */
-async function selectMockHostProviders(
-  sb: SupabaseClient,
-  olderThanIso: string | null,
-): Promise<NamedRow[]> {
+async function selectMockHostProviders(sb: SupabaseClient, olderThanIso: string | null): Promise<NamedRow[]> {
   const patterns = ['%example.com%', '%localhost%', '%.test%', '%.invalid%', '%.local%'];
   const byId = new Map<string, NamedRow>();
   for (const pattern of patterns) {
@@ -247,7 +234,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  const olderThanIso = resolveOlderThanIso(process.argv.includes('--soft'));
+  const olderThanIso = resolveOlderThanIso(process.argv.includes('--soft'), {
+    envMinAgeMs: envOrEmpty('E2E_CLEANUP_MIN_AGE_MS') || null,
+  });
   const host = new URL(url).host;
   const sb = createClient(url, key);
 
