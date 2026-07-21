@@ -91,11 +91,12 @@ export function OccurrenceSheet({
               <div className="sheet-msg">A quick built-in check-in — just tap it done when it happens.</div>
             ) : detail.status !== 'pending' ? (
               <div className="sheet-msg">
-                This one's already {detail.status === 'done' ? 'done — nice.' : `marked ${detail.status}.`}
+                {"This one's already "}
+                {detail.status === 'done' ? 'done — nice.' : `marked ${detail.status}.`}
               </div>
             ) : (
               <div className="sheet-msg">
-                I couldn't put this session together just now — close and tap it again in a moment.
+                {"I couldn't put this session together just now — close and tap it again in a moment."}
               </div>
             )}
           </>

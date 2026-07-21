@@ -96,7 +96,7 @@ export function OnboardingChat({
       {chrome === 'onboarding' && (
         <div className="chat-disclaimer">
           <Orb />
-          <span>I'm AI and can make mistakes — please double-check what I say.</span>
+          <span>{"I'm AI and can make mistakes — please double-check what I say."}</span>
         </div>
       )}
     </div>

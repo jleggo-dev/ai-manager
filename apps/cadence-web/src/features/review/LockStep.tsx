@@ -19,7 +19,7 @@ export function LockStep({ preview, goals, equipment, baseline, name }: Props) {
   if (preview) {
     return (
       <div className="wiz-list">
-        <div className="screen-title">Here's the rhythm I'd build</div>
+        <div className="screen-title">{"Here's the rhythm I'd build"}</div>
         <div className="screen-sub">{preview.note || "Take a look — nothing's set until you say go."}</div>
         {groupByGoal(preview.activities).map((grp) => (
           <div className="prev-group" key={grp.key}>
@@ -46,7 +46,7 @@ export function LockStep({ preview, goals, equipment, baseline, name }: Props) {
   return (
     <div className="wiz-list">
       <div className="screen-title">Ready to set your rhythm</div>
-      <div className="screen-sub">I'll build your plan from this — and it can always bend later.</div>
+      <div className="screen-sub">{"I'll build your plan from this — and it can always bend later."}</div>
       <div className="confirm-sec">
         <div className="cs-t">
           <b>

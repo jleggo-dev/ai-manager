@@ -127,7 +127,7 @@ export function AuthScreen() {
           autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
         />
         {msg && <div className="auth-error">{msg}</div>}
-        {!authConfigured && <div className="auth-error">Sign-in isn't configured yet (missing Supabase keys).</div>}
+        {!authConfigured && <div className="auth-error">{"Sign-in isn't configured yet (missing Supabase keys)."}</div>}
       </div>
 
       <button className="cta" onClick={submit} disabled={busy || !authConfigured}>

@@ -31,7 +31,7 @@ export function ProgressView() {
     return (
       <div className="scrollbody">
         <div className="wiz-empty" style={{ marginTop: 24 }}>
-          Couldn't load your progress just now — hop to another tab and back.
+          {"Couldn't load your progress just now — hop to another tab and back."}
         </div>
       </div>
     );

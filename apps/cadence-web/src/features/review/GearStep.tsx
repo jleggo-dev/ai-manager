@@ -12,7 +12,7 @@ export function GearStep({ equipment, setEquip }: Props) {
   return (
     <div className="wiz-list">
       <div className="screen-sub">
-        What you're working with — a barbell, a journal, running shoes. Remove anything wrong, add what's missing.
+        {"What you're working with — a barbell, a journal, running shoes. Remove anything wrong, add what's missing."}
       </div>
       {equipment.length === 0 && <div className="wiz-empty">No tools noted yet.</div>}
       {equipment.map((eq) => (

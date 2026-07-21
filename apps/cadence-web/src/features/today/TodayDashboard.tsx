@@ -75,11 +75,11 @@ export function TodayDashboard({
       {/* 1 — Today's rhythm: the anchor card, always first. */}
       <div className="prog-card dash-rhythm">
         <div className="dash-h">
-          <b>Today's rhythm</b>
+          <b>{"Today's rhythm"}</b>
           <span>{today ? `${today.weekday} ${today.dayNum}` : ''}</span>
         </div>
         {todaysOccs.length === 0 ? (
-          <div className="pd-empty">Your day's clear — rest counts too.</div>
+          <div className="pd-empty">{"Your day's clear — rest counts too."}</div>
         ) : (
           todaysOccs.map((o) => (
             <OccurrenceRow key={o.occurrence_id} o={o} variant="dashboard" onCheck={onCheck} onOpen={onOpen} />

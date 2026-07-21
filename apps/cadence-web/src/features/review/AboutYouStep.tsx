@@ -58,7 +58,7 @@ export function AboutYouStep({ data, setData, baseline, setBaseline, patchBaseli
 
   return (
     <div className="wiz-list">
-      <div className="screen-sub">The facts I'll plan around. Fix anything that's off.</div>
+      <div className="screen-sub">{"The facts I'll plan around. Fix anything that's off."}</div>
       <div className="wiz-card">
         <label className="wiz-field">
           <span>Your name</span>
