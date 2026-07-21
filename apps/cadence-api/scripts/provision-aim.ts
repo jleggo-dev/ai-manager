@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { config as dotenv } from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveJobProfileIds } from '../src/lib/job-profiles.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 dotenv({ path: path.join(root, 'backend/.env') });
@@ -101,15 +102,12 @@ async function main() {
     }
   }
 
-  // 5. Jobs (resolve placeholder ai_profile_id by slug). Keep in lockstep with scripts/sync-jobs.ts
-  // (assess-goal was missing here — a fresh provision silently mis-tiered it to the broker).
-  // Explicit UUIDs (e.g. parse-meal → Gemini 3.1 Pro) are preserved.
-  const coachJobs = new Set(['synthesize-plan', 'weekly-readout', 'disrupted-plan', 'assess-goal', 'prescribe-session']);
-  const isPlaceholder = (v: unknown) => typeof v === 'string' && /^<[^>]+>$/.test(v);
-  for (const j of cfg.jobs) {
-    if (!isPlaceholder(j.ai_profile_id)) continue;
-    j.ai_profile_id = coachJobs.has(j.slug) ? coachId : brokerId;
-  }
+  // 5. Jobs — resolve each placeholder ai_profile_id from the TOKEN itself (the config names the
+  // tier), preserving explicit UUIDs (e.g. parse-meal → the live Gemini vision profile). Shared
+  // with scripts/sync-jobs.ts so the two can no longer drift: the previous hardcoded slug set had
+  // to be kept "in lockstep" by hand and silently mis-tiered whatever was forgotten — first
+  // assess-goal, then nutrition-baseline.
+  resolveJobProfileIds(cfg.jobs, { coachId, brokerId });
   console.log('sync jobs →', JSON.stringify(await api('POST', '/api/sync', { jobs: cfg.jobs })));
   const jobIds: Record<string, string | null> = {};
   for (const slug of ['capture-extract', 'plan-vet', 'situation-assess', 'context-select', 'synthesize-plan', 'weekly-readout', 'surface-insights', 'disrupted-plan']) {

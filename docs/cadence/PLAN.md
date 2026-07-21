@@ -1606,6 +1606,14 @@ the visible payoff and lands last so the rings/dots have real data behind them.
 
 1. Ring center: **macros lead, kcal as a quiet number below** (MFP parity without calorie-first).
 2. Provisional threshold: **0.5 default**, tunable per user later.
+   ⚠️ **Needs recalibration — the model under it changed.** `PROVISIONAL_BELOW = 0.5`
+   (`apps/cadence-api/src/services/nutrition-parse.ts`) was calibrated against `gpt-4.1-mini`;
+   `parse-meal` now runs on `gemini-3.1-pro`, whose confidence distribution is a different scale.
+   Too high → real meals sit provisional and never reach the rings; too low → guesses count as
+   fact. **Both fail silently** — the number is plausible either way, so nothing surfaces the
+   error. Action: log `ai_confidence` across ~20 real meals (photo AND text-only — they will
+   differ), compare against whether the parse was actually right, then set the threshold from
+   that distribution instead of inheriting a constant from a retired model.
 3. Image transport: **signed URL first**; file-ID fallback only if the N1 smoke fails.
 4. Target proposal surface: **extend the Baseline moment** (one coached moment, not a new one).
 5. Week view: **segment toggle** v1; swipe pager if the segment feels buried.
