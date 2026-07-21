@@ -5,6 +5,9 @@
  * CI load; soft cleanup from a parallel Actions job used to wipe in-flight
  * `e2e%` rows — prefer age-gated cleanup (see cleanup-e2e-test-data.ts) over
  * skipping these suites.
+ *
+ * Parallel `main` CI runs share one Supabase project: use `e2eScopedUserId`
+ * so fixed UUIDs from two Actions jobs do not delete each other's sessions.
  */
 
 /** Vitest timeout for tests that await a full live SSE / LLM response. */
@@ -12,6 +15,24 @@ export const LIVE_SSE_TEST_TIMEOUT_MS = 180_000;
 
 /** Superagent deadline so a hung upstream fails with a clear timeout, not a silent hang. */
 export const LIVE_SSE_REQUEST_TIMEOUT_MS = 150_000;
+
+/**
+ * UUID v4-shaped user id unique per GitHub Actions run (or local pid).
+ * `tagHex2` is a 2-hex-digit suite tag (e.g. `'a1'`, `'e1'`) so suites in the
+ * same run still isolate from each other.
+ */
+export function e2eScopedUserId(tagHex2: string): string {
+  const run = process.env.GITHUB_RUN_ID;
+  let mid: string;
+  if (run && /^\d+$/.test(run)) mid = BigInt(run).toString(16).padStart(10, '0').slice(-10);
+  else mid = process.pid.toString(16).padStart(10, '0').slice(-10);
+  const tag = tagHex2
+    .replace(/[^0-9a-f]/gi, '')
+    .toLowerCase()
+    .padStart(2, '0')
+    .slice(-2);
+  return `00000000-0000-4000-8000-${mid}${tag}`;
+}
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

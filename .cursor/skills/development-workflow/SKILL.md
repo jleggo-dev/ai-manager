@@ -154,15 +154,28 @@ Include in PR body: summary, test plan checklist, any env/migration notes.
 
 ## Step 7 — Fix until CI is green
 
-Watch PR checks (`gh pr checks` or CI watcher). **Every job that runs must pass**, or be
+Watch PR checks (`gh pr checks` or CI watcher). Prefer the always-run check **`CI gate`**
+plus every product job that actually ran. **Every job that runs must pass**, or be
 **intentionally skipped** with a documented reason (e.g. quarantined flaky suite + human action
 item such as key rotation).
 
-- Never leave jobs **red** and move on to the next task or batch.
-- CI is a **required** branch-protection gate on `main` (INFRA-02 flip Done) — failing checks block merge.
+### How to read checks (this repo)
+
+| Signal | Meaning |
+|--------|---------|
+| **`CI gate` green** + expected product jobs ran & passed | Safe to treat product CI as green |
+| **`CI gate` green** but `ai-admin/*` / `cadence/*` / `format:check` all **skipped** | Docs/path-skip only — **not** proof the app is healthy |
+| Non-skipped `ai-admin/*`, `cadence/*`, or `format:check` **red** | **Blocker** — fix before merge / next batch |
+| **Vercel** red with Hobby **build rate-limit** / upgrade upsell | **Ignore** — not actionable; do **not** ask the user to change Hobby settings |
+| Config-drift / other workflows | Separate from product `CI`; handle on their own merits |
+
+- Never leave **product** jobs **red** and move on to the next task or batch.
+- Product CI is the ship gate agents must honor (INFRA-02); GitHub ruleset API may 403 —
+  process in Cursor rules/skills is the enforcement when UI rulesets are unavailable.
 - Fix, push, re-check until green (or documented skip). Loop as needed.
 
-**Exit:** All non-skipped PR checks green; any skip has a written reason + owner.
+**Exit:** `CI gate` green; all non-skipped product PR checks green; any skip has a written
+reason + owner. Do not claim “app healthy” from docs-only path skips.
 
 ---
 
@@ -205,15 +218,23 @@ locally as needed, push, and **re-enter step 7** until CI is green again.
 
 ## Step 11 — Merge only when PR checks pass
 
-When PR is approved **and** CI is green (or remaining failures are explicitly quarantined with a
-documented human action item):
+When PR is approved **and** product CI is green per step 7 (or remaining failures are
+explicitly quarantined with a documented human action item):
 
 ```powershell
 gh pr merge --squash
 # or merge strategy your team uses
 ```
 
-**Do not merge while CI is failing or blockers remain.**
+**Do not merge while product CI is failing or blockers remain.** Vercel Hobby rate-limit
+red alone must not block merge and must not trigger “please upgrade Vercel” asks.
+
+### Batch merges (anti micro-merge)
+
+Prefer **few coherent PRs** over a stream of single-file micro-PRs for related work.
+After merging something that runs `ai-admin / backend` (shared Supabase e2e), **wait for
+`main`’s `CI gate` to go green** before merging the next such PR. Parallel micro-merges
+cause e2e flakes and Hobby deploy rate-limits.
 
 Post-merge: note any ops steps (migrations, env vars, provider setup) for the user.
 
@@ -221,19 +242,23 @@ Post-merge: note any ops steps (migrations, env vars, provider setup) for the us
 
 ## Step 12 — Confirm base branch green before the next batch
 
-During the Cadence/refactor effort the integration branch is `feat/cadence` (otherwise the team's
-current base).
+Default ship base is `main` (otherwise the team's current integration branch).
 
 Before starting the **next** parallel batch or assigning the next backlog item:
 
-1. Confirm the integration branch's latest CI is green (or failures are quarantined with a human
-   action item — not silently ignored).
-2. Multi-agent refactor orchestration: **do not start the next parallel batch until CI on the
-   integration branch is green** under that same rule.
+1. Confirm the base branch's latest **product** CI is green — prefer `CI gate` on the latest
+   `main` push (or failures are quarantined with a human action item — not silently ignored).
+2. Multi-agent refactor orchestration: **do not start the next parallel batch until product CI
+   on the base branch is green** under that same rule. Do not interpret docs-only path-skip
+   greens or Vercel Hobby rate-limit reds as product status.
+3. Do not merge the next backend-touching PR until the previous `main` CI run finished green
+   (shared test DB).
 
 See [refactoring_plan.md](../../../refactoring_plan.md) §6 for orchestrator/supervisor rules.
+Always-applied rule: [ci-signals-and-merge-batching](../../rules/ci-signals-and-merge-batching.mdc).
 
-**Exit:** Base/integration branch is green (or explicitly quarantined); safe to assign next work.
+**Exit:** Base/integration branch product CI is green (or explicitly quarantined); safe to
+assign next work.
 
 ---
 

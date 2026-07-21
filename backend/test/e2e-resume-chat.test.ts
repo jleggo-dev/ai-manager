@@ -20,10 +20,17 @@ import request from 'supertest';
 import { app, authHeaders } from './setup.ts';
 import { getServiceSupabase } from '../src/db/service-supabase.ts';
 import { findDevsChatProfile } from './helpers/real-providers.ts';
-import { LIVE_SSE_REQUEST_TIMEOUT_MS, LIVE_SSE_TEST_TIMEOUT_MS, retryTransient, sleep } from './helpers/e2e-harness.ts';
+import {
+  LIVE_SSE_REQUEST_TIMEOUT_MS,
+  LIVE_SSE_TEST_TIMEOUT_MS,
+  e2eScopedUserId,
+  retryTransient,
+  sleep,
+} from './helpers/e2e-harness.ts';
 
-const TEST_USER_ID = '00000000-0000-4000-8000-0000000000a1';
-const COMPLIANCE_USER_ID = '00000000-0000-4000-8000-0000000000a2';
+/* Run-scoped so parallel CI jobs sharing Supabase do not wipe each other's rows. */
+const TEST_USER_ID = e2eScopedUserId('a1');
+const COMPLIANCE_USER_ID = e2eScopedUserId('a2');
 const CALLING_APP = 'e2e-test:resume-chat';
 
 let devsProfileId: string | null = null;

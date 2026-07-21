@@ -23,7 +23,8 @@ Pre-push review
 - [ ] Tests added or updated for non-trivial backend behavior
 - [ ] npm run lint && npm run typecheck passed
 - [ ] npm run prepush passed (workflow step 4)
-- [ ] After push: PR CI green (or intentional skip with documented reason) before merge / next batch
+- [ ] After push: product CI green (`CI gate` + jobs that ran; ignore Vercel Hobby rate-limit)
+      before merge / next batch — docs-only path-skip ≠ app healthy
 ```
 
 ## High-risk areas (extra scrutiny)
@@ -42,8 +43,11 @@ Pre-push review
 - **Should fix** — correct before merge if time allows
 - **Nit** — optional follow-up
 
-CI is not optional: failing PR or integration-branch checks block merge and block starting the next
-refactor batch. See [development-workflow](../development-workflow/SKILL.md) steps 7, 11–12.
+CI is not optional: failing **product** PR or base-branch checks (`CI gate` / non-skipped
+`ai-admin` / `cadence` / `format:check`) block merge and block starting the next refactor batch.
+Vercel Hobby rate-limit red is not a product failure. Docs-only path-skip green is not “app
+healthy.” See [development-workflow](../development-workflow/SKILL.md) steps 7, 11–12 and
+[ci-signals-and-merge-batching](../../rules/ci-signals-and-merge-batching.mdc).
 
 ## Common regressions (this repo)
 

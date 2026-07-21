@@ -11,6 +11,8 @@
 # `ai-admin / {backend,frontend}`, `cadence / {apps/cadence-api,apps/cadence-web,
 # packages/core,packages/cadence-shared}`, `format:check`. Jobs that do not match the
 # path filter are skipped; every job that runs still reports real pass/fail.
+# Always-run aggregator: `CI gate` — agents should watch this name, but still verify that
+# expected product jobs actually ran (docs-only path-skip ≠ app healthy).
 name: CI
 
 on:
@@ -148,3 +150,38 @@ jobs:
       # CI-06: assert ESLint still resolves nearest workspace eslint.config.js from repo root
       # (load-bearing for lint-staged; no root eslint config by design).
       - run: npm run test:eslint-nearest-config
+
+  # Always-run aggregator so agents/humans have one stable check name (`CI gate`) whose
+  # pass/fail reflects product jobs that actually ran. Skipped path-filter jobs are OK;
+  # a failed ai-admin/cadence/format job fails this gate. Docs-only PRs (all product jobs
+  # skipped) still get a green `CI gate` — that does NOT mean the app was tested; see
+  # `.cursor/skills/development-workflow/SKILL.md` CI signal rules.
+  ci-gate:
+    name: CI gate
+    needs: [changes, ai-admin, cadence, format-check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate product CI
+        env:
+          AI_ADMIN: ${{ needs.ai-admin.result }}
+          CADENCE: ${{ needs.cadence.result }}
+          FORMAT: ${{ needs.format-check.result }}
+          CHANGES: ${{ needs.changes.result }}
+        run: |
+          set -euo pipefail
+          echo "changes=$CHANGES ai-admin=$AI_ADMIN cadence=$CADENCE format=$FORMAT"
+          if [ "$CHANGES" != "success" ]; then
+            echo "::error::changes job failed — cannot trust path filters"
+            exit 1
+          fi
+          for result in "$AI_ADMIN" "$CADENCE" "$FORMAT"; do
+            case "$result" in
+              success|skipped) ;;
+              *)
+                echo "::error::Product CI job ended with result=$result (not success/skipped)"
+                exit 1
+                ;;
+            esac
+          done
+          echo "CI gate green (ran jobs succeeded; skipped path filters are OK)"
