@@ -7,6 +7,7 @@ import { deleteFuturePendingOccurrences } from '../repos/occurrences.ts';
 import { ensureHorizon } from './plan-horizon.ts';
 import { toRRule, describeRecurrence } from './scheduling.ts';
 import { matchGoal } from './plan-match.ts';
+import { splitCoverage } from './plan-coverage.ts';
 import type { Activity, Goal, PendingPlanActivity, PlanVetResult } from '@cadence/shared';
 
 const COMPLETION_SOURCES = new Set(['self_report', 'healthkit', 'reply', 'auto']);
@@ -48,6 +49,16 @@ export interface SynthesizeResult {
   violations?: string[];
 }
 
+/** Inputs shared by every synthesis path (single-call, per-goal draft, and reduce). */
+export interface SynthesizeOpts {
+  goals: Goal[];
+  baseline: unknown;
+  equipment: unknown[];
+  currentPlan?: unknown;
+  recentActivity?: unknown;
+  userSteer?: string;
+}
+
 /**
  * The full preview-then-commit result shape, shared by both flows that offer a preview step
  * before applying a synthesized plan: services/lock.ts (first lock) and services/replan.ts
@@ -68,25 +79,16 @@ export interface PlanFlowResult {
 }
 
 /**
- * synthesize_plan (Coach) → plan_vet (Broker) — NO commit, no DB writes. Returns a vetted
- * proposal the caller can show the user before anything is applied (suggest-never-auto-apply),
- * or feed straight into commitActivities for a flow that doesn't need a preview step (re-plan).
- * On a re-plan, pass currentPlan + recentActivity so synthesis evolves the plan to fit how the
- * user has actually been doing.
+ * Run synthesize_plan (Coach) and normalize its output. `draftActivities`, when present, primes the
+ * REDUCE pass with per-goal candidate commitments (fan-out → reduce, see plan-fanout.ts). Evolves the
+ * plan when currentPlan/recentActivity are provided. user_steer is empty-safe: the lock flow never
+ * sets it and the template treats '' as absent.
  */
-export async function synthesizeAndVet(
+export async function runSynthesize(
   userId: string,
-  opts: {
-    goals: Goal[];
-    baseline: unknown;
-    equipment: unknown[];
-    currentPlan?: unknown;
-    recentActivity?: unknown;
-    userSteer?: string;
-  },
-): Promise<SynthesizeResult> {
-  // 1. Synthesize (Coach) — evolves the plan when currentPlan/recentActivity are provided.
-  // user_steer is empty-safe: the lock flow never sets it and the template treats '' as absent.
+  opts: SynthesizeOpts,
+  draftActivities?: unknown,
+): Promise<{ normalized: Partial<Activity>[]; note: string }> {
   const synthRes = await runJob(userId, cadenceConfig.aim.jobs.synthesizePlan, {
     goals: JSON.stringify(opts.goals),
     baseline: JSON.stringify(opts.baseline),
@@ -95,15 +97,54 @@ export async function synthesizeAndVet(
     current_plan: JSON.stringify(opts.currentPlan ?? ''),
     recent_activity: JSON.stringify(opts.recentActivity ?? ''),
     user_steer: (opts.userSteer ?? '').trim().slice(0, 500),
+    draft_activities: JSON.stringify(draftActivities ?? ''),
   });
   const synth = parseJson(synthRes.formatted ?? synthRes.raw ?? '');
   const normalized = (Array.isArray(synth?.activities) ? (synth!.activities as Partial<Activity>[]) : []).map(
     normalizeActivity,
   );
   const note = typeof synth?.note === 'string' ? synth.note.trim() : '';
-  if (normalized.length === 0) return { status: 'vetoed', violations: ['synthesize_plan returned no activities'] };
+  return { normalized, note };
+}
 
-  // 2. Vet (Broker) — flags verified:false rather than fabricating.
+/** Map one normalized activity to the display/commit shape, resolving its goal link (matchGoal). */
+function shapeActivity(a: Partial<Activity>, goals: Goal[]): PendingPlanActivity {
+  // The Coach tags each activity with the confirmed goal it serves (goal_title); resolve it to a real
+  // goal_id so the commitment links to its objective (drives the grouped preview AND lets logged
+  // accomplishments auto-attach to the right goal's progress). Rides on the spread `a` as an untyped
+  // extra field from the model's JSON. `why` is the coach's one-line rationale — display-only, capped.
+  const stated = (a as Record<string, unknown>).goal_title;
+  const matched = matchGoal(typeof stated === 'string' ? stated : undefined, goals);
+  const why = (a as Record<string, unknown>).why;
+  return {
+    title: a.title ?? '',
+    kind: a.kind === 'system' ? 'system' : 'user',
+    category: a.category,
+    cadence: describeRecurrence(a.schedule?.recurrence ?? ''),
+    recurrence: a.schedule?.recurrence ?? '',
+    time_of_day: a.schedule?.time_of_day,
+    duration_min: a.schedule?.duration_min,
+    target: a.target,
+    completion_source: a.completion_source ?? 'self_report',
+    goal_id: matched?.goal_id,
+    goal_title: matched?.title,
+    why: typeof why === 'string' && why.trim() ? why.trim().slice(0, 160) : undefined,
+  };
+}
+
+interface VetShapeResult {
+  status: 'proposed' | 'vetoed';
+  activities?: PendingPlanActivity[];
+  missing?: Goal[];
+  violations?: string[];
+}
+
+/** plan_vet (Broker, flags verified:false rather than fabricating) → shape → coverage split. */
+async function vetAndShape(
+  userId: string,
+  normalized: Partial<Activity>[],
+  opts: SynthesizeOpts,
+): Promise<VetShapeResult> {
   const vetRes = await runJob(userId, cadenceConfig.aim.jobs.planVet, {
     proposed_plan: JSON.stringify({ activities: normalized }),
     baseline: JSON.stringify(opts.baseline),
@@ -114,43 +155,66 @@ export async function synthesizeAndVet(
   if (!vet || vet.verified === false || vet.valid === false) {
     return { status: 'vetoed', violations: vet?.violations ?? ['plan_vet could not verify the plan'] };
   }
+  const activities = normalized.map((a) => shapeActivity(a, opts.goals));
+  return { status: 'proposed', activities, missing: splitCoverage(activities, opts.goals).missing };
+}
 
-  // Display (cadence) and commit (recurrence) both need this, computed once so neither side
-  // — the preview response now, commitActivities later — has to re-derive it.
-  const activities: PendingPlanActivity[] = normalized.map((a) => {
-    // The Coach tags each activity with the confirmed goal it serves (goal_title); resolve it to a
-    // real goal_id so the commitment links to its objective (drives the grouped preview AND lets
-    // logged accomplishments auto-attach to the right goal's progress). Rides on the spread `a` as
-    // an untyped extra field from the model's JSON.
-    const stated = (a as Record<string, unknown>).goal_title;
-    const matched = matchGoal(typeof stated === 'string' ? stated : undefined, opts.goals);
-    // The coach's one-line rationale for THIS commitment — the objective→commitment ladder said
-    // out loud. Display-only (preview + pending_plan); capped so a rambling model can't bloat it.
-    const why = (a as Record<string, unknown>).why;
+/**
+ * Vet + shape, then GUARANTEE coverage. If any committed goal is uncovered, recover it ONCE via
+ * `recoverMissing` (the single-call path re-synthesizes the missing goals; the fan-out path re-uses
+ * their isolated drafts) and re-vet. Never returns a proposal that silently omits a goal — if a gap
+ * survives the one repair it VETOES naming the goals, so a partial plan is surfaced, never committed.
+ * Shared by synthesizeAndVet and synthesizeFanoutAndVet (plan-fanout.ts).
+ */
+export async function finalizeCoverage(
+  userId: string,
+  normalized: Partial<Activity>[],
+  note: string,
+  opts: SynthesizeOpts,
+  recoverMissing: (missing: Goal[]) => Promise<Partial<Activity>[]>,
+): Promise<SynthesizeResult> {
+  let res = await vetAndShape(userId, normalized, opts);
+  if (res.status === 'vetoed') return { status: 'vetoed', violations: res.violations };
+
+  if (res.missing?.length) {
+    const extra = (await recoverMissing(res.missing)).map(normalizeActivity);
+    if (extra.length) {
+      res = await vetAndShape(userId, [...normalized, ...extra], opts);
+      if (res.status === 'vetoed') return { status: 'vetoed', violations: res.violations };
+    }
+  }
+
+  if (res.missing?.length) {
     return {
-      title: a.title ?? '',
-      kind: a.kind === 'system' ? 'system' : 'user',
-      category: a.category,
-      cadence: describeRecurrence(a.schedule?.recurrence ?? ''),
-      recurrence: a.schedule?.recurrence ?? '',
-      time_of_day: a.schedule?.time_of_day,
-      duration_min: a.schedule?.duration_min,
-      target: a.target,
-      completion_source: a.completion_source ?? 'self_report',
-      goal_id: matched?.goal_id,
-      goal_title: matched?.title,
-      why: typeof why === 'string' && why.trim() ? why.trim().slice(0, 160) : undefined,
+      status: 'vetoed',
+      violations: [`plan left goals uncovered: ${res.missing.map((g) => g.title).join('; ')}`],
     };
-  });
+  }
+  return { status: 'proposed', activities: res.activities, note };
+}
 
-  return { status: 'proposed', activities, note };
+/**
+ * synthesize_plan (Coach) → plan_vet (Broker) → coverage guarantee — NO commit, no DB writes. Returns
+ * a vetted proposal the caller can show the user before anything is applied (suggest-never-auto-apply),
+ * or feed straight into commitActivities for a flow that doesn't need a preview step (re-plan). On a
+ * re-plan, pass currentPlan + recentActivity so synthesis evolves the plan to fit how the user has
+ * actually been doing. This is the SINGLE-CALL path; plan-fanout.ts adds the fan-out → reduce path.
+ */
+export async function synthesizeAndVet(userId: string, opts: SynthesizeOpts): Promise<SynthesizeResult> {
+  const { normalized, note } = await runSynthesize(userId, opts);
+  if (normalized.length === 0) return { status: 'vetoed', violations: ['synthesize_plan returned no activities'] };
+  // Coverage repair for the single call: re-synthesize just the goals it dropped and merge them in.
+  return finalizeCoverage(userId, normalized, note, opts, async (missing) => {
+    const r = await runSynthesize(userId, { ...opts, goals: missing });
+    return r.normalized;
+  });
 }
 
 /**
  * Commit an already-synthesized-and-vetted proposal as a NEW plan VERSION: supersede the active
  * plan, insert version+1, clear the old plan's stale future-pending occurrences, materialize the
- * rolling horizon. Does no synthesis of its own — call synthesizeAndVet first (directly, or via
- * synthesizeVetCommit below for a flow with no preview step).
+ * rolling horizon. Does no synthesis of its own — call planSynthesize first (directly, or via
+ * planSynthesizeVetCommit in plan-fanout.ts for a flow with no preview step).
  */
 export async function commitActivities(
   userId: string,
@@ -195,31 +259,4 @@ export async function commitActivities(
     occurrences,
     note: opts.note,
   };
-}
-
-/**
- * The shared spine of both first-lock and re-plan (§6.3): synthesizeAndVet → commitActivities,
- * back-to-back with no preview step in between. Re-plan uses this unchanged; first-lock instead
- * calls the two halves separately (services/lock.ts) so the user can review before committing.
- */
-export async function synthesizeVetCommit(
-  userId: string,
-  opts: {
-    goals: Goal[];
-    baseline: unknown;
-    equipment: unknown[];
-    goalIds: string[];
-    currentPlan?: unknown;
-    recentActivity?: unknown;
-    occurrenceDays?: number;
-  },
-): Promise<CommitResult> {
-  const s = await synthesizeAndVet(userId, opts);
-  if (s.status === 'vetoed') return { status: 'vetoed', violations: s.violations };
-  return commitActivities(userId, {
-    activities: s.activities!,
-    note: s.note ?? '',
-    goalIds: opts.goalIds,
-    occurrenceDays: opts.occurrenceDays,
-  });
 }
