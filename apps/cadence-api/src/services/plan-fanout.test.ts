@@ -8,6 +8,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Goal } from '@cadence/shared';
 
+// config.ts throws at import without DB creds (CI has none). A dummy URL keeps it from throwing;
+// no query ever runs here (runJob + db are mocked). Hoisted so it beats the transitive config load.
+vi.hoisted(() => {
+  process.env.CADENCE_DATABASE_URL ||= 'postgres://u:p@localhost:5432/test';
+});
+
 vi.mock('../ai/aim.ts', () => ({ runJob: vi.fn(), runJobBySlug: vi.fn() }));
 vi.mock('../db/sql.ts', () => ({ sql: {}, json: (v: unknown) => v }));
 
