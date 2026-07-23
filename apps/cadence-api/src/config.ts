@@ -80,6 +80,12 @@ export const cadenceConfig = {
       disruptedPlan: process.env.AIM_JOB_DISRUPTED_PLAN_ID ?? '',
     },
     replanWorkflowSlug: process.env.AIM_WORKFLOW_REPLAN_SLUG ?? 'cadence-replan',
+    /**
+     * Fan-out → reduce planning: draft each goal in its own focused synthesize call, then a
+     * coordinating reduce reconciles them (fixes the single call dropping goals — 3/5 measured).
+     * OFF by default; flip to '1' per-env AFTER sync-jobs lands the draft-priming prompt.
+     */
+    planFanout: process.env.AIM_PLAN_FANOUT === '1',
   },
 
   weatherApiKey: process.env.WEATHER_API_KEY ?? '',

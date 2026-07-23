@@ -8,7 +8,8 @@ import { listNutritionLogs } from '../repos/nutrition.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { rollingConsistency } from './metrics.ts';
 import { describeRecurrence } from './scheduling.ts';
-import { synthesizeVetCommit, synthesizeAndVet, type CommitResult, type PlanFlowResult } from './plan-synthesis.ts';
+import { type CommitResult, type PlanFlowResult } from './plan-synthesis.ts';
+import { planSynthesize, planSynthesizeVetCommit } from './plan-fanout.ts';
 import { confirmPendingPlan } from './plan-commit-flow.ts';
 import type { Goal } from '@cadence/shared';
 
@@ -91,7 +92,7 @@ export async function replanPlan(userId: string): Promise<CommitResult> {
   const inputs = await gatherReplanInputs(userId);
   if (!inputs) return { status: 'vetoed', violations: ['No active goals to re-plan.'] };
 
-  const result = await synthesizeVetCommit(userId, { ...inputs, goalIds: inputs.goals.map((g) => g.goal_id) });
+  const result = await planSynthesizeVetCommit(userId, { ...inputs, goalIds: inputs.goals.map((g) => g.goal_id) });
   // Whatever prompted this re-plan (the manual button, or accepting a coach's proposal) is
   // resolved now — clear any pending proposal so a stale banner can't linger.
   if (result.status === 'committed') await setPendingProposal(userId, null);
@@ -110,7 +111,7 @@ export async function previewReplan(userId: string, steer?: string): Promise<Pla
 
   // steer = the user's own requested change in their own words ("one run day isn't enough").
   // Only flows through the preview; confirm commits the previewed pending_plan that embodies it.
-  const s = await synthesizeAndVet(userId, { ...inputs, userSteer: steer });
+  const s = await planSynthesize(userId, { ...inputs, userSteer: steer });
   if (s.status === 'vetoed') return { status: 'vetoed', violations: s.violations };
 
   const goalIds = inputs.goals.map((g) => g.goal_id);

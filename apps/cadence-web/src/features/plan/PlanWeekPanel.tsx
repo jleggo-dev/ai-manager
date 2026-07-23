@@ -13,6 +13,7 @@ export function PlanWeekPanel({
   onCheck,
   onOpen,
   onAdjust,
+  onRebalance,
 }: {
   today: PlanDay | undefined;
   rest: PlanDay[];
@@ -21,6 +22,7 @@ export function PlanWeekPanel({
   onCheck: (o: PlanOccurrence, next: 'done' | 'skipped' | 'pending') => void;
   onOpen: (id: string) => void;
   onAdjust: () => void;
+  onRebalance: () => void;
 }) {
   const weekRow = (o: PlanOccurrence) => (
     <OccurrenceRow key={o.occurrence_id} o={o} variant="week" onCheck={onCheck} onOpen={onOpen} />
@@ -58,9 +60,14 @@ export function PlanWeekPanel({
 
       <div className="plan-week-row">
         <div className="plan-week-label">The week ahead</div>
-        <button className="adjust-pill" onClick={onAdjust}>
-          Adjust my plan
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="adjust-pill" onClick={onRebalance} title="Review every goal and rebalance the whole week">
+            Rebalance
+          </button>
+          <button className="adjust-pill" onClick={onAdjust}>
+            Adjust my plan
+          </button>
+        </div>
       </div>
       {rest.map((d) => (
         <div className="plan-day" key={d.date}>

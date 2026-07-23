@@ -7,7 +7,8 @@ import { listGoalsByStatus, setGoalStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
 import { getUser, setPendingPlan } from '../repos/users.ts';
 import { evaluateGuardrail } from './goal-guardrail.ts';
-import { synthesizeAndVet, type PlanFlowResult } from './plan-synthesis.ts';
+import { type PlanFlowResult } from './plan-synthesis.ts';
+import { planSynthesize } from './plan-fanout.ts';
 import { confirmPendingPlan } from './plan-commit-flow.ts';
 
 /**
@@ -18,6 +19,14 @@ import { confirmPendingPlan } from './plan-commit-flow.ts';
  * confirmLock applies it; dismissLock discards it so the user can go adjust goals instead.
  */
 export async function previewLock(userId: string): Promise<PlanFlowResult> {
+  // Reconcile the live captured set into scope FIRST. A goal still `captured` at lock — a direct
+  // /plan/lock, or goals captured after the wizard's confirm step — would otherwise be silently
+  // excluded from the plan (the root cause of a multi-goal onboarding producing a one-goal plan).
+  // Confirming here is the same effect as the wizard's doPreview (confirmGoals), so nothing the user
+  // has told us gets stranded; captured→confirmed also makes them immune to later capture churn.
+  const captured = await listGoalsByStatus(userId, ['captured']);
+  for (const cg of captured) await setGoalStatus(userId, cg.goal_id, 'confirmed');
+
   const goals = await listGoalsByStatus(userId, ['confirmed']);
   if (goals.length === 0) return { status: 'vetoed', violations: ['No confirmed goals to lock.'] };
 
@@ -34,7 +43,7 @@ export async function previewLock(userId: string): Promise<PlanFlowResult> {
     return { status: 'needs_focus', guardrail: { weightedLoad: g.weightedLoad, activeCount: g.activeCount } };
   }
 
-  const s = await synthesizeAndVet(userId, { goals, baseline, equipment });
+  const s = await planSynthesize(userId, { goals, baseline, equipment });
   if (s.status === 'vetoed') return { status: 'vetoed', violations: s.violations };
 
   const goalIds = goals.map((gg) => gg.goal_id);
