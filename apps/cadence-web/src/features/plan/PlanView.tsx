@@ -31,6 +31,7 @@ export function PlanView() {
   const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSteer, setAdjustSteer] = useState(''); // pre-filled request (nutrition baseline → Adjust)
+  const [adjustMode, setAdjustMode] = useState<'adjust' | 'rebalance'>('adjust');
   const [reloadKey, setReloadKey] = useState(0); // bumps → dashboard refetches /progress + /nutrition/day
 
   useEffect(() => {
@@ -162,6 +163,12 @@ export function PlanView() {
             onOpen={setSheetOcc}
             onAdjust={() => {
               setAdjustSteer('');
+              setAdjustMode('adjust');
+              setAdjustOpen(true);
+            }}
+            onRebalance={() => {
+              setAdjustSteer('');
+              setAdjustMode('rebalance');
               setAdjustOpen(true);
             }}
           />
@@ -179,6 +186,7 @@ export function PlanView() {
             // Baseline → Adjust bridge: the suggested change rides the normal steer→preview→confirm flow.
             setSheetOcc(null);
             setAdjustSteer(steer);
+            setAdjustMode('adjust');
             setAdjustOpen(true);
           }}
         />
@@ -186,6 +194,7 @@ export function PlanView() {
       {adjustOpen && (
         <AdjustSheet
           initialSteer={adjustSteer}
+          mode={adjustMode}
           onClose={() => setAdjustOpen(false)}
           onCommitted={(n) => {
             setNote(n);
