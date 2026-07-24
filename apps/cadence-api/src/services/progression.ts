@@ -42,6 +42,12 @@ function applyProgression(base: number, steps: number, scheme: ProgressionScheme
     : base + scheme.increment * steps;
 }
 
+/** Whole weeks between two YYYY-MM-DD dates (clamped ≥0). anchor = the eval occurrence (week 0). */
+export function weekIndexBetween(anchorDate: string, occurrenceDate: string): number {
+  const days = (Date.parse(occurrenceDate) - Date.parse(anchorDate)) / 86_400_000;
+  return Math.max(0, Math.floor(days / 7));
+}
+
 export interface ProgressionContext {
   weekIndex: number; // whole weeks since the plan started (0 = baseline/eval week)
   lastMissed?: boolean; // the most recent logged session wasn't completed → hold at last week's level

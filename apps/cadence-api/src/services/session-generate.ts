@@ -15,6 +15,7 @@ import { runJobBySlug } from '../ai/aim.ts';
 import {
   getOccurrenceWithActivity,
   listRecentLogsByTitle,
+  getAnchorSessionByTitle,
   setOccurrenceSessionIfEmpty,
   type OccurrenceWithActivity,
 } from '../repos/occurrences.ts';
@@ -23,6 +24,7 @@ import { listEquipment } from '../repos/equipment.ts';
 import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
 import { coachingPhase, normalizeSession } from './session-normalize.ts';
+import { computeSession, weekIndexBetween } from './progression.ts';
 
 function parseJson(text: string): Record<string, unknown> | null {
   try {
@@ -60,6 +62,28 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
     listRecentLogsByTitle(userId, occ.title, 4),
   ]);
   const phase = coachingPhase(history.length);
+
+  // Deterministic mode (plan §deterministic fitness): once past the eval (>=1 logged) for a goal the
+  // user set to 'deterministic', with a scheme on the activity, compute the session from the eval
+  // template — no coach call, instant and predictable. The eval itself (0 logged) and every coach-mode
+  // or non-fitness activity fall through to prescribe-session below.
+  const goalMode = goals.find((g) => g.goal_id === occ.goal_id)?.plan_mode;
+  const scheme = occ.target?.scheme;
+  if (goalMode === 'deterministic' && scheme && history.length >= 1) {
+    const anchor = await getAnchorSessionByTitle(userId, occ.title);
+    if (anchor?.session) {
+      const weekIndex = weekIndexBetween(anchor.date, occ.date);
+      const lastMissed = history[0]?.log.items?.some((i) => i.done === false) ?? false;
+      const session = computeSession(anchor.session, scheme, { weekIndex, lastMissed }, `${occ.date}T00:00:00.000Z`);
+      void logAi(userId, {
+        kind: 'prescribe_session',
+        input: { occurrenceId: occ.occurrence_id, title: occ.title, date: occ.date },
+        output: session,
+        meta: { deterministic: true, weekIndex, lastMissed, blocks: session.blocks.length },
+      });
+      return session;
+    }
+  }
 
   const res = await runJobBySlug(userId, 'prescribe-session', {
     activity: JSON.stringify({

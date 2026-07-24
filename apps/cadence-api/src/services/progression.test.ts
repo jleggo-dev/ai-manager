@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { OccurrenceSession, ProgressionScheme } from '@cadence/shared';
-import { computeSession, parseLoad } from './progression.ts';
+import { computeSession, parseLoad, weekIndexBetween } from './progression.ts';
 
 const AT = '2026-02-01T00:00:00.000Z';
 
@@ -28,6 +28,16 @@ describe('parseLoad', () => {
     expect(parseLoad('bodyweight')).toBeNull();
     expect(parseLoad('zone 2')).toBeNull();
     expect(parseLoad(undefined)).toBeNull();
+  });
+});
+
+describe('weekIndexBetween', () => {
+  it('counts whole weeks from the anchor, clamped at 0', () => {
+    expect(weekIndexBetween('2026-02-01', '2026-02-01')).toBe(0);
+    expect(weekIndexBetween('2026-02-01', '2026-02-07')).toBe(0); // 6 days — still week 0
+    expect(weekIndexBetween('2026-02-01', '2026-02-08')).toBe(1); // 7 days
+    expect(weekIndexBetween('2026-02-01', '2026-02-15')).toBe(2); // 14 days
+    expect(weekIndexBetween('2026-02-08', '2026-02-01')).toBe(0); // before the anchor → 0
   });
 });
 
