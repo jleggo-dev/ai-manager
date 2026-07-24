@@ -27,7 +27,8 @@ export function kgToLbs(kg: number): number {
 }
 
 export function lbsToKg(lbs: number): number {
-  return round1(lbs * LB_TO_KG);
+  // 2-dp so a whole-lb input round-trips back to whole lbs on display (0.1 kg was off by .1: 195→195.1).
+  return Math.round(lbs * LB_TO_KG * 100) / 100;
 }
 
 export function cmToFtIn(cm: number): { ft: number; in: number } {

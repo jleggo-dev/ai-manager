@@ -73,9 +73,11 @@ describe('unitConversion — kg ↔ lbs round-trips', () => {
     expect(kgToLbs(80)).toBe(176.4);
   });
 
-  it('converts lbs to canonical kg with one-decimal rounding', () => {
-    expect(lbsToKg(154.3)).toBe(70);
-    expect(lbsToKg(176.4)).toBe(80);
+  it('stores lbs as kg at 2-dp so a whole-lb input round-trips back to whole lbs (fixes 195→195.1)', () => {
+    // 1-dp kg stored 195 lb as 88.5 kg, which displayed back as 195.1. 2-dp keeps the round-trip clean.
+    expect(kgToLbs(lbsToKg(195))).toBe(195);
+    expect(kgToLbs(lbsToKg(154.3))).toBe(154.3);
+    expect(kgToLbs(lbsToKg(180))).toBe(180);
   });
 
   it('round-trips kg → lbs → kg without drifting (the corruption class)', () => {
@@ -95,7 +97,7 @@ describe('unitConversion — kg ↔ lbs round-trips', () => {
 
   it('parseWeightDraft converts once on commit and refuses implausible results', () => {
     expect(parseWeightDraft('70', 'kg')).toBe(70);
-    expect(parseWeightDraft('154.3', 'lbs')).toBe(70);
+    expect(parseWeightDraft('154.3', 'lbs')).toBe(69.99); // 2-dp canonical kg (see round-trip test above)
     expect(parseWeightDraft('', 'kg')).toBeUndefined();
     expect(parseWeightDraft('  ', 'lbs')).toBeUndefined();
     expect(parseWeightDraft('-5', 'kg')).toBeUndefined();
