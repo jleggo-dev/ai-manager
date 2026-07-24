@@ -6,8 +6,15 @@ import { ProgressCardView, ProgressTrendCard } from '../../components/ProgressCa
 import { isFoodTitle } from '../../components/occurrence-mod.ts';
 import { rankProgressCard } from './rank.ts';
 import { useGoalEventAdd } from './useGoalEventAdd.ts';
-import { useNutritionDay } from '../../lib/query/index.ts';
-import { getProgress, getRecentMeals, type PlanViewData, type PlanOccurrence, type PlanDay } from '../../lib/api.ts';
+import { useNutritionDay, useInvalidateNutritionDay } from '../../lib/query/index.ts';
+import {
+  getProgress,
+  getRecentMeals,
+  setEatbackPct,
+  type PlanViewData,
+  type PlanOccurrence,
+  type PlanDay,
+} from '../../lib/api.ts';
 
 /**
  * The Visual Today — a module dashboard, not a week list. STABLE CHROME, VARIABLE CONTENT: every
@@ -32,6 +39,7 @@ export function TodayDashboard({
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [recentDays, setRecentDays] = useState(0);
   const { data: nutrition = null } = useNutritionDay();
+  const invalidateDay = useInvalidateNutritionDay();
 
   const refreshProgress = () =>
     getProgress()
@@ -100,7 +108,25 @@ export function TodayDashboard({
             <span>{targets ? 'today' : 'observing'}</span>
           </div>
           {targets ? (
-            <MacroRings totals={nutrition.totals} targets={targets} left={nutrition.left} />
+            <>
+              <MacroRings totals={nutrition.totals} targets={targets} left={nutrition.left} />
+              {nutrition.burn_kcal > 0 && (
+                <label className="dash-eatback">
+                  <span className="prog-sub">
+                    🔥 {nutrition.burn_kcal} burned · +{nutrition.eatback_kcal} eaten back ({nutrition.eatback_pct}%)
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={10}
+                    defaultValue={nutrition.eatback_pct}
+                    onChange={(e) => void setEatbackPct(Number(e.currentTarget.value)).then(invalidateDay)}
+                    aria-label="How much exercise to eat back"
+                  />
+                </label>
+              )}
+            </>
           ) : (
             <div className="dash-observe">
               <DotRow dots={Array.from({ length: 7 }, (_, i) => i < Math.min(7, recentDays))} color="var(--dawn-3)" />
