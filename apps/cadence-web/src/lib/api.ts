@@ -47,6 +47,7 @@ export {
   getNutritionDay,
   patchMeal,
   setMacroTargets,
+  setEatbackPct,
   clearMacroTargets,
   logMeal,
   getRecentMeals,

@@ -30,7 +30,10 @@ export interface NutritionDayData {
   confirmed_count: number;
   provisional_count: number;
   targets: MealMacros | null;
-  left: MealMacros | null;
+  left: MealMacros | null; // per targets incl. eat-back
+  burn_kcal: number; // estimated exercise burn from today's done workouts
+  eatback_kcal: number; // the eaten-back share added to the kcal allowance
+  eatback_pct: number; // 0–100 setting
 }
 
 /** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. */
@@ -63,6 +66,17 @@ export async function setMacroTargets(targets: MealMacros): Promise<MealMacros |
   });
   if (!res.ok) return null;
   return (await res.json()).targets;
+}
+
+/** Set the net-calorie eat-back % (0–100) — how much of exercise burn to add to the day's allowance. */
+export async function setEatbackPct(pct: number): Promise<number | null> {
+  const res = await fetch(`${BASE}/nutrition/eatback`, {
+    method: 'PATCH',
+    headers: headers(),
+    body: JSON.stringify({ pct }),
+  });
+  if (!res.ok) return null;
+  return (await res.json()).eatback_pct;
 }
 
 /** Remove daily targets — back to observe-style (no "left"). */

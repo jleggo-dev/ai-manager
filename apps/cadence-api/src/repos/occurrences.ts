@@ -210,6 +210,30 @@ export async function listLoggedForProgress(
     order by o.date asc`;
 }
 
+/** One day's DONE user (movement) occurrences with their activity category + scheduled duration —
+ *  the input to the deterministic exercise-burn estimate (net-calorie eat-back). */
+export async function listDoneUserOccurrencesForDay(
+  userId: string,
+  date: string,
+): Promise<Array<{ category: string | null; duration_min: number | null }>> {
+  return sql<Array<{ category: string | null; duration_min: number | null }>>`
+    select a.category, (a.schedule->>'duration_min')::int as duration_min
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and o.date = ${date} and o.status = 'done' and a.kind = 'user'`;
+}
+
+/** The user's weigh-in series (date + kg) over the trailing window — feeds the adaptive-target
+ *  weight-trend read. Weigh-ins store `value.weight_kg` on their occurrence (see weigh-in.ts). */
+export async function listWeighInSeries(userId: string, days = 60): Promise<Array<{ date: string; kg: number }>> {
+  const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  return sql<Array<{ date: string; kg: number }>>`
+    select to_char(o.date, 'YYYY-MM-DD') as date, (o.value->>'weight_kg')::float as kg
+    from cadence.occurrences o
+    where o.user_id = ${userId} and o.value ? 'weight_kg' and o.date >= ${from}
+    order by o.date asc`;
+}
+
 /** Recent logged occurrences across ALL activities (newest first) — coach-chat retrieval. */
 export async function listRecentLogged(
   userId: string,

@@ -11,8 +11,15 @@ import { runJobBySlug } from '../ai/aim.ts';
 import { insertNutritionLog, listNutritionLogs, updateNutritionLog } from '../repos/nutrition.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, setMacroTargets } from '../repos/users.ts';
-import { findPendingFoodLogOccurrence, setOccurrenceStatus } from '../repos/occurrences.ts';
+import {
+  findPendingFoodLogOccurrence,
+  setOccurrenceStatus,
+  listDoneUserOccurrencesForDay,
+  listWeighInSeries,
+} from '../repos/occurrences.ts';
 import { putMealPhoto, signMealPhotoUrl, signMealPhotoUrls } from './meal-photos.ts';
+import { estimateBurnKcal } from './burn.ts';
+import { actualWeeklyRate, safeWeeklyKg, classifyLossPace } from './weight-trend.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
 import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW } from './nutrition-parse.ts';
@@ -108,13 +115,21 @@ export interface NutritionDay extends DayTotals {
   date: string;
   meals: NutritionLog[]; // newest first, signed photo URLs attached
   targets: MacroTargets | null; // null until the coach proposes + the user confirms (N3)
-  left: Macros | null; // per confirmed targets, clamped ≥0 — count what's left, never what broke
+  left: Macros | null; // per confirmed targets (incl. eat-back), clamped ≥0 — count what's left, never what broke
+  burn_kcal: number; // estimated exercise burn from today's DONE workouts (net calories)
+  eatback_kcal: number; // burn_kcal × eatback_pct, added to the kcal allowance (already reflected in `left`)
+  eatback_pct: number; // the eat-back setting in effect (0–100; default 50)
 }
 
-/** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. */
+/** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. `left`
+ *  reflects NET calories: base kcal target + the eaten-back share of today's estimated exercise burn. */
 export async function getNutritionDay(userId: string, date?: string): Promise<NutritionDay> {
   const d = date ?? today();
-  const [rows, user] = await Promise.all([listNutritionLogs(userId, d, d), getUser(userId)]);
+  const [rows, user, done] = await Promise.all([
+    listNutritionLogs(userId, d, d),
+    getUser(userId),
+    listDoneUserOccurrencesForDay(userId, d),
+  ]);
   let meals = rows;
   try {
     meals = await signMealPhotoUrls(rows);
@@ -123,7 +138,25 @@ export async function getNutritionDay(userId: string, date?: string): Promise<Nu
   }
   const sums = sumDay(rows);
   const targets = user?.macro_targets ?? null;
-  return { date: d, meals, ...sums, targets, left: computeLeft(targets, sums.totals) };
+
+  // Net calories: estimate today's exercise burn, add eatback_pct% of it to the kcal allowance.
+  const weightKg = user?.baseline?.weight_kg?.current;
+  const burn_kcal = done.reduce((s, o) => s + estimateBurnKcal(o.category, o.duration_min, weightKg), 0);
+  const eatback_pct = typeof targets?.eatback_pct === 'number' ? targets.eatback_pct : 50;
+  const eatback_kcal = Math.round((burn_kcal * eatback_pct) / 100 / 10) * 10;
+  const effective =
+    targets && typeof targets.kcal === 'number' ? { ...targets, kcal: targets.kcal + eatback_kcal } : targets;
+
+  return {
+    date: d,
+    meals,
+    ...sums,
+    targets,
+    left: computeLeft(effective, sums.totals),
+    burn_kcal,
+    eatback_kcal,
+    eatback_pct,
+  };
 }
 
 /**
@@ -206,10 +239,32 @@ export async function getBaselineRead(userId: string): Promise<BaselineRead> {
     return { ready: false, days_logged: summary.days_logged, days_needed: OBSERVE_DAYS_NEEDED };
   }
 
-  const [goals, user] = await Promise.all([listGoalsByStatus(userId, ['confirmed', 'committed']), getUser(userId)]);
-  // Propose targets only when a goal warrants them AND none are set yet (Settings owns edits).
+  const [goals, user, weighSeries] = await Promise.all([
+    listGoalsByStatus(userId, ['confirmed', 'committed']),
+    getUser(userId),
+    listWeighInSeries(userId),
+  ]);
   const hasTargets = !!user?.macro_targets && Object.keys(user.macro_targets).length > 0;
-  const propose = !hasTargets && wantsTargets(goals);
+
+  // Two proposal modes. INITIAL (Baseline moment): propose targets only when a goal warrants them and
+  // none are set. ADAPTIVE (recurring): once targets ARE set and the weigh-in trend is trustworthy,
+  // propose an ADJUSTED target from the trend vs. a safe rate — throttled to ~weekly via last_reviewed.
+  const actualRate = actualWeeklyRate(weighSeries);
+  const currentKg = user?.baseline?.weight_kg?.current;
+  const lastReviewed = user?.macro_targets?.last_reviewed;
+  const dueForReview = !lastReviewed || Date.now() - Date.parse(lastReviewed) >= 7 * 86_400_000;
+  const proposeAdaptive = hasTargets && actualRate != null && typeof currentKg === 'number' && dueForReview;
+  const propose = proposeAdaptive || (!hasTargets && wantsTargets(goals));
+
+  const safeKg = typeof currentKg === 'number' ? safeWeeklyKg(currentKg) : null;
+  const weightTrend =
+    proposeAdaptive && actualRate != null && safeKg != null
+      ? {
+          actual_kg_per_week: Math.round(actualRate * 100) / 100,
+          safe_kg_per_week: safeKg,
+          pace: classifyLossPace(actualRate, safeKg),
+        }
+      : null;
 
   const res = await runJobBySlug(userId, 'nutrition-baseline', {
     summary: JSON.stringify(summary),
@@ -219,6 +274,8 @@ export async function getBaselineRead(userId: string): Promise<BaselineRead> {
     goals: JSON.stringify(goals.map((g) => ({ title: g.title, area: g.area, type: g.type, measure: g.measure }))),
     baseline: JSON.stringify(user?.baseline ?? {}),
     propose_targets: propose ? 'yes' : 'no',
+    weight_trend: weightTrend ? JSON.stringify(weightTrend) : '',
+    current_targets: proposeAdaptive ? JSON.stringify(user?.macro_targets ?? {}) : '',
   });
   const raw = res.formatted ?? res.raw ?? '';
   const parsed = JSON.parse(raw) as {
@@ -237,11 +294,15 @@ export async function getBaselineRead(userId: string): Promise<BaselineRead> {
   const targetsRationale =
     proposedTargets && typeof parsed.targets_rationale === 'string' ? parsed.targets_rationale.trim() : null;
 
+  // Throttle: stamp the review time so an adaptive proposal doesn't re-fire until ~a week out
+  // (whether or not the user accepts). Merge-write — keeps the macros + other settings intact.
+  if (proposeAdaptive) await setMacroTargets(userId, { ...user?.macro_targets, last_reviewed: today() });
+
   void logAi(userId, {
     kind: 'nutrition_baseline',
     input: { summary },
     output: { raw: raw.slice(0, 2000) },
-    meta: { days_logged: summary.days_logged, proposed_targets: !!proposedTargets },
+    meta: { days_logged: summary.days_logged, proposed_targets: !!proposedTargets, adaptive: proposeAdaptive },
   });
   return {
     ready: true,
@@ -253,16 +314,27 @@ export async function getBaselineRead(userId: string): Promise<BaselineRead> {
   };
 }
 
-/** Confirm/edit daily targets (suggest-never-auto-apply: only ever called by the user's tap). */
+/** Confirm/edit daily targets (suggest-never-auto-apply: only ever called by the user's tap). Merges
+ *  so the non-macro settings (eatback_pct, confirm_below_confidence, last_reviewed) survive a target edit. */
 export async function setTargets(userId: string, raw: unknown): Promise<Macros> {
   const t = sanitizeTargets(raw);
   if (!t) throw new Error('no valid targets');
   const { source: _source, ...clean } = t;
-  await setMacroTargets(userId, clean);
+  const user = await getUser(userId);
+  await setMacroTargets(userId, { ...user?.macro_targets, ...clean });
   return clean;
 }
 
 /** Remove targets entirely — back to observe-style, no rings, no "left". */
 export async function clearTargets(userId: string): Promise<void> {
   await setMacroTargets(userId, {});
+}
+
+/** Set the net-calorie eat-back % (0–100), merged into macro_targets without clobbering the macros. */
+export async function setEatbackPct(userId: string, pct: number): Promise<number> {
+  const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+  const user = await getUser(userId);
+  const cur = user?.macro_targets ?? {};
+  await setMacroTargets(userId, { ...cur, eatback_pct: clamped });
+  return clamped;
 }

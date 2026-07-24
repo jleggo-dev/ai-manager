@@ -542,6 +542,8 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 
 /* Observe card + snap shortcut. */
 .dash-observe { display: flex; flex-direction: column; gap: 6px; }
+.dash-eatback { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.dash-eatback input[type="range"] { width: 100%; accent-color: var(--forest); }
 .dash-snap { margin-top: 12px; width: 100%; padding: 9px 0; border-radius: 11px; background: rgba(139, 168, 142, .14); border: 1px solid rgba(139, 168, 142, .32); color: var(--forest); font-size: 13.5px; font-weight: 600; }
 .dash-snap:hover { background: rgba(139, 168, 142, .22); }
 

@@ -9,6 +9,7 @@ import {
   patchMeal,
   setTargets,
   clearTargets,
+  setEatbackPct,
 } from '../services/nutrition.ts';
 import { BodyValidationError, parseBody, logMealBodySchema, macroTargetsBodySchema } from '../validation/body.ts';
 
@@ -131,6 +132,19 @@ router.delete('/targets', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[DELETE /nutrition/targets]', err);
     res.status(500).json({ error: 'failed to clear targets' });
+  }
+});
+
+/** PATCH /nutrition/eatback — set the net-calorie eat-back % (0–100; how much exercise burn to eat back). */
+router.patch('/eatback', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const pct = Number((req.body as { pct?: unknown })?.pct);
+  if (!Number.isFinite(pct)) return void res.status(400).json({ error: 'pct must be a number 0-100' });
+  try {
+    res.json({ eatback_pct: await setEatbackPct(userId, pct) });
+  } catch (err) {
+    console.error('[PATCH /nutrition/eatback]', err);
+    res.status(500).json({ error: 'failed to set eat-back' });
   }
 });
 
