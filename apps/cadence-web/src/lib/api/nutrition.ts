@@ -79,6 +79,23 @@ export async function setEatbackPct(pct: number): Promise<number | null> {
   return (await res.json()).eatback_pct;
 }
 
+export interface PlateAdvice {
+  estimate_kcal: number | null;
+  advice: string;
+  verdict: 'go' | 'tweak' | 'heavy';
+}
+
+/** Pre-eat advice on a plate photo (data URL) — one kind, actionable read; creates no meal log. */
+export async function getPlateAdvice(photo: string): Promise<PlateAdvice | null> {
+  const res = await fetch(`${BASE}/nutrition/plate-advice`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ photo }),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 /** Remove daily targets — back to observe-style (no "left"). */
 export async function clearMacroTargets(): Promise<boolean> {
   const res = await fetch(`${BASE}/nutrition/targets`, { method: 'DELETE', headers: headers() });

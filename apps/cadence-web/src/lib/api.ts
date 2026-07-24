@@ -48,6 +48,8 @@ export {
   patchMeal,
   setMacroTargets,
   setEatbackPct,
+  getPlateAdvice,
+  type PlateAdvice,
   clearMacroTargets,
   logMeal,
   getRecentMeals,

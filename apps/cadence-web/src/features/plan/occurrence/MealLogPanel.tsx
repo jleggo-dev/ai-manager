@@ -99,17 +99,33 @@ export function MealLogPanel({
       {meal.mealPhoto && (
         <div className="photo-preview">
           <img src={meal.mealPhoto} alt="your plate" />
-          <button
-            className="photo-clear"
-            onClick={() => meal.setMealPhoto(null)}
-            disabled={meal.mealBusy}
-            aria-label="Remove photo"
-          >
+          <button className="photo-clear" onClick={meal.clearPhoto} disabled={meal.mealBusy} aria-label="Remove photo">
             ×
           </button>
           <span className="photo-hint">
             {"I'll read what I can from the photo — estimates, not judgments. A few words help."}
           </span>
+        </div>
+      )}
+      {meal.mealPhoto && (
+        <div className="plate-advice-row">
+          {!meal.plateAdvice ? (
+            <button
+              className="plate-check-btn"
+              onClick={meal.checkPlate}
+              disabled={meal.advising || meal.mealBusy}
+              title="A quick pre-eat read before you dig in"
+            >
+              {meal.advising ? 'Looking at your plate…' : '🔎 Check my plate first'}
+            </button>
+          ) : (
+            <div className={`plate-advice pa-${meal.plateAdvice.verdict}`}>
+              <span className="pa-text">{meal.plateAdvice.advice}</span>
+              {meal.plateAdvice.estimate_kcal != null && (
+                <span className="pa-est">~{meal.plateAdvice.estimate_kcal} kcal</span>
+              )}
+            </div>
+          )}
         </div>
       )}
       <div className="weigh-row">

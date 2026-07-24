@@ -338,3 +338,53 @@ export async function setEatbackPct(userId: string, pct: number): Promise<number
   await setMacroTargets(userId, { ...cur, eatback_pct: clamped });
   return clamped;
 }
+
+export interface PlateAdvice {
+  estimate_kcal: number | null;
+  advice: string;
+  verdict: 'go' | 'tweak' | 'heavy';
+}
+
+/**
+ * Pre-eat plate advice (Req 1a): a photo of a plate the user is ABOUT to eat → ONE kind, actionable
+ * suggestion, grounded in what they have LEFT today and their goal. Advice only — creates NO nutrition
+ * log (this is a "should I?" check, not a record). Reuses the meal-photo upload + vision path.
+ */
+export async function getPlateAdvice(userId: string, photoDataUrl: string): Promise<PlateAdvice> {
+  const date = today();
+  const photoRef = await putMealPhoto(userId, date, photoDataUrl);
+  const [signedUrl, day, goals] = await Promise.all([
+    signMealPhotoUrl(photoRef),
+    getNutritionDay(userId, date),
+    listGoalsByStatus(userId, ['confirmed', 'committed']),
+  ]);
+  const res = await runJobBySlug(
+    userId,
+    'plate-advice',
+    {
+      remaining: JSON.stringify(day.left ?? {}),
+      goal: JSON.stringify(goals.filter((g) => g.area === 'nourishment').map((g) => g.title)),
+    },
+    { images: [signedUrl] },
+  );
+
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = JSON.parse(res.formatted ?? res.raw ?? '{}') as Record<string, unknown>;
+  } catch {
+    /* fall through to the empty-advice guard */
+  }
+  const advice = typeof parsed.advice === 'string' ? parsed.advice.trim().slice(0, 300) : '';
+  if (!advice) throw new Error('plate-advice returned no advice');
+  const verdict =
+    parsed.verdict === 'go' || parsed.verdict === 'tweak' || parsed.verdict === 'heavy' ? parsed.verdict : 'tweak';
+  const estimate_kcal = typeof parsed.estimate_kcal === 'number' ? Math.round(parsed.estimate_kcal / 10) * 10 : null;
+
+  void logAi(userId, {
+    kind: 'plate_advice',
+    input: { date },
+    output: { raw: (res.formatted ?? res.raw ?? '').slice(0, 500) },
+    meta: { verdict, estimate_kcal },
+  });
+  return { estimate_kcal, advice, verdict };
+}

@@ -3,9 +3,11 @@ import {
   getRecentMeals,
   logMeal,
   patchMeal,
+  getPlateAdvice,
   type Meal,
   type MealKind,
   type OccurrenceDetail,
+  type PlateAdvice,
 } from '../../../lib/api.ts';
 import { useInvalidateNutritionDay, useNutritionDay } from '../../../lib/query/index.ts';
 import { downscalePhoto, mealForNow } from './format.ts';
@@ -20,9 +22,33 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
   const [mealKind, setMealKind] = useState<MealKind>(mealForNow());
   const [mealBusy, setMealBusy] = useState(false);
   const [mealPhoto, setMealPhoto] = useState<string | null>(null);
+  const [plateAdvice, setPlateAdvice] = useState<PlateAdvice | null>(null);
+  const [advising, setAdvising] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [daysLogged, setDaysLogged] = useState(0);
   const [logErr, setLogErr] = useState('');
+
+  /** Clear the picked photo AND any pre-eat advice it produced. */
+  function clearPhoto() {
+    setMealPhoto(null);
+    setPlateAdvice(null);
+  }
+
+  /** Pre-eat "should I?" read on the picked plate — advice only, logs nothing. */
+  async function checkPlate() {
+    if (!mealPhoto || advising) return;
+    setAdvising(true);
+    setLogErr('');
+    try {
+      const a = await getPlateAdvice(mealPhoto);
+      if (a) setPlateAdvice(a);
+      else setLogErr("Couldn't get a read on that plate — try again.");
+    } catch {
+      setLogErr('Something hiccuped reading the plate — try again.');
+    } finally {
+      setAdvising(false);
+    }
+  }
 
   const { data: day = null, refetch } = useNutritionDay(detail.date);
   const invalidateNutritionDay = useInvalidateNutritionDay();
@@ -49,6 +75,7 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     setLogErr('');
     try {
       setMealPhoto(await downscalePhoto(file));
+      setPlateAdvice(null); // a fresh photo invalidates prior advice
     } catch {
       setLogErr("Couldn't read that photo — try a different one.");
     }
@@ -63,6 +90,7 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
       await logMeal(text, mealKind, mealPhoto ?? undefined);
       setMealText('');
       setMealPhoto(null);
+      setPlateAdvice(null);
       await refreshDay(detail.date);
       if (detail.status === 'pending') setDetail({ ...detail, status: 'done' });
       onLogged?.();
@@ -95,6 +123,10 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     meals,
     mealPhoto,
     setMealPhoto,
+    clearPhoto,
+    plateAdvice,
+    advising,
+    checkPlate,
     day,
     confirming,
     daysLogged,

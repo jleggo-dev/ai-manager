@@ -269,6 +269,16 @@ svg { stroke-width: 1.9; } .stroke { stroke: currentColor; fill: none; }
 .photo-preview img { width: 72px; height: 72px; object-fit: cover; border-radius: 11px; border: 1px solid var(--line-soft); }
 .photo-clear { position: absolute; left: 58px; top: -6px; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 13px; line-height: 1; }
 .photo-hint { font-size: 12.5px; color: var(--text-dim); line-height: 1.45; min-width: 0; }
+/* Pre-eat plate advice — a quick "should I?" read before logging. */
+.plate-advice-row { margin-top: 8px; }
+.plate-check-btn { width: 100%; padding: 8px 0; border-radius: 11px; font-size: 13.5px; font-weight: 600; color: var(--forest); background: rgba(44, 85, 69, .07); border: 1px solid rgba(44, 85, 69, .28); }
+.plate-check-btn:hover { background: rgba(44, 85, 69, .13); }
+.plate-advice { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 11px; border: 1px solid var(--line-soft); }
+.plate-advice .pa-text { font-size: 13.5px; line-height: 1.45; }
+.plate-advice .pa-est { flex: 0 0 auto; font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+.plate-advice.pa-go { background: rgba(139, 168, 142, .12); border-color: rgba(139, 168, 142, .35); }
+.plate-advice.pa-tweak { background: rgba(214, 178, 94, .12); border-color: rgba(214, 178, 94, .38); }
+.plate-advice.pa-heavy { background: rgba(197, 122, 94, .12); border-color: rgba(197, 122, 94, .38); }
 /* The Baseline moment: observation week done → the coach's read + one gradual change. */
 .baseline-cta { margin-top: 12px; width: 100%; padding: 9px 12px; border-radius: 11px; border: 1px dashed var(--line-soft); background: transparent; color: var(--text-dim); font-size: 13.5px; cursor: pointer; }
 .baseline-cta:hover { color: var(--text); border-color: var(--line); }
