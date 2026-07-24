@@ -14,6 +14,7 @@ import type { OccurrenceSession } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import {
   getOccurrenceWithActivity,
+  listOccurrences,
   listRecentLogsByTitle,
   getAnchorSessionByTitle,
   setOccurrenceSessionIfEmpty,
@@ -147,4 +148,24 @@ export async function getOccurrenceDetail(
     return (await getOccurrenceWithActivity(userId, occurrenceId)) ?? { ...occ, session };
   }
   return { ...occ, session };
+}
+
+/**
+ * Warm the session cache for imminent occurrences so the first tap is instant (plan §prefetch).
+ * Best-effort, fire-and-forget from GET /plan: getOccurrenceDetail generates-and-caches only when a
+ * row has no session yet, so deterministic sessions compute in ms and a coach/eval session takes its
+ * AI call now instead of on tap. Bounded to the next `days` days (imminent, likely to be opened) so
+ * we don't pre-spend coach calls on far-off or skipped work; per-occurrence errors are swallowed.
+ */
+export async function prefetchImminentSessions(userId: string, days = 2): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  const to = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+  for (const o of await listOccurrences(userId, today, to)) {
+    if (o.status !== 'pending') continue;
+    try {
+      await getOccurrenceDetail(userId, o.occurrence_id); // no-op when already cached or non-generating
+    } catch {
+      /* best-effort — a failure just means the user waits on tap, exactly as before */
+    }
+  }
 }
