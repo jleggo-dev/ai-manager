@@ -4,7 +4,7 @@ import { previewLock, confirmLock, dismissLock } from '../services/lock.ts';
 import { replanPlan, previewReplan, confirmReplan, dismissReplan } from '../services/replan.ts';
 import { buildPlanView } from '../services/plan-view.ts';
 import { assessIfDue } from '../services/situation.ts';
-import { getOccurrenceDetail } from '../services/session-generate.ts';
+import { getOccurrenceDetail, prefetchImminentSessions } from '../services/session-generate.ts';
 import { logOccurrence } from '../services/session-log.ts';
 import { recordWeighIn } from '../services/weigh-in.ts';
 import { setPendingProposal } from '../repos/users.ts';
@@ -32,6 +32,7 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const view = await buildPlanView(userId);
     void assessIfDue(userId).catch((err) => console.error('[assessIfDue]', err));
+    void prefetchImminentSessions(userId).catch((err) => console.error('[prefetch]', err));
     res.json(view);
   } catch (err) {
     console.error('[GET /plan]', err);

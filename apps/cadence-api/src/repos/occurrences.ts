@@ -162,6 +162,25 @@ export async function listRecentLogsByTitle(
     limit ${limit}`;
 }
 
+/**
+ * The EARLIEST same-title occurrence that has a cached session — the deterministic engine's anchor
+ * (the eval week the Coach programmed). Title-keyed (like listRecentLogsByTitle) so it survives a
+ * replan that recreates activities with new ids. Returns its scheduled date + the session template.
+ */
+export async function getAnchorSessionByTitle(
+  userId: string,
+  title: string,
+): Promise<{ date: string; session: OccurrenceSession } | null> {
+  const [row] = await sql<Array<{ date: string; session: OccurrenceSession }>>`
+    select to_char(o.date, 'YYYY-MM-DD') as date, o.session
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and lower(a.title) = ${title.toLowerCase()} and o.session is not null
+    order by o.date asc
+    limit 1`;
+  return row ?? null;
+}
+
 /** Done occurrences with their value/log payloads (oldest first) — the progress engine's feed. */
 export async function listLoggedForProgress(
   userId: string,

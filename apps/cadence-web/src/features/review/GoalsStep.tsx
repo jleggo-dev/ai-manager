@@ -171,6 +171,23 @@ function GoalCard({
         </select>
       </div>
       <div className="wiz-typehint">{TYPE_HINTS[g.type]}</div>
+      {g.area === 'movement' && (
+        <label className="wiz-field">
+          <span>Workouts</span>
+          <select
+            className="wiz-sel"
+            value={g.plan_mode ?? 'coach'}
+            onChange={(e) => {
+              const plan_mode = e.target.value === 'deterministic' ? 'deterministic' : 'coach';
+              setGoals(goals.map((x) => (x.goal_id === g.goal_id ? { ...x, plan_mode } : x)));
+              updateGoal(g.goal_id, { plan_mode }).catch(() => {});
+            }}
+          >
+            <option value="coach">Coach programs each session</option>
+            <option value="deterministic">Auto-progress each week</option>
+          </select>
+        </label>
+      )}
       {g.type === 'target' && <TargetFields g={g} goals={goals} setGoals={setGoals} />}
       {g.type === 'milestone' && (
         <label className="wiz-field wiz-datefield">

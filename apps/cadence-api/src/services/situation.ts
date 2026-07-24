@@ -1,6 +1,7 @@
 import type { PendingProposal, SituationAssessResult } from '@cadence/shared';
 import { getUser, setPendingProposal, touchAssessedAt } from '../repos/users.ts';
 import { getActivePlan } from '../repos/plans.ts';
+import { listGoalsByStatus } from '../repos/goals.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
 import { rollingConsistency } from './metrics.ts';
 import { detectTripwires, type TripwireSnapshot } from './tripwires.ts';
@@ -62,6 +63,24 @@ export async function assessIfDue(userId: string): Promise<void> {
 
   const plan = await getActivePlan(userId);
   if (!plan) return; // nothing to assess before a plan exists
+
+  // Monthly rebuild checkpoint (deterministic, no LLM): after ~4 weeks the progression engine has
+  // been evolving a deterministic-mode plan on its own — offer a coach rebuild for the next block.
+  // Reuses the pending_proposal → accept-runs-replan machinery; the pending guard above stops it
+  // re-firing until acted on (re-offers the following week if dismissed while still a month in).
+  const planAgeDays = (Date.now() - new Date(plan.generated_at).getTime()) / 86_400_000;
+  if (planAgeDays >= 28) {
+    const goals = await listGoalsByStatus(userId, ['committed']);
+    if (goals.some((g) => g.plan_mode === 'deterministic')) {
+      await touchAssessedAt(userId);
+      await setPendingProposal(userId, {
+        reason: "You've held this rhythm about a month — want me to take a fresh look and build your next block?",
+        suggested_levers: ['Build my next block'],
+        created_at: new Date().toISOString(),
+      });
+      return;
+    }
+  }
 
   const snapshot = await buildSnapshot(userId);
   const fired = detectTripwires(snapshot);

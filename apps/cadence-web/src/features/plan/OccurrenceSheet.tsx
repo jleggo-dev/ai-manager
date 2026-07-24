@@ -40,7 +40,7 @@ export function OccurrenceSheet({
               <i />
               <i />
             </span>
-            <span className="sheet-loading-t">Putting your session together…</span>
+            <span className="sheet-loading-t">Chatting with your coach about this session…</span>
           </div>
         ) : state === 'gone' ? (
           <div className="sheet-msg">

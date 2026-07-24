@@ -147,6 +147,7 @@ export const patchGoalBodySchema = z
     measure: z.unknown().optional(),
     timeframe: z.unknown().optional(),
     milestones: z.unknown().optional(),
+    plan_mode: z.enum(['coach', 'deterministic']).optional(),
   })
   .passthrough();
 

@@ -76,6 +76,7 @@ router.patch('/goals/:id', async (req: Request, res: Response) => {
       measure: body.measure as Goal['measure'],
       timeframe: body.timeframe as Goal['timeframe'],
       milestones: body.milestones as Goal['milestones'],
+      plan_mode: body.plan_mode,
     });
     res.json({ ok: true });
   } catch (err) {
