@@ -223,6 +223,17 @@ export async function listDoneUserOccurrencesForDay(
     where o.user_id = ${userId} and o.date = ${date} and o.status = 'done' and a.kind = 'user'`;
 }
 
+/** The user's weigh-in series (date + kg) over the trailing window — feeds the adaptive-target
+ *  weight-trend read. Weigh-ins store `value.weight_kg` on their occurrence (see weigh-in.ts). */
+export async function listWeighInSeries(userId: string, days = 60): Promise<Array<{ date: string; kg: number }>> {
+  const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  return sql<Array<{ date: string; kg: number }>>`
+    select to_char(o.date, 'YYYY-MM-DD') as date, (o.value->>'weight_kg')::float as kg
+    from cadence.occurrences o
+    where o.user_id = ${userId} and o.value ? 'weight_kg' and o.date >= ${from}
+    order by o.date asc`;
+}
+
 /** Recent logged occurrences across ALL activities (newest first) — coach-chat retrieval. */
 export async function listRecentLogged(
   userId: string,
