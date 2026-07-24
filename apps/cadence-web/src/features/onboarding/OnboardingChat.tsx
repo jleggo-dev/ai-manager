@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Orb } from '../../components/Orb.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
 import { useCoachChat } from './useCoachChat.ts';
@@ -48,6 +48,20 @@ export function OnboardingChat({
   const { turns, input, setInput, streaming, captured, restored, send } = useCoachChat({ intent });
   const chatRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const [flash, setFlash] = useState(false);
+  const prevCaptured = useRef(captured);
+
+  // Flash the Review pill when the captured-goal count rises — a new goal was just heard, so pull
+  // the eye to Review. One-shot: add the class, clear it after the animation so it can re-fire.
+  useEffect(() => {
+    if (captured > prevCaptured.current) {
+      setFlash(true);
+      const t = setTimeout(() => setFlash(false), 1600);
+      prevCaptured.current = captured;
+      return () => clearTimeout(t);
+    }
+    prevCaptured.current = captured;
+  }, [captured]);
 
   // Scroll only the chat pane — scrollIntoView would pan the page/shell on mobile.
   useEffect(() => {
@@ -110,7 +124,11 @@ export function OnboardingChat({
         </button>
       )}
       {chrome === 'onboarding' && (
-        <button className="float-review" onClick={onReview} title="Confirm what I heard & set your rhythm">
+        <button
+          className={`float-review${flash ? ' flash' : ''}`}
+          onClick={onReview}
+          title="Confirm what I heard & set your rhythm"
+        >
           {captured > 0 && <span className="pulse" />}
           <b>{captured}</b>
           <span>{captured === 1 ? 'goal' : 'goals'} · Review →</span>
@@ -129,7 +147,7 @@ export function OnboardingChat({
           <div className="coach-msg">
             {intent === 'ongoing'
               ? "Hey — good to see you 👋 How's your rhythm feeling? If something needs to shift — more, less, a different day — say the word and I'll adjust your plan."
-              : "Hi — I'm your Cadence coach 👋 Tell me what you'd like to work on — a first 10k, eating better, a steadier mind, the daily pages — and I'll take notes as we talk. What's on your mind?"}
+              : "Hi — I'm your coach, Cadence 👋 Tell me what you'd like to work on — a first 10k, eating better, a steadier mind, the daily pages — and I'll take notes as we talk. What's on your mind?"}
           </div>
         )}
         {restored &&

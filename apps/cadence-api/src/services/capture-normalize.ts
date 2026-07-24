@@ -37,7 +37,9 @@ export function normalizeBaseline(raw: Record<string, unknown>): Record<string, 
     unit = 'kg';
   }
   if (typeof value === 'number' && value > 0) {
-    const kg = unit === 'lbs' ? Math.round(value * LB_TO_KG * 10) / 10 : value;
+    // 2-dp (not 1): rounding lbs→kg at 0.1 kg makes a whole-lb input round-trip back to lbs off by
+    // .1 (195 → 88.5 → 195.1). 0.01 kg is fine enough that whole lbs display as whole lbs.
+    const kg = unit === 'lbs' ? Math.round(value * LB_TO_KG * 100) / 100 : value;
     out.weight_kg = { current: kg, start: kg, source: 'captured', updated_at: new Date().toISOString() };
     out.weight_unit = unit ?? 'kg';
   }

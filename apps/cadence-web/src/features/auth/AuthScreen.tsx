@@ -92,7 +92,7 @@ export function AuthScreen() {
       <div className="hero">
         <Orb hero />
         <div className="w-word">Cadence</div>
-        <p className="w-tag">{mode === 'signin' ? 'Welcome back.' : 'A rhythm you can keep.'}</p>
+        <p className="w-tag">Build better habits.</p>
       </div>
 
       <button className="auth-google" onClick={continueWithGoogle} disabled={busy || !authConfigured}>
