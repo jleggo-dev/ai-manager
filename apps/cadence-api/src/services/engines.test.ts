@@ -215,8 +215,8 @@ describe('capture normalizeBaseline (§6.1 — weight lands where the UI reads i
   it('canonicalizes {value, unit:lbs} to weight_kg{current,start} + weight_unit', () => {
     const b = normalizeBaseline({ weight: { value: 200, unit: 'lbs' } });
     const w = b.weight_kg as { current: number; start: number; source: string };
-    expect(w.current).toBe(90.7); // 200 * 0.453592, rounded to 0.1
-    expect(w.start).toBe(90.7);
+    expect(w.current).toBe(90.72); // 200 * 0.453592, 2-dp (whole lbs round-trip cleanly on display)
+    expect(w.start).toBe(90.72);
     expect(w.source).toBe('captured');
     expect(b.weight_unit).toBe('lbs');
   });
@@ -224,7 +224,7 @@ describe('capture normalizeBaseline (§6.1 — weight lands where the UI reads i
   it('accepts a bare kg number and the legacy weight_lbs key', () => {
     expect((normalizeBaseline({ weight_kg: 80 }).weight_kg as { current: number }).current).toBe(80);
     expect(normalizeBaseline({ weight_kg: 80 }).weight_unit).toBe('kg');
-    expect((normalizeBaseline({ weight_lbs: 150 }).weight_kg as { current: number }).current).toBe(68);
+    expect((normalizeBaseline({ weight_lbs: 150 }).weight_kg as { current: number }).current).toBe(68.04);
     expect(normalizeBaseline({ weight_lbs: 150 }).weight_unit).toBe('lbs');
   });
 
