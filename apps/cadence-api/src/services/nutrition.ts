@@ -11,8 +11,13 @@ import { runJobBySlug } from '../ai/aim.ts';
 import { insertNutritionLog, listNutritionLogs, updateNutritionLog } from '../repos/nutrition.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, setMacroTargets } from '../repos/users.ts';
-import { findPendingFoodLogOccurrence, setOccurrenceStatus } from '../repos/occurrences.ts';
+import {
+  findPendingFoodLogOccurrence,
+  setOccurrenceStatus,
+  listDoneUserOccurrencesForDay,
+} from '../repos/occurrences.ts';
 import { putMealPhoto, signMealPhotoUrl, signMealPhotoUrls } from './meal-photos.ts';
+import { estimateBurnKcal } from './burn.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
 import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW } from './nutrition-parse.ts';
@@ -108,13 +113,21 @@ export interface NutritionDay extends DayTotals {
   date: string;
   meals: NutritionLog[]; // newest first, signed photo URLs attached
   targets: MacroTargets | null; // null until the coach proposes + the user confirms (N3)
-  left: Macros | null; // per confirmed targets, clamped ≥0 — count what's left, never what broke
+  left: Macros | null; // per confirmed targets (incl. eat-back), clamped ≥0 — count what's left, never what broke
+  burn_kcal: number; // estimated exercise burn from today's DONE workouts (net calories)
+  eatback_kcal: number; // burn_kcal × eatback_pct, added to the kcal allowance (already reflected in `left`)
+  eatback_pct: number; // the eat-back setting in effect (0–100; default 50)
 }
 
-/** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. */
+/** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. `left`
+ *  reflects NET calories: base kcal target + the eaten-back share of today's estimated exercise burn. */
 export async function getNutritionDay(userId: string, date?: string): Promise<NutritionDay> {
   const d = date ?? today();
-  const [rows, user] = await Promise.all([listNutritionLogs(userId, d, d), getUser(userId)]);
+  const [rows, user, done] = await Promise.all([
+    listNutritionLogs(userId, d, d),
+    getUser(userId),
+    listDoneUserOccurrencesForDay(userId, d),
+  ]);
   let meals = rows;
   try {
     meals = await signMealPhotoUrls(rows);
@@ -123,7 +136,25 @@ export async function getNutritionDay(userId: string, date?: string): Promise<Nu
   }
   const sums = sumDay(rows);
   const targets = user?.macro_targets ?? null;
-  return { date: d, meals, ...sums, targets, left: computeLeft(targets, sums.totals) };
+
+  // Net calories: estimate today's exercise burn, add eatback_pct% of it to the kcal allowance.
+  const weightKg = user?.baseline?.weight_kg?.current;
+  const burn_kcal = done.reduce((s, o) => s + estimateBurnKcal(o.category, o.duration_min, weightKg), 0);
+  const eatback_pct = typeof targets?.eatback_pct === 'number' ? targets.eatback_pct : 50;
+  const eatback_kcal = Math.round((burn_kcal * eatback_pct) / 100 / 10) * 10;
+  const effective =
+    targets && typeof targets.kcal === 'number' ? { ...targets, kcal: targets.kcal + eatback_kcal } : targets;
+
+  return {
+    date: d,
+    meals,
+    ...sums,
+    targets,
+    left: computeLeft(effective, sums.totals),
+    burn_kcal,
+    eatback_kcal,
+    eatback_pct,
+  };
 }
 
 /**
@@ -265,4 +296,13 @@ export async function setTargets(userId: string, raw: unknown): Promise<Macros> 
 /** Remove targets entirely — back to observe-style, no rings, no "left". */
 export async function clearTargets(userId: string): Promise<void> {
   await setMacroTargets(userId, {});
+}
+
+/** Set the net-calorie eat-back % (0–100), merged into macro_targets without clobbering the macros. */
+export async function setEatbackPct(userId: string, pct: number): Promise<number> {
+  const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+  const user = await getUser(userId);
+  const cur = user?.macro_targets ?? {};
+  await setMacroTargets(userId, { ...cur, eatback_pct: clamped });
+  return clamped;
 }

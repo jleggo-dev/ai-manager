@@ -46,6 +46,8 @@ export interface MacroTargets {
   carbs_g?: number | null;
   fat_g?: number | null;
   confirm_below_confidence?: number; // provisional threshold; defaults to 0.5 in nutrition.ts when unset
+  eatback_pct?: number; // 0–100: % of a day's exercise burn added back to the kcal allowance (net calories); default 50
+  last_reviewed?: string; // ISO date the coach last proposed an adaptive target adjustment (weekly throttle)
 }
 
 export interface Recipe {

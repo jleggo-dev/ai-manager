@@ -210,6 +210,19 @@ export async function listLoggedForProgress(
     order by o.date asc`;
 }
 
+/** One day's DONE user (movement) occurrences with their activity category + scheduled duration —
+ *  the input to the deterministic exercise-burn estimate (net-calorie eat-back). */
+export async function listDoneUserOccurrencesForDay(
+  userId: string,
+  date: string,
+): Promise<Array<{ category: string | null; duration_min: number | null }>> {
+  return sql<Array<{ category: string | null; duration_min: number | null }>>`
+    select a.category, (a.schedule->>'duration_min')::int as duration_min
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and o.date = ${date} and o.status = 'done' and a.kind = 'user'`;
+}
+
 /** Recent logged occurrences across ALL activities (newest first) — coach-chat retrieval. */
 export async function listRecentLogged(
   userId: string,
