@@ -10,6 +10,7 @@ import {
   setTargets,
   clearTargets,
   setEatbackPct,
+  getPlateAdvice,
 } from '../services/nutrition.ts';
 import { BodyValidationError, parseBody, logMealBodySchema, macroTargetsBodySchema } from '../validation/body.ts';
 
@@ -132,6 +133,19 @@ router.delete('/targets', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[DELETE /nutrition/targets]', err);
     res.status(500).json({ error: 'failed to clear targets' });
+  }
+});
+
+/** POST /nutrition/plate-advice — pre-eat read on a plate photo (advice only, no log). */
+router.post('/plate-advice', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const photo = (req.body as { photo?: unknown })?.photo;
+  if (typeof photo !== 'string' || !photo) return void res.status(400).json({ error: 'photo required' });
+  try {
+    res.json(await getPlateAdvice(userId, photo));
+  } catch (err) {
+    console.error('[POST /nutrition/plate-advice]', err);
+    res.status(502).json({ error: 'could not read the plate' });
   }
 });
 
