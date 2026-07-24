@@ -54,6 +54,7 @@ export async function updateGoal(userId: string, goalId: string, f: Partial<Goal
       measure = coalesce(${f.measure ? json(f.measure) : null}, measure),
       timeframe = coalesce(${f.timeframe ? json(f.timeframe) : null}, timeframe),
       milestones = coalesce(${f.milestones ? json(f.milestones) : null}, milestones),
+      plan_mode = coalesce(${f.plan_mode ?? null}, plan_mode),
       updated_at = now()
     where user_id = ${userId} and goal_id = ${goalId}`;
 }
