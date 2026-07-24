@@ -48,6 +48,8 @@ export interface Goal {
   linked_equipment: string[];
   source: 'captured' | 'manual';
   confidence?: number; // Scribe extraction confidence
+  plan_mode?: 'coach' | 'deterministic'; // how this goal's fitness sessions are programmed (default 'coach'):
+  // 'coach' = AI programs each session; 'deterministic' = a progression engine computes them (eval + monthly rebuild stay AI)
 }
 
 /** assess_goal — the coach's realism read on ONE goal + proposed stepping-stones (§6.2).
