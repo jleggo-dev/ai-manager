@@ -264,12 +264,13 @@ All authored in `config/ai-admin/ai-admin.config.json` + provisioned via `script
 | `estimate_food`                      | Coach-tier or Flash       | "describe a food" text → `{ name, serving_size, serving_unit, macros_per_serving, confidence }`                                                         |
 | `structure_recipe`                   | Coach-tier                | "I made X with A,B,C, serves N" → `{ name, servings, ingredients:[{name,qty,unit}], steps? }` (app then resolves ingredients → foods + computes macros) |
 
-**WS2 status (Phase 1 jobs):** `parse-nutrition-label`, `identify-food`, and `estimate-food` are
+**WS2 status (Phase 1):** Jobs `parse-nutrition-label`, `identify-food`, and `estimate-food` are
 authored in `config/ai-admin/ai-admin.config.json`. Vision jobs pin the same Gemini vision profile
 UUID as `parse-meal` / `plate-advice`; `estimate-food` uses the Broker (Flash) tier. Runtime:
 `runJobBySlug` (no `AIM_JOB_*`). Sync live with jobs-only:
-`node --import tsx apps/cadence-api/scripts/sync-jobs.ts` (not `provision-aim`). App wiring
-(`services/food-capture.ts` + routes) lands after WS1. `structure_recipe` remains Phase 2.
+`node --import tsx apps/cadence-api/scripts/sync-jobs.ts` (not `provision-aim`). App wiring:
+`services/food-capture.ts` + `POST /nutrition/foods/{parse-label,estimate,identify}` +
+deterministic `POST /nutrition/meals` with `food_id`. `structure_recipe` remains Phase 2.
 
 Notes: `parse_nutrition_label` + `identify_food` can be one 2-photo job if latency allows; keep them
 splittable. `estimate_food` overlaps `parse_meal` — reuse the estimation prompt style; the difference

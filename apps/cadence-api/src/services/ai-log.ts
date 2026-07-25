@@ -11,7 +11,10 @@ export type AiLogKind =
   | 'parse_session_log'
   | 'parse_meal'
   | 'nutrition_baseline'
-  | 'plate_advice';
+  | 'plate_advice'
+  | 'parse_nutrition_label'
+  | 'estimate_food'
+  | 'identify_food';
 
 /**
  * Durable log of a behind-the-scenes AI call (see migration 0004). Best-effort: a logging

@@ -51,17 +51,33 @@ export const logMealBodySchema = z
       .string()
       .refine((s) => s.startsWith('data:image/'), { message: 'photo must be a data:image URL' })
       .optional(),
+    /** Deterministic log of a saved food (Req 5) — no AI when set. */
+    food_id: z.string().uuid({ message: 'food_id must be a uuid' }).optional(),
+    serving_index: z.number().int().min(0).optional(),
+    /** MFP "Number of Servings" multiplier; default 1. */
+    quantity: z.number().positive().optional(),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' })
+      .optional(),
   })
   .superRefine((val, ctx) => {
     const text = typeof val.text === 'string' ? val.text.trim() : '';
-    if (!text && !val.photo) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'a meal needs words or a photo' });
+    if (!text && !val.photo && !val.food_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'a meal needs words, a photo, or a food_id',
+      });
     }
   })
   .transform((val) => ({
     text: typeof val.text === 'string' ? val.text.trim() : '',
     meal: val.meal,
     photo: val.photo,
+    food_id: val.food_id,
+    serving_index: val.serving_index,
+    quantity: val.quantity,
+    date: val.date,
   }));
 
 export const macroTargetsBodySchema = z

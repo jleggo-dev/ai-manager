@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { createFoodBodySchema, patchFoodBodySchema } from './food.ts';
+import {
+  createFoodBodySchema,
+  estimateFoodBodySchema,
+  identifyFoodBodySchema,
+  parseLabelBodySchema,
+  patchFoodBodySchema,
+} from './food.ts';
 
 const validBody = {
   name: 'Nonfat Greek Yogurt',
@@ -47,5 +53,25 @@ describe('patchFoodBodySchema', () => {
 
   it('allows clearing brand to null', () => {
     expect(patchFoodBodySchema.parse({ brand: null }).brand).toBeNull();
+  });
+});
+
+describe('capture body schemas', () => {
+  it('parse-label requires a data:image photo', () => {
+    expect(() => parseLabelBodySchema.parse({ photo: 'http://x' })).toThrow(/data:image/);
+    expect(parseLabelBodySchema.parse({ photo: 'data:image/jpeg;base64,abc', hint: ' Fage ' })).toMatchObject({
+      photo: 'data:image/jpeg;base64,abc',
+      hint: 'Fage',
+    });
+  });
+
+  it('estimate requires non-empty text', () => {
+    expect(() => estimateFoodBodySchema.parse({ text: '  ' })).toThrow();
+    expect(estimateFoodBodySchema.parse({ text: ' greek yogurt ' })).toEqual({ text: 'greek yogurt' });
+  });
+
+  it('identify requires a data:image photo', () => {
+    expect(() => identifyFoodBodySchema.parse({})).toThrow();
+    expect(identifyFoodBodySchema.parse({ photo: 'data:image/png;base64,x' }).photo).toMatch(/^data:image/);
   });
 });

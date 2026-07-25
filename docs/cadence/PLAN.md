@@ -315,7 +315,7 @@ Sorting every requirement into what each layer owns. ✅ = provisioned; ⏳ = pl
 | `disrupted_plan` | episode → additive overlay (§5.7) | ✅ |
 | `adjust_plan` | tweak existing plan, version-bump (§6.3) | ⏳ (may reuse synthesize) |
 | `generate_recipe` / `generate_meal_plan` | prefs/fridge → recipe; targets → week + shopping list (§5.6) | ⏳ (future; see below) |
-| `parse_nutrition_label` / `estimate_food` / `identify_food` | Req 5 WS2 food capture (label / describe / front-of-pack) | ✅ authored (config; sync-jobs) |
+| `parse_nutrition_label` / `estimate_food` / `identify_food` | Req 5 WS2 food capture (label / describe / front-of-pack) | ✅ jobs + app wire (`food-capture` + routes) |
 | `structure_recipe` | Req 5 Phase 2 — recipe from chat | ⏳ |
 
 > **Req 5 reframed (2026-07-24) → a Food & Recipe data layer (MFP-parity), foundation-first.** The

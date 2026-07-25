@@ -17,7 +17,7 @@ import {
 describe('parseBody / nutrition schemas', () => {
   it('rejects empty meal bodies', () => {
     expect(() => parseBody(logMealBodySchema, {})).toThrow(BodyValidationError);
-    expect(() => parseBody(logMealBodySchema, { text: '  ' })).toThrow(/words or a photo/);
+    expect(() => parseBody(logMealBodySchema, { text: '  ' })).toThrow(/words, a photo, or a food_id/);
   });
 
   it('accepts text and optional meal kind', () => {
@@ -25,11 +25,22 @@ describe('parseBody / nutrition schemas', () => {
       text: 'oatmeal',
       meal: 'breakfast',
       photo: undefined,
+      food_id: undefined,
+      serving_index: undefined,
+      quantity: undefined,
+      date: undefined,
     });
   });
 
   it('rejects non-image photo strings', () => {
     expect(() => parseBody(logMealBodySchema, { photo: 'http://x' })).toThrow(/data:image/);
+  });
+
+  it('accepts deterministic food_id log without text/photo', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    expect(
+      parseBody(logMealBodySchema, { food_id: id, meal: 'breakfast', quantity: 2, serving_index: 0 }),
+    ).toMatchObject({ food_id: id, meal: 'breakfast', quantity: 2, serving_index: 0, text: '' });
   });
 
   it('accepts macro target numbers (passthrough for service-side sanitize)', () => {

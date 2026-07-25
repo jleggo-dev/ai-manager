@@ -25,6 +25,7 @@ let logMeal: (typeof import('./nutrition.ts'))['logMeal'];
 let getBaselineRead: (typeof import('./nutrition.ts'))['getBaselineRead'];
 let insertNutritionLog: (typeof import('../repos/nutrition.ts'))['insertNutritionLog'];
 let listNutritionLogs: (typeof import('../repos/nutrition.ts'))['listNutritionLogs'];
+let insertFood: (typeof import('../repos/foods.ts'))['insertFood'];
 let insertGoal: (typeof import('../repos/goals.ts'))['insertGoal'];
 let setMacroTargets: (typeof import('../repos/users.ts'))['setMacroTargets'];
 let resetUserData: (typeof import('./dev-reset.ts'))['resetUserData'];
@@ -58,6 +59,7 @@ d('API-04 — nutrition service (DB)', () => {
     ({ sql } = await import('../db/sql.ts'));
     ({ logMeal, getBaselineRead } = await import('./nutrition.ts'));
     ({ insertNutritionLog, listNutritionLogs } = await import('../repos/nutrition.ts'));
+    ({ insertFood } = await import('../repos/foods.ts'));
     ({ insertGoal } = await import('../repos/goals.ts'));
     ({ setMacroTargets } = await import('../repos/users.ts'));
     ({ resetUserData } = await import('./dev-reset.ts'));
@@ -127,6 +129,42 @@ d('API-04 — nutrition service (DB)', () => {
     const row = await logMeal(USER, { text: 'salmon', date: today() });
     expect(row.provisional).toBe(false);
     expect(row.ai_confidence).toBe(0.9);
+  });
+
+  it('logMeal with food_id is deterministic (no AI) and correlates items[].food_id', async () => {
+    const food = await insertFood(USER, {
+      name: 'Nonfat Greek Yogurt',
+      brand: 'Fage',
+      source: 'manual',
+      base_unit: 'g',
+      macros_per_base: { kcal: 59, protein_g: 10.3, carbs_g: 3.5, fat_g: 0 },
+      servings: [
+        { label: '1 container (170g)', unit: 'container', amount_g: 170 },
+        { label: '100 g', unit: 'g', amount_g: 100 },
+      ],
+      default_serving: 0,
+      confidence: 1,
+    });
+
+    const row = await logMeal(USER, {
+      food_id: food.food_id,
+      meal: 'breakfast',
+      quantity: 1,
+      date: today(),
+    });
+
+    expect(runJobBySlug).not.toHaveBeenCalled();
+    expect(row.input_method).toBe('manual');
+    expect(row.provisional).toBe(false);
+    expect(row.items[0]?.food_id).toBe(food.food_id);
+    expect(row.items[0]?.name).toBe('Nonfat Greek Yogurt');
+    expect(row.macros?.kcal).toBeCloseTo(100.3, 1);
+    expect(row.raw_text).toBe('Fage Nonfat Greek Yogurt');
+
+    const usage = await sql<{ use_count: number }[]>`
+      select use_count from cadence.food_usage
+      where user_id = ${USER} and food_id = ${food.food_id}`;
+    expect(usage[0]?.use_count).toBe(1);
   });
 
   it('getBaselineRead returns ready:false under 7 logged days and never calls the LLM', async () => {
