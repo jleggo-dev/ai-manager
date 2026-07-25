@@ -237,15 +237,15 @@ export async function getNutritionSummary(userId: string, days = 7): Promise<Nut
 
 /**
  * Req 5 WS-I — coach-voiced insight pack for the nutrition card.
- * Reuses `getNutritionDay` totals/left (no forked day math) + Observe summary + recent logs.
+ * Reuses `getNutritionDay` totals/left (no forked day math) + one unsigned recent-log fetch
+ * for Observe summary / pattern / variety (no photo URL signing).
  */
 export async function getNutritionInsight(userId: string, date?: string): Promise<NutritionInsightPack> {
   const windowDays = 7;
-  const [day, summary, recent] = await Promise.all([
-    getNutritionDay(userId, date),
-    getNutritionSummary(userId, windowDays),
-    listRecentMeals(userId, windowDays),
-  ]);
+  const to = today();
+  const from = new Date(Date.now() - (windowDays - 1) * 86_400_000).toISOString().slice(0, 10);
+  const [day, recent] = await Promise.all([getNutritionDay(userId, date), listNutritionLogs(userId, from, to)]);
+  const summary = summarizeNutrition(recent, windowDays);
   // MacroTargets allows null fields; insight builder only needs positive macro numbers.
   const targets: Macros | null = day.targets
     ? {
