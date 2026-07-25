@@ -141,6 +141,35 @@ export async function logMealFromFood(input: {
   }
 }
 
+/**
+ * Deterministic log of a saved recipe (Req 5 Phase 2 / WS3) — N servings, no AI.
+ * POST /nutrition/meals accepts recipe_id + servings (alias for quantity).
+ */
+export async function logMealFromRecipe(input: {
+  recipe_id: string;
+  servings?: number;
+  meal?: MealKind;
+}): Promise<Meal | null> {
+  try {
+    const servings =
+      typeof input.servings === 'number' && Number.isFinite(input.servings) && input.servings > 0 ? input.servings : 1;
+    const res = await fetch(`${BASE}/nutrition/meals`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        recipe_id: input.recipe_id,
+        servings,
+        quantity: servings,
+        ...(input.meal ? { meal: input.meal } : {}),
+      }),
+    });
+    if (res.status === 404 || !res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 /** Recent meals, newest first (the food-log sheet's list). */
 export async function getRecentMeals(days = 7): Promise<Meal[]> {
   const res = await fetch(`${BASE}/nutrition/recent?days=${days}`, { headers: headers() });

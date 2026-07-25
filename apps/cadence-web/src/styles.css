@@ -548,6 +548,9 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .food-snap-pick:hover { border-color: var(--forest); }
 .food-snap-disabled { opacity: .55; pointer-events: none; }
 .food-snap-preview { margin-bottom: 10px; }
+.food-recipe-ings { margin: 4px 0 10px; }
+.food-recipe-ing-list { margin: 0 0 10px; padding-left: 1.15rem; font-size: 13.5px; color: var(--text-dim); line-height: 1.45; }
+.food-recipe-steps { margin: 0 0 12px; padding-left: 1.15rem; font-size: 13.5px; color: var(--text-dim); line-height: 1.45; }
 
 /* ── Dietary profile (Settings / WS5) ────────────────────────── */
 .diet-editor { border-top: 1px solid var(--line-soft); }
