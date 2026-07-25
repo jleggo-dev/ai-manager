@@ -5,6 +5,7 @@ import {
   identifyFoodBodySchema,
   parseLabelBodySchema,
   patchFoodBodySchema,
+  resolveFoodBodySchema,
 } from './food.ts';
 
 const validBody = {
@@ -73,5 +74,21 @@ describe('capture body schemas', () => {
   it('identify requires a data:image photo', () => {
     expect(() => identifyFoodBodySchema.parse({})).toThrow();
     expect(identifyFoodBodySchema.parse({ photo: 'data:image/png;base64,x' }).photo).toMatch(/^data:image/);
+  });
+});
+
+describe('resolveFoodBodySchema', () => {
+  it('allows empty body (recents-style resolve)', () => {
+    expect(resolveFoodBodySchema.parse({})).toEqual({ text: '', photo: undefined });
+  });
+
+  it('trims text', () => {
+    expect(resolveFoodBodySchema.parse({ text: '  3 eggs  ' })).toEqual({ text: '3 eggs', photo: undefined });
+  });
+
+  it('accepts an optional label photo hint', () => {
+    expect(resolveFoodBodySchema.parse({ text: 'Fage', photo: 'data:image/jpeg;base64,x' }).photo).toMatch(
+      /^data:image/,
+    );
   });
 });

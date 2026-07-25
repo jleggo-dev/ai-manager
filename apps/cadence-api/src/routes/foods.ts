@@ -10,6 +10,7 @@ import {
   updateFood,
 } from '../repos/foods.ts';
 import { estimateFood, identifyFood, parseNutritionLabel } from '../services/food-capture.ts';
+import { resolveFoods } from '../services/food-resolver.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
 import {
   createFoodBodySchema,
@@ -17,6 +18,7 @@ import {
   identifyFoodBodySchema,
   parseLabelBodySchema,
   patchFoodBodySchema,
+  resolveFoodBodySchema,
 } from '../validation/food.ts';
 
 const router = Router();
@@ -108,6 +110,27 @@ router.post('/identify', async (req: Request, res: Response) => {
     if (photoStatus) return void res.status(photoStatus).json({ error: (err as Error).message });
     console.error('[POST /nutrition/foods/identify]', err);
     res.status(502).json({ error: 'failed to identify food' });
+  }
+});
+
+/**
+ * POST /nutrition/foods/resolve — deterministic resolve (WS-R).
+ * Ranked candidates + optional preselected (serving + inferred qty). "new" → capture hooks.
+ * Confirm → POST /nutrition/meals { food_id, serving_index, quantity }.
+ */
+router.post('/resolve', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(resolveFoodBodySchema, req.body ?? {});
+    const result = await resolveFoods(userId, {
+      text: body.text ?? '',
+      ...(body.photo ? { photo: body.photo } : {}),
+    });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /nutrition/foods/resolve]', err);
+    res.status(500).json({ error: 'failed to resolve food' });
   }
 });
 
