@@ -49,7 +49,7 @@ confidence numbers are provisional until confirmed._
   - **Describe it** ("nonfat greek yogurt, 170g") → an LLM estimate → confirm → saved.
   - **Snap the nutrition label** → Gemini Flash parses the Nutrition Facts panel into exact macros +
     serving → you name the food/brand (typed, or a photo of the front of the package) → saved.
-  - _(Future)_ **Scan the barcode** → OpenFoodFacts.
+  - **Scan the barcode** → OpenFoodFacts (camera when BarcodeDetector is available; digit entry fallback).
 - **Build & log a recipe.** Tell the coach what you made ("chili with 500g beef, 2 cans beans,
   onion, makes 6 bowls") → it structures it into ingredients (resolved to your foods) + servings →
   computes **real per-serving macros** → saved. Then log "2 servings" in one tap, any day.
@@ -154,7 +154,7 @@ for dev/real users. (See migration 0016 for the pattern.)
 | **Serving model**                         | **Match MyFitnessPal**: a food carries **multiple serving units** (e.g. "1 container (170g)", "100 g", "1 cup"), each with a base-unit equivalence; logging = pick a serving + a quantity multiplier, macros scale. AI **pre-selects** the serving the user usually uses.                                                                                                                                |
 | **Resolver**                              | **First-class** (§5.6, WS-R): any input → ranked candidates across your foods, your recipes, and the shared DB (generic vs. branded vs. a specific recipe) → confirm → log; or "new" → build a food/recipe. The anti-friction engine.                                                                                                                                                                    |
 | **Recipes**                               | **Compositions of foods** (MFP-exact), **user-owned** in v1 (sharing across users is later). Per-serving macros are **computed** (Σ resolved ingredients ÷ servings); a component that isn't a known food is estimated inline (offer "save as food"). Built from a sentence (LLM-structured) or manually.                                                                                                |
-| **Barcode**                               | **Phase 3 (in progress):** browser → OFF product-by-barcode (`/api/v3/product/{barcode}`) with `X-User-Agent`, then POST mapped food to cadence-api for shared cache (`source='off'`, `off_id`). Prefer DB cache; do **not** proxy OFF through the API. Camera scan later; Food tab has a barcode-digit stub. Attribution: ODbL — fill the OFF API usage form before volume. |
+| **Barcode**                               | **Phase 3 ✅:** browser → OFF product-by-barcode (`/api/v3/product/{barcode}`) with `X-User-Agent`, then POST mapped food to cadence-api for shared cache (`source='off'`, `off_id`). Prefer DB cache; do **not** proxy OFF through the API. Food tab: camera + `BarcodeDetector` when supported, digit entry fallback. Attribution: ODbL — fill the OFF API usage form before volume. |
 | **Label capture (v1 barcode substitute)** | Photo of the **Nutrition Facts panel** → **Gemini Flash** → macros + serving JSON. Plus identify the **name + manufacturer** (typed or front-of-package photo).                                                                                                                                                                                                                                          |
 | **Dietary profile**                       | New first-class input (allergies / diet / dislikes) with an **allergen safety pass** (§5.2). Settings + coach; prompt on first recipe.                                                                                                                                                                                                                                                                   |
 | **UX home**                               | A **dedicated Food tab** (4th tab) for fast logging + food/recipe management; the Coach shares the data layer for the conversational (zero-friction) path.                                                                                                                                                                                                                                               |
@@ -343,13 +343,13 @@ and wire as they land. **WS4** (the tab) consumes WS-R. WS5 is otherwise indepen
   **coach-voiced insight card** — simple upfront, drill-down for depth. _The insight is the point; ship
   it in v1, not "later."_
 - **Phase 2 — Recipes (v1 core).** WS3 — build/save/log recipes with computed macros. (Depends on Phase 1.)
-- **Phase 3 — Real food data + barcode + micro insights.** OpenFoodFacts branded/barcode path:
-  browser client → product-by-barcode → cadence-api import/upsert shared `foods` (`source='off'`,
-  `off_id`); resolver already surfaces cached shared foods via search. USDA whole-food micros are a
-  **sibling PR** (`feat/req5-phase3-usda` — may add `fdc_id` + widen `source` check; coordinate
-  migrations as `0018` USDA / avoid colliding with OFF which needs no schema change). Fill the OFF
-  API usage form + ODbL attribution before production volume. **Micronutrient insights** (§2b) fill
-  in as real-data coverage grows. **Before fridge-scan, per owner.**
+- **Phase 3 — Real food data + barcode + micro insights — DONE (foundation).** OpenFoodFacts
+  branded/barcode path: browser → product-by-barcode → cadence-api import/upsert shared `foods`
+  (`source='off'`, `off_id`); camera scan + digit fallback on Food tab. USDA whole foods (`fdc_id`,
+  `source='usda'`, migration `0018`) enrich search/resolve on cache miss. **Micronutrient insights**
+  (zinc/iron class) gate on real-data coverage from USDA/OFF/label foods — never LLM macros.
+  Coach read tool: retrieval registry `lookup_food` (deterministic search + USDA cache; no LLM HTTP
+  wrap). Fill the OFF API usage form + ODbL attribution before production volume.
 - **Phase 4 — Fridge/pantry scan → recipe ideas.** Photograph what you have → review ingredients →
   recipe draft ideas grounded in that list + dietary profile (+ optional macro targets). Jobs:
   `parse-fridge-photo` (vision) + `generate-recipe`; API `POST /nutrition/recipes/parse-fridge` →
@@ -409,15 +409,15 @@ one implementation, two entry points.** USDA is the first concrete tool:
   `foodNutrients[]` (macros + micros per 100g) + `foodPortions[]` (household measure → grams, = our
   serving units) into a `Food` (`source='usda'`, shared/global — public authoritative data). Called by
   the Resolver on cache-miss and by the Insight layer for micros. No LLM in the fetch.
-- **Later (agentic tool):** expose the same lookup as a `lookup_food` **tool** the coach can call, next
-  to `resolve_food`, `log_meal`, `get_nutrition_day`, `build_recipe` — even non-food ones (`enter_detour`).
-  "Oatmeal and blueberries" → the coach calls resolve (which may call USDA) → confirms → logs. **No forms,
-  ever** — the endpoint of "MFP's value without the friction" (§2a) + "we're a coach" (§2b): the coach IS
-  the interface and the app's capabilities are its toolbox.
+- **Now (retrieval tool):** `lookup_food` in the coach retrieval registry — same
+  `searchFoodsWithUsda` path the Food tab uses (local + USDA cache). Scribe can select it; the app
+  executes it. Deterministic; no LLM job wrapping HTTP. OFF barcodes stay on the browser path.
+- **Later (agentic writes):** `resolve_food`, `log_meal`, `get_nutrition_day`, `build_recipe` as
+  tools next to non-food ones (`enter_detour`). "Oatmeal and blueberries" → resolve (may call USDA)
+  → confirm → log. **No forms, ever** — the coach IS the interface.
 
-**Milestones toward it** (each independently useful, so no big-bang): (1) USDA + OFF as deterministic
-providers behind the Resolver; (2) wrap the resolver/log/lookup services as AI-Admin **jobs** with clean
-contracts (so they're callable both ways); (3) turn the coach into a **tool-runner** over that job set
-(the PLAN §"Final step" loop), starting with read-only food tools, then the write ones (log/build) behind
-the same confirm-before-commit stance we use everywhere. **Guardrail:** even agentic, mutations stay
+**Milestones toward it** (each independently useful, so no big-bang): (1) ✅ USDA + OFF as
+deterministic providers behind the Resolver; (2) ✅ first read tool `lookup_food` on the retrieval
+registry; (3) wrap resolver/log as AI-Admin **jobs** + tool-runner loop (PLAN §"Final step"), write
+tools behind confirm-before-commit. **Guardrail:** even agentic, mutations stay
 *suggest-then-confirm* — the coach proposes, the user taps; never silent writes.

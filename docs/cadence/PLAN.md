@@ -1686,9 +1686,9 @@ enhancement, NOT a prerequisite for anything above it. Companion write-up:
 `docs/cadence/blog/04-letting-the-coach-ask-its-own-questions.md`.
 
 > **First concrete tools for this loop → the food layer (Req 5, 2026-07-24 direction).** USDA/OpenFoodFacts
-> lookup, `resolve_food`, `log_meal`, `build_recipe` are being designed as **services the app calls now
-> AND jobs/tools the agentic coach calls later** — one implementation, two entry points — so Req 5 doubles
-> as the proving ground for the tool-runner coach. Long-term objective + milestones in
+> as deterministic providers ✅; coach retrieval `lookup_food` ✅ (read-only, no LLM HTTP wrap).
+> `resolve_food` / `log_meal` / `build_recipe` still designed as services now + tools later — one
+> implementation, two entry points. Long-term objective + milestones in
 > **`docs/cadence/REQ5-food-and-recipes.md` §12**. Guardrail stays: even agentic, writes are suggest-then-confirm.
 
 ## Req 4 — Disrupted mode + streaks that don't punish you (design, 2026-07-24)

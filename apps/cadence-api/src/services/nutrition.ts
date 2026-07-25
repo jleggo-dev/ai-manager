@@ -32,7 +32,9 @@ import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } 
 import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW } from './nutrition-parse.ts';
 import { logAi } from './ai-log.ts';
 import { logMealFromFood, logMealFromRecipe } from './nutrition-log-saved.ts';
+import { getFoodsByIds } from '../repos/foods.ts';
 import { buildNutritionInsight, type NutritionInsightPack } from './nutrition-insight.ts';
+import { buildMicroInsightRollup } from './nutrition-insight-micro.ts';
 
 export { parseMealResult, wantsTargets, PROVISIONAL_BELOW, isMeal } from './nutrition-parse.ts';
 export type { ParsedMealResult } from './nutrition-parse.ts';
@@ -257,6 +259,19 @@ export async function getNutritionInsight(userId: string, date?: string): Promis
     : null;
   const targetsOrNull = targets && Object.keys(targets).length ? targets : null;
 
+  // Micro rollup: load linked foods once; gate inside buildMicroInsightRollup / microInsights.
+  const foodIds = recent.flatMap((m) =>
+    (m.provisional ? [] : (m.items ?? [])).map((i) => (typeof i.food_id === 'string' ? i.food_id : '')).filter(Boolean),
+  );
+  let microRollup = null;
+  try {
+    const foods = await getFoodsByIds(userId, foodIds);
+    const foodsById = new Map(foods.map((f) => [f.food_id, f]));
+    microRollup = buildMicroInsightRollup(recent, foodsById, summary.days_logged);
+  } catch (err) {
+    console.warn('[nutrition] micro rollup skipped:', err instanceof Error ? err.message : err);
+  }
+
   return buildNutritionInsight(
     {
       date: day.date,
@@ -270,6 +285,7 @@ export async function getNutritionInsight(userId: string, date?: string): Promis
     },
     summary,
     recent,
+    microRollup,
   );
 }
 

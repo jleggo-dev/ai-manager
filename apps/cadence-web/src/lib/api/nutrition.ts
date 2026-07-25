@@ -197,7 +197,7 @@ export async function getBaselineRead(): Promise<BaselineRead> {
 }
 
 /* ── Req 5 WS-I insight card ─────────────────────────────────── */
-export type NutritionInsightKind = 'macro' | 'pattern' | 'variety';
+export type NutritionInsightKind = 'macro' | 'pattern' | 'variety' | 'micro';
 export type NutritionInsightStatus = 'quiet' | 'observing' | 'on_track' | 'room_left' | 'a_little_over';
 
 export interface NutritionInsightItem {

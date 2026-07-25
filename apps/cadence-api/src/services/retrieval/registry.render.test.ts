@@ -13,12 +13,14 @@ vi.mock('../../repos/activities.ts', () => ({ listActivities: vi.fn() }));
 vi.mock('../../repos/occurrences.ts', () => ({ listOccurrences: vi.fn(), listRecentLogged: vi.fn() }));
 vi.mock('../../repos/nutrition.ts', () => ({ listNutritionLogs: vi.fn() }));
 vi.mock('../progress.ts', () => ({ buildProgress: vi.fn() }));
+vi.mock('../food-sources/usda-enrich.ts', () => ({ searchFoodsWithUsda: vi.fn() }));
 vi.mock('../nutrition-summarize.ts', async (orig) => {
   const real = await orig<typeof import('../nutrition-summarize.ts')>();
   return real;
 });
 
 import { RETRIEVAL_FUNCTIONS } from './registry.ts';
+import { searchFoodsWithUsda } from '../food-sources/usda-enrich.ts';
 
 describe('retrieval registry — render / rows', () => {
   it('get_identity asks for a name when missing', () => {
@@ -201,5 +203,56 @@ describe('retrieval registry — render / rows', () => {
     expect(RETRIEVAL_FUNCTIONS.get_recent_logs!.render(rows)).toBe(
       'Recent session reports:\n- 2026-07-17 · Easy run: 5k easy (felt good)',
     );
+  });
+
+  it('lookup_food renders cache/USDA hits with micros when present', () => {
+    expect(RETRIEVAL_FUNCTIONS.lookup_food!.render({ q: '', foods: [] })).toMatch(/pass q/);
+    expect(RETRIEVAL_FUNCTIONS.lookup_food!.render({ q: 'oats', foods: [] })).toMatch(/no matches/);
+    const text = RETRIEVAL_FUNCTIONS.lookup_food!.render({
+      q: 'oats',
+      foods: [
+        {
+          food_id: 'f1',
+          name: 'Oats',
+          brand: null,
+          source: 'usda',
+          base_unit: 'g',
+          macros_per_base: { kcal: 389, protein_g: 17, zinc_mg: 4 },
+        },
+      ],
+    });
+    expect(text).toContain('Food lookup "oats"');
+    expect(text).toContain('Oats');
+    expect(text).toContain('[usda]');
+    expect(text).toContain('Zn 4mg');
+    expect(RETRIEVAL_FUNCTIONS.lookup_food!.rows({ q: 'oats', foods: [{ food_id: 'f1' }] })).toBe(1);
+  });
+
+  it('lookup_food run delegates to searchFoodsWithUsda', async () => {
+    vi.mocked(searchFoodsWithUsda).mockResolvedValue([
+      {
+        food_id: 'f1',
+        owner_user_id: null,
+        visibility: 'shared',
+        name: 'Chickpeas',
+        brand: null,
+        source: 'usda',
+        off_id: null,
+        fdc_id: 1,
+        base_unit: 'g',
+        macros_per_base: { kcal: 164, zinc_mg: 1.5 },
+        servings: [{ label: '100 g', unit: 'g', amount_g: 100 }],
+        default_serving: 0,
+        confidence: 1,
+        photo_ref: null,
+      },
+    ]);
+    const result = (await RETRIEVAL_FUNCTIONS.lookup_food!.run('user-1', { q: 'chickpeas', limit: 3 })) as {
+      q: string;
+      foods: unknown[];
+    };
+    expect(result.q).toBe('chickpeas');
+    expect(result.foods).toHaveLength(1);
+    expect(searchFoodsWithUsda).toHaveBeenCalledWith('user-1', 'chickpeas', 3);
   });
 });

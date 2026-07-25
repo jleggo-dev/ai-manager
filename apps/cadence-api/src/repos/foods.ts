@@ -61,6 +61,16 @@ export async function getFood(userId: string, foodId: string): Promise<Food | nu
   return row ?? null;
 }
 
+/** Batch fetch foods the user can see (own or shared). Empty ids → []. */
+export async function getFoodsByIds(userId: string, foodIds: string[]): Promise<Food[]> {
+  const ids = [...new Set(foodIds.map((id) => String(id).trim()).filter(Boolean))].slice(0, 100);
+  if (ids.length === 0) return [];
+  return sql<Food[]>`
+    select ${FOOD_COLS} from cadence.foods f
+    where f.food_id in ${sql(ids)}
+      and (f.owner_user_id = ${userId} or f.visibility = 'shared')`;
+}
+
 /** Lookup a cached USDA shared food by FDC id (any user can see shared rows). */
 export async function findFoodByFdcId(fdcId: number): Promise<Food | null> {
   if (!Number.isInteger(fdcId) || fdcId <= 0) return null;
