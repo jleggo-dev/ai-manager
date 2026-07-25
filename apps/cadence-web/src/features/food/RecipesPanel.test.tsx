@@ -5,6 +5,8 @@ import { RecipesPanel } from './RecipesPanel.tsx';
 const listRecipes = vi.fn();
 const getRecipeById = vi.fn();
 const structureRecipeFromChat = vi.fn();
+const parseFridgePhoto = vi.fn();
+const generateRecipesFromIngredients = vi.fn();
 const saveRecipe = vi.fn();
 const logMealFromRecipe = vi.fn();
 
@@ -12,6 +14,8 @@ vi.mock('../../lib/api.ts', () => ({
   listRecipes: (...args: unknown[]) => listRecipes(...args),
   getRecipeById: (...args: unknown[]) => getRecipeById(...args),
   structureRecipeFromChat: (...args: unknown[]) => structureRecipeFromChat(...args),
+  parseFridgePhoto: (...args: unknown[]) => parseFridgePhoto(...args),
+  generateRecipesFromIngredients: (...args: unknown[]) => generateRecipesFromIngredients(...args),
   saveRecipe: (...args: unknown[]) => saveRecipe(...args),
   logMealFromRecipe: (...args: unknown[]) => logMealFromRecipe(...args),
   recipeMacroHint: (m: { kcal?: number; protein_g?: number }) => {
@@ -73,7 +77,16 @@ describe('RecipesPanel', () => {
     listRecipes.mockResolvedValue({ status: 'unavailable', recipes: [] });
     renderPanel();
     await waitFor(() => expect(screen.getByText(/aren't live on the server yet/i)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /Snap the fridge/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Structure from text/i })).toBeInTheDocument();
+  });
+
+  it('snap-the-fridge entry opens confirm-before-save fridge flow', async () => {
+    renderPanel();
+    await waitFor(() => expect(screen.getByRole('button', { name: /Snap the fridge/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Snap the fridge/i }));
+    expect(screen.getByRole('region', { name: /Snap fridge or pantry/i })).toBeInTheDocument();
+    expect(screen.getByText(/Nothing is saved until you say so/i)).toBeInTheDocument();
   });
 
   it('lists recipes and opens detail → log-again confirm', async () => {

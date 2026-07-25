@@ -349,10 +349,13 @@ and wire as they land. **WS4** (the tab) consumes WS-R. WS5 is otherwise indepen
   `source='usda'`, migration `0018`) enrich search/resolve on cache miss. **Micronutrient insights**
   (zinc/iron class) gate on real-data coverage from USDA/OFF/label foods — never LLM macros.
   Coach read tool: retrieval registry `lookup_food` (deterministic search + USDA cache; no LLM HTTP
-  wrap). Fill the OFF API usage form + ODbL attribution before production volume. **Before
-  fridge-scan (Phase 4), per owner.**
-- **Phase 4 — Fridge/pantry scan → recipe ideas (future / parallel PR).** Photograph what you have →
-  recipe suggestions grounded in your foods + targets + dietary profile.
+  wrap). Fill the OFF API usage form + ODbL attribution before production volume.
+- **Phase 4 — Fridge/pantry scan → recipe ideas.** Photograph what you have → review ingredients →
+  recipe draft ideas grounded in that list + dietary profile (+ optional macro targets). Jobs:
+  `parse-fridge-photo` (vision) + `generate-recipe`; API `POST /nutrition/recipes/parse-fridge` →
+  `POST /nutrition/recipes/generate` → confirm via existing `POST /nutrition/recipes`
+  (`source='ai_from_fridge_photo'`). Food-tab Recipes: **Snap the fridge**. Sync jobs after merge
+  (`apps/cadence-api/scripts/sync-jobs.ts`). Hotel-gym `parse_equipment_photo` stays separate (later).
 - **Phase 5 — Meal plans + shopping list; recipe discovery (future).** `generate_meal_plan`; and
   "find a real recipe" via the research/web-search agent (the earlier "real recipes, retrieved" call
   applies _here_, downstream of the foundation).

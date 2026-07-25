@@ -49,3 +49,30 @@ export const patchRecipeBodySchema = z
 export const fromChatBodySchema = z.object({
   text: z.string().trim().min(1, { message: 'text required' }).max(2000),
 });
+
+const photoDataUrlSchema = z
+  .string()
+  .refine((s) => s.startsWith('data:image/'), { message: 'photo must be a data:image URL' });
+
+/** POST /nutrition/recipes/parse-fridge — fridge/pantry photo → ingredient list (unsaved). */
+export const parseFridgeBodySchema = z
+  .object({
+    photo: photoDataUrlSchema,
+    hint: z.string().trim().max(200).optional(),
+  })
+  .transform((val) => ({
+    photo: val.photo,
+    hint: val.hint || undefined,
+  }));
+
+const fridgeIngredientSchema = z.object({
+  name: z.string().trim().min(1, { message: 'ingredient name required' }).max(80),
+  qty: z.number().positive().optional(),
+  unit: z.string().trim().min(1).max(24).optional(),
+});
+
+/** POST /nutrition/recipes/generate — reviewed ingredients → recipe draft ideas (unsaved). */
+export const generateFromIngredientsBodySchema = z.object({
+  ingredients: z.array(fridgeIngredientSchema).min(1, { message: 'at least one ingredient required' }).max(40),
+  meal_hint: z.string().trim().max(200).optional(),
+});

@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
+import { generateRecipesFromIngredients, parseFridgePhoto } from '../services/fridge-recipes.ts';
 import {
   createRecipe,
   getRecipeForUser,
@@ -10,7 +11,13 @@ import {
   searchRecipesForUser,
 } from '../services/recipe.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
-import { createRecipeBodySchema, fromChatBodySchema, patchRecipeBodySchema } from '../validation/recipe.ts';
+import {
+  createRecipeBodySchema,
+  fromChatBodySchema,
+  generateFromIngredientsBodySchema,
+  parseFridgeBodySchema,
+  patchRecipeBodySchema,
+} from '../validation/recipe.ts';
 
 const router = Router();
 router.use(requireCadenceUser);
@@ -19,6 +26,12 @@ function limitFromQuery(raw: unknown, fallback = 50): number {
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(100, Math.max(1, Math.trunc(n)));
+}
+
+function photoErrorStatus(err: unknown): number | null {
+  const msg = err instanceof Error ? err.message : '';
+  if (/invalid photo/.test(msg)) return 400;
+  return null;
 }
 
 /** GET /nutrition/recipes — list (newest first). ?saved=1 for saved-only. */
@@ -60,6 +73,42 @@ router.post('/from-chat', async (req: Request, res: Response) => {
     if (/required|non-JSON|missing name|no usable/.test(msg)) return void res.status(400).json({ error: msg });
     console.error('[POST /nutrition/recipes/from-chat]', err);
     res.status(500).json({ error: 'failed to structure recipe' });
+  }
+});
+
+/**
+ * POST /nutrition/recipes/parse-fridge — fridge/pantry photo → ingredient list (unsaved).
+ * User reviews ingredients, then POST /generate. Confirm-before-save via POST /.
+ */
+router.post('/parse-fridge', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(parseFridgeBodySchema, req.body);
+    res.json(await parseFridgePhoto(userId, body));
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    const photoStatus = photoErrorStatus(err);
+    if (photoStatus) return void res.status(photoStatus).json({ error: (err as Error).message });
+    console.error('[POST /nutrition/recipes/parse-fridge]', err);
+    res.status(502).json({ error: 'failed to read fridge photo' });
+  }
+});
+
+/**
+ * POST /nutrition/recipes/generate — reviewed ingredients → recipe draft ideas (unsaved).
+ * Allergen-unsafe ideas are dropped server-side. Confirm via POST /nutrition/recipes.
+ */
+router.post('/generate', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(generateFromIngredientsBodySchema, req.body);
+    res.json(await generateRecipesFromIngredients(userId, body));
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    const msg = err instanceof Error ? err.message : '';
+    if (/at least one ingredient|non-JSON/.test(msg)) return void res.status(400).json({ error: msg });
+    console.error('[POST /nutrition/recipes/generate]', err);
+    res.status(502).json({ error: 'failed to generate recipes' });
   }
 });
 
