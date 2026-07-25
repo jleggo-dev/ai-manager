@@ -108,6 +108,13 @@ Before production volume: fill the [OFF API usage form](https://openfoodfacts.or
 contact in the User-Agent. Attribution: product data © Open Food Facts contributors — **ODbL**.
 No OFF API key / secret is required; never put OFF credentials in `VITE_*`.
 
+**USDA FoodData Central (Req 5 Phase 3):** set `USDA_API_KEY` on the **cadence-api** host only
+(`apps/cadence-api/.env` locally; Vercel env for the cadence-api project — never the web project,
+never `VITE_*`). Free key via [api.data.gov](https://api.data.gov/signup/). The API caches every
+successful FDC lookup into `cadence.foods` (`source='usda'`, `fdc_id`) so repeat traffic hits the
+DB; on 429 the server backs off and does not stampede. Without the key, local food search/resolve
+still work; USDA enrich is skipped with a polite 503 on the explicit USDA routes.
+
 ## Notes
 
 - Vercel deploys from the connected branch (usually `main`). `feat/cadence` must merge to `main`

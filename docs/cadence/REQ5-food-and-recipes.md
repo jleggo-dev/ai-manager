@@ -150,7 +150,7 @@ for dev/real users. (See migration 0016 for the pattern.)
 | Decision                                  | Call                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Guiding tenet**                         | **MFP's value, not its friction** (§2a): AI resolves/estimates/infers; the user's job is a one-tap confirm.                                                                                                                                                                                                                                                                                              |
-| **Foods database**                        | **Shared-aware from v1** (owner + visibility on every food; the resolver searches _your foods + the shared DB_). **User-created foods are private by default**; **OpenFoodFacts is the shared backbone** (open-licensed, huge coverage → fewer "not found" → less friction); Cadence-native contributions grow the long tail. Foods are still created on demand (LLM estimate / label photo) and cached. |
+| **Foods database**                        | **Shared-aware from v1** (owner + visibility on every food; the resolver searches _your foods + the shared DB_). **User-created foods are private by default**; real-data backbone = **USDA FoodData Central** (whole foods — best micros + serving portions, free `api.data.gov` key) **+ OpenFoodFacts** (branded/barcode); user contributions grow the long tail; §12 exposes these as agentic **tools** long-term. Foods are still created on demand (LLM estimate / label photo) and cached. |
 | **Serving model**                         | **Match MyFitnessPal**: a food carries **multiple serving units** (e.g. "1 container (170g)", "100 g", "1 cup"), each with a base-unit equivalence; logging = pick a serving + a quantity multiplier, macros scale. AI **pre-selects** the serving the user usually uses.                                                                                                                                |
 | **Resolver**                              | **First-class** (§5.6, WS-R): any input → ranked candidates across your foods, your recipes, and the shared DB (generic vs. branded vs. a specific recipe) → confirm → log; or "new" → build a food/recipe. The anti-friction engine.                                                                                                                                                                    |
 | **Recipes**                               | **Compositions of foods** (MFP-exact), **user-owned** in v1 (sharing across users is later). Per-serving macros are **computed** (Σ resolved ingredients ÷ servings); a component that isn't a known food is estimated inline (offer "save as food"). Built from a sentence (LLM-structured) or manually.                                                                                                |
@@ -174,8 +174,9 @@ owner_user_id   uuid null → cadence.users   -- NULL = shared/global (e.g. Open
 visibility      text check ('private','shared') default 'private'  -- user foods private by default; opt-in to contribute
 name            text            -- "Nonfat Greek Yogurt"
 brand           text null       -- manufacturer ("Fage"); null for generic/whole foods
-source          text check ('llm','label_photo','manual','chat','off')   -- 'off' = OpenFoodFacts
+source          text check ('llm','label_photo','manual','chat','usda','off')  -- 'usda' = FoodData Central; 'off' = OpenFoodFacts
 off_id          text null       -- OpenFoodFacts id/barcode (the future backbone)
+fdc_id          int null unique -- USDA FoodData Central id (dedicated; do not overload off_id)
 -- MFP serving model: macros stored PER BASE, plus named serving options mapping to a base amount.
 base_unit       text check ('g','ml','item')   -- g/ml → macros_per_base is per 100; item → per 1
 macros_per_base jsonb           -- Macros per 100g / 100ml / per item
@@ -388,3 +389,31 @@ and wire as they land. **WS4** (the tab) consumes WS-R. WS5 is otherwise indepen
   add embeddings for loose text if needed).
 - Whether recents/frequents need the `food_usage` projection in v1 or a query over `nutrition_logs` suffices.
 - The exact `parse_nutrition_label` output contract (serving rows vary by region/label format).
+
+## 12. Long-term objective — the agentic coach & food tools
+
+**Direction (owner):** we're aiming toward a real **agentic harness** — a coach that *calls tools*, not
+a single-shot completion. The food layer is a natural place to prove it, and two building blocks already
+exist: **AI Admin has jobs-as-tools (v1.4.0)** — the primitive is shipped — and **PLAN.md already designs
+the endgame** ("*letting the coach ask its own questions*" — the tool-runner retrieval loop, PLAN §"Final
+step"). Cadence's coach is single-shot *today*; this is the path off that.
+
+**Design every food capability as a service the app calls now AND a tool the coach can call later —
+one implementation, two entry points.** USDA is the first concrete tool:
+
+- **Now (deterministic):** `services/food-sources/usda.ts` — `/foods/search` → `/food/{fdcId}`; map
+  `foodNutrients[]` (macros + micros per 100g) + `foodPortions[]` (household measure → grams, = our
+  serving units) into a `Food` (`source='usda'`, shared/global — public authoritative data). Called by
+  the Resolver on cache-miss and by the Insight layer for micros. No LLM in the fetch.
+- **Later (agentic tool):** expose the same lookup as a `lookup_food` **tool** the coach can call, next
+  to `resolve_food`, `log_meal`, `get_nutrition_day`, `build_recipe` — even non-food ones (`enter_detour`).
+  "Oatmeal and blueberries" → the coach calls resolve (which may call USDA) → confirms → logs. **No forms,
+  ever** — the endpoint of "MFP's value without the friction" (§2a) + "we're a coach" (§2b): the coach IS
+  the interface and the app's capabilities are its toolbox.
+
+**Milestones toward it** (each independently useful, so no big-bang): (1) USDA + OFF as deterministic
+providers behind the Resolver; (2) wrap the resolver/log/lookup services as AI-Admin **jobs** with clean
+contracts (so they're callable both ways); (3) turn the coach into a **tool-runner** over that job set
+(the PLAN §"Final step" loop), starting with read-only food tools, then the write ones (log/build) behind
+the same confirm-before-commit stance we use everywhere. **Guardrail:** even agentic, mutations stay
+*suggest-then-confirm* — the coach proposes, the user taps; never silent writes.

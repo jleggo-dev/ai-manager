@@ -188,6 +188,7 @@ describe('FoodView capture wire', () => {
       owner_user_id: 'u',
       visibility: 'private',
       off_id: null,
+      fdc_id: null,
     });
     logMealFromFood.mockResolvedValue({ log_id: 'm1' });
 
@@ -237,6 +238,7 @@ describe('FoodView capture wire', () => {
         owner_user_id: 'u',
         visibility: 'private',
         off_id: null,
+        fdc_id: null,
         ...yogurtCandidate(),
         name: 'Morning yogurt',
       },
@@ -296,6 +298,7 @@ describe('FoodView capture wire', () => {
         owner_user_id: 'u',
         visibility: 'private',
         off_id: null,
+        fdc_id: null,
         ...yogurtCandidate(),
         name: 'Morning yogurt',
       },

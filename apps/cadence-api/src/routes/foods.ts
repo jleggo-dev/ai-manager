@@ -7,11 +7,12 @@ import {
   insertFood,
   listFrequentFoods,
   listRecentFoods,
-  searchFoods,
   updateFood,
   upsertSharedOffFood,
 } from '../repos/foods.ts';
 import { estimateFood, identifyFood, parseNutritionLabel } from '../services/food-capture.ts';
+import { importUsdaFood, searchFoodsWithUsda } from '../services/food-sources/usda-enrich.ts';
+import { isUsdaConfigured, searchUsdaFoods, UsdaConfigError, UsdaHttpError } from '../services/food-sources/usda.ts';
 import { resolveFoods } from '../services/food-resolver.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
 import {
@@ -19,6 +20,7 @@ import {
   estimateFoodBodySchema,
   identifyFoodBodySchema,
   importOffFoodBodySchema,
+  importUsdaBodySchema,
   parseLabelBodySchema,
   patchFoodBodySchema,
   resolveFoodBodySchema,
@@ -39,15 +41,61 @@ function photoErrorStatus(err: unknown): number | null {
   return null;
 }
 
-/** GET /nutrition/foods/search?q=&limit= — own + shared, yours-first. Fast, no AI. */
+/** GET /nutrition/foods/search?q=&limit= — own + shared, yours-first; USDA on cache-miss. */
 router.get('/search', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   const q = typeof req.query.q === 'string' ? req.query.q : '';
   try {
-    res.json({ foods: await searchFoods(userId, q, limitFromQuery(req.query.limit)) });
+    res.json({ foods: await searchFoodsWithUsda(userId, q, limitFromQuery(req.query.limit)) });
   } catch (err) {
     console.error('[GET /nutrition/foods/search]', err);
     res.status(500).json({ error: 'failed to search foods' });
+  }
+});
+
+/**
+ * GET /nutrition/foods/usda/search?q= — external USDA search (auth'd). Does not cache by itself;
+ * use POST …/usda/import to persist. Prefer /search which enriches + caches on miss.
+ */
+router.get('/usda/search', async (req: Request, res: Response) => {
+  const q = typeof req.query.q === 'string' ? req.query.q : '';
+  try {
+    if (!isUsdaConfigured()) {
+      return void res.status(503).json({ error: 'USDA FoodData Central is not configured' });
+    }
+    const foods = await searchUsdaFoods(q, { pageSize: limitFromQuery(req.query.limit, 5) });
+    res.json({ foods });
+  } catch (err) {
+    if (err instanceof UsdaConfigError) {
+      return void res.status(503).json({ error: 'USDA FoodData Central is not configured' });
+    }
+    if (err instanceof UsdaHttpError && err.status === 429) {
+      return void res.status(429).json({ error: 'USDA rate limit exceeded — try again shortly' });
+    }
+    console.error('[GET /nutrition/foods/usda/search]', err);
+    res.status(502).json({ error: 'failed to search USDA foods' });
+  }
+});
+
+/** POST /nutrition/foods/usda/import — fetch by fdc_id and cache as shared food (auth'd). */
+router.post('/usda/import', async (req: Request, res: Response) => {
+  try {
+    const body = parseBody(importUsdaBodySchema, req.body);
+    const food = await importUsdaFood(body.fdc_id);
+    res.status(201).json(food);
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    if (err instanceof UsdaConfigError) {
+      return void res.status(503).json({ error: 'USDA FoodData Central is not configured' });
+    }
+    if (err instanceof UsdaHttpError && err.status === 429) {
+      return void res.status(429).json({ error: 'USDA rate limit exceeded — try again shortly' });
+    }
+    if (err instanceof UsdaHttpError && err.status === 404) {
+      return void res.status(404).json({ error: 'USDA food not found' });
+    }
+    console.error('[POST /nutrition/foods/usda/import]', err);
+    res.status(502).json({ error: 'failed to import USDA food' });
   }
 });
 
@@ -210,6 +258,7 @@ router.post('/', async (req: Request, res: Response) => {
       brand: body.brand ?? null,
       source: body.source,
       off_id: body.off_id ?? null,
+      fdc_id: body.fdc_id ?? null,
       base_unit: body.base_unit,
       macros_per_base: body.macros_per_base,
       servings: body.servings,

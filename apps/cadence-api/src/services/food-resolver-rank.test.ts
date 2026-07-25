@@ -21,6 +21,7 @@ function yogurt(overrides: Partial<Food> = {}): Food {
     brand: 'Fage',
     source: 'manual',
     off_id: null,
+    fdc_id: null,
     base_unit: 'g',
     macros_per_base: { kcal: 59, protein_g: 10.3, carbs_g: 3.5, fat_g: 0 },
     servings: [
@@ -44,6 +45,7 @@ function egg(overrides: Partial<Food> = {}): Food {
     brand: null,
     source: 'manual',
     off_id: null,
+    fdc_id: null,
     base_unit: 'item',
     macros_per_base: { kcal: 72, protein_g: 6.3, carbs_g: 0.4, fat_g: 4.8 },
     servings: [

@@ -205,7 +205,14 @@ function parseCandidate(raw: unknown): FoodCandidate | null {
   const base_unit = raw.base_unit;
   if (base_unit !== 'g' && base_unit !== 'ml' && base_unit !== 'item') return null;
   const source = raw.source;
-  if (source !== 'llm' && source !== 'label_photo' && source !== 'manual' && source !== 'chat' && source !== 'off')
+  if (
+    source !== 'llm' &&
+    source !== 'label_photo' &&
+    source !== 'manual' &&
+    source !== 'chat' &&
+    source !== 'usda' &&
+    source !== 'off'
+  )
     return null;
   if (!isRecord(raw.macros_per_base) || !Array.isArray(raw.servings) || raw.servings.length === 0) return null;
   const servings: FoodServing[] = [];
@@ -243,6 +250,7 @@ function parseFoodDetail(raw: unknown): Food | null {
     brand: c.brand,
     source: c.source,
     off_id: typeof raw.off_id === 'string' ? raw.off_id : null,
+    fdc_id: typeof raw.fdc_id === 'number' && Number.isInteger(raw.fdc_id) ? raw.fdc_id : null,
     base_unit: c.base_unit,
     macros_per_base: c.macros_per_base,
     servings: c.servings,
