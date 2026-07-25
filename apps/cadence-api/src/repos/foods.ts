@@ -98,6 +98,75 @@ export async function listFrequentFoods(userId: string, limit = 20): Promise<Foo
     limit ${capped}`;
 }
 
+/** Shared OFF cache row by barcode / off_id (source='off', visibility='shared'). */
+export async function getFoodByOffId(offId: string): Promise<Food | null> {
+  const id = offId.trim();
+  if (!id) return null;
+  const [row] = await sql<Food[]>`
+    select ${FOOD_COLS} from cadence.foods f
+    where f.off_id = ${id}
+      and f.source = 'off'
+      and f.visibility = 'shared'
+    order by f.created_at asc
+    limit 1`;
+  return row ?? null;
+}
+
+export interface UpsertOffFoodInput {
+  name: string;
+  brand?: string | null;
+  off_id: string;
+  base_unit: FoodBaseUnit;
+  macros_per_base: FoodNutrients;
+  servings: FoodServing[];
+  default_serving?: number;
+  confidence?: number | null;
+  photo_ref?: string | null;
+}
+
+/**
+ * Upsert a shared Open Food Facts food (owner NULL, visibility shared).
+ * Prefer cache hits via getFoodByOffId before the browser calls OFF.
+ */
+export async function upsertSharedOffFood(input: UpsertOffFoodInput): Promise<{ food: Food; cached: boolean }> {
+  const offId = input.off_id.trim();
+  if (!offId) throw new Error('upsertSharedOffFood: off_id required');
+  const defaultServing = Number.isInteger(input.default_serving) ? (input.default_serving as number) : 0;
+  const existing = await getFoodByOffId(offId);
+  if (existing) {
+    const [row] = await sql<Food[]>`
+      update cadence.foods f set
+        name = ${input.name},
+        brand = ${input.brand ?? null},
+        base_unit = ${input.base_unit},
+        macros_per_base = ${json(input.macros_per_base ?? {})},
+        servings = ${json(input.servings ?? [])},
+        default_serving = ${defaultServing},
+        confidence = ${input.confidence ?? null},
+        photo_ref = case
+          when ${input.photo_ref !== undefined} then ${input.photo_ref ?? null}
+          else f.photo_ref
+        end
+      where f.food_id = ${existing.food_id}
+      returning ${FOOD_COLS}`;
+    if (!row) throw new Error('upsertSharedOffFood: update returned no row');
+    return { food: row, cached: true };
+  }
+  const [row] = await sql<Food[]>`
+    insert into cadence.foods (
+      owner_user_id, visibility, name, brand, source, off_id, base_unit,
+      macros_per_base, servings, default_serving, confidence, photo_ref
+    ) values (
+      null, 'shared', ${input.name}, ${input.brand ?? null}, 'off',
+      ${offId}, ${input.base_unit},
+      ${json(input.macros_per_base ?? {})}, ${json(input.servings ?? [])},
+      ${defaultServing}, ${input.confidence ?? null}, ${input.photo_ref ?? null}
+    )
+    returning ${FOOD_COLS_PLAIN}`;
+  if (!row) throw new Error('upsertSharedOffFood: insert returned no row');
+  return { food: row, cached: false };
+}
+
 /** Create a user-owned food (private by default). */
 export async function insertFood(userId: string, input: CreateFoodInput): Promise<Food> {
   const visibility = input.visibility ?? 'private';

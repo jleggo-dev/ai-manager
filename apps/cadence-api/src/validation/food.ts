@@ -112,6 +112,47 @@ export const identifyFoodBodySchema = z
     hint: val.hint || undefined,
   }));
 
+/**
+ * POST /nutrition/foods/import-off — browser-mapped OFF product → shared Food upsert.
+ * source/visibility are forced server-side (off / shared); client must not invent them.
+ */
+export const importOffFoodBodySchema = z
+  .object({
+    name: z.string().trim().min(1, { message: 'name required' }).max(200),
+    brand: z.string().trim().max(120).nullable().optional(),
+    off_id: z
+      .string()
+      .trim()
+      .regex(/^\d{8,14}$/, { message: 'off_id must be an 8–14 digit barcode' }),
+    base_unit: foodBaseUnitSchema,
+    macros_per_base: foodNutrientsSchema,
+    servings: z.array(foodServingSchema).min(1, { message: 'at least one serving required' }),
+    default_serving: z.number().int().min(0).optional(),
+    confidence: z.number().min(0).max(1).nullable().optional(),
+    photo_ref: z.string().trim().nullable().optional(),
+  })
+  .superRefine((val, ctx) => {
+    const idx = val.default_serving ?? 0;
+    if (idx >= val.servings.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'default_serving must be a valid servings index',
+      });
+    }
+    const macros = val.macros_per_base;
+    if (
+      macros.kcal === undefined &&
+      macros.protein_g === undefined &&
+      macros.carbs_g === undefined &&
+      macros.fat_g === undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'macros_per_base needs at least one macro',
+      });
+    }
+  });
+
 /** POST /nutrition/foods/resolve — deterministic rank + preselect (WS-R); no AI. */
 export const resolveFoodBodySchema = z
   .object({

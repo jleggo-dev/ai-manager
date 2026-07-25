@@ -154,7 +154,7 @@ for dev/real users. (See migration 0016 for the pattern.)
 | **Serving model**                         | **Match MyFitnessPal**: a food carries **multiple serving units** (e.g. "1 container (170g)", "100 g", "1 cup"), each with a base-unit equivalence; logging = pick a serving + a quantity multiplier, macros scale. AI **pre-selects** the serving the user usually uses.                                                                                                                                |
 | **Resolver**                              | **First-class** (§5.6, WS-R): any input → ranked candidates across your foods, your recipes, and the shared DB (generic vs. branded vs. a specific recipe) → confirm → log; or "new" → build a food/recipe. The anti-friction engine.                                                                                                                                                                    |
 | **Recipes**                               | **Compositions of foods** (MFP-exact), **user-owned** in v1 (sharing across users is later). Per-serving macros are **computed** (Σ resolved ingredients ÷ servings); a component that isn't a known food is estimated inline (offer "save as food"). Built from a sentence (LLM-structured) or manually.                                                                                                |
-| **Barcode**                               | **Parked to a future phase** (before fridge-scan). When built, it's an _input method_ over the OpenFoodFacts backbone the schema already supports.                                                                                                                                                                                                                                                       |
+| **Barcode**                               | **Phase 3 (in progress):** browser → OFF product-by-barcode (`/api/v3/product/{barcode}`) with `X-User-Agent`, then POST mapped food to cadence-api for shared cache (`source='off'`, `off_id`). Prefer DB cache; do **not** proxy OFF through the API. Camera scan later; Food tab has a barcode-digit stub. Attribution: ODbL — fill the OFF API usage form before volume. |
 | **Label capture (v1 barcode substitute)** | Photo of the **Nutrition Facts panel** → **Gemini Flash** → macros + serving JSON. Plus identify the **name + manufacturer** (typed or front-of-package photo).                                                                                                                                                                                                                                          |
 | **Dietary profile**                       | New first-class input (allergies / diet / dislikes) with an **allergen safety pass** (§5.2). Settings + coach; prompt on first recipe.                                                                                                                                                                                                                                                                   |
 | **UX home**                               | A **dedicated Food tab** (4th tab) for fast logging + food/recipe management; the Coach shares the data layer for the conversational (zero-friction) path.                                                                                                                                                                                                                                               |
@@ -342,9 +342,13 @@ and wire as they land. **WS4** (the tab) consumes WS-R. WS5 is otherwise indepen
   **coach-voiced insight card** — simple upfront, drill-down for depth. _The insight is the point; ship
   it in v1, not "later."_
 - **Phase 2 — Recipes (v1 core).** WS3 — build/save/log recipes with computed macros. (Depends on Phase 1.)
-- **Phase 3 — Real food data + barcode + micro insights (future).** OpenFoodFacts (+ USDA for whole-food
-  micros) integration; `foods.source='off'` + `off_id`; **micronutrient data → the zinc/iron-class
-  insights** (§2b). Barcode is an input method over this backbone. **Before fridge-scan, per owner.**
+- **Phase 3 — Real food data + barcode + micro insights.** OpenFoodFacts branded/barcode path:
+  browser client → product-by-barcode → cadence-api import/upsert shared `foods` (`source='off'`,
+  `off_id`); resolver already surfaces cached shared foods via search. USDA whole-food micros are a
+  **sibling PR** (`feat/req5-phase3-usda` — may add `fdc_id` + widen `source` check; coordinate
+  migrations as `0018` USDA / avoid colliding with OFF which needs no schema change). Fill the OFF
+  API usage form + ODbL attribution before production volume. **Micronutrient insights** (§2b) fill
+  in as real-data coverage grows. **Before fridge-scan, per owner.**
 - **Phase 4 — Fridge/pantry scan → recipe ideas (future).** The original Req 5 headline: photograph
   what you have → recipe suggestions grounded in your foods + targets + dietary profile.
 - **Phase 5 — Meal plans + shopping list; recipe discovery (future).** `generate_meal_plan`; and

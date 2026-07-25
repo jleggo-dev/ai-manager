@@ -3,6 +3,7 @@ import {
   createFoodBodySchema,
   estimateFoodBodySchema,
   identifyFoodBodySchema,
+  importOffFoodBodySchema,
   parseLabelBodySchema,
   patchFoodBodySchema,
   resolveFoodBodySchema,
@@ -74,6 +75,37 @@ describe('capture body schemas', () => {
   it('identify requires a data:image photo', () => {
     expect(() => identifyFoodBodySchema.parse({})).toThrow();
     expect(identifyFoodBodySchema.parse({ photo: 'data:image/png;base64,x' }).photo).toMatch(/^data:image/);
+  });
+});
+
+describe('importOffFoodBodySchema', () => {
+  const offBody = {
+    name: 'Nutella',
+    brand: 'Ferrero',
+    off_id: '3017620422003',
+    base_unit: 'g' as const,
+    macros_per_base: { kcal: 539, protein_g: 6.3, carbs_g: 57.5, fat_g: 30.9 },
+    servings: [
+      { label: '15 g', unit: 'serving', amount_g: 15 },
+      { label: '100 g', unit: 'g', amount_g: 100 },
+    ],
+  };
+
+  it('accepts a mapped OFF product', () => {
+    expect(importOffFoodBodySchema.parse(offBody).off_id).toBe('3017620422003');
+  });
+
+  it('rejects a non-digit off_id', () => {
+    expect(importOffFoodBodySchema.safeParse({ ...offBody, off_id: 'abc' }).success).toBe(false);
+  });
+
+  it('rejects macros with no energy or macros', () => {
+    expect(
+      importOffFoodBodySchema.safeParse({
+        ...offBody,
+        macros_per_base: { fiber_g: 1 },
+      }).success,
+    ).toBe(false);
   });
 });
 
