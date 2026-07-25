@@ -24,16 +24,25 @@ function scaleMacros(recipe: Recipe, servings: number) {
 export function RecipeLogConfirm({
   recipe,
   dietary,
+  initialMeal,
+  initialServings,
   onCancel,
   onLogged,
 }: {
   recipe: Recipe;
   dietary?: DietaryProfile | null;
+  /** Prefill meal kind (e.g. coach "usual breakfast"). */
+  initialMeal?: MealKind;
+  initialServings?: number;
   onCancel: () => void;
   onLogged: () => void;
 }) {
-  const [servings, setServings] = useState(1);
-  const [meal, setMeal] = useState<MealKind>(() => mealForNow());
+  const [servings, setServings] = useState(() =>
+    typeof initialServings === 'number' && Number.isFinite(initialServings) && initialServings > 0
+      ? initialServings
+      : 1,
+  );
+  const [meal, setMeal] = useState<MealKind>(() => initialMeal ?? mealForNow());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [allergyOverride, setAllergyOverride] = useState(false);

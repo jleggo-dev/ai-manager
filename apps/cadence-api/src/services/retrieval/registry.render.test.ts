@@ -126,6 +126,33 @@ describe('retrieval registry — render / rows', () => {
     expect(RETRIEVAL_FUNCTIONS.get_weight!.render({ current: 82.5, start: 90 })).toBe('Weight: 82.5kg (start 90)');
   });
 
+  it('get_dietary_profile renders allergies and empty state', () => {
+    expect(
+      RETRIEVAL_FUNCTIONS.get_dietary_profile!.render({
+        allergies: [],
+        diet: null,
+        dislikes: [],
+        notes: null,
+      }),
+    ).toMatch(/none set yet/);
+    expect(
+      RETRIEVAL_FUNCTIONS.get_dietary_profile!.render({
+        allergies: ['peanuts'],
+        diet: 'vegan',
+        dislikes: ['cilantro'],
+        notes: null,
+      }),
+    ).toMatch(/peanuts/);
+    expect(
+      RETRIEVAL_FUNCTIONS.get_dietary_profile!.rows({
+        allergies: ['peanuts'],
+        diet: 'vegan',
+        dislikes: [],
+        notes: null,
+      }),
+    ).toBe(2);
+  });
+
   it('get_food_log empty vs recent meals', () => {
     expect(
       RETRIEVAL_FUNCTIONS.get_food_log!.render({

@@ -6,6 +6,7 @@ vi.mock('../../lib/api.ts', () => ({
   getReview: vi.fn().mockResolvedValue({ goals: [] }),
   openCoachSession: vi.fn().mockResolvedValue({ sessionId: 'test-session' }),
   sendCoachMessage: vi.fn().mockResolvedValue({ completed: true, responseId: null }),
+  prepareCoachFoodAction: vi.fn().mockResolvedValue({ status: 'ok', action: null }),
 }));
 
 // The Web Speech API isn't in jsdom; stub the mic so its empty-field state is deterministic

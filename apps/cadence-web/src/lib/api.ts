@@ -20,6 +20,15 @@ export {
 export { openCoachSession, getCurrentCoach, sendCoachMessage } from './api/coach.ts';
 
 export {
+  prepareCoachFoodAction,
+  type CoachFoodAction,
+  type CoachFoodActionResult,
+  type CoachFoodLogAction,
+  type CoachFoodRecipeAction,
+  type CoachFoodDietaryAction,
+} from './api/coach-food.ts';
+
+export {
   getPlan,
   setOccurrence,
   logAdhoc,

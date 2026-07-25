@@ -32,11 +32,14 @@ function macroHint(n: { kcal?: number; protein_g?: number; carbs_g?: number; fat
 export function FoodPortionConfirm({
   draft,
   dietary,
+  initialMeal,
   onCancel,
   onLogged,
 }: {
   draft: FoodDraft;
   dietary?: DietaryProfile | null;
+  /** Prefill meal kind (e.g. coach "usual breakfast"). */
+  initialMeal?: MealKind;
   onCancel: () => void;
   onLogged: () => void;
 }) {
@@ -51,7 +54,7 @@ export function FoodPortionConfirm({
   const [quantity, setQuantity] = useState(() =>
     typeof draft.quantity === 'number' && Number.isFinite(draft.quantity) && draft.quantity > 0 ? draft.quantity : 1,
   );
-  const [meal, setMeal] = useState<MealKind>(() => mealForNow());
+  const [meal, setMeal] = useState<MealKind>(() => initialMeal ?? mealForNow());
   const [name, setName] = useState(() => draftName(draft));
   const [brand, setBrand] = useState(() => draftBrand(draft) ?? '');
   const [busy, setBusy] = useState(false);

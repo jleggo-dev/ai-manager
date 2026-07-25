@@ -5,12 +5,14 @@ const getCurrentCoach = vi.fn();
 const getReview = vi.fn();
 const openCoachSession = vi.fn();
 const sendCoachMessage = vi.fn();
+const prepareCoachFoodAction = vi.fn();
 
 vi.mock('../../lib/api.ts', () => ({
   getCurrentCoach: (...args: unknown[]) => getCurrentCoach(...args),
   getReview: (...args: unknown[]) => getReview(...args),
   openCoachSession: (...args: unknown[]) => openCoachSession(...args),
   sendCoachMessage: (...args: unknown[]) => sendCoachMessage(...args),
+  prepareCoachFoodAction: (...args: unknown[]) => prepareCoachFoodAction(...args),
 }));
 
 describe('useCoachChat', () => {
@@ -20,6 +22,7 @@ describe('useCoachChat', () => {
     getReview.mockResolvedValue({ goals: [] });
     openCoachSession.mockResolvedValue({ sessionId: 'sess-new' });
     sendCoachMessage.mockResolvedValue({ completed: true, responseId: null });
+    prepareCoachFoodAction.mockResolvedValue({ status: 'ok', action: null });
   });
 
   it('restores a non-stale thread and skips stale transcripts', async () => {
