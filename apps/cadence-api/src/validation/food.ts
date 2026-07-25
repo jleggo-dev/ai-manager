@@ -74,3 +74,40 @@ export const patchFoodBodySchema = z
       });
     }
   });
+
+const photoDataUrlSchema = z
+  .string()
+  .refine((s) => s.startsWith('data:image/'), { message: 'photo must be a data:image URL' });
+
+/** POST /nutrition/foods/parse-label — Nutrition Facts panel photo → unsaved candidate. */
+export const parseLabelBodySchema = z
+  .object({
+    photo: photoDataUrlSchema,
+    hint: z.string().trim().max(200).optional(),
+    name: z.string().trim().min(1).max(120).optional(),
+    brand: z.string().trim().max(120).nullable().optional(),
+  })
+  .transform((val) => ({
+    photo: val.photo,
+    hint: val.hint || undefined,
+    name: val.name || undefined,
+    brand: val.brand === undefined ? undefined : val.brand,
+  }));
+
+/** POST /nutrition/foods/estimate — describe-a-food text → unsaved candidate. */
+export const estimateFoodBodySchema = z
+  .object({
+    text: z.string().trim().min(1, { message: 'text required' }).max(500),
+  })
+  .transform((val) => ({ text: val.text }));
+
+/** POST /nutrition/foods/identify — front-of-pack photo → name + brand. */
+export const identifyFoodBodySchema = z
+  .object({
+    photo: photoDataUrlSchema,
+    hint: z.string().trim().max(200).optional(),
+  })
+  .transform((val) => ({
+    photo: val.photo,
+    hint: val.hint || undefined,
+  }));

@@ -7,8 +7,17 @@
  * Shape cloned from services/session.ts: runJobBySlug + best-effort parse + app-side validation;
  * a parse failure NEVER loses the user's words (raw row still inserted, items empty).
  */
+import {
+  macrosForLog,
+  type Macros,
+  type MacroTargets,
+  type MealKind,
+  type NutritionLog,
+  type NutritionSummary,
+} from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { insertNutritionLog, listNutritionLogs, updateNutritionLog } from '../repos/nutrition.ts';
+import { getFood, touchFoodUsage } from '../repos/foods.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, setMacroTargets } from '../repos/users.ts';
 import {
@@ -24,25 +33,115 @@ import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
 import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW } from './nutrition-parse.ts';
 import { logAi } from './ai-log.ts';
-import type { Macros, MacroTargets, MealKind, NutritionLog, NutritionSummary } from '@cadence/shared';
 
 export { parseMealResult, wantsTargets, PROVISIONAL_BELOW, isMeal } from './nutrition-parse.ts';
 export type { ParsedMealResult } from './nutrition-parse.ts';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
+async function tickFoodLogOccurrence(userId: string, date: string): Promise<void> {
+  try {
+    const occId = await findPendingFoodLogOccurrence(userId, date);
+    if (occId) await setOccurrenceStatus(userId, occId, 'done');
+  } catch (e) {
+    console.warn('[nutrition] food-log occurrence tick failed:', e);
+  }
+}
+
 /**
- * Record one meal from the user's words and/or a photo. Parse is best-effort — on any failure
- * the raw text is still stored (meal = hint or 'other', items empty) so nothing they said is
- * lost. A photo uploads to private Storage FIRST (capture-first: items stay empty unless a
- * caption was given — the engine can't read images yet, backlog §F; photo_ref makes every photo
- * retroactively parseable). Side effect: the first meal of the day ticks today's pending
- * "Food log" system occurrence done (the deterministic title test, mirroring weigh-in).
+ * Deterministic log of a saved Food (Req 5) — macros from serving math, no AI.
+ * Bumps food_usage so recents/frequents learn.
+ */
+export async function logMealFromFood(
+  userId: string,
+  input: {
+    food_id: string;
+    meal?: MealKind;
+    date?: string;
+    serving_index?: number;
+    quantity?: number;
+  },
+): Promise<NutritionLog> {
+  const food = await getFood(userId, input.food_id);
+  if (!food) throw new Error('food not found');
+  const date = input.date ?? today();
+  const quantity = input.quantity && input.quantity > 0 ? input.quantity : 1;
+  const servingIndex =
+    typeof input.serving_index === 'number' && Number.isInteger(input.serving_index)
+      ? input.serving_index
+      : food.default_serving;
+  const nutrients = macrosForLog(food, { servingIndex, quantity });
+  const macros: Macros = {
+    ...(typeof nutrients.kcal === 'number' ? { kcal: nutrients.kcal } : {}),
+    ...(typeof nutrients.protein_g === 'number' ? { protein_g: nutrients.protein_g } : {}),
+    ...(typeof nutrients.carbs_g === 'number' ? { carbs_g: nutrients.carbs_g } : {}),
+    ...(typeof nutrients.fat_g === 'number' ? { fat_g: nutrients.fat_g } : {}),
+  };
+  const serving =
+    Number.isInteger(servingIndex) && servingIndex >= 0 && servingIndex < food.servings.length
+      ? food.servings[servingIndex]
+      : food.servings[0];
+  const meal: MealKind = input.meal && isMeal(input.meal) ? input.meal : 'other';
+  const rawText = food.brand ? `${food.brand} ${food.name}` : food.name;
+
+  const row = await insertNutritionLog(userId, {
+    date,
+    meal,
+    items: [
+      {
+        name: food.name,
+        qty: quantity,
+        ...(serving?.unit ? { unit: serving.unit } : {}),
+        ...(Object.keys(macros).length ? { est: macros } : {}),
+        food_id: food.food_id,
+      },
+    ],
+    input_method: 'manual',
+    ai_confidence: food.confidence,
+    raw_text: rawText,
+    flags: {},
+    photo_ref: null,
+    macros: Object.keys(macros).length ? macros : null,
+    provisional: false,
+  });
+
+  try {
+    await touchFoodUsage(userId, food.food_id);
+  } catch (e) {
+    console.warn('[nutrition] food_usage touch failed:', e);
+  }
+  await tickFoodLogOccurrence(userId, date);
+  return row;
+}
+
+/**
+ * Record one meal from the user's words and/or a photo, or a saved food_id (deterministic).
+ * Parse is best-effort — on any failure the raw text is still stored (meal = hint or 'other',
+ * items empty) so nothing they said is lost. A photo uploads to private Storage FIRST.
+ * Side effect: the first meal of the day ticks today's pending "Food log" occurrence done.
  */
 export async function logMeal(
   userId: string,
-  input: { text?: string; meal?: MealKind; date?: string; photo?: string },
+  input: {
+    text?: string;
+    meal?: MealKind;
+    date?: string;
+    photo?: string;
+    food_id?: string;
+    serving_index?: number;
+    quantity?: number;
+  },
 ): Promise<NutritionLog> {
+  if (input.food_id) {
+    return logMealFromFood(userId, {
+      food_id: input.food_id,
+      meal: input.meal,
+      date: input.date,
+      serving_index: input.serving_index,
+      quantity: input.quantity,
+    });
+  }
+
   const text = (input.text ?? '').trim().slice(0, 500);
   const date = input.date ?? today();
   if (!text && !input.photo) throw new Error('a meal needs words or a photo');
@@ -94,13 +193,7 @@ export async function logMeal(
     provisional,
   });
 
-  // Best-effort: tick today's pending Food log row (never fails the meal write).
-  try {
-    const occId = await findPendingFoodLogOccurrence(userId, date);
-    if (occId) await setOccurrenceStatus(userId, occId, 'done');
-  } catch (e) {
-    console.warn('[nutrition] food-log occurrence tick failed:', e);
-  }
+  await tickFoodLogOccurrence(userId, date);
 
   void logAi(userId, {
     kind: 'parse_meal',
