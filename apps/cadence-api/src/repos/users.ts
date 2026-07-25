@@ -1,5 +1,13 @@
 import { sql, json } from '../db/sql.ts';
-import type { Baseline, MacroTargets, PendingProposal, PendingPlan, SteerBack, StreakState } from '@cadence/shared';
+import type {
+  Baseline,
+  DietaryProfile,
+  MacroTargets,
+  PendingProposal,
+  PendingPlan,
+  SteerBack,
+  StreakState,
+} from '@cadence/shared';
 
 export interface CadenceUserRow {
   id: string;
@@ -16,6 +24,8 @@ export interface CadenceUserRow {
   // Present once migration 0015 is applied; older rows (or a pre-migration read) leave it
   // undefined and callers fall back to initialStreakState().
   streak_state?: StreakState | null;
+  // Present once migration 0017 is applied (Req 5 dietary safety input).
+  dietary_profile?: DietaryProfile | null;
 }
 
 export async function getUser(userId: string): Promise<CadenceUserRow | null> {
@@ -73,4 +83,19 @@ export async function setPendingPlan(userId: string, plan: PendingPlan | null): 
  *  finalizes past days. Whole-object replace; the caller owns the merge. */
 export async function setStreakState(userId: string, state: StreakState): Promise<void> {
   await sql`update cadence.users set streak_state = ${json(state)} where id = ${userId}`;
+}
+
+/** Read dietary profile jsonb (Req 5). Null only if the user row is missing. */
+export async function getDietaryProfile(userId: string): Promise<DietaryProfile | null> {
+  const [row] = await sql<{ dietary_profile: DietaryProfile }[]>`
+    select dietary_profile from cadence.users where id = ${userId}`;
+  return row?.dietary_profile ?? null;
+}
+
+/** Whole-object replace for Settings confirm-first save (Req 5 WS5). */
+export async function setDietaryProfile(userId: string, profile: DietaryProfile): Promise<void> {
+  await sql`
+    update cadence.users
+    set dietary_profile = ${json(profile)}, updated_at = now()
+    where id = ${userId}`;
 }

@@ -1,8 +1,12 @@
 /**
  * Req 5 food / dietary API client (WS4 + WS5).
  *
- * Endpoints land with WS1 — until then every call treats 404 as "not ready yet"
- * and returns a graceful empty / unavailable result (never throws for missing routes).
+ * Wired to WS1 routes:
+ *   GET/POST /nutrition/dietary-profile
+ *   GET /nutrition/foods/search?q=
+ *   GET /nutrition/foods/recents
+ *
+ * Soft-handles 404/network so Settings + Food tab stay usable if a deploy lags.
  */
 
 import { EMPTY_DIETARY_PROFILE, sanitizeDietaryProfile, type DietaryProfile } from '@cadence/shared';
@@ -40,21 +44,23 @@ function unavailableDietary(): DietaryProfileResult {
   return { status: 'unavailable', profile: { ...EMPTY_DIETARY_PROFILE, allergies: [], dislikes: [] } };
 }
 
-/** GET /nutrition/dietary-profile — empty profile + unavailable when the route is not on main yet. */
+function dietaryFromBody(body: unknown): DietaryProfile {
+  const raw =
+    body && typeof body === 'object' && 'dietary_profile' in (body as object)
+      ? (body as { dietary_profile: unknown }).dietary_profile
+      : body && typeof body === 'object' && 'profile' in (body as object)
+        ? (body as { profile: unknown }).profile
+        : body;
+  return sanitizeDietaryProfile(raw) ?? { ...EMPTY_DIETARY_PROFILE };
+}
+
+/** GET /nutrition/dietary-profile */
 export async function getDietaryProfile(): Promise<DietaryProfileResult> {
   try {
     const res = await fetch(`${BASE}/nutrition/dietary-profile`, { headers: headers() });
     if (res.status === 404) return unavailableDietary();
     if (!res.ok) return { status: 'error', profile: { ...EMPTY_DIETARY_PROFILE } };
-    const body = await readJson(res);
-    const raw =
-      body && typeof body === 'object' && 'dietary_profile' in (body as object)
-        ? (body as { dietary_profile: unknown }).dietary_profile
-        : body && typeof body === 'object' && 'profile' in (body as object)
-          ? (body as { profile: unknown }).profile
-          : body;
-    const profile = sanitizeDietaryProfile(raw) ?? { ...EMPTY_DIETARY_PROFILE };
-    return { status: 'ok', profile };
+    return { status: 'ok', profile: dietaryFromBody(await readJson(res)) };
   } catch {
     return { status: 'error', profile: { ...EMPTY_DIETARY_PROFILE } };
   }
@@ -69,20 +75,31 @@ export async function saveDietaryProfile(profile: DietaryProfile): Promise<Dieta
     const res = await fetch(`${BASE}/nutrition/dietary-profile`, {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify(profile),
+      body: JSON.stringify({
+        allergies: profile.allergies,
+        diet: profile.diet,
+        dislikes: profile.dislikes,
+        notes: profile.notes,
+      }),
     });
     if (res.status === 404 || !res.ok) return null;
-    const body = await readJson(res);
-    const raw =
-      body && typeof body === 'object' && 'dietary_profile' in (body as object)
-        ? (body as { dietary_profile: unknown }).dietary_profile
-        : body && typeof body === 'object' && 'profile' in (body as object)
-          ? (body as { profile: unknown }).profile
-          : body;
-    return sanitizeDietaryProfile(raw) ?? profile;
+    return dietaryFromBody(await readJson(res));
   } catch {
     return null;
   }
+}
+
+function servingLabelFromFood(r: Record<string, unknown>): string | null {
+  if (typeof r.serving_label === 'string' && r.serving_label.trim()) return r.serving_label;
+  if (!Array.isArray(r.servings) || r.servings.length === 0) return null;
+  const idx =
+    typeof r.default_serving === 'number' && Number.isFinite(r.default_serving)
+      ? Math.max(0, Math.trunc(r.default_serving))
+      : 0;
+  const serving = r.servings[Math.min(idx, r.servings.length - 1)];
+  if (!serving || typeof serving !== 'object') return null;
+  const label = (serving as { label?: unknown }).label;
+  return typeof label === 'string' && label.trim() ? label : null;
 }
 
 function parseFoodList(body: unknown): FoodSummary[] {
@@ -103,13 +120,13 @@ function parseFoodList(body: unknown): FoodSummary[] {
       food_id,
       name,
       brand: typeof r.brand === 'string' ? r.brand : null,
-      serving_label: typeof r.serving_label === 'string' ? r.serving_label : null,
+      serving_label: servingLabelFromFood(r),
     });
   }
   return out;
 }
 
-/** GET /nutrition/foods/recents — empty list when the route is not ready. */
+/** GET /nutrition/foods/recents */
 export async function getFoodRecents(): Promise<FoodListResult> {
   try {
     const res = await fetch(`${BASE}/nutrition/foods/recents`, { headers: headers() });
@@ -121,7 +138,7 @@ export async function getFoodRecents(): Promise<FoodListResult> {
   }
 }
 
-/** GET /nutrition/foods/search?q= — empty list when the route is not ready. */
+/** GET /nutrition/foods/search?q= */
 export async function searchFoods(q: string): Promise<FoodListResult> {
   const query = q.trim();
   if (!query) return { status: 'ok', foods: [] };

@@ -22,7 +22,7 @@ describe('FoodView shell', () => {
     expect(screen.getByRole('button', { name: /Snap it/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Search/i })).toBeInTheDocument();
 
-    await waitFor(() => expect(screen.getByText(/food memory is still warming up/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Couldn't load your recent foods/i)).toBeInTheDocument());
   });
 
   it('lists recents when the API returns foods', async () => {
@@ -35,8 +35,8 @@ describe('FoodView shell', () => {
     expect(screen.getByText(/Fage · 1 container/)).toBeInTheDocument();
   });
 
-  it('opens search fallback and explains when search is not ready', async () => {
-    getFoodRecents.mockResolvedValue({ status: 'empty', foods: [] });
+  it('opens search fallback and explains when search is unreachable', async () => {
+    getFoodRecents.mockResolvedValue({ status: 'ok', foods: [] });
     searchFoods.mockResolvedValue({ status: 'unavailable', foods: [] });
     render(<FoodView />);
 
@@ -44,6 +44,20 @@ describe('FoodView shell', () => {
     fireEvent.change(screen.getByPlaceholderText(/yogurt/i), { target: { value: 'chili' } });
 
     await waitFor(() => expect(searchFoods).toHaveBeenCalledWith('chili'));
-    expect(screen.getByText(/Search isn't hooked up yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Search isn't reachable just now/i)).toBeInTheDocument();
+  });
+
+  it('lists search hits from the foods API', async () => {
+    getFoodRecents.mockResolvedValue({ status: 'ok', foods: [] });
+    searchFoods.mockResolvedValue({
+      status: 'ok',
+      foods: [{ food_id: 'f2', name: 'Turkey chili', brand: null, serving_label: '1 bowl' }],
+    });
+    render(<FoodView />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Search/i }));
+    fireEvent.change(screen.getByPlaceholderText(/yogurt/i), { target: { value: 'chili' } });
+
+    await waitFor(() => expect(screen.getByText('Turkey chili')).toBeInTheDocument());
   });
 });

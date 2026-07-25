@@ -1,9 +1,9 @@
 /**
  * Food tab shell (Req 5 WS4) — MFP-fast logging surface in a coach's voice.
  *
- * Say / snap first; search is the fallback. Recents load when WS1 routes exist;
- * 404 → warm empty state (never a dead error). Confirm-first logging wires in
- * once the resolver lands — this shell only owns entry points + empty/recents.
+ * Say / snap first; search is the fallback. Recents/search hit WS1 foods routes;
+ * empty usage → warm empty state (never a dead error). Confirm-first logging
+ * wires in once the resolver lands — this shell owns entry points + lists.
  */
 import { useEffect, useState } from 'react';
 import { getFoodRecents, searchFoods, type FoodSummary } from '../../lib/api.ts';
@@ -45,9 +45,13 @@ export function FoodView() {
       return;
     }
     const r = await searchFoods(q);
-    if (r.status === 'unavailable') {
+    if (r.status === 'unavailable' || r.status === 'error') {
       setSearchHits([]);
-      setSearchNote("Search isn't hooked up yet — try saying it to me in Coach, or snap a label soon.");
+      setSearchNote(
+        r.status === 'unavailable'
+          ? "Search isn't reachable just now — try saying it to me in Coach, or snap a label soon."
+          : "Couldn't search just now — try again in a moment, or say it to me in Coach.",
+      );
       return;
     }
     setSearchHits(r.foods);
@@ -130,8 +134,8 @@ export function FoodView() {
           )}
           {recentsStatus === 'unavailable' && (
             <div className="food-empty">
-              Your food memory is still warming up. Say or snap a meal today — once it&apos;s saved, it&apos;ll show up
-              here for two-tap logging.
+              Couldn&apos;t load your recent foods just now. Say or snap a meal today — once it&apos;s saved, it&apos;ll
+              show up here for two-tap logging.
             </div>
           )}
           {recentsStatus === 'empty' && (

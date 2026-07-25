@@ -1,9 +1,8 @@
 /**
  * Settings — dietary profile capture (Req 5 WS5).
  *
- * Confirm-first: edit chips → Save. When GET/POST /nutrition/dietary-profile
- * is not on main yet (404), the editor still works locally and explains that
- * I'll remember these once the food layer lands.
+ * Confirm-first: edit chips → Save via GET/POST /nutrition/dietary-profile.
+ * Soft-handles a missing/lagging API so the editor still works locally.
  */
 import { useEffect, useState } from 'react';
 import { DIET_OPTIONS, type DietaryProfile } from '@cadence/shared';
@@ -158,7 +157,7 @@ export function DietaryProfileEditor() {
         setApiReady(false);
         setNote(
           dirty
-            ? "I can't store this yet — the food layer is still landing. Your edits are here for now; we'll sync when it's ready."
+            ? "Couldn't store this just now — your edits are still here; try Save again in a moment."
             : "Couldn't save just now — try again in a moment.",
         );
       }
@@ -177,7 +176,7 @@ export function DietaryProfileEditor() {
 
       {!apiReady && (
         <div className="sheet-msg" style={{ padding: '2px 0 8px' }}>
-          Food memory is still catching up on the server — you can fill this in; I&apos;ll sync when it&apos;s ready.
+          I couldn&apos;t reach food memory just now — you can still fill this in; Save will retry.
         </div>
       )}
 
