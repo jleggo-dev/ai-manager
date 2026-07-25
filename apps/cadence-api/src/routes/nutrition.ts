@@ -17,7 +17,7 @@ import { BodyValidationError, parseBody, logMealBodySchema, macroTargetsBodySche
 const router = Router();
 router.use(requireCadenceUser);
 
-/** POST /nutrition/meals — words/photo (AI parse) or food_id (deterministic saved-food log). */
+/** POST /nutrition/meals — words/photo (AI) or food_id / recipe_id (deterministic). */
 router.post('/meals', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
@@ -28,6 +28,7 @@ router.post('/meals', async (req: Request, res: Response) => {
         meal: body.meal,
         photo: body.photo,
         food_id: body.food_id,
+        recipe_id: body.recipe_id,
         serving_index: body.serving_index,
         quantity: body.quantity,
         date: body.date,
@@ -37,7 +38,7 @@ router.post('/meals', async (req: Request, res: Response) => {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     const msg = err instanceof Error ? err.message : '';
     if (/invalid photo/.test(msg)) return void res.status(400).json({ error: msg });
-    if (/food not found/.test(msg)) return void res.status(404).json({ error: msg });
+    if (/food not found|recipe not found/.test(msg)) return void res.status(404).json({ error: msg });
     console.error('[POST /nutrition/meals]', err);
     res.status(500).json({ error: 'failed to log meal' });
   }

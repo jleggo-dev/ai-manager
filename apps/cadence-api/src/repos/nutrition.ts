@@ -21,15 +21,17 @@ export async function insertNutritionLog(
     photo_ref?: string | null;
     macros?: NutritionLog['macros'] | null;
     provisional?: boolean;
+    /** Correlate a meal logged as N servings of a saved recipe (Req 5 WS3). */
+    recipe_id?: string | null;
   },
 ): Promise<NutritionLog> {
   const [out] = await sql<NutritionLog[]>`
     insert into cadence.nutrition_logs
-      (user_id, date, meal, items, input_method, ai_confidence, raw_text, flags, photo_ref, macros, provisional)
+      (user_id, date, meal, items, input_method, ai_confidence, raw_text, flags, photo_ref, macros, provisional, recipe_id)
     values (
       ${userId}, ${row.date}, ${row.meal}, ${json(row.items ?? [])}, ${row.input_method},
       ${row.ai_confidence ?? null}, ${row.raw_text ?? null}, ${json(row.flags ?? {})}, ${row.photo_ref ?? null},
-      ${json(row.macros ?? {})}, ${row.provisional ?? false}
+      ${json(row.macros ?? {})}, ${row.provisional ?? false}, ${row.recipe_id ?? null}
     )
     returning ${COLS}`;
   return out!;

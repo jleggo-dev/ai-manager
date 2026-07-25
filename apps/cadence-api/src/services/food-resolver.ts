@@ -1,16 +1,24 @@
 /**
- * Req 5 §5.6 — Food Resolver (WS-R).
+ * Req 5 §5.6 — Food Resolver (WS-R + WS3 recipes).
  *
- * Any input → ranked candidates across own foods + shared DB → pre-select when
- * clearly best (usual serving + inferred qty) → confirm → log; or "new" →
- * capture (estimate / parse-label). Recipes land with WS3.
+ * Any input → ranked candidates across own foods + own recipes + shared DB →
+ * pre-select when clearly best → confirm → log; or "new" → capture.
  *
  * Deterministic ranking first; embeddings / AI disambiguation later.
  */
-import { assessDietarySafety, type DietaryProfile, type Food } from '@cadence/shared';
+import { assessDietarySafety, type DietaryProfile, type Food, type Recipe } from '@cadence/shared';
 import { listFoodUsageRows, listFrequentFoods, listRecentFoods, searchFoods } from '../repos/foods.ts';
+import { listRecipes, searchRecipes } from '../repos/recipes.ts';
 import { getDietaryProfile } from '../repos/users.ts';
-import { foodLabel, newFoodCandidate, rankFoods, type FoodRankContext, type RankedFood } from './food-resolver-rank.ts';
+import {
+  foodLabel,
+  inferQuantity,
+  lexicalMatchScore,
+  newFoodCandidate,
+  rankFoods,
+  type FoodRankContext,
+  type RankedFood,
+} from './food-resolver-rank.ts';
 import { pickPreselected, type ResolveCandidate, type ResolveInput } from './food-resolver-types.ts';
 
 export type {
@@ -30,6 +38,7 @@ export {
 
 const SEARCH_LIMIT = 20;
 const USAGE_LIMIT = 40;
+const RECIPE_LIMIT = 12;
 
 export interface ResolveResult {
   candidates: ResolveCandidate[];
@@ -49,6 +58,25 @@ function toCandidate(ranked: RankedFood, profile: DietaryProfile | null): Resolv
     food_id: food.food_id,
     brand: food.brand,
     preselected_serving,
+    inferred_quantity,
+    dietary,
+  };
+}
+
+function toRecipeCandidate(
+  recipe: Recipe,
+  score: number,
+  profile: DietaryProfile | null,
+  inferred_quantity: number,
+): ResolveCandidate {
+  const texts = [recipe.name, ...recipe.ingredients.map((i) => i.name)];
+  const dietary = assessDietarySafety(profile, texts);
+  const adjusted = dietary.safe ? score : Math.min(score, 0.05);
+  return {
+    kind: 'recipe',
+    score: adjusted,
+    label: recipe.name,
+    recipe_id: recipe.recipe_id,
     inferred_quantity,
     dietary,
   };
@@ -81,6 +109,33 @@ async function loadRankContext(userId: string): Promise<{ ctx: FoodRankContext; 
   };
 }
 
+/** Own saved recipes as kind:'recipe' candidates (search when q present, else recent list). */
+async function loadRecipeCandidates(
+  userId: string,
+  text: string,
+  profile: DietaryProfile | null,
+): Promise<ResolveCandidate[]> {
+  const recipes = text
+    ? await searchRecipes(userId, text, RECIPE_LIMIT)
+    : await listRecipes(userId, { savedOnly: true, limit: RECIPE_LIMIT });
+  const qty = text ? inferQuantity(text) : 1;
+  const out: ResolveCandidate[] = [];
+  recipes.forEach((recipe, index) => {
+    let score: number;
+    if (text) {
+      const lexical = lexicalMatchScore(text, { name: recipe.name, brand: null });
+      if (lexical <= 0) return;
+      // Slight boost over a bare food lexical hit so a saved dish can win "my chili".
+      score = Math.min(1.5, lexical + 0.06);
+    } else {
+      // Empty query: recents-style — newer recipes score a bit higher.
+      score = Math.max(0.2, 0.55 - index * 0.03);
+    }
+    out.push(toRecipeCandidate(recipe, score, profile, qty));
+  });
+  return out;
+}
+
 /**
  * Resolve text (and optional photo hint) into ranked candidates + optional preselect.
  * Always appends a "new food" escape hatch when there is text and/or a photo.
@@ -103,9 +158,12 @@ export async function resolveFoods(userId: string, input: ResolveInput): Promise
   }
 
   const ranked = rankFoods(text, pool, ctx).slice(0, 12);
-  const candidates: ResolveCandidate[] = ranked.map((r) => toCandidate(r, profile));
+  const candidates: ResolveCandidate[] = [
+    ...ranked.map((r) => toCandidate(r, profile)),
+    ...(await loadRecipeCandidates(userId, text, profile)),
+  ];
 
-  // Re-sort after dietary demotion so allergen rows sink.
+  // Re-sort after dietary demotion + recipe merge so allergen rows sink.
   candidates.sort((a, b) => b.score - a.score);
 
   if (text || hasPhoto) candidates.push(newFoodCandidate({ text, photo: input.photo }));

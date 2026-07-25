@@ -91,5 +91,18 @@ describe('job profile resolution', () => {
       resolveJobProfileIds(jobs, ids);
       expect(jobs.find((j) => j.slug === 'nutrition-baseline')!.ai_profile_id).toBe(COACH);
     });
+
+    it('structure-recipe lands on the coach placeholder (Req 5 WS3)', () => {
+      const job = CONFIG.jobs.find((j) => j.slug === 'structure-recipe');
+      expect(job, 'structure-recipe missing from ai-admin.config.json').toBeTruthy();
+      expect(job!.ai_profile_id).toBe('<CADENCE_COACH_PROFILE_UUID>');
+      const jobs = CONFIG.jobs.map((j) => ({ slug: j.slug, ai_profile_id: j.ai_profile_id }));
+      resolveJobProfileIds(jobs, ids);
+      expect(jobs.find((j) => j.slug === 'structure-recipe')!.ai_profile_id).toBe(COACH);
+      const baselineIdx = CONFIG.jobs.findIndex((j) => j.slug === 'nutrition-baseline');
+      const structureIdx = CONFIG.jobs.findIndex((j) => j.slug === 'structure-recipe');
+      expect(structureIdx).toBeGreaterThanOrEqual(0);
+      expect(structureIdx).toBeLessThan(baselineIdx);
+    });
   });
 });

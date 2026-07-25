@@ -32,16 +32,18 @@ must point at entities that already exist. So fill the `<PLACEHOLDER>` tokens in
    profile model pointers). Preview / CI:
    `… sync-jobs.ts --dry-run --fail-on-drift`. See [`docs/infra/CONFIG-DRIFT.md`](../../docs/infra/CONFIG-DRIFT.md).
 
-### Req 5 — Food capture jobs (WS2)
+### Req 5 — Food capture + recipe jobs (WS2 / WS3)
 
 | Slug                    | Profile                                                               | Contract                                                                               |
 | ----------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `parse-nutrition-label` | **Pinned Gemini vision** (same UUID as `parse-meal` / `plate-advice`) | Label photo → `serving_*` + `macros_per_serving` (+ printed micros) + `confidence`     |
 | `identify-food`         | **Pinned Gemini vision**                                              | Front-of-pack photo → `name` + `brand` + `confidence`                                  |
 | `estimate-food`         | Broker (Flash)                                                        | Describe-a-food text → canonical serving + macro estimate + `confidence` (macros only) |
+| `structure-recipe`      | Coach                                                                 | Recipe-from-chat text → `{ name, servings, ingredients[{name,qty,unit}], steps? }`     |
 
 Runtime resolves jobs **by slug** via `runJobBySlug` — no `AIM_JOB_*` env vars required (same
-pattern as `parse-meal`). After this config lands on `main`, an operator syncs live with:
+pattern as `parse-meal`). After this config lands on `main`, an operator syncs live with
+**jobs-only** sync (includes `structure-recipe`):
 
 ```powershell
 node --import tsx apps/cadence-api/scripts/sync-jobs.ts --dry-run
@@ -49,7 +51,7 @@ node --import tsx apps/cadence-api/scripts/sync-jobs.ts
 ```
 
 Do **not** use `provision-aim.ts` for prompt-only updates — it can re-sync profiles and clobber
-live model pointers. `structure_recipe` is Phase 2 (not in this batch).
+live model pointers.
 
 5. **Sync the workflow** — re-run `ai-admin-sync.mjs` once job UUIDs are filled into
    `steps[].processing_job_id`.

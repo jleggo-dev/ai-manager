@@ -58,8 +58,11 @@ export interface Recipe {
   name: string;
   source: 'user' | 'ai' | 'ai_from_fridge_photo' | 'ai_from_chat';
   servings: number;
-  /** food_id set once the Resolver resolves the ingredient; ad-hoc name/qty/unit allowed. */
-  ingredients: { food_id?: string; name: string; qty: number | string; unit?: string }[];
+  /**
+   * food_id set once the Resolver resolves the ingredient; ad-hoc name/qty/unit allowed.
+   * est holds contribution macros for unresolved / estimated ingredients (recompute on save).
+   */
+  ingredients: { food_id?: string; name: string; qty: number | string; unit?: string; est?: Macros }[];
   steps: string[];
   /** Computed by the app: Σ(ingredient macros) ÷ servings — never free-guessed for the dish. */
   macros_per_serving: Macros;

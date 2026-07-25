@@ -8,7 +8,6 @@
  * a parse failure NEVER loses the user's words (raw row still inserted, items empty).
  */
 import {
-  macrosForLog,
   type Macros,
   type MacroTargets,
   type MealKind,
@@ -17,7 +16,6 @@ import {
 } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { insertNutritionLog, listNutritionLogs, updateNutritionLog } from '../repos/nutrition.ts';
-import { getFood, touchFoodUsage } from '../repos/foods.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, setMacroTargets } from '../repos/users.ts';
 import {
@@ -33,9 +31,11 @@ import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
 import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW } from './nutrition-parse.ts';
 import { logAi } from './ai-log.ts';
+import { logMealFromFood, logMealFromRecipe } from './nutrition-log-saved.ts';
 
 export { parseMealResult, wantsTargets, PROVISIONAL_BELOW, isMeal } from './nutrition-parse.ts';
 export type { ParsedMealResult } from './nutrition-parse.ts';
+export { logMealFromFood, logMealFromRecipe } from './nutrition-log-saved.ts';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -49,76 +49,11 @@ async function tickFoodLogOccurrence(userId: string, date: string): Promise<void
 }
 
 /**
- * Deterministic log of a saved Food (Req 5) — macros from serving math, no AI.
- * Bumps food_usage so recents/frequents learn.
- */
-export async function logMealFromFood(
-  userId: string,
-  input: {
-    food_id: string;
-    meal?: MealKind;
-    date?: string;
-    serving_index?: number;
-    quantity?: number;
-  },
-): Promise<NutritionLog> {
-  const food = await getFood(userId, input.food_id);
-  if (!food) throw new Error('food not found');
-  const date = input.date ?? today();
-  const quantity = input.quantity && input.quantity > 0 ? input.quantity : 1;
-  const servingIndex =
-    typeof input.serving_index === 'number' && Number.isInteger(input.serving_index)
-      ? input.serving_index
-      : food.default_serving;
-  const nutrients = macrosForLog(food, { servingIndex, quantity });
-  const macros: Macros = {
-    ...(typeof nutrients.kcal === 'number' ? { kcal: nutrients.kcal } : {}),
-    ...(typeof nutrients.protein_g === 'number' ? { protein_g: nutrients.protein_g } : {}),
-    ...(typeof nutrients.carbs_g === 'number' ? { carbs_g: nutrients.carbs_g } : {}),
-    ...(typeof nutrients.fat_g === 'number' ? { fat_g: nutrients.fat_g } : {}),
-  };
-  const serving =
-    Number.isInteger(servingIndex) && servingIndex >= 0 && servingIndex < food.servings.length
-      ? food.servings[servingIndex]
-      : food.servings[0];
-  const meal: MealKind = input.meal && isMeal(input.meal) ? input.meal : 'other';
-  const rawText = food.brand ? `${food.brand} ${food.name}` : food.name;
-
-  const row = await insertNutritionLog(userId, {
-    date,
-    meal,
-    items: [
-      {
-        name: food.name,
-        qty: quantity,
-        ...(serving?.unit ? { unit: serving.unit } : {}),
-        ...(Object.keys(macros).length ? { est: macros } : {}),
-        food_id: food.food_id,
-      },
-    ],
-    input_method: 'manual',
-    ai_confidence: food.confidence,
-    raw_text: rawText,
-    flags: {},
-    photo_ref: null,
-    macros: Object.keys(macros).length ? macros : null,
-    provisional: false,
-  });
-
-  try {
-    await touchFoodUsage(userId, food.food_id);
-  } catch (e) {
-    console.warn('[nutrition] food_usage touch failed:', e);
-  }
-  await tickFoodLogOccurrence(userId, date);
-  return row;
-}
-
-/**
- * Record one meal from the user's words and/or a photo, or a saved food_id (deterministic).
- * Parse is best-effort — on any failure the raw text is still stored (meal = hint or 'other',
- * items empty) so nothing they said is lost. A photo uploads to private Storage FIRST.
- * Side effect: the first meal of the day ticks today's pending "Food log" occurrence done.
+ * Record one meal from the user's words and/or a photo, or a saved food_id / recipe_id
+ * (deterministic). Parse is best-effort — on any failure the raw text is still stored
+ * (meal = hint or 'other', items empty) so nothing they said is lost. A photo uploads to
+ * private Storage FIRST. Side effect: the first meal of the day ticks today's pending
+ * "Food log" occurrence done.
  */
 export async function logMeal(
   userId: string,
@@ -128,6 +63,7 @@ export async function logMeal(
     date?: string;
     photo?: string;
     food_id?: string;
+    recipe_id?: string;
     serving_index?: number;
     quantity?: number;
   },
@@ -138,6 +74,14 @@ export async function logMeal(
       meal: input.meal,
       date: input.date,
       serving_index: input.serving_index,
+      quantity: input.quantity,
+    });
+  }
+  if (input.recipe_id) {
+    return logMealFromRecipe(userId, {
+      recipe_id: input.recipe_id,
+      meal: input.meal,
+      date: input.date,
       quantity: input.quantity,
     });
   }
