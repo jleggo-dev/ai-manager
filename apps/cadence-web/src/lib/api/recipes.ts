@@ -1,11 +1,13 @@
 /**
- * Req 5 Phase 2 / WS3 — recipes API client (thin Food-tab UI).
+ * Req 5 Phase 2 / WS3 + Phase 4 fridge — recipes API client (thin Food-tab UI).
  *
  * Routes:
  *   GET    /nutrition/recipes
  *   GET    /nutrition/recipes/:id
  *   POST   /nutrition/recipes
  *   POST   /nutrition/recipes/from-chat  body: { text }
+ *   POST   /nutrition/recipes/parse-fridge  body: { photo, hint? }
+ *   POST   /nutrition/recipes/generate  body: { ingredients, meal_hint? }
  *   POST   /nutrition/meals { recipe_id, servings|quantity, meal }
  *
  * Soft-handles 404/network so the Food tab stays usable on transient outages.
@@ -46,6 +48,27 @@ export type RecipeDetailResult =
 
 export type RecipeFromChatResult =
   { status: 'ok'; draft: RecipeDraft } | { status: 'unavailable' | 'error'; message: string };
+
+export type FridgeIngredient = {
+  name: string;
+  qty?: number;
+  unit?: string;
+};
+
+export type ParseFridgeResult =
+  | {
+      status: 'ok';
+      ingredients: FridgeIngredient[];
+      summary: string;
+      confidence: number;
+      photo_readable: boolean;
+      photo_ref: string | null;
+    }
+  | { status: 'unavailable' | 'error'; message: string };
+
+export type GenerateRecipesResult =
+  | { status: 'ok'; drafts: RecipeDraft[]; notes: string | null; filtered_allergy: number }
+  | { status: 'unavailable' | 'error'; message: string };
 
 export type SaveRecipeResult = { status: 'ok'; recipe: Recipe } | { status: 'unavailable' | 'error'; message: string };
 
@@ -236,6 +259,119 @@ export async function structureRecipeFromChat(description: string): Promise<Reci
     return { status: 'ok', draft };
   } catch {
     return { status: 'error', message: "Couldn't reach recipe structure — try again in a moment." };
+  }
+}
+
+/**
+ * POST /nutrition/recipes/parse-fridge — fridge/pantry photo → ingredient list for review.
+ */
+export async function parseFridgePhoto(input: { photo: string; hint?: string }): Promise<ParseFridgeResult> {
+  if (!input.photo?.startsWith('data:image/')) {
+    return { status: 'error', message: 'I need a fridge or pantry photo to read.' };
+  }
+  try {
+    const res = await fetch(`${BASE}/nutrition/recipes/parse-fridge`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        photo: input.photo,
+        ...(input.hint?.trim() ? { hint: input.hint.trim() } : {}),
+      }),
+    });
+    if (res.status === 404) {
+      return {
+        status: 'unavailable',
+        message: "Fridge scan isn't reachable just now — try again in a moment, or structure a recipe from text.",
+      };
+    }
+    if (!res.ok) {
+      return { status: 'error', message: "Couldn't read that fridge photo — try a clearer shot." };
+    }
+    const body = await readJson(res);
+    if (!isRecord(body)) {
+      return { status: 'error', message: "Couldn't read that fridge photo — try a clearer shot." };
+    }
+    const ingredients: FridgeIngredient[] = [];
+    const rawList = Array.isArray(body.ingredients) ? body.ingredients : [];
+    for (const row of rawList) {
+      if (!isRecord(row)) continue;
+      const name = typeof row.name === 'string' ? row.name.trim() : '';
+      if (!name) continue;
+      const ing: FridgeIngredient = { name };
+      if (typeof row.qty === 'number' && Number.isFinite(row.qty) && row.qty > 0) ing.qty = row.qty;
+      if (typeof row.unit === 'string' && row.unit.trim()) ing.unit = row.unit.trim();
+      ingredients.push(ing);
+    }
+    return {
+      status: 'ok',
+      ingredients: ingredients.slice(0, 40),
+      summary: typeof body.summary === 'string' ? body.summary : '',
+      confidence: typeof body.confidence === 'number' ? body.confidence : 0,
+      photo_readable: body.photo_readable !== false,
+      photo_ref: typeof body.photo_ref === 'string' ? body.photo_ref : null,
+    };
+  } catch {
+    return { status: 'error', message: "Couldn't reach fridge scan — try again in a moment." };
+  }
+}
+
+/**
+ * POST /nutrition/recipes/generate — reviewed ingredients → recipe draft ideas.
+ * Confirm before save (brand: provisional until confirmed).
+ */
+export async function generateRecipesFromIngredients(input: {
+  ingredients: FridgeIngredient[];
+  meal_hint?: string;
+}): Promise<GenerateRecipesResult> {
+  const ingredients = input.ingredients
+    .map((i) => ({
+      name: i.name.trim(),
+      ...(typeof i.qty === 'number' && i.qty > 0 ? { qty: i.qty } : {}),
+      ...(i.unit?.trim() ? { unit: i.unit.trim() } : {}),
+    }))
+    .filter((i) => i.name);
+  if (ingredients.length === 0) {
+    return { status: 'error', message: 'Add at least one ingredient so I have something to cook with.' };
+  }
+  try {
+    const res = await fetch(`${BASE}/nutrition/recipes/generate`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        ingredients,
+        ...(input.meal_hint?.trim() ? { meal_hint: input.meal_hint.trim() } : {}),
+      }),
+    });
+    if (res.status === 404) {
+      return {
+        status: 'unavailable',
+        message: "Recipe ideas aren't reachable just now — try again in a moment.",
+      };
+    }
+    if (!res.ok) {
+      return { status: 'error', message: "Couldn't shape recipe ideas just now — try tweaking the list." };
+    }
+    const body = await readJson(res);
+    if (!isRecord(body)) {
+      return { status: 'error', message: "Couldn't shape recipe ideas just now — try tweaking the list." };
+    }
+    const rawDrafts = Array.isArray(body.drafts) ? body.drafts : [];
+    const drafts: RecipeDraft[] = [];
+    for (const row of rawDrafts) {
+      const draft = parseRecipeDraft(row);
+      if (draft) {
+        draft.source = 'ai_from_fridge_photo';
+        drafts.push(draft);
+      }
+    }
+    return {
+      status: 'ok',
+      drafts: drafts.slice(0, 3),
+      notes: typeof body.notes === 'string' ? body.notes : null,
+      filtered_allergy: typeof body.filtered_allergy === 'number' ? body.filtered_allergy : 0,
+    };
+  } catch {
+    return { status: 'error', message: "Couldn't reach recipe ideas — try again in a moment." };
   }
 }
 

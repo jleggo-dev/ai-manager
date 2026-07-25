@@ -22,7 +22,7 @@ import { logAi } from './ai-log.ts';
 import { estimateFood } from './food-capture.ts';
 import { resolveFoods } from './food-resolver.ts';
 import { computeMacrosPerServing, macrosForIngredientAmount, toMacros } from './recipe-macros.ts';
-import { parseStructureRecipeResult, type StructuredIngredient } from './recipe-parse.ts';
+import { parseStructureRecipeResult, type StructuredIngredient, type StructuredRecipe } from './recipe-parse.ts';
 
 export type { StructuredRecipe } from './recipe-parse.ts';
 
@@ -34,9 +34,11 @@ export interface ResolvedRecipeIngredient extends RecipeIngredient {
   est?: Macros;
 }
 
+export type RecipeDraftSource = 'ai_from_chat' | 'ai_from_fridge_photo';
+
 export interface RecipeDraft {
   name: string;
-  source: 'ai_from_chat';
+  source: RecipeDraftSource;
   servings: number;
   ingredients: ResolvedRecipeIngredient[];
   steps: string[];
@@ -158,6 +160,41 @@ async function resolveOneIngredient(userId: string, ing: StructuredIngredient): 
 }
 
 /**
+ * Resolve structured ingredients → computed macros + allergen pass.
+ * Shared by from-chat and fridge generate. Does NOT persist.
+ */
+export async function buildDraftFromStructured(
+  userId: string,
+  structured: StructuredRecipe,
+  source: RecipeDraftSource,
+  tags: string[] = [],
+): Promise<RecipeDraft> {
+  const ingredients: ResolvedRecipeIngredient[] = [];
+  for (const ing of structured.ingredients) {
+    ingredients.push(await resolveOneIngredient(userId, ing));
+  }
+
+  const contributions = ingredients.map((i) => i.est).filter((m): m is Macros => !!m);
+  const macros_per_serving = computeMacrosPerServing(contributions, structured.servings);
+  const profile = await getDietaryProfile(userId);
+  // Safety pass on structured names (what the model/user said), not only resolved labels —
+  // allergen foods are down-ranked by the resolver and may fall through to estimate.
+  const dietary = assessRecipeDietary(profile, structured.name, [...structured.ingredients, ...ingredients]);
+
+  return {
+    name: structured.name,
+    source,
+    servings: structured.servings,
+    ingredients,
+    steps: structured.steps,
+    macros_per_serving,
+    tags: tags.slice(0, 20),
+    saved: false,
+    dietary,
+  };
+}
+
+/**
  * Chat → structure_recipe → resolve ingredients → computed macros + allergen pass.
  * Does NOT persist — caller confirms via POST /nutrition/recipes (brand: confirm-before-save).
  */
@@ -175,42 +212,22 @@ export async function recipeFromChat(userId: string, recipeText: string): Promis
   }
 
   const structured = parseStructureRecipeResult(rawOut);
-  const ingredients: ResolvedRecipeIngredient[] = [];
-  for (const ing of structured.ingredients) {
-    ingredients.push(await resolveOneIngredient(userId, ing));
-  }
-
-  const contributions = ingredients.map((i) => i.est).filter((m): m is Macros => !!m);
-  const macros_per_serving = computeMacrosPerServing(contributions, structured.servings);
-  const profile = await getDietaryProfile(userId);
-  // Safety pass on the structured names (what they said), not only resolved labels —
-  // allergen foods are down-ranked by the resolver and may fall through to estimate.
-  const dietary = assessRecipeDietary(profile, structured.name, [...structured.ingredients, ...ingredients]);
+  const draft = await buildDraftFromStructured(userId, structured, 'ai_from_chat');
 
   void logAi(userId, {
     kind: 'structure_recipe',
     input: { recipe_text: text },
     output: { raw: rawOut.slice(0, 2000) },
     meta: {
-      name: structured.name,
-      servings: structured.servings,
-      ingredients: ingredients.length,
-      estimated: ingredients.filter((i) => i.estimated).length,
-      dietary_safe: dietary.safe,
+      name: draft.name,
+      servings: draft.servings,
+      ingredients: draft.ingredients.length,
+      estimated: draft.ingredients.filter((i) => i.estimated).length,
+      dietary_safe: draft.dietary.safe,
     },
   });
 
-  return {
-    name: structured.name,
-    source: 'ai_from_chat',
-    servings: structured.servings,
-    ingredients,
-    steps: structured.steps,
-    macros_per_serving,
-    tags: [],
-    saved: false,
-    dietary,
-  };
+  return draft;
 }
 
 /** Persist food_id / est for recomputation; drop ephemeral `estimated` flag. */
