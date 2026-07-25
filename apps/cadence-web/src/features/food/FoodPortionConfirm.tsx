@@ -50,6 +50,7 @@ export function FoodPortionConfirm({
   const [brand, setBrand] = useState(() => draftBrand(draft) ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [allergyOverride, setAllergyOverride] = useState(false);
   const invalidateNutritionDay = useInvalidateNutritionDay();
 
   const nutrients = macrosForLog(shape, { servingIndex, quantity });
@@ -57,15 +58,15 @@ export function FoodPortionConfirm({
   const safety = dietary ? assessDietarySafety(dietary, [name, brand].filter(Boolean)) : { safe: true, flags: [] };
   const allergyFlags = safety.flags.filter((f) => f.severity === 'allergy');
 
-  async function confirm() {
+  async function confirm(opts?: { ignoreAllergy?: boolean }) {
     if (busy) return;
     if (!name.trim()) {
       setErr('Give it a name so I can save it for next time.');
       return;
     }
-    if (allergyFlags.length) {
+    if (allergyFlags.length && !opts?.ignoreAllergy && !allergyOverride) {
       setErr(
-        `Heads up — this looks like it may include ${allergyFlags.map((f) => f.term).join(', ')}. Edit the name, or cancel if that isn't right.`,
+        `Heads up — this looks like it may include ${allergyFlags.map((f) => f.term).join(', ')}. Edit the name, cancel, or confirm you still want it logged.`,
       );
       return;
     }
@@ -188,7 +189,7 @@ export function FoodPortionConfirm({
       {allergyFlags.length > 0 && (
         <div className="food-allergy-warn" role="alert">
           This may conflict with your allergies ({allergyFlags.map((f) => f.term).join(', ')}). I won&apos;t log it
-          until the name looks right.
+          unless you say so.
         </div>
       )}
       {err && <div className="food-empty">{err}</div>}
@@ -197,6 +198,19 @@ export function FoodPortionConfirm({
         <button type="button" className="lockbtn" disabled={busy} onClick={() => void confirm()}>
           {busy ? 'Saving…' : 'Looks right — log it'}
         </button>
+        {allergyFlags.length > 0 && (
+          <button
+            type="button"
+            className="lockbtn ghost"
+            disabled={busy}
+            onClick={() => {
+              setAllergyOverride(true);
+              void confirm({ ignoreAllergy: true });
+            }}
+          >
+            Log it anyway — I know
+          </button>
+        )}
         <button type="button" className="lockbtn ghost" disabled={busy} onClick={onCancel}>
           Back
         </button>
