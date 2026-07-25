@@ -3,11 +3,13 @@ import { requireCadenceUser } from '../auth/middleware.ts';
 import {
   deleteFood,
   getFood,
+  getFoodByOffId,
   insertFood,
   listFrequentFoods,
   listRecentFoods,
   searchFoods,
   updateFood,
+  upsertSharedOffFood,
 } from '../repos/foods.ts';
 import { estimateFood, identifyFood, parseNutritionLabel } from '../services/food-capture.ts';
 import { resolveFoods } from '../services/food-resolver.ts';
@@ -16,6 +18,7 @@ import {
   createFoodBodySchema,
   estimateFoodBodySchema,
   identifyFoodBodySchema,
+  importOffFoodBodySchema,
   parseLabelBodySchema,
   patchFoodBodySchema,
   resolveFoodBodySchema,
@@ -131,6 +134,56 @@ router.post('/resolve', async (req: Request, res: Response) => {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /nutrition/foods/resolve]', err);
     res.status(500).json({ error: 'failed to resolve food' });
+  }
+});
+
+/**
+ * GET /nutrition/foods/by-off/:offId — shared OFF cache hit (prefer before browser → OFF).
+ * Must stay above /:id.
+ */
+router.get('/by-off/:offId', async (req: Request, res: Response) => {
+  try {
+    const offId = String(req.params.offId ?? '').replace(/\D/g, '');
+    if (offId.length < 8 || offId.length > 14) {
+      return void res.status(400).json({ error: 'off_id must be an 8–14 digit barcode' });
+    }
+    const food = await getFoodByOffId(offId);
+    if (!food) return void res.status(404).json({ error: 'food not found' });
+    res.json(food);
+  } catch (err) {
+    console.error('[GET /nutrition/foods/by-off/:offId]', err);
+    res.status(500).json({ error: 'failed to load off food' });
+  }
+});
+
+/**
+ * POST /nutrition/foods/import-off — upsert shared Food from a browser-mapped OFF product.
+ * Does NOT call Open Food Facts (avoids shared egress ban risk). Auth'd; validates shape.
+ */
+router.post('/import-off', async (req: Request, res: Response) => {
+  try {
+    const body = parseBody(importOffFoodBodySchema, req.body);
+    const { food, cached } = await upsertSharedOffFood({
+      name: body.name,
+      brand: body.brand ?? null,
+      off_id: body.off_id,
+      base_unit: body.base_unit,
+      macros_per_base: body.macros_per_base,
+      servings: body.servings,
+      default_serving: body.default_serving,
+      confidence: body.confidence ?? null,
+      photo_ref: body.photo_ref ?? null,
+    });
+    console.info('[POST /nutrition/foods/import-off]', {
+      off_id: body.off_id,
+      food_id: food.food_id,
+      cached,
+    });
+    res.status(cached ? 200 : 201).json({ food, cached });
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /nutrition/foods/import-off]', err);
+    res.status(500).json({ error: 'failed to import off food' });
   }
 });
 

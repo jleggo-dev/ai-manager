@@ -20,13 +20,14 @@ import { NutritionInsightCard } from '../nutrition/NutritionInsightCard.tsx';
 import { FoodEntryActions } from './FoodEntryActions.tsx';
 import { FoodPortionConfirm } from './FoodPortionConfirm.tsx';
 import { FoodRecentsList } from './FoodRecentsList.tsx';
+import { FoodBarcodePanel } from './FoodBarcodePanel.tsx';
 import { FoodSayPanel } from './FoodSayPanel.tsx';
 import { FoodSnapPanel } from './FoodSnapPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import type { FoodDraft, FoodDraftPortion } from './foodDraft.ts';
 
-type Mode = 'home' | 'say' | 'snap' | 'search' | 'recipes' | 'confirm';
-type EntryMode = 'home' | 'say' | 'snap' | 'search' | 'recipes';
+type Mode = 'home' | 'say' | 'snap' | 'barcode' | 'search' | 'recipes' | 'confirm';
+type EntryMode = 'home' | 'say' | 'snap' | 'barcode' | 'search' | 'recipes';
 
 export function FoodView() {
   const [mode, setMode] = useState<Mode>('home');
@@ -206,6 +207,10 @@ export function FoodView() {
       )}
 
       {mode === 'snap' && <FoodSnapPanel onDraft={(d) => openDraft(d, 'snap')} onCancel={() => setMode('home')} />}
+
+      {mode === 'barcode' && (
+        <FoodBarcodePanel onDraft={(d) => openDraft(d, 'barcode')} onCancel={() => setMode('home')} />
+      )}
 
       {mode === 'search' && (
         <div className="food-panel">

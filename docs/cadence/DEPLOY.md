@@ -100,6 +100,14 @@ and matches dev.)
 (`AI_MANAGER_SUPABASE_*`, `CREDENTIAL_ENCRYPTION_KEY`, `DEVS_AI_*`) that today live in
 `backend/.env`. Leave `CADENCE_DEV_USER_ID` **unset in production** so no dev-account bypass ships.
 
+**Open Food Facts (Req 5 Phase 3):** the **browser** calls OFF product-by-barcode directly
+(`GET …/api/v3/product/{barcode}` with `X-User-Agent: Cadence/1.0 (…)`) and POSTs the mapped food to
+cadence-api (`/nutrition/foods/import-off`) for shared cache. Do **not** proxy OFF through cadence-api
+(one egress IP → shared ban risk). Prefer DB cache (`GET /nutrition/foods/by-off/:offId`) before OFF.
+Before production volume: fill the [OFF API usage form](https://openfoodfacts.org/api) and keep a real
+contact in the User-Agent. Attribution: product data © Open Food Facts contributors — **ODbL**.
+No OFF API key / secret is required; never put OFF credentials in `VITE_*`.
+
 ## Notes
 
 - Vercel deploys from the connected branch (usually `main`). `feat/cadence` must merge to `main`
