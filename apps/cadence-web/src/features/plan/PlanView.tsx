@@ -159,6 +159,7 @@ export function PlanView() {
             rest={rest}
             kept={kept}
             windowDays={window}
+            streak={data.streak}
             onCheck={set}
             onOpen={setSheetOcc}
             onAdjust={() => {

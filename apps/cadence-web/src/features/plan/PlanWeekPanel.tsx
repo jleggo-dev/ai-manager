@@ -1,3 +1,4 @@
+import type { StreakView } from '@cadence/shared';
 import { Orb } from '../../components/Orb.tsx';
 import { OccurrenceRow } from '../../components/OccurrenceRow.tsx';
 import type { PlanOccurrence, PlanViewData } from '../../lib/api.ts';
@@ -10,6 +11,7 @@ export function PlanWeekPanel({
   rest,
   kept,
   windowDays,
+  streak,
   onCheck,
   onOpen,
   onAdjust,
@@ -19,11 +21,20 @@ export function PlanWeekPanel({
   rest: PlanDay[];
   kept: number;
   windowDays: number;
+  streak?: StreakView;
   onCheck: (o: PlanOccurrence, next: 'done' | 'skipped' | 'pending') => void;
   onOpen: (id: string) => void;
   onAdjust: () => void;
   onRebalance: () => void;
 }) {
+  // A warm secondary note under the honest "N of 7" line — the protected streak, in the brand's
+  // "rhythm" language (never a scoreboard). Hidden below 2 days so a single day isn't celebrated.
+  const rhythmLine =
+    streak && streak.current >= 2
+      ? `${streak.current}-day rhythm${streak.savedByFreeze ? ' — a freeze kept it going' : ''}${
+          streak.freezes > 0 ? ` · ${streak.freezes} freeze${streak.freezes === 1 ? '' : 's'} banked` : ''
+        }`
+      : null;
   const weekRow = (o: PlanOccurrence) => (
     <OccurrenceRow key={o.occurrence_id} o={o} variant="week" onCheck={onCheck} onOpen={onOpen} />
   );
@@ -39,6 +50,7 @@ export function PlanWeekPanel({
               ? 'Check things off as you go — a missed day is just information.'
               : 'Keep your rhythm — no pressure, no resets.'}
           </span>
+          {rhythmLine && <span className="consist-streak">{rhythmLine}</span>}
         </div>
       </div>
 

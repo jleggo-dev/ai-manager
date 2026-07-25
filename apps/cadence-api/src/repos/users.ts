@@ -1,5 +1,5 @@
 import { sql, json } from '../db/sql.ts';
-import type { Baseline, MacroTargets, PendingProposal, PendingPlan, SteerBack } from '@cadence/shared';
+import type { Baseline, MacroTargets, PendingProposal, PendingPlan, SteerBack, StreakState } from '@cadence/shared';
 
 export interface CadenceUserRow {
   id: string;
@@ -13,6 +13,9 @@ export interface CadenceUserRow {
   last_assessed_at: string | null;
   pending_proposal: PendingProposal | null;
   pending_plan: PendingPlan | null;
+  // Present once migration 0015 is applied; older rows (or a pre-migration read) leave it
+  // undefined and callers fall back to initialStreakState().
+  streak_state?: StreakState | null;
 }
 
 export async function getUser(userId: string): Promise<CadenceUserRow | null> {
@@ -64,4 +67,10 @@ export async function setPendingProposal(userId: string, proposal: PendingPropos
  *  of setPendingProposal. The user's confirm/dismiss resolves it. */
 export async function setPendingPlan(userId: string, plan: PendingPlan | null): Promise<void> {
   await sql`update cadence.users set pending_plan = ${plan ? json(plan) : null} where id = ${userId}`;
+}
+
+/** Persist the forward-only streak state (Req 4) — written by services/streak.ts after it
+ *  finalizes past days. Whole-object replace; the caller owns the merge. */
+export async function setStreakState(userId: string, state: StreakState): Promise<void> {
+  await sql`update cadence.users set streak_state = ${json(state)} where id = ${userId}`;
 }
