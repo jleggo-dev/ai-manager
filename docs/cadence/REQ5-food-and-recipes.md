@@ -350,8 +350,12 @@ and wire as they land. **WS4** (the tab) consumes WS-R. WS5 is otherwise indepen
   migrations as `0018` USDA / avoid colliding with OFF which needs no schema change). Fill the OFF
   API usage form + ODbL attribution before production volume. **Micronutrient insights** (§2b) fill
   in as real-data coverage grows. **Before fridge-scan, per owner.**
-- **Phase 4 — Fridge/pantry scan → recipe ideas (future).** The original Req 5 headline: photograph
-  what you have → recipe suggestions grounded in your foods + targets + dietary profile.
+- **Phase 4 — Fridge/pantry scan → recipe ideas.** Photograph what you have → review ingredients →
+  recipe draft ideas grounded in that list + dietary profile (+ optional macro targets). Jobs:
+  `parse-fridge-photo` (vision) + `generate-recipe`; API `POST /nutrition/recipes/parse-fridge` →
+  `POST /nutrition/recipes/generate` → confirm via existing `POST /nutrition/recipes`
+  (`source='ai_from_fridge_photo'`). Food-tab Recipes: **Snap the fridge**. Sync jobs after merge
+  (`apps/cadence-api/scripts/sync-jobs.ts`). Hotel-gym `parse_equipment_photo` stays separate (later).
 - **Phase 5 — Meal plans + shopping list; recipe discovery (future).** `generate_meal_plan`; and
   "find a real recipe" via the research/web-search agent (the earlier "real recipes, retrieved" call
   applies _here_, downstream of the foundation).

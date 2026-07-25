@@ -1,15 +1,18 @@
 /**
- * Thin recipes hub (Req 5 Phase 2) — list, detail, log-N-servings, structure-from-text.
- * Soft-fails warmly when /nutrition/recipes isn't deployed yet.
+ * Thin recipes hub (Req 5 Phase 2 + Phase 4) — list, detail, log-N-servings,
+ * structure-from-text, snap-fridge → review → pick draft. Soft-fails warmly when
+ * /nutrition/recipes isn't deployed yet.
  */
 import { useEffect, useState } from 'react';
 import type { DietaryProfile, Recipe } from '@cadence/shared';
 import { getRecipeById, listRecipes, recipeMacroHint, type RecipeDraft } from '../../lib/api.ts';
+import { FridgeFromPhotoPanel } from './FridgeFromPhotoPanel.tsx';
 import { RecipeFromChatPanel } from './RecipeFromChatPanel.tsx';
 import { RecipeLogConfirm } from './RecipeLogConfirm.tsx';
 import { RecipeSaveConfirm } from './RecipeSaveConfirm.tsx';
 
-type Mode = 'list' | 'detail' | 'log' | 'from-chat' | 'save';
+type Mode = 'list' | 'detail' | 'log' | 'from-chat' | 'fridge' | 'save';
+type DraftReturn = 'from-chat' | 'fridge';
 
 export function RecipesPanel({
   dietary,
@@ -25,6 +28,7 @@ export function RecipesPanel({
   const [listStatus, setListStatus] = useState<'loading' | 'ok' | 'empty' | 'unavailable' | 'error'>('loading');
   const [selected, setSelected] = useState<Recipe | null>(null);
   const [draft, setDraft] = useState<RecipeDraft | null>(null);
+  const [draftReturn, setDraftReturn] = useState<DraftReturn>('from-chat');
   const [banner, setBanner] = useState('');
   const [pickNote, setPickNote] = useState('');
 
@@ -113,7 +117,7 @@ export function RecipesPanel({
         dietary={dietary}
         onCancel={() => {
           setDraft(null);
-          setMode('from-chat');
+          setMode(draftReturn);
         }}
         onSaved={(recipe) => {
           setDraft(null);
@@ -126,11 +130,25 @@ export function RecipesPanel({
     );
   }
 
+  if (mode === 'fridge') {
+    return (
+      <FridgeFromPhotoPanel
+        onDraft={(d) => {
+          setDraft(d);
+          setDraftReturn('fridge');
+          setMode('save');
+        }}
+        onCancel={() => setMode('list')}
+      />
+    );
+  }
+
   if (mode === 'from-chat') {
     return (
       <RecipeFromChatPanel
         onDraft={(d) => {
           setDraft(d);
+          setDraftReturn('from-chat');
           setMode('save');
         }}
         onCancel={() => setMode('list')}
@@ -187,11 +205,17 @@ export function RecipesPanel({
     <div className="food-panel" role="region" aria-label="Your recipes">
       <div className="food-panel-t">Recipes</div>
       <p className="food-panel-p">
-        Build once, log servings any day. I draft from your words — you confirm before anything is saved.
+        Build once, log servings any day. I draft from your words or a fridge photo — you confirm before anything is
+        saved.
       </p>
 
       {banner && <div className="food-banner">{banner}</div>}
       {pickNote && <div className="food-empty">{pickNote}</div>}
+
+      <button type="button" className="food-action" style={{ marginBottom: 10 }} onClick={() => setMode('fridge')}>
+        <b>Snap the fridge</b>
+        <span>Photo what you have — review ingredients, then pick a recipe idea</span>
+      </button>
 
       <button type="button" className="food-action" style={{ marginBottom: 10 }} onClick={() => setMode('from-chat')}>
         <b>Structure from text</b>
