@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { PlanView } from '../plan/PlanView.tsx';
 import { OnboardingChat } from '../onboarding/OnboardingChat.tsx';
 import { ProgressView } from '../progress/ProgressView.tsx';
+import { FoodView } from '../food/FoodView.tsx';
 import { SettingsSheet } from '../settings/SettingsSheet.tsx';
 import { AdjustSheet } from '../plan/AdjustSheet.tsx';
 import { ReviewScreen } from '../review/ReviewScreen.tsx';
 
-type Tab = 'today' | 'coach' | 'progress';
+type Tab = 'today' | 'coach' | 'food' | 'progress';
 
 const TodayIcon = () => (
   <svg width="19" height="19" viewBox="0 0 19 19" aria-hidden>
@@ -26,6 +27,16 @@ const CoachIcon = () => (
 const ProgressIcon = () => (
   <svg width="19" height="19" viewBox="0 0 19 19" aria-hidden>
     <path className="stroke" d="M2.5 16.5V13M7.2 16.5V8.5M11.9 16.5V11M16.5 16.5V4.5" strokeLinecap="round" />
+  </svg>
+);
+const FoodIcon = () => (
+  <svg width="19" height="19" viewBox="0 0 19 19" aria-hidden>
+    <path
+      className="stroke"
+      d="M5 3.5v6.5a2 2 0 0 0 2 2h0V16M12.5 3.5c0 2.5 1.5 3.5 1.5 6v6.5M12.5 3.5c0 2.2-1.2 3.2-1.2 5.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 const GearIcon = () => (
@@ -69,7 +80,7 @@ export function MainTabs({ email }: { email: string | null }) {
   return (
     <>
       {/* The Coach tab is an immersive full-screen chat (its own floating settings gear), so it
-          drops this header; Today/Progress keep a slim header that now carries only the gear. */}
+          drops this header; Today/Food/Progress keep a slim header that now carries only the gear. */}
       {tab !== 'coach' && (
         <div className="app-head app-head-min">
           <button className="gear" onClick={() => setSettingsOpen(true)} aria-label="Settings" title="Settings">
@@ -80,6 +91,7 @@ export function MainTabs({ email }: { email: string | null }) {
       <div className="app">
         {tab === 'today' && <PlanView />}
         {tab === 'coach' && <OnboardingChat intent="ongoing" chrome="none" onSettings={() => setSettingsOpen(true)} />}
+        {tab === 'food' && <FoodView />}
         {tab === 'progress' && <ProgressView />}
         <nav className="tabbar" aria-label="Main">
           <button className={`tab${tab === 'today' ? ' tab-on' : ''}`} onClick={() => setTab('today')}>
@@ -89,6 +101,10 @@ export function MainTabs({ email }: { email: string | null }) {
           <button className={`tab${tab === 'coach' ? ' tab-on' : ''}`} onClick={() => setTab('coach')}>
             <CoachIcon />
             <span>Coach</span>
+          </button>
+          <button className={`tab${tab === 'food' ? ' tab-on' : ''}`} onClick={() => setTab('food')}>
+            <FoodIcon />
+            <span>Food</span>
           </button>
           <button className={`tab${tab === 'progress' ? ' tab-on' : ''}`} onClick={() => setTab('progress')}>
             <ProgressIcon />
