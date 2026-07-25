@@ -41,10 +41,16 @@ export function FoodPortionConfirm({
   onLogged: () => void;
 }) {
   const shape = foodShape(draft);
-  const [servingIndex, setServingIndex] = useState(() =>
-    Math.max(0, Math.min(shape.default_serving ?? 0, shape.servings.length - 1)),
+  const [servingIndex, setServingIndex] = useState(() => {
+    const fromResolver =
+      typeof draft.servingIndex === 'number' && Number.isInteger(draft.servingIndex) ? draft.servingIndex : null;
+    const fallback = shape.default_serving ?? 0;
+    const idx = fromResolver ?? fallback;
+    return Math.max(0, Math.min(idx, shape.servings.length - 1));
+  });
+  const [quantity, setQuantity] = useState(() =>
+    typeof draft.quantity === 'number' && Number.isFinite(draft.quantity) && draft.quantity > 0 ? draft.quantity : 1,
   );
-  const [quantity, setQuantity] = useState(1);
   const [meal, setMeal] = useState<MealKind>(() => mealForNow());
   const [name, setName] = useState(() => draftName(draft));
   const [brand, setBrand] = useState(() => draftBrand(draft) ?? '');

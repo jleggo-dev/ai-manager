@@ -1,18 +1,27 @@
 /**
  * Food tab (Req 5 WS4) — say / snap first, search as fallback.
  *
- * Capture → portion confirm → create (if new) + log. Soft-fails when routes lag.
- * TODO(WS-R): prefer POST /nutrition/foods/resolve over search+estimate for "say".
+ * Say + search use POST /nutrition/foods/resolve (ranked + preselected serving/qty).
+ * Snap stays on parse-label. Confirm-before-log always.
  */
 import { useEffect, useState } from 'react';
 import type { DietaryProfile } from '@cadence/shared';
-import { getDietaryProfile, getFoodById, getFoodRecents, searchFoods, type FoodSummary } from '../../lib/api.ts';
+import {
+  getDietaryProfile,
+  getFoodById,
+  getFoodRecents,
+  foodSummaryFromResolve,
+  portionHintFromResolve,
+  resolveFoods,
+  type FoodSummary,
+  type ResolvePortionHint,
+} from '../../lib/api.ts';
 import { FoodEntryActions } from './FoodEntryActions.tsx';
 import { FoodPortionConfirm } from './FoodPortionConfirm.tsx';
 import { FoodRecentsList } from './FoodRecentsList.tsx';
 import { FoodSayPanel } from './FoodSayPanel.tsx';
 import { FoodSnapPanel } from './FoodSnapPanel.tsx';
-import type { FoodDraft } from './foodDraft.ts';
+import type { FoodDraft, FoodDraftPortion } from './foodDraft.ts';
 
 type Mode = 'home' | 'say' | 'snap' | 'search' | 'confirm';
 type EntryMode = 'home' | 'say' | 'snap' | 'search';
@@ -25,6 +34,7 @@ export function FoodView() {
   const [recentsStatus, setRecentsStatus] = useState<'loading' | 'ok' | 'empty' | 'unavailable'>('loading');
   const [searchQ, setSearchQ] = useState('');
   const [searchHits, setSearchHits] = useState<FoodSummary[]>([]);
+  const [searchPortions, setSearchPortions] = useState<Record<string, ResolvePortionHint>>({});
   const [searchNote, setSearchNote] = useState('');
   const [pickNote, setPickNote] = useState('');
   const [dietary, setDietary] = useState<DietaryProfile | null>(null);
@@ -70,7 +80,7 @@ export function FoodView() {
     setBanner('');
   }
 
-  async function pickSaved(summary: FoodSummary, from: EntryMode) {
+  async function pickSaved(summary: FoodSummary, from: EntryMode, portion?: FoodDraftPortion) {
     setPickNote('');
     const detail = await getFoodById(summary.food_id);
     if (detail.status !== 'ok' || !detail.food) {
@@ -81,7 +91,15 @@ export function FoodView() {
       );
       return;
     }
-    openDraft({ kind: 'saved', food: detail.food }, from);
+    openDraft(
+      {
+        kind: 'saved',
+        food: detail.food,
+        ...(typeof portion?.servingIndex === 'number' ? { servingIndex: portion.servingIndex } : {}),
+        ...(typeof portion?.quantity === 'number' ? { quantity: portion.quantity } : {}),
+      },
+      from,
+    );
   }
 
   async function runSearch(q: string) {
@@ -89,12 +107,14 @@ export function FoodView() {
     setPickNote('');
     if (!q.trim()) {
       setSearchHits([]);
+      setSearchPortions({});
       setSearchNote('');
       return;
     }
-    const r = await searchFoods(q);
+    const r = await resolveFoods({ text: q });
     if (r.status === 'unavailable' || r.status === 'error') {
       setSearchHits([]);
+      setSearchPortions({});
       setSearchNote(
         r.status === 'unavailable'
           ? "Search isn't reachable just now — try saying it, or snap a label."
@@ -102,8 +122,18 @@ export function FoodView() {
       );
       return;
     }
-    setSearchHits(r.foods);
-    setSearchNote(r.foods.length ? '' : "Nothing matched yet — say it or snap it and we'll save it for next time.");
+    const summaries: FoodSummary[] = [];
+    const portions: Record<string, ResolvePortionHint> = {};
+    for (const c of r.candidates) {
+      if (c.kind !== 'food') continue;
+      const s = foodSummaryFromResolve(c);
+      if (!s) continue;
+      summaries.push(s);
+      portions[s.food_id] = portionHintFromResolve(c);
+    }
+    setSearchHits(summaries);
+    setSearchPortions(portions);
+    setSearchNote(summaries.length ? '' : "Nothing matched yet — say it or snap it and we'll save it for next time.");
   }
 
   function onLogged() {
@@ -158,7 +188,7 @@ export function FoodView() {
         <FoodSayPanel
           onDraft={(d) => openDraft(d, 'say')}
           onCancel={() => setMode('home')}
-          onPickSaved={(s) => void pickSaved(s, 'say')}
+          onPickSaved={(s, portion) => void pickSaved(s, 'say', portion)}
         />
       )}
 
@@ -176,7 +206,12 @@ export function FoodView() {
           />
           {searchNote && <div className="food-empty">{searchNote}</div>}
           {pickNote && <div className="food-empty">{pickNote}</div>}
-          {searchHits.length > 0 && <FoodRecentsList foods={searchHits} onPick={(s) => void pickSaved(s, 'search')} />}
+          {searchHits.length > 0 && (
+            <FoodRecentsList
+              foods={searchHits}
+              onPick={(s) => void pickSaved(s, 'search', searchPortions[s.food_id])}
+            />
+          )}
           <button type="button" className="lockbtn ghost" style={{ marginTop: 10 }} onClick={() => setMode('home')}>
             Back
           </button>

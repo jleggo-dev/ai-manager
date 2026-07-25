@@ -89,6 +89,18 @@ export {
 } from './api/foods.ts';
 
 export {
+  resolveFoods,
+  foodSummaryFromResolve,
+  portionHintFromResolve,
+  type ResolveCandidate,
+  type ResolveCandidateKind,
+  type ResolveCaptureHint,
+  type ResolveCapturePath,
+  type ResolveFoodsResult,
+  type ResolvePortionHint,
+} from './api/foods-resolve.ts';
+
+export {
   getReview,
   confirmGoals,
   updateGoal,

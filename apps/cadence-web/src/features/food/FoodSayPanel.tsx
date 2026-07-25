@@ -1,12 +1,18 @@
 /**
- * "Say it" capture — describe → estimate (or pick a search hit) → confirm.
- *
- * TODO(WS-R): swap search+estimate for POST /nutrition/foods/resolve when that
- * endpoint lands (ranked candidates + preselected serving in one round-trip).
+ * "Say it" capture — resolve → confirm (preselect when clear), or estimate for "new".
+ * Snap/parse-label stays on FoodSnapPanel; nothing logs until portion confirm.
  */
 import { useState } from 'react';
 import { MicButton } from '../../components/MicButton.tsx';
-import { estimateFood, searchFoods, type FoodCandidate, type FoodSummary } from '../../lib/api.ts';
+import {
+  estimateFood,
+  foodSummaryFromResolve,
+  portionHintFromResolve,
+  resolveFoods,
+  type FoodSummary,
+  type ResolveCandidate,
+  type ResolvePortionHint,
+} from '../../lib/api.ts';
 import { FoodRecentsList } from './FoodRecentsList.tsx';
 import type { FoodDraft } from './foodDraft.ts';
 
@@ -17,41 +23,76 @@ export function FoodSayPanel({
 }: {
   onDraft: (draft: FoodDraft) => void;
   onCancel: () => void;
-  onPickSaved: (summary: FoodSummary) => void;
+  onPickSaved: (summary: FoodSummary, portion?: ResolvePortionHint) => void;
 }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const [hits, setHits] = useState<FoodSummary[]>([]);
-  const [pending, setPending] = useState<FoodCandidate | null>(null);
+  const [portionById, setPortionById] = useState<Record<string, ResolvePortionHint>>({});
+  const [newHint, setNewHint] = useState<ResolveCandidate | null>(null);
+
+  async function draftNewFromWords(q: string, captureText?: string) {
+    const est = await estimateFood(captureText?.trim() || q);
+    if (est.status !== 'ok') {
+      setNote(est.message);
+      return;
+    }
+    onDraft({ kind: 'candidate', candidate: est.candidate });
+  }
 
   async function draftFromWords() {
     const q = text.trim();
     if (!q || busy) return;
     setBusy(true);
     setNote('');
-    setPending(null);
+    setHits([]);
+    setPortionById({});
+    setNewHint(null);
     try {
-      const [found, est] = await Promise.all([searchFoods(q), estimateFood(q)]);
-      const matchList = found.status === 'ok' ? found.foods : [];
-      setHits(matchList);
+      const resolved = await resolveFoods({ text: q });
 
-      if (est.status !== 'ok') {
-        if (matchList.length) {
-          setNote(`${est.message} You can still pick a match below.`);
+      // Deploy lag / hard fail — fall back to estimate so say still works.
+      if (resolved.status !== 'ok') {
+        await draftNewFromWords(q);
+        return;
+      }
+
+      const foodCandidates = resolved.candidates.filter((c) => c.kind === 'food' && c.food_id);
+      const newCand = resolved.candidates.find((c) => c.kind === 'new') ?? null;
+      const portions: Record<string, ResolvePortionHint> = {};
+      for (const c of foodCandidates) {
+        if (c.food_id) portions[c.food_id] = portionHintFromResolve(c);
+      }
+      setPortionById(portions);
+
+      const clearBest = resolved.preselected?.food_id ? resolved.preselected : null;
+      if (clearBest?.food_id) {
+        const summary = foodSummaryFromResolve(clearBest);
+        if (summary) {
+          onPickSaved(summary, portionHintFromResolve(clearBest));
           return;
         }
-        setNote(est.message);
+      }
+
+      if (foodCandidates.length) {
+        const summaries: FoodSummary[] = [];
+        for (const c of foodCandidates) {
+          const s = foodSummaryFromResolve(c);
+          if (s) summaries.push(s);
+        }
+        setHits(summaries);
+        setNewHint(newCand);
+        setNote(
+          summaries.length > 1
+            ? 'A few close matches — pick one, or add it as new. Nothing counts until you confirm.'
+            : "Here's a match — pick it, or add as new. You confirm before anything counts.",
+        );
         return;
       }
 
-      if (matchList.length) {
-        setPending(est.candidate);
-        setNote('Looks familiar — pick a match, or use the new draft I made from your words.');
-        return;
-      }
-
-      onDraft({ kind: 'candidate', candidate: est.candidate });
+      // No saved match → "new" capture (estimate).
+      await draftNewFromWords(q, newCand?.capture?.text);
     } finally {
       setBusy(false);
     }
@@ -61,7 +102,7 @@ export function FoodSayPanel({
     <div className="food-panel">
       <div className="food-panel-t">Say what you ate</div>
       <p className="food-panel-p">
-        A few words are enough — I&apos;ll draft macros and a serving. You confirm before anything counts.
+        A few words are enough — I&apos;ll match your foods or draft a new one. You confirm before anything counts.
       </p>
       <div className="food-say-row">
         <textarea
@@ -78,23 +119,33 @@ export function FoodSayPanel({
       {hits.length > 0 && (
         <div className="food-say-hits">
           <div className="plan-week-label">Matches</div>
-          <FoodRecentsList foods={hits} onPick={onPickSaved} />
+          <FoodRecentsList foods={hits} onPick={(s) => onPickSaved(s, portionById[s.food_id])} />
         </div>
       )}
-      {pending && (
+      {newHint && (
         <button
           type="button"
           className="lockbtn"
           style={{ marginTop: 8 }}
           disabled={busy}
-          onClick={() => onDraft({ kind: 'candidate', candidate: pending })}
+          onClick={() => {
+            void (async () => {
+              setBusy(true);
+              setNote('');
+              try {
+                await draftNewFromWords(text.trim(), newHint.capture?.text);
+              } finally {
+                setBusy(false);
+              }
+            })();
+          }}
         >
-          Use new draft — I confirm next
+          Add as new — I confirm next
         </button>
       )}
       <div className="food-confirm-actions">
         <button type="button" className="lockbtn" disabled={busy || !text.trim()} onClick={() => void draftFromWords()}>
-          {busy ? 'Drafting…' : 'Draft it — I confirm next'}
+          {busy ? 'Matching…' : 'Match it — I confirm next'}
         </button>
         <button type="button" className="lockbtn ghost" disabled={busy} onClick={onCancel}>
           Back

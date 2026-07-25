@@ -5,9 +5,16 @@
 import type { Food } from '@cadence/shared';
 import type { FoodCandidate } from '../../lib/api.ts';
 
+/** Optional resolver portion prefill (serving index + inferred qty). */
+export interface FoodDraftPortion {
+  servingIndex?: number;
+  quantity?: number;
+}
+
 /** Unsaved capture → createFood on confirm; saved food → log only. */
 export type FoodDraft =
-  { kind: 'candidate'; candidate: FoodCandidate; labelReadable?: boolean } | { kind: 'saved'; food: Food };
+  | ({ kind: 'candidate'; candidate: FoodCandidate; labelReadable?: boolean } & FoodDraftPortion)
+  | ({ kind: 'saved'; food: Food } & FoodDraftPortion);
 
 export function draftName(d: FoodDraft): string {
   return d.kind === 'candidate' ? d.candidate.name : d.food.name;
