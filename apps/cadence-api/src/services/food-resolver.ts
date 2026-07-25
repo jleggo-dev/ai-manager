@@ -10,6 +10,7 @@ import { assessDietarySafety, type DietaryProfile, type Food, type Recipe } from
 import { listFoodUsageRows, listFrequentFoods, listRecentFoods, searchFoods } from '../repos/foods.ts';
 import { listRecipes, searchRecipes } from '../repos/recipes.ts';
 import { getDietaryProfile } from '../repos/users.ts';
+import { enrichFoodsWithUsda } from './food-sources/usda-enrich.ts';
 import {
   foodLabel,
   inferQuantity,
@@ -153,8 +154,10 @@ export async function resolveFoods(userId: string, input: ResolveInput): Promise
     pool = mergeFoodPools([recents, frequents]);
   } else {
     const hits = await searchFoods(userId, text, SEARCH_LIMIT);
+    // Cache-miss → USDA whole foods (always cached on import). Local stays first.
+    const withUsda = await enrichFoodsWithUsda(userId, text, hits);
     // Also consider recents/frequents that may fuzzy-match beyond SQL LIKE.
-    pool = mergeFoodPools([hits, recents, frequents]);
+    pool = mergeFoodPools([withUsda, recents, frequents]);
   }
 
   const ranked = rankFoods(text, pool, ctx).slice(0, 12);

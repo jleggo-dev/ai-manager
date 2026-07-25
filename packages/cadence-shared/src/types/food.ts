@@ -5,7 +5,7 @@
 /** Base unit for macros_per_base: g/ml are per 100; item is per 1. */
 export type FoodBaseUnit = 'g' | 'ml' | 'item';
 
-export type FoodSource = 'llm' | 'label_photo' | 'manual' | 'chat' | 'off';
+export type FoodSource = 'llm' | 'label_photo' | 'manual' | 'chat' | 'usda' | 'off';
 
 export type FoodVisibility = 'private' | 'shared';
 
@@ -50,6 +50,8 @@ export interface Food {
   brand: string | null;
   source: FoodSource;
   off_id: string | null;
+  /** USDA FoodData Central id when source='usda'; null otherwise. */
+  fdc_id: number | null;
   base_unit: FoodBaseUnit;
   macros_per_base: FoodNutrients;
   servings: FoodServing[];

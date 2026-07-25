@@ -25,7 +25,7 @@ const foodServingSchema = z.object({
   amount_g: z.number().positive({ message: 'serving amount_g must be > 0' }),
 });
 
-export const foodSourceSchema = z.enum(['llm', 'label_photo', 'manual', 'chat', 'off'], {
+export const foodSourceSchema = z.enum(['llm', 'label_photo', 'manual', 'chat', 'usda', 'off'], {
   message: 'bad food source',
 });
 export const foodBaseUnitSchema = z.enum(['g', 'ml', 'item'], { message: 'bad base_unit' });
@@ -37,6 +37,7 @@ export const createFoodBodySchema = z
     brand: z.string().trim().nullable().optional(),
     source: foodSourceSchema,
     off_id: z.string().trim().nullable().optional(),
+    fdc_id: z.number().int().positive().nullable().optional(),
     base_unit: foodBaseUnitSchema,
     macros_per_base: foodNutrientsSchema,
     servings: z.array(foodServingSchema).min(1, { message: 'at least one serving required' }),
@@ -173,3 +174,10 @@ export const resolveFoodBodySchema = z
     text: typeof val.text === 'string' ? val.text.trim() : '',
     photo: val.photo,
   }));
+
+/** POST /nutrition/foods/usda/import — cache a USDA food by FDC id. */
+export const importUsdaBodySchema = z
+  .object({
+    fdc_id: z.number().int().positive({ message: 'fdc_id must be a positive integer' }),
+  })
+  .transform((val) => ({ fdc_id: val.fdc_id }));

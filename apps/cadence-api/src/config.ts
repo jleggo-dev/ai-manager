@@ -90,4 +90,10 @@ export const cadenceConfig = {
   },
 
   weatherApiKey: process.env.WEATHER_API_KEY ?? '',
+
+  /**
+   * USDA FoodData Central (api.data.gov) — server-only. Never expose via VITE_* or cadence-web.
+   * Set in apps/cadence-api/.env locally and the cadence-api Vercel project env in prod.
+   */
+  usdaApiKey: process.env.USDA_API_KEY ?? '',
 };

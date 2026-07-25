@@ -4,12 +4,12 @@ import type { Food, FoodBaseUnit, FoodNutrients, FoodServing, FoodSource, FoodVi
 // Alias-qualified so joins (search / recents) never collide with food_usage.food_id.
 // created_at cast to text — postgres.js Date-object trap (same as nutrition.ts).
 const FOOD_COLS = sql`
-  f.food_id, f.owner_user_id, f.visibility, f.name, f.brand, f.source, f.off_id, f.base_unit,
+  f.food_id, f.owner_user_id, f.visibility, f.name, f.brand, f.source, f.off_id, f.fdc_id, f.base_unit,
   f.macros_per_base, f.servings, f.default_serving, f.confidence, f.photo_ref,
   f.created_at::text as created_at`;
 
 const FOOD_COLS_PLAIN = sql`
-  food_id, owner_user_id, visibility, name, brand, source, off_id, base_unit,
+  food_id, owner_user_id, visibility, name, brand, source, off_id, fdc_id, base_unit,
   macros_per_base, servings, default_serving, confidence, photo_ref,
   created_at::text as created_at`;
 
@@ -18,6 +18,7 @@ export interface CreateFoodInput {
   brand?: string | null;
   source: FoodSource;
   off_id?: string | null;
+  fdc_id?: number | null;
   base_unit: FoodBaseUnit;
   macros_per_base: FoodNutrients;
   servings: FoodServing[];
@@ -26,6 +27,17 @@ export interface CreateFoodInput {
   photo_ref?: string | null;
   /** User foods are private by default; shared is opt-in. */
   visibility?: FoodVisibility;
+}
+
+export interface UpsertUsdaFoodInput {
+  fdc_id: number;
+  name: string;
+  brand?: string | null;
+  base_unit: FoodBaseUnit;
+  macros_per_base: FoodNutrients;
+  servings: FoodServing[];
+  default_serving?: number;
+  confidence?: number | null;
 }
 
 export interface UpdateFoodInput {
@@ -45,6 +57,16 @@ export async function getFood(userId: string, foodId: string): Promise<Food | nu
     select ${FOOD_COLS} from cadence.foods f
     where f.food_id = ${foodId}
       and (f.owner_user_id = ${userId} or f.visibility = 'shared')
+    limit 1`;
+  return row ?? null;
+}
+
+/** Lookup a cached USDA shared food by FDC id (any user can see shared rows). */
+export async function findFoodByFdcId(fdcId: number): Promise<Food | null> {
+  if (!Number.isInteger(fdcId) || fdcId <= 0) return null;
+  const [row] = await sql<Food[]>`
+    select ${FOOD_COLS} from cadence.foods f
+    where f.fdc_id = ${fdcId} and f.source = 'usda'
     limit 1`;
   return row ?? null;
 }
@@ -173,16 +195,48 @@ export async function insertFood(userId: string, input: CreateFoodInput): Promis
   const defaultServing = Number.isInteger(input.default_serving) ? (input.default_serving as number) : 0;
   const [row] = await sql<Food[]>`
     insert into cadence.foods (
-      owner_user_id, visibility, name, brand, source, off_id, base_unit,
+      owner_user_id, visibility, name, brand, source, off_id, fdc_id, base_unit,
       macros_per_base, servings, default_serving, confidence, photo_ref
     ) values (
       ${userId}, ${visibility}, ${input.name}, ${input.brand ?? null}, ${input.source},
-      ${input.off_id ?? null}, ${input.base_unit},
+      ${input.off_id ?? null}, ${input.fdc_id ?? null}, ${input.base_unit},
       ${json(input.macros_per_base ?? {})}, ${json(input.servings ?? [])},
       ${defaultServing}, ${input.confidence ?? null}, ${input.photo_ref ?? null}
     )
     returning ${FOOD_COLS_PLAIN}`;
   if (!row) throw new Error('insertFood: no row returned');
+  return row;
+}
+
+/**
+ * Upsert a shared/global USDA food (owner NULL). Always cache successful FDC lookups here
+ * so repeat resolve/search hits the DB, not api.data.gov.
+ */
+export async function upsertUsdaFood(input: UpsertUsdaFoodInput): Promise<Food> {
+  if (!Number.isInteger(input.fdc_id) || input.fdc_id <= 0) throw new Error('upsertUsdaFood: bad fdc_id');
+  const defaultServing = Number.isInteger(input.default_serving) ? (input.default_serving as number) : 0;
+  const [row] = await sql<Food[]>`
+    insert into cadence.foods (
+      owner_user_id, visibility, name, brand, source, off_id, fdc_id, base_unit,
+      macros_per_base, servings, default_serving, confidence, photo_ref
+    ) values (
+      null, 'shared', ${input.name}, ${input.brand ?? null}, 'usda',
+      null, ${input.fdc_id}, ${input.base_unit},
+      ${json(input.macros_per_base ?? {})}, ${json(input.servings ?? [])},
+      ${defaultServing}, ${input.confidence ?? 1}, null
+    )
+    on conflict (fdc_id) do update set
+      name = excluded.name,
+      brand = excluded.brand,
+      macros_per_base = excluded.macros_per_base,
+      servings = excluded.servings,
+      default_serving = excluded.default_serving,
+      confidence = excluded.confidence,
+      source = 'usda',
+      visibility = 'shared',
+      owner_user_id = null
+    returning ${FOOD_COLS_PLAIN}`;
+  if (!row) throw new Error('upsertUsdaFood: no row returned');
   return row;
 }
 

@@ -11,11 +11,11 @@ with Cadence absent. See [project_ai_manager_monorepo] memory / CLAUDE.md for th
 
 ## Live Vercel targets (config-as-code)
 
-| Product | Vercel project role | Root Directory | Config file | Compute |
-|---|---|---|---|---|
-| **AI Admin** (monorepo root) | Combined frontend + backend Services | `./` (repo root) | [`vercel.json`](../../vercel.json) (`experimentalServices`) | Vite SPA + long-running backend at `/_/backend` |
-| **cadence-web** | Static SPA (+ `/api` rewrite) | `apps/cadence-web` | [`apps/cadence-web/vercel.json`](../../apps/cadence-web/vercel.json) | Vite static |
-| **cadence-api** | Long-running Express Service | `apps/cadence-api` | [`apps/cadence-api/vercel.json`](../../apps/cadence-api/vercel.json) (`services`) | Express Service (not classic serverless) |
+| Product                      | Vercel project role                  | Root Directory     | Config file                                                                       | Compute                                         |
+| ---------------------------- | ------------------------------------ | ------------------ | --------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **AI Admin** (monorepo root) | Combined frontend + backend Services | `./` (repo root)   | [`vercel.json`](../../vercel.json) (`experimentalServices`)                       | Vite SPA + long-running backend at `/_/backend` |
+| **cadence-web**              | Static SPA (+ `/api` rewrite)        | `apps/cadence-web` | [`apps/cadence-web/vercel.json`](../../apps/cadence-web/vercel.json)              | Vite static                                     |
+| **cadence-api**              | Long-running Express Service         | `apps/cadence-api` | [`apps/cadence-api/vercel.json`](../../apps/cadence-api/vercel.json) (`services`) | Express Service (not classic serverless)        |
 
 **cadence-web → API rewrite (checked into config):** `/api/:path*` →
 `https://ai-manager-cadence-api-2f4j.vercel.app/:path*` (update this host in
@@ -26,9 +26,9 @@ reject that key, and AI Admin already owns the root project.
 
 ## Two pieces, and why they differ
 
-| Piece | What | Build/run context |
-|---|---|---|
-| **cadence-web** | React/Vite PWA (static bundle) | `apps/cadence-web` (workspace install from repo root) |
+| Piece           | What                                                                            | Build/run context                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **cadence-web** | React/Vite PWA (static bundle)                                                  | `apps/cadence-web` (workspace install from repo root)                                                               |
 | **cadence-api** | Node/Express server; embeds the AI Admin engine in-process via `@ai-admin/core` | **repo root** — it imports `backend/src/*` + `packages/*`, so the whole monorepo must be present at build & runtime |
 
 That asymmetry is the whole story: the web app is an ordinary static SPA, but the API is a
@@ -38,7 +38,7 @@ long-running Node server that carries the AI Admin engine with it **and streams 
 
 Config: `apps/cadence-web/vercel.json`. Create a Vercel **project**:
 
-- **Root Directory:** `apps/cadence-web`. Keep *"Include files outside the root directory"* ON so
+- **Root Directory:** `apps/cadence-web`. Keep _"Include files outside the root directory"_ ON so
   the workspace dep `@cadence/shared` resolves against the repo-root lockfile.
 - Framework auto-detects as Vite → build `npm run build`, output `dist`. The SPA rewrite in the
   config sends non-asset, non-`/api` paths to `index.html`.
@@ -67,6 +67,7 @@ manifest, Cadence deploys as two single-purpose projects. Same Services mechanis
 separate, no root-config contention.
 
 **Vercel project: `cadence-api`**
+
 - **Root Directory:** `apps/cadence-api`. Config: `apps/cadence-api/vercel.json` (new `services`
   key — required for new Vercel projects; do **not** rely on the repo-root
   `experimentalServices` manifest, which AI Admin owns and new projects reject).
@@ -107,6 +108,13 @@ cadence-api (`/nutrition/foods/import-off`) for shared cache. Do **not** proxy O
 Before production volume: fill the [OFF API usage form](https://openfoodfacts.org/api) and keep a real
 contact in the User-Agent. Attribution: product data © Open Food Facts contributors — **ODbL**.
 No OFF API key / secret is required; never put OFF credentials in `VITE_*`.
+
+**USDA FoodData Central (Req 5 Phase 3):** set `USDA_API_KEY` on the **cadence-api** host only
+(`apps/cadence-api/.env` locally; Vercel env for the cadence-api project — never the web project,
+never `VITE_*`). Free key via [api.data.gov](https://api.data.gov/signup/). The API caches every
+successful FDC lookup into `cadence.foods` (`source='usda'`, `fdc_id`) so repeat traffic hits the
+DB; on 429 the server backs off and does not stampede. Without the key, local food search/resolve
+still work; USDA enrich is skipped with a polite 503 on the explicit USDA routes.
 
 ## Notes
 
