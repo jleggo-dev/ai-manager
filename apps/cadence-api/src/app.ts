@@ -10,6 +10,7 @@ import progressRoutes from './routes/progress.ts';
 import nutritionRoutes from './routes/nutrition.ts';
 import dietaryProfileRoutes from './routes/dietary-profile.ts';
 import foodsRoutes from './routes/foods.ts';
+import recipesRoutes from './routes/recipes.ts';
 import meRoutes from './routes/me.ts';
 import devRoutes from './routes/dev.ts';
 
@@ -25,6 +26,7 @@ export function createApp() {
   app.use('/nutrition', nutritionRoutes);
   app.use('/nutrition', dietaryProfileRoutes);
   app.use('/nutrition/foods', foodsRoutes);
+  app.use('/nutrition/recipes', recipesRoutes);
   app.use('/me', meRoutes);
   app.use('/dev', devRoutes);
 

@@ -13,8 +13,14 @@ export class BodyValidationError extends Error {
   }
 }
 
-/** Parse `req.body` with a Zod schema; throw BodyValidationError on failure. */
-export function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
+/**
+ * Parse `req.body` with a Zod schema; throw BodyValidationError on failure.
+ * Accepts ZodEffects (refine/transform) via structural safeParse — not only ZodType<T>.
+ */
+export function parseBody<T>(
+  schema: { safeParse: (data: unknown) => z.SafeParseReturnType<unknown, T> },
+  body: unknown,
+): T {
   const result = schema.safeParse(body ?? {});
   if (!result.success) {
     const first = result.error.issues[0];
@@ -25,7 +31,7 @@ export function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
 
 /** Express helper: run handler with parsed body, map BodyValidationError → 400. */
 export function withParsedBody<T>(
-  schema: z.ZodType<T>,
+  schema: { safeParse: (data: unknown) => z.SafeParseReturnType<unknown, T> },
   handler: (req: Request, res: Response, body: T) => Promise<void>,
 ) {
   return async (req: Request, res: Response) => {
@@ -53,20 +59,30 @@ export const logMealBodySchema = z
       .optional(),
     /** Deterministic log of a saved food (Req 5) — no AI when set. */
     food_id: z.string().uuid({ message: 'food_id must be a uuid' }).optional(),
+    /** Deterministic log of N servings of a saved recipe (Req 5 WS3) — no AI when set. */
+    recipe_id: z.string().uuid({ message: 'recipe_id must be a uuid' }).optional(),
     serving_index: z.number().int().min(0).optional(),
     /** MFP "Number of Servings" multiplier; default 1. */
     quantity: z.number().positive().optional(),
+    /** Alias for recipe quantity (accepted by Food-tab clients). */
+    servings: z.number().positive().optional(),
     date: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' })
       .optional(),
   })
   .superRefine((val, ctx) => {
-    const text = typeof val.text === 'string' ? val.text.trim() : '';
-    if (!text && !val.photo && !val.food_id) {
+    if (val.food_id && val.recipe_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'a meal needs words, a photo, or a food_id',
+        message: 'food_id and recipe_id are mutually exclusive',
+      });
+    }
+    const text = typeof val.text === 'string' ? val.text.trim() : '';
+    if (!text && !val.photo && !val.food_id && !val.recipe_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'a meal needs words, a photo, a food_id, or a recipe_id',
       });
     }
   })
@@ -75,8 +91,9 @@ export const logMealBodySchema = z
     meal: val.meal,
     photo: val.photo,
     food_id: val.food_id,
+    recipe_id: val.recipe_id,
     serving_index: val.serving_index,
-    quantity: val.quantity,
+    quantity: val.quantity ?? val.servings,
     date: val.date,
   }));
 

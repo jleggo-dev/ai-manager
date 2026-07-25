@@ -17,7 +17,7 @@ import {
 describe('parseBody / nutrition schemas', () => {
   it('rejects empty meal bodies', () => {
     expect(() => parseBody(logMealBodySchema, {})).toThrow(BodyValidationError);
-    expect(() => parseBody(logMealBodySchema, { text: '  ' })).toThrow(/words, a photo, or a food_id/);
+    expect(() => parseBody(logMealBodySchema, { text: '  ' })).toThrow(/words, a photo, a food_id, or a recipe_id/);
   });
 
   it('accepts text and optional meal kind', () => {
@@ -26,6 +26,7 @@ describe('parseBody / nutrition schemas', () => {
       meal: 'breakfast',
       photo: undefined,
       food_id: undefined,
+      recipe_id: undefined,
       serving_index: undefined,
       quantity: undefined,
       date: undefined,
@@ -41,6 +42,23 @@ describe('parseBody / nutrition schemas', () => {
     expect(
       parseBody(logMealBodySchema, { food_id: id, meal: 'breakfast', quantity: 2, serving_index: 0 }),
     ).toMatchObject({ food_id: id, meal: 'breakfast', quantity: 2, serving_index: 0, text: '' });
+  });
+
+  it('accepts recipe_id with servings alias → quantity', () => {
+    const id = '22222222-2222-4222-8222-222222222222';
+    expect(parseBody(logMealBodySchema, { recipe_id: id, meal: 'dinner', servings: 2 })).toMatchObject({
+      recipe_id: id,
+      meal: 'dinner',
+      quantity: 2,
+      food_id: undefined,
+      text: '',
+    });
+  });
+
+  it('rejects food_id and recipe_id together', () => {
+    const food = '11111111-1111-4111-8111-111111111111';
+    const recipe = '22222222-2222-4222-8222-222222222222';
+    expect(() => parseBody(logMealBodySchema, { food_id: food, recipe_id: recipe })).toThrow(/mutually exclusive/);
   });
 
   it('accepts macro target numbers (passthrough for service-side sanitize)', () => {
