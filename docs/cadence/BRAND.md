@@ -5,6 +5,12 @@ defers to this document. Process: 4 independent identity proposals (rhythm / con
 companion-memory / anti-hustle) scored by a 3-lens judge panel (brand fit, breadth, code
 practicality), synthesized; full rationale in the workflow run of 2026-07-04.
 
+**Amendment 2026-07-24 (streaks return, protected).** The v1.0 "streaks retired" stance is
+reversed by founder direction ("our brand is about building better habits"). Streaks return as a
+**protected momentum counter** — a freeze economy + check-ins + detours mean the count never
+resets to zero *because life happened*, and the honest `5 of 7` rolling metric always coexists.
+The affected lines below are updated; full design + rationale in `PLAN.md` "Req 4".
+
 ---
 
 ## The identity
@@ -43,7 +49,9 @@ the plan bends instead of breaking.
   goal, so broadening is an enum addition — never a migration, never a brand refresh.
 - **Hearth, not scoreboard.** The coach mark is a sunrise — a terracotta arch over a forest-green
   horizon line (2026-07-11, "Trust & Wellness" palette; superseded the ember orb on dark violet).
-  Copy must never turn it into a scoreboard (no streak-shame, no red marks, no resets to zero).
+  Copy must never turn it into a scoreboard: a streak is a warm momentum counter (protected by
+  freezes and detours), never a cudgel — no streak-shame, no red marks, and it never resets to
+  zero because life happened.
 
 ## Voice principles
 
@@ -52,8 +60,10 @@ the plan bends instead of breaking.
 2. **Plain, kind words for hard things.** Say "burnout", "grief", "relapse" simply and without
    flinching — no fitness metaphors, no clinical euphemism, no brand-speak standing in for a hard
    fact.
-3. **Count what happened, never what broke.** "You showed up 5 of 7 days this week" — no streaks,
-   no resets to zero, no red marks; a missed day is information, not failure.
+3. **Count what happened, never what broke.** "You showed up 5 of 7 days this week" — the honest
+   rolling metric is always there. A **streak** may sit beside it as a momentum counter, but
+   freezes, check-ins, and detours keep it from ever resetting to zero because life happened; a
+   missed day is information, not failure — never a red mark.
 4. **Use their words, not ours.** "Your 5k", "your pages", "your Tuesday runs" — never "your
    fitness journey", never system labels, never a category name the user didn't say first.
 5. **Confirm before you commit.** "Here's what I heard — did I get it right?" Cadence asks; it
@@ -89,7 +99,7 @@ allowed to differ — that's the pattern working, not an inconsistency.
 | Weekly readout | `recap` | **Your weekly check-in** | two-way: report, then ask how the week went |
 | Context pack | `memory_pack` | **What Cadence remembers about you** | the moat, surfaced as the trust screen |
 | Broker (capture AI) | `Scribe` | not surfaced; UI says "Cadence takes notes while you talk" | internal name that leaks safely |
-| Streaks | retired → rolling window `kept_count / window` | "5 of 7 this week" — never "streak lost", nothing resets to zero | keep `skipped` vs `missed` statuses distinct internally (causal signal) |
+| Streaks | **returned as a protected counter** atop the rolling window `kept_count / window`; state in `users.streak_state` (current/longest/freezes) | "5 of 7 this week" **+** a streak count; a **freeze** absorbs an ordinary slip, a **detour**/check-in shields a rough patch — never "streak lost" for living | freezes + `paused` (episode) days + `skipped` vs `missed` keep it from punishing life; design in PLAN.md "Req 4" |
 | Coach | `coach` (unchanged) | your coach | the category word; does double duty |
 | Baseline | `baseline` (unchanged) | Baseline | reads as "bassline" — free brand story |
 | Occurrences | `occurrences` (unchanged — never `beats`) | Today / Your week | plain activity names in product |
@@ -102,7 +112,7 @@ allowed to differ — that's the pattern working, not an inconsistency.
 - `plan.status = 'set'` (unsearchable stopword)
 - "captured" in any user-facing copy (surveillance framing)
 - "someone in your corner", "gentle is a strategy", "unlock/empower/journey/transform" (wellness clichés)
-- streak mechanics that reset to zero
+- streak mechanics that **punish you for life happening** — reset-to-zero on travel/illness/a rough week, streak-shame, red marks. A *protected* streak (freezes + detours + check-ins, always beside the honest 5-of-7) is the sanctioned form; see PLAN.md "Req 4"
 
 ## Safety note (brand-critical)
 

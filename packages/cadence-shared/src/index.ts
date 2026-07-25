@@ -20,3 +20,4 @@ export * from './types/episode.ts';
 export * from './types/conversation.ts';
 export * from './types/scribe-contracts.ts';
 export * from './types/tripwires.ts';
+export * from './types/streak.ts';

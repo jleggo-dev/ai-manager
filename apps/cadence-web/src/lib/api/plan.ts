@@ -1,4 +1,4 @@
-import type { PendingPlanActivity, ProgressData } from '@cadence/shared';
+import type { PendingPlanActivity, ProgressData, StreakView } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /* ── Ongoing plan view (Today / Your week) ─────────────────────── */
@@ -39,6 +39,9 @@ export interface PlanViewData {
   activities: PlanActivity[];
   week: PlanDay[];
   consistency: { kept: number; window: number };
+  // The protected streak (Req 4) — beside consistency, never instead of it. Optional so the
+  // "no data" fallbacks below stay valid; the live API always includes it.
+  streak?: StreakView;
   pendingProposal?: PendingProposal | null;
 }
 

@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import type { OccurrenceStatus } from '@cadence/shared';
-import { rollingConsistency, type ConsistencyOccurrence } from './metrics.ts';
+import type { OccurrenceStatus, StreakDay } from '@cadence/shared';
+import {
+  rollingConsistency,
+  type ConsistencyOccurrence,
+  advanceStreak,
+  classifyDay,
+  computeStreakView,
+  initialStreakState,
+  SEED_FREEZES,
+} from './metrics.ts';
 
 function occ(date: string | Date, status: OccurrenceStatus = 'done'): ConsistencyOccurrence {
   return { date: date as string, status };
@@ -80,5 +88,124 @@ describe('rollingConsistency (brand: never resets to zero)', () => {
   it('honors a custom windowDays', () => {
     const occurrences = [occ('2026-07-15'), occ('2026-07-14'), occ('2026-07-10')];
     expect(rollingConsistency(occurrences, TODAY, 3)).toEqual({ kept: 2, window: 3 });
+  });
+});
+
+function day(date: string, o: Partial<StreakDay> = {}): StreakDay {
+  return { date, due: false, engaged: false, inEpisode: false, ...o };
+}
+/** N consecutive kept days starting 2026-07-01 (or `start`). */
+function keptRun(n: number, start = '2026-07-01'): StreakDay[] {
+  const startMs = new Date(start).getTime();
+  return Array.from({ length: n }, (_, i) =>
+    day(new Date(startMs + i * 86_400_000).toISOString().slice(0, 10), { due: true, engaged: true }),
+  );
+}
+
+describe('classifyDay', () => {
+  it('engaged is always kept — even with nothing due (a check-in on a rest day still counts)', () => {
+    expect(classifyDay(day('2026-07-01', { engaged: true }))).toBe('kept');
+    expect(classifyDay(day('2026-07-01', { due: true, engaged: true }))).toBe('kept');
+  });
+  it('due + not engaged + not shielded = slip', () => {
+    expect(classifyDay(day('2026-07-01', { due: true }))).toBe('slip');
+  });
+  it('an episode shields a no-show from becoming a slip (neutral, not slip)', () => {
+    expect(classifyDay(day('2026-07-01', { due: true, inEpisode: true }))).toBe('neutral');
+  });
+  it('nothing due and no engagement is a neutral rest day', () => {
+    expect(classifyDay(day('2026-07-01'))).toBe('neutral');
+  });
+});
+
+describe('advanceStreak (protected streak + freeze economy)', () => {
+  it('seeds a brand-new state with one freeze', () => {
+    expect(initialStreakState().freezes).toBe(SEED_FREEZES);
+    expect(initialStreakState()).toMatchObject({ current: 0, longest: 0, freeze_credit: 0, last_evaluated: null });
+  });
+
+  it('kept days extend current + longest and advance last_evaluated', () => {
+    const s = advanceStreak(initialStreakState(), keptRun(3));
+    expect(s.current).toBe(3);
+    expect(s.longest).toBe(3);
+    expect(s.last_evaluated).toBe('2026-07-03');
+    expect(s.freeze_credit).toBe(3);
+  });
+
+  it('earns a freeze every 7 kept days, capped at 2', () => {
+    const after7 = advanceStreak(initialStreakState(), keptRun(7));
+    expect(after7.current).toBe(7);
+    expect(after7.freezes).toBe(2); // seed 1 + 1 earned
+    expect(after7.freeze_credit).toBe(0);
+
+    // 14 kept days would earn a 2nd, but the cap holds it at 2 (the over-cap earning is forfeited).
+    const after14 = advanceStreak(initialStreakState(), keptRun(14));
+    expect(after14.current).toBe(14);
+    expect(after14.freezes).toBe(2);
+    expect(after14.freeze_credit).toBe(0);
+  });
+
+  it('a slip spends a freeze and the streak HOLDS (never resets for a covered slip)', () => {
+    const built = advanceStreak(initialStreakState(), keptRun(3)); // current 3, freezes 1 (seed)
+    const afterSlip = advanceStreak(built, [day('2026-07-04', { due: true })]);
+    expect(afterSlip.current).toBe(3); // held, not reset
+    expect(afterSlip.freezes).toBe(0);
+    expect(afterSlip.last_saved_by_freeze).toBe('2026-07-04');
+  });
+
+  it('a slip with no freeze left resets current to 0 (and clears credit)', () => {
+    const built = advanceStreak(initialStreakState(), keptRun(3));
+    const noFreeze = advanceStreak(built, [day('2026-07-04', { due: true })]); // spends the seed
+    const reset = advanceStreak(noFreeze, [day('2026-07-05', { due: true })]);
+    expect(reset.freezes).toBe(0);
+    expect(reset.current).toBe(0);
+    expect(reset.freeze_credit).toBe(0);
+  });
+
+  it('neutral days keep the run alive without extending it', () => {
+    const s = advanceStreak(initialStreakState(), [
+      day('2026-07-01', { due: true, engaged: true }),
+      day('2026-07-02', { due: true, engaged: true }),
+      day('2026-07-03'), // rest day — neutral
+      day('2026-07-04', { due: true, engaged: true }),
+    ]);
+    expect(s.current).toBe(3);
+    expect(s.last_evaluated).toBe('2026-07-04');
+  });
+
+  it('an in-episode no-show does not spend a freeze (the episode shields it)', () => {
+    const built = advanceStreak(initialStreakState(), keptRun(3)); // freezes 1
+    const inEpisode = advanceStreak(built, [day('2026-07-04', { due: true, inEpisode: true })]);
+    expect(inEpisode.freezes).toBe(1); // untouched
+    expect(inEpisode.current).toBe(3); // held
+  });
+
+  it('is forward-only: advancing with no days is a no-op', () => {
+    const built = advanceStreak(initialStreakState(), keptRun(4));
+    expect(advanceStreak(built, [])).toEqual(built);
+  });
+});
+
+describe('computeStreakView (today is provisional)', () => {
+  const built = advanceStreak(initialStreakState(), keptRun(5)); // current 5
+
+  it('a kept today extends the shown count by one', () => {
+    const view = computeStreakView(built, day('2026-07-06', { due: true, engaged: true }));
+    expect(view.current).toBe(6);
+    expect(view.longest).toBe(6);
+  });
+
+  it('a due-but-not-yet-done today HOLDS — it is not a slip until the day ends', () => {
+    const view = computeStreakView(built, day('2026-07-06', { due: true }));
+    expect(view.current).toBe(5); // no reset, no extension
+    expect(view.freezes).toBe(built.freezes);
+  });
+
+  it('savedByFreeze lights up only within ~2 days of the rescue', () => {
+    const rescued = { ...built, last_saved_by_freeze: '2026-07-05' };
+    expect(computeStreakView(rescued, day('2026-07-06')).savedByFreeze).toBe(true);
+    expect(computeStreakView(rescued, day('2026-07-07')).savedByFreeze).toBe(true);
+    expect(computeStreakView(rescued, day('2026-07-09')).savedByFreeze).toBe(false);
+    expect(computeStreakView(built, day('2026-07-06')).savedByFreeze).toBe(false); // never rescued
   });
 });

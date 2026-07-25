@@ -1674,3 +1674,115 @@ factual claims. It belongs in the coach job's `config.systemPrompt` (synced, aud
 optionally add the interim hops to reduce guessing; the full tool-runner loop is the final
 enhancement, NOT a prerequisite for anything above it. Companion write-up:
 `docs/cadence/blog/04-letting-the-coach-ask-its-own-questions.md`.
+
+## Req 4 — Disrupted mode + streaks that don't punish you (design, 2026-07-24)
+
+The "missed days / disrupted mode" requirement, designed in full and now being built. Req 4 was
+already ~60% plumbed (see the inventory below); this section is the design of the *gap* + the
+product decisions that shape it. **Approach decisions this session (Matt/Jeff):** streaks return
+with a **freeze economy** (not a hard reset); build **all three** disrupted-mode entry paths.
+
+### What already existed (the 60%)
+- **Tripwires** — `services/tripwires.ts` `detectTripwires` (pure, no LLM): `missed_threshold`,
+  `consistency_drop`, `consistency_outcome_divergence`, timezone/location/weather (last three are
+  stubs — undefined signals never fire). 
+- **Weekly assess gate** — `services/situation.ts` `assessIfDue` runs tripwires → `situation_assess`
+  Broker job → stores a `PendingProposal`; also the monthly deterministic-rebuild checkpoint.
+  `situation_assess` **already returns `enter_disrupted` / `open_checkin`** recommendations — they
+  were read-but-unconsumed pending this build.
+- **Proposal → accept** — `POST /plan/proposal/accept` → `replanPlan`. One action only today
+  (full re-plan).
+- **Episode substrate** — `cadence.episodes` table (migration 0001), `DisruptedEpisode` type,
+  `disrupted_plan` job (provisioned), `CoachIntent 'disrupted'` + a context-pack selection.
+
+### What Req 4 builds (the gap)
+No episodes repo, no lifecycle (`plan-synthesis.ts` hard-codes `active_episode: null`), the
+`disrupted_plan` job is never called, nothing triggers the `'disrupted'` intent, no on-return
+prompt, no ad-hoc/alternate logging, and **streaks are still retired** (`rollingConsistency`
+"5 of 7"). 
+
+### Streaks as a rhythm counter, not a scoreboard (the freeze economy)
+Three coexisting layers — the honest metric stays; the streak sits on top:
+
+| Layer | Behavior | Resets to zero? |
+|---|---|---|
+| **Rhythm metric** (`rollingConsistency`, "5 of 7") | honest underlying number, always shown | never — just dips |
+| **Streak** (consecutive kept days) | the motivational counter | only when freezes run out *and* the slip is un-acknowledged |
+| **Freezes** | earned buffer, auto-spent to save the streak on a slip | — |
+
+**Day classification (finalized through *yesterday*; today is provisional — a due-but-not-done
+today is not yet a slip):**
+- `due` = ≥1 occurrence that day with status in (`pending`,`done`,`missed`). **`skipped` does NOT
+  create due-pressure** — an acknowledged skip is a free pass (Phase B).
+- `engaged` = ≥1 `done` occurrence that day **OR** an explicit check-in that day.
+- `slip` = `due && !engaged && !inEpisode` · `kept` = `engaged` · `neutral` = everything else
+  (rest day, or in-episode with no engagement — the episode shields it).
+
+**Advance (per finalized day, ascending):** kept → `current++`, earn 1 freeze per **7** consecutive
+kept days (cap **2**); neutral → unchanged (run continues); slip → spend a freeze if any (stays
+kept, record `last_saved_by_freeze`), else `current = 0`. **Seed 1 freeze** at state init so the
+first streak has a cushion. Forward-only (`last_evaluated` advances, never re-finalizes a past
+day) ⇒ idempotent + a past freeze decision is frozen in time without a separate event log.
+
+**The brand-critical property:** disrupted-mode days and check-ins **never consume freezes** —
+inside an episode the base occurrences are `paused` (not due), so there's no slip to absorb. A
+rough patch never drains the buffer you earned; freezes exist only for the ordinary "too busy,
+said nothing" day. When freezes finally run out the streak resets, but the coach *checks in*
+warmly (never guilt) and the rhythm metric underneath never moved — you never actually start over.
+
+**Storage:** `users.streak_state` jsonb (migration 0015), `{current,longest,freezes,freeze_credit,
+last_evaluated,last_saved_by_freeze}`, defaulting `freezes:1` (the seed). NOT `goal_events` — its
+`kind` CHECK is `('completion','note')` and it feeds the user-facing History feed. Pure
+`advanceStreak`/`computeStreakView` in `metrics.ts` (heavy unit tests, mirrors `progression.ts`);
+thin `services/streak.ts` `evaluateStreak` builds the day list + persists; `GET /plan` surfaces
+`streak: StreakView` alongside `consistency`.
+
+### Disrupted-mode lifecycle (enter → additive overlay → end)
+- **Enter** creates an `episodes` row, optionally confirms available equipment (hotel-gym photo →
+  existing parse path), then calls the **`disrupted_plan` job** (AI Admin machinery — no
+  hand-authored prompts) → `temp_activities` + `overrides`.
+- **Additive overlay via occurrences:** materialize temp activities as occurrences tagged
+  `episode_id`; set base occurrences in the window to a new **`paused`** status (not `missed`).
+  Reuses the whole occurrence-centric stack; `paused` reads as "not due" so it can't break the
+  streak. **End** = drop future temp occurrences, un-pause base from today forward; history stays
+  honest. Base plan resumes untouched.
+- Feed the live episode into `plan-synthesis` (replace the hard-`null` `active_episode`), and
+  generalize `PendingProposal` with `action: 'replan' | 'enter_disrupted' | 'rebaseline'` so accept
+  can branch. Align the type's `protect_momentum` → the DB's `protect_streak`.
+
+### Logging honesty
+`POST /plan/occurrences/adhoc` — log an unscheduled thing you did → a `done` occurrence (optional
+`episode_id`); feeds streak/consistency honestly ("did hotel yoga instead"). Acknowledged **skip**
+affordance writing `status='skipped'` (vs. silent `pending`) — distinguishes "I chose to skip"
+(neutral, no slip) from "went dark" (slip). Both statuses already exist in the enum; nothing wrote
+them before.
+
+### Three entry paths (all three, per decision)
+1. **On-return "was this a detour?"** — open after N dark days (default **4**) → ask, offer to
+   enter. The specific 2026-07-24 refinement; deterministic gap-detection on session/plan load.
+2. **Manual "I'm traveling/disrupted"** — a self-declare entry; covers disruptions no tripwire
+   catches (a wedding, a rough week).
+3. **Proactive tripwire proposal** — reuse `assessIfDue` so `missed_threshold` etc. proposes
+   `enter_disrupted` (via `PendingProposal.action`) instead of only a full replan.
+
+**Week-gap re-baseline:** after ~**7**+ dark days (or a long episode), offer a coach re-baseline
+(`action:'rebaseline'`) rather than silently resuming the old plan.
+
+### Build phasing
+- **A — streak + freeze economy** (metric layer; independent, ships value alone; reinstates the
+  streak). 
+- **B — logging honesty** (ad-hoc log + acknowledged skip; feeds A's classification).
+- **C — episode engine** (repo + enter/end + `disrupted_plan` wiring + `paused` overlay +
+  check-in store + generalized proposal). **Gotcha:** the `episodes` table (0001) FK-references
+  `auth.users`, but everything post-0002 (e.g. `goal_events`) references `cadence.users` — the
+  episodes repo needs an FK-fix migration or inserts fail for the dev user.
+- **D — the three entry paths** (thin once C exists; opens the `'disrupted'` intent).
+- **E — week-gap re-baseline** (rides on C's generalized proposal).
+
+### Brand reconciliation
+BRAND.md retired streaks and bans "streak mechanics that reset to zero." The founder reversed the
+retirement ("our brand is about building better habits"). This design is what makes streaks
+brand-safe *by construction*: freezes + check-ins + disrupted-mode `paused` days mean the streak
+never resets **because life happened**, and the honest 5-of-7 metric always coexists. BRAND.md is
+updated to reframe the ban as *"streaks that punish you for life happening"* — which this design
+structurally cannot do.

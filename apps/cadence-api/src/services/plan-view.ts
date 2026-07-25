@@ -1,4 +1,4 @@
-import type { OccurrenceStatus, PendingProposal } from '@cadence/shared';
+import type { OccurrenceStatus, PendingProposal, StreakView } from '@cadence/shared';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
@@ -8,6 +8,7 @@ import { listGoals } from '../repos/goals.ts';
 import { ensureHorizon } from './plan-horizon.ts';
 import { describeRecurrence } from './scheduling.ts';
 import { rollingConsistency } from './metrics.ts';
+import { evaluateStreak } from './streak.ts';
 
 const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -44,9 +45,13 @@ export interface PlanView {
   committedAt?: string;
   activities: PlanViewActivity[];
   week: PlanViewDay[];
-  consistency: { kept: number; window: number }; // "showed up N of 7 days" — never a streak
+  consistency: { kept: number; window: number }; // "showed up N of 7 days" — the honest metric
+  streak: StreakView; // the PROTECTED momentum counter that sits BESIDE consistency (Req 4)
   pendingProposal: PendingProposal | null; // a coach-proposed re-plan awaiting accept/dismiss
 }
+
+/** Neutral view when the streak evaluation itself fails — never let it break the plan load. */
+const EMPTY_STREAK: StreakView = { current: 0, longest: 0, freezes: 0, savedByFreeze: false };
 
 const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10);
 
@@ -58,6 +63,13 @@ const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10)
 export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanView> {
   await ensureHorizon(userId).catch(() => {
     /* best-effort top-up; view still renders from what's materialized */
+  });
+  // Finalize + read the streak after the horizon top-up so today's occurrences are visible.
+  // Independent of having a committed plan (it reads occurrences, not the plan), so both the
+  // no-plan and committed branches report it.
+  const streak = await evaluateStreak(userId).catch((e) => {
+    console.error('[buildPlanView:streak]', e);
+    return EMPTY_STREAK;
   });
   const plan = await getActivePlan(userId);
   if (!plan) {
@@ -72,6 +84,7 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
       activities: [],
       week: [],
       consistency: { kept: 0, window: weekDays },
+      streak,
       pendingProposal: null,
     };
   }
@@ -136,6 +149,7 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
     })),
     week: days,
     consistency: { kept, window },
+    streak,
     pendingProposal: user?.pending_proposal ?? null,
   };
 }
