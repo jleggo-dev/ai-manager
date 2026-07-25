@@ -1,6 +1,8 @@
 import { sql, json } from '../db/sql.ts';
 import { ensureUser } from '../repos/users.ts';
 import { purgeMealPhotos } from './meal-photos.ts';
+import { initialStreakState } from './metrics.ts';
+import { EMPTY_DIETARY_PROFILE } from '@cadence/shared';
 
 /**
  * Dev-only account data reset — the shared implementation behind both the `/dev/reset`
@@ -9,14 +11,16 @@ import { purgeMealPhotos } from './meal-photos.ts';
  * Real auth is deferred; callers gate this on dev mode.
  */
 
-// Every per-user table in the cadence schema (all keyed by user_id).
+// Every per-user table in the cadence schema keyed by user_id.
 export const DEV_CHILD_TABLES = [
   'activities',
   'ai_log',
+  'check_ins',
   'context_pack',
   'conversations',
   'episodes',
   'equipment',
+  'food_usage',
   'goal_events',
   'goals',
   'meal_plans',
@@ -43,11 +47,18 @@ export async function resetUserData(userId: string): Promise<void> {
   for (const t of DEV_CHILD_TABLES) {
     await sql`delete from cadence.${sql(t)} where user_id = ${userId}`;
   }
+  // foods are keyed by owner_user_id (shared/global rows have null owner — leave those alone).
+  await sql`delete from cadence.foods where owner_user_id = ${userId}`;
   // name is NOT NULL (default ''); "" is treated as "no name captured" by the context pack.
-  // macro_targets cleared too — observe phase starts with no rings / no "left".
+  // macro_targets cleared too — observe phase starts with no rings / no "left". streak_state resets
+  // to the seed (freezes:1) so a start-over truly begins the streak from zero (Req 4).
+  // dietary_profile cleared so allergen/diet prefs don't leak across resets (Req 5).
   await sql`
     update cadence.users
     set name = '', baseline = ${json({})}, macro_targets = ${json({})},
-        last_assessed_at = null, pending_proposal = null, pending_plan = null, updated_at = now()
+        last_assessed_at = null, pending_proposal = null, pending_plan = null,
+        streak_state = ${json(initialStreakState())},
+        dietary_profile = ${json(EMPTY_DIETARY_PROFILE)},
+        updated_at = now()
     where id = ${userId}`;
 }

@@ -5,7 +5,8 @@ import type { NutritionLog } from '@cadence/shared';
 // (goal_events.at, plan generated_at) bites any string-typed column left uncast.
 const COLS = sql`
   log_id, to_char(date, 'YYYY-MM-DD') as date, meal, items, macros, input_method,
-  ai_confidence, provisional, photo_ref, raw_text, flags, created_at::text as created_at`;
+  ai_confidence, provisional, photo_ref, raw_text, flags, recipe_id,
+  created_at::text as created_at`;
 
 export async function insertNutritionLog(
   userId: string,
