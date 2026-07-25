@@ -9,6 +9,7 @@ function kindLabel(kind: string): string {
   if (kind === 'macro') return 'Macros';
   if (kind === 'pattern') return 'Pattern';
   if (kind === 'variety') return 'Variety';
+  if (kind === 'micro') return 'Micros';
   return 'Note';
 }
 

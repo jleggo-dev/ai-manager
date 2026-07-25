@@ -6,7 +6,14 @@
  * Each function knows how to run, render a compact section, and report a row count for
  * provenance.
  */
-import type { DietaryProfile, NutritionLog, NutritionSummary, OccurrenceLog, ProgressCard } from '@cadence/shared';
+import type {
+  DietaryProfile,
+  Food,
+  NutritionLog,
+  NutritionSummary,
+  OccurrenceLog,
+  ProgressCard,
+} from '@cadence/shared';
 import { EMPTY_DIETARY_PROFILE, sanitizeDietaryProfile } from '@cadence/shared';
 import { getUser, getDietaryProfile } from '../../repos/users.ts';
 import { listGoalsByStatus } from '../../repos/goals.ts';
@@ -17,6 +24,7 @@ import { listOccurrences, listRecentLogged } from '../../repos/occurrences.ts';
 import { listNutritionLogs } from '../../repos/nutrition.ts';
 import { buildProgress } from '../progress.ts';
 import { summarizeNutrition, renderNutritionLine } from '../nutrition-summarize.ts';
+import { searchFoodsWithUsda } from '../food-sources/usda-enrich.ts';
 
 export interface RetrievalFunction {
   name: string;
@@ -289,6 +297,47 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
     },
     rows(r) {
       return (r as { meals: unknown[] }).meals.length;
+    },
+  },
+
+  /**
+   * Req 5 Phase 3 — deterministic food lookup (local cache + USDA enrich).
+   * Read-only; no LLM job wrapping HTTP. OFF barcodes stay on the browser path.
+   */
+  lookup_food: {
+    name: 'lookup_food',
+    description:
+      "Look up foods by name in the user's cache + shared DB (incl. USDA whole foods on cache miss). Use when they ask what something is / macros / micros, or before suggesting a food. Params: { q: string, limit?: number }. Not for barcodes (Food tab handles OFF).",
+    domains: ['nutrition', 'foods'],
+    async run(userId, params) {
+      const q = typeof params?.q === 'string' ? params.q.trim() : '';
+      if (!q) return { q: '', foods: [] as Food[] };
+      const limit = Math.min(10, Math.max(1, Number(params?.limit ?? 5) || 5));
+      const foods = await searchFoodsWithUsda(userId, q, limit);
+      return { q, foods };
+    },
+    render(r) {
+      const { q, foods } = r as { q: string; foods: Food[] };
+      if (!q) return 'Food lookup: pass q (food name).';
+      if (!foods.length) return `Food lookup "${q}": no matches in cache/USDA yet.`;
+      const lines = foods.slice(0, 8).map((f) => {
+        const m = f.macros_per_base ?? {};
+        const brand = f.brand ? ` (${f.brand})` : '';
+        const macros = [
+          typeof m.kcal === 'number' ? `${Math.round(m.kcal)} kcal` : null,
+          typeof m.protein_g === 'number' ? `P${Math.round(m.protein_g)}` : null,
+          typeof m.zinc_mg === 'number' ? `Zn ${m.zinc_mg}mg` : null,
+          typeof m.iron_mg === 'number' ? `Fe ${m.iron_mg}mg` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        const per = f.base_unit === 'item' ? '/item' : '/100' + f.base_unit;
+        return `- ${f.name}${brand} [${f.source}] ${macros}${macros ? ` ${per}` : ''}`;
+      });
+      return `Food lookup "${q}" (${foods.length}):\n${lines.join('\n')}`;
+    },
+    rows(r) {
+      return (r as { foods: unknown[] }).foods.length;
     },
   },
 

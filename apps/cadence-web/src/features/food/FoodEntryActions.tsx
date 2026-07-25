@@ -27,7 +27,7 @@ export function FoodEntryActions({ mode, onMode }: { mode: Mode; onMode: (m: Mod
         onClick={() => onMode(mode === 'barcode' ? 'home' : 'barcode')}
       >
         <b>Barcode</b>
-        <span>Type digits for now — Open Food Facts</span>
+        <span>Scan or type — Open Food Facts</span>
       </button>
       <button
         type="button"

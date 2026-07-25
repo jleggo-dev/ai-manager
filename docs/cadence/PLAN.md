@@ -314,14 +314,14 @@ Sorting every requirement into what each layer owns. ✅ = provisioned; ⏳ = pl
 | `weekly_readout` | stats → narrative readout (§6/§A5) | ✅ |
 | `disrupted_plan` | episode → additive overlay (§5.7) | ✅ |
 | `adjust_plan` | tweak existing plan, version-bump (§6.3) | ⏳ (may reuse synthesize) |
-| `generate_recipe` / `generate_meal_plan` | prefs/fridge → recipe; targets → week + shopping list (§5.6) | ⏳ (future; see below) |
+| `generate_recipe` / `generate_meal_plan` | prefs/fridge → recipe; targets → week + shopping list (§5.6) | ⏳ (Phase 4/5; see REQ5) |
 | `parse_nutrition_label` / `estimate_food` / `identify_food` | Req 5 WS2 food capture (label / describe / front-of-pack) | ✅ jobs + app wire (`food-capture` + routes) |
 | `structure_recipe` | Req 5 Phase 2 — recipe from chat | ✅ job + API (`structure-recipe` → recipes from-chat) |
 
-> **Req 5 reframed (2026-07-24) → a Food & Recipe data layer (MFP-parity), foundation-first.** The
-> fridge-scan headline is now Phase 4; the foundation is a per-user LLM-seeded **foods cache** +
-> fast logging + recipes-with-computed-macros + a dietary/allergen profile. Barcode (OpenFoodFacts)
-> is Phase 3, before fridge-scan. Full farm-out plan + workstreams: **`docs/cadence/REQ5-food-and-recipes.md`**.
+> **Req 5 reframed (2026-07-24) → a Food & Recipe data layer (MFP-parity), foundation-first.** Phases
+> 1–3 foundation shipped (foods cache, recipes, OFF barcode + camera, USDA micros, micro insights,
+> `lookup_food` retrieval). Fridge-scan headline is Phase 4 (separate PR). Full plan:
+> **`docs/cadence/REQ5-food-and-recipes.md`**.
 
 **Coach chat rule-set templates (the conversation — turns, not jobs):** `onboarding`,
 `initial`, topic (`nutrition`/`training`/`goal`/`struggles`/`recipes`), `disrupted`,
@@ -1683,9 +1683,9 @@ enhancement, NOT a prerequisite for anything above it. Companion write-up:
 `docs/cadence/blog/04-letting-the-coach-ask-its-own-questions.md`.
 
 > **First concrete tools for this loop → the food layer (Req 5, 2026-07-24 direction).** USDA/OpenFoodFacts
-> lookup, `resolve_food`, `log_meal`, `build_recipe` are being designed as **services the app calls now
-> AND jobs/tools the agentic coach calls later** — one implementation, two entry points — so Req 5 doubles
-> as the proving ground for the tool-runner coach. Long-term objective + milestones in
+> as deterministic providers ✅; coach retrieval `lookup_food` ✅ (read-only, no LLM HTTP wrap).
+> `resolve_food` / `log_meal` / `build_recipe` still designed as services now + tools later — one
+> implementation, two entry points. Long-term objective + milestones in
 > **`docs/cadence/REQ5-food-and-recipes.md` §12**. Guardrail stays: even agentic, writes are suggest-then-confirm.
 
 ## Req 4 — Disrupted mode + streaks that don't punish you (design, 2026-07-24)
