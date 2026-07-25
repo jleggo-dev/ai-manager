@@ -30,6 +30,11 @@ const GoogleG = () => (
  */
 type Mode = 'signin' | 'signup';
 
+function authErrorMessage(error: { message?: string } | null | undefined, fallback: string): string {
+  const message = error?.message?.trim();
+  return message || fallback;
+}
+
 export function AuthScreen() {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
@@ -43,20 +48,19 @@ export function AuthScreen() {
     setBusy(true);
     setMsg('');
     setNotice('');
-    try {
-      // Redirects the browser to Google, then back to the app; the returned session is parsed by
-      // the client (detectSessionInUrl) and App's listener takes over. No dev query param to keep —
-      // this screen only renders in real-auth mode.
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: window.location.origin },
-      });
-      if (error) throw error;
-      // Success → the page is navigating to Google; leave busy set (no inline continuation).
-    } catch (err) {
-      setMsg(err instanceof Error ? err.message : 'Could not start Google sign-in — try again.');
+    // Redirects the browser to Google, then back to the app; the returned session is parsed by
+    // the client (detectSessionInUrl) and App's listener takes over. No dev query param to keep —
+    // this screen only renders in real-auth mode.
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) {
+      setMsg(authErrorMessage(error, 'Could not start Google sign-in — try again.'));
       setBusy(false);
+      return;
     }
+    // Success → the page is navigating to Google; leave busy set (no inline continuation).
   }
 
   async function submit() {
@@ -65,26 +69,31 @@ export function AuthScreen() {
     setBusy(true);
     setMsg('');
     setNotice('');
-    try {
-      if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({ email: e, password });
-        if (error) throw error;
-        // If email confirmation is on, there's no session yet — tell the user to check their inbox.
-        if (!data.session) {
-          setNotice('Check your email to confirm your account, then sign in.');
-          setMode('signin');
-        }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email: e, password });
-        if (error) throw error;
+
+    if (mode === 'signup') {
+      const { data, error } = await supabase.auth.signUp({ email: e, password });
+      if (error) {
+        setMsg(authErrorMessage(error, 'Something went wrong — try again.'));
+        setBusy(false);
+        return;
       }
-      // On success with a session, App's auth listener takes over from here.
-    } catch (err) {
-      const m = err instanceof Error ? err.message : 'Something went wrong — try again.';
-      setMsg(m);
-    } finally {
+      // If email confirmation is on, there's no session yet — tell the user to check their inbox.
+      if (!data.session) {
+        setNotice('Check your email to confirm your account, then sign in.');
+        setMode('signin');
+      }
       setBusy(false);
+      return;
     }
+
+    const { error } = await supabase.auth.signInWithPassword({ email: e, password });
+    if (error) {
+      setMsg(authErrorMessage(error, 'Something went wrong — try again.'));
+      setBusy(false);
+      return;
+    }
+    // On success with a session, App's auth listener takes over from here.
+    setBusy(false);
   }
 
   return (
@@ -92,7 +101,7 @@ export function AuthScreen() {
       <div className="hero">
         <Orb hero />
         <div className="w-word">Cadence</div>
-        <p className="w-tag">Build better habits.</p>
+        <p className="w-tag">{mode === 'signin' ? 'Welcome back.' : 'A rhythm you can keep.'}</p>
       </div>
 
       <button className="auth-google" onClick={continueWithGoogle} disabled={busy || !authConfigured}>

@@ -25,15 +25,15 @@ describe('AuthScreen', () => {
 
   it('toggles between sign-in and create-account modes', () => {
     render(<AuthScreen />);
-    expect(screen.getByText('Build better habits.')).toBeInTheDocument();
+    expect(screen.getByText('Welcome back.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in →' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'New here? Create an account' }));
-    expect(screen.getByText('Build better habits.')).toBeInTheDocument();
+    expect(screen.getByText('A rhythm you can keep.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create account →' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Already have an account? Sign in' }));
-    expect(screen.getByText('Build better habits.')).toBeInTheDocument();
+    expect(screen.getByText('Welcome back.')).toBeInTheDocument();
   });
 
   it('signup without a session shows the check-your-email notice and flips to sign-in', async () => {
