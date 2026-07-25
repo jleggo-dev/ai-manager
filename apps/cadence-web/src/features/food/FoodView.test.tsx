@@ -12,6 +12,7 @@ const createFood = vi.fn();
 const logMealFromFood = vi.fn();
 const parseNutritionLabel = vi.fn();
 const identifyFood = vi.fn();
+const listRecipes = vi.fn();
 
 vi.mock('../../lib/api.ts', () => ({
   getFoodRecents: (...args: unknown[]) => getFoodRecents(...args),
@@ -44,6 +45,12 @@ vi.mock('../../lib/api.ts', () => ({
   logMealFromFood: (...args: unknown[]) => logMealFromFood(...args),
   parseNutritionLabel: (...args: unknown[]) => parseNutritionLabel(...args),
   identifyFood: (...args: unknown[]) => identifyFood(...args),
+  listRecipes: (...args: unknown[]) => listRecipes(...args),
+  getRecipeById: vi.fn(),
+  structureRecipeFromChat: vi.fn(),
+  saveRecipe: vi.fn(),
+  logMealFromRecipe: vi.fn(),
+  recipeMacroHint: () => '',
 }));
 
 vi.mock('../../components/MicButton.tsx', () => ({
@@ -94,6 +101,7 @@ describe('FoodView capture wire', () => {
     getFoodRecents.mockResolvedValue({ status: 'ok', foods: [] });
     searchFoods.mockResolvedValue({ status: 'ok', foods: [] });
     resolveFoods.mockResolvedValue({ status: 'ok', candidates: [], preselected: null });
+    listRecipes.mockResolvedValue({ status: 'unavailable', recipes: [] });
   });
 
   it('shows say/snap first and a warm empty state when recents are unavailable', async () => {
@@ -102,9 +110,17 @@ describe('FoodView capture wire', () => {
 
     expect(screen.getByRole('button', { name: /Say it/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Snap it/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Recipes/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Search/i })).toBeInTheDocument();
 
     await waitFor(() => expect(screen.getByText(/Couldn't load your recent foods/i)).toBeInTheDocument());
+  });
+
+  it('opens recipes hub with soft-fail copy when API is missing', async () => {
+    listRecipes.mockResolvedValue({ status: 'unavailable', recipes: [] });
+    renderFood();
+    fireEvent.click(screen.getByRole('button', { name: /Recipes/i }));
+    await waitFor(() => expect(screen.getByText(/aren't live on the server yet/i)).toBeInTheDocument());
   });
 
   it('lists recents when the API returns foods', async () => {

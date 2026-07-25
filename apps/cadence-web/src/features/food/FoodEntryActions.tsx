@@ -1,6 +1,6 @@
-/** Primary fast-log entry points — say / snap first, search as fallback. */
+/** Primary fast-log entry points — say / snap first; recipes + search as secondary. */
 
-type Mode = 'home' | 'say' | 'snap' | 'search';
+type Mode = 'home' | 'say' | 'snap' | 'search' | 'recipes';
 
 export function FoodEntryActions({ mode, onMode }: { mode: Mode; onMode: (m: Mode) => void }) {
   return (
@@ -20,6 +20,14 @@ export function FoodEntryActions({ mode, onMode }: { mode: Mode; onMode: (m: Mod
       >
         <b>Snap it</b>
         <span>Label or plate photo</span>
+      </button>
+      <button
+        type="button"
+        className={`food-action${mode === 'recipes' ? ' food-action-on' : ''}`}
+        onClick={() => onMode(mode === 'recipes' ? 'home' : 'recipes')}
+      >
+        <b>Recipes</b>
+        <span>Save a dish once — log servings any day</span>
       </button>
       <button
         type="button"

@@ -21,10 +21,11 @@ import { FoodPortionConfirm } from './FoodPortionConfirm.tsx';
 import { FoodRecentsList } from './FoodRecentsList.tsx';
 import { FoodSayPanel } from './FoodSayPanel.tsx';
 import { FoodSnapPanel } from './FoodSnapPanel.tsx';
+import { RecipesPanel } from './RecipesPanel.tsx';
 import type { FoodDraft, FoodDraftPortion } from './foodDraft.ts';
 
-type Mode = 'home' | 'say' | 'snap' | 'search' | 'confirm';
-type EntryMode = 'home' | 'say' | 'snap' | 'search';
+type Mode = 'home' | 'say' | 'snap' | 'search' | 'recipes' | 'confirm';
+type EntryMode = 'home' | 'say' | 'snap' | 'search' | 'recipes';
 
 export function FoodView() {
   const [mode, setMode] = useState<Mode>('home');
@@ -170,19 +171,23 @@ export function FoodView() {
         Food
       </div>
       <div className="screen-sub">
-        Say it or snap it — I&apos;ll draft the log, you confirm. Search is here when you want it.
+        {mode === 'recipes'
+          ? 'Build a dish once — I draft ingredients and per-serving macros; you confirm before anything is saved.'
+          : "Say it or snap it — I'll draft the log, you confirm. Search is here when you want it."}
       </div>
 
       {banner && <div className="food-banner">{banner}</div>}
 
-      <FoodEntryActions
-        mode={entryMode}
-        onMode={(m) => {
-          setBanner('');
-          setPickNote('');
-          setMode(m);
-        }}
-      />
+      {mode !== 'recipes' && (
+        <FoodEntryActions
+          mode={entryMode}
+          onMode={(m) => {
+            setBanner('');
+            setPickNote('');
+            setMode(m);
+          }}
+        />
+      )}
 
       {mode === 'say' && (
         <>
@@ -219,6 +224,17 @@ export function FoodView() {
             Back
           </button>
         </div>
+      )}
+
+      {mode === 'recipes' && (
+        <RecipesPanel
+          dietary={dietary}
+          onClose={() => setMode('home')}
+          onLogged={() => {
+            setBanner('Logged — that recipe is on today.');
+            reloadRecents();
+          }}
+        />
       )}
 
       {mode === 'home' && (

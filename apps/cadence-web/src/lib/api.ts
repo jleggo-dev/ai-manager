@@ -58,6 +58,7 @@ export {
   clearMacroTargets,
   logMeal,
   logMealFromFood,
+  logMealFromRecipe,
   getRecentMeals,
   getBaselineRead,
   type MealKind,
@@ -99,6 +100,23 @@ export {
   type ResolveFoodsResult,
   type ResolvePortionHint,
 } from './api/foods-resolve.ts';
+
+export {
+  listRecipes,
+  getRecipeById,
+  structureRecipeFromChat,
+  saveRecipe,
+  recipeMacroHint,
+  parseRecipe,
+  parseRecipeDraft,
+  type RecipeDraft,
+  type RecipeIngredientRow,
+  type RecipeListResult,
+  type RecipeDetailResult,
+  type RecipeFromChatResult,
+  type SaveRecipeResult,
+  type RecipeSource,
+} from './api/recipes.ts';
 
 export {
   getReview,
