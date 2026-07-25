@@ -29,14 +29,26 @@ describe('job profile resolution', () => {
     expect(jobs[0]!.ai_profile_id).toBe(BROKER);
   });
 
-  // The regression that matters: parse-meal is pinned to the live Gemini vision profile. A sync
-  // must never steal it back to the broker (that would silently kill photo-quality macro reads).
+  // The regression that matters: parse-meal (and Req 5 vision capture jobs) are pinned to the
+  // live Gemini vision profile. A sync must never steal them back to the broker.
   it('leaves an explicitly pinned profile UUID untouched', () => {
     const pinned = '61541478-fd03-4bc8-8e03-ec5284eb66c3';
     const jobs = [{ slug: 'parse-meal', ai_profile_id: pinned }];
     resolveJobProfileIds(jobs, ids);
     expect(jobs[0]!.ai_profile_id).toBe(pinned);
     expect(jobs[0]!.ai_profile_id).not.toBe(BROKER);
+  });
+
+  it('keeps Req 5 vision capture jobs pinned in the shipped config', () => {
+    const pinned = '61541478-fd03-4bc8-8e03-ec5284eb66c3';
+    for (const slug of ['parse-meal', 'plate-advice', 'parse-nutrition-label', 'identify-food']) {
+      const job = CONFIG.jobs.find((j) => j.slug === slug);
+      expect(job, `${slug} missing from ai-admin.config.json`).toBeTruthy();
+      expect(job!.ai_profile_id, `${slug} must stay on Gemini vision`).toBe(pinned);
+    }
+    const estimate = CONFIG.jobs.find((j) => j.slug === 'estimate-food');
+    expect(estimate, 'estimate-food missing').toBeTruthy();
+    expect(estimate!.ai_profile_id).toBe('<CADENCE_BROKER_PROFILE_UUID>');
   });
 
   it('throws on an unrecognized placeholder rather than defaulting to a cheaper model', () => {

@@ -1,8 +1,9 @@
 # Cadence — AI Admin config-as-code
 
-Declarative definitions for the AI Admin entities Cadence drives: two AI profiles
-(`cadence-coach`, `cadence-broker`), five processing jobs (the Broker/Coach jobs
-from spec §C4), and the `cadence-replan` workflow. Synced idempotently by slug.
+Declarative definitions for the AI Admin entities Cadence drives: AI profiles
+(`cadence-coach`, `cadence-broker`, plus pinned Gemini vision for photo jobs),
+processing jobs (Broker/Coach jobs from spec §C4, nutrition Observe jobs, Req 5
+food-capture jobs), and the `cadence-replan` workflow. Synced idempotently by slug.
 
 ## Why this matters in the monorepo
 
@@ -30,6 +31,26 @@ must point at entities that already exist. So fill the `<PLACEHOLDER>` tokens in
    `node --import tsx apps/cadence-api/scripts/sync-jobs.ts` (jobs only — does not clobber live
    profile model pointers). Preview / CI:
    `… sync-jobs.ts --dry-run --fail-on-drift`. See [`docs/infra/CONFIG-DRIFT.md`](../../docs/infra/CONFIG-DRIFT.md).
+
+### Req 5 — Food capture jobs (WS2)
+
+| Slug                    | Profile                                                               | Contract                                                                               |
+| ----------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `parse-nutrition-label` | **Pinned Gemini vision** (same UUID as `parse-meal` / `plate-advice`) | Label photo → `serving_*` + `macros_per_serving` (+ printed micros) + `confidence`     |
+| `identify-food`         | **Pinned Gemini vision**                                              | Front-of-pack photo → `name` + `brand` + `confidence`                                  |
+| `estimate-food`         | Broker (Flash)                                                        | Describe-a-food text → canonical serving + macro estimate + `confidence` (macros only) |
+
+Runtime resolves jobs **by slug** via `runJobBySlug` — no `AIM_JOB_*` env vars required (same
+pattern as `parse-meal`). After this config lands on `main`, an operator syncs live with:
+
+```powershell
+node --import tsx apps/cadence-api/scripts/sync-jobs.ts --dry-run
+node --import tsx apps/cadence-api/scripts/sync-jobs.ts
+```
+
+Do **not** use `provision-aim.ts` for prompt-only updates — it can re-sync profiles and clobber
+live model pointers. `structure_recipe` is Phase 2 (not in this batch).
+
 5. **Sync the workflow** — re-run `ai-admin-sync.mjs` once job UUIDs are filled into
    `steps[].processing_job_id`.
 6. **Wire env** — put the resulting profile/job ids + `AIM_WORKSPACE_ID` into
@@ -47,9 +68,9 @@ limit on how many profiles/agents we create.
 - **`cadence-coach`** — **`anthropic-claude-4-5-sonnet`** (Devs.ai), chat mode,
   `temperature: 0.7`. Cost/quality balance for the bounded-context coaching loop (§4.3);
   streaming. Failover → `claude-opus-4-6`. (Devs.ai's catalog has no Sonnet 4.6; 4.5 is the
-  latest Sonnet.) *Plan-quality lever:* `synthesize-plan` is a **separate job** — point it at
+  latest Sonnet.) _Plan-quality lever:_ `synthesize-plan` is a **separate job** — point it at
   a `cadence-planner` profile on `claude-opus-4-6` if synthesis needs more muscle;
-  backstopped by `plan_vet` + confirm-before-lock. *Agent upgrade path:* a tuned Devs.ai
+  backstopped by `plan_vet` + confirm-before-lock. _Agent upgrade path:_ a tuned Devs.ai
   agent with `config.toolJobs[]` lets the Coach call Broker jobs as tools natively (v1.4.0).
 - **`cadence-broker`** — **`gemini-2.0-flash` via the Devs.ai provider**, `temperature: 0.1`.
   Cheapest for the always-on hot path. **Do NOT use the native `google-gemini` provider** —
@@ -70,6 +91,6 @@ Keep prompts model-agnostic so they survive failover (per
   `backend/src/services/formatting-rules.ts` before relying on them.
 - **Flat top-level JSON**: kept per spec §C4. v1.4.0 also supports **nested**
   `outputMappings` (dot/bracket paths) if a schema ever needs nesting — the spec's
-  "top-level only" rule is now a *can*, not a *must*.
+  "top-level only" rule is now a _can_, not a _must_.
 - **`plan_vet` / `synthesize_plan`** are also runnable standalone via
   `POST /api/processing-jobs/:id/test`; the `cadence-replan` workflow chains them.
