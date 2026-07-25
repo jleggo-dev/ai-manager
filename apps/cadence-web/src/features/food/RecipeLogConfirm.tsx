@@ -61,7 +61,7 @@ export function RecipeLogConfirm({
         meal,
       });
       if (!logged) {
-        setErr("Couldn't log that just now — recipe logging may still be landing. Try again in a moment.");
+        setErr("Couldn't log that just now — try again in a moment.");
         return;
       }
       await invalidateNutritionDay();

@@ -1,14 +1,14 @@
 /**
  * Req 5 Phase 2 / WS3 — recipes API client (thin Food-tab UI).
  *
- * Expected routes (WS3 API):
+ * Routes:
  *   GET    /nutrition/recipes
  *   GET    /nutrition/recipes/:id
  *   POST   /nutrition/recipes
- *   POST   /nutrition/recipes/from-chat
- *   POST   /nutrition/meals { recipe_id, servings, meal }  — see nutrition.ts
+ *   POST   /nutrition/recipes/from-chat  body: { text }
+ *   POST   /nutrition/meals { recipe_id, servings|quantity, meal }
  *
- * Soft-handles 404/network so the Food tab stays usable until API lands.
+ * Soft-handles 404/network so the Food tab stays usable on transient outages.
  */
 
 import type { Macros, Recipe } from '@cadence/shared';
@@ -222,8 +222,7 @@ export async function structureRecipeFromChat(description: string): Promise<Reci
     if (res.status === 404) {
       return {
         status: 'unavailable',
-        message:
-          "Recipe structure isn't reachable just now — try again once recipes are live, or describe it in Coach.",
+        message: "Recipe structure isn't reachable just now — try again in a moment, or describe it in Coach.",
       };
     }
     if (!res.ok) {
@@ -265,7 +264,7 @@ export async function saveRecipe(draft: RecipeDraft): Promise<SaveRecipeResult> 
     if (res.status === 404) {
       return {
         status: 'unavailable',
-        message: "Saving recipes isn't reachable just now — try again once the recipes API is live.",
+        message: "Saving recipes isn't reachable just now — try again in a moment.",
       };
     }
     if (!res.ok) {

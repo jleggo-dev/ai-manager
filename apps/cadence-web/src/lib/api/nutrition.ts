@@ -142,8 +142,8 @@ export async function logMealFromFood(input: {
 }
 
 /**
- * Deterministic log of a saved recipe (Req 5 Phase 2) — N servings, no AI.
- * Soft-fails to null when the route/body isn't supported yet.
+ * Deterministic log of a saved recipe (Req 5 Phase 2 / WS3) — N servings, no AI.
+ * POST /nutrition/meals accepts recipe_id + servings (alias for quantity).
  */
 export async function logMealFromRecipe(input: {
   recipe_id: string;
@@ -159,7 +159,6 @@ export async function logMealFromRecipe(input: {
       body: JSON.stringify({
         recipe_id: input.recipe_id,
         servings,
-        // Some servers may accept quantity as the servings multiplier — send both.
         quantity: servings,
         ...(input.meal ? { meal: input.meal } : {}),
       }),
