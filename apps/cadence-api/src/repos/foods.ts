@@ -155,3 +155,17 @@ export async function touchFoodUsage(userId: string, foodId: string): Promise<vo
       use_count = cadence.food_usage.use_count + 1,
       last_used_at = now()`;
 }
+
+/** Per-user usage rows for resolver ranking (use_count + recency). */
+export async function listFoodUsageRows(
+  userId: string,
+  limit = 100,
+): Promise<Array<{ food_id: string; use_count: number; last_used_at: string }>> {
+  const capped = Math.min(200, Math.max(1, limit));
+  return sql<{ food_id: string; use_count: number; last_used_at: string }[]>`
+    select food_id, use_count, last_used_at::text as last_used_at
+    from cadence.food_usage
+    where user_id = ${userId}
+    order by last_used_at desc
+    limit ${capped}`;
+}

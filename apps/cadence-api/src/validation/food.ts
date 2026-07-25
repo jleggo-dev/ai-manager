@@ -111,3 +111,24 @@ export const identifyFoodBodySchema = z
     photo: val.photo,
     hint: val.hint || undefined,
   }));
+
+/** POST /nutrition/foods/resolve — deterministic rank + preselect (WS-R); no AI. */
+export const resolveFoodBodySchema = z
+  .object({
+    text: z.string().max(500).optional(),
+    photo: photoDataUrlSchema.optional(),
+  })
+  .superRefine((val, ctx) => {
+    const text = typeof val.text === 'string' ? val.text.trim() : '';
+    if (!text && !val.photo) {
+      // Empty resolve is valid — returns recents/frequents (Food-tab empty-search).
+      return;
+    }
+    if (val.photo && !val.photo.startsWith('data:image/')) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'photo must be a data:image URL' });
+    }
+  })
+  .transform((val) => ({
+    text: typeof val.text === 'string' ? val.text.trim() : '',
+    photo: val.photo,
+  }));

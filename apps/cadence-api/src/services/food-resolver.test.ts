@@ -30,4 +30,18 @@ describe('pickPreselected', () => {
     ];
     expect(pickPreselected(candidates)).toBeNull();
   });
+
+  it('never pre-selects an allergen-flagged candidate', () => {
+    const candidates: ResolveCandidate[] = [
+      {
+        kind: 'food',
+        score: 1,
+        label: 'Peanut butter',
+        food_id: 'pb',
+        dietary: { safe: false, flags: [{ severity: 'allergy', term: 'peanuts', matched: 'peanut' }] },
+      },
+      { kind: 'new', score: 0, label: 'Add "peanut"' },
+    ];
+    expect(pickPreselected(candidates)).toBeNull();
+  });
 });
