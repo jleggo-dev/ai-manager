@@ -67,6 +67,17 @@ export {
 } from './api/nutrition.ts';
 
 export {
+  getDietaryProfile,
+  saveDietaryProfile,
+  getFoodRecents,
+  searchFoods,
+  type DietaryProfileResult,
+  type FoodSummary,
+  type FoodListResult,
+  type ApiAvailability,
+} from './api/foods.ts';
+
+export {
   getReview,
   confirmGoals,
   updateGoal,

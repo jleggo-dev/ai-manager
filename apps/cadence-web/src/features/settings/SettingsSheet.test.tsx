@@ -13,6 +13,11 @@ vi.mock('../../lib/api.ts', () => ({
   getDevAccount: () => 'scratch',
   setMacroTargets: vi.fn(),
   clearMacroTargets: vi.fn(),
+  getDietaryProfile: vi.fn().mockResolvedValue({
+    status: 'unavailable',
+    profile: { allergies: [], diet: null, dislikes: [], notes: null },
+  }),
+  saveDietaryProfile: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../../lib/supabase.ts', () => ({

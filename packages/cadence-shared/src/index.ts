@@ -18,6 +18,7 @@ export * from './types/progress.ts';
 export * from './types/nutrition.ts';
 export * from './types/food.ts';
 export * from './types/dietary.ts';
+export * from './dietary-safety.ts';
 export * from './types/episode.ts';
 export * from './types/conversation.ts';
 export * from './types/scribe-contracts.ts';
