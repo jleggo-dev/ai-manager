@@ -1,6 +1,8 @@
 import type { StreakDay, StreakView } from '@cadence/shared';
 import { getUser, setStreakState } from '../repos/users.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
+import { listEpisodeRanges } from '../repos/episodes.ts';
+import { listCheckInDays } from '../repos/check-ins.ts';
 import { advanceStreak, computeStreakView, initialStreakState } from './metrics.ts';
 
 /** Bound the finalize window so a long-dormant account can't trigger a huge back-walk; a gap
@@ -38,23 +40,33 @@ export async function evaluateStreak(userId: string): Promise<StreakView> {
   let startMs = prior.last_evaluated ? isoToUtcMs(prior.last_evaluated) + DAY : yesterdayMs;
   if (startMs < clampMs) startMs = clampMs;
 
-  // Pull occurrences across the finalize window PLUS today (today feeds the provisional view).
-  const occ = await listOccurrences(userId, isoDay(Math.min(startMs, todayMs)), isoDay(todayMs));
+  // Pull occurrences + episode ranges + check-ins across the finalize window PLUS today (today
+  // feeds the provisional view). Episodes shield no-shows; check-ins count as showing up (Req 4).
+  const from = isoDay(Math.min(startMs, todayMs));
+  const toIso = isoDay(todayMs);
+  const [occ, episodeRanges, checkInDays] = await Promise.all([
+    listOccurrences(userId, from, toIso),
+    listEpisodeRanges(userId, from, toIso),
+    listCheckInDays(userId, from, toIso),
+  ]);
   const dueDays = new Set<string>();
   const doneDays = new Set<string>();
   for (const o of occ) {
     // The DB driver hands back `date` columns as JS Date objects; normalize to YYYY-MM-DD the
     // same way rollingConsistency does so the keys match the day-walk below.
     const d = new Date(o.date).toISOString().slice(0, 10);
-    // `skipped` is an acknowledged pass — it deliberately does NOT create due-pressure.
+    // `skipped` (acknowledged pass) and `paused` (shelved for an episode) deliberately do NOT
+    // create due-pressure — only real obligations do.
     if (o.status === 'pending' || o.status === 'done' || o.status === 'missed') dueDays.add(d);
     if (o.status === 'done') doneDays.add(d);
   }
+  const checkedIn = new Set(checkInDays);
+  const inEpisode = (dateIso: string): boolean => episodeRanges.some((r) => dateIso >= r.start && dateIso <= r.end);
   const mkDay = (dateIso: string): StreakDay => ({
     date: dateIso,
     due: dueDays.has(dateIso),
-    engaged: doneDays.has(dateIso),
-    inEpisode: false, // Phase C feeds active episodes here to shield no-shows from becoming slips
+    engaged: doneDays.has(dateIso) || checkedIn.has(dateIso), // did a session OR checked in
+    inEpisode: inEpisode(dateIso),
   });
 
   const finalized: StreakDay[] = [];

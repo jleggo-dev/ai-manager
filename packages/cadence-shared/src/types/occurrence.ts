@@ -2,7 +2,10 @@
    §5.5 Occurrence / completion log  (+ §B1 weather)
    ════════════════════════════════════════════════════════════════ */
 
-export type OccurrenceStatus = 'pending' | 'done' | 'skipped' | 'missed';
+// `paused` = a base occurrence shelved for the duration of a disrupted episode (Req 4): the base
+// plan is preserved, not deleted, and a paused day is never a slip. System-set only — the client
+// status endpoint never accepts it (see occurrenceStatusBodySchema).
+export type OccurrenceStatus = 'pending' | 'done' | 'skipped' | 'missed' | 'paused';
 
 export interface Provenance {
   source: 'self_report' | 'apple_health' | 'reply' | 'auto';
@@ -79,4 +82,5 @@ export interface Occurrence {
   weather?: OccurrenceWeather; // outdoor activities only
   session?: OccurrenceSession | null; // prescription (cached; may be unset until first open)
   log?: OccurrenceLog | null; // the user's report
+  episode_id?: string | null; // set on the TEMP "do what you can" occurrences a disrupted episode adds (Req 4)
 }

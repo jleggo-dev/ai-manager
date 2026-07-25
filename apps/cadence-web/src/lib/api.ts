@@ -22,6 +22,10 @@ export { openCoachSession, getCurrentCoach, sendCoachMessage } from './api/coach
 export {
   getPlan,
   setOccurrence,
+  logAdhoc,
+  enterEpisode,
+  endEpisode,
+  checkin,
   replan,
   previewReplan,
   dismissReplanPreview,
@@ -37,6 +41,7 @@ export {
   type PlanActivity,
   type PendingProposal,
   type PlanViewData,
+  type ActiveEpisode,
   type ReplanPreview,
   type LockPreview,
 } from './api/plan.ts';

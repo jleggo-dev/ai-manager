@@ -8,6 +8,9 @@ const setPendingProposal = vi.fn();
 const touchAssessedAt = vi.fn();
 const getActivePlan = vi.fn();
 const listOccurrences = vi.fn();
+const getLastDoneOccurrenceDate = vi.fn();
+const getActiveEpisode = vi.fn();
+const getLastCheckInDate = vi.fn();
 const runJob = vi.fn();
 const detectTripwires = vi.fn();
 const rollingConsistency = vi.fn();
@@ -22,6 +25,13 @@ vi.mock('../repos/plans.ts', () => ({
 }));
 vi.mock('../repos/occurrences.ts', () => ({
   listOccurrences: (...a: unknown[]) => listOccurrences(...a),
+  getLastDoneOccurrenceDate: (...a: unknown[]) => getLastDoneOccurrenceDate(...a),
+}));
+vi.mock('../repos/episodes.ts', () => ({
+  getActiveEpisode: (...a: unknown[]) => getActiveEpisode(...a),
+}));
+vi.mock('../repos/check-ins.ts', () => ({
+  getLastCheckInDate: (...a: unknown[]) => getLastCheckInDate(...a),
 }));
 vi.mock('../ai/aim.ts', () => ({
   runJob: (...a: unknown[]) => runJob(...a),
@@ -47,6 +57,9 @@ describe('assessIfDue', () => {
     rollingConsistency.mockReturnValue({ kept: 5, window: 7 });
     listOccurrences.mockResolvedValue([]);
     getActivePlan.mockResolvedValue({ plan_id: 'p1' });
+    getActiveEpisode.mockResolvedValue(null);
+    getLastDoneOccurrenceDate.mockResolvedValue(null);
+    getLastCheckInDate.mockResolvedValue(null);
     touchAssessedAt.mockResolvedValue(undefined);
     setPendingProposal.mockResolvedValue(undefined);
   });
@@ -115,5 +128,66 @@ describe('assessIfDue', () => {
     runJob.mockResolvedValue({ formatted: JSON.stringify({ recommend_replan: false }) });
     await assessIfDue(USER);
     expect(setPendingProposal).not.toHaveBeenCalled();
+  });
+
+  it('proposes a detour on return after a dark gap (Req 4 on-return), before touching the Broker', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-15T12:00:00.000Z'));
+    getUser.mockResolvedValue({ pending_proposal: null, last_assessed_at: null, steer_back: null });
+    getLastDoneOccurrenceDate.mockResolvedValue('2026-07-10'); // 5 dark days
+    await assessIfDue(USER);
+    expect(setPendingProposal).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ action: 'enter_disrupted', episode_type: 'custom' }),
+    );
+    expect(runJob).not.toHaveBeenCalled();
+  });
+
+  it('proposes a re-baseline (not a detour) on return after a LONG gap', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-15T12:00:00.000Z'));
+    getUser.mockResolvedValue({ pending_proposal: null, last_assessed_at: null, steer_back: null });
+    getLastDoneOccurrenceDate.mockResolvedValue('2026-07-05'); // 10 dark days
+    await assessIfDue(USER);
+    expect(setPendingProposal).toHaveBeenCalledWith(USER, expect.objectContaining({ action: 'rebaseline' }));
+    expect(runJob).not.toHaveBeenCalled();
+  });
+
+  it('does not propose an on-return detour for a short gap', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-15T12:00:00.000Z'));
+    getUser.mockResolvedValue({ pending_proposal: null, last_assessed_at: null, steer_back: null });
+    getLastDoneOccurrenceDate.mockResolvedValue('2026-07-13'); // 2 days — not a gap
+    detectTripwires.mockReturnValue([]);
+    await assessIfDue(USER);
+    expect(setPendingProposal).not.toHaveBeenCalled();
+  });
+
+  it('skips the on-return detour when already on a detour', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-15T12:00:00.000Z'));
+    getUser.mockResolvedValue({ pending_proposal: null, last_assessed_at: null, steer_back: null });
+    getActiveEpisode.mockResolvedValue({ episode_id: 'e1' });
+    getLastDoneOccurrenceDate.mockResolvedValue('2026-07-01'); // long gap, but already detouring
+    detectTripwires.mockReturnValue([]);
+    await assessIfDue(USER);
+    expect(setPendingProposal).not.toHaveBeenCalled();
+  });
+
+  it('proposes a travel detour when the Broker recommends enter_disrupted', async () => {
+    getUser.mockResolvedValue({ pending_proposal: null, last_assessed_at: null, steer_back: null });
+    detectTripwires.mockReturnValue(['timezone_shift']);
+    runJob.mockResolvedValue({
+      formatted: JSON.stringify({ enter_disrupted: true, reason: 'Looks like you are traveling' }),
+    });
+    await assessIfDue(USER);
+    expect(setPendingProposal).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({
+        action: 'enter_disrupted',
+        episode_type: 'travel',
+        reason: 'Looks like you are traveling',
+      }),
+    );
   });
 });

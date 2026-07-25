@@ -1746,9 +1746,12 @@ thin `services/streak.ts` `evaluateStreak` builds the day list + persists; `GET 
   Reuses the whole occurrence-centric stack; `paused` reads as "not due" so it can't break the
   streak. **End** = drop future temp occurrences, un-pause base from today forward; history stays
   honest. Base plan resumes untouched.
-- Feed the live episode into `plan-synthesis` (replace the hard-`null` `active_episode`), and
-  generalize `PendingProposal` with `action: 'replan' | 'enter_disrupted' | 'rebaseline'` so accept
-  can branch. Align the type's `protect_momentum` → the DB's `protect_streak`.
+- Feed the live episode into `plan_vet` (replace the hard-`null` `active_episode`). **Naming
+  correction (found during Phase C):** migration `0006` already renamed `protect_streak` →
+  `protect_momentum`, so the type and live DB match — no rename. The streak protection is
+  **structural** (the `inEpisode` shield in `evaluateStreak`), not a boolean read, so `protect_momentum`
+  stays. The `PendingProposal.action` generalization (`replan | enter_disrupted | rebaseline`) moves
+  to **Phase D**, where the proactive/on-return entry paths actually consume it.
 
 ### Logging honesty
 `POST /plan/occurrences/adhoc` — log an unscheduled thing you did → a `done` occurrence (optional
@@ -1769,15 +1772,39 @@ them before.
 (`action:'rebaseline'`) rather than silently resuming the old plan.
 
 ### Build phasing
-- **A — streak + freeze economy** (metric layer; independent, ships value alone; reinstates the
-  streak). 
-- **B — logging honesty** (ad-hoc log + acknowledged skip; feeds A's classification).
-- **C — episode engine** (repo + enter/end + `disrupted_plan` wiring + `paused` overlay +
-  check-in store + generalized proposal). **Gotcha:** the `episodes` table (0001) FK-references
-  `auth.users`, but everything post-0002 (e.g. `goal_events`) references `cadence.users` — the
-  episodes repo needs an FK-fix migration or inserts fail for the dev user.
-- **D — the three entry paths** (thin once C exists; opens the `'disrupted'` intent).
-- **E — week-gap re-baseline** (rides on C's generalized proposal).
+- **A — streak + freeze economy** ✅ DONE — metric layer; `metrics.ts` pure engine + `streak.ts` +
+  `users.streak_state` (migration 0015); surfaced in PlanView + a Week-tab "rhythm" line.
+- **B — logging honesty** ✅ DONE — ad-hoc off-plan log (`POST /plan/occurrences/adhoc` →
+  `adhoc-log.ts` → "Off-plan" bucket activity). Acknowledged skip was ALREADY shipped pre-Req-4
+  (OccurrenceRow skip button + status endpoint); "ran 2km not 5km" already worked via `logOccurrence`.
+- **C — episode engine** ✅ DONE — migration 0016 (episodes FK `auth.users`→`cadence.users`;
+  occurrences `+paused` status `+episode_id`; `check_ins` table). `repos/episodes.ts` +
+  `repos/check-ins.ts`; `services/episode.ts` enter/end + pure `episode-overlay.ts`; `disrupted_plan`
+  job wired (best-effort); additive overlay = pause base user occurrences + materialize temp
+  (episode-tagged) options; `evaluateStreak` now shields `inEpisode` days + counts check-ins as
+  engaged; `active_episode` fed into `plan_vet`; `POST /plan/{episode,episode/end,checkin}`; PlanView
+  gains `activeEpisode`; web detour banner + paused render.
+- **D — the three entry paths** ✅ DONE — `PendingProposal.action` (`replan|enter_disrupted|rebaseline`)
+  + `episode_type`; accept-route branches (enter_disrupted → `enterEpisode`, else re-plan). (1)
+  On-return: `assessIfDue` proposes a detour when `lastEngagementDate` gap ≥ 4 days (uses
+  `getLastDoneOccurrenceDate` + `getLastCheckInDate`); (2) manual: Week-tab "Life happened? Take a
+  detour" type-picker → `POST /plan/episode`; (3) proactive: `assessIfDue` now consumes
+  `situation_assess`'s `enter_disrupted` (infers `travel` from timezone/location tripwires). Banner
+  copy branches on action. **NB:** on-return shares the weekly `last_assessed_at` throttle, so a
+  short gap right after an assess can delay it up to ~a week (acceptable; the tripwire path also
+  catches the dark stretch). **Deferred:** the `'disrupted'` COACH intent (client passes `intent`
+  to `/coach`; wire `activeEpisode → intent:'disrupted'` in the web coach-open) — small follow-up.
+- **E — week-gap re-baseline** ✅ DONE — `rebaseline` is proposed (1) on return after a **≥7-day**
+  gap (vs. a detour for a 4–6-day gap) and (2) on `endEpisode` after a **≥7-day** detour (surfaces as
+  the normal proposal banner). Accepting it runs `replanPlan(userId, REBASELINE_STEER)` — a
+  coach-driven fresh-look synthesis (reassess the starting point, gentle on-ramp) rather than a
+  silent resume. Banner reads "Welcome back / Take a fresh look".
+
+**Req 4 COMPLETE (2026-07-24)** — A–E all built on `feat/req4-disrupted-streaks`, 236 api tests +
+all three workspaces green (tsc/lint/format). Deploy items outstanding (user's call): apply
+migrations **0015** + **0016**; branch uncommitted/unmerged; auth-gated so verified by tsc/tests not
+the browser. Remaining polish (noted, not built): the `'disrupted'` coach intent wire; a richer
+conversational re-baseline (today's is a steered one-shot re-plan).
 
 ### Brand reconciliation
 BRAND.md retired streaks and bans "streak mechanics that reset to zero." The founder reversed the

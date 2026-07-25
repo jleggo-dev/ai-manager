@@ -39,12 +39,18 @@ export interface SituationAssessResult {
   suggested_levers?: string[];
 }
 
+/** What accepting a proposal DOES (Req 4). Absent ⇒ 'replan' (the original, back-compatible
+ *  behavior). 'enter_disrupted' starts a detour; 'rebaseline' is the week-gap coach reset (Phase E). */
+export type ProposalAction = 'replan' | 'enter_disrupted' | 'rebaseline';
+
 /** A situation_assess recommendation awaiting the user's accept/dismiss — never auto-applied
  *  (suggest-never-auto-apply, BRAND.md's autonomy stance). Stored per-user until resolved. */
 export interface PendingProposal {
   reason: string;
   suggested_levers: string[];
   created_at: string;
+  action?: ProposalAction; // undefined = 'replan'
+  episode_type?: 'travel' | 'illness' | 'injury' | 'recovery' | 'custom'; // for action 'enter_disrupted'
 }
 
 /** One activity in a synthesized-but-not-yet-committed plan. Carries both the raw fields

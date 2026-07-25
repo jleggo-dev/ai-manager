@@ -4,6 +4,7 @@ import { sql } from '../db/sql.ts';
 import { getActivePlan, supersedeActivePlans, insertPlan } from '../repos/plans.ts';
 import { insertActivities } from '../repos/activities.ts';
 import { deleteFuturePendingOccurrences } from '../repos/occurrences.ts';
+import { getActiveEpisode } from '../repos/episodes.ts';
 import { ensureHorizon } from './plan-horizon.ts';
 import { toRRule, describeRecurrence } from './scheduling.ts';
 import { matchGoal } from './plan-match.ts';
@@ -145,11 +146,14 @@ async function vetAndShape(
   normalized: Partial<Activity>[],
   opts: SynthesizeOpts,
 ): Promise<VetShapeResult> {
+  // A replan DURING a disrupted episode is vetted against it (the Broker eases expectations rather
+  // than flagging the lighter load as under-programming). Null when not in an episode — the common case.
+  const activeEpisode = await getActiveEpisode(userId);
   const vetRes = await runJob(userId, cadenceConfig.aim.jobs.planVet, {
     proposed_plan: JSON.stringify({ activities: normalized }),
     baseline: JSON.stringify(opts.baseline),
     equipment: JSON.stringify(opts.equipment),
-    active_episode: JSON.stringify(null),
+    active_episode: JSON.stringify(activeEpisode),
   });
   const vet = parseJson(vetRes.formatted ?? vetRes.raw ?? '') as PlanVetResult | null;
   if (!vet || vet.verified === false || vet.valid === false) {
