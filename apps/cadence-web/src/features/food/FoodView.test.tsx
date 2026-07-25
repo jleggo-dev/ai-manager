@@ -51,6 +51,7 @@ vi.mock('../../lib/api.ts', () => ({
   saveRecipe: vi.fn(),
   logMealFromRecipe: vi.fn(),
   recipeMacroHint: () => '',
+  getNutritionInsight: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../../components/MicButton.tsx', () => ({

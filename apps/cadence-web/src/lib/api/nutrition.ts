@@ -195,3 +195,51 @@ export async function getBaselineRead(): Promise<BaselineRead> {
   if (!res.ok) throw Object.assign(new Error(`baseline failed: ${res.status}`), { status: res.status });
   return res.json();
 }
+
+/* ── Req 5 WS-I insight card ─────────────────────────────────── */
+export type NutritionInsightKind = 'macro' | 'pattern' | 'variety';
+export type NutritionInsightStatus = 'quiet' | 'observing' | 'on_track' | 'room_left' | 'a_little_over';
+
+export interface NutritionInsightItem {
+  kind: NutritionInsightKind;
+  body: string;
+}
+
+export interface NutritionInsightPack {
+  status: NutritionInsightStatus;
+  status_line: string;
+  primary: NutritionInsightItem | null;
+  more: NutritionInsightItem[];
+  drill: {
+    date: string;
+    macros: Array<{
+      key: 'kcal' | 'protein_g' | 'carbs_g' | 'fat_g';
+      label: string;
+      eaten: number;
+      target: number | null;
+      left: number | null;
+    }>;
+    meals: Array<{
+      meal: MealKind;
+      summary: string;
+      kcal: number | null;
+      provisional?: boolean;
+    }>;
+    window: {
+      days_logged: number;
+      window_days: number;
+      top_items: { name: string; count: number }[];
+    };
+  };
+}
+
+/** Coach-voiced nutrition insight for Today / Food (deterministic; soft-fails to null). */
+export async function getNutritionInsight(date?: string): Promise<NutritionInsightPack | null> {
+  try {
+    const res = await fetch(`${BASE}/nutrition/insight${date ? `?date=${date}` : ''}`, { headers: headers() });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}

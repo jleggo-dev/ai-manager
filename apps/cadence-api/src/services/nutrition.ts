@@ -32,10 +32,12 @@ import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } 
 import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW } from './nutrition-parse.ts';
 import { logAi } from './ai-log.ts';
 import { logMealFromFood, logMealFromRecipe } from './nutrition-log-saved.ts';
+import { buildNutritionInsight, type NutritionInsightPack } from './nutrition-insight.ts';
 
 export { parseMealResult, wantsTargets, PROVISIONAL_BELOW, isMeal } from './nutrition-parse.ts';
 export type { ParsedMealResult } from './nutrition-parse.ts';
 export { logMealFromFood, logMealFromRecipe } from './nutrition-log-saved.ts';
+export type { NutritionInsightPack } from './nutrition-insight.ts';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -231,6 +233,44 @@ export async function getNutritionSummary(userId: string, days = 7): Promise<Nut
   const to = today();
   const from = new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
   return summarizeNutrition(await listNutritionLogs(userId, from, to), days);
+}
+
+/**
+ * Req 5 WS-I — coach-voiced insight pack for the nutrition card.
+ * Reuses `getNutritionDay` totals/left (no forked day math) + one unsigned recent-log fetch
+ * for Observe summary / pattern / variety (no photo URL signing).
+ */
+export async function getNutritionInsight(userId: string, date?: string): Promise<NutritionInsightPack> {
+  const windowDays = 7;
+  const to = today();
+  const from = new Date(Date.now() - (windowDays - 1) * 86_400_000).toISOString().slice(0, 10);
+  const [day, recent] = await Promise.all([getNutritionDay(userId, date), listNutritionLogs(userId, from, to)]);
+  const summary = summarizeNutrition(recent, windowDays);
+  // MacroTargets allows null fields; insight builder only needs positive macro numbers.
+  const targets: Macros | null = day.targets
+    ? {
+        ...(typeof day.targets.kcal === 'number' ? { kcal: day.targets.kcal } : {}),
+        ...(typeof day.targets.protein_g === 'number' ? { protein_g: day.targets.protein_g } : {}),
+        ...(typeof day.targets.carbs_g === 'number' ? { carbs_g: day.targets.carbs_g } : {}),
+        ...(typeof day.targets.fat_g === 'number' ? { fat_g: day.targets.fat_g } : {}),
+      }
+    : null;
+  const targetsOrNull = targets && Object.keys(targets).length ? targets : null;
+
+  return buildNutritionInsight(
+    {
+      date: day.date,
+      meals: day.meals,
+      totals: day.totals,
+      provisional_totals: day.provisional_totals,
+      targets: targetsOrNull,
+      left: day.left,
+      confirmed_count: day.confirmed_count,
+      provisional_count: day.provisional_count,
+    },
+    summary,
+    recent,
+  );
 }
 
 /** Recent meals, newest first, with short-lived signed photo URLs attached (UI list). */
