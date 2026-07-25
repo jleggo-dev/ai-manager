@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Orb } from '../../components/Orb.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
+import { CoachFoodActionSheet } from '../coach/CoachFoodActionSheet.tsx';
 import { useCoachChat } from './useCoachChat.ts';
 
 const SendIcon = () => (
@@ -45,7 +46,9 @@ export function OnboardingChat({
   intent?: 'onboarding' | 'ongoing';
   chrome?: 'onboarding' | 'none';
 }) {
-  const { turns, input, setInput, streaming, captured, restored, send } = useCoachChat({ intent });
+  const { turns, input, setInput, streaming, captured, restored, send, foodAction, clearFoodAction } = useCoachChat({
+    intent,
+  });
   const chatRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const [flash, setFlash] = useState(false);
@@ -170,6 +173,15 @@ export function OnboardingChat({
           )}
       </div>
       {composer}
+      {foodAction && (
+        <CoachFoodActionSheet
+          action={foodAction}
+          onClose={clearFoodAction}
+          onDone={() => {
+            clearFoodAction();
+          }}
+        />
+      )}
     </div>
   );
 }

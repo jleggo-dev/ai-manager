@@ -6,7 +6,9 @@
  * Each function knows how to run, render a compact section, and report a row count for
  * provenance.
  */
-import { getUser } from '../../repos/users.ts';
+import type { DietaryProfile, NutritionLog, NutritionSummary, OccurrenceLog, ProgressCard } from '@cadence/shared';
+import { EMPTY_DIETARY_PROFILE, sanitizeDietaryProfile } from '@cadence/shared';
+import { getUser, getDietaryProfile } from '../../repos/users.ts';
 import { listGoalsByStatus } from '../../repos/goals.ts';
 import { listEquipment } from '../../repos/equipment.ts';
 import { getActivePlan } from '../../repos/plans.ts';
@@ -15,7 +17,6 @@ import { listOccurrences, listRecentLogged } from '../../repos/occurrences.ts';
 import { listNutritionLogs } from '../../repos/nutrition.ts';
 import { buildProgress } from '../progress.ts';
 import { summarizeNutrition, renderNutritionLine } from '../nutrition-summarize.ts';
-import type { NutritionLog, NutritionSummary, OccurrenceLog, ProgressCard } from '@cadence/shared';
 
 export interface RetrievalFunction {
   name: string;
@@ -288,6 +289,31 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
     },
     rows(r) {
       return (r as { meals: unknown[] }).meals.length;
+    },
+  },
+
+  get_dietary_profile: {
+    name: 'get_dietary_profile',
+    description:
+      'Allergies (hard excludes), diet pattern (vegan/vegetarian/…), and soft dislikes. Use before suggesting foods/recipes and when the user mentions allergies or diet.',
+    domains: ['nutrition', 'safety'],
+    async run(userId) {
+      const raw = await getDietaryProfile(userId);
+      return sanitizeDietaryProfile(raw) ?? { ...EMPTY_DIETARY_PROFILE };
+    },
+    render(r) {
+      const p = r as DietaryProfile;
+      const bits: string[] = [];
+      if (p.allergies.length) bits.push(`allergies (hard): ${p.allergies.join(', ')}`);
+      if (p.diet) bits.push(`diet: ${p.diet}`);
+      if (p.dislikes.length) bits.push(`dislikes: ${p.dislikes.join(', ')}`);
+      if (p.notes?.trim()) bits.push(`notes: ${p.notes.trim()}`);
+      if (!bits.length) return 'Dietary profile: none set yet (ask before first recipe if relevant).';
+      return `Dietary profile: ${bits.join('; ')}`;
+    },
+    rows(r) {
+      const p = r as DietaryProfile;
+      return p.allergies.length + p.dislikes.length + (p.diet ? 1 : 0) + (p.notes?.trim() ? 1 : 0);
     },
   },
 };

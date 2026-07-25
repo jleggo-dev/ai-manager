@@ -1,6 +1,8 @@
+import { injectCoachContext } from '../ai/aim.ts';
 import { getUser } from '../repos/users.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
+import { classifyFoodIntent, FOOD_CONFIRM_CONTEXT } from './coach-food-classify.ts';
 import { injectTurnContext } from './turn-context.ts';
 import { startingPointGaps } from './intake.ts';
 
@@ -101,5 +103,12 @@ export function intentFraming(intent: CoachIntent, topic?: CoachTopic): string {
  */
 export async function assembleTurn(userId: string, sessionId: string, message: string): Promise<string> {
   await injectTurnContext(userId, sessionId, message).catch((e) => console.error('[assembleTurn]', e));
+  // Req 5 coach food surface: confirm-before-commit — remind the model not to claim a log/save.
+  if (classifyFoodIntent(message)) {
+    await injectCoachContext(userId, sessionId, FOOD_CONFIRM_CONTEXT, {
+      source: 'food-confirm',
+      version: 1,
+    }).catch((e) => console.error('[assembleTurn food-confirm]', e));
+  }
   return message;
 }

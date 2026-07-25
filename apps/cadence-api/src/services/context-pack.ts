@@ -23,9 +23,24 @@ import { logAi } from './ai-log.ts';
 /** Deterministic fallback selection per intent (used only if the Scribe select fails). */
 const INTENT_SELECTION: Record<CoachIntent, string[]> = {
   onboarding: ['get_identity', 'get_objectives', 'get_constraints', 'get_equipment'],
-  initial: ['get_identity', 'get_objectives', 'get_active_plan', 'get_constraints'],
-  ongoing: ['get_identity', 'get_objectives', 'get_active_plan', 'get_consistency', 'get_constraints', 'get_weight'],
-  disrupted: ['get_identity', 'get_objectives', 'get_active_plan', 'get_constraints', 'get_equipment'],
+  initial: ['get_identity', 'get_objectives', 'get_active_plan', 'get_constraints', 'get_dietary_profile'],
+  ongoing: [
+    'get_identity',
+    'get_objectives',
+    'get_active_plan',
+    'get_consistency',
+    'get_constraints',
+    'get_weight',
+    'get_dietary_profile',
+  ],
+  disrupted: [
+    'get_identity',
+    'get_objectives',
+    'get_active_plan',
+    'get_constraints',
+    'get_equipment',
+    'get_dietary_profile',
+  ],
 };
 
 /** Safety-critical functions ALWAYS retrieved, regardless of the Scribe's selection. */

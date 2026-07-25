@@ -4,6 +4,7 @@ import './config.ts';
 import express from 'express';
 import healthRoutes from './routes/health.ts';
 import coachRoutes from './routes/coach.ts';
+import coachFoodRoutes from './routes/coach-food.ts';
 import planRoutes from './routes/plan.ts';
 import reviewRoutes from './routes/review.ts';
 import progressRoutes from './routes/progress.ts';
@@ -20,6 +21,7 @@ export function createApp() {
 
   app.use('/health', healthRoutes);
   app.use('/coach', coachRoutes);
+  app.use('/coach', coachFoodRoutes);
   app.use('/plan', planRoutes);
   app.use('/review', reviewRoutes);
   app.use('/progress', progressRoutes);

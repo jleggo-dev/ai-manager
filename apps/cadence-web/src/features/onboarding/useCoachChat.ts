@@ -3,9 +3,17 @@
  *
  * Owns restore, send, SSE-drop recovery, and the StrictMode-safe streaming delta
  * reducer — testable without mounting chrome (Review pill / settings gear / disclaimer).
+ * Req 5: also prepares confirm-first food actions in parallel with the coach reply.
  */
 import { useEffect, useRef, useState } from 'react';
-import { openCoachSession, sendCoachMessage, getReview, getCurrentCoach } from '../../lib/api.ts';
+import {
+  openCoachSession,
+  sendCoachMessage,
+  getReview,
+  getCurrentCoach,
+  prepareCoachFoodAction,
+  type CoachFoodAction,
+} from '../../lib/api.ts';
 
 export interface CoachTurn {
   role: 'user' | 'coach';
@@ -21,6 +29,14 @@ export type UseCoachChatArgs = {
   delay?: (ms: number) => Promise<void>;
 };
 
+function turnsWindow(turns: CoachTurn[], nextUser: string): string {
+  const prior = turns
+    .slice(-8)
+    .map((t) => `${t.role === 'coach' ? 'Coach' : 'User'}: ${t.text}`)
+    .join('\n');
+  return prior ? `${prior}\nUser: ${nextUser}` : `User: ${nextUser}`;
+}
+
 export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs = {}) {
   const wait = delay ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const [turns, setTurns] = useState<CoachTurn[]>([]);
@@ -28,6 +44,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
   const [streaming, setStreaming] = useState(false);
   const [captured, setCaptured] = useState(0);
   const [restored, setRestored] = useState(false);
+  const [foodAction, setFoodAction] = useState<CoachFoodAction | null>(null);
   const sessionId = useRef<string | null>(null);
 
   async function refreshCaptured() {
@@ -98,8 +115,17 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     const text = input.trim();
     if (!text || streaming) return;
     setInput('');
+    const window = turnsWindow(turns, text);
     setTurns((t) => [...t, { role: 'user', text }, { role: 'coach', text: '' }]);
     setStreaming(true);
+    // Confirm-first food draft in parallel with the coach stream (never blocks reply).
+    void prepareCoachFoodAction({ message: text, window })
+      .then((r) => {
+        if (r.status === 'ok' && r.action) setFoodAction(r.action);
+      })
+      .catch(() => {
+        /* soft-fail — chat still works */
+      });
     try {
       if (!sessionId.current) sessionId.current = (await openCoachSession({ intent })).sessionId;
       const { completed } = await sendCoachMessage(sessionId.current, text, applyStreamDelta);
@@ -122,6 +148,8 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     captured,
     restored,
     send,
+    foodAction,
+    clearFoodAction: () => setFoodAction(null),
     // Exported for unit tests of recovery / delta helpers without full send path.
     recoverFromServer,
     fillLastCoach,
