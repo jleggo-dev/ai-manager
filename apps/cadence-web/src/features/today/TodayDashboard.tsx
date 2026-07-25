@@ -7,6 +7,7 @@ import { isFoodTitle } from '../../components/occurrence-mod.ts';
 import { rankProgressCard } from './rank.ts';
 import { useGoalEventAdd } from './useGoalEventAdd.ts';
 import { useNutritionDay, useInvalidateNutritionDay } from '../../lib/query/index.ts';
+import { NutritionInsightCard } from '../nutrition/NutritionInsightCard.tsx';
 import {
   getProgress,
   getRecentMeals,
@@ -141,8 +142,12 @@ export function TodayDashboard({
               📷 Log a meal
             </button>
           )}
+          <NutritionInsightCard reloadKey={reloadKey} compact />
         </div>
       )}
+
+      {/* Nutrition insight can still surface when rings aren't engaged yet (observing). */}
+      {!nutritionEngaged && <NutritionInsightCard reloadKey={reloadKey} />}
 
       {/* 3–7 — everything else derives from /progress, ordered by the S6 registry. */}
       {cards.map((c, i) => (

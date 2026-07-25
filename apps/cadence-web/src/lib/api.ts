@@ -61,11 +61,16 @@ export {
   logMealFromRecipe,
   getRecentMeals,
   getBaselineRead,
+  getNutritionInsight,
   type MealKind,
   type MealMacros,
   type Meal,
   type NutritionDayData,
   type BaselineRead,
+  type NutritionInsightPack,
+  type NutritionInsightItem,
+  type NutritionInsightKind,
+  type NutritionInsightStatus,
 } from './api/nutrition.ts';
 
 export {

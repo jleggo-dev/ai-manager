@@ -16,6 +16,7 @@ import {
   type FoodSummary,
   type ResolvePortionHint,
 } from '../../lib/api.ts';
+import { NutritionInsightCard } from '../nutrition/NutritionInsightCard.tsx';
 import { FoodEntryActions } from './FoodEntryActions.tsx';
 import { FoodPortionConfirm } from './FoodPortionConfirm.tsx';
 import { FoodRecentsList } from './FoodRecentsList.tsx';
@@ -40,6 +41,7 @@ export function FoodView() {
   const [pickNote, setPickNote] = useState('');
   const [dietary, setDietary] = useState<DietaryProfile | null>(null);
   const [banner, setBanner] = useState('');
+  const [insightKey, setInsightKey] = useState(0);
 
   function reloadRecents() {
     getFoodRecents().then((r) => {
@@ -142,6 +144,7 @@ export function FoodView() {
     setMode('home');
     setBanner('Logged — nothing provisional here; that portion is on today.');
     reloadRecents();
+    setInsightKey((k) => k + 1);
   }
 
   if (mode === 'confirm' && draft) {
@@ -177,6 +180,8 @@ export function FoodView() {
       </div>
 
       {banner && <div className="food-banner">{banner}</div>}
+
+      {mode === 'home' && <NutritionInsightCard reloadKey={insightKey} compact />}
 
       {mode !== 'recipes' && (
         <FoodEntryActions
@@ -233,6 +238,7 @@ export function FoodView() {
           onLogged={() => {
             setBanner('Logged — that recipe is on today.');
             reloadRecents();
+            setInsightKey((k) => k + 1);
           }}
         />
       )}

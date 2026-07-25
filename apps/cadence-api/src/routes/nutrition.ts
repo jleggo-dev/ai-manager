@@ -6,6 +6,7 @@ import {
   listRecentMeals,
   getBaselineRead,
   getNutritionDay,
+  getNutritionInsight,
   patchMeal,
   setTargets,
   clearTargets,
@@ -78,6 +79,21 @@ router.get('/day', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /nutrition/day]', err);
     res.status(500).json({ error: 'failed to build the day' });
+  }
+});
+
+/**
+ * GET /nutrition/insight?date=YYYY-MM-DD — Req 5 WS-I insight card payload.
+ * Deterministic macro/pattern/variety copy grounded in day totals + Observe summary.
+ */
+router.get('/insight', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date ?? '')) ? String(req.query.date) : undefined;
+  try {
+    res.json(await getNutritionInsight(userId, date));
+  } catch (err) {
+    console.error('[GET /nutrition/insight]', err);
+    res.status(500).json({ error: 'failed to build insight' });
   }
 });
 
