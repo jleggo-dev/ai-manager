@@ -46,6 +46,7 @@ function parseFood(raw: unknown): Food | null {
     brand: typeof raw.brand === 'string' ? raw.brand : null,
     source: 'off',
     off_id: typeof raw.off_id === 'string' ? raw.off_id : null,
+    fdc_id: typeof raw.fdc_id === 'number' && Number.isInteger(raw.fdc_id) ? raw.fdc_id : null,
     base_unit,
     macros_per_base: raw.macros_per_base as Food['macros_per_base'],
     servings,
