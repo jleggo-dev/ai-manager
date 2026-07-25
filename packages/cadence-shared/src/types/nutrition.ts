@@ -17,7 +17,8 @@ export interface NutritionLog {
   log_id: string;
   date: string;
   meal: MealKind;
-  items: { name: string; qty?: number; unit?: string; est?: Macros }[];
+  /** Optional food_id correlates a free-form item back to a saved Food (Req 5 §5.4). */
+  items: { name: string; qty?: number; unit?: string; est?: Macros; food_id?: string }[];
   macros: Macros;
   input_method: 'photo' | 'voice' | 'text' | 'manual';
   ai_confidence?: number;
@@ -27,6 +28,8 @@ export interface NutritionLog {
   raw_text?: string | null; // the user's own words — always kept (0013)
   flags?: { alcohol?: boolean; caffeine?: boolean }; // ONLY from explicit mentions, never inferred (0013)
   photo_url?: string | null; // display-only: short-lived signed URL attached at read time (never stored)
+  /** Set when the meal is N servings of a saved recipe (Req 5 §5.4). */
+  recipe_id?: string | null;
 }
 
 /** Deterministic Observe-phase read over nutrition_logs — the coach's food-log summary. */
@@ -53,10 +56,12 @@ export interface MacroTargets {
 export interface Recipe {
   recipe_id: string;
   name: string;
-  source: 'user' | 'ai_from_fridge_photo' | 'ai';
+  source: 'user' | 'ai' | 'ai_from_fridge_photo' | 'ai_from_chat';
   servings: number;
-  ingredients: { name: string; qty: number | string }[];
+  /** food_id set once the Resolver resolves the ingredient; ad-hoc name/qty/unit allowed. */
+  ingredients: { food_id?: string; name: string; qty: number | string; unit?: string }[];
   steps: string[];
+  /** Computed by the app: Σ(ingredient macros) ÷ servings — never free-guessed for the dish. */
   macros_per_serving: Macros;
   tags: string[];
   saved: boolean;

@@ -1,0 +1,150 @@
+/* ════════════════════════════════════════════════════════════════
+   Req 5 §5.1 — Foods (shared-aware, MFP-style servings)
+   ════════════════════════════════════════════════════════════════ */
+
+/** Base unit for macros_per_base: g/ml are per 100; item is per 1. */
+export type FoodBaseUnit = 'g' | 'ml' | 'item';
+
+export type FoodSource = 'llm' | 'label_photo' | 'manual' | 'chat' | 'off';
+
+export type FoodVisibility = 'private' | 'shared';
+
+/**
+ * Nutrient blob stored per base. Macros always; micros optional when the source
+ * provides real data (USDA / label / OFF) — never LLM-guessed.
+ */
+export interface FoodNutrients {
+  kcal?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  fiber_g?: number;
+  sodium_mg?: number;
+  iron_mg?: number;
+  zinc_mg?: number;
+  vitamin_c_mg?: number;
+  calcium_mg?: number;
+  potassium_mg?: number;
+}
+
+/** Named serving option mapping to a base amount (MFP Select Unit list). */
+export interface FoodServing {
+  /** User-facing label, e.g. "1 container (170g)". */
+  label: string;
+  /** Unit key, e.g. "container" | "g" | "cup". */
+  unit: string;
+  /**
+   * Amount of base this serving represents.
+   * For base_unit g|ml: grams / milliliters.
+   * For base_unit item: item count in one serving (field name kept for MFP parity).
+   */
+  amount_g: number;
+}
+
+export interface Food {
+  food_id: string;
+  /** NULL = shared/global (e.g. OpenFoodFacts); set = a user's custom food. */
+  owner_user_id: string | null;
+  visibility: FoodVisibility;
+  name: string;
+  brand: string | null;
+  source: FoodSource;
+  off_id: string | null;
+  base_unit: FoodBaseUnit;
+  macros_per_base: FoodNutrients;
+  servings: FoodServing[];
+  /** Index into servings[] to pre-select (anti-friction default). */
+  default_serving: number;
+  confidence: number | null;
+  photo_ref: string | null;
+  created_at?: string;
+}
+
+/** Per-user recents/frequents projection row (optional; ranking falls back to logs). */
+export interface FoodUsage {
+  user_id: string;
+  food_id: string;
+  use_count: number;
+  last_used_at: string;
+}
+
+export const FOOD_NUTRIENT_KEYS = [
+  'kcal',
+  'protein_g',
+  'carbs_g',
+  'fat_g',
+  'fiber_g',
+  'sodium_mg',
+  'iron_mg',
+  'zinc_mg',
+  'vitamin_c_mg',
+  'calcium_mg',
+  'potassium_mg',
+] as const satisfies ReadonlyArray<keyof FoodNutrients>;
+
+export type FoodNutrientKey = (typeof FOOD_NUTRIENT_KEYS)[number];
+
+/** Round macros to 1 decimal; keep micros at 2 when small. */
+function roundNutrient(key: FoodNutrientKey, value: number): number {
+  const places = key === 'kcal' || key.endsWith('_g') ? 1 : 2;
+  const f = 10 ** places;
+  return Math.round(value * f) / f;
+}
+
+/** Scale a nutrient blob by a linear factor (serving × quantity). */
+export function scaleNutrients(base: FoodNutrients, factor: number): FoodNutrients {
+  if (!Number.isFinite(factor) || factor === 0) return {};
+  const out: FoodNutrients = {};
+  for (const key of FOOD_NUTRIENT_KEYS) {
+    const v = base[key];
+    if (typeof v === 'number' && Number.isFinite(v)) out[key] = roundNutrient(key, v * factor);
+  }
+  return out;
+}
+
+/**
+ * Convert (serving, quantity) into a multiplier against macros_per_base.
+ * g/ml: amount_g/100 × qty · item: amount_g (item count) × qty.
+ */
+export function servingFactor(baseUnit: FoodBaseUnit, serving: Pick<FoodServing, 'amount_g'>, quantity = 1): number {
+  const qty = Number.isFinite(quantity) && quantity > 0 ? quantity : 0;
+  const amount = Number.isFinite(serving.amount_g) ? serving.amount_g : 0;
+  if (baseUnit === 'item') return amount * qty;
+  return (amount / 100) * qty;
+}
+
+export interface MacrosForLogOpts {
+  /** Index into food.servings; defaults to food.default_serving. */
+  servingIndex?: number;
+  /** Number of servings (MFP "Number of Servings"); default 1. */
+  quantity?: number;
+}
+
+/**
+ * Macros for a logged amount of a food = macros_per_base × servingFactor × quantity.
+ * Matches MyFitnessPal: pick a serving unit, then a quantity multiplier.
+ */
+export function macrosForLog(
+  food: Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'>,
+  opts: MacrosForLogOpts = {},
+): FoodNutrients {
+  const servings = Array.isArray(food.servings) ? food.servings : [];
+  if (servings.length === 0) return {};
+  const rawIdx = opts.servingIndex ?? food.default_serving ?? 0;
+  const idx = Number.isInteger(rawIdx) && rawIdx >= 0 && rawIdx < servings.length ? rawIdx : 0;
+  const serving = servings[idx];
+  if (!serving) return {};
+  const factor = servingFactor(food.base_unit, serving, opts.quantity ?? 1);
+  return scaleNutrients(food.macros_per_base, factor);
+}
+
+/** Resolve the serving row the UI/resolver should pre-select. */
+export function resolveDefaultServing(food: Pick<Food, 'servings' | 'default_serving'>): FoodServing | null {
+  const servings = Array.isArray(food.servings) ? food.servings : [];
+  if (servings.length === 0) return null;
+  const idx =
+    Number.isInteger(food.default_serving) && food.default_serving >= 0 && food.default_serving < servings.length
+      ? food.default_serving
+      : 0;
+  return servings[idx] ?? null;
+}
