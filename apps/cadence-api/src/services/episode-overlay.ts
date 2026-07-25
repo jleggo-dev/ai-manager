@@ -1,6 +1,9 @@
 import type { Activity } from '@cadence/shared';
 import { toRRule, expandRecurrence } from './scheduling.ts';
-import { EPISODE_CATEGORY } from '../repos/activities.ts';
+
+/** Same sentinel as `EPISODE_CATEGORY` in repos/activities — kept local so this pure helper never
+ *  imports the sql-backed repo module (CI unit tests have no CADENCE_DATABASE_URL). */
+const EPISODE_CATEGORY = 'episode';
 
 /**
  * Coerce one `disrupted_plan` temp activity ({ title, kind, schedule, swap_for }) into our Activity
