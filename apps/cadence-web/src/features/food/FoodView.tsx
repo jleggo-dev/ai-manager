@@ -185,11 +185,14 @@ export function FoodView() {
       />
 
       {mode === 'say' && (
-        <FoodSayPanel
-          onDraft={(d) => openDraft(d, 'say')}
-          onCancel={() => setMode('home')}
-          onPickSaved={(s, portion) => void pickSaved(s, 'say', portion)}
-        />
+        <>
+          {pickNote && <div className="food-empty">{pickNote}</div>}
+          <FoodSayPanel
+            onDraft={(d) => openDraft(d, 'say')}
+            onCancel={() => setMode('home')}
+            onPickSaved={(s, portion) => void pickSaved(s, 'say', portion)}
+          />
+        </>
       )}
 
       {mode === 'snap' && <FoodSnapPanel onDraft={(d) => openDraft(d, 'snap')} onCancel={() => setMode('home')} />}
