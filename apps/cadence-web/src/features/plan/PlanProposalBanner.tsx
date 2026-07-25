@@ -15,11 +15,32 @@ export function PlanProposalBanner({
   onAccept: () => void;
   onDismiss: () => void;
 }) {
+  // Each proposal action (Req 4) reads in its own voice — a detour, a welcome-back re-baseline, or
+  // the original plan-adjust.
+  const action = proposal.action ?? 'replan';
+  const TITLE: Record<'replan' | 'enter_disrupted' | 'rebaseline', string> = {
+    replan: 'Your coach has a suggestion',
+    enter_disrupted: 'Life happened?',
+    rebaseline: 'Welcome back',
+  };
+  const ACCEPT: Record<'replan' | 'enter_disrupted' | 'rebaseline', string> = {
+    replan: 'Adjust my plan',
+    enter_disrupted: 'Take a detour',
+    rebaseline: 'Take a fresh look',
+  };
+  const BUSY: Record<'replan' | 'enter_disrupted' | 'rebaseline', string> = {
+    replan: 'Adjusting…',
+    enter_disrupted: 'Starting…',
+    rebaseline: 'Taking a look…',
+  };
+  const title = TITLE[action];
+  const acceptLabel = busy ? BUSY[action] : ACCEPT[action];
+
   return (
     <div className="plan-proposal">
       <Orb />
       <div className="plan-proposal-t">
-        <b>Your coach has a suggestion</b>
+        <b>{title}</b>
         <span>{proposal.reason}</span>
         {proposal.suggested_levers.length > 0 && (
           <div className="proposal-levers">
@@ -32,7 +53,7 @@ export function PlanProposalBanner({
         )}
         <div className="proposal-actions">
           <button className="proposal-accept" onClick={onAccept} disabled={busy}>
-            {busy ? 'Adjusting…' : 'Adjust my plan'}
+            {acceptLabel}
           </button>
           <button className="proposal-dismiss" onClick={onDismiss} disabled={busy}>
             Not now

@@ -7,11 +7,27 @@ import { PlanWeekPanel } from './PlanWeekPanel.tsx';
 import {
   getPlan,
   setOccurrence,
+  logAdhoc,
+  enterEpisode,
+  endEpisode,
+  checkin,
   acceptProposal,
   dismissProposal,
   type PlanViewData,
   type PlanOccurrence,
+  type ActiveEpisode,
 } from '../../lib/api.ts';
+
+/** Warm label for a detour type — the coach names the disruption plainly (BRAND.md). */
+function detourLabel(type: ActiveEpisode['type']): string {
+  return {
+    travel: 'traveling',
+    illness: 'under the weather',
+    injury: 'working around an injury',
+    recovery: 'recovering',
+    custom: 'a full stretch',
+  }[type];
+}
 
 /**
  * The "Today" TAB — rendered inside MainTabs' .app shell (no header of its own). A pinned
@@ -59,6 +75,9 @@ export function PlanView() {
         setNote(r.note?.trim() || 'Updated your plan to fit how this stretch has been going.');
         setData(await getPlan());
         bump();
+      } else if (r.status === 'entered_disrupted') {
+        setData(await getPlan()); // the detour banner + paused overlay appear — that's the feedback
+        bump();
       } else {
         setNote("I couldn't adjust it just now — give it another try in a bit.");
       }
@@ -90,6 +109,29 @@ export function PlanView() {
     );
     await setOccurrence(o.occurrence_id, next).catch(() => {});
     refresh(); // reconcile + refresh consistency
+  }
+
+  async function adhocLog(text: string) {
+    await logAdhoc(text).catch(() => {});
+    refresh(); // the off-plan entry shows in the week + moves consistency/streak
+    bump();
+  }
+
+  async function enterDetour(type: ActiveEpisode['type']) {
+    await enterEpisode(type).catch(() => {});
+    refresh(); // base plan pauses; the detour banner + lighter options appear
+    bump();
+  }
+
+  async function endDetour() {
+    await endEpisode().catch(() => {});
+    refresh(); // base plan resumes; the banner clears
+    bump();
+  }
+
+  async function checkInNow() {
+    await checkin().catch(() => {});
+    refresh(); // keeps the streak alive even with nothing completed
   }
 
   if (!data) {
@@ -149,6 +191,25 @@ export function PlanView() {
             onDismiss={dismissProp}
           />
         )}
+        {data.activeEpisode && (
+          <div className="detour">
+            <div className="detour-t">
+              <b>On a detour — {detourLabel(data.activeEpisode.type)}</b>
+              <span>
+                Your plan&apos;s on hold so a rough stretch never breaks your rhythm. Do what you can — checking in
+                keeps your streak alive.
+              </span>
+            </div>
+            <div className="detour-actions">
+              <button className="adjust-pill" onClick={checkInNow}>
+                Check in
+              </button>
+              <button className="detour-end" onClick={endDetour}>
+                I&apos;m back
+              </button>
+            </div>
+          </div>
+        )}
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
         {view === 'today' ? (
@@ -161,6 +222,8 @@ export function PlanView() {
             windowDays={window}
             streak={data.streak}
             onCheck={set}
+            onAdhocLog={adhocLog}
+            onEnterDetour={data.activeEpisode ? undefined : enterDetour}
             onOpen={setSheetOcc}
             onAdjust={() => {
               setAdjustSteer('');

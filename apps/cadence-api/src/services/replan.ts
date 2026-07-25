@@ -88,16 +88,30 @@ async function gatherReplanInputs(userId: string): Promise<ReplanInputs | null> 
  * The MANUAL "Adjust my plan" button uses previewReplan/confirmReplan below instead, because
  * clicking that button has no prior consent moment of its own.
  */
-export async function replanPlan(userId: string): Promise<CommitResult> {
+export async function replanPlan(userId: string, steer?: string): Promise<CommitResult> {
   const inputs = await gatherReplanInputs(userId);
   if (!inputs) return { status: 'vetoed', violations: ['No active goals to re-plan.'] };
 
-  const result = await planSynthesizeVetCommit(userId, { ...inputs, goalIds: inputs.goals.map((g) => g.goal_id) });
+  // `steer` lets a caller frame the synthesis (e.g. the Req 4 re-baseline: reassess from scratch
+  // after a long break). Undefined for a plain adaptive re-plan.
+  const result = await planSynthesizeVetCommit(userId, {
+    ...inputs,
+    userSteer: steer,
+    goalIds: inputs.goals.map((g) => g.goal_id),
+  });
   // Whatever prompted this re-plan (the manual button, or accepting a coach's proposal) is
   // resolved now — clear any pending proposal so a stale banner can't linger.
   if (result.status === 'committed') await setPendingProposal(userId, null);
   return result;
 }
+
+/**
+ * The steer for a Req 4 "re-baseline" — accepted after a long absence or a long detour. It tells
+ * synthesis to reassess the user's starting point rather than resume the old plan at its old level:
+ * a coach-driven fresh look, not a silent replan.
+ */
+export const REBASELINE_STEER =
+  'The user is returning after an extended break. Reassess their starting point from scratch — do not assume they held their previous level. Rebuild a gentle on-ramp that eases them back in over the next couple of weeks before returning to full load.';
 
 /**
  * First half of the manual "Adjust my plan" flow: synthesize_plan → plan_vet, no commit. Stores

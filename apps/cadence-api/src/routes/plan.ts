@@ -1,22 +1,32 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { previewLock, confirmLock, dismissLock } from '../services/lock.ts';
-import { replanPlan, previewReplan, confirmReplan, dismissReplan } from '../services/replan.ts';
+import { replanPlan, previewReplan, confirmReplan, dismissReplan, REBASELINE_STEER } from '../services/replan.ts';
 import { buildPlanView } from '../services/plan-view.ts';
 import { assessIfDue } from '../services/situation.ts';
 import { getOccurrenceDetail, prefetchImminentSessions } from '../services/session-generate.ts';
 import { logOccurrence } from '../services/session-log.ts';
+import { logAdhocActivity } from '../services/adhoc-log.ts';
+import { enterEpisode, endEpisode } from '../services/episode.ts';
 import { recordWeighIn } from '../services/weigh-in.ts';
-import { setPendingProposal } from '../repos/users.ts';
+import { setPendingProposal, getUser } from '../repos/users.ts';
 import { setOccurrenceStatus } from '../repos/occurrences.ts';
+import { recordCheckIn } from '../repos/check-ins.ts';
 import {
   BodyValidationError,
   parseBody,
   replanSteerBodySchema,
   occurrenceLogBodySchema,
+  adhocLogBodySchema,
   weighInBodySchema,
   occurrenceStatusBodySchema,
+  episodeEnterBodySchema,
 } from '../validation/body.ts';
+
+const todayIso = (): string => {
+  const n = new Date();
+  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())).toISOString().slice(0, 10);
+};
 
 const router = Router();
 router.use(requireCadenceUser);
@@ -88,12 +98,25 @@ router.post('/replan', async (req: Request, res: Response) => {
   }
 });
 
-/** POST /plan/proposal/accept — accept the coach's proactive proposal: runs the same re-plan as
- *  "Adjust my plan" (accepting IS the commit); clears the proposal on success. */
+/** POST /plan/proposal/accept — accept the coach's proactive proposal. Branches on the proposal's
+ *  `action` (Req 4): an `enter_disrupted` proposal starts a detour; everything else re-plans (the
+ *  original behavior). Accepting IS the commit; the proposal is cleared on success. */
 router.post('/proposal/accept', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
-    const r = await replanPlan(userId);
+    const user = await getUser(userId);
+    const proposal = user?.pending_proposal ?? null;
+    if (proposal?.action === 'enter_disrupted') {
+      const r = await enterEpisode(userId, { type: proposal.episode_type ?? 'custom' });
+      await setPendingProposal(userId, null);
+      return void res
+        .status(r ? 200 : 409)
+        .json(r ? { status: 'entered_disrupted', episode: r.episode } : { status: 'no_plan' });
+    }
+    // 'rebaseline' steers a fresh-start synthesis (reassess after a long break); 'replan'/undefined
+    // is the plain adaptive re-plan. Both commit + clear the proposal via replanPlan.
+    const steer = proposal?.action === 'rebaseline' ? REBASELINE_STEER : undefined;
+    const r = await replanPlan(userId, steer);
     res.status(r.status === 'committed' ? 200 : 422).json(r);
   } catch (err) {
     console.error('[POST /plan/proposal/accept]', err);
@@ -114,6 +137,49 @@ router.post('/proposal/dismiss', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /plan/episode — enter a disrupted episode (Req 4): an ADDITIVE overlay, base plan paused for
+ * the window + lighter "do what you can" options added (via the disrupted_plan job). The base plan
+ * resumes untouched on end. 200 with the episode · 400 bad body · 409 no committed plan to overlay.
+ */
+router.post('/episode', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(episodeEnterBodySchema, req.body);
+    const r = await enterEpisode(userId, body);
+    if (!r) return void res.status(409).json({ error: 'no active plan to overlay' });
+    res.json(r);
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /plan/episode]', err);
+    res.status(500).json({ error: 'enter episode failed' });
+  }
+});
+
+/** POST /plan/episode/end — end the active episode; base plan resumes from today. Idempotent. */
+router.post('/episode/end', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    res.json(await endEpisode(userId));
+  } catch (err) {
+    console.error('[POST /plan/episode/end]', err);
+    res.status(500).json({ error: 'end episode failed' });
+  }
+});
+
+/** POST /plan/checkin — the explicit "I'm here" (Req 4): showing up keeps the streak alive on a
+ *  rough day, even with nothing completed. Idempotent per day. */
+router.post('/checkin', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    await recordCheckIn(userId, todayIso());
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[POST /plan/checkin]', err);
+    res.status(500).json({ error: 'checkin failed' });
+  }
+});
+
+/**
  * GET /plan/occurrences/:id — the session detail sheet: occurrence + activity + the coach's
  * concrete session (generated + cached on first open; gates in services/session.ts). 404 when
  * the id isn't this user's — including future rows a replan just deleted, which the client
@@ -128,6 +194,26 @@ router.get('/occurrences/:id', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /plan/occurrences/:id]', err);
     res.status(500).json({ error: 'failed to load session' });
+  }
+});
+
+/**
+ * POST /plan/occurrences/adhoc — log something you DID that wasn't on the plan ("hotel yoga
+ * class"). Lands as a done occurrence on the day (default today) so it counts toward consistency
+ * + the streak (Req 4 honest logging). MUST precede `/occurrences/:id` so "adhoc" isn't parsed as
+ * an id. 400 empty text · 409 no committed plan (or date out of range).
+ */
+router.post('/occurrences/adhoc', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const { text, date } = parseBody(adhocLogBodySchema, req.body);
+    const r = await logAdhocActivity(userId, text, date);
+    if (!r) return void res.status(409).json({ error: 'no active plan (or date out of range)' });
+    res.json(r);
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /plan/occurrences/adhoc]', err);
+    res.status(500).json({ error: 'log failed' });
   }
 });
 

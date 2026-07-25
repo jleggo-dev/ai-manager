@@ -38,6 +38,22 @@ export async function upsertOccurrences(rows: NewOccurrence[]): Promise<void> {
     on conflict (activity_id, date) do nothing`;
 }
 
+/**
+ * Ensure an occurrence exists for (activity, date) and return its id — the ad-hoc log path, where
+ * the row doesn't pre-exist (the off-plan bucket is never materialized by the scheduler). Upserts
+ * against the unique (activity_id, date) index so a repeat same-day call returns the existing row
+ * instead of colliding; the `do update` is a no-op that just forces RETURNING to yield the row.
+ */
+export async function getOrInsertOccurrenceId(activityId: string, userId: string, date: string): Promise<string> {
+  const [row] = await sql<{ occurrence_id: string }[]>`
+    insert into cadence.occurrences (activity_id, user_id, date, status)
+    values (${activityId}, ${userId}, ${date}, 'pending')
+    on conflict (activity_id, date) do update set date = excluded.date
+    returning occurrence_id`;
+  if (!row) throw new Error('getOrInsertOccurrenceId: no row returned');
+  return row.occurrence_id;
+}
+
 export async function listOccurrences(userId: string, fromDate: string, toDate: string): Promise<OccurrenceListRow[]> {
   // Explicit columns, deliberately EXCLUDING session/log jsonb — this feeds the week view,
   // consistency, and replan context, none of which need the (potentially large) payloads.
@@ -248,6 +264,67 @@ export async function listRecentLogged(
     where o.user_id = ${userId} and o.log is not null and o.date >= ${from}
     order by o.date desc
     limit ${limit}`;
+}
+
+/** The most recent day the user completed something (any done occurrence) — half of the
+ *  "last engagement" signal the on-return detour prompt uses (Req 4). Null if they never have. */
+export async function getLastDoneOccurrenceDate(userId: string): Promise<string | null> {
+  const [row] = await sql<Array<{ date: string }>>`
+    select to_char(max(date), 'YYYY-MM-DD') as date
+    from cadence.occurrences where user_id = ${userId} and status = 'done'`;
+  return row?.date ?? null;
+}
+
+/* ── Disrupted-episode overlay (Req 4 Phase C) ─────────────────────────────────────────────── */
+
+/**
+ * Shelve the base plan for an episode window: set still-pending USER occurrences (the effortful
+ * ones — system tracking like food/weigh-in keeps running) to `paused` across [from, to]. Paused
+ * base days are preserved, not deleted, and never count as slips. Returns the count paused.
+ */
+export async function pauseUserOccurrencesInWindow(userId: string, from: string, to: string): Promise<number> {
+  const res = await sql`
+    update cadence.occurrences o set status = 'paused'
+    from cadence.activities a
+    where o.activity_id = a.activity_id and o.user_id = ${userId}
+      and o.date >= ${from} and o.date <= ${to} and o.status = 'pending' and a.kind = 'user'`;
+  return res.count;
+}
+
+/** Un-pause base occurrences from `from` forward when an episode ends — the base plan resumes.
+ *  Past paused days are left as-is (honest history: they were shelved, not done). Returns count. */
+export async function restorePausedOccurrencesFrom(userId: string, from: string): Promise<number> {
+  const res = await sql`
+    update cadence.occurrences set status = 'pending'
+    where user_id = ${userId} and status = 'paused' and date >= ${from}`;
+  return res.count;
+}
+
+/** Materialize an episode's TEMP occurrences (the "do what you can" options), tagged with its
+ *  episode_id. Idempotent on (activity_id, date). */
+export async function insertTempOccurrences(
+  rows: Array<{ activity_id: string; user_id: string; date: string; episode_id: string }>,
+): Promise<void> {
+  if (rows.length === 0) return;
+  await sql`
+    insert into cadence.occurrences ${sql(
+      rows.map((r) => ({ ...r, status: 'pending' as const })),
+      'activity_id',
+      'user_id',
+      'date',
+      'episode_id',
+      'status',
+    )}
+    on conflict (activity_id, date) do nothing`;
+}
+
+/** Drop an episode's still-pending FUTURE temp occurrences when it ends (past done ones stay as
+ *  history). Returns the count removed. */
+export async function deleteFutureTempOccurrences(userId: string, episodeId: string, from: string): Promise<number> {
+  const res = await sql`
+    delete from cadence.occurrences
+    where user_id = ${userId} and episode_id = ${episodeId} and date >= ${from} and status = 'pending'`;
+  return res.count;
 }
 
 export async function setOccurrenceStatus(

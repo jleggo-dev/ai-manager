@@ -45,18 +45,26 @@ export function OccurrenceRow({
 }) {
   const done = o.status === 'done';
   const skipped = o.status === 'skipped';
-  const openable = isOccurrenceOpenable(o);
+  // A base occurrence shelved for a detour (Req 4): shown muted + non-actionable, never a red mark.
+  const paused = o.status === 'paused';
+  const openable = isOccurrenceOpenable(o) && !paused;
   const openTitle = variant === 'dashboard' ? 'Open' : 'See the session';
 
   return (
-    <div className={`occ${done ? ' occ-done' : ''}${skipped ? ' occ-skip' : ''}`}>
-      <button
-        className="occ-check"
-        onClick={() => onCheck(o, done ? 'pending' : 'done')}
-        aria-label={done ? 'Mark not done' : 'Mark done'}
-      >
-        {done ? '✓' : skipped ? '–' : ''}
-      </button>
+    <div className={`occ${done ? ' occ-done' : ''}${skipped ? ' occ-skip' : ''}${paused ? ' occ-paused' : ''}`}>
+      {paused ? (
+        <span className="occ-check occ-check-static" aria-hidden>
+          –
+        </span>
+      ) : (
+        <button
+          className="occ-check"
+          onClick={() => onCheck(o, done ? 'pending' : 'done')}
+          aria-label={done ? 'Mark not done' : 'Mark done'}
+        >
+          {done ? '✓' : skipped ? '–' : ''}
+        </button>
+      )}
       {variant === 'dashboard' && (
         <span className={`occ-mod occ-mod-${occMod(o)}`}>
           <ModIcon mod={occMod(o)} />
@@ -73,10 +81,14 @@ export function OccurrenceRow({
           {o.time_of_day && <span className="occ-time">{o.time_of_day}</span>}
         </div>
       )}
-      {!done && (
-        <button className="occ-skipbtn" onClick={() => onCheck(o, skipped ? 'pending' : 'skipped')}>
-          {skipped ? 'undo' : 'skip'}
-        </button>
+      {paused ? (
+        <span className="occ-pausetag">paused</span>
+      ) : (
+        !done && (
+          <button className="occ-skipbtn" onClick={() => onCheck(o, skipped ? 'pending' : 'skipped')}>
+            {skipped ? 'undo' : 'skip'}
+          </button>
+        )
       )}
     </div>
   );

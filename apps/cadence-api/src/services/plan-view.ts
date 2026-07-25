@@ -1,7 +1,8 @@
 import type { OccurrenceStatus, PendingProposal, StreakView } from '@cadence/shared';
 import { getActivePlan } from '../repos/plans.ts';
-import { listActivities } from '../repos/activities.ts';
+import { listActivities, NON_PLAN_CATEGORIES } from '../repos/activities.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
+import { getActiveEpisode } from '../repos/episodes.ts';
 import { getUser } from '../repos/users.ts';
 import { getLatestConversation } from '../repos/conversations.ts';
 import { listGoals } from '../repos/goals.ts';
@@ -47,7 +48,15 @@ export interface PlanView {
   week: PlanViewDay[];
   consistency: { kept: number; window: number }; // "showed up N of 7 days" — the honest metric
   streak: StreakView; // the PROTECTED momentum counter that sits BESIDE consistency (Req 4)
+  activeEpisode: ActiveEpisodeView | null; // set when the user is in a disrupted detour (Req 4)
   pendingProposal: PendingProposal | null; // a coach-proposed re-plan awaiting accept/dismiss
+}
+
+/** The slim "you're on a detour" shape the Today/Week view needs — the full episode isn't sent. */
+export interface ActiveEpisodeView {
+  type: 'travel' | 'illness' | 'injury' | 'recovery' | 'custom';
+  start: string;
+  end: string;
 }
 
 /** Neutral view when the streak evaluation itself fails — never let it break the plan load. */
@@ -71,6 +80,10 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
     console.error('[buildPlanView:streak]', e);
     return EMPTY_STREAK;
   });
+  const episode = await getActiveEpisode(userId).catch(() => null);
+  const activeEpisode: ActiveEpisodeView | null = episode
+    ? { type: episode.type, start: episode.start, end: episode.end }
+    : null;
   const plan = await getActivePlan(userId);
   if (!plan) {
     // Started but hasn't locked yet (an open conversation, or goals captured some other way)
@@ -85,6 +98,7 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
       week: [],
       consistency: { kept: 0, window: weekDays },
       streak,
+      activeEpisode,
       pendingProposal: null,
     };
   }
@@ -138,18 +152,23 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
     stage: 'committed',
     version: plan.version,
     committedAt: plan.generated_at,
-    activities: activities.map((a) => ({
-      activity_id: a.activity_id,
-      title: a.title,
-      kind: a.kind,
-      cadence: describeRecurrence(a.schedule?.recurrence ?? ''),
-      recurrence: a.schedule?.recurrence ?? '',
-      time_of_day: a.schedule?.time_of_day,
-      duration_min: a.schedule?.duration_min,
-    })),
+    // Exclude the "Off-plan" bucket + episode-temp activities from the committed-rhythm list — their
+    // occurrences still render in the week (via actById above), but they aren't the plan the user set.
+    activities: activities
+      .filter((a) => !a.category || !NON_PLAN_CATEGORIES.has(a.category))
+      .map((a) => ({
+        activity_id: a.activity_id,
+        title: a.title,
+        kind: a.kind,
+        cadence: describeRecurrence(a.schedule?.recurrence ?? ''),
+        recurrence: a.schedule?.recurrence ?? '',
+        time_of_day: a.schedule?.time_of_day,
+        duration_min: a.schedule?.duration_min,
+      })),
     week: days,
     consistency: { kept, window },
     streak,
+    activeEpisode,
     pendingProposal: user?.pending_proposal ?? null,
   };
 }

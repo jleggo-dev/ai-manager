@@ -7,8 +7,15 @@ export interface PlanOccurrence {
   activity_id: string;
   title: string;
   kind: 'user' | 'system';
-  status: 'pending' | 'done' | 'skipped' | 'missed';
+  status: 'pending' | 'done' | 'skipped' | 'missed' | 'paused';
   time_of_day?: string;
+}
+
+/** The "you're on a detour" summary (Req 4) — set while a disrupted episode is active. */
+export interface ActiveEpisode {
+  type: 'travel' | 'illness' | 'injury' | 'recovery' | 'custom';
+  start: string;
+  end: string;
 }
 export interface PlanDay {
   date: string;
@@ -30,6 +37,8 @@ export interface PendingProposal {
   reason: string;
   suggested_levers: string[];
   created_at: string;
+  action?: 'replan' | 'enter_disrupted' | 'rebaseline'; // undefined = replan (Req 4)
+  episode_type?: ActiveEpisode['type'];
 }
 export interface PlanViewData {
   hasPlan: boolean;
@@ -42,6 +51,7 @@ export interface PlanViewData {
   // The protected streak (Req 4) — beside consistency, never instead of it. Optional so the
   // "no data" fallbacks below stay valid; the live API always includes it.
   streak?: StreakView;
+  activeEpisode?: ActiveEpisode | null; // set while the user is on a disrupted detour (Req 4)
   pendingProposal?: PendingProposal | null;
 }
 
@@ -57,6 +67,43 @@ export async function setOccurrence(id: string, status: 'pending' | 'done' | 'sk
     headers: headers(),
     body: JSON.stringify({ status }),
   });
+}
+
+/** Log something you did that wasn't on the plan (Req 4) → a done occurrence for the day, so it
+ *  counts toward consistency + the streak. `date` optional (YYYY-MM-DD), defaults to today. */
+export async function logAdhoc(text: string, date?: string): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/plan/occurrences/adhoc`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ text, date }),
+  });
+  return { ok: res.ok };
+}
+
+/** Enter a disrupted detour (Req 4): the base plan pauses for the window and lighter options
+ *  appear. `days` defaults server-side to a week. */
+export async function enterEpisode(
+  type: ActiveEpisode['type'],
+  opts?: { days?: number; end?: string; tone?: 'gentle' | 'supportive' },
+): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/plan/episode`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ type, ...opts }),
+  });
+  return { ok: res.ok };
+}
+
+/** End the active detour; the base plan resumes from today. */
+export async function endEpisode(): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/plan/episode/end`, { method: 'POST', headers: headers() });
+  return { ok: res.ok };
+}
+
+/** The explicit "I'm here" (Req 4) — showing up keeps the streak alive on a rough day. */
+export async function checkin(): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/plan/checkin`, { method: 'POST', headers: headers() });
+  return { ok: res.ok };
 }
 
 /** Confirm the previewed "Adjust my plan" adjustment (or run it fresh if nothing was previewed). */

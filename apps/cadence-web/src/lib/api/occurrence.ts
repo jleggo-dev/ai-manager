@@ -6,7 +6,7 @@ export interface OccurrenceDetail {
   occurrence_id: string;
   activity_id: string;
   date: string;
-  status: 'pending' | 'done' | 'skipped' | 'missed';
+  status: 'pending' | 'done' | 'skipped' | 'missed' | 'paused';
   title: string;
   kind: 'user' | 'system';
   category?: string | null;

@@ -95,6 +95,21 @@ export const occurrenceLogBodySchema = z
   })
   .transform((val) => ({ text: val.text.trim() }));
 
+export const adhocLogBodySchema = z
+  .object({
+    text: z.string({ message: 'text required' }),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' })
+      .optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (!val.text.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'text required' });
+    }
+  })
+  .transform((val) => ({ text: val.text.trim(), date: val.date }));
+
 export const weighInBodySchema = z
   .object({
     weight: z.coerce.number({ message: 'weight (number) and unit (kg|lb) required' }),
@@ -113,6 +128,18 @@ export const occurrenceStatusBodySchema = z.object({
   status: z.enum(['pending', 'done', 'skipped'], {
     message: 'status must be pending|done|skipped',
   }),
+});
+
+export const episodeEnterBodySchema = z.object({
+  type: z.enum(['travel', 'illness', 'injury', 'recovery', 'custom'], {
+    message: 'type must be travel|illness|injury|recovery|custom',
+  }),
+  days: z.coerce.number().int().min(1).max(60).optional(),
+  end: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'end must be YYYY-MM-DD' })
+    .optional(),
+  tone: z.enum(['gentle', 'supportive']).optional(),
 });
 
 export const progressEventBodySchema = z

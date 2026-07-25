@@ -16,6 +16,9 @@ vi.hoisted(() => {
 
 vi.mock('../ai/aim.ts', () => ({ runJob: vi.fn(), runJobBySlug: vi.fn() }));
 vi.mock('../db/sql.ts', () => ({ sql: {}, json: (v: unknown) => v }));
+// vetAndShape now consults the active episode (Req 4) — stub it to "none" so these DB-free tests
+// don't hit the real repo (which would touch the mocked-empty sql).
+vi.mock('../repos/episodes.ts', () => ({ getActiveEpisode: vi.fn().mockResolvedValue(null) }));
 
 import * as aim from '../ai/aim.ts';
 import { synthesizeFanoutAndVet } from './plan-fanout.ts';

@@ -426,6 +426,19 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .consist-t { display: flex; flex-direction: column; }
 .consist-t b { font-family: var(--display); font-weight: 700; font-size: 15.5px; }
 .consist-t span { font-size: 13px; color: var(--text-dim); line-height: 1.35; margin-top: 2px; }
+/* The protected streak — a warm secondary note under the honest "N of 7" (Req 4). */
+.consist-t .consist-streak { color: var(--forest); font-weight: 600; margin-top: 3px; }
+
+/* Off-plan quick log (Req 4 honest logging): "I did something that wasn't on the plan." */
+.adhoc { margin: 2px 0 14px; }
+.adhoc-trigger { width: 100%; text-align: left; background: none; border: 1px dashed var(--line-soft); color: var(--text-dim); border-radius: 12px; padding: 9px 13px; font: inherit; font-size: 13.5px; cursor: pointer; }
+.adhoc-trigger:hover { border-color: var(--forest); color: var(--forest); }
+.adhoc-compose { display: flex; flex-direction: column; gap: 8px; }
+.adhoc-input { width: 100%; box-sizing: border-box; border: 1px solid var(--line-soft); border-radius: 12px; padding: 10px 12px; background: var(--surface); color: inherit; font: inherit; font-size: 14px; resize: vertical; }
+.adhoc-input:focus { outline: none; border-color: var(--forest); }
+.adhoc-actions { display: flex; align-items: center; gap: 10px; }
+.adhoc-cancel { background: none; border: none; color: var(--text-dim); font: inherit; font-size: 13px; cursor: pointer; }
+
 .plan-week-label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-mute); margin: 18px 2px 8px; }
 .plan-day { margin-bottom: 10px; }
 .plan-day.plan-today { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 16px; padding: 12px 13px; margin-bottom: 16px; }
@@ -445,6 +458,30 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .occ-skip .occ-title { text-decoration: none; color: var(--text-mute); }
 .occ-skipbtn { flex: 0 0 auto; background: transparent; border: none; color: var(--text-mute); font-size: 12px; font-family: var(--mono); cursor: pointer; padding: 4px 6px; }
 .occ-skipbtn:hover { color: var(--text-dim); }
+/* Paused occurrence (Req 4): a base session shelved for a detour — muted, non-actionable, no red. */
+.occ-paused { opacity: .72; }
+.occ-paused .occ-title { color: var(--text-mute); }
+.occ-check-static { width: 24px; height: 24px; flex: 0 0 auto; border-radius: 50%; border: 1.5px dashed var(--line); color: var(--text-mute); font-size: 14px; display: grid; place-items: center; }
+.occ-pausetag { flex: 0 0 auto; font-size: 11.5px; font-family: var(--mono); color: var(--text-mute); text-transform: uppercase; letter-spacing: .06em; padding: 4px 6px; }
+
+/* Detour banner (Req 4) — supportive + calm; distinct from the amber proposal and iris note. */
+.detour { display: flex; align-items: center; gap: 12px; background: rgba(44, 85, 69, .07); border: 1px solid rgba(44, 85, 69, .2); border-radius: 14px; padding: 12px 14px; margin: 4px 0 12px; }
+.detour-t { flex: 1; display: flex; flex-direction: column; }
+.detour-t b { font-family: var(--display); font-weight: 700; font-size: 14px; color: var(--forest); }
+.detour-t span { font-size: 13px; color: var(--text-dim); line-height: 1.4; margin-top: 2px; }
+.detour-actions { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
+.detour-end { background: transparent; border: none; color: var(--text-mute); font-size: 12.5px; cursor: pointer; }
+.detour-end:hover { color: var(--text-dim); }
+/* Manual "Life happened? Take a detour" entry (Req 4) — a self-declare path when no proposal exists. */
+.detour-entry { margin: 2px 0 14px; }
+.detour-trigger { width: 100%; text-align: left; background: none; border: 1px dashed var(--line-soft); color: var(--text-dim); border-radius: 12px; padding: 9px 13px; font: inherit; font-size: 13.5px; cursor: pointer; }
+.detour-trigger:hover { border-color: var(--forest); color: var(--forest); }
+.detour-pick { display: flex; flex-direction: column; gap: 8px; }
+.detour-pick-label { font-size: 13px; color: var(--text-dim); line-height: 1.35; }
+.detour-chips { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.detour-chip { background: var(--surface); border: 1px solid var(--line-soft); color: var(--text); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.detour-chip:hover { border-color: var(--forest); color: var(--forest); }
+
 .plan-note { display: flex; align-items: flex-start; gap: 11px; background: rgba(44, 85, 69, .08); border: 1px solid rgba(44, 85, 69, .22); border-radius: 14px; padding: 12px 13px; margin: 4px 0 4px; }
 .plan-note .orb { width: 26px; height: 26px; flex: 0 0 auto; }
 .plan-note-t { flex: 1; display: flex; flex-direction: column; }
