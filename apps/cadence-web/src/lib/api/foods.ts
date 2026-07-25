@@ -11,8 +11,8 @@
  *
  * Soft-handles 404/network so Settings + Food tab stay usable if a deploy lags.
  *
- * TODO(WS-R): when POST /nutrition/foods/resolve lands, prefer it over search+estimate
- * for the Food tab "say it" path (ranked candidates + preselected serving).
+ * Resolve (WS-R): see `./foods-resolve.ts` — Food tab Say/Search prefer it over
+ * ad-hoc search+estimate for ranked candidates + preselected serving/qty.
  */
 
 import {
