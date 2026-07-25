@@ -113,6 +113,34 @@ export async function logMeal(text: string, meal?: MealKind, photo?: string): Pr
   return res.json();
 }
 
+/**
+ * Deterministic log of a saved food (Req 5) — serving math on the server, no AI.
+ * Soft-fails to null on 404/network so the Food tab can warm-message without throwing.
+ */
+export async function logMealFromFood(input: {
+  food_id: string;
+  meal?: MealKind;
+  serving_index?: number;
+  quantity?: number;
+}): Promise<Meal | null> {
+  try {
+    const res = await fetch(`${BASE}/nutrition/meals`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        food_id: input.food_id,
+        ...(input.meal ? { meal: input.meal } : {}),
+        ...(typeof input.serving_index === 'number' ? { serving_index: input.serving_index } : {}),
+        ...(typeof input.quantity === 'number' ? { quantity: input.quantity } : {}),
+      }),
+    });
+    if (res.status === 404 || !res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 /** Recent meals, newest first (the food-log sheet's list). */
 export async function getRecentMeals(days = 7): Promise<Meal[]> {
   const res = await fetch(`${BASE}/nutrition/recent?days=${days}`, { headers: headers() });

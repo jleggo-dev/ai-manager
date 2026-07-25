@@ -532,6 +532,22 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .food-row b { font-size: 14.5px; font-weight: 600; }
 .food-row span { font-size: 12.5px; color: var(--text-dim); }
 .food-row:hover { border-color: var(--forest); }
+.food-banner { margin: 8px 0 0; padding: 10px 12px; border-radius: 12px; background: rgba(44, 85, 69, .08); color: var(--forest); font-size: 13.5px; line-height: 1.4; }
+.food-say-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
+.food-say-in { flex: 1; min-width: 0; }
+.food-say-hits { margin: 8px 0 4px; }
+.food-confirm { padding: 8px 0 12px; }
+.food-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 12.5px; color: var(--text-dim); }
+.food-field .wiz-in { width: 100%; }
+.food-macro-preview { font-size: 14px; font-weight: 600; margin: 4px 0 10px; color: var(--text); }
+.food-allergy-warn { font-size: 13.5px; line-height: 1.45; color: var(--dawn-3); margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: rgba(194, 95, 69, .08); }
+.food-confirm-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.food-snap-fields { margin-bottom: 8px; }
+.food-snap-actions { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 12px; }
+.food-snap-pick { display: block; width: 100%; text-align: center; padding: 11px 12px; border-radius: 12px; border: 1px dashed var(--line); background: var(--surface); font-size: 14px; cursor: pointer; color: var(--text); }
+.food-snap-pick:hover { border-color: var(--forest); }
+.food-snap-disabled { opacity: .55; pointer-events: none; }
+.food-snap-preview { margin-bottom: 10px; }
 
 /* ── Dietary profile (Settings / WS5) ────────────────────────── */
 .diet-editor { border-top: 1px solid var(--line-soft); }
