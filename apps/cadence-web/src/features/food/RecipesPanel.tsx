@@ -1,27 +1,32 @@
 /**
- * Thin recipes hub (Req 5 Phase 2 + Phase 4) — list, detail, log-N-servings,
- * structure-from-text, snap-fridge → review → pick draft. Soft-fails warmly when
- * /nutrition/recipes isn't deployed yet.
+ * Thin recipes hub (Req 5 Phase 2 + Phase 4 + Phase 5 discovery) — list, detail,
+ * log-N-servings, structure-from-text, snap-fridge → review → pick draft.
+ * Soft-fails warmly when /nutrition/recipes isn't deployed yet.
+ * Discovery entry only appears when POST /nutrition/recipes/discover exists.
  */
 import { useEffect, useState } from 'react';
 import type { DietaryProfile, Recipe } from '@cadence/shared';
-import { getRecipeById, listRecipes, recipeMacroHint, type RecipeDraft } from '../../lib/api.ts';
+import { getRecipeById, listRecipes, probeRecipeDiscovery, recipeMacroHint, type RecipeDraft } from '../../lib/api.ts';
 import { FridgeFromPhotoPanel } from './FridgeFromPhotoPanel.tsx';
+import { RecipeDiscoverPanel } from './RecipeDiscoverPanel.tsx';
 import { RecipeFromChatPanel } from './RecipeFromChatPanel.tsx';
 import { RecipeLogConfirm } from './RecipeLogConfirm.tsx';
 import { RecipeSaveConfirm } from './RecipeSaveConfirm.tsx';
 
-type Mode = 'list' | 'detail' | 'log' | 'from-chat' | 'fridge' | 'save';
-type DraftReturn = 'from-chat' | 'fridge';
+type Mode = 'list' | 'detail' | 'log' | 'from-chat' | 'fridge' | 'save' | 'discover';
+type DraftReturn = 'from-chat' | 'fridge' | 'discover';
 
 export function RecipesPanel({
   dietary,
   onClose,
   onLogged,
+  onOpenMealPlans,
 }: {
   dietary?: DietaryProfile | null;
   onClose: () => void;
   onLogged: () => void;
+  /** Optional Phase 5 bridge into meal plans + shopping list. */
+  onOpenMealPlans?: () => void;
 }) {
   const [mode, setMode] = useState<Mode>('list');
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -31,6 +36,7 @@ export function RecipesPanel({
   const [draftReturn, setDraftReturn] = useState<DraftReturn>('from-chat');
   const [banner, setBanner] = useState('');
   const [pickNote, setPickNote] = useState('');
+  const [discoveryLive, setDiscoveryLive] = useState(false);
 
   function reload() {
     setListStatus('loading');
@@ -66,6 +72,9 @@ export function RecipesPanel({
       }
       setRecipes(r.recipes);
       setListStatus(r.recipes.length ? 'ok' : 'empty');
+    });
+    probeRecipeDiscovery().then((live) => {
+      if (!cancelled) setDiscoveryLive(live);
     });
     return () => {
       cancelled = true;
@@ -156,6 +165,19 @@ export function RecipesPanel({
     );
   }
 
+  if (mode === 'discover') {
+    return (
+      <RecipeDiscoverPanel
+        onDraft={(d) => {
+          setDraft(d);
+          setDraftReturn('discover');
+          setMode('save');
+        }}
+        onCancel={() => setMode('list')}
+      />
+    );
+  }
+
   if (mode === 'detail' && selected) {
     const per = recipeMacroHint(selected.macros_per_serving);
     return (
@@ -221,6 +243,25 @@ export function RecipesPanel({
         <b>Structure from text</b>
         <span>Describe a dish — I draft ingredients + per-serving macros</span>
       </button>
+
+      {discoveryLive && (
+        <button type="button" className="food-action" style={{ marginBottom: 10 }} onClick={() => setMode('discover')}>
+          <b>Find a real recipe</b>
+          <span>Look for ideas — nothing is saved until you pick one and confirm</span>
+        </button>
+      )}
+
+      {onOpenMealPlans && (
+        <button
+          type="button"
+          className="food-action food-action-muted"
+          style={{ marginBottom: 10 }}
+          onClick={onOpenMealPlans}
+        >
+          <b>This week&apos;s meals</b>
+          <span>Meal plan + shopping list — confirm before it sticks</span>
+        </button>
+      )}
 
       {listStatus === 'loading' && (
         <div className="chat-loading">

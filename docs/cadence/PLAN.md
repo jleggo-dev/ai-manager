@@ -324,7 +324,8 @@ Sorting every requirement into what each layer owns. ✅ = provisioned; ⏳ = pl
 > **Req 5 reframed (2026-07-24) → a Food & Recipe data layer (MFP-parity), foundation-first.** Phases
 > 1–3 foundation shipped (foods cache, recipes, OFF barcode + camera, USDA micros, micro insights,
 > `lookup_food` retrieval). **Phase 4** fridge → recipes and **Phase 5** meal plans + shopping list
-> (+ scoped `discover-recipe`) shipped as API verticals (confirm-before-save). Full plan:
+> (+ scoped `discover-recipe`) shipped as API verticals (confirm-before-save). **Phase 5 web:** Food →
+> This week's meals + shopping list; Recipes discovery gated on discover probe. Full plan:
 > **`docs/cadence/REQ5-food-and-recipes.md`**.
 
 **Coach chat rule-set templates (the conversation — turns, not jobs):** `onboarding`,

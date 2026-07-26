@@ -23,11 +23,12 @@ import { FoodRecentsList } from './FoodRecentsList.tsx';
 import { FoodBarcodePanel } from './FoodBarcodePanel.tsx';
 import { FoodSayPanel } from './FoodSayPanel.tsx';
 import { FoodSnapPanel } from './FoodSnapPanel.tsx';
+import { MealPlansPanel } from './MealPlansPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import type { FoodDraft, FoodDraftPortion } from './foodDraft.ts';
 
-type Mode = 'home' | 'say' | 'snap' | 'barcode' | 'search' | 'recipes' | 'confirm';
-type EntryMode = 'home' | 'say' | 'snap' | 'barcode' | 'search' | 'recipes';
+type Mode = 'home' | 'say' | 'snap' | 'barcode' | 'search' | 'recipes' | 'meal-plans' | 'confirm';
+type EntryMode = 'home' | 'say' | 'snap' | 'barcode' | 'search' | 'recipes' | 'meal-plans';
 
 export function FoodView() {
   const [mode, setMode] = useState<Mode>('home');
@@ -177,14 +178,16 @@ export function FoodView() {
       <div className="screen-sub">
         {mode === 'recipes'
           ? 'Build a dish once — I draft ingredients and per-serving macros; you confirm before anything is saved.'
-          : "Say it or snap it — I'll draft the log, you confirm. Search is here when you want it."}
+          : mode === 'meal-plans'
+            ? 'A week of meals and a shopping list — I draft, you confirm before anything is saved.'
+            : "Say it or snap it — I'll draft the log, you confirm. Search is here when you want it."}
       </div>
 
       {banner && <div className="food-banner">{banner}</div>}
 
       {mode === 'home' && <NutritionInsightCard reloadKey={insightKey} compact />}
 
-      {mode !== 'recipes' && (
+      {mode !== 'recipes' && mode !== 'meal-plans' && (
         <FoodEntryActions
           mode={entryMode}
           onMode={(m) => {
@@ -240,6 +243,7 @@ export function FoodView() {
         <RecipesPanel
           dietary={dietary}
           onClose={() => setMode('home')}
+          onOpenMealPlans={() => setMode('meal-plans')}
           onLogged={() => {
             setBanner('Logged — that recipe is on today.');
             reloadRecents();
@@ -247,6 +251,8 @@ export function FoodView() {
           }}
         />
       )}
+
+      {mode === 'meal-plans' && <MealPlansPanel onClose={() => setMode('home')} />}
 
       {mode === 'home' && (
         <section className="food-recents" aria-label="Recent foods">

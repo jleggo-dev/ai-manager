@@ -361,7 +361,9 @@ and wire as they land. **WS4** (the tab) consumes WS-R. WS5 is otherwise indepen
   `0019` (notes/updated_at + unique user/week). API: `POST /nutrition/meal-plans/generate` →
   confirm `POST /nutrition/meal-plans` (upsert week; creates recipes as needed); CRUD + shopping
   checkoffs via PATCH; `POST /nutrition/recipes/discover` → confirm via existing recipe save.
-  Sync jobs after merge (`apps/cadence-api/scripts/sync-jobs.ts`).
+  Sync jobs after merge (`apps/cadence-api/scripts/sync-jobs.ts`). **UX (web):** Food tab →
+  **This week's meals** (also bridged from Recipes) — draft → confirm-before-save → shopping
+  checkmarks; Recipes shows **Find a real recipe** only when the discover route probes live.
 
 ## 10. Safety & brand (non-negotiables)
 

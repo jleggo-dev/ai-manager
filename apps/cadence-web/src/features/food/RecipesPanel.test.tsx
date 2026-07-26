@@ -9,6 +9,7 @@ const parseFridgePhoto = vi.fn();
 const generateRecipesFromIngredients = vi.fn();
 const saveRecipe = vi.fn();
 const logMealFromRecipe = vi.fn();
+const probeRecipeDiscovery = vi.fn();
 
 vi.mock('../../lib/api.ts', () => ({
   listRecipes: (...args: unknown[]) => listRecipes(...args),
@@ -18,6 +19,7 @@ vi.mock('../../lib/api.ts', () => ({
   generateRecipesFromIngredients: (...args: unknown[]) => generateRecipesFromIngredients(...args),
   saveRecipe: (...args: unknown[]) => saveRecipe(...args),
   logMealFromRecipe: (...args: unknown[]) => logMealFromRecipe(...args),
+  probeRecipeDiscovery: (...args: unknown[]) => probeRecipeDiscovery(...args),
   recipeMacroHint: (m: { kcal?: number; protein_g?: number }) => {
     const bits: string[] = [];
     if (m.kcal != null) bits.push(`~${Math.round(m.kcal)} kcal`);
@@ -71,6 +73,7 @@ describe('RecipesPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listRecipes.mockResolvedValue({ status: 'ok', recipes: [] });
+    probeRecipeDiscovery.mockResolvedValue(false);
   });
 
   it('warm-messages when recipes API is unavailable', async () => {
@@ -79,6 +82,15 @@ describe('RecipesPanel', () => {
     await waitFor(() => expect(screen.getByText(/aren't live on the server yet/i)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /Snap the fridge/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Structure from text/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Find a real recipe/i })).not.toBeInTheDocument();
+  });
+
+  it('shows discovery only when API probe is live', async () => {
+    probeRecipeDiscovery.mockResolvedValue(true);
+    renderPanel();
+    await waitFor(() => expect(screen.getByRole('button', { name: /Find a real recipe/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Find a real recipe/i }));
+    expect(screen.getByRole('region', { name: /Find a real recipe/i })).toBeInTheDocument();
   });
 
   it('snap-the-fridge entry opens confirm-before-save fridge flow', async () => {
