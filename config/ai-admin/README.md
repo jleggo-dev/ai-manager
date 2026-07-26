@@ -40,10 +40,12 @@ must point at entities that already exist. So fill the `<PLACEHOLDER>` tokens in
 | `identify-food`         | **Pinned Gemini vision**                                              | Front-of-pack photo → `name` + `brand` + `confidence`                                  |
 | `estimate-food`         | Broker (Flash)                                                        | Describe-a-food text → canonical serving + macro estimate + `confidence` (macros only) |
 | `structure-recipe`      | Coach                                                                 | Recipe-from-chat text → `{ name, servings, ingredients[{name,qty,unit}], steps? }`     |
+| `generate-meal-plan`    | Coach                                                                 | Prefs/fridge/saved recipes/targets → week `days[]` + `shopping_list[]` (Phase 5)       |
+| `discover-recipe`       | Coach                                                                 | Query → 1–3 recipe drafts (scoped; not live web search)                                |
 
 Runtime resolves jobs **by slug** via `runJobBySlug` — no `AIM_JOB_*` env vars required (same
 pattern as `parse-meal`). After this config lands on `main`, an operator syncs live with
-**jobs-only** sync (includes `structure-recipe`):
+**jobs-only** sync (includes meal-plan / discover jobs):
 
 ```powershell
 node --import tsx apps/cadence-api/scripts/sync-jobs.ts --dry-run

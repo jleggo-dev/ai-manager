@@ -70,16 +70,42 @@ export interface Recipe {
   saved: boolean;
 }
 
+/** Grocery aisle bucket for shopping-list grouping (UI may localize labels). */
+export type ShoppingListCategory = 'produce' | 'dairy' | 'protein' | 'pantry' | 'frozen' | 'bakery' | 'other';
+
 export interface ShoppingListItem {
   name: string;
   qty: string;
-  category: string;
+  category: ShoppingListCategory | string;
   checked: boolean;
 }
 
+/** Meal slot on a planned day (aligns with common MealKind values). */
+export type MealPlanSlotKind = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export interface MealPlanMeal {
+  slot: MealPlanSlotKind | string;
+  recipe_id: string;
+  /** Denormalized name for list UIs (optional; filled when known). */
+  recipe_name?: string;
+}
+
+export interface MealPlanDay {
+  /** Calendar day YYYY-MM-DD within the plan week. */
+  day: string;
+  meals: MealPlanMeal[];
+}
+
+/**
+ * Persisted week plan + shopping list (Req 5 Phase 5).
+ * Generate returns an unsaved draft; POST confirms and stores recipe_ids.
+ */
 export interface MealPlan {
   meal_plan_id: string;
   week_of: string;
-  days: { day: string; meals: { slot: string; recipe_id: string }[] }[];
+  days: MealPlanDay[];
   shopping_list: ShoppingListItem[];
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }

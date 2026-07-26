@@ -316,15 +316,16 @@ Sorting every requirement into what each layer owns. ✅ = provisioned; ⏳ = pl
 | `disrupted_plan` | episode → additive overlay (§5.7) | ✅ |
 | `adjust_plan` | tweak existing plan, version-bump (§6.3) | ⏳ (may reuse synthesize) |
 | `generate_recipe` | fridge ingredients (+ dietary/targets) → 1–3 recipe drafts (Req 5 Phase 4) | ✅ job + API (`generate` → confirm save) |
-| `generate_meal_plan` | targets → week + shopping list (§5.6) | ⏳ (Phase 5) |
+| `generate_meal_plan` | prefs/fridge/recipes/targets → week + shopping list (Req 5 Phase 5) | ✅ job + API (`meal-plans/generate` → confirm save) |
+| `discover_recipe` | query → 1–3 recipe drafts (scoped; not live web search) | ✅ job + API (`recipes/discover` → confirm save) |
 | `parse_nutrition_label` / `estimate_food` / `identify_food` | Req 5 WS2 food capture (label / describe / front-of-pack) | ✅ jobs + app wire (`food-capture` + routes) |
 | `structure_recipe` | Req 5 Phase 2 — recipe from chat | ✅ job + API (`structure-recipe` → recipes from-chat) |
 
 > **Req 5 reframed (2026-07-24) → a Food & Recipe data layer (MFP-parity), foundation-first.** Phases
 > 1–3 foundation shipped (foods cache, recipes, OFF barcode + camera, USDA micros, micro insights,
-> `lookup_food` retrieval). **Phase 4 fridge/pantry → recipe ideas** shipped as a vertical slice
-> (`parse-fridge-photo` + `generate-recipe`; Food-tab Recipes → Snap the fridge; confirm-before-save).
-> Full plan: **`docs/cadence/REQ5-food-and-recipes.md`**.
+> `lookup_food` retrieval). **Phase 4** fridge → recipes and **Phase 5** meal plans + shopping list
+> (+ scoped `discover-recipe`) shipped as API verticals (confirm-before-save). Full plan:
+> **`docs/cadence/REQ5-food-and-recipes.md`**.
 
 **Coach chat rule-set templates (the conversation — turns, not jobs):** `onboarding`,
 `initial`, topic (`nutrition`/`training`/`goal`/`struggles`/`recipes`), `disrupted`,
