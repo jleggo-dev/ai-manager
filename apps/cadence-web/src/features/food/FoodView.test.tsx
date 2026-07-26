@@ -51,6 +51,15 @@ vi.mock('../../lib/api.ts', () => ({
   saveRecipe: vi.fn(),
   logMealFromRecipe: vi.fn(),
   recipeMacroHint: () => '',
+  probeRecipeDiscovery: vi.fn().mockResolvedValue(false),
+  listMealPlans: vi.fn().mockResolvedValue({ status: 'unavailable', plans: [] }),
+  getCurrentMealPlan: vi.fn().mockResolvedValue({ status: 'unavailable', plan: null }),
+  generateMealPlan: vi.fn(),
+  saveMealPlan: vi.fn(),
+  patchMealPlan: vi.fn(),
+  weekOfMonday: () => '2026-07-20',
+  mealPlanDayLabel: (d: string) => d,
+  shoppingListSummary: () => 'No shopping list yet',
   getNutritionInsight: vi.fn().mockResolvedValue(null),
 }));
 

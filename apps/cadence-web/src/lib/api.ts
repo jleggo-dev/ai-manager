@@ -138,6 +138,35 @@ export {
 } from './api/recipes.ts';
 
 export {
+  listMealPlans,
+  getCurrentMealPlan,
+  getMealPlanById,
+  generateMealPlan,
+  saveMealPlan,
+  patchMealPlan,
+  probeRecipeDiscovery,
+  discoverRecipes,
+  weekOfMonday,
+  mealPlanDayLabel,
+  shoppingListSummary,
+  parseMealPlan,
+  parseMealPlanDraft,
+  type MealPlanRecord,
+  type MealPlanDraft,
+  type MealPlanDraftDay,
+  type MealPlanDraftMeal,
+  type MealPlanRecipeDraft,
+  type MealPlanDay,
+  type MealPlanMeal,
+  type MealPlanListResult,
+  type MealPlanDetailResult,
+  type GenerateMealPlanResult,
+  type SaveMealPlanResult,
+  type PatchMealPlanResult,
+  type DiscoverRecipesResult,
+} from './api/meal-plans.ts';
+
+export {
   getReview,
   confirmGoals,
   updateGoal,
