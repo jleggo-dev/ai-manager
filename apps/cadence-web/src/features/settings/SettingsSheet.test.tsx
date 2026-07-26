@@ -18,6 +18,19 @@ vi.mock('../../lib/api.ts', () => ({
     profile: { allergies: [], diet: null, dislikes: [], notes: null },
   }),
   saveDietaryProfile: vi.fn().mockResolvedValue(null),
+  getHomeLocation: vi.fn().mockResolvedValue({ home_location: null, timezone: null, available: true }),
+  saveHomeLocation: vi.fn(),
+  clearHomeLocation: vi.fn(),
+  browserTimezone: () => 'UTC',
+}));
+
+vi.mock('../../lib/capability/index.ts', () => ({
+  capabilities: {
+    location: {
+      isAvailable: () => false,
+      getCoarseLocation: async () => null,
+    },
+  },
 }));
 
 vi.mock('../../lib/supabase.ts', () => ({
