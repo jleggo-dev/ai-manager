@@ -45,10 +45,15 @@ vi.mock('./tripwires.ts', () => ({
 vi.mock('./metrics.ts', () => ({
   rollingConsistency: (...a: unknown[]) => rollingConsistency(...a),
 }));
+vi.mock('./weather/weather.ts', () => ({
+  getWeatherForUser: vi.fn().mockResolvedValue(null),
+}));
 
 import { assessIfDue } from './situation.ts';
+import { getWeatherForUser } from './weather/weather.ts';
 
 const USER = '00000000-0000-4000-a000-00000000a201';
+const getWeatherForUserMock = getWeatherForUser as unknown as ReturnType<typeof vi.fn>;
 
 describe('assessIfDue', () => {
   beforeEach(() => {
@@ -62,6 +67,7 @@ describe('assessIfDue', () => {
     getLastCheckInDate.mockResolvedValue(null);
     touchAssessedAt.mockResolvedValue(undefined);
     setPendingProposal.mockResolvedValue(undefined);
+    getWeatherForUserMock.mockResolvedValue(null);
   });
 
   it('no-ops when user missing, pending proposal outstanding, or no plan', async () => {
@@ -189,5 +195,28 @@ describe('assessIfDue', () => {
         reason: 'Looks like you are traveling',
       }),
     );
+  });
+
+  it('passes weatherTempC into the tripwire snapshot when weather is available', async () => {
+    getUser.mockResolvedValue({
+      pending_proposal: null,
+      last_assessed_at: null,
+      steer_back: { missed_threshold: 3 },
+      home_location: { lat: 40.7, lon: -74.0 },
+      timezone: 'UTC',
+    });
+    getWeatherForUserMock.mockResolvedValue({
+      tempC: 40,
+      feelsLikeC: 42,
+      windKph: 10,
+      conditions: 'clear',
+      precipMm: 0,
+      precipChance: null,
+      source: 'openweathermap',
+      fetchedAt: '2026-07-25T12:00:00.000Z',
+    });
+    detectTripwires.mockReturnValue([]);
+    await assessIfDue(USER);
+    expect(detectTripwires).toHaveBeenCalledWith(expect.objectContaining({ weatherTempC: 40 }));
   });
 });

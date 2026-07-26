@@ -99,3 +99,33 @@ export async function setDietaryProfile(userId: string, profile: DietaryProfile)
     set dietary_profile = ${json(profile)}, updated_at = now()
     where id = ${userId}`;
 }
+
+export type HomeLocation = { lat: number; lon: number; label?: string };
+
+/**
+ * Persist coarse home location + IANA timezone (§B1). Columns exist since migration 0001 —
+ * no new migration. Whole-object replace for location; timezone is a plain text column.
+ */
+export async function setHomeLocation(userId: string, location: HomeLocation, timezone: string | null): Promise<void> {
+  await sql`
+    update cadence.users
+    set home_location = ${json(location)},
+        timezone = ${timezone},
+        updated_at = now()
+    where id = ${userId}`;
+}
+
+/** Clear home location (and optionally timezone) — Settings "forget this place". */
+export async function clearHomeLocation(userId: string, clearTimezone = false): Promise<void> {
+  if (clearTimezone) {
+    await sql`
+      update cadence.users
+      set home_location = null, timezone = null, updated_at = now()
+      where id = ${userId}`;
+  } else {
+    await sql`
+      update cadence.users
+      set home_location = null, updated_at = now()
+      where id = ${userId}`;
+  }
+}

@@ -1,6 +1,7 @@
 import { runJob } from '../ai/aim.ts';
 import { cadenceConfig } from '../config.ts';
 import { sql } from '../db/sql.ts';
+import { weatherVarsForUser } from './weather/weather.ts';
 import { getActivePlan, supersedeActivePlans, insertPlan } from '../repos/plans.ts';
 import { insertActivities } from '../repos/activities.ts';
 import { deleteFuturePendingOccurrences } from '../repos/occurrences.ts';
@@ -90,6 +91,7 @@ export async function runSynthesize(
   opts: SynthesizeOpts,
   draftActivities?: unknown,
 ): Promise<{ normalized: Partial<Activity>[]; note: string }> {
+  const { weather } = await weatherVarsForUser(userId).catch(() => ({ weather: '' }));
   const synthRes = await runJob(userId, cadenceConfig.aim.jobs.synthesizePlan, {
     goals: JSON.stringify(opts.goals),
     baseline: JSON.stringify(opts.baseline),
@@ -99,6 +101,8 @@ export async function runSynthesize(
     recent_activity: JSON.stringify(opts.recentActivity ?? ''),
     user_steer: (opts.userSteer ?? '').trim().slice(0, 500),
     draft_activities: JSON.stringify(draftActivities ?? ''),
+    // Deterministic API weather when home_location is set; empty otherwise (template ignores '').
+    weather,
   });
   const synth = parseJson(synthRes.formatted ?? synthRes.raw ?? '');
   const normalized = (Array.isArray(synth?.activities) ? (synth!.activities as Partial<Activity>[]) : []).map(

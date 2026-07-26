@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase.ts';
 import { deleteMyData, isDevMode, getDevAccount, resetAccount } from '../../lib/api.ts';
 import { NutritionTargets } from './NutritionTargets.tsx';
 import { DietaryProfileEditor } from './DietaryProfileEditor.tsx';
+import { LocationSettings } from './LocationSettings.tsx';
 
 /**
  * Settings, as a sheet from the header gear. Real-auth: email, sign out, password reset (email
@@ -92,6 +93,8 @@ export function SettingsSheet({
           <NutritionTargets />
 
           <DietaryProfileEditor />
+
+          <LocationSettings />
 
           {!dev && (
             <>

@@ -81,7 +81,9 @@ limit on how many profiles/agents we create.
   it rejected the id; Devs.ai serves Gemini under the same key. Failover →
   `anthropic-claude-4-5-haiku`.
 - **`cadence-research`** (add later) — a Devs.ai **agent with web search** for recipe
-  ideas + how-to-video lookup (§C2). Keep weather a deterministic API, not an LLM call.
+  ideas + how-to-video lookup (§C2). Weather stays a deterministic OpenWeatherMap call
+  in cadence-api (`WEATHER_API_KEY` / `weatherApiKey`) — never an LLM call; `synthesize-plan`
+  and `prescribe-session` accept an optional `{{weather}}` variable from the app.
 
 Model ids are **vendor-prefixed** in Devs.ai (e.g. `anthropic-claude-4-5-sonnet`); Gemini is
 served under `gemini-*` ids through the Devs.ai key. List them via `GET /api/providers/:id/models`.

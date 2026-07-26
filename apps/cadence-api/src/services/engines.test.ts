@@ -173,6 +173,14 @@ describe('tripwires (§B4)', () => {
     expect(km).toBeGreaterThan(3800);
     expect(km).toBeLessThan(4100);
   });
+
+  it('detects extreme_weather from weatherTempC (cold and hot)', () => {
+    expect(detectTripwires({ weatherTempC: -10 })).toContain('extreme_weather');
+    expect(detectTripwires({ weatherTempC: -11 })).toContain('extreme_weather');
+    expect(detectTripwires({ weatherTempC: 38 })).toContain('extreme_weather');
+    expect(detectTripwires({ weatherTempC: 20 })).not.toContain('extreme_weather');
+    expect(detectTripwires({})).not.toContain('extreme_weather');
+  });
 });
 
 describe('capture selectCapturedGoals (§6.1 — no duplicate goal cards)', () => {
