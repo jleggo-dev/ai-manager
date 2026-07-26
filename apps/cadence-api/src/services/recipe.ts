@@ -34,7 +34,7 @@ export interface ResolvedRecipeIngredient extends RecipeIngredient {
   est?: Macros;
 }
 
-export type RecipeDraftSource = 'ai_from_chat' | 'ai_from_fridge_photo';
+export type RecipeDraftSource = 'ai_from_chat' | 'ai_from_fridge_photo' | 'ai';
 
 export interface RecipeDraft {
   name: string;

@@ -356,9 +356,12 @@ and wire as they land. **WS4** (the tab) consumes WS-R. WS5 is otherwise indepen
   `POST /nutrition/recipes/generate` → confirm via existing `POST /nutrition/recipes`
   (`source='ai_from_fridge_photo'`). Food-tab Recipes: **Snap the fridge**. Sync jobs after merge
   (`apps/cadence-api/scripts/sync-jobs.ts`). Hotel-gym `parse_equipment_photo` stays separate (later).
-- **Phase 5 — Meal plans + shopping list; recipe discovery (future).** `generate_meal_plan`; and
-  "find a real recipe" via the research/web-search agent (the earlier "real recipes, retrieved" call
-  applies _here_, downstream of the foundation).
+- **Phase 5 — Meal plans + shopping list; recipe discovery.** Jobs `generate-meal-plan` + scoped
+  `discover-recipe` (LLM structure — not live web search; cadence-research later). Migration
+  `0019` (notes/updated_at + unique user/week). API: `POST /nutrition/meal-plans/generate` →
+  confirm `POST /nutrition/meal-plans` (upsert week; creates recipes as needed); CRUD + shopping
+  checkoffs via PATCH; `POST /nutrition/recipes/discover` → confirm via existing recipe save.
+  Sync jobs after merge (`apps/cadence-api/scripts/sync-jobs.ts`).
 
 ## 10. Safety & brand (non-negotiables)
 

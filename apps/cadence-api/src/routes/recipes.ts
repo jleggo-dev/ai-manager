@@ -10,7 +10,9 @@ import {
   removeRecipe,
   searchRecipesForUser,
 } from '../services/recipe.ts';
+import { discoverRecipes } from '../services/recipe-discover.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
+import { discoverRecipeBodySchema } from '../validation/meal-plan.ts';
 import {
   createRecipeBodySchema,
   fromChatBodySchema,
@@ -109,6 +111,24 @@ router.post('/generate', async (req: Request, res: Response) => {
     if (/at least one ingredient|non-JSON/.test(msg)) return void res.status(400).json({ error: msg });
     console.error('[POST /nutrition/recipes/generate]', err);
     res.status(502).json({ error: 'failed to generate recipes' });
+  }
+});
+
+/**
+ * POST /nutrition/recipes/discover — query → 1–3 recipe drafts (scoped; not live web search).
+ * Confirm via POST /nutrition/recipes. Real retrieval lands with cadence-research later.
+ */
+router.post('/discover', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(discoverRecipeBodySchema, req.body);
+    res.json(await discoverRecipes(userId, body.query));
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    const msg = err instanceof Error ? err.message : '';
+    if (/query required|non-JSON/.test(msg)) return void res.status(400).json({ error: msg });
+    console.error('[POST /nutrition/recipes/discover]', err);
+    res.status(502).json({ error: 'failed to discover recipes' });
   }
 });
 
