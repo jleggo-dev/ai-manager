@@ -89,6 +89,10 @@ export const cadenceConfig = {
     planFanout: process.env.AIM_PLAN_FANOUT !== '0',
   },
 
+  /**
+   * OpenWeatherMap — server-only (cadenceConfig.weatherApiKey). Never expose via VITE_* or
+   * cadence-web. Set in apps/cadence-api/.env locally and the cadence-api Vercel project env.
+   */
   weatherApiKey: process.env.WEATHER_API_KEY ?? '',
 
   /**

@@ -109,7 +109,7 @@ Per spec §4.2, these stay out of the models. Scaffolded as stubs in `cadence-ap
 - **Tripwires** (`services/tripwires.ts`) — timezone/location/missed/divergence/weather/streak (§B4); empty ⇒ no Broker call. ✅
 - **Context packet** — Coach grounding via retrieval/`context-pack` (dead `services/dossier.ts` compiler deleted; duplicated retrieval renderers). ✅
 - **Nudge engine** — schedule off activity times; dedupe HealthKit auto-completions; channel routing. ⏳ to add.
-- **Weather** — deterministic API keyed on location+time for outdoor occurrences (§B1). ⏳ to add.
+- **Weather** — deterministic OpenWeatherMap API keyed on location+time for outdoor occurrences (§B1). ✅
 
 All pure engines are unit-tested (`services/engines.test.ts`, 12/12). Data access is the
 **repository layer** (`src/repos/*` — goals, equipment, plans, activities, occurrences,

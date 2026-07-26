@@ -182,3 +182,12 @@ export {
 } from './api/review.ts';
 
 export { resetAccount, getTrace, getCoachLog, type DevTrace, type AiLogEntry } from './api/dev.ts';
+
+export {
+  getHomeLocation,
+  saveHomeLocation,
+  clearHomeLocation,
+  browserTimezone,
+  type HomeLocation,
+  type LocationResult,
+} from './api/location.ts';

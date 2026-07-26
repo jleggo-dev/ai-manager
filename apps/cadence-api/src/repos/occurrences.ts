@@ -5,6 +5,7 @@ import type {
   OccurrenceLog,
   OccurrenceSession,
   OccurrenceStatus,
+  OccurrenceWeather,
   Provenance,
 } from '@cadence/shared';
 
@@ -98,12 +99,28 @@ export async function getOccurrenceWithActivity(
 ): Promise<OccurrenceWithActivity | null> {
   const [row] = await sql<OccurrenceWithActivity[]>`
     select o.occurrence_id, o.activity_id, to_char(o.date, 'YYYY-MM-DD') as date, o.status,
-           o.value, o.provenance, o.session, o.log,
+           o.value, o.provenance, o.weather, o.session, o.log,
            a.title, a.kind, a.category, a.goal_id, a.schedule, a.target, a.why, a.how_to
     from cadence.occurrences o
     join cadence.activities a on a.activity_id = o.activity_id
     where o.user_id = ${userId} and o.occurrence_id = ${occurrenceId}`;
   return row ?? null;
+}
+
+/**
+ * Attach weather jsonb ONLY if none exists yet — outdoor open/log paths race-safe.
+ * Dual-keyed on user_id. Returns whether THIS write won.
+ */
+export async function setOccurrenceWeatherIfEmpty(
+  userId: string,
+  occurrenceId: string,
+  weather: OccurrenceWeather,
+): Promise<boolean> {
+  const res = await sql`
+    update cadence.occurrences
+    set weather = ${json(weather)}
+    where user_id = ${userId} and occurrence_id = ${occurrenceId} and weather is null`;
+  return res.count > 0;
 }
 
 /**

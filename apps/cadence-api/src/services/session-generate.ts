@@ -10,7 +10,7 @@
  * Shape cloned from goal-assess.ts: runJobBySlug + parseJson + app-side normalization
  * (expectedSchema is best-effort in the engine — see plan-synthesis.ts normalizeActivity).
  */
-import type { OccurrenceSession } from '@cadence/shared';
+import type { OccurrenceSession, OccurrenceWeather } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import {
   getOccurrenceWithActivity,
@@ -18,6 +18,7 @@ import {
   listRecentLogsByTitle,
   getAnchorSessionByTitle,
   setOccurrenceSessionIfEmpty,
+  setOccurrenceWeatherIfEmpty,
   type OccurrenceWithActivity,
 } from '../repos/occurrences.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
@@ -26,6 +27,7 @@ import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
 import { coachingPhase, normalizeSession } from './session-normalize.ts';
 import { computeSession, weekIndexBetween } from './progression.ts';
+import { getWeatherForUser, isOutdoorActivity, type WeatherSnapshot } from './weather/weather.ts';
 
 function parseJson(text: string): Record<string, unknown> | null {
   try {
@@ -86,6 +88,14 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
     }
   }
 
+  // Weather is deterministic API data for outdoor sessions — empty string when unavailable
+  // (template ignores unused placeholders; never invent conditions in the prompt).
+  const weatherLine = isOutdoorActivity(occ.category, occ.title)
+    ? await getWeatherForUser(userId)
+        .then((w) => (w ? `${Math.round(w.tempC)}°C, ${w.conditions}, wind ${w.windKph} km/h` : ''))
+        .catch(() => '')
+    : '';
+
   const res = await runJobBySlug(userId, 'prescribe-session', {
     activity: JSON.stringify({
       title: occ.title,
@@ -103,6 +113,7 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
     phase,
     sessions_logged: String(history.length),
     occurrence_date: occ.date,
+    weather: weatherLine,
   });
 
   const session = normalizeSession(parseJson(res.formatted ?? res.raw ?? ''));
@@ -123,12 +134,33 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
  * still returns its stored session/log. Returns null when the occurrence isn't this user's
  * (route → 404; happens legitimately after a replan deletes future pending rows).
  */
+function toOccurrenceWeather(w: WeatherSnapshot): OccurrenceWeather {
+  return {
+    temp_c: w.tempC,
+    conditions: w.conditions,
+    wind_kph: w.windKph,
+    source: 'weather_api',
+    logged_at: w.fetchedAt,
+  };
+}
+
+/** Best-effort: stamp outdoor occurrences with today's weather jsonb (once). */
+async function attachOutdoorWeather(userId: string, occ: OccurrenceWithActivity): Promise<OccurrenceWithActivity> {
+  if (occ.weather || !isOutdoorActivity(occ.category, occ.title)) return occ;
+  const snap = await getWeatherForUser(userId).catch(() => null);
+  if (!snap) return occ;
+  const weather = toOccurrenceWeather(snap);
+  const won = await setOccurrenceWeatherIfEmpty(userId, occ.occurrence_id, weather);
+  return won ? { ...occ, weather } : ((await getOccurrenceWithActivity(userId, occ.occurrence_id)) ?? occ);
+}
+
 export async function getOccurrenceDetail(
   userId: string,
   occurrenceId: string,
 ): Promise<OccurrenceWithActivity | null> {
-  const occ = await getOccurrenceWithActivity(userId, occurrenceId);
-  if (!occ) return null;
+  const base = await getOccurrenceWithActivity(userId, occurrenceId);
+  if (!base) return null;
+  const occ = await attachOutdoorWeather(userId, base);
 
   const utcToday = new Date().toISOString().slice(0, 10);
   const shouldGenerate = occ.kind === 'user' && occ.status === 'pending' && occ.date >= utcToday && !occ.session;

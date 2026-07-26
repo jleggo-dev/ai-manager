@@ -9,6 +9,7 @@ import { rollingConsistency } from './metrics.ts';
 import { detectTripwires, type TripwireSnapshot } from './tripwires.ts';
 import { runJob } from '../ai/aim.ts';
 import { cadenceConfig } from '../config.ts';
+import { getWeatherForUser } from './weather/weather.ts';
 
 const ASSESS_INTERVAL_DAYS = 7;
 const RETURN_GAP_DAYS = 4; // dark days after which we ask, on return, "was your schedule disrupted?"
@@ -41,12 +42,33 @@ function parseJson(text: string): Partial<SituationAssessResult> | null {
   }
 }
 
+/** Offset minutes east of UTC for an IANA timezone at `now` (null if tz missing/invalid). */
+function timezoneOffsetMin(timezone: string | null | undefined, now = new Date()): number | null {
+  const tz = timezone?.trim();
+  if (!tz) return null;
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'shortOffset',
+    }).formatToParts(now);
+    const raw = parts.find((p) => p.type === 'timeZoneName')?.value ?? '';
+    // "GMT", "GMT+5", "GMT-4:30", "UTC"
+    const m = /(?:GMT|UTC)([+-]\d{1,2})(?::(\d{2}))?/.exec(raw);
+    if (!m) return raw === 'GMT' || raw === 'UTC' ? 0 : null;
+    const hours = Number(m[1]);
+    const mins = Number(m[2] ?? '0');
+    if (!Number.isFinite(hours) || !Number.isFinite(mins)) return null;
+    return hours * 60 + Math.sign(hours || 1) * mins;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Deterministic snapshot (spec §B4) — no LLM, only signals the app can actually observe today:
- * rolling consistency, its week-over-week dip, and past-due-still-pending occurrences read as
- * "missed" (the `missed` occurrence status is never written by anything yet). Timezone/location/
- * weather aren't wired to a live signal, so those fields stay undefined — detectTripwires guards
- * every check on `!= null`, so they simply never fire rather than firing on stale defaults.
+ * rolling consistency, its week-over-week dip, past-due-still-pending occurrences read as
+ * "missed", home timezone/location when persisted, and weatherTempC from OpenWeatherMap at
+ * home_location (§B1). detectTripwires guards every check on `!= null`.
  */
 async function buildSnapshot(userId: string): Promise<TripwireSnapshot> {
   const user = await getUser(userId);
@@ -60,12 +82,21 @@ async function buildSnapshot(userId: string): Promise<TripwireSnapshot> {
   const prev7 = rollingConsistency(occ, new Date(base - 7 * 86_400_000), 7);
   const missedCount = occ.filter((o) => o.status === 'pending' && iso(o.date) < iso(new Date(base))).length;
 
+  const weather = await getWeatherForUser(userId).catch(() => null);
+  const homeTzOff = timezoneOffsetMin(user?.timezone, now);
+  const loc = user?.home_location;
+
   return {
     missedCount,
     missedThreshold,
     // A meaningful dip, not noise: was showing up most days, now down by 2+ — a fresh plan's
     // empty prior window (prev7.kept === 0) correctly never trips this.
     consistencyDropped: prev7.kept >= 4 && last7.kept <= prev7.kept - 2,
+    ...(weather ? { weatherTempC: weather.tempC } : {}),
+    ...(homeTzOff != null ? { homeTimezoneOffsetMin: homeTzOff, currentTimezoneOffsetMin: homeTzOff } : {}),
+    ...(loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lon)
+      ? { homeLat: loc.lat, homeLon: loc.lon, currentLat: loc.lat, currentLon: loc.lon }
+      : {}),
   };
 }
 
