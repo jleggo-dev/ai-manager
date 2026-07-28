@@ -4,7 +4,7 @@ import { resetUserData } from '../services/dev-reset.ts';
 import { clearTrace } from '../services/dev-trace.ts';
 import { AimError, purgeUserAiData } from '../ai/aim.ts';
 import { clearHomeLocation, getUser, setHomeLocation } from '../repos/users.ts';
-import { geocodeCity } from '../services/weather/weather.ts';
+import { geocodeCity, getWeatherForUser } from '../services/weather/weather.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
 import { homeLocationBodySchema } from '../validation/location.ts';
 
@@ -26,6 +26,29 @@ router.get('/location', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /me/location]', err);
     res.status(500).json({ error: 'failed to load location' });
+  }
+});
+
+/**
+ * GET /me/weather — current conditions at the user's home location (+ the OWM city label), for the
+ * Today header. Deterministic OWM data; `available:false` when there's no location or weather is
+ * unconfigured (the header then just shows the greeting — never a fabricated location).
+ */
+router.get('/weather', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const w = await getWeatherForUser(userId);
+    if (!w) return void res.json({ available: false });
+    res.json({
+      available: true,
+      temp_c: Math.round(w.tempC),
+      conditions: w.conditions,
+      label: w.label ?? null,
+      precip_chance: w.precipChance,
+    });
+  } catch (err) {
+    console.error('[GET /me/weather]', err);
+    res.status(500).json({ error: 'failed to load weather' });
   }
 });
 

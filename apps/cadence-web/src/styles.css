@@ -829,3 +829,6 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
   display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 0 oklch(80% 0.02 265); z-index: 2; }
 .trail-label { max-width: 150px; text-align: center; font-size: 13px; font-weight: 800; line-height: 1.25; text-wrap: pretty; }
 .trail-meta { margin-top: 2px; font-size: 11px; font-weight: 700; }
+.trail-loc { display: inline-flex; align-items: center; gap: 3px; margin-top: 1px; padding: 0; background: none;
+  font-size: 11px; font-weight: 700; letter-spacing: .01em; color: oklch(52% 0.03 250); text-align: left; }
+.trail-loc i { font-style: normal; font-weight: 800; color: oklch(56% 0.10 250); }

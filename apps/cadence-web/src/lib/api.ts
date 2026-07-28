@@ -188,6 +188,8 @@ export {
   saveHomeLocation,
   clearHomeLocation,
   browserTimezone,
+  getWeather,
   type HomeLocation,
   type LocationResult,
+  type WeatherNow,
 } from './api/location.ts';

@@ -6,7 +6,6 @@ import { FoodView } from '../food/FoodView.tsx';
 import { SettingsSheet } from '../settings/SettingsSheet.tsx';
 import { AdjustSheet } from '../plan/AdjustSheet.tsx';
 import { ReviewScreen } from '../review/ReviewScreen.tsx';
-import { LocationOffer } from './LocationOffer.tsx';
 
 type Tab = 'today' | 'coach' | 'food' | 'progress';
 
@@ -90,12 +89,7 @@ export function MainTabs({ email }: { email: string | null }) {
         </div>
       )}
       <div className="app">
-        {tab === 'today' && (
-          <>
-            <LocationOffer />
-            <PlanView />
-          </>
-        )}
+        {tab === 'today' && <PlanView />}
         {tab === 'coach' && <OnboardingChat intent="ongoing" chrome="none" onSettings={() => setSettingsOpen(true)} />}
         {tab === 'food' && <FoodView />}
         {tab === 'progress' && <ProgressView />}

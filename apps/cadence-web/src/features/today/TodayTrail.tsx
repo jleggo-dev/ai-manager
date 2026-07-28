@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { PlanViewData, PlanDay, PlanOccurrence } from '../../lib/api.ts';
 import { isFoodTitle } from '../../components/occurrence-mod.ts';
+import { useTodayHeader } from './useTodayHeader.ts';
 
 /**
  * The Visual Today — the redesign's sky-trail (REQ8 handoff `docs/cadence/design/redesign-today-trail`).
@@ -111,6 +112,8 @@ function greeting(): string {
   return 'Good evening';
 }
 
+const cap = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
 /* ── Solid-white glyphs (filled silhouettes on the discs) ─────────────────────────────── */
 const ICON: Record<Category, string> = {
   mindset:
@@ -183,6 +186,8 @@ function TrailNode({
 export function TodayTrail({ plan, onOpen }: { plan: PlanViewData; onOpen: (occId: string) => void }) {
   const days = plan.week;
   const streak = plan.streak?.current ?? 0;
+  const { weather, city, locating, requestLocation } = useTodayHeader();
+  const wx = weather?.available ? weather : null;
 
   return (
     <div className="trail">
@@ -193,8 +198,20 @@ export function TodayTrail({ plan, onOpen }: { plan: PlanViewData; onOpen: (occI
           </svg>
         </div>
         <div className="trail-greet">
-          <b>{greeting()}</b>
-          <span>{days.find((d) => d.isToday)?.weekday ?? ''}</span>
+          <b>{wx ? `${cap(wx.conditions ?? '')} · ${wx.temp_c}°` : greeting()}</b>
+          <button className="trail-loc" type="button" onClick={requestLocation}>
+            {city ? (
+              <>
+                <span aria-hidden>📍</span> {city} <i>· change</i>
+              </>
+            ) : locating ? (
+              'Locating…'
+            ) : (
+              <>
+                <span aria-hidden>📍</span> Set location for weather
+              </>
+            )}
+          </button>
         </div>
         {streak > 0 && (
           <div className="trail-streak" aria-label={`${streak} day streak`}>
