@@ -869,3 +869,19 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .trail-bay-bubble::before { content: ''; position: absolute; top: -6px; width: 12px; height: 12px; background: #fff; transform: rotate(45deg); }
 .trail-bay.is-left .trail-bay-bubble::before { left: 14px; }
 .trail-bay.is-right .trail-bay-bubble::before { right: 14px; }
+
+/* ── Trail celestial layers: sun/horizon/moon glows + twinkling stars ── */
+@keyframes twinkle { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.9; } }
+.trail-daylabel { position: relative; z-index: 2; }
+.trail-nodes { position: relative; z-index: 1; }
+.trail-sun { position: absolute; top: 36px; right: -26px; width: 120px; height: 120px; border-radius: 50%; z-index: 0;
+  background: radial-gradient(circle, oklch(93% 0.14 88) 0%, oklch(93% 0.14 88 / 0.45) 55%, oklch(93% 0.14 88 / 0) 72%); }
+.trail-horizon { position: absolute; top: 5%; left: 50%; width: 230px; height: 120px; margin-left: -115px; border-radius: 50%; z-index: 0;
+  background: radial-gradient(ellipse, oklch(97% 0.12 72) 0%, oklch(92% 0.14 56 / 0.5) 45%, oklch(90% 0.14 45 / 0) 75%); }
+.trail-sundisc { position: absolute; top: 12.5%; left: 50%; width: 78px; height: 78px; margin-left: -39px; border-radius: 50%; z-index: 0;
+  background: radial-gradient(circle, oklch(99% 0.06 88) 0%, oklch(95% 0.13 72) 60%, oklch(93% 0.14 62 / 0) 78%); }
+.trail-moon { position: absolute; bottom: 70px; left: -18px; width: 88px; height: 88px; border-radius: 50%; z-index: 0;
+  background: radial-gradient(circle, oklch(96% 0.03 265) 0%, oklch(96% 0.03 265 / 0.28) 48%, oklch(96% 0.03 265 / 0) 70%); }
+.trail-stars { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; z-index: 0; pointer-events: none; }
+.trail-star { position: absolute; border-radius: 50%; background: #fff;
+  animation-name: twinkle; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }

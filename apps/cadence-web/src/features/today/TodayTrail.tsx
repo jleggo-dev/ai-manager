@@ -88,6 +88,16 @@ const FIRST_SKY =
 const LATER_SKY =
   'linear-gradient(to bottom, oklch(23% 0.06 266) 0%, oklch(30% 0.09 292) 4%, oklch(48% 0.13 20) 8%, oklch(74% 0.14 46) 13%, oklch(92% 0.07 66) 19%, oklch(96% 0.035 88) 30%, oklch(95% 0.03 210) 46%, oklch(84% 0.06 245) 62%, oklch(58% 0.11 285) 78%, oklch(33% 0.08 272) 91%, oklch(23% 0.06 268) 100%)';
 
+/** Twinkling night stars (bottom 34% of each day), authored per the handoff. */
+const STARS = [
+  { left: '16%', top: '22%', size: 3, dur: '3.4s' },
+  { left: '72%', top: '8%', size: 4, dur: '4.2s' },
+  { left: '44%', top: '38%', size: 2, dur: '2.8s' },
+  { left: '86%', top: '52%', size: 3, dur: '3.9s' },
+  { left: '28%', top: '66%', size: 2, dur: '4.6s' },
+  { left: '62%', top: '78%', size: 3, dur: '3.1s' },
+];
+
 /** Horizontal crescent offset for node i of n on day d — a half-circle sweep that mirrors each day. */
 function crescentX(i: number, n: number, d: number): number {
   const t = n < 2 ? 0.5 : i / (n - 1);
@@ -239,6 +249,24 @@ export function TodayTrail({
           className={`trail-day${di > 0 ? ' is-later' : ''}`}
           style={{ background: di === 0 ? FIRST_SKY : LATER_SKY }}
         >
+          {di === 0 ? (
+            <div className="trail-sun" aria-hidden />
+          ) : (
+            <>
+              <div className="trail-horizon" aria-hidden />
+              <div className="trail-sundisc" aria-hidden />
+            </>
+          )}
+          <div className="trail-moon" aria-hidden />
+          <div className="trail-stars" aria-hidden>
+            {STARS.map((s, si) => (
+              <span
+                key={si}
+                className="trail-star"
+                style={{ left: s.left, top: s.top, width: s.size, height: s.size, animationDuration: s.dur }}
+              />
+            ))}
+          </div>
           <div className="trail-daylabel">
             <i />
             <span>{dayLabel(day, di)}</span>
