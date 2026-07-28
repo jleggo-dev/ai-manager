@@ -104,6 +104,33 @@ function dayLabel(day: PlanDay, index: number): string {
   return stamp;
 }
 
+const MONTHS_FULL = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+function ordinal(n: number): string {
+  const v = n % 100;
+  const suffix = v >= 11 && v <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
+  return `${n}${suffix}`;
+}
+function prettyDate(dateStr: string): string {
+  const [, m, d] = dateStr.split('-').map(Number);
+  return `${MONTHS_FULL[(m ?? 1) - 1]} ${ordinal(d ?? 1)}`;
+}
+const COACH_TEXTS = ['Not feeling it? Talk to me.', 'Want to shuffle tomorrow?', "Planning ahead? Let's talk."];
+const LEAF =
+  'M20.6 3.4C7.6 4.6 3.4 12.9 4.6 19.2c1.5-3.6 4.2-6.8 8.6-9.4-3.4 2.9-5.4 6.2-6.5 9.9 6.2 1.2 14.7-3.1 13.9-16.3Z';
+
 /* ── Solid-white glyphs (filled silhouettes on the discs) ─────────────────────────────── */
 const ICON: Record<Category, string> = {
   mindset:
@@ -170,8 +197,17 @@ function TrailNode({
   );
 }
 
-export function TodayTrail({ plan, onOpen }: { plan: PlanViewData; onOpen: (occId: string) => void }) {
+export function TodayTrail({
+  plan,
+  onOpen,
+  onCoach,
+}: {
+  plan: PlanViewData;
+  onOpen: (occId: string) => void;
+  onCoach: () => void;
+}) {
   const days = plan.week;
+  const todayPretty = prettyDate(days.find((d) => d.isToday)?.date ?? new Date().toISOString().slice(0, 10));
 
   return (
     <div className="trail">
@@ -179,7 +215,9 @@ export function TodayTrail({ plan, onOpen }: { plan: PlanViewData; onOpen: (occI
         <svg className="stroke" viewBox="0 0 24 24" width="20" height="20" aria-hidden>
           <path d="M20 11.5a7.5 7.5 0 01-10.9 6.7L4 19l1-4.3A7.5 7.5 0 1120 11.5z" strokeLinejoin="round" />
         </svg>
-        <span>Everything here is a suggestion — start wherever feels right.</span>
+        <span>
+          <b>It&apos;s {todayPretty} —</b> everything here is a suggestion; start wherever feels right.
+        </span>
       </div>
 
       {days.map((day, di) => (
@@ -202,6 +240,18 @@ export function TodayTrail({ plan, onOpen }: { plan: PlanViewData; onOpen: (occI
               ))
             )}
           </div>
+          {day.occurrences.length > 0 && (
+            <div className={`trail-bay ${di % 2 === 0 ? 'is-left' : 'is-right'}`}>
+              <div className="trail-bay-mark" aria-hidden>
+                <svg viewBox="0 0 24 24" width="30" height="30">
+                  <path d={LEAF} fill="#fff" />
+                </svg>
+              </div>
+              <button className="trail-bay-bubble" onClick={onCoach}>
+                {COACH_TEXTS[di % COACH_TEXTS.length]}
+              </button>
+            </div>
+          )}
         </section>
       ))}
     </div>

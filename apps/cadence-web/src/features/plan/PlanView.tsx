@@ -40,7 +40,7 @@ function detourLabel(type: ActiveEpisode['type']): string {
  * that pops the AdjustSheet: steer → preview → confirm) — suggest-never-auto-apply as always.
  * `reloadKey` bumps when a log/meal/adjust lands so the dashboard's aux fetches refresh.
  */
-export function PlanView() {
+export function PlanView({ onCoach }: { onCoach: () => void }) {
   const [data, setData] = useState<PlanViewData | null>(null);
   const [view, setView] = useState<'today' | 'week'>('today');
   const [note, setNote] = useState('');
@@ -217,7 +217,7 @@ export function PlanView() {
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
         {view === 'today' ? (
-          <TodayTrail plan={data} onOpen={setSheetOcc} />
+          <TodayTrail plan={data} onOpen={setSheetOcc} onCoach={onCoach} />
         ) : (
           <PlanWeekPanel
             today={today}

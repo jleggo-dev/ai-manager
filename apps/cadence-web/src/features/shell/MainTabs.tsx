@@ -79,20 +79,16 @@ export function MainTabs({ email }: { email: string | null }) {
 
   return (
     <>
-      {/* The Coach tab is an immersive full-screen chat (its own floating settings gear), so it
-          drops this header; Today/Food/Progress keep a slim header that now carries only the gear. */}
-      {tab !== 'coach' && (
-        <div className="app-head app-head-min">
-          <button className="gear" onClick={() => setSettingsOpen(true)} aria-label="Settings" title="Settings">
-            <GearIcon />
-          </button>
-        </div>
-      )}
       <div className="app">
-        {tab === 'today' && <PlanView />}
+        {tab === 'today' && <PlanView onCoach={() => setTab('coach')} />}
         {tab === 'coach' && <OnboardingChat intent="ongoing" chrome="none" onSettings={() => setSettingsOpen(true)} />}
         {tab === 'food' && <FoodView />}
         {tab === 'progress' && <ProgressView />}
+        {tab !== 'coach' && (
+          <button className="fab" onClick={() => setTab('coach')} aria-label="Log something you did">
+            ＋
+          </button>
+        )}
         <nav className="tabbar" aria-label="Main">
           <button className={`tab${tab === 'today' ? ' tab-on' : ''}`} onClick={() => setTab('today')}>
             <TodayIcon />
@@ -109,6 +105,10 @@ export function MainTabs({ email }: { email: string | null }) {
           <button className={`tab${tab === 'progress' ? ' tab-on' : ''}`} onClick={() => setTab('progress')}>
             <ProgressIcon />
             <span>Progress</span>
+          </button>
+          <button className="tab" onClick={() => setSettingsOpen(true)} aria-label="Settings">
+            <GearIcon />
+            <span>Settings</span>
           </button>
         </nav>
         {settingsOpen && (
