@@ -10,7 +10,7 @@ import {
   type PlateAdvice,
 } from '../../../lib/api.ts';
 import { useInvalidateNutritionDay, useNutritionDay } from '../../../lib/query/index.ts';
-import { downscalePhoto, mealForNow } from './format.ts';
+import { downscalePhoto, mealForNow, mealFromTitle } from './format.ts';
 
 /**
  * Meal / nutrition observe-phase state: day rollup, photo downscale, confirm, and log submit.
@@ -19,7 +19,8 @@ import { downscalePhoto, mealForNow } from './format.ts';
  */
 export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDetail) => void, onLogged?: () => void) {
   const [mealText, setMealText] = useState('');
-  const [mealKind, setMealKind] = useState<MealKind>(mealForNow());
+  // A split task names its meal ("Log breakfast"); a generic "Food log" falls back to the clock.
+  const [mealKind, setMealKind] = useState<MealKind>(mealFromTitle(detail.title) ?? mealForNow());
   const [mealBusy, setMealBusy] = useState(false);
   const [mealPhoto, setMealPhoto] = useState<string | null>(null);
   const [plateAdvice, setPlateAdvice] = useState<PlateAdvice | null>(null);

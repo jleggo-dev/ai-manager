@@ -17,9 +17,17 @@ export function qty(i: SessionItem): string {
 export const ytSearch = (q: string) =>
   `https://www.youtube.com/results?search_query=${encodeURIComponent(q.replace(/\s+/g, ' ').trim())}`;
 
-/** System food/meal/nutrition rows — open even when already ticked done. */
+/** System food/meal/nutrition rows — open even when already ticked done. Also matches the per-meal
+ *  split tasks ("Log breakfast/lunch/dinner/snack"), which carry no "food"/"meal" token. */
 export const isFoodRow = (d: OccurrenceDetail | null): boolean =>
-  !!d && d.kind === 'system' && /food|meal|nutrition/i.test(d.title);
+  !!d && d.kind === 'system' && /food|meal|nutrition|breakfast|lunch|dinner|snack/i.test(d.title);
+
+/** The meal a split task names ("Log breakfast" → breakfast), or null for a generic food task —
+ *  lets the meal capture pre-select the right meal instead of guessing from the clock. */
+export const mealFromTitle = (title: string): MealKind | null => {
+  const m = title.toLowerCase().match(/breakfast|lunch|dinner|snack/);
+  return (m?.[0] as MealKind | undefined) ?? null;
+};
 
 /** Pending system weigh-in — deterministic capture, no LLM. */
 export const isWeighInPending = (d: OccurrenceDetail): boolean =>

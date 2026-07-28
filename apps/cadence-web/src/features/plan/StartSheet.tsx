@@ -4,6 +4,10 @@ import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
 import { setOccurrence, logOccurrence } from '../../lib/api.ts';
 
+// "I have less time" only earns its place on a real session — multi-step AND more than this many
+// minutes. Below it there's nothing worth trimming; you just do it or skip (owner steer).
+const TIMEFLEX_MIN_MINUTES = 10;
+
 /**
  * The redesign's task **start sheet** (REQ8 handoff §3) — the pre-flight popup a trail node opens.
  * It fetches the occurrence's coach session (generating it on first open, same as the old sheet),
@@ -57,7 +61,7 @@ export function StartSheet({
     onClose();
   }
 
-  const shortWt = wt && wt.steps.length > 2 ? condense(wt) : null;
+  const shortWt = wt && wt.steps.length > 2 && wt.total_min > TIMEFLEX_MIN_MINUTES ? condense(wt) : null;
 
   return (
     <>

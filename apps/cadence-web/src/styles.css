@@ -908,6 +908,9 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .ss-btn { width: 100%; border: none; border-radius: 16px; padding: 15px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; margin-top: 10px; }
 .ss-start { background: linear-gradient(180deg, oklch(60% 0.10 152) 0%, oklch(52% 0.09 152) 46%); box-shadow: 0 5px 0 oklch(39% 0.08 152); }
 .ss-less { background: linear-gradient(180deg, oklch(70% 0.08 250) 0%, oklch(62% 0.08 250) 46%); box-shadow: 0 5px 0 oklch(47% 0.08 250); }
+/* Capture-sheet head discs — meal (green) + weigh-in (blue), overriding the orange start disc. */
+.ss-disc-meal { background: linear-gradient(168deg, oklch(74% 0.13 150) 0%, oklch(60% 0.13 152) 52%); box-shadow: 0 5px 0 oklch(48% 0.12 152); }
+.ss-disc-weigh { background: linear-gradient(168deg, oklch(72% 0.10 250) 0%, oklch(60% 0.11 250) 52%); box-shadow: 0 5px 0 oklch(46% 0.10 250); }
 
 /* ── "Log something you did" sheet (the goal-aware ＋) ── */
 .ld-head { display: flex; flex-direction: column; gap: 3px; margin-bottom: 4px; }

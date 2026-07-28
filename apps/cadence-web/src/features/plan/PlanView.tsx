@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { OccurrenceSheet } from './OccurrenceSheet.tsx';
 import { StartSheet } from './StartSheet.tsx';
+import { CaptureSheet } from './CaptureSheet.tsx';
 import { AdjustSheet } from './AdjustSheet.tsx';
-import { isFoodTitle } from '../../components/occurrence-mod.ts';
+import { taskOpener } from './taskShape.ts';
 import { TodayTrail } from '../today/TodayTrail.tsx';
 import { TrailHeader } from '../today/TrailHeader.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
@@ -49,6 +50,7 @@ export function PlanView({ onCoach, reloadSignal }: { onCoach: () => void; reloa
   const [proposalBusy, setProposalBusy] = useState(false);
   const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)
   const [startOcc, setStartOcc] = useState<string | null>(null); // redesign start sheet (stepped task)
+  const [captureOcc, setCaptureOcc] = useState<string | null>(null); // capture sheet (weigh-in / meal)
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSteer, setAdjustSteer] = useState(''); // pre-filled request (nutrition baseline → Adjust)
   const [adjustMode, setAdjustMode] = useState<'adjust' | 'rebalance'>('adjust');
@@ -169,9 +171,10 @@ export function PlanView({ onCoach, reloadSignal }: { onCoach: () => void; reloa
   const doneCount = data.week.reduce((n, d) => n + d.occurrences.filter((o) => o.status === 'done').length, 0);
   const xp = doneCount * 10; // stopgap XP until the REQ8 points finalize is wired to the plan response
 
-  // Trail node tap → the redesign start sheet for stepped tasks; food/meal keeps its logging sheet.
+  // Trail node tap → routed by task shape: captures (weigh-in, meals) open the minimal CaptureSheet;
+  // coach sessions open the StartSheet walkthrough. (The Week view keeps its own OccurrenceSheet.)
   const openTask = (occ: PlanOccurrence) =>
-    isFoodTitle(occ.title) ? setSheetOcc(occ.occurrence_id) : setStartOcc(occ.occurrence_id);
+    taskOpener(occ) === 'task' ? setStartOcc(occ.occurrence_id) : setCaptureOcc(occ.occurrence_id);
 
   return (
     <>
@@ -274,6 +277,22 @@ export function PlanView({ onCoach, reloadSignal }: { onCoach: () => void; reloa
           onLogged={() => {
             refresh();
             bump();
+          }}
+        />
+      )}
+      {captureOcc && (
+        <CaptureSheet
+          occurrenceId={captureOcc}
+          onClose={() => setCaptureOcc(null)}
+          onLogged={() => {
+            refresh();
+            bump();
+          }}
+          onProposeChange={(steer) => {
+            setCaptureOcc(null);
+            setAdjustSteer(steer);
+            setAdjustMode('adjust');
+            setAdjustOpen(true);
           }}
         />
       )}
