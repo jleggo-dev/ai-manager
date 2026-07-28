@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { OccurrenceSheet } from './OccurrenceSheet.tsx';
+import { StartSheet } from './StartSheet.tsx';
 import { AdjustSheet } from './AdjustSheet.tsx';
+import { isFoodTitle } from '../../components/occurrence-mod.ts';
 import { TodayTrail } from '../today/TodayTrail.tsx';
 import { TrailHeader } from '../today/TrailHeader.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
@@ -46,6 +48,7 @@ export function PlanView({ onCoach }: { onCoach: () => void }) {
   const [note, setNote] = useState('');
   const [proposalBusy, setProposalBusy] = useState(false);
   const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)
+  const [startOcc, setStartOcc] = useState<string | null>(null); // redesign start sheet (stepped task)
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSteer, setAdjustSteer] = useState(''); // pre-filled request (nutrition baseline → Adjust)
   const [adjustMode, setAdjustMode] = useState<'adjust' | 'rebalance'>('adjust');
@@ -165,6 +168,10 @@ export function PlanView({ onCoach }: { onCoach: () => void }) {
   const doneCount = data.week.reduce((n, d) => n + d.occurrences.filter((o) => o.status === 'done').length, 0);
   const xp = doneCount * 10; // stopgap XP until the REQ8 points finalize is wired to the plan response
 
+  // Trail node tap → the redesign start sheet for stepped tasks; food/meal keeps its logging sheet.
+  const openTask = (occ: PlanOccurrence) =>
+    isFoodTitle(occ.title) ? setSheetOcc(occ.occurrence_id) : setStartOcc(occ.occurrence_id);
+
   return (
     <>
       <TrailHeader streak={data.streak?.current ?? 0} xp={xp} />
@@ -217,7 +224,7 @@ export function PlanView({ onCoach }: { onCoach: () => void }) {
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
         {view === 'today' ? (
-          <TodayTrail plan={data} onOpen={setSheetOcc} onCoach={onCoach} />
+          <TodayTrail plan={data} onOpen={openTask} onCoach={onCoach} />
         ) : (
           <PlanWeekPanel
             today={today}
@@ -256,6 +263,16 @@ export function PlanView({ onCoach }: { onCoach: () => void }) {
             setAdjustSteer(steer);
             setAdjustMode('adjust');
             setAdjustOpen(true);
+          }}
+        />
+      )}
+      {startOcc && (
+        <StartSheet
+          occurrenceId={startOcc}
+          onClose={() => setStartOcc(null)}
+          onLogged={() => {
+            refresh();
+            bump();
           }}
         />
       )}

@@ -162,7 +162,7 @@ function TrailNode({
   i: number;
   n: number;
   d: number;
-  onOpen: (id: string) => void;
+  onOpen: (occ: PlanOccurrence) => void;
 }) {
   const cat = categoryOf(occ.title);
   const ramp = RAMP[Math.round((n < 2 ? 0 : i / (n - 1)) * 5)]!;
@@ -182,7 +182,7 @@ function TrailNode({
     <button
       className="trail-node"
       style={{ transform: `translateX(${crescentX(i, n, d)}px)` }}
-      onClick={() => onOpen(occ.occurrence_id)}
+      onClick={() => onOpen(occ)}
       aria-label={occ.title}
     >
       <span className={`trail-disc${done ? ' is-done' : ''}`} style={discStyle}>
@@ -213,7 +213,7 @@ export function TodayTrail({
   onCoach,
 }: {
   plan: PlanViewData;
-  onOpen: (occId: string) => void;
+  onOpen: (occ: PlanOccurrence) => void;
   onCoach: () => void;
 }) {
   const days = plan.week;
