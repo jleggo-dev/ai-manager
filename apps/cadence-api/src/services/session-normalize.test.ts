@@ -126,4 +126,22 @@ describe('normalizeSession', () => {
     expect(item.duration_min).toBeUndefined();
     expect(item.distance_km).toBeUndefined();
   });
+
+  it('keeps a whitelisted coach tool and drops anything off-catalog (REQ8)', () => {
+    const session = normalizeSession({
+      blocks: [
+        {
+          label: 'Main',
+          items: [
+            { name: 'Plank', duration_min: 1, tool: 'timer' },
+            { name: 'Find a seat', duration_min: 1, tool: 'read' },
+            { name: 'Mystery', tool: 'laser' },
+            { name: 'Untagged' },
+          ],
+        },
+      ],
+    });
+    const tools = session!.blocks[0]!.items.map((i) => i.tool);
+    expect(tools).toEqual(['timer', 'read', undefined, undefined]);
+  });
 });

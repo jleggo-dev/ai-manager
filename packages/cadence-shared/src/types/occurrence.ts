@@ -25,6 +25,15 @@ export interface OccurrenceWeather {
       items, not exercises — a practice-area session ("say these prayers", "morning pages")
       flows through the same types/pipe with no new code) ─────────────────────────────── */
 
+/**
+ * How the walkthrough should PLAY a step (REQ8) — the coach's EXPLICIT choice, because only the
+ * coach has judgment the quantities can't carry: a 1-min plank is a `timer`, a 1-min "find a
+ * comfortable seat" is a `read`. Optional + additive — an untagged item falls back to inference
+ * from its quantities (deriveWalkthrough/inferTool). This is the per-item subset the coach picks;
+ * the full renderable catalog (incl. insight tools placed by the app) lives in walkthrough.ts.
+ */
+export type SessionItemTool = 'read' | 'timer' | 'reps' | 'checkoff' | 'photo' | 'journal';
+
 /** One prescribed item in a session — an exercise, a run segment, a practice step. Only the
  *  quantity fields that apply are set; the UI renders whichever are present ("3×8 @ 55 lb"). */
 export interface SessionItem {
@@ -36,6 +45,7 @@ export interface SessionItem {
   distance_km?: number;
   detail?: string; // one short cue/instruction
   video_query?: string | null; // YouTube SEARCH phrase only — never a URL (client builds the link)
+  tool?: SessionItemTool; // coach's explicit render/play choice; falls back to inference when unset
 }
 
 export interface SessionBlock {

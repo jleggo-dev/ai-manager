@@ -3,7 +3,7 @@
  * plan-synthesis.ts#normalizeActivity). Kept free of DB/LLM so bounds + URL stripping
  * can be unit-tested without the AI Admin seam.
  */
-import type { OccurrenceSession, SessionBlock, SessionItem } from '@cadence/shared';
+import type { OccurrenceSession, SessionBlock, SessionItem, SessionItemTool } from '@cadence/shared';
 
 const MAX_BLOCKS = 6;
 const MAX_ITEMS = 12;
@@ -13,6 +13,13 @@ export const str = (v: unknown, max = 200): string | undefined =>
 
 export const num = (v: unknown): number | undefined =>
   typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined;
+
+const SESSION_TOOLS: ReadonlySet<string> = new Set(['read', 'timer', 'reps', 'checkoff', 'photo', 'journal']);
+
+/** Whitelist the coach's tool choice (REQ8) — an off-catalog value is dropped so the walkthrough
+ *  falls back to quantity inference rather than trusting an unknown renderer name. */
+export const toolOf = (v: unknown): SessionItemTool | undefined =>
+  typeof v === 'string' && SESSION_TOOLS.has(v) ? (v as SessionItemTool) : undefined;
 
 /**
  * App-side contract assertion: coerce whatever the model returned into a bounded,
@@ -43,6 +50,7 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
             distance_km: num(i.distance_km),
             detail: str(i.detail, 200),
             video_query: vq && !/https?:|youtube\.com|youtu\.be|www\./i.test(vq) ? vq : null,
+            tool: toolOf(i.tool),
           };
         })
         .filter((i): i is SessionItem => i !== null);
