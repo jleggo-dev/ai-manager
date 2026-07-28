@@ -908,6 +908,20 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .ss-btn { width: 100%; border: none; border-radius: 16px; padding: 15px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; margin-top: 10px; }
 .ss-start { background: linear-gradient(180deg, oklch(60% 0.10 152) 0%, oklch(52% 0.09 152) 46%); box-shadow: 0 5px 0 oklch(39% 0.08 152); }
 .ss-less { background: linear-gradient(180deg, oklch(70% 0.08 250) 0%, oklch(62% 0.08 250) 46%); box-shadow: 0 5px 0 oklch(47% 0.08 250); }
+/* "I have less time" → the time-definition step (33% / 66% / other, deterministically trimmed). */
+.ss-timeask { margin-top: 12px; }
+.ss-timeask-q { font-size: 14px; font-weight: 800; color: oklch(30% 0.02 150); margin-bottom: 10px; }
+.ss-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.ss-chip { flex: 1 1 0; min-width: 84px; border: none; border-radius: 14px; padding: 14px 12px; font-size: 14px; font-weight: 800;
+  color: #fff; cursor: pointer; background: linear-gradient(180deg, oklch(70% 0.08 250) 0%, oklch(62% 0.08 250) 46%);
+  box-shadow: 0 4px 0 oklch(47% 0.08 250); }
+.ss-chip:disabled { opacity: 0.5; box-shadow: none; cursor: default; }
+.ss-custom { display: flex; gap: 8px; margin-top: 8px; }
+.ss-custom-in { flex: 1; min-width: 0; border: 1px solid oklch(89% 0.015 85); border-radius: 12px; padding: 12px 13px;
+  font-size: 14px; font-weight: 700; color: oklch(28% 0.02 150); background: #fff; }
+.ss-back { margin-top: 12px; background: none; border: none; padding: 4px; font-size: 13px; font-weight: 700;
+  color: oklch(52% 0.03 250); cursor: pointer; }
+
 /* Capture-sheet head discs — meal (green) + weigh-in (blue), overriding the orange start disc. */
 .ss-disc-meal { background: linear-gradient(168deg, oklch(74% 0.13 150) 0%, oklch(60% 0.13 152) 52%); box-shadow: 0 5px 0 oklch(48% 0.12 152); }
 .ss-disc-weigh { background: linear-gradient(168deg, oklch(72% 0.10 250) 0%, oklch(60% 0.11 250) 52%); box-shadow: 0 5px 0 oklch(46% 0.10 250); }
