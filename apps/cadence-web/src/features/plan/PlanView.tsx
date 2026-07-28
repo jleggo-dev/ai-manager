@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { OccurrenceSheet } from './OccurrenceSheet.tsx';
 import { AdjustSheet } from './AdjustSheet.tsx';
-import { TodayDashboard } from '../today/TodayDashboard.tsx';
+import { TodayTrail } from '../today/TodayTrail.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
 import { PlanWeekPanel } from './PlanWeekPanel.tsx';
 import {
@@ -48,7 +48,7 @@ export function PlanView() {
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSteer, setAdjustSteer] = useState(''); // pre-filled request (nutrition baseline → Adjust)
   const [adjustMode, setAdjustMode] = useState<'adjust' | 'rebalance'>('adjust');
-  const [reloadKey, setReloadKey] = useState(0); // bumps → dashboard refetches /progress + /nutrition/day
+  const [, setReloadKey] = useState(0); // bumps → aux refetch after a log/adjust (kept for callbacks)
 
   useEffect(() => {
     getPlan()
@@ -213,7 +213,7 @@ export function PlanView() {
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
         {view === 'today' ? (
-          <TodayDashboard plan={data} reloadKey={reloadKey} onCheck={set} onOpen={setSheetOcc} />
+          <TodayTrail plan={data} onOpen={setSheetOcc} />
         ) : (
           <PlanWeekPanel
             today={today}

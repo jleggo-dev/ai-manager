@@ -793,3 +793,39 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 /* Reference dumps (persona, raw JSON, capture, log rows): boxed so they don't dominate the panel;
    these are the ONLY blocks that keep an inner scroll, and only because you rarely read them fully. */
 .devpre.dump { max-height: 220px; overflow: auto; }
+
+/* ── Visual Today: the sky-trail (REQ8 redesign — docs/cadence/design/redesign-today-trail) ── */
+.trail { margin: 0 -20px; padding-bottom: 40px; }
+.trail-head { display: flex; align-items: center; gap: 10px; padding: 6px 20px 12px; }
+.trail-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: oklch(78% 0.16 64); box-shadow: 0 3px 0 oklch(62% 0.15 60); flex: 0 0 auto; }
+.trail-greet { flex: 1; display: flex; flex-direction: column; line-height: 1.15; }
+.trail-greet b { font-family: var(--display); font-size: 15px; font-weight: 800; color: oklch(34% 0.02 150); }
+.trail-greet span { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: oklch(58% 0.02 120); }
+.trail-streak { display: flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px;
+  background: oklch(90% 0.03 40); color: oklch(35% 0.1 40); font-family: var(--display); font-weight: 800; font-size: 13px; }
+.trail-coach { display: flex; gap: 10px; align-items: flex-start; margin: 0 20px 18px; padding: 14px 16px; background: #fff;
+  border-radius: 18px; box-shadow: 0 1px 3px rgba(0, 0, 0, .04); }
+.trail-coach svg { color: oklch(50% 0.07 152); flex: 0 0 auto; margin-top: 1px; }
+.trail-coach span { font-size: 13px; line-height: 1.4; color: oklch(35% 0.02 150); }
+
+.trail-day { position: relative; padding: 18px 20px 34px; overflow: hidden; }
+.trail-day.is-later { padding-top: 92px; }
+.trail-daylabel { display: flex; align-items: center; gap: 12px; padding: 6px 0 22px; }
+.trail-daylabel i { flex: 1; height: 1px; background: oklch(62% 0.04 62 / .35); }
+.trail-daylabel span { font-size: 10.5px; font-weight: 900; letter-spacing: .12em; color: oklch(44% 0.06 58); }
+.trail-nodes { display: flex; flex-direction: column; align-items: center; gap: 30px; }
+.trail-empty { font-size: 13px; font-weight: 600; color: oklch(45% 0.03 250); padding: 6px 0; }
+
+.trail-node { display: flex; flex-direction: column; align-items: center; background: none; padding: 0; }
+.trail-disc { position: relative; width: 82px; height: 74px; border-radius: 50%; overflow: visible; margin-bottom: 18px;
+  background: var(--face); box-shadow: 0 8px 0 var(--edge), 0 13px 18px oklch(25% 0.05 265 / .20);
+  display: flex; align-items: center; justify-content: center; }
+.trail-disc::before { content: ''; position: absolute; top: 7px; left: 12px; width: 38px; height: 17px;
+  background: oklch(100% 0 0 / .34); border-radius: 50%; transform: rotate(-16deg); }
+.trail-disc svg { position: relative; z-index: 1; }
+.trail-check { position: absolute; bottom: -4px; right: -6px; width: 26px; height: 26px; border-radius: 50%;
+  background: oklch(97% 0.01 265); color: oklch(40% 0.07 265); font-size: 14px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 0 oklch(80% 0.02 265); z-index: 2; }
+.trail-label { max-width: 150px; text-align: center; font-size: 13px; font-weight: 800; line-height: 1.25; text-wrap: pretty; }
+.trail-meta { margin-top: 2px; font-size: 11px; font-weight: 700; }
