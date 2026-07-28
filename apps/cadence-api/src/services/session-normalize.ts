@@ -3,7 +3,15 @@
  * plan-synthesis.ts#normalizeActivity). Kept free of DB/LLM so bounds + URL stripping
  * can be unit-tested without the AI Admin seam.
  */
-import type { OccurrenceSession, SessionBlock, SessionItem, SessionItemTool } from '@cadence/shared';
+import {
+  BLOCK_MODE_KINDS,
+  SESSION_TOOL_KINDS,
+  type BlockMode,
+  type OccurrenceSession,
+  type SessionBlock,
+  type SessionItem,
+  type SessionItemTool,
+} from '@cadence/shared';
 
 const MAX_BLOCKS = 6;
 const MAX_ITEMS = 12;
@@ -14,18 +22,20 @@ export const str = (v: unknown, max = 200): string | undefined =>
 export const num = (v: unknown): number | undefined =>
   typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined;
 
-const SESSION_TOOLS: ReadonlySet<string> = new Set(['read', 'timer', 'reps', 'checkoff', 'photo', 'journal']);
+// Whitelists derive from the one tool catalog (@cadence/shared/tool-catalog) — the same list the
+// coach is taught via {{tool_catalog}}, so what we accept can't drift from what we told it to emit.
+const SESSION_TOOLS: ReadonlySet<string> = new Set(SESSION_TOOL_KINDS);
 
 /** Whitelist the coach's tool choice (REQ8) — an off-catalog value is dropped so the walkthrough
  *  falls back to quantity inference rather than trusting an unknown renderer name. */
 export const toolOf = (v: unknown): SessionItemTool | undefined =>
   typeof v === 'string' && SESSION_TOOLS.has(v) ? (v as SessionItemTool) : undefined;
 
-const BLOCK_MODES: ReadonlySet<string> = new Set(['straight', 'circuit']);
+const BLOCK_MODES: ReadonlySet<string> = new Set(BLOCK_MODE_KINDS);
 
 /** Whitelist the coach's block set-flow (REQ8 slice 2) — off-catalog → undefined (= straight). */
-export const modeOf = (v: unknown): 'straight' | 'circuit' | undefined =>
-  typeof v === 'string' && BLOCK_MODES.has(v) ? (v as 'straight' | 'circuit') : undefined;
+export const modeOf = (v: unknown): BlockMode | undefined =>
+  typeof v === 'string' && BLOCK_MODES.has(v) ? (v as BlockMode) : undefined;
 
 /**
  * App-side contract assertion: coerce whatever the model returned into a bounded,

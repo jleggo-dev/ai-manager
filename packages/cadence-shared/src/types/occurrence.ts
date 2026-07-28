@@ -34,6 +34,10 @@ export interface OccurrenceWeather {
  */
 export type SessionItemTool = 'read' | 'timer' | 'reps' | 'checkoff' | 'photo' | 'journal';
 
+/** How a block's sets flow (REQ8 slice 2). The catalog (tool-catalog.ts) is the authority for the
+ *  names; this type is the shape both it and `SessionBlock.mode` share so they can't drift. */
+export type BlockMode = 'straight' | 'circuit';
+
 /** One prescribed item in a session — an exercise, a run segment, a practice step. Only the
  *  quantity fields that apply are set; the UI renders whichever are present ("3×8 @ 55 lb"). */
 export interface SessionItem {
@@ -54,7 +58,7 @@ export interface SessionBlock {
   /** How this block's sets flow (REQ8 slice 2). 'straight' (default) = each exercise's sets done
    *  consecutively (A,A,B,B); 'circuit' = rotate through the items for `rounds` rounds (A,B,A,B).
    *  The coach chooses per block; absent = straight, so existing sessions are unchanged. */
-  mode?: 'straight' | 'circuit';
+  mode?: BlockMode;
   rounds?: number; // circuit only — rounds through the items (defaults to the items' max sets)
 }
 
