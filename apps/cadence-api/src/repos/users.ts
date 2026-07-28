@@ -5,6 +5,7 @@ import type {
   MacroTargets,
   PendingProposal,
   PendingPlan,
+  PointsState,
   SteerBack,
   StreakState,
 } from '@cadence/shared';
@@ -26,6 +27,9 @@ export interface CadenceUserRow {
   streak_state?: StreakState | null;
   // Present once migration 0017 is applied (Req 5 dietary safety input).
   dietary_profile?: DietaryProfile | null;
+  // Present once migration 0020 is applied (REQ8 rewards); undefined pre-migration → callers fall
+  // back to initialPointsState().
+  points_state?: PointsState | null;
 }
 
 export async function getUser(userId: string): Promise<CadenceUserRow | null> {
@@ -83,6 +87,12 @@ export async function setPendingPlan(userId: string, plan: PendingPlan | null): 
  *  finalizes past days. Whole-object replace; the caller owns the merge. */
 export async function setStreakState(userId: string, state: StreakState): Promise<void> {
   await sql`update cadence.users set streak_state = ${json(state)} where id = ${userId}`;
+}
+
+/** Persist the forward-only points wallet (REQ8) — written by the rewards finalize after it folds
+ *  past days / redeems a freeze. Whole-object replace; the caller owns the merge. */
+export async function setPointsState(userId: string, state: PointsState): Promise<void> {
+  await sql`update cadence.users set points_state = ${json(state)} where id = ${userId}`;
 }
 
 /** Read dietary profile jsonb (Req 5). Null only if the user row is missing. */

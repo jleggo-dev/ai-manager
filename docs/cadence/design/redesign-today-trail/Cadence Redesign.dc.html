@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Nunito+Sans:wght@400;600;700;800;900&display=swap');
+    body { margin:0; background:oklch(96% 0.015 95); font-family:'Nunito Sans',sans-serif; }
+    * { box-sizing:border-box; }
+    a { color:oklch(45% 0.09 150); }
+    a:hover { color:oklch(38% 0.1 150); }
+    @keyframes pop { 0%{transform:scale(0.4);opacity:0} 60%{transform:scale(1.08);opacity:1} 100%{transform:scale(1)} }
+    ::-webkit-scrollbar { width:0; height:0; }
+    @keyframes swapIn { 0%{transform:translateY(7px);opacity:0} 100%{transform:translateY(0);opacity:1} }
+    @keyframes twinkle { 0%,100%{opacity:0.25} 50%{opacity:0.9} }
+    @keyframes floatUp { 0%{transform:translateY(0);opacity:0} 15%{opacity:1} 100%{transform:translateY(-40px);opacity:0} }
+  </style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:24px;padding:48px 24px;">
+  <div style="text-align:center;max-width:640px;">
+    <div style="font-family:'Fraunces',serif;font-size:32px;font-weight:600;color:oklch(28% 0.03 150);letter-spacing:-0.01em;">Cadence, reimagined</div>
+    <div style="font-size:15px;color:oklch(45% 0.02 150);margin-top:6px;">Tap through the day — tasks are suggestions, not a locked path. Tap any node to start, or log your own.</div>
+  </div>
+
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="390,844">
+    <div style="position:relative;height:100%;display:flex;flex-direction:column;background:oklch(96% 0.025 76);font-family:'Nunito Sans',sans-serif;overflow:hidden;">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:54px 20px 4px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:36px;height:36px;border-radius:50%;background:oklch(78% 0.16 64);box-shadow:0 3px 0 oklch(62% 0.15 60);display:flex;align-items:center;justify-content:center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="white"><path d="M20.6 3.4C7.6 4.6 3.4 12.9 4.6 19.2c1.5-3.6 4.2-6.8 8.6-9.4-3.4 2.9-5.4 6.2-6.5 9.9 6.2 1.2 14.7-3.1 13.9-16.3Z"></path></svg></div>
+          <div style="min-height:34px;display:flex;flex-direction:column;justify-content:center;">
+            <sc-if value="{{ showGreeting }}" hint-placeholder-val="{{ true }}">
+              <div style="animation:swapIn 0.45s ease;">
+                <div style="font-size:13.5px;font-weight:800;color:oklch(34% 0.02 150);">Good morning</div>
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:0.04em;color:oklch(58% 0.02 120);">{{ todayLong }}</div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showWeather }}" hint-placeholder-val="{{ false }}">
+              <div style="animation:swapIn 0.45s ease;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="oklch(48% 0.07 250)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.6 14.4a3.9 3.9 0 0 1 .3-7.8 5.3 5.3 0 0 1 10.1 1.2 3.3 3.3 0 0 1-.6 6.6Z"></path><path d="M9 17.6l-.8 2.6M12.4 17.6l-.8 2.6M15.8 17.6l-.8 2.6"></path></svg>
+                  <div style="font-size:13.5px;font-weight:800;color:oklch(40% 0.06 250);">Cold &amp; rainy · 4°</div>
+                </div>
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:0.04em;color:oklch(50% 0.07 250);">INDOOR SWAP READY</div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="display:flex;align-items:center;gap:4px;background:oklch(90% 0.03 40);padding:5px 10px;border-radius:999px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(45% 0.13 45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s4.5 3.6 4.5 8.2c0 1.4-.4 2.4-1 3.2.2-1.6-.4-3.2-1.6-4.2.3 3-1.4 4.3-2.4 5.6-.7.9-1 1.7-1 2.6 0 1.6 1.3 3 3 3-3.3 0-6-2.4-6-5.6C7.5 10.4 12 8.4 12 3Z"></path></svg>
+            <span style="font-size:13px;font-weight:800;color:oklch(35% 0.1 40);">{{ streak }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;background:oklch(90% 0.05 95);padding:5px 10px;border-radius:999px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(45% 0.12 92)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.4 14.3 9l6 .5-4.6 3.9 1.4 5.9L12 16.1l-5.1 3.2 1.4-5.9L3.7 9.5l6-.5Z"></path></svg>
+            <span style="font-size:13px;font-weight:800;color:oklch(38% 0.11 95);">{{ xp }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin:12px 20px 14px;">
+        <button onClick="{{ goToday }}" style="flex:1;border:none;padding:11px 0;border-radius:14px;font-size:14px;font-weight:900;letter-spacing:0.01em;cursor:pointer;background:{{ todayTabBg }};color:{{ todayTabColor }};box-shadow:{{ todayTabShadow }};">Today</button>
+        <button onClick="{{ goWeek }}" style="flex:1;border:none;padding:11px 0;border-radius:14px;font-size:14px;font-weight:900;letter-spacing:0.01em;cursor:pointer;background:{{ weekTabBg }};color:{{ weekTabColor }};box-shadow:{{ weekTabShadow }};">Week</button>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;padding:0;">
+
+        <sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:0 20px;">
+            <div style="background:white;border-radius:18px;padding:14px 16px;display:flex;gap:10px;align-items:center;box-shadow:0 1px 3px oklch(0% 0 0 / 0.04);margin-bottom:18px;">
+              <div style="flex:none;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="oklch(50% 0.07 152)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12.4c0 4-3.8 7.1-8.5 7.1-1 0-2-.1-2.9-.4L4.5 20.5l1.3-3.4A6.7 6.7 0 0 1 3.5 12.4c0-3.9 3.8-7.1 8.5-7.1s8.5 3.2 8.5 7.1Z"></path></svg></div>
+              <div style="font-size:13px;color:oklch(35% 0.02 150);line-height:1.4;">"{{ coachLine }}"</div>
+            </div>
+          </div>
+
+          <sc-for list="{{ days }}" as="day" hint-placeholder-count="2">
+          <div style="position:relative;padding:0 20px 30px;overflow:hidden;">
+            <sc-if value="{{ day.isFirst }}" hint-placeholder-val="{{ true }}">
+              <div style="position:absolute;inset:0;background:linear-gradient(to bottom,oklch(95% 0.04 68) 0%,oklch(96% 0.035 88) 16%,oklch(95% 0.03 210) 36%,oklch(84% 0.06 245) 56%,oklch(58% 0.11 285) 74%,oklch(33% 0.08 272) 88%,oklch(23% 0.06 268) 100%);"></div>
+              <div style="position:absolute;top:36px;right:-26px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,oklch(93% 0.14 88) 0%,oklch(93% 0.14 88 / 0.45) 55%,oklch(93% 0.14 88 / 0) 72%);"></div>
+            </sc-if>
+            <sc-if value="{{ day.notFirst }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;inset:0;background:linear-gradient(to bottom,oklch(23% 0.06 266) 0%,oklch(30% 0.09 292) 4%,oklch(48% 0.13 20) 8%,oklch(74% 0.14 46) 13%,oklch(92% 0.07 66) 19%,oklch(96% 0.035 88) 30%,oklch(95% 0.03 210) 46%,oklch(84% 0.06 245) 62%,oklch(58% 0.11 285) 78%,oklch(33% 0.08 272) 91%,oklch(23% 0.06 268) 100%);"></div>
+              <div style="position:absolute;top:5%;left:50%;width:230px;height:120px;margin-left:-115px;border-radius:50%;background:radial-gradient(ellipse,oklch(97% 0.12 72) 0%,oklch(92% 0.14 56 / 0.5) 45%,oklch(90% 0.14 45 / 0) 75%);"></div>
+              <div style="position:absolute;top:12.5%;left:50%;width:78px;height:78px;margin-left:-39px;border-radius:50%;background:radial-gradient(circle,oklch(99% 0.06 88) 0%,oklch(95% 0.13 72) 60%,oklch(93% 0.14 62 / 0) 78%);"></div>
+            </sc-if>
+            <div style="position:absolute;bottom:70px;left:-18px;width:88px;height:88px;border-radius:50%;background:radial-gradient(circle,oklch(96% 0.03 265) 0%,oklch(96% 0.03 265 / 0.28) 48%,oklch(96% 0.03 265 / 0) 70%);"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;height:34%;">
+              <div style="position:absolute;left:16%;top:22%;width:3px;height:3px;border-radius:50%;background:white;animation:twinkle 3.4s ease-in-out infinite;"></div>
+              <div style="position:absolute;left:72%;top:8%;width:4px;height:4px;border-radius:50%;background:white;animation:twinkle 4.2s ease-in-out infinite;"></div>
+              <div style="position:absolute;left:44%;top:38%;width:2px;height:2px;border-radius:50%;background:white;animation:twinkle 2.8s ease-in-out infinite;"></div>
+              <div style="position:absolute;left:86%;top:52%;width:3px;height:3px;border-radius:50%;background:white;animation:twinkle 3.9s ease-in-out infinite;"></div>
+              <div style="position:absolute;left:28%;top:66%;width:2px;height:2px;border-radius:50%;background:white;animation:twinkle 4.6s ease-in-out infinite;"></div>
+              <div style="position:absolute;left:62%;top:78%;width:3px;height:3px;border-radius:50%;background:white;animation:twinkle 3.1s ease-in-out infinite;"></div>
+            </div>
+
+            <sc-if value="{{ day.notFirst }}" hint-placeholder-val="{{ false }}"><div style="height:96px;"></div></sc-if>
+            <div style="position:relative;z-index:2;display:flex;align-items:center;gap:10px;padding:18px 0 22px;">
+              <div style="flex:1;height:1px;background:oklch(62% 0.04 62 / 0.35);"></div>
+              <div style="font-size:10.5px;font-weight:900;letter-spacing:0.12em;color:oklch(44% 0.06 58);">{{ day.label }}</div>
+              <div style="flex:1;height:1px;background:oklch(62% 0.04 62 / 0.35);"></div>
+            </div>
+
+            <sc-if value="{{ day.coachRight }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;right:16px;top:42%;width:126px;z-index:3;display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+                <div style="width:58px;height:58px;border-radius:50%;background:linear-gradient(165deg,oklch(62% 0.08 152) 0%,oklch(48% 0.08 152) 60%);box-shadow:0 6px 0 oklch(36% 0.07 152),0 10px 16px oklch(25% 0.05 265 / 0.25);display:flex;align-items:center;justify-content:center;">
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="white"><path d="M20.6 3.4C7.6 4.6 3.4 12.9 4.6 19.2c1.5-3.6 4.2-6.8 8.6-9.4-3.4 2.9-5.4 6.2-6.5 9.9 6.2 1.2 14.7-3.1 13.9-16.3Z"></path></svg>
+                </div>
+                <button onClick="{{ openCoach }}" style="position:relative;border:none;cursor:pointer;background:white;border-radius:14px;padding:10px 12px;text-align:right;box-shadow:0 3px 0 oklch(88% 0.02 85),0 6px 14px oklch(30% 0.03 265 / 0.12);">
+                  <div style="font-size:11.5px;font-weight:800;color:oklch(34% 0.03 152);line-height:1.35;">{{ day.coachText }}</div>
+                  <div style="position:absolute;top:-6px;right:14px;width:12px;height:12px;background:white;transform:rotate(45deg);"></div>
+                </button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ day.coachLeft }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;left:16px;top:42%;width:126px;z-index:3;display:flex;flex-direction:column;align-items:flex-start;gap:8px;">
+                <div style="width:58px;height:58px;border-radius:50%;background:linear-gradient(165deg,oklch(62% 0.08 152) 0%,oklch(48% 0.08 152) 60%);box-shadow:0 6px 0 oklch(36% 0.07 152),0 10px 16px oklch(25% 0.05 265 / 0.25);display:flex;align-items:center;justify-content:center;">
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="white"><path d="M20.6 3.4C7.6 4.6 3.4 12.9 4.6 19.2c1.5-3.6 4.2-6.8 8.6-9.4-3.4 2.9-5.4 6.2-6.5 9.9 6.2 1.2 14.7-3.1 13.9-16.3Z"></path></svg>
+                </div>
+                <button onClick="{{ openCoach }}" style="position:relative;border:none;cursor:pointer;background:white;border-radius:14px;padding:10px 12px;text-align:left;box-shadow:0 3px 0 oklch(88% 0.02 85),0 6px 14px oklch(30% 0.03 265 / 0.12);">
+                  <div style="font-size:11.5px;font-weight:800;color:oklch(34% 0.03 152);line-height:1.35;">{{ day.coachText }}</div>
+                  <div style="position:absolute;top:-6px;left:14px;width:12px;height:12px;background:white;transform:rotate(45deg);"></div>
+                </button>
+              </div>
+            </sc-if>
+
+            <sc-for list="{{ day.nodes }}" as="t" hint-placeholder-count="6">
+              <div style="position:relative;display:flex;justify-content:center;margin-bottom:30px;z-index:1;">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:11px;transform:translateX({{ t.offset }}px);">
+                  <div style="position:relative;width:104px;height:112px;display:flex;align-items:center;justify-content:center;">
+                  <sc-if value="{{ t.hasRing }}" hint-placeholder-val="{{ true }}">
+                    <svg width="104" height="112" viewBox="0 0 104 112" fill="none" style="position:absolute;top:0;left:0;">
+                      <circle cx="52" cy="60" r="49" pathLength="100" stroke="{{ t.ringColor }}" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ t.ringDash }}" transform="rotate(-90 52 60)"></circle>
+                    </svg>
+                  </sc-if>
+                  <button onClick="{{ t.onOpen }}" style="width:82px;height:74px;border-radius:50%;border:none;background:{{ t.bg }};display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:{{ t.shadow }};position:relative;opacity:{{ t.iconOpacity }};overflow:hidden;" style-before="content:'';position:absolute;top:7px;left:12px;width:38px;height:17px;border-radius:50%;background:oklch(100% 0 0 / 0.34);transform:rotate(-16deg);">
+                    <sc-if value="{{ t.isMind }}" hint-placeholder-val="{{ false }}"><svg width="36" height="36" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5.1"></circle><g stroke="white" stroke-width="2.6" stroke-linecap="round"><path d="M12 1.9v2.7M12 19.4v2.7M1.9 12h2.7M19.4 12h2.7M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"></path></g></svg></sc-if>
+                    <sc-if value="{{ t.isRun }}" hint-placeholder-val="{{ false }}"><svg width="36" height="36" viewBox="0 0 24 24" fill="white"><circle cx="16" cy="4.1" r="2.4"></circle><path d="M13.4 7.1c-.5.1-.9.4-1.2.8l-2.4 3.2-3.6-.7a1.4 1.4 0 0 0-.5 2.8l4.5.8c.5.1 1-.1 1.3-.5l.9-1.2 1.1 2.1-3.1 4.6a1.5 1.5 0 0 0 2.5 1.7l3.6-5.3c.3-.5.3-1.1 0-1.6l-1-1.9 1.9.7 2.5-1a1.4 1.4 0 0 0-1-2.6l-1.9.8-3-1.2c-.4-.2-.7-.2-1.1-.1Z"></path><path d="M14.6 15.9l2.7 1 1.1 4.4a1.5 1.5 0 0 0 2.9-.7l-1.3-5.2c-.1-.5-.5-.9-1-1.1l-2.7-1Z"></path></svg></sc-if>
+                    <sc-if value="{{ t.isMeal }}" hint-placeholder-val="{{ false }}"><svg width="36" height="36" viewBox="0 0 24 24" fill="white"><path d="M12 8.6c-1.4-1.2-3.1-1.6-4.7-.8C5.4 8.9 4.5 11.2 5 13.9c.6 3.1 3.1 6.6 5.4 6.6.8 0 1.1-.4 1.6-.4s.8.4 1.6.4c2.3 0 4.8-3.5 5.4-6.6.5-2.7-.4-5-2.3-6-1.6-.8-3.3-.4-4.7.8Z"></path><path d="M12.7 7.5c-.3-2.1 1-3.9 3.1-4.7.5 2.4-.8 4.3-3.1 4.7Z"></path></svg></sc-if>
+                    <sc-if value="{{ t.isNight }}" hint-placeholder-val="{{ false }}"><svg width="36" height="36" viewBox="0 0 24 24" fill="white"><path d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6 8.6 8.6 0 1 0 20.4 14.6Z"></path></svg></sc-if>
+                    <sc-if value="{{ t.done }}" hint-placeholder-val="{{ false }}">
+                      <div style="position:absolute;bottom:-4px;right:-6px;width:26px;height:26px;border-radius:50%;background:oklch(97% 0.01 265);color:oklch(40% 0.07 265);font-size:14px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 0 oklch(80% 0.02 265);">✓</div>
+                    </sc-if>
+                  </button>
+                  </div>
+                  <div style="text-align:center;">
+                    <div style="font-size:13px;font-weight:800;color:{{ t.titleColor }};max-width:140px;line-height:1.25;text-wrap:pretty;">{{ t.title }}</div>
+                    <div style="font-size:11px;font-weight:700;color:{{ t.metaColor }};margin-top:2px;">{{ t.time }} · {{ t.minutes }} min</div>
+                    <sc-if value="{{ t.weatherSwap }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:inline-flex;align-items:center;gap:4px;margin-top:5px;background:oklch(93% 0.03 250);border-radius:999px;padding:3px 8px;">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="oklch(45% 0.08 250)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"></path></svg>
+                        <span style="font-size:9.5px;font-weight:900;letter-spacing:0.04em;color:oklch(42% 0.08 250);">INDOOR SWAP</span>
+                      </div>
+                    </sc-if>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          </sc-for>
+
+          <div style="background:oklch(23% 0.05 262);padding:0 20px 150px;">
+            <a href="#" onClick="{{ onDetourClick }}" style="text-decoration:none;display:block;text-align:center;font-size:13px;font-weight:700;color:oklch(88% 0.03 268);border:1.5px dashed oklch(45% 0.07 268);border-radius:16px;padding:14px;">Life happened? Take a detour</a>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:0 20px 124px;">
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <button onClick="{{ weekPrev }}" style="width:32px;height:32px;border-radius:50%;border:none;background:white;box-shadow:0 2px 0 oklch(90% 0.015 95);color:oklch(45% 0.02 150);font-size:17px;font-weight:900;cursor:pointer;">‹</button>
+              <div style="text-align:center;">
+                <div style="font-size:13.5px;font-weight:900;color:oklch(30% 0.02 150);">{{ weekRange }}</div>
+                <div style="font-size:10px;font-weight:800;letter-spacing:0.1em;color:oklch(55% 0.02 120);margin-top:1px;">{{ weekTag }}</div>
+              </div>
+              <button onClick="{{ weekNext }}" style="width:32px;height:32px;border-radius:50%;border:none;background:white;box-shadow:0 2px 0 oklch(90% 0.015 95);color:oklch(45% 0.02 150);font-size:17px;font-weight:900;cursor:pointer;">›</button>
+            </div>
+
+            <div style="display:flex;gap:6px;background:oklch(92% 0.02 90);padding:4px;border-radius:12px;margin-bottom:14px;">
+              <button onClick="{{ pickVarA }}" style="flex:1;border:none;border-radius:9px;padding:7px 0;font-size:11.5px;font-weight:900;letter-spacing:0.04em;cursor:pointer;background:{{ varABg }};color:{{ varAColor }};">A · GOAL ROLL-UP</button>
+              <button onClick="{{ pickVarB }}" style="flex:1;border:none;border-radius:9px;padding:7px 0;font-size:11.5px;font-weight:900;letter-spacing:0.04em;cursor:pointer;background:{{ varBBg }};color:{{ varBColor }};">B · ACTIVITY BOARD</button>
+            </div>
+
+            <sc-if value="{{ weekCheckIn }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ openCoach }}" style="width:100%;text-align:left;border:none;cursor:pointer;background:linear-gradient(160deg,oklch(94% 0.04 152) 0%,oklch(91% 0.05 150) 100%);border-radius:18px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 0 oklch(85% 0.04 152);">
+                <div style="width:38px;height:38px;flex:none;border-radius:50%;background:linear-gradient(165deg,oklch(62% 0.08 152) 0%,oklch(48% 0.08 152) 60%);box-shadow:0 3px 0 oklch(36% 0.07 152);display:flex;align-items:center;justify-content:center;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M20.6 3.4C7.6 4.6 3.4 12.9 4.6 19.2c1.5-3.6 4.2-6.8 8.6-9.4-3.4 2.9-5.4 6.2-6.5 9.9 6.2 1.2 14.7-3.1 13.9-16.3Z"></path></svg>
+                </div>
+                <div style="flex:1;">
+                  <div style="font-size:13px;font-weight:900;color:oklch(32% 0.05 152);">Plan the week together</div>
+                  <div style="font-size:11.5px;font-weight:700;color:oklch(45% 0.05 152);margin-top:1px;">10-min check-in · sets your targets</div>
+                </div>
+                <div style="font-size:17px;font-weight:900;color:oklch(45% 0.07 152);">›</div>
+              </button>
+            </sc-if>
+
+            <sc-if value="{{ isVarA }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px;">
+                <sc-for list="{{ goals }}" as="g" hint-placeholder-count="3">
+                  <div style="background:white;border-radius:18px;padding:15px 16px;box-shadow:0 1px 3px oklch(0% 0 0 / 0.05);">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <div style="width:8px;height:8px;border-radius:50%;background:{{ g.color }};"></div>
+                      <div style="flex:1;font-size:13.5px;font-weight:900;color:oklch(29% 0.02 150);">{{ g.name }}</div>
+                      <div style="font-size:10px;font-weight:900;letter-spacing:0.04em;padding:3px 8px;border-radius:999px;background:{{ g.paceBg }};color:{{ g.paceColor }};">{{ g.pace }}</div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:9px;margin-top:12px;">
+                      <sc-for list="{{ g.lines }}" as="ln" hint-placeholder-count="2">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                          <div style="flex:1;font-size:12.5px;font-weight:700;color:oklch(38% 0.02 150);">{{ ln.summary }}</div>
+                          <div style="display:flex;gap:5px;">
+                            <sc-for list="{{ ln.dots }}" as="d" hint-placeholder-count="3">
+                              <div style="width:13px;height:13px;border-radius:50%;background:{{ d.bg }};border:{{ d.border }};"></div>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="font-size:11px;font-weight:900;letter-spacing:0.1em;color:oklch(52% 0.02 120);margin:0 4px 10px;">THE PLAN · DRAG TO MOVE</div>
+              <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">
+                <sc-for list="{{ planDays }}" as="p" hint-placeholder-count="7">
+                  <div onDragOver="{{ p.onDragOver }}" onDrop="{{ p.onDrop }}" style="display:flex;align-items:center;gap:11px;background:{{ p.rowBg }};border:{{ p.rowBorder }};border-radius:15px;padding:10px 12px;">
+                    <div style="width:34px;flex:none;text-align:center;">
+                      <div style="font-size:10px;font-weight:900;letter-spacing:0.06em;color:{{ p.dayColor }};">{{ p.label }}</div>
+                      <div style="font-size:15px;font-weight:900;color:{{ p.dateColor }};line-height:1.1;">{{ p.date }}</div>
+                    </div>
+                    <div style="width:22px;flex:none;display:flex;flex-direction:column;align-items:center;gap:1px;">
+                  <sc-if value="{{ p.wxSun }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(62% 0.13 76)" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 3.2v2M12 18.8v2M3.2 12h2M18.8 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"></path></svg></sc-if>
+                  <sc-if value="{{ p.wxCloud }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(60% 0.02 250)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.8 17.4a4 4 0 0 1 .3-8 5.4 5.4 0 0 1 10.3 1.2 3.4 3.4 0 0 1-.6 6.8Z"></path></svg></sc-if>
+                  <sc-if value="{{ p.wxRain }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(52% 0.09 250)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.6 14.4a3.9 3.9 0 0 1 .3-7.8 5.3 5.3 0 0 1 10.1 1.2 3.3 3.3 0 0 1-.6 6.6Z"></path><path d="M9 17.6l-.8 2.6M12.4 17.6l-.8 2.6M15.8 17.6l-.8 2.6"></path></svg></sc-if>
+                  <sc-if value="{{ p.wxNone }}" hint-placeholder-val="{{ true }}"><div style="width:16px;height:16px;"></div></sc-if>
+                      <div style="font-size:9px;font-weight:800;color:oklch(58% 0.02 250);">{{ p.temp }}</div>
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-size:12.5px;font-weight:800;color:oklch(30% 0.02 150);">{{ p.focus }}</div>
+                      <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap;">
+                        <sc-for list="{{ p.chips }}" as="c" hint-placeholder-count="3">
+                          <div draggable="{{ true }}" onDragStart="{{ c.onDragStart }}" style="width:26px;height:26px;border-radius:50%;background:{{ c.bg }};box-shadow:0 2px 0 {{ c.deep }};display:flex;align-items:center;justify-content:center;cursor:grab;position:relative;">
+                    <sc-if value="{{ c.isRun }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><circle cx="16" cy="4.1" r="2.4"></circle><path d="M13.4 7.1c-.5.1-.9.4-1.2.8l-2.4 3.2-3.6-.7a1.4 1.4 0 0 0-.5 2.8l4.5.8c.5.1 1-.1 1.3-.5l.9-1.2 1.1 2.1-3.1 4.6a1.5 1.5 0 0 0 2.5 1.7l3.6-5.3c.3-.5.3-1.1 0-1.6l-1-1.9 1.9.7 2.5-1a1.4 1.4 0 0 0-1-2.6l-1.9.8-3-1.2c-.4-.2-.7-.2-1.1-.1Z"></path><path d="M14.6 15.9l2.7 1 1.1 4.4a1.5 1.5 0 0 0 2.9-.7l-1.3-5.2c-.1-.5-.5-.9-1-1.1l-2.7-1Z"></path></svg></sc-if>
+                    <sc-if value="{{ c.isMeal }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M12 8.6c-1.4-1.2-3.1-1.6-4.7-.8C5.4 8.9 4.5 11.2 5 13.9c.6 3.1 3.1 6.6 5.4 6.6.8 0 1.1-.4 1.6-.4s.8.4 1.6.4c2.3 0 4.8-3.5 5.4-6.6.5-2.7-.4-5-2.3-6-1.6-.8-3.3-.4-4.7.8Z"></path><path d="M12.7 7.5c-.3-2.1 1-3.9 3.1-4.7.5 2.4-.8 4.3-3.1 4.7Z"></path></svg></sc-if>
+                    <sc-if value="{{ c.isMind }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5.1"></circle><g stroke="white" stroke-width="2.6" stroke-linecap="round"><path d="M12 1.9v2.7M12 19.4v2.7M1.9 12h2.7M19.4 12h2.7M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"></path></g></svg></sc-if>
+                    <sc-if value="{{ c.isNight }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6 8.6 8.6 0 1 0 20.4 14.6Z"></path></svg></sc-if>
+                            <sc-if value="{{ c.atRisk }}" hint-placeholder-val="{{ false }}">
+                              <div style="position:absolute;bottom:-3px;right:-4px;width:14px;height:14px;border-radius:50%;background:oklch(95% 0.02 250);display:flex;align-items:center;justify-content:center;">
+                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="oklch(45% 0.08 250)" stroke-width="3" stroke-linecap="round"><path d="M4 8h13l-3-3M20 16H7l3 3"></path></svg>
+                              </div>
+                            </sc-if>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                    <div style="font-size:11px;font-weight:900;color:{{ p.tallyColor }};">{{ p.tally }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isVarB }}" hint-placeholder-val="{{ false }}">
+              <div style="background:white;border-radius:18px;padding:15px 16px;box-shadow:0 1px 3px oklch(0% 0 0 / 0.05);margin-bottom:14px;">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;">
+                  <div style="font-size:13.5px;font-weight:900;color:oklch(29% 0.02 150);">{{ weekSummary }}</div>
+                  <div style="font-size:10px;font-weight:900;letter-spacing:0.04em;padding:3px 8px;border-radius:999px;background:{{ weekPaceBg }};color:{{ weekPaceColor }};">{{ weekPace }}</div>
+                </div>
+                <div style="height:8px;border-radius:4px;background:oklch(93% 0.01 120);margin-top:11px;overflow:hidden;">
+                  <div style="height:100%;border-radius:4px;background:linear-gradient(90deg,oklch(60% 0.10 152),oklch(52% 0.09 152));width:{{ weekDonePct }}%;"></div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:11px;margin-top:15px;">
+                  <sc-for list="{{ activities }}" as="a" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                      <div style="width:28px;height:28px;flex:none;border-radius:50%;background:{{ a.bg }};box-shadow:0 2px 0 {{ a.deep }};display:flex;align-items:center;justify-content:center;">
+                        <sc-if value="{{ a.isRun }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><circle cx="16" cy="4.1" r="2.4"></circle><path d="M13.4 7.1c-.5.1-.9.4-1.2.8l-2.4 3.2-3.6-.7a1.4 1.4 0 0 0-.5 2.8l4.5.8c.5.1 1-.1 1.3-.5l.9-1.2 1.1 2.1-3.1 4.6a1.5 1.5 0 0 0 2.5 1.7l3.6-5.3c.3-.5.3-1.1 0-1.6l-1-1.9 1.9.7 2.5-1a1.4 1.4 0 0 0-1-2.6l-1.9.8-3-1.2c-.4-.2-.7-.2-1.1-.1Z"></path><path d="M14.6 15.9l2.7 1 1.1 4.4a1.5 1.5 0 0 0 2.9-.7l-1.3-5.2c-.1-.5-.5-.9-1-1.1l-2.7-1Z"></path></svg></sc-if>
+                        <sc-if value="{{ a.isMeal }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M12 8.6c-1.4-1.2-3.1-1.6-4.7-.8C5.4 8.9 4.5 11.2 5 13.9c.6 3.1 3.1 6.6 5.4 6.6.8 0 1.1-.4 1.6-.4s.8.4 1.6.4c2.3 0 4.8-3.5 5.4-6.6.5-2.7-.4-5-2.3-6-1.6-.8-3.3-.4-4.7.8Z"></path><path d="M12.7 7.5c-.3-2.1 1-3.9 3.1-4.7.5 2.4-.8 4.3-3.1 4.7Z"></path></svg></sc-if>
+                        <sc-if value="{{ a.isMind }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5.1"></circle><g stroke="white" stroke-width="2.6" stroke-linecap="round"><path d="M12 1.9v2.7M12 19.4v2.7M1.9 12h2.7M19.4 12h2.7M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"></path></g></svg></sc-if>
+                        <sc-if value="{{ a.isNight }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6 8.6 8.6 0 1 0 20.4 14.6Z"></path></svg></sc-if>
+                      </div>
+                      <div style="flex:1;min-width:0;">
+                        <div style="font-size:12.5px;font-weight:800;color:oklch(31% 0.02 150);">{{ a.summary }}</div>
+                        <div style="font-size:10.5px;font-weight:700;color:oklch(56% 0.02 120);">{{ a.goalName }}</div>
+                      </div>
+                      <div style="display:flex;gap:5px;">
+                        <sc-for list="{{ a.dots }}" as="d" hint-placeholder-count="3">
+                          <div style="width:13px;height:13px;border-radius:50%;background:{{ d.bg }};border:{{ d.border }};"></div>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="font-size:11px;font-weight:900;letter-spacing:0.1em;color:oklch(52% 0.02 120);margin:0 4px 10px;">DRAG TO RESHAPE THE WEEK</div>
+              <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:18px;scrollbar-width:none;">
+                <sc-for list="{{ planDays }}" as="p" hint-placeholder-count="7">
+                  <div onDragOver="{{ p.onDragOver }}" onDrop="{{ p.onDrop }}" style="width:78px;flex:none;background:{{ p.colBg }};border:{{ p.rowBorder }};border-radius:16px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:8px;min-height:172px;">
+                    <div style="text-align:center;">
+                      <div style="font-size:9.5px;font-weight:900;letter-spacing:0.06em;color:{{ p.dayColor }};">{{ p.label }}</div>
+                      <div style="font-size:15px;font-weight:900;color:{{ p.dateColor }};line-height:1.1;">{{ p.date }}</div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
+                  <sc-if value="{{ p.wxSun }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(62% 0.13 76)" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 3.2v2M12 18.8v2M3.2 12h2M18.8 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"></path></svg></sc-if>
+                  <sc-if value="{{ p.wxCloud }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(60% 0.02 250)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.8 17.4a4 4 0 0 1 .3-8 5.4 5.4 0 0 1 10.3 1.2 3.4 3.4 0 0 1-.6 6.8Z"></path></svg></sc-if>
+                  <sc-if value="{{ p.wxRain }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(52% 0.09 250)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.6 14.4a3.9 3.9 0 0 1 .3-7.8 5.3 5.3 0 0 1 10.1 1.2 3.3 3.3 0 0 1-.6 6.6Z"></path><path d="M9 17.6l-.8 2.6M12.4 17.6l-.8 2.6M15.8 17.6l-.8 2.6"></path></svg></sc-if>
+                  <sc-if value="{{ p.wxNone }}" hint-placeholder-val="{{ true }}"><div style="width:16px;height:16px;"></div></sc-if>
+                      <div style="font-size:9px;font-weight:800;color:oklch(58% 0.02 250);">{{ p.temp }}</div>
+                    </div>
+                    <div style="width:100%;height:1px;background:oklch(90% 0.015 95);"></div>
+                    <div style="display:flex;flex-direction:column;gap:6px;align-items:center;">
+                      <sc-for list="{{ p.chips }}" as="c" hint-placeholder-count="2">
+                        <div draggable="{{ true }}" onDragStart="{{ c.onDragStart }}" style="width:30px;height:30px;border-radius:50%;background:{{ c.bg }};box-shadow:0 2px 0 {{ c.deep }};display:flex;align-items:center;justify-content:center;cursor:grab;position:relative;">
+                    <sc-if value="{{ c.isRun }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><circle cx="16" cy="4.1" r="2.4"></circle><path d="M13.4 7.1c-.5.1-.9.4-1.2.8l-2.4 3.2-3.6-.7a1.4 1.4 0 0 0-.5 2.8l4.5.8c.5.1 1-.1 1.3-.5l.9-1.2 1.1 2.1-3.1 4.6a1.5 1.5 0 0 0 2.5 1.7l3.6-5.3c.3-.5.3-1.1 0-1.6l-1-1.9 1.9.7 2.5-1a1.4 1.4 0 0 0-1-2.6l-1.9.8-3-1.2c-.4-.2-.7-.2-1.1-.1Z"></path><path d="M14.6 15.9l2.7 1 1.1 4.4a1.5 1.5 0 0 0 2.9-.7l-1.3-5.2c-.1-.5-.5-.9-1-1.1l-2.7-1Z"></path></svg></sc-if>
+                    <sc-if value="{{ c.isMeal }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M12 8.6c-1.4-1.2-3.1-1.6-4.7-.8C5.4 8.9 4.5 11.2 5 13.9c.6 3.1 3.1 6.6 5.4 6.6.8 0 1.1-.4 1.6-.4s.8.4 1.6.4c2.3 0 4.8-3.5 5.4-6.6.5-2.7-.4-5-2.3-6-1.6-.8-3.3-.4-4.7.8Z"></path><path d="M12.7 7.5c-.3-2.1 1-3.9 3.1-4.7.5 2.4-.8 4.3-3.1 4.7Z"></path></svg></sc-if>
+                    <sc-if value="{{ c.isMind }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5.1"></circle><g stroke="white" stroke-width="2.6" stroke-linecap="round"><path d="M12 1.9v2.7M12 19.4v2.7M1.9 12h2.7M19.4 12h2.7M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"></path></g></svg></sc-if>
+                    <sc-if value="{{ c.isNight }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6 8.6 8.6 0 1 0 20.4 14.6Z"></path></svg></sc-if>
+                          <sc-if value="{{ c.atRisk }}" hint-placeholder-val="{{ false }}">
+                            <div style="position:absolute;bottom:-3px;right:-4px;width:14px;height:14px;border-radius:50%;background:oklch(95% 0.02 250);display:flex;align-items:center;justify-content:center;">
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="oklch(45% 0.08 250)" stroke-width="3" stroke-linecap="round"><path d="M4 8h13l-3-3M20 16H7l3 3"></path></svg>
+                            </div>
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <button onClick="{{ openReport }}" style="width:100%;text-align:left;cursor:pointer;background:white;border:1px solid oklch(91% 0.015 85);border-radius:16px;padding:13px 14px;display:flex;align-items:center;gap:11px;margin-bottom:12px;">
+              <div style="width:30px;height:30px;flex:none;border-radius:50%;background:oklch(93% 0.02 250);display:flex;align-items:center;justify-content:center;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(45% 0.08 250)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6a2.6 2.6 0 0 1 2.6 2.6v5a2.6 2.6 0 0 1-5.2 0v-5A2.6 2.6 0 0 1 12 3.6Z"></path><path d="M6.4 11.4a5.6 5.6 0 0 0 11.2 0M12 17v3.4"></path></svg>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:12.5px;font-weight:800;color:oklch(31% 0.02 150);">Already did something? Just tell me</div>
+                <div style="font-size:11px;font-weight:700;color:oklch(56% 0.02 120);margin-top:1px;">Speak or type it — I'll fill in the week</div>
+              </div>
+            </button>
+
+            <div style="background:white;border-radius:18px;padding:15px 16px;box-shadow:0 1px 3px oklch(0% 0 0 / 0.05);margin-bottom:16px;">
+              <div style="font-size:12.5px;font-weight:900;color:oklch(29% 0.02 150);margin-bottom:12px;">This week vs last week</div>
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <sc-for list="{{ compare }}" as="cm" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:74px;flex:none;font-size:11.5px;font-weight:700;color:oklch(40% 0.02 150);">{{ cm.label }}</div>
+                    <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+                      <div style="height:7px;border-radius:4px;background:oklch(93% 0.01 120);overflow:hidden;">
+                        <div style="height:100%;border-radius:4px;background:oklch(75% 0.03 120);width:{{ cm.lastPct }}%;"></div>
+                      </div>
+                      <div style="height:7px;border-radius:4px;background:oklch(93% 0.01 120);overflow:hidden;">
+                        <div style="height:100%;border-radius:4px;background:oklch(56% 0.09 152);width:{{ cm.thisPct }}%;"></div>
+                      </div>
+                    </div>
+                    <div style="width:44px;flex:none;text-align:right;font-size:11.5px;font-weight:900;color:{{ cm.deltaColor }};">{{ cm.delta }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:14px;margin-top:12px;">
+                <div style="display:flex;align-items:center;gap:5px;"><div style="width:9px;height:9px;border-radius:3px;background:oklch(75% 0.03 120);"></div><span style="font-size:10px;font-weight:700;color:oklch(52% 0.02 120);">Last week</span></div>
+                <div style="display:flex;align-items:center;gap:5px;"><div style="width:9px;height:9px;border-radius:3px;background:oklch(56% 0.09 152);"></div><span style="font-size:10px;font-weight:700;color:oklch(52% 0.02 120);">This week</span></div>
+              </div>
+            </div>
+
+            <a href="#" onClick="{{ onDetourClick }}" style="text-decoration:none;display:block;text-align:center;font-size:13px;color:oklch(50% 0.02 150);border:1px dashed oklch(75% 0.02 95);border-radius:14px;padding:12px;margin-bottom:16px;">+ Log something off-plan</a>
+          </div>
+        </sc-if>
+
+      </div>
+
+      <button onClick="{{ toggleLogSheet }}" style="position:absolute;right:18px;bottom:98px;width:56px;height:56px;border-radius:50%;background:oklch(66% 0.14 258);border:none;box-shadow:0 6px 0 oklch(50% 0.14 260),0 10px 18px oklch(20% 0.06 265 / 0.35);color:white;font-size:26px;font-weight:700;cursor:pointer;z-index:7;">＋</button>
+
+      <div style="position:absolute;bottom:0;left:0;right:0;background:white;border-top:1px solid oklch(90% 0.015 95);display:flex;padding:8px 4px 22px;z-index:6;">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <div style="background:oklch(93% 0.02 152);border-radius:12px;padding:5px 16px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="oklch(42% 0.06 152)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.6" y="5.4" width="16.8" height="15" rx="3"></rect><path d="M3.6 10.4h16.8M8.4 3.4v3.4M15.6 3.4v3.4"></path></svg></div>
+          <div style="font-size:10.5px;font-weight:800;color:oklch(42% 0.06 152);">Today</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <div style="padding:5px 16px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="oklch(62% 0.01 152)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.6"></circle><path d="M16 16l4 4"></path></svg></div>
+          <div style="font-size:10.5px;font-weight:700;color:oklch(58% 0.01 152);">Coach</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <div style="padding:5px 16px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="oklch(62% 0.01 152)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.4v6.2a2.6 2.6 0 0 0 5.2 0V3.4M10.6 12.2v8.4"></path><path d="M17.4 3.4v17.2M17.4 3.4c1.8 0 2.8 1.6 2.6 4-.1 1.5-1.2 2.4-2.6 2.4"></path></svg></div>
+          <div style="font-size:10.5px;font-weight:700;color:oklch(58% 0.01 152);">Food</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <div style="padding:5px 16px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="oklch(62% 0.01 152)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V13M9.7 20V8M14.3 20v-7M19 20V5"></path></svg></div>
+          <div style="font-size:10.5px;font-weight:700;color:oklch(58% 0.01 152);">Progress</div>
+        </div>
+      </div>
+
+      <sc-if value="{{ logSheetOpen }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ toggleLogSheet }}" style="position:absolute;inset:0;background:oklch(20% 0.02 150 / 0.35);z-index:10;display:flex;align-items:flex-end;">
+          <div onClick="{{ stop }}" style="background:oklch(96% 0.015 95);width:100%;border-radius:22px 22px 0 0;padding:20px 20px 28px;">
+            <div style="width:36px;height:4px;background:oklch(85% 0.01 95);border-radius:2px;margin:0 auto 16px;"></div>
+            <div style="font-size:15px;font-weight:800;color:oklch(28% 0.02 150);margin-bottom:12px;">Log something you did</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <button onClick="{{ logWorkout }}" style="border:1px solid oklch(90% 0.02 85);background:white;border-radius:14px;padding:14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="oklch(45% 0.07 152)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="15.2" cy="4.4" r="2" fill="oklch(45% 0.07 152)" stroke="none"></circle><path d="M13.6 8.2 10 10.6l2.1 3.1-1 7.5"></path><path d="M12.1 13.7 16 15l1.4 5.6"></path><path d="M13.6 8.2 17 9.4l2.8-1.1"></path><path d="M10 10.6 5.6 9.9"></path></svg>
+                <div style="font-size:13px;font-weight:700;color:oklch(32% 0.02 150);">Workout</div>
+              </button>
+              <button onClick="{{ logMeal }}" style="border:1px solid oklch(90% 0.02 85);background:white;border-radius:14px;padding:14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="oklch(45% 0.07 152)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8.4c-1.3-1.1-3-1.5-4.5-.7C5.6 8.7 4.7 11 5.2 13.6c.6 3 3 6.4 5.2 6.4.8 0 1.1-.4 1.6-.4s.8.4 1.6.4c2.2 0 4.6-3.4 5.2-6.4.5-2.6-.4-4.9-2.3-5.9-1.5-.8-3.2-.4-4.5.7Z"></path><path d="M12 8.4c0-2 1.1-3.6 3-4.4"></path></svg>
+                <div style="font-size:13px;font-weight:700;color:oklch(32% 0.02 150);">Meal</div>
+              </button>
+              <button onClick="{{ logMood }}" style="border:1px solid oklch(90% 0.02 85);background:white;border-radius:14px;padding:14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="oklch(45% 0.07 152)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"></circle><path d="M8.6 14.2c.9 1.1 2 1.6 3.4 1.6s2.5-.5 3.4-1.6M9.3 10h.01M14.7 10h.01"></path></svg>
+                <div style="font-size:13px;font-weight:700;color:oklch(32% 0.02 150);">Mood</div>
+              </button>
+              <button onClick="{{ logNote }}" style="border:1px solid oklch(90% 0.02 85);background:white;border-radius:14px;padding:14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="oklch(45% 0.07 152)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20.2l1-4 10-10 3 3-10 10Z"></path><path d="M14 6.2l3 3"></path><path d="M4 20.2h6"></path></svg>
+                <div style="font-size:13px;font-weight:700;color:oklch(32% 0.02 150);">Something else</div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ toast }}" hint-placeholder-val="{{ null }}">
+        <div style="position:absolute;top:70px;left:20px;right:20px;background:oklch(30% 0.03 150);color:white;font-size:13px;font-weight:700;text-align:center;padding:10px;border-radius:12px;z-index:20;animation:floatUp 2.2s ease forwards;">{{ toast }}</div>
+      </sc-if>
+
+      <sc-if value="{{ previewTask }}" hint-placeholder-val="{{ null }}">
+        <div onClick="{{ closePreview }}" style="position:absolute;inset:0;background:oklch(22% 0.03 262 / 0.42);z-index:12;display:flex;align-items:flex-end;">
+          <div onClick="{{ stop }}" style="width:100%;background:oklch(97% 0.012 85);border-radius:26px 26px 0 0;padding:20px 20px 26px;box-shadow:0 -8px 30px oklch(20% 0.03 262 / 0.25);">
+            <div style="width:38px;height:4px;background:oklch(87% 0.02 85);border-radius:2px;margin:0 auto 16px;"></div>
+            <div style="display:flex;align-items:center;gap:13px;">
+              <div style="width:58px;height:52px;border-radius:50%;flex:none;background:{{ previewTask.face }};box-shadow:0 5px 0 {{ previewTask.deep }};display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;" style-before="content:'';position:absolute;top:5px;left:9px;width:24px;height:11px;border-radius:50%;background:oklch(100% 0 0 / 0.32);transform:rotate(-16deg);">
+                <sc-if value="{{ previewTask.isMind }}" hint-placeholder-val="{{ false }}"><svg width="28" height="28" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5.1"></circle><g stroke="white" stroke-width="2.6" stroke-linecap="round"><path d="M12 1.9v2.7M12 19.4v2.7M1.9 12h2.7M19.4 12h2.7M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"></path></g></svg></sc-if>
+                <sc-if value="{{ previewTask.isRun }}" hint-placeholder-val="{{ false }}"><svg width="28" height="28" viewBox="0 0 24 24" fill="white"><circle cx="16" cy="4.1" r="2.4"></circle><path d="M13.4 7.1c-.5.1-.9.4-1.2.8l-2.4 3.2-3.6-.7a1.4 1.4 0 0 0-.5 2.8l4.5.8c.5.1 1-.1 1.3-.5l.9-1.2 1.1 2.1-3.1 4.6a1.5 1.5 0 0 0 2.5 1.7l3.6-5.3c.3-.5.3-1.1 0-1.6l-1-1.9 1.9.7 2.5-1a1.4 1.4 0 0 0-1-2.6l-1.9.8-3-1.2c-.4-.2-.7-.2-1.1-.1Z"></path><path d="M14.6 15.9l2.7 1 1.1 4.4a1.5 1.5 0 0 0 2.9-.7l-1.3-5.2c-.1-.5-.5-.9-1-1.1l-2.7-1Z"></path></svg></sc-if>
+                <sc-if value="{{ previewTask.isMeal }}" hint-placeholder-val="{{ false }}"><svg width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M12 8.6c-1.4-1.2-3.1-1.6-4.7-.8C5.4 8.9 4.5 11.2 5 13.9c.6 3.1 3.1 6.6 5.4 6.6.8 0 1.1-.4 1.6-.4s.8.4 1.6.4c2.3 0 4.8-3.5 5.4-6.6.5-2.7-.4-5-2.3-6-1.6-.8-3.3-.4-4.7.8Z"></path><path d="M12.7 7.5c-.3-2.1 1-3.9 3.1-4.7.5 2.4-.8 4.3-3.1 4.7Z"></path></svg></sc-if>
+                <sc-if value="{{ previewTask.isNight }}" hint-placeholder-val="{{ false }}"><svg width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6 8.6 8.6 0 1 0 20.4 14.6Z"></path></svg></sc-if>
+              </div>
+              <div>
+                <div style="font-family:'Fraunces',serif;font-size:19px;font-weight:600;color:oklch(28% 0.02 150);line-height:1.2;text-wrap:pretty;">{{ previewTask.title }}</div>
+                <div style="font-size:11.5px;font-weight:700;letter-spacing:0.04em;color:oklch(52% 0.02 120);margin-top:3px;">{{ previewTask.time }} · {{ previewTask.stepTotal }} STEPS · {{ previewTask.minutes }} MIN</div>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:7px;margin:16px 0 18px;">
+              <sc-for list="{{ previewTask.stepList }}" as="st" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:10px;background:white;border:1px solid oklch(91% 0.015 85);border-radius:12px;padding:10px 12px;">
+                  <div style="width:6px;height:6px;border-radius:50%;flex:none;background:{{ previewTask.color }};"></div>
+                  <div style="flex:1;font-size:13px;font-weight:700;color:oklch(32% 0.02 150);">{{ st.t }}</div>
+                  <div style="font-size:11.5px;font-weight:700;color:oklch(58% 0.02 120);">{{ st.mins }} min</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <button onClick="{{ startFull }}" style="border:none;background:linear-gradient(180deg,oklch(60% 0.10 152) 0%,oklch(52% 0.09 152) 46%);box-shadow:0 5px 0 oklch(39% 0.08 152);color:white;font-size:15px;font-weight:900;padding:15px;border-radius:16px;cursor:pointer;">Start · {{ previewTask.minutes }} min</button>
+              <button onClick="{{ startShort }}" style="border:none;background:linear-gradient(180deg,oklch(70% 0.08 250) 0%,oklch(62% 0.08 250) 46%);box-shadow:0 5px 0 oklch(47% 0.08 250);color:white;font-size:15px;font-weight:900;padding:15px;border-radius:16px;cursor:pointer;">I have less time · {{ previewTask.shortMinutes }} min</button>
+              <sc-if value="{{ previewTask.hasSwap }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ startAlt }}" style="border:1.5px solid oklch(80% 0.05 250);background:oklch(95% 0.02 250);color:oklch(38% 0.08 250);font-size:14.5px;font-weight:900;padding:14px;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="oklch(45% 0.08 250)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.6 14.4a3.9 3.9 0 0 1 .3-7.8 5.3 5.3 0 0 1 10.1 1.2 3.3 3.3 0 0 1-.6 6.6Z"></path><path d="M9 17.6l-.8 2.6M12.4 17.6l-.8 2.6M15.8 17.6l-.8 2.6"></path></svg>
+                  <span>Indoor swap · {{ previewTask.altMinutes }} min</span>
+                </button>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ activeTask }}" hint-placeholder-val="{{ null }}">
+        <div style="position:absolute;inset:0;background:{{ activeTask.tint }};z-index:15;display:flex;flex-direction:column;padding:58px 20px 30px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button onClick="{{ closeTask }}" style="width:32px;height:32px;border-radius:50%;border:none;background:oklch(100% 0 0 / 0.6);font-size:16px;cursor:pointer;">✕</button>
+            <div style="flex:1;height:6px;background:oklch(100% 0 0 / 0.5);border-radius:3px;overflow:hidden;">
+              <div style="height:100%;background:{{ activeTask.deep }};width:{{ activeTask.progressPct }}%;transition:width 0.3s;"></div>
+            </div>
+          </div>
+
+          <sc-if value="{{ notCelebrating }}" hint-placeholder-val="{{ true }}">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;text-align:center;padding:0 8px;">
+              <div style="width:112px;height:100px;border-radius:50%;background:{{ activeTask.face }};box-shadow:0 8px 0 {{ activeTask.deep }};display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;" style-before="content:'';position:absolute;top:9px;left:16px;width:48px;height:21px;border-radius:50%;background:oklch(100% 0 0 / 0.32);transform:rotate(-16deg);">
+                <sc-if value="{{ activeTask.isMind }}" hint-placeholder-val="{{ false }}"><svg width="48" height="48" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5.1"></circle><g stroke="white" stroke-width="2.6" stroke-linecap="round"><path d="M12 1.9v2.7M12 19.4v2.7M1.9 12h2.7M19.4 12h2.7M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"></path></g></svg></sc-if>
+                <sc-if value="{{ activeTask.isRun }}" hint-placeholder-val="{{ false }}"><svg width="48" height="48" viewBox="0 0 24 24" fill="white"><circle cx="16" cy="4.1" r="2.4"></circle><path d="M13.4 7.1c-.5.1-.9.4-1.2.8l-2.4 3.2-3.6-.7a1.4 1.4 0 0 0-.5 2.8l4.5.8c.5.1 1-.1 1.3-.5l.9-1.2 1.1 2.1-3.1 4.6a1.5 1.5 0 0 0 2.5 1.7l3.6-5.3c.3-.5.3-1.1 0-1.6l-1-1.9 1.9.7 2.5-1a1.4 1.4 0 0 0-1-2.6l-1.9.8-3-1.2c-.4-.2-.7-.2-1.1-.1Z"></path><path d="M14.6 15.9l2.7 1 1.1 4.4a1.5 1.5 0 0 0 2.9-.7l-1.3-5.2c-.1-.5-.5-.9-1-1.1l-2.7-1Z"></path></svg></sc-if>
+                <sc-if value="{{ activeTask.isMeal }}" hint-placeholder-val="{{ false }}"><svg width="48" height="48" viewBox="0 0 24 24" fill="white"><path d="M12 8.6c-1.4-1.2-3.1-1.6-4.7-.8C5.4 8.9 4.5 11.2 5 13.9c.6 3.1 3.1 6.6 5.4 6.6.8 0 1.1-.4 1.6-.4s.8.4 1.6.4c2.3 0 4.8-3.5 5.4-6.6.5-2.7-.4-5-2.3-6-1.6-.8-3.3-.4-4.7.8Z"></path><path d="M12.7 7.5c-.3-2.1 1-3.9 3.1-4.7.5 2.4-.8 4.3-3.1 4.7Z"></path></svg></sc-if>
+                <sc-if value="{{ activeTask.isNight }}" hint-placeholder-val="{{ false }}"><svg width="48" height="48" viewBox="0 0 24 24" fill="white"><path d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6 8.6 8.6 0 1 0 20.4 14.6Z"></path></svg></sc-if>
+              </div>
+              <div>
+                <div style="font-size:11px;font-weight:800;letter-spacing:0.06em;color:{{ activeTask.deep }};text-transform:uppercase;">Step {{ activeTask.stepNum }} of {{ activeTask.stepTotal }}</div>
+                <div style="font-size:21px;font-weight:800;color:oklch(25% 0.02 150);margin-top:8px;">{{ activeTask.stepTitle }}</div>
+                <div style="font-size:14.5px;color:oklch(40% 0.02 150);margin-top:10px;line-height:1.5;">{{ activeTask.stepBody }}</div>
+              </div>
+            </div>
+            <button onClick="{{ nextStep }}" style="border:none;background:{{ activeTask.deep }};color:white;font-size:15px;font-weight:800;padding:15px;border-radius:14px;cursor:pointer;">{{ activeTask.nextLabel }}</button>
+          </sc-if>
+
+          <sc-if value="{{ celebrating }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;">
+              <div style="width:110px;height:110px;border-radius:50%;background:{{ activeTask.color }};box-shadow:0 7px 0 {{ activeTask.deep }};display:flex;align-items:center;justify-content:center;font-size:52px;color:white;animation:pop 0.5s ease;">✓</div>
+              <div style="font-size:22px;font-weight:800;color:oklch(25% 0.02 150);">Nice work!</div>
+              <div style="font-size:14px;color:oklch(40% 0.02 150);">{{ activeTask.title }} complete</div>
+              <div style="font-size:15px;font-weight:800;color:{{ activeTask.deep }};">+{{ activeTask.xpGain }} XP</div>
+            </div>
+            <button onClick="{{ finishCelebration }}" style="border:none;background:{{ activeTask.deep }};color:white;font-size:15px;font-weight:800;padding:15px;border-radius:14px;cursor:pointer;">Continue</button>
+          </sc-if>
+        </div>
+      </sc-if>
+
+    </div>
+  </x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const CADENCE_CATEGORIES = {
+  mindset:   { color: 'oklch(62% 0.10 150)', light: 'oklch(90% 0.03 150)', tint: 'oklch(94% 0.02 150)', icon: '🌱' },
+  movement:  { color: 'oklch(55% 0.12 35)',  light: 'oklch(90% 0.04 35)',  tint: 'oklch(94% 0.03 35)',  icon: '⛰️' },
+  nutrition: { color: 'oklch(58% 0.12 95)',  light: 'oklch(90% 0.04 95)',  tint: 'oklch(94% 0.03 95)',  icon: '🎯' },
+  reflection:{ color: 'oklch(58% 0.09 280)', light: 'oklch(90% 0.03 280)', tint: 'oklch(94% 0.02 280)', icon: '🌙' },
+};
+
+const CADENCE_TASKS = [
+  { id:'t1', title:'Morning mindset check-in', time:'07:00', minutes:5, cat:'mindset',
+    steps:[
+      {mins:1, t:'Find a quiet spot', b:'Sit somewhere comfortable, phone on do-not-disturb.'},
+      {mins:2, t:'Breathe', b:'Take 5 slow breaths — in for 4 counts, out for 6.'},
+      {mins:2, t:"Set today's intention", b:'Name one thing that would make today feel good.'},
+    ]},
+  { id:'t2', title:'Easy run (zone 2, knee-safe)', time:'08:30', minutes:30, cat:'movement',
+    steps:[
+      {mins:3, t:'Warm up', b:'Walk briskly for 3 minutes to ease into it.'},
+      {mins:2, t:'Find your zone', b:'Keep effort conversational — nothing that strains the knee.'},
+      {mins:20, t:'Run', b:'20 minutes at an easy, steady pace.'},
+      {mins:5, t:'Cool down', b:'Walk 2 minutes, then stretch calves and quads.'},
+    ],
+    alt:{ title:'Indoor spin (knee-safe)', steps:[
+      {mins:3, t:'Set up', b:'Bike or elliptical, resistance low, water within reach.'},
+      {mins:18, t:'Steady spin', b:'Conversational effort — smooth, no knee strain.'},
+      {mins:4, t:'Cool down', b:'Easy pedal, then stretch calves and quads.'},
+    ]}},
+  { id:'t3', title:'Log breakfast', time:'09:00', minutes:2, cat:'nutrition',
+    steps:[
+      {mins:1, t:'Snap a photo', b:"Capture what you ate — doesn't need to be perfect."},
+      {mins:1, t:'Add a note', b:'Anything worth remembering: how full, how it sat with you.'},
+    ]},
+  { id:'t4', title:'Midday mobility break', time:'13:00', minutes:10, cat:'movement',
+    steps:[
+      {mins:2, t:'Stand up', b:'Step away from your desk for a few minutes.'},
+      {mins:6, t:'Loosen up', b:'Hips, shoulders, neck — whatever feels stiff.'},
+      {mins:2, t:'Check in', b:'Notice how your energy shifts.'},
+    ]},
+  { id:'t5', title:'Evening reflection', time:'20:00', minutes:5, cat:'reflection',
+    steps:[
+      {mins:2, t:'Look back', b:"What's one moment from today worth remembering?"},
+      {mins:2, t:'Name a win', b:'Big or small — what went well?'},
+      {mins:1, t:'Let it go', b:"Anything you're carrying that can wait until tomorrow?"},
+    ]},
+  { id:'t6', title:'Log dinner', time:'21:00', minutes:3, cat:'nutrition',
+    steps:[
+      {mins:1, t:'Snap a photo', b:"Capture what you ate — doesn't need to be perfect."},
+      {mins:2, t:'Add a note', b:'Anything worth remembering.'},
+    ]},
+];
+
+// crescent sweep: left->right on even days, right->left on odd, bowed outward mid-day
+function cadenceOffset(i, n, dayIdx) {
+  const t = n < 2 ? 0.5 : i / (n - 1);
+  const dir = dayIdx % 2 === 0 ? 1 : -1;
+  // half-circle sweep: starts near centre, bulges to one side, returns — the
+  // hollow of the crescent is the coach's bay
+  return Math.round(dir * (-20 + 72 * Math.cos(Math.PI * (t - 0.5))));
+}
+
+// dawn -> midday -> dusk -> night. main = node face, deep = hard 3D edge
+const CADENCE_TONES = [
+  { main:'oklch(76% 0.15 55)',  light:'oklch(87% 0.11 62)',  deep:'oklch(60% 0.14 52)',  tint:'oklch(95% 0.035 58)',  mLight:'oklch(77% 0.04 62)', mMain:'oklch(68% 0.04 58)', mDeep:'oklch(57% 0.04 55)', dark:false },
+  { main:'oklch(79% 0.16 70)',  light:'oklch(89% 0.12 78)',  deep:'oklch(63% 0.15 68)',  tint:'oklch(95% 0.035 74)',  mLight:'oklch(78% 0.04 76)', mMain:'oklch(69% 0.04 70)', mDeep:'oklch(58% 0.04 68)', dark:false },
+  { main:'oklch(84% 0.15 90)',  light:'oklch(93% 0.10 94)',  deep:'oklch(69% 0.14 86)',  tint:'oklch(96% 0.035 92)',  mLight:'oklch(79% 0.04 92)',  mMain:'oklch(70% 0.04 88)',  mDeep:'oklch(59% 0.04 86)',  dark:false },
+  { main:'oklch(76% 0.12 212)', light:'oklch(88% 0.08 208)', deep:'oklch(61% 0.12 218)', tint:'oklch(95% 0.03 214)',  mLight:'oklch(77% 0.03 210)',mMain:'oklch(68% 0.03 214)',mDeep:'oklch(57% 0.03 218)',dark:false },
+  { main:'oklch(64% 0.14 268)', light:'oklch(77% 0.10 266)', deep:'oklch(49% 0.14 268)', tint:'oklch(94% 0.03 272)',  mLight:'oklch(64% 0.03 266)', mMain:'oklch(56% 0.03 268)', mDeep:'oklch(45% 0.03 268)', dark:true },
+  { main:'oklch(57% 0.15 266)', light:'oklch(71% 0.11 264)', deep:'oklch(43% 0.14 266)', tint:'oklch(93% 0.03 268)',  mLight:'oklch(58% 0.03 264)', mMain:'oklch(50% 0.03 266)', mDeep:'oklch(40% 0.03 266)', dark:true },
+];
+
+const CADENCE_TODAY_INDEX = 3;
+const CADENCE_WEEK_DATES = [
+  { label:'MON', date:'21', long:'MON 21 JUL' },
+  { label:'TUE', date:'22', long:'TUE 22 JUL' },
+  { label:'WED', date:'23', long:'WED 23 JUL' },
+  { label:'THU', date:'24', long:'THU 24 JUL' },
+  { label:'FRI', date:'25', long:'FRI 25 JUL' },
+  { label:'SAT', date:'26', long:'SAT 26 JUL' },
+  { label:'SUN', date:'27', long:'SUN 27 JUL' },
+];
+
+function cadenceDayLabel(offset) {
+  const d = CADENCE_WEEK_DATES[CADENCE_TODAY_INDEX + offset];
+  if (offset === 0) return 'TODAY · ' + d.long;
+  if (offset === 1) return 'TOMORROW · ' + d.long;
+  return d.long;
+}
+
+const CADENCE_DAYS = [
+  { label: cadenceDayLabel(0), ids:['t1','t2','t3','t4','t5','t6'] },
+  { label: cadenceDayLabel(1), ids:['t1','t2','t3','t4','t5'] },
+  { label: cadenceDayLabel(2), ids:['t1','t3','t4','t5','t6'] },
+];
+
+function cadenceTask(id) { return CADENCE_TASKS.find(t => t.id === id); }
+
+// instance id "1:t3" -> { task, tone }
+function cadenceResolve(instId) {
+  if (!instId) return null;
+  const parts = String(instId).split(':');
+  const day = CADENCE_DAYS[Number(parts[0])];
+  const i = day.ids.indexOf(parts[1]);
+  const n = day.ids.length;
+  const toneIdx = n < 2 ? 0 : Math.round((i / (n - 1)) * (CADENCE_TONES.length - 1));
+  return { task: cadenceTask(parts[1]), tone: CADENCE_TONES[toneIdx], indexInDay: i };
+}
+
+function cadenceStepMins(task) {
+  const n = task.steps.length;
+  const base = Math.max(1, Math.floor(task.minutes / n));
+  return task.steps.map((st, i) => Object.assign({}, st, {
+    mins: st.mins != null ? st.mins : (i === n - 1 ? Math.max(1, task.minutes - base * (n - 1)) : base),
+  }));
+}
+
+// keep the setup step plus the core (longest) step, at a reduced duration
+// the indoor alternative stands in for the outdoor plan when weather turns
+function cadenceVariant(task, alt) {
+  if (!alt || !task.alt) return task;
+  const steps = task.alt.steps;
+  return { title: task.alt.title, steps: steps, minutes: steps.reduce((a, st) => a + st.mins, 0) };
+}
+
+function cadenceShortSteps(task) {
+  const all = cadenceStepMins(task);
+  if (all.length <= 2) return all;
+  let ci = 0;
+  all.forEach((st, i) => { if (st.mins > all[ci].mins) ci = i; });
+  const core = Object.assign({}, all[ci], { mins: Math.max(2, Math.round(all[ci].mins * 0.5)) });
+  return ci === 0 ? [core, all[all.length - 1]] : [all[0], core];
+}
+
+const CADENCE_KINDS = {
+  run:   { label:'Run',        bg:'linear-gradient(168deg,oklch(80% 0.10 208) 0%,oklch(70% 0.12 214) 52%)', deep:'oklch(56% 0.12 218)' },
+  meal:  { label:'Meal',       bg:'linear-gradient(168deg,oklch(89% 0.12 78) 0%,oklch(79% 0.16 70) 52%)',   deep:'oklch(63% 0.15 68)' },
+  mind:  { label:'Mindset',    bg:'linear-gradient(168deg,oklch(87% 0.11 62) 0%,oklch(76% 0.15 55) 52%)',   deep:'oklch(60% 0.14 52)' },
+  night: { label:'Reflection', bg:'linear-gradient(168deg,oklch(71% 0.11 264) 0%,oklch(57% 0.15 266) 52%)', deep:'oklch(43% 0.14 266)' },
+};
+
+// planned week: chips are the activities scheduled that day
+const CADENCE_PLAN_ROWS = [
+  { focus:'Easy run + reset',  wx:'sun',   temp:'17°', chips:[{k:'mind'},{k:'run'},{k:'night'}] },
+  { focus:'Strength + cook',   wx:'cloud', temp:'15°', chips:[{k:'mind'},{k:'meal'},{k:'night'}] },
+  { focus:'Rest & reflect',    wx:'cloud', temp:'12°', chips:[{k:'mind'},{k:'night'}] },
+  { focus:'Tempo run',         wx:'rain',  temp:'4°',  chips:[{k:'run'},{k:'meal'},{k:'night'}] },
+  { focus:'Cook + wind down',  wx:'rain',  temp:'6°',  chips:[{k:'meal'},{k:'night'}] },
+  { focus:'Long run',          wx:'cloud', temp:'11°', chips:[{k:'mind'},{k:'run'},{k:'meal'}] },
+  { focus:'Open + plan ahead', wx:null,    temp:'',    chips:[{k:'night'}] },
+];
+
+const CADENCE_PLAN = CADENCE_PLAN_ROWS.map((r, i) => Object.assign({}, r, CADENCE_WEEK_DATES[i]));
+
+// progress: full = completed, half = short or swapped version
+const CADENCE_WEEK_PROGRESS = { run:{ done:1, half:1 }, meal:{ done:2, half:0 }, mind:{ done:3, half:1 }, night:{ done:2, half:1 } };
+
+const CADENCE_GOALS = [
+  { id:'g1', name:'Marathon in October', color:'oklch(62% 0.12 214)', kinds:['run'] },
+  { id:'g2', name:'Alcohol-free evenings', color:'oklch(52% 0.09 152)', kinds:['night','mind'] },
+  { id:'g3', name:'Eat for energy', color:'oklch(70% 0.14 60)', kinds:['meal'] },
+];
+
+const CADENCE_COMPARE = [
+  { label:'Runs', last:2, thisWk:3, max:4 },
+  { label:'AF evenings', last:4, thisWk:6, max:7 },
+  { label:'Home-cooked', last:5, thisWk:4, max:6 },
+  { label:'Reflections', last:3, thisWk:5, max:7 },
+];
+
+function cadenceDots(planned, done, half, color) {
+  const out = [];
+  for (let i = 0; i < planned; i++) {
+    if (i < done) out.push({ bg: color, border: 'none' });
+    else if (i < done + half) out.push({ bg: 'linear-gradient(90deg,' + color + ' 50%,oklch(94% 0.01 120) 50%)', border: '1.5px solid ' + color });
+    else out.push({ bg: 'oklch(94% 0.01 120)', border: '1.5px solid oklch(87% 0.015 120)' });
+  }
+  return out;
+}
+
+class Component extends DCLogic {
+  state = {
+    screen: 'today',
+    done: {},
+    started: {},
+    previewId: null,
+    shortMode: false,
+    altMode: false,
+    selectedId: null,
+    stepIndex: 0,
+    celebrating: false,
+    xp: 40,
+    streak: 12,
+    logSheetOpen: false,
+    toast: null,
+    showWeather: false,
+    weekVariant: 'a',
+    weekOffset: 0,
+    plan: CADENCE_PLAN.map(d => ({ label:d.label, date:d.date, focus:d.focus, wx:d.wx, temp:d.temp, chips:d.chips.slice() })),
+    dragFrom: null,
+  };
+
+  componentDidMount() {
+    this._wxT = setInterval(() => this.setState(s => ({ showWeather: !s.showWeather })), 4200);
+  }
+  componentWillUnmount() { clearInterval(this._wxT); clearTimeout(this._toastT); }
+
+  pickVariant(v) { this.setState({ weekVariant: v }); }
+  weekStep(n) { this.setState(s => ({ weekOffset: s.weekOffset + n })); }
+
+  dragStart(dayIdx, chipIdx) { this.setState({ dragFrom: { dayIdx, chipIdx } }); }
+  dropOn(dayIdx) {
+    const from = this.state.dragFrom;
+    if (!from || from.dayIdx === dayIdx) { this.setState({ dragFrom: null }); return; }
+    this.setState(s => {
+      const plan = s.plan.map(d => Object.assign({}, d, { chips: d.chips.slice() }));
+      const moved = plan[from.dayIdx].chips.splice(from.chipIdx, 1)[0];
+      if (moved) plan[dayIdx].chips.push(moved);
+      return { plan, dragFrom: null };
+    });
+    this.showToast('Moved to ' + this.state.plan[dayIdx].label.charAt(0) + this.state.plan[dayIdx].label.slice(1).toLowerCase());
+  }
+
+  goToday() { this.setState({ screen: 'today' }); }
+  goWeek() { this.setState({ screen: 'week' }); }
+  stop(e) { e.stopPropagation(); }
+  onDetourClick(e) { e.preventDefault(); this.toggleLogSheet(); }
+
+  toggleLogSheet() { this.setState(s => ({ logSheetOpen: !s.logSheetOpen })); }
+
+  showToast(msg) {
+    this.setState({ logSheetOpen: false, toast: msg });
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => this.setState({ toast: null }), 2200);
+  }
+
+  quickLog(label) { this.showToast('Logged: ' + label); }
+
+  openTask(id) { this.setState({ previewId: id }); }
+  closePreview() { this.setState({ previewId: null }); }
+  begin(opts) {
+    this.setState(s => Object.assign({
+      selectedId: s.previewId, previewId: null, stepIndex: 0, celebrating: false,
+      shortMode: false, altMode: false,
+      started: Object.assign({}, s.started, { [s.previewId]: true }),
+    }, opts));
+  }
+  startFull() { this.begin({}); }
+  startShort() { this.begin({ shortMode: true }); }
+  startAlt() { this.begin({ altMode: true }); }
+  closeTask() { this.setState({ selectedId: null }); }
+
+  activeSteps() {
+    const src = cadenceVariant(cadenceResolve(this.state.selectedId).task, this.state.altMode);
+    return this.state.shortMode ? cadenceShortSteps(src) : cadenceStepMins(src);
+  }
+
+  nextStep() {
+    if (this.state.stepIndex + 1 >= this.activeSteps().length) {
+      this.setState({ celebrating: true });
+    } else {
+      this.setState(s => ({ stepIndex: s.stepIndex + 1 }));
+    }
+  }
+
+  finishCelebration() {
+    this.setState(s => ({
+      selectedId: null,
+      celebrating: false,
+      done: Object.assign({}, s.done, { [s.selectedId]: true }),
+      xp: s.xp + 10,
+    }));
+  }
+
+  renderVals() {
+    const s = this.state;
+    const bound = {
+      goToday: this.goToday.bind(this),
+      goWeek: this.goWeek.bind(this),
+      stop: this.stop.bind(this),
+      onDetourClick: this.onDetourClick.bind(this),
+      toggleLogSheet: this.toggleLogSheet.bind(this),
+      openCoach: () => this.showToast('Coach is listening — what changed today?'),
+      logWorkout: () => this.quickLog('Workout'),
+      logMeal: () => this.quickLog('Meal'),
+      logMood: () => this.quickLog('Mood'),
+      logNote: () => this.quickLog('Note'),
+      closeTask: this.closeTask.bind(this),
+      closePreview: this.closePreview.bind(this),
+      startFull: this.startFull.bind(this),
+      startShort: this.startShort.bind(this),
+      startAlt: this.startAlt.bind(this),
+      nextStep: this.nextStep.bind(this),
+      finishCelebration: this.finishCelebration.bind(this),
+    };
+
+    const days = CADENCE_DAYS.map((day, di) => ({
+      label: day.label,
+      isFirst: di === 0,
+      notFirst: di > 0,
+      coachLeft: di % 2 === 0,
+      coachRight: di % 2 === 1,
+      coachText: di === 0 ? 'Not feeling it today? Talk to me.' : (di === 1 ? 'Want to shuffle tomorrow?' : 'Planning ahead? Let\u2019s talk.'),
+      nodes: day.ids.map((tid, i) => {
+      const t = cadenceTask(tid);
+      const instId = di + ':' + tid;
+      const cat = CADENCE_CATEGORIES[t.cat];
+      const tone = cadenceResolve(instId).tone;
+      const done = !!s.done[instId];
+      const live = done || !!s.started[instId];
+      const stepCount = t.steps.length;
+      return {
+        id: instId, title: t.title, time: t.time, minutes: t.minutes,
+        icon: cat.icon,
+        isMind: t.cat === 'mindset', isRun: t.cat === 'movement', isMeal: t.cat === 'nutrition', isNight: t.cat === 'reflection',
+        weatherSwap: di === 0 && t.id === 't2',
+        offset: cadenceOffset(i, day.ids.length, di), done,
+        bg: live
+          ? 'linear-gradient(168deg,' + tone.light + ' 0%,' + tone.main + ' 52%)'
+          : 'linear-gradient(168deg,' + tone.mLight + ' 0%,' + tone.mMain + ' 52%)',
+        hasRing: stepCount > 1,
+        ringDash: (100 / stepCount - 4).toFixed(1) + ' 4',
+        ringColor: tone.dark ? 'oklch(52% 0.03 262)' : 'oklch(78% 0.02 250)',
+        deep: done ? 'oklch(35% 0.06 265)' : tone.deep,
+        shadow: '0 8px 0 ' + (live ? tone.deep : tone.mDeep) + ', 0 13px 18px oklch(25% 0.05 265 / 0.20)',
+
+        titleColor: tone.dark ? 'oklch(97% 0.01 265)' : 'oklch(30% 0.04 250)',
+        metaColor: tone.dark ? 'oklch(80% 0.03 265)' : 'oklch(48% 0.03 250)',
+        iconOpacity: done ? 0.85 : 1,
+        onOpen: () => this.openTask(instId),
+      };
+      }),
+    }));
+
+    let previewTask = null;
+    if (s.previewId) {
+      const pr = cadenceResolve(s.previewId);
+      const pt = pr.task;
+      const ptone = pr.tone;
+      previewTask = {
+        title: pt.title, time: pt.time, minutes: pt.minutes,
+        color: ptone.main, deep: ptone.deep,
+        face: 'linear-gradient(168deg,' + ptone.light + ' 0%,' + ptone.main + ' 52%)',
+        isMind: pt.cat === 'mindset', isRun: pt.cat === 'movement', isMeal: pt.cat === 'nutrition', isNight: pt.cat === 'reflection',
+        stepTotal: pt.steps.length,
+        stepList: cadenceStepMins(pt),
+        shortMinutes: cadenceShortSteps(pt).reduce((a, st) => a + st.mins, 0),
+        hasSwap: !!pt.alt && String(s.previewId).indexOf('0:') === 0,
+        altMinutes: pt.alt ? pt.alt.steps.reduce((a, st) => a + st.mins, 0) : 0,
+      };
+    }
+
+    let activeTask = null;
+    if (s.selectedId) {
+      const ar = cadenceResolve(s.selectedId);
+      const t = ar.task;
+      const cat = CADENCE_CATEGORIES[t.cat];
+      const tone = ar.tone;
+      const src = cadenceVariant(t, s.altMode);
+      const steps = s.shortMode ? cadenceShortSteps(src) : cadenceStepMins(src);
+      const step = steps[Math.min(s.stepIndex, steps.length - 1)];
+      activeTask = {
+        title: src.title, color: tone.main, deep: tone.deep, tint: tone.tint, icon: cat.icon,
+        face: 'linear-gradient(168deg,' + tone.light + ' 0%,' + tone.main + ' 52%)',
+        isMind: t.cat === 'mindset', isRun: t.cat === 'movement', isMeal: t.cat === 'nutrition', isNight: t.cat === 'reflection',
+        stepNum: s.stepIndex + 1, stepTotal: steps.length,
+        stepTitle: step.t, stepBody: step.b,
+        nextLabel: (s.stepIndex + 1 >= steps.length) ? 'Finish' : 'Next',
+        progressPct: Math.round(((s.stepIndex + 1) / steps.length) * 100),
+        xpGain: 10,
+      };
+    }
+
+    const plannedByKind = {};
+    s.plan.forEach(d => d.chips.forEach(c => { plannedByKind[c.k] = (plannedByKind[c.k] || 0) + 1; }));
+
+    const kindLine = (k) => {
+      const planned = plannedByKind[k] || 0;
+      const pr = CADENCE_WEEK_PROGRESS[k] || { done: 0, half: 0 };
+      const done = Math.min(pr.done, planned);
+      const half = Math.min(pr.half, Math.max(0, planned - done));
+      const noun = CADENCE_KINDS[k].label.toLowerCase() + (planned === 1 ? '' : 's');
+      return { k, planned, done, half, noun,
+        summary: done + ' of ' + planned + ' ' + noun,
+        credit: done + half * 0.5 };
+    };
+
+    const dayIndexToday = CADENCE_TODAY_INDEX;
+    const expectedRatio = (dayIndexToday + 1) / 7;
+
+    const paceOf = (planned, credit) => {
+      const behind = planned * expectedRatio - credit;
+      if (behind >= 1) return { pace: Math.round(behind) + ' BEHIND', paceBg: 'oklch(93% 0.04 40)', paceColor: 'oklch(45% 0.12 40)' };
+      if (credit >= planned) return { pace: 'DONE', paceBg: 'oklch(92% 0.05 152)', paceColor: 'oklch(42% 0.09 152)' };
+      return { pace: 'ON PACE', paceBg: 'oklch(93% 0.03 152)', paceColor: 'oklch(45% 0.08 152)' };
+    };
+
+    const goals = CADENCE_GOALS.map(g => {
+      const lines = g.kinds.map(kindLine).filter(l => l.planned > 0);
+      const planned = lines.reduce((a, l) => a + l.planned, 0);
+      const credit = lines.reduce((a, l) => a + l.credit, 0);
+      return Object.assign({
+        name: g.name, color: g.color,
+        lines: lines.map(l => ({ summary: l.summary, dots: cadenceDots(l.planned, l.done, l.half, g.color) })),
+      }, paceOf(planned, credit));
+    });
+
+    const activities = ['run','meal','mind','night'].map(k => {
+      const l = kindLine(k);
+      const goal = CADENCE_GOALS.find(g => g.kinds.indexOf(k) >= 0);
+      return {
+        summary: l.planned + ' ' + l.noun + ' planned · ' + l.done + ' done',
+        goalName: goal ? goal.name : '',
+        bg: CADENCE_KINDS[k].bg, deep: CADENCE_KINDS[k].deep,
+        isRun: k === 'run', isMeal: k === 'meal', isMind: k === 'mind', isNight: k === 'night',
+        dots: cadenceDots(l.planned, l.done, l.half, goal ? goal.color : 'oklch(52% 0.09 152)'),
+      };
+    });
+
+    const allLines = ['run','meal','mind','night'].map(kindLine);
+    const totalPlanned = allLines.reduce((a, l) => a + l.planned, 0);
+    const totalCredit = allLines.reduce((a, l) => a + l.credit, 0);
+
+    const planDays = s.plan.map((d, di) => {
+      const isPast = di < dayIndexToday, isToday = di === dayIndexToday;
+      return {
+        label: d.label, date: d.date, focus: d.focus, temp: d.temp,
+        wxSun: d.wx === 'sun', wxCloud: d.wx === 'cloud', wxRain: d.wx === 'rain', wxNone: !d.wx,
+        rowBg: isToday ? 'oklch(97% 0.03 66)' : 'white',
+        colBg: isToday ? 'oklch(97% 0.03 66)' : 'white',
+        rowBorder: isToday ? '1.5px solid oklch(80% 0.10 62)' : '1px solid oklch(92% 0.015 85)',
+        dayColor: isToday ? 'oklch(48% 0.11 55)' : 'oklch(58% 0.02 120)',
+        dateColor: isPast ? 'oklch(62% 0.02 120)' : 'oklch(30% 0.02 150)',
+        tally: d.chips.length + '',
+        tallyColor: isToday ? 'oklch(48% 0.11 55)' : 'oklch(66% 0.02 120)',
+        onDragOver: (e) => e.preventDefault(),
+        onDrop: () => this.dropOn(di),
+        chips: d.chips.map((c, ci) => ({
+          bg: CADENCE_KINDS[c.k].bg, deep: CADENCE_KINDS[c.k].deep,
+          isRun: c.k === 'run', isMeal: c.k === 'meal', isMind: c.k === 'mind', isNight: c.k === 'night',
+          atRisk: c.k === 'run' && d.wx === 'rain',
+          onDragStart: () => this.dragStart(di, ci),
+        })),
+      };
+    });
+
+    const compare = CADENCE_COMPARE.map(c => {
+      const delta = c.thisWk - c.last;
+      return {
+        label: c.label,
+        lastPct: Math.round((c.last / c.max) * 100),
+        thisPct: Math.round((c.thisWk / c.max) * 100),
+        delta: (delta > 0 ? '+' : '') + delta,
+        deltaColor: delta > 0 ? 'oklch(45% 0.09 152)' : (delta < 0 ? 'oklch(50% 0.12 40)' : 'oklch(60% 0.02 120)'),
+      };
+    });
+
+    const weekStarts = ['21–27 Jul','28 Jul – 3 Aug','14–20 Jul'];
+    const weekTags = ['THIS WEEK','NEXT WEEK','LAST WEEK'];
+    const wi = s.weekOffset === 0 ? 0 : (s.weekOffset > 0 ? 1 : 2);
+
+    const badges = [
+      { icon: '🔥', name: '7-Day Streak', opacity: 1 },
+      { icon: '🌙', name: 'Reflector', opacity: 1 },
+      { icon: '🏅', name: '30-Day Club', opacity: 0.35 },
+    ];
+
+    const quickLogs = [
+      { icon: '🏃', label: 'Workout', onPick: () => this.quickLog('Workout') },
+      { icon: '🍽️', label: 'Meal', onPick: () => this.quickLog('Meal') },
+      { icon: '😌', label: 'Mood', onPick: () => this.quickLog('Mood') },
+      { icon: '✍️', label: 'Something else', onPick: () => this.quickLog('Note') },
+    ];
+
+    const navItems = [
+      { label: 'Today', shape: '6px', color: 'oklch(58% 0.15 58)' },
+      { label: 'Coach', shape: '50%', color: 'oklch(68% 0.01 260)' },
+      { label: 'Food', shape: '6px', color: 'oklch(68% 0.01 260)' },
+      { label: 'Progress', shape: '2px', color: 'oklch(68% 0.01 260)' },
+    ];
+
+    return Object.assign({
+      isToday: s.screen === 'today',
+      isWeek: s.screen === 'week',
+      todayTabBg: s.screen === 'today' ? 'oklch(78% 0.16 64)' : 'oklch(92% 0.04 66)',
+      todayTabColor: s.screen === 'today' ? 'oklch(29% 0.08 55)' : 'oklch(56% 0.07 60)',
+      todayTabShadow: s.screen === 'today' ? '0 4px 0 oklch(62% 0.15 60)' : '0 3px 0 oklch(86% 0.04 62)',
+      weekTabBg: s.screen === 'week' ? 'oklch(78% 0.16 64)' : 'oklch(92% 0.04 66)',
+      weekTabColor: s.screen === 'week' ? 'oklch(29% 0.08 55)' : 'oklch(56% 0.07 60)',
+      weekTabShadow: s.screen === 'week' ? '0 4px 0 oklch(62% 0.15 60)' : '0 3px 0 oklch(86% 0.04 62)',
+      streak: s.streak, xp: s.xp,
+      showWeather: s.showWeather, showGreeting: !s.showWeather,
+      todayLong: CADENCE_WEEK_DATES[CADENCE_TODAY_INDEX].long,
+      coachLine: "It's 4° and raining — I've lined up an indoor swap for your run. Everything else is just a suggestion.",
+      days, badges, quickLogs, navItems,
+      goals, activities, planDays, compare,
+      isVarA: s.weekVariant === 'a', isVarB: s.weekVariant === 'b',
+      varABg: s.weekVariant === 'a' ? 'white' : 'transparent',
+      varAColor: s.weekVariant === 'a' ? 'oklch(30% 0.02 150)' : 'oklch(55% 0.02 120)',
+      varBBg: s.weekVariant === 'b' ? 'white' : 'transparent',
+      varBColor: s.weekVariant === 'b' ? 'oklch(30% 0.02 150)' : 'oklch(55% 0.02 120)',
+      pickVarA: () => this.pickVariant('a'),
+      pickVarB: () => this.pickVariant('b'),
+      weekPrev: () => this.weekStep(-1),
+      weekNext: () => this.weekStep(1),
+      weekRange: weekStarts[wi], weekTag: weekTags[wi],
+      weekCheckIn: s.weekOffset > 0,
+      weekSummary: Math.round(totalCredit) + ' of ' + totalPlanned + ' planned done',
+      weekPace: paceOf(totalPlanned, totalCredit).pace,
+      weekPaceBg: paceOf(totalPlanned, totalCredit).paceBg,
+      weekPaceColor: paceOf(totalPlanned, totalCredit).paceColor,
+      weekDonePct: totalPlanned ? Math.round((totalCredit / totalPlanned) * 100) : 0,
+      openReport: () => this.showToast('Listening — tell me what you did'),
+      previewTask,
+      logSheetOpen: s.logSheetOpen,
+      toast: s.toast,
+      activeTask, celebrating: s.celebrating, notCelebrating: !s.celebrating,
+    }, bound);
+  }
+}
+</script>
+</body>
+</html>
