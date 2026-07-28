@@ -185,6 +185,22 @@ function TrailNode({
       onClick={() => onOpen(occ)}
       aria-label={occ.title}
     >
+      {occ.steps != null && occ.steps > 1 && (
+        <svg className="trail-ring" width="104" height="104" viewBox="0 0 104 104" aria-hidden>
+          <circle
+            cx="52"
+            cy="52"
+            r="47"
+            fill="none"
+            pathLength={100}
+            stroke={ramp.dark ? 'oklch(52% 0.03 262)' : 'oklch(78% 0.02 250)'}
+            strokeWidth={4}
+            strokeLinecap="round"
+            strokeDasharray={`${100 / occ.steps - 4} 4`}
+            transform="rotate(-90 52 52)"
+          />
+        </svg>
+      )}
       <span className={`trail-disc${done ? ' is-done' : ''}`} style={discStyle}>
         <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden>
           <path d={ICON[cat]} fill="#fff" />

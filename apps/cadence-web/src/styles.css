@@ -817,8 +817,9 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .trail-nodes { display: flex; flex-direction: column; align-items: center; gap: 30px; }
 .trail-empty { font-size: 13px; font-weight: 600; color: oklch(45% 0.03 250); padding: 6px 0; }
 
-.trail-node { display: flex; flex-direction: column; align-items: center; background: none; padding: 0; }
-.trail-disc { position: relative; width: 82px; height: 74px; border-radius: 50%; overflow: visible; margin-bottom: 18px;
+.trail-node { position: relative; display: flex; flex-direction: column; align-items: center; background: none; padding: 0; }
+.trail-ring { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); z-index: 0; pointer-events: none; }
+.trail-disc { position: relative; z-index: 1; width: 82px; height: 74px; border-radius: 50%; overflow: visible; margin-bottom: 18px;
   background: var(--face); box-shadow: 0 8px 0 var(--edge), 0 13px 18px oklch(25% 0.05 265 / .20);
   display: flex; align-items: center; justify-content: center; }
 .trail-disc::before { content: ''; position: absolute; top: 7px; left: 12px; width: 38px; height: 17px;

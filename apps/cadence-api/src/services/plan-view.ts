@@ -1,7 +1,7 @@
 import type { OccurrenceStatus, PendingProposal, StreakView } from '@cadence/shared';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities, NON_PLAN_CATEGORIES } from '../repos/activities.ts';
-import { listOccurrences } from '../repos/occurrences.ts';
+import { listOccurrences, listSessionStepCounts } from '../repos/occurrences.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
 import { getUser } from '../repos/users.ts';
 import { getLatestConversation } from '../repos/conversations.ts';
@@ -20,6 +20,7 @@ export interface PlanViewOccurrence {
   kind: 'user' | 'system';
   status: OccurrenceStatus;
   time_of_day?: string;
+  steps?: number; // prescribed-item count from a cached session (drives the trail's step ring)
 }
 export interface PlanViewDay {
   date: string; // YYYY-MM-DD
@@ -124,6 +125,7 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
   const from = days[0]!.date;
   const to = days[days.length - 1]!.date;
   const occ = await listOccurrences(userId, from, to);
+  const stepCounts = new Map((await listSessionStepCounts(userId, from, to)).map((r) => [r.occurrence_id, r.steps]));
   for (const o of occ) {
     const day = dayByDate.get(iso(o.date));
     const a = actById.get(o.activity_id);
@@ -135,6 +137,7 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
         kind: a.kind,
         status: o.status,
         time_of_day: a.schedule?.time_of_day,
+        steps: stepCounts.get(o.occurrence_id),
       });
     }
   }

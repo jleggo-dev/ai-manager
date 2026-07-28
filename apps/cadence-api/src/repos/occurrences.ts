@@ -65,6 +65,23 @@ export async function listOccurrences(userId: string, fromDate: string, toDate: 
     where user_id = ${userId} and date >= ${fromDate} and date <= ${toDate}`;
 }
 
+/** Step counts (total prescribed items across a cached session's blocks) for occurrences in a range
+ *  that already have a session — powers the trail's step ring in the plan view WITHOUT loading the
+ *  full session jsonb into the app (a server-side jsonb count). Occurrences without a session are
+ *  omitted (no ring until the coach has programmed the session). */
+export async function listSessionStepCounts(
+  userId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<Array<{ occurrence_id: string; steps: number }>> {
+  return sql<Array<{ occurrence_id: string; steps: number }>>`
+    select o.occurrence_id,
+      coalesce((select sum(jsonb_array_length(b->'items'))
+                from jsonb_array_elements(o.session->'blocks') b), 0)::int as steps
+    from cadence.occurrences o
+    where o.user_id = ${userId} and o.date >= ${fromDate} and o.date <= ${toDate} and o.session is not null`;
+}
+
 /**
  * Today's pending "Food log" system row, if any — the deterministic anchor the nutrition module
  * ticks when the first meal of the day is logged (mirrors the weigh-in title-test pattern).

@@ -9,6 +9,7 @@ export interface PlanOccurrence {
   kind: 'user' | 'system';
   status: 'pending' | 'done' | 'skipped' | 'missed' | 'paused';
   time_of_day?: string;
+  steps?: number; // prescribed-step count (from a cached session) — the trail's step ring
 }
 
 /** The "you're on a detour" summary (Req 4) — set while a disrupted episode is active. */
