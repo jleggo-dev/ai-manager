@@ -1,8 +1,12 @@
+import { useMemo, useState, type CSSProperties } from 'react';
+import { deriveWalkthrough, condense, type Walkthrough as WalkthroughData } from '@cadence/shared';
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
 import { isFoodRow, isWeighInPending } from './occurrence/format.ts';
 import { SessionLogPanel } from './occurrence/SessionLogPanel.tsx';
 import { MealLogPanel } from './occurrence/MealLogPanel.tsx';
 import { WeighInPanel } from './occurrence/WeighInPanel.tsx';
+import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
+import { setOccurrence, logOccurrence } from '../../lib/api.ts';
 
 /**
  * The session sheet — tap an occurrence, see the coach's concrete session (blocks of items with
@@ -27,6 +31,22 @@ export function OccurrenceSheet({
 }) {
   const { detail, setDetail, state } = useOccurrenceDetail(occurrenceId);
   const session = detail?.session;
+  const wt = useMemo(() => (session ? deriveWalkthrough(session) : null), [session]);
+  const [run, setRun] = useState<WalkthroughData | null>(null);
+
+  async function handleComplete(summary: string) {
+    if (!detail) return;
+    try {
+      if (summary.trim()) await logOccurrence(detail.occurrence_id, summary);
+      else await setOccurrence(detail.occurrence_id, 'done');
+      setDetail({ ...detail, status: 'done' });
+    } catch {
+      /* best-effort — the plan refresh reflects reality */
+    }
+    onLogged?.();
+    setRun(null);
+    onClose();
+  }
 
   return (
     <>
@@ -77,7 +97,21 @@ export function OccurrenceSheet({
             )}
 
             {session ? (
-              <SessionLogPanel detail={detail} session={session} setDetail={setDetail} onLogged={onLogged} />
+              <>
+                {wt && wt.steps.length > 0 && detail.status === 'pending' && (
+                  <div style={startRow}>
+                    <button style={startBtn} onClick={() => setRun(wt)}>
+                      ▶ Start · {wt.total_min} min
+                    </button>
+                    {wt.steps.length > 2 && (
+                      <button style={startGhost} onClick={() => setRun(condense(wt))}>
+                        Less time
+                      </button>
+                    )}
+                  </div>
+                )}
+                <SessionLogPanel detail={detail} session={session} setDetail={setDetail} onLogged={onLogged} />
+              </>
             ) : isFoodRow(detail) ? (
               <MealLogPanel
                 detail={detail}
@@ -102,6 +136,32 @@ export function OccurrenceSheet({
           </>
         ) : null}
       </div>
+      {run && detail && (
+        <Walkthrough walkthrough={run} title={detail.title} onClose={() => setRun(null)} onComplete={handleComplete} />
+      )}
     </>
   );
 }
+
+const startRow: CSSProperties = { display: 'flex', gap: 8, margin: '2px 0 12px' };
+const startBtn: CSSProperties = {
+  flex: 1,
+  padding: 12,
+  borderRadius: 12,
+  border: 'none',
+  fontWeight: 800,
+  fontSize: 14,
+  color: '#fff',
+  background: 'var(--forest, #3f7a52)',
+  cursor: 'pointer',
+};
+const startGhost: CSSProperties = {
+  padding: '12px 14px',
+  borderRadius: 12,
+  border: '1px solid var(--forest, #3f7a52)',
+  fontWeight: 700,
+  fontSize: 14,
+  color: 'var(--forest, #3f7a52)',
+  background: 'transparent',
+  cursor: 'pointer',
+};
