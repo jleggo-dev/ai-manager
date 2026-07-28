@@ -1,0 +1,124 @@
+import { useEffect, useState } from 'react';
+import { getPlan, logDid, logAdhoc, type PlanActivity } from '../../lib/api.ts';
+import { categoryOf, ICON } from '../today/category.ts';
+
+/**
+ * The goal-aware "＋" sheet — "log something you did." The options are your PLAN's activities (the
+ * things tied to your goals), so a tap credits the real activity as done for today even when it was
+ * scheduled for another day ("did my Thursday workout on Wednesday"): it counts toward that goal +
+ * your streak, and the done node appears on Today. A free-text line at the bottom keeps the honest
+ * off-plan path ("did a hotel yoga class") for anything not in the plan. Suggest-never-auto: nothing
+ * here changes the plan itself — it only records what already happened.
+ */
+export function LogDidSheet({ onClose, onLogged }: { onClose: () => void; onLogged: () => void }) {
+  const [activities, setActivities] = useState<PlanActivity[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null); // id being logged (or 'free')
+  const [text, setText] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    getPlan()
+      .then((p) => {
+        // Only the committed-rhythm activities (user-kind) — system weigh-ins + the off-plan bucket
+        // aren't things you "did." The plan view already excludes off-plan/episode from `activities`.
+        if (alive) setActivities(p.activities.filter((a) => a.kind === 'user'));
+      })
+      .catch(() => {
+        if (alive) setActivities([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function pick(a: PlanActivity) {
+    if (busy) return;
+    setBusy(a.activity_id);
+    await logDid(a.activity_id).catch(() => {});
+    onLogged();
+    onClose();
+  }
+
+  async function freeLog() {
+    const t = text.trim();
+    if (!t || busy) return;
+    setBusy('free');
+    await logAdhoc(t).catch(() => {});
+    onLogged();
+    onClose();
+  }
+
+  return (
+    <>
+      <div className="sheet-scrim" onClick={onClose} aria-hidden />
+      <div className="sheet ld" role="dialog" aria-label="Log something you did">
+        <div className="sheet-grab" aria-hidden />
+        <div className="ld-head">
+          <b>Log something you did</b>
+          <span>Tap what you did — it counts even if it wasn&apos;t scheduled for today.</span>
+        </div>
+
+        {activities === null ? (
+          <div className="sheet-loading">
+            <span className="typing">
+              <i />
+              <i />
+              <i />
+            </span>
+          </div>
+        ) : (
+          <>
+            <div className="ld-list">
+              {activities.length === 0 ? (
+                <div className="ld-empty">Nothing in your plan yet — jot it below.</div>
+              ) : (
+                activities.map((a) => {
+                  const cat = categoryOf(a.title);
+                  const meta = [a.cadence, a.time_of_day].filter(Boolean).join(' · ');
+                  return (
+                    <button
+                      key={a.activity_id}
+                      className="ld-row"
+                      onClick={() => pick(a)}
+                      disabled={!!busy}
+                      aria-label={`Log ${a.title}`}
+                    >
+                      <span className={`ld-ic ld-ic-${cat}`} aria-hidden>
+                        <svg viewBox="0 0 24 24" width="20" height="20">
+                          <path d={ICON[cat]} fill="#fff" />
+                        </svg>
+                      </span>
+                      <span className="ld-row-t">
+                        <b>{a.title}</b>
+                        {meta && <span>{meta}</span>}
+                      </span>
+                      <span className="ld-plus" aria-hidden>
+                        {busy === a.activity_id ? '·' : '＋'}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="ld-free">
+              <input
+                className="ld-input"
+                placeholder="Something else you did…"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void freeLog();
+                }}
+                disabled={!!busy}
+              />
+              <button className="ld-log" onClick={() => void freeLog()} disabled={!text.trim() || !!busy}>
+                Log
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}

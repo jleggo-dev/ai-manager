@@ -39,6 +39,15 @@ export async function getOrCreateAdhocActivity(userId: string, planId: string): 
   return row;
 }
 
+/** Fetch one of the user's activities by id (ownership-checked); null if it isn't theirs. Backs the
+ *  goal-aware "log something you did" FAB, which credits the REAL planned activity by title (so it
+ *  counts toward that goal's progression) rather than the generic off-plan bucket. */
+export async function getUserActivity(userId: string, activityId: string): Promise<Activity | null> {
+  const [row] = await sql<Activity[]>`
+    select * from cadence.activities where user_id = ${userId} and activity_id = ${activityId} limit 1`;
+  return row ?? null;
+}
+
 /** Insert the activities for a plan (one statement each — jsonb schedule/target via json()). */
 export async function insertActivities(
   userId: string,

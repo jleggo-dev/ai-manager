@@ -9,6 +9,7 @@ export interface PlanOccurrence {
   kind: 'user' | 'system';
   status: 'pending' | 'done' | 'skipped' | 'missed' | 'paused';
   time_of_day?: string;
+  steps?: number; // prescribed-step count (from a cached session) — the trail's step ring
 }
 
 /** The "you're on a detour" summary (Req 4) — set while a disrupted episode is active. */
@@ -73,6 +74,20 @@ export async function setOccurrence(id: string, status: 'pending' | 'done' | 'sk
  *  counts toward consistency + the streak. `date` optional (YYYY-MM-DD), defaults to today. */
 export async function logAdhoc(text: string, date?: string): Promise<{ ok: boolean }> {
   const res = await fetch(`${BASE}/plan/occurrences/adhoc`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ text, date }),
+  });
+  return { ok: res.ok };
+}
+
+/**
+ * Goal-aware "log something you did" (the ＋ FAB): credit a PLANNED activity as done for the day
+ * (default today), so it counts toward that goal + streak even if it was scheduled for another day.
+ * `text` optional — the coach records "Did {title}" when omitted.
+ */
+export async function logDid(activityId: string, text?: string, date?: string): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/plan/activities/${activityId}/did`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({ text, date }),

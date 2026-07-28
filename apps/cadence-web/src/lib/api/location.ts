@@ -59,6 +59,36 @@ export async function clearHomeLocation(): Promise<boolean> {
   }
 }
 
+export type WeatherNow = {
+  available: boolean;
+  temp_c?: number;
+  conditions?: string;
+  label?: string | null;
+  precip_chance?: number | null;
+};
+
+/** GET /me/weather — current conditions + city at the user's home location (for the Today header). */
+export async function getWeather(): Promise<WeatherNow> {
+  try {
+    const res = await fetch(`${BASE}/me/weather`, { headers: headers() });
+    if (!res.ok) return { available: false };
+    return (await res.json()) as WeatherNow;
+  } catch {
+    return { available: false };
+  }
+}
+
+/** GET /me/today-brief — the Today header's one-line day recap (cached per user+day). */
+export async function getTodayBrief(): Promise<{ recap: string | null }> {
+  try {
+    const res = await fetch(`${BASE}/me/today-brief`, { headers: headers() });
+    if (!res.ok) return { recap: null };
+    return (await res.json()) as { recap: string | null };
+  } catch {
+    return { recap: null };
+  }
+}
+
 /** Browser IANA timezone when available. */
 export function browserTimezone(): string | undefined {
   try {

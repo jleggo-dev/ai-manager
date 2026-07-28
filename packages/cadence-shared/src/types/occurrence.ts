@@ -51,6 +51,11 @@ export interface SessionItem {
 export interface SessionBlock {
   label: string; // "Warm-up", "Main", "Finisher", "Practice"
   items: SessionItem[];
+  /** How this block's sets flow (REQ8 slice 2). 'straight' (default) = each exercise's sets done
+   *  consecutively (A,A,B,B); 'circuit' = rotate through the items for `rounds` rounds (A,B,A,B).
+   *  The coach chooses per block; absent = straight, so existing sessions are unchanged. */
+  mode?: 'straight' | 'circuit';
+  rounds?: number; // circuit only — rounds through the items (defaults to the items' max sets)
 }
 
 /** The coach's generated prescription for ONE occurrence. A regenerable cache (see migration

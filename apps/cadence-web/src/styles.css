@@ -793,3 +793,163 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 /* Reference dumps (persona, raw JSON, capture, log rows): boxed so they don't dominate the panel;
    these are the ONLY blocks that keep an inner scroll, and only because you rarely read them fully. */
 .devpre.dump { max-height: 220px; overflow: auto; }
+
+/* ── Visual Today: the sky-trail (REQ8 redesign — docs/cadence/design/redesign-today-trail) ── */
+.trail { margin: 0 -20px; padding-bottom: 40px; }
+.trail-head { display: flex; align-items: center; gap: 10px; padding: 6px 20px 12px; }
+.trail-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: oklch(78% 0.16 64); box-shadow: 0 3px 0 oklch(62% 0.15 60); flex: 0 0 auto; }
+.trail-greet { flex: 1; display: flex; flex-direction: column; line-height: 1.15; }
+.trail-greet b { font-family: var(--display); font-size: 15px; font-weight: 800; color: oklch(34% 0.02 150); }
+.trail-greet span { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: oklch(58% 0.02 120); }
+.trail-streak { display: flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px;
+  background: oklch(90% 0.03 40); color: oklch(35% 0.1 40); font-family: var(--display); font-weight: 800; font-size: 13px; }
+.trail-coach { display: flex; gap: 10px; align-items: flex-start; margin: 0 20px 18px; padding: 14px 16px; background: #fff;
+  border-radius: 18px; box-shadow: 0 1px 3px rgba(0, 0, 0, .04); }
+.trail-coach svg { color: oklch(50% 0.07 152); flex: 0 0 auto; margin-top: 1px; }
+/* Direct child only, so the inner recap span inherits the useFitText-shrunk size (else it'd be pinned
+ * to 13px and never shrink). line-height 1.4 must match useFitText's scrollHeight math. */
+.trail-coach > span { font-size: 13px; line-height: 1.4; color: oklch(35% 0.02 150); }
+
+.trail-day { position: relative; padding: 18px 20px 34px; overflow: hidden; }
+.trail-day.is-later { padding-top: 92px; }
+.trail-daylabel { display: flex; align-items: center; gap: 12px; padding: 6px 0 22px; }
+.trail-daylabel i { flex: 1; height: 1px; background: oklch(62% 0.04 62 / .35); }
+.trail-daylabel span { font-size: 10.5px; font-weight: 900; letter-spacing: .12em; color: oklch(44% 0.06 58); }
+.trail-nodes { display: flex; flex-direction: column; align-items: center; gap: 30px; }
+.trail-empty { font-size: 13px; font-weight: 600; color: oklch(45% 0.03 250); padding: 6px 0; }
+
+.trail-node { position: relative; display: flex; flex-direction: column; align-items: center; background: none; padding: 0; }
+/* Centered on the full button (face + the 8px box-shadow rim below), not the face alone — else the
+ * ring hugs the shaded bottom rim. top offset = -(ring 104 − button 82)/2 rounded to sit even. */
+.trail-ring { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); z-index: 0; pointer-events: none; }
+.trail-disc { position: relative; z-index: 1; width: 82px; height: 74px; border-radius: 50%; overflow: visible; margin-bottom: 18px;
+  background: var(--face); box-shadow: 0 8px 0 var(--edge), 0 13px 18px oklch(25% 0.05 265 / .20);
+  display: flex; align-items: center; justify-content: center; }
+.trail-disc::before { content: ''; position: absolute; top: 7px; left: 12px; width: 38px; height: 17px;
+  background: oklch(100% 0 0 / .34); border-radius: 50%; transform: rotate(-16deg); }
+.trail-disc svg { position: relative; z-index: 1; }
+.trail-check { position: absolute; bottom: -4px; right: -6px; width: 26px; height: 26px; border-radius: 50%;
+  background: oklch(97% 0.01 265); color: oklch(40% 0.07 265); font-size: 14px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 0 oklch(80% 0.02 265); z-index: 2; }
+.trail-label { max-width: 150px; text-align: center; font-size: 13px; font-weight: 800; line-height: 1.25; text-wrap: pretty; }
+.trail-meta { margin-top: 2px; font-size: 11px; font-weight: 700; }
+.trail-loc { display: inline-flex; align-items: center; gap: 3px; margin-top: 1px; padding: 0; background: none;
+  font-size: 11px; font-weight: 700; letter-spacing: .01em; color: oklch(52% 0.03 250); text-align: left; }
+.trail-loc i { font-style: normal; font-weight: 800; color: oklch(56% 0.10 250); }
+
+/* ── Today/Week top header (redesign): avatar · weather+location · streak+XP ── */
+.thead { display: flex; align-items: center; gap: 10px; padding: 8px 20px 10px; }
+.thead-avatar { width: 36px; height: 36px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center;
+  justify-content: center; background: oklch(78% 0.16 64); box-shadow: 0 3px 0 oklch(62% 0.15 60); }
+.thead-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.2; }
+.thead-wx { font-family: var(--display); font-size: 14px; font-weight: 800; color: oklch(40% 0.06 250);
+  display: flex; align-items: center; gap: 5px; }
+.thead-loc, .thead-set { display: inline-flex; align-items: center; gap: 3px; padding: 0; background: none;
+  font-size: 11px; font-weight: 700; color: oklch(52% 0.03 250); text-align: left; }
+.thead-set { font-size: 12.5px; }
+.thead-loc i, .thead-set i { font-style: normal; font-weight: 800; letter-spacing: .04em; color: oklch(50% 0.10 255); }
+.thead-pills { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.thead-pill { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px;
+  font-family: var(--display); font-weight: 800; font-size: 13px; }
+.thead-streak { background: oklch(90% 0.03 40); color: oklch(35% 0.10 40); }
+.thead-xp { background: oklch(90% 0.05 95); color: oklch(38% 0.11 95); }
+
+/* ── ＋ FAB (log something) + coach bay (Cadence avatar in the crescent) ── */
+.fab { position: absolute; right: 18px; bottom: 92px; width: 56px; height: 56px; border-radius: 50%; z-index: 7;
+  background: oklch(66% 0.14 258); border: none; color: #fff; font-size: 26px; font-weight: 700; cursor: pointer;
+  line-height: 1; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 0 oklch(50% 0.14 260), 0 10px 18px oklch(20% 0.06 265 / 0.35); }
+.trail-bay { position: absolute; top: 40%; width: 128px; z-index: 3; display: flex; flex-direction: column; gap: 8px; }
+.trail-bay.is-left { left: 16px; align-items: flex-start; }
+.trail-bay.is-right { right: 16px; align-items: flex-end; }
+.trail-bay-mark { width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(165deg, oklch(62% 0.08 152) 0%, oklch(48% 0.08 152) 60%);
+  box-shadow: 0 6px 0 oklch(36% 0.07 152), 0 10px 16px oklch(25% 0.05 265 / 0.25); }
+.trail-bay-bubble { position: relative; border: none; cursor: pointer; background: #fff; border-radius: 14px; padding: 10px 12px;
+  font-size: 11.5px; font-weight: 800; color: oklch(34% 0.03 152); line-height: 1.35; max-width: 128px;
+  box-shadow: 0 3px 0 oklch(88% 0.02 85), 0 6px 14px oklch(30% 0.03 265 / 0.12); }
+.trail-bay.is-left .trail-bay-bubble { text-align: left; }
+.trail-bay.is-right .trail-bay-bubble { text-align: right; }
+.trail-bay-bubble::before { content: ''; position: absolute; top: -6px; width: 12px; height: 12px; background: #fff; transform: rotate(45deg); }
+.trail-bay.is-left .trail-bay-bubble::before { left: 14px; }
+.trail-bay.is-right .trail-bay-bubble::before { right: 14px; }
+
+/* ── Trail celestial layers: sun/horizon/moon glows + twinkling stars ── */
+@keyframes twinkle { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.9; } }
+.trail-daylabel { position: relative; z-index: 2; }
+.trail-nodes { position: relative; z-index: 1; }
+.trail-sun { position: absolute; top: 36px; right: -26px; width: 120px; height: 120px; border-radius: 50%; z-index: 0;
+  background: radial-gradient(circle, oklch(93% 0.14 88) 0%, oklch(93% 0.14 88 / 0.45) 55%, oklch(93% 0.14 88 / 0) 72%); }
+.trail-horizon { position: absolute; top: 5%; left: 50%; width: 230px; height: 120px; margin-left: -115px; border-radius: 50%; z-index: 0;
+  background: radial-gradient(ellipse, oklch(97% 0.12 72) 0%, oklch(92% 0.14 56 / 0.5) 45%, oklch(90% 0.14 45 / 0) 75%); }
+.trail-sundisc { position: absolute; top: 12.5%; left: 50%; width: 78px; height: 78px; margin-left: -39px; border-radius: 50%; z-index: 0;
+  background: radial-gradient(circle, oklch(99% 0.06 88) 0%, oklch(95% 0.13 72) 60%, oklch(93% 0.14 62 / 0) 78%); }
+.trail-moon { position: absolute; bottom: 70px; left: -18px; width: 88px; height: 88px; border-radius: 50%; z-index: 0;
+  background: radial-gradient(circle, oklch(96% 0.03 265) 0%, oklch(96% 0.03 265 / 0.28) 48%, oklch(96% 0.03 265 / 0) 70%); }
+.trail-stars { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; z-index: 0; pointer-events: none; }
+.trail-star { position: absolute; border-radius: 50%; background: #fff;
+  animation-name: twinkle; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+
+/* ── Redesign task start sheet (StartSheet) ── */
+.ss { padding: 20px 20px 26px; }
+.ss-head { display: flex; align-items: center; gap: 13px; margin-bottom: 2px; }
+.ss-disc { width: 56px; height: 50px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 19px; background: linear-gradient(168deg, oklch(70% 0.12 60) 0%, oklch(60% 0.14 55) 52%);
+  box-shadow: 0 5px 0 oklch(50% 0.13 52); }
+.ss-headt { display: flex; flex-direction: column; min-width: 0; }
+.ss-headt b { font-family: var(--display); font-size: 19px; font-weight: 700; color: oklch(28% 0.02 150); line-height: 1.2; }
+.ss-headt span { font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; color: oklch(52% 0.02 120); margin-top: 3px; }
+.ss-steps { display: flex; flex-direction: column; gap: 7px; margin: 16px 0 4px; max-height: 38vh; overflow-y: auto; }
+.ss-step { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid oklch(91% 0.015 85); border-radius: 12px; padding: 10px 12px; }
+.ss-dot { width: 6px; height: 6px; border-radius: 50%; background: oklch(70% 0.14 60); flex: 0 0 auto; }
+.ss-step-t { flex: 1; font-size: 13px; font-weight: 700; color: oklch(32% 0.02 150); }
+.ss-step-m { font-size: 11.5px; font-weight: 700; color: oklch(58% 0.02 120); }
+.ss-btn { width: 100%; border: none; border-radius: 16px; padding: 15px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; margin-top: 10px; }
+.ss-start { background: linear-gradient(180deg, oklch(60% 0.10 152) 0%, oklch(52% 0.09 152) 46%); box-shadow: 0 5px 0 oklch(39% 0.08 152); }
+.ss-less { background: linear-gradient(180deg, oklch(70% 0.08 250) 0%, oklch(62% 0.08 250) 46%); box-shadow: 0 5px 0 oklch(47% 0.08 250); }
+/* "I have less time" → the time-definition step (33% / 66% / other, deterministically trimmed). */
+.ss-timeask { margin-top: 12px; }
+.ss-timeask-q { font-size: 14px; font-weight: 800; color: oklch(30% 0.02 150); margin-bottom: 10px; }
+.ss-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.ss-chip { flex: 1 1 0; min-width: 84px; border: none; border-radius: 14px; padding: 14px 12px; font-size: 14px; font-weight: 800;
+  color: #fff; cursor: pointer; background: linear-gradient(180deg, oklch(70% 0.08 250) 0%, oklch(62% 0.08 250) 46%);
+  box-shadow: 0 4px 0 oklch(47% 0.08 250); }
+.ss-chip:disabled { opacity: 0.5; box-shadow: none; cursor: default; }
+.ss-custom { display: flex; gap: 8px; margin-top: 8px; }
+.ss-custom-in { flex: 1; min-width: 0; border: 1px solid oklch(89% 0.015 85); border-radius: 12px; padding: 12px 13px;
+  font-size: 14px; font-weight: 700; color: oklch(28% 0.02 150); background: #fff; }
+.ss-back { margin-top: 12px; background: none; border: none; padding: 4px; font-size: 13px; font-weight: 700;
+  color: oklch(52% 0.03 250); cursor: pointer; }
+
+/* Capture-sheet head discs — meal (green) + weigh-in (blue), overriding the orange start disc. */
+.ss-disc-meal { background: linear-gradient(168deg, oklch(74% 0.13 150) 0%, oklch(60% 0.13 152) 52%); box-shadow: 0 5px 0 oklch(48% 0.12 152); }
+.ss-disc-weigh { background: linear-gradient(168deg, oklch(72% 0.10 250) 0%, oklch(60% 0.11 250) 52%); box-shadow: 0 5px 0 oklch(46% 0.10 250); }
+
+/* ── "Log something you did" sheet (the goal-aware ＋) ── */
+.ld-head { display: flex; flex-direction: column; gap: 3px; margin-bottom: 4px; }
+.ld-head b { font-family: var(--display); font-size: 19px; font-weight: 700; color: oklch(28% 0.02 150); }
+.ld-head span { font-size: 12.5px; font-weight: 600; color: oklch(52% 0.02 120); line-height: 1.3; }
+.ld-list { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 4px; max-height: 44vh; overflow-y: auto; }
+.ld-empty { font-size: 13px; font-weight: 600; color: oklch(52% 0.02 120); padding: 10px 2px; }
+.ld-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: #fff;
+  border: 1px solid oklch(91% 0.015 85); border-radius: 14px; padding: 10px 12px; cursor: pointer; }
+.ld-row:disabled { opacity: 0.6; cursor: default; }
+.ld-ic { width: 40px; height: 40px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 3px 0 oklch(0% 0 0 / 0.10); }
+.ld-ic-movement { background: linear-gradient(168deg, oklch(76% 0.15 55), oklch(64% 0.15 50)); }
+.ld-ic-nutrition { background: linear-gradient(168deg, oklch(74% 0.13 150), oklch(60% 0.13 152)); }
+.ld-ic-mindset { background: linear-gradient(168deg, oklch(84% 0.13 90), oklch(72% 0.14 78)); }
+.ld-ic-reflection { background: linear-gradient(168deg, oklch(66% 0.13 268), oklch(54% 0.14 266)); }
+.ld-row-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ld-row-t b { font-size: 14px; font-weight: 800; color: oklch(30% 0.02 150); line-height: 1.25; }
+.ld-row-t span { font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; color: oklch(56% 0.02 120); margin-top: 1px; }
+.ld-plus { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: oklch(95% 0.02 150); color: oklch(48% 0.10 150); font-size: 15px; font-weight: 900; }
+.ld-free { display: flex; gap: 8px; margin-top: 12px; }
+.ld-input { flex: 1; min-width: 0; border: 1px solid oklch(89% 0.015 85); border-radius: 12px; padding: 12px 13px; font-size: 14px;
+  font-weight: 600; color: oklch(28% 0.02 150); background: #fff; }
+.ld-input::placeholder { color: oklch(64% 0.02 120); font-weight: 600; }
+.ld-log { flex: 0 0 auto; border: none; border-radius: 12px; padding: 0 18px; font-size: 14px; font-weight: 900; color: #fff; cursor: pointer;
+  background: linear-gradient(180deg, oklch(60% 0.10 152), oklch(52% 0.09 152)); box-shadow: 0 4px 0 oklch(39% 0.08 152); }
+.ld-log:disabled { opacity: 0.5; cursor: default; box-shadow: none; }

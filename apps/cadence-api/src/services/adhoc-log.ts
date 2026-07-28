@@ -1,6 +1,6 @@
 import type { OccurrenceLog } from '@cadence/shared';
 import { getActivePlan } from '../repos/plans.ts';
-import { getOrCreateAdhocActivity } from '../repos/activities.ts';
+import { getOrCreateAdhocActivity, getUserActivity } from '../repos/activities.ts';
 import { getOrInsertOccurrenceId } from '../repos/occurrences.ts';
 import { logOccurrence } from './session-log.ts';
 
@@ -49,4 +49,30 @@ export async function logAdhocActivity(
   const activity = await getOrCreateAdhocActivity(userId, plan.plan_id);
   const occurrenceId = await getOrInsertOccurrenceId(activity.activity_id, userId, dateIso);
   return logOccurrence(userId, occurrenceId, text);
+}
+
+/**
+ * The goal-aware half of the "＋": log a PLANNED activity the user actually did. Unlike
+ * logAdhocActivity (generic Off-plan bucket), this credits the real activity — upserting a `done`
+ * occurrence for the day (default today) via the (activity_id, date) unique key — so it counts
+ * toward that goal's progression (history is keyed by title) AND consistency/the streak. This is
+ * the "did my Thursday workout on Wednesday" case: a done strength occurrence lands today; the
+ * still-scheduled future one is untouched. Text is optional (defaults to "Did {title}").
+ *
+ * Returns null when the activity isn't this user's, or the date is out of range (route → 404).
+ */
+export async function logPlannedActivity(
+  userId: string,
+  activityId: string,
+  text?: string,
+  date?: string,
+): Promise<{ log: OccurrenceLog; summary: string } | null> {
+  const dateIso = resolveAdhocDate(date, Date.now());
+  if (!dateIso) return null;
+
+  const activity = await getUserActivity(userId, activityId);
+  if (!activity) return null;
+
+  const occurrenceId = await getOrInsertOccurrenceId(activity.activity_id, userId, dateIso);
+  return logOccurrence(userId, occurrenceId, text?.trim() || `Did ${activity.title}`);
 }

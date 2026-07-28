@@ -65,6 +65,23 @@ export async function listOccurrences(userId: string, fromDate: string, toDate: 
     where user_id = ${userId} and date >= ${fromDate} and date <= ${toDate}`;
 }
 
+/** Step counts (total prescribed items across a cached session's blocks) for occurrences in a range
+ *  that already have a session — powers the trail's step ring in the plan view WITHOUT loading the
+ *  full session jsonb into the app (a server-side jsonb count). Occurrences without a session are
+ *  omitted (no ring until the coach has programmed the session). */
+export async function listSessionStepCounts(
+  userId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<Array<{ occurrence_id: string; steps: number }>> {
+  return sql<Array<{ occurrence_id: string; steps: number }>>`
+    select o.occurrence_id,
+      coalesce((select sum(jsonb_array_length(b->'items'))
+                from jsonb_array_elements(o.session->'blocks') b), 0)::int as steps
+    from cadence.occurrences o
+    where o.user_id = ${userId} and o.date >= ${fromDate} and o.date <= ${toDate} and o.session is not null`;
+}
+
 /**
  * Today's pending "Food log" system row, if any — the deterministic anchor the nutrition module
  * ticks when the first meal of the day is logged (mirrors the weigh-in title-test pattern).
@@ -76,6 +93,23 @@ export async function findPendingFoodLogOccurrence(userId: string, date: string)
     join cadence.activities a on a.activity_id = o.activity_id
     where o.user_id = ${userId} and o.date = ${date} and o.status = 'pending'
       and a.kind = 'system' and a.title ~* 'food|meal|nutrition'
+    limit 1`;
+  return row?.occurrence_id ?? null;
+}
+
+/**
+ * Today's pending meal-log system row for a specific meal (breakfast/lunch/dinner/snack) — the
+ * redesign's per-meal tasks. `drink`/`other` (and any non-meal value) return null; the caller then
+ * falls back to findPendingFoodLogOccurrence for plans that predate the per-meal split.
+ */
+export async function findPendingMealOccurrence(userId: string, date: string, meal: string): Promise<string | null> {
+  if (!/^(breakfast|lunch|dinner|snack)$/.test(meal)) return null;
+  const [row] = await sql<{ occurrence_id: string }[]>`
+    select o.occurrence_id
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and o.date = ${date} and o.status = 'pending'
+      and a.kind = 'system' and a.title ~* ${meal}
     limit 1`;
   return row?.occurrence_id ?? null;
 }

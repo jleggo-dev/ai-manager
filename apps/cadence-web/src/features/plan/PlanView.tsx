@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { OccurrenceSheet } from './OccurrenceSheet.tsx';
+import { StartSheet } from './StartSheet.tsx';
+import { CaptureSheet } from './CaptureSheet.tsx';
 import { AdjustSheet } from './AdjustSheet.tsx';
-import { TodayDashboard } from '../today/TodayDashboard.tsx';
+import { taskOpener } from './taskShape.ts';
+import { TodayTrail } from '../today/TodayTrail.tsx';
+import { TrailHeader } from '../today/TrailHeader.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
 import { PlanWeekPanel } from './PlanWeekPanel.tsx';
 import {
@@ -39,24 +43,27 @@ function detourLabel(type: ActiveEpisode['type']): string {
  * that pops the AdjustSheet: steer → preview → confirm) — suggest-never-auto-apply as always.
  * `reloadKey` bumps when a log/meal/adjust lands so the dashboard's aux fetches refresh.
  */
-export function PlanView() {
+export function PlanView({ onCoach, reloadSignal }: { onCoach: () => void; reloadSignal?: number }) {
   const [data, setData] = useState<PlanViewData | null>(null);
   const [view, setView] = useState<'today' | 'week'>('today');
   const [note, setNote] = useState('');
   const [proposalBusy, setProposalBusy] = useState(false);
   const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)
+  const [startOcc, setStartOcc] = useState<string | null>(null); // redesign start sheet (stepped task)
+  const [captureOcc, setCaptureOcc] = useState<string | null>(null); // capture sheet (weigh-in / meal)
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSteer, setAdjustSteer] = useState(''); // pre-filled request (nutrition baseline → Adjust)
   const [adjustMode, setAdjustMode] = useState<'adjust' | 'rebalance'>('adjust');
-  const [reloadKey, setReloadKey] = useState(0); // bumps → dashboard refetches /progress + /nutrition/day
+  const [, setReloadKey] = useState(0); // bumps → aux refetch after a log/adjust (kept for callbacks)
 
+  // Refetch on mount AND whenever the parent bumps reloadSignal (a ＋ FAB log just landed).
   useEffect(() => {
     getPlan()
       .then(setData)
       .catch(() =>
         setData({ hasPlan: false, stage: 'new', activities: [], week: [], consistency: { kept: 0, window: 7 } }),
       );
-  }, []);
+  }, [reloadSignal]);
 
   const refresh = () =>
     getPlan()
@@ -161,9 +168,17 @@ export function PlanView() {
   const today = data.week.find((d) => d.isToday);
   const rest = data.week.filter((d) => !d.isToday);
   const { kept, window } = data.consistency;
+  const doneCount = data.week.reduce((n, d) => n + d.occurrences.filter((o) => o.status === 'done').length, 0);
+  const xp = doneCount * 10; // stopgap XP until the REQ8 points finalize is wired to the plan response
+
+  // Trail node tap → routed by task shape: captures (weigh-in, meals) open the minimal CaptureSheet;
+  // coach sessions open the StartSheet walkthrough. (The Week view keeps its own OccurrenceSheet.)
+  const openTask = (occ: PlanOccurrence) =>
+    taskOpener(occ) === 'task' ? setStartOcc(occ.occurrence_id) : setCaptureOcc(occ.occurrence_id);
 
   return (
     <>
+      <TrailHeader streak={data.streak?.current ?? 0} xp={xp} />
       <div className="seg" role="tablist" aria-label="Today or week">
         <button
           className={`seg-btn${view === 'today' ? ' seg-on' : ''}`}
@@ -213,7 +228,7 @@ export function PlanView() {
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
         {view === 'today' ? (
-          <TodayDashboard plan={data} reloadKey={reloadKey} onCheck={set} onOpen={setSheetOcc} />
+          <TodayTrail plan={data} onOpen={openTask} onCoach={onCoach} />
         ) : (
           <PlanWeekPanel
             today={today}
@@ -249,6 +264,32 @@ export function PlanView() {
           onProposeChange={(steer) => {
             // Baseline → Adjust bridge: the suggested change rides the normal steer→preview→confirm flow.
             setSheetOcc(null);
+            setAdjustSteer(steer);
+            setAdjustMode('adjust');
+            setAdjustOpen(true);
+          }}
+        />
+      )}
+      {startOcc && (
+        <StartSheet
+          occurrenceId={startOcc}
+          onClose={() => setStartOcc(null)}
+          onLogged={() => {
+            refresh();
+            bump();
+          }}
+        />
+      )}
+      {captureOcc && (
+        <CaptureSheet
+          occurrenceId={captureOcc}
+          onClose={() => setCaptureOcc(null)}
+          onLogged={() => {
+            refresh();
+            bump();
+          }}
+          onProposeChange={(steer) => {
+            setCaptureOcc(null);
             setAdjustSteer(steer);
             setAdjustMode('adjust');
             setAdjustOpen(true);

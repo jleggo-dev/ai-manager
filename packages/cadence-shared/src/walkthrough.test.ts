@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { OccurrenceSession } from './types/occurrence.ts';
+import type { OccurrenceSession, SessionItem } from './types/occurrence.ts';
 import { deriveWalkthrough, condense, inferTool, stepCaptureMode } from './walkthrough.ts';
 
 /** The redesign's canonical example: "Easy run (zone 2)" — 4 steps, 30 min total, condenses to 13. */
@@ -105,6 +105,54 @@ describe('deriveWalkthrough', () => {
 
   it('is deterministic — same session projects to an identical walkthrough', () => {
     expect(deriveWalkthrough(runSession)).toEqual(deriveWalkthrough(runSession));
+  });
+});
+
+describe('deriveWalkthrough — circuit blocks', () => {
+  const circuitItems: SessionItem[] = [
+    { name: 'Band pull-aparts', sets: 2, reps: 15, load: 'light band' },
+    { name: 'Plank', sets: 2, duration_min: 1 },
+  ];
+  const circuitSession: OccurrenceSession = {
+    blocks: [{ label: 'Conditioning circuit', mode: 'circuit', items: circuitItems }],
+    note: '',
+    generated_at: '2026-07-28T00:00:00.000Z',
+    version: 1,
+  };
+
+  it('projects a circuit block to ONE step whose tool rotates the items (reps vs timed hold)', () => {
+    const w = deriveWalkthrough(circuitSession);
+    expect(w.steps).toHaveLength(1);
+    expect(w.steps[0]?.title).toBe('Conditioning circuit');
+    expect(w.steps[0]?.tool).toEqual({
+      kind: 'circuit',
+      rounds: 2,
+      exercises: [
+        { name: 'Band pull-aparts', reps: 15, load: 'light band' },
+        { name: 'Plank', seconds: 60 },
+      ],
+    });
+  });
+
+  it("defaults rounds to the items' max sets, and honors an explicit rounds", () => {
+    expect(deriveWalkthrough(circuitSession).steps[0]?.tool).toMatchObject({ rounds: 2 });
+    const explicit = deriveWalkthrough({
+      ...circuitSession,
+      blocks: [{ label: 'Conditioning circuit', mode: 'circuit', rounds: 3, items: circuitItems }],
+    });
+    expect(explicit.steps[0]?.tool).toMatchObject({ rounds: 3 });
+  });
+
+  it('leaves a straight block (no mode) flattened, one step per item', () => {
+    const straight = deriveWalkthrough({
+      ...circuitSession,
+      blocks: [{ label: 'Main', items: circuitItems }],
+    });
+    expect(straight.steps.map((s) => s.title)).toEqual(['Band pull-aparts', 'Plank']);
+  });
+
+  it('captures structured data (the rounds done)', () => {
+    expect(stepCaptureMode({ kind: 'circuit', rounds: 2, exercises: [] })).toBe('structured');
   });
 });
 

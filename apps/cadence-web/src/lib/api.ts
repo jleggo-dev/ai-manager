@@ -32,6 +32,7 @@ export {
   getPlan,
   setOccurrence,
   logAdhoc,
+  logDid,
   enterEpisode,
   endEpisode,
   checkin,
@@ -188,6 +189,9 @@ export {
   saveHomeLocation,
   clearHomeLocation,
   browserTimezone,
+  getWeather,
+  getTodayBrief,
   type HomeLocation,
   type LocationResult,
+  type WeatherNow,
 } from './api/location.ts';

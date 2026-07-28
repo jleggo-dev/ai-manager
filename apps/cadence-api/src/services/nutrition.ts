@@ -20,6 +20,7 @@ import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, setMacroTargets } from '../repos/users.ts';
 import {
   findPendingFoodLogOccurrence,
+  findPendingMealOccurrence,
   setOccurrenceStatus,
   listDoneUserOccurrencesForDay,
   listWeighInSeries,
@@ -43,12 +44,16 @@ export type { NutritionInsightPack } from './nutrition-insight.ts';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
-async function tickFoodLogOccurrence(userId: string, date: string): Promise<void> {
+async function tickFoodLogOccurrence(userId: string, date: string, meal?: string): Promise<void> {
   try {
-    const occId = await findPendingFoodLogOccurrence(userId, date);
+    // Prefer the specific meal task (the redesign's per-meal logs); fall back to the single "Food
+    // log" row for plans that predate the split, and for drink/other which map to no meal task.
+    const occId =
+      (meal ? await findPendingMealOccurrence(userId, date, meal) : null) ??
+      (await findPendingFoodLogOccurrence(userId, date));
     if (occId) await setOccurrenceStatus(userId, occId, 'done');
   } catch (e) {
-    console.warn('[nutrition] food-log occurrence tick failed:', e);
+    console.warn('[nutrition] meal-log occurrence tick failed:', e);
   }
 }
 
@@ -141,7 +146,7 @@ export async function logMeal(
     provisional,
   });
 
-  await tickFoodLogOccurrence(userId, date);
+  await tickFoodLogOccurrence(userId, date, meal);
 
   void logAi(userId, {
     kind: 'parse_meal',

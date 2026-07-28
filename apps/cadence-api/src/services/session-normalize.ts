@@ -21,6 +21,12 @@ const SESSION_TOOLS: ReadonlySet<string> = new Set(['read', 'timer', 'reps', 'ch
 export const toolOf = (v: unknown): SessionItemTool | undefined =>
   typeof v === 'string' && SESSION_TOOLS.has(v) ? (v as SessionItemTool) : undefined;
 
+const BLOCK_MODES: ReadonlySet<string> = new Set(['straight', 'circuit']);
+
+/** Whitelist the coach's block set-flow (REQ8 slice 2) — off-catalog → undefined (= straight). */
+export const modeOf = (v: unknown): 'straight' | 'circuit' | undefined =>
+  typeof v === 'string' && BLOCK_MODES.has(v) ? (v as 'straight' | 'circuit') : undefined;
+
 /**
  * App-side contract assertion: coerce whatever the model returned into a bounded,
  * render-safe OccurrenceSession — or null if there's nothing usable.
@@ -32,7 +38,7 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
   const blocks: SessionBlock[] = (raw.blocks as unknown[])
     .slice(0, MAX_BLOCKS)
     .map((b): SessionBlock | null => {
-      const blk = b as { label?: unknown; items?: unknown };
+      const blk = b as { label?: unknown; items?: unknown; mode?: unknown; rounds?: unknown };
       if (!blk || !Array.isArray(blk.items)) return null;
       const items: SessionItem[] = (blk.items as unknown[])
         .slice(0, MAX_ITEMS)
@@ -55,7 +61,13 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
         })
         .filter((i): i is SessionItem => i !== null);
       if (items.length === 0) return null;
-      return { label: str(blk.label, 40) ?? 'Session', items };
+      const block: SessionBlock = { label: str(blk.label, 40) ?? 'Session', items };
+      const mode = modeOf(blk.mode);
+      if (mode) block.mode = mode;
+      // Rounds only mean something for a circuit; cap so a bad number can't balloon the player.
+      const rounds = num(blk.rounds);
+      if (mode === 'circuit' && rounds) block.rounds = Math.min(10, Math.round(rounds));
+      return block;
     })
     .filter((b): b is SessionBlock => b !== null);
   if (blocks.length === 0) return null;
