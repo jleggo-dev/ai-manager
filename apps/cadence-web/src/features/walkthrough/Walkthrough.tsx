@@ -119,7 +119,9 @@ export function Walkthrough({
         </div>
       </div>
 
-      <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <div
+        style={{ marginTop: 20, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto' }}
+      >
         {step.tool.kind === 'circuit' ? (
           <StepCircuit
             step={step}
@@ -134,7 +136,7 @@ export function Walkthrough({
         ) : (
           <>
             <StepHeader step={step} />
-            <div style={{ marginTop: 18 }}>{renderTool(step, logs, setLog, next)}</div>
+            <div style={{ marginTop: 18 }}>{renderTool(step, logs, setLog, next, steps[idx + 1]?.title)}</div>
           </>
         )}
       </div>
@@ -201,6 +203,7 @@ function renderTool(
   logs: StepLogs,
   setLog: (id: string, l: StepLog) => void,
   onAdvance: () => void,
+  nextTitle?: string,
 ): ReactNode {
   const t = step.tool;
   const log = logs[step.id];
@@ -220,6 +223,7 @@ function renderTool(
         <StepTimer
           seconds={t.seconds}
           chime={t.chime ?? true}
+          nextTitle={nextTitle}
           log={log?.kind === 'timer' ? log : undefined}
           onLog={(l) => setLog(step.id, l)}
           onDone={onAdvance}

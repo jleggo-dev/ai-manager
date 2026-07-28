@@ -16,6 +16,7 @@ const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, 
 export function StepTimer({
   seconds,
   chime,
+  nextTitle,
   log,
   onLog,
   onDone,
@@ -69,18 +70,20 @@ export function StepTimer({
       >
         <svg width="190" height="190" viewBox="0 0 128 128" style={{ position: 'absolute' }} aria-hidden>
           <circle cx="64" cy="64" r="54" fill="none" strokeWidth={13} stroke={TONE.track} />
-          <circle
-            cx="64"
-            cy="64"
-            r="54"
-            fill="none"
-            strokeWidth={13}
-            strokeLinecap="round"
-            stroke={TONE.fillA}
-            strokeDasharray={`${RING_C * frac} ${RING_C}`}
-            transform="rotate(-90 64 64)"
-            style={{ transition: 'stroke-dasharray 1s linear' }}
-          />
+          {frac > 0 && (
+            <circle
+              cx="64"
+              cy="64"
+              r="54"
+              fill="none"
+              strokeWidth={13}
+              strokeLinecap="round"
+              stroke={TONE.fillA}
+              strokeDasharray={`${RING_C * frac} ${RING_C}`}
+              transform="rotate(-90 64 64)"
+              style={{ transition: 'stroke-dasharray 1s linear' }}
+            />
+          )}
         </svg>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
           <div
@@ -141,7 +144,8 @@ export function StepTimer({
           color: 'oklch(48% 0.02 150)',
         }}
       >
-        Logs {Math.round(seconds / 60) || 1} min and moves on when it ends. Pausing keeps the time you&apos;ve done.
+        Logs {Math.round(seconds / 60) || 1} min and {nextTitle ? `moves to ${nextTitle} on its own` : 'moves on'} when
+        it ends. Pausing keeps the time you&apos;ve done.
       </div>
     </div>
   );
