@@ -1,102 +1,242 @@
 import { useState, type CSSProperties } from 'react';
+import type { StepLog } from '../state.ts';
+import { TONE, RING_C } from './tone.ts';
 
-const FOREST = 'var(--forest, #3f7a52)';
-const MUTED = 'rgba(0,0,0,0.10)';
+const GAP = 10;
+type RepsLog = Extract<StepLog, { kind: 'reps' }>;
 
 /**
- * The **reps** tool (REQ8 slice 2 — sets/reps as first-class). A set-based exercise is done one set
- * at a time: the segmented ring is the SETS, filling as each lands, with "Set N of M" in the middle.
- * "Done set" ticks a segment; the last one completes the ring. It captures "N/M sets × reps @ load"
- * into the step note so the sets you actually did flow to the log (the adaptation signal) — doing
- * fewer than prescribed is honest data, not a failure. It does NOT auto-advance; the shell's Next
- * moves to the next exercise, so you control the rest between exercises.
+ * Reps tool (walkthrough v2, design A). The ring is the sets; the centre count is editable via the
+ * flanking − / + dial; the delta line doubles as the reset-to-target control; the ONE tone button
+ * logs the number it names ("Log set 3 · 12 reps"). A fresh set opens at what you logged last (set 1
+ * at target), so the common case is repeating reality. Tap a logged chip to re-open + edit it. Every
+ * write goes through `onLog` — moving between steps logs nothing.
  */
 export function StepReps({
   sets,
-  reps,
+  reps: target,
   load,
-  setNote,
+  log,
+  onLog,
 }: {
   sets: number;
   reps?: number;
   load?: string;
-  setNote: (s: string) => void;
+  log?: RepsLog;
+  onLog: (l: RepsLog) => void;
 }) {
-  const [done, setDone] = useState(0);
-  const complete = done >= sets;
-  const current = Math.min(done + 1, sets);
+  const logged = log?.sets ?? [];
+  const [editing, setEditing] = useState<number | null>(null);
+  const [dial, setDial] = useState<number | null>(null);
 
-  function tick() {
-    if (complete) return;
-    const next = done + 1;
-    setDone(next);
-    const suffix = [reps != null ? `× ${reps}` : '', load ? `@ ${load}` : ''].filter(Boolean).join(' ');
-    setNote(`${next}/${sets} set${sets === 1 ? '' : 's'}${suffix ? ` ${suffix}` : ''}`);
+  const fallback = target ?? 10;
+  const carry = editing != null ? (logged[editing] ?? fallback) : logged.length ? logged[logged.length - 1]! : fallback;
+  const reps = dial == null ? carry : dial;
+  const setNum = editing != null ? editing + 1 : Math.min(logged.length + 1, sets);
+  const full = logged.length >= sets && editing == null;
+
+  const bump = (d: number) => setDial(Math.max(0, Math.min(99, reps + d)));
+  function commit() {
+    if (editing != null) {
+      const next = logged.slice();
+      next[editing] = reps;
+      onLog({ kind: 'reps', sets: next, target, load });
+      setEditing(null);
+    } else if (logged.length < sets) {
+      onLog({ kind: 'reps', sets: [...logged, reps], target, load });
+    }
+    setDial(null);
   }
 
+  const delta = target != null ? reps - target : 0;
+  const deltaLabel =
+    delta === 0
+      ? 'On target'
+      : delta > 0
+        ? `+${delta} over target · reset to ${target}`
+        : `${delta} under target · reset to ${target}`;
+
+  const seg = RING_C / sets;
+  const arc = Math.max(2, seg - GAP);
+
   return (
-    <div style={wrap}>
-      <div style={{ position: 'relative', width: 132, height: 132 }}>
-        <svg width="132" height="132" viewBox="0 0 132 132" aria-hidden>
-          {Array.from({ length: sets }).map((_, i) => {
-            const seg = 100 / sets;
-            const len = Math.max(2, seg - (sets > 1 ? 4 : 0.5));
-            return (
-              <circle
-                key={i}
-                cx="66"
-                cy="66"
-                r="58"
-                fill="none"
-                pathLength={100}
-                stroke={i < done ? FOREST : MUTED}
-                strokeWidth={9}
-                strokeLinecap="round"
-                strokeDasharray={`${len} ${100 - len}`}
-                strokeDashoffset={-(i * seg)}
-                transform="rotate(-90 66 66)"
-                style={{ transition: 'stroke 0.25s' }}
-              />
-            );
-          })}
+    <div style={card}>
+      <div
+        style={{ position: 'relative', height: 158, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <svg width="158" height="158" viewBox="0 0 128 128" style={{ position: 'absolute' }} aria-hidden>
+          {Array.from({ length: sets }).map((_, i) => (
+            <circle
+              key={i}
+              cx="64"
+              cy="64"
+              r="54"
+              fill="none"
+              strokeWidth={13}
+              strokeLinecap="round"
+              stroke={i < logged.length ? TONE.deep : TONE.track}
+              strokeDasharray={`${arc} ${RING_C - arc}`}
+              strokeDashoffset={-(i * seg)}
+              transform="rotate(-90 64 64)"
+            />
+          ))}
         </svg>
-        <div style={ringCenter}>
-          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', color: FOREST }}>SET</div>
-          <div style={{ fontSize: 36, fontWeight: 900, lineHeight: 1 }}>
-            {current}
-            <span style={{ fontSize: 15, fontWeight: 700, opacity: 0.45 }}>/{sets}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+          <div style={eyebrow}>
+            Set {setNum} of {sets}
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--display), serif',
+              fontWeight: 600,
+              fontSize: 46,
+              lineHeight: 1.05,
+              color: TONE.ink,
+            }}
+          >
+            {reps}
+          </div>
+          <div
+            style={{
+              fontSize: 10.5,
+              fontWeight: 800,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: TONE.sub,
+            }}
+          >
+            reps done
           </div>
         </div>
+        <button onClick={() => bump(-1)} disabled={full} style={{ ...dialBtn, left: 6 }} aria-label="one fewer rep">
+          −
+        </button>
+        <button onClick={() => bump(1)} disabled={full} style={{ ...dialBtn, right: 6 }} aria-label="one more rep">
+          +
+        </button>
       </div>
-      {(reps != null || load) && (
-        <div className="prog-sub">{[reps != null ? `${reps} reps` : '', load].filter(Boolean).join(' · ')}</div>
+
+      {target != null && !full && (
+        <div
+          onClick={() => setDial(target)}
+          style={{
+            textAlign: 'center',
+            fontSize: 11.5,
+            fontWeight: 800,
+            color: delta === 0 ? TONE.green : TONE.off,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {deltaLabel}
+        </div>
       )}
-      <button style={{ ...btn, ...(complete ? btnDone : null) }} onClick={tick} disabled={complete}>
-        {complete ? '✓ All sets done' : done === sets - 1 ? 'Done — last set' : 'Done set'}
+
+      <button onClick={commit} disabled={full} style={{ ...logBtn, opacity: full ? 0.62 : 1 }}>
+        {full
+          ? `Sets logged · ${sets} of ${sets}`
+          : editing != null
+            ? `Save set ${editing + 1} · ${reps} reps`
+            : `Log set ${setNum} · ${reps} reps`}
       </button>
+
+      <div style={{ display: 'flex', gap: 6, borderTop: '1px solid oklch(93% 0.012 85)', paddingTop: 13 }}>
+        {Array.from({ length: sets }).map((_, i) => {
+          const done = i < logged.length;
+          const isCurrent = editing != null ? i === editing : i === logged.length;
+          const off = done && target != null && logged[i] !== target;
+          return (
+            <div
+              key={i}
+              onClick={
+                done
+                  ? () => {
+                      setEditing(i);
+                      setDial(logged[i]!);
+                    }
+                  : undefined
+              }
+              style={{
+                flex: 1,
+                textAlign: 'center',
+                borderRadius: 12,
+                padding: '8px 0',
+                background: done ? 'oklch(97% 0.02 74)' : 'white',
+                border: `1.5px solid ${done ? 'oklch(90% 0.05 70)' : isCurrent ? TONE.fillA : 'oklch(93% 0.012 85)'}`,
+                cursor: done ? 'pointer' : 'default',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 900,
+                  lineHeight: 1.1,
+                  color: done ? (off ? TONE.off : 'oklch(40% 0.06 62)') : 'oklch(78% 0.015 85)',
+                }}
+              >
+                {done ? logged[i] : isCurrent ? '·' : '—'}
+              </div>
+              <div
+                style={{
+                  fontSize: 9,
+                  fontWeight: 900,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: done ? 'oklch(52% 0.04 62)' : 'oklch(66% 0.015 85)',
+                }}
+              >
+                Set {i + 1}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-const wrap: CSSProperties = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 };
-const ringCenter: CSSProperties = {
-  position: 'absolute',
-  inset: 0,
+const card: CSSProperties = {
+  background: 'white',
+  border: '1px solid oklch(91% 0.015 85)',
+  borderRadius: 18,
+  padding: 18,
+  boxShadow: '0 1px 3px oklch(0% 0 0 / 0.04)',
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 2,
+  gap: 14,
 };
-const btn: CSSProperties = {
-  padding: '13px 26px',
-  borderRadius: 14,
+const eyebrow: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: '0.09em',
+  textTransform: 'uppercase',
+  color: TONE.sub,
+};
+const dialBtn: CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  width: 50,
+  height: 44,
   border: 'none',
+  borderRadius: 999,
+  background: 'linear-gradient(180deg,#fff 0%,oklch(96% 0.01 85) 46%)',
+  boxShadow: '0 4px 0 oklch(88% 0.02 85), 0 0 0 1px oklch(92% 0.015 85)',
+  fontSize: 24,
   fontWeight: 800,
-  fontSize: 15,
-  color: '#fff',
-  background: FOREST,
+  color: 'oklch(40% 0.02 150)',
   cursor: 'pointer',
-  minWidth: 190,
+  padding: 0,
+  lineHeight: 1,
 };
-const btnDone: CSSProperties = { background: 'rgba(0,0,0,0.12)', color: FOREST, cursor: 'default' };
+const logBtn: CSSProperties = {
+  border: 'none',
+  borderRadius: 16,
+  padding: 15,
+  fontSize: 15,
+  fontWeight: 900,
+  color: 'white',
+  cursor: 'pointer',
+  background: `linear-gradient(180deg, ${TONE.fillA} 0%, ${TONE.fillB} 46%)`,
+  boxShadow: `0 5px 0 ${TONE.deep}`,
+};
