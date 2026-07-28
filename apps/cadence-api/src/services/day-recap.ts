@@ -1,5 +1,5 @@
 /**
- * Today-screen day recap (REQ8 redesign) — ONE warm 5–10 word line shown after "It's {date} —".
+ * Today-screen day recap (REQ8 redesign) — ONE warm line (≤70 chars, two-line-safe) shown after "It's {date} —".
  * A Broker (gemini) job over today's weather + activity titles, CACHED per user + local date so it
  * generates at most once a day (instant + cheap on every open). Fire-safe: any failure returns null
  * and the header simply shows the date with no line. No new schema — the cache is process-local.
@@ -16,12 +16,29 @@ export function __clearDayRecapCacheForTests(): void {
   cache.clear();
 }
 
-/** Coerce the job's `{ recap }` into a bounded line, or null when there's nothing usable. */
+/**
+ * Sanity cap on recap length. The bubble ("It's {date} — {recap}") stays two lines via useFitText,
+ * which shrinks the whole line to fit — empirically a ~70-char recap plus the longest date still fits
+ * two lines at a readable ~11px. The job is told to aim for 45 (renders at full size); this only
+ * bites on a genuinely long line, trimming on a word boundary (no mid-word cut, no dangling punct)
+ * so the client-side shrink never has to drop below readable.
+ */
+const RECAP_MAX = 70;
+
+/** Trim to at most `max` chars without cutting a word, dropping any trailing separators. */
+export function clampLine(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.!—-]+$/, '');
+}
+
+/** Coerce the job's `{ recap }` into a bounded, two-line-safe line, or null when nothing's usable. */
 export function parseRecap(text: string): string | null {
   try {
     const o = JSON.parse(text) as { recap?: unknown };
     const r = typeof o.recap === 'string' ? o.recap.trim() : '';
-    return r ? r.slice(0, 120) : null;
+    return r ? clampLine(r, RECAP_MAX) : null;
   } catch {
     return null;
   }
