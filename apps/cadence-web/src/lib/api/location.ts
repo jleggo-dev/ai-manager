@@ -78,6 +78,17 @@ export async function getWeather(): Promise<WeatherNow> {
   }
 }
 
+/** GET /me/today-brief — the Today header's one-line day recap (cached per user+day). */
+export async function getTodayBrief(): Promise<{ recap: string | null }> {
+  try {
+    const res = await fetch(`${BASE}/me/today-brief`, { headers: headers() });
+    if (!res.ok) return { recap: null };
+    return (await res.json()) as { recap: string | null };
+  } catch {
+    return { recap: null };
+  }
+}
+
 /** Browser IANA timezone when available. */
 export function browserTimezone(): string | undefined {
   try {

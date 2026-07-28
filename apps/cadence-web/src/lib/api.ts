@@ -189,6 +189,7 @@ export {
   clearHomeLocation,
   browserTimezone,
   getWeather,
+  getTodayBrief,
   type HomeLocation,
   type LocationResult,
   type WeatherNow,

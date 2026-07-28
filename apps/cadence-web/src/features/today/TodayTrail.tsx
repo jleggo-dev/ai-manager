@@ -1,5 +1,5 @@
-import type { CSSProperties } from 'react';
-import type { PlanViewData, PlanDay, PlanOccurrence } from '../../lib/api.ts';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { getTodayBrief, type PlanViewData, type PlanDay, type PlanOccurrence } from '../../lib/api.ts';
 import { isFoodTitle } from '../../components/occurrence-mod.ts';
 
 /**
@@ -208,6 +208,16 @@ export function TodayTrail({
 }) {
   const days = plan.week;
   const todayPretty = prettyDate(days.find((d) => d.isToday)?.date ?? new Date().toISOString().slice(0, 10));
+  const [recap, setRecap] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void getTodayBrief().then((b) => {
+      if (alive) setRecap(b.recap);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   return (
     <div className="trail">
@@ -216,7 +226,10 @@ export function TodayTrail({
           <path d="M20 11.5a7.5 7.5 0 01-10.9 6.7L4 19l1-4.3A7.5 7.5 0 1120 11.5z" strokeLinejoin="round" />
         </svg>
         <span>
-          <b>It&apos;s {todayPretty} —</b> everything here is a suggestion; start wherever feels right.
+          <b>It&apos;s {todayPretty} —</b>{' '}
+          <span style={{ opacity: recap ? 1 : 0.9, transition: 'opacity 0.4s ease' }}>
+            {recap ?? 'everything here is a suggestion; start wherever feels right.'}
+          </span>
         </span>
       </div>
 

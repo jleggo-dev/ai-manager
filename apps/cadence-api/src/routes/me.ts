@@ -5,6 +5,7 @@ import { clearTrace } from '../services/dev-trace.ts';
 import { AimError, purgeUserAiData } from '../ai/aim.ts';
 import { clearHomeLocation, getUser, setHomeLocation } from '../repos/users.ts';
 import { geocodeCity, getWeatherForUser } from '../services/weather/weather.ts';
+import { getDayRecap } from '../services/day-recap.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
 import { homeLocationBodySchema } from '../validation/location.ts';
 
@@ -49,6 +50,20 @@ router.get('/weather', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /me/weather]', err);
     res.status(500).json({ error: 'failed to load weather' });
+  }
+});
+
+/**
+ * GET /me/today-brief — the Today header's one-line day recap (REQ8). Cached per user+day; returns
+ * { recap: null } on any failure so the header just shows the date with no line.
+ */
+router.get('/today-brief', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    res.json({ recap: await getDayRecap(userId) });
+  } catch (err) {
+    console.error('[GET /me/today-brief]', err);
+    res.json({ recap: null });
   }
 });
 
