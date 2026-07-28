@@ -84,6 +84,11 @@ prototype.)
   coach composes only from real tools, so the palette grows deliberately, never by hallucination.
   **Default posture:** deterministic placement rules first ("meal tasks open with `rings`"), coach
   override second — matching the per-goal `plan_mode` / AI-intensity thinking.
+  **✅ Built (2026-07-28)** — `packages/cadence-shared/src/tool-catalog.ts` is the single source of
+  truth; the api whitelist derives from it, a compile-time guard requires a client renderer per tool,
+  and `renderCoachToolCatalog()` is injected into `prescribe-session` as the runtime
+  `{{tool_catalog}}` variable (so the coach's palette can't drift from what the app renders/accepts).
+  See `docs/cadence/PLAN.md` § "Tool catalog — the coach's single source of truth".
 
 ## 4. Insights baked into tasks (the dashboard, redistributed)
 

@@ -1831,3 +1831,30 @@ brand-safe *by construction*: freezes + check-ins + disrupted-mode `paused` days
 never resets **because life happened**, and the honest 5-of-7 metric always coexists. BRAND.md is
 updated to reframe the ban as *"streaks that punish you for life happening"* — which this design
 structurally cannot do.
+
+## Tool catalog — the coach's single source of truth (REQ8 harness, built 2026-07-28)
+
+The coach can only build sessions from tools it knows exist; the client can only render tools it has
+code for; the api only accepts a whitelist. Those three lists were hand-kept in three files and
+drifted. `packages/cadence-shared/src/tool-catalog.ts` is now the ONE source of truth:
+
+- `COACH_TOOLS: Record<SessionItemTool, …>` (read · timer · checkoff · reps · photo · journal) +
+  `SET_FLOWS` (straight · circuit). Typed as a total Record → a new tool won't compile without an
+  entry, each carrying its when / trap / fields / example.
+- The api whitelist (`session-normalize.ts`) derives from `SESSION_TOOL_KINDS` / `BLOCK_MODE_KINDS`.
+- `renderCoachToolCatalog()` renders a hierarchical GUIDED/CAPTURE + SET-FLOW block, injected into
+  `prescribe-session` as the **runtime `{{tool_catalog}}` variable** (session-generate.ts) — the
+  coach's prompt always equals the deployed catalog, so adding a tool never needs a prompt re-sync.
+- A compile-time `never` guard fails the build unless every coach tool also has a client renderer.
+
+`measure` / `rings` / `insight` stay out on purpose (app-attached, not coach-emitted). Edit the tool
+once in `tool-catalog.ts` → prompt + whitelist + compile-check all move together.
+
+**Chosen access = runtime variable**, over the two alternatives (bake the catalog into the synced
+prompt; or a devs.ai knowledge resource) — devs.ai holds only the placeholder, so zero drift.
+
+**Future — revisit the catalog architecture (owner steer 2026-07-28):** create a **devs.ai-managed
+agent** and maintain its data sources through devs.ai instead of injecting an app-side variable —
+"much more efficient," and it centralizes upkeep on the platform the coach already lives on. Revisit
+once the runtime-variable version is proven; keep code as the type/whitelist authority and sync the
+LLM-facing copy to devs.ai's data sources.

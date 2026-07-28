@@ -10,7 +10,7 @@
  * Shape cloned from goal-assess.ts: runJobBySlug + parseJson + app-side normalization
  * (expectedSchema is best-effort in the engine — see plan-synthesis.ts normalizeActivity).
  */
-import type { OccurrenceSession, OccurrenceWeather } from '@cadence/shared';
+import { renderCoachToolCatalog, type OccurrenceSession, type OccurrenceWeather } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import {
   getOccurrenceWithActivity,
@@ -52,6 +52,10 @@ function renderLogLines(
     })
     .join('\n');
 }
+
+// The coach's tool palette, rendered once — a pure constant (the catalog has no runtime inputs).
+// Injected as {{tool_catalog}} so prescribe-session always sees exactly the deployed catalog.
+const TOOL_CATALOG = renderCoachToolCatalog();
 
 // Single-flight per occurrence: a double-tap or two tabs must not double-spend a coach call.
 // Per-process only — does not dedupe across instances in a multi-instance deploy.
@@ -114,6 +118,7 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
     sessions_logged: String(history.length),
     occurrence_date: occ.date,
     weather: weatherLine,
+    tool_catalog: TOOL_CATALOG,
   });
 
   const session = normalizeSession(parseJson(res.formatted ?? res.raw ?? ''));
