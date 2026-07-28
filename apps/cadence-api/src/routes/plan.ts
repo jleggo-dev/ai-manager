@@ -6,7 +6,7 @@ import { buildPlanView } from '../services/plan-view.ts';
 import { assessIfDue } from '../services/situation.ts';
 import { getOccurrenceDetail, prefetchImminentSessions } from '../services/session-generate.ts';
 import { logOccurrence } from '../services/session-log.ts';
-import { logAdhocActivity } from '../services/adhoc-log.ts';
+import { logAdhocActivity, logPlannedActivity } from '../services/adhoc-log.ts';
 import { enterEpisode, endEpisode } from '../services/episode.ts';
 import { recordWeighIn } from '../services/weigh-in.ts';
 import { setPendingProposal, getUser } from '../repos/users.ts';
@@ -18,6 +18,7 @@ import {
   replanSteerBodySchema,
   occurrenceLogBodySchema,
   adhocLogBodySchema,
+  didLogBodySchema,
   weighInBodySchema,
   occurrenceStatusBodySchema,
   episodeEnterBodySchema,
@@ -213,6 +214,26 @@ router.post('/occurrences/adhoc', async (req: Request, res: Response) => {
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/occurrences/adhoc]', err);
+    res.status(500).json({ error: 'log failed' });
+  }
+});
+
+/**
+ * POST /plan/activities/:id/did — the goal-aware "＋" (log something you did): credit a PLANNED
+ * activity you actually did as a done occurrence for the day (default today), so it counts toward
+ * that goal + consistency/streak even if it was scheduled for another day ("did Thursday's workout
+ * today"). 400 bad body · 404 not this user's activity (or date out of range).
+ */
+router.post('/activities/:id/did', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const { text, date } = parseBody(didLogBodySchema, req.body);
+    const r = await logPlannedActivity(userId, req.params.id as string, text, date);
+    if (!r) return void res.status(404).json({ error: 'activity not found (or date out of range)' });
+    res.json(r);
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /plan/activities/:id/did]', err);
     res.status(500).json({ error: 'log failed' });
   }
 });

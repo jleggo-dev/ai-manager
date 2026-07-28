@@ -81,6 +81,20 @@ export async function logAdhoc(text: string, date?: string): Promise<{ ok: boole
   return { ok: res.ok };
 }
 
+/**
+ * Goal-aware "log something you did" (the ＋ FAB): credit a PLANNED activity as done for the day
+ * (default today), so it counts toward that goal + streak even if it was scheduled for another day.
+ * `text` optional — the coach records "Did {title}" when omitted.
+ */
+export async function logDid(activityId: string, text?: string, date?: string): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/plan/activities/${activityId}/did`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ text, date }),
+  });
+  return { ok: res.ok };
+}
+
 /** Enter a disrupted detour (Req 4): the base plan pauses for the window and lighter options
  *  appear. `days` defaults server-side to a week. */
 export async function enterEpisode(

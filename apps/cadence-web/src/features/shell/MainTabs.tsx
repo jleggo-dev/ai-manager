@@ -5,6 +5,7 @@ import { ProgressView } from '../progress/ProgressView.tsx';
 import { FoodView } from '../food/FoodView.tsx';
 import { SettingsSheet } from '../settings/SettingsSheet.tsx';
 import { AdjustSheet } from '../plan/AdjustSheet.tsx';
+import { LogDidSheet } from '../plan/LogDidSheet.tsx';
 import { ReviewScreen } from '../review/ReviewScreen.tsx';
 
 type Tab = 'today' | 'coach' | 'food' | 'progress';
@@ -63,6 +64,8 @@ export function MainTabs({ email }: { email: string | null }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [manage, setManage] = useState(false);
   const [offerAdjust, setOfferAdjust] = useState(false);
+  const [logDidOpen, setLogDidOpen] = useState(false);
+  const [planReload, setPlanReload] = useState(0); // bump → PlanView refetches after a ＋ log
 
   if (manage) {
     return (
@@ -80,12 +83,12 @@ export function MainTabs({ email }: { email: string | null }) {
   return (
     <>
       <div className="app">
-        {tab === 'today' && <PlanView onCoach={() => setTab('coach')} />}
+        {tab === 'today' && <PlanView onCoach={() => setTab('coach')} reloadSignal={planReload} />}
         {tab === 'coach' && <OnboardingChat intent="ongoing" chrome="none" onSettings={() => setSettingsOpen(true)} />}
         {tab === 'food' && <FoodView />}
         {tab === 'progress' && <ProgressView />}
         {tab !== 'coach' && (
-          <button className="fab" onClick={() => setTab('coach')} aria-label="Log something you did">
+          <button className="fab" onClick={() => setLogDidOpen(true)} aria-label="Log something you did">
             ＋
           </button>
         )}
@@ -115,6 +118,15 @@ export function MainTabs({ email }: { email: string | null }) {
           <SettingsSheet email={email} onClose={() => setSettingsOpen(false)} onManage={() => setManage(true)} />
         )}
         {offerAdjust && <AdjustSheet onClose={() => setOfferAdjust(false)} onCommitted={() => setOfferAdjust(false)} />}
+        {logDidOpen && (
+          <LogDidSheet
+            onClose={() => setLogDidOpen(false)}
+            onLogged={() => {
+              setTab('today'); // land back on Today so the just-logged node shows done
+              setPlanReload((k) => k + 1);
+            }}
+          />
+        )}
       </div>
     </>
   );

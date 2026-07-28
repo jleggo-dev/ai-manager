@@ -143,6 +143,19 @@ export const adhocLogBodySchema = z
   })
   .transform((val) => ({ text: val.text.trim(), date: val.date }));
 
+/** "Log something you did" against a planned activity — text is OPTIONAL (defaults server-side to
+ *  "Did {title}"); the activity is named by the path param, so the body only carries the optional
+ *  free-text note + backdate. */
+export const didLogBodySchema = z
+  .object({
+    text: z.string().optional(),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' })
+      .optional(),
+  })
+  .transform((val) => ({ text: typeof val.text === 'string' ? val.text.trim() : '', date: val.date }));
+
 export const weighInBodySchema = z
   .object({
     weight: z.coerce.number({ message: 'weight (number) and unit (kg|lb) required' }),

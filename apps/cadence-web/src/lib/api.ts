@@ -32,6 +32,7 @@ export {
   getPlan,
   setOccurrence,
   logAdhoc,
+  logDid,
   enterEpisode,
   endEpisode,
   checkin,

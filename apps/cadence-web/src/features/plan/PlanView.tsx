@@ -42,7 +42,7 @@ function detourLabel(type: ActiveEpisode['type']): string {
  * that pops the AdjustSheet: steer → preview → confirm) — suggest-never-auto-apply as always.
  * `reloadKey` bumps when a log/meal/adjust lands so the dashboard's aux fetches refresh.
  */
-export function PlanView({ onCoach }: { onCoach: () => void }) {
+export function PlanView({ onCoach, reloadSignal }: { onCoach: () => void; reloadSignal?: number }) {
   const [data, setData] = useState<PlanViewData | null>(null);
   const [view, setView] = useState<'today' | 'week'>('today');
   const [note, setNote] = useState('');
@@ -54,13 +54,14 @@ export function PlanView({ onCoach }: { onCoach: () => void }) {
   const [adjustMode, setAdjustMode] = useState<'adjust' | 'rebalance'>('adjust');
   const [, setReloadKey] = useState(0); // bumps → aux refetch after a log/adjust (kept for callbacks)
 
+  // Refetch on mount AND whenever the parent bumps reloadSignal (a ＋ FAB log just landed).
   useEffect(() => {
     getPlan()
       .then(setData)
       .catch(() =>
         setData({ hasPlan: false, stage: 'new', activities: [], week: [], consistency: { kept: 0, window: 7 } }),
       );
-  }, []);
+  }, [reloadSignal]);
 
   const refresh = () =>
     getPlan()

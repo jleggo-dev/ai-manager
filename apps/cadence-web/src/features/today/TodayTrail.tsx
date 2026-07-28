@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { getTodayBrief, type PlanViewData, type PlanDay, type PlanOccurrence } from '../../lib/api.ts';
-import { isFoodTitle } from '../../components/occurrence-mod.ts';
+import { categoryOf, ICON } from './category.ts';
 
 /**
  * The Visual Today — the redesign's sky-trail (REQ8 handoff `docs/cadence/design/redesign-today-trail`).
@@ -10,19 +10,6 @@ import { isFoodTitle } from '../../components/occurrence-mod.ts';
  * plan we already load — no new endpoint. This is v1 of the visual system: skies, discs, the tone
  * ramp and the crescent. Coach bay, weather flip, step rings and stars follow.
  */
-
-type Category = 'mindset' | 'movement' | 'nutrition' | 'reflection';
-
-/** No area on the plan occurrence yet, so infer the icon family from the title (v1). */
-function categoryOf(title: string): Category {
-  if (isFoodTitle(title)) return 'nutrition';
-  const t = title.toLowerCase();
-  if (/reflect|journal|gratitude|wind.?down|evening|night|sleep/.test(t)) return 'reflection';
-  if (/mindset|meditat|breath|calm|focus|intention|morning|check-in/.test(t)) return 'mindset';
-  if (/run|walk|jog|workout|strength|lift|ride|swim|cycl|mobility|yoga|stretch|cardio|hiit|zone|row/.test(t))
-    return 'movement';
-  return 'movement';
-}
 
 /** Six-stop tone ramp (dawn→night), authored in oklch in the handoff. Vibrant = main/light/deep;
  *  untouched = the muted m* triplet; the last two stops sit over a dark sky (light type + ring). */
@@ -141,16 +128,6 @@ const COACH_TEXTS = ['Not feeling it? Talk to me.', 'Want to shuffle tomorrow?',
 const LEAF =
   'M20.6 3.4C7.6 4.6 3.4 12.9 4.6 19.2c1.5-3.6 4.2-6.8 8.6-9.4-3.4 2.9-5.4 6.2-6.5 9.9 6.2 1.2 14.7-3.1 13.9-16.3Z';
 
-/* ── Solid-white glyphs (filled silhouettes on the discs) ─────────────────────────────── */
-const ICON: Record<Category, string> = {
-  mindset:
-    'M12 4a1 1 0 011 1v1a1 1 0 01-2 0V5a1 1 0 011-1zm0 12a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zM4 11h1a1 1 0 010 2H4a1 1 0 010-2zm14 0h1a1 1 0 010 2h-1a1 1 0 010-2zM6.2 6.2a1 1 0 011.4 0l.7.7A1 1 0 016.9 8.3l-.7-.7a1 1 0 010-1.4zm9.3 9.3a1 1 0 011.4 0l.7.7a1 1 0 01-1.4 1.4l-.7-.7a1 1 0 010-1.4zm1.4-9.3a1 1 0 010 1.4l-.7.7a1 1 0 01-1.4-1.4l.7-.7a1 1 0 011.4 0zM6.9 15.7a1 1 0 010 1.4l-.7.7a1 1 0 01-1.4-1.4l.7-.7a1 1 0 011.4 0zM12 8a4 4 0 100 8 4 4 0 000-8z',
-  movement:
-    'M14.5 5.5a1.8 1.8 0 11-3.6 0 1.8 1.8 0 013.6 0zM9 9.2l3.4-1.3a1.6 1.6 0 011.7.4l2 2.1 2.1.8a1 1 0 01-.7 1.9l-2.5-1a1.6 1.6 0 01-.5-.4l-.8-.9-1 3 2.2 2.4.9 3.6a1.1 1.1 0 01-2.1.6l-.9-3.4-2.9-3a1.6 1.6 0 01-.4-1.4l.3-1.6-1.6.6-1.2 2.2a1 1 0 01-1.8-.9l1.4-2.6a1.6 1.6 0 01.9-.7z',
-  nutrition:
-    'M12 6.5c.7-1.6 2.3-2.6 3.9-2.3-.2 1.2-1 2.3-2.1 2.8 1.8-.3 3.6.7 4.4 2.4 1 2.4.1 5.6-1.7 7.8-.8 1-1.7 1.6-2.6 1.4-.6-.1-1-.4-1.9-.4s-1.3.3-1.9.4c-.9.2-1.8-.4-2.6-1.4C5.9 17.4 5 14.2 6 11.8c.8-1.8 2.7-2.8 4.6-2.3-.7-.4-1.3-1.1-1.6-1.9 1.3-.2 2.6.3 3 .9z',
-  reflection: 'M20 13.5A8 8 0 019 4.2a1 1 0 00-1.3-1.1A9.5 9.5 0 1021 15a1 1 0 00-1-1.5z',
-};
 function TrailNode({
   occ,
   i,
