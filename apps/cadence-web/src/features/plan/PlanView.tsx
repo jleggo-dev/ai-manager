@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { OccurrenceSheet } from './OccurrenceSheet.tsx';
 import { AdjustSheet } from './AdjustSheet.tsx';
 import { TodayTrail } from '../today/TodayTrail.tsx';
+import { TrailHeader } from '../today/TrailHeader.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
 import { PlanWeekPanel } from './PlanWeekPanel.tsx';
 import {
@@ -161,9 +162,12 @@ export function PlanView() {
   const today = data.week.find((d) => d.isToday);
   const rest = data.week.filter((d) => !d.isToday);
   const { kept, window } = data.consistency;
+  const doneCount = data.week.reduce((n, d) => n + d.occurrences.filter((o) => o.status === 'done').length, 0);
+  const xp = doneCount * 10; // stopgap XP until the REQ8 points finalize is wired to the plan response
 
   return (
     <>
+      <TrailHeader streak={data.streak?.current ?? 0} xp={xp} />
       <div className="seg" role="tablist" aria-label="Today or week">
         <button
           className={`seg-btn${view === 'today' ? ' seg-on' : ''}`}

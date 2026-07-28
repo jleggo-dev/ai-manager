@@ -1,7 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { PlanViewData, PlanDay, PlanOccurrence } from '../../lib/api.ts';
 import { isFoodTitle } from '../../components/occurrence-mod.ts';
-import { useTodayHeader } from './useTodayHeader.ts';
 
 /**
  * The Visual Today — the redesign's sky-trail (REQ8 handoff `docs/cadence/design/redesign-today-trail`).
@@ -105,15 +104,6 @@ function dayLabel(day: PlanDay, index: number): string {
   return stamp;
 }
 
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
-}
-
-const cap = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-
 /* ── Solid-white glyphs (filled silhouettes on the discs) ─────────────────────────────── */
 const ICON: Record<Category, string> = {
   mindset:
@@ -124,9 +114,6 @@ const ICON: Record<Category, string> = {
     'M12 6.5c.7-1.6 2.3-2.6 3.9-2.3-.2 1.2-1 2.3-2.1 2.8 1.8-.3 3.6.7 4.4 2.4 1 2.4.1 5.6-1.7 7.8-.8 1-1.7 1.6-2.6 1.4-.6-.1-1-.4-1.9-.4s-1.3.3-1.9.4c-.9.2-1.8-.4-2.6-1.4C5.9 17.4 5 14.2 6 11.8c.8-1.8 2.7-2.8 4.6-2.3-.7-.4-1.3-1.1-1.6-1.9 1.3-.2 2.6.3 3 .9z',
   reflection: 'M20 13.5A8 8 0 019 4.2a1 1 0 00-1.3-1.1A9.5 9.5 0 1021 15a1 1 0 00-1-1.5z',
 };
-const LEAF =
-  'M18 4C11 4 5.5 8 5.5 15c0 2 .6 3.6 1.4 4.8C9 15 12.5 12 18 11c-4.5 2-7.5 5.5-9 10.5.9.3 1.9.5 3 .5 7 0 11-6 11-13 0-2-.5-3.7-1.5-5H18z';
-
 function TrailNode({
   occ,
   i,
@@ -185,42 +172,9 @@ function TrailNode({
 
 export function TodayTrail({ plan, onOpen }: { plan: PlanViewData; onOpen: (occId: string) => void }) {
   const days = plan.week;
-  const streak = plan.streak?.current ?? 0;
-  const { weather, city, locating, requestLocation } = useTodayHeader();
-  const wx = weather?.available ? weather : null;
 
   return (
     <div className="trail">
-      <div className="trail-head">
-        <div className="trail-avatar" aria-hidden>
-          <svg viewBox="0 0 24 24" width="21" height="21">
-            <path d={LEAF} fill="#fff" />
-          </svg>
-        </div>
-        <div className="trail-greet">
-          <b>{wx ? `${cap(wx.conditions ?? '')} · ${wx.temp_c}°` : greeting()}</b>
-          <button className="trail-loc" type="button" onClick={requestLocation}>
-            {city ? (
-              <>
-                <span aria-hidden>📍</span> {city} <i>· change</i>
-              </>
-            ) : locating ? (
-              'Locating…'
-            ) : (
-              <>
-                <span aria-hidden>📍</span> Set location for weather
-              </>
-            )}
-          </button>
-        </div>
-        {streak > 0 && (
-          <div className="trail-streak" aria-label={`${streak} day streak`}>
-            <span aria-hidden>🔥</span>
-            {streak}
-          </div>
-        )}
-      </div>
-
       <div className="trail-coach">
         <svg className="stroke" viewBox="0 0 24 24" width="20" height="20" aria-hidden>
           <path d="M20 11.5a7.5 7.5 0 01-10.9 6.7L4 19l1-4.3A7.5 7.5 0 1120 11.5z" strokeLinejoin="round" />

@@ -832,3 +832,20 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .trail-loc { display: inline-flex; align-items: center; gap: 3px; margin-top: 1px; padding: 0; background: none;
   font-size: 11px; font-weight: 700; letter-spacing: .01em; color: oklch(52% 0.03 250); text-align: left; }
 .trail-loc i { font-style: normal; font-weight: 800; color: oklch(56% 0.10 250); }
+
+/* ── Today/Week top header (redesign): avatar · weather+location · streak+XP ── */
+.thead { display: flex; align-items: center; gap: 10px; padding: 8px 20px 10px; }
+.thead-avatar { width: 36px; height: 36px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center;
+  justify-content: center; background: oklch(78% 0.16 64); box-shadow: 0 3px 0 oklch(62% 0.15 60); }
+.thead-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.2; }
+.thead-wx { font-family: var(--display); font-size: 14px; font-weight: 800; color: oklch(40% 0.06 250);
+  display: flex; align-items: center; gap: 5px; }
+.thead-loc, .thead-set { display: inline-flex; align-items: center; gap: 3px; padding: 0; background: none;
+  font-size: 11px; font-weight: 700; color: oklch(52% 0.03 250); text-align: left; }
+.thead-set { font-size: 12.5px; }
+.thead-loc i, .thead-set i { font-style: normal; font-weight: 800; letter-spacing: .04em; color: oklch(50% 0.10 255); }
+.thead-pills { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.thead-pill { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px;
+  font-family: var(--display); font-weight: 800; font-size: 13px; }
+.thead-streak { background: oklch(90% 0.03 40); color: oklch(35% 0.10 40); }
+.thead-xp { background: oklch(90% 0.05 95); color: oklch(38% 0.11 95); }
