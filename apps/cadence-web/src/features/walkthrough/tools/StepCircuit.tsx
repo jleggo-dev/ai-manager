@@ -6,6 +6,7 @@ import { YouTubeLink } from './YouTubeLink.tsx';
 
 type CircuitLog = Extract<StepLog, { kind: 'circuit' }>;
 const GAP = 10;
+const ordinal = (i: number) => ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'][i] ?? `${i + 1}th`;
 
 /**
  * Circuit tool (walkthrough v2, design B) — one cohesive nested player, three bands: (1) a rounds
@@ -182,7 +183,9 @@ export function StepCircuit({
               <div style={targetPill}>
                 {ex.reps != null ? `Target ${ex.reps}` : ex.seconds ? `Target ${ex.seconds} s` : 'Target'}
               </div>
-              {ex.video_query && <YouTubeLink query={ex.video_query} label="How-to" />}
+              {ex.video_query && (
+                <YouTubeLink query={ex.video_query} label={ex.reps != null ? 'Form' : 'Follow along'} />
+              )}
             </div>
             {ex.reps != null ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
@@ -266,15 +269,21 @@ export function StepCircuit({
                     boxSizing: 'border-box',
                   }}
                 />
-                <div
-                  style={{
-                    flex: 1,
-                    fontSize: 12.5,
-                    fontWeight: isCurrent ? 900 : 700,
-                    color: isCurrent ? TONE.ink : TONE.sub,
-                  }}
-                >
-                  {e.name}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <div
+                    style={{
+                      fontSize: isCurrent ? 13.5 : 12.5,
+                      fontWeight: isCurrent ? 900 : 700,
+                      color: isCurrent ? TONE.ink : TONE.sub,
+                    }}
+                  >
+                    {e.name}
+                  </div>
+                  {isCurrent && (
+                    <div style={{ fontSize: 10.5, fontWeight: 800, color: TONE.deep }}>
+                      Now · {ordinal(pos)} of {n}
+                    </div>
+                  )}
                 </div>
                 <div
                   style={{

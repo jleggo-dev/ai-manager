@@ -8,7 +8,7 @@ import { TONE } from './tools/tone.ts';
 import { Recap } from './Recap.tsx';
 import { AllSteps } from './AllSteps.tsx';
 import { Pip, StepHeader } from './wt-parts.tsx';
-import { overlay, center, closeBtn, caption, navBtn, greenBtn } from './wt-styles.ts';
+import { overlay, center, closeBtn, caption, navBtn, greenBtn, shortTitle } from './wt-styles.ts';
 import { type StepLog, type StepLogs, stepStatus, stepFraction, minutesLeft, recapSummary } from './state.ts';
 
 /**
@@ -94,7 +94,7 @@ export function Walkthrough({
         </button>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: 'oklch(38% 0.05 60)' }}>{title}</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: 'oklch(38% 0.05 60)' }}>{shortTitle(title)}</div>
             <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', color: 'oklch(52% 0.04 62)' }}>
               {walkthrough.total_min} MIN TOTAL
             </div>

@@ -35,6 +35,20 @@ export function rowReceipt(step: WalkthroughStep, log: StepLog | undefined, curr
   return toolNoun(step);
 }
 
+/** A short header label — strip the parenthetical qualifier and cap length, so the workout name in
+ *  the control row stays one line (the design's "Strength · lower body") instead of wrapping. */
+export function shortTitle(title: string): string {
+  const stripped = title.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+  return stripped.length > 30 ? `${stripped.slice(0, 29).trimEnd()}…` : stripped;
+}
+
+/** Name the how-to link by what it shows, the way the design does ("Form" / "Follow along"). */
+export function videoLabel(kind: string): string {
+  if (kind === 'reps') return 'Form';
+  if (kind === 'timer') return 'Follow along';
+  return 'How-to';
+}
+
 /* ── Shared styles ── */
 export const overlay: CSSProperties = {
   position: 'absolute',

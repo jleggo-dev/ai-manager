@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import type { WalkthroughStep } from '@cadence/shared';
 import { YouTubeLink } from './tools/YouTubeLink.tsx';
 import { TONE } from './tools/tone.ts';
-import { targetChip, chip } from './wt-styles.ts';
+import { targetChip, videoLabel, chip } from './wt-styles.ts';
 
 /** One progress-bar pip — width = its step's minutes; state is logged / partial / current / skipped
  *  / untouched, so the bar's shape is the session's shape and a long step can't look like a short one. */
@@ -94,7 +94,7 @@ export function StepHeader({ step }: { step: WalkthroughStep }) {
               <span style={{ fontSize: 15, fontWeight: 900, color: TONE.ink }}>{target}</span>
             </div>
           )}
-          {step.video_query && <YouTubeLink query={step.video_query} label="How-to" />}
+          {step.video_query && <YouTubeLink query={step.video_query} label={videoLabel(step.tool.kind)} />}
         </div>
       )}
       {step.body && (

@@ -80,8 +80,8 @@ export function logLine(step: WalkthroughStep, log: StepLog): string {
 
 /** The whole-task summary written on Finish — "squat 4×12 @ 40 kg · circuit 2/3 · 2 steps left". */
 export function recapSummary(steps: WalkthroughStep[], logs: StepLogs): string {
-  const did = steps.filter((s) => logs[s.id]).map((s) => `${s.title.toLowerCase()} ${logLine(s, logs[s.id]!)}`);
+  const parts = steps.filter((s) => logs[s.id]).map((s) => `${s.title.toLowerCase()} ${logLine(s, logs[s.id]!)}`);
   const skipped = steps.filter((s) => !logs[s.id]).length;
-  const tail = skipped > 0 ? ` · ${skipped} step${skipped === 1 ? '' : 's'} left` : '';
-  return did.join(' · ') + tail;
+  if (skipped > 0) parts.push(`${skipped} step${skipped === 1 ? '' : 's'} left`);
+  return parts.join(' · ');
 }
