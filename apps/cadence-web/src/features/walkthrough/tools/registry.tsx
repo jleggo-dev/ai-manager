@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { StepTool } from '@cadence/shared';
 import { StepTimer } from './StepTimer.tsx';
+import { StepReps } from './StepReps.tsx';
 import { MicButton } from '../../../components/MicButton.tsx';
 
 /**
@@ -25,7 +26,7 @@ export function ToolView({
     case 'timer':
       return <StepTimer seconds={tool.seconds} chime={tool.chime ?? true} onComplete={onAutoAdvance} />;
     case 'reps':
-      return <div style={big}>{repsLabel(tool)}</div>;
+      return <StepReps sets={tool.sets} reps={tool.reps} load={tool.load} setNote={setNote} />;
     case 'checkoff':
       return tool.label ? <div style={big}>{tool.label}</div> : null;
     case 'journal':
@@ -63,13 +64,6 @@ export function ToolView({
       return null;
     }
   }
-}
-
-function repsLabel(t: Extract<StepTool, { kind: 'reps' }>): string {
-  const parts = [`${t.sets} set${t.sets === 1 ? '' : 's'}`];
-  if (t.reps != null) parts.push(`× ${t.reps}`);
-  if (t.load) parts.push(`@ ${t.load}`);
-  return parts.join(' ');
 }
 
 const big: CSSProperties = { fontSize: 30, fontWeight: 800, color: 'var(--forest, #3f7a52)' };
