@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import type { StepTool } from '@cadence/shared';
 import { StepTimer } from './StepTimer.tsx';
 import { StepReps } from './StepReps.tsx';
+import { StepCircuit } from './StepCircuit.tsx';
 import { MicButton } from '../../../components/MicButton.tsx';
 
 /**
@@ -27,6 +28,8 @@ export function ToolView({
       return <StepTimer seconds={tool.seconds} chime={tool.chime ?? true} onComplete={onAutoAdvance} />;
     case 'reps':
       return <StepReps sets={tool.sets} reps={tool.reps} load={tool.load} setNote={setNote} />;
+    case 'circuit':
+      return <StepCircuit rounds={tool.rounds} exercises={tool.exercises} setNote={setNote} />;
     case 'checkoff':
       return tool.label ? <div style={big}>{tool.label}</div> : null;
     case 'journal':

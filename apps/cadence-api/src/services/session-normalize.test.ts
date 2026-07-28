@@ -29,6 +29,26 @@ describe('normalizeSession', () => {
     expect(normalizeSession({ blocks: [{ label: 'Main', items: [{ name: '   ' }] }] })).toBeNull();
   });
 
+  it('preserves a circuit block mode + capped rounds; drops an off-catalog mode', () => {
+    const circuit = normalizeSession({
+      blocks: [{ label: 'Circuit', mode: 'circuit', rounds: 3, items: [{ name: 'Burpees', reps: 10 }] }],
+    });
+    expect(circuit?.blocks[0]).toMatchObject({ mode: 'circuit', rounds: 3 });
+
+    // rounds is capped so a bad number can't balloon the circuit player.
+    const big = normalizeSession({
+      blocks: [{ label: 'Circuit', mode: 'circuit', rounds: 999, items: [{ name: 'Burpees', reps: 10 }] }],
+    });
+    expect(big?.blocks[0]?.rounds).toBe(10);
+
+    // an off-catalog mode → undefined (= straight); rounds mean nothing without a circuit.
+    const straight = normalizeSession({
+      blocks: [{ label: 'Main', mode: 'superset', rounds: 3, items: [{ name: 'Row', reps: 8 }] }],
+    });
+    expect(straight?.blocks[0]?.mode).toBeUndefined();
+    expect(straight?.blocks[0]?.rounds).toBeUndefined();
+  });
+
   it('keeps a well-formed session and stamps version + generated_at', () => {
     const session = normalizeSession({
       note: 'Ease into volume.',
