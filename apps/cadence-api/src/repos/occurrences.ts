@@ -80,6 +80,23 @@ export async function findPendingFoodLogOccurrence(userId: string, date: string)
   return row?.occurrence_id ?? null;
 }
 
+/**
+ * Today's pending meal-log system row for a specific meal (breakfast/lunch/dinner/snack) — the
+ * redesign's per-meal tasks. `drink`/`other` (and any non-meal value) return null; the caller then
+ * falls back to findPendingFoodLogOccurrence for plans that predate the per-meal split.
+ */
+export async function findPendingMealOccurrence(userId: string, date: string, meal: string): Promise<string | null> {
+  if (!/^(breakfast|lunch|dinner|snack)$/.test(meal)) return null;
+  const [row] = await sql<{ occurrence_id: string }[]>`
+    select o.occurrence_id
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and o.date = ${date} and o.status = 'pending'
+      and a.kind = 'system' and a.title ~* ${meal}
+    limit 1`;
+  return row?.occurrence_id ?? null;
+}
+
 /** An occurrence joined with its activity — the payload behind the session detail sheet. */
 export interface OccurrenceWithActivity extends Occurrence {
   title: string;
