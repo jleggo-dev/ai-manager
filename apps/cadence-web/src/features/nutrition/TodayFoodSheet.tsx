@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { patchMeal, type MealMacros, type NutritionDayData } from '../../lib/api.ts';
 import { useInvalidateNutritionDay, useNutritionDay } from '../../lib/query/index.ts';
-import { MealPlansPanel } from '../food/MealPlansPanel.tsx';
 import { RecipesPanel } from '../food/RecipesPanel.tsx';
 import { NutritionInsightCard } from './NutritionInsightCard.tsx';
 import { NutritionRing } from './NutritionRing.tsx';
 import { ShopSheet } from './ShopSheet.tsx';
+import { WeekMenuSheet } from './WeekMenuSheet.tsx';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -189,7 +189,7 @@ export function TodayFoodSheet({
           </div>
         ) : sub === 'meals' ? (
           <div className="tf-sub">
-            <MealPlansPanel onClose={() => setSub('home')} />
+            <WeekMenuSheet onOpenShop={() => setSub('shop')} onClose={() => setSub('home')} />
           </div>
         ) : sub === 'recipes' ? (
           <div className="tf-sub">
