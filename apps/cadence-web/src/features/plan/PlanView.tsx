@@ -288,12 +288,6 @@ export function PlanView({ onCoach, reloadSignal }: { onCoach: () => void; reloa
             refresh();
             bump();
           }}
-          onProposeChange={(steer) => {
-            setCaptureOcc(null);
-            setAdjustSteer(steer);
-            setAdjustMode('adjust');
-            setAdjustOpen(true);
-          }}
         />
       )}
       {adjustOpen && (
