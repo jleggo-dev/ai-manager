@@ -1017,6 +1017,16 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .mc-plate-tot { display: flex; align-items: baseline; justify-content: space-between; }
 .mc-plate-tot b { font-size: 15px; font-weight: 900; color: oklch(30% 0.02 150); }
 .mc-plate-tot span { font-size: 11.5px; font-weight: 800; color: oklch(52% 0.02 120); }
+/* Plan-first shortcuts (2B/2C) — today's planned dish + this week's other meals */
+.mc-planned { display: flex; flex-direction: column; gap: 8px; }
+.mc-plan-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: #fff; border: 1px solid oklch(91% 0.015 85); border-radius: 14px; padding: 11px 14px; cursor: pointer; }
+.mc-plan-row.is-planned { border: 1.5px solid oklch(86% 0.05 78); background: linear-gradient(160deg, oklch(97% 0.02 78) 0%, #fff 60%); }
+.mc-plan-row:disabled { opacity: 0.6; cursor: default; }
+.mc-plan-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mc-plan-t b { font-size: 13px; font-weight: 800; color: oklch(30% 0.02 150); }
+.mc-plan-t span { font-size: 10px; font-weight: 900; letter-spacing: 0.04em; color: oklch(48% 0.08 68); }
+.mc-plan-row:not(.is-planned) .mc-plan-t span { font-weight: 700; letter-spacing: 0; color: oklch(56% 0.02 120); }
+.mc-plan-go { font-size: 15px; font-weight: 800; color: oklch(60% 0.02 120); flex: 0 0 auto; }
 
 /* ── Food module — the trail food strip (2E) + "Today's food" sheet (2F) ─────────────── */
 .tfs { box-sizing: border-box; display: flex; align-items: center; gap: 12px; width: calc(100% - 40px); text-align: left; background: #fff; border: 1px solid oklch(91% 0.015 85); border-radius: 18px; padding: 10px 14px; margin: 0 20px 14px; box-shadow: 0 8px 20px -10px rgba(60,50,35,.35); cursor: pointer; }

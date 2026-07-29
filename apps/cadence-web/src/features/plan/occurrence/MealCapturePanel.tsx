@@ -5,6 +5,7 @@ import type { MealMacros, OccurrenceDetail } from '../../../lib/api.ts';
 import { NutritionRing } from '../../nutrition/NutritionRing.tsx';
 import { MealDraftCard } from './MealDraftCard.tsx';
 import { useMealCapture, type PlateEntry } from './useMealCapture.ts';
+import { usePlannedMeal } from './usePlannedMeal.ts';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -154,6 +155,7 @@ export function MealCapturePanel({
   onClose?: () => void;
 }) {
   const cap = useMealCapture(detail, setDetail, { onLogged, onClose });
+  const { planned, alsoThisWeek } = usePlannedMeal(cap.mealKind, detail.date);
   const [text, setText] = useState('');
   const [route, setRoute] = useState<'idle' | 'text'>('idle');
   const [pending, setPending] = useState<MealMacros | null>(null);
@@ -291,6 +293,41 @@ export function MealCapturePanel({
         </div>
       ) : (
         <>
+          {cap.plate.length === 0 && (planned || alsoThisWeek.length > 0) && (
+            <div className="mc-planned">
+              {planned && (
+                <button
+                  className="mc-plan-row is-planned"
+                  disabled={cap.busy}
+                  onClick={() => void cap.logRecipe(planned.recipe_id)}
+                >
+                  <div className="mc-plan-t">
+                    <b>{planned.name}</b>
+                    <span>PLANNED · ATE IT — ONE TAP</span>
+                  </div>
+                  <span className="mc-plan-go" aria-hidden>
+                    ›
+                  </span>
+                </button>
+              )}
+              {alsoThisWeek.map((m) => (
+                <button
+                  key={m.recipe_id}
+                  className="mc-plan-row"
+                  disabled={cap.busy}
+                  onClick={() => void cap.logRecipe(m.recipe_id)}
+                >
+                  <div className="mc-plan-t">
+                    <b>{m.name}</b>
+                    <span>also on your week</span>
+                  </div>
+                  <span className="mc-plan-go" aria-hidden>
+                    ›
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="mc-routes">
             <label className="mc-route mc-route-tone">
               <span className="mc-route-i">
