@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
-import { getCurrentMealPlan, mealPlanDayLabel, type MealPlanRecord } from '../../lib/api.ts';
+import {
+  getCurrentMealPlan,
+  mealPlanDayLabel,
+  saveRecipe,
+  type MealPlanRecord,
+  type RecipeDraft,
+} from '../../lib/api.ts';
 import { MealPlansPanel } from '../food/MealPlansPanel.tsx';
+import { RecipeFromChatPanel } from '../food/RecipeFromChatPanel.tsx';
 
 /**
  * This week's meals (design 2G/E) — the saved week menu as redesigned day rows: each day, the dish(es)
@@ -13,6 +20,8 @@ export function WeekMenuSheet({ onOpenShop, onClose }: { onOpenShop: () => void;
   const [plan, setPlan] = useState<MealPlanRecord | null>(null);
   const [status, setStatus] = useState<'loading' | 'ok' | 'empty' | 'error'>('loading');
   const [editing, setEditing] = useState(false);
+  const [prep, setPrep] = useState(false); // "I cooked something else" — meal-prep-writes-recipe
+  const [prepNote, setPrepNote] = useState('');
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
@@ -42,6 +51,37 @@ export function WeekMenuSheet({ onOpenShop, onClose }: { onOpenShop: () => void;
     );
   }
 
+  if (prep) {
+    return (
+      <div className="wk">
+        <div className="wk-head">
+          <button className="shop-back" onClick={() => setPrep(false)} aria-label="Back">
+            ‹
+          </button>
+          <div className="shop-headt">
+            <b>I cooked something else</b>
+            <span>TELL ME WHAT — I&apos;LL SAVE THE RECIPE</span>
+          </div>
+        </div>
+        <RecipeFromChatPanel
+          onCancel={() => setPrep(false)}
+          onDraft={(draft: RecipeDraft) => {
+            void saveRecipe(draft).then((r) => {
+              if (r.status === 'ok') {
+                const s = r.recipe.servings;
+                setPrepNote(`Saved ${r.recipe.name} — ${s} serving${s === 1 ? '' : 's'}. It's in your recipes now.`);
+                setPrep(false);
+                setReload((k) => k + 1);
+              } else {
+                setPrepNote(r.message);
+              }
+            });
+          }}
+        />
+      </div>
+    );
+  }
+
   const left = plan?.shopping_list.filter((i) => !i.checked).length ?? 0;
 
   return (
@@ -55,6 +95,8 @@ export function WeekMenuSheet({ onOpenShop, onClose }: { onOpenShop: () => void;
           <span>{status === 'ok' ? 'LIVE · EDITS SAVE AS YOU GO' : 'PLAN A WEEK OF DINNERS'}</span>
         </div>
       </div>
+
+      {prepNote && <div className="shop-msg">{prepNote}</div>}
 
       {status === 'loading' ? (
         <div className="shop-msg">Loading your week…</div>
@@ -93,6 +135,18 @@ export function WeekMenuSheet({ onOpenShop, onClose }: { onOpenShop: () => void;
               </span>
             </button>
           )}
+          <button
+            className="wk-cooked"
+            onClick={() => {
+              setPrepNote('');
+              setPrep(true);
+            }}
+          >
+            <div className="wk-shop-t">
+              <b>I cooked something else ›</b>
+              <span>Tell me what it was — I&apos;ll save the recipe and its servings</span>
+            </div>
+          </button>
           <button className="wk-edit" onClick={() => setEditing(true)}>
             Edit this week ·<span> swap dishes, regenerate ›</span>
           </button>
