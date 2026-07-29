@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { macrosForLog } from '@cadence/shared';
 import { MicButton } from '../../../components/MicButton.tsx';
+import { FoodBarcodePanel } from '../../food/FoodBarcodePanel.tsx';
 import type { MealMacros, OccurrenceDetail } from '../../../lib/api.ts';
 import { NutritionRing } from '../../nutrition/NutritionRing.tsx';
 import { MealDraftCard } from './MealDraftCard.tsx';
@@ -157,7 +158,7 @@ export function MealCapturePanel({
   const cap = useMealCapture(detail, setDetail, { onLogged, onClose });
   const { planned, alsoThisWeek } = usePlannedMeal(cap.mealKind, detail.date);
   const [text, setText] = useState('');
-  const [route, setRoute] = useState<'idle' | 'text'>('idle');
+  const [route, setRoute] = useState<'idle' | 'text' | 'scan'>('idle');
   const [pending, setPending] = useState<MealMacros | null>(null);
 
   const day = cap.day;
@@ -357,23 +358,25 @@ export function MealCapturePanel({
               </span>
               <span className="mc-route-l">Type</span>
             </button>
-            <label className="mc-route">
+            <button className="mc-route" onClick={() => setRoute('scan')}>
               <span className="mc-route-i">
                 <ScanIcon />
               </span>
               <span className="mc-route-l">Scan</span>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                hidden
-                onChange={(e) => {
-                  onPhoto(e.target.files?.[0]);
-                  e.target.value = '';
-                }}
-              />
-            </label>
+            </button>
           </div>
+
+          {route === 'scan' && (
+            <div className="mc-scan">
+              <FoodBarcodePanel
+                onDraft={(d) => {
+                  cap.setDraft(d);
+                  setRoute('idle');
+                }}
+                onCancel={() => setRoute('idle')}
+              />
+            </div>
+          )}
 
           {route === 'text' && (
             <div className="mc-say">
