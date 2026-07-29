@@ -5,6 +5,7 @@ import { MealPlansPanel } from '../food/MealPlansPanel.tsx';
 import { RecipesPanel } from '../food/RecipesPanel.tsx';
 import { NutritionInsightCard } from './NutritionInsightCard.tsx';
 import { NutritionRing } from './NutritionRing.tsx';
+import { ShopSheet } from './ShopSheet.tsx';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -41,7 +42,7 @@ function TodayFoodHome({
   day: NutritionDayData | null;
   confirming: string | null;
   onConfirm: (logId: string) => void;
-  onSub: (s: 'meals' | 'recipes') => void;
+  onSub: (s: 'meals' | 'recipes' | 'shop') => void;
   onClose: () => void;
 }) {
   const target = day?.targets ?? null;
@@ -136,7 +137,7 @@ function TodayFoodHome({
         <button className="tf-tool" onClick={() => onSub('recipes')}>
           Recipes
         </button>
-        <button className="tf-tool" onClick={() => onSub('meals')}>
+        <button className="tf-tool" onClick={() => onSub('shop')}>
           The shop
         </button>
       </div>
@@ -161,7 +162,7 @@ export function TodayFoodSheet({
 }) {
   const { data: day = null, refetch } = useNutritionDay(date);
   const invalidate = useInvalidateNutritionDay();
-  const [sub, setSub] = useState<'home' | 'meals' | 'recipes'>('home');
+  const [sub, setSub] = useState<'home' | 'meals' | 'recipes' | 'shop'>('home');
   const [confirming, setConfirming] = useState<string | null>(null);
 
   async function onConfirm(logId: string) {
@@ -182,7 +183,11 @@ export function TodayFoodSheet({
       <div className="sheet-scrim" onClick={onClose} aria-hidden />
       <div className="sheet tf" role="dialog" aria-label="Today's food">
         <div className="sheet-grab" aria-hidden />
-        {sub === 'meals' ? (
+        {sub === 'shop' ? (
+          <div className="tf-sub">
+            <ShopSheet onClose={() => setSub('home')} />
+          </div>
+        ) : sub === 'meals' ? (
           <div className="tf-sub">
             <MealPlansPanel onClose={() => setSub('home')} />
           </div>
