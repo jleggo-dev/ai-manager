@@ -153,16 +153,19 @@ function TodayFoodHome({
  */
 export function TodayFoodSheet({
   date,
+  initialSub = 'home',
   onClose,
   onLogged,
 }: {
   date: string;
+  /** Open straight to a sub-view — e.g. a shop trail task opens to 'shop'. */
+  initialSub?: 'home' | 'meals' | 'recipes' | 'shop';
   onClose: () => void;
   onLogged?: () => void;
 }) {
   const { data: day = null, refetch } = useNutritionDay(date);
   const invalidate = useInvalidateNutritionDay();
-  const [sub, setSub] = useState<'home' | 'meals' | 'recipes' | 'shop'>('home');
+  const [sub, setSub] = useState<'home' | 'meals' | 'recipes' | 'shop'>(initialSub);
   const [confirming, setConfirming] = useState<string | null>(null);
 
   async function onConfirm(logId: string) {

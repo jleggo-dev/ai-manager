@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { OccurrenceSheet } from './OccurrenceSheet.tsx';
 import { StartSheet } from './StartSheet.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
+import { CookSheet } from './CookSheet.tsx';
 import { AdjustSheet } from './AdjustSheet.tsx';
 import { taskOpener } from './taskShape.ts';
 import { TodayTrail } from '../today/TodayTrail.tsx';
@@ -59,6 +60,8 @@ export function PlanView({
   const [startOcc, setStartOcc] = useState<string | null>(null); // redesign start sheet (stepped task)
   const [captureOcc, setCaptureOcc] = useState<string | null>(null); // capture sheet (weigh-in / meal)
   const [foodOpen, setFoodOpen] = useState(false); // "Today's food" sheet (2F), opened from the trail strip
+  const [foodSub, setFoodSub] = useState<'home' | 'shop'>('home'); // which sub-view the food sheet opens to
+  const [cookOcc, setCookOcc] = useState<string | null>(null); // cook walkthrough (menu-derived cook task)
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSteer, setAdjustSteer] = useState(''); // pre-filled request (nutrition baseline → Adjust)
   const [adjustMode, setAdjustMode] = useState<'adjust' | 'rebalance'>('adjust');
@@ -181,8 +184,19 @@ export function PlanView({
 
   // Trail node tap → routed by task shape: captures (weigh-in, meals) open the minimal CaptureSheet;
   // coach sessions open the StartSheet walkthrough. (The Week view keeps its own OccurrenceSheet.)
-  const openTask = (occ: PlanOccurrence) =>
-    taskOpener(occ) === 'task' ? setStartOcc(occ.occurrence_id) : setCaptureOcc(occ.occurrence_id);
+  const openTask = (occ: PlanOccurrence) => {
+    switch (taskOpener(occ)) {
+      case 'task':
+        return setStartOcc(occ.occurrence_id);
+      case 'cook':
+        return setCookOcc(occ.occurrence_id);
+      case 'shop':
+        setFoodSub('shop');
+        return setFoodOpen(true);
+      default: // weigh + meal
+        return setCaptureOcc(occ.occurrence_id);
+    }
+  };
 
   return (
     <>
@@ -218,7 +232,15 @@ export function PlanView({
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
         {view === 'today' ? (
-          <TodayTrail plan={data} onOpen={openTask} onOpenFood={() => setFoodOpen(true)} onCoach={onCoach} />
+          <TodayTrail
+            plan={data}
+            onOpen={openTask}
+            onOpenFood={() => {
+              setFoodSub('home');
+              setFoodOpen(true);
+            }}
+            onCoach={onCoach}
+          />
         ) : (
           <PlanWeekPanel
             today={today}
@@ -283,7 +305,18 @@ export function PlanView({
       {foodOpen && (
         <TodayFoodSheet
           date={data.week.find((d) => d.isToday)?.date ?? new Date().toISOString().slice(0, 10)}
+          initialSub={foodSub}
           onClose={() => setFoodOpen(false)}
+          onLogged={() => {
+            refresh();
+            bump();
+          }}
+        />
+      )}
+      {cookOcc && (
+        <CookSheet
+          occurrenceId={cookOcc}
+          onClose={() => setCookOcc(null)}
           onLogged={() => {
             refresh();
             bump();

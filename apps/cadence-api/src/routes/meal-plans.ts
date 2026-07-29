@@ -9,6 +9,7 @@ import {
   patchMealPlanForUser,
   removeMealPlan,
 } from '../services/meal-plan.ts';
+import { syncMenuTasks } from '../services/menu-tasks.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
 import {
   confirmMealPlanBodySchema,
@@ -85,6 +86,13 @@ router.post('/', async (req: Request, res: Response) => {
       shopping_list: body.shopping_list,
       notes: body.notes,
     });
+    // Deterministically place this week's shop + cook tasks on the trail (owner's call: write on save).
+    // Best-effort — a sync failure never fails the save the user just made.
+    try {
+      await syncMenuTasks(userId, meal_plan);
+    } catch (e) {
+      console.warn('[POST /nutrition/meal-plans] menu task sync failed (non-fatal):', e);
+    }
     res.status(201).json({ meal_plan });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });

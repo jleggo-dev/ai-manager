@@ -15,8 +15,28 @@ export const ADHOC_CATEGORY = 'adhoc';
  *  tagged) surface in the week as the episode's lighter options. */
 export const EPISODE_CATEGORY = 'episode';
 
-/** Off-plan + episode-temp activities are excluded from the committed-rhythm summary list. */
-export const NON_PLAN_CATEGORIES = new Set<string>([ADHOC_CATEGORY, EPISODE_CATEGORY]);
+/** Marks the shop/cook tasks a saved week menu implies (food module). Like ad-hoc/episode, they're
+ *  kept out of the committed-rhythm list — they're this week's derived chores, not your set rhythm —
+ *  but their occurrences ride the trail. Cleared + re-created on each menu save (see menu-tasks.ts). */
+export const MENU_TASK_CATEGORY = 'menu';
+
+/** Off-plan + episode-temp + menu-derived activities are excluded from the committed-rhythm list. */
+export const NON_PLAN_CATEGORIES = new Set<string>([ADHOC_CATEGORY, EPISODE_CATEGORY, MENU_TASK_CATEGORY]);
+
+/** Delete a plan's activities of one category, and their occurrences first (no FK-cascade assumed).
+ *  Backs the idempotent re-save of menu-derived shop/cook tasks. */
+export async function deleteActivitiesByCategory(userId: string, planId: string, category: string): Promise<void> {
+  await sql`
+    delete from cadence.occurrences
+    where user_id = ${userId}
+      and activity_id in (
+        select activity_id from cadence.activities
+        where user_id = ${userId} and plan_id = ${planId} and category = ${category}
+      )`;
+  await sql`
+    delete from cadence.activities
+    where user_id = ${userId} and plan_id = ${planId} and category = ${category}`;
+}
 
 /**
  * Find (or lazily create) the per-plan "Off-plan" bucket activity. Ad-hoc logs need an activity to
