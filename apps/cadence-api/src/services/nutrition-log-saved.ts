@@ -2,13 +2,14 @@
  * Deterministic meal logs from saved Food / Recipe entities (Req 5).
  * No AI — macros from serving math or recipe macros_per_serving × quantity.
  */
-import { macrosForLog, type Macros, type MealKind, type NutritionLog } from '@cadence/shared';
+import { macrosForLog, type Food, type Macros, type MealKind, type NutritionLog } from '@cadence/shared';
 import { getFood, touchFoodUsage } from '../repos/foods.ts';
 import { insertNutritionLog } from '../repos/nutrition.ts';
 import { getRecipe } from '../repos/recipes.ts';
 import { findPendingFoodLogOccurrence, setOccurrenceStatus } from '../repos/occurrences.ts';
 import { isMeal } from './nutrition-parse.ts';
 import { scaleMacros } from './recipe-macros.ts';
+import { composePlate, type PlateItemInput } from './plate-compose.ts';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -143,6 +144,50 @@ export async function logMealFromRecipe(
       await touchFoodUsage(userId, ing.food_id);
     } catch (e) {
       console.warn('[nutrition] food_usage touch (recipe) failed:', e);
+    }
+  }
+
+  await tickFoodLogOccurrence(userId, date);
+  return row;
+}
+
+/** Deterministic log of a plate — one meal, N saved-food items, macros summed (design 2D). */
+export async function logMealFromItems(
+  userId: string,
+  input: { items: PlateItemInput[]; meal?: MealKind; date?: string },
+): Promise<NutritionLog> {
+  if (!input.items.length) throw new Error('a plate needs at least one item');
+  const date = input.date ?? today();
+  const meal: MealKind = input.meal && isMeal(input.meal) ? input.meal : 'other';
+
+  const foods: Food[] = [];
+  const portions: Array<{ serving_index?: number; quantity?: number }> = [];
+  for (const it of input.items) {
+    const food = await getFood(userId, it.food_id);
+    if (!food) throw new Error('food not found');
+    foods.push(food);
+    portions.push({ serving_index: it.serving_index, quantity: it.quantity });
+  }
+
+  const { items, macros } = composePlate(foods, portions);
+  const row = await insertNutritionLog(userId, {
+    date,
+    meal,
+    items,
+    input_method: 'manual',
+    ai_confidence: null,
+    raw_text: foods.map((f) => f.name).join(', '),
+    flags: {},
+    photo_ref: null,
+    macros,
+    provisional: false,
+  });
+
+  for (const f of foods) {
+    try {
+      await touchFoodUsage(userId, f.food_id);
+    } catch (e) {
+      console.warn('[nutrition] food_usage touch (plate) failed:', e);
     }
   }
 

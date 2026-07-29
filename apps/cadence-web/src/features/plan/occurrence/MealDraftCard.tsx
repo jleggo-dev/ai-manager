@@ -46,16 +46,21 @@ export function MealDraftCard({
   meal,
   busy,
   err,
+  plateMode = false,
   onMacros,
   onLog,
+  onAddAnother,
   onBack,
 }: {
   draft: FoodDraft;
   meal: MealKind;
   busy: boolean;
   err: string;
+  /** True once a plate is being built — the primary action becomes "Add to plate" (design 2D). */
+  plateMode?: boolean;
   onMacros: (m: MealMacros | null) => void;
   onLog: (portion: DraftPortion) => void;
+  onAddAnother?: (portion: DraftPortion) => void;
   onBack: () => void;
 }) {
   const shape = foodShape(draft);
@@ -172,14 +177,37 @@ export function MealDraftCard({
       {err && <div className="mc-err">{err}</div>}
 
       <div className="mc-actions">
-        <button
-          type="button"
-          className="mc-log"
-          disabled={busy || (isNew && !name.trim())}
-          onClick={() => onLog({ servingIndex, quantity, meal, name, brand })}
-        >
-          {busy ? 'Writing it down…' : `Looks right — log ${meal}`}
-        </button>
+        {plateMode ? (
+          <button
+            type="button"
+            className="mc-log"
+            disabled={busy || (isNew && !name.trim())}
+            onClick={() => onAddAnother?.({ servingIndex, quantity, meal, name, brand })}
+          >
+            {busy ? 'Adding…' : 'Add to plate'}
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="mc-log"
+              disabled={busy || (isNew && !name.trim())}
+              onClick={() => onLog({ servingIndex, quantity, meal, name, brand })}
+            >
+              {busy ? 'Writing it down…' : `Looks right — log ${meal}`}
+            </button>
+            {onAddAnother && (
+              <button
+                type="button"
+                className="mc-addanother"
+                disabled={busy || (isNew && !name.trim())}
+                onClick={() => onAddAnother({ servingIndex, quantity, meal, name, brand })}
+              >
+                ＋ Add another thing
+              </button>
+            )}
+          </>
+        )}
         <button type="button" className="mc-back" disabled={busy} onClick={onBack}>
           Back
         </button>

@@ -1,11 +1,92 @@
 import { useState } from 'react';
+import { macrosForLog } from '@cadence/shared';
 import { MicButton } from '../../../components/MicButton.tsx';
 import type { MealMacros, OccurrenceDetail } from '../../../lib/api.ts';
 import { NutritionRing } from '../../nutrition/NutritionRing.tsx';
 import { MealDraftCard } from './MealDraftCard.tsx';
-import { useMealCapture } from './useMealCapture.ts';
+import { useMealCapture, type PlateEntry } from './useMealCapture.ts';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** Sum a plate's items into one macro total (client-side preview; the server recomputes on log). */
+function sumPlate(plate: PlateEntry[]): MealMacros {
+  const total: MealMacros = { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+  for (const e of plate) {
+    const m = macrosForLog(e.food, { servingIndex: e.servingIndex, quantity: e.quantity });
+    total.kcal = (total.kcal ?? 0) + (m.kcal ?? 0);
+    total.protein_g = (total.protein_g ?? 0) + (m.protein_g ?? 0);
+    total.carbs_g = (total.carbs_g ?? 0) + (m.carbs_g ?? 0);
+    total.fat_g = (total.fat_g ?? 0) + (m.fat_g ?? 0);
+  }
+  return total;
+}
+
+/** The plate's item rows (design 2D) — each a thumb-less line with name, a ±0.25 stepper, and macros. */
+function PlateList({
+  plate,
+  busy,
+  onQty,
+  onRemove,
+}: {
+  plate: PlateEntry[];
+  busy: boolean;
+  onQty: (i: number, q: number) => void;
+  onRemove: (i: number) => void;
+}) {
+  return (
+    <div className="mc-platelist">
+      {plate.map((e, i) => {
+        const m = macrosForLog(e.food, { servingIndex: e.servingIndex, quantity: e.quantity });
+        const sub = [
+          e.food.servings[e.servingIndex]?.label,
+          m.kcal ? `${Math.round(m.kcal)} kcal` : '',
+          m.protein_g ? `P${Math.round(m.protein_g)}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <div className="mc-item" key={`${e.food.food_id}-${i}`}>
+            <div className="mc-item-t">
+              <b>{e.food.name}</b>
+              <span>{sub}</span>
+            </div>
+            <div className="mc-item-q">
+              <button
+                type="button"
+                className="mc-istep"
+                aria-label="Less"
+                disabled={busy || e.quantity <= 0.25}
+                onClick={() => onQty(i, Math.max(0.25, round2(e.quantity - 0.25)))}
+              >
+                −
+              </button>
+              <b>{e.quantity}</b>
+              <button
+                type="button"
+                className="mc-istep"
+                aria-label="More"
+                disabled={busy}
+                onClick={() => onQty(i, round2(e.quantity + 0.25))}
+              >
+                +
+              </button>
+            </div>
+            <button
+              type="button"
+              className="mc-item-x"
+              aria-label={`Remove ${e.food.name}`}
+              disabled={busy}
+              onClick={() => onRemove(i)}
+            >
+              ×
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const CameraIcon = () => (
   <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden>
@@ -82,7 +163,8 @@ export function MealCapturePanel({
   const eaten = day?.totals ?? {};
   const eatenKcal = eaten.kcal ?? 0;
   const targetKcal = target?.kcal ?? null;
-  const pendingKcal = pending?.kcal ?? 0;
+  const plateMacros = sumPlate(cap.plate);
+  const pendingKcal = (plateMacros.kcal ?? 0) + (pending?.kcal ?? 0);
   const leftAfter = targetKcal != null ? targetKcal - eatenKcal - pendingKcal : null;
 
   const macroBars: Array<{ key: 'protein_g' | 'carbs_g' | 'fat_g'; label: string; color: string }> = [
@@ -152,14 +234,23 @@ export function MealCapturePanel({
         </div>
       </div>
 
+      {cap.plate.length > 0 && (
+        <PlateList plate={cap.plate} busy={cap.busy} onQty={cap.setPlateQty} onRemove={cap.removePlateItem} />
+      )}
+
       {cap.draft ? (
         <MealDraftCard
           draft={cap.draft}
           meal={cap.mealKind}
           busy={cap.busy}
           err={cap.logErr}
+          plateMode={cap.plate.length > 0}
           onMacros={setPending}
           onLog={cap.logDraft}
+          onAddAnother={(portion) => {
+            setPending(null);
+            void cap.addToPlate(portion);
+          }}
           onBack={() => {
             setPending(null);
             cap.setDraft(null);
@@ -288,6 +379,24 @@ export function MealCapturePanel({
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {cap.plate.length > 0 && (
+            <div className="mc-plate-foot">
+              <div className="mc-plate-tot">
+                <b>~{fmt(plateMacros.kcal ?? 0)} kcal</b>
+                <span>
+                  P{Math.round(plateMacros.protein_g ?? 0)} · C{Math.round(plateMacros.carbs_g ?? 0)} · F
+                  {Math.round(plateMacros.fat_g ?? 0)}
+                </span>
+              </div>
+              {cap.logErr && <div className="mc-err">{cap.logErr}</div>}
+              <button className="mc-log" disabled={cap.busy} onClick={() => void cap.logPlate()}>
+                {cap.busy
+                  ? 'Writing it down…'
+                  : `Log ${cap.mealKind} · ${cap.plate.length} thing${cap.plate.length === 1 ? '' : 's'}`}
+              </button>
             </div>
           )}
         </>

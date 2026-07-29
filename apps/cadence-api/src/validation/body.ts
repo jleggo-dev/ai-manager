@@ -66,6 +66,18 @@ export const logMealBodySchema = z
     quantity: z.number().positive().optional(),
     /** Alias for recipe quantity (accepted by Food-tab clients). */
     servings: z.number().positive().optional(),
+    /** A plate — N saved-food items composed into one meal (design 2D). */
+    items: z
+      .array(
+        z.object({
+          food_id: z.string().uuid({ message: 'items[].food_id must be a uuid' }),
+          serving_index: z.number().int().min(0).optional(),
+          quantity: z.number().positive().optional(),
+        }),
+      )
+      .min(1)
+      .max(20)
+      .optional(),
     date: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' })
@@ -79,10 +91,10 @@ export const logMealBodySchema = z
       });
     }
     const text = typeof val.text === 'string' ? val.text.trim() : '';
-    if (!text && !val.photo && !val.food_id && !val.recipe_id) {
+    if (!text && !val.photo && !val.food_id && !val.recipe_id && !val.items?.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'a meal needs words, a photo, a food_id, or a recipe_id',
+        message: 'a meal needs words, a photo, a food_id, a recipe_id, or items',
       });
     }
   })
@@ -94,6 +106,7 @@ export const logMealBodySchema = z
     recipe_id: val.recipe_id,
     serving_index: val.serving_index,
     quantity: val.quantity ?? val.servings,
+    items: val.items,
     date: val.date,
   }));
 

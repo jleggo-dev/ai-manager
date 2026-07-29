@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { Food } from '@cadence/shared';
 import {
   createFood,
   estimateFood,
@@ -7,6 +8,7 @@ import {
   getPlateAdvice,
   logMeal,
   logMealFromFood,
+  logMealFromItems,
   portionHintFromResolve,
   resolveFoods,
   type FoodSummary,
@@ -24,6 +26,13 @@ export interface DraftPortion {
   meal: MealKind;
   name: string;
   brand: string;
+}
+
+/** One item on a plate — a resolved saved Food + its portion (design 2D). */
+export interface PlateEntry {
+  food: Food;
+  servingIndex: number;
+  quantity: number;
 }
 
 /**
@@ -50,29 +59,87 @@ async function resolveToDraft(q: string): Promise<{ draft?: FoodDraft; note?: st
   return { note: est.message || "Couldn't read that one — try saying it a different way." };
 }
 
-/** A confirmed draft → deterministic log (real macros). Creates the food first if it was new. */
+/** A draft → its saved Food (creating it first if it was a fresh estimate). */
+async function foodFromDraft(draft: FoodDraft, portion: DraftPortion): Promise<Food | null> {
+  if (draft.kind === 'saved') return draft.food;
+  return createFood({
+    ...draft.candidate,
+    name: portion.name.trim() || draft.candidate.name,
+    brand: portion.brand.trim() || null,
+    default_serving: portion.servingIndex,
+  });
+}
+
+/** A confirmed draft → deterministic single-item log (real macros). */
 async function commitDraft(draft: FoodDraft, portion: DraftPortion): Promise<{ ok: boolean; err?: string }> {
-  let foodId: string;
-  if (draft.kind === 'saved') {
-    foodId = draft.food.food_id;
-  } else {
-    const saved = await createFood({
-      ...draft.candidate,
-      name: portion.name.trim() || draft.candidate.name,
-      brand: portion.brand.trim() || null,
-      default_serving: portion.servingIndex,
-    });
-    if (!saved) return { ok: false, err: "Couldn't save that food just now — try again in a moment." };
-    foodId = saved.food_id;
-  }
+  const food = await foodFromDraft(draft, portion);
+  if (!food) return { ok: false, err: "Couldn't save that food just now — try again in a moment." };
   const logged = await logMealFromFood({
-    food_id: foodId,
+    food_id: food.food_id,
     meal: portion.meal,
     serving_index: portion.servingIndex,
     quantity: portion.quantity,
   });
   if (!logged) return { ok: false, err: "Couldn't log that just now — try again in a moment." };
   return { ok: true };
+}
+
+/**
+ * The plate (design 2D) — building one meal from N saved-food items. Split out of the main capture
+ * hook so each stays lean: `addToPlate` commits the open draft (creating a new food first), `logPlate`
+ * writes the whole plate as one meal with N items. Shares the parent's busy/error + draft state so the
+ * sheet's buttons and the ring stay in sync.
+ */
+function usePlate(deps: {
+  draft: FoodDraft | null;
+  setDraft: (d: FoodDraft | null) => void;
+  busy: boolean;
+  setBusy: (b: boolean) => void;
+  setLogErr: (s: string) => void;
+  mealKind: MealKind;
+  refreshDay: () => Promise<void>;
+  markLogged: () => void;
+}) {
+  const [plate, setPlate] = useState<PlateEntry[]>([]);
+
+  async function addToPlate(portion: DraftPortion) {
+    if (!deps.draft || deps.busy) return;
+    deps.setBusy(true);
+    deps.setLogErr('');
+    try {
+      const food = await foodFromDraft(deps.draft, portion);
+      if (!food) return deps.setLogErr("Couldn't save that food just now — try again in a moment.");
+      setPlate((p) => [...p, { food, servingIndex: portion.servingIndex, quantity: portion.quantity }]);
+      deps.setDraft(null);
+    } finally {
+      deps.setBusy(false);
+    }
+  }
+
+  async function logPlate() {
+    if (!plate.length || deps.busy) return;
+    deps.setBusy(true);
+    deps.setLogErr('');
+    try {
+      const logged = await logMealFromItems({
+        items: plate.map((e) => ({ food_id: e.food.food_id, serving_index: e.servingIndex, quantity: e.quantity })),
+        meal: deps.mealKind,
+      });
+      if (!logged) return deps.setLogErr("Couldn't log that plate just now — try again in a moment.");
+      await deps.refreshDay();
+      deps.markLogged();
+    } finally {
+      deps.setBusy(false);
+    }
+  }
+
+  return {
+    plate,
+    addToPlate,
+    logPlate,
+    setPlateQty: (i: number, quantity: number) => setPlate((p) => p.map((e, j) => (j === i ? { ...e, quantity } : e))),
+    removePlateItem: (i: number) => setPlate((p) => p.filter((_, j) => j !== i)),
+  };
 }
 
 /**
@@ -125,6 +192,8 @@ export function useMealCapture(
     opts.onLogged?.();
     opts.onClose?.();
   }
+
+  const plateApi = usePlate({ draft, setDraft, busy, setBusy, setLogErr, mealKind, refreshDay, markLogged });
 
   async function resolveText(text: string) {
     const q = text.trim();
@@ -211,6 +280,7 @@ export function useMealCapture(
   }
 
   return {
+    ...plateApi,
     mealKind,
     setMealKind,
     day,
