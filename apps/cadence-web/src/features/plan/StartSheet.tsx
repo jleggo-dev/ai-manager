@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { deriveWalkthrough, type Walkthrough as WalkthroughData } from '@cadence/shared';
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
+import { coachingMessages, useRotatingMessage } from './coaching-progress.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
 import { setOccurrence, logOccurrence } from '../../lib/api.ts';
 
@@ -39,14 +40,18 @@ const roundUp5 = (x: number) => Math.max(5, Math.ceil(x / 5) * 5);
  */
 export function StartSheet({
   occurrenceId,
+  title,
   onClose,
   onLogged,
 }: {
   occurrenceId: string;
+  title?: string; // the tapped node's title — lets the loader personalize before the detail lands
   onClose: () => void;
   onLogged?: () => void;
 }) {
   const { detail, state } = useOccurrenceDetail(occurrenceId);
+  const messages = useMemo(() => coachingMessages(title), [title]);
+  const loadingMsg = useRotatingMessage(state === 'loading', messages);
   const [run, setRun] = useState<WalkthroughData | null>(null);
   const [timePick, setTimePick] = useState(false); // "I have less time" → the time-definition step
   const [showCustom, setShowCustom] = useState(false);
@@ -102,7 +107,9 @@ export function StartSheet({
               <i />
               <i />
             </span>
-            <span className="sheet-loading-t">Lining up your steps…</span>
+            <span className="sheet-loading-t" key={loadingMsg}>
+              {loadingMsg}
+            </span>
           </div>
         ) : state === 'gone' ? (
           <div className="sheet-msg">This one moved with your new plan — close and take a fresh look at your week.</div>

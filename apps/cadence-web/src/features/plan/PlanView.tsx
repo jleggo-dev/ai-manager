@@ -57,7 +57,7 @@ export function PlanView({
   const [note, setNote] = useState('');
   const [proposalBusy, setProposalBusy] = useState(false);
   const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)
-  const [startOcc, setStartOcc] = useState<string | null>(null); // redesign start sheet (stepped task)
+  const [startOcc, setStartOcc] = useState<{ id: string; title: string } | null>(null); // redesign start sheet (stepped task)
   const [captureOcc, setCaptureOcc] = useState<string | null>(null); // capture sheet (weigh-in / meal)
   const [foodOpen, setFoodOpen] = useState(false); // "Today's food" sheet (2F), opened from the trail strip
   const [foodSub, setFoodSub] = useState<'home' | 'shop'>('home'); // which sub-view the food sheet opens to
@@ -187,7 +187,7 @@ export function PlanView({
   const openTask = (occ: PlanOccurrence) => {
     switch (taskOpener(occ)) {
       case 'task':
-        return setStartOcc(occ.occurrence_id);
+        return setStartOcc({ id: occ.occurrence_id, title: occ.title });
       case 'cook':
         return setCookOcc(occ.occurrence_id);
       case 'shop':
@@ -284,7 +284,8 @@ export function PlanView({
       )}
       {startOcc && (
         <StartSheet
-          occurrenceId={startOcc}
+          occurrenceId={startOcc.id}
+          title={startOcc.title}
           onClose={() => setStartOcc(null)}
           onLogged={() => {
             refresh();
