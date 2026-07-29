@@ -1,6 +1,6 @@
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
 import { isFoodRow } from './occurrence/format.ts';
-import { MealLogPanel } from './occurrence/MealLogPanel.tsx';
+import { MealCapturePanel } from './occurrence/MealCapturePanel.tsx';
 import { WeighInPanel } from './occurrence/WeighInPanel.tsx';
 import { ICON } from '../today/category.ts';
 
@@ -12,22 +12,22 @@ const SCALE =
  * The **capture sheet** (REQ8 task shapes) — a weigh-in or a meal is one data entry, so it opens
  * minimal: a clean redesign header + the capture, and nothing else. No "start", no step summary, no
  * "I have less time" — there's nothing to walk through or shorten. The weigh-in is a deterministic
- * number; the meal is the photo/note capture (pre-selecting the meal the task names). Sessions
- * (workouts) keep the StartSheet walkthrough; this is only for the capture shapes.
+ * number; the meal is the redesigned two-tone-ring capture (say / snap / type, resolver draft card,
+ * quantities, two-tap recents), pre-selecting the meal the task names. Sessions keep the StartSheet
+ * walkthrough; the Week view keeps its own OccurrenceSheet (with the fuller meal log + baseline).
  */
 export function CaptureSheet({
   occurrenceId,
   onClose,
   onLogged,
-  onProposeChange,
 }: {
   occurrenceId: string;
   onClose: () => void;
   onLogged?: () => void;
-  onProposeChange?: (steer: string) => void;
 }) {
   const { detail, setDetail, state } = useOccurrenceDetail(occurrenceId);
   const isWeigh = !!detail && /weigh/i.test(detail.title);
+  const time = detail?.schedule?.time_of_day ?? null;
 
   return (
     <>
@@ -56,7 +56,11 @@ export function CaptureSheet({
               </div>
               <div className="ss-headt">
                 <b>{detail.title}</b>
-                <span>{detail.schedule?.time_of_day ?? (isWeigh ? 'weekly' : 'anytime')}</span>
+                <span>
+                  {isWeigh
+                    ? (time ?? 'weekly')
+                    : [time, 'CAPTURE · NOTHING COUNTS UNTIL YOU CONFIRM'].filter(Boolean).join(' · ')}
+                </span>
               </div>
             </div>
 
@@ -69,12 +73,7 @@ export function CaptureSheet({
                 </div>
               )
             ) : isFoodRow(detail) ? (
-              <MealLogPanel
-                detail={detail}
-                setDetail={setDetail}
-                onLogged={onLogged}
-                onProposeChange={onProposeChange}
-              />
+              <MealCapturePanel detail={detail} setDetail={setDetail} onLogged={onLogged} onClose={onClose} />
             ) : (
               <div className="sheet-msg">Tap it done when it happens.</div>
             )}

@@ -17,7 +17,9 @@ import {
 describe('parseBody / nutrition schemas', () => {
   it('rejects empty meal bodies', () => {
     expect(() => parseBody(logMealBodySchema, {})).toThrow(BodyValidationError);
-    expect(() => parseBody(logMealBodySchema, { text: '  ' })).toThrow(/words, a photo, a food_id, or a recipe_id/);
+    expect(() => parseBody(logMealBodySchema, { text: '  ' })).toThrow(
+      /words, a photo, a food_id, a recipe_id, or items/,
+    );
   });
 
   it('accepts text and optional meal kind', () => {
@@ -53,6 +55,25 @@ describe('parseBody / nutrition schemas', () => {
       food_id: undefined,
       text: '',
     });
+  });
+
+  it('accepts a plate of items without text/photo', () => {
+    const a = '11111111-1111-4111-8111-111111111111';
+    const b = '22222222-2222-4222-8222-222222222222';
+    expect(
+      parseBody(logMealBodySchema, {
+        items: [{ food_id: a, serving_index: 0, quantity: 1.5 }, { food_id: b }],
+        meal: 'lunch',
+      }),
+    ).toMatchObject({
+      items: [{ food_id: a, serving_index: 0, quantity: 1.5 }, { food_id: b }],
+      meal: 'lunch',
+      text: '',
+    });
+  });
+
+  it('rejects items with a non-uuid food_id', () => {
+    expect(() => parseBody(logMealBodySchema, { items: [{ food_id: 'nope' }] })).toThrow(/food_id must be a uuid/);
   });
 
   it('rejects food_id and recipe_id together', () => {

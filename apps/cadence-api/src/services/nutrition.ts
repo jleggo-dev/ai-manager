@@ -32,7 +32,8 @@ import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
 import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW } from './nutrition-parse.ts';
 import { logAi } from './ai-log.ts';
-import { logMealFromFood, logMealFromRecipe } from './nutrition-log-saved.ts';
+import { logMealFromFood, logMealFromItems, logMealFromRecipe } from './nutrition-log-saved.ts';
+import type { PlateItemInput } from './plate-compose.ts';
 import { getFoodsByIds } from '../repos/foods.ts';
 import { buildNutritionInsight, type NutritionInsightPack } from './nutrition-insight.ts';
 import { buildMicroInsightRollup } from './nutrition-insight-micro.ts';
@@ -75,8 +76,12 @@ export async function logMeal(
     recipe_id?: string;
     serving_index?: number;
     quantity?: number;
+    items?: PlateItemInput[];
   },
 ): Promise<NutritionLog> {
+  if (input.items?.length) {
+    return logMealFromItems(userId, { items: input.items, meal: input.meal, date: input.date });
+  }
   if (input.food_id) {
     return logMealFromFood(userId, {
       food_id: input.food_id,

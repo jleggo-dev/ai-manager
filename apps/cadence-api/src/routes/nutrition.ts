@@ -32,6 +32,7 @@ router.post('/meals', async (req: Request, res: Response) => {
         recipe_id: body.recipe_id,
         serving_index: body.serving_index,
         quantity: body.quantity,
+        items: body.items,
         date: body.date,
       }),
     );

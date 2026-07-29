@@ -170,6 +170,30 @@ export async function logMealFromRecipe(input: {
   }
 }
 
+export interface PlateItem {
+  food_id: string;
+  serving_index?: number;
+  quantity?: number;
+}
+
+/**
+ * Deterministic log of a plate (design 2D) — N saved-food items composed into ONE meal, macros summed
+ * server-side. `nutrition_logs.items[]` is exactly this shape, so it's one write, one meal, N items.
+ */
+export async function logMealFromItems(input: { items: PlateItem[]; meal?: MealKind }): Promise<Meal | null> {
+  try {
+    const res = await fetch(`${BASE}/nutrition/meals`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ items: input.items, ...(input.meal ? { meal: input.meal } : {}) }),
+    });
+    if (res.status === 404 || !res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 /** Recent meals, newest first (the food-log sheet's list). */
 export async function getRecentMeals(days = 7): Promise<Meal[]> {
   const res = await fetch(`${BASE}/nutrition/recent?days=${days}`, { headers: headers() });

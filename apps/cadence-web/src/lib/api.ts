@@ -69,6 +69,8 @@ export {
   logMeal,
   logMealFromFood,
   logMealFromRecipe,
+  logMealFromItems,
+  type PlateItem,
   getRecentMeals,
   getBaselineRead,
   getNutritionInsight,

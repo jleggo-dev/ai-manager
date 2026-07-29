@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { getTodayBrief, type PlanViewData, type PlanDay, type PlanOccurrence } from '../../lib/api.ts';
+import { TrailFoodStrip } from '../nutrition/TrailFoodStrip.tsx';
 import { categoryOf, ICON } from './category.ts';
 import { useFitText } from './useFitText.ts';
 
@@ -204,14 +205,17 @@ function TrailNode({
 export function TodayTrail({
   plan,
   onOpen,
+  onOpenFood,
   onCoach,
 }: {
   plan: PlanViewData;
   onOpen: (occ: PlanOccurrence) => void;
+  onOpenFood: () => void;
   onCoach: () => void;
 }) {
   const days = plan.week;
-  const todayPretty = prettyDate(days.find((d) => d.isToday)?.date ?? new Date().toISOString().slice(0, 10));
+  const todayDate = days.find((d) => d.isToday)?.date ?? new Date().toISOString().slice(0, 10);
+  const todayPretty = prettyDate(todayDate);
   const [recap, setRecap] = useState<string | null>(null);
   // Deterministic 2-line guarantee: shrink the whole line to fit even if the recap runs long.
   const fit = useFitText(`${todayPretty}|${recap ?? ''}`);
@@ -227,6 +231,7 @@ export function TodayTrail({
 
   return (
     <div className="trail">
+      <TrailFoodStrip date={todayDate} onOpen={onOpenFood} />
       <div className="trail-coach">
         <svg className="stroke" viewBox="0 0 24 24" width="20" height="20" aria-hidden>
           <path d="M20 11.5a7.5 7.5 0 01-10.9 6.7L4 19l1-4.3A7.5 7.5 0 1120 11.5z" strokeLinejoin="round" />
