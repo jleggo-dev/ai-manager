@@ -3,9 +3,11 @@ import { cadenceConfig } from '../config.ts';
 import type { CaptureExtractResult, GoalArea, GoalType, EquipmentCategory } from '@cadence/shared';
 import { insertGoal, listGoalsByStatus, deleteCapturedWithoutMilestones } from '../repos/goals.ts';
 import { insertEquipment, deleteAllEquipment } from '../repos/equipment.ts';
-import { mergeBaseline, setName } from '../repos/users.ts';
+import { getUser, mergeBaseline, setHomeLocation, setName } from '../repos/users.ts';
+import { geocodeCity } from './weather/weather.ts';
 import { logAi } from './ai-log.ts';
 import { normalizeBaseline, normTitle, selectCapturedGoals } from './capture-normalize.ts';
+import { extractCity } from './capture-location.ts';
 
 const GOAL_AREAS: GoalArea[] = ['movement', 'nourishment', 'mind', 'practice'];
 const GOAL_TYPES: GoalType[] = ['milestone', 'target', 'recurring'];
@@ -148,6 +150,24 @@ export async function runCaptureExtract(
   if (Object.keys(normBaseline).length > 0) {
     await mergeBaseline(userId, normBaseline as unknown as Parameters<typeof mergeBaseline>[1]);
     baseline = true;
+  }
+
+  // Home location the Broker heard — so weather can default from what they told the coach, not a
+  // second ask. Geocode the stated city via OWM → coarse coords, and set it ONLY when the user hasn't
+  // already chosen a place in Settings (never override an explicit choice). Best-effort: a geocode
+  // miss (or an unconfigured weather key) is swallowed — it never fails the capture.
+  const statedCity = extractCity(parsed.location);
+  if (statedCity) {
+    try {
+      const user = await getUser(userId);
+      if (!user?.home_location) {
+        const geo = await geocodeCity(statedCity);
+        if (geo)
+          await setHomeLocation(userId, { lat: geo.lat, lon: geo.lon, label: geo.label }, user?.timezone ?? null);
+      }
+    } catch (e) {
+      console.warn('[capture] home-location geocode failed (non-fatal):', e);
+    }
   }
 
   const persisted = { goals, equipment, baseline };
