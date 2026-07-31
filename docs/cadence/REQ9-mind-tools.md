@@ -267,3 +267,47 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
   carry only "Something else?", a tool switch; the emergency line lives inside that sheet.)
 - **Library routing** — its own tab, under Mind, or a shared cross-pillar surface? A pricing and
   moderation decision, not a layout one.
+
+## 8. The emergency line — recognition & trigger (added 2026-07-31)
+
+How rung 3 (§3.4) gets reached. Three paths — and the ladder's boundary applies to detection
+itself: classification separates the everyday from the acute, and **only acute ever touches
+crisis machinery**.
+
+- **Pull — reached, not detected (the floor).** The ladder: any practice surface → "Something
+  else?" → the emergency line at the sheet's bottom. Two taps, fully deterministic — it works
+  when detection fails, which is why it's the most important path. Plus one stable home outside
+  practices (Settings or the Coach tab) so it's findable cold.
+- **Push — detected in conversation.** Two layers that fail differently:
+  1. **The prompt boundary** — the coach's system prompt
+     (`config/ai-admin/cadence-coach.system-prompt.md`, deployed via
+     `apps/cadence-api/scripts/set-coach-persona.ts`). A boundary already shipped there;
+     upgraded 2026-07-31 with the reframe's other half stated affirmatively (everyday stress and
+     anxiety are *yours to coach*), the acute classes named, 988 US **and Canada** + 911, no
+     technique-as-substitute in acute moments, bidirectional med caution, and
+     deferral-is-not-abandonment.
+  2. **The classifier** — a `distress: none | elevated | acute` field (+ one-line reason) added
+     to `capture_extract`'s schema, riding the **existing per-turn ambient capture**
+     (`routes/coach.ts` fires it async on the full window — off the hot path, so recognition
+     costs no latency and no new job). Tuned high-recall; extends to journals via
+     `parse_mind_log` when the journal ships.
+  **On `acute`:** the app — never the LLM — renders the fixed vetted card (owner-supplied copy
+  deck, region-aware via `home_location`, generic international fallback) and sets a session
+  **deferral-mode flag**; subsequent coach turns receive it and keep deferring warmly until it
+  clears. **On `elevated`: not crisis** — the coach coaches in plain words; a responsive
+  grounding offer is fine; the ladder sits unchanged. High recall guarantees false positives, so
+  the card is dismissible, non-alarmist, never locks the app, never shames.
+- **Trend — slow, out-of-loop, never crisis copy.** Declining check-in words, journal valence,
+  `situation.ts`'s "days since anything real" → the existing tripwire → Broker-proposes
+  machinery fires a **warm coaching check-in** — outreach, never the emergency card. Blocked on
+  the REQ10 §7 tick (tripwires only evaluate at request time today; silence is invisible).
+
+**Deliberate non-detection:** client tools stay dumb — no sentiment surveillance inside a breath
+widget; "did it help? → no" is arc data, not a red flag; recognition reads only what the person
+*tells* us. **Guardrails:** never auto-dial, never contact a third party, every trip
+audit-logged; the response is furniture, never freestyled. The chat card **reuses the ladder
+sheet's emergency-line component** (noted in `design/now-door-brief.md`).
+
+**Status:** prompt boundary upgraded in-repo, live after `set-coach-persona` re-run. Classifier
++ card + deferral mode: designed, not built — needs the copy deck. Trend layer: blocked on the
+tick.

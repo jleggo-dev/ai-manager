@@ -101,7 +101,10 @@ breathing is "Something else?" — an offer, not an alarm) and shrinks the copy 
 - **The express lane** — the pinned-item sheet variant and the promoted-disc variant.
 - **The ladder** — "Something else?" in place on the breathing screen (running state), the sheet
   with its three rungs, and the emergency line's treatment at rest (present, calm, unmistakable
-  when needed, never alarming).
+  when needed, never alarming). **Design the emergency line as a reusable component:** when
+  chat-side detection trips (REQ9 §8), the app renders a fixed crisis card in the conversation —
+  same element, same treatment, different host. Don't design the card here; just don't make the
+  line sheet-only.
 - **First encounter** — how the door introduces itself once, in the coach's voice (one line in
   the day-recap bubble, e.g. "that little door is always there — for when you've got a few
   minutes or need one"), then never explains again.
