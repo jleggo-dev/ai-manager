@@ -82,6 +82,11 @@ Not adopted: the `oklch(52% 0.07 268)` hue (superseded by your own withdrawal �
 
 ## 4. The spine — specify once, here; everything inherits it
 
+> **⚠️ Superseded in part (2026-07-31):** the now-door portion of this section was generalized
+> after Mind 1 shipped — the door is now a **neutral shell affordance with a coach-composed,
+> plan-relative menu**, not a Mind-owned breath disc. See
+> [`now-door-brief.md`](now-door-brief.md) and REQ10 §6. Everything else in this brief stands.
+
 **Three entry doors.** A scheduled trail node · an **unscheduled "now" door** reachable from
 anywhere without a task existing first · a coach-offered door mid-chat. You flagged the
 unscheduled door as under-specified and the one an anxious person actually needs — agreed, and

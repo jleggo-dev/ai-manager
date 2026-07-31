@@ -66,9 +66,16 @@ Three classes. Most mind tools are **timer-class**; exactly two things are modul
 unchanged; sets/reps simply go unused (tools ignore fields they don't read). What the rail is
 *missing* for mind:
 
-1. **The "now door"** — an unscheduled entry point ("I need a minute") for breath/ground/sit.
-   Mind practices are half reactive; the trail only shows what was planned. Unscheduled use logs
-   to the day but draws no node (the trail stays a picture of what you and the coach agreed).
+1. **The "now door" — shell-level and plan-relative, NOT Mind-owned** (owner correction
+   2026-07-31; supersedes the Mind 1 design's global breath-disc). The universal need is "I have
+   something right now" — extra capacity, a pull toward practice, a rough moment. Its *content*
+   is personal: the calm-program user gets grounding options, the athlete gets a stretch or 20
+   extra pushups, the practice user gets 10 Hail Marys. So the door is a **neutral shell
+   affordance opening a coach-composed, cached menu** (REQ10 §6), with an optional coach-pinned
+   one-tap express lane per user. **The shell law:** nothing pillar-flavored ever ships in the
+   frame — the shell offers doors, the coach decides what's behind them. Mind supplies
+   *payloads* behind the door, never the door itself. Unscheduled use logs to the day but draws
+   no node. Brief: `design/now-door-brief.md`.
 2. **A journal store** — occurrence-log notes aren't a journal; entries need their own table +
    history view.
 3. **Audio/background behavior** — long sits and sleep audio need screen-dim, keep-awake, and
@@ -210,9 +217,10 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
 
 ## 6. Build order (one at a time; each independently shippable)
 
-1. **`breath`** — the signature widget; pure client; ships the pillar. Lands **with the now door**
-   (it must be reachable unscheduled to be itself), **the calm surface (chrome A)**, and **the
-   crisis rail** — the three pieces of spine everything later inherits.
+1. **`breath`** — the signature widget; pure client; ships the pillar. Lands **behind the
+   generalized now door** (REQ10 §6 — the door + menu composer are shell work and precede or
+   accompany this step), with **the calm surface (chrome A)** and **the crisis rail** — the
+   spine everything later inherits.
 2. **`sit`** — extends StepTimer (bells, settle pre-roll, "came back" tap, keep-awake).
 3. **`checkin`** — small; starts the Observe data flowing (REQ6 §10: instrument demand first).
 4. **`ground`** — the family shell + senses/letters/switch first.
@@ -225,7 +233,10 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
 
 ## 7. Open questions
 
-- **Where does the now door live?** A quiet affordance on Today vs. inside the ＋ FAB vs. both.
+- ~~Where does the now door live?~~ **Resolved 2026-07-31:** generalized to a neutral,
+  plan-relative shell door with a coach-composed menu — see §3.1, REQ10 §6, and
+  `design/now-door-brief.md`. Remaining sub-question (Design to recommend): one control with a
+  two-tense sheet vs. the ＋/door stack.
 - **`SessionItem` params:** typed optional fields per tool (REQ8 idiom) vs. one `params` jsonb —
   decide at `breath` build time; leaning typed fields + normalize caps.
 - **Check-in vocabulary:** which emotion-word set (needs to be granular but not clinical).
