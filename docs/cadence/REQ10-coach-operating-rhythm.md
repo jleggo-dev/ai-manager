@@ -96,6 +96,10 @@ the tap — **zero LLM calls at tap time**; nobody mid-spiral waits eight second
   tools-that-exist + activities-that-exist (the catalog law).
 - Menu items log through the same rails as everything (occurrence log / `did`), so extra work
   credits progression and the day footer ("also today: 6 breaths").
+- **Second consumer — the escalation ladder** (REQ9 §3.4): the in-practice "Something else?"
+  sheet is the menu's `right_now`-tagged subset (distraction/grounding alternates, a different
+  breath). One composer, two tenses: "do something now" (the door) and "this isn't landing"
+  (the ladder). The emergency line at the ladder's bottom is app-fixed copy, never composed.
 
 ## 7. Gap 3 — the clock (acting when the user is gone)
 

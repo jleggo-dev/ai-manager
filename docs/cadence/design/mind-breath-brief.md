@@ -103,6 +103,11 @@ it's a first-class deliverable here:
 dismissible by leaving. One design, one copy line, one log shape, **asked at most once a day
 across all mind surfaces** — your call, taken. Include the partial state.
 
+> **⚠️ Superseded (2026-07-31):** the rail below conflated everyday rough moments with actual
+> crises and was replaced by the **escalation ladder** — an ever-present "Something else?" tool
+> switch on practice surfaces, with the emergency line at the bottom of its sheet. See
+> [`now-door-brief.md`](now-door-brief.md) §5 and REQ9 §3.4.
+
 **The rail, same place always.** One line of furniture, identical position and copy on every mind
 surface from phase 1. Routes to deferral copy + resources. Never colour-coded as an alarm, never a
 modal, never absent — reads as an exit, not a warning. *Design the placement and treatment; the

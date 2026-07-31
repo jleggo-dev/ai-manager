@@ -80,12 +80,19 @@ unchanged; sets/reps simply go unused (tools ignore fields they don't read). Wha
    history view.
 3. **Audio/background behavior** — long sits and sleep audio need screen-dim, keep-awake, and
    background playback; the workout walkthrough never needed these.
-4. **The crisis rail as shell furniture.** BRAND's crisis boundary gates *acute* distress only —
-   but the surface it lives on must exist from the first calm tool, not the last. People reach a
-   breath pacer or a grounding game *while dysregulated*, and those ship first. One line of
-   furniture, same position and copy on every mind surface, reads as an exit and never as an
-   alarm. (Design's assessment caught this; it was originally scoped to the stepped-protocol
-   phase, which was wrong.)
+4. **The escalation ladder + the emergency line** (owner reframe 2026-07-31 — replaces "the
+   crisis rail," which conflated two things that must never share a control: "name animals
+   starting with A" and "dial 911"). **Rung 1 — "Something else?":** ever-present on every
+   in-practice surface from the first calm tool (Design's phase-1 timing insight stands), and it
+   is a *tool switch*, never an exit — it opens the coach's other in-the-moment tools for this
+   person (the `ground` distraction family, a different breath, a walk; the `right_now` subset
+   of the now-menu, same composer as the door). **Rung 2 — the coach** (chat; everyday anxiety
+   is coachable in plain words). **Rung 3 — the emergency line:** real resources (region-aware:
+   911/988 etc.) + the deterministic vetted deferral copy, at the bottom of the same sheet —
+   always the same place, two taps from anywhere, never ambient furniture on a breathing screen.
+   The chat-side distress classifier trip is unchanged. **"Crisis" is reserved for rung 3
+   only** — everyday rough moments are coaching, not crises; nothing labeled or flavored
+   "crisis" appears on practice surfaces.
 5. Already there: quick-shape (single-tool, one-tap) tasks, the grey pre-roll, partial-elapsed
    logging ("4 of 10 min · that counts" — partial is the normal case, never shamed).
 
@@ -153,7 +160,10 @@ timer pressure; leaving early still counts. **Params:** `game`:
 - `cold` — instruction card (cool water on the face; safe, no interaction)
 
 Close = "did that help?" (yes / no / skip) → logs to the arc as self-report. Primary home is the
-**now door**, zero setup; the coach may also schedule one or offer one in chat.
+**now door**, zero setup; the coach may also schedule one or offer one in chat. The family is
+also **rung 1 of the escalation ladder** (§3.4): mid-practice "Something else?" offers exactly
+these as the in-the-moment alternates — they are the everyday answer that keeps ordinary rough
+moments out of "crisis" territory.
 
 ### 4.4 `checkin` — the mind-side instrument (Class 1)
 
@@ -251,7 +261,9 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
   reps or grams — so asking it four times a day would read as nagging, not care).
 - **Do mind practices log as occurrences** with the existing status vocabulary (`skipped` vs
   `missed`, freezes, detours), or something new? Leaning existing.
-- **The crisis rail's shipping copy deck + resource list** — needed before the rail is built, not
-  designed around a placeholder.
+- **The emergency line's copy deck + region-aware resource list** (911/988 CA-US; 999/111 UK…)
+  — owner-supplied before rung 3 is built. (The old "rail" questions — its copy deck and whether
+  it may be absent during active breathing — dissolved in the ladder reframe: practice surfaces
+  carry only "Something else?", a tool switch; the emergency line lives inside that sheet.)
 - **Library routing** — its own tab, under Mind, or a shared cross-pillar surface? A pricing and
   moderation decision, not a layout one.
