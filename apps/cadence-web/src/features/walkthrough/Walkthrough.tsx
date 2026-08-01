@@ -3,6 +3,7 @@ import type { Walkthrough as WalkthroughData, WalkthroughStep } from '@cadence/s
 import { StepReps } from './tools/StepReps.tsx';
 import { StepTimer } from './tools/StepTimer.tsx';
 import { StepCircuit } from './tools/StepCircuit.tsx';
+import { StepBreathing } from './tools/StepBreathing.tsx';
 import { StepCheckoff, StepJournal } from './tools/SimpleTools.tsx';
 import { TONE } from './tools/tone.ts';
 import { Recap } from './Recap.tsx';
@@ -225,6 +226,17 @@ function renderTool(
           chime={t.chime ?? true}
           nextTitle={nextTitle}
           log={log?.kind === 'timer' ? log : undefined}
+          onLog={(l) => setLog(step.id, l)}
+          onDone={onAdvance}
+        />
+      );
+    case 'breathing':
+      return (
+        <StepBreathing
+          pattern={t.pattern}
+          cycles={t.cycles}
+          caution={t.pattern.caution}
+          log={log?.kind === 'breathing' ? log : undefined}
           onLog={(l) => setLog(step.id, l)}
           onDone={onAdvance}
         />

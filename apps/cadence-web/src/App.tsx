@@ -8,6 +8,7 @@ import { DevPanel } from './features/dev/DevPanel.tsx';
 import { AccountSwitcher } from './features/dev/AccountSwitcher.tsx';
 import { AuthScreen } from './features/auth/AuthScreen.tsx';
 import { PhoneFrame } from './components/PhoneFrame.tsx';
+import { BreathingPreview } from './features/dev/BreathingPreview.tsx';
 import { getPlan, setAuthToken, isDevMode } from './lib/api.ts';
 import { supabase } from './lib/supabase.ts';
 import { screenFromPlanStage } from './screenFromPlanStage.ts';
@@ -17,6 +18,8 @@ type Screen = 'loading' | 'welcome' | 'onboarding' | 'review' | 'plan';
 // Resolved once at load (the URL doesn't change without a reload). Dev mode uses the header-based
 // test accounts and skips real auth; everything else requires a Supabase session.
 const DEV_MODE = isDevMode();
+// Resolved once at load, like DEV_MODE — the URL doesn't change without a reload.
+const PREVIEW = new URLSearchParams(window.location.search).get('preview');
 
 const Loading = () => (
   <div className="app">
@@ -122,6 +125,17 @@ export function App() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Tool previews (`?preview=breathing`) short-circuit auth and the plan entirely — they render one
+  // component against fixture data so a temporal tool can be watched without a coach-composed
+  // session. Dev affordance only; nothing links here. Sits below the hooks so the hook order is
+  // identical on every render.
+  if (PREVIEW === 'breathing')
+    return (
+      <PhoneFrame>
+        <BreathingPreview />
+      </PhoneFrame>
+    );
 
   if (!ready)
     return (

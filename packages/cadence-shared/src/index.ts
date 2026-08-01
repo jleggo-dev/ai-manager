@@ -27,3 +27,4 @@ export * from './types/streak.ts';
 export * from './types/rewards.ts';
 export * from './walkthrough.ts';
 export * from './tool-catalog.ts';
+export * from './breathing.ts';

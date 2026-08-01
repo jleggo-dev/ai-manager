@@ -17,6 +17,7 @@
  */
 
 import type { OccurrenceSession, SessionBlock, SessionItem, SessionItemTool } from './types/occurrence.ts';
+import { type BreathPattern, clampCycles, patternById, totalMinutes } from './breathing.ts';
 
 /* ── The tool catalog ────────────────────────────────────────────────────────────────────────
    Three capture classes (see `stepCaptureMode`):
@@ -43,6 +44,10 @@ export type StepTool =
   // ring is the ROUNDS. Straight sets stay as separate `reps` steps (ring = that exercise's sets).
   | { kind: 'circuit'; rounds: number; exercises: CircuitExercise[] }
   | { kind: 'checkoff'; label?: string }
+  // Paced breathing (REQ9 §4.1). The resolved pattern travels WITH the step so the renderer stays
+  // dumb — it animates `pattern.phases` without knowing any technique's name. `cycles` is already
+  // safety-clamped; the renderer never re-derives it.
+  | { kind: 'breathing'; pattern: BreathPattern; cycles: number }
   | { kind: 'photo'; prompt: string; purpose: 'meal' | 'progress' | 'form' }
   | { kind: 'journal'; prompt: string; mode: 'text' | 'voice' | 'either' }
   | { kind: 'measure'; metric: string; unit: string }
@@ -83,9 +88,12 @@ export function stepCaptureMode(tool: StepTool): StepCaptureMode {
     case 'rings':
     case 'insight':
       return 'none';
+    // `breathing` sits here deliberately: it captures nothing structured — the log records the
+    // rounds you did, never anything about the person.
     case 'read':
     case 'timer':
     case 'checkoff':
+    case 'breathing':
       return 'done';
     case 'reps':
     case 'circuit':
@@ -110,15 +118,25 @@ const DEFAULT_MINUTES: Record<StepToolKind, number> = {
   photo: 1,
   journal: 3,
   measure: 1,
+  breathing: 1, // breathing computes its real minutes from pattern × cycles; this is only a floor
   rings: 1,
   insight: 1,
 };
 
-/** Round a positive minute value; treat missing/≤0 as absent. */
-function minutesOf(item: SessionItem, kind: StepToolKind): number {
+/** Round a positive minute value; treat missing/≤0 as absent. A breathing step ignores any stated
+ *  duration — its real length is pattern × clamped cycles, which is arithmetic, not a guess. */
+function minutesOf(item: SessionItem, tool: StepTool): number {
+  if (tool.kind === 'breathing') return totalMinutes(tool.pattern, tool.cycles);
   const d = item.duration_min;
   if (typeof d === 'number' && d > 0) return Math.round(d);
-  return DEFAULT_MINUTES[kind];
+  return DEFAULT_MINUTES[tool.kind];
+}
+
+/** A breathing tool from the item's pattern/cycles, resolved and safety-clamped here so every
+ *  consumer gets an already-valid step (an unknown pattern degrades to the default, never breaks). */
+function breathingTool(item: SessionItem): StepTool {
+  const pattern: BreathPattern = patternById(item.breath_pattern);
+  return { kind: 'breathing', pattern, cycles: clampCycles(pattern, item.breath_cycles) };
 }
 
 /**
@@ -127,6 +145,10 @@ function minutesOf(item: SessionItem, kind: StepToolKind): number {
  * when the coach left it unset do we INFER from quantities: sets → **reps**, duration → **timer**,
  * distance → **checkoff**, else **read** (a cue to follow). Covers movement + practice-area
  * sessions through the same pipe; nutrition/weigh-in/insight tools are attached by the caller.
+ *
+ * `breathing` is NEVER inferred — a duration means a timer. Paced breathing is only ever played
+ * when the coach explicitly asks for it, because "5 minutes of breathing" and "a 5-minute hold"
+ * are indistinguishable from quantities alone.
  */
 export function inferTool(item: SessionItem): StepTool {
   if (item.tool) return toolFromKind(item.tool, item);
@@ -163,6 +185,8 @@ function toolFromKind(kind: SessionItemTool, item: SessionItem): StepTool {
       return { kind: 'photo', prompt: item.detail ?? 'Take a photo', purpose: 'progress' };
     case 'journal':
       return { kind: 'journal', prompt: item.detail ?? 'Jot down how it went', mode: 'either' };
+    case 'breathing':
+      return breathingTool(item);
     case 'read':
       return { kind: 'read' };
     default: {
@@ -193,7 +217,7 @@ export function deriveWalkthrough(session: OccurrenceSession | null | undefined)
       const step: WalkthroughStep = {
         id: `s${steps.length + 1}`,
         title: item.name,
-        minutes: minutesOf(item, tool.kind),
+        minutes: minutesOf(item, tool),
         tool,
         skippable: true,
       };

@@ -10,6 +10,8 @@ export type StepLog =
   | { kind: 'reps'; sets: number[]; target?: number; load?: string }
   | { kind: 'circuit'; roundsDone: number; totalRounds: number }
   | { kind: 'timer'; elapsedSec: number; targetSec: number; done: boolean }
+  // Breathing logs ROUNDS, never anything about the person. Partial is the normal case.
+  | { kind: 'breathing'; roundsDone: number; totalRounds: number; pattern: string }
   | { kind: 'done'; note?: string }; // checkoff / read / journal (journal carries the note)
 
 export type StepLogs = Record<string, StepLog>;
@@ -25,6 +27,7 @@ export function stepFraction(step: WalkthroughStep, log?: StepLog): number {
       return target > 0 ? Math.min(1, log.sets.length / target) : log.sets.length > 0 ? 1 : 0;
     }
     case 'circuit':
+    case 'breathing':
       return log.totalRounds > 0 ? Math.min(1, log.roundsDone / log.totalRounds) : log.roundsDone > 0 ? 1 : 0;
     case 'timer':
       return log.targetSec > 0 ? Math.min(1, log.elapsedSec / log.targetSec) : log.done ? 1 : 0;
@@ -68,6 +71,11 @@ export function logLine(step: WalkthroughStep, log: StepLog): string {
     }
     case 'circuit':
       return `${log.roundsDone} of ${log.totalRounds} rounds`;
+    // Never "incomplete" — the rounds you did are the rounds you did.
+    case 'breathing':
+      return log.roundsDone >= log.totalRounds
+        ? `${log.totalRounds} rounds`
+        : `${log.roundsDone} of ${log.totalRounds} rounds · that counts`;
     case 'timer': {
       const m = Math.floor(log.elapsedSec / 60);
       const s = log.elapsedSec % 60;

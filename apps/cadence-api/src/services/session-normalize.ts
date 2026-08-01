@@ -6,6 +6,9 @@
 import {
   BLOCK_MODE_KINDS,
   SESSION_TOOL_KINDS,
+  clampCycles,
+  isBreathPatternId,
+  patternById,
   type BlockMode,
   type OccurrenceSession,
   type SessionBlock,
@@ -37,6 +40,19 @@ const BLOCK_MODES: ReadonlySet<string> = new Set(BLOCK_MODE_KINDS);
 export const modeOf = (v: unknown): BlockMode | undefined =>
   typeof v === 'string' && BLOCK_MODES.has(v) ? (v as BlockMode) : undefined;
 
+/** Whitelist the coach's breath pattern (REQ9 §4.1) — an unknown name is dropped so the tool falls
+ *  back to the default pattern rather than playing something we never vetted. */
+export const breathPatternOf = (v: unknown): string | undefined =>
+  typeof v === 'string' && isBreathPatternId(v) ? v : undefined;
+
+/** Safety-clamp the coach's round count against the pattern's own cap. Belt and braces: the
+ *  walkthrough clamps again at render, but a stored session should never hold an unsafe number. */
+export const breathCyclesOf = (pattern: string | undefined, v: unknown): number | undefined => {
+  const n = num(v);
+  if (n === undefined) return undefined;
+  return clampCycles(patternById(pattern), n);
+};
+
 /**
  * App-side contract assertion: coerce whatever the model returned into a bounded,
  * render-safe OccurrenceSession — or null if there's nothing usable.
@@ -57,6 +73,7 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
           const name = str(i.name, 120);
           if (!name) return null;
           const vq = str(i.video_query, 80);
+          const breathPattern = breathPatternOf(i.breath_pattern);
           return {
             name,
             sets: num(i.sets),
@@ -67,6 +84,8 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
             detail: str(i.detail, 200),
             video_query: vq && !/https?:|youtube\.com|youtu\.be|www\./i.test(vq) ? vq : null,
             tool: toolOf(i.tool),
+            breath_pattern: breathPattern,
+            breath_cycles: breathCyclesOf(breathPattern, i.breath_cycles),
           };
         })
         .filter((i): i is SessionItem => i !== null);

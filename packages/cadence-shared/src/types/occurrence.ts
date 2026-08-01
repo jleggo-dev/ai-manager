@@ -32,7 +32,7 @@ export interface OccurrenceWeather {
  * from its quantities (deriveWalkthrough/inferTool). This is the per-item subset the coach picks;
  * the full renderable catalog (incl. insight tools placed by the app) lives in walkthrough.ts.
  */
-export type SessionItemTool = 'read' | 'timer' | 'reps' | 'checkoff' | 'photo' | 'journal';
+export type SessionItemTool = 'read' | 'timer' | 'reps' | 'checkoff' | 'photo' | 'journal' | 'breathing';
 
 /** How a block's sets flow (REQ8 slice 2). The catalog (tool-catalog.ts) is the authority for the
  *  names; this type is the shape both it and `SessionBlock.mode` share so they can't drift. */
@@ -50,6 +50,11 @@ export interface SessionItem {
   detail?: string; // one short cue/instruction
   video_query?: string | null; // YouTube SEARCH phrase only — never a URL (client builds the link)
   tool?: SessionItemTool; // coach's explicit render/play choice; falls back to inference when unset
+  /** `breathing` only (REQ9 §4.1) — which pattern to play. Unknown ids fall back to the default;
+   *  the bank and its safety caps live in breathing.ts, never in coach output. */
+  breath_pattern?: string;
+  /** `breathing` only — how many cycles. Clamped to the session cap regardless of what's asked. */
+  breath_cycles?: number;
 }
 
 export interface SessionBlock {

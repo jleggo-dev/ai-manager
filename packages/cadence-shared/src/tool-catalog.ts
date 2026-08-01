@@ -23,9 +23,11 @@
 
 import type { BlockMode, SessionItemTool } from './types/occurrence.ts';
 import type { StepToolKind } from './walkthrough.ts';
+import { BREATH_PATTERNS, patternCounts } from './breathing.ts';
 
 /** The `SessionItem` quantity/detail fields a tool reads — named so the coach fills the right ones. */
-export type ItemField = 'sets' | 'reps' | 'load' | 'duration_min' | 'distance_km' | 'detail';
+export type ItemField =
+  'sets' | 'reps' | 'load' | 'duration_min' | 'distance_km' | 'detail' | 'breath_pattern' | 'breath_cycles';
 
 /** Capture class (mirrors `stepCaptureMode`): `guided` = do it, log records only that it happened;
  *  `capture` = the person emits data that BECOMES the log. */
@@ -68,6 +70,15 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
     summary: 'do-it-and-confirm with nothing to capture — a distance target, "step outside", a mobility drill',
     reads: ['distance_km', 'detail'],
     example: { name: 'Easy shakeout jog', tool: 'checkoff', distance_km: 3 },
+  },
+  breathing: {
+    class: 'guided',
+    summary:
+      'paced breathing — the app runs the rhythm and they follow it. Pick a pattern by name and how many rounds; a settling practice, a wind-down before sleep, or a few breaths before something hard',
+    notWhen:
+      'do NOT use timer for breathing, and do NOT use breathing for silent sitting — a timer counts a held effort, breathing paces each breath. Name the pattern; never describe counts in the detail text',
+    reads: ['breath_pattern', 'breath_cycles', 'detail'],
+    example: { name: 'Settle before we start', tool: 'breathing', breath_pattern: 'box', breath_cycles: 6 },
   },
   reps: {
     class: 'capture',
@@ -139,6 +150,17 @@ export function renderCoachToolCatalog(): string {
   }
   lines.push('', 'SET FLOW — how each block\'s sets are sequenced. Set each block\'s "mode":');
   for (const mode of BLOCK_MODE_KINDS) lines.push(`  • ${mode} — ${SET_FLOWS[mode].summary}`);
+  lines.push(
+    '',
+    'BREATH PATTERNS — the only values "breath_pattern" accepts. Choose by what the moment needs;',
+    'an unlisted name is replaced with coherent. Round counts are capped for safety, so ask for what',
+    'you mean and the app will keep it safe.',
+  );
+  for (const p of BREATH_PATTERNS) {
+    const counts = patternCounts(p);
+    lines.push(`  • ${p.id} (${p.name}, ${counts}) — ${p.summary}`);
+    if (p.caution) lines.push(`      caution: ${p.caution} Keep it brief and only before effort.`);
+  }
   return lines.join('\n');
 }
 
