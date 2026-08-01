@@ -72,7 +72,12 @@ unchanged; sets/reps simply go unused (tools ignore fields they don't read). Wha
    is personal: the calm-program user gets grounding options, the athlete gets a stretch or 20
    extra pushups, the practice user gets 10 Hail Marys. So the door is a **neutral shell
    affordance opening a coach-composed, cached menu** (REQ10 §6), with an optional coach-pinned
-   one-tap express lane per user. **The shell law:** nothing pillar-flavored ever ships in the
+   one-tap express lane per user. **Resolved by Design 2026-08-01 — ONE control, not two:** the
+   door is the **existing ＋ FAB**, whose sheet gains a second section — *"Do something now"*
+   (present tense) above *"Log something you did"* (past tense). A neutral second disc proved
+   indistinguishable from the ＋; the two-tense sheet keeps one affordance. A coach-pinned
+   express item renders as a **labelled white pill**, never a disc. Empty state = the section is
+   simply absent (no door until the coach has composed a menu). **The shell law:** nothing pillar-flavored ever ships in the
    frame — the shell offers doors, the coach decides what's behind them. Mind supplies
    *payloads* behind the door, never the door itself. Unscheduled use logs to the day but draws
    no node. Brief: `design/now-door-brief.md`.

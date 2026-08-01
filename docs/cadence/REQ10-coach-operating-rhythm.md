@@ -94,6 +94,13 @@ the tap — **zero LLM calls at tap time**; nobody mid-spiral waits eight second
 - **Rebuilt on:** plan commit/replan, weekly check-in close, and any coach-chat exchange that
   changes the situation; cached like day-recap otherwise. Normalize clamps items to
   tools-that-exist + activities-that-exist (the catalog law).
+- **Accepted from Design 2026-08-01:** the composer **may emit zero items** — an empty menu hides
+  the section rather than inventing filler (a user with nothing sensible to offer right now is a
+  real state, not an error). **Stale rows are dropped, never rendered** — an item referencing a
+  deleted activity or a since-completed occurrence disappears at read time rather than failing on
+  tap. And **promotion to the trail happens only after repeated use** from the sheet — the menu
+  observes what someone actually reaches for before the coach schedules it, so the trail stays a
+  record of agreement rather than of inference.
 - Menu items log through the same rails as everything (occurrence log / `did`), so extra work
   credits progression and the day footer ("also today: 6 breaths").
 - **Second consumer — the escalation ladder** (REQ9 §3.4): the in-practice "Something else?"
