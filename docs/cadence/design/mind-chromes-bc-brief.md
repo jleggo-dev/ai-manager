@@ -1,8 +1,8 @@
 # Design brief — Mind chromes B & C: the stepped micro-flow and capture
 
 **Goal.** Design the pillar's **two remaining chromes** while chrome A (the calm surface) goes
-into code. Chrome A, the now door and the escalation ladder are settled — this brief covers
-everything the pillar still can't render.
+into code. Chrome A and the now door are settled (the escalation ladder is withdrawn — §1);
+this brief covers everything the pillar still can't render.
 
 **Why these two together:** REQ9 §3 frames the pillar as *three chromes, not eleven tools* —
 briefing the surface before its payloads is what keeps it coherent. You've delivered **A · the
@@ -13,35 +13,57 @@ exhausting it.
 
 ## Read these first
 
-- [`../REQ9-mind-tools.md`](../REQ9-mind-tools.md) — §3 the three chromes, §4.3 `ground`,
+- [`../REQ9-mind-tools.md`](../REQ9-mind-tools.md) — §3 the three chromes, §4.3 `grounding`,
   §4.4 `checkin`, §6 build order. §1 is the register; it hasn't moved.
 - Your own `Cadence Mind 1 - Calm Surface + Breath.dc.html` and `Cadence Now Door.dc.html` —
-  chrome A and the door/ladder as shipped.
+  chrome A and the door as shipped (the ladder in §4g comes out — see §1).
 - [`../BRAND.md`](../BRAND.md) — voice.
 - Live capture vocabulary to inherit, not reinvent:
   [`CaptureSheet.tsx`](../../../apps/cadence-web/src/features/plan/CaptureSheet.tsx),
   [`MealLogPanel.tsx`](../../../apps/cadence-web/src/features/plan/occurrence/MealLogPanel.tsx),
   and the weigh-in panel — chrome C is *these sheets*, wearing mind content.
 
-## 1. What's settled (don't reopen)
+## 1. Two corrections to fold in first
+
+**(a) The escalation ladder is withdrawn — please remove it.** Your §4g three-rung sheet and the
+emergency-line component should come out of `Cadence Now Door.dc.html`, and the "Something else?"
+lines in Mind 1 stay but change meaning. The owner ruled that distress detection and emergency
+chrome are **out of scope for a habit coach**, and the repo's own legal drafts agree — Cadence is
+*"not medical care… not an emergency service and may not respond in real time."* A standing
+emergency affordance makes a promise we can't keep, and phones already dial emergency services.
+The coach still responds warmly and defers if someone tells it something serious, but that lives
+in conversation, never as a rendered surface. Full reasoning: REQ9 §8.
+
+**What "Something else?" now means:** a practice that isn't landing offers one quiet link into
+**the same extras menu the ＋ sheet shows** — a different breathing pattern, a grounding game, a
+walk. A tool switch. No rungs, no resources, no safety framing. Talking to the coach needs no
+special path; the Coach tab exists.
+
+**(b) The pinned item is too loud.** The labelled pill reads as more important than the day's
+actual scheduled activities, and it shouldn't — extras are the *optional* thing, a door you may
+not need today. Please restate its visual weight so a pinned extra sits **quieter than a
+scheduled item**, and show it in context alongside real trail content so the hierarchy is
+checkable rather than asserted.
+
+## 2. What's settled (don't reopen)
 
 - **The register** (REQ9 §1): a practitioner in training; the coach assigns practice; contemplative
   vocabulary, never gym metrics, never clinical language. Your in/out word list stands.
 - **The door is one control** — the ＋ FAB with a two-section sheet, "Do something now" above
   "Log something you did." Accepted, and now in REQ9 §3.1.
-- **The ladder** — "Something else?" on practice surfaces, three rungs, emergency line last and
-  reusable. Accepted. Copy is final except the emergency line itself.
 - **Partial credit is the normal case** — "4 of 10 min · that counts", never a percentage, never
   "incomplete." It generalizes to both chromes here.
+- **Tool names changed** (code only, users never see them): `breath`→`breathing`, `sit`→`meditate`,
+  `ground`→`grounding`, `listen`→`guided_audio`.
 
-## 2. Chrome B — the stepped micro-flow, proven with `ground`
+## 3. Chrome B — the stepped micro-flow, proven with `grounding`
 
 **What it is.** Tap-forward cards on a deterministic spine: a short sequence, one prompt at a
 time, no timing pressure, no scoring. It's the surface that later carries chained practices and
 the stepped program — so the shape you set here is the one those inherit. **Design it as a
-chrome with `ground` as its first payload, not as a grounding-games screen.**
+chrome with `grounding` as its first payload, not as a grounding-games screen.**
 
-**The payload — `ground` (REQ9 §4.3).** Reactive tools for a racing moment. Games:
+**The payload — `grounding` (REQ9 §4.3).** Reactive tools for a racing moment. Games:
 - `senses` — 5-4-3-2-1 (see 5, hear 4, feel 3, smell 2, taste 1)
 - `letters` — A→B→C naming; bank: animals / foods / cities
 - `switch` — category switch
@@ -64,11 +86,11 @@ the way out.
   flexes without becoming three designs.
 - The close: **"did that help?"** (yes / no / skip) → self-report, logged to the arc. It must not
   read as a quiz result.
-- **`ground` is rung 1 of the ladder** — these are exactly what "Something else?" offers. Show
-  the hand-off: arriving here *from* a breath practice that wasn't landing, and whether the
-  ladder is still reachable once you're inside a grounding flow.
+- **Grounding games are what "Something else?" offers** — show the hand-off: arriving here *from*
+  a breathing practice that wasn't landing, and whether "Something else?" is still available once
+  you're inside a grounding flow.
 
-## 3. Chrome C — capture, proven with `checkin`
+## 4. Chrome C — capture, proven with `checkin`
 
 **What it is.** The existing sheet vocabulary (weigh-in, meal capture), carrying mind content.
 Inherit that chrome — this is the one place in the pillar where the answer is "look like what we
@@ -94,9 +116,9 @@ need. Propose the actual list.
   what we're building.)
 - How it's entered: a trail node, and from the ＋ sheet's "Do something now" section.
 
-## 4. Small addendum — the `sit` "came back" tap
+## 5. Small addendum — the `meditate` "came back" tap
 
-`sit` (REQ9 §4.2) needs **no round of its own** — it's chrome A with bells, and your Mind 1
+`meditate` (REQ9 §4.2) needs **no round of its own** — it's chrome A with bells, and your Mind 1
 already shows the chrome carrying it. But you flagged one piece as most likely to be designed
 wrong if left late, and you were right: the optional **"came back" tap** — the person taps when
 they notice their mind wandered and return. **Noticing the drift *is* the practice; there is
@@ -104,22 +126,22 @@ nothing to fail.** Spec just that, inline: what it looks like on the calm surfac
 anything) it shows during the sit, and how it reads at the close — a count that never becomes a
 score. A few hundred words and one state is plenty.
 
-## 5. Constraints
+## 6. Constraints
 
 - **Both chromes must work in all four homes** (REQ9): a trail node · the ＋ sheet's "Do
   something now" · a step inside a session · offered by the coach in chat.
 - **Nothing pillar-flavoured in the shell** — the shell law stands; these are payloads.
-- **The ladder rides chrome B surfaces too** — "Something else?" belongs on a grounding flow, not
-  just on breath.
+- **"Something else?" rides chrome B too** — it belongs on a grounding flow, not just on a
+  breathing practice.
 - Voice per REQ9 §1: the coach speaks as "I", warm, level, no exclamation marks; never names a
   feeling the user hasn't named.
 - Everything deterministic — banks, word lists and game rules live in code, generated live by
   nothing. AI personalises *order and framing*, never content.
 
-## 6. Deliverables
+## 7. Deliverables
 
 390×844 screens with redlines in the handoff's format: the chrome B card shell with `senses`,
-`letters` and `object` in place plus the "did that help?" close and the arrive-from-the-ladder
+`letters` and `object` in place plus the "did that help?" close and the arrive-from-a-stalled-practice
 hand-off; the chrome C check-in sheet with your proposed vocabulary and intensity treatment, plus
-the after-state; and the `sit` "came back" addendum. Call the fork on chrome B (input vs pacing)
+the after-state; and the `meditate` "came back" addendum. Call the fork on chrome B (input vs pacing)
 explicitly, and flag anything you'd want owner-ruled rather than deciding yourself.

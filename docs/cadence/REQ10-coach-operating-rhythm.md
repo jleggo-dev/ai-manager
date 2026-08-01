@@ -119,6 +119,48 @@ path-checkpoint dates, freeze-expiry warnings. Each rule's *action* is the exist
 capped frequency, hearth-not-scoreboard copy, and the tick *evaluates rules* — it never gives
 an LLM standing permission to message people.
 
+## 7b. Check-ins are calibration, and re-entry is not resumption (owner ruling 2026-08-01)
+
+**What a check-in is for.** A check-in — weekly, or after an absence — is not a status report and
+not a compliance review. It is **calibration**: fine-tuning the plan, and honestly seeing how the
+person is doing. The weekly check-in already exists as a plan occurrence (§4, the
+plan-as-scheduler); this ruling is about what it's *for*, and it applies to the coach's framing
+of every check-in.
+
+**Re-entry must never silently resume.** Someone who drops off for three weeks and comes back
+should not be handed the plan they abandoned, ticking along as if nothing happened. Fitness fades,
+life moves, and a plan built for who they were a month ago may not fit who they are today —
+resuming a stale plan sets them up to fail at it. The coach instead: says it's good to see them
+**without guilt** (never "you missed 14 sessions", never making them account for themselves),
+asks what's changed, finds an honest baseline, and **re-calibrates the plan to meet them there** —
+smaller if that's the truth — before getting them going again.
+
+**Gap: there is no `returning` intent.** `coach-context.ts` defines
+`onboarding | initial | ongoing | disrupted`. `disrupted` handles a *described* episode (travel,
+illness) and builds an additive temporary plan — the wrong shape for silent re-entry, where the
+coach knows nothing and the base plan itself may be stale. Add **`returning`**, selected when the
+gap since the last real activity crosses a threshold; the `missed_threshold` tripwire already
+detects the condition, and the system prompt now carries the intent's framing. Its outcome is a
+re-calibrated plan (an ordinary replan), not an additive overlay.
+
+**Already built, worth naming:** the `consistency_outcome_divergence` tripwire (`tripwires.ts`,
+`highConsistency: 0.8`) fires when someone is showing up but the outcome isn't moving — which is
+exactly the "you've done everything right and nothing's changed; worth asking a doctor" pattern
+that REQ9 §8 puts *in* scope. The detection exists; the coaching move on top of it is the work.
+
+## 7c. Nudges — stickiness without guilt (owner steer 2026-08-01)
+
+We want Duolingo-grade stickiness with none of the shame: notifications, and eventually email and
+SMS. Today Cadence can only speak when the app is open, so **every nudge depends on the §7 tick**.
+
+- **Channels:** push first (Capacitor iOS is already the planned wrapper), then email, then SMS —
+  each opt-in, each with quiet hours, each rate-capped. Never a channel the person didn't choose.
+- **Content is coaching, not scolding** — "your run is still there if you want it" beats "you're
+  falling behind." Count what happened, never what broke (BRAND); a missed day is information.
+  **Absence earns a warm re-entry invitation, never a wellbeing inference** (REQ9 §8).
+- **Deterministic rules pick the moment; the coach writes the sentence** — same split as
+  everything else. Escalation decays: a couple of nudges, then it goes quiet rather than nagging.
+
 ## 8. Forgetfulness — why context limits don't threaten this design
 
 - **The ledger is the memory.** Raw logs (`raw_text` always kept) outlive every summary.
