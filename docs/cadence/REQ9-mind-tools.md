@@ -8,6 +8,22 @@ boundary).
 
 ---
 
+## 0. Plain-English glossary
+
+Terms used throughout, defined once so nobody has to reverse-engineer them.
+
+| Term | What it means |
+|---|---|
+| **The tools** | `breathing` (breathing-exercise player), `meditate` (silent timer with optional bells), `grounding` (distraction games — name animals A/B/C, 5-4-3-2-1 senses, count back by 7s), `checkin` (quick "how are you doing" log), `journal` (write or speak an entry), `guided_audio` (narrated audio player). Code names only — **users never see these words.** |
+| **The extras menu** | The ＋ button's sheet gains a second section, *"Do something now"*, listing 3–5 things the coach picked for this person (a grounding game, 20 extra pushups, 10 Hail Marys). Present tense, above the existing past-tense *"Log something you did."* |
+| **"Something else?"** | A quiet link shown during a practice that isn't landing. Opens the same extras menu. Not a safety feature. |
+| **The pill** | A small labelled button (words, not a bare icon) used when the coach pins one shortcut to the top of the extras menu. |
+| **The three surfaces** | Every mind tool renders on one of three screen types: **the calm surface** (full-screen, dark, one moving form — breathing, timers, audio); **the stepped flow** (tap-forward cards — grounding games); **capture** (the existing sheet style — check-in, journal). |
+| **Partial credit** | Stopping early still counts: "4 of 10 min · that counts." Never a percentage, never "incomplete." |
+
+*Withdrawn terms:* the "escalation ladder" / "rungs" (§3.4, §8) and the "now door" as a separate
+control (§3.1) — both superseded; noted here only so older commits and design files read clearly.
+
 ## 1. The frame (owner-ratified — supersedes both prior framings)
 
 Two design passes missed the register from opposite sides: Claude Design's "mental fitness — a gym
@@ -22,9 +38,9 @@ for attention" (reps/load/performance; erased self-worth entirely), then an over
   practice, session, breath, noticing, returning, settling) — **not** gym metrics (reps, load,
   PRs, performance) and **not** the clinic (symptoms, treatment, protocols, "mental health").
 - **Everyday anxiety is coachable.** All humans have it, naturally; the coach coaches through it in
-  plain words — breath, grounding, reframing, worry-parking are coaching moves, not treatment. The
-  **crisis boundary** (BRAND) is unchanged and gates only acute distress: deterministic vetted
-  copy, name resources, defer. "Never say CBT" stands.
+  plain words — breath, grounding, reframing, worry-parking are coaching moves, not treatment.
+  Acute distress is where the coach steps back and says so, **in conversation** — that boundary
+  lives in the system prompt, not in any screen (§8). "Never say CBT" stands.
 - **Secular by default; the user's own tradition is welcome.** If someone's practice *is*
   religious (prayer, dhikr, a rosary), the coach supports it in their terms — that's what the
   `practice` area is for. The coach never supplies doctrine; it supplies rhythm.
@@ -54,7 +70,7 @@ proven-standalone competitor; the composition is ours alone.
 Three classes. Most mind tools are **timer-class**; exactly two things are module-class.
 
 - **Class 1 — widget** (like `StepTimer`): pure client renderer + a catalog entry + normalize
-  whitelist. `breath`, `sit`, `ground`, `checkin`.
+  whitelist. `breathing`, `meditate`, `grounding`, `checkin`.
 - **Class 2 — widget + service**: a widget with one AI-Admin job or platform service behind it.
   Voice journaling (STT job), TTS-guided audio (frozen script → TTS job + player), gratitude
   share-out (compose + OS share sheet).
@@ -85,19 +101,12 @@ unchanged; sets/reps simply go unused (tools ignore fields they don't read). Wha
    history view.
 3. **Audio/background behavior** — long sits and sleep audio need screen-dim, keep-awake, and
    background playback; the workout walkthrough never needed these.
-4. **The escalation ladder + the emergency line** (owner reframe 2026-07-31 — replaces "the
-   crisis rail," which conflated two things that must never share a control: "name animals
-   starting with A" and "dial 911"). **Rung 1 — "Something else?":** ever-present on every
-   in-practice surface from the first calm tool (Design's phase-1 timing insight stands), and it
-   is a *tool switch*, never an exit — it opens the coach's other in-the-moment tools for this
-   person (the `ground` distraction family, a different breath, a walk; the `right_now` subset
-   of the now-menu, same composer as the door). **Rung 2 — the coach** (chat; everyday anxiety
-   is coachable in plain words). **Rung 3 — the emergency line:** real resources (region-aware:
-   911/988 etc.) + the deterministic vetted deferral copy, at the bottom of the same sheet —
-   always the same place, two taps from anywhere, never ambient furniture on a breathing screen.
-   The chat-side distress classifier trip is unchanged. **"Crisis" is reserved for rung 3
-   only** — everyday rough moments are coaching, not crises; nothing labeled or flavored
-   "crisis" appears on practice surfaces.
+4. **"Something else?" — a tool switch, and nothing more** (owner correction 2026-08-01, which
+   **dissolved the "escalation ladder"** designed the day before; that three-rung structure is
+   withdrawn — see §8 for why). A practice that isn't landing offers one quiet link to *the same
+   extras menu the ＋ sheet shows* — a different breathing pattern, a grounding game, a walk. It
+   is **not a safety feature and carries no emergency content**. Talking to the coach needs no
+   special path: the Coach tab already exists. The app ships **no emergency chrome at all** (§8).
 5. Already there: quick-shape (single-tool, one-tap) tasks, the grey pre-roll, partial-elapsed
    logging ("4 of 10 min · that counts" — partial is the normal case, never shamed).
 
@@ -107,7 +116,7 @@ surfaces, and briefing the surface before its payloads is what keeps the pillar 
 guided sit, sleep wind-down); **B · the stepped micro-flow** (tap-forward cards on a deterministic
 spine — grounding games, chained practices, the stepped program); **C · capture** (the existing
 sheet vocabulary — check-in, journal, gratitude). The content library is a fourth thing: a
-Food-depth module, cross-pillar, last. **`breath` is not a countdown** — a ring reads as *time
+Food-depth module, cross-pillar, last. **`breathing` is not a countdown** — a ring reads as *time
 remaining*, but a breath pattern is a phase loop, so the calm surface shares StepTimer's chrome
 (card, pre-roll, chime, log-on-complete) and replaces its ring.
 
@@ -117,7 +126,7 @@ Each tool = one `COACH_TOOLS` catalog entry (compile-locked to a renderer, injec
 prompt via `{{tool_catalog}}` — the REQ8 pattern). Params ride typed optional `SessionItem` fields;
 `session-normalize` clamps everything to safety caps (as it caps circuit rounds today).
 
-### 4.1 `breath` — the pacer (Class 1)
+### 4.1 `breathing` — the pacer (Class 1)
 
 One deterministic model covers every technique: **a pattern = ordered phases**
 `[{label, seconds, cue?}] × cycles`. The player animates any pattern (expanding form + traveling
@@ -145,14 +154,14 @@ their own counts (kept from the design pass — it was good).
 up-shift ≤30s + seated copy ("sit down; stop if dizzy"); **no hyperventilation + breath-hold
 patterns (Wim Hof-style) in v1** — deliberately not in the catalog.
 
-### 4.2 `sit` — meditation / mindfulness timer (Class 1, extends StepTimer)
+### 4.2 `meditate` — meditation / mindfulness timer (Class 1, extends StepTimer)
 
 A held quiet. **Params:** `minutes`, `bells` (start / interval / end), optional ambience. Reuses
 the timer's grey pre-roll ("get in position" → "settle in"), chime, and partial-elapsed logging.
 One addition: an optional **"came back" tap** — counts returns without judging them (noticing the
-drift *is* the practice; there is nothing to fail). Silent by default; guided sits are `listen`.
+drift *is* the practice; there is nothing to fail). Silent by default; guided sits are `guided_audio`.
 
-### 4.3 `ground` — grounding / distraction family (Class 1)
+### 4.3 `grounding` — grounding / distraction family (Class 1)
 
 Reactive tools for a racing moment. One tap-forward stepped shell, big targets, no scores, no
 timer pressure; leaving early still counts. **Params:** `game`:
@@ -205,7 +214,7 @@ Three tiers:
    unsent, so the close is "send it, read it to them, or keep it."
 3. **Platform-sent messages: deferred indefinitely.** No third-party comms infrastructure.
 
-### 4.7 `listen` — guided audio player (Class 2 now; Class 3 later)
+### 4.7 `guided_audio` — guided audio player (Class 2 now; Class 3 later)
 
 **v1 = TTS-guided practice** (REQ6's unlock: vetted, frozen scripts → TTS job — no licensing, no
 hallucinated URLs, personalizable length): body scan, wind-down, and **loving-kindness /
@@ -217,7 +226,7 @@ content library (podcast RSS etc., REQ6 §6) — never renders anything a retrie
 ### 4.8 Chained practices — not a new tool
 
 The evening review, thought-reframe (what happened → what I told myself → what's actually true),
-and worry-park-then-revisit are **ordered chains of `journal` + `ground` + `read` steps on a
+and worry-park-then-revisit are **ordered chains of `journal` + `grounding` + `read` steps on a
 deterministic tree with coach turns between** — the walkthrough shell already plays ordered
 steps. REQ6 §5.2's one-deep stepped program is this pattern grown up: no new engine, new *trees*.
 
@@ -232,17 +241,17 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
 
 ## 6. Build order (one at a time; each independently shippable)
 
-1. **`breath`** — the signature widget; pure client; ships the pillar. Lands **behind the
+1. **`breathing`** — the signature widget; pure client; ships the pillar. Lands **behind the
    generalized now door** (REQ10 §6 — the door + menu composer are shell work and precede or
    accompany this step), with **the calm surface (chrome A)** and **the crisis rail** — the
    spine everything later inherits.
-2. **`sit`** — extends StepTimer (bells, settle pre-roll, "came back" tap, keep-awake).
+2. **`meditate`** — extends StepTimer (bells, settle pre-roll, "came back" tap, keep-awake).
 3. **`checkin`** — small; starts the Observe data flowing (REQ6 §10: instrument demand first).
-4. **`ground`** — the family shell + senses/letters/switch first.
+4. **`grounding`** — the family shell + senses/letters/switch first.
 5. **Journal store + written journal** — the module foundation + gratitude banks.
 6. **Voice journaling** — STT job on top.
 7. **Gratitude share-out** — compose + share sheet.
-8. **`listen` v1** — TTS player: body scan, wind-down, loving-kindness.
+8. **`guided_audio` v1** — TTS player: body scan, wind-down, loving-kindness.
 9. **Chained practices** — evening review → reframe → worry-park (then REQ6's one deep program).
 10. **Content library** — horizontal with Fitness, last (REQ6 §6 unchanged).
 
@@ -253,10 +262,10 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
   `design/now-door-brief.md`. Remaining sub-question (Design to recommend): one control with a
   two-tense sheet vs. the ＋/door stack.
 - **`SessionItem` params:** typed optional fields per tool (REQ8 idiom) vs. one `params` jsonb —
-  decide at `breath` build time; leaning typed fields + normalize caps.
+  decide at `breathing` build time; leaning typed fields + normalize caps.
 - **Check-in vocabulary:** which emotion-word set (needs to be granular but not clinical).
-- **Journal retention/export format** and whether private entries are still Scribe-parsed for
-  *aggregate* signal (leaning no — private means private).
+- **Journal retention/export format.** (The "are private entries still parsed" half is
+  **resolved** — §8: nothing scans them, private means private.)
 - **TTS voice** — the coach's voice or a distinct practice voice? Plus **time-to-first-audio** and
   streamed-vs-pre-rendered, which decides whether the guided player needs a loading state at all.
 - **Where "did it help?" lands in the data model**, and whether `recap` consumes mind self-reports
@@ -266,53 +275,52 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
   reps or grams — so asking it four times a day would read as nagging, not care).
 - **Do mind practices log as occurrences** with the existing status vocabulary (`skipped` vs
   `missed`, freezes, detours), or something new? Leaning existing.
-- **The emergency line's copy deck + region-aware resource list** (911/988 CA-US; 999/111 UK…)
-  — owner-supplied before rung 3 is built. (The old "rail" questions — its copy deck and whether
-  it may be absent during active breathing — dissolved in the ladder reframe: practice surfaces
-  carry only "Something else?", a tool switch; the emergency line lives inside that sheet.)
+- ~~The emergency line's copy deck + resource list~~ — **no longer needed** (§8: no emergency
+  chrome ships). One live question remains, and it is narrow: **should the coach, in
+  conversation, name a specific number (988/911) or stop at "please talk to someone who can
+  help"?** The legal drafts currently name 988, so prompt and terms should agree either way.
 - **Library routing** — its own tab, under Mind, or a shared cross-pillar surface? A pricing and
   moderation decision, not a layout one.
 
-## 8. The emergency line — recognition & trigger (added 2026-07-31)
+## 8. Scope: what the coach notices, and what it doesn't (owner ruling 2026-08-01)
 
-How rung 3 (§3.4) gets reached. Three paths — and the ladder's boundary applies to detection
-itself: classification separates the everyday from the acute, and **only acute ever touches
-crisis machinery**.
+**This replaces the "recognition & trigger" design of 2026-07-31 and withdraws the escalation
+ladder with it.** That design proposed scanning every message for distress and rendering crisis
+chrome. The owner ruled it out of scope, and the repo's own legal drafts agree: Cadence is "not
+medical care, dietary prescription, psychotherapy, or crisis intervention," not a therapist or
+crisis counselor, and **"not an emergency service and may not respond in real time."** Building
+detection would have manufactured exactly the real-time expectation the terms disclaim — and
+detection that exists but misses is a worse posture than no detection with an honest scope.
 
-- **Pull — reached, not detected (the floor).** The ladder: any practice surface → "Something
-  else?" → the emergency line at the sheet's bottom. Two taps, fully deterministic — it works
-  when detection fails, which is why it's the most important path. Plus one stable home outside
-  practices (Settings or the Coach tab) so it's findable cold.
-- **Push — detected in conversation.** Two layers that fail differently:
-  1. **The prompt boundary** — the coach's system prompt
-     (`config/ai-admin/cadence-coach.system-prompt.md`, deployed via
-     `apps/cadence-api/scripts/set-coach-persona.ts`). A boundary already shipped there;
-     upgraded 2026-07-31 with the reframe's other half stated affirmatively (everyday stress and
-     anxiety are *yours to coach*), the acute classes named, 988 US **and Canada** + 911, no
-     technique-as-substitute in acute moments, bidirectional med caution, and
-     deferral-is-not-abandonment.
-  2. **The classifier** — a `distress: none | elevated | acute` field (+ one-line reason) added
-     to `capture_extract`'s schema, riding the **existing per-turn ambient capture**
-     (`routes/coach.ts` fires it async on the full window — off the hot path, so recognition
-     costs no latency and no new job). Tuned high-recall; extends to journals via
-     `parse_mind_log` when the journal ships.
-  **On `acute`:** the app — never the LLM — renders the fixed vetted card (owner-supplied copy
-  deck, region-aware via `home_location`, generic international fallback) and sets a session
-  **deferral-mode flag**; subsequent coach turns receive it and keep deferring warmly until it
-  clears. **On `elevated`: not crisis** — the coach coaches in plain words; a responsive
-  grounding offer is fine; the ladder sits unchanged. High recall guarantees false positives, so
-  the card is dismissible, non-alarmist, never locks the app, never shames.
-- **Trend — slow, out-of-loop, never crisis copy.** Declining check-in words, journal valence,
-  `situation.ts`'s "days since anything real" → the existing tripwire → Broker-proposes
-  machinery fires a **warm coaching check-in** — outreach, never the emergency card. Blocked on
-  the REQ10 §7 tick (tripwires only evaluate at request time today; silence is invisible).
+**The line:** *reason about what people DO; never scan what they SAY for pathology.*
 
-**Deliberate non-detection:** client tools stay dumb — no sentiment surveillance inside a breath
-widget; "did it help? → no" is arc data, not a red flag; recognition reads only what the person
-*tells* us. **Guardrails:** never auto-dial, never contact a third party, every trip
-audit-logged; the response is furniture, never freestyled. The chat card **reuses the ladder
-sheet's emergency-line component** (noted in `design/now-door-brief.md`).
+- **In scope — patterns in coaching data.** The coach already holds logged sessions, weights,
+  meals, consistency. Noticing "you've done everything we planned for two months and the number
+  hasn't moved — worth raising with a doctor" is **responsible coaching, not diagnosis**: it is
+  about *the plan not working*, which is the coach's actual job, and it reads data the user gave
+  us for coaching. Physical or mental, the move is identical — observe the pattern, suggest a
+  professional, never name a condition. (REQ7 `notable_deltas` territory.)
+- **Out of scope — content surveillance.** No distress classifier, no per-message safety parse,
+  no journal scanning, no sentiment reading. Beyond a coach's remit, corrosive in false positives
+  ("this diet is killing me"), and in direct tension with the journal's privacy promise. **This
+  also resolves the private-journal fork:** private means private — nothing scans it, so there is
+  no ruling left to make.
+- **Out of scope — emergency chrome.** No persistent emergency affordance, no crisis card
+  component, no resource section in any menu. A standing emergency button inside a habit app
+  makes a promise ("we are watching") that we cannot keep. **Phones already dial emergency
+  services**; we are not that layer.
+- **In scope — the coach's own judgment, in conversation.** If someone tells the coach something
+  serious, it responds as any decent LLM does: acknowledge plainly, say this is beyond what a
+  coach should carry, encourage them toward a professional. That behavior lives **entirely in the
+  system prompt** (`config/ai-admin/cadence-coach.system-prompt.md`) — one warm response in
+  context, never a product surface.
 
-**Status:** prompt boundary upgraded in-repo, live after `set-coach-persona` re-run. Classifier
-+ card + deferral mode: designed, not built — needs the copy deck. Trend layer: blocked on the
-tick.
+**Absence is a habit signal, not a health signal.** Three quiet weeks earns a check-in because
+**we help people build habits** — "haven't seen you in a while; want to pick back up, or should we
+adjust?" It must never imply we have inferred anything about their wellbeing. Normal life includes
+slacking off, a heavy weekend, and chocolate bars nobody logs; the coach treats that as ordinary,
+because it is. (Mechanism: the REQ10 §7 tick — still unbuilt.)
+
+**BRAND note:** BRAND's crisis boundary survives intact but is **coach behavior, not machinery** —
+its "deterministic vetted copy" should be read as the system-prompt boundary, not a rendered
+component.

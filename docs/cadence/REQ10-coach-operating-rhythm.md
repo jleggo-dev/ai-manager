@@ -103,10 +103,10 @@ the tap — **zero LLM calls at tap time**; nobody mid-spiral waits eight second
   record of agreement rather than of inference.
 - Menu items log through the same rails as everything (occurrence log / `did`), so extra work
   credits progression and the day footer ("also today: 6 breaths").
-- **Second consumer — the escalation ladder** (REQ9 §3.4): the in-practice "Something else?"
-  sheet is the menu's `right_now`-tagged subset (distraction/grounding alternates, a different
-  breath). One composer, two tenses: "do something now" (the door) and "this isn't landing"
-  (the ladder). The emergency line at the ladder's bottom is app-fixed copy, never composed.
+- **Second consumer — "Something else?"** (REQ9 §3.4): a practice that isn't landing opens the
+  same menu, filtered to what can be done right now (a different breathing pattern, a grounding
+  game, a walk). One composer, two entry points. **It carries no emergency content** — the
+  escalation ladder was withdrawn 2026-08-01; see REQ9 §8 for the scope ruling.
 
 ## 7. Gap 3 — the clock (acting when the user is gone)
 
