@@ -14,7 +14,7 @@ exhausting it.
 ## Read these first
 
 - [`../REQ9-mind-tools.md`](../REQ9-mind-tools.md) — §3 the three chromes, §4.3 `grounding`,
-  §4.4 `checkin`, §6 build order. §1 is the register; it hasn't moved.
+  §4.4 `mood_note`, §6 build order. §1 is the register; it hasn't moved.
 - Your own `Cadence Mind 1 - Calm Surface + Breath.dc.html` and `Cadence Now Door.dc.html` —
   chrome A and the door as shipped (the ladder in §4g comes out — see §1).
 - [`../BRAND.md`](../BRAND.md) — voice.
@@ -90,13 +90,13 @@ the way out.
   a breathing practice that wasn't landing, and whether "Something else?" is still available once
   you're inside a grounding flow.
 
-## 4. Chrome C — capture, proven with `checkin`
+## 4. Chrome C — capture, proven with `mood_note`
 
 **What it is.** The existing sheet vocabulary (weigh-in, meal capture), carrying mind content.
 Inherit that chrome — this is the one place in the pillar where the answer is "look like what we
 already have," and the design job is content and restraint, not invention.
 
-**The payload — `checkin` (REQ9 §4.4).** The Mind pillar's instrument: the weigh-in of the mind.
+**The payload — `mood_note` (REQ9 §4.4).** The Mind pillar's instrument: the weigh-in of the mind.
 Pick the word that fits, an intensity, an optional one-line note. **~20 seconds, every time.** It
 feeds baselines and the cross-pillar correlations that are the product's moat, so it has to be
 light enough to do daily and specific enough to be worth analysing.

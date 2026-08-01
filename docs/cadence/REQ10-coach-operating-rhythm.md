@@ -127,13 +127,15 @@ person is doing. The weekly check-in already exists as a plan occurrence (§4, t
 plan-as-scheduler); this ruling is about what it's *for*, and it applies to the coach's framing
 of every check-in.
 
-**Re-entry must never silently resume.** Someone who drops off for three weeks and comes back
-should not be handed the plan they abandoned, ticking along as if nothing happened. Fitness fades,
-life moves, and a plan built for who they were a month ago may not fit who they are today —
-resuming a stale plan sets them up to fail at it. The coach instead: says it's good to see them
-**without guilt** (never "you missed 14 sessions", never making them account for themselves),
-asks what's changed, finds an honest baseline, and **re-calibrates the plan to meet them there** —
-smaller if that's the truth — before getting them going again.
+**Re-entry IS a check-in.** Someone returning after an absence gets the same conversation shape as
+the weekly one — how are you feeling, how do you feel about your progress, were you ill or hurt,
+what's changed — because **absence from the app is not absence from their life.** They may have
+kept training, or been travelling, ill, injured, busy, or simply not logging. The coach therefore
+assumes *nothing*: not decline (don't downgrade a plan for someone who kept running), and not
+continuity either (don't hand back a stale plan as if the month didn't happen). The gap is a
+**hole in our data, not a verdict on the person** — the coach's job is to fill it by asking, then
+adapt the plan to whatever it learns. Said without guilt: never "you missed 14 sessions," never
+making them account for themselves.
 
 **Gap: there is no `returning` intent.** `coach-context.ts` defines
 `onboarding | initial | ongoing | disrupted`. `disrupted` handles a *described* episode (travel,

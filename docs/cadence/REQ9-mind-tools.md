@@ -14,11 +14,12 @@ Terms used throughout, defined once so nobody has to reverse-engineer them.
 
 | Term | What it means |
 |---|---|
-| **The tools** | `breathing` (breathing-exercise player), `meditate` (silent timer with optional bells), `grounding` (distraction games — name animals A/B/C, 5-4-3-2-1 senses, count back by 7s), `checkin` (quick "how are you doing" log), `journal` (write or speak an entry), `guided_audio` (narrated audio player). Code names only — **users never see these words.** |
+| **The tools** | `breathing` (breathing-exercise player), `meditate` (silent timer with optional bells), `grounding` (distraction games — name animals A/B/C, 5-4-3-2-1 senses, count back by 7s), `mood_note` (quick "how are you doing" log), `journal` (write or speak an entry), `guided_audio` (narrated audio player). Code names only — **users never see these words.** |
 | **The extras menu** | The ＋ button's sheet gains a second section, *"Do something now"*, listing 3–5 things the coach picked for this person (a grounding game, 20 extra pushups, 10 Hail Marys). Present tense, above the existing past-tense *"Log something you did."* |
 | **"Something else?"** | A quiet link shown during a practice that isn't landing. Opens the same extras menu. Not a safety feature. |
 | **The pill** | A small labelled button (words, not a bare icon) used when the coach pins one shortcut to the top of the extras menu. |
-| **The three surfaces** | Every mind tool renders on one of three screen types: **the calm surface** (full-screen, dark, one moving form — breathing, timers, audio); **the stepped flow** (tap-forward cards — grounding games); **capture** (the existing sheet style — check-in, journal). |
+| **The three surfaces** | Every mind tool renders on one of three screen types: **the calm surface** (full-screen, dark, one moving form — breathing, timers, audio); **the stepped flow** (tap-forward cards — grounding games); **capture** (the existing sheet style — mood note, journal). |
+| **Check-in** | Reserved for the *coaching conversation* — weekly, or on return after an absence. Calibration: how are you feeling, how is progress, what changed. **Not** the `mood_note` tool. |
 | **Partial credit** | Stopping early still counts: "4 of 10 min · that counts." Never a percentage, never "incomplete." |
 
 *Withdrawn terms:* the "escalation ladder" / "rungs" (§3.4, §8) and the "now door" as a separate
@@ -70,7 +71,7 @@ proven-standalone competitor; the composition is ours alone.
 Three classes. Most mind tools are **timer-class**; exactly two things are module-class.
 
 - **Class 1 — widget** (like `StepTimer`): pure client renderer + a catalog entry + normalize
-  whitelist. `breathing`, `meditate`, `grounding`, `checkin`.
+  whitelist. `breathing`, `meditate`, `grounding`, `mood_note`.
 - **Class 2 — widget + service**: a widget with one AI-Admin job or platform service behind it.
   Voice journaling (STT job), TTS-guided audio (frozen script → TTS job + player), gratitude
   share-out (compose + OS share sheet).
@@ -179,7 +180,7 @@ also **rung 1 of the escalation ladder** (§3.4): mid-practice "Something else?"
 these as the in-the-moment alternates — they are the everyday answer that keeps ordinary rough
 moments out of "crisis" territory.
 
-### 4.4 `checkin` — the mind-side instrument (Class 1)
+### 4.4 `mood_note` — the mind-side instrument (Class 1)
 
 The pillar's weigh-in (the arc's Observe instrument, REQ6 §4): pick the word that fits (granular
 emotion vocabulary — naming precisely is itself the practice), intensity, optional one-line
@@ -246,7 +247,7 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
    accompany this step), with **the calm surface (chrome A)** and **the crisis rail** — the
    spine everything later inherits.
 2. **`meditate`** — extends StepTimer (bells, settle pre-roll, "came back" tap, keep-awake).
-3. **`checkin`** — small; starts the Observe data flowing (REQ6 §10: instrument demand first).
+3. **`mood_note`** — small; starts the Observe data flowing (REQ6 §10: instrument demand first).
 4. **`grounding`** — the family shell + senses/letters/switch first.
 5. **Journal store + written journal** — the module foundation + gratitude banks.
 6. **Voice journaling** — STT job on top.
