@@ -54,7 +54,9 @@ checkable rather than asserted.
 - **Partial credit is the normal case** — "4 of 10 min · that counts", never a percentage, never
   "incomplete." It generalizes to both chromes here.
 - **Tool names changed** (code only, users never see them): `breath`→`breathing`, `sit`→`meditate`,
-  `ground`→`grounding`, `listen`→`guided_audio`.
+  `ground`→`grounding`, `listen`→`guided_audio`, and `checkin`→`mood_note` — because **"check-in"
+  now means only the coaching conversation** (the weekly one, or the one after an absence). Don't
+  let the 20-second mood log and the calibration conversation share a word on any screen.
 
 ## 3. Chrome B — the stepped micro-flow, proven with `grounding`
 
