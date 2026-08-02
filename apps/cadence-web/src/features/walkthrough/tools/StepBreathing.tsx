@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { type BreathPattern, breathFullness, cycleSeconds, phaseAt } from '@cadence/shared';
+import { type BreathPattern, breathFullness, cycleSeconds, patternCounts, phaseAt } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
 import { TONE } from './tone.ts';
 import { playChime } from './chime.ts';
@@ -29,6 +29,7 @@ export function StepBreathing({
   pattern,
   cycles,
   caution,
+  title,
   log,
   onLog,
   onDone,
@@ -36,6 +37,11 @@ export function StepBreathing({
   pattern: BreathPattern;
   cycles: number;
   caution?: string;
+  /** The coach's own name for this step, when there is one. Inside the walkthrough a header
+   *  already shows it, so the card names the RHYTHM instead and never competes; standalone (the
+   *  extras menu, the dev preview) there is no header, so the card falls back to the pattern's
+   *  own name rather than going unlabelled. */
+  title?: string;
   log?: BreathingLog;
   onLog: (l: BreathingLog) => void;
   onDone: () => void;
@@ -117,11 +123,15 @@ export function StepBreathing({
             </>
           ) : (
             <>
-              <div style={phaseLabel}>{isRun ? at.phase.label : pattern.name}</div>
+              {/* Before you start, the card names the RHYTHM you're about to follow ("4 · 7 · 8"),
+                  not the practice — the header (or the title prop) already named that. */}
+              <div style={phaseLabel}>{isRun ? at.phase.label : (title ?? pattern.name)}</div>
               {isRun ? (
                 <div style={bigNum}>{Math.ceil(at.remaining)}</div>
               ) : (
-                <div style={{ ...caps, marginTop: 4 }}>{cycles} rounds</div>
+                /* Counts only — the dot row below already IS the round count, and the pair
+                   together overflowed the form on longer patterns. */
+                <div style={{ ...caps, marginTop: 4 }}>{patternCounts(pattern)}</div>
               )}
             </>
           )}
@@ -145,8 +155,8 @@ export function StepBreathing({
       {caution ? <div style={cautionLine}>{caution}</div> : null}
 
       <div style={footnote}>
-        {pattern.name} · {cycles} rounds · about {Math.max(1, Math.round((per * cycles) / 60))} min. Stopping early
-        keeps the rounds you did.
+        {patternCounts(pattern)} · {cycles} rounds · about {Math.max(1, Math.round((per * cycles) / 60))} min. Stopping
+        early keeps the rounds you did.
       </div>
     </div>
   );

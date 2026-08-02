@@ -230,6 +230,8 @@ function renderTool(
           onDone={onAdvance}
         />
       );
+    // No `title` passed on purpose: the shell header already shows step.title (the coach's own
+    // words), so the card names the rhythm instead of repeating the name back.
     case 'breathing':
       return (
         <StepBreathing
