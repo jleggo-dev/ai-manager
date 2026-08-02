@@ -8,7 +8,7 @@ import { DevPanel } from './features/dev/DevPanel.tsx';
 import { AccountSwitcher } from './features/dev/AccountSwitcher.tsx';
 import { AuthScreen } from './features/auth/AuthScreen.tsx';
 import { PhoneFrame } from './components/PhoneFrame.tsx';
-import { BreathingPreview, MeditatePreview } from './features/dev/BreathingPreview.tsx';
+import { BreathingPreview, GroundingPreview, MeditatePreview } from './features/dev/BreathingPreview.tsx';
 import { getPlan, setAuthToken, isDevMode } from './lib/api.ts';
 import { supabase } from './lib/supabase.ts';
 import { screenFromPlanStage } from './screenFromPlanStage.ts';
@@ -140,6 +140,12 @@ export function App() {
     return (
       <PhoneFrame>
         <MeditatePreview />
+      </PhoneFrame>
+    );
+  if (PREVIEW === 'grounding')
+    return (
+      <PhoneFrame>
+        <GroundingPreview />
       </PhoneFrame>
     );
 

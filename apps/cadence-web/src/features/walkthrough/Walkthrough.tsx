@@ -5,6 +5,7 @@ import { StepTimer } from './tools/StepTimer.tsx';
 import { StepCircuit } from './tools/StepCircuit.tsx';
 import { StepBreathing } from './tools/StepBreathing.tsx';
 import { StepMeditate } from './tools/StepMeditate.tsx';
+import { StepGrounding } from './tools/StepGrounding.tsx';
 import { StepCheckoff, StepJournal } from './tools/SimpleTools.tsx';
 import { TONE } from './tools/tone.ts';
 import { Recap } from './Recap.tsx';
@@ -255,6 +256,8 @@ function renderTool(
           onDone={onAdvance}
         />
       );
+    case 'grounding':
+      return <StepGrounding spec={t.spec} onLog={(l) => setLog(step.id, l)} onDone={onAdvance} />;
     case 'journal':
       return (
         <StepJournal

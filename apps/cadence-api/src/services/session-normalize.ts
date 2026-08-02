@@ -10,6 +10,7 @@ import {
   clampIntervalMinutes,
   clampSitMinutes,
   isBreathPatternId,
+  isGroundingGame,
   isMeditateBells,
   patternById,
   type BlockMode,
@@ -61,6 +62,11 @@ export const breathCyclesOf = (pattern: string | undefined, v: unknown): number 
 export const meditateBellsOf = (v: unknown): string | undefined =>
   typeof v === 'string' && isMeditateBells(v) ? v : undefined;
 
+/** Whitelist the coach's grounding game — an unknown name is dropped so the flow falls back to
+ *  the senses sweep rather than a game we never wrote. */
+export const groundingGameOf = (v: unknown): string | undefined =>
+  typeof v === 'string' && isGroundingGame(v) ? v : undefined;
+
 /**
  * App-side contract assertion: coerce whatever the model returned into a bounded,
  * render-safe OccurrenceSession — or null if there's nothing usable.
@@ -95,6 +101,8 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
             breath_pattern: breathPattern,
             breath_cycles: breathCyclesOf(breathPattern, i.breath_cycles),
             meditate_bells: meditateBellsOf(i.meditate_bells),
+            grounding_game: groundingGameOf(i.grounding_game),
+            grounding_bank: str(i.grounding_bank, 20),
             // Bounded here too, so a stored session never holds an out-of-range sit.
             meditate_interval_min:
               num(i.meditate_interval_min) === undefined

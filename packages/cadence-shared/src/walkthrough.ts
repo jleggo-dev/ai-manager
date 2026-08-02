@@ -19,6 +19,7 @@
 import type { OccurrenceSession, SessionBlock, SessionItem, SessionItemTool } from './types/occurrence.ts';
 import { type BreathPattern, clampCycles, patternById, totalMinutes } from './breathing.ts';
 import { type MeditateBells, clampIntervalMinutes, clampSitMinutes, isMeditateBells } from './meditate.ts';
+import { type GroundingGame, type GroundingSpec, groundingSpec, isGroundingGame } from './grounding.ts';
 
 /* ── The tool catalog ────────────────────────────────────────────────────────────────────────
    Three capture classes (see `stepCaptureMode`):
@@ -52,6 +53,9 @@ export type StepTool =
   // A held quiet (REQ9 §4.2). Structurally the timer plus bells and the optional "came back" tap —
   // the tap counts returns WITHOUT ever showing a running total, because noticing IS the practice.
   | { kind: 'meditate'; seconds: number; bells: MeditateBells; intervalMin: number }
+  // A grounding flow (REQ9 §4.3) — tap-forward cards on the four-zone shell. The whole resolved
+  // spec travels with the step so the renderer never looks a game up; it just walks `spec.steps`.
+  | { kind: 'grounding'; spec: GroundingSpec }
   | { kind: 'photo'; prompt: string; purpose: 'meal' | 'progress' | 'form' }
   | { kind: 'journal'; prompt: string; mode: 'text' | 'voice' | 'either' }
   | { kind: 'measure'; metric: string; unit: string }
@@ -99,6 +103,7 @@ export function stepCaptureMode(tool: StepTool): StepCaptureMode {
     case 'checkoff':
     case 'breathing':
     case 'meditate':
+    case 'grounding':
       return 'done';
     case 'reps':
     case 'circuit':
@@ -125,6 +130,7 @@ const DEFAULT_MINUTES: Record<StepToolKind, number> = {
   measure: 1,
   breathing: 1, // breathing computes its real minutes from pattern × cycles; this is only a floor
   meditate: 10, // a sit carries its own duration; this is only a floor
+  grounding: 3, // a grounding flow has no required length — this is a nominal slot on the trail
   rings: 1,
   insight: 1,
 };
@@ -137,6 +143,13 @@ function minutesOf(item: SessionItem, tool: StepTool): number {
   const d = item.duration_min;
   if (typeof d === 'number' && d > 0) return Math.round(d);
   return DEFAULT_MINUTES[tool.kind];
+}
+
+/** A grounding flow from the item's game + bank. An unknown game degrades to the senses sweep
+ *  rather than breaking the step. */
+function groundingTool(item: SessionItem): StepTool {
+  const game: GroundingGame = isGroundingGame(item.grounding_game) ? item.grounding_game : 'senses';
+  return { kind: 'grounding', spec: groundingSpec(game, item.grounding_bank) };
 }
 
 /** A sit from the item's duration + bell settings, bounded here so every consumer gets a valid
@@ -209,6 +222,8 @@ function toolFromKind(kind: SessionItemTool, item: SessionItem): StepTool {
       return breathingTool(item);
     case 'meditate':
       return meditateTool(item);
+    case 'grounding':
+      return groundingTool(item);
     case 'read':
       return { kind: 'read' };
     default: {

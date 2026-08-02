@@ -32,7 +32,8 @@ export interface OccurrenceWeather {
  * from its quantities (deriveWalkthrough/inferTool). This is the per-item subset the coach picks;
  * the full renderable catalog (incl. insight tools placed by the app) lives in walkthrough.ts.
  */
-export type SessionItemTool = 'read' | 'timer' | 'reps' | 'checkoff' | 'photo' | 'journal' | 'breathing' | 'meditate';
+export type SessionItemTool =
+  'read' | 'timer' | 'reps' | 'checkoff' | 'photo' | 'journal' | 'breathing' | 'meditate' | 'grounding';
 
 /** How a block's sets flow (REQ8 slice 2). The catalog (tool-catalog.ts) is the authority for the
  *  names; this type is the shape both it and `SessionBlock.mode` share so they can't drift. */
@@ -59,6 +60,10 @@ export interface SessionItem {
   meditate_bells?: string;
   /** `meditate` only — minutes between interval bells; ignored unless bells are `interval`. */
   meditate_interval_min?: number;
+  /** `grounding` only (REQ9 §4.3) — which game: senses | letters | switch | countback | object | cold. */
+  grounding_game?: string;
+  /** `grounding` only — the word bank for `letters` (animals | foods | cities). */
+  grounding_bank?: string;
 }
 
 export interface SessionBlock {

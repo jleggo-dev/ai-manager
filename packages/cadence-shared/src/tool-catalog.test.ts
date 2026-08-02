@@ -21,6 +21,7 @@ describe('tool catalog', () => {
     'journal',
     'breathing',
     'meditate',
+    'grounding',
   ];
 
   it('covers exactly the SessionItemTool palette (the api whitelist derives from this)', () => {

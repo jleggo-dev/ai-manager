@@ -6,9 +6,13 @@ import {
   patternCounts,
   type BreathPatternId,
   type MeditateBells,
+  GROUNDING_GAMES,
+  type GroundingGame,
+  groundingSpec,
 } from '@cadence/shared';
 import { StepBreathing } from '../walkthrough/tools/StepBreathing.tsx';
 import { StepMeditate } from '../walkthrough/tools/StepMeditate.tsx';
+import { StepGrounding } from '../walkthrough/tools/StepGrounding.tsx';
 import type { StepLog } from '../walkthrough/state.ts';
 
 type BreathingLog = Extract<StepLog, { kind: 'breathing' }>;
@@ -141,6 +145,53 @@ export function MeditatePreview() {
       />
       <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.7 }}>
         {last ? `logged → ${last.elapsedSec}/${last.targetSec}s · returns=${last.returns}` : 'no log yet'}
+      </div>
+    </div>
+  );
+}
+
+/** Every grounding game one tap away — the four-zone shell has to survive six very different
+ *  payloads, and that is only judgeable by walking each of them. */
+export function GroundingPreview() {
+  const [game, setGame] = useState<GroundingGame>('senses');
+  const [last, setLast] = useState<Extract<StepLog, { kind: 'grounding' }> | null>(null);
+  const [runKey, setRunKey] = useState(0);
+  return (
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14, background: 'oklch(96% 0.015 95)' }}>
+      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55 }}>
+        Grounding · dev preview
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {GROUNDING_GAMES.map((g) => (
+          <button
+            key={g}
+            onClick={() => {
+              setGame(g);
+              setLast(null);
+              setRunKey((k) => k + 1);
+            }}
+            style={{
+              border: g === game ? '1.5px solid oklch(76% 0.15 55)' : '1.5px solid oklch(90% 0.015 95)',
+              background: g === game ? 'oklch(95% 0.05 68)' : 'white',
+              borderRadius: 999,
+              padding: '7px 11px',
+              fontSize: 11.5,
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            {g}
+          </button>
+        ))}
+      </div>
+      <StepGrounding
+        key={`${game}-${runKey}`}
+        spec={groundingSpec(game, 'animals')}
+        onLog={setLast}
+        onDone={() => setRunKey((k) => k + 1)}
+      />
+      <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.7 }}>
+        {last ? `logged → ${last.game} ${last.stepsDone}/${last.total} helped=${String(last.helped)}` : 'no log yet'}
       </div>
     </div>
   );

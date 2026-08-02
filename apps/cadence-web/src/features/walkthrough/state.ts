@@ -1,4 +1,4 @@
-import { type WalkthroughStep, sitLogLine } from '@cadence/shared';
+import { type GroundingGame, type WalkthroughStep, groundingLogLine, sitLogLine } from '@cadence/shared';
 
 /**
  * The walkthrough v2 capture model (design "browse / do / commit"). Moving through steps logs
@@ -15,6 +15,15 @@ export type StepLog =
   // `returns` is context for the coach ("a busy day, not a bad sit") — never a metric, never
   // charted, never part of XP or a streak.
   | { kind: 'meditate'; elapsedSec: number; targetSec: number; returns: number; done: boolean }
+  // `helped` is self-report, logged to the arc — never surfaced back as a result.
+  | {
+      kind: 'grounding';
+      game: string;
+      stepsDone: number;
+      total: number;
+      openEnded: boolean;
+      helped: boolean | null;
+    }
   | { kind: 'done'; note?: string }; // checkoff / read / journal (journal carries the note)
 
 export type StepLogs = Record<string, StepLog>;
@@ -35,6 +44,10 @@ export function stepFraction(step: WalkthroughStep, log?: StepLog): number {
     case 'timer':
     case 'meditate':
       return log.targetSec > 0 ? Math.min(1, log.elapsedSec / log.targetSec) : log.done ? 1 : 0;
+    // Leaving a grounding flow IS finishing it — there is no required length, so it never reads
+    // as partial on the pips or the recap.
+    case 'grounding':
+      return 1;
     case 'done':
       return log.note != null || log.kind === 'done' ? 1 : 0;
   }
@@ -82,6 +95,8 @@ export function logLine(step: WalkthroughStep, log: StepLog): string {
         : `${log.roundsDone} of ${log.totalRounds} rounds · that counts`;
     case 'meditate':
       return sitLogLine(log.elapsedSec, log.targetSec);
+    case 'grounding':
+      return groundingLogLine(log.game as GroundingGame, log.stepsDone, log.total, log.openEnded);
     case 'timer': {
       const m = Math.floor(log.elapsedSec / 60);
       const s = log.elapsedSec % 60;

@@ -25,6 +25,7 @@ import type { BlockMode, SessionItemTool } from './types/occurrence.ts';
 import type { StepToolKind } from './walkthrough.ts';
 import { BREATH_PATTERNS, patternCounts } from './breathing.ts';
 import { DEFAULT_SIT_MINUTES, MAX_SIT_MINUTES, MEDITATE_BELL_KINDS } from './meditate.ts';
+import { GROUNDING_GAMES, GROUNDING_NAMES } from './grounding.ts';
 
 /** The `SessionItem` quantity/detail fields a tool reads — named so the coach fills the right ones. */
 export type ItemField =
@@ -37,7 +38,9 @@ export type ItemField =
   | 'breath_pattern'
   | 'breath_cycles'
   | 'meditate_bells'
-  | 'meditate_interval_min';
+  | 'meditate_interval_min'
+  | 'grounding_game'
+  | 'grounding_bank';
 
 /** Capture class (mirrors `stepCaptureMode`): `guided` = do it, log records only that it happened;
  *  `capture` = the person emits data that BECOMES the log. */
@@ -98,6 +101,15 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
       'do NOT use meditate for guided or narrated sitting, and do NOT use it for paced breathing — breathing paces each breath, meditate leaves them alone with a clock',
     reads: ['duration_min', 'meditate_bells', 'meditate_interval_min', 'detail'],
     example: { name: 'Sit quietly', tool: 'meditate', duration_min: 10, meditate_bells: 'start_end' },
+  },
+  grounding: {
+    class: 'guided',
+    summary:
+      'a short tap-forward flow that gives a racing mind something ordinary to do — reach for this in the moment, not as a daily practice. Pick the game with grounding_game',
+    notWhen:
+      'do NOT use grounding as a settling practice (that is breathing) and do NOT use it to pass time (that is meditate). Nothing here is scored or checked',
+    reads: ['grounding_game', 'grounding_bank', 'detail'],
+    example: { name: 'Five senses', tool: 'grounding', grounding_game: 'senses' },
   },
   reps: {
     class: 'capture',
@@ -169,6 +181,9 @@ export function renderCoachToolCatalog(): string {
   }
   lines.push('', 'SET FLOW — how each block\'s sets are sequenced. Set each block\'s "mode":');
   for (const mode of BLOCK_MODE_KINDS) lines.push(`  • ${mode} — ${SET_FLOWS[mode].summary}`);
+  lines.push('', 'GROUNDING GAMES — the only values "grounding_game" accepts:');
+  for (const g of GROUNDING_GAMES) lines.push(`  • ${g} — ${GROUNDING_NAMES[g]}`);
+  lines.push('  "letters" also reads "grounding_bank": animals | foods | cities.');
   lines.push(
     '',
     `SITTING — "meditate" reads duration_min (1-${MAX_SIT_MINUTES} min, default ${DEFAULT_SIT_MINUTES}) and`,
