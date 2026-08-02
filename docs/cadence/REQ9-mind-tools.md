@@ -179,7 +179,11 @@ timer pressure; leaving early still counts. **Params:** `game`:
 - `senses` — 5-4-3-2-1 (see 5, hear 4, feel 3, smell 2, taste 1)
 - `letters` — A→B→C naming; bank: animals / foods / cities
 - `switch` — category-switch prompts
-- `countback` — count back from 100 by 7s
+- `countback` — count back from 100 by 7s. **No input, no aids, no validation** (owner +
+  Design, 2026-08-02): the mental arithmetic IS the mechanism — it occupies the part of the mind
+  that is spiralling — so handing over a keypad or a running total would remove the very thing
+  that works, and marking an answer wrong would inject failure-anxiety into a tool whose whole job
+  is relieving it. You tap forward and the app believes you. Same for `switch`.
 - `object` — 60 seconds on one object
 - `cold` — instruction card (cool water on the face; safe, no interaction)
 
@@ -195,6 +199,29 @@ The pillar's weigh-in (the arc's Observe instrument, REQ6 §4): pick the word th
 emotion vocabulary — naming precisely is itself the practice), intensity, optional one-line
 trigger note. ~20 seconds. Feeds baselines ("your triggers cluster around work handoffs") and
 REQ7's cross-pillar correlations. How We Feel proves the shape standalone.
+
+**Provenance:** proposed in this doc, not an owner requirement — derived from the arc's need for an
+Observe phase. Owner-confirmed 2026-08-02, with the rulings below.
+
+**Owner rulings (2026-08-02), answering Design's Mind 2 §E:**
+
+- **Where it lives.** Primarily the **＋ extras menu**, placed there by the coach for someone
+  dealing with stress or anxiety. It **can also be a daily task** — the coach decides.
+- **Scheduling is phase-bound, not permanent.** During Observe (roughly week 1 of a mind goal) the
+  coach needs data, so it may schedule it daily; once baselines exist it stops scheduling and only
+  offers it contextually. Observe is a *phase*, not a fixture — which answers Design's "a scheduled
+  feeling has an odd smell": "I'm learning your patterns this week" is honest and self-limiting.
+- **The after-state shows nothing, and that ships** — no chart, no history, no streak (§8's scope
+  ruling). **Condition:** the coach must *visibly use* it within the first week or two ("the last
+  three Sunday evenings you've been on edge — want to move the long run?"). The retention
+  mechanism is the coach's memory, not a surface. If people stop logging, that is the signal to
+  revisit — the fix is still never a dashboard.
+- **"anxious" IS in the word list.** The register bans clinical language *we* impose, not the
+  plainest word someone has for their own state; excluding it would make people hunt for a
+  euphemism for their own feeling.
+- **Never stacked with a grounding close.** A grounding flow already ends on "did that help?";
+  asking "how are you doing?" straight after is one prompt too many. If the pairing is ever
+  wanted it must *replace* that question, never follow it.
 
 ### 4.5 `journal` — deepened (Class 2/3 — the widget is small; the **store** is the module)
 
