@@ -14,7 +14,7 @@ exhausting it.
 ## Read these first
 
 - [`../REQ9-mind-tools.md`](../REQ9-mind-tools.md) — §3 the three chromes, §4.3 `grounding`,
-  §4.4 `mood_note`, §6 build order. §1 is the register; it hasn't moved.
+  §4.4 `feeling_log`, §6 build order. §1 is the register; it hasn't moved.
 - Your own `Cadence Mind 1 - Calm Surface + Breath.dc.html` and `Cadence Now Door.dc.html` —
   chrome A and the door as shipped (the ladder in §4g comes out — see §1).
 - [`../BRAND.md`](../BRAND.md) — voice.
@@ -54,9 +54,9 @@ checkable rather than asserted.
 - **Partial credit is the normal case** — "4 of 10 min · that counts", never a percentage, never
   "incomplete." It generalizes to both chromes here.
 - **Tool names changed** (code only, users never see them): `breath`→`breathing`, `sit`→`meditate`,
-  `ground`→`grounding`, `listen`→`guided_audio`, and `checkin`→`mood_note` — because **"check-in"
+  `ground`→`grounding`, `listen`→`guided_audio`, and `checkin`→`feeling_log` — because **"check-in"
   now means only the coaching conversation** (the weekly one, or the one after an absence). Don't
-  let the 20-second mood log and the calibration conversation share a word on any screen.
+  let the 20-second instrument and the calibration conversation share a word on any screen.
 
 ## 3. Chrome B — the stepped micro-flow, proven with `grounding`
 
@@ -92,13 +92,13 @@ the way out.
   a breathing practice that wasn't landing, and whether "Something else?" is still available once
   you're inside a grounding flow.
 
-## 4. Chrome C — capture, proven with `mood_note`
+## 4. Chrome C — capture, proven with `feeling_log`
 
 **What it is.** The existing sheet vocabulary (weigh-in, meal capture), carrying mind content.
 Inherit that chrome — this is the one place in the pillar where the answer is "look like what we
 already have," and the design job is content and restraint, not invention.
 
-**The payload — `mood_note` (REQ9 §4.4).** The Mind pillar's instrument: the weigh-in of the mind.
+**The payload — `feeling_log` (REQ9 §4.4).** The Mind pillar's instrument: the weigh-in of the mind.
 Pick the word that fits, an intensity, an optional one-line note. **~20 seconds, every time.** It
 feeds baselines and the cross-pillar correlations that are the product's moat, so it has to be
 light enough to do daily and specific enough to be worth analysing.
@@ -110,11 +110,11 @@ is itself the practice, but the register bans symptom language. How many words, 
 need. Propose the actual list.
 
 **Specific asks:**
-- The check-in sheet: word → intensity → optional note, and what makes it feel like 20 seconds.
+- The sheet itself: word → intensity → optional note, and what makes it feel like 20 seconds.
 - The vocabulary itself, and its surfacing.
 - **Intensity without a clinical scale** — a 1–10 severity slider is exactly the wrong register.
 - What the person sees *afterwards*: nothing? a quiet acknowledgment? a pattern once there are
-  enough? (Careful — this is where a check-in becomes a mood-tracking dashboard, which is not
+  enough? (Careful — this is where the instrument becomes a mood-tracking dashboard, which is not
   what we're building.)
 - How it's entered: a trail node, and from the ＋ sheet's "Do something now" section.
 
