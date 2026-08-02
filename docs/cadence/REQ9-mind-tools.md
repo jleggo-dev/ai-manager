@@ -134,8 +134,17 @@ One deterministic model covers every technique: **a pattern = ordered phases**
 light; the device owns the timing — "nothing to count").
 
 **Coach params:** `pattern` (preset name or custom phases), `cycles` *or* `minutes`, plus the
-framing line. User overrides at play time; "find my rhythm — tap four turns" lets a person seed
-their own counts (kept from the design pass — it was good).
+framing line.
+
+**No picker — the coach prescribes, the person does it** (owner ruling 2026-08-02). A prescribed
+step plays exactly the pattern and count the coach chose; there is no rhythm list, no rounds dial,
+and no setup screen in the player. This supersedes the earlier "user overrides at play time" line
+here and the rhythm/rounds setup screen in Design's Mind 1 §2e — both are withdrawn. The reasoning
+is the pillar's own frame: a coach that hands you a menu isn't coaching, and nine options in front
+of someone who wants to settle is a decision they didn't ask for. Unscheduled use is still
+coach-chosen — the extras menu carries params on each item (`breathing(box, 6)`), so the choice was
+made when the menu was composed. The nine-pattern picker exists **only** in the dev harness
+(`features/dev/BreathingPreview.tsx`, `?preview=breathing`), which nothing links to.
 
 **Preset bank (v1):**
 

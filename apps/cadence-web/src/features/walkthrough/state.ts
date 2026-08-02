@@ -1,4 +1,4 @@
-import type { WalkthroughStep } from '@cadence/shared';
+import { type WalkthroughStep, sitLogLine } from '@cadence/shared';
 
 /**
  * The walkthrough v2 capture model (design "browse / do / commit"). Moving through steps logs
@@ -12,6 +12,9 @@ export type StepLog =
   | { kind: 'timer'; elapsedSec: number; targetSec: number; done: boolean }
   // Breathing logs ROUNDS, never anything about the person. Partial is the normal case.
   | { kind: 'breathing'; roundsDone: number; totalRounds: number; pattern: string }
+  // `returns` is context for the coach ("a busy day, not a bad sit") — never a metric, never
+  // charted, never part of XP or a streak.
+  | { kind: 'meditate'; elapsedSec: number; targetSec: number; returns: number; done: boolean }
   | { kind: 'done'; note?: string }; // checkoff / read / journal (journal carries the note)
 
 export type StepLogs = Record<string, StepLog>;
@@ -30,6 +33,7 @@ export function stepFraction(step: WalkthroughStep, log?: StepLog): number {
     case 'breathing':
       return log.totalRounds > 0 ? Math.min(1, log.roundsDone / log.totalRounds) : log.roundsDone > 0 ? 1 : 0;
     case 'timer':
+    case 'meditate':
       return log.targetSec > 0 ? Math.min(1, log.elapsedSec / log.targetSec) : log.done ? 1 : 0;
     case 'done':
       return log.note != null || log.kind === 'done' ? 1 : 0;
@@ -76,6 +80,8 @@ export function logLine(step: WalkthroughStep, log: StepLog): string {
       return log.roundsDone >= log.totalRounds
         ? `${log.totalRounds} rounds`
         : `${log.roundsDone} of ${log.totalRounds} rounds · that counts`;
+    case 'meditate':
+      return sitLogLine(log.elapsedSec, log.targetSec);
     case 'timer': {
       const m = Math.floor(log.elapsedSec / 60);
       const s = log.elapsedSec % 60;

@@ -4,6 +4,7 @@ import { StepReps } from './tools/StepReps.tsx';
 import { StepTimer } from './tools/StepTimer.tsx';
 import { StepCircuit } from './tools/StepCircuit.tsx';
 import { StepBreathing } from './tools/StepBreathing.tsx';
+import { StepMeditate } from './tools/StepMeditate.tsx';
 import { StepCheckoff, StepJournal } from './tools/SimpleTools.tsx';
 import { TONE } from './tools/tone.ts';
 import { Recap } from './Recap.tsx';
@@ -239,6 +240,17 @@ function renderTool(
           cycles={t.cycles}
           caution={t.pattern.caution}
           log={log?.kind === 'breathing' ? log : undefined}
+          onLog={(l) => setLog(step.id, l)}
+          onDone={onAdvance}
+        />
+      );
+    case 'meditate':
+      return (
+        <StepMeditate
+          seconds={t.seconds}
+          bells={t.bells}
+          intervalMin={t.intervalMin}
+          log={log?.kind === 'meditate' ? log : undefined}
           onLog={(l) => setLog(step.id, l)}
           onDone={onAdvance}
         />

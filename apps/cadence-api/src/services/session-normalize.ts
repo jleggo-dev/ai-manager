@@ -7,7 +7,10 @@ import {
   BLOCK_MODE_KINDS,
   SESSION_TOOL_KINDS,
   clampCycles,
+  clampIntervalMinutes,
+  clampSitMinutes,
   isBreathPatternId,
+  isMeditateBells,
   patternById,
   type BlockMode,
   type OccurrenceSession,
@@ -53,6 +56,11 @@ export const breathCyclesOf = (pattern: string | undefined, v: unknown): number 
   return clampCycles(patternById(pattern), n);
 };
 
+/** Whitelist the coach's bell setting (REQ9 §4.2) — an unknown value is dropped so the sit falls
+ *  back to a plain start/end pair rather than silence. */
+export const meditateBellsOf = (v: unknown): string | undefined =>
+  typeof v === 'string' && isMeditateBells(v) ? v : undefined;
+
 /**
  * App-side contract assertion: coerce whatever the model returned into a bounded,
  * render-safe OccurrenceSession — or null if there's nothing usable.
@@ -86,6 +94,12 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
             tool: toolOf(i.tool),
             breath_pattern: breathPattern,
             breath_cycles: breathCyclesOf(breathPattern, i.breath_cycles),
+            meditate_bells: meditateBellsOf(i.meditate_bells),
+            // Bounded here too, so a stored session never holds an out-of-range sit.
+            meditate_interval_min:
+              num(i.meditate_interval_min) === undefined
+                ? undefined
+                : clampIntervalMinutes(clampSitMinutes(num(i.duration_min)), num(i.meditate_interval_min)),
           };
         })
         .filter((i): i is SessionItem => i !== null);

@@ -1138,3 +1138,10 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .ld-log { flex: 0 0 auto; border: none; border-radius: 12px; padding: 0 18px; font-size: 14px; font-weight: 900; color: #fff; cursor: pointer;
   background: linear-gradient(180deg, oklch(60% 0.10 152), oklch(52% 0.09 152)); box-shadow: 0 4px 0 oklch(39% 0.08 152); }
 .ld-log:disabled { opacity: 0.5; cursor: default; box-shadow: none; }
+
+/* The "came back" tap (REQ9 §4.2). One ripple, then nothing — the screen after a return is
+   identical to the screen before it, because that is what returning means. */
+@keyframes cadence-ripple {
+  from { transform: scale(0.7); opacity: 0.5; }
+  to   { transform: scale(1.9); opacity: 0; }
+}

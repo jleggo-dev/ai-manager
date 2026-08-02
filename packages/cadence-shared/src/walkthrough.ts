@@ -18,6 +18,7 @@
 
 import type { OccurrenceSession, SessionBlock, SessionItem, SessionItemTool } from './types/occurrence.ts';
 import { type BreathPattern, clampCycles, patternById, totalMinutes } from './breathing.ts';
+import { type MeditateBells, clampIntervalMinutes, clampSitMinutes, isMeditateBells } from './meditate.ts';
 
 /* ── The tool catalog ────────────────────────────────────────────────────────────────────────
    Three capture classes (see `stepCaptureMode`):
@@ -48,6 +49,9 @@ export type StepTool =
   // dumb — it animates `pattern.phases` without knowing any technique's name. `cycles` is already
   // safety-clamped; the renderer never re-derives it.
   | { kind: 'breathing'; pattern: BreathPattern; cycles: number }
+  // A held quiet (REQ9 §4.2). Structurally the timer plus bells and the optional "came back" tap —
+  // the tap counts returns WITHOUT ever showing a running total, because noticing IS the practice.
+  | { kind: 'meditate'; seconds: number; bells: MeditateBells; intervalMin: number }
   | { kind: 'photo'; prompt: string; purpose: 'meal' | 'progress' | 'form' }
   | { kind: 'journal'; prompt: string; mode: 'text' | 'voice' | 'either' }
   | { kind: 'measure'; metric: string; unit: string }
@@ -88,12 +92,13 @@ export function stepCaptureMode(tool: StepTool): StepCaptureMode {
     case 'rings':
     case 'insight':
       return 'none';
-    // `breathing` sits here deliberately: it captures nothing structured — the log records the
-    // rounds you did, never anything about the person.
+    // `breathing` and `meditate` sit here deliberately: they capture nothing structured — the log
+    // records the rounds or the minutes you did, never anything about the person.
     case 'read':
     case 'timer':
     case 'checkoff':
     case 'breathing':
+    case 'meditate':
       return 'done';
     case 'reps':
     case 'circuit':
@@ -119,6 +124,7 @@ const DEFAULT_MINUTES: Record<StepToolKind, number> = {
   journal: 3,
   measure: 1,
   breathing: 1, // breathing computes its real minutes from pattern × cycles; this is only a floor
+  meditate: 10, // a sit carries its own duration; this is only a floor
   rings: 1,
   insight: 1,
 };
@@ -127,9 +133,23 @@ const DEFAULT_MINUTES: Record<StepToolKind, number> = {
  *  duration — its real length is pattern × clamped cycles, which is arithmetic, not a guess. */
 function minutesOf(item: SessionItem, tool: StepTool): number {
   if (tool.kind === 'breathing') return totalMinutes(tool.pattern, tool.cycles);
+  if (tool.kind === 'meditate') return Math.max(1, Math.round(tool.seconds / 60));
   const d = item.duration_min;
   if (typeof d === 'number' && d > 0) return Math.round(d);
   return DEFAULT_MINUTES[tool.kind];
+}
+
+/** A sit from the item's duration + bell settings, bounded here so every consumer gets a valid
+ *  step. An unknown bell name falls back to a plain start/end pair rather than silence. */
+function meditateTool(item: SessionItem): StepTool {
+  const minutes = clampSitMinutes(item.duration_min);
+  const bells: MeditateBells = isMeditateBells(item.meditate_bells) ? item.meditate_bells : 'start_end';
+  return {
+    kind: 'meditate',
+    seconds: minutes * 60,
+    bells,
+    intervalMin: clampIntervalMinutes(minutes, item.meditate_interval_min),
+  };
 }
 
 /** A breathing tool from the item's pattern/cycles, resolved and safety-clamped here so every
@@ -187,6 +207,8 @@ function toolFromKind(kind: SessionItemTool, item: SessionItem): StepTool {
       return { kind: 'journal', prompt: item.detail ?? 'Jot down how it went', mode: 'either' };
     case 'breathing':
       return breathingTool(item);
+    case 'meditate':
+      return meditateTool(item);
     case 'read':
       return { kind: 'read' };
     default: {

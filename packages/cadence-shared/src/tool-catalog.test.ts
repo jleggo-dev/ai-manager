@@ -12,7 +12,16 @@ import {
 /** The catalog is the single source of truth — these lock the two things that must never silently
  *  drift: it covers exactly the coach's tool palette, and its render names every tool + set flow. */
 describe('tool catalog', () => {
-  const ALL_TOOLS: SessionItemTool[] = ['read', 'timer', 'reps', 'checkoff', 'photo', 'journal', 'breathing'];
+  const ALL_TOOLS: SessionItemTool[] = [
+    'read',
+    'timer',
+    'reps',
+    'checkoff',
+    'photo',
+    'journal',
+    'breathing',
+    'meditate',
+  ];
 
   it('covers exactly the SessionItemTool palette (the api whitelist derives from this)', () => {
     expect([...SESSION_TOOL_KINDS].sort()).toEqual([...ALL_TOOLS].sort());

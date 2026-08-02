@@ -24,10 +24,20 @@
 import type { BlockMode, SessionItemTool } from './types/occurrence.ts';
 import type { StepToolKind } from './walkthrough.ts';
 import { BREATH_PATTERNS, patternCounts } from './breathing.ts';
+import { DEFAULT_SIT_MINUTES, MAX_SIT_MINUTES, MEDITATE_BELL_KINDS } from './meditate.ts';
 
 /** The `SessionItem` quantity/detail fields a tool reads — named so the coach fills the right ones. */
 export type ItemField =
-  'sets' | 'reps' | 'load' | 'duration_min' | 'distance_km' | 'detail' | 'breath_pattern' | 'breath_cycles';
+  | 'sets'
+  | 'reps'
+  | 'load'
+  | 'duration_min'
+  | 'distance_km'
+  | 'detail'
+  | 'breath_pattern'
+  | 'breath_cycles'
+  | 'meditate_bells'
+  | 'meditate_interval_min';
 
 /** Capture class (mirrors `stepCaptureMode`): `guided` = do it, log records only that it happened;
  *  `capture` = the person emits data that BECOMES the log. */
@@ -79,6 +89,15 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
       'do NOT use timer for breathing, and do NOT use breathing for silent sitting — a timer counts a held effort, breathing paces each breath. Name the pattern; never describe counts in the detail text',
     reads: ['breath_pattern', 'breath_cycles', 'detail'],
     example: { name: 'Settle before we start', tool: 'breathing', breath_pattern: 'box', breath_cycles: 6 },
+  },
+  meditate: {
+    class: 'guided',
+    summary:
+      'silent sitting for a set time — a settling practice, or a quiet few minutes after effort. Set duration_min; bells mark the start and end (and optionally an interval) so they can close their eyes',
+    notWhen:
+      'do NOT use meditate for guided or narrated sitting, and do NOT use it for paced breathing — breathing paces each breath, meditate leaves them alone with a clock',
+    reads: ['duration_min', 'meditate_bells', 'meditate_interval_min', 'detail'],
+    example: { name: 'Sit quietly', tool: 'meditate', duration_min: 10, meditate_bells: 'start_end' },
   },
   reps: {
     class: 'capture',
@@ -150,6 +169,12 @@ export function renderCoachToolCatalog(): string {
   }
   lines.push('', 'SET FLOW — how each block\'s sets are sequenced. Set each block\'s "mode":');
   for (const mode of BLOCK_MODE_KINDS) lines.push(`  • ${mode} — ${SET_FLOWS[mode].summary}`);
+  lines.push(
+    '',
+    `SITTING — "meditate" reads duration_min (1-${MAX_SIT_MINUTES} min, default ${DEFAULT_SIT_MINUTES}) and`,
+    `"meditate_bells": ${MEDITATE_BELL_KINDS.join(' | ')}. Use "interval" only for longer sits, with`,
+    '"meditate_interval_min" for the spacing. Anything else is replaced with start_end.',
+  );
   lines.push(
     '',
     'BREATH PATTERNS — the only values "breath_pattern" accepts. Choose by what the moment needs;',
