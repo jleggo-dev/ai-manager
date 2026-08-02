@@ -144,6 +144,6 @@ score. A few hundred words and one state is plenty.
 
 390×844 screens with redlines in the handoff's format: the chrome B card shell with `senses`,
 `letters` and `object` in place plus the "did that help?" close and the arrive-from-a-stalled-practice
-hand-off; the chrome C check-in sheet with your proposed vocabulary and intensity treatment, plus
+hand-off; the chrome C feeling_log sheet with your proposed vocabulary and intensity treatment, plus
 the after-state; and the `meditate` "came back" addendum. Call the fork on chrome B (input vs pacing)
 explicitly, and flag anything you'd want owner-ruled rather than deciding yourself.
