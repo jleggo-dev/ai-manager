@@ -30,3 +30,4 @@ export * from './tool-catalog.ts';
 export * from './breathing.ts';
 export * from './meditate.ts';
 export * from './grounding.ts';
+export * from './now-menu.ts';
