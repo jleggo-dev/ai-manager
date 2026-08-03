@@ -1,0 +1,41 @@
+# Live coach-behaviour probe (REQ10 §11 — "the probe is manual, not CI" gap, closed).
+#
+# Runs apps/cadence-api/scripts/probe-coach-tools.ts against the DEPLOYED AI Admin: six
+# prescribe-session scenarios in user voice (wants, bans, and traps), five Scribe transcripts
+# (including injection, negation, and mid-message correction), and a now-menu register check —
+# all through the same normalizers the app uses.
+#
+# Deliberately its OWN workflow, not a CI job: the coach is stochastic, so this must never gate a
+# merge. A red run here means "look at the output", not "revert". Two suite repetitions per run
+# (--runs 2) so a flaky scenario shows up as flaky instead of passing on luck.
+#
+# Spends real model calls (~24 jobs per run) — hence weekly + on-demand, not per-push.
+#
+# Local equivalent:
+#   node --import tsx apps/cadence-api/scripts/probe-coach-tools.ts --runs 2
+#
+name: Coach behaviour probe
+
+on:
+  schedule:
+    # Weekly, Monday 13:00 UTC — after a weekend of prompt/catalog changes has settled.
+    - cron: '0 13 * * 1'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      AI_ADMIN_API_KEY: ${{ secrets.AI_ADMIN_API_KEY }}
+      AI_ADMIN_BASE_URL: ${{ secrets.AI_ADMIN_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install (workspaces)
+        run: npm ci
+      - name: Probe the live coach (2 full passes)
+        run: node --import tsx apps/cadence-api/scripts/probe-coach-tools.ts --runs 2

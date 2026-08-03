@@ -4,6 +4,7 @@ import type { StepLog } from '../state.ts';
 import { TONE } from './tone.ts';
 import { playChime } from './chime.ts';
 import { WhatsThis } from './WhatsThis.tsx';
+import { markHelpedAsked } from './helped-gate.ts';
 
 type GroundingLog = Extract<StepLog, { kind: 'grounding' }>;
 
@@ -60,6 +61,9 @@ export function StepGrounding({
 
   function finish() {
     setClosed(true);
+    // Mark on SHOW, not on answer — a person who skips was still asked, and asking again the
+    // same day is exactly what the once-a-day rule forbids.
+    if (askHelped) markHelpedAsked();
     onLog({
       kind: 'grounding',
       game: spec.game,

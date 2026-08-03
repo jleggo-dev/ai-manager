@@ -100,7 +100,7 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
         .catch(() => '')
     : '';
 
-  const res = await runJobBySlug(userId, 'prescribe-session', {
+  const variables = {
     activity: JSON.stringify({
       title: occ.title,
       category: occ.category ?? undefined,
@@ -119,14 +119,24 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
     occurrence_date: occ.date,
     weather: weatherLine,
     tool_catalog: TOOL_CATALOG,
-  });
+  };
 
-  const session = normalizeSession(parseJson(res.formatted ?? res.raw ?? ''));
+  // One retry when the output doesn't survive normalization (REQ10 §11's named gap). A
+  // normalize-null here is almost always a provider blip — truncation, a refusal preamble, a
+  // malformed block — and re-rolling once turns "the user taps retry" into "the user never
+  // noticed". One retry only: two consecutive rejections means something real is wrong, and the
+  // regenerate-on-next-open path is the right place for that to surface.
+  let session: OccurrenceSession | null = null;
+  let attempts = 0;
+  for (; attempts < 2 && !session; attempts += 1) {
+    const res = await runJobBySlug(userId, 'prescribe-session', variables);
+    session = normalizeSession(parseJson(res.formatted ?? res.raw ?? ''));
+  }
   void logAi(userId, {
     kind: 'prescribe_session',
     input: { occurrenceId: occ.occurrence_id, title: occ.title, date: occ.date },
     output: session,
-    meta: { blocks: session?.blocks.length ?? 0, ok: !!session, phase, sessions_logged: history.length },
+    meta: { blocks: session?.blocks.length ?? 0, ok: !!session, phase, sessions_logged: history.length, attempts },
   });
   return session;
 }
