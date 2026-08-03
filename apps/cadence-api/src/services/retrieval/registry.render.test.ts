@@ -12,8 +12,14 @@ vi.mock('../../repos/plans.ts', () => ({ getActivePlan: vi.fn() }));
 vi.mock('../../repos/activities.ts', () => ({ listActivities: vi.fn() }));
 vi.mock('../../repos/occurrences.ts', () => ({ listOccurrences: vi.fn(), listRecentLogged: vi.fn() }));
 vi.mock('../../repos/nutrition.ts', () => ({ listNutritionLogs: vi.fn() }));
+vi.mock('../../repos/journal-entries.ts', () => ({ listForCoach: vi.fn() }));
 vi.mock('../progress.ts', () => ({ buildProgress: vi.fn() }));
 vi.mock('../food-sources/usda-enrich.ts', () => ({ searchFoodsWithUsda: vi.fn() }));
+// Backstop: the per-repo mocks above have to stay exhaustive, and adding one import to registry.ts
+// silently broke that (edc1fb8 added journal-entries; CI went red, every dev machine stayed green
+// because a local .env always has CADENCE_* set). Mocking the shared DB seam means the NEXT repo
+// added to registry.ts can't reintroduce the same failure.
+vi.mock('../../db/sql.ts', () => ({ sql: vi.fn(), json: vi.fn() }));
 vi.mock('../nutrition-summarize.ts', async (orig) => {
   const real = await orig<typeof import('../nutrition-summarize.ts')>();
   return real;

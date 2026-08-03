@@ -8,6 +8,20 @@ import { describe, expect, it, vi } from 'vitest';
 const listForCoach = vi.fn();
 vi.mock('../../repos/journal-entries.ts', () => ({ listForCoach: (...a: unknown[]) => listForCoach(...a) }));
 
+/**
+ * Importing `registry.ts` drags in every repo it reads from, and each of those imports `db/sql.ts`
+ * → `config.ts`, which builds the Postgres URL AT MODULE SCOPE and throws when no CADENCE_* creds
+ * exist. That's invisible locally (a developer's .env always has them) and fatal in CI, which runs
+ * the cadence job deliberately without DB secrets — every other DB-touching suite here stays green
+ * by never letting config.ts load (see plan-commit.test.ts's guard + lazy imports).
+ *
+ * These two mocks are that wall: `db/sql.ts` severs every repo at once, and `usda-enrich.ts` severs
+ * the food-source subtree, which reaches config.ts by its own path. Don't remove them to "simplify"
+ * — the test passes either way on a dev machine and only fails once it's pushed.
+ */
+vi.mock('../../db/sql.ts', () => ({ sql: vi.fn(), json: vi.fn() }));
+vi.mock('../food-sources/usda-enrich.ts', () => ({ searchFoodsWithUsda: vi.fn() }));
+
 const { RETRIEVAL_FUNCTIONS } = await import('./registry.ts');
 const fn = RETRIEVAL_FUNCTIONS.get_journal!;
 
