@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getPlan, logDid, logAdhoc, type PlanActivity } from '../../lib/api.ts';
 import { categoryOf, ICON } from '../today/category.ts';
+import { DoNowSection } from './DoNowSection.tsx';
 
 /**
  * The goal-aware "＋" sheet — "log something you did." The options are your PLAN's activities (the
@@ -51,8 +52,14 @@ export function LogDidSheet({ onClose, onLogged }: { onClose: () => void; onLogg
   return (
     <>
       <div className="sheet-scrim" onClick={onClose} aria-hidden />
-      <div className="sheet ld" role="dialog" aria-label="Log something you did">
+      <div className="sheet ld" role="dialog" aria-label="Do something now, or log something you did">
         <div className="sheet-grab" aria-hidden />
+
+        {/* Present tense first — the past is patient. Renders nothing at all when the coach has
+            nothing to offer, so the log section simply sits where it always did. */}
+        <DoNowSection onClose={onClose} onLogged={onLogged} />
+        <div className="ld-split" aria-hidden />
+
         <div className="ld-head">
           <b>Log something you did</b>
           <span>Tap what you did — it counts even if it wasn&apos;t scheduled for today.</span>

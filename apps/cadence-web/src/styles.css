@@ -1113,7 +1113,10 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 
 /* ── "Log something you did" sheet (the goal-aware ＋) ── */
 .ld-head { display: flex; flex-direction: column; gap: 3px; margin-bottom: 4px; }
-.ld-head b { font-family: var(--display); font-size: 19px; font-weight: 700; color: oklch(28% 0.02 150); }
+/* 15px/800 to match .dn-head, per Now Door §4f ("headings 15px/800, two of them"). The sheet now
+   has two peer sections, and a 19px heading over a 15px one would make the past-tense section read
+   as the primary one — inverting the whole point of putting the present first. */
+.ld-head b { font-size: 15px; font-weight: 800; color: oklch(30% 0.02 150); }
 .ld-head span { font-size: 12.5px; font-weight: 600; color: oklch(52% 0.02 120); line-height: 1.3; }
 .ld-list { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 4px; max-height: 44vh; overflow-y: auto; }
 .ld-empty { font-size: 13px; font-weight: 600; color: oklch(52% 0.02 120); padding: 10px 2px; }
@@ -1145,3 +1148,29 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
   from { transform: scale(0.7); opacity: 0.5; }
   to   { transform: scale(1.9); opacity: 0; }
 }
+
+/* ── "Do something now" — the ＋ sheet's present-tense section (REQ10 §6, Now Door §4f) ──
+   Present sits above past because a log can wait a tap and someone who needs three minutes
+   cannot. The pillar colour is legal here and ONLY here: inside the sheet, on items that
+   genuinely are mind items. Nothing is added to the frame. */
+.dn { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 14px; }
+.dn-head { font-size: 15px; font-weight: 800; color: oklch(30% 0.02 150); }
+.dn-list { display: flex; flex-direction: column; gap: 8px; }
+.dn-row { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; cursor: pointer;
+  background: #fff; border: 1px solid oklch(90% 0.02 85); border-radius: 14px; padding: 13px 14px; }
+.dn-ic { width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center;
+  justify-content: center; box-shadow: 0 2px 0 oklch(0% 0 0 / 0.10); }
+.dn-row-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dn-row-t b { font-size: 13.5px; font-weight: 800; color: oklch(30% 0.02 150); line-height: 1.25; }
+.dn-row-t span { font-size: 11px; font-weight: 700; color: oklch(56% 0.02 120); margin-top: 2px; }
+/* The pin is the coach's judgment that this person needs one tap, not a list — so it is the only
+   thing in the sheet with thickness. */
+.dn-pin { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  border: none; border-radius: 18px; padding: 17px 16px; box-shadow: 0 5px 0 oklch(0% 0 0 / 0.13); }
+.dn-pin-ic { width: 42px; height: 42px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center;
+  justify-content: center; background: oklch(100% 0 0 / 0.22); }
+.dn-pin-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dn-pin-t b { font-family: var(--display), serif; font-weight: 600; font-size: 19px; color: #fff; line-height: 1.15; }
+.dn-pin-t span { font-size: 12px; font-weight: 800; color: oklch(100% 0 0 / 0.85); margin-top: 3px; }
+/* The rule between the two sections. */
+.ld-split { height: 1px; background: oklch(90% 0.015 95); margin: 6px 16px 14px; }

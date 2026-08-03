@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   BREATH_PATTERNS,
   DEFAULT_CYCLES,
@@ -13,6 +13,7 @@ import {
 import { StepBreathing } from '../walkthrough/tools/StepBreathing.tsx';
 import { StepMeditate } from '../walkthrough/tools/StepMeditate.tsx';
 import { StepGrounding } from '../walkthrough/tools/StepGrounding.tsx';
+import { DoNowSection } from '../plan/DoNowSection.tsx';
 import type { StepLog } from '../walkthrough/state.ts';
 
 type BreathingLog = Extract<StepLog, { kind: 'breathing' }>;
@@ -192,6 +193,82 @@ export function GroundingPreview() {
       />
       <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.7 }}>
         {last ? `logged → ${last.game} ${last.stepsDone}/${last.total} helped=${String(last.helped)}` : 'no log yet'}
+      </div>
+    </div>
+  );
+}
+
+const NOW_MENU_FIXTURE = [
+  {
+    id: 'n1',
+    label: 'Three long exhales',
+    area: 'mind',
+    pinned: true,
+    coachLine: "I'll count",
+    action: { kind: 'tool', tool: 'breathing', params: { breath_pattern: 'extended_exhale', breath_cycles: 5 } },
+  },
+  {
+    id: 'n2',
+    label: 'Five things you can see',
+    area: 'mind',
+    action: { kind: 'tool', tool: 'grounding', params: { grounding_game: 'senses' } },
+  },
+  {
+    id: 'n3',
+    label: 'A short sit',
+    area: 'practice',
+    action: { kind: 'tool', tool: 'meditate', params: { duration_min: 5, meditate_bells: 'start_end' } },
+  },
+];
+
+/** The "Do something now" section against a stubbed menu, so the sheet's chrome can be judged
+ *  without the api running. Stubs the network, not the component — what renders here is the real
+ *  DoNowSection with real rows. */
+export function NowMenuPreview() {
+  // The api can't compose a real menu on this machine (the engine needs credentials we don't
+  // have), and the service correctly soft-fails to an empty list — which would render nothing to
+  // look at. So the preview stubs the ENDPOINT and leaves the component untouched: what renders
+  // below is the real DoNowSection, fetching over the real client, against a fixture.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const orig = window.fetch;
+    window.fetch = ((u: RequestInfo | URL, o?: RequestInit) =>
+      String(u).includes('/me/now-menu')
+        ? Promise.resolve(
+            new Response(JSON.stringify({ items: NOW_MENU_FIXTURE }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          )
+        : orig(u, o)) as typeof window.fetch;
+    setReady(true);
+    return () => {
+      window.fetch = orig;
+    };
+  }, []);
+  if (!ready) return null;
+  return (
+    <div style={{ padding: 0, background: 'oklch(96% 0.015 95)', minHeight: 600 }}>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 900,
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          opacity: 0.55,
+          padding: 16,
+        }}
+      >
+        ＋ sheet · dev preview
+      </div>
+      <div className="sheet ld" style={{ position: 'static', transform: 'none' }}>
+        <div className="sheet-grab" aria-hidden />
+        <DoNowSection onClose={() => undefined} onLogged={() => undefined} />
+        <div className="ld-split" aria-hidden />
+        <div className="ld-head">
+          <b>Log something you did</b>
+          <span>Tap what you did — it counts even if it wasn&apos;t scheduled for today.</span>
+        </div>
       </div>
     </div>
   );

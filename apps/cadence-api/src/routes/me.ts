@@ -6,6 +6,7 @@ import { AimError, purgeUserAiData } from '../ai/aim.ts';
 import { clearHomeLocation, getUser, setHomeLocation } from '../repos/users.ts';
 import { geocodeCity, getWeatherForUser } from '../services/weather/weather.ts';
 import { getDayRecap } from '../services/day-recap.ts';
+import { getNowMenu } from '../services/now-menu.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
 import { homeLocationBodySchema } from '../validation/location.ts';
 
@@ -50,6 +51,20 @@ router.get('/weather', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /me/weather]', err);
     res.status(500).json({ error: 'failed to load weather' });
+  }
+});
+
+/**
+ * GET /me/now-menu — the ＋ sheet's present-tense section (REQ10 §6). Composed ahead and cached, so
+ * this is a fast read; an empty list is a legitimate answer and simply hides the section.
+ */
+router.get('/now-menu', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    res.json({ items: await getNowMenu(userId) });
+  } catch (err) {
+    console.error('[GET /me/now-menu]', err);
+    res.json({ items: [] });
   }
 });
 

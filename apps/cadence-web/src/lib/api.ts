@@ -186,6 +186,8 @@ export {
 
 export { resetAccount, getTrace, getCoachLog, type DevTrace, type AiLogEntry } from './api/dev.ts';
 
+export { getNowMenu } from './api/now-menu.ts';
+
 export {
   getHomeLocation,
   saveHomeLocation,
