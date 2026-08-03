@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { deriveWalkthrough, nowMenuMeta, type NowMenuItem, type OccurrenceSession } from '@cadence/shared';
 import { getNowMenu } from '../../lib/api.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
+import { JournalWrite } from '../journal/JournalWrite.tsx';
 import { ICON, type Category } from '../today/category.ts';
 
 /**
@@ -35,6 +36,21 @@ export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLog
       alive = false;
     };
   }, []);
+
+  // Journal rows open the real writing page (full-screen, the store behind it) — the walkthrough's
+  // journal step is for sessions; a menu-launched entry belongs to the module.
+  if (playing?.action.kind === 'tool' && playing.action.tool === 'journal') {
+    return (
+      <JournalWrite
+        onClose={() => setPlaying(null)}
+        onKept={() => {
+          setPlaying(null);
+          onLogged();
+          onClose();
+        }}
+      />
+    );
+  }
 
   if (playing) {
     return (

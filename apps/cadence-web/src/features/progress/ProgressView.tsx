@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { JournalStore } from '../journal/JournalStore.tsx';
 import type { ProgressTrend } from '@cadence/shared';
 import { getProgress } from '../../lib/api.ts';
 import { ProgressCardView, ProgressTrendCard } from '../../components/ProgressCards.tsx';
@@ -13,6 +14,7 @@ import { useGoalEventAdd } from '../today/useGoalEventAdd.ts';
  */
 
 export function ProgressView() {
+  const [journalOpen, setJournalOpen] = useState(false);
   const [data, setData] = useState<Awaited<ReturnType<typeof getProgress>> | null>(null);
   const [err, setErr] = useState(false);
 
@@ -54,6 +56,16 @@ export function ProgressView() {
 
   return (
     <div className="scrollbody">
+      {/* The journal's home (Journal v2 §3): one quiet row — the store is a full-screen page.
+          Present even when Progress is empty; words don't wait for fitness data. */}
+      <button className="journal-row" onClick={() => setJournalOpen(true)}>
+        <span className="journal-row-t">
+          <b>Your journal</b>
+          <span>your words, as you wrote them</span>
+        </span>
+        <span aria-hidden>›</span>
+      </button>
+      {journalOpen && <JournalStore onClose={() => setJournalOpen(false)} />}
       {empty ? (
         <>
           <div className="screen-title" style={{ marginTop: 10 }}>

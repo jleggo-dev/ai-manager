@@ -14,6 +14,7 @@ import { StepBreathing } from '../walkthrough/tools/StepBreathing.tsx';
 import { StepMeditate } from '../walkthrough/tools/StepMeditate.tsx';
 import { StepGrounding } from '../walkthrough/tools/StepGrounding.tsx';
 import { DoNowSection } from '../plan/DoNowSection.tsx';
+import { JournalStore } from '../journal/JournalStore.tsx';
 import { StepFeelingLog } from '../walkthrough/tools/StepFeelingLog.tsx';
 import type { StepLog } from '../walkthrough/state.ts';
 
@@ -290,4 +291,65 @@ export function FeelingLogPreview() {
       </div>
     </div>
   );
+}
+
+/** The journal against an in-memory store — the full write → bookshelf → secret loop, no api. */
+export function JournalPreview() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const entries: Array<Record<string, unknown>> = [
+      {
+        entry_id: 'j1',
+        created_at: new Date(Date.now() - 86_400_000).toISOString(),
+        bank: 'park_a_worry',
+        prompt: "What's circling? Put it down here — it'll keep until tomorrow.",
+        body: 'The mortgage call. Writing it here so it stops riding shotgun all weekend.',
+        secret: false,
+        mode: 'typed',
+      },
+      {
+        entry_id: 'j2',
+        created_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+        bank: null,
+        prompt: null,
+        body: '',
+        secret: true,
+        mode: 'paper',
+      },
+    ];
+    const orig = window.fetch;
+    window.fetch = (async (u: RequestInfo | URL, o?: RequestInit) => {
+      const url = String(u);
+      if (url.includes('/journal')) {
+        if (o?.method === 'POST') {
+          const b = JSON.parse(String(o.body)) as Record<string, unknown>;
+          const entry = {
+            entry_id: `j${entries.length + 1}`,
+            created_at: new Date().toISOString(),
+            bank: b.bank ?? null,
+            prompt: b.prompt ?? null,
+            body: b.mode === 'paper' ? '' : String(b.body ?? ''),
+            secret: b.mode === 'paper' ? true : b.secret === true,
+            mode: (b.mode as string) ?? 'typed',
+          };
+          entries.unshift(entry);
+          return new Response(JSON.stringify({ entry }), { status: 201 });
+        }
+        if (o?.method === 'PATCH') {
+          const id = url.split('/journal/')[1]?.split('/')[0];
+          const hit = entries.find((e) => e.entry_id === id);
+          if (hit) hit.secret = (JSON.parse(String(o.body)) as { secret: boolean }).secret;
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ entries }), { status: 200 });
+      }
+      return orig(u, o);
+    }) as typeof window.fetch;
+    setReady(true);
+    return () => {
+      window.fetch = orig;
+    };
+  }, []);
+  if (!ready) return null;
+  return <JournalStore onClose={() => undefined} />;
 }

@@ -14,6 +14,7 @@ import foodsRoutes from './routes/foods.ts';
 import recipesRoutes from './routes/recipes.ts';
 import mealPlansRoutes from './routes/meal-plans.ts';
 import meRoutes from './routes/me.ts';
+import journalRoutes from './routes/journal.ts';
 import devRoutes from './routes/dev.ts';
 
 export function createApp() {
@@ -26,6 +27,7 @@ export function createApp() {
   app.use('/plan', planRoutes);
   app.use('/review', reviewRoutes);
   app.use('/progress', progressRoutes);
+  app.use('/journal', journalRoutes);
   app.use('/nutrition', nutritionRoutes);
   app.use('/nutrition', dietaryProfileRoutes);
   app.use('/nutrition/foods', foodsRoutes);

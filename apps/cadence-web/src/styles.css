@@ -1174,3 +1174,75 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .dn-pin-t span { font-size: 12px; font-weight: 800; color: oklch(100% 0 0 / 0.85); margin-top: 3px; }
 /* The rule between the two sections. */
 .ld-split { height: 1px; background: oklch(90% 0.015 95); margin: 6px 16px 14px; }
+
+/* ── The Journal (Journal v2 — settled) ────────────────────────────────────────────────────
+   Full-screen pages: words directly on the cream, no card, no box. The key means secret and
+   locks against the coach, not you. The store is a bookshelf: dates and words, nothing else. */
+.jw, .js { position: absolute; inset: 0; z-index: 60; background: oklch(96% 0.015 95); display: flex;
+  flex-direction: column; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
+.jw-bar, .js-bar { display: flex; align-items: center; gap: 10px; }
+.jw-back { width: 34px; height: 34px; border-radius: 50%; border: 1px solid oklch(90% 0.015 95);
+  background: #fff; font-size: 18px; color: oklch(45% 0.02 150); cursor: pointer; line-height: 1; flex: none; }
+.jw-date { font-size: 11px; font-weight: 900; letter-spacing: 0.08em; color: oklch(52% 0.02 120); }
+.jw-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.jw-key { border: 1.5px solid oklch(88% 0.015 95); background: #fff; border-radius: 999px;
+  padding: 7px 11px; font-size: 12px; font-weight: 800; color: oklch(48% 0.02 150); cursor: pointer; }
+.jw-key.on { border-color: oklch(57% 0.15 266); color: oklch(45% 0.14 266); background: oklch(95% 0.03 266); }
+.jw-save { border: none; border-radius: 12px; padding: 9px 16px; font-size: 13.5px; font-weight: 900;
+  color: #fff; cursor: pointer; background: linear-gradient(180deg, oklch(79% 0.16 70), oklch(71% 0.16 68) 52%);
+  box-shadow: 0 4px 0 oklch(63% 0.15 68); }
+.jw-save:disabled { opacity: 0.4; cursor: default; }
+.jw-disclose { margin-top: 12px; font-size: 12.5px; line-height: 1.5; font-weight: 700;
+  color: oklch(45% 0.05 152); background: oklch(95% 0.02 152); border: 1px solid oklch(89% 0.03 152);
+  border-radius: 12px; padding: 10px 12px; }
+.jw-prompt { margin-top: 14px; display: flex; align-items: baseline; gap: 8px; }
+.jw-prompt em { font-family: var(--display), serif; font-style: italic; font-size: 14.5px;
+  line-height: 1.4; color: oklch(46% 0.03 266); }
+.jw-prompt button { border: none; background: none; font-size: 15px; color: oklch(60% 0.02 150); cursor: pointer; }
+.jw-page { flex: 1; margin-top: 10px; border: none; outline: none; background: transparent; resize: none;
+  font-family: var(--display), serif; font-weight: 500; font-size: 18px; line-height: 1.65;
+  color: oklch(26% 0.02 150); }
+.jw-page::placeholder { font-style: italic; font-size: 20px; color: oklch(64% 0.015 120); }
+.jw-read { flex: 1; margin-top: 12px; overflow-y: auto; white-space: pre-wrap;
+  font-family: var(--display), serif; font-weight: 500; font-size: 18px; line-height: 1.65;
+  color: oklch(26% 0.02 150); }
+.jw-failed { margin: 8px 0; font-size: 12.5px; font-weight: 800; color: oklch(45% 0.06 52);
+  background: oklch(97% 0.02 74); border: 1px solid oklch(90% 0.04 66); border-radius: 12px; padding: 9px 11px; }
+.jw-shareline { font-size: 11.5px; font-weight: 700; color: oklch(52% 0.02 150); margin-bottom: 6px; }
+.jw-dock { display: flex; flex-direction: column; gap: 8px; }
+.jw-pill { align-self: center; border: 1.5px solid oklch(87% 0.02 85); background: oklch(100% 0 0 / 0.7);
+  border-radius: 999px; padding: 11px 18px; font-size: 13px; font-weight: 800;
+  color: oklch(42% 0.03 266); cursor: pointer; }
+.jw-paper { align-self: center; border: none; background: none; font-size: 12px; font-weight: 800;
+  color: oklch(55% 0.02 150); cursor: pointer; padding: 6px; }
+.jw-picker { display: flex; flex-direction: column; gap: 8px; }
+.jw-picker-head { font-size: 15px; font-weight: 800; color: oklch(30% 0.02 150); margin-bottom: 2px; }
+.jw-bank { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%;
+  text-align: left; background: #fff; border: 1px solid oklch(90% 0.02 85); border-radius: 14px;
+  padding: 12px 14px; cursor: pointer; }
+.jw-bank span { font-size: 9.5px; font-weight: 900; letter-spacing: 0.08em; color: oklch(50% 0.1 52); }
+.jw-bank em { font-family: var(--display), serif; font-style: italic; font-size: 14px; line-height: 1.4;
+  color: oklch(36% 0.02 150); }
+.js-bar b { font-family: var(--display), serif; font-weight: 600; font-size: 20px; color: oklch(27% 0.02 150); display: block; }
+.js-sub { font-size: 9.5px; font-weight: 900; letter-spacing: 0.1em; color: oklch(55% 0.02 120); }
+.js-list { flex: 1; overflow-y: auto; margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.js-empty { font-size: 13.5px; font-weight: 600; color: oklch(50% 0.02 120); padding: 18px 4px; }
+.js-row { display: flex; flex-direction: column; gap: 4px; text-align: left; background: #fff;
+  border: 1px solid oklch(91% 0.015 85); border-radius: 14px; padding: 12px 14px; cursor: pointer; }
+.js-row.paper { background: transparent; border-style: dashed; cursor: default; }
+.js-meta { display: flex; gap: 8px; align-items: baseline; }
+.js-date { font-size: 10px; font-weight: 900; letter-spacing: 0.06em; color: oklch(55% 0.02 120); }
+.js-bank { font-size: 9px; font-weight: 900; letter-spacing: 0.08em; color: oklch(50% 0.1 52); }
+.js-secret { font-size: 9px; font-weight: 900; letter-spacing: 0.08em; color: oklch(45% 0.14 266); }
+.js-line { font-family: var(--display), serif; font-size: 14.5px; line-height: 1.45; color: oklch(30% 0.02 150); }
+.js-write { position: sticky; bottom: 0; align-self: flex-end; border: none; border-radius: 16px;
+  padding: 13px 20px; font-size: 14px; font-weight: 900; color: #fff; cursor: pointer;
+  background: linear-gradient(180deg, oklch(79% 0.16 70), oklch(71% 0.16 68) 52%);
+  box-shadow: 0 5px 0 oklch(63% 0.15 68); }
+.journal-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  background: #fff; border: 1px solid oklch(90% 0.02 85); border-radius: 14px; padding: 13px 14px;
+  cursor: pointer; margin: 10px 0 4px; }
+.journal-row-t { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.journal-row-t b { font-size: 14px; font-weight: 800; color: oklch(30% 0.02 150); }
+.journal-row-t span { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  color: oklch(55% 0.02 120); }
