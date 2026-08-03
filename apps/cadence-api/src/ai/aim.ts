@@ -23,6 +23,7 @@ import {
 } from '@ai-admin/core';
 import { cadenceConfig } from '../config.ts';
 import { rejectAsAimError } from './aim-errors.ts';
+import { remoteJobsEnabled, remoteJobsTarget, remoteRunJobById, remoteRunJobBySlug } from './aim-remote.ts';
 
 export { AimError } from './aim-errors.ts';
 export type { AimErrorKind } from './aim-errors.ts';
@@ -62,11 +63,23 @@ function clockVars(): { today: string; day_of_week: string } {
   };
 }
 
+/**
+ * Jobs can run in one of two places (see aim-remote.ts). In-process is the default and what
+ * production uses. Remote sends the job to a deployed AI Admin over HTTP, which is how a machine
+ * WITHOUT `CREDENTIAL_ENCRYPTION_KEY` still gets a working coach: the deployment owns the key and
+ * decrypts its own provider credentials, so no provider secret ever has to exist locally.
+ *
+ * Logged once, because "why is the coach quiet" and "which AI Admin am I hitting" are the same
+ * question often enough to be worth answering up front.
+ */
+const REMOTE_JOBS = remoteJobsEnabled();
+if (REMOTE_JOBS) console.info(`[aim] jobs → ${remoteJobsTarget()} (remote; coach chat stays in-process)`);
+
 /** Run any templated processing job (Broker- or Coach-tier) in the user's AI Admin context. */
 export function runJob(cadenceUserId: string, jobId: string, variables: Record<string, unknown>) {
-  return withAim(cadenceUserId, () =>
-    executeJobById(jobId, { callingApplication: CALLING_APP, variables: { ...clockVars(), ...variables } }),
-  );
+  const vars = { ...clockVars(), ...variables };
+  if (REMOTE_JOBS) return remoteRunJobById(jobId, CALLING_APP, vars).catch(rejectAsAimError);
+  return withAim(cadenceUserId, () => executeJobById(jobId, { callingApplication: CALLING_APP, variables: vars }));
 }
 
 /** Run a templated job by SLUG (resolves slug→job→id internally; self-instrumented diagnostics).
@@ -78,10 +91,14 @@ export function runJobBySlug(
   variables: Record<string, unknown>,
   opts: { images?: string[] } = {},
 ) {
+  const vars = { ...clockVars(), ...variables };
+  // Images ride the in-process path only — the remote job endpoint takes attachments in a
+  // different shape, and no image-bearing job has needed remote mode yet.
+  if (REMOTE_JOBS && !opts.images?.length) return remoteRunJobBySlug(slug, CALLING_APP, vars).catch(rejectAsAimError);
   return withAim(cadenceUserId, () =>
     executeJob(slug, {
       callingApplication: CALLING_APP,
-      variables: { ...clockVars(), ...variables },
+      variables: vars,
       ...(opts.images?.length ? { images: opts.images } : {}),
     }),
   );
