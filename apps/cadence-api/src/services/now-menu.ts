@@ -14,6 +14,7 @@ import {
   BREATH_PATTERNS,
   GROUNDING_NAMES,
   SESSION_TOOL_KINDS,
+  PRACTICES,
   normalizeNowMenu,
   patternCounts,
   type NowMenuItem,
@@ -90,19 +91,22 @@ function toItems(raw: string): { items: unknown[] } {
     if (!entry || typeof entry !== 'object') return null;
     const f = entry as Record<string, unknown>;
     const action =
-      f.kind === 'activity'
-        ? { kind: 'activity', activityId: f.activity_id }
-        : {
-            kind: 'tool',
-            tool: f.tool,
-            params: {
-              breath_pattern: f.breath_pattern ?? undefined,
-              breath_cycles: f.breath_cycles ?? undefined,
-              duration_min: f.duration_min ?? undefined,
-              meditate_bells: f.meditate_bells ?? undefined,
-              grounding_game: f.grounding_game ?? undefined,
-            },
-          };
+      f.kind === 'practice'
+        ? { kind: 'practice', practiceId: f.practice_id }
+        : f.kind === 'activity'
+          ? { kind: 'activity', activityId: f.activity_id }
+          : {
+              kind: 'tool',
+              tool: f.tool,
+              params: {
+                breath_pattern: f.breath_pattern ?? undefined,
+                breath_cycles: f.breath_cycles ?? undefined,
+                duration_min: f.duration_min ?? undefined,
+                meditate_bells: f.meditate_bells ?? undefined,
+                grounding_game: f.grounding_game ?? undefined,
+                journal_bank: f.journal_bank ?? undefined,
+              },
+            };
     return { label: f.label, area: f.area, action, pinned: f.pinned === true, coachLine: f.coach_line };
   });
   return { items };
@@ -132,6 +136,7 @@ export async function getNowMenu(userId: string): Promise<NowMenuItem[]> {
       tools: SESSION_TOOL_KINDS.join(', '),
       breath_patterns: BREATH_PATTERNS.map((p) => `${p.id} (${patternCounts(p)})`).join(', '),
       grounding_games: Object.keys(GROUNDING_NAMES).join(', '),
+      practices: PRACTICES.map((p) => `${p.id} — ${p.summary}`).join('\n'),
     });
 
     const items = normalizeNowMenu(

@@ -15,6 +15,7 @@ import { Pip, StepHeader } from './wt-parts.tsx';
 import { overlay, center, closeBtn, caption, navBtn, greenBtn, shortTitle } from './wt-styles.ts';
 import { type StepLog, type StepLogs, stepStatus, stepFraction, minutesLeft, recapSummary } from './state.ts';
 import { mayAskHelped } from './tools/helped-gate.ts';
+import { keepJournalEntry } from '../../lib/api.ts';
 
 /**
  * The task walkthrough (v2 — design "browse / do / commit"). Moving between steps (Back ↔ Next, the
@@ -53,6 +54,27 @@ export function Walkthrough({
   const prev = () => idx > 0 && go(idx - 1);
   const setLog = (id: string, log: StepLog) => setLogs((l) => ({ ...l, [id]: log }));
 
+  /**
+   * Finish is the single write — and journal steps write TWICE by design: the occurrence log gets
+   * a receipt ("kept"), and the words themselves go to the journal store where they can be reread.
+   * Best-effort and never blocking: a store failure must not cost someone their completed session,
+   * and the receipt in the occurrence log survives either way.
+   */
+  const finish = () => {
+    for (const step of steps) {
+      const log = logs[step.id];
+      if (log?.kind !== 'journal' || !log.note.trim()) continue;
+      void keepJournalEntry({
+        bank: log.bank,
+        prompt: log.prompt,
+        body: log.note,
+        secret: log.secret,
+        mode: 'typed',
+      }).catch(() => undefined);
+    }
+    onComplete(recapSummary(steps, logs));
+  };
+
   if (steps.length === 0 || !step) return null;
 
   if (phase === 'done') {
@@ -66,7 +88,7 @@ export function Walkthrough({
           <div style={{ fontSize: 14, color: 'oklch(45% 0.02 150)', textAlign: 'center', maxWidth: 300 }}>
             {recapSummary(steps, logs) || `${title} complete`}
           </div>
-          <button style={{ ...greenBtn, marginTop: 8 }} onClick={() => onComplete(recapSummary(steps, logs))}>
+          <button style={{ ...greenBtn, marginTop: 8 }} onClick={finish}>
             Done
           </button>
         </div>
@@ -266,14 +288,34 @@ function renderTool(
       );
     case 'feeling_log':
       return <StepFeelingLog onLog={(l) => setLog(step.id, l)} onDone={onAdvance} />;
-    case 'journal':
+    case 'journal': {
+      const jl = log?.kind === 'journal' ? log : null;
       return (
         <StepJournal
           prompt={t.prompt}
-          note={log?.kind === 'done' ? (log.note ?? '') : ''}
-          onLog={(note) => setLog(step.id, { kind: 'done', note })}
+          note={jl?.note ?? ''}
+          secret={jl?.secret ?? false}
+          onSecret={(secret) =>
+            setLog(step.id, {
+              kind: 'journal',
+              note: jl?.note ?? '',
+              secret,
+              bank: t.bank ?? null,
+              prompt: t.prompt,
+            })
+          }
+          onLog={(note) =>
+            setLog(step.id, {
+              kind: 'journal',
+              note,
+              secret: jl?.secret ?? false,
+              bank: t.bank ?? null,
+              prompt: t.prompt,
+            })
+          }
         />
       );
+    }
     default:
       return (
         <StepCheckoff

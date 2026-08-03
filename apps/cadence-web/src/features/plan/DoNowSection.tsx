@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { deriveWalkthrough, nowMenuMeta, type NowMenuItem, type OccurrenceSession } from '@cadence/shared';
+import {
+  deriveWalkthrough,
+  expandPractice,
+  nowMenuMeta,
+  type NowMenuItem,
+  type OccurrenceSession,
+} from '@cadence/shared';
 import { getNowMenu } from '../../lib/api.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
 import { JournalWrite } from '../journal/JournalWrite.tsx';
@@ -26,8 +32,9 @@ export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLog
     getNowMenu()
       .then((rows) => {
         // Activity rows need a deep-link into that task's own flow, which doesn't exist yet — they
-        // are dropped rather than rendered as something that wouldn't work under a thumb.
-        if (alive) setItems(rows.filter((r) => r.action.kind === 'tool'));
+        // are dropped rather than rendered as something that wouldn't work under a thumb. Tool and
+        // practice rows both play right here.
+        if (alive) setItems(rows.filter((r) => r.action.kind === 'tool' || r.action.kind === 'practice'));
       })
       .catch(() => {
         if (alive) setItems([]);
@@ -119,6 +126,11 @@ export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLog
  *  same renderers, same logging, same partial-credit rules. Nothing about the tool knows it was
  *  launched from a menu rather than the trail. */
 function sessionFor(item: NowMenuItem): OccurrenceSession {
+  // A practice is already a session — its tree is ours, so it expands rather than being rebuilt.
+  if (item.action.kind === 'practice') {
+    const expanded = expandPractice(item.action.practiceId);
+    if (expanded) return expanded;
+  }
   const params = item.action.kind === 'tool' ? item.action.params : {};
   return {
     blocks: [

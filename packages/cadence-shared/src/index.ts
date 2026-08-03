@@ -33,3 +33,4 @@ export * from './grounding.ts';
 export * from './feelings.ts';
 export * from './now-menu.ts';
 export * from './journal.ts';
+export * from './practices.ts';

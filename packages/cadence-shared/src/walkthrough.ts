@@ -20,6 +20,7 @@ import type { OccurrenceSession, SessionBlock, SessionItem, SessionItemTool } fr
 import { type BreathPattern, clampCycles, patternById, totalMinutes } from './breathing.ts';
 import { type MeditateBells, clampIntervalMinutes, clampSitMinutes, isMeditateBells } from './meditate.ts';
 import { type GroundingGame, type GroundingSpec, groundingSpec, isGroundingGame } from './grounding.ts';
+import { type JournalBankId, isJournalBankId, journalBank, todaysPhrasing } from './journal.ts';
 
 /* ── The tool catalog ────────────────────────────────────────────────────────────────────────
    Three capture classes (see `stepCaptureMode`):
@@ -60,7 +61,9 @@ export type StepTool =
   // and shared, so the coach chooses WHEN to ask, never what the words are.
   | { kind: 'feeling_log' }
   | { kind: 'photo'; prompt: string; purpose: 'meal' | 'progress' | 'form' }
-  | { kind: 'journal'; prompt: string; mode: 'text' | 'voice' | 'either' }
+  // A journal step (REQ9 §4.5). `bank` ties it to a question bank so the kept prompt survives into
+  // the store; the entry itself is written on Finish, with the walkthrough's commit rules.
+  | { kind: 'journal'; prompt: string; mode: 'text' | 'voice' | 'either'; bank?: JournalBankId }
   | { kind: 'measure'; metric: string; unit: string }
   // "Insight tools" — deterministic progress surfaces baked into a task (usually its first step to
   // orient, or the celebration to reward). `source`/`card` name which existing surface to render.
@@ -152,6 +155,16 @@ function minutesOf(item: SessionItem, tool: StepTool): number {
   return DEFAULT_MINUTES[tool.kind];
 }
 
+/** A journal step. A named bank supplies today's phrasing (rotating, deterministic) unless the
+ *  coach wrote its own question in `detail` — their sentence always wins. */
+function journalTool(item: SessionItem): StepTool {
+  const bank = isJournalBankId(item.journal_bank) ? item.journal_bank : undefined;
+  const banked = bank ? journalBank(bank) : undefined;
+  const prompt =
+    item.detail ?? (banked ? todaysPhrasing(banked, new Date().toISOString().slice(0, 10)) : 'Jot down how it went');
+  return { kind: 'journal', prompt, mode: 'either', ...(bank ? { bank } : {}) };
+}
+
 /** A grounding flow from the item's game + bank. An unknown game degrades to the senses sweep
  *  rather than breaking the step. */
 function groundingTool(item: SessionItem): StepTool {
@@ -224,7 +237,7 @@ function toolFromKind(kind: SessionItemTool, item: SessionItem): StepTool {
     case 'photo':
       return { kind: 'photo', prompt: item.detail ?? 'Take a photo', purpose: 'progress' };
     case 'journal':
-      return { kind: 'journal', prompt: item.detail ?? 'Jot down how it went', mode: 'either' };
+      return journalTool(item);
     case 'breathing':
       return breathingTool(item);
     case 'meditate':

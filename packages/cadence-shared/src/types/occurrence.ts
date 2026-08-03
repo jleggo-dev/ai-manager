@@ -64,6 +64,9 @@ export interface SessionItem {
   grounding_game?: string;
   /** `grounding` only — the word bank for `letters` (animals | foods | cities). */
   grounding_bank?: string;
+  /** `journal` only (REQ9 §4.5) — which question bank to open from. The step shows that bank's
+   *  phrasing for today and keeps it with the entry; omit for a blank page. */
+  journal_bank?: string;
 }
 
 export interface SessionBlock {

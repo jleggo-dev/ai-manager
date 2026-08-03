@@ -14,8 +14,24 @@ export function StepCheckoff({ label, done, onDone }: { label?: string; done: bo
   );
 }
 
-/** journal — write or speak a line for the coach; the note is the capture. */
-export function StepJournal({ prompt, note, onLog }: { prompt: string; note: string; onLog: (n: string) => void }) {
+/**
+ * journal — write or speak an entry inside a session. The words are kept in the journal store on
+ * Finish (the walkthrough's commit rule), so the key belongs here too: a session is an ordinary
+ * place to write something you'd rather the coach didn't read.
+ */
+export function StepJournal({
+  prompt,
+  note,
+  secret,
+  onLog,
+  onSecret,
+}: {
+  prompt: string;
+  note: string;
+  secret: boolean;
+  onLog: (n: string) => void;
+  onSecret: (s: boolean) => void;
+}) {
   return (
     <div style={card}>
       <div className="logbox-label">{prompt}</div>
@@ -28,6 +44,14 @@ export function StepJournal({ prompt, note, onLog }: { prompt: string; note: str
           placeholder="Write a few words…"
         />
         <MicButton value={note} onChange={onLog} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+        <button className={`jw-key ${secret ? 'on' : ''}`} onClick={() => onSecret(!secret)} aria-pressed={secret}>
+          ⚿ {secret ? 'secret' : 'mark secret'}
+        </button>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'oklch(55% 0.02 150)' }}>
+          {secret ? "I won't read this one." : 'Kept in your journal.'}
+        </span>
       </div>
     </div>
   );

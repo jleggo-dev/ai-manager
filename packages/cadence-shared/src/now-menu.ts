@@ -26,6 +26,7 @@
 import { BREATH_PATTERNS, cycleSeconds, clampCycles, patternById } from './breathing.ts';
 import { GROUNDING_NAMES, isGroundingGame, type GroundingGame } from './grounding.ts';
 import { clampSitMinutes } from './meditate.ts';
+import { type PracticeId, isPracticeId, practiceById } from './practices.ts';
 import type { SessionItemTool } from './types/occurrence.ts';
 
 /** Which pillar the row's puck is toned from. `null` = a plan activity whose area we inherit. */
@@ -34,7 +35,10 @@ export type NowMenuArea = 'movement' | 'nourishment' | 'mind' | 'practice';
 /** What a row launches. A tool with parameters, or an activity that already exists in the plan. */
 export type NowMenuAction =
   | { kind: 'tool'; tool: SessionItemTool; params: Record<string, string | number | undefined> }
-  | { kind: 'activity'; activityId: string };
+  | { kind: 'activity'; activityId: string }
+  // A whole chained practice (REQ9 §4.8) — the tree is ours, so the row is one id, not a shape
+  // the coach could get wrong.
+  | { kind: 'practice'; practiceId: PracticeId };
 
 export interface NowMenuItem {
   /** Stable within a menu build — the client keys rows on it. */
@@ -63,6 +67,10 @@ export const MAX_NOW_ITEMS = 5;
  * parameters for), and the row simply shows no meta.
  */
 export function nowMenuMeta(action: NowMenuAction): string | undefined {
+  if (action.kind === 'practice') {
+    const p = practiceById(action.practiceId);
+    return p ? `about ${p.minutes} min · ${p.items.length} steps` : undefined;
+  }
   if (action.kind !== 'tool') return undefined;
   const p = action.params;
   switch (action.tool) {
@@ -150,17 +158,30 @@ export function normalizeNowMenu(
       knownActivityIds.includes(action.activityId)
     ) {
       resolved = { kind: 'activity', activityId: action.activityId };
+    } else if (action.kind === 'practice' && isPracticeId(action.practiceId)) {
+      resolved = { kind: 'practice', practiceId: action.practiceId };
     }
     if (!resolved) continue; // stale or unknown — dropped, never rendered
 
-    const key = resolved.kind === 'tool' ? `${resolved.tool}:${JSON.stringify(resolved.params)}` : resolved.activityId;
+    const key =
+      resolved.kind === 'tool'
+        ? `${resolved.tool}:${JSON.stringify(resolved.params)}`
+        : resolved.kind === 'practice'
+          ? `practice:${resolved.practiceId}`
+          : resolved.activityId;
     if (seen.has(key)) continue;
     seen.add(key);
 
     const item: NowMenuItem = {
       id: `n${out.length + 1}`,
       label,
-      area: isArea(it.area) ? it.area : resolved.kind === 'tool' ? areaForTool(resolved.tool) : 'movement',
+      area: isArea(it.area)
+        ? it.area
+        : resolved.kind === 'tool'
+          ? areaForTool(resolved.tool)
+          : resolved.kind === 'practice'
+            ? 'mind'
+            : 'movement',
       action: resolved,
     };
     if (it.pinned && !pinned) {

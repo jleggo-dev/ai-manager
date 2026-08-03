@@ -221,6 +221,13 @@ const NOW_MENU_FIXTURE = [
     area: 'practice',
     action: { kind: 'tool', tool: 'meditate', params: { duration_min: 5, meditate_bells: 'start_end' } },
   },
+  // A whole chained practice as one row — the tree expands when tapped.
+  {
+    id: 'n4',
+    label: 'Look back at today',
+    area: 'mind',
+    action: { kind: 'practice', practiceId: 'evening_review' },
+  },
 ];
 
 /** The "Do something now" section against a stubbed menu, so the sheet's chrome can be judged

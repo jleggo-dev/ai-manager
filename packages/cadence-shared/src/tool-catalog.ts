@@ -26,6 +26,7 @@ import type { StepToolKind } from './walkthrough.ts';
 import { BREATH_PATTERNS, patternCounts } from './breathing.ts';
 import { DEFAULT_SIT_MINUTES, MAX_SIT_MINUTES, MEDITATE_BELL_KINDS } from './meditate.ts';
 import { GROUNDING_GAMES, GROUNDING_NAMES } from './grounding.ts';
+import { JOURNAL_BANKS } from './journal.ts';
 
 /** The `SessionItem` quantity/detail fields a tool reads — named so the coach fills the right ones. */
 export type ItemField =
@@ -40,7 +41,8 @@ export type ItemField =
   | 'meditate_bells'
   | 'meditate_interval_min'
   | 'grounding_game'
-  | 'grounding_bank';
+  | 'grounding_bank'
+  | 'journal_bank';
 
 /** Capture class (mirrors `stepCaptureMode`): `guided` = do it, log records only that it happened;
  *  `capture` = the person emits data that BECOMES the log. */
@@ -134,9 +136,12 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   },
   journal: {
     class: 'capture',
-    summary: 'they write or speak a short reflection — put the question in detail',
-    reads: ['detail'],
-    example: { name: 'Name one win', tool: 'journal', detail: 'What went well today, however small?' },
+    summary:
+      'they write or speak a short entry, which is kept in their journal. Either name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own question in detail — your sentence always wins',
+    notWhen:
+      'this keeps real words in a place they can reread — do not use it for a yes/no or a number, and never promise to analyse what they write',
+    reads: ['journal_bank', 'detail'],
+    example: { name: 'Three good things', tool: 'journal', journal_bank: 'three_good_things' },
   },
 };
 
@@ -190,6 +195,8 @@ export function renderCoachToolCatalog(): string {
   }
   lines.push('', 'SET FLOW — how each block\'s sets are sequenced. Set each block\'s "mode":');
   for (const mode of BLOCK_MODE_KINDS) lines.push(`  • ${mode} — ${SET_FLOWS[mode].summary}`);
+  lines.push('', 'JOURNAL BANKS — the only values "journal_bank" accepts:');
+  for (const b of JOURNAL_BANKS) lines.push(`  • ${b.id} — ${b.label}`);
   lines.push('', 'GROUNDING GAMES — the only values "grounding_game" accepts:');
   for (const g of GROUNDING_GAMES) lines.push(`  • ${g} — ${GROUNDING_NAMES[g]}`);
   lines.push('  "letters" also reads "grounding_bank": animals | foods | cities.');

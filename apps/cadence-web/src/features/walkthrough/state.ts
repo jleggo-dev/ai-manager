@@ -33,6 +33,10 @@ export type StepLog =
   // The instrument's capture: a word, how much room it's taking (1-3, never rendered), an optional
   // line. Available to the coach as context; there is no surface anywhere that shows it back.
   | { kind: 'feeling_log'; word: string; family: string | null; room: 1 | 2 | 3; note?: string }
+  // A journal step's words. They ride the walkthrough's commit rules — nothing reaches the store
+  // until Finish — and carry their own key, because a session is a perfectly ordinary place to
+  // write something you don't want the coach to read.
+  | { kind: 'journal'; note: string; secret: boolean; bank: string | null; prompt: string | null }
   | { kind: 'done'; note?: string }; // checkoff / read / journal (journal carries the note)
 
 export type StepLogs = Record<string, StepLog>;
@@ -59,6 +63,8 @@ export function stepFraction(step: WalkthroughStep, log?: StepLog): number {
       return 1;
     case 'feeling_log':
       return 1;
+    case 'journal':
+      return log.note.trim() ? 1 : 0;
     case 'done':
       return log.note != null || log.kind === 'done' ? 1 : 0;
   }
@@ -110,6 +116,10 @@ export function logLine(step: WalkthroughStep, log: StepLog): string {
       return groundingLogLine(log.game as GroundingGame, log.stepsDone, log.total, log.openEnded);
     case 'feeling_log':
       return feelingLogLine(log.word, log.room);
+    // The recap shows that words were kept, never the words themselves — a session summary is a
+    // receipt, and an entry someone marked secret must not leak through it.
+    case 'journal':
+      return log.secret ? 'kept, secret' : 'kept';
     case 'timer': {
       const m = Math.floor(log.elapsedSec / 60);
       const s = log.elapsedSec % 60;
