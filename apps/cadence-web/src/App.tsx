@@ -13,6 +13,7 @@ import {
   GroundingPreview,
   MeditatePreview,
   NowMenuPreview,
+  FeelingLogPreview,
 } from './features/dev/BreathingPreview.tsx';
 import { getPlan, setAuthToken, isDevMode } from './lib/api.ts';
 import { supabase } from './lib/supabase.ts';
@@ -151,6 +152,12 @@ export function App() {
     return (
       <PhoneFrame>
         <GroundingPreview />
+      </PhoneFrame>
+    );
+  if (PREVIEW === 'feeling')
+    return (
+      <PhoneFrame>
+        <FeelingLogPreview />
       </PhoneFrame>
     );
   if (PREVIEW === 'nowmenu')

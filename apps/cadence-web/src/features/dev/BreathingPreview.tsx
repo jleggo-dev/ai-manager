@@ -14,6 +14,7 @@ import { StepBreathing } from '../walkthrough/tools/StepBreathing.tsx';
 import { StepMeditate } from '../walkthrough/tools/StepMeditate.tsx';
 import { StepGrounding } from '../walkthrough/tools/StepGrounding.tsx';
 import { DoNowSection } from '../plan/DoNowSection.tsx';
+import { StepFeelingLog } from '../walkthrough/tools/StepFeelingLog.tsx';
 import type { StepLog } from '../walkthrough/state.ts';
 
 type BreathingLog = Extract<StepLog, { kind: 'breathing' }>;
@@ -269,6 +270,23 @@ export function NowMenuPreview() {
           <b>Log something you did</b>
           <span>Tap what you did — it counts even if it wasn&apos;t scheduled for today.</span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** The instrument, end to end — family, word, room, note, acknowledgement. */
+export function FeelingLogPreview() {
+  const [last, setLast] = useState<Extract<StepLog, { kind: 'feeling_log' }> | null>(null);
+  const [runKey, setRunKey] = useState(0);
+  return (
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14, background: 'oklch(96% 0.015 95)' }}>
+      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55 }}>
+        Feeling log · dev preview
+      </div>
+      <StepFeelingLog key={runKey} onLog={setLast} onDone={() => setRunKey((k) => k + 1)} />
+      <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.7 }}>
+        {last ? `logged → ${last.word} · room=${last.room} · ${last.note ?? 'no note'}` : 'no log yet'}
       </div>
     </div>
   );

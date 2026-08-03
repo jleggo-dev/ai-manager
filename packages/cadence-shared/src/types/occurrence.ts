@@ -33,7 +33,7 @@ export interface OccurrenceWeather {
  * the full renderable catalog (incl. insight tools placed by the app) lives in walkthrough.ts.
  */
 export type SessionItemTool =
-  'read' | 'timer' | 'reps' | 'checkoff' | 'photo' | 'journal' | 'breathing' | 'meditate' | 'grounding';
+  'read' | 'timer' | 'reps' | 'checkoff' | 'photo' | 'journal' | 'breathing' | 'meditate' | 'grounding' | 'feeling_log';
 
 /** How a block's sets flow (REQ8 slice 2). The catalog (tool-catalog.ts) is the authority for the
  *  names; this type is the shape both it and `SessionBlock.mode` share so they can't drift. */

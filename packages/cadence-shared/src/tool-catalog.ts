@@ -111,6 +111,15 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
     reads: ['grounding_game', 'grounding_bank', 'detail'],
     example: { name: 'Five senses', tool: 'grounding', grounding_game: 'senses' },
   },
+  feeling_log: {
+    class: 'capture',
+    summary:
+      "a 20-second note on how they're doing — they pick a word, say how much room it's taking, and may add a line. The mind side's weigh-in: use it while you're still learning someone's patterns, or offer it when checking in would help",
+    notWhen:
+      'do NOT schedule it every day forever — ask while you are learning their patterns, then stop. And do not put it straight after a grounding flow, which already asks its own question',
+    reads: ['detail'],
+    example: { name: 'How are you doing?', tool: 'feeling_log' },
+  },
   reps: {
     class: 'capture',
     summary: 'a counted sets × reps movement — the person logs the reps they actually did, set by set',

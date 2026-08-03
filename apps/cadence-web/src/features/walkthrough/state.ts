@@ -1,4 +1,10 @@
-import { type GroundingGame, type WalkthroughStep, groundingLogLine, sitLogLine } from '@cadence/shared';
+import {
+  type GroundingGame,
+  type WalkthroughStep,
+  feelingLogLine,
+  groundingLogLine,
+  sitLogLine,
+} from '@cadence/shared';
 
 /**
  * The walkthrough v2 capture model (design "browse / do / commit"). Moving through steps logs
@@ -24,6 +30,9 @@ export type StepLog =
       openEnded: boolean;
       helped: boolean | null;
     }
+  // The instrument's capture: a word, how much room it's taking (1-3, never rendered), an optional
+  // line. Available to the coach as context; there is no surface anywhere that shows it back.
+  | { kind: 'feeling_log'; word: string; family: string | null; room: 1 | 2 | 3; note?: string }
   | { kind: 'done'; note?: string }; // checkoff / read / journal (journal carries the note)
 
 export type StepLogs = Record<string, StepLog>;
@@ -47,6 +56,8 @@ export function stepFraction(step: WalkthroughStep, log?: StepLog): number {
     // Leaving a grounding flow IS finishing it — there is no required length, so it never reads
     // as partial on the pips or the recap.
     case 'grounding':
+      return 1;
+    case 'feeling_log':
       return 1;
     case 'done':
       return log.note != null || log.kind === 'done' ? 1 : 0;
@@ -97,6 +108,8 @@ export function logLine(step: WalkthroughStep, log: StepLog): string {
       return sitLogLine(log.elapsedSec, log.targetSec);
     case 'grounding':
       return groundingLogLine(log.game as GroundingGame, log.stepsDone, log.total, log.openEnded);
+    case 'feeling_log':
+      return feelingLogLine(log.word, log.room);
     case 'timer': {
       const m = Math.floor(log.elapsedSec / 60);
       const s = log.elapsedSec % 60;

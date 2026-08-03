@@ -56,6 +56,9 @@ export type StepTool =
   // A grounding flow (REQ9 §4.3) — tap-forward cards on the four-zone shell. The whole resolved
   // spec travels with the step so the renderer never looks a game up; it just walks `spec.steps`.
   | { kind: 'grounding'; spec: GroundingSpec }
+  // The mind pillar's instrument (REQ9 §4.4). Carries no configuration: the vocabulary is fixed
+  // and shared, so the coach chooses WHEN to ask, never what the words are.
+  | { kind: 'feeling_log' }
   | { kind: 'photo'; prompt: string; purpose: 'meal' | 'progress' | 'form' }
   | { kind: 'journal'; prompt: string; mode: 'text' | 'voice' | 'either' }
   | { kind: 'measure'; metric: string; unit: string }
@@ -105,6 +108,9 @@ export function stepCaptureMode(tool: StepTool): StepCaptureMode {
     case 'meditate':
     case 'grounding':
       return 'done';
+    // A feeling note IS the capture — a word and how much room it's taking become the log.
+    case 'feeling_log':
+      return 'structured';
     case 'reps':
     case 'circuit':
     case 'photo':
@@ -131,6 +137,7 @@ const DEFAULT_MINUTES: Record<StepToolKind, number> = {
   breathing: 1, // breathing computes its real minutes from pattern × cycles; this is only a floor
   meditate: 10, // a sit carries its own duration; this is only a floor
   grounding: 3, // a grounding flow has no required length — this is a nominal slot on the trail
+  feeling_log: 1, // twenty seconds, every time
   rings: 1,
   insight: 1,
 };
@@ -224,6 +231,8 @@ function toolFromKind(kind: SessionItemTool, item: SessionItem): StepTool {
       return meditateTool(item);
     case 'grounding':
       return groundingTool(item);
+    case 'feeling_log':
+      return { kind: 'feeling_log' };
     case 'read':
       return { kind: 'read' };
     default: {
