@@ -194,3 +194,42 @@ SMS. Today Cadence can only speak when the app is open, so **every nudge depends
   coach-authored, use-signal in the pack.)
 - When chat *changes the situation* mid-week, what marks the now-menu stale — Scribe emitting a
   `situation_changed` flag, or re-compose on every chat close? (Cost vs freshness.)
+
+## 11. Output discipline — one job, one surface (added 2026-08-03)
+
+The concern this answers: LLMs reason well but multitask poorly, and a single prompt asked to
+populate many surfaces invites hallucinated or silently-empty core fields. The control is
+**decomposition plus defense in depth** — no prompt in the system feeds more than one surface.
+
+1. **One job, one surface, one moment.** `day-recap` returns one line for one header.
+   `compose-now-menu` returns one list for one sheet section. `prescribe-session` returns one
+   session for one occurrence — never a week. `capture-extract` writes profile deltas and nothing
+   else. Each has its own trigger, cache, and failure mode. **The conversational coach populates
+   no structured fields at all** — chat is chat, and the Scribe extracts out-of-band from the
+   transcript (the two-speed split: the talker is never also the form-filler).
+2. **Provider-level schema.** Schema-bearing jobs run strict native json_schema on gpt-class
+   models (the CLAUDE.md rule), plus AI Admin formatting rules (remove-reasoning, trim-to-json,
+   repair-json, require-keys) before Cadence ever parses.
+3. **App-side normalize, everywhere.** Whitelists derive from the same catalog the prompt teaches
+   (`toolOf`, `breathPatternOf`, `groundingGameOf`, `meditateBellsOf`); numbers clamp to safety
+   caps; unknown names degrade to safe defaults; stale or malformed rows are **dropped, never
+   rendered**. Flat sibling fields over nested objects, because models fill siblings far more
+   reliably.
+4. **Absence is a designed state.** Recap null → the header shows the date alone. Menu empty →
+   the section hides. Session normalize-null → the prescription is a regenerable cache and
+   regenerates on next open. An empty core field becomes quiet UI — never a rendered lie.
+5. **The two big asks get extra machinery.** `synthesize-plan` (the widest output) is checked by
+   a **second model** (`plan-vet`) before anything commits; `prescribe-session` is bounded to one
+   occurrence and regenerable. Derived copy (the menu's meta lines) is computed from parameters,
+   never trusted from coach text, so a row can't promise five minutes and deliver ten.
+
+**Evidence (2026-08-03):** the live probe — six prescribe scenarios in user voice (wants, bans,
+and traps), two Scribe transcripts written the way people actually type, one now-menu register
+check — ran twice against prod with **zero violations**: every ban held, every parameter valid,
+nothing invented, no feeling_log stacked on a grounding close. The same harness caught the
+now-menu label bug ("Box breathing" as a row label) the day the job first ran live.
+
+**Honest gaps:** `prescribe-session` has no retry-on-normalize-null (single shot, then regenerate
+on next open — a one-retry would hide provider blips); the probe is manual, not a CI job;
+`capture-extract` carries the widest single schema (six top-level keys) and deserves the closest
+watch as conversations get longer.
