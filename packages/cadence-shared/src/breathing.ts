@@ -46,6 +46,13 @@ export interface BreathPattern {
   phases: BreathPhase[];
   /** Extra copy the surface must show (seated warnings). Present only where it's needed. */
   caution?: string;
+  /**
+   * How the pattern works, in plain words — the written equivalent of the how-to video a barbell
+   * movement gets. Written rather than filmed on purpose: a breath pattern is counts and
+   * attention, not form, so a video would be 90% filler, and text can be read mid-practice with
+   * the sound off. (A coach can still attach `video_query` to any step if it genuinely helps.)
+   */
+  how: string;
   /** Energizing patterns are capped harder and never auto-selected. */
   gated?: boolean;
 }
@@ -71,6 +78,7 @@ export const MIN_CYCLES = 1;
 export const BREATH_PATTERNS: readonly BreathPattern[] = [
   {
     id: 'box',
+    how: 'Equal counts all the way round: in for four, hold for four, out for four, hold for four. The holds are the point — they stop you rushing into the next breath.',
     name: 'Box',
     summary: 'even four counts all the way round — steadying, and the safest default',
     phases: [
@@ -82,6 +90,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
   },
   {
     id: 'wind_down',
+    how: 'In for four, hold for seven, out for eight. The long hold and the longer exhale are what do the work: a slow out-breath is how the body is told the day is finished.',
     name: 'Wind-down',
     summary: 'a long hold and a longer exhale — for the end of the day, or sleep',
     phases: [
@@ -92,6 +101,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
   },
   {
     id: 'coherent',
+    how: 'In and out for about five and a half seconds each, with no holds. Slower than you would breathe on your own, and even. This is the one worth building a daily practice on.',
     name: 'Coherent',
     summary: 'equal in and out, slow — the one to build a daily practice on',
     phases: [
@@ -101,6 +111,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
   },
   {
     id: 'extended_exhale',
+    how: 'In for four, out for six — only the out-breath is stretched. The fastest way to settle when you do not want a pattern to remember.',
     name: 'Longer out',
     summary: 'the fastest way to settle — the out-breath does the work',
     phases: [
@@ -110,6 +121,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
   },
   {
     id: 'physiological_sigh',
+    how: 'Two breaths in — a full one, then a short top-up on top of it — then one long release. The second inhale reopens the bottom of the lungs. Three or four rounds is usually plenty.',
     name: 'Double breath',
     summary: 'two breaths in, one long release — for settling quickly, three or four is plenty',
     phases: [
@@ -120,6 +132,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
   },
   {
     id: 'triangle',
+    how: 'In, hold, out, all for four. Box without the second hold, which makes it easier to follow when your attention is short.',
     name: 'Triangle',
     summary: 'box without the second hold — simpler to follow',
     phases: [
@@ -130,6 +143,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
   },
   {
     id: 'equal',
+    how: 'In for four, out for four. Nothing to remember and nothing to hold. Start here if none of this is familiar.',
     name: 'Even',
     summary: 'in and out, same count — the place to start if none of this is familiar',
     phases: [
@@ -139,6 +153,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
   },
   {
     id: 'alternate_nostril',
+    how: 'Breathe in through one side, out through the other, then swap. Right thumb closes the right nostril, ring finger closes the left. Giving your hands a job is half of why it settles.',
     name: 'Side to side',
     summary: 'one side at a time — settling, and it gives the hands something to do',
     phases: [
@@ -152,6 +167,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
   },
   {
     id: 'up_shift',
+    how: 'Quick breaths with the weight on the in-breath. This one wakes you up rather than settling you, so it is deliberately short.',
     name: 'Sharpen',
     summary: 'quick and in-biased, before something that needs you awake — short by design',
     phases: [
@@ -182,6 +198,7 @@ export function patternById(id: string | null | undefined): BreathPattern {
     id: 'equal',
     name: 'Even',
     summary: 'in and out, same count',
+    how: 'In for four, out for four. Nothing to remember and nothing to hold.',
     phases: [
       { label: 'In', seconds: 4 },
       { label: 'Out', seconds: 4 },

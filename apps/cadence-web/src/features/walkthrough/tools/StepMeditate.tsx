@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { RETURNS_FOOTER, type MeditateBells, returnsSentence, ringsAt, sitLogLine } from '@cadence/shared';
+import {
+  MEDITATE_HOW,
+  RETURNS_FOOTER,
+  type MeditateBells,
+  returnsSentence,
+  ringsAt,
+  sitLogLine,
+} from '@cadence/shared';
 import type { StepLog } from '../state.ts';
 import { TONE, RING_C } from './tone.ts';
 import { playChime } from './chime.ts';
+import { WhatsThis } from './WhatsThis.tsx';
 
 type MeditateLog = Extract<StepLog, { kind: 'meditate' }>;
 
@@ -200,6 +208,9 @@ export function StepMeditate({
               ? 'Sit again'
               : `Begin · ${minutes} min`}
       </button>
+
+      {/* Not while sitting — the point is to stop reading. */}
+      {!isRun && !isPre && <WhatsThis text={MEDITATE_HOW} />}
 
       {!isRun && (
         <div style={footnote}>

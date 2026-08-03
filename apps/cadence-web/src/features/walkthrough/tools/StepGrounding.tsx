@@ -3,6 +3,7 @@ import { type GroundingSpec, groundingLogLine } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
 import { TONE } from './tone.ts';
 import { playChime } from './chime.ts';
+import { WhatsThis } from './WhatsThis.tsx';
 
 type GroundingLog = Extract<StepLog, { kind: 'grounding' }>;
 
@@ -212,6 +213,10 @@ export function StepGrounding({
           {step.forward}
         </button>
       </div>
+
+      {/* On the opening card only: whoever just met an unfamiliar game is exactly who needs this,
+          and someone three steps into a sweep is not reading. */}
+      {idx === 0 && <WhatsThis text={spec.how} />}
 
       {/* Tapping every target is not required — the forward control is never gated on it. */}
       {step.field === 'targets' && allTapped && <div style={quietNote}>that&apos;s all of them</div>}

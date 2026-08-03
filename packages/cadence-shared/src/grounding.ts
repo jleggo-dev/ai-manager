@@ -55,6 +55,8 @@ export interface GroundingStep {
 
 export interface GroundingSpec {
   game: GroundingGame;
+  /** The plain-words explanation, carried with the spec so the renderer never looks it up. */
+  how: string;
   /** Shown to the coach and used as the log line's subject. */
   name: string;
   /** Open-ended flows have no known length, so they get a static label where the spine would be —
@@ -184,8 +186,36 @@ export function groundingSpec(game: GroundingGame, bank?: string | null): Ground
             : game === 'cold'
               ? 'TAKE YOUR TIME'
               : '';
-  return { game, name: GROUNDING_NAMES[game], openEnded, label, steps: groundingSteps(game, bank) };
+  return {
+    game,
+    name: GROUNDING_NAMES[game],
+    how: GROUNDING_HOW[game],
+    openEnded,
+    label,
+    steps: groundingSteps(game, bank),
+  };
 }
+
+/**
+ * How each game works, in plain words — the written equivalent of the how-to video a barbell
+ * movement gets. Written rather than filmed because these are verbal and attentional, not
+ * physical: there is no form to watch, and text can be read with the sound off. Shown behind a
+ * quiet "How this works" on the card, available always rather than only the first time — nobody
+ * should have to remember whether they have seen it.
+ */
+export const GROUNDING_HOW: Record<GroundingGame, string> = {
+  senses:
+    'Name five things you can see, four you can hear, three you can feel, two you can smell, one you can taste. It works by giving your attention somewhere concrete to go — the room is always there, and it does not argue back.',
+  letters:
+    'Name something for each letter, A to Z. Skipping is fine. It is deliberately a little boring: the job is to occupy the part of your mind that is spinning, not to be clever.',
+  switch:
+    'Answer one small question, then another. Each one pulls your attention somewhere specific for a few seconds, which is often enough to interrupt a loop.',
+  countback:
+    'Count backwards from a hundred in sevens, in your head. Nobody checks the answer — the arithmetic itself is the point, because it is just hard enough to crowd out whatever you were turning over.',
+  object:
+    'Pick one thing near you and look at it properly for a minute — its edges, its colour, how the light sits on it. Attention has to be somewhere; this gives it a place that is not your thoughts.',
+  cold: 'Cool water on your face, or the inside of your wrists. The most physical thing here, and often the quickest — cold on the face genuinely slows things down.',
+};
 
 /** Plain names — used in logs and in the coach's catalog, never as a score. */
 export const GROUNDING_NAMES: Record<GroundingGame, string> = {

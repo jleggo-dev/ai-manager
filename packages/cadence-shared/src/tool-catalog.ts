@@ -87,27 +87,27 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   breathing: {
     class: 'guided',
     summary:
-      'paced breathing — the app runs the rhythm and they follow it. Pick a pattern by name and how many rounds; a settling practice, a wind-down before sleep, or a few breaths before something hard',
+      'paced breathing — the app runs the rhythm and they follow it. Pick a pattern by name and how many rounds; a daily practice, a wind-down before sleep, a few breaths before something hard, or one step of a longer session',
     notWhen:
-      'do NOT use timer for breathing, and do NOT use breathing for silent sitting — a timer counts a held effort, breathing paces each breath. Name the pattern; never describe counts in the detail text',
+      'a timer counts a held effort; breathing paces each breath — pick whichever matches what they are actually doing. Name the pattern rather than describing counts in the detail text, and never promise a feeling will change',
     reads: ['breath_pattern', 'breath_cycles', 'detail'],
     example: { name: 'Settle before we start', tool: 'breathing', breath_pattern: 'box', breath_cycles: 6 },
   },
   meditate: {
     class: 'guided',
     summary:
-      'silent sitting for a set time — a settling practice, or a quiet few minutes after effort. Set duration_min; bells mark the start and end (and optionally an interval) so they can close their eyes',
+      'silent sitting for a set time — a daily practice, a quiet few minutes after effort, or a step inside a longer session. Set duration_min; bells mark the start and end (and optionally an interval) so they can close their eyes',
     notWhen:
-      'do NOT use meditate for guided or narrated sitting, and do NOT use it for paced breathing — breathing paces each breath, meditate leaves them alone with a clock',
+      'meditate leaves someone alone with a clock — if you want each breath paced, that is breathing; if you want words in their ear, that is not built yet',
     reads: ['duration_min', 'meditate_bells', 'meditate_interval_min', 'detail'],
     example: { name: 'Sit quietly', tool: 'meditate', duration_min: 10, meditate_bells: 'start_end' },
   },
   grounding: {
     class: 'guided',
     summary:
-      'a short tap-forward flow that gives a racing mind something ordinary to do — reach for this in the moment, not as a daily practice. Pick the game with grounding_game',
+      'a short tap-forward flow that gives busy attention something ordinary to do. Good in the moment, and equally good as a daily noticing practice or a step inside a longer session — senses and object are attention practices in their own right, while letters and countback are more purely distraction. Pick the game with grounding_game',
     notWhen:
-      'do NOT use grounding as a settling practice (that is breathing) and do NOT use it to pass time (that is meditate). Nothing here is scored or checked',
+      'nothing here is ever scored or checked — never frame it as a test, and never promise it will make a feeling go away',
     reads: ['grounding_game', 'grounding_bank', 'detail'],
     example: { name: 'Five senses', tool: 'grounding', grounding_game: 'senses' },
   },

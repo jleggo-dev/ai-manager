@@ -4,6 +4,7 @@ import type { StepLog } from '../state.ts';
 import { TONE } from './tone.ts';
 import { playChime } from './chime.ts';
 import { useBreathClock } from './useBreathClock.ts';
+import { WhatsThis } from './WhatsThis.tsx';
 
 type BreathingLog = Extract<StepLog, { kind: 'breathing' }>;
 
@@ -153,6 +154,9 @@ export function StepBreathing({
       </button>
 
       {caution ? <div style={cautionLine}>{caution}</div> : null}
+
+      {/* Only before you start — an explanation offered mid-breath is an interruption. */}
+      {!isRun && <WhatsThis text={pattern.how} />}
 
       <div style={footnote}>
         {patternCounts(pattern)} · {cycles} rounds · about {Math.max(1, Math.round((per * cycles) / 60))} min. Stopping

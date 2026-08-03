@@ -16,6 +16,13 @@
  * Dependency-free and pure, like `breathing.ts`: the renderer owns the clock and calls these.
  */
 
+/**
+ * How sitting works, in plain words — shown behind "What's this?" on the card, the same
+ * affordance breathing and grounding use.
+ */
+export const MEDITATE_HOW =
+  'Sit, and let the clock keep the time so you do not have to. A bell marks the start and the end, so you can close your eyes and stop wondering how long is left. When you notice your attention has wandered, that IS the practice working — come back, and carry on.';
+
 /** Which bells ring. `interval` implies start and end too. */
 export type MeditateBells = 'none' | 'start_end' | 'interval';
 
