@@ -22,6 +22,7 @@ import { getActivePlan } from '../../repos/plans.ts';
 import { listActivities } from '../../repos/activities.ts';
 import { listOccurrences, listRecentLogged } from '../../repos/occurrences.ts';
 import { listNutritionLogs } from '../../repos/nutrition.ts';
+import { listForCoach } from '../../repos/journal-entries.ts';
 import { buildProgress } from '../progress.ts';
 import { summarizeNutrition, renderNutritionLine } from '../nutrition-summarize.ts';
 import { searchFoodsWithUsda } from '../food-sources/usda-enrich.ts';
@@ -338,6 +339,42 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
     },
     rows(r) {
       return (r as { foods: unknown[] }).foods.length;
+    },
+  },
+
+  /**
+   * The journal, as the coach may read it (REQ9 §4.5). This is the ONLY path journal words take
+   * into a context pack, and it goes through `listForCoach` — which excludes secret entries and
+   * paper rows in SQL. That is the whole privacy promise made mechanical: there is no argument to
+   * this function that could widen it, and turning the key removes an entry from the very next
+   * pack build.
+   *
+   * Words, verbatim, newest first — never themes, never sentiment, never a count. What the coach
+   * does with them is remember ("three weeks ago you wrote…"), which is the entire point of the
+   * store; a compression layer over these (REQ9 §12's parse_mind_log) only earns its place once
+   * volume makes raw entries too big for a pack, exactly like REQ7's rollups.
+   */
+  get_journal: {
+    name: 'get_journal',
+    description:
+      'Recent journal entries the user has written, in their own words (secret entries are never included). Use when they refer to something they wrote, when a pattern across entries would help, or to remember what mattered to them lately.',
+    domains: ['journal', 'mind'],
+    async run(userId, params) {
+      const limit = typeof params?.limit === 'number' ? Math.min(20, Math.max(1, params.limit)) : 8;
+      return listForCoach(userId, limit);
+    },
+    render(r) {
+      const entries = r as Array<{ created_at: string; prompt: string | null; body: string }>;
+      if (!entries.length) return '';
+      const lines = entries.map((e) => {
+        const date = e.created_at.slice(0, 10);
+        const q = e.prompt ? ` (asked: ${e.prompt})` : '';
+        return `  - ${date}${q}: ${e.body.replace(/\s+/g, ' ').slice(0, 300)}`;
+      });
+      return `Journal — their own words, most recent first:\n${lines.join('\n')}`;
+    },
+    rows(r) {
+      return (r as unknown[]).length;
     },
   },
 
