@@ -1,18 +1,23 @@
-# Live coach-behaviour probe (REQ10 §11 — "the probe is manual, not CI" gap, closed).
+# Live coach-behaviour probes (REQ10 §11 — "the probe is manual, not CI" gap, closed).
 #
-# Runs apps/cadence-api/scripts/probe-coach-tools.ts against the DEPLOYED AI Admin: six
-# prescribe-session scenarios in user voice (wants, bans, and traps), five Scribe transcripts
-# (including injection, negation, and mid-message correction), and a now-menu register check —
-# all through the same normalizers the app uses.
+# Two probes against the DEPLOYED AI Admin, asking questions at two different levels:
+#   • probe-coach-tools.ts — does the coach pick the right tool INSIDE one activity? Six
+#     prescribe-session scenarios in user voice (wants, bans, and traps), five Scribe transcripts
+#     (including injection, negation, and mid-message correction), a now-menu register check.
+#   • probe-plan-shape.ts — does a day get the right NUMBER of activities (REQ10 §12)? Mind-only
+#     must not collapse to one node, strength must not shatter into per-exercise nodes, and someone
+#     who asked for one thing a day must not be padded to hit a number.
+# Both run through the same normalizers the app uses.
 #
 # Deliberately its OWN workflow, not a CI job: the coach is stochastic, so this must never gate a
 # merge. A red run here means "look at the output", not "revert". Two suite repetitions per run
 # (--runs 2) so a flaky scenario shows up as flaky instead of passing on luck.
 #
-# Spends real model calls (~24 jobs per run) — hence weekly + on-demand, not per-push.
+# Spends real model calls (~30 jobs per run) — hence weekly + on-demand, not per-push.
 #
 # Local equivalent:
 #   node --import tsx apps/cadence-api/scripts/probe-coach-tools.ts --runs 2
+#   node --import tsx apps/cadence-api/scripts/probe-plan-shape.ts --runs 2
 #
 name: Coach behaviour probe
 
@@ -37,5 +42,10 @@ jobs:
           cache: npm
       - name: Install (workspaces)
         run: npm ci
-      - name: Probe the live coach (2 full passes)
+      - name: Probe tool choice (2 full passes)
         run: node --import tsx apps/cadence-api/scripts/probe-coach-tools.ts --runs 2
+      # `if: always()` so a red tool probe still lets the plan-shape result be seen — the two fail
+      # for unrelated reasons, and hiding one behind the other wastes a whole week.
+      - name: Probe plan shape (2 full passes)
+        if: always()
+        run: node --import tsx apps/cadence-api/scripts/probe-plan-shape.ts --runs 2

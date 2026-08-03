@@ -267,6 +267,15 @@ and worry-park-then-revisit are **ordered chains of `journal` + `grounding` + `r
 deterministic tree with coach turns between** — the walkthrough shell already plays ordered
 steps. REQ6 §5.2's one-deep stepped program is this pattern grown up: no new engine, new *trees*.
 
+**But chain sparingly — a chain costs the day a node** (owner steer 2026-08-03, ruled in
+REQ10 §12). Chaining is what collapses repetition: a strength session's sets would otherwise be
+dozens of trail items, so bundling is the only way it works. Mind steps are usually the opposite —
+morning breathing and an evening journal are two *occasions*, and chaining them buries three
+commitments behind one button on a day that then looks empty. The test is **would they do these
+back-to-back in one sitting?** An evening review genuinely is one sitting, so it chains; a day's
+mind work generally is not, so it doesn't. A 4–5 step mind chain done once a day is almost always
+4–5 separate activities wearing a trench coat.
+
 ## 5. Coach configuration — one pattern for everything
 
 Adding a mind tool = the REQ8 recipe, unchanged: a `COACH_TOOLS` entry (summary / trap / fields /

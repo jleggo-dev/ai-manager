@@ -1858,3 +1858,26 @@ agent** and maintain its data sources through devs.ai instead of injecting an ap
 "much more efficient," and it centralizes upkeep on the platform the coach already lives on. Revisit
 once the runtime-variable version is proven; keep code as the type/whitelist authority and sync the
 LLM-facing copy to devs.ai's data sources.
+
+## Plan shape — how many things a day holds (owner steer 2026-08-03 · canonical: REQ10 §12)
+
+The day's trail renders **one node per scheduled activity**, so the coach's choice between "one
+activity with many steps" and "several activities" is what the user actually sees. A 4–5 step mind
+session is one button on an otherwise empty day; the same work as 4–5 activities is a day with a
+rhythm. Strength is the opposite case — sets and exercises must bundle or the trail is unusable.
+
+**The rule, in `synthesize-plan`: split by OCCASION, not by subject.** Would they do these
+back-to-back in one go? Then one activity. Different times of day, or either could happen without
+the other? Then separate activities with their own `time_of_day`. Meals already worked this way
+(four logs, never one lumped "Food log") — this generalizes it. `prescribe-session` carries the
+matching rule so a single-practice activity stays ONE item instead of being padded into a ritual.
+
+**Density is a judgment the coach makes, not a quota the app enforces** — "it's all about balance;
+checking things off gives us dopamine, but a really long list is scary." Both failure modes are
+named in the prompt (too few = nothing to finish; too many = a wall people quit) so the model can
+weigh them. Roughly 3–5 on a normal day, with someone's stated limit always winning and a
+three-free-days-a-week plan counting as good, not failed.
+
+Verified by `apps/cadence-api/scripts/probe-plan-shape.ts` (weekly in CI, never a merge gate) —
+three scenarios that fail in three directions: mind-only must not collapse, strength must not
+shatter, "one thing a day" must not get padded.

@@ -229,7 +229,56 @@ check — ran twice against prod with **zero violations**: every ban held, every
 nothing invented, no feeling_log stacked on a grounding close. The same harness caught the
 now-menu label bug ("Box breathing" as a row label) the day the job first ran live.
 
-**Honest gaps:** `prescribe-session` has no retry-on-normalize-null (single shot, then regenerate
-on next open — a one-retry would hide provider blips); the probe is manual, not a CI job;
-`capture-extract` carries the widest single schema (six top-level keys) and deserves the closest
-watch as conversations get longer.
+**Closed since (211502c):** `prescribe-session` now retries once on normalize-null
+(`session-generate.ts`), and the probe runs weekly in CI (`.github/workflows/probe-coach.yml`) —
+deliberately not a merge gate, because a stochastic check that blocks merges trains people to
+ignore it.
+
+**Honest gap:** `capture-extract` carries the widest single schema (six top-level keys) and
+deserves the closest watch as conversations get longer.
+
+## 12. Plan shape — how many things a day holds (added 2026-08-03)
+
+A day's trail is **one node per scheduled activity**, so the split between "one activity with many
+steps" and "several activities" is not an internal detail — it *is* what the person sees when they
+open the app. Both directions fail, and they fail for opposite reasons:
+
+- **Over-bundling** gives a mind-heavy user a single button. Three real commitments — morning
+  breathing, an evening journal, a wind-down — collapse into one "Mindfulness practice" node, and
+  there is nothing to check off. Finishing something is the small reward that makes tomorrow
+  likely.
+- **Over-splitting** shatters a gym session into per-exercise nodes and turns the day into a wall
+  of obligations. A list someone is scared to open is the list they quit.
+
+**The rule (in `synthesize-plan`): split by OCCASION, not by subject.** The test is *would they do
+these back-to-back in one go?* If yes, one activity — a strength session's exercises and sets
+belong together. If they'd happen at different times, or either could happen without the other,
+they are separate activities with their own `time_of_day`. Meals already followed this rule
+(four logs, never one lumped "Food log"); §12 only generalizes what food learned first.
+
+**Mind work splits by default** — breathing, sitting, journaling and grounding are usually distinct
+occasions — with the genuine exception intact: a wind-down that runs breath → journal → sit
+back-to-back is one activity. And a single practice is a complete activity; "Ten minutes sitting"
+needs no companion steps. `prescribe-session` carries the matching rule so it doesn't pad a
+one-practice activity into a ritual nobody asked for.
+
+**Density is a judgment, not a quota.** Roughly 3–5 things on a normal day, with both failure modes
+named in the prompt so the coach can balance them rather than count to a number. Someone with three
+free days a week gets three fuller days and four light ones — a good plan, not a failed one — and
+someone who asked for one small commitment keeps getting one.
+
+**Evidence (2026-08-03):** `probe-plan-shape.ts` runs three scenarios that fail in three different
+directions — mind-only (must not collapse), strength (must not shatter), and "one thing a day
+maximum" (must not pad). Two clean runs against prod: the mind plan came back as 2–3 separate nodes
+at distinct times, the deadlift plan as one gym node per day, and the burnout/newborn plan as
+exactly one walk. The probe judges each plan on its **busiest** day; a fixed weekday read as green
+whenever it landed on a rest day, which is how the strength scenario first passed while asserting
+nothing.
+
+**Known limit — this shapes NEW plans, not existing ones.** `RE-PLAN` tells the coach to keep
+activity titles stable (session history is keyed by title, and a rename orphans it) and to change
+the least necessary, so an already-bundled "Mindfulness practice" will not spontaneously split into
+three on the next re-plan. That is the right default — churning someone's plan to satisfy a shape
+rule is its own harm — but it means the fix reaches existing users only when a goal genuinely
+changes or they steer. If bundled legacy plans turn out to be common, the migration is a deliberate
+one-time re-shape with the user's consent, not a quiet rewrite.

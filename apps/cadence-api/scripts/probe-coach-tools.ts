@@ -16,9 +16,6 @@
  *
  * Run: node --import tsx apps/cadence-api/scripts/probe-coach-tools.ts
  */
-import { config as dotenv } from 'dotenv';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   BREATH_PATTERNS,
   GROUNDING_NAMES,
@@ -35,72 +32,7 @@ import {
   type SessionItemTool,
 } from '@cadence/shared';
 import { normalizeSession } from '../src/services/session-normalize.ts';
-
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-dotenv({ path: path.join(root, 'backend/.env') });
-
-const KEY = process.env.AI_ADMIN_API_KEY || process.env.VITE_DEV_API_KEY || '';
-const BASE = (process.env.AI_ADMIN_BASE_URL || 'https://ai-manager-alpha-seven.vercel.app') + '/_/backend';
-if (!KEY) throw new Error('No AI_ADMIN_API_KEY');
-
-async function api(method: string, p: string, body?: unknown) {
-  const res = await fetch(`${BASE}${p}`, {
-    method,
-    headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`${method} ${p} → ${res.status}: ${text.slice(0, 400)}`);
-  try {
-    return JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    return { raw: text };
-  }
-}
-
-const jobIds = new Map<string, string>();
-async function jobId(slug: string): Promise<string> {
-  if (jobIds.size === 0) {
-    const body = (await api('GET', '/api/processing-jobs')) as { data?: unknown[] } | unknown[];
-    const list = (Array.isArray(body) ? body : (body.data ?? [])) as Array<Record<string, unknown>>;
-    for (const j of list) if (typeof j.slug === 'string' && typeof j.id === 'string') jobIds.set(j.slug, j.id);
-  }
-  const found = jobIds.get(slug);
-  if (!found) throw new Error(`no job "${slug}" on the deployment`);
-  return found;
-}
-
-async function runJob(slug: string, variables: Record<string, unknown>): Promise<string> {
-  const out = await api('POST', `/api/processing-jobs/${await jobId(slug)}/test`, {
-    variables,
-    callingApplication: 'platform:cadence',
-  });
-  return String(out.formatted ?? out.raw ?? '');
-}
-
-function parseJson(raw: string): Record<string, unknown> | null {
-  const cleaned = raw
-    .replace(/^```(?:json)?/i, '')
-    .replace(/```$/, '')
-    .trim();
-  try {
-    return JSON.parse(cleaned) as Record<string, unknown>;
-  } catch {
-    const m = cleaned.match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    try {
-      return JSON.parse(m[0]) as Record<string, unknown>;
-    } catch {
-      return null;
-    }
-  }
-}
-
-let problems = 0;
-const flag = (msg: string) => {
-  problems += 1;
-  console.log(`   ⚠ ${msg}`);
-};
+import { flag, finish, parseJson, runJob, tally } from './probe-lib.ts';
 
 /* ══ 1 · prescribe-session — the coach composing with the full palette ═══════════════════════ */
 
@@ -413,12 +345,11 @@ const runs = Math.max(1, Number(runsArg?.split('=')[1] ?? process.argv[process.a
 const perRun: number[] = [];
 for (let r = 1; r <= runs; r += 1) {
   if (runs > 1) console.log(`\n════ run ${r} of ${runs} ════`);
-  const before = problems;
+  const before = tally.problems;
   await probeSessions();
   await probeCaptures();
   await probeNowMenu();
-  perRun.push(problems - before);
+  perRun.push(tally.problems - before);
 }
 if (runs > 1) console.log(`\nper-run problems: [${perRun.join(', ')}]`);
-console.log(`\n${problems === 0 ? 'All scenarios behaved.' : `${problems} thing(s) to look at.`}`);
-process.exit(problems === 0 ? 0 : 1);
+finish();
