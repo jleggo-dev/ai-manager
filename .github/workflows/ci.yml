@@ -125,6 +125,13 @@ jobs:
       CADENCE_SUPABASE_URL: ${{ secrets.CADENCE_SUPABASE_URL }}
       CADENCE_SUPABASE_ANON_KEY: ${{ secrets.CADENCE_SUPABASE_ANON_KEY }}
       CADENCE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.CADENCE_SUPABASE_SERVICE_ROLE_KEY }}
+      # Prefer the PASSWORD-ONLY secret: config.ts builds the pooler URL itself and URL-encodes
+      # the password, so special characters can never mangle the connection string. The full-URL
+      # secret cost two outages in one day — first the IPv6-only direct host (ENETUNREACH, see
+      # 80e7930), then a raw-pasted password failing auth until the pooler circuit-broke. NOTE:
+      # config.ts prefers CADENCE_DATABASE_URL when both are set — so set ONE: ideally delete the
+      # URL secret and keep only CADENCE_DB_PASSWORD.
+      CADENCE_DB_PASSWORD: ${{ secrets.CADENCE_DB_PASSWORD }}
       CADENCE_DATABASE_URL: ${{ secrets.CADENCE_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v7
