@@ -1251,3 +1251,46 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .journal-row-t b { font-size: 14px; font-weight: 800; color: oklch(30% 0.02 150); }
 .journal-row-t span { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
   color: oklch(55% 0.02 120); }
+
+/* ── Timed free-write (Design "Journal v2" §1b, + the owner's paper case) ─────────────────────
+   A pill variant, not a mode: the same sheet and the same page, with a clock that never grades.
+   Indigo is the timer's colour throughout, borrowed from the key so the page stays one family. */
+.fw-start { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; }
+.fw-start .jw-bank { flex-shrink: 0; }
+.fw-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.fw-chip { font-size: 10px; font-weight: 900; letter-spacing: 0.08em; color: oklch(45% 0.14 266);
+  background: oklch(95% 0.03 266); border-radius: 999px; padding: 4px 9px; white-space: nowrap; }
+.fw-durations, .fw-surface { display: flex; gap: 6px; }
+.fw-dur, .fw-surf { flex: 1; border: 1.5px solid oklch(90% 0.015 95); background: #fff; border-radius: 999px;
+  padding: 8px 0; font-size: 12.5px; font-weight: 800; color: oklch(40% 0.02 150); cursor: pointer; }
+.fw-dur.on, .fw-surf.on { border-color: oklch(57% 0.15 266); color: oklch(45% 0.14 266);
+  background: oklch(95% 0.03 266); }
+/* The pure row ships with no coach input at all — tinted so it reads as the floor, not a suggestion. */
+.fw-pure { border-color: oklch(85% 0.05 266); background: oklch(97% 0.02 266); }
+.fw-commit { text-align: center; font-size: 11.5px; font-weight: 700; color: oklch(52% 0.02 150); padding: 4px 0 2px; }
+
+/* The hairline IS the timer: 3px, full-bleed under the bar, filling left→right. No clock on screen
+   by default — a countdown dominating the page is performance pressure. Tap it for time REMAINING. */
+.fw-rail { display: block; width: 100%; height: 3px; padding: 0; border: none; margin-top: 8px;
+  background: oklch(92% 0.01 95); border-radius: 999px; cursor: pointer; overflow: hidden; }
+.fw-rail-fill { display: block; height: 100%; background: oklch(57% 0.15 266); transition: width 1s linear; }
+.fw-time { align-self: center; margin-top: 6px; font-size: 11px; font-weight: 900; letter-spacing: 0.06em;
+  color: oklch(45% 0.14 266); background: oklch(95% 0.03 266); border-radius: 999px; padding: 3px 9px; }
+/* The idle nudge — an offer above the keyboard. It never touches, fades, or deletes their words. */
+.fw-nudge { text-align: center; font-family: var(--display), serif; font-style: italic;
+  font-size: 13px; color: oklch(58% 0.02 150); padding: 4px 0; }
+
+/* Paper: the words are in a notebook, so the screen is only the clock. */
+.fw-screen { flex: 1; display: flex; flex-direction: column; }
+.fw-paper-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 10px;
+  text-align: center; padding: 0 8px; }
+.fw-paper-body .jw-prompt { justify-content: center; }
+.fw-paper-note { font-size: 12.5px; font-weight: 700; color: oklch(55% 0.02 150); }
+
+/* The kept moment — disc check and the coach's one line ("Twenty minutes — kept."). */
+.jw-kept { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+.jw-kept-disc { width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; background: oklch(95% 0.03 266); color: oklch(45% 0.14 266); font-size: 24px; font-weight: 900; }
+.jw-kept-line { font-family: var(--display), serif; font-style: italic; font-size: 17px; color: oklch(34% 0.02 150); }
+.jw-kept-btn { border: none; border-radius: 12px; padding: 10px 22px; font-size: 13.5px; font-weight: 900;
+  background: oklch(45% 0.14 266); color: #fff; cursor: pointer; }

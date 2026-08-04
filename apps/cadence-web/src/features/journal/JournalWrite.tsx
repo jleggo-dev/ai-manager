@@ -1,14 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  FREE_WRITE_NUDGE,
   JOURNAL_BANKS,
   JOURNAL_DISCLOSURE,
   SHARE_FRAMING,
+  freeWriteKeptLine,
+  freeWriteProgress,
   isShareableGratitude,
+  shouldNudge,
+  timeLeftLabel,
   todaysPhrasing,
   type JournalBank,
 } from '@cadence/shared';
 import { keepJournalEntry } from '../../lib/api.ts';
 import { MicButton } from '../../components/MicButton.tsx';
+import { playChime } from '../walkthrough/tools/chime.ts';
+import { FreeWriteStart, type FreeWriteStartChoice } from './FreeWriteStart.tsx';
+import { FreeWritePaper } from './FreeWritePaper.tsx';
+import { useWriteTimer } from './useWriteTimer.ts';
 
 /**
  * The writing page (Journal v2, settled): full-screen, words directly on the cream — no card, no
@@ -33,8 +42,16 @@ export function JournalWrite({
   onKept: () => void;
   /** The question this page opens on when the coach chose one — a bank it named, or a sentence it
    *  wrote for this person. Absent when the page is opened cold, which is a real state: no
-   *  question, the picker one tap away. Whatever the coach sent, the reader can still change it. */
-  openWith?: { bank: JournalBank | null; prompt: string | null };
+   *  question, the picker one tap away. Whatever the coach sent, the reader can still change it.
+   *
+   *  `minutes` set means the coach asked for a TIMED free-write: the page opens on the start sheet
+   *  rather than a blank box, because the clock has to begin on a deliberate press. */
+  openWith?: {
+    bank: JournalBank | null;
+    prompt: string | null;
+    minutes?: number;
+    topics?: readonly { label: string; prompt: string }[];
+  };
 }) {
   const [text, setText] = useState('');
   const [bank, setBank] = useState<JournalBank | null>(openWith?.bank ?? null);
@@ -43,6 +60,10 @@ export function JournalWrite({
   const [written, setWritten] = useState<string | null>(openWith?.prompt ?? null);
   const [secret, setSecret] = useState(false);
   const [picker, setPicker] = useState(false);
+  // A coach-issued duration opens the start sheet immediately — the clock must begin on a press.
+  const [freeStart, setFreeStart] = useState(() => openWith?.minutes !== undefined);
+  const [timed, setTimed] = useState<FreeWriteStartChoice | null>(null);
+  const [timeUp, setTimeUp] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   const areaRef = useRef<HTMLTextAreaElement>(null);
@@ -68,7 +89,27 @@ export function JournalWrite({
   const today = new Date().toISOString().slice(0, 10);
   const prompt = written ?? (bank ? todaysPhrasing(bank, today) : null);
 
-  async function keep(mode: 'typed' | 'paper') {
+  const totalSec = (timed?.minutes ?? 0) * 60;
+  // Runs only for an on-screen timed write. Paper has its own screen; "Keep writing" drops the
+  // clock entirely (momentum outranks the number — no re-chime, no overtime count).
+  const timer = useWriteTimer(totalSec, timed?.surface === 'typed' && !timeUp, () => {
+    playChime();
+    navigator.vibrate?.(18);
+    setTimeUp(true);
+    void keep('typed', true);
+  });
+  const [showTime, setShowTime] = useState(false);
+
+  /**
+   * `stay` is the timed case: the clock running out saves the words immediately (Design §1b —
+   * "the entry is saved automatically; nothing to confirm") but holds the page open so "Keep
+   * writing" can restore it mid-sentence. Every other save closes as it always did.
+   *
+   * Known gap: continuing after the bell and saving again writes a SECOND entry containing the
+   * first one's text — the store has an insert but no update. Worth an endpoint before this sees
+   * real use; it costs a duplicate, never lost words.
+   */
+  async function keep(mode: 'typed' | 'paper', stay = false) {
     if (saving) return;
     setSaving(true);
     setFailed(false);
@@ -85,11 +126,41 @@ export function JournalWrite({
       if (mode === 'typed' && isShareableGratitude(bank?.id, secret) && navigator.share) {
         await navigator.share({ text }).catch(() => undefined);
       }
+      if (stay) {
+        setSaving(false);
+        return;
+      }
       onKept();
     } catch {
       setFailed(true); // the draft stays right here — nothing is lost until you leave this screen
       setSaving(false);
     }
+  }
+
+  // A timed write on paper is a different screen: no text area, no keyboard, no nudge — the words
+  // are in a notebook and this app is only the clock.
+  if (timed?.surface === 'paper') {
+    return <FreeWritePaper minutes={timed.minutes} prompt={timed.prompt} onClose={onClose} onKept={onKept} />;
+  }
+
+  if (timeUp && timed) {
+    return (
+      <div className="jw" role="dialog" aria-label="Time's up">
+        <div className="jw-kept">
+          <div className="jw-kept-disc" aria-hidden>
+            ✓
+          </div>
+          <div className="jw-kept-line">{freeWriteKeptLine(timed.minutes)}</div>
+          {/* Momentum outranks the number: this restores the page mid-sentence with no clock. */}
+          <button className="jw-kept-btn" onClick={() => setTimed(null)}>
+            Keep writing
+          </button>
+          <button className="jw-paper" onClick={onKept}>
+            Read it back ›
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -118,6 +189,26 @@ export function JournalWrite({
         </span>
       </div>
 
+      {/* The hairline IS the timer — no clock on screen unless tapped for. */}
+      {timed && (
+        <>
+          <button
+            className="fw-rail"
+            onClick={() => {
+              setShowTime(true);
+              setTimeout(() => setShowTime(false), 3000);
+            }}
+            aria-label={timeLeftLabel(totalSec - timer.elapsedSec)}
+          >
+            <span
+              className="fw-rail-fill"
+              style={{ width: `${freeWriteProgress(timer.elapsedSec, totalSec) * 100}%` }}
+            />
+          </button>
+          {showTime && <div className="fw-time">{timeLeftLabel(totalSec - timer.elapsedSec)}</div>}
+        </>
+      )}
+
       {disclose && <div className="jw-disclose">{JOURNAL_DISCLOSURE}</div>}
 
       {prompt && (
@@ -134,9 +225,15 @@ export function JournalWrite({
         className="jw-page"
         placeholder="Write anything…"
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value);
+          timer.poke(); // resets the idle window; the nudge fades on the next keystroke
+        }}
         autoFocus
       />
+
+      {/* An offer, never enforcement — it touches no words and disappears the moment you type. */}
+      {timed && shouldNudge('typed', timer.idleMs) && <div className="fw-nudge">{FREE_WRITE_NUDGE}</div>}
 
       {failed && (
         <div className="jw-failed">
@@ -157,6 +254,20 @@ export function JournalWrite({
         </button>
       </div>
 
+      {freeStart && (
+        <FreeWriteStart
+          coachMinutes={openWith?.minutes}
+          topics={openWith?.topics}
+          onClose={() => setFreeStart(false)}
+          onStart={(c) => {
+            setFreeStart(false);
+            setWritten(c.prompt);
+            setBank(null);
+            setTimed(c);
+          }}
+        />
+      )}
+
       {picker && (
         <>
           <div className="sheet-scrim" onClick={() => setPicker(false)} aria-hidden />
@@ -168,9 +279,15 @@ export function JournalWrite({
                 key={b.id}
                 className="jw-bank"
                 onClick={() => {
+                  setPicker(false);
+                  // "There is no untimed path into a free-write" (Design §1b): the free-write row
+                  // is the doorway to the clock, not a question you can take without one.
+                  if (b.id === 'free_write') {
+                    setFreeStart(true);
+                    return;
+                  }
                   setBank(b);
                   setWritten(null); // the reader's pick replaces the coach's question
-                  setPicker(false);
                   areaRef.current?.focus();
                 }}
               >

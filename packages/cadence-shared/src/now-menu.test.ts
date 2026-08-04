@@ -165,6 +165,20 @@ describe('normalizeNowMenu', () => {
   });
 });
 
+describe('a timed journal row promises time, never output', () => {
+  it('says the duration and that nothing is counted', () => {
+    expect(nowMenuMeta(tool('journal', { duration_min: 20 }) as NowMenuAction)).toBe('20 min · no word count');
+  });
+
+  it('still says "a line or two" for an untimed one', () => {
+    expect(nowMenuMeta(tool('journal') as NowMenuAction)).toBe('a line or two');
+  });
+
+  it('clamps a duration the coach invented rather than promising it', () => {
+    expect(nowMenuMeta(tool('journal', { duration_min: 9999 }) as NowMenuAction)).toBe('60 min · no word count');
+  });
+});
+
 describe('journal rows — the coach names a bank or writes the question', () => {
   it("the coach's own sentence wins over a bank it also sent", () => {
     const opener = journalOpener({ journal_bank: 'three_good_things', journal_prompt: 'Free-write the scene.' });

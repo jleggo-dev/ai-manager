@@ -26,6 +26,7 @@
 import { BREATH_PATTERNS, cycleSeconds, clampCycles, patternById } from './breathing.ts';
 import { GROUNDING_NAMES, isGroundingGame, type GroundingGame } from './grounding.ts';
 import { clampSitMinutes } from './meditate.ts';
+import { clampFreeWriteMinutes } from './freewrite.ts';
 import type { SessionItemTool } from './types/occurrence.ts';
 
 /** Which pillar the row's puck is toned from. `null` = a plan activity whose area we inherit. */
@@ -124,8 +125,12 @@ export function nowMenuMeta(action: NowMenuAction): string | undefined {
       const game = typeof p.grounding_game === 'string' && isGroundingGame(p.grounding_game) ? p.grounding_game : null;
       return game ? `${GROUNDING_NAMES[game].toLowerCase()} · no scores` : 'no scores';
     }
-    case 'journal':
-      return 'a line or two';
+    case 'journal': {
+      // A timed free-write says so, and says the reassurance that matters on this row: the clock
+      // measures time, never output. "a line or two" would be a promise the timer then breaks.
+      const mins = typeof p.duration_min === 'number' ? clampFreeWriteMinutes(p.duration_min) : null;
+      return mins ? `${mins} min · no word count` : 'a line or two';
+    }
     case 'timer': {
       const mins = typeof p.duration_min === 'number' ? Math.max(1, Math.round(p.duration_min)) : null;
       return mins ? `${mins} min` : undefined;

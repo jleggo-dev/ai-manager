@@ -50,9 +50,16 @@ export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLog
     // The coach picked a bank or wrote a question for this row; before this it chose one and the
     // page opened blank anyway. `journalOpener` holds the "your sentence always wins" rule.
     const opener = journalOpener(playing.action.params);
+    const mins = playing.action.params.duration_min;
     return (
       <JournalWrite
-        openWith={{ bank: journalBank(opener.bank) ?? null, prompt: opener.prompt }}
+        openWith={{
+          bank: journalBank(opener.bank) ?? null,
+          prompt: opener.prompt,
+          // A duration turns this into a timed free-write: the page opens on the start sheet, so
+          // the clock still begins on a deliberate press rather than the moment the row is tapped.
+          minutes: typeof mins === 'number' ? mins : undefined,
+        }}
         onClose={() => setPlaying(null)}
         onKept={() => {
           setPlaying(null);

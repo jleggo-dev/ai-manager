@@ -137,10 +137,10 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   journal: {
     class: 'capture',
     summary:
-      'they write or speak an entry, which is kept in their journal. This is the tool for ANY writing practice, not only reflection: a novelist free-writing a scene, morning pages, a studio or practice log, a language learner\'s daily paragraph, lectio divina or a daily examen, working a problem out on the page. Either name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own prompt in detail — your sentence always wins, and for creative or craft work it usually should ("Free-write a haunted house scene with a cartoon character you loved as a kid")',
+      'they write or speak an entry, which is kept in their journal. This is the tool for ANY writing practice, not only reflection: a novelist free-writing a scene, morning pages, a studio or practice log, a language learner\'s daily paragraph, lectio divina or a daily examen, working a problem out on the page. Either name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own prompt in detail — your sentence always wins, and for creative or craft work it usually should ("Free-write a haunted house scene with a cartoon character you loved as a kid"). Add duration_min to make it a TIMED free-write: the app runs a quiet clock, and writing continuously for a set stretch is the practice itself for morning pages or a drafting habit',
     notWhen:
       'this keeps real words in a place they can reread — do not use it for a yes/no or a number, and never promise to analyse what they write. The banks are a floor, not a menu you are limited to: match the bank FAMILY to the practice they are actually doing (a novelist gets craft, never gratitude), and whenever you can write something better fitted to this person and this week, write it',
-    reads: ['journal_bank', 'detail'],
+    reads: ['journal_bank', 'detail', 'duration_min'],
     example: { name: 'Three good things', tool: 'journal', journal_bank: 'three_good_things' },
   },
 };

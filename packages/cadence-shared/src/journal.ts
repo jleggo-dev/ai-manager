@@ -132,7 +132,10 @@ export const JOURNAL_BANKS: readonly JournalBank[] = [
     label: 'Free-write',
     family: 'craft',
     phrasings: [
-      'Write for ten minutes without stopping — no fixing as you go.',
+      // Design's primary line (Journal v2 §1b) — and deliberately duration-free, because the same
+      // question serves an untimed entry and a timed one whose length the coach or reader chooses.
+      "Write continuously — whatever comes. Don't stop, don't edit; anything counts.",
+      'Write without stopping — no fixing as you go.',
       'Start in the middle of a scene and write until it turns.',
       'Describe a place you know well to someone who has never been there.',
       "Write the conversation you didn't get to have.",
