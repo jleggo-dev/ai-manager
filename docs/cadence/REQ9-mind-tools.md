@@ -229,6 +229,19 @@ Observe phase. Owner-confirmed 2026-08-02, with the rulings below.
   Audio discarded after transcription in v1 (cost + privacy; revisit if demand).
 - **Prompted or free:** prompt chips from **deterministic banks**, coach-personalized in order
   (`suggest_gratitude_prompts`-class job); blank page always allowed.
+- **The journal is a WRITING tool, not a feelings tool (owner ruling 2026-08-04).** Gratitude and
+  reflection are *uses*, not the category. A novelist free-writing a scene, morning pages, a
+  studio log, a language learner's paragraph, lectio divina — all the same tool, and for someone
+  whose habit is writing a novel, "free-write a haunted house scene with a favourite cartoon
+  character" is exactly the right prompt. **The coach decides; the app does not get to be
+  prescriptive about how the journal gets used.** The coach may therefore **author its own prompt**
+  (already supported: `detail` overrides `journal_bank` — "your sentence always wins"), and the
+  tool catalog now names the non-reflective uses so the coach knows the breadth is legitimate.
+  *This corrects an assistant framing that treated journaling as inherently vulnerable/therapeutic
+  — the same **frame leakage** §1 warns about (gym→mind, mind→shell, everyday→crisis), here
+  journal→therapy.* **Known gap:** all six shipped banks are reflective (three good things, park a
+  worry, a win, savor it, smallest next thing, what's actually true), so the standalone journal
+  page still offers a novelist nothing that fits — see §7.
 - **Banks (v1):** gratitude (three good things), savor (photo + a line — uses `photo`),
   a win, smallest next thing, "what's actually true," worry-park, evening review (chained).
 - **The store (new):** `journal_entries` table — id, user, ts, source occurrence?, bank, text,
@@ -310,8 +323,19 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
 - **`SessionItem` params:** typed optional fields per tool (REQ8 idiom) vs. one `params` jsonb —
   decide at `breathing` build time; leaning typed fields + normalize caps.
 - **Check-in vocabulary:** which emotion-word set (needs to be granular but not clinical).
-- **Journal retention/export format.** (The "are private entries still parsed" half is
-  **resolved** — §8: nothing scans them, private means private.)
+- **The journal page's chips are still reflection-only** (§4.5 ruling). In a *session* the coach can
+  already write any prompt it likes, but the standalone journal page renders the six fixed banks —
+  so a novelist, a student, or someone with a devotional practice opens it to six chips that all
+  assume emotional processing. Two ways out: **(a)** widen the banks with craft/study/devotional
+  sets (user-facing copy → BRAND review), or **(b)** let the coach supply the page's chips the way
+  it supplies the now-menu's rows (machinery exists — `compose-now-menu` is the pattern), keeping
+  the banks as the fallback when it has nothing better. **Leaning (b)**: it honours "the coach
+  decides" instead of the app guessing which six practices exist, and it doesn't hard-code a
+  taxonomy of writing practices that will always be incomplete.
+- ~~Journal retention/export format.~~ **Resolved 2026-08-04 (owner):** entries live **as long as
+  the user wants** — nothing auto-expires. They are **exportable as Markdown**, and the user can
+  **delete** them. (The "are private entries still parsed" half was already resolved — §8: nothing
+  scans them, private means private.) *Unbuilt: export and delete are not implemented yet.*
 - **TTS voice** — the coach's voice or a distinct practice voice? Plus **time-to-first-audio** and
   streamed-vs-pre-rendered, which decides whether the guided player needs a loading state at all.
 - **Where "did it help?" lands in the data model**, and whether `recap` consumes mind self-reports
@@ -322,9 +346,13 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
 - **Do mind practices log as occurrences** with the existing status vocabulary (`skipped` vs
   `missed`, freezes, detours), or something new? Leaning existing.
 - ~~The emergency line's copy deck + resource list~~ — **no longer needed** (§8: no emergency
-  chrome ships). One live question remains, and it is narrow: **should the coach, in
-  conversation, name a specific number (988/911) or stop at "please talk to someone who can
-  help"?** The legal drafts currently name 988, so prompt and terms should agree either way.
+  chrome ships). ~~Should the coach name a specific number (988/911)?~~ **Resolved 2026-08-04
+  (owner): no number.** The coach refers to a **medical professional**, as any decent LLM already
+  does — "we might get it wrong," and a wrong number is worse than no number (regions differ,
+  lines change, and we cannot verify one at runtime). Already the live behaviour: the coach system
+  prompt says "a professional, someone they trust, or an emergency or crisis line" and names
+  nothing. TERMS-OF-SERVICE.md still names 988 — that is a **legal disclosure, not the coach
+  speaking**, so the two do not conflict; revisit only if the terms are rewritten.
 - **Library routing** — its own tab, under Mind, or a shared cross-pillar surface? A pricing and
   moderation decision, not a layout one.
 

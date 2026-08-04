@@ -137,9 +137,9 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   journal: {
     class: 'capture',
     summary:
-      'they write or speak a short entry, which is kept in their journal. Either name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own question in detail — your sentence always wins',
+      'they write or speak an entry, which is kept in their journal. This is the tool for ANY writing practice, not only reflection: a novelist free-writing a scene, morning pages, a studio or practice log, a language learner\'s daily paragraph, lectio divina or a daily examen, working a problem out on the page. Either name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own prompt in detail — your sentence always wins, and for creative or craft work it usually should ("Free-write a haunted house scene with a cartoon character you loved as a kid")',
     notWhen:
-      'this keeps real words in a place they can reread — do not use it for a yes/no or a number, and never promise to analyse what they write',
+      "this keeps real words in a place they can reread — do not use it for a yes/no or a number, and never promise to analyse what they write. The banks lean reflective, so do NOT reach for them when the person's practice is craft, study, or devotional — write the prompt their practice actually calls for instead",
     reads: ['journal_bank', 'detail'],
     example: { name: 'Three good things', tool: 'journal', journal_bank: 'three_good_things' },
   },
