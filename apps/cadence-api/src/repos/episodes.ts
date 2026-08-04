@@ -92,3 +92,35 @@ export async function listEpisodeRanges(
     from cadence.episodes
     where user_id = ${userId} and start_date <= ${to} and end_date >= ${from}`;
 }
+
+/** Replace the active episode's equipment list (the mid-window revision — see
+ *  `reviseEpisodeEquipment`). Guarded to the active row so a stale caller can't edit history. */
+export async function updateEpisodeEquipment(
+  userId: string,
+  episodeId: string,
+  equipment: Partial<Equipment>[],
+  tempActivities: Partial<Activity>[],
+): Promise<void> {
+  await sql`
+    update cadence.episodes
+    set available_equipment = ${json(equipment)}, temp_activities = ${json(tempActivities)}
+    where user_id = ${userId} and episode_id = ${episodeId} and status = 'active'`;
+}
+
+/** Push the active episode's start forward — the arrival-day "not yet". */
+export async function updateEpisodeStart(userId: string, episodeId: string, start: string): Promise<void> {
+  await sql`
+    update cadence.episodes set start_date = ${start}
+    where user_id = ${userId} and episode_id = ${episodeId} and status = 'active'`;
+}
+
+/** Merge keys into the episode's constraints jsonb (e.g. `gear_confirmed`) without a migration. */
+export async function mergeEpisodeConstraints(
+  userId: string,
+  episodeId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  await sql`
+    update cadence.episodes set constraints = coalesce(constraints, '{}'::jsonb) || ${json(patch)}
+    where user_id = ${userId} and episode_id = ${episodeId} and status = 'active'`;
+}

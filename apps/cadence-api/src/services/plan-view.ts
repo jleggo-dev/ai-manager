@@ -58,6 +58,9 @@ export interface ActiveEpisodeView {
   type: 'travel' | 'illness' | 'injury' | 'recovery' | 'custom';
   start: string;
   end: string;
+  /** Has the equipment question been ANSWERED — by words, photo, or at entry? Distinct from the
+   *  list being empty: "no gym here" is an answer, silence is not. Drives the arrival card. */
+  gearKnown: boolean;
 }
 
 /** Neutral view when the streak evaluation itself fails — never let it break the plan load. */
@@ -83,7 +86,14 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
   });
   const episode = await getActiveEpisode(userId).catch(() => null);
   const activeEpisode: ActiveEpisodeView | null = episode
-    ? { type: episode.type, start: episode.start, end: episode.end }
+    ? {
+        type: episode.type,
+        start: episode.start,
+        end: episode.end,
+        gearKnown:
+          (episode.available_equipment ?? []).length > 0 ||
+          (episode.constraints as { gear_confirmed?: unknown } | null)?.gear_confirmed === true,
+      }
     : null;
   const plan = await getActivePlan(userId);
   if (!plan) {

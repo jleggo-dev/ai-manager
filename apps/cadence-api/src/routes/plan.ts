@@ -7,7 +7,8 @@ import { assessIfDue } from '../services/situation.ts';
 import { getOccurrenceDetail, prefetchImminentSessions } from '../services/session-generate.ts';
 import { logOccurrence } from '../services/session-log.ts';
 import { logAdhocActivity, logPlannedActivity } from '../services/adhoc-log.ts';
-import { enterEpisode, endEpisode } from '../services/episode.ts';
+import { enterEpisode, endEpisode, reviseEpisodeEquipment, postponeEpisodeStart } from '../services/episode.ts';
+import { equipmentFromGymPhotos } from '../services/gym-photo.ts';
 import { recordWeighIn } from '../services/weigh-in.ts';
 import { setPendingProposal, getUser } from '../repos/users.ts';
 import { setOccurrenceStatus } from '../repos/occurrences.ts';
@@ -22,6 +23,8 @@ import {
   weighInBodySchema,
   occurrenceStatusBodySchema,
   episodeEnterBodySchema,
+  episodePhotoBodySchema,
+  episodeEquipmentBodySchema,
 } from '../validation/body.ts';
 
 const todayIso = (): string => {
@@ -153,6 +156,58 @@ router.post('/episode', async (req: Request, res: Response) => {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/episode]', err);
     res.status(500).json({ error: 'enter episode failed' });
+  }
+});
+
+/**
+ * POST /plan/episode/equipment-photo — the equipment answer as pictures (PLAN §424): parse what
+ * the gym photos show and re-draft the detour's remaining days around it. 409 without an active
+ * episode — the photo only means something inside one.
+ */
+router.post('/episode/equipment-photo', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(episodePhotoBodySchema, req.body);
+    const r = await equipmentFromGymPhotos(userId, body.photos);
+    if (r.reason === 'no_episode') return void res.status(409).json({ error: 'no active detour' });
+    res.json(r);
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /plan/episode/equipment-photo]', err);
+    res.status(500).json({ error: 'could not read the photo' });
+  }
+});
+
+/**
+ * POST /plan/episode/equipment — the equipment answer in words, from the arrival card's chips:
+ * the same revision machine the conversational and photo doors feed. An empty list is a real
+ * answer ("no gym here") and re-drafts to equipment-free days.
+ */
+router.post('/episode/equipment', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(episodeEquipmentBodySchema, req.body);
+    const r = await reviseEpisodeEquipment(userId, body.equipment);
+    if (r.reason === 'no_episode') return void res.status(409).json({ error: 'no active detour' });
+    res.json(r);
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /plan/episode/equipment]', err);
+    res.status(500).json({ error: 'could not update the detour' });
+  }
+});
+
+/**
+ * POST /plan/episode/not-yet — arrival day, but they haven't arrived: push the start one day.
+ * Today's shelved sessions come back; the end stays put; pushing past the end cancels.
+ */
+router.post('/episode/not-yet', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    res.json(await postponeEpisodeStart(userId));
+  } catch (err) {
+    console.error('[POST /plan/episode/not-yet]', err);
+    res.status(500).json({ error: 'could not postpone' });
   }
 });
 

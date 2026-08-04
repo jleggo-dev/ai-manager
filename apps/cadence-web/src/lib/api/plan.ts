@@ -17,6 +17,8 @@ export interface ActiveEpisode {
   type: 'travel' | 'illness' | 'injury' | 'recovery' | 'custom';
   start: string;
   end: string;
+  /** Answered — by words, photo, or at entry. Empty-list "no gym" counts; silence does not. */
+  gearKnown: boolean;
 }
 export interface PlanDay {
   date: string;
@@ -226,4 +228,39 @@ export async function addGoalEvent(goalId: string, label: string): Promise<void>
     headers: headers(),
     body: JSON.stringify({ goal_id: goalId, label }),
   });
+}
+
+/** The detour's equipment answer as pictures: parse what the gym photos show and re-draft the
+ *  remaining days around it. 409 = no active detour. */
+export async function sendGymPhotos(
+  photos: string[],
+): Promise<{ ok: boolean; saw?: string[]; revised?: boolean; note?: string }> {
+  const res = await fetch(`${BASE}/plan/episode/equipment-photo`, {
+    method: 'POST',
+    headers: { ...headers(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ photos }),
+  });
+  if (!res.ok) return { ok: false };
+  const body = (await res.json()) as { saw: string[]; revised: boolean; note?: string };
+  return { ok: true, ...body };
+}
+
+/** The arrival card's gear answer in words — [] is the explicit "no gym here". */
+export async function sendDetourEquipment(
+  equipment: { name: string }[],
+): Promise<{ ok: boolean; revised?: boolean; note?: string }> {
+  const res = await fetch(`${BASE}/plan/episode/equipment`, {
+    method: 'POST',
+    headers: { ...headers(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ equipment }),
+  });
+  if (!res.ok) return { ok: false };
+  return { ok: true, ...((await res.json()) as { revised: boolean; note?: string }) };
+}
+
+/** Arrival day but not arrived: push the detour's start a day. Past the end, it cancels. */
+export async function postponeDetour(): Promise<{ ok: boolean; cancelled?: boolean }> {
+  const res = await fetch(`${BASE}/plan/episode/not-yet`, { method: 'POST', headers: headers() });
+  if (!res.ok) return { ok: false };
+  return { ok: true, ...((await res.json()) as { cancelled?: boolean }) };
 }

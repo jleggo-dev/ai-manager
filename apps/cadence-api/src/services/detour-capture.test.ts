@@ -13,10 +13,14 @@ const getActiveEpisode = vi.fn();
 const enterEpisode = vi.fn();
 vi.mock('../ai/aim.ts', () => ({ runJobBySlug: (...a: unknown[]) => runJobBySlug(...a) }));
 vi.mock('../repos/episodes.ts', () => ({ getActiveEpisode: (...a: unknown[]) => getActiveEpisode(...a) }));
-vi.mock('./episode.ts', () => ({ enterEpisode: (...a: unknown[]) => enterEpisode(...a) }));
+const reviseEpisodeEquipment = vi.fn();
+vi.mock('./episode.ts', () => ({
+  enterEpisode: (...a: unknown[]) => enterEpisode(...a),
+  reviseEpisodeEquipment: (...a: unknown[]) => reviseEpisodeEquipment(...a),
+}));
 
-const { runDetourCapture, normalizeDetour } = await import('./detour-capture.ts');
-const { hasDetourSignal } = await import('./detour-signal.ts');
+const { runDetourCapture, normalizeDetour, normalizeEquipmentUpdate } = await import('./detour-capture.ts');
+const { hasDetourSignal, hasEquipmentSignal } = await import('./detour-signal.ts');
 
 const CONFIRMED = JSON.stringify({
   detour: {
@@ -47,10 +51,11 @@ describe('the deterministic gate', () => {
     expect(hasDetourSignal('User: what should i eat before a run')).toBe(false);
   });
 
-  it('an active episode short-circuits BEFORE the job — also what makes re-capture a no-op', async () => {
-    getActiveEpisode.mockResolvedValue({ type: 'travel' });
+  it('an active episode flips to update mode — entering is off the table', async () => {
+    getActiveEpisode.mockResolvedValue({ type: 'travel', start: '2026-08-04', end: '2026-08-09' });
+    // Arrangement talk with no equipment in it: quiet, no job.
     const out = await runDetourCapture('u1', 'User: about that trip — yes, set it up');
-    expect(out.reason).toBe('episode_active');
+    expect(out.reason).toBe('no_signal');
     expect(runJobBySlug).not.toHaveBeenCalled();
     expect(enterEpisode).not.toHaveBeenCalled();
   });
@@ -123,5 +128,75 @@ describe('nothing from the model is trusted', () => {
     enterEpisode.mockResolvedValue(null);
     const out = await runDetourCapture('u1', 'User: trip… Coach: detour? User: yes');
     expect(out).toEqual({ ran: true, entered: false, reason: 'no_plan' });
+  });
+});
+
+describe('update mode — the equipment answer arrives mid-window', () => {
+  const ACTIVE = { type: 'travel', start: '2026-08-04', end: '2026-08-09', available_equipment: [] };
+
+  it('revises the remaining days when the user reports the gym', async () => {
+    getActiveEpisode.mockResolvedValue(ACTIVE);
+    reviseEpisodeEquipment.mockResolvedValue({ revised: true, reason: 'revised' });
+    runJobBySlug.mockResolvedValue({
+      formatted: JSON.stringify({ detour: null, equipment_update: [{ name: 'dumbbells' }, { name: 'rower' }] }),
+    });
+    const out = await runDetourCapture('u1', 'User: ok im here, the gym has dumbbells and a rower');
+    expect(out.reason).toBe('equipment_revised');
+    expect(reviseEpisodeEquipment).toHaveBeenCalledWith('u1', [{ name: 'dumbbells' }, { name: 'rower' }]);
+    expect(enterEpisode).not.toHaveBeenCalled();
+  });
+
+  it('the job is TOLD about the episode, so it can tell new from repeated', async () => {
+    getActiveEpisode.mockResolvedValue(ACTIVE);
+    reviseEpisodeEquipment.mockResolvedValue({ revised: true, reason: 'revised' });
+    runJobBySlug.mockResolvedValue({
+      formatted: JSON.stringify({ detour: null, equipment_update: [{ name: 'bike' }] }),
+    });
+    await runDetourCapture('u1', 'User: theres an exercise bike here');
+    const vars = runJobBySlug.mock.calls[0]?.[2] as { active_episode?: string };
+    expect(JSON.parse(vars.active_episode ?? '{}').type).toBe('travel');
+  });
+
+  it('"nothing here" is a real answer — an explicit empty list re-drafts to bodyweight', () => {
+    expect(normalizeEquipmentUpdate(JSON.stringify({ detour: null, equipment_update: [] }))).toEqual([]);
+  });
+
+  it('silence about equipment is null, never an accidental wipe', () => {
+    expect(normalizeEquipmentUpdate(JSON.stringify({ detour: null, equipment_update: null }))).toBeNull();
+    expect(normalizeEquipmentUpdate(JSON.stringify({ detour: null }))).toBeNull();
+  });
+
+  it('same names again reports unchanged — the churn guard downstream', async () => {
+    getActiveEpisode.mockResolvedValue({ ...ACTIVE, available_equipment: [{ name: 'dumbbells' }] });
+    reviseEpisodeEquipment.mockResolvedValue({ revised: false, reason: 'unchanged' });
+    runJobBySlug.mockResolvedValue({
+      formatted: JSON.stringify({ detour: null, equipment_update: [{ name: 'dumbbells' }] }),
+    });
+    const out = await runDetourCapture('u1', 'User: like i said, dumbbells in the gym');
+    expect(out.reason).toBe('equipment_unchanged');
+  });
+
+  it('gym talk gates in only while an episode is active', () => {
+    expect(hasEquipmentSignal('User: the gym here has a bench and weights')).toBe(true);
+    expect(hasEquipmentSignal('User: how was your day')).toBe(false);
+  });
+});
+
+describe('a detour agreed in advance is scheduled, not started', () => {
+  it('a stated arrival date passes through to enterEpisode', async () => {
+    runJobBySlug.mockResolvedValue({
+      formatted: JSON.stringify({
+        detour: { type: 'travel', start: '2026-08-06', end: '2026-08-10', available_equipment: [], confirmed: true },
+      }),
+    });
+    await runDetourCapture('u1', 'User: travelling thursday to monday… Coach: detour? User: yes');
+    expect(enterEpisode).toHaveBeenCalledWith('u1', expect.objectContaining({ start: '2026-08-06' }));
+  });
+
+  it('a malformed start is dropped — entering begins today, never on garbage', () => {
+    const raw = JSON.stringify({
+      detour: { type: 'travel', start: 'thursday', confirmed: true, available_equipment: [] },
+    });
+    expect(normalizeDetour(raw)?.start).toBeUndefined();
   });
 });

@@ -394,3 +394,20 @@ export async function setOccurrenceStatus(
       where user_id = ${userId} and occurrence_id = ${occurrenceId}`;
   }
 }
+
+/** Un-pause base occurrences on ONE day — the "not arrived yet" push (a scheduled detour's first
+ *  day returns to the plan when arrival slips). Targeted so nothing else moves. */
+export async function restorePausedOccurrencesOn(userId: string, date: string): Promise<number> {
+  const res = await sql`
+    update cadence.occurrences set status = 'pending'
+    where user_id = ${userId} and status = 'paused' and date = ${date}`;
+  return res.count;
+}
+
+/** Drop an episode's pending temp occurrences on ONE day — the other half of the arrival push. */
+export async function deleteTempOccurrencesOn(userId: string, episodeId: string, date: string): Promise<number> {
+  const res = await sql`
+    delete from cadence.occurrences
+    where user_id = ${userId} and episode_id = ${episodeId} and date = ${date} and status = 'pending'`;
+  return res.count;
+}

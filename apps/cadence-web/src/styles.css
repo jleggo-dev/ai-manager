@@ -1312,3 +1312,5 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .detour-go { border: none; border-radius: 12px; padding: 9px 16px; font-size: 13px; font-weight: 900;
   background: oklch(45% 0.14 266); color: #fff; cursor: pointer; }
 .detour-go:disabled { opacity: 0.5; cursor: default; }
+/* What the gym photo saw — the coach's one line under the detour card. */
+.detour-saw { font-size: 12px; font-weight: 700; color: oklch(45% 0.14 266); padding: 6px 2px 0; }

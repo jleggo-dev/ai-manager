@@ -55,3 +55,35 @@ export function hasDetourSignal(window: string): boolean {
   const text = window.toLowerCase();
   return SIGNALS.some((s) => text.includes(s));
 }
+
+/**
+ * The UPDATE-mode gate, used only while an episode is ACTIVE: does the window sound like someone
+ * reporting what they have with them? Split from `hasDetourSignal` on purpose — words like "gym"
+ * saturate ordinary training talk, so gating on them all the time would run the Broker job on
+ * half of all conversations. While on a detour, they are exactly the signal that the missing
+ * equipment answer has finally arrived ("ok I'm here, the gym has dumbbells and a rower").
+ */
+const EQUIPMENT_SIGNALS = [
+  'gym',
+  'equipment',
+  'dumbbell',
+  'barbell',
+  'kettlebell',
+  'treadmill',
+  'rower',
+  'rowing machine',
+  'bike',
+  'weights',
+  'machines',
+  'band',
+  'bench',
+  'pool',
+  'nothing here',
+  'no gym',
+  'just my shoes',
+];
+
+export function hasEquipmentSignal(window: string): boolean {
+  const text = window.toLowerCase();
+  return EQUIPMENT_SIGNALS.some((s) => text.includes(s));
+}

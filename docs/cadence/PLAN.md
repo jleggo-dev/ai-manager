@@ -1887,6 +1887,20 @@ them before.
    job, which also makes re-reading the same exchange next turn a no-op. Its own job rather than
    a seventh key on capture-extract — already the widest schema in the system (REQ10 §11), and
    one job/one surface is the law for exactly this reason.
+   **The arrival model (owner, same day):** a detour agreed in ADVANCE is *scheduled*, not
+   started — "I'm travelling Thursday" said on Monday pauses nothing until Thursday (the contract
+   carries `start`; `enterEpisode` honours it; before it the card reads "Detour ahead", and the
+   plan runs as normal). On the start date the card becomes the **arrival check-in** — "Have you
+   arrived? What have you got?" — because that is where the equipment answer actually lives:
+   gear chips, **"Snap the gym"** (photos → `parse-gym-photo` vision job → names; PLAN §424
+   finally built), an explicit **"No gym here"** (an empty list is an answer and re-drafts to
+   equipment-free days), or **"Not yet"**, which pushes the start a day — today's shelved
+   sessions come back, the end stays put, and a push past the end cancels (a window with no days
+   left is not a detour). All three doors — words in chat, chips on the card, photos — feed ONE
+   revision machine (`reviseEpisodeEquipment`): re-draft the remaining days only, lived days stay
+   as history, and a deterministic same-names guard stops the rolling chat window re-drafting the
+   week every turn. `gearKnown` (equipment present, or `constraints.gear_confirmed`) is what
+   tells "answered: nothing" from "never answered".
 
 **Week-gap re-baseline:** after ~**7**+ dark days (or a long episode), offer a coach re-baseline
 (`action:'rebaseline'`) rather than silently resuming the old plan.

@@ -98,8 +98,16 @@ export interface ContextSelectResult {
  * form-filler (REQ10 §11) — the coach converses, this contract is how the Broker acts on it.
  */
 export interface CaptureDetourResult {
+  /** While an episode is ACTIVE the job flips modes: `detour` stays null (one detour at a time)
+   *  and this carries the arrived equipment answer — "ok, the gym has dumbbells and a rower" —
+   *  their words, only when newly stated in the window. Null in enter mode and in silence. */
+  equipment_update?: Array<{ name: string }> | null;
   detour: {
     type: 'travel' | 'illness' | 'injury' | 'recovery' | 'custom';
+    /** Arrival date (YYYY-MM-DD) when the trip starts LATER — "I'm travelling Thursday" said on
+     *  Monday. Null/absent means it has already begun. A scheduled detour pauses nothing until
+     *  this date; the app checks in on arrival for the equipment answer (owner, 2026-08-04). */
+    start?: string;
     /** Window length in days when no explicit end date was stated. */
     days?: number;
     /** Explicit end date (YYYY-MM-DD) when the user gave real dates. */

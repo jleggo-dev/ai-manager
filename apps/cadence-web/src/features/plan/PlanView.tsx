@@ -10,6 +10,7 @@ import { TrailHeader } from '../today/TrailHeader.tsx';
 import { TodayFoodSheet } from '../nutrition/TodayFoodSheet.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
 import type { DetourChoice } from './DetourSetup.tsx';
+import { downscalePhoto } from './occurrence/format.ts';
 import { PlanWeekPanel } from './PlanWeekPanel.tsx';
 import {
   getPlan,
@@ -23,9 +24,21 @@ import {
   type PlanViewData,
   type PlanOccurrence,
   type ActiveEpisode,
+  sendGymPhotos,
+  sendDetourEquipment,
+  postponeDetour,
 } from '../../lib/api.ts';
 
 /** Warm label for a detour type — the coach names the disruption plainly (BRAND.md). */
+/** Local calendar day — the detour card's clock is the user's day, not UTC. */
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** One-tap answers for the arrival card; DetourSetup keeps its own copy for the entry sheet. */
+const ARRIVAL_GEAR = ['Hotel gym', 'Dumbbells', 'Treadmill', 'Resistance band', 'Pool', 'Just my shoes'];
+
 function detourLabel(type: ActiveEpisode['type']): string {
   return {
     travel: 'traveling',
@@ -147,6 +160,62 @@ export function PlanView({
     bump();
   }
 
+  // The gym photos → equipment revision (PLAN §424). Several angles are ONE answer: files
+  // accumulate here and send as one request; the banner shows what the model saw.
+  const [gymBusy, setGymBusy] = useState(false);
+  const [gymSaw, setGymSaw] = useState<string | null>(null);
+  async function sendGym(files: FileList | null) {
+    if (!files?.length || gymBusy) return;
+    setGymBusy(true);
+    setGymSaw(null);
+    try {
+      const photos = await Promise.all([...files].slice(0, 4).map((f) => downscalePhoto(f)));
+      const r = await sendGymPhotos(photos);
+      if (r.ok && r.saw) {
+        setGymSaw(
+          r.saw.length
+            ? `I can see: ${r.saw.join(', ')}.${r.revised ? ' Reworking your week around it.' : ''}`
+            : 'Looks like a bare room — keeping things equipment-free.',
+        );
+        if (r.revised) {
+          refresh();
+          bump();
+        }
+      } else {
+        setGymSaw("Couldn't read that photo — try another angle?");
+      }
+    } catch {
+      setGymSaw("Couldn't read that photo — try another angle?");
+    } finally {
+      setGymBusy(false);
+    }
+  }
+
+  // Arrival-day answers (owner, 2026-08-04): the card asks once, on the scheduled start.
+  const [arrivalGear, setArrivalGear] = useState<string[]>([]);
+  async function confirmArrivalGear(explicitNone: boolean) {
+    if (gymBusy) return;
+    setGymBusy(true);
+    try {
+      const list = explicitNone ? [] : arrivalGear.map((name) => ({ name }));
+      const r = await sendDetourEquipment(list);
+      if (r.ok) {
+        setGymSaw(
+          explicitNone ? 'Equipment-free it is — reworking your days.' : 'Got it — reworking your days around that.',
+        );
+        refresh();
+        bump();
+      }
+    } finally {
+      setGymBusy(false);
+    }
+  }
+  async function notArrivedYet() {
+    await postponeDetour().catch(() => {});
+    refresh(); // today's sessions come back; the card returns tomorrow
+    bump();
+  }
+
   async function endDetour() {
     await endEpisode().catch(() => {});
     refresh(); // base plan resumes; the banner clears
@@ -216,7 +285,72 @@ export function PlanView({
             onDismiss={dismissProp}
           />
         )}
-        {data.activeEpisode && (
+        {data.activeEpisode && todayIso() < data.activeEpisode.start && (
+          <div className="detour">
+            <div className="detour-t">
+              <b>Detour ahead — {detourLabel(data.activeEpisode.type)}</b>
+              <span>
+                Starts {data.activeEpisode.start}. Your plan runs as normal until then; I&apos;ll check in when it
+                begins.
+              </span>
+            </div>
+            <div className="detour-actions">
+              <button className="detour-end" onClick={endDetour}>
+                Cancel it
+              </button>
+            </div>
+          </div>
+        )}
+        {data.activeEpisode && todayIso() >= data.activeEpisode.start && !data.activeEpisode.gearKnown && (
+          <div className="detour">
+            <div className="detour-t">
+              <b>Detour day — {detourLabel(data.activeEpisode.type)}</b>
+              <span>Have you arrived? Tell me what you&apos;ve got and I&apos;ll shape the days around it.</span>
+            </div>
+            <div className="detour-chips">
+              {ARRIVAL_GEAR.map((g) => (
+                <button
+                  key={g}
+                  className={`detour-chip ${arrivalGear.includes(g) ? 'on' : ''}`}
+                  aria-pressed={arrivalGear.includes(g)}
+                  onClick={() => setArrivalGear((a) => (a.includes(g) ? a.filter((x) => x !== g) : [...a, g]))}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+            <div className="detour-actions">
+              {arrivalGear.length > 0 && (
+                <button className="adjust-pill" disabled={gymBusy} onClick={() => void confirmArrivalGear(false)}>
+                  {gymBusy ? 'Working…' : "That's what I've got"}
+                </button>
+              )}
+              <label className="adjust-pill" title="Snap the gym — I'll work out what's there">
+                {gymBusy ? 'Looking…' : '📷 Snap the gym'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  hidden
+                  disabled={gymBusy}
+                  onChange={(e) => {
+                    void sendGym(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              <button className="adjust-pill" disabled={gymBusy} onClick={() => void confirmArrivalGear(true)}>
+                No gym here
+              </button>
+              <button className="detour-end" onClick={() => void notArrivedYet()}>
+                Not yet
+              </button>
+            </div>
+            {gymSaw && <div className="detour-saw">{gymSaw}</div>}
+          </div>
+        )}
+        {data.activeEpisode && todayIso() >= data.activeEpisode.start && data.activeEpisode.gearKnown && (
           <div className="detour">
             <div className="detour-t">
               <b>On a detour — {detourLabel(data.activeEpisode.type)}</b>
@@ -229,10 +363,27 @@ export function PlanView({
               <button className="adjust-pill" onClick={checkInNow}>
                 Check in
               </button>
+              {/* The equipment answer as pictures — parsed into names, the week re-drafts. */}
+              <label className="adjust-pill" title="Snap the gym — I'll rework the week around what's there">
+                {gymBusy ? 'Looking…' : '📷 Snap the gym'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  hidden
+                  disabled={gymBusy}
+                  onChange={(e) => {
+                    void sendGym(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
               <button className="detour-end" onClick={endDetour}>
                 I&apos;m back
               </button>
             </div>
+            {gymSaw && <div className="detour-saw">{gymSaw}</div>}
           </div>
         )}
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}

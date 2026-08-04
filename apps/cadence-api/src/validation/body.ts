@@ -299,3 +299,18 @@ export const patchBaselineBodySchema = z
       })),
     };
   });
+
+/** The detour's gym photos — data-URL images only, and few: several angles of ONE gym are one
+ *  answer. Size/type limits are enforced downstream by parsePhotoDataUrl, same as meal photos. */
+export const episodePhotoBodySchema = z.object({
+  photos: z
+    .array(z.string().refine((s) => s.startsWith('data:image/'), { message: 'photos must be data:image URLs' }))
+    .min(1)
+    .max(4),
+});
+
+/** The arrival card's gear answer in words. Empty is legitimate: "no gym here" re-drafts to
+ *  equipment-free days — an answer, not an accident (the card sends it only on an explicit tap). */
+export const episodeEquipmentBodySchema = z.object({
+  equipment: z.array(z.object({ name: z.string().min(1).max(60) })).max(20),
+});

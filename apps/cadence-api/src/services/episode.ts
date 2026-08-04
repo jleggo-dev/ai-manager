@@ -3,13 +3,22 @@ import { runJob } from '../ai/aim.ts';
 import { cadenceConfig } from '../config.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities, insertActivities } from '../repos/activities.ts';
-import { getActiveEpisode, insertEpisode, endActiveEpisode } from '../repos/episodes.ts';
+import {
+  getActiveEpisode,
+  insertEpisode,
+  endActiveEpisode,
+  updateEpisodeEquipment,
+  updateEpisodeStart,
+  mergeEpisodeConstraints,
+} from '../repos/episodes.ts';
 import { getUser, setPendingProposal } from '../repos/users.ts';
 import {
   pauseUserOccurrencesInWindow,
   restorePausedOccurrencesFrom,
   insertTempOccurrences,
   deleteFutureTempOccurrences,
+  restorePausedOccurrencesOn,
+  deleteTempOccurrencesOn,
 } from '../repos/occurrences.ts';
 import { normalizeTempActivity, computeTempOccurrenceDates } from './episode-overlay.ts';
 
@@ -38,6 +47,10 @@ function parseJson(text: string): Record<string, unknown> | null {
 
 export interface EnterEpisodeInput {
   type: DisruptedEpisode['type'];
+  /** Arrival date for a detour agreed in ADVANCE (owner, 2026-08-04). The plan pauses only from
+   *  this date — agreeing on Monday to a Thursday trip must not shelve Tuesday's session. Past or
+   *  absent → today. */
+  start?: string;
   end?: string; // explicit end date; else start + days
   days?: number; // window length when `end` is omitted
   tone?: DisruptedEpisode['tone'];
@@ -98,7 +111,8 @@ export async function enterEpisode(
   const plan = await getActivePlan(userId);
   if (!plan) return null;
 
-  const start = todayIso();
+  const today = todayIso();
+  const start = input.start && input.start > today ? input.start : today;
   const end = input.end ?? addDaysIso(start, input.days ?? DEFAULT_EPISODE_DAYS);
   const available_equipment = input.available_equipment ?? [];
   const constraints = input.constraints ?? {};
@@ -136,6 +150,95 @@ export async function enterEpisode(
   }
 
   return { episode, note };
+}
+
+/**
+ * Revise the ACTIVE episode's equipment mid-window — the "I'll only know when I get there" case
+ * (owner, 2026-08-04). A detour is entered when the schedule is known; the gear often isn't until
+ * someone is standing in the hotel gym. When it lands — said to the coach, or parsed from a photo
+ * — the remaining days get re-drafted around what is actually there. Days already lived stay as
+ * honest history, the same rule `endEpisode` follows.
+ *
+ * The churn guard is deterministic and comes first: the conversational path re-reads a rolling
+ * window every turn, so "the gym has dumbbells" would otherwise re-draft the week on every message
+ * until the words scrolled out. Same names (case-insensitive, any order) → nothing happens.
+ */
+export async function reviseEpisodeEquipment(
+  userId: string,
+  equipment: Array<{ name: string }>,
+): Promise<{ revised: boolean; reason: 'no_episode' | 'unchanged' | 'revised'; note?: string }> {
+  const active = await getActiveEpisode(userId);
+  if (!active) return { revised: false, reason: 'no_episode' };
+
+  const names = (list: Array<{ name?: string }>) =>
+    [...new Set(list.map((e) => (e.name ?? '').trim().toLowerCase()).filter(Boolean))].sort().join('|');
+  if (names(equipment) === names(active.available_equipment ?? [])) return { revised: false, reason: 'unchanged' };
+
+  const plan = await getActivePlan(userId);
+  if (!plan) return { revised: false, reason: 'no_episode' };
+
+  // Re-draft only what is still ahead: from today (or the start, if the window hasn't begun) to
+  // the end. Future temp options are replaced; past ones are lived history and stay.
+  const today = todayIso();
+  const from = today > active.start ? today : active.start;
+  const baseActivities = await listActivities(plan.plan_id);
+  const { temp, note } = await draftTempActivities(
+    userId,
+    {
+      type: active.type,
+      start: from,
+      end: active.end,
+      available_equipment: equipment,
+      constraints: active.constraints,
+    },
+    baseActivities,
+  );
+
+  await updateEpisodeEquipment(userId, active.episode_id, equipment, temp);
+  // The arrival card keys off this: [] as an ANSWER ("no gym here") must read differently from
+  // [] as silence, and equipment alone cannot carry that distinction.
+  await mergeEpisodeConstraints(userId, active.episode_id, { gear_confirmed: true });
+  await deleteFutureTempOccurrences(userId, active.episode_id, from);
+  if (temp.length) {
+    const inserted = await insertActivities(userId, plan.plan_id, temp);
+    const rows = inserted.flatMap((a) =>
+      computeTempOccurrenceDates(a.schedule?.recurrence, from, active.end).map((date) => ({
+        activity_id: a.activity_id,
+        user_id: userId,
+        date,
+        episode_id: active.episode_id,
+      })),
+    );
+    await insertTempOccurrences(rows);
+  }
+  return { revised: true, reason: 'revised', note };
+}
+
+/**
+ * Arrival day, but they haven't arrived — push the scheduled detour's start one day (owner,
+ * 2026-08-04: "the application prompts me if I've arrived yet"). Targeted: the old first day's
+ * base occurrences return to the plan, that day's temp options go, the end date stays put — a
+ * late flight doesn't extend the trip. A push past the end cancels the whole detour instead:
+ * a window with no days left isn't a detour.
+ */
+export async function postponeEpisodeStart(
+  userId: string,
+): Promise<{ postponed: boolean; cancelled?: boolean; start?: string }> {
+  const active = await getActiveEpisode(userId);
+  if (!active) return { postponed: false };
+  const today = todayIso();
+  // Only meaningful ON/AFTER the scheduled start — before it there is nothing to push.
+  if (today < active.start) return { postponed: false };
+
+  const newStart = addDaysIso(active.start, 1);
+  if (newStart > active.end) {
+    await endEpisode(userId);
+    return { postponed: true, cancelled: true };
+  }
+  await restorePausedOccurrencesOn(userId, active.start);
+  await deleteTempOccurrencesOn(userId, active.episode_id, active.start);
+  await updateEpisodeStart(userId, active.episode_id, newStart);
+  return { postponed: true, start: newStart };
 }
 
 /**

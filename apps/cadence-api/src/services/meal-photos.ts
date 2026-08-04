@@ -63,3 +63,23 @@ export async function purgeMealPhotos(userId: string): Promise<void> {
     if (paths.length) await storage.from(BUCKET).remove(paths);
   }
 }
+
+/**
+ * A gym photo — the detour's equipment answer as a picture (PLAN §424, built 2026-08-04). Lives in
+ * the same private bucket under `<userId>/gym/…` so purge stays one folder walk; unlike a meal, it
+ * is parsed once into equipment names and never shown back, so no ref is stored anywhere.
+ */
+export async function putGymPhoto(userId: string, dataUrl: string): Promise<string> {
+  const parsed = parsePhotoDataUrl(dataUrl);
+  if (!parsed.ok) throw new Error(`invalid photo: ${parsed.reason}`);
+  const storage = cadenceServiceClient().storage;
+  const path = `${userId}/gym/${crypto.randomUUID()}.${parsed.ext}`;
+  const upload = () => storage.from(BUCKET).upload(path, parsed.buffer, { contentType: parsed.mime, upsert: false });
+  let { error } = await upload();
+  if (error && /bucket/i.test(error.message) && /not.*found/i.test(error.message)) {
+    await storage.createBucket(BUCKET, { public: false }).catch(() => {});
+    ({ error } = await upload());
+  }
+  if (error) throw new Error(`gym photo upload failed: ${error.message}`);
+  return path;
+}

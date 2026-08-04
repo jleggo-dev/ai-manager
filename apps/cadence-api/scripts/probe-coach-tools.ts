@@ -36,7 +36,7 @@ import {
   type SessionItemTool,
 } from '@cadence/shared';
 import { normalizeSession } from '../src/services/session-normalize.ts';
-import { normalizeDetour } from '../src/services/detour-capture.ts';
+import { normalizeDetour, normalizeEquipmentUpdate } from '../src/services/detour-capture.ts';
 import { flag, finish, parseJson, runJob, tally } from './probe-lib.ts';
 
 /* ══ 1 · prescribe-session — the coach composing with the full palette ═══════════════════════ */
@@ -385,7 +385,14 @@ async function probeNowMenu(): Promise<void> {
 /** The conversational door's one hard rule, probed live: a detour exists ONLY on an explicit yes
  *  to the coach's offer. A mention is conversation; a retracted yes is a no. Runs through
  *  `normalizeDetour`, so what passes here is known to reach `enterEpisode` intact. */
-const DETOURS: Array<{ name: string; window: string; expectEntered: boolean; check?: (d: NonNullable<ReturnType<typeof normalizeDetour>>) => void }> = [
+const DETOURS: Array<{
+  name: string;
+  window: string;
+  expectEntered: boolean;
+  activeEpisode?: string;
+  expectUpdate?: string[] | null;
+  check?: (d: NonNullable<ReturnType<typeof normalizeDetour>>) => void;
+}> = [
   {
     name: 'confirmed · trip + gear + explicit yes',
     expectEntered: true,
@@ -398,6 +405,8 @@ const DETOURS: Array<{ name: string; window: string; expectEntered: boolean; che
     ].join('\n'),
     check(d) {
       if (d.type !== 'travel') flag(`detour type "${d.type}", expected travel`);
+      // "thursday through monday" said on Tue 2026-08-04: the trip is SCHEDULED, not started.
+      if (d.start !== '2026-08-06') flag(`arrival start ${d.start ?? 'missing'}, expected 2026-08-06`);
       const names = d.available_equipment.map((e) => e.name.toLowerCase()).join(', ');
       if (!names.includes('dumbbell')) flag(`equipment missed the dumbbells: [${names}]`);
       if (names.includes('barbell')) flag('invented home equipment into the trip');
@@ -420,17 +429,50 @@ const DETOURS: Array<{ name: string; window: string; expectEntered: boolean; che
       'User: yeah okay — actually no, leave the plan as is, ill just do what i can',
     ].join('\n'),
   },
+  {
+    name: 'update · on the detour, the gym answer arrives',
+    expectEntered: false,
+    activeEpisode: JSON.stringify({ type: 'travel', start: '2026-08-04', end: '2026-08-09', available_equipment: [] }),
+    expectUpdate: ['dumbbell', 'rower'],
+    window: [
+      'User: ok made it to the hotel. gym is tiny lol',
+      'Coach: Tiny works. What have they got?',
+      'User: dumbbells up to like 20kg and a rower. thats it',
+    ].join('\n'),
+  },
+  {
+    name: 'update · already on a detour, a NEW trip mention must not re-enter',
+    expectEntered: false,
+    activeEpisode: JSON.stringify({ type: 'travel', start: '2026-08-04', end: '2026-08-09', available_equipment: [{ name: 'dumbbells' }] }),
+    expectUpdate: null,
+    window: [
+      'User: btw next month i might be in tokyo for work, the gym situation there is probably better',
+      'Coach: Noted — let\u2019s sort that when it\u2019s close.',
+    ].join('\n'),
+  },
 ];
 
 async function probeDetours(): Promise<void> {
   for (const c of DETOURS) {
     console.log(`\n── detour · ${c.name}`);
-    const raw = await runJob('capture-detour', { conversation_window: c.window, today: '2026-08-04' });
+    const raw = await runJob('capture-detour', { conversation_window: c.window, today: '2026-08-04', active_episode: c.activeEpisode ?? '' });
     const input = normalizeDetour(raw);
     console.log(`   → ${input ? `${input.type}, days=${input.days ?? '—'} end=${input.end ?? '—'}, gear=[${input.available_equipment.map((e) => e.name).join(', ')}]` : 'null (nothing entered)'}`);
     if (c.expectEntered && !input) flag('expected a confirmed detour, got none');
     if (!c.expectEntered && input) flag(`entered a detour nobody agreed to (${input.type})`);
     if (input && c.check) c.check(input);
+    if (c.activeEpisode !== undefined) {
+      const update = normalizeEquipmentUpdate(raw);
+      console.log(`   → update: ${update ? `[${update.map((e) => e.name).join(', ')}]` : 'null'}`);
+      if (c.expectUpdate === null && update) flag(`invented an equipment update: [${update.map((e) => e.name).join(', ')}]`);
+      if (Array.isArray(c.expectUpdate)) {
+        if (!update) flag('expected an equipment update, got none');
+        else {
+          const names = update.map((e) => e.name.toLowerCase()).join(', ');
+          for (const want of c.expectUpdate) if (!names.includes(want)) flag(`update missed "${want}": [${names}]`);
+        }
+      }
+    }
   }
 }
 

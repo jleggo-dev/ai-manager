@@ -21,8 +21,8 @@
 import type { CaptureDetourResult } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
-import { enterEpisode } from './episode.ts';
-import { hasDetourSignal } from './detour-signal.ts';
+import { enterEpisode, reviseEpisodeEquipment } from './episode.ts';
+import { hasDetourSignal, hasEquipmentSignal } from './detour-signal.ts';
 
 const EPISODE_TYPES = new Set(['travel', 'illness', 'injury', 'recovery', 'custom']);
 const MAX_DAYS = 60;
@@ -31,12 +31,51 @@ const MAX_EQUIPMENT = 20;
 export interface DetourCaptureOutcome {
   ran: boolean;
   entered: boolean;
-  reason: 'no_signal' | 'episode_active' | 'no_agreement' | 'invalid' | 'no_plan' | 'entered';
+  reason:
+    | 'no_signal'
+    | 'no_agreement'
+    | 'invalid'
+    | 'no_plan'
+    | 'entered'
+    | 'equipment_revised'
+    | 'equipment_unchanged'
+    | 'no_update';
+}
+
+/** Trim, de-junk and cap an equipment list from the model — shared by both modes. */
+function clampEquipment(raw: unknown): Array<{ name: string }> {
+  return (Array.isArray(raw) ? raw : [])
+    .map((e) =>
+      e && typeof (e as { name?: unknown }).name === 'string'
+        ? String((e as { name: string }).name)
+            .trim()
+            .slice(0, 60)
+        : '',
+    )
+    .filter(Boolean)
+    .slice(0, MAX_EQUIPMENT)
+    .map((name) => ({ name }));
+}
+
+/** The update-mode read: the arrived equipment answer, or null. Exported for tests. */
+export function normalizeEquipmentUpdate(raw: string): Array<{ name: string }> | null {
+  let parsed: CaptureDetourResult;
+  try {
+    parsed = JSON.parse(raw) as CaptureDetourResult;
+  } catch {
+    return null;
+  }
+  const list = parsed?.equipment_update;
+  if (!Array.isArray(list)) return null;
+  const cleaned = clampEquipment(list);
+  // An explicit empty list is a REAL answer ("nothing here, no gym") — it re-drafts to bodyweight.
+  return cleaned.length || list.length === 0 ? cleaned : null;
 }
 
 /** Parse + clamp the job's output into an `enterEpisode` input, or null. Exported for tests. */
 export function normalizeDetour(raw: string): {
   type: 'travel' | 'illness' | 'injury' | 'recovery' | 'custom';
+  start?: string;
   days?: number;
   end?: string;
   available_equipment: Array<{ name: string }>;
@@ -57,14 +96,11 @@ export function normalizeDetour(raw: string): {
       ? Math.min(MAX_DAYS, Math.max(1, Math.round(d.days)))
       : undefined;
   const end = typeof d.end === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.end) ? d.end : undefined;
+  // A stated arrival date schedules the detour (owner, 2026-08-04): nothing pauses until then.
+  // Malformed or past dates drop to undefined — entering begins today, never retroactively.
+  const start = typeof d.start === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.start) ? d.start : undefined;
 
-  const available_equipment = (Array.isArray(d.available_equipment) ? d.available_equipment : [])
-    .map((e) => (e && typeof e.name === 'string' ? e.name.trim().slice(0, 60) : ''))
-    .filter(Boolean)
-    .slice(0, MAX_EQUIPMENT)
-    .map((name) => ({ name }));
-
-  return { type: d.type, days, end, available_equipment };
+  return { type: d.type, start, days, end, available_equipment: clampEquipment(d.available_equipment) };
 }
 
 /**
@@ -72,13 +108,40 @@ export function normalizeDetour(raw: string): {
  * a detour landing one turn late is fine; a chat turn blocking on it is not.
  */
 export async function runDetourCapture(userId: string, conversationWindow: string): Promise<DetourCaptureOutcome> {
+  const active = await getActiveEpisode(userId);
+
+  // UPDATE mode — the "I'll only know when I get there" case (owner, 2026-08-04): a detour was
+  // entered on schedule alone, and the equipment answer arrives mid-window. The job is told about
+  // the active episode and may ONLY report newly-stated equipment; entering is off the table (one
+  // detour at a time), which is also what keeps re-reading the old confirmed exchange a no-op.
+  // The deterministic churn guard lives in reviseEpisodeEquipment: same names, nothing happens.
+  if (active) {
+    if (!hasEquipmentSignal(conversationWindow)) return { ran: false, entered: false, reason: 'no_signal' };
+    const res = await runJobBySlug(userId, 'capture-detour', {
+      conversation_window: conversationWindow,
+      active_episode: JSON.stringify({
+        type: active.type,
+        start: active.start,
+        end: active.end,
+        available_equipment: active.available_equipment ?? [],
+      }),
+    });
+    const update = normalizeEquipmentUpdate(String(res.formatted ?? res.raw ?? 'null'));
+    if (!update) return { ran: true, entered: false, reason: 'no_update' };
+    const r = await reviseEpisodeEquipment(userId, update);
+    return {
+      ran: true,
+      entered: false,
+      reason: r.reason === 'revised' ? 'equipment_revised' : 'equipment_unchanged',
+    };
+  }
+
+  // ENTER mode — no episode yet; consent is the only trigger.
   if (!hasDetourSignal(conversationWindow)) return { ran: false, entered: false, reason: 'no_signal' };
-
-  // Cheaper than the job and fails closed: already on a detour means nothing to capture — and it
-  // is what makes re-reading the same confirmed exchange next turn a no-op.
-  if (await getActiveEpisode(userId)) return { ran: false, entered: false, reason: 'episode_active' };
-
-  const res = await runJobBySlug(userId, 'capture-detour', { conversation_window: conversationWindow });
+  const res = await runJobBySlug(userId, 'capture-detour', {
+    conversation_window: conversationWindow,
+    active_episode: '',
+  });
   const input = normalizeDetour(String(res.formatted ?? res.raw ?? 'null'));
   if (!input) return { ran: true, entered: false, reason: 'no_agreement' };
 
