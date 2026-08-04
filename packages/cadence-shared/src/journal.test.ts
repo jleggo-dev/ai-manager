@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   JOURNAL_BANKS,
   JOURNAL_DISCLOSURE,
+  bankFamily,
   isJournalBankId,
   isJournalMode,
   isShareableGratitude,
@@ -11,9 +12,25 @@ import {
 } from './journal.ts';
 
 describe('the banks', () => {
-  it('ships six banks, each one question with a reviewed pool', () => {
-    expect(JOURNAL_BANKS).toHaveLength(6);
+  it('ships twelve banks, each one question with a reviewed pool', () => {
+    expect(JOURNAL_BANKS).toHaveLength(12);
     for (const b of JOURNAL_BANKS) expect(b.phrasings.length).toBeGreaterThanOrEqual(4);
+  });
+
+  // The guarantee that matters isn't a count — it's that someone whose practice is writing a
+  // novel, studying, or a devotional discipline opens the picker and finds something that fits.
+  // Shipping reflection-only banks told three of those four they were in the wrong app.
+  it('covers every practice family, not just reflection', () => {
+    const families = new Set(JOURNAL_BANKS.map(bankFamily));
+    expect([...families].sort()).toEqual(['craft', 'devotion', 'reflection', 'study']);
+    for (const f of ['craft', 'devotion', 'study'] as const) {
+      expect(JOURNAL_BANKS.filter((b) => bankFamily(b) === f).length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('defaults the six original banks to reflection', () => {
+    expect(bankFamily(journalBank('three_good_things')!)).toBe('reflection');
+    expect(bankFamily(journalBank('free_write')!)).toBe('craft');
   });
 
   it("index 0 is Design's primary line, verbatim", () => {

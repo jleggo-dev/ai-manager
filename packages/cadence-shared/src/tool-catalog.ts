@@ -26,7 +26,7 @@ import type { StepToolKind } from './walkthrough.ts';
 import { BREATH_PATTERNS, patternCounts } from './breathing.ts';
 import { DEFAULT_SIT_MINUTES, MAX_SIT_MINUTES, MEDITATE_BELL_KINDS } from './meditate.ts';
 import { GROUNDING_GAMES, GROUNDING_NAMES } from './grounding.ts';
-import { JOURNAL_BANKS } from './journal.ts';
+import { JOURNAL_BANKS, bankFamily, type JournalFamily } from './journal.ts';
 
 /** The `SessionItem` quantity/detail fields a tool reads — named so the coach fills the right ones. */
 export type ItemField =
@@ -139,7 +139,7 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
     summary:
       'they write or speak an entry, which is kept in their journal. This is the tool for ANY writing practice, not only reflection: a novelist free-writing a scene, morning pages, a studio or practice log, a language learner\'s daily paragraph, lectio divina or a daily examen, working a problem out on the page. Either name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own prompt in detail — your sentence always wins, and for creative or craft work it usually should ("Free-write a haunted house scene with a cartoon character you loved as a kid")',
     notWhen:
-      "this keeps real words in a place they can reread — do not use it for a yes/no or a number, and never promise to analyse what they write. The banks lean reflective, so do NOT reach for them when the person's practice is craft, study, or devotional — write the prompt their practice actually calls for instead",
+      'this keeps real words in a place they can reread — do not use it for a yes/no or a number, and never promise to analyse what they write. The banks are a floor, not a menu you are limited to: match the bank FAMILY to the practice they are actually doing (a novelist gets craft, never gratitude), and whenever you can write something better fitted to this person and this week, write it',
     reads: ['journal_bank', 'detail'],
     example: { name: 'Three good things', tool: 'journal', journal_bank: 'three_good_things' },
   },
@@ -195,8 +195,18 @@ export function renderCoachToolCatalog(): string {
   }
   lines.push('', 'SET FLOW — how each block\'s sets are sequenced. Set each block\'s "mode":');
   for (const mode of BLOCK_MODE_KINDS) lines.push(`  • ${mode} — ${SET_FLOWS[mode].summary}`);
-  lines.push('', 'JOURNAL BANKS — the only values "journal_bank" accepts:');
-  for (const b of JOURNAL_BANKS) lines.push(`  • ${b.id} — ${b.label}`);
+  lines.push(
+    '',
+    'JOURNAL BANKS — the only values "journal_bank" accepts, grouped by the practice they serve.',
+    'Pick from the family that matches what this person actually does; a prompt you write yourself',
+    'in "detail" beats any of them when you know enough to fit it to them.',
+  );
+  for (const fam of ['reflection', 'craft', 'study', 'devotion'] as JournalFamily[]) {
+    const inFamily = JOURNAL_BANKS.filter((b) => bankFamily(b) === fam);
+    if (inFamily.length === 0) continue;
+    lines.push(`  ${fam}:`);
+    for (const b of inFamily) lines.push(`    • ${b.id} — ${b.label}`);
+  }
   lines.push('', 'GROUNDING GAMES — the only values "grounding_game" accepts:');
   for (const g of GROUNDING_GAMES) lines.push(`  • ${g} — ${GROUNDING_NAMES[g]}`);
   lines.push('  "letters" also reads "grounding_bank": animals | foods | cities.');

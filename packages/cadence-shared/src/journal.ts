@@ -20,9 +20,28 @@
  */
 
 export type JournalBankId =
-  'three_good_things' | 'park_a_worry' | 'a_win' | 'savor_it' | 'smallest_next_thing' | 'whats_actually_true';
+  | 'three_good_things'
+  | 'park_a_worry'
+  | 'a_win'
+  | 'savor_it'
+  | 'smallest_next_thing'
+  | 'whats_actually_true'
+  | 'free_write'
+  | 'practice_log'
+  | 'what_you_learned'
+  | 'explain_it_back'
+  | 'sit_with_a_line'
+  | 'day_reviewed';
 
 export type JournalMode = 'typed' | 'spoken' | 'paper';
+
+/**
+ * What KIND of practice a bank serves. The journal is a writing tool, not a feelings tool (REQ9
+ * §4.5) — a novelist, a student and someone with a devotional practice are all doing the same
+ * thing with it, and shipping only reflection banks quietly told three of those four they were in
+ * the wrong app.
+ */
+export type JournalFamily = 'reflection' | 'craft' | 'study' | 'devotion';
 
 export interface JournalBank {
   id: JournalBankId;
@@ -33,6 +52,13 @@ export interface JournalBank {
   /** Gratitude-family banks carry the share-out affordance (trigger = the kept prompt, never
    *  content inspection — the correction Design made in review). */
   gratitude?: boolean;
+  /** Absent means `reflection` — the six original banks predate the split. */
+  family?: JournalFamily;
+}
+
+/** A bank's practice family, with the documented default applied. */
+export function bankFamily(bank: JournalBank): JournalFamily {
+  return bank.family ?? 'reflection';
 }
 
 export const JOURNAL_BANKS: readonly JournalBank[] = [
@@ -97,6 +123,87 @@ export const JOURNAL_BANKS: readonly JournalBank[] = [
       'What would you tell a friend who told you this thought?',
       'Write the thought down, then write what the evidence says.',
       "What's the kinder reading of today that is still honest?",
+    ],
+  },
+
+  // ── craft ──────────────────────────────────────────────────────────────────────────────────
+  {
+    id: 'free_write',
+    label: 'Free-write',
+    family: 'craft',
+    phrasings: [
+      'Write for ten minutes without stopping — no fixing as you go.',
+      'Start in the middle of a scene and write until it turns.',
+      'Describe a place you know well to someone who has never been there.',
+      "Write the conversation you didn't get to have.",
+      'Take the last thing that surprised you and make it fiction.',
+    ],
+  },
+  {
+    id: 'practice_log',
+    label: 'What you made',
+    family: 'craft',
+    phrasings: [
+      'What did you work on, and where did you leave it?',
+      "What's the first thing you'll do when you sit down again?",
+      'What worked today that you want to keep?',
+      'What were you stuck on, and what did you try?',
+      'How long did you actually work, and what pulled you away?',
+    ],
+  },
+
+  // ── study ──────────────────────────────────────────────────────────────────────────────────
+  {
+    id: 'what_you_learned',
+    label: 'What you learned',
+    family: 'study',
+    phrasings: [
+      "What's one thing you understand today that you didn't yesterday?",
+      'What did you get wrong, and what was the misunderstanding underneath it?',
+      "Which part still doesn't fit together?",
+      'What would you need to look up to go one step further?',
+      "Write today's idea in a sentence a twelve-year-old would follow.",
+    ],
+  },
+  {
+    id: 'explain_it_back',
+    label: 'Explain it back',
+    family: 'study',
+    phrasings: [
+      "Explain today's idea in your own words, without looking at your notes.",
+      'Teach it to someone who knows nothing about it. Where do you stumble?',
+      "What's the simplest example that shows why this matters?",
+      "Where does your explanation go vague? That's the part you don't have yet.",
+      'What question would catch you out if someone asked it right now?',
+    ],
+  },
+
+  // ── devotion ───────────────────────────────────────────────────────────────────────────────
+  // Shaped by lectio divina and the examen, written so they work for someone with a religious
+  // practice AND someone without one — REQ9 §1: "without the religious context (unless you were
+  // using it for religious reasons)". Nothing here names a tradition or assumes belief.
+  {
+    id: 'sit_with_a_line',
+    label: 'Sit with a line',
+    family: 'devotion',
+    phrasings: [
+      'Take one line from what you read. Which word stays with you?',
+      'Read it again slowly. What does it ask of you today?',
+      'What in it did you resist?',
+      'Write the line out, then write what it means to you now.',
+      'What would today look like if you took it seriously?',
+    ],
+  },
+  {
+    id: 'day_reviewed',
+    label: 'The day, looked back over',
+    family: 'devotion',
+    phrasings: [
+      'Walk back through the day. Where were you most yourself?',
+      'What are you grateful for, and what are you sorry for?',
+      'Where did you turn toward something good, and where away from it?',
+      'Which moment would you live again, and what would you do differently?',
+      'What do you want to carry into tomorrow?',
     ],
   },
 ];

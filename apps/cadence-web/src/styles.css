@@ -1215,7 +1215,12 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
   color: oklch(42% 0.03 266); cursor: pointer; }
 .jw-paper { align-self: center; border: none; background: none; font-size: 12px; font-weight: 800;
   color: oklch(55% 0.02 150); cursor: pointer; padding: 6px; }
-.jw-picker { display: flex; flex-direction: column; gap: 8px; }
+/* Scrolls because the bank list outgrew the sheet: 12 banks (4 practice families) at ~66px each
+   is ~790px against the ~605px `.sheet` max-height leaves on a 375x812 screen, so without this the
+   last families are clipped and unreachable — devotion would simply not exist for a phone user.
+   flex-shrink: 0 keeps rows at full height instead of squashing them to fit. */
+.jw-picker { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; }
+.jw-picker .jw-bank { flex-shrink: 0; }
 .jw-picker-head { font-size: 15px; font-weight: 800; color: oklch(30% 0.02 150); margin-bottom: 2px; }
 .jw-bank { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%;
   text-align: left; background: #fff; border: 1px solid oklch(90% 0.02 85); border-radius: 14px;
