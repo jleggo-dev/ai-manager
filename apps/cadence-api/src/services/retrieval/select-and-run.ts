@@ -3,7 +3,7 @@
  * (MEMORY-ARCHITECTURE.md §4.1 / §4.3).
  *
  * Both the standing context pack (`context-pack.ts`) and per-turn just-in-time retrieval
- * (`turn-context.ts`) ask a Scribe job for function names, then validate + execute app-side.
+ * (`turn-context.ts`) ask a Broker job for function names, then validate + execute app-side.
  * The model never reaches an unknown function and never runs queries.
  */
 import { RETRIEVAL_FUNCTIONS } from './registry.ts';

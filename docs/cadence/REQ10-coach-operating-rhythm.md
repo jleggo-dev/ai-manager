@@ -39,7 +39,7 @@ neutral doors; the coach decides what's behind them per person.
 
 | Horizon | Machinery (as built) | Status |
 |---|---|---|
-| **Goal** (months→years) | goals + milestone/target/recurring, Scribe capture, goal cap + focus budget | ✅ |
+| **Goal** (months→years) | goals + milestone/target/recurring, Broker capture, goal cap + focus budget | ✅ |
 | **Path** (month by month) | — nothing first-class. Per-activity progression exists; the *phased arc* between goal and week does not | ❌ gap §5 |
 | **Week** (routine) | the living plan: synthesize → vet → commit; RRULE occurrences; consistency; the weekly check-in **as a plan occurrence** | ✅ |
 | **Day** (composition) | day-recap (request+cache), prescribe-session (request+cache, catalog-fed), per-meal tasks, goal-aware ＋ (past tense), the now door (present tense — REQ9 §3, being designed) | ✅ + §6 |
@@ -204,7 +204,7 @@ SMS. Today Cadence can only speak when the app is open, so **every nudge depends
 - Tick cadence + quiet hours; per-user opt-in surface (Settings? the coach asks?).
 - Does the now-menu learn from taps (rank by use) or stay purely coach-authored? (Leaning:
   coach-authored, use-signal in the pack.)
-- When chat *changes the situation* mid-week, what marks the now-menu stale — Scribe emitting a
+- When chat *changes the situation* mid-week, what marks the now-menu stale — Broker emitting a
   `situation_changed` flag, or re-compose on every chat close? (Cost vs freshness.)
 
 ## 11. Output discipline — one job, one surface (added 2026-08-03)
@@ -217,7 +217,7 @@ populate many surfaces invites hallucinated or silently-empty core fields. The c
    `compose-now-menu` returns one list for one sheet section. `prescribe-session` returns one
    session for one occurrence — never a week. `capture-extract` writes profile deltas and nothing
    else. Each has its own trigger, cache, and failure mode. **The conversational coach populates
-   no structured fields at all** — chat is chat, and the Scribe extracts out-of-band from the
+   no structured fields at all** — chat is chat, and the Broker extracts out-of-band from the
    transcript (the two-speed split: the talker is never also the form-filler).
 2. **Provider-level schema.** Schema-bearing jobs run strict native json_schema on gpt-class
    models (the CLAUDE.md rule), plus AI Admin formatting rules (remove-reasoning, trim-to-json,
@@ -236,7 +236,7 @@ populate many surfaces invites hallucinated or silently-empty core fields. The c
    never trusted from coach text, so a row can't promise five minutes and deliver ten.
 
 **Evidence (2026-08-03):** the live probe — six prescribe scenarios in user voice (wants, bans,
-and traps), two Scribe transcripts written the way people actually type, one now-menu register
+and traps), two Broker transcripts written the way people actually type, one now-menu register
 check — ran twice against prod with **zero violations**: every ban held, every parameter valid,
 nothing invented, no feeling_log stacked on a grounding close. The same harness caught the
 now-menu label bug ("Box breathing" as a row label) the day the job first ran live.

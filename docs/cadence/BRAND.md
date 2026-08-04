@@ -98,7 +98,7 @@ allowed to differ — that's the pattern working, not an inconsistency.
 | Disruptions | `detours` (cause + duration) | **Life happened? Let's take a detour** | cause is always named plainly (say "grief", never euphemize) |
 | Weekly readout | `recap` | **Your weekly check-in** | two-way: report, then ask how the week went |
 | Context pack | `memory_pack` | **What Cadence remembers about you** | the moat, surfaced as the trust screen |
-| Broker (capture AI) | `Scribe` | not surfaced; UI says "Cadence takes notes while you talk" | internal name that leaks safely |
+| Broker (capture AI) | `Broker` — the Scribe rename is **reverted** (owner ruling 2026-08-04) | never surfaced; UI describes the behaviour ("Cadence takes notes while you talk") without ever naming the entity | a hidden entity needs no display name. "Internal name that leaks safely" solved a problem that doesn't exist: to the user there is only the coach, and the Broker is the technical way we deliver that. Do not reintroduce "Scribe" |
 | Streaks | **returned as a protected counter** atop the rolling window `kept_count / window`; state in `users.streak_state` (current/longest/freezes) | "5 of 7 this week" **+** a streak count; a **freeze** absorbs an ordinary slip, a **detour**/check-in shields a rough patch — never "streak lost" for living | freezes + `paused` (episode) days + `skipped` vs `missed` keep it from punishing life; design in PLAN.md "Req 4" |
 | Coach | `coach` (unchanged) | your coach | the category word; does double duty |
 | Baseline | `baseline` (unchanged) | Baseline | reads as "bassline" — free brand story |

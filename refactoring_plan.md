@@ -113,7 +113,7 @@ numbers verbatim.
 |---|---|---|---|
 | **Root `package.json` workspaces exclude all of Cadence; `npm install` would delete Cadence's linked packages** | Reports 05 §1, 06 §1 (independently confirmed) | **INFRA-01** | ✅ Done (PR #3) |
 | **Frontend/backend type drift (`CallingApplication`/`DiagnosticLog` vs. their `*Row` counterparts)** — SD2/SD3 | Reports 01 §5, 02 §3/§5, 05 §5 | **FE-10** | ✅ Done (PR #42) |
-| **`Broker` → `Scribe` rename (exported DevTrace field names + shared contracts module)** | Report 03/04/05 | **CROSS-01** | ✅ Done (PR #30) |
+| **`Broker` → `Scribe` rename (exported DevTrace field names + shared contracts module)** | Report 03/04/05 | **CROSS-01** | ✅ Done (PR #30) — **REVERTED 2026-08-04** (owner): Broker is the name; a hidden entity needs no display name |
 | **SSE line-buffering/parsing logic independently reimplemented 3+ times** | Reports 01/03/05 | **CROSS-02** | ✅ Done (BE-02 #18 + API-03 #25) |
 | **Template-interpolation logic reimplemented independently** instead of using canonical helpers | Report 02 §1.4/§4.1 (3× inside frontend) | FE-01/FE-03 sub-tasks | ✅ Done with those items |
 | **No data-fetching cache layer anywhere React is used** — hand-rolled `useState`+`useEffect`+manual error notification, duplicated fetches | Report 02 §6 (AI Admin frontend), Report 04 §6 (Cadence web) | **CROSS-03** | ✅ Done both halves — AI Admin providers list (#49) + Cadence nutrition-day (#50) |
@@ -391,6 +391,11 @@ merge log (originally via `feat/cadence`, then `main`):
 >   (+ core package header) (PR #30). DevTrace fields `scribeSelect`/`scribeSummarize`;
 >   `broker-contracts.ts` → `scribe-contracts.ts`. Persisted mode strings `broker-curated`/
 >   `broker-partial` and profile slug `cadence-broker` left unchanged (audit trail / live IDs).
+>   **REVERTED 2026-08-04** (owner ruling): Broker is the name and always was — it is a hidden
+>   entity that never needed a display name, and the rename only created drift against the
+>   persisted `broker-*` values and `cadence-broker` slug it could never touch. Everything is
+>   re-normalised to Broker (`broker-contracts.ts`, `brokerSelect`/`brokerSummarize`, prompts,
+>   docs); storage and code now agree again. Canonical ruling: BRAND.md nomenclature table.
 > - **API-04** — test-first nutrition backfill: extract `parseMealResult`/`wantsTargets`, unit +
 >   DB integration tests for `logMeal` fallback/provisional and `getBaselineRead` cost-control /
 >   propose gates (`refactor/api-04-nutrition-tests`, PR #33).
@@ -494,7 +499,7 @@ merge log (originally via `feat/cadence`, then `main`):
 
 ### 4.3 Cross-cutting items (span multiple areas — assign to one owner, coordinate with affected area owners)
 
-#### CROSS-01 — `Broker` → `Scribe` rename [P1] — ✅ **Done** (PR #30)
+#### CROSS-01 — `Broker` → `Scribe` rename [P1] — ✅ Done (PR #30) · **REVERTED 2026-08-04** — Broker is the name (owner ruling; see BRAND.md). This section is history: do not "restore consistency" toward Scribe from it.
 
 **Was:** BRAND.md's `Broker`→`Scribe` rename had not propagated to exported DevTrace field names
 (`brokerSelect`/`brokerSummarize`) or the shared contracts module title.

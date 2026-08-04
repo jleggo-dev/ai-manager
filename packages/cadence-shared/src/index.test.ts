@@ -3,7 +3,7 @@ import { isGoalArea, GOAL_AREAS, type GoalArea } from './index.ts';
 
 /**
  * `@cadence/shared` is a types-only package by design — the one runtime export
- * (`isGoalArea`) exists specifically to guard raw Scribe/model output before the
+ * (`isGoalArea`) exists specifically to guard raw Broker/model output before the
  * app trusts it as a `GoalArea` (see the file's §5.1 header comment). This is the
  * seam most likely to receive an unexpected string from an LLM, so it's the
  * highest-leverage smoke test available in this package today.

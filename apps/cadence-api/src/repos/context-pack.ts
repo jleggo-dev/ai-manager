@@ -43,7 +43,7 @@ export async function insertContextPack(p: InsertContextPack): Promise<string | 
  * outside like a shipped optimisation; that is how PLAN §12 came to list pack-reuse as further
  * along than it was.
  *
- * Reuse is still worth having — building a pack costs TWO Scribe calls (select, then summarize)
+ * Reuse is still worth having — building a pack costs TWO Broker calls (select, then summarize)
  * before the coach starts replying, on every single turn. But the read was never the hard part.
  * The hard part is knowing when a pack has gone stale, and getting that wrong breaks the one
  * promise the product makes loudest: a coach working from a cached briefing would forget what you

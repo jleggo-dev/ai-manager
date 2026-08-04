@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════
-   §C4 Scribe job contracts — flat top-level JSON. Assert app-side.
+   §C4 Broker job contracts — flat top-level JSON. Assert app-side.
    ════════════════════════════════════════════════════════════════ */
 
 import type { Baseline } from './baseline.ts';

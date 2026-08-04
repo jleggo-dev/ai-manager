@@ -34,8 +34,8 @@ async function main() {
 
     console.log('trace.context.mode :', t?.context?.mode);
     console.log('trace.provenance   :', t?.context?.provenance?.map((p) => `${p.fn}(${p.rows})`).join(', '));
-    console.log('trace.scribeSelect :', t?.scribeSelect?.reason ?? '(fallback)');
-    console.log('trace.scribeSumm   :', (t?.scribeSummarize?.output || '(fallback)').slice(0, 70).replace(/\n/g, ' '));
+    console.log('trace.brokerSelect :', t?.brokerSelect?.reason ?? '(fallback)');
+    console.log('trace.brokerSumm   :', (t?.brokerSummarize?.output || '(fallback)').slice(0, 70).replace(/\n/g, ' '));
     console.log('trace.data keys    :', Object.keys(t?.context?.data ?? {}).join(', '));
     console.log('persona first line :', (persona || '(none)').split('\n')[0]);
 

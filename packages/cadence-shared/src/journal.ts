@@ -7,7 +7,7 @@
  * reread. Two rules organize everything (journal-brief):
  *
  *   • **Words in, words back — never analysis.** The store shows your sentences as you wrote
- *     them. No sentiment, no themes, no counts, no streaks, anywhere in the module. (The Scribe
+ *     them. No sentiment, no themes, no counts, no streaks, anywhere in the module. (The Broker
  *     may extract coaching context behind the scenes — from non-secret entries only — but that
  *     is invisible here.)
  *   • **Secret means secret, entirely.** The key locks an entry against the coach, not against

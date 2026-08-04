@@ -30,7 +30,7 @@
  * HOT PATH — request-time surface (Cadence API runtime / aim.ts)
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Engine: Scribe (templated jobs) ─────────────────────────── */
+/* ── Engine: Broker (templated jobs) ─────────────────────────── */
 export {
   executeJob,
   executeJobById,

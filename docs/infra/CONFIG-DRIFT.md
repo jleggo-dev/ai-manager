@@ -6,7 +6,7 @@
 
 ## Problem
 
-`config/ai-admin/ai-admin.config.json` is the source of truth for Cadence job prompts/schemas, but live AI Admin is updated only when someone runs `sync-jobs.ts` / `provision-aim.ts`. Silent divergence = production coach/Scribe behavior that no longer matches git.
+`config/ai-admin/ai-admin.config.json` is the source of truth for Cadence job prompts/schemas, but live AI Admin is updated only when someone runs `sync-jobs.ts` / `provision-aim.ts`. Silent divergence = production coach/Broker behavior that no longer matches git.
 
 ## What already existed
 

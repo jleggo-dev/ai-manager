@@ -47,7 +47,7 @@ export interface Goal {
   status: GoalStatus;
   linked_equipment: string[];
   source: 'captured' | 'manual';
-  confidence?: number; // Scribe extraction confidence
+  confidence?: number; // Broker extraction confidence
   plan_mode?: 'coach' | 'deterministic'; // how this goal's fitness sessions are programmed (default 'coach'):
   // 'coach' = AI programs each session; 'deterministic' = a progression engine computes them (eval + monthly rebuild stay AI)
 }

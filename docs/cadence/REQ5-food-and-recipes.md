@@ -415,7 +415,7 @@ one implementation, two entry points.** USDA is the first concrete tool:
   serving units) into a `Food` (`source='usda'`, shared/global — public authoritative data). Called by
   the Resolver on cache-miss and by the Insight layer for micros. No LLM in the fetch.
 - **Now (retrieval tool):** `lookup_food` in the coach retrieval registry — same
-  `searchFoodsWithUsda` path the Food tab uses (local + USDA cache). Scribe can select it; the app
+  `searchFoodsWithUsda` path the Food tab uses (local + USDA cache). Broker can select it; the app
   executes it. Deterministic; no LLM job wrapping HTTP. OFF barcodes stay on the browser path.
 - **Later (agentic writes):** `resolve_food`, `log_meal`, `get_nutrition_day`, `build_recipe` as
   tools next to non-food ones (`enter_detour`). "Oatmeal and blueberries" → resolve (may call USDA)

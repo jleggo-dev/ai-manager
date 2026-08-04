@@ -37,7 +37,7 @@ function Card({
   );
 }
 
-type Section = 'ctx' | 'prompts' | 'coach' | 'scribe' | 'history';
+type Section = 'ctx' | 'prompts' | 'coach' | 'broker' | 'history';
 
 const Label = ({ children }: { children: ReactNode }) => <div className="devlabel">{children}</div>;
 // `dump` boxes long reference blobs (persona, raw JSON, capture, log rows) in their own capped,
@@ -58,7 +58,7 @@ export function DevPanel() {
     ctx: true,
     prompts: true,
     coach: true,
-    scribe: true,
+    broker: true,
     history: false,
   });
   const toggle = (k: Section) => setOpen((o) => ({ ...o, [k]: !o[k] }));
@@ -138,11 +138,11 @@ export function DevPanel() {
         )}
       </Card>
 
-      <Card title="4 · Scribe responses" tone="iris" open={open.scribe} onToggle={() => toggle('scribe')}>
+      <Card title="4 · Broker responses" tone="iris" open={open.broker} onToggle={() => toggle('broker')}>
         <Label>pack-select (chose functions)</Label>
-        <Pre>{t?.scribeSelect ? json(t.scribeSelect) : '— (deterministic fallback)'}</Pre>
+        <Pre>{t?.brokerSelect ? json(t.brokerSelect) : '— (deterministic fallback)'}</Pre>
         <Label>pack-summarize (rendered block)</Label>
-        <Pre>{t?.scribeSummarize?.output ?? '— (deterministic fallback)'}</Pre>
+        <Pre>{t?.brokerSummarize?.output ?? '— (deterministic fallback)'}</Pre>
         <Label>context-select (per-turn just-in-time fns)</Label>
         <Pre>
           {t?.turnSelect

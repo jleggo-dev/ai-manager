@@ -32,7 +32,7 @@ const GearIcon = () => (
  * only the user's turns get a bubble, so the type can breathe. Two chromes: 'onboarding' (floating
  * Review pill + the AI disclaimer footer, its own full-screen shell) and 'none' (the Coach TAB,
  * hosted inside MainTabs' .app shell, with a floating settings gear via `onSettings`). Streams the
- * Coach over SSE; the Scribe captures goals/equipment in the background. Session/stream logic
+ * Coach over SSE; the Broker captures goals/equipment in the background. Session/stream logic
  * lives in `useCoachChat` so drop-recovery is unit-testable without this chrome.
  */
 export function OnboardingChat({

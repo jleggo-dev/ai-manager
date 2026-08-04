@@ -26,7 +26,7 @@ Conceptual overlap is real (streaming chat + session id). Implementation overlap
 
 ## Why a shared helper is not worth it now
 
-1. **Different event contracts.** Test Chat is a multi-provider / tool-auth debugger. Cadence coach is a single product stream with server-side Scribe and client-side drop recovery. Sharing a “chat stream hook” would either drag Cadence into tool/OAuth complexity or strip Test Chat of what makes it useful.
+1. **Different event contracts.** Test Chat is a multi-provider / tool-auth debugger. Cadence coach is a single product stream with server-side Broker and client-side drop recovery. Sharing a “chat stream hook” would either drag Cadence into tool/OAuth complexity or strip Test Chat of what makes it useful.
 2. **Different session lifecycles.** Cadence owns freshness (`stale` / `graduated`), 409-safe send, and GET `/coach/current` recovery. Test Chat owns profile-scoped sessions and `submitChatToolOutputs` resume. Those are not the same abstraction.
 3. **FE-11 already extracted the AI Admin side.** `useTestChatStream` + `lib/test-chat-stream` are the right seam for admin. Cadence already extracted `coach-sse.ts` (WEB-02). Further sharing would cross the Cadence ↔ AI Admin client boundary the monorepo deliberately keeps one-way (Cadence → AI Admin engine, not shared UI packages).
 4. **`packages/client` is the wrong home.** Its `parseSseText` is whole-buffer parsing for external integrators, not incremental UI streaming. Populating it with Cadence/TestChat helpers would recreate the “internal reuse of integrator packages” anti-pattern (report 05).

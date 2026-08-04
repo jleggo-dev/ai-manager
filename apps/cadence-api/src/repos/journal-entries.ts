@@ -7,7 +7,7 @@ import type { JournalEntry } from '@cadence/shared';
  *   • **Words are verbatim.** `body` is stored exactly as written (length-capped at the route,
  *     never rewritten). Nothing here summarizes, scores, or counts for any UI.
  *   • **Secret means secret, entirely** (REQ9 §8). `listForCoach` is the ONLY reader context
- *     packs and Scribe parsing may use — it excludes secret rows in SQL, so an entry locked
+ *     packs and Broker parsing may use — it excludes secret rows in SQL, so an entry locked
  *     retroactively drops out of the very next pack build. `listEntries` (the owner's own store
  *     view) returns everything, secrets included, because the key locks against the coach,
  *     not against you.

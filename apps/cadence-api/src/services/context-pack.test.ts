@@ -1,9 +1,9 @@
 /**
- * API-06 — resilience-contract tests for buildContextPack's 3-way Scribe fallback.
+ * API-06 — resilience-contract tests for buildContextPack's 3-way Broker fallback.
  *
  * Modes (persisted audit trail; historical `broker-*` prefix kept on purpose):
  *   - broker-curated  — pack-select AND pack-summarize both succeed
- *   - broker-partial  — exactly one of the two Scribe steps succeeds
+ *   - broker-partial  — exactly one of the two Broker steps succeeds
  *   - deterministic   — both fail → intent selection + renderResults
  *
  * AI seam + catalog + persist/trace/log are mocked so CI runs without Cadence DB / AIM secrets.
@@ -54,7 +54,7 @@ vi.mock('./coach-context.ts', () => ({
 
 import { buildContextPack } from './context-pack.ts';
 
-function selectOk(calls: Array<{ fn: string; params?: Record<string, unknown> }>, reason = 'scribe pick') {
+function selectOk(calls: Array<{ fn: string; params?: Record<string, unknown> }>, reason = 'broker pick') {
   return { formatted: JSON.stringify({ calls, reason }) };
 }
 
@@ -111,7 +111,7 @@ describe('API-06 — buildContextPack 3-way fallback', () => {
   it('mode=broker-partial when select fails but summarize succeeds', async () => {
     stubs.runJobBySlug.mockImplementation(async (_uid: string, slug: string) => {
       if (slug === 'pack-select') throw new Error('select boom');
-      if (slug === 'pack-summarize') return summarizeOk('Deterministic fns, scribe prose.');
+      if (slug === 'pack-summarize') return summarizeOk('Deterministic fns, broker prose.');
       throw new Error(`unexpected slug ${slug}`);
     });
 
@@ -121,12 +121,12 @@ describe('API-06 — buildContextPack 3-way fallback', () => {
 
     expect(pack.mode).toBe('broker-partial');
     expect(pack.selectReason).toBe('(deterministic selection)');
-    expect(pack.rendered).toContain('Deterministic fns, scribe prose.');
+    expect(pack.rendered).toContain('Deterministic fns, broker prose.');
   });
 
-  it('mode=deterministic when both Scribe steps fail', async () => {
+  it('mode=deterministic when both Broker steps fail', async () => {
     stubs.runJobBySlug.mockImplementation(async () => {
-      throw new Error('scribe down');
+      throw new Error('broker down');
     });
 
     const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -154,7 +154,7 @@ describe('API-06 — buildContextPack 3-way fallback', () => {
     expect(pack.selectReason).toBe('(deterministic selection)');
   });
 
-  it('always appends mandatory get_identity + get_constraints even if Scribe omitted them', async () => {
+  it('always appends mandatory get_identity + get_constraints even if Broker omitted them', async () => {
     stubs.runJobBySlug.mockImplementation(async (_uid: string, slug: string) => {
       if (slug === 'pack-select') return selectOk([{ fn: 'get_objectives' }], 'objectives only');
       if (slug === 'pack-summarize') return summarizeOk('summary');

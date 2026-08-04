@@ -38,7 +38,7 @@ Warm words in the UI; boring stable words in schema/prompts. A brand refresh nev
 | `consistency` (replaces `adherence`) | "how you showed up this week" |
 | `detours` (replaces disruptions) | "Life happened? Let's take a detour" |
 | `recap` (replaces weekly readout) | "Your weekly check-in" |
-| `Scribe` (replaces Broker, internal only) | UI: "Cadence takes notes while you talk" |
+| `Broker` (the Scribe rename is reverted — owner 2026-08-04; a hidden entity, internal only) | UI describes the behaviour ("Cadence takes notes while you talk"), never the entity — to the user there is only the coach |
 | unchanged: `coach`, `baseline`, `occurrences`, `milestone/target/recurring` | |
 
 **Banned:** "captured" in user copy; `beats`/`instruments`/`tempo changes` anywhere; `tools` as a
@@ -70,7 +70,7 @@ field name; `resources`/`limits` for constraints; streaks that reset to zero; we
 - Job prompt changes in `config/ai-admin/ai-admin.config.json` are NOT live until synced
   (`apps/cadence-api/scripts/sync-jobs.ts` — jobs-only; `provision-aim.ts` re-syncs profiles too
   and can clobber live model pointers).
-- Broker/Scribe model: strict native json_schema is ~free on OpenAI models, ~2.2× slower on
+- Broker model: strict native json_schema is ~free on OpenAI models, ~2.2× slower on
   gemini via Devs.ai v2 — keep schema-based jobs on gpt-class models.
 - Devs.ai silently removes model ids; keep primary AND failover on catalog-verified models
   (`apps/cadence-api/scripts/list-v2-models.ts`).

@@ -32,7 +32,7 @@ chained practices (evening review, thought-reframe) that write their steps *into
 **1 · The journal shows your words back; it never shows analysis of them.** The store is
 reverse-chron rereading — your own sentences, as you wrote them. No sentiment colours, no theme
 clusters, no charts, no writing streak inside the module. (Gratitude consistency surfaces in the
-*recap*, in the coach's voice — never as a scoreboard here.) The Scribe does extract themes to
+*recap*, in the coach's voice — never as a scoreboard here.) The Broker does extract themes to
 case notes behind the scenes (`parse_mind_log`), but that is coaching context, invisible in this
 UI. `feeling_log` earned "nowhere to look at your feelings"; the journal earns the opposite —
 **somewhere to reread your words** — and the line between the two is *words in, words back;
@@ -40,7 +40,7 @@ never words in, judgments back.*
 
 **2 · Private means private — entirely.** The coach reads entries by default, and says so
 plainly once, at first use: *"I keep your notes so I can know you better — mark anything private
-and I won't use it."* The per-entry lock excludes an entry from context packs **and from Scribe
+and I won't use it."* The per-entry lock excludes an entry from context packs **and from Broker
 parsing entirely** (REQ9 §8 resolved this: no safety-scan, no aggregate signal, nothing). The
 toggle works retroactively — locking an entry later removes it from future packs. Design the
 lock so it feels like closing a drawer, not like flagging a risk.

@@ -18,7 +18,7 @@ export interface EpisodeOverride {
  * untouched on `end`. `type: 'custom'` covers
  * non-fitness life events (a wedding, a bereavement) where tone matters more than
  * equipment. `available_equipment` is confirmed for the episode — e.g. the user
- * photographs a hotel gym and the Scribe/Coach parses it into equipment.
+ * photographs a hotel gym and the Broker/Coach parses it into equipment.
  */
 export interface DisruptedEpisode {
   episode_id: string;

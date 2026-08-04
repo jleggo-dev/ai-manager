@@ -1,12 +1,12 @@
 /**
  * Context pack builder (MEMORY-ARCHITECTURE.md §4.3–4.4).
  *
- * P2: the Scribe CURATES the pack via two auditable AI Admin jobs —
+ * P2: the Broker CURATES the pack via two auditable AI Admin jobs —
  *   1. pack-select   : reads the catalog (functions + data stats) → chooses which retrieval
  *                      functions to call. The app validates the choice against the registry
  *                      and EXECUTES them (the semantic layer; the model never touches the DB).
  *   2. pack-summarize: turns the executed results into a compact grounding block.
- * Each step falls back to the deterministic P1 path if the Scribe fails, so the coach never
+ * Each step falls back to the deterministic P1 path if the Broker fails, so the coach never
  * breaks. The pack is persisted with provenance (which functions ran, the select reason, the
  * mode) and injected as the end-of-prefix context turn.
  */
@@ -20,7 +20,7 @@ import { insertContextPack, type ProvenanceEntry } from '../repos/context-pack.t
 import { updateTrace } from './dev-trace.ts';
 import { logAi } from './ai-log.ts';
 
-/** Deterministic fallback selection per intent (used only if the Scribe select fails). */
+/** Deterministic fallback selection per intent (used only if the Broker select fails). */
 const INTENT_SELECTION: Record<CoachIntent, string[]> = {
   onboarding: ['get_identity', 'get_objectives', 'get_constraints', 'get_equipment'],
   initial: ['get_identity', 'get_objectives', 'get_active_plan', 'get_constraints', 'get_dietary_profile'],
@@ -43,7 +43,7 @@ const INTENT_SELECTION: Record<CoachIntent, string[]> = {
   ],
 };
 
-/** Safety-critical functions ALWAYS retrieved, regardless of the Scribe's selection. */
+/** Safety-critical functions ALWAYS retrieved, regardless of the Broker's selection. */
 const MANDATORY = ['get_identity', 'get_constraints'];
 
 const TTL_DAYS: Partial<Record<CoachIntent, number>> = { onboarding: 1 };
@@ -58,8 +58,8 @@ export interface ContextPack {
   expiresAt: string;
 }
 
-/** Step 1: Scribe chooses functions from the catalog. Returns null on any failure. */
-async function scribeSelect(userId: string, intent: CoachIntent): Promise<{ calls: FnCall[]; reason: string } | null> {
+/** Step 1: Broker chooses functions from the catalog. Returns null on any failure. */
+async function brokerSelect(userId: string, intent: CoachIntent): Promise<{ calls: FnCall[]; reason: string } | null> {
   try {
     const catalog = await renderCatalogDoc(userId);
     const res = await runJobBySlug(userId, 'pack-select', { intent, catalog });
@@ -73,8 +73,8 @@ async function scribeSelect(userId: string, intent: CoachIntent): Promise<{ call
   }
 }
 
-/** Step 2: Scribe summarizes the executed results into a grounding block. Null on failure. */
-async function scribeSummarize(
+/** Step 2: Broker summarizes the executed results into a grounding block. Null on failure. */
+async function brokerSummarize(
   userId: string,
   intent: CoachIntent,
   results: Record<string, unknown>,
@@ -116,12 +116,12 @@ export async function buildContextPack(
   const ttlDays = TTL_DAYS[intent] ?? 7;
   const expiresAt = new Date(now.getTime() + ttlDays * 86_400_000).toISOString();
 
-  // 1. SELECT — Scribe, with deterministic fallback.
-  const sel = await scribeSelect(userId, intent);
+  // 1. SELECT — Broker, with deterministic fallback.
+  const sel = await brokerSelect(userId, intent);
   const usedScribeSelect = sel !== null;
   const calls: FnCall[] =
     sel?.calls ?? (INTENT_SELECTION[intent] ?? INTENT_SELECTION.ongoing).map((fn) => ({ fn, params: {} }));
-  // Safety net: always retrieve identity + constraints even if the Scribe didn't pick them.
+  // Safety net: always retrieve identity + constraints even if the Broker didn't pick them.
   const have = new Set(calls.map((c) => c.fn));
   for (const m of MANDATORY) if (!have.has(m) && RETRIEVAL_FUNCTIONS[m]) calls.push({ fn: m, params: {} });
   const selectReason = sel?.reason || '(deterministic selection)';
@@ -133,14 +133,14 @@ export async function buildContextPack(
   });
   if (intent === 'onboarding') results.onboarding_readiness = await onboardingReadiness(userId);
 
-  // 3. SUMMARIZE — Scribe, with deterministic fallback.
-  const scribeSummary = await scribeSummarize(userId, intent, results);
-  const usedScribeSummary = scribeSummary !== null;
-  const summary = scribeSummary ?? renderResults(results);
+  // 3. SUMMARIZE — Broker, with deterministic fallback.
+  const brokerSummary = await brokerSummarize(userId, intent, results);
+  const usedScribeSummary = brokerSummary !== null;
+  const summary = brokerSummary ?? renderResults(results);
 
   // 4. Compose + persist (provenance + mode + reason are the audit trail).
   // Mode string values keep the historical `broker-*` prefix (persisted audit trail); DevTrace
-  // field names use the canonical Scribe name (CROSS-01 / BRAND.md).
+  // field names use the canonical Broker name (CROSS-01 / BRAND.md).
   const mode =
     usedScribeSelect && usedScribeSummary
       ? 'broker-curated'
@@ -153,10 +153,10 @@ export async function buildContextPack(
   // Dev X-ray: record what was pulled + how it was curated (no effect on the coaching path).
   updateTrace(userId, {
     context: { mode, selectReason, provenance, data: results, rendered },
-    scribeSelect: sel ? { calls: sel.calls, reason: sel.reason } : null,
-    scribeSummarize: scribeSummary ? { output: scribeSummary } : null,
+    brokerSelect: sel ? { calls: sel.calls, reason: sel.reason } : null,
+    brokerSummarize: brokerSummary ? { output: brokerSummary } : null,
   });
-  // Durable log of the two Scribe steps.
+  // Durable log of the two Broker steps.
   void logAi(userId, { kind: 'pack_select', input: { intent }, output: sel ?? { fallback: true }, meta: { mode } });
   void logAi(userId, { kind: 'pack_summarize', output: { summary }, meta: { mode } });
 

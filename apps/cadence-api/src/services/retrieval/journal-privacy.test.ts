@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 /**
  * The privacy promise, made mechanical. `get_journal` is the ONLY path journal words take into a
  * context pack, and it must be impossible to widen — no parameter, no shape of input, nothing a
- * Scribe could select, may reach a secret entry.
+ * Broker could select, may reach a secret entry.
  */
 const listForCoach = vi.fn();
 vi.mock('../../repos/journal-entries.ts', () => ({ listForCoach: (...a: unknown[]) => listForCoach(...a) }));

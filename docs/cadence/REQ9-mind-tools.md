@@ -76,7 +76,7 @@ Three classes. Most mind tools are **timer-class**; exactly two things are modul
   Voice journaling (STT job), TTS-guided audio (frozen script → TTS job + player), gratitude
   share-out (compose + OS share sheet).
 - **Class 3 — module** (like Food): own store, own history surface, multiple entry points. Only
-  the **Journal** (entries outlive occurrences; history, privacy, Scribe parse) and the **content
+  the **Journal** (entries outlive occurrences; history, privacy, Broker parse) and the **content
   library** (REQ6 §6 — horizontal with Fitness, built last).
 
 **The REQ8 rail fits.** Catalog → `SessionItem.tool` → renderer → `StepLog` → recap works for mind
@@ -249,7 +249,7 @@ Observe phase. Owner-confirmed 2026-08-02, with the rulings below.
   weeks ago you wrote…" — the memory moat).
 - **Privacy:** the coach reads entries by default and says so plainly at first use ("I keep your
   notes so I can know you better — mark anything private and I won't use it"). Per-entry
-  **private toggle** excludes from context packs. Export + delete. Scribe `parse_mind_log`
+  **private toggle** excludes from context packs. Export + delete. Broker `parse_mind_log`
   extracts themes/valence to case notes; never judges.
 
 #### Where journal prompts live (settled 2026-08-04, after building it wrong twice)

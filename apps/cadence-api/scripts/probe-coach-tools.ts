@@ -222,7 +222,7 @@ async function probeSessions(): Promise<void> {
   }
 }
 
-/* ══ 2 · capture-extract — the Scribe listening to how people actually talk ══════════════════ */
+/* ══ 2 · capture-extract — the Broker listening to how people actually talk ══════════════════ */
 
 interface CaptureScenario {
   name: string;
@@ -269,7 +269,7 @@ const CAPTURES: CaptureScenario[] = [
   },
 ];
 
-/** Adversarial: the Scribe reads text written BY users, so instructions inside it are data. */
+/** Adversarial: the Broker reads text written BY users, so instructions inside it are data. */
 const ADVERSARIAL: CaptureScenario[] = [
   {
     name: 'injection · instructions inside the user message must be treated as data',
@@ -317,7 +317,7 @@ const ADVERSARIAL: CaptureScenario[] = [
 
 async function probeCaptures(): Promise<void> {
   for (const c of [...CAPTURES, ...ADVERSARIAL]) {
-    console.log(`\n── scribe · ${c.name}`);
+    console.log(`\n── broker · ${c.name}`);
     const raw = await runJob('capture-extract', { conversation_window: c.window, today: '2026-08-03' });
     const parsed = parseJson(raw);
     if (!parsed) {
