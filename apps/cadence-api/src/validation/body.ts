@@ -199,6 +199,20 @@ export const episodeEnterBodySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'end must be YYYY-MM-DD' })
     .optional(),
   tone: z.enum(['gentle', 'supportive']).optional(),
+  /**
+   * What they actually have with them — a hotel gym's dumbbells, a resistance band, nothing at
+   * all. `enterEpisode` has always accepted this and the route dropped it, so every detour was
+   * drafted against an EMPTY equipment list: the coach was told you had nothing.
+   *
+   * This is not a nicety. A detour exists to preserve the habits that CAN be preserved when the
+   * schedule is thrown out, and the coach cannot work out which those are without knowing the
+   * schedule and the equipment. Name only — no ids, no wear, nothing that would let a client
+   * mutate the real equipment list through this door.
+   */
+  available_equipment: z
+    .array(z.object({ name: z.string().min(1).max(60) }))
+    .max(20)
+    .optional(),
 });
 
 export const progressEventBodySchema = z

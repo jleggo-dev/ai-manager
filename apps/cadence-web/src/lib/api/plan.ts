@@ -95,11 +95,23 @@ export async function logDid(activityId: string, text?: string, date?: string): 
   return { ok: res.ok };
 }
 
-/** Enter a disrupted detour (Req 4): the base plan pauses for the window and lighter options
- *  appear. `days` defaults server-side to a week. */
+/**
+ * Enter a disrupted detour (Req 4): the base plan pauses for the window and what survives of it
+ * appears instead.
+ *
+ * `days` and `available_equipment` are the two facts the coach cannot draft without — a detour is
+ * about preserving the habits that CAN be preserved when the schedule is thrown out, and without
+ * the window and the gear it is guessing at both. Omitting equipment means "nothing", which is a
+ * real answer (a week with no gym at all) but a bad default.
+ */
 export async function enterEpisode(
   type: ActiveEpisode['type'],
-  opts?: { days?: number; end?: string; tone?: 'gentle' | 'supportive' },
+  opts?: {
+    days?: number;
+    end?: string;
+    tone?: 'gentle' | 'supportive';
+    available_equipment?: { name: string }[];
+  },
 ): Promise<{ ok: boolean }> {
   const res = await fetch(`${BASE}/plan/episode`, {
     method: 'POST',

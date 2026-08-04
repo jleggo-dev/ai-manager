@@ -9,6 +9,7 @@ import { TodayTrail } from '../today/TodayTrail.tsx';
 import { TrailHeader } from '../today/TrailHeader.tsx';
 import { TodayFoodSheet } from '../nutrition/TodayFoodSheet.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
+import type { DetourChoice } from './DetourSetup.tsx';
 import { PlanWeekPanel } from './PlanWeekPanel.tsx';
 import {
   getPlan,
@@ -135,9 +136,14 @@ export function PlanView({
     bump();
   }
 
-  async function enterDetour(type: ActiveEpisode['type']) {
-    await enterEpisode(type).catch(() => {});
-    refresh(); // base plan pauses; the detour banner + lighter options appear
+  // The window and the gear travel with it — the coach cannot draft a detour without both, and
+  // before this it received neither (empty equipment, default window).
+  async function enterDetour(choice: DetourChoice) {
+    await enterEpisode(choice.type, {
+      days: choice.days,
+      available_equipment: choice.available_equipment,
+    }).catch(() => {});
+    refresh(); // base plan pauses; the detour banner + what survives of the week appear
     bump();
   }
 

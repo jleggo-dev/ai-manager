@@ -2,18 +2,10 @@ import { useState } from 'react';
 import type { StreakView } from '@cadence/shared';
 import { Orb } from '../../components/Orb.tsx';
 import { OccurrenceRow } from '../../components/OccurrenceRow.tsx';
-import type { PlanOccurrence, PlanViewData, ActiveEpisode } from '../../lib/api.ts';
+import type { PlanOccurrence, PlanViewData } from '../../lib/api.ts';
+import { DetourSetup, type DetourChoice } from './DetourSetup.tsx';
 
 type PlanDay = PlanViewData['week'][number];
-
-/** The self-declare detour types (Req 4) — the coach names each plainly (BRAND.md). */
-const DETOUR_TYPES: Array<{ type: ActiveEpisode['type']; label: string }> = [
-  { type: 'travel', label: 'Traveling' },
-  { type: 'illness', label: 'Unwell' },
-  { type: 'injury', label: 'An injury' },
-  { type: 'recovery', label: 'Recovering' },
-  { type: 'custom', label: 'A rough stretch' },
-];
 
 /** Week tab: consistency strip + today + off-plan quick-log + take-a-detour + remaining days + Adjust. */
 export function PlanWeekPanel({
@@ -36,7 +28,7 @@ export function PlanWeekPanel({
   streak?: StreakView;
   onCheck: (o: PlanOccurrence, next: 'done' | 'skipped' | 'pending') => void;
   onAdhocLog: (text: string) => Promise<void>;
-  onEnterDetour?: (type: ActiveEpisode['type']) => Promise<void>; // absent while already on a detour
+  onEnterDetour?: (choice: DetourChoice) => Promise<void>; // absent while already on a detour
   onOpen: (id: string) => void;
   onAdjust: () => void;
   onRebalance: () => void;
@@ -137,26 +129,13 @@ export function PlanWeekPanel({
       {onEnterDetour && (
         <div className="detour-entry">
           {detourOpen ? (
-            <div className="detour-pick">
-              <span className="detour-pick-label">Take a detour — your plan pauses for a bit, it never resets.</span>
-              <div className="detour-chips">
-                {DETOUR_TYPES.map((d) => (
-                  <button
-                    key={d.type}
-                    className="detour-chip"
-                    onClick={() => {
-                      void onEnterDetour(d.type);
-                      setDetourOpen(false);
-                    }}
-                  >
-                    {d.label}
-                  </button>
-                ))}
-                <button className="adhoc-cancel" onClick={() => setDetourOpen(false)}>
-                  Cancel
-                </button>
-              </div>
-            </div>
+            <DetourSetup
+              onCancel={() => setDetourOpen(false)}
+              onEnter={async (choice) => {
+                await onEnterDetour(choice);
+                setDetourOpen(false);
+              }}
+            />
           ) : (
             <button className="detour-trigger" onClick={() => setDetourOpen(true)}>
               Life happened? Take a detour
