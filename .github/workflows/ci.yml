@@ -21,6 +21,14 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# The cadence DB suites (plan-commit, nutrition-service, recipe) seed and wipe FIXED synthetic user
+# ids against a real shared Postgres. Distinct ids keep them from colliding within a run, but two
+# overlapping RUNS would seed and wipe the same rows — flaky red that reads as random. One run per
+# ref at a time; superseded runs are cancelled rather than queued.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Determines which product(s) a change actually touches, so the ai-admin/cadence jobs
   # below can skip entirely (not just pass trivially) when irrelevant.

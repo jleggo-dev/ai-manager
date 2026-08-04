@@ -1,5 +1,23 @@
 # Design brief — the "right now" door + the escalation ladder (corrections to Mind 1)
 
+> **⚠️ PARTIALLY SUPERSEDED (2026-08-01) — read this first.**
+>
+> **The door shipped. The escalation ladder did not.** A later owner ruling
+> ([REQ9 §8](../REQ9-mind-tools.md)) withdrew the ladder's rung 3 and the whole safety apparatus
+> around it: **no emergency chrome, no crisis card component, no resource section in any menu, and
+> no chat-side distress detection** — the repo's own legal drafts disclaim being "an emergency
+> service", and detection that exists but misses is a worse posture than an honest scope. The line
+> that replaced it: *reason about what people DO; never scan what they SAY for pathology.*
+>
+> **Still live in this brief:** §1–§4 (the neutral door, the two-tense sheet, the express lane,
+> the persona test set) and rungs 1–2 of §5 ("Something else?" as a tool switch → alternates →
+> chat). Those built and shipped.
+>
+> **Dead on arrival:** rung 3, the reusable emergency-line component, and the region-aware
+> resource deck. Sections below are struck through where they'd otherwise read as instructions.
+> Kept rather than deleted because the reasoning in §1 about *why* the rail was wrong is what
+> produced the ruling — but do not build from the struck parts.
+
 **Goal.** Two coupled corrections to `Cadence Mind 1 - Calm Surface + Breath.dc.html`, one design
 round: **(1)** generalize §3B's now door — it was a pillar-specific control promoted to global
 chrome; **(2)** replace §3E's crisis rail with an **escalation ladder** — the rail conflated two
@@ -78,18 +96,22 @@ switch, never an exit** — tapping it opens a small sheet:
   §6) — one composer, two tenses: "do something now" (the door) / "this isn't landing" (the
   ladder). Breathing was never the only tool; mid-breath, this hands you the rest.
 - **Rung 2 — the coach.** "Talk to me" → chat.
-- **Rung 3 — the emergency line.** At the sheet's bottom, small, always the same position: real
-  resources (region-aware — 911/988 etc.; copy deck owner-supplied) + the deterministic vetted
-  deferral. Someone genuinely escalating is *already in this sheet*, so it's two taps from
-  anywhere — without a "crisis" affordance looming over every breath.
+- ~~**Rung 3 — the emergency line.**~~ **WITHDRAWN (REQ9 §8).** No emergency line, no region-aware
+  resource deck, no vetted deferral component. Phones already dial emergency services; a standing
+  emergency affordance inside a habit app makes a promise ("we are watching") that we cannot keep.
+  What remains is coach behavior in conversation, living entirely in the system prompt: if someone
+  says something serious, acknowledge it plainly, say it's beyond what a coach should carry, and
+  encourage a professional. One warm response in context — never a product surface.
 
-**Rules:** nothing labeled or flavored "crisis" ever appears on a practice surface — "crisis" is
-rung 3's word only. Everyday rough moments are coaching, not crises. Switching tools mid-practice
-keeps partial credit for the abandoned practice (abandoning is information, not failure). The
-chat-side distress detection and fixed vetted response are unchanged and out of scope here.
+**Rules:** nothing labeled or flavored "crisis" appears on a practice surface — and after §8,
+nowhere else either. Everyday rough moments are coaching, not crises. Switching tools mid-practice
+keeps partial credit for the abandoned practice (abandoning is information, not failure).
+~~The chat-side distress detection and fixed vetted response are unchanged~~ — **there is no
+distress detection.** It was withdrawn wholesale; nothing scans messages or journal entries.
 
-This dissolves your two blocked asks: the "absent while breathing" ruling (what's present while
-breathing is "Something else?" — an offer, not an alarm) and shrinks the copy deck to rung 3.
+This dissolves the "absent while breathing" ruling (what's present while breathing is "Something
+else?" — an offer, not an alarm). ~~and shrinks the copy deck to rung 3~~ — with rung 3 gone, the
+copy deck is gone with it.
 
 ## 6. What to design
 
@@ -99,12 +121,11 @@ breathing is "Something else?" — an offer, not an alarm) and shrinks the copy 
 - **The "Do something now" sheet** — the three persona fills above as the test set: same chrome,
   three different lives. Include the free-text line.
 - **The express lane** — the pinned-item sheet variant and the promoted-disc variant.
-- **The ladder** — "Something else?" in place on the breathing screen (running state), the sheet
-  with its three rungs, and the emergency line's treatment at rest (present, calm, unmistakable
-  when needed, never alarming). **Design the emergency line as a reusable component:** when
-  chat-side detection trips (REQ9 §8), the app renders a fixed crisis card in the conversation —
-  same element, same treatment, different host. Don't design the card here; just don't make the
-  line sheet-only.
+- **The ladder** — "Something else?" in place on the breathing screen (running state) and the
+  sheet with its ~~three~~ **two** rungs (alternates, then chat).
+  ~~the emergency line's treatment at rest … design it as a reusable component … a fixed crisis
+  card in the conversation~~ — **all withdrawn (REQ9 §8).** Design no emergency line and no crisis
+  card; there is no detection to trigger one.
 - **First encounter** — how the door introduces itself once, in the coach's voice (one line in
   the day-recap bubble, e.g. "that little door is always there — for when you've got a few
   minutes or need one"), then never explains again.
