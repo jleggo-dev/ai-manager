@@ -21,15 +21,7 @@ export type StepLog =
   // `returns` is context for the coach ("a busy day, not a bad sit") — never a metric, never
   // charted, never part of XP or a streak.
   | { kind: 'meditate'; elapsedSec: number; targetSec: number; returns: number; done: boolean }
-  // `helped` is self-report, logged to the arc — never surfaced back as a result.
-  | {
-      kind: 'grounding';
-      game: string;
-      stepsDone: number;
-      total: number;
-      openEnded: boolean;
-      helped: boolean | null;
-    }
+  | { kind: 'grounding'; game: string; stepsDone: number; total: number; openEnded: boolean }
   // The instrument's capture: a word, how much room it's taking (1-3, never rendered), an optional
   // line. Available to the coach as context; there is no surface anywhere that shows it back.
   | { kind: 'feeling_log'; word: string; family: string | null; room: 1 | 2 | 3; note?: string }

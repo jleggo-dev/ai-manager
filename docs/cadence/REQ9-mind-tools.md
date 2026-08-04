@@ -364,13 +364,19 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
   scans them, private means private.) *Unbuilt: export and delete are not implemented yet.*
 - **TTS voice** — the coach's voice or a distinct practice voice? Plus **time-to-first-audio** and
   streamed-vs-pre-rendered, which decides whether the guided player needs a loading state at all.
-- **Where "did it help?" lands in the data model**, and whether `recap` consumes mind self-reports
-  the way it consumes body counts — that determines whether Mind can appear in the weekly
-  check-in at all. Design position taken: a single three-way tap, dismissible by leaving, asked at
-  most **once a day across all mind surfaces** (it's the pillar's only signal — nothing here has
-  reps or grams — so asking it four times a day would read as nagging, not care).
-- **Do mind practices log as occurrences** with the existing status vocabulary (`skipped` vs
-  `missed`, freezes, detours), or something new? Leaning existing.
+- ~~Where "did it help?" lands in the data model.~~ **Resolved 2026-08-04 (owner): it doesn't —
+  the question is retired.** "That sounds like the weekly check-in. Talk to the coach about what's
+  working or not working. Let them adjust the plan." The conversation is the better instrument:
+  right after a two-minute flow the honest answer often isn't known yet, and a coach that can ask
+  in context and change the plan beats a tap that produces a boolean nobody acts on. Removed with
+  it: the three-way tap, `StepLog.helped`, and `helped-gate.ts` (the once-a-day cross-surface
+  rule, which existed only to make the question tolerable).
+  **Consequence, accepted:** Mind's signal into the weekly check-in is now what got logged as done
+  or skipped, plus what the person says — which is what the owner ruled it should be.
+- ~~Do mind practices log as occurrences with the existing status vocabulary?~~ **Resolved
+  2026-08-04 (owner): yes, existing.** `skipped` vs `missed`, freezes and detours all apply
+  unchanged — a sit you didn't do is a sit you didn't do, and inventing a parallel vocabulary for
+  the mind pillar would have implied it needed gentler accounting than the body pillar. It doesn't.
 - ~~The emergency line's copy deck + resource list~~ — **no longer needed** (§8: no emergency
   chrome ships). ~~Should the coach name a specific number (988/911)?~~ **Resolved 2026-08-04
   (owner): no number.** The coach refers to a **medical professional**, as any decent LLM already

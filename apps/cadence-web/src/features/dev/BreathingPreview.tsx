@@ -195,7 +195,7 @@ export function GroundingPreview() {
         onDone={() => setRunKey((k) => k + 1)}
       />
       <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.7 }}>
-        {last ? `logged → ${last.game} ${last.stepsDone}/${last.total} helped=${String(last.helped)}` : 'no log yet'}
+        {last ? `logged → ${last.game} ${last.stepsDone}/${last.total}` : 'no log yet'}
       </div>
     </div>
   );

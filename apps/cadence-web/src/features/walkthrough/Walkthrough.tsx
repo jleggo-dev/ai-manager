@@ -14,7 +14,6 @@ import { AllSteps } from './AllSteps.tsx';
 import { Pip, StepHeader } from './wt-parts.tsx';
 import { overlay, center, closeBtn, caption, navBtn, greenBtn, shortTitle } from './wt-styles.ts';
 import { type StepLog, type StepLogs, stepStatus, stepFraction, minutesLeft, recapSummary } from './state.ts';
-import { mayAskHelped } from './tools/helped-gate.ts';
 import { keepJournalEntry } from '../../lib/api.ts';
 
 /**
@@ -281,11 +280,7 @@ function renderTool(
         />
       );
     case 'grounding':
-      // askHelped: "did that help?" is asked at most once a day across ALL mind surfaces —
-      // the gate lives here because only a caller can own a cross-surface rule.
-      return (
-        <StepGrounding spec={t.spec} askHelped={mayAskHelped()} onLog={(l) => setLog(step.id, l)} onDone={onAdvance} />
-      );
+      return <StepGrounding spec={t.spec} onLog={(l) => setLog(step.id, l)} onDone={onAdvance} />;
     case 'feeling_log':
       return <StepFeelingLog onLog={(l) => setLog(step.id, l)} onDone={onAdvance} />;
     case 'journal': {
@@ -293,6 +288,7 @@ function renderTool(
       return (
         <StepJournal
           prompt={t.prompt}
+          minutes={t.minutes}
           note={jl?.note ?? ''}
           secret={jl?.secret ?? false}
           onSecret={(secret) =>

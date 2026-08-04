@@ -21,6 +21,7 @@ import { type BreathPattern, clampCycles, patternById, totalMinutes } from './br
 import { type MeditateBells, clampIntervalMinutes, clampSitMinutes, isMeditateBells } from './meditate.ts';
 import { type GroundingGame, type GroundingSpec, groundingSpec, isGroundingGame } from './grounding.ts';
 import { type JournalBankId, isJournalBankId, journalBank, todaysPhrasing } from './journal.ts';
+import { clampFreeWriteMinutes } from './freewrite.ts';
 
 /* ── The tool catalog ────────────────────────────────────────────────────────────────────────
    Three capture classes (see `stepCaptureMode`):
@@ -63,7 +64,9 @@ export type StepTool =
   | { kind: 'photo'; prompt: string; purpose: 'meal' | 'progress' | 'form' }
   // A journal step (REQ9 §4.5). `bank` ties it to a question bank so the kept prompt survives into
   // the store; the entry itself is written on Finish, with the walkthrough's commit rules.
-  | { kind: 'journal'; prompt: string; mode: 'text' | 'voice' | 'either'; bank?: JournalBankId }
+  // `minutes` makes it a timed free-write (REQ9 §4.5): the step runs the same quiet clock the
+  // writing page does. The bell never saves here either — the walkthrough commits on Finish.
+  | { kind: 'journal'; prompt: string; mode: 'text' | 'voice' | 'either'; bank?: JournalBankId; minutes?: number }
   | { kind: 'measure'; metric: string; unit: string }
   // "Insight tools" — deterministic progress surfaces baked into a task (usually its first step to
   // orient, or the celebration to reward). `source`/`card` name which existing surface to render.
@@ -167,7 +170,10 @@ function journalTool(item: SessionItem): StepTool {
   const prompt =
     item.detail ??
     (banked ? todaysPhrasing(banked, new Date().toISOString().slice(0, 10)) : 'What do you want to write?');
-  return { kind: 'journal', prompt, mode: 'either', ...(bank ? { bank } : {}) };
+  // The catalog tells the coach `duration_min` makes this a timed free-write, so the step has to
+  // honour it. Dropping it here is how the ＋ menu ran a clock and a session step silently didn't.
+  const minutes = typeof item.duration_min === 'number' ? clampFreeWriteMinutes(item.duration_min) : undefined;
+  return { kind: 'journal', prompt, mode: 'either', ...(bank ? { bank } : {}), ...(minutes ? { minutes } : {}) };
 }
 
 /** A grounding flow from the item's game + bank. An unknown game degrades to the senses sweep

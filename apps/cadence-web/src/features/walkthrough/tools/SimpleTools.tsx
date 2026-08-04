@@ -1,6 +1,9 @@
-import { type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
+import { freeWriteDoneLine, freeWriteProgress, timeLeftLabel } from '@cadence/shared';
 import { TONE } from './tone.ts';
 import { MicButton } from '../../../components/MicButton.tsx';
+import { useWriteTimer } from '../../journal/useWriteTimer.ts';
+import { playChime } from './chime.ts';
 
 /** checkoff / read — one tone button that logs "done" (the browse/do/commit "do"). */
 export function StepCheckoff({ label, done, onDone }: { label?: string; done: boolean; onDone: () => void }) {
@@ -23,24 +26,58 @@ export function StepJournal({
   prompt,
   note,
   secret,
+  minutes,
   onLog,
   onSecret,
 }: {
   prompt: string;
   note: string;
   secret: boolean;
+  /** Set when the coach asked for a timed free-write — the same quiet clock the writing page runs. */
+  minutes?: number;
   onLog: (n: string) => void;
   onSecret: (s: boolean) => void;
 }) {
+  const totalSec = (minutes ?? 0) * 60;
+  const [showTime, setShowTime] = useState(false);
+  // The bell chimes and stops there. It cannot save even if it wanted to — a session commits on
+  // Finish — which is the same rule the writing page follows for its own reasons.
+  const timer = useWriteTimer(totalSec, !!minutes, () => {
+    playChime();
+    navigator.vibrate?.(18);
+  });
+
   return (
     <div style={card}>
+      {minutes ? (
+        <>
+          <button
+            className="fw-rail"
+            onClick={() => {
+              setShowTime(true);
+              setTimeout(() => setShowTime(false), 3000);
+            }}
+            aria-label={timeLeftLabel(totalSec - timer.elapsedSec)}
+          >
+            <span
+              className="fw-rail-fill"
+              style={{ width: `${freeWriteProgress(timer.elapsedSec, totalSec) * 100}%` }}
+            />
+          </button>
+          {showTime && <div className="fw-time">{timeLeftLabel(totalSec - timer.elapsedSec)}</div>}
+          {timer.done && <div className="fw-done">{freeWriteDoneLine(minutes)}</div>}
+        </>
+      ) : null}
       <div className="logbox-label">{prompt}</div>
       <div className="steer-row">
         <textarea
           className="logbox-in"
           rows={3}
           value={note}
-          onChange={(e) => onLog(e.target.value)}
+          onChange={(e) => {
+            onLog(e.target.value);
+            timer.poke();
+          }}
           placeholder="Write a few words…"
         />
         <MicButton value={note} onChange={onLog} />

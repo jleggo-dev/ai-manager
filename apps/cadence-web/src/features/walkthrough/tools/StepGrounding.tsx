@@ -4,7 +4,6 @@ import type { StepLog } from '../state.ts';
 import { TONE } from './tone.ts';
 import { playChime } from './chime.ts';
 import { WhatsThis } from './WhatsThis.tsx';
-import { markHelpedAsked } from './helped-gate.ts';
 
 type GroundingLog = Extract<StepLog, { kind: 'grounding' }>;
 
@@ -23,14 +22,12 @@ type GroundingLog = Extract<StepLog, { kind: 'grounding' }>;
  */
 export function StepGrounding({
   spec,
-  askHelped = true,
   onLog,
   onDone,
 }: {
   spec: GroundingSpec;
   /** "Did that help?" is asked at most once a day across all mind surfaces — the caller owns that
    *  gate, because only it can see the other surfaces. */
-  askHelped?: boolean;
   onLog: (l: GroundingLog) => void;
   onDone: () => void;
 }) {
@@ -61,16 +58,12 @@ export function StepGrounding({
 
   function finish() {
     setClosed(true);
-    // Mark on SHOW, not on answer — a person who skips was still asked, and asking again the
-    // same day is exactly what the once-a-day rule forbids.
-    if (askHelped) markHelpedAsked();
     onLog({
       kind: 'grounding',
       game: spec.game,
       stepsDone: idx + (spec.openEnded ? 0 : 1),
       total,
       openEnded: spec.openEnded,
-      helped: null,
     });
   }
 
@@ -80,14 +73,13 @@ export function StepGrounding({
     else setIdx(idx + 1);
   }
 
-  function answerHelped(helped: boolean | null) {
+  function close() {
     onLog({
       kind: 'grounding',
       game: spec.game,
       stepsDone: spec.openEnded ? idx + 1 : Math.min(idx + 1, total),
       total,
       openEnded: spec.openEnded,
-      helped,
     });
     onDone();
   }
@@ -96,32 +88,11 @@ export function StepGrounding({
     return (
       <div style={card}>
         <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 0' }}>
-          {/* Credit is settled BEFORE anything is asked. */}
           <div style={creditLine}>{groundingLogLine(spec.game, idx + 1, total, spec.openEnded)}</div>
-          {askHelped && (
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'oklch(40% 0.02 150)' }}>Did that help?</div>
-          )}
         </div>
-        {askHelped ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button style={{ ...forwardBtn, flex: 1 }} onClick={() => answerHelped(true)}>
-                Yes
-              </button>
-              {/* An outline, never a red or a frown — a tool not landing is information. */}
-              <button style={{ ...outlineBtn, flex: 1 }} onClick={() => answerHelped(false)}>
-                Not really
-              </button>
-            </div>
-            <button style={textBtn} onClick={() => answerHelped(null)}>
-              Skip
-            </button>
-          </div>
-        ) : (
-          <button style={forwardBtn} onClick={() => answerHelped(null)}>
-            Done
-          </button>
-        )}
+        <button style={forwardBtn} onClick={close}>
+          Done
+        </button>
       </div>
     );
   }
@@ -311,15 +282,6 @@ const outlineBtn: CSSProperties = {
   fontSize: 15,
   fontWeight: 900,
   color: 'oklch(40% 0.02 150)',
-  cursor: 'pointer',
-};
-const textBtn: CSSProperties = {
-  border: 'none',
-  background: 'transparent',
-  padding: 6,
-  fontSize: 13,
-  fontWeight: 800,
-  color: 'oklch(55% 0.02 150)',
   cursor: 'pointer',
 };
 const creditLine: CSSProperties = {

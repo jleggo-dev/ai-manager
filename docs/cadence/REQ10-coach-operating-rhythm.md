@@ -108,7 +108,19 @@ the tap — **zero LLM calls at tap time**; nobody mid-spiral waits eight second
   game, a walk). One composer, two entry points. **It carries no emergency content** — the
   escalation ladder was withdrawn 2026-08-01; see REQ9 §8 for the scope ruling.
 
-## 7. Gap 3 — the clock (acting when the user is gone)
+## 7. Gap 3 — reminders and check-ins (acting when the user is gone) · **PARKED 2026-08-04**
+
+> **Parked by the owner, with a renaming.** "The tick" was a mechanism wearing a feature's name —
+> a cron is an implementation detail, not a thing anyone wants. What this actually is: **a system
+> of reminders and proactive check-ins** — "like Duolingo's guilt trips, but more of a
+> wellness check" (owner). Read the second half as the *intent* (someone notices you've been
+> away and says something kind) rather than as a label to ship: §7b already rules that **absence
+> is a habit signal, never a health signal**, so no user-facing copy or schema name should imply
+> we've inferred anything about anyone's wellbeing. "Check-in" is the word that survives review.
+>
+> Parked alongside the content library. Nothing below is wrong; none of it is next.
+
+### The original note (mechanism)
 
 The one trigger species we lack: **wake-without-the-user**. Proactive check-ins are already
 designed (PLAN §5a: configurable cadence, opt-in) but nothing can fire them. Add **one Vercel
