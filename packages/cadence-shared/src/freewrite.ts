@@ -99,12 +99,34 @@ const WORDS: Record<number, string> = {
 };
 
 /**
- * The line at time's up — "Twenty minutes — kept." Words rather than digits because this is the
- * coach speaking, not a readout, and because a numeral here would read like a score.
+ * What the bell says (owner ruling 2026-08-04). Design's §1b had time's-up auto-save and take over
+ * the screen with a kept moment; the owner overruled it, and was right on both counts:
  *
- * ONLY for a clock that actually ran out. Saving early is the ordinary kept moment with the
- * ordinary line, and the duration is never mentioned — there is no partial credit to award because
- * nothing was incomplete.
+ *   • **Auto-saving IS the interruption.** Someone mid-sentence when the clock runs out should
+ *     finish the sentence. The bell is information, not a deadline.
+ *   • **It removed a whole class of bug.** Saving at the bell and then letting someone carry on
+ *     meant a second Save wrote a SECOND entry containing the first one's text, because the store
+ *     has no update. With no auto-save there is one entry and one save, always.
+ *
+ * So the bell chimes, this line appears quietly beside the writing, and nothing else happens.
+ */
+export function freeWriteDoneLine(minutes: number): string {
+  const m = clampFreeWriteMinutes(minutes);
+  const word = WORDS[m];
+  const span = word === 'An hour' ? 'An hour' : `${word ?? m} minutes`;
+  return `${span}. Save whenever you're ready.`;
+}
+
+/** The ordinary kept line — for stopping early, which is not a failure and never counts as one. */
+export const KEPT_LINE = "Kept — it's yours to come back to.";
+
+/**
+ * The line once a clock that actually ran out is saved — "Twenty minutes — kept." Words rather
+ * than digits because this is the coach speaking, not a readout, and because a numeral here would
+ * read like a score.
+ *
+ * Stopping early gets `KEPT_LINE` instead and the duration is never mentioned. A baby, a doorbell,
+ * a change of mind — those end a session, they do not fail one, so there is nothing to report.
  */
 export function freeWriteKeptLine(minutes: number): string {
   const m = clampFreeWriteMinutes(minutes);

@@ -4,7 +4,7 @@ import {
   JOURNAL_BANKS,
   JOURNAL_DISCLOSURE,
   SHARE_FRAMING,
-  freeWriteKeptLine,
+  freeWriteDoneLine,
   freeWriteProgress,
   isShareableGratitude,
   shouldNudge,
@@ -63,7 +63,6 @@ export function JournalWrite({
   // A coach-issued duration opens the start sheet immediately — the clock must begin on a press.
   const [freeStart, setFreeStart] = useState(() => openWith?.minutes !== undefined);
   const [timed, setTimed] = useState<FreeWriteStartChoice | null>(null);
-  const [timeUp, setTimeUp] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   const areaRef = useRef<HTMLTextAreaElement>(null);
@@ -90,26 +89,20 @@ export function JournalWrite({
   const prompt = written ?? (bank ? todaysPhrasing(bank, today) : null);
 
   const totalSec = (timed?.minutes ?? 0) * 60;
-  // Runs only for an on-screen timed write. Paper has its own screen; "Keep writing" drops the
-  // clock entirely (momentum outranks the number — no re-chime, no overtime count).
-  const timer = useWriteTimer(totalSec, timed?.surface === 'typed' && !timeUp, () => {
+  // The bell chimes and stops there — it does NOT save and does NOT take the screen (owner ruling,
+  // 2026-08-04). Someone mid-sentence finishes the sentence; Save is theirs to press, whenever.
+  const timer = useWriteTimer(totalSec, timed?.surface === 'typed', () => {
     playChime();
     navigator.vibrate?.(18);
-    setTimeUp(true);
-    void keep('typed', true);
   });
   const [showTime, setShowTime] = useState(false);
 
   /**
-   * `stay` is the timed case: the clock running out saves the words immediately (Design §1b —
-   * "the entry is saved automatically; nothing to confirm") but holds the page open so "Keep
-   * writing" can restore it mid-sentence. Every other save closes as it always did.
-   *
-   * Known gap: continuing after the bell and saving again writes a SECOND entry containing the
-   * first one's text — the store has an insert but no update. Worth an endpoint before this sees
-   * real use; it costs a duplicate, never lost words.
+   * One entry, one save — including for a timed write. The bell never saves, so there is no path
+   * where continuing past it produces a second entry containing the first one's text (the store
+   * has an insert but no update). Pressing Save is the only way words are kept, at any point.
    */
-  async function keep(mode: 'typed' | 'paper', stay = false) {
+  async function keep(mode: 'typed' | 'paper') {
     if (saving) return;
     setSaving(true);
     setFailed(false);
@@ -126,10 +119,6 @@ export function JournalWrite({
       if (mode === 'typed' && isShareableGratitude(bank?.id, secret) && navigator.share) {
         await navigator.share({ text }).catch(() => undefined);
       }
-      if (stay) {
-        setSaving(false);
-        return;
-      }
       onKept();
     } catch {
       setFailed(true); // the draft stays right here — nothing is lost until you leave this screen
@@ -141,26 +130,6 @@ export function JournalWrite({
   // are in a notebook and this app is only the clock.
   if (timed?.surface === 'paper') {
     return <FreeWritePaper minutes={timed.minutes} prompt={timed.prompt} onClose={onClose} onKept={onKept} />;
-  }
-
-  if (timeUp && timed) {
-    return (
-      <div className="jw" role="dialog" aria-label="Time's up">
-        <div className="jw-kept">
-          <div className="jw-kept-disc" aria-hidden>
-            ✓
-          </div>
-          <div className="jw-kept-line">{freeWriteKeptLine(timed.minutes)}</div>
-          {/* Momentum outranks the number: this restores the page mid-sentence with no clock. */}
-          <button className="jw-kept-btn" onClick={() => setTimed(null)}>
-            Keep writing
-          </button>
-          <button className="jw-paper" onClick={onKept}>
-            Read it back ›
-          </button>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -232,8 +201,12 @@ export function JournalWrite({
         autoFocus
       />
 
-      {/* An offer, never enforcement — it touches no words and disappears the moment you type. */}
-      {timed && shouldNudge('typed', timer.idleMs) && <div className="fw-nudge">{FREE_WRITE_NUDGE}</div>}
+      {/* An offer, never enforcement — it touches no words and disappears the moment you type.
+          Gone once the bell has rung: "keep going" would be arguing with the clock. */}
+      {timed && !timer.done && shouldNudge('typed', timer.idleMs) && <div className="fw-nudge">{FREE_WRITE_NUDGE}</div>}
+
+      {/* The bell, said quietly and left there. No countdown to zero, no pressure to stop. */}
+      {timed && timer.done && <div className="fw-done">{freeWriteDoneLine(timed.minutes)}</div>}
 
       {failed && (
         <div className="jw-failed">

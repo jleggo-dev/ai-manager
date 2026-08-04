@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { freeWriteKeptLine, freeWriteProgress, timeLeftLabel } from '@cadence/shared';
+import { KEPT_LINE, freeWriteDoneLine, freeWriteKeptLine, freeWriteProgress, timeLeftLabel } from '@cadence/shared';
 import { playChime } from '../walkthrough/tools/chime.ts';
 import { keepJournalEntry } from '../../lib/api.ts';
 import { useWriteTimer } from './useWriteTimer.ts';
@@ -33,22 +33,20 @@ export function FreeWritePaper({
   const [failed, setFailed] = useState(false);
   const [finished, setFinished] = useState(false);
 
+  // The bell rings and stops there — it never saves for you (owner ruling, 2026-08-04). Someone
+  // mid-paragraph in their notebook finishes the paragraph; Save is theirs to press.
   const timer = useWriteTimer(totalSec, !finished, () => {
     playChime();
     navigator.vibrate?.(18);
-    void keep(true);
   });
 
-  async function keep(auto: boolean) {
+  async function keep() {
     if (saving) return;
     setSaving(true);
     setFailed(false);
     try {
       await keepJournalEntry({ bank: 'free_write', prompt, body: '', secret: true, mode: 'paper' });
       setFinished(true);
-      // A clock that ran out earns the duration line; saving early is an ordinary save and never
-      // mentions it, because nothing was incomplete.
-      if (!auto) onKept();
     } catch {
       setFailed(true);
     } finally {
@@ -63,7 +61,9 @@ export function FreeWritePaper({
           <div className="jw-kept-disc" aria-hidden>
             ✓
           </div>
-          <div className="jw-kept-line">{freeWriteKeptLine(minutes)}</div>
+          {/* The duration is claimed only if the clock actually ran out. Stopping early — a baby,
+              the door, a change of mind — is an ordinary save that reports nothing. */}
+          <div className="jw-kept-line">{timer.done ? freeWriteKeptLine(minutes) : KEPT_LINE}</div>
           <button className="jw-kept-btn" onClick={onKept}>
             Done
           </button>
@@ -81,7 +81,7 @@ export function FreeWritePaper({
           ‹
         </button>
         <div className="jw-date">On paper</div>
-        <button className="jw-save" onClick={() => void keep(false)} disabled={saving}>
+        <button className="jw-save" onClick={() => void keep()} disabled={saving}>
           {saving ? '…' : 'Save'}
         </button>
       </div>
@@ -104,6 +104,7 @@ export function FreeWritePaper({
           <em>{prompt}</em>
         </div>
         <div className="fw-paper-note">Your notebook has the words — this just keeps the time.</div>
+        {timer.done && <div className="fw-done">{freeWriteDoneLine(minutes)}</div>}
       </div>
 
       {failed && <div className="jw-failed">That didn&rsquo;t save. Try again?</div>}

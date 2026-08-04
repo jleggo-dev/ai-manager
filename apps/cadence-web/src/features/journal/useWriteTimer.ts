@@ -12,8 +12,6 @@ export interface WriteTimer {
   done: boolean;
   /** Call on every keystroke to reset the idle window. */
   poke: () => void;
-  /** Abandon the clock — "Keep writing" continues the entry with no timer at all. */
-  stop: () => void;
 }
 
 /**
@@ -50,14 +48,6 @@ export function useWriteTimer(totalSec: number, running: boolean, onDone: () => 
   const poke = useCallback(() => {
     lastKey.current = Date.now();
     setIdleMs(0);
-  }, []);
-
-  const stop = useCallback(() => {
-    runStart.current = null;
-    banked.current = 0;
-    setElapsedSec(0);
-    setDone(false);
-    fired.current = false;
   }, []);
 
   useEffect(() => {
@@ -97,5 +87,5 @@ export function useWriteTimer(totalSec: number, running: boolean, onDone: () => 
     };
   }, [running, done, totalSec]);
 
-  return { elapsedSec, idleMs, done, poke, stop };
+  return { elapsedSec, idleMs, done, poke };
 }

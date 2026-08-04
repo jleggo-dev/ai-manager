@@ -7,8 +7,10 @@ import {
   PURE_FREE_WRITE,
   clampFreeWriteMinutes,
   freeWriteDurationChip,
+  freeWriteDoneLine,
   freeWriteKeptLine,
   freeWritePickerHead,
+  KEPT_LINE,
   freeWriteProgress,
   freeWriteRows,
   shouldNudge,
@@ -94,5 +96,25 @@ describe('paper is a physical journal with a timer, not a text box', () => {
   it('nudges a typed session only once genuinely idle', () => {
     expect(shouldNudge('typed', FREE_WRITE_IDLE_MS - 1)).toBe(false);
     expect(shouldNudge('typed', FREE_WRITE_IDLE_MS)).toBe(true);
+  });
+});
+
+describe('the bell informs, it never decides (owner ruling 2026-08-04)', () => {
+  it('invites a save rather than announcing one', () => {
+    expect(freeWriteDoneLine(20)).toBe("Twenty minutes. Save whenever you're ready.");
+    expect(freeWriteDoneLine(60)).toBe("An hour. Save whenever you're ready.");
+  });
+
+  it('never implies the session is over or must end', () => {
+    for (const m of [5, 20, 60]) {
+      expect(freeWriteDoneLine(m)).not.toMatch(/stop|done|finished|time.s up|over\b|saved/i);
+    }
+  });
+
+  // Life happens: a baby, the door, a change of mind. Stopping early ends a session; it does not
+  // fail one, so nothing about it is reported back.
+  it('reports no duration when someone stops early', () => {
+    expect(KEPT_LINE).not.toMatch(/minute|hour|\d/);
+    expect(KEPT_LINE).not.toMatch(/incomplete|only|short|partial|unfinished/i);
   });
 });
