@@ -26,6 +26,8 @@ const stubs = vi.hoisted(() => {
     runJobBySlug: vi.fn(),
     renderCatalogDoc: vi.fn(async () => 'catalog-doc'),
     insertContextPack: vi.fn(async (_p: { sections?: { mode?: string } }) => 'pack-id'),
+    // Default MISS so every pre-P3 test runs the build path untouched; reuse tests opt in per-test.
+    getFreshContextPack: vi.fn(async (): Promise<unknown> => null),
     updateTrace: vi.fn(),
     logAi: vi.fn(),
     RETRIEVAL_FUNCTIONS: {
@@ -42,7 +44,10 @@ const stubs = vi.hoisted(() => {
 
 vi.mock('../ai/aim.ts', () => ({ runJobBySlug: stubs.runJobBySlug }));
 vi.mock('./retrieval/catalog.ts', () => ({ renderCatalogDoc: stubs.renderCatalogDoc }));
-vi.mock('../repos/context-pack.ts', () => ({ insertContextPack: stubs.insertContextPack }));
+vi.mock('../repos/context-pack.ts', () => ({
+  insertContextPack: stubs.insertContextPack,
+  getFreshContextPack: stubs.getFreshContextPack,
+}));
 vi.mock('./dev-trace.ts', () => ({ updateTrace: stubs.updateTrace }));
 vi.mock('./ai-log.ts', () => ({ logAi: stubs.logAi }));
 vi.mock('./retrieval/registry.ts', () => ({ RETRIEVAL_FUNCTIONS: stubs.RETRIEVAL_FUNCTIONS }));
@@ -166,5 +171,44 @@ describe('API-06 — buildContextPack 3-way fallback', () => {
     expect(fns).toContain('get_objectives');
     expect(fns).toContain('get_identity');
     expect(fns).toContain('get_constraints');
+  });
+});
+
+describe('P3 — pack reuse', () => {
+  // Sibling describe → the API-06 beforeEach doesn't cover us; without this, the last build-path
+  // test's calls leak into the "never called" assertions here.
+  beforeEach(() => {
+    stubs.runJobBySlug.mockReset();
+    stubs.insertContextPack.mockClear();
+    stubs.getFreshContextPack.mockClear();
+  });
+
+  it('a fresh pack short-circuits BOTH Broker calls and inserts nothing', async () => {
+    stubs.getFreshContextPack.mockResolvedValueOnce({
+      id: 'cached-1',
+      rendered: '[context built 2026-08-04 · broker-curated · fns: get_identity]\n\nCACHED DOSSIER',
+      provenance: [{ fn: 'get_identity', params: {}, rows: 1, at: '2026-08-04T10:00:00Z' }],
+      builtAt: '2026-08-04T10:00:00Z',
+      expiresAt: '2026-08-11T10:00:00Z',
+    });
+    const pack = await buildContextPack(USER, 'ongoing');
+    expect(pack.mode).toBe('pack-reuse');
+    expect(pack.rendered).toContain('CACHED DOSSIER');
+    // The whole point: zero model calls, zero new rows.
+    expect(stubs.runJobBySlug).not.toHaveBeenCalled();
+    expect(stubs.insertContextPack).not.toHaveBeenCalled();
+  });
+
+  it('a miss (stale, expired, or touched) builds normally', async () => {
+    stubs.getFreshContextPack.mockResolvedValueOnce(null);
+    const pack = await buildContextPack(USER, 'ongoing');
+    expect(pack.mode).not.toBe('pack-reuse');
+    expect(stubs.insertContextPack).toHaveBeenCalled();
+  });
+
+  it('reuse asks for THIS intent — a disrupted session never gets an ongoing framing', async () => {
+    stubs.getFreshContextPack.mockResolvedValueOnce(null);
+    await buildContextPack(USER, 'disrupted');
+    expect(stubs.getFreshContextPack).toHaveBeenCalledWith(USER, null, 'disrupted');
   });
 });

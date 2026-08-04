@@ -4,6 +4,7 @@ export type AiLogKind =
   | 'capture'
   | 'coach'
   | 'pack_select'
+  | 'pack_reuse'
   | 'pack_summarize'
   | 'context_select'
   | 'assess_goal'

@@ -563,18 +563,23 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
 ### Backlog — detailed
 
 **A. Context/memory (MEMORY-ARCHITECTURE.md §9 phasing)**
-- **P3 — refresh policy + enrichment. NOT BUILT** (checked 2026-08-04), and note the trap:
-  `getFreshContextPack` **exists in `repos/context-pack.ts` and is called from nowhere in the
-  repo** — the reuse path was written and never wired, so every turn still rebuilds. Whoever
-  picks this up should decide whether to wire that function or delete it; a dead export that looks
-  like a shipped capability is how this item got mis-read as further along than it is.
-  Design as originally specced: reuse a fresh pack via `getFreshContextPack` (TTL: 7d
-  default, onboarding 1d). Rebuild *before* TTL on triggers: (a) **data-volume** (N new rows in
-  a relevant domain since `built_at`, read from catalog stats); (b) **event** (lock/replan/
-  disruption invalidates the affected topic's pack); (c) **conversational staleness** (coach or
-  a `context_select` miss flags that the pack lacks a referenced fact). Between rebuilds,
-  **enrich** with high-signal new items (today's workout/check-in) without a full rebuild
-  (`status='enriching'`).
+- **P3 — pack reuse: BUILT 2026-08-04** (the reuse half; enrichment deliberately dropped — see
+  below). A coach session open now serves a cached dossier and skips BOTH Broker calls whenever
+  the pack provably reflects every dossier write since it was built. The invalidation rule is
+  **database triggers** (migration `0022_pack_touch`), not app-side calls — the `listForCoach`
+  move: one missed invalidate call would be "making you repeat yourself", so no app code is
+  trusted to remember. Every dossier table touches `users.pack_touched_at` on write; the one
+  churn trap is handled in SQL — occurrences' UPDATE trigger fires only on dossier-real columns
+  (status/value/log/date/episode), so the prescription-CACHE writes on every plan open cannot
+  kill packs. Reuse requires intent match (framing is baked into `rendered`) and expiry.
+  Verified three ways: a live SQL truth-table on the deployed DB, a 7-case integration suite
+  through the app's own read (goal write / secret toggle / status flip invalidate; cache write
+  does not), and 3 mock tests proving the service short-circuits with zero model calls and zero
+  inserts. *Known races, accepted:* session-open fires ensureHorizon concurrently — a horizon
+  top-up may invalidate a pack a moment after it was served (next open rebuilds).
+  *Deliberately dropped from the original spec:* data-volume triggers and `status='enriching'`
+  partial refresh — the watermark makes both redundant (any relevant write rebuilds, and builds
+  are cheap enough once they only happen on real change); conversational-staleness stays with P4.
 - **P4 — reflection + cross-session/topic memory. NOT BUILT** (checked 2026-08-04). Background
   reflection pass (MemGPT-style); per-topic packs; a longitudinal memory store beyond per-session
   `workflow_variables`. *Note for anyone grepping:* "reflection" appears in `services/burn.ts` as

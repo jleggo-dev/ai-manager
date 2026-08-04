@@ -16,7 +16,7 @@ import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 import { validateCalls, executeCalls, type FnCall } from './retrieval/select-and-run.ts';
 import { renderCatalogDoc } from './retrieval/catalog.ts';
 import { runJobBySlug } from '../ai/aim.ts';
-import { insertContextPack, type ProvenanceEntry } from '../repos/context-pack.ts';
+import { getFreshContextPack, insertContextPack, type ProvenanceEntry } from '../repos/context-pack.ts';
 import { updateTrace } from './dev-trace.ts';
 import { logAi } from './ai-log.ts';
 
@@ -111,6 +111,35 @@ export async function buildContextPack(
   intent: CoachIntent = 'ongoing',
   topic?: CoachTopic,
 ): Promise<ContextPack> {
+  // REUSE (P3): a fresh-enough pack whose user has written NOTHING dossier-relevant since it was
+  // built is served as-is — zero Broker calls. Freshness is decided in SQL against the trigger
+  // watermark (migration 0022), so no app code has to remember to invalidate anything. The stored
+  // row already carries the audit trail; a reuse inserts nothing.
+  const cached = await getFreshContextPack(userId, topic ?? null, intent);
+  if (cached) {
+    updateTrace(userId, {
+      context: {
+        mode: 'pack-reuse',
+        selectReason: `reused pack built ${cached.builtAt} — no dossier writes since`,
+        provenance: cached.provenance,
+        data: {},
+        rendered: cached.rendered,
+      },
+      brokerSelect: null,
+      brokerSummarize: null,
+    });
+    void logAi(userId, { kind: 'pack_reuse', output: { packId: cached.id }, meta: { builtAt: cached.builtAt } });
+    return {
+      id: cached.id,
+      rendered: cached.rendered,
+      provenance: cached.provenance,
+      mode: 'pack-reuse',
+      selectReason: 'fresh pack — no dossier writes since',
+      builtAt: cached.builtAt,
+      expiresAt: cached.expiresAt,
+    };
+  }
+
   const now = new Date();
   const builtAt = now.toISOString();
   const ttlDays = TTL_DAYS[intent] ?? 7;
@@ -163,7 +192,7 @@ export async function buildContextPack(
   const id = await insertContextPack({
     userId,
     topic: topic ?? null,
-    sections: { summary, select_reason: selectReason, mode },
+    sections: { summary, select_reason: selectReason, mode, intent },
     rendered,
     provenance,
     tokenEstimate: Math.ceil(rendered.length / 4),
