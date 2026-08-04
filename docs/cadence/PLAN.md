@@ -623,14 +623,27 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   entry. Photo input SHIPPED capture-first 2026-07-17. REMAINING: per-topic thread continuity;
   vision parse + `macro_targets` day view + rings — now fully specced in "SPEC — Nutrition v2 +
   the Visual Today" (phases N1–N4).
-- **Adaptation (Phase 7) — MORE BUILT THAN THIS ENTRY IMPLIED; needs an audit, not a build.**
-  Present and wired (checked 2026-08-04): `services/situation.ts` (calling the `situation-assess`
-  job), `services/episode.ts` + `services/episode-overlay.ts` (the additive temporary plan), the
-  `disrupted-plan` job, `activities.disrupted_override`, and the `cadence-replan` workflow.
-  Tripwire logic exists in `situation.ts`. **Unknown, and the actual next step:** whether the
-  trip→assess→overlay→exit path holds end-to-end on a live account, and how much of it can run at
-  all before the tick exists (the trips that depend on absence cannot fire yet). Audit before
-  building anything new here.
+- **Adaptation (Phase 7) — AUDITED 2026-08-04: BUILT END TO END.** The chain, traced in code:
+  `GET /plan` fires `assessIfDue` (fire-and-forget) → **deterministic tripwires gate it, so no
+  wire firing means no LLM call at all** → `situation-assess` proposes → `users.pending_proposal`
+  → `PlanProposalBanner` on the next load → accept runs either `enterEpisode` (the additive
+  temporary plan, via `episode-overlay`) or `replanPlan` → `endEpisode` exits, wired to a route
+  and to `PlanView`. Guards in place: one outstanding proposal at a time, a 7-day assess interval,
+  and nothing assessed before a plan exists.
+  **Six wires:** timezone shift (≥2h), location move (≥100km), missed threshold,
+  consistency/outcome divergence (showing up, number not moving), consistency dip, extreme
+  weather (≤-10°C / ≥38°C). Absence is handled on RETURN (`RETURN_GAP_DAYS` 4,
+  `REBASELINE_GAP_DAYS` 7).
+  **Correction to an earlier note in this refresh:** Phase 7 is *not* blocked on the parked
+  reminders work. It is request-time triggered by design — the user opening their plan is the
+  clock — so it functions today without anything that wakes up on its own.
+  **Gap found and closed:** `tripwires.ts` — the gate deciding whether the LLM runs, and the home
+  of every threshold — had **zero tests** while everything downstream was covered (situation 11,
+  episode 8, overlay 5). Now 12, covering each boundary, the empty case, and the guard that a
+  partial fact never fires a wire (a missing home location must not propose a detour to someone
+  sitting at home).
+  **Genuinely still unknown:** no end-to-end run on a live account — every link is verified in
+  isolation, the seam between them is not.
 
 **C. Capture quality — FIXED (2026-07-15)**
 - **Baseline schema drift — FIXED.** `normalizeBaseline` (`services/capture-normalize.ts`)
