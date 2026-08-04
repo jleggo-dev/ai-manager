@@ -28,9 +28,12 @@ describe('the banks', () => {
     }
   });
 
-  it('defaults the six original banks to reflection', () => {
-    expect(bankFamily(journalBank('three_good_things')!)).toBe('reflection');
-    expect(bankFamily(journalBank('free_write')!)).toBe('craft');
+  it('defaults the six original banks to reflection, and tags the new ones', () => {
+    const family = Object.fromEntries(JOURNAL_BANKS.map((b) => [b.id, bankFamily(b)]));
+    expect(family.three_good_things).toBe('reflection');
+    expect(family.free_write).toBe('craft');
+    expect(family.what_you_learned).toBe('study');
+    expect(family.sit_with_a_line).toBe('devotion');
   });
 
   it("index 0 is Design's primary line, verbatim", () => {

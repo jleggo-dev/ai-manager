@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { deriveWalkthrough, nowMenuMeta, type NowMenuItem, type OccurrenceSession } from '@cadence/shared';
+import {
+  deriveWalkthrough,
+  journalBank,
+  journalOpener,
+  nowMenuMeta,
+  type NowMenuItem,
+  type OccurrenceSession,
+} from '@cadence/shared';
 import { getNowMenu } from '../../lib/api.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
 import { JournalWrite } from '../journal/JournalWrite.tsx';
@@ -40,8 +47,12 @@ export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLog
   // Journal rows open the real writing page (full-screen, the store behind it) — the walkthrough's
   // journal step is for sessions; a menu-launched entry belongs to the module.
   if (playing?.action.kind === 'tool' && playing.action.tool === 'journal') {
+    // The coach picked a bank or wrote a question for this row; before this it chose one and the
+    // page opened blank anyway. `journalOpener` holds the "your sentence always wins" rule.
+    const opener = journalOpener(playing.action.params);
     return (
       <JournalWrite
+        openWith={{ bank: journalBank(opener.bank) ?? null, prompt: opener.prompt }}
         onClose={() => setPlaying(null)}
         onKept={() => {
           setPlaying(null);

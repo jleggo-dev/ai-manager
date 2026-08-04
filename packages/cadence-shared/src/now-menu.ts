@@ -57,6 +57,46 @@ export interface NowMenu {
 /** Design's redline: three to five rows before the free line. Zero is a legitimate menu. */
 export const MAX_NOW_ITEMS = 5;
 
+/** A coach-written journal question is the one free-text parameter that reaches the page verbatim. */
+export const MAX_JOURNAL_PROMPT = 140;
+
+/**
+ * Coerce a row's parameters. Every other param is an id or a number that its renderer clamps
+ * (`patternById`, `clampCycles`, `clampSitMinutes`), but `journal_prompt` is copy the coach wrote
+ * and the page shows as-is — so it gets the same trim-and-cap the label gets, right here, and an
+ * empty one is dropped rather than rendered as a blank question. Junk values (objects, booleans,
+ * nulls) are discarded instead of reaching a renderer that assumed a string.
+ */
+function sanitizeParams(params: unknown): Record<string, string | number | undefined> {
+  const out: Record<string, string | number | undefined> = {};
+  if (!params || typeof params !== 'object') return out;
+  for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      out[key] = value;
+    } else if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      out[key] = key === 'journal_prompt' ? trimmed.slice(0, MAX_JOURNAL_PROMPT) : trimmed;
+    }
+  }
+  return out;
+}
+
+/**
+ * The question a journal row opens with. The coach's own sentence beats a bank id — the same
+ * promise the tool catalog makes ("your sentence always wins"), kept in one place so the menu and
+ * the session can't disagree about it. Returns nulls when the coach named neither, which is a real
+ * state: the page opens blank with its own picker.
+ */
+export function journalOpener(params: Record<string, string | number | undefined>): {
+  prompt: string | null;
+  bank: string | null;
+} {
+  const written = typeof params.journal_prompt === 'string' ? params.journal_prompt : '';
+  const bank = typeof params.journal_bank === 'string' ? params.journal_bank : '';
+  return { prompt: written || null, bank: written ? null : bank || null };
+}
+
 /**
  * The meta line under a row, derived from what will actually play — never from coach copy.
  * Returns `undefined` when there is nothing honest to say (a plan activity we don't own the
@@ -143,7 +183,7 @@ export function normalizeNowMenu(
 
     let resolved: NowMenuAction | null = null;
     if (action.kind === 'tool' && typeof action.tool === 'string' && knownTools.includes(action.tool)) {
-      resolved = { kind: 'tool', tool: action.tool as SessionItemTool, params: action.params ?? {} };
+      resolved = { kind: 'tool', tool: action.tool as SessionItemTool, params: sanitizeParams(action.params) };
     } else if (
       action.kind === 'activity' &&
       typeof action.activityId === 'string' &&

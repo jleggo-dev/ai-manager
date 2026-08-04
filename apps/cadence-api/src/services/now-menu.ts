@@ -13,7 +13,9 @@
 import {
   BREATH_PATTERNS,
   GROUNDING_NAMES,
+  JOURNAL_BANKS,
   SESSION_TOOL_KINDS,
+  bankFamily,
   normalizeNowMenu,
   patternCounts,
   type NowMenuItem,
@@ -102,6 +104,9 @@ function toItems(raw: string): { items: unknown[] } {
               meditate_bells: f.meditate_bells ?? undefined,
               grounding_game: f.grounding_game ?? undefined,
               journal_bank: f.journal_bank ?? undefined,
+              // The coach's own question, when it wrote one instead of naming a bank. Trimmed and
+              // capped in normalizeNowMenu — it is the only row parameter that renders verbatim.
+              journal_prompt: f.journal_prompt ?? undefined,
             },
           };
     return { label: f.label, area: f.area, action, pinned: f.pinned === true, coachLine: f.coach_line };
@@ -133,6 +138,9 @@ export async function getNowMenu(userId: string): Promise<NowMenuItem[]> {
       tools: SESSION_TOOL_KINDS.join(', '),
       breath_patterns: BREATH_PATTERNS.map((p) => `${p.id} (${patternCounts(p)})`).join(', '),
       grounding_games: Object.keys(GROUNDING_NAMES).join(', '),
+      // Grouped by family so the composer matches the practice — a novelist must never be handed a
+      // gratitude prompt just because gratitude banks happen to be listed first.
+      journal_banks: JOURNAL_BANKS.map((b) => `${b.id} (${bankFamily(b)})`).join(', '),
     });
 
     const items = normalizeNowMenu(

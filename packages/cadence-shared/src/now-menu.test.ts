@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { MAX_NOW_ITEMS, areaForTool, normalizeNowMenu, nowMenuMeta, type NowMenuAction } from './now-menu.ts';
+import {
+  MAX_JOURNAL_PROMPT,
+  MAX_NOW_ITEMS,
+  areaForTool,
+  journalOpener,
+  normalizeNowMenu,
+  nowMenuMeta,
+  type NowMenuAction,
+} from './now-menu.ts';
 import { SESSION_TOOL_KINDS } from './tool-catalog.ts';
 
 const TOOLS = SESSION_TOOL_KINDS as readonly string[];
@@ -154,5 +162,60 @@ describe('normalizeNowMenu', () => {
   it('survives junk without throwing', () => {
     const out = normalizeNowMenu({ items: [null, 42, 'nope', {}] as unknown[] }, TOOLS, ACTIVITIES);
     expect(out).toEqual([]);
+  });
+});
+
+describe('journal rows — the coach names a bank or writes the question', () => {
+  it("the coach's own sentence wins over a bank it also sent", () => {
+    const opener = journalOpener({ journal_bank: 'three_good_things', journal_prompt: 'Free-write the scene.' });
+    expect(opener.prompt).toBe('Free-write the scene.');
+    // Not "both" — a page showing two questions is worse than either one alone.
+    expect(opener.bank).toBeNull();
+  });
+
+  it('falls back to the bank, and to nothing at all', () => {
+    expect(journalOpener({ journal_bank: 'free_write' })).toEqual({ prompt: null, bank: 'free_write' });
+    // Neither is a real state: the page opens blank with the picker one tap away.
+    expect(journalOpener({})).toEqual({ prompt: null, bank: null });
+  });
+
+  it('trims and caps a written prompt — it is the one param that renders verbatim', () => {
+    const long = 'x'.repeat(400);
+    const [row] = normalizeNowMenu(
+      { items: [{ label: 'Write', action: tool('journal', { journal_prompt: `   ${long}   ` }) }] },
+      TOOLS,
+      ACTIVITIES,
+    );
+    const written = row?.action.kind === 'tool' ? row.action.params.journal_prompt : undefined;
+    expect(written).toHaveLength(MAX_JOURNAL_PROMPT);
+    expect(written).not.toMatch(/^\s|\s$/);
+  });
+
+  it('drops a whitespace-only prompt rather than rendering a blank question', () => {
+    const [row] = normalizeNowMenu(
+      { items: [{ label: 'Write', action: tool('journal', { journal_prompt: '   ' }) }] },
+      TOOLS,
+      ACTIVITIES,
+    );
+    expect(row?.action.kind === 'tool' && row.action.params.journal_prompt).toBeUndefined();
+  });
+
+  it('discards junk params instead of handing a renderer the wrong type', () => {
+    const [row] = normalizeNowMenu(
+      {
+        items: [
+          {
+            label: 'Write',
+            action: tool('journal', { journal_prompt: { evil: true }, breath_cycles: NaN, journal_bank: 'a_win' }),
+          },
+        ],
+      },
+      TOOLS,
+      ACTIVITIES,
+    );
+    const params = row?.action.kind === 'tool' ? row.action.params : {};
+    expect(params.journal_prompt).toBeUndefined();
+    expect(params.breath_cycles).toBeUndefined();
+    expect(params.journal_bank).toBe('a_win');
   });
 });

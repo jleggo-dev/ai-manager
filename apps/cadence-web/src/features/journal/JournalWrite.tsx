@@ -24,9 +24,23 @@ import { MicButton } from '../../components/MicButton.tsx';
  * Rule 1 lives here too: OS autocorrect stays on (standard keyboard behaviour), but nothing we
  * write ever rewrites their words.
  */
-export function JournalWrite({ onClose, onKept }: { onClose: () => void; onKept: () => void }) {
+export function JournalWrite({
+  onClose,
+  onKept,
+  openWith,
+}: {
+  onClose: () => void;
+  onKept: () => void;
+  /** The question this page opens on when the coach chose one — a bank it named, or a sentence it
+   *  wrote for this person. Absent when the page is opened cold, which is a real state: no
+   *  question, the picker one tap away. Whatever the coach sent, the reader can still change it. */
+  openWith?: { bank: JournalBank | null; prompt: string | null };
+}) {
   const [text, setText] = useState('');
-  const [bank, setBank] = useState<JournalBank | null>(null);
+  const [bank, setBank] = useState<JournalBank | null>(openWith?.bank ?? null);
+  // A coach-written question, held apart from the banks because it has no phrasing pool to rotate.
+  // Picking from the picker clears it — the reader's choice replaces the coach's, never stacks.
+  const [written, setWritten] = useState<string | null>(openWith?.prompt ?? null);
   const [secret, setSecret] = useState(false);
   const [picker, setPicker] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -52,7 +66,7 @@ export function JournalWrite({ onClose, onKept }: { onClose: () => void; onKept:
   }, [disclose]);
 
   const today = new Date().toISOString().slice(0, 10);
-  const prompt = bank ? todaysPhrasing(bank, today) : null;
+  const prompt = written ?? (bank ? todaysPhrasing(bank, today) : null);
 
   async function keep(mode: 'typed' | 'paper') {
     if (saving) return;
@@ -155,6 +169,7 @@ export function JournalWrite({ onClose, onKept }: { onClose: () => void; onKept:
                 className="jw-bank"
                 onClick={() => {
                   setBank(b);
+                  setWritten(null); // the reader's pick replaces the coach's question
                   setPicker(false);
                   areaRef.current?.focus();
                 }}
