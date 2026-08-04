@@ -47,6 +47,10 @@ jobs:
         with:
           filters: |
             ai-admin:
+              # Workflow edits re-run the pipeline they define: a ci.yml-only push previously
+              # skipped every job and handed the gate a VACUOUS green — which landed right when a
+              # broken DB secret needed a real run to disprove it (2026-08-04).
+              - '.github/workflows/**'
               - 'backend/**'
               - 'frontend/**'
               - 'packages/types/**'
@@ -58,6 +62,7 @@ jobs:
               - 'scripts/**'
               - '.husky/**'
             cadence:
+              - '.github/workflows/**'
               - 'apps/**'
               - 'packages/core/**'
               - 'packages/cadence-shared/**'
