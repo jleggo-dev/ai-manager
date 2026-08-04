@@ -20,7 +20,20 @@ dotenv.config({ path: path.join(repoRoot, 'apps/cadence-api/.env') });
  */
 function buildDbUrl(): string {
   const full = process.env.CADENCE_DATABASE_URL;
-  if (full && full.includes('@')) return full;
+  if (full && full.includes('@')) {
+    // The DIRECT host (db.<ref>.supabase.co) is IPv6-ONLY — from an IPv4-only network (GitHub
+    // Actions runners, most CI) every connect dies as ENETUNREACH on a 2600:… address, which
+    // looks like a mystery outage and cost half a day on 2026-08-04. Say so up front; the value
+    // that works everywhere is the POOLER (aws-*.pooler.supabase.com:6543, user postgres.<ref>).
+    if (/@db\.[a-z0-9]+\.supabase\.co[:/]/.test(full)) {
+      console.warn(
+        '[config] CADENCE_DATABASE_URL points at the DIRECT Supabase host (db.*.supabase.co), ' +
+          'which is IPv6-only — unreachable from IPv4-only environments like CI runners. ' +
+          'Use the pooler URL (aws-*.pooler.supabase.com:6543) or set CADENCE_DB_PASSWORD instead.',
+      );
+    }
+    return full;
+  }
 
   const password = process.env.CADENCE_DB_PASSWORD;
   if (!password) {
