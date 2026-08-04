@@ -252,6 +252,37 @@ Observe phase. Owner-confirmed 2026-08-02, with the rulings below.
   **private toggle** excludes from context packs. Export + delete. Scribe `parse_mind_log`
   extracts themes/valence to case notes; never judges.
 
+#### Where journal prompts live (settled 2026-08-04, after building it wrong twice)
+
+**The task owns its prompt; nothing is pooled per user.** Two journal tasks are two goals that
+coincidentally share a widget (owner, 2026-08-04) — a novelist's free-write and an evening
+gratitude practice must never merge into one chip list.
+
+Three surfaces, three existing homes, **no new table and no new job**:
+
+| surface | where the question comes from |
+|---|---|
+| scheduled journal step | `prescribe-session` writes `journal_bank` or `detail` on the item; `detail` wins (`journalTool`) |
+| adhoc ＋ row | `compose-now-menu` writes `journal_bank` or `journal_prompt`; written wins (`journalOpener`) |
+| journal page, opened cold | the twelve banks — the "no task selected" state, which is what deterministic mode also gets |
+
+**Two designs were proposed and dropped, both after checking rather than building:**
+
+1. *A `journal_prompts` table keyed by user, regenerated weekly.* Wrong because it pooled the
+   practices — the thing the owner ruling forbids.
+2. *Prompts on `activity.target`, crafted at re-plan.* Wrong twice over: `ActivityTarget` requires
+   `metric` + `value`, so a journal activity would have carried a bogus metric — and the coach
+   **already** writes a fitted question per session, so the machinery was redundant. A live probe
+   showed it unprompted: a novelist's "Morning pages" came back with a real free-writing
+   instruction, not a gratitude question.
+
+**What the probe did find** is the defect worth fixing: a journal item with *neither* field (a
+student's study review) fell through to the hardcoded `'Jot down how it went'` — a line that
+presumes a workout and reads as nonsense on a study or free-writing step. Fixed at the source
+(prescribe-session must always carry one) and at the last resort (a practice-neutral default).
+`probe-coach-tools.ts` now holds novelist and student scenarios so it can't silently return: the
+failure mode is a *plausible* prompt for somebody else's practice, which nothing else would catch.
+
 ### 4.6 Gratitude — banks + **share-out** (Class 2; resolves REQ6's deferral)
 
 Three tiers:
@@ -323,15 +354,10 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
 - **`SessionItem` params:** typed optional fields per tool (REQ8 idiom) vs. one `params` jsonb —
   decide at `breathing` build time; leaning typed fields + normalize caps.
 - **Check-in vocabulary:** which emotion-word set (needs to be granular but not clinical).
-- **The journal page's chips are still reflection-only** (§4.5 ruling). In a *session* the coach can
-  already write any prompt it likes, but the standalone journal page renders the six fixed banks —
-  so a novelist, a student, or someone with a devotional practice opens it to six chips that all
-  assume emotional processing. Two ways out: **(a)** widen the banks with craft/study/devotional
-  sets (user-facing copy → BRAND review), or **(b)** let the coach supply the page's chips the way
-  it supplies the now-menu's rows (machinery exists — `compose-now-menu` is the pattern), keeping
-  the banks as the fallback when it has nothing better. **Leaning (b)**: it honours "the coach
-  decides" instead of the app guessing which six practices exist, and it doesn't hard-code a
-  taxonomy of writing practices that will always be incomplete.
+- ~~The journal page's chips are reflection-only.~~ **Resolved 2026-08-04 — route (a) shipped:**
+  twelve banks across four families (reflection · craft · study · devotion), and the coach picks
+  from the family that matches the practice. Route (b) — a per-user weekly prompt-crafting job —
+  was **investigated and dropped as redundant**: see "Where prompts live" below.
 - ~~Journal retention/export format.~~ **Resolved 2026-08-04 (owner):** entries live **as long as
   the user wants** — nothing auto-expires. They are **exportable as Markdown**, and the user can
   **delete** them. (The "are private entries still parsed" half was already resolved — §8: nothing

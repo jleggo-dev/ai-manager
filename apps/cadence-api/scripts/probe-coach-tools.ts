@@ -20,14 +20,18 @@ import {
   BREATH_PATTERNS,
   GROUNDING_NAMES,
   SESSION_TOOL_KINDS,
+  bankFamily,
   clampCycles,
   isBreathPatternId,
+  isJournalBankId,
+  journalBank,
   isGroundingGame,
   isMeditateBells,
   normalizeNowMenu,
   patternById,
   patternCounts,
   renderCoachToolCatalog,
+  type JournalFamily,
   type SessionItem,
   type SessionItemTool,
 } from '@cadence/shared';
@@ -49,6 +53,9 @@ interface SessionScenario {
   baseline: string;
   equipment: string;
   phase?: 'discover' | 'calibrate' | 'progress';
+  /** When set, a journal item that NAMES a bank must name one from this family — the guard on
+   *  "never hand a novelist a gratitude prompt". A coach-written question always passes. */
+  journalFamily?: JournalFamily;
 }
 
 /** Both directions, in user voice: does each tool fire where it belongs, stay away where it
@@ -108,9 +115,47 @@ const SESSIONS: SessionScenario[] = [
     equipment: 'road shoes',
     phase: 'progress',
   },
+  // The journal is a WRITING tool, not a feelings tool (REQ9 §4.5). These two exist because the
+  // failure is silent and plausible-looking: a novelist handed "what were three good things?" gets
+  // a perfectly nice prompt for somebody else's practice, and nothing errors.
+  {
+    name: 'novelist · "trying to actually finish this draft"',
+    want: ['journal'],
+    ban: ['feeling_log'],
+    journalFamily: 'craft',
+    activity: 'Morning pages — 20 min, practice',
+    goals: 'finish the first draft of my novel',
+    baseline: '{"notes":"writes best before work, gets stuck editing as they go"}',
+    equipment: 'notebook',
+    phase: 'discover',
+  },
+  {
+    name: 'student · "exam in november and it is not going in"',
+    want: ['journal'],
+    journalFamily: 'study',
+    activity: 'Study review — 15 min, practice',
+    goals: 'pass my actuarial exam in November',
+    baseline: '{"notes":"reads the chapter twice and still blanks on the practice questions"}',
+    equipment: 'textbook',
+    phase: 'discover',
+  },
 ];
 
-function checkItem(i: SessionItem): void {
+function checkItem(i: SessionItem, wantFamily?: JournalFamily): void {
+  if (i.tool === 'journal') {
+    const bank = isJournalBankId(i.journal_bank ?? '') ? journalBank(i.journal_bank) : undefined;
+    const written = typeof i.detail === 'string' && i.detail.trim() ? i.detail.trim() : '';
+    console.log(`     journal "${i.name}" → bank=${bank?.id ?? '—'} written=${written ? `"${written.slice(0, 70)}…"` : '—'}`);
+    // The defect this scenario exists for: an item with neither falls through to a generic line
+    // that fits nobody. The coach has the context; a fallback is not a plan.
+    if (!bank && !written) flag(`journal item "${i.name}" carries neither a bank nor a question`);
+    if (i.journal_bank && !bank) flag(`invented journal bank "${String(i.journal_bank)}"`);
+    // A named bank must match the practice. A written question is the coach's own and is not
+    // family-checkable — that's the point of letting it write one, so it passes.
+    if (bank && wantFamily && bankFamily(bank) !== wantFamily) {
+      flag(`${wantFamily} practice got a ${bankFamily(bank)} bank ("${bank.id}")`);
+    }
+  }
   if (i.tool === 'breathing') {
     const valid = isBreathPatternId(i.breath_pattern ?? '');
     const pattern = patternById(i.breath_pattern);
@@ -158,7 +203,7 @@ async function probeSessions(): Promise<void> {
     const items = norm.blocks.flatMap((b) => b.items);
     const used = new Set(items.map((i) => i.tool).filter(Boolean));
     console.log(`   ${items.length} items · tools: ${[...used].join(', ') || '(all inferred)'}`);
-    items.forEach(checkItem);
+    items.forEach((i) => checkItem(i, s.journalFamily));
 
     // Owner ruling: a feeling note never lands straight after a grounding flow — that flow
     // already ends on its own question, and two prompts back to back is one too many.
