@@ -130,6 +130,29 @@ const SESSIONS: SessionScenario[] = [
     equipment: 'notebook',
     phase: 'discover',
   },
+  // The journal↔feeling_log boundary (catalog audit 2026-08-04): both capture inner-state words,
+  // so each side gets a scenario. Sentences worth rereading are journal; one word and a size is
+  // feeling_log — a selector that muddles them turns a writing practice into mood tracking.
+  {
+    name: 'end-of-day pages · sentences are journal, never a mood word',
+    want: ['journal'],
+    ban: ['feeling_log'],
+    activity: 'End-of-day pages — 10 min, practice',
+    goals: 'i want to process the day in writing, a few honest paragraphs before bed',
+    baseline: 'journals on and off since college. not looking for mood tracking.',
+    equipment: 'a notebook',
+    phase: 'discover',
+  },
+  {
+    name: 'pattern week · one word and a size is feeling_log, never an essay',
+    want: ['feeling_log'],
+    ban: ['journal'],
+    activity: 'Morning check-in — 2 min, mind',
+    goals: 'stress is all over the place. coach said this week we are just learning my patterns',
+    baseline: 'week one. nothing tried yet.',
+    equipment: 'none',
+    phase: 'discover',
+  },
   {
     name: 'student · "exam in november and it is not going in"',
     want: ['journal'],
@@ -206,14 +229,10 @@ async function probeSessions(): Promise<void> {
     console.log(`   ${items.length} items · tools: ${[...used].join(', ') || '(all inferred)'}`);
     items.forEach((i) => checkItem(i, s.journalFamily));
 
-    // Owner ruling: a feeling note never lands straight after a grounding flow — that flow
-    // already ends on its own question, and two prompts back to back is one too many.
-    for (const b of norm.blocks) {
-      b.items.forEach((i, idx) => {
-        if (i.tool === 'feeling_log' && b.items[idx - 1]?.tool === 'grounding')
-          flag('feeling_log stacked directly after grounding');
-      });
-    }
+    // RETIRED 2026-08-04: the "no feeling_log straight after grounding" check. Its whole reason
+    // was that grounding ended on its own question ("did that help?") — that question was removed
+    // by owner ruling, so the adjacency is harmless now and the assertion had started flagging
+    // legitimate compositions. A rule must not outlive its rationale.
 
     for (const w of s.want ?? []) if (!used.has(w)) flag(`expected ${w}, got none`);
     for (const h of s.hope ?? []) if (!used.has(h)) console.log(`   (hoped for ${h}; not present — fine)`);

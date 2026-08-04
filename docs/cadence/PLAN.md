@@ -1969,6 +1969,30 @@ once in `tool-catalog.ts` → prompt + whitelist + compile-check all move togeth
 **Chosen access = runtime variable**, over the two alternatives (bake the catalog into the synced
 prompt; or a devs.ai knowledge resource) — devs.ai holds only the placeholder, so zero drift.
 
+**Description discipline (audit 2026-08-04 — the catalog reviewed as what it is, a
+function-calling toolset):** four rules, each bought with a live failure:
+
+1. **Examples are canon.** A worked example outweighs any rule — "a 5-min meditation" living in
+   timer's examples taught timer-for-mind-practices for weeks despite a trap saying otherwise, and
+   photo's lone "Photo your plate" pointed session photos at the food module's job. Every example
+   must be the tool's most *unmistakable* case, never a neighbour's.
+2. **Every confusable pair carries its tiebreak on at least one side.** The audit found three
+   uncovered: timer↔checkoff (watch a clock vs confirm it happened), read↔checkoff (a cue inside a
+   step vs a step of its own), journal↔feeling_log (sentences worth rereading vs one word and a
+   size). All covered now; a NEW tool's review question is "which existing entries could this be
+   mistaken for, and where does that tiebreak live?"
+3. **Summaries lead with the discriminator.** The first clause is what a selector model reads;
+   operational detail (banks, fields, variants) comes after or lives in the trap.
+4. **Inference must honour the preamble.** The catalog tells the coach `tool: null` is safe, so
+   `inferTool` now checks tool-specific fields (journal_bank, grounding_game, meditate_bells,
+   breath_pattern) BEFORE quantities — previously a journal item with a duration and no tag
+   silently became a bare timer, and a bank with no duration became `read`. Unambiguous fields
+   outrank ambiguous numbers.
+
+Also retired with its rationale: the probe's "no feeling_log straight after grounding" check —
+its whole reason was grounding ending on its own question, which the owner removed. A rule must
+not outlive its why.
+
 **Future — revisit the catalog architecture (owner steer 2026-07-28):** create a **devs.ai-managed
 agent** and maintain its data sources through devs.ai instead of injecting an app-side variable —
 "much more efficient," and it centralizes upkeep on the platform the coach already lives on. Revisit

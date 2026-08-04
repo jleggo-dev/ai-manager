@@ -17,7 +17,7 @@
  */
 
 import type { OccurrenceSession, SessionBlock, SessionItem, SessionItemTool } from './types/occurrence.ts';
-import { type BreathPattern, clampCycles, patternById, totalMinutes } from './breathing.ts';
+import { type BreathPattern, clampCycles, isBreathPatternId, patternById, totalMinutes } from './breathing.ts';
 import { type MeditateBells, clampIntervalMinutes, clampSitMinutes, isMeditateBells } from './meditate.ts';
 import { type GroundingGame, type GroundingSpec, groundingSpec, isGroundingGame } from './grounding.ts';
 import { type JournalBankId, isJournalBankId, journalBank, todaysPhrasing } from './journal.ts';
@@ -206,16 +206,24 @@ function breathingTool(item: SessionItem): StepTool {
 /**
  * Resolve the tool for one prescribed item. The coach's EXPLICIT `item.tool` wins — it carries the
  * judgment quantities can't (a 1-min plank is a `timer`; a 1-min "find a seat" is a `read`). Only
- * when the coach left it unset do we INFER from quantities: sets → **reps**, duration → **timer**,
- * distance → **checkoff**, else **read** (a cue to follow). Covers movement + practice-area
- * sessions through the same pipe; nutrition/weigh-in/insight tools are attached by the caller.
+ * when the coach left it unset do we infer — and **tool-specific fields outrank quantities**,
+ * because they are unambiguous where quantities never were: `journal_bank` can only mean journal,
+ * `grounding_game` only grounding, `meditate_bells` only meditate, `breath_pattern` only breathing.
+ * Quantities come after: sets → **reps**, duration → **timer**, distance → **checkoff**, else
+ * **read**. The catalog's preamble tells the coach `tool: null` is safe; this ordering is what
+ * makes that sentence true — before it, a journal item with a duration and no tag silently became
+ * a bare timer, and a bank with no duration became `read` (the widget vanished entirely).
  *
- * `breathing` is NEVER inferred — a duration means a timer. Paced breathing is only ever played
- * when the coach explicitly asks for it, because "5 minutes of breathing" and "a 5-minute hold"
- * are indistinguishable from quantities alone.
+ * Bare `duration_min` still means timer, never breathing — "5 minutes of breathing" and "a 5-min
+ * hold" are indistinguishable from a duration alone. An explicit `breath_pattern` is not a
+ * quantity, so inferring breathing from it keeps that rule intact.
  */
 export function inferTool(item: SessionItem): StepTool {
   if (item.tool) return toolFromKind(item.tool, item);
+  if (isJournalBankId(item.journal_bank)) return journalTool(item);
+  if (isGroundingGame(item.grounding_game)) return groundingTool(item);
+  if (isMeditateBells(item.meditate_bells)) return meditateTool(item);
+  if (isBreathPatternId(item.breath_pattern)) return breathingTool(item);
   if (typeof item.sets === 'number' && item.sets > 0) return repsTool(item);
   if (typeof item.duration_min === 'number' && item.duration_min > 0) {
     return { kind: 'timer', seconds: Math.round(item.duration_min * 60), chime: true };

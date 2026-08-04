@@ -67,7 +67,8 @@ export interface CoachToolSpec {
 export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   read: {
     class: 'guided',
-    summary: 'a cue to read and follow, capturing nothing — THE DEFAULT when nothing interactive fits',
+    summary:
+      'a cue to read and follow, capturing nothing — the connective tissue INSIDE a session (settle in, set up, transition) and THE DEFAULT when nothing interactive fits',
     reads: ['detail'],
     example: { name: 'Settle in', tool: 'read', detail: 'Find a comfortable seat, shoulders soft' },
   },
@@ -87,6 +88,8 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   checkoff: {
     class: 'guided',
     summary: 'do-it-and-confirm with nothing to capture — a distance target, "step outside", a mobility drill',
+    notWhen:
+      'if they WATCH a clock while doing it, that is timer; checkoff is for things you simply confirm happened (a distance, an errand, a drill). And it is a real step of its own — a cue inside another step is read',
     reads: ['distance_km', 'detail'],
     example: { name: 'Easy shakeout jog', tool: 'checkoff', distance_km: 3 },
   },
@@ -120,9 +123,9 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   feeling_log: {
     class: 'capture',
     summary:
-      "a 20-second note on how they're doing — they pick a word, say how much room it's taking, and may add a line. The mind side's weigh-in: use it while you're still learning someone's patterns, or offer it when checking in would help",
+      "a 20-second check-in: ONE word for how they're doing and how much room it's taking, with an optional line. The mind side's weigh-in — use it while you're still learning someone's patterns, or when checking in would help",
     notWhen:
-      'do NOT schedule it every day forever — ask while you are learning their patterns, then stop. Two questions back to back is one too many, so never follow one capture step straight with another',
+      'a word and a size, never sentences — writing that deserves rereading is journal, not this. Do NOT schedule it every day forever: ask while you are learning their patterns, then stop. And never follow one capture step straight with another — two questions back to back is one too many',
     reads: ['detail'],
     example: { name: 'How are you doing?', tool: 'feeling_log' },
   },
@@ -134,16 +137,17 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   },
   photo: {
     class: 'capture',
-    summary: 'they photograph something (their form, a plate, a progress shot)',
+    summary:
+      "they photograph something — their form on a lift, a progress shot, a plate. For meals, prefer the day's own meal-log tasks; a photo step here is for when THIS session is the thing being photographed",
     reads: ['detail'],
-    example: { name: 'Photo your plate', tool: 'photo', detail: 'Snap the meal before you eat' },
+    example: { name: 'Check your setup', tool: 'photo', detail: 'Snap your squat setup from the side' },
   },
   journal: {
     class: 'capture',
     summary:
-      'they write or speak an entry, which is kept in their journal. This is the tool for ANY writing practice, not only reflection: a novelist free-writing a scene, morning pages, a studio or practice log, a language learner\'s daily paragraph, lectio divina or a daily examen, working a problem out on the page. Either name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own prompt in detail — your sentence always wins, and for creative or craft work it usually should ("Free-write a haunted house scene with a cartoon character you loved as a kid"). Add duration_min to make it a TIMED free-write: the app runs a quiet clock, and writing continuously for a set stretch is the practice itself for morning pages or a drafting habit',
+      "real WRITING, kept where they can reread it — the tool for any writing practice, not only reflection: free-writing a scene, morning pages, a studio log, a language learner's paragraph, lectio divina, working a problem out on the page. Name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own prompt in detail — your sentence always wins, and for craft work it usually should. Add duration_min for a TIMED free-write (a quiet clock; writing continuously IS the practice)",
     notWhen:
-      'this keeps real words in a place they can reread — do not use it for a yes/no or a number, and never promise to analyse what they write. The banks are a floor, not a menu you are limited to: match the bank FAMILY to the practice they are actually doing (a novelist gets craft, never gratitude), and whenever you can write something better fitted to this person and this week, write it',
+      'sentences, never a yes/no, a number, or a single mood word — one word about how they are doing is feeling_log. Never promise to analyse what they write. The banks are a floor, not a menu: match the bank FAMILY to the practice (a novelist gets craft, never gratitude), and when you can write a prompt better fitted to this person and this week, write it',
     reads: ['journal_bank', 'detail', 'duration_min'],
     example: { name: 'Three good things', tool: 'journal', journal_bank: 'three_good_things' },
   },
@@ -183,7 +187,7 @@ const CLASS_HEADER: Record<ToolClass, string> = {
 export function renderCoachToolCatalog(): string {
   const lines: string[] = [
     'TOOL CATALOG — the ONLY ways the app can play a step. Set each item\'s "tool" to one of these names',
-    '(or null to let the app infer from the quantities you filled). Pick the ONE tool that matches how the',
+    '(or null to let the app infer from the fields you filled). Pick the ONE tool that matches how the',
     'person physically does the step; a name not in this catalog will be dropped.',
   ];
   for (const cls of ['guided', 'capture'] as ToolClass[]) {

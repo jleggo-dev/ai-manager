@@ -24,6 +24,32 @@ const runSession: OccurrenceSession = {
 };
 
 describe('inferTool', () => {
+  // The catalog tells the coach `tool: null` is safe. These pin the ordering that makes that
+  // true: a tool-specific field is unambiguous and outranks any quantity. Before this, the first
+  // case below became a bare TIMER and the second became READ — the widget silently vanished.
+  it('a journal bank with a duration is a timed journal, never a bare timer', () => {
+    const t = inferTool({ name: 'Morning pages', journal_bank: 'free_write', duration_min: 20 });
+    expect(t.kind).toBe('journal');
+    expect(t.kind === 'journal' && t.minutes).toBe(20);
+  });
+  it('a bank alone is a journal, not read', () => {
+    expect(inferTool({ name: 'Gratitude', journal_bank: 'three_good_things' }).kind).toBe('journal');
+  });
+  it('a grounding game outranks a duration', () => {
+    expect(inferTool({ name: 'Noticing', grounding_game: 'senses', duration_min: 5 }).kind).toBe('grounding');
+  });
+  it('bells mean a sit, not a timer', () => {
+    expect(inferTool({ name: 'Sit', meditate_bells: 'start_end', duration_min: 10 }).kind).toBe('meditate');
+  });
+  it('an explicit pattern infers breathing; a bare duration still never does', () => {
+    expect(inferTool({ name: 'Settle', breath_pattern: 'box', breath_cycles: 6 }).kind).toBe('breathing');
+    expect(inferTool({ name: 'Breathing', duration_min: 5 }).kind).toBe('timer');
+  });
+  it('junk field values fall through to the quantity path, never crash', () => {
+    expect(inferTool({ name: 'X', journal_bank: 'not_a_bank', duration_min: 2 }).kind).toBe('timer');
+    expect(inferTool({ name: 'Y', grounding_game: 'not_a_game' }).kind).toBe('read');
+  });
+
   it('reads quantities in priority order: sets → reps, duration → timer, distance → checkoff, else read', () => {
     expect(inferTool({ name: 'Squat', sets: 3, reps: 5, load: '95 lb' })).toEqual({
       kind: 'reps',
