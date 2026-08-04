@@ -73,10 +73,14 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   },
   timer: {
     class: 'guided',
+    // "a 5-min meditation" USED to be an example here — teaching the exact collision this line
+    // now warns against: it taught timer-for-meditate, and by analogy timer-for-any-short-mind-
+    // practice, which is how a 5-min noticing practice kept getting a bare clock (probe, 2 of 3
+    // runs 2026-08-04) instead of the grounding flow that IS the practice.
     summary:
-      'the passage of time itself IS the task — a held or timed effort you watch a clock for (a 1-min plank, a 5-min meditation, a 20-min zone-2 run)',
+      'the passage of time itself IS the task — a held or timed physical effort you watch a clock for (a 1-min plank, a 20-min zone-2 run, a wall sit)',
     notWhen:
-      'do NOT pick timer just because a step has a duration — "a minute to settle in" has a duration but is read',
+      'do NOT pick timer just because a step has a duration — "a minute to settle in" has a duration but is read. And a MIND practice with a duration is almost never a timer: silent sitting is meditate, and a noticing or attention practice ("notice five things", a noticing walk, being more present) is grounding — there the noticing is the task and the clock is furniture',
     reads: ['duration_min'],
     example: { name: 'Forearm plank', tool: 'timer', duration_min: 1 },
   },
