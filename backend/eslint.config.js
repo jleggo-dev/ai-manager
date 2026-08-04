@@ -51,19 +51,12 @@ export default [
     ignores: ['**/*.test.ts'],
     rules: { ...sizeRules },
   },
-  // Size-gate backlog — grandfathered offenders (refactoring_plan.md). Each split PR deletes an
-  // entry; the target is zero. NEVER add a new file here to pass CI — split it instead.
-  {
-    files: [
-      // chat-sessions.ts cleared 2026-08-04 — split into routes/chat-sessions/{shared,lifecycle,
-      // send-message,streams,admin}.ts behind an order-preserving assembler; every function under
-      // the cap with no waiver. Do not re-add.
-      'src/ai-manager/chat-session-lifecycle.ts', // ~580 after leaf peel to chat-session-client.ts
-      // chat-messaging.ts + job-execution.ts cleared from allowlist (Phase 3 residual)
-      // widget-health-checker.ts removed with the feature (PR #27) — do not re-add.
-    ],
-    rules: { 'max-lines': 'off', 'max-lines-per-function': 'off' },
-  },
+  // Size-gate backlog — EMPTY as of 2026-08-04: chat-sessions.ts (split into
+  // routes/chat-sessions/* behind an order-preserving assembler) and chat-session-lifecycle.ts
+  // (open/resume peeled to their own modules, re-exported for a stable import surface) were the
+  // last two entries. Target zero, reached. If a file outgrows the gates, SPLIT it — never
+  // resurrect this block to pass CI. (History: chat-messaging.ts + job-execution.ts cleared in
+  // Phase 3; widget-health-checker.ts removed with its feature, PR #27.)
   {
     ignores: ['dist/', 'node_modules/'],
   },
