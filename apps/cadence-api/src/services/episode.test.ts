@@ -12,7 +12,7 @@ const insertTempOccurrences = vi.fn();
 const deleteFutureTempOccurrences = vi.fn();
 const getUser = vi.fn();
 const setPendingProposal = vi.fn();
-const runJob = vi.fn();
+const runJobBySlug = vi.fn();
 
 vi.mock('../repos/plans.ts', () => ({ getActivePlan: (...a: unknown[]) => getActivePlan(...a) }));
 vi.mock('../repos/users.ts', () => ({
@@ -35,8 +35,7 @@ vi.mock('../repos/occurrences.ts', () => ({
   insertTempOccurrences: (...a: unknown[]) => insertTempOccurrences(...a),
   deleteFutureTempOccurrences: (...a: unknown[]) => deleteFutureTempOccurrences(...a),
 }));
-vi.mock('../ai/aim.ts', () => ({ runJob: (...a: unknown[]) => runJob(...a) }));
-vi.mock('../config.ts', () => ({ cadenceConfig: { aim: { jobs: { disruptedPlan: 'job-disrupted' } } } }));
+vi.mock('../ai/aim.ts', () => ({ runJobBySlug: (...a: unknown[]) => runJobBySlug(...a) }));
 
 import { enterEpisode, endEpisode } from './episode.ts';
 
@@ -50,7 +49,7 @@ describe('enterEpisode', () => {
     getActiveEpisode.mockResolvedValue(null);
     getActivePlan.mockResolvedValue({ plan_id: 'p1' });
     listActivities.mockResolvedValue([]);
-    runJob.mockResolvedValue({
+    runJobBySlug.mockResolvedValue({
       formatted: JSON.stringify({
         temp_activities: [{ title: 'Hotel circuit', kind: 'user', schedule: { recurrence: 'FREQ=DAILY' } }],
         note: 'Keep it light.',
@@ -93,7 +92,7 @@ describe('enterEpisode', () => {
   });
 
   it('still enters (base paused, no options) when the disrupted_plan job fails', async () => {
-    runJob.mockRejectedValue(new Error('broker down'));
+    runJobBySlug.mockRejectedValue(new Error('broker down'));
     const r = await enterEpisode(USER, { type: 'custom' });
     expect(r?.episode.episode_id).toBe('e1');
     expect(pauseUserOccurrencesInWindow).toHaveBeenCalled();

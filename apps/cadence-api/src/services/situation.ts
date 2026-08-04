@@ -7,8 +7,7 @@ import { getActiveEpisode } from '../repos/episodes.ts';
 import { getLastCheckInDate } from '../repos/check-ins.ts';
 import { rollingConsistency } from './metrics.ts';
 import { detectTripwires, type TripwireSnapshot } from './tripwires.ts';
-import { runJob } from '../ai/aim.ts';
-import { cadenceConfig } from '../config.ts';
+import { runJobBySlug } from '../ai/aim.ts';
 import { getWeatherForUser } from './weather/weather.ts';
 
 const ASSESS_INTERVAL_DAYS = 7;
@@ -179,7 +178,7 @@ export async function assessIfDue(userId: string): Promise<void> {
 
   if (fired.length === 0) return;
 
-  const res = await runJob(userId, cadenceConfig.aim.jobs.situationAssess, {
+  const res = await runJobBySlug(userId, 'situation-assess', {
     snapshot: JSON.stringify({ ...snapshot, fired }),
   });
   const out = parseJson(res.formatted ?? res.raw ?? '');

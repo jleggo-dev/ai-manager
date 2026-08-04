@@ -11,7 +11,7 @@ const listOccurrences = vi.fn();
 const getLastDoneOccurrenceDate = vi.fn();
 const getActiveEpisode = vi.fn();
 const getLastCheckInDate = vi.fn();
-const runJob = vi.fn();
+const runJobBySlug = vi.fn();
 const detectTripwires = vi.fn();
 const rollingConsistency = vi.fn();
 
@@ -34,10 +34,16 @@ vi.mock('../repos/check-ins.ts', () => ({
   getLastCheckInDate: (...a: unknown[]) => getLastCheckInDate(...a),
 }));
 vi.mock('../ai/aim.ts', () => ({
-  runJob: (...a: unknown[]) => runJob(...a),
+  runJobBySlug: (...a: unknown[]) => runJobBySlug(...a),
 }));
 vi.mock('../config.ts', () => ({
-  cadenceConfig: { aim: { jobs: { situationAssess: 'job-situation' } } },
+  // Minimal: the services no longer read config, but their repos' import chain reaches
+  // db/sql.ts, whose module scope builds the DB URL and throws without CADENCE_* env (CI).
+  cadenceConfig: {
+    databaseUrl: 'postgresql://mock:mock@mock:5432/mock',
+    supabase: { url: '', anonKey: '', serviceRoleKey: '' },
+    aim: {},
+  },
 }));
 vi.mock('./tripwires.ts', () => ({
   detectTripwires: (...a: unknown[]) => detectTripwires(...a),
@@ -103,14 +109,14 @@ describe('assessIfDue', () => {
     detectTripwires.mockReturnValue([]);
     await assessIfDue(USER);
     expect(touchAssessedAt).toHaveBeenCalledWith(USER);
-    expect(runJob).not.toHaveBeenCalled();
+    expect(runJobBySlug).not.toHaveBeenCalled();
     expect(setPendingProposal).not.toHaveBeenCalled();
   });
 
   it('stores a pending proposal when Broker recommends a re-plan', async () => {
     getUser.mockResolvedValue({ pending_proposal: null, last_assessed_at: null, steer_back: null });
     detectTripwires.mockReturnValue(['missed_streak']);
-    runJob.mockResolvedValue({
+    runJobBySlug.mockResolvedValue({
       formatted: JSON.stringify({
         recommend_replan: true,
         reason: 'Missed several days',
@@ -118,7 +124,7 @@ describe('assessIfDue', () => {
       }),
     });
     await assessIfDue(USER);
-    expect(runJob).toHaveBeenCalledWith(USER, 'job-situation', expect.any(Object));
+    expect(runJobBySlug).toHaveBeenCalledWith(USER, 'situation-assess', expect.any(Object));
     expect(setPendingProposal).toHaveBeenCalledWith(
       USER,
       expect.objectContaining({
@@ -131,7 +137,7 @@ describe('assessIfDue', () => {
   it('does not store a proposal when Broker says no re-plan', async () => {
     getUser.mockResolvedValue({ pending_proposal: null, last_assessed_at: null, steer_back: null });
     detectTripwires.mockReturnValue(['dip']);
-    runJob.mockResolvedValue({ formatted: JSON.stringify({ recommend_replan: false }) });
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify({ recommend_replan: false }) });
     await assessIfDue(USER);
     expect(setPendingProposal).not.toHaveBeenCalled();
   });
@@ -146,7 +152,7 @@ describe('assessIfDue', () => {
       USER,
       expect.objectContaining({ action: 'enter_disrupted', episode_type: 'custom' }),
     );
-    expect(runJob).not.toHaveBeenCalled();
+    expect(runJobBySlug).not.toHaveBeenCalled();
   });
 
   it('proposes a re-baseline (not a detour) on return after a LONG gap', async () => {
@@ -156,7 +162,7 @@ describe('assessIfDue', () => {
     getLastDoneOccurrenceDate.mockResolvedValue('2026-07-05'); // 10 dark days
     await assessIfDue(USER);
     expect(setPendingProposal).toHaveBeenCalledWith(USER, expect.objectContaining({ action: 'rebaseline' }));
-    expect(runJob).not.toHaveBeenCalled();
+    expect(runJobBySlug).not.toHaveBeenCalled();
   });
 
   it('does not propose an on-return detour for a short gap', async () => {
@@ -183,7 +189,7 @@ describe('assessIfDue', () => {
   it('proposes a travel detour when the Broker recommends enter_disrupted', async () => {
     getUser.mockResolvedValue({ pending_proposal: null, last_assessed_at: null, steer_back: null });
     detectTripwires.mockReturnValue(['timezone_shift']);
-    runJob.mockResolvedValue({
+    runJobBySlug.mockResolvedValue({
       formatted: JSON.stringify({ enter_disrupted: true, reason: 'Looks like you are traveling' }),
     });
     await assessIfDue(USER);

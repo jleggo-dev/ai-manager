@@ -48,8 +48,7 @@ let insertActivities: (typeof import('../repos/activities.ts'))['insertActivitie
 let getGoal: (typeof import('../repos/goals.ts'))['getGoal'];
 let insertGoal: (typeof import('../repos/goals.ts'))['insertGoal'];
 let resetUserData: (typeof import('./dev-reset.ts'))['resetUserData'];
-let runJob: ReturnType<typeof vi.fn>;
-let jobs: { synthesizePlan: string; planVet: string };
+let runJobBySlug: ReturnType<typeof vi.fn>;
 
 /** Build N minimal, valid pending activities (recurrence yields occurrences within the horizon). */
 function acts(goalId: string, n = 2): PendingPlanActivity[] {
@@ -66,8 +65,8 @@ function acts(goalId: string, n = 2): PendingPlanActivity[] {
 
 /** Canned synthesize_plan + plan_vet responses; `verified` toggles the veto path. */
 function primeRunJob(goalTitle: string, verified: boolean) {
-  runJob.mockImplementation(async (_userId: string, slug: string) => {
-    if (slug === jobs.synthesizePlan) {
+  runJobBySlug.mockImplementation(async (_userId: string, slug: string) => {
+    if (slug === 'synthesize-plan') {
       return {
         formatted: JSON.stringify({
           activities: [
@@ -84,7 +83,7 @@ function primeRunJob(goalTitle: string, verified: boolean) {
         }),
       };
     }
-    if (slug === jobs.planVet) {
+    if (slug === 'plan-vet') {
       return {
         formatted: JSON.stringify(
           verified ? { verified: true, valid: true } : { verified: false, violations: ['unrealistic'] },
@@ -118,8 +117,7 @@ d('API-01 — plan commit pipeline', () => {
     ({ listActivities, insertActivities } = await import('../repos/activities.ts'));
     ({ getGoal, insertGoal } = await import('../repos/goals.ts'));
     ({ resetUserData } = await import('./dev-reset.ts'));
-    ({ runJob } = (await import('../ai/aim.ts')) as unknown as { runJob: ReturnType<typeof vi.fn> });
-    jobs = (await import('../config.ts')).cadenceConfig.aim.jobs;
+    ({ runJobBySlug } = (await import('../ai/aim.ts')) as unknown as { runJobBySlug: ReturnType<typeof vi.fn> });
   });
 
   afterAll(async () => {
@@ -134,7 +132,7 @@ d('API-01 — plan commit pipeline', () => {
   afterEach(() => {
     // insertActivities' one-shot mockRejectedValueOnce self-clears after firing, so its default
     // (the real insert) resumes on its own. Only runJob's per-test implementation needs clearing.
-    runJob.mockReset();
+    runJobBySlug.mockReset();
   });
 
   it('normalizeActivity coerces kind/completion_source and derives a recurrence', () => {

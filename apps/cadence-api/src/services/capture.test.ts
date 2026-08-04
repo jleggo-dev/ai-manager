@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const runJob = vi.fn();
+const runJobBySlug = vi.fn();
 const insertGoal = vi.fn();
 const listGoalsByStatus = vi.fn();
 const deleteCapturedWithoutMilestones = vi.fn();
@@ -14,10 +14,16 @@ const setName = vi.fn();
 const logAi = vi.fn();
 
 vi.mock('../ai/aim.ts', () => ({
-  runJob: (...a: unknown[]) => runJob(...a),
+  runJobBySlug: (...a: unknown[]) => runJobBySlug(...a),
 }));
 vi.mock('../config.ts', () => ({
-  cadenceConfig: { aim: { jobs: { captureExtract: 'job-capture' } } },
+  // Minimal: the services no longer read config, but their repos' import chain reaches
+  // db/sql.ts, whose module scope builds the DB URL and throws without CADENCE_* env (CI).
+  cadenceConfig: {
+    databaseUrl: 'postgresql://mock:mock@mock:5432/mock',
+    supabase: { url: '', anonKey: '', serviceRoleKey: '' },
+    aim: {},
+  },
 }));
 vi.mock('../repos/goals.ts', () => ({
   insertGoal: (...a: unknown[]) => insertGoal(...a),
@@ -55,7 +61,7 @@ describe('runCaptureExtract', () => {
 
   it('coerces legacy area labels and persists (never drops)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    runJob.mockResolvedValue({
+    runJobBySlug.mockResolvedValue({
       formatted: JSON.stringify({
         goals: [{ title: 'Run more', area: 'fitness', type: 'recurring' }],
         equipment: [],
@@ -75,7 +81,7 @@ describe('runCaptureExtract', () => {
   });
 
   it('dedupes near-duplicate goals from one capture run to a single insert', async () => {
-    runJob.mockResolvedValue({
+    runJobBySlug.mockResolvedValue({
       formatted: JSON.stringify({
         goals: [
           { title: 'Read 12 books', area: 'mind', type: 'target' },
@@ -94,7 +100,7 @@ describe('runCaptureExtract', () => {
 
   it('coerces unknown equipment categories to other', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    runJob.mockResolvedValue({
+    runJobBySlug.mockResolvedValue({
       formatted: JSON.stringify({
         goals: [],
         equipment: [{ name: 'Foam roller', category: 'weird-thing' }],

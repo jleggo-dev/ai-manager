@@ -82,16 +82,12 @@ export const cadenceConfig = {
     brokerProfileId: process.env.AIM_BROKER_PROFILE_ID ?? '',
     /** The Coach chat is opened against this processing job (binds diagnostics + owns the persona). */
     coachJobSlug: process.env.AIM_COACH_JOB_SLUG ?? 'cadence-coach-chat',
-    jobs: {
-      captureExtract: process.env.AIM_JOB_CAPTURE_EXTRACT_ID ?? '',
-      planVet: process.env.AIM_JOB_PLAN_VET_ID ?? '',
-      synthesizePlan: process.env.AIM_JOB_SYNTHESIZE_PLAN_ID ?? '',
-      situationAssess: process.env.AIM_JOB_SITUATION_ASSESS_ID ?? '',
-      contextSelect: process.env.AIM_JOB_CONTEXT_SELECT_ID ?? '',
-      weeklyReadout: process.env.AIM_JOB_WEEKLY_READOUT_ID ?? '',
-      surfaceInsights: process.env.AIM_JOB_SURFACE_INSIGHTS_ID ?? '',
-      disruptedPlan: process.env.AIM_JOB_DISRUPTED_PLAN_ID ?? '',
-    },
+    // The AIM_JOB_*_ID env layer is GONE (2026-08-04): every job call goes through
+    // runJobBySlug with its canonical slug — the same name the config/sync layer uses — so no
+    // environment has ids to provision and none can get them wrong. The layer's failure mode was
+    // found by the DB suites' first CI run: absent ids all defaulted to '', every jobs.* compared
+    // equal, and a slug-dispatching mock returned the SYNTHESIZE payload to the VET call — the
+    // veto test committed. Eight env vars, three of them read by nothing, one silent collision.
     replanWorkflowSlug: process.env.AIM_WORKFLOW_REPLAN_SLUG ?? 'cadence-replan',
     /**
      * Fan-out → reduce planning: draft each goal in its own focused synthesize call, then a

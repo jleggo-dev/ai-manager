@@ -1,6 +1,5 @@
 import type { Activity, DisruptedEpisode, Equipment } from '@cadence/shared';
-import { runJob } from '../ai/aim.ts';
-import { cadenceConfig } from '../config.ts';
+import { runJobBySlug } from '../ai/aim.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities, insertActivities } from '../repos/activities.ts';
 import {
@@ -76,7 +75,7 @@ async function draftTempActivities(
   baseActivities: Activity[],
 ): Promise<{ temp: Partial<Activity>[]; note: string }> {
   try {
-    const res = await runJob(userId, cadenceConfig.aim.jobs.disruptedPlan, {
+    const res = await runJobBySlug(userId, 'disrupted-plan', {
       episode: JSON.stringify(episode),
       available_equipment: JSON.stringify(episode.available_equipment),
       base_plan: JSON.stringify(baseActivities.map((a) => ({ title: a.title, kind: a.kind, schedule: a.schedule }))),

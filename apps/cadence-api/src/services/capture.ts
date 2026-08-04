@@ -1,5 +1,4 @@
-import { runJob } from '../ai/aim.ts';
-import { cadenceConfig } from '../config.ts';
+import { runJobBySlug } from '../ai/aim.ts';
 import type { CaptureExtractResult, GoalArea, GoalType, EquipmentCategory } from '@cadence/shared';
 import { insertGoal, listGoalsByStatus, deleteCapturedWithoutMilestones } from '../repos/goals.ts';
 import { insertEquipment, deleteAllEquipment } from '../repos/equipment.ts';
@@ -69,7 +68,7 @@ export async function runCaptureExtract(
   userId: string,
   variables: { conversation_window: string },
 ): Promise<CaptureResult> {
-  const result = await runJob(userId, cadenceConfig.aim.jobs.captureExtract, variables);
+  const result = await runJobBySlug(userId, 'capture-extract', variables);
   const text = result.formatted ?? result.raw ?? '{}';
 
   let parsed: Record<string, unknown>;

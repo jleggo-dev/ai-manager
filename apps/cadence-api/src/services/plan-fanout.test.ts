@@ -24,7 +24,7 @@ import * as aim from '../ai/aim.ts';
 import { synthesizeFanoutAndVet } from './plan-fanout.ts';
 import { synthesizeAndVet } from './plan-synthesis.ts';
 
-const runJob = aim.runJob as unknown as ReturnType<typeof vi.fn>;
+const runJob = aim.runJobBySlug as unknown as ReturnType<typeof vi.fn>;
 
 const USER = 'u1';
 const goal = (goal_id: string, title: string): Goal => ({ goal_id, title }) as Goal;

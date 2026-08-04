@@ -1,5 +1,4 @@
-import { runJob } from '../ai/aim.ts';
-import { cadenceConfig } from '../config.ts';
+import { runJobBySlug } from '../ai/aim.ts';
 import { sql } from '../db/sql.ts';
 import { weatherVarsForUser } from './weather/weather.ts';
 import { getActivePlan, supersedeActivePlans, insertPlan } from '../repos/plans.ts';
@@ -92,7 +91,7 @@ export async function runSynthesize(
   draftActivities?: unknown,
 ): Promise<{ normalized: Partial<Activity>[]; note: string }> {
   const { weather } = await weatherVarsForUser(userId).catch(() => ({ weather: '' }));
-  const synthRes = await runJob(userId, cadenceConfig.aim.jobs.synthesizePlan, {
+  const synthRes = await runJobBySlug(userId, 'synthesize-plan', {
     goals: JSON.stringify(opts.goals),
     baseline: JSON.stringify(opts.baseline),
     equipment: JSON.stringify(opts.equipment),
@@ -153,7 +152,7 @@ async function vetAndShape(
   // A replan DURING a disrupted episode is vetted against it (the Broker eases expectations rather
   // than flagging the lighter load as under-programming). Null when not in an episode — the common case.
   const activeEpisode = await getActiveEpisode(userId);
-  const vetRes = await runJob(userId, cadenceConfig.aim.jobs.planVet, {
+  const vetRes = await runJobBySlug(userId, 'plan-vet', {
     proposed_plan: JSON.stringify({ activities: normalized }),
     baseline: JSON.stringify(opts.baseline),
     equipment: JSON.stringify(opts.equipment),
