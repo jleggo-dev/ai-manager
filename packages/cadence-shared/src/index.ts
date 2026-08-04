@@ -34,3 +34,4 @@ export * from './feelings.ts';
 export * from './now-menu.ts';
 export * from './journal.ts';
 export * from './freewrite.ts';
+export * from './journal-export.ts';

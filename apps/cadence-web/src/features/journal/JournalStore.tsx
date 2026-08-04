@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { journalBank, journalPreview, type JournalEntry } from '@cadence/shared';
-import { listJournal, setJournalSecret } from '../../lib/api.ts';
+import { exportJournal, listJournal, setJournalSecret } from '../../lib/api.ts';
 import { JournalWrite } from './JournalWrite.tsx';
 
 /**
@@ -13,6 +13,29 @@ export function JournalStore({ onClose }: { onClose: () => void }) {
   const [entries, setEntries] = useState<JournalEntry[] | null>(null);
   const [writing, setWriting] = useState(false);
   const [open, setOpen] = useState<JournalEntry | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportFailed, setExportFailed] = useState(false);
+
+  /** Hand the file to the OS. The blob URL is revoked straight after — someone's whole journal
+   *  should not stay addressable in the tab for the rest of the session. */
+  const download = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportFailed(false);
+    try {
+      const { blob, filename } = await exportJournal();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportFailed(true);
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting]);
 
   const load = useCallback(() => {
     listJournal()
@@ -78,6 +101,18 @@ export function JournalStore({ onClose }: { onClose: () => void }) {
           ))
         )}
       </div>
+
+      {/* Export sits with the words it copies, not in a settings screen — "never makes you start
+          over" is only true if taking them out is as ordinary as writing them. The secrets note is
+          stated BEFORE the tap, because a file that quietly contained them would be a surprise at
+          exactly the wrong moment. */}
+      {entries !== null && entries.length > 0 && (
+        <button className="js-export" onClick={() => void download()} disabled={exporting}>
+          {exporting ? 'Preparing…' : '↓ Export everything as Markdown'}
+          <span>includes entries marked secret</span>
+        </button>
+      )}
+      {exportFailed && <div className="jw-failed">That didn&rsquo;t download. Try again?</div>}
 
       <button className="js-write" onClick={() => setWriting(true)}>
         ＋ Write

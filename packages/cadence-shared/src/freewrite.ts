@@ -175,6 +175,14 @@ export const PURE_FREE_WRITE: FreeWriteRow = {
  */
 export const MAX_FREE_WRITE_TOPICS = 4;
 
+/**
+ * A topic must never state a duration IN ITS TEXT. The coach defines the duration — it is the
+ * coach's call — but it defines it once, in `duration_min`, and the app is what clamps it, shows
+ * it in the chip and runs the clock from it. Copy like "Twenty minutes on the move" states it a
+ * second time, in prose nothing can keep in step, so it contradicts the chip the moment the coach
+ * picks a different number. One source, rendered once — the same rule the now-menu's derived meta
+ * line exists to enforce.
+ */
 export function freeWriteRows(topics: readonly { label: string; prompt: string }[] = []): FreeWriteRow[] {
   const rows: FreeWriteRow[] = [PURE_FREE_WRITE];
   const seen = new Set([PURE_FREE_WRITE.prompt.toLowerCase()]);

@@ -187,7 +187,7 @@ export {
 export { resetAccount, getTrace, getCoachLog, type DevTrace, type AiLogEntry } from './api/dev.ts';
 
 export { getNowMenu } from './api/now-menu.ts';
-export { keepJournalEntry, listJournal, setJournalSecret } from './api/journal.ts';
+export { exportJournal, keepJournalEntry, listJournal, setJournalSecret } from './api/journal.ts';
 
 export {
   getHomeLocation,

@@ -1297,3 +1297,9 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 /* The bell, said quietly and left in place — it never blocks, saves, or asks for a decision. */
 .fw-done { text-align: center; font-size: 12.5px; font-weight: 800; color: oklch(45% 0.14 266);
   padding: 6px 0 2px; }
+/* Export sits with the words, not in settings — taking them out should be as ordinary as writing. */
+.js-export { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%;
+  border: 1.5px solid oklch(88% 0.015 95); background: #fff; border-radius: 14px; padding: 10px 14px;
+  margin-bottom: 8px; font-size: 13px; font-weight: 800; color: oklch(38% 0.02 150); cursor: pointer; }
+.js-export span { font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; color: oklch(55% 0.02 150); }
+.js-export:disabled { opacity: 0.5; cursor: default; }

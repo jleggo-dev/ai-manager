@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { isJournalBankId, isJournalMode, journalBank } from '@cadence/shared';
+import { isJournalBankId, isJournalMode, journalBank, journalExportFilename, journalToMarkdown } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { createEntry, deleteEntry, listEntries, setEntrySecret } from '../repos/journal-entries.ts';
 
@@ -9,6 +9,8 @@ router.use(requireCadenceUser);
 /** Verbatim, but bounded — a cap is the only transformation the journal ever applies to words. */
 const MAX_BODY = 10_000;
 const MAX_PROMPT = 300;
+/** Twenty years of writing something every day, and still a bounded query. */
+const EXPORT_MAX = 100_000;
 
 /**
  * GET /journal — the owner's bookshelf: everything, newest first, secrets included (the key locks
@@ -22,6 +24,33 @@ router.get('/', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /journal]', err);
     res.status(500).json({ error: 'failed to load journal' });
+  }
+});
+
+/**
+ * GET /journal/export — every word back, as Markdown (owner ruling 2026-08-04).
+ *
+ * Secrets included: the key locks entries against the coach, never against the person who wrote
+ * them, and an export that withheld someone's own words would be a different promise than "never
+ * makes you start over". Sent as an attachment so a phone treats it as a file to keep.
+ *
+ * Keep this route ABOVE any future `GET /:id` — express matches in order, and a parameterised
+ * route declared first would swallow "/export" as an id.
+ */
+router.get('/export', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    // `listEntries` defaults to 100. An export that silently stopped there would be the worst bug
+    // this endpoint could have — it looks complete and isn't — so ask for far more than anyone
+    // will write, rather than accepting the shelf's page size.
+    const entries = await listEntries(userId, EXPORT_MAX);
+    const now = new Date().toISOString();
+    res.type('text/markdown; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${journalExportFilename(now)}"`);
+    res.send(journalToMarkdown(entries, { exportedAt: now }));
+  } catch (err) {
+    console.error('[GET /journal/export]', err);
+    res.status(500).json({ error: 'failed to export the journal' });
   }
 });
 

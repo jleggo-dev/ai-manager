@@ -9,6 +9,7 @@ import {
   GROUNDING_GAMES,
   type GroundingGame,
   groundingSpec,
+  journalToMarkdown,
 } from '@cadence/shared';
 import { StepBreathing } from '../walkthrough/tools/StepBreathing.tsx';
 import { StepMeditate } from '../walkthrough/tools/StepMeditate.tsx';
@@ -321,6 +322,14 @@ export function JournalPreview() {
     window.fetch = (async (u: RequestInfo | URL, o?: RequestInit) => {
       const url = String(u);
       if (url.includes('/journal')) {
+        // Export must come first: it is a GET under /journal too, and the list branch below would
+        // otherwise hand back JSON with a .md filename — a broken file that looks like a feature.
+        if (url.includes('/journal/export')) {
+          return new Response(journalToMarkdown(entries as never, { exportedAt: new Date().toISOString() }), {
+            status: 200,
+            headers: { 'Content-Disposition': 'attachment; filename="cadence-journal-preview.md"' },
+          });
+        }
         if (o?.method === 'POST') {
           const b = JSON.parse(String(o.body)) as Record<string, unknown>;
           const entry = {

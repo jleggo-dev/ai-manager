@@ -16,6 +16,7 @@ import {
   FeelingLogPreview,
   JournalPreview,
 } from './features/dev/BreathingPreview.tsx';
+import { FreeWritePreview } from './features/dev/FreeWritePreview.tsx';
 import { getPlan, setAuthToken, isDevMode } from './lib/api.ts';
 import { supabase } from './lib/supabase.ts';
 import { screenFromPlanStage } from './screenFromPlanStage.ts';
@@ -165,6 +166,12 @@ export function App() {
     return (
       <PhoneFrame>
         <JournalPreview />
+      </PhoneFrame>
+    );
+  if (PREVIEW === 'freewrite')
+    return (
+      <PhoneFrame>
+        <FreeWritePreview />
       </PhoneFrame>
     );
   if (PREVIEW === 'nowmenu')

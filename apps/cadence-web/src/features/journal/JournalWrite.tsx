@@ -216,16 +216,21 @@ export function JournalWrite({
 
       {isShareableGratitude(bank?.id, secret) && text.trim() && <div className="jw-shareline">{SHARE_FRAMING}</div>}
 
-      <div className="jw-dock">
-        {!text.trim() && !bank && (
-          <button className="jw-pill" onClick={() => setPicker(true)}>
-            Start from a question
+      {/* The dock is gone mid-session: a running clock has already answered both of its questions.
+          Offering "start from a question" over a chosen prompt, or "I wrote on paper today" while
+          they are writing here right now, contradicts the session they are in. */}
+      {!timed && (
+        <div className="jw-dock">
+          {!text.trim() && !bank && (
+            <button className="jw-pill" onClick={() => setPicker(true)}>
+              Start from a question
+            </button>
+          )}
+          <button className="jw-paper" onClick={() => void keep('paper')} disabled={saving}>
+            ✎ I wrote on paper today
           </button>
-        )}
-        <button className="jw-paper" onClick={() => void keep('paper')} disabled={saving}>
-          ✎ I wrote on paper today
-        </button>
-      </div>
+        </div>
+      )}
 
       {freeStart && (
         <FreeWriteStart
