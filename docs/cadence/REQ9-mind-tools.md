@@ -351,8 +351,17 @@ The register rules (§1) go in the coach prompts the same sync-gated way as ever
   plan-relative shell door with a coach-composed menu — see §3.1, REQ10 §6, and
   `design/now-door-brief.md`. Remaining sub-question (Design to recommend): one control with a
   two-tense sheet vs. the ＋/door stack.
-- **`SessionItem` params:** typed optional fields per tool (REQ8 idiom) vs. one `params` jsonb —
-  decide at `breathing` build time; leaning typed fields + normalize caps.
+- ~~`SessionItem` params: typed optional fields vs one `params` jsonb.~~ **Resolved 2026-08-04 —
+  typed flat fields**, settled by construction across all five mind tools. The deciding reason is
+  reliability, not ergonomics: **models fill sibling fields far more consistently than nested
+  objects**, which is why `compose-now-menu` flattens its output for the same reason. A jsonb bag
+  would also have put every parameter beyond the reach of the type system and the normalizer's
+  per-field clamps. *Cost:* the interface widens with each tool (16 fields, 7 tool-specific
+  today). *Tripwire for revisiting:* a tool needing fields no other tool shares AND a count that
+  makes the type hard to read. A second compile-time guard in `tool-catalog.ts` now fails the
+  build if `ItemField` names a field `SessionItem` doesn't have — the catalog's `reads` list is
+  prose to the model, so an invented field would be emitted, dropped by normalize, and render a
+  step missing the parameter that was its whole point.
 - **Check-in vocabulary:** which emotion-word set (needs to be granular but not clinical).
 - ~~The journal page's chips are reflection-only.~~ **Resolved 2026-08-04 — route (a) shipped:**
   twelve banks across four families (reflection · craft · study · devotion), and the coach picks

@@ -21,7 +21,7 @@
  * not things the coach emits — they live only in walkthrough.ts's `StepTool`.
  */
 
-import type { BlockMode, SessionItemTool } from './types/occurrence.ts';
+import type { BlockMode, SessionItem, SessionItemTool } from './types/occurrence.ts';
 import type { StepToolKind } from './walkthrough.ts';
 import { BREATH_PATTERNS, patternCounts } from './breathing.ts';
 import { DEFAULT_SIT_MINUTES, MAX_SIT_MINUTES, MEDITATE_BELL_KINDS } from './meditate.ts';
@@ -118,7 +118,7 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
     summary:
       "a 20-second note on how they're doing — they pick a word, say how much room it's taking, and may add a line. The mind side's weigh-in: use it while you're still learning someone's patterns, or offer it when checking in would help",
     notWhen:
-      'do NOT schedule it every day forever — ask while you are learning their patterns, then stop. And do not put it straight after a grounding flow, which already asks its own question',
+      'do NOT schedule it every day forever — ask while you are learning their patterns, then stop. Two questions back to back is one too many, so never follow one capture step straight with another',
     reads: ['detail'],
     example: { name: 'How are you doing?', tool: 'feeling_log' },
   },
@@ -238,3 +238,18 @@ export function renderCoachToolCatalog(): string {
  */
 const _everyCoachToolRenders: Exclude<SessionItemTool, StepToolKind> extends never ? true : false = true;
 void _everyCoachToolRenders;
+
+/**
+ * Compile-time guard #2: every field the catalog TELLS the coach to fill must actually exist on
+ * `SessionItem`. `reads` is prose to the model — it will happily emit a field this file invented,
+ * the normalizer will drop it, and the step will render without the parameter that was the whole
+ * point. Naming a field here that the type doesn't have now fails the build instead.
+ *
+ * This is the SessionItem-params question, settled by construction (REQ9 §7): flat typed fields
+ * per tool, not one `params` jsonb. The reason is not ergonomics but reliability — models fill
+ * sibling fields far more consistently than nested objects, which is why the now-menu flattens its
+ * output too. The cost is a widening interface; the tripwire for revisiting is when a tool needs
+ * fields no other tool shares AND the count makes the type hard to read.
+ */
+const _everyItemFieldExists: Exclude<ItemField, keyof SessionItem> extends never ? true : false = true;
+void _everyItemFieldExists;
