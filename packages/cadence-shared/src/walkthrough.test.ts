@@ -229,3 +229,28 @@ describe('condense — "I have less time"', () => {
     expect(short.total_min).toBe(20);
   });
 });
+
+describe('journal steps always open with a usable question', () => {
+  const step = (item: Record<string, unknown>) =>
+    deriveWalkthrough({ blocks: [{ label: 'x', items: [{ name: 'Write', tool: 'journal', ...item }] }] } as never)
+      .steps[0];
+
+  it("the coach's own question wins over a bank it also named", () => {
+    const t = step({ detail: 'Free-write the scene you left yesterday.', journal_bank: 'three_good_things' });
+    expect(t?.tool.kind === 'journal' && t.tool.prompt).toBe('Free-write the scene you left yesterday.');
+  });
+
+  it('falls back to the named bank when the coach wrote no question', () => {
+    const t = step({ journal_bank: 'free_write' });
+    expect(t?.tool.kind === 'journal' && t.tool.prompt).toBeTruthy();
+    expect(t?.tool.kind === 'journal' && t.tool.prompt).not.toBe('What do you want to write?');
+  });
+
+  // The live coach really does emit journal items with neither field (seen on a study activity),
+  // so this last resort has to read sensibly for craft, study and devotion — not just for a workout.
+  it('degrades to a practice-neutral line, never a workout assumption', () => {
+    const t = step({});
+    expect(t?.tool.kind === 'journal' && t.tool.prompt).toBe('What do you want to write?');
+    expect(t?.tool.kind === 'journal' && t.tool.prompt).not.toMatch(/how it went|workout|session|training/i);
+  });
+});

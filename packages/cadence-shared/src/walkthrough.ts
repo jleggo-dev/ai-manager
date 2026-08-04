@@ -160,8 +160,13 @@ function minutesOf(item: SessionItem, tool: StepTool): number {
 function journalTool(item: SessionItem): StepTool {
   const bank = isJournalBankId(item.journal_bank) ? item.journal_bank : undefined;
   const banked = bank ? journalBank(bank) : undefined;
+  // Last resort, and deliberately practice-neutral. The coach is told to always send a bank or its
+  // own question, but when it sends neither this line still has to work for a novelist, a student
+  // and someone with a devotional practice alike — "jot down how it went" (the old default)
+  // presumed a workout had just happened and read as nonsense on a study or free-writing step.
   const prompt =
-    item.detail ?? (banked ? todaysPhrasing(banked, new Date().toISOString().slice(0, 10)) : 'Jot down how it went');
+    item.detail ??
+    (banked ? todaysPhrasing(banked, new Date().toISOString().slice(0, 10)) : 'What do you want to write?');
   return { kind: 'journal', prompt, mode: 'either', ...(bank ? { bank } : {}) };
 }
 
