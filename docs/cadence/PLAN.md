@@ -465,10 +465,27 @@ HealthKit (the deciding constraint, §7/§8). The path:
   testing. This is Phase 7.
 - The same Capacitor plugin also supports Android/Health Connect — low-cost later (deferred per §10).
 
-## 12. Status & backlog (living — updated 2026-07-01)
+## 12. Status & backlog (living — **refreshed 2026-08-04**, previously stamped 2026-07-01)
 
 > This section supersedes the pre-build "immediate next steps" in §10. It is the durable
 > record of what is built and what remains, captured in detail so it survives context loss.
+>
+> **Refresh pass 2026-08-04** — every item below was re-checked against the code, not against the
+> previous entry. A durable record that has gone stale is worse than no record: it sends the next
+> session to build things that already exist. What the pass changed:
+>
+> | item | was | is |
+> |---|---|---|
+> | E · Real auth | "currently the dev user" | **SHIPPED** — `AuthScreen.tsx` + Supabase sign-in |
+> | F · Multimodal content parts | "proposed" | **SHIPPED** — `ContentPart` flows through devs-ai-v2, gemini, job-execution-run |
+> | A · P3 refresh policy | implied next | **NOT built** — and `getFreshContextPack` is dead code (defined, called nowhere) |
+> | A · P4 reflection | implied next | **NOT built** — an earlier grep "found" it, but that was `reflection` as an activity *category* in `burn.ts` |
+> | B · Proactive check-ins | not started | **PARTIAL** — `check_ins` + `recordCheckIn` + streak days ship; the user-chosen *cadence* does not |
+> | E · Native iOS | "seam scaffolded" | **still open** — no Capacitor dependency anywhere |
+> | The whole Mind pillar | absent from this section | **SHIPPED** — see below |
+>
+> Two lessons for the next refresh: a grep hit is not a shipped feature (P4), and an exported
+> function is not a wired one (P3).
 
 ### Done & verified
 - **Monorepo + in-process AI Admin** via `@ai-admin/core` + `apps/cadence-api/src/ai/aim.ts`.
@@ -506,6 +523,12 @@ HealthKit (the deciding constraint, §7/§8). The path:
   aren't installed locally.
 
 ### In progress
+
+> **Refresh note 2026-08-04:** the dev X-ray below still stands as written — `DevPanel.tsx` and
+> `GET /coach/trace` both exist, and the v1.5 enrichment (exact AI Admin diagnostics: composed
+> prompt + token/cost) is still not done. The `?dev=1` panel has since been joined by the
+> `?preview=<tool>` harnesses, which bypass auth to render one tool against fixtures — that is
+> how the Mind pillar's surfaces get looked at, since the journal sits behind sign-in.
 - **Dev "X-ray" mode — v1 BUILT** (backend verified; live UI not yet screenshot-verified).
   Impl: `services/dev-trace.ts` (in-memory per-user trace) + `GET /coach/trace` + wiring in
   `context-pack.ts` (context/broker) and `routes/coach.ts` (coach turn + capture) +
@@ -514,19 +537,48 @@ HealthKit (the deciding constraint, §7/§8). The path:
   diagnostics (composed prompt + token/cost). Minor polish: `pack-summarize` sometimes wraps
   output in ``` fences — tighten its prompt/rules.
 
+### Done & verified — the Mind pillar (added in the 2026-08-04 refresh; this section had no record of it)
+
+REQ9's toolkit shipped whole and this backlog never mentioned it. Each tool is a `COACH_TOOLS`
+entry + a client renderer + normalize caps, with the deterministic content (patterns, games,
+vocabularies, question banks) living in `@cadence/shared` so it is code-reviewed, never generated:
+
+- **`breathing`** — 9 patterns as data, `phaseAt()` pure in elapsed time; safety-capped rounds.
+- **`meditate`** — bells, optional interval, the "came back" tap that never shows a running total.
+- **`grounding`** — 6 games; nothing scored, nothing checked. (Its "did that help?" close was
+  **removed** 2026-08-04 by owner ruling — the weekly conversation is the better instrument.)
+- **`feeling_log`** — fixed 6×5 vocabulary; the coach chooses *when* to ask, never the words.
+- **`journal`** — 12 banks across four families (reflection · craft · study · devotion), the
+  writing page, the store, secrets (`listForCoach` excludes them **in SQL**), Markdown **export**,
+  and the **timed free-write** on screen or in a physical notebook.
+- **Plan shape** (REQ10 §12) — split by occasion, not by subject; day-shape as a judgment, and a
+  live probe (`probe-plan-shape.ts`) that fails in three directions.
+- **Governance** — the runtime `{{tool_catalog}}`, two compile-time guards (every tool renders;
+  every `ItemField` exists), and two live probes wired into a weekly, non-blocking CI workflow.
+
+**Settled rulings worth not re-litigating:** no emergency chrome and no message scanning (REQ9 §8);
+the journal is a writing tool, not a feelings tool (§4.5); mind practices log as ordinary
+occurrences with `skipped`/`missed`; the coach names no crisis phone number.
+
 ### Backlog — detailed
 
 **A. Context/memory (MEMORY-ARCHITECTURE.md §9 phasing)**
-- **P3 — refresh policy + enrichment.** Reuse a fresh pack via `getFreshContextPack` (TTL: 7d
+- **P3 — refresh policy + enrichment. NOT BUILT** (checked 2026-08-04), and note the trap:
+  `getFreshContextPack` **exists in `repos/context-pack.ts` and is called from nowhere in the
+  repo** — the reuse path was written and never wired, so every turn still rebuilds. Whoever
+  picks this up should decide whether to wire that function or delete it; a dead export that looks
+  like a shipped capability is how this item got mis-read as further along than it is.
+  Design as originally specced: reuse a fresh pack via `getFreshContextPack` (TTL: 7d
   default, onboarding 1d). Rebuild *before* TTL on triggers: (a) **data-volume** (N new rows in
   a relevant domain since `built_at`, read from catalog stats); (b) **event** (lock/replan/
   disruption invalidates the affected topic's pack); (c) **conversational staleness** (coach or
   a `context_select` miss flags that the pack lacks a referenced fact). Between rebuilds,
   **enrich** with high-signal new items (today's workout/check-in) without a full rebuild
   (`status='enriching'`).
-- **P4 — reflection + cross-session/topic memory.** Background reflection pass (MemGPT-style);
-  per-topic packs; a longitudinal memory store beyond per-session `workflow_variables`. Depends
-  on the AI Admin "context/memory store" enhancement (F).
+- **P4 — reflection + cross-session/topic memory. NOT BUILT** (checked 2026-08-04). Background
+  reflection pass (MemGPT-style); per-topic packs; a longitudinal memory store beyond per-session
+  `workflow_variables`. *Note for anyone grepping:* "reflection" appears in `services/burn.ts` as
+  an activity **category**, not as a memory pass — it is not evidence of this being started.
 
 **B. Coaching**
 - **Objective → commitment bridge — PARTIAL (2026-07-15).** Objectives = goals, commitments =
@@ -551,12 +603,19 @@ HealthKit (the deciding constraint, §7/§8). The path:
   assessment panel as "worth talking through with your coach") and the Review `measure.start`
   editor ("starting from …") for when capture misses it. Intake is now: deterministic starting
   points chased in chat + LLM texture questions on demand — never a fixed form.
-- **Daily loop (Phase 6).** `GET /today` timeline, occurrences, HealthKit auto-complete
-  (capability seam), shoe-mileage, `weekly_readout`, one nudge channel.
-- **Proactive check-ins.** End-of-session/day "how did it go?"; user picks a cadence at
-  onboarding; a `capture_feedback` Broker job saves per-session/day/week feedback; a flaring
-  injury triggers a plan adjustment. Needs a `check_ins` table + `users.check_in` cadence
-  (migration `0004`).
+- **Daily loop (Phase 6) — LARGELY SHIPPED** (checked 2026-08-04). The Today trail, occurrences
+  (`listOccurrences` + the walkthrough's commit-on-Finish), the HealthKit capability seam,
+  shoe-mileage and `weekly-readout` all exist. The one piece genuinely missing is the **nudge
+  channel** — and it is missing for the same reason as everything else in this family: nothing
+  can fire without the user present. Parked with reminders/check-ins (REQ10 §7).
+- **Proactive check-ins — PARTIAL, and the rest is PARKED** (owner 2026-08-04). SHIPPED: the
+  `check_ins` table, `repos/check-ins.ts` (`recordCheckIn`, `listCheckInDays`), consumed by
+  `routes/plan.ts` and `services/streak.ts`. NOT built: the user-chosen **cadence**
+  (`users.check_in`), a `capture_feedback` job, and anything that fires without the user present.
+  **Parked** with the rest of "reminders and proactive check-ins" (REQ10 §7) — nothing can wake
+  up without a user today, which is the actual blocker, and the owner has deferred it.
+  ⚠️ Naming: REQ10 §7b rules that **absence is a habit signal, never a health signal** — no copy
+  or column here may imply we inferred anything about someone's wellbeing.
 - **Nutrition topic slice — OBSERVE PHASE SHIPPED (2026-07-17).** `parse-meal` job +
   `nutrition_logs` writes (raw_text always kept) + deterministic summary feeding dossier,
   `get_food_log` retrieval, replan `recent_activity.food_log`, and the Food-log capture sheet;
@@ -564,8 +623,14 @@ HealthKit (the deciding constraint, §7/§8). The path:
   entry. Photo input SHIPPED capture-first 2026-07-17. REMAINING: per-topic thread continuity;
   vision parse + `macro_targets` day view + rings — now fully specced in "SPEC — Nutrition v2 +
   the Visual Today" (phases N1–N4).
-- **Adaptation (Phase 7).** Tripwires → `situation_assess` → disrupted mode (additive temp
-  plan) / check-in / replan (`cadence-replan` workflow exists).
+- **Adaptation (Phase 7) — MORE BUILT THAN THIS ENTRY IMPLIED; needs an audit, not a build.**
+  Present and wired (checked 2026-08-04): `services/situation.ts` (calling the `situation-assess`
+  job), `services/episode.ts` + `services/episode-overlay.ts` (the additive temporary plan), the
+  `disrupted-plan` job, `activities.disrupted_override`, and the `cadence-replan` workflow.
+  Tripwire logic exists in `situation.ts`. **Unknown, and the actual next step:** whether the
+  trip→assess→overlay→exit path holds end-to-end on a live account, and how much of it can run at
+  all before the tick exists (the trips that depend on absence cannot fire yet). Audit before
+  building anything new here.
 
 **C. Capture quality — FIXED (2026-07-15)**
 - **Baseline schema drift — FIXED.** `normalizeBaseline` (`services/capture-normalize.ts`)
@@ -585,23 +650,32 @@ HealthKit (the deciding constraint, §7/§8). The path:
   remains a possible future upgrade; the title-fuzzy backstop covers the observed failure.)
 
 **D. Persona / UX tuning**
-- **Question cadence.** The coach bundles 1–2 *related* questions per turn despite the "one at a
-  time" instruction (observed in the sim). Decide strict-one vs allow-1–2-related, and align the
-  persona wording in Build Rules to match the chosen behavior.
+- **Question cadence — still open, and now a BEHAVIOUR gap rather than a wording one.** The
+  persona is unambiguous (checked 2026-08-04: *"Ask only ONE question at a time"*, plus a ban on
+  bulleted question lists and an offer to send a questionnaire instead of interrogating in chat),
+  so there is nothing left to align in Build Rules — the instruction says strict-one already. What
+  was observed in the sim was the model not obeying it. The open decision is therefore: accept
+  1–2 related questions and soften the rule to match reality, or keep strict-one and enforce it
+  the way the tool catalog enforces everything else (a check, not a sentence). Re-observe first —
+  the sim predates several persona edits, so the behaviour may have moved.
 
 **E. Platform / infra**
-- **Real auth** — currently the dev user (`00000000-0000-4000-a000-000000000001`). Supabase Auth;
-  link `cadence.users.id ↔ auth.users.id`; capture the name at signup.
+- ~~**Real auth**~~ — **SHIPPED** (verified 2026-08-04): `features/auth/AuthScreen.tsx` with
+  Supabase sign-in, email/password + Google, wired in `App.tsx`; `requireCadenceUser` gates every
+  API route. The dev user survives only behind `?dev=1` / `?preview=` harnesses.
 - **Deployment (Vercel)** — SSE + always-on caveats (§11); Broker triggers via Vercel Cron → AI
   Admin trigger endpoints.
-- **Native iOS (Capacitor) + HealthKit** — Phase 7; capability seam already scaffolded.
+- **Native iOS (Capacitor) + HealthKit** — genuinely open (checked 2026-08-04: **no Capacitor
+  dependency in any package.json**). The HealthKit *capability seam* does exist app-side, so the
+  work is the shell and the bridge, not the abstraction.
 
 **F. AI Admin enhancements this exercise surfaced (proposed — MEMORY-ARCHITECTURE.md §5)**
-- **Multimodal content parts in the provider layer** — PROMOTED to a concrete plan (2026-07-17):
-  Devs.ai accepts `ComplexMessageContent` (`{type:'url'|'id'}` image parts), so this is
-  implementable now, not blocked upstream. Full design + phasing in the "SPEC — Nutrition v2 +
-  the Visual Today" section (S2, phase N1). Until built, Cadence's photos stay capture-first;
-  photo_ref keeps every plate retroactively parseable.
+- ~~**Multimodal content parts in the provider layer**~~ — **SHIPPED** (verified 2026-08-04, not
+  merely planned): `ContentPart = {type:'text'} | {type:'image_url'}` in `backend/src/types/llm.ts`,
+  normalised by `backend/src/lib/message-content.ts`, and consumed by the **devs-ai-v2
+  request-builder, the google-gemini client, devs-ai completions, and job-execution-run**. Vision
+  jobs downstream of it are live too (`parse-fridge-photo`, `identify-food`). This entry said
+  "proposed" for two weeks after it landed.
 - Engine-owned chat finalization (so no consumer can bypass logging).
 - First-class per-user **context/memory store** primitive (TTL + provenance).
 - Cache-aware "stable prefix + dynamic tail" prompt assembly.
