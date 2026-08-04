@@ -87,3 +87,26 @@ export interface ContextSelectResult {
   calls: Array<{ fn: string; params?: Record<string, unknown> }>;
   reason?: string;
 }
+
+/**
+ * capture_detour — conversation window → a CONFIRMED detour agreement, or null.
+ *
+ * The conversational door into disrupted mode (REQ4 entry path #2): the coach runs the exchange
+ * in chat — what kind of disruption, how long, what they'll have with them — and the user's plain
+ * yes IS the trigger. This job never proposes and never guesses: `detour` is null unless the coach
+ * offered to set it up AND the user clearly agreed in the window. The talker is never the
+ * form-filler (REQ10 §11) — the coach converses, this contract is how the Broker acts on it.
+ */
+export interface CaptureDetourResult {
+  detour: {
+    type: 'travel' | 'illness' | 'injury' | 'recovery' | 'custom';
+    /** Window length in days when no explicit end date was stated. */
+    days?: number;
+    /** Explicit end date (YYYY-MM-DD) when the user gave real dates. */
+    end?: string;
+    /** What they said they'll have with them — names only, in their words. */
+    available_equipment: Array<{ name: string }>;
+    /** True ONLY on explicit user assent to the coach's offer ("yes, set it up"). */
+    confirmed: boolean;
+  } | null;
+}

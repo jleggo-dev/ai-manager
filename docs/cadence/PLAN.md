@@ -1865,13 +1865,28 @@ affordance writing `status='skipped'` (vs. silent `pending`) — distinguishes "
 (neutral, no slip) from "went dark" (slip). Both statuses already exist in the enum; nothing wrote
 them before.
 
-### Three entry paths (all three, per decision)
+### Entry paths (originally three; a fourth added 2026-08-04)
 1. **On-return "was this a detour?"** — open after N dark days (default **4**) → ask, offer to
    enter. The specific 2026-07-24 refinement; deterministic gap-detection on session/plan load.
 2. **Manual "I'm traveling/disrupted"** — a self-declare entry; covers disruptions no tripwire
-   catches (a wedding, a rough week).
+   catches (a wedding, a rough week). Since 2026-08-04 the picker is a three-question check-in
+   (type → how long → what you've got): the two facts a re-plan cannot run without.
 3. **Proactive tripwire proposal** — reuse `assessIfDue` so `missed_threshold` etc. proposes
    `enter_disrupted` (via `PendingProposal.action`) instead of only a full replan.
+4. **Telling the coach (2026-08-04)** — "why shouldn't telling the coach I'm travelling start a
+   detour?" (owner). It does now: the coach runs the exchange in chat (how long, what you'll
+   have), confirms what it heard, and **the user's plain yes is the trigger** — no banner
+   re-asking what they just said. BRAND's "confirm before you commit" happens IN the
+   conversation; the banner stays only for tripwires, where the system is guessing and a guess
+   does need a separate confirm. Mechanically the two-speed split holds: the coach only talks;
+   after the turn a deterministic keyword gate (`detour-signal.ts`, the tripwires pattern applied
+   to chat — no signal, no LLM call) runs the `capture-detour` Broker job over the same window
+   ambient capture uses, and it emits an agreement ONLY on explicit assent — a mention is
+   conversation, a retracted yes is a no. Normalized app-side (type whitelist, days clamp,
+   equipment cap), then the existing `enterEpisode`; an active episode short-circuits before the
+   job, which also makes re-reading the same exchange next turn a no-op. Its own job rather than
+   a seventh key on capture-extract — already the widest schema in the system (REQ10 §11), and
+   one job/one surface is the law for exactly this reason.
 
 **Week-gap re-baseline:** after ~**7**+ dark days (or a long episode), offer a coach re-baseline
 (`action:'rebaseline'`) rather than silently resuming the old plan.

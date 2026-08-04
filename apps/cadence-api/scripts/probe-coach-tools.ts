@@ -36,6 +36,7 @@ import {
   type SessionItemTool,
 } from '@cadence/shared';
 import { normalizeSession } from '../src/services/session-normalize.ts';
+import { normalizeDetour } from '../src/services/detour-capture.ts';
 import { flag, finish, parseJson, runJob, tally } from './probe-lib.ts';
 
 /* ══ 1 · prescribe-session — the coach composing with the full palette ═══════════════════════ */
@@ -379,6 +380,60 @@ async function probeNowMenu(): Promise<void> {
   if (items.filter((i) => i.pinned).length > 1) flag('more than one pin survived normalize');
 }
 
+/* ══ 3b · capture-detour — consent is the only trigger ═══════════════════════════════════════ */
+
+/** The conversational door's one hard rule, probed live: a detour exists ONLY on an explicit yes
+ *  to the coach's offer. A mention is conversation; a retracted yes is a no. Runs through
+ *  `normalizeDetour`, so what passes here is known to reach `enterEpisode` intact. */
+const DETOURS: Array<{ name: string; window: string; expectEntered: boolean; check?: (d: NonNullable<ReturnType<typeof normalizeDetour>>) => void }> = [
+  {
+    name: 'confirmed · trip + gear + explicit yes',
+    expectEntered: true,
+    window: [
+      'User: heads up, im in lisbon thursday through monday for work',
+      'Coach: Good to know. What will you have there — does the hotel have a gym?',
+      'User: yeah small gym, dumbbells and a treadmill. and im bringing my band',
+      "Coach: Lisbon, Thursday to Monday, hotel gym with dumbbells and a treadmill plus your band — want me to set up a detour for those days? Your plan pauses — it never resets.",
+      'User: yes do it',
+    ].join('\n'),
+    check(d) {
+      if (d.type !== 'travel') flag(`detour type "${d.type}", expected travel`);
+      const names = d.available_equipment.map((e) => e.name.toLowerCase()).join(', ');
+      if (!names.includes('dumbbell')) flag(`equipment missed the dumbbells: [${names}]`);
+      if (names.includes('barbell')) flag('invented home equipment into the trip');
+    },
+  },
+  {
+    name: 'mention only · a trip is not a detour',
+    expectEntered: false,
+    window: [
+      'User: got a trip coming up next month, kinda dreading the disruption honestly',
+      'Coach: What part of it worries you most?',
+    ].join('\n'),
+  },
+  {
+    name: 'retracted · a yes taken back is a no',
+    expectEntered: false,
+    window: [
+      'User: im sick this week, everything hurts',
+      'Coach: Rough. Want me to set up a lighter detour week while you recover?',
+      'User: yeah okay — actually no, leave the plan as is, ill just do what i can',
+    ].join('\n'),
+  },
+];
+
+async function probeDetours(): Promise<void> {
+  for (const c of DETOURS) {
+    console.log(`\n── detour · ${c.name}`);
+    const raw = await runJob('capture-detour', { conversation_window: c.window, today: '2026-08-04' });
+    const input = normalizeDetour(raw);
+    console.log(`   → ${input ? `${input.type}, days=${input.days ?? '—'} end=${input.end ?? '—'}, gear=[${input.available_equipment.map((e) => e.name).join(', ')}]` : 'null (nothing entered)'}`);
+    if (c.expectEntered && !input) flag('expected a confirmed detour, got none');
+    if (!c.expectEntered && input) flag(`entered a detour nobody agreed to (${input.type})`);
+    if (input && c.check) c.check(input);
+  }
+}
+
 /* ══ run ═════════════════════════════════════════════════════════════════════════════════════ */
 
 // --runs N repeats the whole suite: the coach is stochastic, so one clean pass is a smoke test
@@ -393,6 +448,7 @@ for (let r = 1; r <= runs; r += 1) {
   const before = tally.problems;
   await probeSessions();
   await probeCaptures();
+  await probeDetours();
   await probeNowMenu();
   perRun.push(tally.problems - before);
 }

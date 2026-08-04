@@ -10,6 +10,7 @@ import {
   getCoachHistory,
 } from '../ai/aim.ts';
 import { runCaptureExtract } from '../services/capture.ts';
+import { runDetourCapture } from '../services/detour-capture.ts';
 import { assembleTurn } from '../services/coach-context.ts';
 import { relayAndAccumulate } from '../services/coach-stream.ts';
 import { buildContextPack } from '../services/context-pack.ts';
@@ -210,11 +211,23 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     }).catch(() => {});
 
     // Ambient capture on the FULL conversation (§6.1) — not just the last message — so goals
-    // aren't fragmented per-turn. Result recorded for the X-ray.
+    // aren't fragmented per-turn. Result recorded for the X-ray. The detour capture rides the
+    // SAME window: the conversational door into disrupted mode (REQ4 path #2) — a deterministic
+    // keyword gate inside decides whether its job runs at all, and it enters an episode only on
+    // the user's explicit yes to the coach's offer. Both fire-and-forget: a detour landing one
+    // turn late is fine; a chat turn blocking on either is not.
     captureWindow(userId, req.params.id as string, message)
-      .then((window) => runCaptureExtract(userId, { conversation_window: window }))
-      .then((r) => updateTrace(userId, { capture: r }))
-      .catch((e) => console.error('[capture_extract]', e));
+      .then((window) => {
+        runCaptureExtract(userId, { conversation_window: window })
+          .then((r) => updateTrace(userId, { capture: r }))
+          .catch((e) => console.error('[capture_extract]', e));
+        runDetourCapture(userId, window)
+          .then((o) => {
+            if (o.ran) console.log('[capture_detour]', o.reason);
+          })
+          .catch((e) => console.error('[capture_detour]', e));
+      })
+      .catch((e) => console.error('[capture_window]', e));
   } catch (err) {
     const aim = AimError.fromUnknown(err);
     console.error('[POST /coach/sessions/:id/messages]', aim.kind, aim.message);
