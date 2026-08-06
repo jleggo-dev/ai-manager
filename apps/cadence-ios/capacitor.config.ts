@@ -9,7 +9,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * (it can never change after that) and register it in the Apple Developer portal.
  */
 const config: CapacitorConfig = {
-  appId: 'com.cadenceapp.ios',
+  appId: 'dev.jleggo.cadence',
   appName: 'Cadence',
   webDir: '../cadence-web/dist',
 };

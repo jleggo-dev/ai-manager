@@ -108,7 +108,7 @@ export const cadenceConfig = {
     keyId: process.env.APNS_KEY_ID ?? '',
     teamId: process.env.APNS_TEAM_ID ?? '',
     privateKey: process.env.APNS_PRIVATE_KEY ?? '',
-    bundleId: process.env.APNS_BUNDLE_ID ?? 'com.cadenceapp.ios',
+    bundleId: process.env.APNS_BUNDLE_ID ?? 'dev.jleggo.cadence',
     environment: (process.env.APNS_ENVIRONMENT === 'production' ? 'production' : 'development') as
       'development' | 'production',
   },
