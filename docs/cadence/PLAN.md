@@ -681,6 +681,18 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
 - ~~**Real auth**~~ — **SHIPPED** (verified 2026-08-04): `features/auth/AuthScreen.tsx` with
   Supabase sign-in, email/password + Google, wired in `App.tsx`; `requireCadenceUser` gates every
   API route. The dev user survives only behind `?dev=1` / `?preview=` harnesses.
+- **Social logins: Apple + Facebook (added 2026-08-06)** — extend `AuthScreen.tsx` alongside the
+  existing Google button; both are Supabase Auth providers, so the flow (incl. the native
+  `cadence://auth-callback` PKCE deep link) is already built — per-provider work is dashboard
+  config + a button. **Sign in with Apple is NOT optional:** App Review guideline 4.8 requires it
+  in any iOS app offering third-party login (Google today) — it gates the App Store submission,
+  so ship it with (or before) TestFlight. Needs the paid enrollment: an App ID with the
+  "Sign in with Apple" capability + a Services ID/secret key for Supabase; native-first via
+  `@capacitor-community/apple-sign-in` (system sheet, no browser hop) with the web-OAuth path as
+  fallback. Facebook is optional/when-wanted: a Meta developer app (App Review for `email`
+  scope), Supabase provider config, button. Both must respect the brand's plain-words copy —
+  and account-linking policy needs a decision (same email across providers: Supabase links by
+  verified email by default; confirm that's the behaviour we want before enabling).
 - **Deployment (Vercel)** — SSE + always-on caveats (§11); Broker triggers via Vercel Cron → AI
   Admin trigger endpoints.
 - ~~**Native iOS (Capacitor) + HealthKit**~~ — **SHIPPED as a simulator-verified shell (2026-08-06):**
