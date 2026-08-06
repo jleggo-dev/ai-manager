@@ -17,7 +17,9 @@ import {
   JournalPreview,
 } from './features/dev/BreathingPreview.tsx';
 import { FreeWritePreview } from './features/dev/FreeWritePreview.tsx';
-import { getPlan, setAuthToken, isDevMode } from './lib/api.ts';
+import { getPlan, setAuthToken, isDevMode, getHealthDigest, postHealthDigest } from './lib/api.ts';
+import { capabilities } from './lib/capability/index.ts';
+import { maybeRefreshHealthDigest } from './features/onboarding/health-digest.ts';
 import { supabase } from './lib/supabase.ts';
 import { screenFromPlanStage } from './screenFromPlanStage.ts';
 
@@ -60,6 +62,14 @@ function CoachApp({ session }: { session: Session | null }) {
         setScreen(screenFromPlanStage(p.stage));
       })
       .catch(() => setScreen('welcome'));
+    // Silent Apple Health refresh (iOS shell, permission already granted): keeps the coach's
+    // view of recent activity current without re-asking. Throttled + content-diffed inside.
+    void maybeRefreshHealthDigest({
+      isAvailable: () => capabilities.health.isAvailable(),
+      getWorkouts: (since) => capabilities.health.getWorkouts(since),
+      getLatest: getHealthDigest,
+      post: (d) => postHealthDigest(d),
+    }).catch(() => {});
   }, []);
 
   const phone = (

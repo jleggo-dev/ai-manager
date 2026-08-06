@@ -8,6 +8,8 @@ vi.mock('./lib/api.ts', () => ({
   getPlan: (...args: unknown[]) => getPlan(...args),
   setAuthToken: vi.fn(),
   isDevMode: () => true,
+  getHealthDigest: vi.fn(async () => ({ digest: null, created_at: null })),
+  postHealthDigest: vi.fn(async () => true),
 }));
 
 vi.mock('./lib/supabase.ts', () => ({

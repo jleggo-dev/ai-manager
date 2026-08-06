@@ -3,7 +3,7 @@ import { Orb } from '../../components/Orb.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
 import { CoachFoodActionSheet } from '../coach/CoachFoodActionSheet.tsx';
 import { HealthOfferCard } from './HealthOfferCard.tsx';
-import { healthOfferAnswered } from './health-digest.ts';
+import { findHealthOfferTurn, healthOfferAnswered } from './health-digest.ts';
 import { capabilities } from '../../lib/capability/index.ts';
 import { useCoachChat } from './useCoachChat.ts';
 
@@ -53,11 +53,11 @@ export function OnboardingChat({
     useCoachChat({
       intent,
     });
-  // Confirm-first Apple Health offer: iOS shell + onboarding only, once per answer. Resolved at
-  // mount (capability + flag are both stable for the life of this screen).
-  const [showHealthOffer] = useState(
-    () => intent === 'onboarding' && capabilities.health.isAvailable() && !healthOfferAnswered(),
-  );
+  // Goal-gated Apple Health offer (detour pattern): the card renders under the coach turn that
+  // offered it in prose — never unprompted. Gate: iOS shell + not yet answered; the turn index
+  // recomputes per render so a streamed re-offer moves the card.
+  const canOfferHealth = capabilities.health.isAvailable() && !healthOfferAnswered();
+  const healthOfferAt = canOfferHealth && !streaming ? findHealthOfferTurn(turns) : -1;
   const chatRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const [flash, setFlash] = useState(false);
@@ -162,25 +162,25 @@ export function OnboardingChat({
               : "Hi — I'm your coach, Cadence 👋 Tell me what you'd like to work on — a first 10k, eating better, a steadier mind, the daily pages — and I'll take notes as we talk. What's on your mind?"}
           </div>
         )}
-        {restored && showHealthOffer && <HealthOfferCard sessionId={() => sessionId.current} />}
         {restored &&
-          turns.map((t, i) =>
-            t.role === 'coach' ? (
-              <div className="coach-msg" key={i}>
-                {t.text || (
-                  <span className="typing">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="bubble me" key={i}>
-                {t.text}
-              </div>
-            ),
-          )}
+          turns.map((t, i) => (
+            <div key={i} style={{ display: 'contents' }}>
+              {t.role === 'coach' ? (
+                <div className="coach-msg">
+                  {t.text || (
+                    <span className="typing">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="bubble me">{t.text}</div>
+              )}
+              {i === healthOfferAt && <HealthOfferCard sessionId={() => sessionId.current} />}
+            </div>
+          ))}
       </div>
       {composer}
       {foodAction && (

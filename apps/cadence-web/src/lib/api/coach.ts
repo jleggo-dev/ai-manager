@@ -2,7 +2,7 @@ import { BASE, headers } from './http.ts';
 import { createCoachSseParseState, pushCoachSseChunk } from './coach-sse.ts';
 
 export async function openCoachSession(
-  opts: { intent?: string; topic?: string; systemPrompt?: string } = {},
+  opts: { intent?: string; topic?: string; systemPrompt?: string; healthAvailable?: boolean } = {},
 ): Promise<{ sessionId: string }> {
   const res = await fetch(`${BASE}/coach/sessions`, {
     method: 'POST',

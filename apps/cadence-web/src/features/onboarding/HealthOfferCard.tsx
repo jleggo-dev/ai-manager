@@ -25,13 +25,13 @@ export function HealthOfferCard({ sessionId }: { sessionId: () => string | null 
       const since = new Date(Date.now() - DIGEST_PERIOD_DAYS * 86_400_000).toISOString();
       const workouts = await capabilities.health.getWorkouts(since);
       if (!workouts.length) {
-        localStorage.setItem(FLAG_KEY, 'done');
+        window.localStorage.setItem(FLAG_KEY, 'done');
         setPhase('empty');
         return;
       }
       const ok = await postHealthDigest(buildDigestFromWorkouts(workouts), sessionId());
       if (!ok) throw new Error('post failed');
-      localStorage.setItem(FLAG_KEY, 'done');
+      window.localStorage.setItem(FLAG_KEY, 'done');
       setPhase('done');
     } catch {
       setPhase('error');
@@ -39,7 +39,7 @@ export function HealthOfferCard({ sessionId }: { sessionId: () => string | null 
   }
 
   function dismiss() {
-    localStorage.setItem(FLAG_KEY, 'dismissed');
+    window.localStorage.setItem(FLAG_KEY, 'dismissed');
     setGone(true);
   }
 

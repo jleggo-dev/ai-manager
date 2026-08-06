@@ -50,7 +50,7 @@ router.use(requireCadenceUser);
 router.post('/sessions', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
-    const { intent, topic } = req.body ?? {};
+    const { intent, topic, healthAvailable } = req.body ?? {};
     // Roll the plan horizon forward (idempotent) whenever the user comes back to the coach —
     // this is the top-up that keeps a long/undated plan materialized ~2 weeks ahead. Best-effort.
     void ensureHorizon(userId).catch((e) => console.error('[ensureHorizon]', e));
@@ -59,7 +59,14 @@ router.post('/sessions', async (req: Request, res: Response) => {
     // Build the context pack from the retrieval registry (P1) + inject as a non-triggering,
     // provenance-stamped turn. The pack is persisted (cadence.context_pack) for audit/reuse.
     const pack = await buildContextPack(userId, intent, topic);
-    await injectCoachContext(userId, session.sessionId, pack.rendered, { source: 'registry-pack', version: 1 });
+    // Device-capability note (client-declared): lets the persona's goal-gated Apple Health offer
+    // fire only where the permission card can actually appear (iOS shell, not yet answered).
+    // No "Recent activity" block + no note = web/answered → the coach never mentions Apple Health.
+    const rendered =
+      healthAvailable === true
+        ? `${pack.rendered}\nDevice: Apple Health is available on this device and the user has not shared activity yet.`
+        : pack.rendered;
+    await injectCoachContext(userId, session.sessionId, rendered, { source: 'registry-pack', version: 1 });
     // Persist conversation_id <-> ai_session_id mapping (§C6).
     await createConversation(userId, session.sessionId, session.externalChatId).catch((e) =>
       console.error('[createConversation]', e),

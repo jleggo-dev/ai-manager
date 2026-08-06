@@ -13,8 +13,75 @@ export const HEALTH_OFFER_FLAG_KEY = 'cadence.healthOffer'; // 'done' | 'dismiss
 
 /** True once the user has answered the onboarding offer either way. */
 export function healthOfferAnswered(): boolean {
-  const v = localStorage.getItem(HEALTH_OFFER_FLAG_KEY);
+  const v = window.localStorage.getItem(HEALTH_OFFER_FLAG_KEY);
   return v === 'done' || v === 'dismissed';
+}
+
+/** Refresh cadence: skip when the stored digest is younger than this. */
+export const REFRESH_STALE_MS = 24 * 60 * 60 * 1000;
+const REFRESH_CHECK_KEY = 'cadence.healthRefreshAt';
+/** Local throttle so an app that's opened many times a day doesn't re-check the server each time. */
+export const REFRESH_MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/** Pure staleness rule (exported for tests): refresh when there's no digest or it's >24h old. */
+export function digestIsStale(createdAtISO: string | null, nowMs: number): boolean {
+  if (!createdAtISO) return true;
+  const t = Date.parse(createdAtISO);
+  return !Number.isFinite(t) || nowMs - t > REFRESH_STALE_MS;
+}
+
+/** Key-order-insensitive equality — jsonb round-trips reorder object keys. */
+export function digestsEqual(a: unknown, b: unknown): boolean {
+  const canon = (v: unknown): string => {
+    if (Array.isArray(v)) return `[${v.map(canon).join(',')}]`;
+    if (v && typeof v === 'object')
+      return `{${Object.entries(v as Record<string, unknown>)
+        .sort(([x], [y]) => x.localeCompare(y))
+        .map(([k, val]) => `${JSON.stringify(k)}:${canon(val)}`)
+        .join(',')}}`;
+    return JSON.stringify(v) ?? 'null';
+  };
+  return canon(a) === canon(b);
+}
+
+/**
+ * Silent foreground refresh: once permission was granted (offer answered 'done'), keep the
+ * server-side digest current without asking again. Throttled locally (6h), skipped while the
+ * stored digest is fresh (<24h), and skipped when nothing changed — an identical POST would
+ * only churn the pack_touch watermark and force needless context-pack rebuilds.
+ */
+export async function maybeRefreshHealthDigest(deps: {
+  isAvailable: () => boolean;
+  getWorkouts: (sinceISO: string) => Promise<Workout[]>;
+  getLatest: () => Promise<{ digest: HealthDigest | null; created_at: string | null }>;
+  post: (digest: HealthDigest) => Promise<boolean>;
+  now?: () => number;
+}): Promise<'skipped' | 'fresh' | 'unchanged' | 'posted'> {
+  const now = deps.now ?? Date.now;
+  if (!deps.isAvailable() || window.localStorage.getItem(HEALTH_OFFER_FLAG_KEY) !== 'done') return 'skipped';
+  const lastCheck = Number(window.localStorage.getItem(REFRESH_CHECK_KEY) ?? 0);
+  if (now() - lastCheck < REFRESH_MIN_INTERVAL_MS) return 'skipped';
+  window.localStorage.setItem(REFRESH_CHECK_KEY, String(now()));
+  const latest = await deps.getLatest();
+  if (!digestIsStale(latest.created_at, now())) return 'fresh';
+  const since = new Date(now() - DIGEST_PERIOD_DAYS * 86_400_000).toISOString();
+  const digest = buildDigestFromWorkouts(await deps.getWorkouts(since));
+  if (latest.digest && digestsEqual(digest, latest.digest)) return 'unchanged';
+  await deps.post(digest);
+  return 'posted';
+}
+
+/**
+ * Goal-gated offer (detour pattern): the coach offers in prose when the goal warrants it —
+ * the persona always names "Apple Health" when offering — and the card renders under that
+ * turn. Returns the index of the LAST offering coach turn (a re-offer moves the card), or -1.
+ */
+export function findHealthOfferTurn(turns: { role: string; text: string }[]): number {
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const t = turns[i];
+    if (t && t.role === 'coach' && /apple\s+health/i.test(t.text)) return i;
+  }
+  return -1;
 }
 const MAX_TYPES = 25;
 const MAX_RECENT = 5;

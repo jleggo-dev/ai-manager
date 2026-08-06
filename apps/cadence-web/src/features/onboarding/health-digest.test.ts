@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Workout } from '../../lib/capability/index.ts';
-import { buildDigestFromWorkouts } from './health-digest.ts';
+import {
+  buildDigestFromWorkouts,
+  digestIsStale,
+  digestsEqual,
+  findHealthOfferTurn,
+  maybeRefreshHealthDigest,
+  HEALTH_OFFER_FLAG_KEY,
+} from './health-digest.ts';
 
 const run = (start: string, km: number, min: number): Workout => ({
   type: 'HKWorkoutActivityTypeRunning',
@@ -62,5 +69,86 @@ describe('buildDigestFromWorkouts', () => {
       start: '2026-07-01T08:00:00Z',
     }));
     expect(buildDigestFromWorkouts(zoo, 90).byType).toHaveLength(25);
+  });
+});
+
+describe('findHealthOfferTurn', () => {
+  it('anchors to the LAST coach turn naming Apple Health; user turns never match', () => {
+    expect(
+      findHealthOfferTurn([
+        { role: 'coach', text: 'Want me to look at your Apple Health activity?' },
+        { role: 'user', text: 'what is apple health?' },
+        { role: 'coach', text: 'I can read your recent workouts from Apple Health — okay?' },
+      ]),
+    ).toBe(2);
+    expect(findHealthOfferTurn([{ role: 'coach', text: 'Tell me about your goal.' }])).toBe(-1);
+  });
+});
+
+describe('digestIsStale / digestsEqual', () => {
+  const now = Date.parse('2026-08-06T12:00:00Z');
+  it('stale when missing, unparseable, or older than 24h', () => {
+    expect(digestIsStale(null, now)).toBe(true);
+    expect(digestIsStale('garbage', now)).toBe(true);
+    expect(digestIsStale('2026-08-05T11:00:00Z', now)).toBe(true);
+    expect(digestIsStale('2026-08-06T01:00:00Z', now)).toBe(false);
+  });
+  it('equality ignores key order (jsonb round-trip)', () => {
+    expect(digestsEqual({ a: 1, b: [{ x: 1, y: 2 }] }, { b: [{ y: 2, x: 1 }], a: 1 })).toBe(true);
+    expect(digestsEqual({ a: 1 }, { a: 2 })).toBe(false);
+  });
+});
+
+describe('maybeRefreshHealthDigest', () => {
+  // This jsdom setup has no Storage — give the window a minimal in-memory one.
+  const mem = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => void mem.set(k, String(v)),
+      removeItem: (k: string) => void mem.delete(k),
+      clear: () => mem.clear(),
+    },
+  });
+  const now = () => Date.parse('2026-08-06T12:00:00Z');
+  const digest = buildDigestFromWorkouts(
+    [{ type: 'HKWorkoutActivityTypeRunning', distanceKm: 5, durationMin: 30, start: '2026-08-01T08:00:00Z' }],
+    90,
+  );
+  const deps = (over: Partial<Parameters<typeof maybeRefreshHealthDigest>[0]>) => ({
+    isAvailable: () => true,
+    getWorkouts: async () => [
+      { type: 'HKWorkoutActivityTypeRunning', distanceKm: 5, durationMin: 30, start: '2026-08-01T08:00:00Z' },
+    ],
+    getLatest: async () => ({ digest: null, created_at: null }),
+    post: async () => true,
+    now,
+    ...over,
+  });
+
+  beforeEach(() => window.localStorage.clear());
+
+  it('skips without granted permission, posts when stale and changed', async () => {
+    expect(await maybeRefreshHealthDigest(deps({}))).toBe('skipped');
+    window.localStorage.setItem(HEALTH_OFFER_FLAG_KEY, 'done');
+    expect(await maybeRefreshHealthDigest(deps({}))).toBe('posted');
+  });
+
+  it('throttles repeat checks and respects freshness + content equality', async () => {
+    window.localStorage.setItem(HEALTH_OFFER_FLAG_KEY, 'done');
+    expect(
+      await maybeRefreshHealthDigest(deps({ getLatest: async () => ({ digest, created_at: '2026-08-06T11:00:00Z' }) })),
+    ).toBe('fresh');
+    // Second call inside the 6h throttle window never hits the server.
+    expect(await maybeRefreshHealthDigest(deps({}))).toBe('skipped');
+    window.localStorage.removeItem('cadence.healthRefreshAt');
+    expect(
+      await maybeRefreshHealthDigest(
+        deps({
+          getLatest: async () => ({ digest: JSON.parse(JSON.stringify(digest)), created_at: '2026-08-01T11:00:00Z' }),
+        }),
+      ),
+    ).toBe('unchanged');
   });
 });

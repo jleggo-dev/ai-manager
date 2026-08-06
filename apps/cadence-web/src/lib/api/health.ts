@@ -13,3 +13,10 @@ export async function postHealthDigest(digest: HealthDigest, sessionId?: string 
   });
   return res.ok;
 }
+
+/** Latest stored digest + when it was shared (null when none). */
+export async function getHealthDigest(): Promise<{ digest: HealthDigest | null; created_at: string | null }> {
+  const res = await fetch(`${BASE}/me/health-digest`, { headers: headers() });
+  if (!res.ok) return { digest: null, created_at: null };
+  return res.json();
+}

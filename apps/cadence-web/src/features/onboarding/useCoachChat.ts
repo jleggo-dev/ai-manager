@@ -14,6 +14,8 @@ import {
   prepareCoachFoodAction,
   type CoachFoodAction,
 } from '../../lib/api.ts';
+import { capabilities } from '../../lib/capability/index.ts';
+import { healthOfferAnswered } from './health-digest.ts';
 
 export interface CoachTurn {
   role: 'user' | 'coach';
@@ -127,7 +129,15 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
         /* soft-fail — chat still works */
       });
     try {
-      if (!sessionId.current) sessionId.current = (await openCoachSession({ intent })).sessionId;
+      if (!sessionId.current)
+        sessionId.current = (
+          await openCoachSession({
+            intent,
+            // Declares the goal-gated Apple Health offer as possible: iOS shell + not yet answered.
+            // The persona only offers when this note is present AND the goal warrants it.
+            healthAvailable: capabilities.health.isAvailable() && !healthOfferAnswered(),
+          })
+        ).sessionId;
       const { completed } = await sendCoachMessage(sessionId.current, text, applyStreamDelta);
       if (!completed && !(await recoverFromServer())) {
         fillLastCoach('⚠️ Connection dropped — send again to continue.');

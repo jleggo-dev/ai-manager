@@ -21,7 +21,7 @@ export { openCoachSession, getCurrentCoach, sendCoachMessage } from './api/coach
 
 export { registerPushToken, removePushToken } from './api/devices.ts';
 
-export { postHealthDigest } from './api/health.ts';
+export { postHealthDigest, getHealthDigest } from './api/health.ts';
 
 export {
   prepareCoachFoodAction,

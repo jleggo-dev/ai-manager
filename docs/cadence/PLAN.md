@@ -697,10 +697,19 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   queries, so those seams return null (custom Swift later). Device install 2026-08-06: bundle id
   is **`dev.jleggo.cadence`** (`com.cadenceapp.ios` was taken — app ids are globally unique);
   free-team build on jeffrey's iPhone, push entitlement locally removed until enrollment activates.
-- **Onboarding health context (in progress 2026-08-06)** — on iOS the coach offers (confirm-first,
-  in-chat) to read recent HealthKit activity; the CLIENT builds a compact digest (workouts by
-  type/week — the Broker cannot query HealthKit, it is on-device only) which lands in the context
-  pack so Coach + Broker ground onboarding in real history instead of asking the user to type it.
+- **Onboarding health context — SHIPPED 2026-08-06, incl. goal-gating + foreground refresh.**
+  The CLIENT builds a compact digest (workouts by type/week — the Broker cannot query HealthKit,
+  it is on-device only) → `POST /me/health-digest` (zod-bounded; optional live-session inject) →
+  `cadence.health_digests` (0024, pack_touch trigger) → `get_health_history` retrieval fn +
+  `health_history` catalog stat (without the stat the Broker never selects it — verified live).
+  **Goal-gated offer (detour pattern):** session open declares `healthAvailable` (iOS shell +
+  unanswered) → context gets a "Device: Apple Health is available…" line → the persona offers
+  ONCE, in prose, only for goals Apple Health actually records (never mind/practice goals),
+  always naming "Apple Health" → the client anchors the permission card under that coach turn
+  (`findHealthOfferTurn`). No Device line (web/answered) = the coach never mentions it.
+  **Foreground refresh:** `maybeRefreshHealthDigest` on app open — 6h local throttle, skip if
+  server digest <24h old, content-diff (key-order-insensitive; jsonb reorders) so an unchanged
+  digest never trips pack_touch and never forces a pack rebuild.
 - **Strava — PAUSED (owner decision 2026-08-06).** Direct API integration deferred. Owner's
   position: imported activities become the user's own *workout history* inside Cadence, merged
   with other health data; the Broker only ever sees a parsed abstraction with no Strava
