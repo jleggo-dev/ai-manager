@@ -625,9 +625,12 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   `nutrition_logs` writes (raw_text always kept) + deterministic summary feeding dossier,
   `get_food_log` retrieval, replan `recent_activity.food_log`, and the Food-log capture sheet;
   synthesis holds eating changes until 7+ logged days, then ONE at a time. See the dated batch
-  entry. Photo input SHIPPED capture-first 2026-07-17. REMAINING: per-topic thread continuity;
-  vision parse + `macro_targets` day view + rings — now fully specced in "SPEC — Nutrition v2 +
-  the Visual Today" (phases N1–N4).
+  entry. Photo input SHIPPED capture-first 2026-07-17.
+  **Stale line corrected 2026-08-06:** this entry claimed vision parse + `macro_targets` day view
+  + rings were REMAINING; the spec section below is stamped **✅ SHIPPED N1–N4**, so they are
+  done — the entry was describing finished work as outstanding (exactly the failure the §12
+  refresh header warns about). REMAINING is only **per-topic thread continuity**, which is really
+  a face of P4 (see below), not a nutrition-specific task.
 - **Adaptation (Phase 7) — AUDITED 2026-08-04: BUILT END TO END.** The chain, traced in code:
   `GET /plan` fires `assessIfDue` (fire-and-forget) → **deterministic tripwires gate it, so no
   wire firing means no LLM call at all** → `situation-assess` proposes → `users.pending_proposal`
