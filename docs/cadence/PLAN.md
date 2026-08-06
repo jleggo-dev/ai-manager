@@ -708,7 +708,10 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   geolocation API is unreliable in WKWebView — the previous inherit was a latent bug, not just an
   inconsistency. Also gains a real permission state (`checkPermissions`) rather than only
   success/failure. Requests `coarseLocation` (weather + timezone is all Cadence needs).
-- **Weather via Apple WeatherKit — BLOCKED on the paid enrollment (designed 2026-08-06).** Rationale
+- **Weather via Apple WeatherKit — BLOCKED: enrollment still PENDING as of 2026-08-06** (paid, but
+  Apple's identity verification hadn't cleared; WeatherKit key creation needs an ACTIVE membership,
+  so this cannot start until then — same gate as TestFlight, push/APNs key, and Sign in with Apple).
+  Design (2026-08-06). Rationale
   is OS consistency: an iOS user's lock-screen/Weather-app forecast is Apple's, so Cadence quoting
   OpenWeatherMap reads as wrong even when it isn't. Design: **swap the SERVER-side source**
   (`services/weather/weather.ts`) to the WeatherKit **REST** API and keep OpenWeatherMap as the
