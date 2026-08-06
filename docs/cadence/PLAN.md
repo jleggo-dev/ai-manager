@@ -734,12 +734,21 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   *populated 11 km cells*, NOT with users (a whole city shares one entry), giving ~700 distinct
   cells/day at 24 hourly refreshes. Six call sites (`me`, `session-generate` ×2, `day-recap`,
   `date-context`, `situation`) all share that cache, so a chatty coach hour is one fetch.
-  **The actual risk: the cache is a process-local in-memory `Map`.** On Vercel Services every cold
-  start or extra instance starts empty and re-fetches — that, not the TTL, is what would multiply
-  calls. **Do this before/with the WeatherKit swap: move the cache to Postgres** (same key, shared
-  across instances, survives restarts) — worth doing even on OpenWeatherMap. Bonus: WeatherKit
-  returns `currentWeather`+`forecastDaily`+`forecastHourly` in ONE request, halving today's two
-  OWM calls (current + forecast) per miss.
+  ~~**The actual risk: the cache is a process-local in-memory `Map`.**~~ — **FIXED 2026-08-06**
+  (migration `0025_weather_cache` + `repos/weather-cache.ts`). Two tiers now: L1 the existing
+  in-process Map (free, no DB round trip on repeat hits), L2 `cadence.weather_cache` shared by
+  every instance and surviving restarts, then the provider. The table is deliberately **not**
+  user-scoped (weather belongs to a place — the ~11 km bucket sharing IS the saving) and
+  deliberately has **no `pack_touch` trigger** (weather is ambient; wiring it to the 0022
+  watermark would invalidate every user's context pack on every fetch). RLS on with no policy:
+  no owner column exists, so no policy would be correct, and the `cadence` schema isn't exposed
+  to the Data API anyway. The migration script asserts all three properties.
+  **Bug found while testing:** the L2 read sat outside `getWeatherAt`'s try/catch, and
+  `session-generate` awaits `getWeatherForUser` with no `.catch` — a cache fault would have
+  broken session generation. Now independently guarded; a cache outage costs a provider call,
+  never a failed request. Still to do with WeatherKit: it returns
+  `currentWeather`+`forecastDaily`+`forecastHourly` in ONE request, halving today's two OWM calls
+  (current + forecast) per miss.
 - **Deployment (Vercel)** — SSE + always-on caveats (§11); Broker triggers via Vercel Cron → AI
   Admin trigger endpoints.
 - ~~**Native iOS (Capacitor) + HealthKit**~~ — **SHIPPED as a simulator-verified shell (2026-08-06):**

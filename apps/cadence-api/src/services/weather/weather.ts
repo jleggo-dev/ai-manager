@@ -3,6 +3,7 @@
  * Cached by rounded lat/lon + local date. No LLM. Soft-fails when unconfigured.
  */
 import { getUser } from '../../repos/users.ts';
+import { getCachedWeather, putCachedWeather, pruneExpiredWeather } from '../../repos/weather-cache.ts';
 import { isWeatherConfigured, owmGeoGet, owmGet, WeatherConfigError, WeatherHttpError } from './weather-http.ts';
 import {
   formatWeatherLine,
@@ -17,7 +18,11 @@ export type { WeatherSnapshot } from './weather-map.ts';
 export { formatWeatherLine, isOutdoorActivity, localDateIso, localTimeLabel, weatherCacheKey } from './weather-map.ts';
 export { isWeatherConfigured, WeatherConfigError, WeatherHttpError } from './weather-http.ts';
 
-/** In-memory daily bucket cache — process-local; enough for thousands of users with aggressive rounding. */
+/**
+ * L1: in-memory, process-local — free, and saves a DB round trip for repeat hits in one process.
+ * L2 is `cadence.weather_cache` (migration 0025), shared across instances and surviving restarts;
+ * without it every cold start re-billed the provider. Miss on both → the provider.
+ */
 const cache = new Map<string, { snapshot: WeatherSnapshot; expiresAt: number }>();
 
 /** Soft TTL within the local-date key (OWM free tier freshness; still one key per day+bucket). */
@@ -71,10 +76,23 @@ export async function getWeatherAt(
   const cached = cacheGet(key);
   if (cached) return cached;
 
+  // L2: another instance (or this one before a restart) may already have paid for this cell today.
+  // Guarded independently of the provider try//catch below: the repo soft-fails internally, but
+  // this must not DEPEND on that — `session-generate` awaits getWeatherForUser with no catch, so a
+  // throw escaping here would break session generation over a cache problem.
+  const shared = await getCachedWeather(key).catch(() => null);
+  if (shared) {
+    cacheSet(key, shared); // warm L1 so the rest of this process's requests skip the DB too
+    return shared;
+  }
+
   try {
     const snapshot = await fetchOwm(lat, lon);
     if (!snapshot) return null;
     cacheSet(key, snapshot);
+    // Publish to the shared cache + sweep dead rows. Both soft-fail, and neither blocks the
+    // caller's result — a cache outage must cost a provider call, never a failed request.
+    void putCachedWeather(key, snapshot, SOFT_TTL_MS).then(pruneExpiredWeather);
     return snapshot;
   } catch (err) {
     if (err instanceof WeatherConfigError) return null;
