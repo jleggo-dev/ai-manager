@@ -689,8 +689,13 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   so ship it with (or before) TestFlight. Needs the paid enrollment: an App ID with the
   "Sign in with Apple" capability + a Services ID/secret key for Supabase; native-first via
   `@capacitor-community/apple-sign-in` (system sheet, no browser hop) with the web-OAuth path as
-  fallback. Facebook is optional/when-wanted: a Meta developer app (App Review for `email`
-  scope), Supabase provider config, button. Both must respect the brand's plain-words copy —
+  fallback. Facebook is optional/when-wanted: **Meta developer account created 2026-08-06** —
+  app + Facebook Login product + OAuth redirect URI (`https://qvukqinwmyvewzgcsgzt.supabase.co
+  /auth/v1/callback`) + Supabase provider config + button still to do. Correction to an earlier
+  note: `email`+`public_profile` now get Standard Access automatically — **no App Review
+  needed** for what Cadence uses; the only gate is filling in Basic Settings (privacy policy URL,
+  icon) to flip the app from Development to Live. Both providers must respect the brand's
+  plain-words copy —
   **Account-linking: DECIDED (owner 2026-08-06) — one account per verified email**, providers
   link into it (Supabase's default; keep it). Fits the brand promise directly: never make the
   user start over — signing in with Apple tomorrow after Google today must land in the same
