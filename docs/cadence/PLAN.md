@@ -691,8 +691,12 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   `@capacitor-community/apple-sign-in` (system sheet, no browser hop) with the web-OAuth path as
   fallback. Facebook is optional/when-wanted: a Meta developer app (App Review for `email`
   scope), Supabase provider config, button. Both must respect the brand's plain-words copy —
-  and account-linking policy needs a decision (same email across providers: Supabase links by
-  verified email by default; confirm that's the behaviour we want before enabling).
+  **Account-linking: DECIDED (owner 2026-08-06) — one account per verified email**, providers
+  link into it (Supabase's default; keep it). Fits the brand promise directly: never make the
+  user start over — signing in with Apple tomorrow after Google today must land in the same
+  coach relationship. Caveat to honor at build time: Apple offers "Hide My Email" relay
+  addresses — a relay email won't match the user's Google email, so linking silently won't
+  happen for those users; the sign-in copy should not promise it does.
 - **Deployment (Vercel)** — SSE + always-on caveats (§11); Broker triggers via Vercel Cron → AI
   Admin trigger endpoints.
 - ~~**Native iOS (Capacitor) + HealthKit**~~ — **SHIPPED as a simulator-verified shell (2026-08-06):**
