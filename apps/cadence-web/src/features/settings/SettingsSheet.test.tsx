@@ -22,6 +22,9 @@ vi.mock('../../lib/api.ts', () => ({
   saveHomeLocation: vi.fn(),
   clearHomeLocation: vi.fn(),
   browserTimezone: () => 'UTC',
+  logAdhoc: vi.fn(),
+  registerPushToken: vi.fn(),
+  removePushToken: vi.fn(),
 }));
 
 vi.mock('../../lib/capability/index.ts', () => ({
@@ -30,6 +33,9 @@ vi.mock('../../lib/capability/index.ts', () => ({
       isAvailable: () => false,
       getCoarseLocation: async () => null,
     },
+    // Web-shaped: Apple Health + notifications sections render null (native shell only).
+    health: { isAvailable: () => false },
+    push: { isAvailable: () => false },
   },
 }));
 

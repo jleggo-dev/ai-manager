@@ -683,9 +683,18 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   API route. The dev user survives only behind `?dev=1` / `?preview=` harnesses.
 - **Deployment (Vercel)** — SSE + always-on caveats (§11); Broker triggers via Vercel Cron → AI
   Admin trigger endpoints.
-- **Native iOS (Capacitor) + HealthKit** — genuinely open (checked 2026-08-04: **no Capacitor
-  dependency in any package.json**). The HealthKit *capability seam* does exist app-side, so the
-  work is the shell and the bridge, not the abstraction.
+- ~~**Native iOS (Capacitor) + HealthKit**~~ — **SHIPPED as a simulator-verified shell (2026-08-06):**
+  `apps/cadence-ios` (Capacitor 8, SPM not CocoaPods), runtime capability selection
+  (`capability/native.ts`: HealthKit workouts via `capacitor-health`, APNs register), OAuth deep link
+  (`cadence://auth-callback`, PKCE), CORS on cadence-api, `.env.ios` absolute API base, migration
+  `0023_device_tokens` + `/me/push-token` + APNs p8 sender (`services/push-apns.ts`, no SDK dep),
+  confirm-first Apple Health import + notifications in Settings. Built and verified on the iOS 26.5
+  simulator (blank-screen fix: PhoneFrame must never pin `--app-height` to WKWebView's early
+  `visualViewport.height` of 0). **Still open:** paid Apple Developer enrollment, bundle-id decision
+  (placeholder `com.cadenceapp.ios`), Supabase redirect allowlist for the deep link, APNs `.p8` env,
+  deploy cadence-api (CORS) — then device build, HealthKit-on-device, TestFlight. Push *scheduling*
+  still belongs to item B (check-in cadence); plugin gap: `capacitor-health` has no weight/sleep
+  queries, so those seams return null (custom Swift later).
 
 **F. AI Admin enhancements this exercise surfaced (proposed — MEMORY-ARCHITECTURE.md §5)**
 - ~~**Multimodal content parts in the provider layer**~~ — **SHIPPED** (verified 2026-08-04, not

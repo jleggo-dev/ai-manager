@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase, authConfigured } from '../../lib/supabase.ts';
+import { isNativeShell, signInWithGoogleNative } from '../../lib/native-auth.ts';
 import { Orb } from '../../components/Orb.tsx';
 
 /** Google's brand "G" for the sign-in button (their sanctioned use for exactly this). */
@@ -48,9 +49,17 @@ export function AuthScreen() {
     setBusy(true);
     setMsg('');
     setNotice('');
-    // Redirects the browser to Google, then back to the app; the returned session is parsed by
-    // the client (detectSessionInUrl) and App's listener takes over. No dev query param to keep —
-    // this screen only renders in real-auth mode.
+    // Native shell: system browser sheet + cadence:// deep link (lib/native-auth.ts); the
+    // appUrlOpen listener finishes the session, and App's auth listener takes over.
+    if (isNativeShell()) {
+      const errMsg = await signInWithGoogleNative();
+      if (errMsg) setMsg(errMsg);
+      setBusy(false); // the sheet is up (or failed); this screen stays interactive behind it
+      return;
+    }
+    // Web: redirects the browser to Google, then back to the app; the returned session is parsed
+    // by the client (detectSessionInUrl) and App's listener takes over. No dev query param to
+    // keep — this screen only renders in real-auth mode.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin },

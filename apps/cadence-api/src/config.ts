@@ -99,6 +99,21 @@ export const cadenceConfig = {
   },
 
   /**
+   * APNs (native-shell push) — token-based auth with a .p8 key. All server-only; the key comes
+   * from the Apple Developer portal (Keys → new key with APNs enabled). Optional until push
+   * ships: apnsConfigured() gates every send, so an unset block just means "push off".
+   * APNS_PRIVATE_KEY holds the .p8 PEM contents (literal \n escapes fine — the sender unescapes).
+   */
+  apns: {
+    keyId: process.env.APNS_KEY_ID ?? '',
+    teamId: process.env.APNS_TEAM_ID ?? '',
+    privateKey: process.env.APNS_PRIVATE_KEY ?? '',
+    bundleId: process.env.APNS_BUNDLE_ID ?? 'com.cadenceapp.ios',
+    environment: (process.env.APNS_ENVIRONMENT === 'production' ? 'production' : 'development') as
+      'development' | 'production',
+  },
+
+  /**
    * OpenWeatherMap — server-only (cadenceConfig.weatherApiKey). Never expose via VITE_* or
    * cadence-web. Set in apps/cadence-api/.env locally and the cadence-api Vercel project env.
    */

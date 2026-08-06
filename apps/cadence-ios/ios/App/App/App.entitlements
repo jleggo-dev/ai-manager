@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- HealthKit: works with a free personal team for on-device testing; distribution needs
+	     the paid program. Push (aps-environment) needs the paid program even for device builds;
+	     simulator builds ignore entitlements, so this file never blocks simulator work. -->
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

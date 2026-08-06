@@ -1,0 +1,27 @@
+{
+  "name": "@cadence/ios",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cadence iOS shell (Capacitor). Wraps the cadence-web bundle (built with --mode ios); native calls flow through cadence-web's capability seam. Own workspace so the Xcode/Pods tree stays out of cadence-web's Vercel build root.",
+  "scripts": {
+    "build:web": "npm run build -w @cadence/web -- --mode ios",
+    "sync": "npm run build:web && cap sync ios",
+    "open": "cap open ios",
+    "run:ios": "npm run sync && cap run ios",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
+    "@capacitor/push-notifications": "^8.1.2",
+    "capacitor-health": "^8.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.0",
+    "typescript": "^6.0.3"
+  }
+}

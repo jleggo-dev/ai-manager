@@ -1,0 +1,19 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- App icon: the Cadence sunrise arch (Orb.tsx) on the oat canvas. Colors are the resolved
+       brand vars from styles.css: dawn-1 #f4b896 / dawn-3 #e07a5f / dawn-4 #c25f45, forest
+       #2c5545, canvas ink-2 #f7f5f0. Kept flat + centered; iOS applies its own corner mask. -->
+  <rect width="1024" height="1024" fill="#f7f5f0"/>
+  <defs>
+    <linearGradient id="arch" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#f4b896"/>
+      <stop offset="0.55" stop-color="#e07a5f"/>
+      <stop offset="1" stop-color="#c25f45"/>
+    </linearGradient>
+  </defs>
+  <!-- Orb geometry (viewBox 0 0 120 120) scaled 6.4x and centered: x' = 6.4x + 128, y' = 6.4y + 128 -->
+  <g>
+    <path d="M 320,640 A 192 192 0 0 1 704 640" fill="none" stroke="url(#arch)" stroke-width="76.8" stroke-linecap="round"/>
+    <path d="M 416,640 A 96 96 0 0 1 608 640" fill="url(#arch)"/>
+    <rect x="256" y="678.4" width="512" height="51.2" rx="25.6" fill="#2c5545"/>
+  </g>
+</svg>

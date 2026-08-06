@@ -2,6 +2,7 @@
 import './config.ts';
 
 import express from 'express';
+import { corsMiddleware } from './lib/cors.ts';
 import healthRoutes from './routes/health.ts';
 import coachRoutes from './routes/coach.ts';
 import coachFoodRoutes from './routes/coach-food.ts';
@@ -14,11 +15,14 @@ import foodsRoutes from './routes/foods.ts';
 import recipesRoutes from './routes/recipes.ts';
 import mealPlansRoutes from './routes/meal-plans.ts';
 import meRoutes from './routes/me.ts';
+import deviceRoutes from './routes/devices.ts';
 import journalRoutes from './routes/journal.ts';
 import devRoutes from './routes/dev.ts';
 
 export function createApp() {
   const app = express();
+  // Before json(): preflights carry no body, and SSE responses need the headers too.
+  app.use(corsMiddleware());
   app.use(express.json({ limit: '2mb' }));
 
   app.use('/health', healthRoutes);
@@ -34,6 +38,7 @@ export function createApp() {
   app.use('/nutrition/recipes', recipesRoutes);
   app.use('/nutrition/meal-plans', mealPlansRoutes);
   app.use('/me', meRoutes);
+  app.use('/me', deviceRoutes);
   app.use('/dev', devRoutes);
 
   return app;

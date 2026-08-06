@@ -19,6 +19,8 @@ export {
 
 export { openCoachSession, getCurrentCoach, sendCoachMessage } from './api/coach.ts';
 
+export { registerPushToken, removePushToken } from './api/devices.ts';
+
 export {
   prepareCoachFoodAction,
   type CoachFoodAction,

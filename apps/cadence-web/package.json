@@ -15,8 +15,13 @@
   },
   "dependencies": {
     "@cadence/shared": "*",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/push-notifications": "^8.1.2",
     "@supabase/supabase-js": "^2.101.1",
     "@tanstack/react-query": "^5.101.3",
+    "capacitor-health": "^8.1.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

@@ -7,6 +7,9 @@ node_modules/
 !.env.example
 !.env.replica.example
 !.env.old.example
+# Public-by-design build config for the iOS shell (absolute API base + publishable Supabase
+# key — the same values every web bundle ships). No secrets may ever be added to it.
+!apps/cadence-web/.env.ios
 backend/.env.replica
 backend/.env.old
 

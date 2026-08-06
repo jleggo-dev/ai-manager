@@ -65,5 +65,13 @@ export interface Capabilities {
   dictation: DictationCapability;
 }
 
-/** Active capability set for this build (web today; Capacitor swaps the export later). */
-export { webCapabilities as capabilities } from './web.ts';
+import { Capacitor } from '@capacitor/core';
+import { webCapabilities } from './web.ts';
+import { nativeCapabilities } from './native.ts';
+
+/**
+ * Active capability set, resolved at runtime: the Capacitor iOS shell gets the native
+ * implementations (HealthKit, APNs); every web context keeps the browser/no-op set.
+ * `isNativePlatform()` is false in plain browsers, so the web bundle behaves exactly as before.
+ */
+export const capabilities: Capabilities = Capacitor.isNativePlatform() ? nativeCapabilities : webCapabilities;

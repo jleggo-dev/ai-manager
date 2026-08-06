@@ -4,6 +4,8 @@ import { deleteMyData, isDevMode, getDevAccount, resetAccount } from '../../lib/
 import { NutritionTargets } from './NutritionTargets.tsx';
 import { DietaryProfileEditor } from './DietaryProfileEditor.tsx';
 import { LocationSettings } from './LocationSettings.tsx';
+import { AppleHealthSettings } from './AppleHealthSettings.tsx';
+import { NotificationSettings } from './NotificationSettings.tsx';
 
 /**
  * Settings, as a sheet from the header gear. Real-auth: email, sign out, password reset (email
@@ -95,6 +97,10 @@ export function SettingsSheet({
           <DietaryProfileEditor />
 
           <LocationSettings />
+
+          {/* Native-shell only: both render null on web (capability seam). */}
+          <AppleHealthSettings />
+          <NotificationSettings />
 
           {!dev && (
             <>

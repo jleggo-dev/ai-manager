@@ -14,13 +14,18 @@ export function PhoneFrame({ children }: { children: ReactNode }) {
 
     const sync = () => {
       const vv = window.visualViewport;
-      if (!vv) {
-        root.style.setProperty('--app-height', `${window.innerHeight}px`);
-        root.style.setProperty('--app-top', '0px');
+      // WKWebView (Capacitor shell) reports visualViewport.height as 0 during early layout —
+      // pinning to it collapses the whole app to 0px (blank screen on iOS, found 2026-08-06).
+      // Never accept a zero: fall back to innerHeight, and with no sane number at all leave the
+      // vars unset so the CSS `var(--app-height, 100svh)` fallback keeps the app visible.
+      const h = vv?.height || window.innerHeight;
+      if (!h) {
+        root.style.removeProperty('--app-height');
+        root.style.removeProperty('--app-top');
         return;
       }
-      root.style.setProperty('--app-height', `${vv.height}px`);
-      root.style.setProperty('--app-top', `${vv.offsetTop}px`);
+      root.style.setProperty('--app-height', `${h}px`);
+      root.style.setProperty('--app-top', `${vv?.offsetTop ?? 0}px`);
     };
 
     sync();

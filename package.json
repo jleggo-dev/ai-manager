@@ -11,7 +11,8 @@
     "packages/core",
     "packages/cadence-shared",
     "apps/cadence-api",
-    "apps/cadence-web"
+    "apps/cadence-web",
+    "apps/cadence-ios"
   ],
   "scripts": {
     "dev": "npm run dev:backend & npm run dev:frontend",

@@ -11,7 +11,10 @@ const url = import.meta.env.VITE_CADENCE_SUPABASE_URL as string | undefined;
 const anonKey = import.meta.env.VITE_CADENCE_SUPABASE_ANON_KEY as string | undefined;
 
 export const supabase = createClient(url ?? '', anonKey ?? '', {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  // PKCE (not implicit) so the native iOS shell can finish Google sign-in by exchanging the
+  // ?code= from its cadence:// deep link (see lib/native-auth.ts). On web, detectSessionInUrl
+  // does the same exchange automatically after the redirect — same flow, two return paths.
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
 });
 
 /** True when the Supabase auth env is present — lets the UI show a clear message if it's not set. */
