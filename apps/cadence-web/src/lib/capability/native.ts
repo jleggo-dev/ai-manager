@@ -1,5 +1,6 @@
 import { Health } from 'capacitor-health';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { Geolocation } from '@capacitor/geolocation';
 import type { Capabilities, Workout } from './index.ts';
 import { webCapabilities } from './web.ts';
 
@@ -76,6 +77,27 @@ export const nativeCapabilities: Capabilities = {
       });
     },
   },
-  location: webCapabilities.location,
+  location: {
+    isAvailable: () => true,
+    // CoreLocation via the Capacitor plugin, NOT WKWebView's navigator.geolocation: the shell is
+    // served from capacitor://localhost, which iOS does not treat as a secure origin, so the web
+    // API is unreliable there. Going through the plugin also gives a real permission state
+    // (checkPermissions) instead of only a success/failure callback, and keeps the prompt and
+    // accuracy behaviour identical to any other iOS app.
+    getCoarseLocation: async () => {
+      try {
+        const status = await Geolocation.checkPermissions();
+        if (status.location !== 'granted' && status.coarseLocation !== 'granted') {
+          const asked = await Geolocation.requestPermissions({ permissions: ['coarseLocation'] });
+          if (asked.location !== 'granted' && asked.coarseLocation !== 'granted') return null;
+        }
+        // Coarse is all Cadence needs (weather + timezone); low accuracy is faster and colder on battery.
+        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 10_000 });
+        return { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      } catch {
+        return null;
+      }
+    },
+  },
   dictation: webCapabilities.dictation,
 };

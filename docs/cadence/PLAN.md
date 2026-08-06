@@ -702,6 +702,26 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   coach relationship. Caveat to honor at build time: Apple offers "Hide My Email" relay
   addresses — a relay email won't match the user's Google email, so linking silently won't
   happen for those users; the sign-in copy should not promise it does.
+- **Native location — SHIPPED 2026-08-06.** `capability/native.ts` now uses `@capacitor/geolocation`
+  (CoreLocation) instead of inheriting the web `navigator.geolocation`. Not cosmetic: the shell is
+  served from `capacitor://localhost`, which iOS does **not** treat as a secure origin, so the web
+  geolocation API is unreliable in WKWebView — the previous inherit was a latent bug, not just an
+  inconsistency. Also gains a real permission state (`checkPermissions`) rather than only
+  success/failure. Requests `coarseLocation` (weather + timezone is all Cadence needs).
+- **Weather via Apple WeatherKit — BLOCKED on the paid enrollment (designed 2026-08-06).** Rationale
+  is OS consistency: an iOS user's lock-screen/Weather-app forecast is Apple's, so Cadence quoting
+  OpenWeatherMap reads as wrong even when it isn't. Design: **swap the SERVER-side source**
+  (`services/weather/weather.ts`) to the WeatherKit **REST** API and keep OpenWeatherMap as the
+  fallback when WeatherKit is unconfigured or errors — the existing cache/`WeatherSnapshot`/
+  tripwire layers are source-agnostic, so this is a `weather-http.ts` swap, not a re-architecture.
+  Do NOT move weather on-device: server-side keeps one source for web + iOS (a per-client source
+  would make a user's web and phone disagree) and preserves the cache. Auth reuses machinery we
+  already built — WeatherKit REST signs an **ES256 JWT from a p8 key**, exactly like
+  `services/push-apns.ts`; needs a WeatherKit-enabled key + Services ID + App ID, and the JWT's
+  `sub`/`jti` differ from APNs. Free tier 500k calls/month with membership — far beyond our volume.
+  **Product constraint:** displaying Apple weather data REQUIRES showing the Apple Weather
+  trademark plus a link to Apple's legal-attribution page, so every weather surface needs an
+  attribution line before this can ship.
 - **Deployment (Vercel)** — SSE + always-on caveats (§11); Broker triggers via Vercel Cron → AI
   Admin trigger endpoints.
 - ~~**Native iOS (Capacitor) + HealthKit**~~ — **SHIPPED as a simulator-verified shell (2026-08-06):**
