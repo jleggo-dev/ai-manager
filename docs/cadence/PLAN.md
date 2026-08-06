@@ -725,6 +725,18 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   **Product constraint:** displaying Apple weather data REQUIRES showing the Apple Weather
   trademark plus a link to Apple's legal-attribution page, so every weather surface needs an
   attribution line before this can ship.
+  **Call budget (analysed 2026-08-06 — the fix is WHERE the cache lives, not how often we call).**
+  500k/month ≈ 16.6k/day. The existing key already bounds this well: `weatherCacheKey` buckets to
+  **1 decimal degree (~11 km) + local calendar date**, with a 1h soft TTL — so cost scales with
+  *populated 11 km cells*, NOT with users (a whole city shares one entry), giving ~700 distinct
+  cells/day at 24 hourly refreshes. Six call sites (`me`, `session-generate` ×2, `day-recap`,
+  `date-context`, `situation`) all share that cache, so a chatty coach hour is one fetch.
+  **The actual risk: the cache is a process-local in-memory `Map`.** On Vercel Services every cold
+  start or extra instance starts empty and re-fetches — that, not the TTL, is what would multiply
+  calls. **Do this before/with the WeatherKit swap: move the cache to Postgres** (same key, shared
+  across instances, survives restarts) — worth doing even on OpenWeatherMap. Bonus: WeatherKit
+  returns `currentWeather`+`forecastDaily`+`forecastHourly` in ONE request, halving today's two
+  OWM calls (current + forecast) per miss.
 - **Deployment (Vercel)** — SSE + always-on caveats (§11); Broker triggers via Vercel Cron → AI
   Admin trigger endpoints.
 - ~~**Native iOS (Capacitor) + HealthKit**~~ — **SHIPPED as a simulator-verified shell (2026-08-06):**
