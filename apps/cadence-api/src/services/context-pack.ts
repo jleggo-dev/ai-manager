@@ -22,7 +22,7 @@ import { logAi } from './ai-log.ts';
 
 /** Deterministic fallback selection per intent (used only if the Broker select fails). */
 const INTENT_SELECTION: Record<CoachIntent, string[]> = {
-  onboarding: ['get_identity', 'get_objectives', 'get_constraints', 'get_equipment'],
+  onboarding: ['get_identity', 'get_objectives', 'get_constraints', 'get_equipment', 'get_health_history'],
   initial: ['get_identity', 'get_objectives', 'get_active_plan', 'get_constraints', 'get_dietary_profile'],
   ongoing: [
     'get_identity',

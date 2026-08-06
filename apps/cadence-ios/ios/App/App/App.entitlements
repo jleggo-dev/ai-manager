@@ -7,7 +7,9 @@
 	     simulator builds ignore entitlements, so this file never blocks simulator work. -->
 	<key>com.apple.developer.healthkit</key>
 	<true/>
-	<key>aps-environment</key>
-	<string>development</string>
+	<!-- aps-environment (push) TEMPORARILY REMOVED for free-team cable install 2026-08-06 —
+	     restore once the paid enrollment activates:
+	     <key>aps-environment</key><string>development</string> -->
+
 </dict>
 </plist>

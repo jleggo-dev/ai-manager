@@ -694,7 +694,21 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   (placeholder `com.cadenceapp.ios`), Supabase redirect allowlist for the deep link, APNs `.p8` env,
   deploy cadence-api (CORS) — then device build, HealthKit-on-device, TestFlight. Push *scheduling*
   still belongs to item B (check-in cadence); plugin gap: `capacitor-health` has no weight/sleep
-  queries, so those seams return null (custom Swift later).
+  queries, so those seams return null (custom Swift later). Device install 2026-08-06: bundle id
+  is **`dev.jleggo.cadence`** (`com.cadenceapp.ios` was taken — app ids are globally unique);
+  free-team build on jeffrey's iPhone, push entitlement locally removed until enrollment activates.
+- **Onboarding health context (in progress 2026-08-06)** — on iOS the coach offers (confirm-first,
+  in-chat) to read recent HealthKit activity; the CLIENT builds a compact digest (workouts by
+  type/week — the Broker cannot query HealthKit, it is on-device only) which lands in the context
+  pack so Coach + Broker ground onboarding in real history instead of asking the user to type it.
+- **Strava — PAUSED (owner decision 2026-08-06).** Direct API integration deferred. Owner's
+  position: imported activities become the user's own *workout history* inside Cadence, merged
+  with other health data; the Broker only ever sees a parsed abstraction with no Strava
+  provenance — so the app is not "sending Strava data to an LLM". Recorded caution: Strava's
+  API terms (late 2024) ban Strava data in AI models and this reading skirts them — the
+  provenance-stripping happens in OUR pipeline, which their terms may not recognize. Preferred
+  path remains Strava→Apple Health sync (user-enabled in Strava's app, forward-only) which
+  keeps Strava's API out of the loop entirely. Revisit only with a terms-compatible shape.
 
 **F. AI Admin enhancements this exercise surfaced (proposed — MEMORY-ARCHITECTURE.md §5)**
 - ~~**Multimodal content parts in the provider layer**~~ — **SHIPPED** (verified 2026-08-04, not

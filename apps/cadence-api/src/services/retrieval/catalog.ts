@@ -12,13 +12,20 @@ export interface DomainStat {
   latest: string | null;
 }
 
-async function stat(domain: string, table: 'goals' | 'equipment' | 'occurrences', userId: string): Promise<DomainStat> {
+async function stat(
+  domain: string,
+  table: 'goals' | 'equipment' | 'occurrences' | 'health_digests',
+  userId: string,
+): Promise<DomainStat> {
   try {
     let rows;
     if (table === 'goals')
       rows = await sql`select count(*)::int n, max(created_at) latest from cadence.goals where user_id = ${userId}`;
     else if (table === 'equipment')
       rows = await sql`select count(*)::int n, max(created_at) latest from cadence.equipment where user_id = ${userId}`;
+    else if (table === 'health_digests')
+      rows =
+        await sql`select count(*)::int n, max(created_at) latest from cadence.health_digests where user_id = ${userId}`;
     else
       rows =
         await sql`select count(*)::int n, max(created_at) latest from cadence.occurrences where user_id = ${userId}`;
@@ -34,6 +41,7 @@ export async function getDomainStats(userId: string): Promise<DomainStat[]> {
     stat('goals', 'goals', userId),
     stat('equipment', 'equipment', userId),
     stat('occurrences', 'occurrences', userId),
+    stat('health_history', 'health_digests', userId),
   ]);
 }
 

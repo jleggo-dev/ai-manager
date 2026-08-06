@@ -23,6 +23,8 @@ import { listActivities } from '../../repos/activities.ts';
 import { listOccurrences, listRecentLogged } from '../../repos/occurrences.ts';
 import { listNutritionLogs } from '../../repos/nutrition.ts';
 import { listForCoach } from '../../repos/journal-entries.ts';
+import { latestHealthDigest } from '../../repos/health-digests.ts';
+import { renderHealthDigest } from '../health-context.ts';
 import { buildProgress } from '../progress.ts';
 import { summarizeNutrition, renderNutritionLine } from '../nutrition-summarize.ts';
 import { searchFoodsWithUsda } from '../food-sources/usda-enrich.ts';
@@ -400,6 +402,25 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
     rows(r) {
       const p = r as DietaryProfile;
       return p.allergies.length + p.dislikes.length + (p.diet ? 1 : 0) + (p.notes?.trim() ? 1 : 0);
+    },
+  },
+
+  get_health_history: {
+    name: 'get_health_history',
+    description:
+      'Recent activity the user shared from Apple Health — workouts by type with weekly frequency. Use during onboarding instead of asking them to type their workout history, and whenever what they actually did recently matters.',
+    domains: ['movement', 'history'],
+    async run(userId) {
+      return latestHealthDigest(userId);
+    },
+    render(r) {
+      const row = r as Awaited<ReturnType<typeof latestHealthDigest>>;
+      if (!row) return '';
+      return renderHealthDigest(row.digest, row.createdAt);
+    },
+    rows(r) {
+      const row = r as Awaited<ReturnType<typeof latestHealthDigest>>;
+      return row ? row.digest.totalWorkouts : 0;
     },
   },
 };
