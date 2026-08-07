@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sunrise Mark Designer</title>
+  <style>
+    :root {
+      --ui-bg: #1a1a1a;
+      --ui-panel: #242424;
+      --ui-border: #3a3a3a;
+      --ui-text: #e8e8e8;
+      --ui-muted: #9a9a9a;
+      --ui-accent: #5a9fd4;
+      --squircle: 22.37%;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: var(--ui-bg);
+      color: var(--ui-text);
+      padding: 24px;
+      line-height: 1.4;
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      color: var(--ui-muted);
+      font-size: 0.875rem;
+      margin-bottom: 24px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+      align-items: start;
+      max-width: 1200px;
+    }
+
+    @media (max-width: 800px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .controls {
+      background: var(--ui-panel);
+      border: 1px solid var(--ui-border);
+      border-radius: 12px;
+      padding: 16px;
+      position: sticky;
+      top: 24px;
+    }
+
+    .controls h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ui-muted);
+      margin-bottom: 12px;
+    }
+
+    .control {
+      margin-bottom: 14px;
+    }
+
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.8125rem;
+      margin-bottom: 4px;
+    }
+
+    .control .value {
+      font-variant-numeric: tabular-nums;
+      color: var(--ui-accent);
+      font-size: 0.75rem;
+    }
+
+    .control input[type="range"] {
+      width: 100%;
+      accent-color: var(--ui-accent);
+    }
+
+    .control input[type="color"] {
+      width: 100%;
+      height: 32px;
+      border: 1px solid var(--ui-border);
+      border-radius: 6px;
+      background: transparent;
+      cursor: pointer;
+      padding: 2px;
+    }
+
+    .exports {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+      padding-top: 16px;
+      border-top: 1px solid var(--ui-border);
+    }
+
+    .exports button {
+      background: #2e2e2e;
+      color: var(--ui-text);
+      border: 1px solid var(--ui-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.8125rem;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .exports button:hover {
+      background: #383838;
+      border-color: var(--ui-accent);
+    }
+
+    .panels {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .panel {
+      background: var(--ui-panel);
+      border: 1px solid var(--ui-border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .panel h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ui-muted);
+      margin-bottom: 14px;
+    }
+
+    .hero-wrap {
+      display: flex;
+      justify-content: center;
+    }
+
+    .tile {
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .tile.squircle {
+      border-radius: var(--squircle);
+    }
+
+    .tile svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .ladder {
+      display: flex;
+      align-items: flex-end;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .ladder-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ladder-item span {
+      font-size: 0.6875rem;
+      color: var(--ui-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .modes {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 600px) {
+      .modes { grid-template-columns: 1fr; }
+    }
+
+    .mode {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mode span {
+      font-size: 0.75rem;
+      color: var(--ui-muted);
+    }
+
+    .sweep {
+      display: grid;
+      grid-template-columns: repeat(5, 72px);
+      gap: 8px;
+      justify-content: start;
+    }
+
+    .sweep-cell {
+      width: 72px;
+      height: 72px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      border-radius: 10px;
+      overflow: hidden;
+      padding: 0;
+      background: none;
+    }
+
+    .sweep-cell:hover {
+      border-color: var(--ui-accent);
+    }
+
+    .sweep-cell.active {
+      border-color: #fff;
+    }
+
+    .sweep-cell .tile {
+      width: 100%;
+      height: 100%;
+      border-radius: 8px;
+    }
+
+    .sweep-meta {
+      font-size: 0.6875rem;
+      color: var(--ui-muted);
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sunrise Mark Designer</h1>
+  <p class="subtitle">Annulus rising behind a horizon bar — live geometry, no baked lighting.</p>
+
+  <div class="layout">
+    <aside class="controls">
+      <h2>Parameters</h2>
+      <div id="controls"></div>
+      <div class="exports">
+        <h2>Export</h2>
+        <button type="button" id="btn-svg">Download layered SVG</button>
+        <button type="button" id="btn-png-sun">Download sun PNG (1024)</button>
+        <button type="button" id="btn-png-horizon">Download horizon PNG (1024)</button>
+        <button type="button" id="btn-png-flat">Download flat PNG (1024)</button>
+      </div>
+    </aside>
+
+    <main class="panels">
+      <section class="panel">
+        <h2>Hero · 512</h2>
+        <div class="hero-wrap">
+          <div class="tile squircle" id="hero" style="width:512px;height:512px"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Size ladder</h2>
+        <div class="ladder" id="ladder"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Appearance modes</h2>
+        <div class="modes" id="modes"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Parameter sweep</h2>
+        <p class="sweep-meta" id="sweep-meta"></p>
+        <div class="sweep" id="sweep"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // ── Config (edit defaults by hand) ──────────────────────────────────────
+    const config = {
+      outerRadius: 22,
+      bandWeight: 7,
+      horizonRise: 0,
+      barWidth: 60,
+      barThickness: 5,
+      barCornerRadius: 2.5,
+      markScale: 0.72,       // fraction of tile used by mark bounding box
+      verticalOffset: 0,     // additional Y shift within tile (design units)
+      sunColor: '#D85A30',
+      horizonColor: '#0F6E56',
+      backgroundColor: '#F4EFE4',
+      // Design-space canvas: mark is authored in this coordinate system,
+      // then mapped into each tile via markScale / verticalOffset.
+      designSize: 100,
+    };
+
+    // ── Geometry ────────────────────────────────────────────────────────────
+    function sunPath(cx, cy, R, w, d) {
+      const r = R - w;
+      const yh = cy - d;
+      const wo = Math.sqrt(Math.max(0, R * R - d * d));
+
+      if (r > d) {
+        const wi = Math.sqrt(Math.max(0, r * r - d * d));
+        return [
+          `M ${cx - wo},${yh}`,
+          `A ${R} ${R} 0 0 1 ${cx + wo},${yh}`,
+          `L ${cx + wi},${yh}`,
+          `A ${r} ${r} 0 0 0 ${cx - wi},${yh}`,
+          'Z',
+        ].join(' ');
+      }
+
+      // Inner circle fully below the line → solid cap
+      return [
+        `M ${cx - wo},${yh}`,
+        `A ${R} ${R} 0 0 1 ${cx + wo},${yh}`,
+        'Z',
+      ].join(' ');
+    }
+
+    function markGeometry(cfg) {
+      const size = cfg.designSize;
+      const cx = size / 2;
+      const cy = size / 2;
+      const R = cfg.outerRadius;
+      const w = Math.min(cfg.bandWeight, R - 0.01);
+      const d = Math.min(Math.max(0, cfg.horizonRise), R);
+      const yh = cy - d;
+
+      const path = sunPath(cx, cy, R, w, d);
+
+      const barW = cfg.barWidth;
+      const barH = cfg.barThickness;
+      const barRx = Math.min(cfg.barCornerRadius, barW / 2, barH / 2);
+      // Bar centred on cx, sitting ON the horizon line (top edge at yh)
+      const barX = cx - barW / 2;
+      const barY = yh;
+
+      return { cx, cy, R, w, d, yh, path, barX, barY, barW, barH, barRx, size };
+    }
+
+    // ViewBox that centres the design-space mark with padding (markScale)
+    // and applies verticalOffset. Larger markScale ⇒ less padding.
+    function tileViewBox(cfg) {
+      const size = cfg.designSize;
+      const pad = size * (1 - cfg.markScale) / 2;
+      const yShift = -cfg.verticalOffset;
+      return `${-pad} ${-pad + yShift} ${size + pad * 2} ${size + pad * 2}`;
+    }
+
+    function buildSvgMarkup(cfg, opts = {}) {
+      const {
+        includeBackground = true,
+        squircle = false,
+        mode = 'default', // 'default' | 'dark' | 'mono'
+        layers = 'both',  // 'both' | 'sun' | 'horizon'
+        width,
+        height,
+      } = opts;
+
+      const g = markGeometry(cfg);
+      const vb = tileViewBox(cfg);
+
+      let bg = cfg.backgroundColor;
+      let sun = cfg.sunColor;
+      let horizon = cfg.horizonColor;
+
+      if (mode === 'dark') {
+        bg = '#1C1C1E';
+        sun = lighten(cfg.sunColor, 0.35);
+        horizon = lighten(cfg.horizonColor, 0.4);
+      } else if (mode === 'mono') {
+        bg = '#F5F5F5';
+        sun = '#1A1A1A';
+        horizon = '#1A1A1A';
+      }
+
+      const parts = [];
+      parts.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}"` +
+        (width != null ? ` width="${width}"` : '') +
+        (height != null ? ` height="${height}"` : '') +
+        ` preserveAspectRatio="xMidYMid meet">`);
+
+      if (includeBackground) {
+        // Background covers the full viewBox (not rounded — squircle is CSS chrome)
+        const [vx, vy, vw, vh] = vb.split(' ').map(Number);
+        parts.push(`<rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" fill="${bg}"/>`);
+      }
+
+      if (layers === 'both' || layers === 'sun') {
+        parts.push(`<g id="sun"><path d="${g.path}" fill="${sun}"/></g>`);
+      }
+      if (layers === 'both' || layers === 'horizon') {
+        parts.push(
+          `<g id="horizon">` +
+          `<rect x="${g.barX}" y="${g.barY}" width="${g.barW}" height="${g.barH}" ` +
+          `rx="${g.barRx}" ry="${g.barRx}" fill="${horizon}"/>` +
+          `</g>`
+        );
+      }
+
+      parts.push('</svg>');
+      return parts.join('');
+    }
+
+    // ── Colour helpers ──────────────────────────────────────────────────────
+    function parseHex(hex) {
+      const h = hex.replace('#', '');
+      const full = h.length === 3
+        ? h.split('').map((c) => c + c).join('')
+        : h;
+      return {
+        r: parseInt(full.slice(0, 2), 16),
+        g: parseInt(full.slice(2, 4), 16),
+        b: parseInt(full.slice(4, 6), 16),
+      };
+    }
+
+    function toHex({ r, g, b }) {
+      const c = (n) => Math.round(Math.min(255, Math.max(0, n)))
+        .toString(16).padStart(2, '0');
+      return `#${c(r)}${c(g)}${c(b)}`;
+    }
+
+    function lighten(hex, amount) {
+      const { r, g, b } = parseHex(hex);
+      return toHex({
+        r: r + (255 - r) * amount,
+        g: g + (255 - g) * amount,
+        b: b + (255 - b) * amount,
+      });
+    }
+
+    // ── Controls ────────────────────────────────────────────────────────────
+    const controlDefs = [
+      { key: 'outerRadius', label: 'Outer radius', min: 5, max: 45, step: 0.5 },
+      { key: 'bandWeight', label: 'Band weight', min: 1, max: 30, step: 0.5 },
+      { key: 'horizonRise', label: 'Horizon rise', min: 0, max: 45, step: 0.5 },
+      { key: 'barWidth', label: 'Bar width', min: 10, max: 90, step: 0.5 },
+      { key: 'barThickness', label: 'Bar thickness', min: 1, max: 20, step: 0.25 },
+      { key: 'barCornerRadius', label: 'Bar corner radius', min: 0, max: 10, step: 0.25 },
+      { key: 'markScale', label: 'Mark scale (padding)', min: 0.4, max: 0.95, step: 0.01 },
+      { key: 'verticalOffset', label: 'Vertical offset', min: -20, max: 20, step: 0.5 },
+      { key: 'sunColor', label: 'Sun colour', type: 'color' },
+      { key: 'horizonColor', label: 'Horizon colour', type: 'color' },
+      { key: 'backgroundColor', label: 'Background', type: 'color' },
+    ];
+
+    const controlsEl = document.getElementById('controls');
+
+    function formatValue(key, val) {
+      if (typeof val !== 'number') return val;
+      if (key === 'markScale') return val.toFixed(2);
+      return Number.isInteger(val) ? String(val) : String(Math.round(val * 100) / 100);
+    }
+
+    function buildControls() {
+      controlsEl.innerHTML = '';
+      for (const def of controlDefs) {
+        const wrap = document.createElement('div');
+        wrap.className = 'control';
+
+        if (def.type === 'color') {
+          wrap.innerHTML =
+            `<label><span>${def.label}</span><span class="value" data-val="${def.key}">${config[def.key]}</span></label>` +
+            `<input type="color" data-key="${def.key}" value="${config[def.key]}" />`;
+        } else {
+          // Clamp horizon rise max to current R dynamically via attribute update in render
+          const max = def.key === 'horizonRise' ? config.outerRadius : def.max;
+          wrap.innerHTML =
+            `<label><span>${def.label}</span><span class="value" data-val="${def.key}">${formatValue(def.key, config[def.key])}</span></label>` +
+            `<input type="range" data-key="${def.key}" min="${def.min}" max="${max}" step="${def.step}" value="${config[def.key]}" />`;
+        }
+
+        controlsEl.appendChild(wrap);
+      }
+
+      controlsEl.addEventListener('input', (e) => {
+        const el = e.target;
+        if (!el.dataset.key) return;
+        const key = el.dataset.key;
+        if (el.type === 'color') {
+          config[key] = el.value;
+        } else {
+          config[key] = parseFloat(el.value);
+          // Keep horizon rise within [0, R]
+          if (key === 'outerRadius' && config.horizonRise > config.outerRadius) {
+            config.horizonRise = config.outerRadius;
+          }
+          if (key === 'bandWeight' && config.bandWeight > config.outerRadius - 0.01) {
+            config.bandWeight = Math.max(0.5, config.outerRadius - 0.01);
+          }
+        }
+        render();
+      });
+    }
+
+    function syncControlDisplays() {
+      for (const def of controlDefs) {
+        const input = controlsEl.querySelector(`[data-key="${def.key}"]`);
+        const valEl = controlsEl.querySelector(`[data-val="${def.key}"]`);
+        if (!input || !valEl) continue;
+
+        if (def.type === 'color') {
+          if (input.value !== config[def.key]) input.value = config[def.key];
+          valEl.textContent = config[def.key];
+        } else {
+          if (def.key === 'horizonRise') {
+            input.max = config.outerRadius;
+          }
+          if (parseFloat(input.value) !== config[def.key]) {
+            input.value = config[def.key];
+          }
+          valEl.textContent = formatValue(def.key, config[def.key]);
+        }
+      }
+    }
+
+    // ── Render panels ───────────────────────────────────────────────────────
+    function setTile(el, sizePx, opts = {}) {
+      el.style.width = sizePx + 'px';
+      el.style.height = sizePx + 'px';
+      el.innerHTML = buildSvgMarkup(config, opts);
+    }
+
+    function renderHero() {
+      const hero = document.getElementById('hero');
+      setTile(hero, 512, { squircle: true });
+      hero.classList.add('squircle');
+    }
+
+    function renderLadder() {
+      const sizes = [180, 120, 87, 60, 40];
+      const ladder = document.getElementById('ladder');
+      ladder.innerHTML = '';
+      for (const s of sizes) {
+        const item = document.createElement('div');
+        item.className = 'ladder-item';
+        const tile = document.createElement('div');
+        tile.className = 'tile squircle';
+        setTile(tile, s);
+        const label = document.createElement('span');
+        label.textContent = s + 'px';
+        item.appendChild(tile);
+        item.appendChild(label);
+        ladder.appendChild(item);
+      }
+    }
+
+    function renderModes() {
+      const modes = document.getElementById('modes');
+      modes.innerHTML = '';
+      const defs = [
+        { id: 'default', label: 'Default' },
+        { id: 'dark', label: 'Dark' },
+        { id: 'mono', label: 'Mono' },
+      ];
+      for (const m of defs) {
+        const wrap = document.createElement('div');
+        wrap.className = 'mode';
+        const tile = document.createElement('div');
+        tile.className = 'tile squircle';
+        setTile(tile, 160, { mode: m.id });
+        const label = document.createElement('span');
+        label.textContent = m.label;
+        wrap.appendChild(tile);
+        wrap.appendChild(label);
+        modes.appendChild(wrap);
+      }
+    }
+
+    // Window of `count` values centred on `center`, shifted to stay in [min, max]
+    // so edge values (e.g. rise=0) still produce a useful unique sweep.
+    function sweepWindow(center, count, step, min, max) {
+      let start = center - Math.floor(count / 2) * step;
+      if (start < min) start = min;
+      const span = (count - 1) * step;
+      if (start + span > max) start = Math.max(min, max - span);
+      const vals = [];
+      for (let i = 0; i < count; i++) {
+        const v = start + i * step;
+        vals.push(Math.round(Math.min(max, Math.max(min, v)) * 100) / 100);
+      }
+      return vals;
+    }
+
+    function renderSweep() {
+      const grid = document.getElementById('sweep');
+      const meta = document.getElementById('sweep-meta');
+      grid.innerHTML = '';
+
+      const weightStep = 1.5;
+      const riseStep = 1.5;
+      const weights = sweepWindow(
+        config.bandWeight, 5, weightStep,
+        1, Math.max(1, config.outerRadius - 0.5)
+      );
+      const rises = sweepWindow(
+        config.horizonRise, 5, riseStep,
+        0, config.outerRadius
+      );
+
+      meta.textContent =
+        `Columns: band weight [${weights[0]} … ${weights[4]}] · ` +
+        `Rows: horizon rise [${rises[0]} … ${rises[4]}] · click a cell to apply`;
+
+      for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 5; col++) {
+          const w = weights[col];
+          const d = rises[row];
+          const cellCfg = { ...config, bandWeight: w, horizonRise: d };
+
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'sweep-cell';
+          if (
+            Math.abs(w - config.bandWeight) < 0.01 &&
+            Math.abs(d - config.horizonRise) < 0.01
+          ) {
+            btn.classList.add('active');
+          }
+          btn.title = `weight ${w}, rise ${d}`;
+
+          const tile = document.createElement('div');
+          tile.className = 'tile';
+          tile.style.width = '100%';
+          tile.style.height = '100%';
+          tile.innerHTML = buildSvgMarkup(cellCfg);
+          btn.appendChild(tile);
+
+          btn.addEventListener('click', () => {
+            config.bandWeight = w;
+            config.horizonRise = d;
+            render();
+          });
+
+          grid.appendChild(btn);
+        }
+      }
+    }
+
+    function render() {
+      // Clamp live
+      config.horizonRise = Math.min(Math.max(0, config.horizonRise), config.outerRadius);
+      config.bandWeight = Math.min(config.bandWeight, config.outerRadius - 0.01);
+
+      syncControlDisplays();
+      renderHero();
+      renderLadder();
+      renderModes();
+      renderSweep();
+    }
+
+    // ── Export ──────────────────────────────────────────────────────────────
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportLayeredSvg() {
+      // Two groups, no background, no transforms baked into paths
+      const markup = buildSvgMarkup(config, {
+        includeBackground: false,
+        width: 1024,
+        height: 1024,
+      });
+      downloadBlob(
+        new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }),
+        'sunrise-mark.svg'
+      );
+    }
+
+    function rasterize(opts) {
+      return new Promise((resolve) => {
+        const size = 1024;
+        const markup = buildSvgMarkup(config, {
+          includeBackground: opts.includeBackground,
+          layers: opts.layers,
+          width: size,
+          height: size,
+        });
+
+        const img = new Image();
+        const svgBlob = new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+
+          if (opts.opaque) {
+            // Flat opaque — force background fill first, then draw
+            ctx.fillStyle = config.backgroundColor;
+            ctx.fillRect(0, 0, size, size);
+          } else {
+            ctx.clearRect(0, 0, size, size);
+          }
+
+          ctx.drawImage(img, 0, 0, size, size);
+          URL.revokeObjectURL(url);
+
+          if (opts.opaque) {
+            // Ensure no alpha: re-export as JPEG-style opaque via getImageData strip
+            // Use toBlob PNG but after compositing onto opaque bg (already done).
+            // Strip residual alpha by redrawing onto a fresh opaque canvas.
+            const opaque = document.createElement('canvas');
+            opaque.width = size;
+            opaque.height = size;
+            const octx = opaque.getContext('2d');
+            octx.fillStyle = config.backgroundColor;
+            octx.fillRect(0, 0, size, size);
+            octx.drawImage(canvas, 0, 0);
+            opaque.toBlob((blob) => resolve(blob), 'image/png');
+          } else {
+            canvas.toBlob((blob) => resolve(blob), 'image/png');
+          }
+        };
+
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve(null);
+        };
+
+        img.src = url;
+      });
+    }
+
+    async function exportPng(kind) {
+      let blob;
+      let name;
+      if (kind === 'sun') {
+        blob = await rasterize({
+          includeBackground: false,
+          layers: 'sun',
+          opaque: false,
+        });
+        name = 'sunrise-mark-sun.png';
+      } else if (kind === 'horizon') {
+        blob = await rasterize({
+          includeBackground: false,
+          layers: 'horizon',
+          opaque: false,
+        });
+        name = 'sunrise-mark-horizon.png';
+      } else {
+        blob = await rasterize({
+          includeBackground: true,
+          layers: 'both',
+          opaque: true,
+        });
+        name = 'sunrise-mark-flat.png';
+      }
+      if (blob) downloadBlob(blob, name);
+    }
+
+    document.getElementById('btn-svg').addEventListener('click', exportLayeredSvg);
+    document.getElementById('btn-png-sun').addEventListener('click', () => exportPng('sun'));
+    document.getElementById('btn-png-horizon').addEventListener('click', () => exportPng('horizon'));
+    document.getElementById('btn-png-flat').addEventListener('click', () => exportPng('flat'));
+
+    // ── Init ────────────────────────────────────────────────────────────────
+    buildControls();
+    render();
+  </script>
+</body>
+</html>

@@ -47,11 +47,14 @@ the plan bends instead of breaking.
   surface are a run and a meal; the third example rotates (a steadier mind, daily pages) to keep
   the door visibly open. The taxonomy ships day one with a first-class home for every kind of
   goal, so broadening is an enum addition — never a migration, never a brand refresh.
-- **Hearth, not scoreboard.** The coach mark is a sunrise — a terracotta arch over a forest-green
-  horizon line (2026-07-11, "Trust & Wellness" palette; superseded the ember orb on dark violet).
-  Copy must never turn it into a scoreboard: a streak is a warm momentum counter (protected by
-  freezes and detours), never a cudgel — no streak-shame, no red marks, and it never resets to
-  zero because life happened.
+- **Hearth, not scoreboard.** The coach mark is **Metronome Split** — a geometric C cut on a
+  45° diagonal, terracotta day over dusk night, on a white Default icon plate (2026-08-07;
+  superseded the sunrise arch). Copy must never turn it into a scoreboard: a streak is a warm
+  momentum counter (protected by freezes and detours), never a cudgel — no streak-shame, no red
+  marks, and it never resets to zero because life happened.
+- **Typeface: Plus Jakarta Sans** (2026-08-07). Brand face for wordmark, display, headers, and
+  web/Android UI. On native iOS, SF Pro remains the chat/chrome workhorse for Dynamic Type;
+  Plus Jakarta Sans still owns the wordmark and display moments.
 
 ## Voice principles
 
