@@ -13,10 +13,21 @@ import {
   type OwmForecastPayload,
   type WeatherSnapshot,
 } from './weather-map.ts';
+import { isWeatherKitConfigured, weatherKitGet, WeatherKitError } from './weatherkit-http.ts';
+import { mapWeatherKitToSnapshot, type WeatherKitPayload } from './weatherkit-map.ts';
 
 export type { WeatherSnapshot } from './weather-map.ts';
-export { formatWeatherLine, isOutdoorActivity, localDateIso, localTimeLabel, weatherCacheKey } from './weather-map.ts';
+export {
+  formatWeatherLine,
+  isOutdoorActivity,
+  localDateIso,
+  localTimeLabel,
+  weatherCacheKey,
+  needsAppleAttribution,
+  APPLE_WEATHER_ATTRIBUTION_URL,
+} from './weather-map.ts';
 export { isWeatherConfigured, WeatherConfigError, WeatherHttpError } from './weather-http.ts';
+export { isWeatherKitConfigured, WeatherKitError } from './weatherkit-http.ts';
 
 /**
  * L1: in-memory, process-local — free, and saves a DB round trip for repeat hits in one process.
@@ -47,6 +58,30 @@ function cacheSet(key: string, snapshot: WeatherSnapshot): void {
   cache.set(key, { snapshot, expiresAt: Date.now() + SOFT_TTL_MS });
 }
 
+/**
+ * WeatherKit first, OpenWeatherMap as fallback. Rationale is OS consistency: an iOS user's lock
+ * screen shows Apple's forecast, so Cadence quoting a different provider reads as wrong even when
+ * it isn't. The fallback is not belt-and-braces — WeatherKit legitimately 404s for points it has
+ * no data on, and OWM remains the only geocoder either way.
+ *
+ * Returns null only when BOTH are unusable; the caller treats that as "no weather", which every
+ * consumer already tolerates.
+ */
+async function fetchFromProvider(lat: number, lon: number, timezone?: string | null): Promise<WeatherSnapshot | null> {
+  if (isWeatherKitConfigured()) {
+    try {
+      const snapshot = mapWeatherKitToSnapshot((await weatherKitGet(lat, lon, timezone)) as WeatherKitPayload);
+      if (snapshot) return snapshot;
+      console.warn('[weather] WeatherKit payload unusable — falling back to OpenWeatherMap');
+    } catch (err) {
+      const status = err instanceof WeatherKitError ? err.status : 0;
+      console.warn(`[weather] WeatherKit failed (${status}) — falling back to OpenWeatherMap`);
+    }
+  }
+  if (!isWeatherConfigured()) return null;
+  return fetchOwm(lat, lon);
+}
+
 async function fetchOwm(lat: number, lon: number): Promise<WeatherSnapshot | null> {
   const q = `lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}&units=metric`;
   const [currentRaw, forecastRaw] = await Promise.all([
@@ -69,7 +104,8 @@ export async function getWeatherAt(
   lon: number,
   timezone?: string | null,
 ): Promise<WeatherSnapshot | null> {
-  if (!isWeatherConfigured()) return null;
+  // Either provider is enough — an OWM-less deployment with WeatherKit configured still has weather.
+  if (!isWeatherConfigured() && !isWeatherKitConfigured()) return null;
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
 
   const key = weatherCacheKey(lat, lon, timezone);
@@ -87,7 +123,7 @@ export async function getWeatherAt(
   }
 
   try {
-    const snapshot = await fetchOwm(lat, lon);
+    const snapshot = await fetchFromProvider(lat, lon, timezone);
     if (!snapshot) return null;
     cacheSet(key, snapshot);
     // Publish to the shared cache + sweep dead rows. Both soft-fail, and neither blocks the
