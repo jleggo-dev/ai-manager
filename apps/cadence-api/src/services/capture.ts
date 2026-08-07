@@ -7,6 +7,7 @@ import { geocodeCity } from './weather/weather.ts';
 import { logAi } from './ai-log.ts';
 import { normalizeBaseline, normTitle, selectCapturedGoals } from './capture-normalize.ts';
 import { extractCity } from './capture-location.ts';
+import { screenGoal, type GoalScreenResult } from './goal-screen.ts';
 
 const GOAL_AREAS: GoalArea[] = ['movement', 'nourishment', 'mind', 'practice'];
 const GOAL_TYPES: GoalType[] = ['milestone', 'target', 'recurring'];
@@ -56,6 +57,8 @@ function coerceArea(raw: unknown, coerced: string[]): GoalArea {
 
 export interface CaptureResult extends CaptureExtractResult {
   persisted: { goals: number; equipment: number; baseline: boolean };
+  /** Deterministic scope/safety screen verdicts — the caller injects the notes for the coach. */
+  screened: Array<{ title: string; result: GoalScreenResult }>;
 }
 
 /**
@@ -112,7 +115,9 @@ export async function runCaptureExtract(
   // the deterministic backstop: a model that returns two near-duplicate goals in one run yields ONE
   // card), then coerced — never dropped for out-of-enum labels (see coerceArea).
   const coerced: string[] = [];
+  const screened: CaptureResult['screened'] = [];
   let goals = 0;
+  const weightKg = Number((await getUser(userId))?.baseline?.weight_kg ?? NaN);
   for (const g of selectCapturedGoals(out.goals, confirmed, stickyTitles)) {
     // The prompt emits `area`; tolerate the legacy `category` key from stale prompts.
     const rawArea = g.area ?? (g as Record<string, unknown>).category;
@@ -122,6 +127,12 @@ export async function runCaptureExtract(
       coerced.push(`type "${String(g.type ?? '(empty)')}" → recurring`);
       type = 'recurring';
     }
+    // Scope/safety screen (goal-screen.ts). 'refuse' is the ONE case where the never-drop rule
+    // yields: a self-harm goal must not become a card the user can commit. It is not silent —
+    // the note goes to the coach, who has to address it in the conversation this turn.
+    const result = screenGoal({ ...g, area, type }, Number.isFinite(weightKg) ? weightKg : undefined);
+    screened.push({ title: g.title ?? '(untitled)', result });
+    if (result.verdict === 'refuse') continue;
     await insertGoal(userId, { ...g, area, type });
     goals++;
   }
@@ -171,11 +182,18 @@ export async function runCaptureExtract(
 
   const persisted = { goals, equipment, baseline };
   if (coerced.length) console.warn('[capture] coerced out-of-enum values:', coerced.join(' | '));
+  const flagged = screened.filter((s) => s.result.verdict !== 'ok');
+  if (flagged.length) console.warn('[capture] goal screen fired:', flagged.map((f) => f.result.code).join(', '));
   await logAi(userId, {
     kind: 'capture',
     input: { window: variables.conversation_window },
     output: { raw: text, parsed: out },
-    meta: { persisted, confidence: out.confidence, ...(coerced.length ? { coerced } : {}) },
+    meta: {
+      persisted,
+      confidence: out.confidence,
+      ...(coerced.length ? { coerced } : {}),
+      ...(flagged.length ? { screened: flagged } : {}),
+    },
   });
-  return { ...out, persisted };
+  return { ...out, persisted, screened };
 }

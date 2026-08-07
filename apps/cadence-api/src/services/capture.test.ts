@@ -37,6 +37,10 @@ vi.mock('../repos/equipment.ts', () => ({
 vi.mock('../repos/users.ts', () => ({
   mergeBaseline: (...a: unknown[]) => mergeBaseline(...a),
   setName: (...a: unknown[]) => setName(...a),
+  // The goal screen reads baseline weight to price a loss rate; no home_location, so the
+  // geocode branch stays off.
+  getUser: async () => ({ baseline: { weight_kg: 80 }, home_location: null, timezone: null }),
+  setHomeLocation: async () => {},
 }));
 vi.mock('./ai-log.ts', () => ({
   logAi: (...a: unknown[]) => logAi(...a),
