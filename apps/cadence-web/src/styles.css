@@ -1,14 +1,32 @@
 /* Cadence design system — "Trust & Wellness" palette (2026-07-11): sunlight on natural materials,
    not neon in the dark. Oat/Alabaster canvas, Deep Slate text, Sage & Forest Green (vitality),
    Terracotta/Dawn Peach (the human accent) replacing the old dark-violet/ember scheme. */
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+/* Typeface: Plus Jakarta Sans (BRAND.md, locked 2026-08-07) — wordmark, display, headers AND
+   web/Android UI body, replacing Bricolage Grotesque + Hanken Grotesk. Inter is the documented
+   last-resort body fallback but "must never replace Plus Jakarta Sans at display sizes", so it is
+   listed only in the stack, never assigned to --display. */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
 
 :root {
   --ink: #fbf9f4; --ink-2: #f7f5f0; --surface: #ffffff; --surface-2: #f1ebdd; --surface-3: #e4dac5;
   --line: #dcd2bc; --line-soft: #eae2d0; --text: #2c2f33; --text-dim: #5c5f63; --text-mute: #8b8d91;
   --dawn-1: #f4b896; --dawn-2: #ea9670; --dawn-3: #e07a5f; --dawn-4: #c25f45;
   --sage: #8ba88e; --forest: #2c5545; --danger: #b5453a;
-  --display: 'Bricolage Grotesque', sans-serif; --body: 'Hanken Grotesk', sans-serif; --mono: 'Space Mono', monospace;
+  /* Brand-canonical values from cadence-brand-identity-v2.md §9, introduced for the Metronome
+     Split mark. Deliberately NOT a repaint of the dawn/forest product ramp above: the identity
+     doc calls its palette "starting points to test on-screen, not gospel", so a full token
+     migration is its own reviewed pass. These two are exact because the MARK must be. */
+  --sun: #D85A30; --dusk: #3E5C76;
+  --display: 'Plus Jakarta Sans', sans-serif;
+  --body: 'Plus Jakarta Sans', Inter, sans-serif;
+  --mono: 'Space Mono', monospace;
+}
+/* Native iOS only: SF Pro is the chat/chrome workhorse for Dynamic Type (audience is 30-60;
+   reading comfort beats brand distinctiveness in long chat). The wordmark and display moments
+   stay Plus Jakarta Sans — hence --body is overridden here and --display is not. The `native`
+   class is set on <html> by the Capacitor shell; on web this rule never applies. */
+html.native {
+  --body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
 html { height: 100%; }
@@ -114,19 +132,20 @@ svg { stroke-width: 1.9; } .stroke { stroke: currentColor; fill: none; }
   }
 }
 
-/* ── Orb (the coach mark — a sunrise arch; see components/Orb.tsx) ───── */
+/* ── Orb (the coach mark — Metronome Split; see components/Orb.tsx) ───── */
 .orb { width: 30px; height: 30px; flex: 0 0 auto; display: block; }
-/* Hero-only one-shot "sunrise rising" on the Welcome splash: horizon settles, arch draws itself
-   up, dome warms in. One-time, not a loop — a persistent pulse would read as a loading throb and
-   fight the "warm, level, unhyped" voice. Full-motion users only; reduced-motion sees it at rest. */
-.orb-hero .arch-arc { stroke-dasharray: 96; stroke-dashoffset: 96; animation: arch-draw 1.05s .2s cubic-bezier(.4, 0, .2, 1) forwards; }
-.orb-hero .arch-dome { opacity: 0; animation: dome-in .5s .95s ease-out forwards; }
-.orb-hero .arch-bar { transform-box: fill-box; transform-origin: center; transform: scaleX(0); animation: bar-in .55s ease-out forwards; }
-@keyframes arch-draw { to { stroke-dashoffset: 0; } }
-@keyframes dome-in { to { opacity: 1; } }
-@keyframes bar-in { to { transform: scaleX(1); } }
+/* Hero-only one-shot on the Welcome splash: the two halves converge along the 45° cut and settle.
+   The motion states the mark's own idea (tempo, a beat closing) instead of decorating it. One-time,
+   not a loop — a persistent pulse reads as a loading throb and fights the "warm, level, unhyped"
+   voice. Full-motion users only; reduced-motion sees it at rest.
+   Note the previous hero variant's feTurbulence rough edge is gone on purpose — the identity doc
+   warns terracotta + pine tips "farmhouse craft" the moment it meets hand-drawn texture. */
+.orb-hero .ms-day { transform: translate(-7px, -7px); opacity: 0; animation: ms-day-in .7s .15s cubic-bezier(.4, 0, .2, 1) forwards; }
+.orb-hero .ms-night { transform: translate(7px, 7px); opacity: 0; animation: ms-night-in .7s .15s cubic-bezier(.4, 0, .2, 1) forwards; }
+@keyframes ms-day-in { to { transform: translate(0, 0); opacity: 1; } }
+@keyframes ms-night-in { to { transform: translate(0, 0); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .orb-hero .arch-arc, .orb-hero .arch-dome, .orb-hero .arch-bar { animation: none; stroke-dashoffset: 0; opacity: 1; transform: none; }
+  .orb-hero .ms-day, .orb-hero .ms-night { animation: none; transform: none; opacity: 1; }
 }
 
 /* ── App header ──────────────────────────────────────────────── */
@@ -392,6 +411,15 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .auth-google { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 13px; color: var(--text); font-weight: 600; font-size: 15px; box-shadow: 0 1px 2px rgba(120, 58, 40, .06); transition: border-color .15s ease; }
 .auth-google:hover:not(:disabled) { border-color: var(--text-mute); }
 .auth-google svg { width: 18px; height: 18px; flex: 0 0 auto; }
+/* Apple's sign-in button guidelines: solid black, white filled logo, corner radius matching the
+   surrounding controls, and no visual weight below the other providers. Sits directly under the
+   Google button with the same metrics so neither reads as the "real" option. */
+.auth-apple { width: 100%; display: flex; align-items: center; justify-content: center; gap: 9px;
+  background: #000; border: 1px solid #000; border-radius: 14px; padding: 13px; color: #fff;
+  font-weight: 600; font-size: 15px; margin-top: 8px; transition: opacity .15s ease; }
+.auth-apple:hover:not(:disabled) { opacity: .85; }
+.auth-apple:disabled { opacity: .5; }
+.auth-apple svg { width: 16px; height: 20px; flex: 0 0 auto; margin-top: -2px; }
 .auth-divider { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; color: var(--text-mute); font-size: 13px; }
 .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--line-soft); }
 .auth-form { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 14px; }
@@ -840,8 +868,11 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 
 /* ── Today/Week top header (redesign): avatar · weather+location · streak+XP ── */
 .thead { display: flex; align-items: center; gap: 10px; padding: 8px 20px 10px; }
+/* White plate, matching the Default app-icon ground. Was a solid orange disc holding a white leaf
+   glyph; the two-colour mark needs a neutral ground or the terracotta half vanishes into it. */
 .thead-avatar { width: 36px; height: 36px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center;
-  justify-content: center; background: oklch(78% 0.16 64); box-shadow: 0 3px 0 oklch(62% 0.15 60); }
+  justify-content: center; background: #fff; box-shadow: 0 1px 3px rgba(120, 58, 40, .16); }
+.thead-avatar .orb { width: 22px; height: 22px; }
 .thead-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.2; }
 .thead-wx { font-family: var(--display); font-size: 14px; font-weight: 800; color: oklch(40% 0.06 250);
   display: flex; align-items: center; gap: 5px; }
@@ -849,6 +880,10 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
   font-size: 11px; font-weight: 700; color: oklch(52% 0.03 250); text-align: left; }
 .thead-set { font-size: 12.5px; }
 .thead-loc i, .thead-set i { font-style: normal; font-weight: 800; letter-spacing: .04em; color: oklch(50% 0.10 255); }
+/* Apple Weather attribution — required wherever WeatherKit data is displayed. Quiet by design:
+   it must be legible, but it is not a thing the user came here to read. */
+.thead-attr { font-size: 10px; font-weight: 600; color: oklch(58% 0.02 250); text-decoration: none; }
+.thead-attr:hover { text-decoration: underline; }
 .thead-pills { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 .thead-pill { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px;
   font-family: var(--display); font-weight: 800; font-size: 13px; }
