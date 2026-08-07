@@ -11,7 +11,7 @@ vi.mock('../config.ts', () => ({
       keyId: 'KEY123',
       teamId: 'TEAM456',
       privateKey: pem,
-      bundleId: 'dev.jleggo.cadence',
+      bundleId: 'builders.cadence.app',
       environment: 'development',
     },
   },

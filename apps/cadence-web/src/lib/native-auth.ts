@@ -27,17 +27,38 @@ export function initNativeAuth(): void {
   });
 }
 
+/** Providers offered on the sign-in screen. Apple is not optional — see AuthScreen. */
+export type NativeOAuthProvider = 'google' | 'apple';
+
+const PROVIDER_LABEL: Record<NativeOAuthProvider, string> = {
+  google: 'Google',
+  apple: 'Apple',
+};
+
 /**
- * Start Google sign-in from the native shell: get the provider URL from Supabase without
- * navigating the WebView, then hand it to the system browser sheet. Returns an error message
- * for the auth screen to show, or null on successful launch.
+ * Start OAuth from the native shell: get the provider URL from Supabase without navigating the
+ * WebView, then hand it to the system browser sheet. Returns an error message for the auth screen
+ * to show, or null on successful launch.
+ *
+ * Apple rides the identical path to Google (Supabase → system browser → `cadence://` deep link).
+ * A native ASAuthorization sheet via `@capacitor-community/apple-sign-in` is a nicer UX and is
+ * still worth doing, but it is a UX upgrade, not a requirement: guideline 4.8 asks that Sign in
+ * with Apple be OFFERED, not that it use the system sheet. Shipping the shared path first means
+ * App Store submission is not blocked on a new native dependency.
  */
-export async function signInWithGoogleNative(): Promise<string | null> {
+export async function signInWithProviderNative(provider: NativeOAuthProvider): Promise<string | null> {
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
+    provider,
     options: { redirectTo: NATIVE_AUTH_CALLBACK, skipBrowserRedirect: true },
   });
-  if (error || !data?.url) return error?.message?.trim() || 'Could not start Google sign-in — try again.';
+  if (error || !data?.url) {
+    return error?.message?.trim() || `Could not start ${PROVIDER_LABEL[provider]} sign-in — try again.`;
+  }
   await Browser.open({ url: data.url });
   return null;
+}
+
+/** @deprecated Use `signInWithProviderNative('google')`. Kept so existing callers keep compiling. */
+export async function signInWithGoogleNative(): Promise<string | null> {
+  return signInWithProviderNative('google');
 }

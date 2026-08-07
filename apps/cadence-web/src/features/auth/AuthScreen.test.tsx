@@ -36,6 +36,27 @@ describe('AuthScreen', () => {
     expect(screen.getByText('Welcome back.')).toBeInTheDocument();
   });
 
+  /**
+   * Guideline 4.8 makes the Apple button a submission gate, not a feature — if it silently stops
+   * rendering, the failure surfaces as an App Store rejection rather than anything visible here.
+   */
+  it('offers both OAuth providers, with Apple wired to the apple provider', async () => {
+    render(<AuthScreen />);
+    expect(screen.getByRole('button', { name: /Continue with Google/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Continue with Apple/ }));
+    await waitFor(() => expect(signInWithOAuth).toHaveBeenCalledWith(expect.objectContaining({ provider: 'apple' })));
+  });
+
+  it('surfaces a provider-specific message when Apple sign-in fails to start', async () => {
+    signInWithOAuth.mockResolvedValueOnce({ error: { message: '' } });
+    render(<AuthScreen />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Continue with Apple/ }));
+    // The fallback must name Apple, not Google — the old handler was hard-coded to one provider.
+    await waitFor(() => expect(screen.getByText(/Could not start Apple sign-in/)).toBeInTheDocument());
+  });
+
   it('signup without a session shows the check-your-email notice and flips to sign-in', async () => {
     signUp.mockResolvedValueOnce({ data: { session: null }, error: null });
     render(<AuthScreen />);
