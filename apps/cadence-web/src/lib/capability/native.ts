@@ -30,9 +30,9 @@ const PUSH_REGISTER_TIMEOUT_MS = 10_000;
 /**
  * Native (Capacitor iOS) capabilities. Health = HealthKit via capacitor-health (workouts only —
  * the plugin has no weight/sleep queries yet, so those stay null; a custom Swift extension is the
- * future path). Push = APNs via @capacitor/push-notifications. Location + dictation reuse the web
- * implementations: WKWebView geolocation works behind NSLocationWhenInUseUsageDescription, and
- * WKWebView has no Web Speech API so dictation correctly reports unavailable (MicButton hides).
+ * future path). Push = APNs via @capacitor/push-notifications. Location = CoreLocation via
+ * @capacitor/geolocation (not WKWebView navigator.geolocation — capacitor:// is not a secure
+ * origin). Dictation reuses web: WKWebView has no Web Speech API so it correctly reports unavailable.
  */
 export const nativeCapabilities: Capabilities = {
   health: {
