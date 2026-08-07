@@ -52,6 +52,9 @@ the plan bends instead of breaking.
   superseded the sunrise arch). Copy must never turn it into a scoreboard: a streak is a warm
   momentum counter (protected by freezes and detours), never a cudgel — no streak-shame, no red
   marks, and it never resets to zero because life happened.
+- **Typeface: Plus Jakarta Sans** (2026-08-07). Brand face for wordmark, display, headers, and
+  web/Android UI. On native iOS, SF Pro remains the chat/chrome workhorse for Dynamic Type;
+  Plus Jakarta Sans still owns the wordmark and display moments.
 
 ## Voice principles
 

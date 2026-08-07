@@ -190,23 +190,18 @@ The sun remains the **only** hot accent. Restraint in the palette is what buys u
 
 ### Typography
 
-Humanist or geometric-humanist sans — friendly through proportion and openness, **not** through bubbly rounding (rounding is how "cartoony" gets back in). Generous sizes, calm hierarchy, coach-message text set for comfortable reading.
+**Chosen (2026-08-07): Plus Jakarta Sans** — the Cadence typeface. Geometric-humanist, warm, slightly distinctive; free on Google Fonts. Use it for the wordmark, display/marketing, in-app headers, and web/Android UI.
 
-Two-tier system — brand face for display, workhorse for the conversation:
+Friendly through proportion and openness, **not** through bubbly rounding (rounding is how "cartoony" gets back in). Generous sizes, calm hierarchy, coach-message text set for comfortable reading.
 
-| Candidate | Character | License | Proposed role |
-|---|---|---|---|
-| **SF Pro** | Native iOS; optical sizes; full Dynamic Type support | Free (system) | UI chrome + chat text |
-| **Plus Jakarta Sans** | Geometric-humanist, warm, slightly distinctive | Free (Google Fonts) | Display / brand |
-| **General Sans** | Crisper, more modern geometric-humanist | Free (Fontshare) | Display alternative |
-| **Söhne** | Quietly warm grotesk; genuinely premium | Paid (Klim) | Display upgrade when there's budget |
-| **Fraunces** | Warm, soft variable serif | Free (Google Fonts) | Optional editorial accent — marketing only, never in-app |
+| Face | Role |
+|---|---|
+| **Plus Jakarta Sans** | Brand typeface — wordmark, display, headers, web/Android UI |
+| **SF Pro** (system) | Native iOS chrome + chat body only — Dynamic Type / optical sizes for the conversation surface (audience is 30–60; reading comfort beats brand distinctiveness in long chat) |
 
-**Recommendation: Plus Jakarta Sans (display) + SF Pro (text/UI).** Costs nothing, ships now, and SF Pro is the right call for the chat surface regardless of budget: the conversation is the product, our audience is 30–60 — reading-glasses territory — and native Dynamic Type support at every size is worth more than brand distinctiveness in body text. Distinctiveness lives in display sizes, the mark, and the palette.
+Retired from the shortlist (do not revive without a new decision): General Sans, Söhne, Fraunces as in-app faces. Fraunces may still appear as an optional marketing-only editorial accent, never inside the product.
 
-**Avoid:** fully rounded faces (Nunito, Quicksand, Baloo, Comfortaa) — that's the door cartoony walks back through. Inter is acceptable as a web/Android body fallback later but reads as "default template" at display sizes.
-
-⚑ Test the display shortlist against the mark at app-header scale and on a real chat screen before committing.
+**Avoid:** fully rounded faces (Nunito, Quicksand, Baloo, Comfortaa) — that's the door cartoony walks back through. Inter is acceptable as a last-resort web/Android body fallback but must never replace Plus Jakarta Sans at display sizes.
 
 ### Imagery
 
@@ -226,8 +221,8 @@ Component-level visual inconsistency is a brand problem before it is a design pr
 
 ## Open decisions ⚑
 
-1. Mark geometry — pick from the Cursor concept/sweep exploration (§9).
-2. Typeface — test the display shortlist against the mark and a real chat screen (§9).
+1. ~~Mark geometry~~ — **decided: Metronome Split** (§9).
+2. ~~Typeface~~ — **decided: Plus Jakarta Sans** (§9); SF Pro remains native iOS chat/chrome only.
 3. Token spec — type scale, spacing, radius, elevation; validate §9 color values for WCAG contrast (semantic colors especially).
 4. Illustration seed set — commission brief and budget (§9).
 5. Campaign line — slot intentionally empty until there's awareness to trade on (§5).

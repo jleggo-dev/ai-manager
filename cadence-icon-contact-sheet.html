@@ -1049,23 +1049,18 @@ The sun remains the **only** hot accent. Restraint in the palette is what buys u
 
 ### Typography
 
-Humanist or geometric-humanist sans — friendly through proportion and openness, **not** through bubbly rounding (rounding is how "cartoony" gets back in). Generous sizes, calm hierarchy, coach-message text set for comfortable reading.
+**Chosen (2026-08-07): Plus Jakarta Sans** — the Cadence typeface. Geometric-humanist, warm, slightly distinctive; free on Google Fonts. Use it for the wordmark, display/marketing, in-app headers, and web/Android UI.
 
-Two-tier system — brand face for display, workhorse for the conversation:
+Friendly through proportion and openness, **not** through bubbly rounding (rounding is how "cartoony" gets back in). Generous sizes, calm hierarchy, coach-message text set for comfortable reading.
 
-| Candidate | Character | License | Proposed role |
-|---|---|---|---|
-| **SF Pro** | Native iOS; optical sizes; full Dynamic Type support | Free (system) | UI chrome + chat text |
-| **Plus Jakarta Sans** | Geometric-humanist, warm, slightly distinctive | Free (Google Fonts) | Display / brand |
-| **General Sans** | Crisper, more modern geometric-humanist | Free (Fontshare) | Display alternative |
-| **Söhne** | Quietly warm grotesk; genuinely premium | Paid (Klim) | Display upgrade when there's budget |
-| **Fraunces** | Warm, soft variable serif | Free (Google Fonts) | Optional editorial accent — marketing only, never in-app |
+| Face | Role |
+|---|---|
+| **Plus Jakarta Sans** | Brand typeface — wordmark, display, headers, web/Android UI |
+| **SF Pro** (system) | Native iOS chrome + chat body only — Dynamic Type / optical sizes for the conversation surface |
 
-**Recommendation: Plus Jakarta Sans (display) + SF Pro (text/UI).** Costs nothing, ships now, and SF Pro is the right call for the chat surface regardless of budget: the conversation is the product, our audience is 30–60 — reading-glasses territory — and native Dynamic Type support at every size is worth more than brand distinctiveness in body text. Distinctiveness lives in display sizes, the mark, and the palette.
+Retired from the shortlist (do not revive without a new decision): General Sans, Söhne, Fraunces as in-app faces. Fraunces may still appear as an optional marketing-only editorial accent, never inside the product.
 
-**Avoid:** fully rounded faces (Nunito, Quicksand, Baloo, Comfortaa) — that's the door cartoony walks back through. Inter is acceptable as a web/Android body fallback later but reads as "default template" at display sizes.
-
-⚑ Test the display shortlist against the mark at app-header scale and on a real chat screen before committing.
+**Avoid:** fully rounded faces (Nunito, Quicksand, Baloo, Comfortaa) — that's the door cartoony walks back through. Inter is acceptable as a last-resort web/Android body fallback but must never replace Plus Jakarta Sans at display sizes.
 
 ### Imagery
 
@@ -7543,11 +7538,11 @@ Component-level visual inconsistency is a brand problem before it is a design pr
     board.classList.toggle('mobile', typeMobile);
 
     const faces = [
-      { name: 'Plus Jakarta Sans', stack: '"Plus Jakarta Sans", system-ui, sans-serif', note: 'Recommended display' },
-      { name: 'General Sans', stack: '"General Sans", system-ui, sans-serif', note: 'Display alternative' },
-      { name: 'Inter', stack: 'Inter, system-ui, sans-serif', note: 'Web/Android fallback — avoid at display' },
-      { name: 'Fraunces', stack: 'Fraunces, Georgia, serif', note: 'Editorial accent only' },
-      { name: 'SF Pro (system)', stack: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif', note: 'Recommended UI/chat' },
+      { name: 'Plus Jakarta Sans', stack: '"Plus Jakarta Sans", system-ui, sans-serif', note: 'Chosen brand typeface' },
+      { name: 'General Sans', stack: '"General Sans", system-ui, sans-serif', note: 'Retired shortlist — comparison only' },
+      { name: 'Inter', stack: 'Inter, system-ui, sans-serif', note: 'Last-resort web/Android body fallback' },
+      { name: 'Fraunces', stack: 'Fraunces, Georgia, serif', note: 'Marketing editorial accent only' },
+      { name: 'SF Pro (system)', stack: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif', note: 'Native iOS chat/chrome only' },
     ];
 
     const t = BRAND.taglines;
