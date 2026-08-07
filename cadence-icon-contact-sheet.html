@@ -918,7 +918,7 @@ One line doesn't carry a brand; a small system does. **Rule for this stage: nobo
 Retired, with reasons (so they don't come back):
 
 - *"Change is inevitable. Your habits aren't."* — a threat; fear-of-loss is the competitor mechanic we reject.
-- *"Life changes. Cadence adapts."* and *"Change is inevitable. So is sunrise."* — say nothing about what Cadence does. The sunrise sentiment lives in the mark, where it belongs.
+- *"Life changes. Cadence adapts."* and *"Change is inevitable. So is sunrise."* — say nothing about what Cadence does. Daily return / rhythm lives in the mark (**Metronome Split**), not in the tagline.
 
 The campaign-line slot is intentionally empty until there's awareness to trade on.
 
@@ -989,16 +989,15 @@ Rules for the nudge generator:
 
 ## 9. Visual direction
 
-### Mark: the sunrise
+### Mark: Metronome Split
 
-A circular sun rising from behind a horizon bar. Chosen because it is the most universal image of daily return — it doesn't code athlete or yogi, sport or spa, and it is organic rather than techno. It also happens to be what the existing icon already wants to be.
+A geometric uppercase **C** split on a sharp **45° diagonal** — terracotta day above, dusk night below — with the cut offset so it exits through the letter's aperture. Chosen because it carries both halves of the brand at once: **rhythm** (the metronome angle) and **a full day** (the colour split), without relying on the contested sunrise trope.
 
-- The mark reads as **light**, not fire, not a rainbow, not an arch: warm-weighted, horizon integrated with the sun (no doorway negative space), no detached elements.
-- Two layers only (sun / horizon), flat solid fills, no gradients or baked lighting — required for the iOS Icon Composer pipeline (Default / Dark / Mono variants from one layered source) and correct for Liquid Glass, where the system renders depth itself.
-- Must survive 40 px and the mono test.
-- **Known risk — the sunrise is the most-used trope in wellness iconography** (Rise is literally a sunrise; arcs-over-horizons are everywhere in the health folder). The meaning is right; the form territory is contested. The final geometry therefore needs one ownable twist a generic sunrise lacks. Most promising direction: the mark currently says *renewal* but the name says *rhythm* — a construction carrying repetition (e.g., radiating arcs that read as both rays and resonance) could own both.
-- **Gate before committing: the lineup test.** The candidate at 60 px on one sheet beside the real marks of Rise, Headspace, Calm, Noom, and several generic wellness suns. If a stranger can't pick ours out, it fails regardless of how it looks alone.
-- ⚑ Final geometry pending the concept/parameter exploration in Cursor — which must be allowed to challenge the sunrise concept itself, not just refine it.
+- Flat solid fills, two layers (day terracotta / night dusk), no gradients or baked lighting — required for the iOS Icon Composer pipeline (Default / Dark / Mono from one layered source) and correct for Liquid Glass, where the system renders depth itself.
+- Must survive 40 px and the mono test. The diagonal cut is geometry, so it holds when colour collapses; the day/night reading is colour-dependent and softens in mono.
+- **App icon grounds:** Default (regular light home screen) sits on pure white \`#FFFFFF\`. Dark sits on charcoal ground \`#1C1A17\`. Product cream \`#F4EFE4\` is an in-app / brand-ground colour, not the Default icon plate.
+- **Known risk:** a metronome is a device that keeps time *for* you; Cadence is meant to bend to the user's rhythm. The angle must read as tempo and momentum, never as drill-sergeant precision. Pairing with warm voice and cream product surfaces is what keeps it coach-grade.
+- Lineup gate still applies: at 60 px beside Rise, Headspace, Calm, Noom, and Apple Fitness as a home-screen neighbour. If a stranger can't pick Cadence out, revisit.
 
 ### The warmth ladder
 
@@ -1023,7 +1022,8 @@ Core:
 | Sun / primary accent | \`#D85A30\` | \`#F0997B\` |
 | Horizon / secondary | \`#0F6E56\` | \`#5DCAA5\` |
 | Dusk / night accent — sleep, evening wind-down, rest | \`#3E5C76\` | \`#9DBBD4\` |
-| Ground / background | \`#F4EFE4\` | \`#1C1A17\` |
+| Ground / background (in-app) | \`#F4EFE4\` | \`#1C1A17\` |
+| App icon plate (Default / Dark) | \`#FFFFFF\` | \`#1C1A17\` |
 
 The dusk blue is deliberately desaturated slate, not tech blue — it has to feel like sky at 9pm, sit calmly next to terracotta, and never read as a link color.
 
@@ -1056,7 +1056,7 @@ Friendly through proportion and openness, **not** through bubbly rounding (round
 | Face | Role |
 |---|---|
 | **Plus Jakarta Sans** | Brand typeface — wordmark, display, headers, web/Android UI |
-| **SF Pro** (system) | Native iOS chrome + chat body only — Dynamic Type / optical sizes for the conversation surface |
+| **SF Pro** (system) | Native iOS chrome + chat body only — Dynamic Type / optical sizes for the conversation surface (audience is 30–60; reading comfort beats brand distinctiveness in long chat) |
 
 Retired from the shortlist (do not revive without a new decision): General Sans, Söhne, Fraunces as in-app faces. Fraunces may still appear as an optional marketing-only editorial accent, never inside the product.
 
@@ -1080,8 +1080,8 @@ Component-level visual inconsistency is a brand problem before it is a design pr
 
 ## Open decisions ⚑
 
-1. Mark geometry — pick from the Cursor concept/sweep exploration (§9).
-2. Typeface — test the display shortlist against the mark and a real chat screen (§9).
+1. ~~Mark geometry~~ — **decided: Metronome Split** (§9).
+2. ~~Typeface~~ — **decided: Plus Jakarta Sans** (§9); SF Pro remains native iOS chat/chrome only.
 3. Token spec — type scale, spacing, radius, elevation; validate §9 color values for WCAG contrast (semantic colors especially).
 4. Illustration seed set — commission brief and budget (§9).
 5. Campaign line — slot intentionally empty until there's awareness to trade on (§5).

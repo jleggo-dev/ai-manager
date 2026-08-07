@@ -59,7 +59,7 @@ One line doesn't carry a brand; a small system does. **Rule for this stage: nobo
 Retired, with reasons (so they don't come back):
 
 - *"Change is inevitable. Your habits aren't."* — a threat; fear-of-loss is the competitor mechanic we reject.
-- *"Life changes. Cadence adapts."* and *"Change is inevitable. So is sunrise."* — say nothing about what Cadence does. The sunrise sentiment lives in the mark, where it belongs.
+- *"Life changes. Cadence adapts."* and *"Change is inevitable. So is sunrise."* — say nothing about what Cadence does. Daily return / rhythm lives in the mark (**Metronome Split**), not in the tagline.
 
 The campaign-line slot is intentionally empty until there's awareness to trade on.
 
