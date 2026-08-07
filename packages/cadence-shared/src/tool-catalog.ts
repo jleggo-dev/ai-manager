@@ -180,6 +180,37 @@ const CLASS_HEADER: Record<ToolClass, string> = {
 };
 
 /**
+ * The same catalog, one line per tool — for the CHAT coach, which needs to *talk about* what a
+ * session can contain, not emit one. Someone asking "could we put some breathwork in?" or "do you
+ * do journaling prompts?" is asking about this list, and a chat coach that has never seen it either
+ * invents a tool the app cannot play or says no to something that exists. Deliberately drops the
+ * fields/examples/traps (that is authoring detail the chat coach has no use for) so the block stays
+ * a few hundred tokens in every session.
+ */
+export function renderToolCatalogBrief(): string {
+  const lines: string[] = [
+    '== WAYS A STEP CAN BE PLAYED (the app can guide these; anything else is just words on a page) ==',
+  ];
+  for (const kind of SESSION_TOOL_KINDS) {
+    // First clause only — the summaries carry authoring nuance after the dash that a chat coach
+    // does not need and should not read aloud.
+    lines.push(`  • ${kind} — ${(COACH_TOOLS[kind].summary.split(/[—;]/)[0] ?? '').trim()}`);
+  }
+  lines.push(
+    `  breathing patterns: ${BREATH_PATTERNS.map((p) => p.id).join(', ')}.`,
+    `  grounding games: ${GROUNDING_GAMES.join(', ')}.`,
+    `  journal prompt banks by family: ${(['reflection', 'craft', 'study', 'devotion'] as JournalFamily[])
+      .map((f) => `${f} (${JOURNAL_BANKS.filter((b) => bankFamily(b) === f).length})`)
+      .join(', ')}.`,
+    'These names are internal. Say them in plain words ("some paced breathing", "a short sit") and',
+    'never speak the identifier itself — "I\'ll add a feeling_log" is not something a coach says. If',
+    'they ask for something not on this list, say so plainly and ask what they were after; do not',
+    'promise a step the app cannot actually play.',
+  );
+  return lines.join('\n');
+}
+
+/**
  * Render the catalog to the hierarchical, LLM-facing block injected as `{{tool_catalog}}`. Grouped
  * by capture class, one bullet per tool with its when/trap/fields/example, then the SET FLOW section.
  * Deterministic (stable order) so the prompt is cacheable.

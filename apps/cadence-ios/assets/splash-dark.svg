@@ -1,0 +1,14 @@
+<svg viewBox="0 0 2732 2732" xmlns="http://www.w3.org/2000/svg">
+  <!-- Launch screen, dark. Same geometry and placement as splash.svg; charcoal ground #1C1A17 and
+       the palette's DARK-mode fills (sun #F0997B, dusk #9DBBD4) — the light dusk #3E5C76 all but
+       vanishes on charcoal, taking the day/night reading with it. See assets/icon-dark.svg. -->
+  <rect width="2732" height="2732" fill="#1C1A17"/>
+  <g transform="translate(916 916) scale(9)">
+    <defs>
+      <clipPath id="day"><polygon points="-50,-50 166.6,-50 -50,166.6"/></clipPath>
+      <clipPath id="night"><polygon points="173.4,-50 173.4,173.4 -50,173.4"/></clipPath>
+    </defs>
+    <path d="M 79.737 66.484 A 34 34 0 1 1 79.737 33.516 L 66.773 39.107 A 20 20 0 1 0 66.773 60.893 Z" fill="#F0997B" clip-path="url(#day)"/>
+    <path d="M 79.737 66.484 A 34 34 0 1 1 79.737 33.516 L 66.773 39.107 A 20 20 0 1 0 66.773 60.893 Z" fill="#9DBBD4" clip-path="url(#night)"/>
+  </g>
+</svg>

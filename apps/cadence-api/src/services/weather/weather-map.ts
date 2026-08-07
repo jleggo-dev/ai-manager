@@ -34,9 +34,24 @@ export interface WeatherSnapshot {
   conditions: string;
   precipMm: number;
   precipChance: number | null; // 0..1 from short forecast, when available
-  source: 'openweathermap';
+  /**
+   * Which provider answered. Carried on the snapshot (not inferred from config) because the
+   * ATTRIBUTION requirement is per-datum, not per-deployment: Apple requires the Apple Weather
+   * mark + legal link wherever WeatherKit data is shown, and a cached or persisted snapshot may
+   * predate a provider switch. Widened from the old `'openweathermap'` literal — historic rows in
+   * `cadence.weather_cache` and occurrence jsonb still read back fine.
+   */
+  source: 'openweathermap' | 'weatherkit';
   fetchedAt: string; // ISO
-  label?: string; // city name from OWM when present
+  label?: string; // city name from OWM when present (WeatherKit has no place-name field)
+}
+
+/** Apple's required attribution target — shown wherever a `weatherkit` snapshot is displayed. */
+export const APPLE_WEATHER_ATTRIBUTION_URL = 'https://developer.apple.com/weatherkit/data-source-attribution/';
+
+/** True when this snapshot obliges us to show the Apple Weather mark + link. */
+export function needsAppleAttribution(w: Pick<WeatherSnapshot, 'source'> | null | undefined): boolean {
+  return w?.source === 'weatherkit';
 }
 
 function num(v: unknown): number | null {

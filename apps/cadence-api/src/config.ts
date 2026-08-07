@@ -108,7 +108,7 @@ export const cadenceConfig = {
     keyId: process.env.APNS_KEY_ID ?? '',
     teamId: process.env.APNS_TEAM_ID ?? '',
     privateKey: process.env.APNS_PRIVATE_KEY ?? '',
-    bundleId: process.env.APNS_BUNDLE_ID ?? 'dev.jleggo.cadence',
+    bundleId: process.env.APNS_BUNDLE_ID ?? 'builders.cadence.app',
     environment: (process.env.APNS_ENVIRONMENT === 'production' ? 'production' : 'development') as
       'development' | 'production',
   },
@@ -116,8 +116,24 @@ export const cadenceConfig = {
   /**
    * OpenWeatherMap — server-only (cadenceConfig.weatherApiKey). Never expose via VITE_* or
    * cadence-web. Set in apps/cadence-api/.env locally and the cadence-api Vercel project env.
+   * Still wired after WeatherKit landed: it is the FALLBACK when WeatherKit is unconfigured or
+   * erroring, and it remains the only geocoder (WeatherKit has no city → lat/lon endpoint).
    */
   weatherApiKey: process.env.WEATHER_API_KEY ?? '',
+
+  /**
+   * Apple WeatherKit (REST) — server-only, same .p8/ES256 shape as APNs but a different claim set
+   * (`sub` = the Services ID; APNs has no `sub`). Preferred source when configured so an iOS
+   * user's Cadence forecast matches their lock screen; OpenWeatherMap stays as fallback.
+   * Unset = WeatherKit off, and everything silently keeps using OWM.
+   * serviceId is the *Services ID* identifier, NOT the app's bundle ID.
+   */
+  weatherkit: {
+    keyId: process.env.WEATHERKIT_KEY_ID ?? '',
+    teamId: process.env.WEATHERKIT_TEAM_ID ?? '',
+    serviceId: process.env.WEATHERKIT_SERVICE_ID ?? '',
+    privateKey: process.env.WEATHERKIT_PRIVATE_KEY ?? '',
+  },
 
   /**
    * USDA FoodData Central (api.data.gov) — server-only. Never expose via VITE_* or cadence-web.

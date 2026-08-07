@@ -1,0 +1,21 @@
+<svg viewBox="0 0 2732 2732" xmlns="http://www.w3.org/2000/svg">
+  <!-- Launch screen, light. The Metronome Split mark centred on the product cream ground.
+       Cream (not the icon's white plate) is correct here: cadence-brand-identity-v2.md §9 scopes
+       #F4EFE4 as the in-app / brand ground, and the splash is the first in-app surface.
+
+       Geometry transcribed from docs/cadence/assets/cadence-mark-metronome-split.svg — identical
+       to components/Orb.tsx and assets/icon.svg. Do not redraw by eye; re-export from
+       cadence-icon-contact-sheet.html instead.
+
+       Was a flat PNG of the retired sunrise arch. Kept as SVG so the mark has ONE source per
+       surface and the next brand change is a re-export, not a bitmap hunt. -->
+  <rect width="2732" height="2732" fill="#F4EFE4"/>
+  <g transform="translate(916 916) scale(9)">
+    <defs>
+      <clipPath id="day"><polygon points="-50,-50 166.6,-50 -50,166.6"/></clipPath>
+      <clipPath id="night"><polygon points="173.4,-50 173.4,173.4 -50,173.4"/></clipPath>
+    </defs>
+    <path d="M 79.737 66.484 A 34 34 0 1 1 79.737 33.516 L 66.773 39.107 A 20 20 0 1 0 66.773 60.893 Z" fill="#D85A30" clip-path="url(#day)"/>
+    <path d="M 79.737 66.484 A 34 34 0 1 1 79.737 33.516 L 66.773 39.107 A 20 20 0 1 0 66.773 60.893 Z" fill="#3E5C76" clip-path="url(#night)"/>
+  </g>
+</svg>

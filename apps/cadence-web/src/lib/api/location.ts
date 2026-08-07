@@ -65,6 +65,9 @@ export type WeatherNow = {
   conditions?: string;
   label?: string | null;
   precip_chance?: number | null;
+  source?: 'openweathermap' | 'weatherkit';
+  /** Present only when the licence requires it (WeatherKit). Render the mark + link when set. */
+  attribution?: { name: string; url: string } | null;
 };
 
 /** GET /me/weather — current conditions + city at the user's home location (for the Today header). */

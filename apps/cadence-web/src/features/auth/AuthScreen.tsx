@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase, authConfigured } from '../../lib/supabase.ts';
-import { isNativeShell, signInWithGoogleNative } from '../../lib/native-auth.ts';
+import { isNativeShell, signInWithProviderNative, type NativeOAuthProvider } from '../../lib/native-auth.ts';
 import { Orb } from '../../components/Orb.tsx';
 
 /** Google's brand "G" for the sign-in button (their sanctioned use for exactly this). */
@@ -22,12 +22,24 @@ const GoogleG = () => (
   </svg>
 );
 
+/** Apple's mark for the sign-in button — their sanctioned use, and required to be the filled logo. */
+const AppleLogo = () => (
+  <svg viewBox="0 0 16 20" aria-hidden xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+    <path d="M13.29 10.6c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.61-1.7-3.18-1.72-1.35-.14-2.64.8-3.33.8-.69 0-1.75-.78-2.87-.76-1.48.02-2.84.86-3.6 2.18-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.25 2.74 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.08 2.65-2.14.84-1.23 1.18-2.42 1.2-2.48-.03-.01-2.3-.88-2.32-3.5zM11.1 3.9c.6-.74 1.01-1.76.9-2.78-.87.04-1.93.58-2.56 1.31-.56.65-1.05 1.69-.92 2.69.97.07 1.96-.49 2.58-1.22z" />
+  </svg>
+);
+
 /**
- * Pre-auth screen: continue with Google, or sign in / create an account with email + password
- * (all Supabase). On success, the session change is picked up by App's onAuthStateChange listener,
- * which swaps this out for the app — so there's no explicit onDone callback. For Google, the browser
- * redirects to Google and back; the client's detectSessionInUrl parses the returned session, which
- * fires the same listener. Copy stays in the coach's warm, plain voice.
+ * Pre-auth screen: continue with Google or Apple, or sign in / create an account with email +
+ * password (all Supabase). On success, the session change is picked up by App's onAuthStateChange
+ * listener, which swaps this out for the app — so there's no explicit onDone callback. For the
+ * OAuth providers the browser redirects out and back; the client's detectSessionInUrl parses the
+ * returned session, which fires the same listener. Copy stays in the coach's warm, plain voice.
+ *
+ * Account linking (decided 2026-08-06): one account per verified email, providers link into it.
+ * Deliberately NOT promised in the copy — Apple's "Hide My Email" hands us a relay address that
+ * won't match a Google email, so linking silently won't happen for those users, and copy that
+ * promised it would be a lie for exactly the people who chose the private option.
  */
 type Mode = 'signin' | 'signup';
 
@@ -44,32 +56,33 @@ export function AuthScreen() {
   const [msg, setMsg] = useState('');
   const [notice, setNotice] = useState('');
 
-  async function continueWithGoogle() {
+  async function continueWith(provider: NativeOAuthProvider) {
     if (busy) return;
+    const label = provider === 'apple' ? 'Apple' : 'Google';
     setBusy(true);
     setMsg('');
     setNotice('');
     // Native shell: system browser sheet + cadence:// deep link (lib/native-auth.ts); the
     // appUrlOpen listener finishes the session, and App's auth listener takes over.
     if (isNativeShell()) {
-      const errMsg = await signInWithGoogleNative();
+      const errMsg = await signInWithProviderNative(provider);
       if (errMsg) setMsg(errMsg);
       setBusy(false); // the sheet is up (or failed); this screen stays interactive behind it
       return;
     }
-    // Web: redirects the browser to Google, then back to the app; the returned session is parsed
-    // by the client (detectSessionInUrl) and App's listener takes over. No dev query param to
-    // keep — this screen only renders in real-auth mode.
+    // Web: redirects the browser to the provider, then back to the app; the returned session is
+    // parsed by the client (detectSessionInUrl) and App's listener takes over. No dev query param
+    // to keep — this screen only renders in real-auth mode.
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider,
       options: { redirectTo: window.location.origin },
     });
     if (error) {
-      setMsg(authErrorMessage(error, 'Could not start Google sign-in — try again.'));
+      setMsg(authErrorMessage(error, `Could not start ${label} sign-in — try again.`));
       setBusy(false);
       return;
     }
-    // Success → the page is navigating to Google; leave busy set (no inline continuation).
+    // Success → the page is navigating to the provider; leave busy set (no inline continuation).
   }
 
   async function submit() {
@@ -113,9 +126,16 @@ export function AuthScreen() {
         <p className="w-tag">{mode === 'signin' ? 'Welcome back.' : 'A rhythm you can keep.'}</p>
       </div>
 
-      <button className="auth-google" onClick={continueWithGoogle} disabled={busy || !authConfigured}>
+      <button className="auth-google" onClick={() => continueWith('google')} disabled={busy || !authConfigured}>
         <GoogleG />
         Continue with Google
+      </button>
+      {/* Apple is listed second but is NOT optional: App Review guideline 4.8 requires Sign in
+          with Apple in any app offering third-party login. Apple's own guidelines require the
+          exact wording "Continue with Apple" and the filled logo on a solid button. */}
+      <button className="auth-apple" onClick={() => continueWith('apple')} disabled={busy || !authConfigured}>
+        <AppleLogo />
+        Continue with Apple
       </button>
       <div className="auth-divider">
         <span>or</span>

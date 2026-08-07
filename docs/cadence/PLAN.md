@@ -684,6 +684,41 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
 - ~~**Real auth**~~ — **SHIPPED** (verified 2026-08-04): `features/auth/AuthScreen.tsx` with
   Supabase sign-in, email/password + Google, wired in `App.tsx`; `requireCadenceUser` gates every
   API route. The dev user survives only behind `?dev=1` / `?preview=` harnesses.
+- **Sign in with Apple — CLIENT SHIPPED 2026-08-07, awaiting portal + Supabase config.** Button,
+  provider-agnostic native path (`signInWithProviderNative`), the `com.apple.developer.applesignin`
+  entitlement, and `scripts/generate-apple-secret.ts` are all in. **Decision: ship the shared
+  browser-sheet path first, not `@capacitor-community/apple-sign-in`** — guideline 4.8 requires that
+  Sign in with Apple be *offered*, not that it use the native ASAuthorization sheet, so the system
+  sheet is a UX upgrade rather than a submission gate, and this way App Store submission isn't
+  blocked on a new native dependency. **The recurring trap:** Apple issues no static client secret —
+  it is an ES256 JWT with a **6-month maximum lifetime**, so Apple sign-in breaks on a timer with no
+  code change to blame. `generate-apple-secret.ts` re-mints it and prints the expiry date. Also
+  restored `aps-environment` in `App.entitlements` (removed 2026-08-06 for the free-team install).
+  - **BACKLOG — owning the Apple OAuth client (deferred 2026-08-07; Supabase is fine for now).**
+    The expiring secret is not inherent to Sign in with Apple; it is the cost of Supabase performing
+    the **token exchange** for us. Whoever POSTs to Apple's token endpoint can mint the client-secret
+    JWT per request with a ~5-minute expiry and store nothing — the pattern `push-apns.ts` and
+    `weatherkit-http.ts` already use here. Note this needs no "IdP" of our own: Apple issues the
+    identity, we would only be the OAuth *client*.
+    **The cheaper 80% is the native path:** `@capacitor-community/apple-sign-in` gets an Apple
+    identity token straight from the OS sheet, which goes to `supabase.auth.signInWithIdToken(...)`
+    and is verified against Apple's PUBLIC keys — **no client secret in that flow at all** (Supabase
+    needs the bundle id in its allowed client IDs). So it is not only a UX upgrade, as the decision
+    above framed it; it also removes the expiring credential on iOS.
+    **What it does NOT fix:** web has no system sheet, so the redirect flow — and the 6-month
+    secret — stays for the PWA. Native therefore buys *blast radius* (a lapse leaves iOS users
+    signing in fine and breaks only web), not a cure. Dropping Apple on web WOULD delete the
+    problem outright (4.8 is an App Store rule, not a web one) but is rejected: a user who signed up
+    on iOS with **Hide My Email** has a relay address and could be left with no way into the web app
+    — a direct violation of "never makes you start over".
+    **Revisit when** the secret actually lapses once, or web Apple sign-in gets real usage. Until
+    then the tripwire below is the mitigation.
+  - **BACKLOG — expiry tripwire (recommended next, ~20 lines).** Record the secret's expiry date to
+    a committed file from `generate-apple-secret.ts`, and fail a test within 30 days of it, so CI
+    goes red weeks before users are affected. Chosen over automated rotation via Supabase's
+    Management API because a rotation job that runs twice a year is untested when it matters —
+    teams who automate this properly rotate MONTHLY so the path is exercised. Not worth that
+    operational surface for a solo maintainer yet.
 - **Social logins: Apple + Facebook (added 2026-08-06)** — extend `AuthScreen.tsx` alongside the
   existing Google button; both are Supabase Auth providers, so the flow (incl. the native
   `cadence://auth-callback` PKCE deep link) is already built — per-provider work is dashboard
@@ -711,9 +746,16 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   geolocation API is unreliable in WKWebView — the previous inherit was a latent bug, not just an
   inconsistency. Also gains a real permission state (`checkPermissions`) rather than only
   success/failure. Requests `coarseLocation` (weather + timezone is all Cadence needs).
-- **Weather via Apple WeatherKit — BLOCKED: enrollment still PENDING as of 2026-08-06** (paid, but
-  Apple's identity verification hadn't cleared; WeatherKit key creation needs an ACTIVE membership,
-  so this cannot start until then — same gate as TestFlight, push/APNs key, and Sign in with Apple).
+- **Weather via Apple WeatherKit — CODE COMPLETE 2026-08-07, awaiting credentials.** Membership went
+  active 2026-08-07, unblocking this (and TestFlight, the APNs key, Sign in with Apple). The swap is
+  built and tested against a mocked provider; it stays **dormant until the four `WEATHERKIT_*` env
+  vars are set** (`isWeatherKitConfigured()` gates every call, so an unset block just means "keep
+  using OpenWeatherMap"). Shipped: `weather/weatherkit-http.ts` (ES256 provider JWT + REST client),
+  `weather/weatherkit-map.ts` (payload → `WeatherSnapshot`), provider selection with OWM fallback in
+  `weather/weather.ts`, `source` on the snapshot, and the Apple Weather attribution line in the
+  Today header. Two things worth knowing for the first live call: `sub`/header-`id` use the
+  **Services ID**, not the bundle id (the overwhelmingly common 401), and WeatherKit reports wind in
+  **km/h** where OWM uses m/s — mis-mapping that is a silent 3.6× error, so it is pinned by a test.
   Design (2026-08-06). Rationale
   is OS consistency: an iOS user's lock-screen/Weather-app forecast is Apple's, so Cadence quoting
   OpenWeatherMap reads as wrong even when it isn't. Design: **swap the SERVER-side source**
@@ -765,6 +807,18 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
   queries, so those seams return null (custom Swift later). Device install 2026-08-06: bundle id
   is **`dev.jleggo.cadence`** (`com.cadenceapp.ios` was taken — app ids are globally unique);
   free-team build on jeffrey's iPhone, push entitlement locally removed until enrollment activates.
+  **Bundle id changed to `builders.cadence.app` (2026-08-07), BEFORE any App Store Connect record
+  existed** — the last moment it is free. `dev.jleggo.*` was a personal namespace and, unlike a
+  display name, a bundle id is permanent: changing it after first upload means a NEW app record and
+  losing ratings, reviews, and the install base. It now reverse-DNSes a domain actually owned
+  (`cadence.builders`, on Vercel DNS), which `dev.jleggo.cadence` never did — `jleggo.dev` is
+  unregistered. `.app` as the final segment, not `.ios`, because Capacitor's single `appId` becomes
+  the Android package name too. Avoided `com.cadence.*`: that is Cadence Design Systems' namespace
+  (they own cadence.com), and squatting it on an unchangeable identifier invites a dispute.
+  **The two Services IDs deliberately keep the old `dev.jleggo.cadence.{weather,signin}` strings** —
+  a Services ID is not the bundle id, is not user-visible, and is not permanent; renaming them would
+  mean re-minting the Apple client secret and re-pointing Supabase for zero functional gain. The
+  Sign in with Apple Services ID does need its **Primary App ID re-pointed** to the new App ID.
 - **Onboarding health context — SHIPPED 2026-08-06, incl. goal-gating + foreground refresh.**
   The CLIENT builds a compact digest (workouts by type/week — the Broker cannot query HealthKit,
   it is on-device only) → `POST /me/health-digest` (zod-bounded; optional live-session inject) →
@@ -1119,6 +1173,10 @@ permanently ("tools" is UI-only — LLM tool-calling collision).
 - Provisioning: `provision-aim`, `set-coach-persona`, `provision-pack-jobs`.
 - Verification/debug: `live-coach`, `verify-coach`, `verify-p2`, `coach-sim` (turn-by-turn),
   `dump-sse`.
+- `probe-weatherkit [lat] [lon]` — checks the four `WEATHERKIT_*` values locally (p8 parses? key
+  is EC? Services ID not accidentally the bundle id?) before making one real call, then maps the
+  status to the specific portal screen to fix. Exists because Apple answers every credential
+  mistake with the same opaque 401 and the values come from three different screens.
 
 ### Blog series (`docs/cadence/blog`)
 - **#1 "Teaching an AI Coach to Remember"** — DONE (`.md` + `.docx` + figures). Refreshed 2026-07-07
@@ -2126,3 +2184,148 @@ three-free-days-a-week plan counting as good, not failed.
 Verified by `apps/cadence-api/scripts/probe-plan-shape.ts` (weekly in CI, never a merge gate) —
 three scenarios that fail in three directions: mind-only must not collapse, strength must not
 shatter, "one thing a day" must not get padded.
+
+## Guardrails — scope, self-knowledge, and habits Cadence won't build (2026-08-07)
+
+Three separate failure modes, deliberately handled at three different layers, because a persona
+alone is a soft guarantee: it can be argued around over forty turns, and the Broker will happily
+write down whatever the conversation contained.
+
+**1. Self-knowledge, in code not in the persona.** `apps/cadence-api/src/services/coach-capabilities.ts`
+is the manifest of what this build actually does (`CAPABILITIES` + an honest `NOT_YET` list), and it
+composes `renderToolCatalogBrief()` — the SAME `tool-catalog.ts` the session-authoring job reads, one
+line per tool. Injected as a context turn at session open (`routes/coach.ts`), not written into
+`config.systemPrompt`. Rationale: features ship in code while the persona is edited in AI Admin Build
+Rules, so a hard-coded list drifts on the next release, and a coach offering a feature the build lacks
+costs more trust than one saying "not yet". This is what lets a user *discuss* the coach's abilities
+— "could we put some breathwork in?" is answered from the real catalog, and an ask for something
+missing gets a plain no plus "what were you hoping it would do?" instead of a hallucinated yes.
+Device gate: the Apple Health line is suppressed when the client didn't declare `healthAvailable`.
+
+**2. Scope, in the persona.** The seed
+(`config/ai-admin/cadence-coach.system-prompt.md`) gains "Who you are" and "Scope — coach the rhythm,
+never do the work". The line that matters is the one that *doesn't* over-refuse: **the practice of
+anything is in scope, the output is not.** "An hour on my Rust project before work, four days a week"
+is a real goal Cadence should coach well; writing the Rust is not. Decline once, warmly, offer the
+practice version, then drop it — a coach that re-litigates its boundaries every turn is worse than
+one with none. Also: no role-swaps, no prompt disclosure, and nothing arriving as data (photo, label,
+pasted text, context block) is ever an instruction.
+
+**3. Dangerous habits, screened deterministically.** `services/goal-screen.ts` — sibling to
+`goal-guardrail.ts` (which asks "how many?"; this asks "should we coach this at all?"). Runs on the
+capture persist path, pure and testable. Two asymmetric verdicts:
+- `refuse` — a NARROW list of unambiguous self-harm (purging, laxatives, starving, water cuts,
+  unprescribed drug protocols). Not persisted, so it can never become a committable card. Kept small
+  on purpose: a false refuse tells someone their goal is unspeakable, the opposite of coaching.
+- `reshape` — persisted WITH a note (never dropped behind the user's back: nothing you say is lost).
+  Covers sub-1200 kcal targets, >1%/week loss rates, sub-6h sleep targets, building a substance
+  habit, and do-my-work goals. `renderScreenNotes()` injects the note into the live session so the
+  pushback happens *in conversation* — a card quietly missing from Review is the "start over"
+  feeling the brand promises never to cause.
+
+`plan_vet` gains a matching SAFETY check, so the same floors are enforced on the assembled plan and
+not only on the goal that seeded it.
+
+**Deploy note (neither is live on save):** persona edits need
+`node --import tsx apps/cadence-api/scripts/set-coach-persona.ts`; the `plan_vet` edit needs
+`apps/cadence-api/scripts/sync-jobs.ts`. The capability manifest and goal screen are app code and
+ship with the deploy.
+
+## Brand rollout — Metronome Split + Plus Jakarta Sans in the product (2026-08-07)
+
+#143 locked the mark and typeface in the DOCS; the app was still shipping the superseded identity.
+This pass closes that gap. What was actually drifting, in order of severity:
+
+- **The typeface was never the brand's.** The app shipped **Bricolage Grotesque** (display) +
+  **Hanken Grotesk** (body) — neither appears in any brand document, and Bricolage isn't even on
+  the retired shortlist, so it predates the decision rather than losing to it. Now Plus Jakarta
+  Sans for both, with `html.native` overriding `--body` to SF Pro per the doc's iOS chat/chrome
+  carve-out. `--mono` (Space Mono) is untouched: no brand doc covers mono.
+- **Three marks were live at once.** `Orb.tsx` (sunrise arch), the iOS icon (arch on cream), and a
+  bespoke leaf glyph in `TrailHeader` that appears in NO brand document. All three are now the one
+  `Orb`; the header's orange disc became a white plate matching the Default icon ground.
+- **The icon plate was cream.** The identity doc scopes `#F4EFE4` as an in-app / brand ground and
+  sets the Default icon plate to pure white. Fixed, plus a new `icon-dark.svg` on charcoal.
+
+**Mark geometry is TRANSCRIBED, never redrawn.** Source of truth is
+`docs/cadence/assets/cadence-mark-metronome-split.svg` (exported from
+`cadence-icon-contact-sheet.html` → `conceptMetronomeSplit` / `dayNightC(14, 58)`): C centred
+(50,50), outer r=34, counter r=20 (thickness 14), 58° aperture, cut on a 45° line through (60,60).
+This is stated in `Orb.tsx` because it was learned the hard way — a mark drawn from the prose
+description looked entirely plausible and was wrong twice (too heavy; cut centred rather than
+offset). The contact sheet's own note already records both failure modes: centred, the cut "lopped
+the top terminal off into a floating shard", and rotating the letter to match "cost the C its
+reading altogether". **Change the mark in the contact sheet, re-export, re-transcribe.** The only
+edit from the export is expressing each clip half-plane as a triangle instead of the generator's
+97-point polyline — verified equivalent (every boundary point lies on x+y=116.6 / x+y=123.4).
+
+**Also removed:** the hero variant's `feTurbulence` "hand-drawn edge". The identity doc's execution
+warning is that terracotta + pine tips "farmhouse craft" the moment it meets hand-drawn texture —
+the roughening was the exact thing being warned about. The hero now converges the two halves along
+the cut instead.
+
+**iOS assets: the SVGs are now the only sources.** `icon-only.png`, `splash.png` and
+`splash-dark.png` were deleted, not just regenerated — `icon-only.png` silently WINS over
+`icon.svg` in `@capacitor/assets`, so the first regeneration emitted byte-identical arch bitmaps
+and looked like a no-op success. Sources are now `icon.svg` / `icon-dark.svg` / `splash.svg` /
+`splash-dark.svg`; regenerate with
+`npx @capacitor/assets generate --ios --assetPath assets` from `apps/cadence-ios`.
+
+**Deliberately NOT done (each its own reviewed pass):**
+- **Palette migration — CLOSED, owner call 2026-08-07: keep the brighter ramp.** The product
+  values (`--dawn-3 #e07a5f`, `--forest #2c5545`) sit brighter than the identity doc's `#D85A30` /
+  `#0F6E56`, which §9 warns reads as "a Headspace cousin". Raised and **dismissed** — owner prefers
+  the brighter terracotta and does not regard the Headspace adjacency as a risk worth designing
+  around ("we're better than them anyway"). So §9's "the terracotta never drifts brighter or more
+  saturated in any asset" no longer describes the product; treat the shipped ramp as canonical and
+  the doc line as superseded. Do NOT re-raise this as drift. `--sun` / `--dusk` remain at the exact
+  identity-doc values because the MARK is transcribed from the export and must match it byte for
+  byte; that is a fidelity requirement, not a palette position.
+- **Dark mode.** The web app has none, so the dark-mode palette values have nowhere to live. They
+  ARE used in `icon-dark.svg` / `splash-dark.svg`, where the light dusk `#3E5C76` on charcoal is
+  near-invisible at icon sizes and would drop the night wedge entirely.
+
+## BACKLOG — Postgres robustness (raised 2026-08-07)
+
+Not a rewrite proposal; a list of concrete failures the current setup has actually produced, so the
+decision gets made on evidence rather than vibes. Supabase Postgres is fine as a database — every
+problem below is about **how we reach it and how we test against it.**
+
+**1. Two hosts, one of which silently breaks CI.** Supabase exposes a DIRECT host
+(`db.<ref>.supabase.co:5432`, **IPv6-only**) and a POOLER (`aws-*.pooler.supabase.com:6543`). On an
+IPv4-only network — GitHub Actions runners, most CI — the direct host fails as `ENETUNREACH`, which
+reads as a mystery outage; it cost half a day on 2026-08-04 and `config.ts` now carries a warning
+comment about it. **It recurred on 2026-08-07:** `.env` held the direct connection string under
+`CADENCE_DB_CONNECTION_STRING` (a name nothing reads) while `CADENCE_DATABASE_URL` held an
+`https://` Supabase URL. It worked only because `buildDbUrl()` requires an `@` before trusting
+`CADENCE_DATABASE_URL`, so it fell through to the password path. Had someone pasted the direct
+Postgres string into the right variable, it would have worked locally and failed only in CI. A
+guard that depends on the wrong value being wrong in a *specific* way is luck, not a guard.
+
+**2. Three env vars can specify one connection.** `CADENCE_DATABASE_URL`, `CADENCE_DB_PASSWORD`
+(+ host/port/user/name overrides), and — until deleted — a third that nothing read. Precedence
+lives in `buildDbUrl()` and is invisible from the `.env` file. Minimum fix, independent of any
+migration: **validate at startup** — reject a `CADENCE_DATABASE_URL` that isn't `postgres(ql)://`,
+and warn loudly on the direct host rather than only in a comment.
+
+**3. The DB integration suites are effectively untested.** `plan-commit`, `nutrition-service` and
+`recipe` talk to REAL remote Postgres: ~1.7s just to connect, seed-and-wipe per test, a 30s
+`testTimeout` to stop latency alone failing them — and they **skip entirely in CI** (no `CADENCE_*`
+secrets). Observed 2026-08-07: three consecutive local runs of the same unchanged tree gave 1
+failure, then 2, then 0. So the suites guarding commit/nutrition/recipe correctness are flaky where
+they run and absent where it matters. This is the real cost and the strongest argument for change.
+
+**Options, cheapest first:**
+- **Local Postgres in CI** (a service container) + keep Supabase for prod. Fixes #3 outright, makes
+  the suites fast and deterministic, needs no migration. Almost certainly the right first move.
+- **Startup validation + collapse to one connection var.** Fixes #1 and #2, hours of work.
+- **A real migration tool** (the `apply-migration-00NN.ts` scripts are hand-rolled and now number
+  ~16); worth it independent of provider.
+- **Migrate off Supabase Postgres** (Neon, RDS, Fly Postgres). Only worth pricing AFTER the above —
+  note Supabase is also doing **auth** (Google/Apple sign-in, JWT validation in `requireCadenceUser`)
+  and **storage** (meal photos), so "migrate off Supabase" and "migrate the database" are different
+  sizes of job. Moving just Postgres is plausible; moving auth means redoing everything provisioned
+  on 2026-08-07.
+
+**Recommendation:** do the CI Postgres container first. It converts the flaky-and-skipped suites
+into a real gate, and it is the prerequisite for confidently changing anything else here.

@@ -10,6 +10,8 @@ import {
   getCoachHistory,
 } from '../ai/aim.ts';
 import { runCaptureExtract } from '../services/capture.ts';
+import { renderCapabilities } from '../services/coach-capabilities.ts';
+import { renderScreenNotes } from '../services/goal-screen.ts';
 import { runDetourCapture } from '../services/detour-capture.ts';
 import { assembleTurn } from '../services/coach-context.ts';
 import { relayAndAccumulate } from '../services/coach-stream.ts';
@@ -67,6 +69,14 @@ router.post('/sessions', async (req: Request, res: Response) => {
         ? `${pack.rendered}\nDevice: Apple Health is available on this device and the user has not shared activity yet.`
         : pack.rendered;
     await injectCoachContext(userId, session.sessionId, rendered, { source: 'registry-pack', version: 1 });
+    // What this build can actually do (coach-capabilities.ts) + the session-tool catalog. Injected
+    // rather than written into the persona because features ship in code and the persona is edited
+    // in AI Admin — a hard-coded list drifts, and a coach that offers a feature the build lacks is
+    // worse than one that says "not yet". Cheap and static, so it rides the same session-open turn.
+    await injectCoachContext(userId, session.sessionId, renderCapabilities({ healthAvailable }), {
+      source: 'capabilities',
+      version: 1,
+    });
     // Persist conversation_id <-> ai_session_id mapping (§C6).
     await createConversation(userId, session.sessionId, session.externalChatId).catch((e) =>
       console.error('[createConversation]', e),
@@ -226,7 +236,19 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     captureWindow(userId, req.params.id as string, message)
       .then((window) => {
         runCaptureExtract(userId, { conversation_window: window })
-          .then((r) => updateTrace(userId, { capture: r }))
+          .then(async (r) => {
+            updateTrace(userId, { capture: r });
+            // Deterministic scope/safety screen fired on something they just said. Hand the coach
+            // the note so the pushback happens in the conversation — a card quietly missing from
+            // Review is exactly the "start over" feeling the brand promises never to cause.
+            const notes = renderScreenNotes(r.screened);
+            if (notes) {
+              await injectCoachContext(userId, req.params.id as string, notes, {
+                source: 'goal-screen',
+                version: 1,
+              }).catch((e) => console.error('[goal-screen inject]', e));
+            }
+          })
           .catch((e) => console.error('[capture_extract]', e));
         runDetourCapture(userId, window)
           .then((o) => {

@@ -3,13 +3,23 @@
 <plist version="1.0">
 <dict>
 	<!-- HealthKit: works with a free personal team for on-device testing; distribution needs
-	     the paid program. Push (aps-environment) needs the paid program even for device builds;
-	     simulator builds ignore entitlements, so this file never blocks simulator work. -->
+	     the paid program. Simulator builds ignore entitlements, so this never blocks simulator work. -->
 	<key>com.apple.developer.healthkit</key>
 	<true/>
-	<!-- aps-environment (push) TEMPORARILY REMOVED for free-team cable install 2026-08-06 —
-	     restore once the paid enrollment activates:
-	     <key>aps-environment</key><string>development</string> -->
 
+	<!-- Push. Removed 2026-08-06 for a free-team cable install (aps-environment needs the paid
+	     program even for device builds); RESTORED 2026-08-07 now the membership is active.
+	     Keep as "development" — App Store/TestFlight builds get "production" swapped in at
+	     archive time by Xcode's capability, not here. -->
+	<key>aps-environment</key>
+	<string>development</string>
+
+	<!-- Sign in with Apple. Required by App Review guideline 4.8 because Cadence offers Google
+	     login; without this entitlement the native system sheet cannot be presented, and the
+	     App ID must carry the matching capability or signing fails. -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
 </dict>
 </plist>

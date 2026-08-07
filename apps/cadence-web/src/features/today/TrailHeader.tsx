@@ -1,15 +1,17 @@
 import { useTodayHeader } from './useTodayHeader.ts';
+import { Orb } from '../../components/Orb.tsx';
 
 /**
  * The top header for the Today/Week surface (redesign) — pinned ABOVE the Today/Week switch.
- * Left: the leaf avatar. Middle: current weather (conditions · temp) with the detected city + a
+ * Left: the coach mark. Middle: current weather (conditions · temp) with the detected city + a
  * CHANGE affordance beneath it; when there's no location yet it collapses to a plain "Set location"
  * prompt (never a fabricated place). Right: the streak and XP pills. Weather/location come from
  * `useTodayHeader` (auto-detect on first load); `streak`/`xp` are passed from the loaded plan.
+ *
+ * The avatar was a bespoke leaf glyph that appears in no brand document — a third mark competing
+ * with the sunrise arch it sat beside, and now with Metronome Split. It is the shared `Orb`, so
+ * the mark stays in exactly one file.
  */
-
-const LEAF =
-  'M18 4C11 4 5.5 8 5.5 15c0 2 .6 3.6 1.4 4.8C9 15 12.5 12 18 11c-4.5 2-7.5 5.5-9 10.5.9.3 1.9.5 3 .5 7 0 11-6 11-13 0-2-.5-3.7-1.5-5H18z';
 
 const cap = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
@@ -31,9 +33,7 @@ export function TrailHeader({ streak, xp }: { streak: number; xp: number }) {
   return (
     <div className="thead">
       <div className="thead-avatar" aria-hidden>
-        <svg viewBox="0 0 24 24" width="21" height="21">
-          <path d={LEAF} fill="#fff" />
-        </svg>
+        <Orb />
       </div>
 
       <div className="thead-main">
@@ -45,6 +45,20 @@ export function TrailHeader({ streak, xp }: { streak: number; xp: number }) {
             <button className="thead-loc" type="button" onClick={requestLocation}>
               <span aria-hidden>📍</span> {city ?? 'Weather nearby'} <i>· CHANGE</i>
             </button>
+            {/* Licence obligation, not a credit line: Apple requires the Apple Weather mark plus a
+                link to their data-source page wherever WeatherKit data is shown. Driven by the
+                snapshot's own `attribution`, so an OWM fallback response renders nothing. */}
+            {wx.attribution && (
+              <a
+                className="thead-attr"
+                href={wx.attribution.url}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {wx.attribution.name}
+              </a>
+            )}
           </>
         ) : (
           <button className="thead-set" type="button" onClick={requestLocation}>
