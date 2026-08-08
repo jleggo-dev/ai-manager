@@ -1,9 +1,9 @@
-import { buildReminders, type ReminderActivity } from '@cadence/shared';
+import { buildLocalNotifications, type SchedulableActivity } from '@cadence/shared';
 import type { PlanActivity } from './api/plan.ts';
 import { capabilities } from './capability/index.ts';
 
 /**
- * Keep on-device reminders in step with the committed plan.
+ * Keep on-device local notifications in step with the committed plan.
  *
  * Called on every plan load, which is deliberately often: reminders that disagree with the plan
  * are worse than none — a phone buzzing for a session that was replanned away reads as the app
@@ -15,7 +15,7 @@ import { capabilities } from './capability/index.ts';
  */
 
 /** `PlanActivity` flattens the schedule; the shared builder takes the nested shape. */
-function toReminderActivity(a: PlanActivity): ReminderActivity {
+function toSchedulableActivity(a: PlanActivity): SchedulableActivity {
   return {
     activity_id: a.activity_id,
     title: a.title,
@@ -35,14 +35,14 @@ export interface SyncResult {
  * Deliberately does NOT request permission — that prompt belongs to a moment the user initiated
  * (Settings), not to app start. Here we only act on a permission already granted.
  */
-export async function syncPlanReminders(activities: PlanActivity[]): Promise<SyncResult> {
+export async function syncPlanLocalNotifications(activities: PlanActivity[]): Promise<SyncResult> {
   try {
-    if (!capabilities.reminders.isAvailable()) return { scheduled: 0, reason: 'unavailable' };
+    if (!capabilities.localNotifications.isAvailable()) return { scheduled: 0, reason: 'unavailable' };
 
     // An empty plan still syncs: it CANCELS everything, which is the correct behaviour when a
     // plan is cleared or the user starts over. Returning early here would leave orphans firing.
-    const specs = buildReminders(activities.map(toReminderActivity));
-    const scheduled = await capabilities.reminders.sync(specs);
+    const specs = buildLocalNotifications(activities.map(toSchedulableActivity));
+    const scheduled = await capabilities.localNotifications.sync(specs);
 
     // sync() returns 0 both for "nothing to schedule" and "permission not granted"; only the
     // latter is worth surfacing, so distinguish them rather than reporting a misleading reason.

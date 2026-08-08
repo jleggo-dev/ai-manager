@@ -1,7 +1,7 @@
 import { Health } from 'capacitor-health';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import type { ReminderSpec } from '@cadence/shared';
+import type { LocalNotificationSpec } from '@cadence/shared';
 import { Geolocation } from '@capacitor/geolocation';
 import type { Capabilities, Workout } from './index.ts';
 import { webCapabilities } from './web.ts';
@@ -85,7 +85,7 @@ export const nativeCapabilities: Capabilities = {
    * pending slots and fires every week indefinitely, which is what keeps a full plan far below
    * the ceiling instead of scheduling one notification per occurrence.
    */
-  reminders: {
+  localNotifications: {
     isAvailable: () => true,
     requestPermission: async () => {
       // iOS has a single notification permission — granting it here also covers push, and vice
@@ -93,7 +93,7 @@ export const nativeCapabilities: Capabilities = {
       const res = await LocalNotifications.requestPermissions();
       return res.display === 'granted';
     },
-    sync: async (specs: ReminderSpec[]) => {
+    sync: async (specs: LocalNotificationSpec[]) => {
       const perm = await LocalNotifications.checkPermissions();
       if (perm.display !== 'granted') return 0;
 

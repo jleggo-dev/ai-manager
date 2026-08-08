@@ -14,7 +14,7 @@
  * silently drops the rest. A repeating calendar trigger occupies ONE slot and fires forever, so
  * "Mon/Wed/Fri at 7am" is three slots rather than three-per-week-until-the-cap-is-hit. A typical
  * plan lands around 5-15 slots, comfortably clear of the ceiling — which is only reachable here
- * if a plan has more than 64 distinct weekday/time pairs, and `MAX_REMINDERS` guards that anyway.
+ * if a plan has more than 64 distinct weekday/time pairs, and `MAX_LOCAL_NOTIFICATIONS` guards that anyway.
  */
 
 /** iOS's hard ceiling on pending local notifications, app-wide. */
@@ -25,12 +25,12 @@ export const IOS_PENDING_LIMIT = 64;
  * ever schedule a local notification, and going over the OS limit fails SILENTLY — the extras
  * simply never fire. Leaving headroom means a future feature cannot quietly break reminders.
  */
-export const MAX_REMINDERS = 48;
+export const MAX_LOCAL_NOTIFICATIONS = 48;
 
 /** iOS weekday numbering: 1 = Sunday … 7 = Saturday (NOT 0-based, and NOT Monday-first). */
 export type IosWeekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-export interface ReminderSpec {
+export interface LocalNotificationSpec {
   /** Stable across re-syncs so rescheduling replaces rather than duplicates. */
   id: number;
   activityId: string;
@@ -41,7 +41,7 @@ export interface ReminderSpec {
   minute: number;
 }
 
-export interface ReminderActivity {
+export interface SchedulableActivity {
   activity_id: string;
   title: string;
   schedule: { recurrence: string; time_of_day?: string };
@@ -103,7 +103,7 @@ export function weekdaysFromRrule(rrule: string | undefined | null): IosWeekday[
  * A hash can collide; the consequence here is one reminder overwriting another, which is why the
  * caller cancels everything it owns before rescheduling rather than relying on ids alone.
  */
-export function reminderId(activityId: string, weekday: number): number {
+export function localNotificationId(activityId: string, weekday: number): number {
   let h = 2166136261; // FNV-1a
   const key = `${activityId}:${weekday}`;
   for (let i = 0; i < key.length; i++) {
@@ -119,7 +119,7 @@ export function reminderId(activityId: string, weekday: number): number {
  * Brand rules that apply here — count what happened never what broke, no streak-shame, plain
  * words — leave very little room, which is exactly why this is a template and not a prompt.
  */
-export function reminderCopy(activityTitle: string): { title: string; body: string } {
+export function localNotificationCopy(activityTitle: string): { title: string; body: string } {
   return { title: 'Cadence', body: `${activityTitle} today.` };
 }
 
@@ -128,18 +128,18 @@ export function reminderCopy(activityTitle: string): { title: string; body: stri
  * recurrence are skipped silently — this runs on every plan load, so it must degrade rather
  * than throw.
  *
- * Ordered by weekday then time so truncation at MAX_REMINDERS drops the far end of the week
+ * Ordered by weekday then time so truncation at MAX_LOCAL_NOTIFICATIONS drops the far end of the week
  * predictably instead of an arbitrary subset.
  */
-export function buildReminders(activities: ReminderActivity[]): ReminderSpec[] {
-  const out: ReminderSpec[] = [];
+export function buildLocalNotifications(activities: SchedulableActivity[]): LocalNotificationSpec[] {
+  const out: LocalNotificationSpec[] = [];
   for (const a of activities) {
     const time = parseTimeOfDay(a.schedule?.time_of_day);
     if (!time) continue;
     for (const weekday of weekdaysFromRrule(a.schedule?.recurrence)) {
-      const { title, body } = reminderCopy(a.title);
+      const { title, body } = localNotificationCopy(a.title);
       out.push({
-        id: reminderId(a.activity_id, weekday),
+        id: localNotificationId(a.activity_id, weekday),
         activityId: a.activity_id,
         title,
         body,
@@ -150,5 +150,5 @@ export function buildReminders(activities: ReminderActivity[]): ReminderSpec[] {
     }
   }
   out.sort((x, y) => x.weekday - y.weekday || x.hour - y.hour || x.minute - y.minute);
-  return out.slice(0, MAX_REMINDERS);
+  return out.slice(0, MAX_LOCAL_NOTIFICATIONS);
 }

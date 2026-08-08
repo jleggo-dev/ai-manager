@@ -5,16 +5,16 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  buildReminders,
+  buildLocalNotifications,
   parseTimeOfDay,
-  reminderId,
+  localNotificationId,
   weekdaysFromRrule,
-  MAX_REMINDERS,
+  MAX_LOCAL_NOTIFICATIONS,
   IOS_PENDING_LIMIT,
-  type ReminderActivity,
-} from './reminders.ts';
+  type SchedulableActivity,
+} from './local-notifications.ts';
 
-const act = (over: Partial<ReminderActivity> = {}): ReminderActivity => ({
+const act = (over: Partial<SchedulableActivity> = {}): SchedulableActivity => ({
   activity_id: 'a1',
   title: 'Easy run',
   schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO,WE,FR', time_of_day: '07:00' },
@@ -76,20 +76,20 @@ describe('parseTimeOfDay', () => {
   });
 });
 
-describe('reminderId', () => {
+describe('localNotificationId', () => {
   it('is stable, so a re-sync replaces rather than duplicates', () => {
-    expect(reminderId('a1', 2)).toBe(reminderId('a1', 2));
+    expect(localNotificationId('a1', 2)).toBe(localNotificationId('a1', 2));
   });
 
   it('differs per activity and per weekday', () => {
-    expect(reminderId('a1', 2)).not.toBe(reminderId('a1', 3));
-    expect(reminderId('a1', 2)).not.toBe(reminderId('a2', 2));
+    expect(localNotificationId('a1', 2)).not.toBe(localNotificationId('a1', 3));
+    expect(localNotificationId('a1', 2)).not.toBe(localNotificationId('a2', 2));
   });
 
   it('always yields a positive 32-bit int, which is what the iOS API accepts', () => {
     for (const key of ['a', 'zzzz', 'activity-with-a-very-long-uuid-like-id', '🙂']) {
       for (const wd of [1, 7]) {
-        const id = reminderId(key, wd);
+        const id = localNotificationId(key, wd);
         expect(Number.isInteger(id)).toBe(true);
         expect(id).toBeGreaterThan(0);
         expect(id).toBeLessThanOrEqual(2147483647);
@@ -98,16 +98,16 @@ describe('reminderId', () => {
   });
 });
 
-describe('buildReminders', () => {
+describe('buildLocalNotifications', () => {
   it('produces ONE spec per activity-weekday — repeating, not per occurrence', () => {
-    const out = buildReminders([act()]);
+    const out = buildLocalNotifications([act()]);
     expect(out).toHaveLength(3); // Mon/Wed/Fri, repeating forever = 3 iOS slots
     expect(out.map((r) => r.weekday)).toEqual([2, 4, 6]);
     expect(out.every((r) => r.hour === 7 && r.minute === 0)).toBe(true);
   });
 
   it('skips activities with an unusable time or recurrence, without throwing', () => {
-    const out = buildReminders([
+    const out = buildLocalNotifications([
       act({ activity_id: 'ok' }),
       act({ activity_id: 'no-time', schedule: { recurrence: 'FREQ=DAILY', time_of_day: 'whenever' } }),
       act({ activity_id: 'no-rule', schedule: { recurrence: 'FREQ=WEEKLY', time_of_day: '07:00' } }),
@@ -116,7 +116,7 @@ describe('buildReminders', () => {
   });
 
   it('orders by weekday then time, so truncation drops the far end predictably', () => {
-    const out = buildReminders([
+    const out = buildLocalNotifications([
       act({ activity_id: 'pm', title: 'Lift', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO', time_of_day: '18:00' } }),
       act({ activity_id: 'am', title: 'Run', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO', time_of_day: '06:00' } }),
       act({ activity_id: 'we', title: 'Swim', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=WE', time_of_day: '06:00' } }),
@@ -125,21 +125,21 @@ describe('buildReminders', () => {
   });
 
   it('caps below the iOS ceiling — going over it fails SILENTLY on device', () => {
-    expect(MAX_REMINDERS).toBeLessThan(IOS_PENDING_LIMIT);
+    expect(MAX_LOCAL_NOTIFICATIONS).toBeLessThan(IOS_PENDING_LIMIT);
     const many = Array.from({ length: 40 }, (_, i) =>
       act({ activity_id: `a${i}`, schedule: { recurrence: 'FREQ=DAILY', time_of_day: '07:00' } }),
     );
-    expect(buildReminders(many)).toHaveLength(MAX_REMINDERS); // 40 × 7 = 280 → capped
+    expect(buildLocalNotifications(many)).toHaveLength(MAX_LOCAL_NOTIFICATIONS); // 40 × 7 = 280 → capped
   });
 
   it('writes copy that states the fact and never implies a failure', () => {
-    const bodies = buildReminders([act({ title: 'Easy run' })]).map((r) => r.body);
+    const bodies = buildLocalNotifications([act({ title: 'Easy run' })]).map((r) => r.body);
     expect(bodies[0]).toBe('Easy run today.');
     // Brand: count what happened, never what broke — no streak-shame, no implied failure.
     for (const b of bodies) expect(b).not.toMatch(/miss|streak|don't|behind|fail/i);
   });
 
   it('handles an empty plan', () => {
-    expect(buildReminders([])).toEqual([]);
+    expect(buildLocalNotifications([])).toEqual([]);
   });
 });

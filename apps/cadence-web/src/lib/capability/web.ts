@@ -43,7 +43,7 @@ export const webCapabilities: Capabilities = {
   // and the Notification Triggers proposal (scheduled, page-closed) was never shipped by any
   // browser — so a web "implementation" would be a reminder that silently never arrives.
   // isAvailable() === false lets callers show the right thing instead of failing quietly.
-  reminders: {
+  localNotifications: {
     isAvailable: () => false,
     requestPermission: async () => false,
     sync: async () => 0,
