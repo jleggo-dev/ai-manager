@@ -19,6 +19,7 @@ import healthDigestRoutes from './routes/health-digest.ts';
 import deviceRoutes from './routes/devices.ts';
 import journalRoutes from './routes/journal.ts';
 import devRoutes from './routes/dev.ts';
+import internalRoutes from './routes/internal.ts';
 
 export function createApp() {
   const app = express();
@@ -41,6 +42,8 @@ export function createApp() {
   app.use('/me', meRoutes);
   app.use('/me', healthDigestRoutes);
   app.use('/me', deviceRoutes);
+  // Machine-to-machine (cron). Owns its own shared-secret gate — see routes/internal.ts.
+  app.use('/internal', internalRoutes);
   app.use('/dev', devRoutes);
 
   return app;

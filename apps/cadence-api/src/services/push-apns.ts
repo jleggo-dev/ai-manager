@@ -99,6 +99,16 @@ export async function sendPushToUser(userId: string, title: string, bodyText: st
     if (r.status === 410 || (r.status === 400 && r.reason === 'BadDeviceToken')) {
       await pruneDeadToken(token);
     }
+    // Apple issues environment-SCOPED APNs keys, so the key and the host must agree. This reason
+    // names neither, and the natural reading ("bad token") sends you hunting the wrong thing —
+    // every device would fail, not one. Say what to actually change.
+    if (r.reason === 'BadEnvironmentKeyInToken') {
+      console.error(
+        `[apns] BadEnvironmentKeyInToken — APNS_KEY_ID (${cadenceConfig.apns.keyId}) is not valid for ` +
+          `APNS_ENVIRONMENT=${cadenceConfig.apns.environment}. They are a matched pair: the Sandbox key ` +
+          'goes with development, the Production key with production. Nothing about the device token is wrong.',
+      );
+    }
     results.push(r);
   }
   return results;

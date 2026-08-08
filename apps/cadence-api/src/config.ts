@@ -114,6 +114,16 @@ export const cadenceConfig = {
   },
 
   /**
+   * Shared secret for the scheduler tick (POST /internal/notifications/tick). Set identically on
+   * this API and on whatever drives the cron (GitHub Actions secret, or Vercel cron on Pro).
+   *
+   * UNSET MEANS THE ENDPOINT REFUSES EVERYTHING — it fails closed. An open tick endpoint would
+   * let anyone drain a user's daily notification budget, and an env var missing from one
+   * environment is a normal deployment slip, so the default has to be the safe one.
+   */
+  cronSecret: process.env.CADENCE_CRON_SECRET ?? '',
+
+  /**
    * OpenWeatherMap — server-only (cadenceConfig.weatherApiKey). Never expose via VITE_* or
    * cadence-web. Set in apps/cadence-api/.env locally and the cadence-api Vercel project env.
    * Still wired after WeatherKit landed: it is the FALLBACK when WeatherKit is unconfigured or
