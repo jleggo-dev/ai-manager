@@ -17,6 +17,7 @@
     "@capacitor/core": "^8.5.0",
     "@capacitor/geolocation": "^8.2.0",
     "@capacitor/ios": "^8.5.0",
+    "@capacitor/local-notifications": "^8.2.1",
     "@capacitor/push-notifications": "^8.1.2",
     "capacitor-health": "^8.1.2"
   },

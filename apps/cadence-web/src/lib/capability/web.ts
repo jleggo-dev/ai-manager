@@ -39,6 +39,17 @@ export const webCapabilities: Capabilities = {
         );
       }),
   },
+  // Reminders are native-only. The Web Notifications API can only fire while a page is open,
+  // and the Notification Triggers proposal (scheduled, page-closed) was never shipped by any
+  // browser — so a web "implementation" would be a reminder that silently never arrives.
+  // isAvailable() === false lets callers show the right thing instead of failing quietly.
+  localNotifications: {
+    isAvailable: () => false,
+    requestPermission: async () => false,
+    sync: async () => 0,
+    cancelAll: async () => {},
+    pendingCount: async () => 0,
+  },
   dictation: {
     isAvailable: () => getSpeechRecognitionCtor() !== null,
     createSession: () => {

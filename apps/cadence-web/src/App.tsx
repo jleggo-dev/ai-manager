@@ -18,6 +18,7 @@ import {
 } from './features/dev/BreathingPreview.tsx';
 import { FreeWritePreview } from './features/dev/FreeWritePreview.tsx';
 import { getPlan, setAuthToken, isDevMode, getHealthDigest, postHealthDigest } from './lib/api.ts';
+import { syncPlanLocalNotifications } from './lib/local-notifications-sync.ts';
 import { capabilities } from './lib/capability/index.ts';
 import { maybeRefreshHealthDigest } from './features/onboarding/health-digest.ts';
 import { supabase } from './lib/supabase.ts';
@@ -60,6 +61,11 @@ function CoachApp({ session }: { session: Session | null }) {
     getPlan()
       .then((p) => {
         setScreen(screenFromPlanStage(p.stage));
+        // Reconcile on-device local notifications with the plan we just loaded. Full replace, native-only,
+        // and a no-op without permission — so it is safe to run on every load, and running it
+        // often is the point: a reminder for a session that was replanned away reads as the app
+        // not having listened.
+        void syncPlanLocalNotifications(p.activities);
       })
       .catch(() => setScreen('welcome'));
     // Silent Apple Health refresh (iOS shell, permission already granted): keeps the coach's
