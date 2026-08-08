@@ -58,13 +58,31 @@ export interface DictationCapability {
   createSession(): DictationSession | null;
 }
 
+/**
+ * On-device scheduled reminders (iOS local notifications). Distinct from `push`: these need no
+ * server, no APNs and no network, and they fire exactly on time — but they only know what the
+ * app knew when it last ran. Plan reminders belong here; anything requiring server knowledge
+ * (a re-plan, a week away, a recap) belongs in `push`.
+ */
+export interface RemindersCapability {
+  isAvailable(): boolean;
+  /** iOS shares one permission with push — granting either covers both. */
+  requestPermission(): Promise<boolean>;
+  /** Replace ALL Cadence-owned reminders with exactly these. Idempotent. */
+  sync(specs: ReminderSpec[]): Promise<number>;
+  cancelAll(): Promise<void>;
+  pendingCount(): Promise<number>;
+}
+
 export interface Capabilities {
   health: HealthCapability;
   push: PushCapability;
+  reminders: RemindersCapability;
   location: LocationCapability;
   dictation: DictationCapability;
 }
 
+import type { ReminderSpec } from '@cadence/shared';
 import { Capacitor } from '@capacitor/core';
 import { webCapabilities } from './web.ts';
 import { nativeCapabilities } from './native.ts';

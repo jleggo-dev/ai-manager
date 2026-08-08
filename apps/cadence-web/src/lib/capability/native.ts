@@ -1,5 +1,7 @@
 import { Health } from 'capacitor-health';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import type { ReminderSpec } from '@cadence/shared';
 import { Geolocation } from '@capacitor/geolocation';
 import type { Capabilities, Workout } from './index.ts';
 import { webCapabilities } from './web.ts';
@@ -76,6 +78,51 @@ export const nativeCapabilities: Capabilities = {
         void PushNotifications.register();
       });
     },
+  },
+  /**
+   * On-device plan reminders. No server, no APNs, no network — and exact, because iOS owns the
+   * clock. `repeats: true` with a weekday/hour/minute trigger occupies ONE of the OS's 64
+   * pending slots and fires every week indefinitely, which is what keeps a full plan far below
+   * the ceiling instead of scheduling one notification per occurrence.
+   */
+  reminders: {
+    isAvailable: () => true,
+    requestPermission: async () => {
+      // iOS has a single notification permission — granting it here also covers push, and vice
+      // versa. Asking again when already granted is a no-op, not a second prompt.
+      const res = await LocalNotifications.requestPermissions();
+      return res.display === 'granted';
+    },
+    sync: async (specs: ReminderSpec[]) => {
+      const perm = await LocalNotifications.checkPermissions();
+      if (perm.display !== 'granted') return 0;
+
+      // Cancel-then-schedule, rather than trusting stable ids to overwrite. Ids are a hash and
+      // can collide, and a plan that DROPS an activity leaves an orphan that no id-based upsert
+      // would ever touch — the user would keep being reminded of something no longer in the plan.
+      const pending = await LocalNotifications.getPending();
+      if (pending.notifications.length > 0) {
+        await LocalNotifications.cancel({ notifications: pending.notifications.map((p) => ({ id: p.id })) });
+      }
+      if (specs.length === 0) return 0;
+
+      await LocalNotifications.schedule({
+        notifications: specs.map((r) => ({
+          id: r.id,
+          title: r.title,
+          body: r.body,
+          schedule: { on: { weekday: r.weekday, hour: r.hour, minute: r.minute }, repeats: true, allowWhileIdle: true },
+          extra: { activityId: r.activityId },
+        })),
+      });
+      return specs.length;
+    },
+    cancelAll: async () => {
+      const pending = await LocalNotifications.getPending();
+      if (pending.notifications.length === 0) return;
+      await LocalNotifications.cancel({ notifications: pending.notifications.map((p) => ({ id: p.id })) });
+    },
+    pendingCount: async () => (await LocalNotifications.getPending()).notifications.length,
   },
   location: {
     isAvailable: () => true,
