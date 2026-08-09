@@ -86,6 +86,36 @@ describe('quiet hours are enforced by construction', () => {
     expect(almost.every((s) => s.hour === 6 && s.minute === 45)).toBe(true);
   });
 
+  it('announces a just-after-midnight session the NIGHT BEFORE, not the same night', () => {
+    // 00:05 Tuesday, minus a 15-minute lead, is 23:50 MONDAY. Shifting the clock without shifting
+    // the weekday would fire it ~24 hours late — the whole point of the nudge lost, silently.
+    // Quiet hours are switched off (start === end) so the wrap itself is what is under test.
+    const specs = buildLocalNudges(
+      input({
+        quietStartMin: 0,
+        quietEndMin: 0,
+        activities: [run({ schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU', time_of_day: '00:05' } })],
+      }),
+    );
+    const almost = only(specs, 'almost_time');
+    expect({ weekday: almost.weekday, hour: almost.hour, minute: almost.minute }).toEqual({
+      weekday: 2, // Monday — 1 = Sunday
+      hour: 23,
+      minute: 50,
+    });
+  });
+
+  it('wraps a Sunday-morning session back to Saturday, not to weekday zero', () => {
+    const specs = buildLocalNudges(
+      input({
+        quietStartMin: 0,
+        quietEndMin: 0,
+        activities: [run({ schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=SU', time_of_day: '00:10' } })],
+      }),
+    );
+    expect(only(specs, 'almost_time').weekday).toBe(7); // Saturday, not 0 and not 1
+  });
+
   it('never schedules INSIDE the window, for any activity time, on any tier', () => {
     const hours = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
     const specs = buildLocalNudges(

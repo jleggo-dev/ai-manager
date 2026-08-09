@@ -113,12 +113,26 @@ function emit(
   out.push(category ? { ...spec, actionTypeId: category } : spec);
 }
 
+/**
+ * The weekday a lead-in actually fires on.
+ *
+ * `shiftMinutes` wraps the CLOCK but knows nothing about the calendar, so a session at 00:05 on
+ * Tuesday shifts back to 23:50 — which is Monday night, not Tuesday night. Left uncorrected the
+ * reminder lands almost a full day late. Default quiet hours happen to hide this today, so it is
+ * the kind of thing that stays hidden until someone widens their window.
+ */
+function weekdayForLead(weekday: IosWeekday, minutesOfDay: number, leadMin: number): IosWeekday {
+  if (minutesOfDay - leadMin >= 0) return weekday;
+  return (((weekday - 2 + 7) % 7) + 1) as IosWeekday; // 1 = Sunday … 7 = Saturday, wrapping
+}
+
 /** almost_time — one repeating slot per (timed activity × weekday it recurs on). */
 function addAlmostTime(out: LocalNotificationSpec[], input: NudgePlanInput): void {
   for (const a of input.activities) {
     const time = parseTimeOfDay(a.schedule?.time_of_day);
     if (!time) continue; // untimed activities get no countdown — there is nothing to count to
-    const at = shiftMinutes(time.hour * 60 + time.minute, -ALMOST_TIME_LEAD_MIN);
+    const startMin = time.hour * 60 + time.minute;
+    const at = shiftMinutes(startMin, -ALMOST_TIME_LEAD_MIN);
     const register = nudgeRegister({ area: a.area, category: a.category, title: a.title });
     for (const weekday of weekdaysFromRrule(a.schedule?.recurrence)) {
       const copy = nudgeCopy({
@@ -131,11 +145,13 @@ function addAlmostTime(out: LocalNotificationSpec[], input: NudgePlanInput): voi
         weekday,
       });
       emit(out, input, {
+        // Id and copy stay keyed to the SESSION's weekday so a re-sync replaces the same slot and
+        // the rotating sentence does not change; only the trigger moves to the night before.
         id: specId('almost_time', a.activity_id, weekday),
         kind: 'almost_time',
         activityId: a.activity_id,
         ...copy,
-        weekday,
+        weekday: weekdayForLead(weekday, startMin, ALMOST_TIME_LEAD_MIN),
         date: null,
         hour: at.hour,
         minute: at.minute,
