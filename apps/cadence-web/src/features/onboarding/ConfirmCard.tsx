@@ -108,7 +108,11 @@ export function ConfirmCard({ onEdit, onTellMore }: { onEdit: (step: Step) => vo
   }, []);
 
   if (!data) return null;
-  const baseline: Baseline = { ...data.baseline, constraints: data.baseline?.constraints ?? [], preferences: {} };
+  const baseline: Baseline = {
+    ...data.baseline,
+    constraints: data.baseline?.constraints ?? [],
+    preferences: data.baseline?.preferences ?? {},
+  };
   const about = aboutYouLine(data.name, baseline);
   const avail = availabilityLine(baseline);
   const milestones = data.goals.reduce((n, g) => n + (g.milestones?.length ?? 0), 0);

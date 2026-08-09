@@ -93,8 +93,14 @@ export function OnboardingChat({
   const healthOfferAt = canOfferHealth && !streaming ? findHealthOfferTurn(turns) : -1;
 
   // Let Cadence open her own conversation once the restore has settled and found nothing.
+  // The ref belts what `kickoff`'s own empty-transcript check braces: two opens would mean two
+  // upstream sessions and two greetings, and the guard inside kickoff reads a `turns` captured
+  // before either call had a chance to append to it.
+  const kickedOff = useRef(false);
   useEffect(() => {
-    if (restored && intent === 'onboarding') void kickoff(OPENER);
+    if (!restored || intent !== 'onboarding' || kickedOff.current) return;
+    kickedOff.current = true;
+    void kickoff(OPENER);
     // kickoff no-ops on a restored transcript; re-running it on turn changes would be a loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored, intent]);
