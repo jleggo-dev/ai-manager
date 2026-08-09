@@ -4,6 +4,7 @@ import type { StepLog } from '../state.ts';
 import { TONE } from './tone.ts';
 import { playChime } from './chime.ts';
 import { useBreathClock } from './useBreathClock.ts';
+import { useHandoff } from './useHandoff.ts';
 import { WhatsThis } from './WhatsThis.tsx';
 
 type BreathingLog = Extract<StepLog, { kind: 'breathing' }>;
@@ -50,6 +51,7 @@ export function StepBreathing({
   const [phase, setPhase] = useState<'idle' | 'preroll' | 'running'>('idle');
   const [preroll, setPreroll] = useState(PREROLL);
   const finished = useRef(log ? log.roundsDone >= log.totalRounds : false);
+  const handoff = useHandoff();
   const elapsed = useBreathClock(phase === 'running');
 
   const per = cycleSeconds(pattern);
@@ -72,11 +74,9 @@ export function StepBreathing({
       setPhase('idle');
       playChime();
       onLog({ kind: 'breathing', roundsDone: cycles, totalRounds: cycles, pattern: pattern.id });
-      const t = setTimeout(onDone, 700);
-      return () => clearTimeout(t);
+      handoff.schedule(onDone, 700);
     }
-    return undefined;
-  }, [phase, at.done, cycles, pattern.id, onLog, onDone]);
+  }, [phase, at.done, cycles, pattern.id, onLog, onDone, handoff]);
 
   function primary() {
     if (phase === 'running') {
@@ -85,6 +85,7 @@ export function StepBreathing({
     } else if (phase === 'preroll') {
       setPhase('running');
     } else {
+      handoff.cancel(); // "Go again" inside the 700 ms hand-off means stay here, don't move on.
       finished.current = false;
       setPreroll(PREROLL);
       setPhase('preroll');

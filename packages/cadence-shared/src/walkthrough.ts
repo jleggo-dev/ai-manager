@@ -22,6 +22,7 @@ import { type MeditateBells, clampIntervalMinutes, clampSitMinutes, isMeditateBe
 import { type GroundingGame, type GroundingSpec, groundingSpec, isGroundingGame } from './grounding.ts';
 import { type JournalBankId, isJournalBankId, journalBank, todaysPhrasing } from './journal.ts';
 import { clampFreeWriteMinutes } from './freewrite.ts';
+import { type IntervalPlan, clampIntervalPlan, intervalTotalMinutes } from './interval.ts';
 
 /* ── The tool catalog ────────────────────────────────────────────────────────────────────────
    Three capture classes (see `stepCaptureMode`):
@@ -43,6 +44,11 @@ export interface CircuitExercise {
 export type StepTool =
   | { kind: 'read' }
   | { kind: 'timer'; seconds: number; chime?: boolean }
+  // Intervals — the timer generalised from one phase to a list (warm-up → work/recover × rounds →
+  // cool-down), handing over on its own. The already-clamped PLAN travels with the step, not the
+  // expanded phases: expansion is deterministic arithmetic the renderer can do (`expandIntervalPhases`),
+  // and the edit sheet needs the numbers back anyway to let someone change them before starting.
+  | { kind: 'interval'; plan: IntervalPlan }
   | { kind: 'reps'; sets: number; reps?: number; load?: string }
   // A circuit rotates through its exercises for `rounds` rounds (A,B,A,B) — one cohesive step whose
   // ring is the ROUNDS. Straight sets stay as separate `reps` steps (ring = that exercise's sets).
@@ -109,6 +115,7 @@ export function stepCaptureMode(tool: StepTool): StepCaptureMode {
     // records the rounds or the minutes you did, never anything about the person.
     case 'read':
     case 'timer':
+    case 'interval':
     case 'checkoff':
     case 'breathing':
     case 'meditate':
@@ -133,6 +140,7 @@ export function stepCaptureMode(tool: StepTool): StepCaptureMode {
 
 const DEFAULT_MINUTES: Record<StepToolKind, number> = {
   timer: 1, // timer items always carry a real duration; this is only a floor
+  interval: 9, // an interval run computes its real minutes from the plan; this is only a floor
   reps: 3,
   circuit: 8, // circuits compute their own minutes (rounds × items); this is only a floor
   checkoff: 5,
@@ -153,6 +161,9 @@ const DEFAULT_MINUTES: Record<StepToolKind, number> = {
 function minutesOf(item: SessionItem, tool: StepTool): number {
   if (tool.kind === 'breathing') return totalMinutes(tool.pattern, tool.cycles);
   if (tool.kind === 'meditate') return Math.max(1, Math.round(tool.seconds / 60));
+  // Same rule as breathing: an interval run's length is arithmetic over its own numbers, so a
+  // `duration_min` the coach also wrote down is ignored rather than allowed to contradict the ring.
+  if (tool.kind === 'interval') return intervalTotalMinutes(tool.plan);
   const d = item.duration_min;
   if (typeof d === 'number' && d > 0) return Math.round(d);
   return DEFAULT_MINUTES[tool.kind];
@@ -196,6 +207,21 @@ function meditateTool(item: SessionItem): StepTool {
   };
 }
 
+/** An interval run from the item's five numbers, clamped here so every consumer gets a plan that
+ *  is safe to play (and a run that fits inside an hour). */
+function intervalTool(item: SessionItem): StepTool {
+  return {
+    kind: 'interval',
+    plan: clampIntervalPlan({
+      warmupSec: item.interval_warmup_sec,
+      workSec: item.interval_work_sec,
+      recoverSec: item.interval_recover_sec,
+      rounds: item.interval_rounds,
+      cooldownSec: item.interval_cooldown_sec,
+    }),
+  };
+}
+
 /** A breathing tool from the item's pattern/cycles, resolved and safety-clamped here so every
  *  consumer gets an already-valid step (an unknown pattern degrades to the default, never breaks). */
 function breathingTool(item: SessionItem): StepTool {
@@ -208,19 +234,21 @@ function breathingTool(item: SessionItem): StepTool {
  * judgment quantities can't (a 1-min plank is a `timer`; a 1-min "find a seat" is a `read`). Only
  * when the coach left it unset do we infer — and **tool-specific fields outrank quantities**,
  * because they are unambiguous where quantities never were: `journal_bank` can only mean journal,
- * `grounding_game` only grounding, `meditate_bells` only meditate, `breath_pattern` only breathing.
- * Quantities come after: sets → **reps**, duration → **timer**, distance → **checkoff**, else
- * **read**. The catalog's preamble tells the coach `tool: null` is safe; this ordering is what
+ * `grounding_game` only grounding, `meditate_bells` only meditate, `breath_pattern` only breathing,
+ * `interval_work_sec` only intervals. Quantities come after: sets → **reps**, duration → **timer**,
+ * distance → **checkoff**, else **read**. The catalog's preamble tells the coach `tool: null` is safe; this ordering is what
  * makes that sentence true — before it, a journal item with a duration and no tag silently became
  * a bare timer, and a bank with no duration became `read` (the widget vanished entirely).
  *
- * Bare `duration_min` still means timer, never breathing — "5 minutes of breathing" and "a 5-min
- * hold" are indistinguishable from a duration alone. An explicit `breath_pattern` is not a
- * quantity, so inferring breathing from it keeps that rule intact.
+ * Bare `duration_min` still means timer, never breathing or intervals — "5 minutes of breathing",
+ * "5 minutes of sprints" and "a 5-min hold" are indistinguishable from a duration alone. An
+ * explicit `breath_pattern` or `interval_work_sec` is not a quantity, so inferring from those
+ * keeps that rule intact.
  */
 export function inferTool(item: SessionItem): StepTool {
   if (item.tool) return toolFromKind(item.tool, item);
   if (isJournalBankId(item.journal_bank)) return journalTool(item);
+  if (typeof item.interval_work_sec === 'number' && item.interval_work_sec > 0) return intervalTool(item);
   if (isGroundingGame(item.grounding_game)) return groundingTool(item);
   if (isMeditateBells(item.meditate_bells)) return meditateTool(item);
   if (isBreathPatternId(item.breath_pattern)) return breathingTool(item);
@@ -249,6 +277,8 @@ function toolFromKind(kind: SessionItemTool, item: SessionItem): StepTool {
   switch (kind) {
     case 'timer':
       return { kind: 'timer', seconds: item.duration_min ? Math.round(item.duration_min * 60) : 60, chime: true };
+    case 'interval':
+      return intervalTool(item);
     case 'reps':
       return repsTool(item);
     case 'checkoff':

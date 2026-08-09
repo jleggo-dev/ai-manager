@@ -26,6 +26,7 @@
 import { BREATH_PATTERNS, cycleSeconds, clampCycles, patternById } from './breathing.ts';
 import { GROUNDING_NAMES, isGroundingGame, type GroundingGame } from './grounding.ts';
 import { clampSitMinutes } from './meditate.ts';
+import { clampIntervalPlan, intervalShorthand, intervalTotalMinutes } from './interval.ts';
 import { clampFreeWriteMinutes } from './freewrite.ts';
 import type { SessionItemTool } from './types/occurrence.ts';
 
@@ -103,6 +104,9 @@ export function journalOpener(params: Record<string, string | number | undefined
  * Returns `undefined` when there is nothing honest to say (a plan activity we don't own the
  * parameters for), and the row simply shows no meta.
  */
+/** A param value as a number, or undefined — the menu's params are loosely typed by design. */
+const numberOr = (v: string | number | undefined): number | undefined => (typeof v === 'number' ? v : undefined);
+
 export function nowMenuMeta(action: NowMenuAction): string | undefined {
   if (action.kind !== 'tool') return undefined;
   const p = action.params;
@@ -134,6 +138,18 @@ export function nowMenuMeta(action: NowMenuAction): string | undefined {
     case 'timer': {
       const mins = typeof p.duration_min === 'number' ? Math.max(1, Math.round(p.duration_min)) : null;
       return mins ? `${mins} min` : undefined;
+    }
+    case 'interval': {
+      // The shape AND the length, because on this row "intervals" alone tells you nothing about
+      // whether you have time for it — and time is the only question this menu answers.
+      const plan = clampIntervalPlan({
+        warmupSec: numberOr(p.interval_warmup_sec),
+        workSec: numberOr(p.interval_work_sec),
+        recoverSec: numberOr(p.interval_recover_sec),
+        rounds: numberOr(p.interval_rounds),
+        cooldownSec: numberOr(p.interval_cooldown_sec),
+      });
+      return `${intervalShorthand(plan)} · ${intervalTotalMinutes(plan)} min`;
     }
     case 'reps': {
       const sets = typeof p.sets === 'number' ? p.sets : null;

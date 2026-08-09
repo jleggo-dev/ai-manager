@@ -33,7 +33,17 @@ export interface OccurrenceWeather {
  * the full renderable catalog (incl. insight tools placed by the app) lives in walkthrough.ts.
  */
 export type SessionItemTool =
-  'read' | 'timer' | 'reps' | 'checkoff' | 'photo' | 'journal' | 'breathing' | 'meditate' | 'grounding' | 'feeling_log';
+  | 'read'
+  | 'timer'
+  | 'interval'
+  | 'reps'
+  | 'checkoff'
+  | 'photo'
+  | 'journal'
+  | 'breathing'
+  | 'meditate'
+  | 'grounding'
+  | 'feeling_log';
 
 /** How a block's sets flow (REQ8 slice 2). The catalog (tool-catalog.ts) is the authority for the
  *  names; this type is the shape both it and `SessionBlock.mode` share so they can't drift. */
@@ -67,6 +77,21 @@ export interface SessionItem {
   /** `journal` only (REQ9 §4.5) — which question bank to open from. The step shows that bank's
    *  phrasing for today and keeps it with the entry; omit for a blank page. */
   journal_bank?: string;
+  /** `interval` only — seconds of the hard effort in ONE round. The load-bearing field: an item
+   *  carrying it is an interval step even when the coach forgot the tag. Bounds live in
+   *  interval.ts, never in coach output. */
+  interval_work_sec?: number;
+  /** `interval` only — seconds of the breather in one round. 0 (or absent) makes it EMOM-style:
+   *  the chime marks each work start and the rest is whatever is left. */
+  interval_recover_sec?: number;
+  /** `interval` only — how many work/recover rounds run back to back. Clamped, and trimmed
+   *  further if the whole run would exceed the session cap. */
+  interval_rounds?: number;
+  /** `interval` only — seconds of warm-up BEFORE the rounds (outside them, so never multiplied).
+   *  Absent = none, and the player's 5s "get in position" pre-roll takes its job. */
+  interval_warmup_sec?: number;
+  /** `interval` only — seconds of cool-down after the last round. Absent = none. */
+  interval_cooldown_sec?: number;
 }
 
 export interface SessionBlock {

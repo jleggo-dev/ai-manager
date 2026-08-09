@@ -24,6 +24,14 @@
 import type { BlockMode, SessionItem, SessionItemTool } from './types/occurrence.ts';
 import type { StepToolKind } from './walkthrough.ts';
 import { BREATH_PATTERNS, patternCounts } from './breathing.ts';
+import {
+  INTERVAL_TEMPLATES,
+  MAX_INTERVAL_SEC,
+  MAX_ROUNDS,
+  MAX_WORK_SEC,
+  MIN_WORK_SEC,
+  intervalShorthand,
+} from './interval.ts';
 import { DEFAULT_SIT_MINUTES, MAX_SIT_MINUTES, MEDITATE_BELL_KINDS } from './meditate.ts';
 import { GROUNDING_GAMES, GROUNDING_NAMES } from './grounding.ts';
 import { JOURNAL_BANKS, bankFamily, type JournalFamily } from './journal.ts';
@@ -42,7 +50,12 @@ export type ItemField =
   | 'meditate_interval_min'
   | 'grounding_game'
   | 'grounding_bank'
-  | 'journal_bank';
+  | 'journal_bank'
+  | 'interval_work_sec'
+  | 'interval_recover_sec'
+  | 'interval_rounds'
+  | 'interval_warmup_sec'
+  | 'interval_cooldown_sec';
 
 /** Capture class (mirrors `stepCaptureMode`): `guided` = do it, log records only that it happened;
  *  `capture` = the person emits data that BECOMES the log. */
@@ -81,9 +94,31 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
     summary:
       'the passage of time itself IS the task — a held or timed physical effort you watch a clock for (a 1-min plank, a 20-min zone-2 run, a wall sit)',
     notWhen:
-      'do NOT pick timer just because a step has a duration — "a minute to settle in" has a duration but is read. And a MIND practice with a duration is almost never a timer: silent sitting is meditate, and a noticing or attention practice ("notice five things", a noticing walk, being more present) is grounding — there the noticing is the task and the clock is furniture',
+      'do NOT pick timer just because a step has a duration — "a minute to settle in" has a duration but is read. A timer is ONE continuous stretch: work that alternates with rest and repeats (sprints, HIIT, EMOM, Tabata) is interval, and a bare timer there makes the person do the counting the app was built to do. And a MIND practice with a duration is almost never a timer: silent sitting is meditate, and a noticing or attention practice ("notice five things", a noticing walk, being more present) is grounding — there the noticing is the task and the clock is furniture',
     reads: ['duration_min'],
     example: { name: 'Forearm plank', tool: 'timer', duration_min: 1 },
+  },
+  interval: {
+    class: 'guided',
+    summary:
+      'work and recover, alternating, on a clock that runs the whole thing hands-free — sprints, a HIIT finisher, EMOM, Tabata, hill repeats, a rowing pyramid. One press of start and the app hands over between phases with a chime and a colour change, so nobody has to look at the phone mid-effort. Set interval_work_sec and interval_rounds; add interval_recover_sec for a breather (leave it out for EMOM, where the rest is whatever is left of the minute)',
+    notWhen:
+      'ONE effort with no repeat is a timer, not an interval — an interval is the alternation. Different MOVEMENTS each round (burpees, then squats, then a plank) is a circuit block, not this: interval rounds are the same work repeated. Do not also send duration_min — the length is the arithmetic of the numbers you set, and a second figure just contradicts the ring. Warm-up and cool-down are optional and sit OUTSIDE the rounds; leave them out when the session already has its own warm-up block',
+    reads: [
+      'interval_work_sec',
+      'interval_recover_sec',
+      'interval_rounds',
+      'interval_warmup_sec',
+      'interval_cooldown_sec',
+      'detail',
+    ],
+    example: {
+      name: 'Bike sprints',
+      tool: 'interval',
+      interval_work_sec: 40,
+      interval_recover_sec: 20,
+      interval_rounds: 6,
+    },
   },
   checkoff: {
     class: 'guided',
@@ -198,6 +233,9 @@ export function renderToolCatalogBrief(): string {
   }
   lines.push(
     `  breathing patterns: ${BREATH_PATTERNS.map((p) => p.id).join(', ')}.`,
+    `  interval shapes: ${INTERVAL_TEMPLATES.map((t) => `${t.label} (${t.workSec}/${t.recoverSec} × ${t.rounds})`).join(
+      ', ',
+    )} — or any numbers you like.`,
     `  grounding games: ${GROUNDING_GAMES.join(', ')}.`,
     `  journal prompt banks by family: ${(['reflection', 'craft', 'study', 'devotion'] as JournalFamily[])
       .map((f) => `${f} (${JOURNAL_BANKS.filter((b) => bankFamily(b) === f).length})`)
@@ -246,6 +284,27 @@ export function renderCoachToolCatalog(): string {
     lines.push(`  ${fam}:`);
     for (const b of inFamily) lines.push(`    • ${b.id} — ${b.label}`);
   }
+  lines.push(
+    '',
+    'INTERVALS — "interval" is five numbers, all seconds except the round count. There is no shape',
+    'to name and no mode to pick: the familiar ones are just numbers, and anything between them is',
+    'equally legal. Say what this person should actually do.',
+  );
+  for (const t of INTERVAL_TEMPLATES) {
+    const shape = intervalShorthand({
+      warmupSec: 0,
+      workSec: t.workSec,
+      recoverSec: t.recoverSec,
+      rounds: t.rounds,
+      cooldownSec: 0,
+    });
+    lines.push(`  • ${t.label} = ${shape} — ${t.summary}`);
+  }
+  lines.push(
+    `  bounds: work ${MIN_WORK_SEC}-${MAX_WORK_SEC}s, recover 0-${MAX_WORK_SEC}s (0 = EMOM), rounds 1-${MAX_ROUNDS},`,
+    `  warm-up/cool-down 0-900s each. The whole run is capped at ${Math.round(MAX_INTERVAL_SEC / 60)} min — ask for`,
+    '  what you mean and the app trims rounds to fit rather than refusing.',
+  );
   lines.push('', 'GROUNDING GAMES — the only values "grounding_game" accepts:');
   for (const g of GROUNDING_GAMES) lines.push(`  • ${g} — ${GROUNDING_NAMES[g]}`);
   lines.push('  "letters" also reads "grounding_bank": animals | foods | cities.');

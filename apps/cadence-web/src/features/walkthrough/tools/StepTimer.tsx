@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { StepLog } from '../state.ts';
 import { TONE, RING_C } from './tone.ts';
 import { playChime } from './chime.ts';
+import { useHandoff } from './useHandoff.ts';
 
 type TimerLog = Extract<StepLog, { kind: 'timer' }>;
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -12,8 +13,9 @@ const PREROLL = 5;
  * counts m:ss down. Start hands to a **5 s grey pre-roll** (design B3): a cool-grey sweep counting
  * 5→1 with "Get in position", because the phone is on the floor by second two; pre-roll seconds are
  * never logged. At zero the ring resets to full and turns tone, the real clock runs. One tone button
- * toggles Start ⇄ (Skip the count) ⇄ Pause; +1 min / Reset / Chime sit below. The only step that
- * auto-advances: on completion it chimes, logs the full duration, and moves on. Pause captures
+ * toggles Start ⇄ (Skip the count) ⇄ Pause; +1 min / Reset / Chime sit below. One of the steps that
+ * auto-advance (see `useHandoff`): on completion it chimes, logs the full duration, and moves on
+ * without a tap — Reset inside that window keeps you here. Pause captures
  * partial elapsed (recap shows partial, not skipped); Resume skips the pre-roll.
  */
 export function StepTimer({
@@ -36,6 +38,7 @@ export function StepTimer({
   const [elapsed, setElapsed] = useState(log?.done ? seconds : (log?.elapsedSec ?? 0));
   const [chimeOn, setChimeOn] = useState(chime);
   const finished = useRef(log?.done ?? false);
+  const handoff = useHandoff();
   const remaining = Math.max(0, seconds - elapsed);
 
   useEffect(() => {
@@ -61,11 +64,9 @@ export function StepTimer({
       setPhase('idle');
       if (chimeOn) playChime();
       onLog({ kind: 'timer', elapsedSec: seconds, targetSec: seconds, done: true });
-      const t = setTimeout(onDone, 600);
-      return () => clearTimeout(t);
+      handoff.schedule(onDone, 600);
     }
-    return undefined;
-  }, [phase, elapsed, seconds, chimeOn, onLog, onDone]);
+  }, [phase, elapsed, seconds, chimeOn, onLog, onDone, handoff]);
 
   function primary() {
     if (phase === 'running') {
@@ -188,6 +189,7 @@ export function StepTimer({
           <button
             style={secBtn}
             onClick={() => {
+              handoff.cancel(); // Reset inside the 600 ms hand-off means stay here, don't move on.
               setPhase('idle');
               finished.current = false;
               setElapsed(0);

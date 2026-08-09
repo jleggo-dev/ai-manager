@@ -8,6 +8,7 @@ import {
   SESSION_TOOL_KINDS,
   clampCycles,
   clampIntervalMinutes,
+  clampIntervalPlan,
   clampSitMinutes,
   isBreathPatternId,
   isGroundingGame,
@@ -68,6 +69,36 @@ export const groundingGameOf = (v: unknown): string | undefined =>
   typeof v === 'string' && isGroundingGame(v) ? v : undefined;
 
 /**
+ * The five interval numbers, resolved together (they only make sense as a set — the round count is
+ * trimmed against the work/recover length) and written back only for an item that actually IS an
+ * interval. An item that says `tool: 'interval'` but names no work length still gets the defaults
+ * stored, so a stored session always holds a plan the player can run.
+ */
+export const intervalFieldsOf = (
+  i: Record<string, unknown>,
+): Pick<
+  SessionItem,
+  'interval_work_sec' | 'interval_recover_sec' | 'interval_rounds' | 'interval_warmup_sec' | 'interval_cooldown_sec'
+> => {
+  const declared = i.tool === 'interval' || num(i.interval_work_sec) !== undefined;
+  if (!declared) return {};
+  const plan = clampIntervalPlan({
+    warmupSec: num(i.interval_warmup_sec) ?? 0,
+    workSec: num(i.interval_work_sec),
+    recoverSec: typeof i.interval_recover_sec === 'number' ? i.interval_recover_sec : undefined,
+    rounds: num(i.interval_rounds),
+    cooldownSec: num(i.interval_cooldown_sec) ?? 0,
+  });
+  return {
+    interval_work_sec: plan.workSec,
+    interval_recover_sec: plan.recoverSec,
+    interval_rounds: plan.rounds,
+    interval_warmup_sec: plan.warmupSec,
+    interval_cooldown_sec: plan.cooldownSec,
+  };
+};
+
+/**
  * App-side contract assertion: coerce whatever the model returned into a bounded,
  * render-safe OccurrenceSession — or null if there's nothing usable.
  * video_query is mechanically de-URLed: the client builds YouTube SEARCH links itself, and a
@@ -103,6 +134,7 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
             meditate_bells: meditateBellsOf(i.meditate_bells),
             grounding_game: groundingGameOf(i.grounding_game),
             grounding_bank: str(i.grounding_bank, 20),
+            ...intervalFieldsOf(i),
             // Bounded here too, so a stored session never holds an out-of-range sit.
             meditate_interval_min:
               num(i.meditate_interval_min) === undefined
