@@ -5,21 +5,14 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  buildLocalNotifications,
   parseTimeOfDay,
   localNotificationId,
+  shiftMinutes,
+  specMinutes,
   weekdaysFromRrule,
   MAX_LOCAL_NOTIFICATIONS,
   IOS_PENDING_LIMIT,
-  type SchedulableActivity,
 } from './local-notifications.ts';
-
-const act = (over: Partial<SchedulableActivity> = {}): SchedulableActivity => ({
-  activity_id: 'a1',
-  title: 'Easy run',
-  schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO,WE,FR', time_of_day: '07:00' },
-  ...over,
-});
 
 describe('weekdaysFromRrule', () => {
   it('maps BYDAY to iOS numbering — Sunday is 1, not 0, and not Monday-first', () => {
@@ -98,48 +91,25 @@ describe('localNotificationId', () => {
   });
 });
 
-describe('buildLocalNotifications', () => {
-  it('produces ONE spec per activity-weekday — repeating, not per occurrence', () => {
-    const out = buildLocalNotifications([act()]);
-    expect(out).toHaveLength(3); // Mon/Wed/Fri, repeating forever = 3 iOS slots
-    expect(out.map((r) => r.weekday)).toEqual([2, 4, 6]);
-    expect(out.every((r) => r.hour === 7 && r.minute === 0)).toBe(true);
+describe('shiftMinutes / specMinutes', () => {
+  it('places a nudge relative to another clock time', () => {
+    expect(shiftMinutes(7 * 60, -15)).toEqual({ hour: 6, minute: 45 });
+    expect(shiftMinutes(21 * 60, -45)).toEqual({ hour: 20, minute: 15 });
   });
 
-  it('skips activities with an unusable time or recurrence, without throwing', () => {
-    const out = buildLocalNotifications([
-      act({ activity_id: 'ok' }),
-      act({ activity_id: 'no-time', schedule: { recurrence: 'FREQ=DAILY', time_of_day: 'whenever' } }),
-      act({ activity_id: 'no-rule', schedule: { recurrence: 'FREQ=WEEKLY', time_of_day: '07:00' } }),
-    ]);
-    expect([...new Set(out.map((r) => r.activityId))]).toEqual(['ok']);
+  it('wraps the day in BOTH directions rather than going negative', () => {
+    // A 00:10 session's 15-minute lead is 23:55 the night before, not minute -5.
+    expect(shiftMinutes(10, -15)).toEqual({ hour: 23, minute: 55 });
+    expect(shiftMinutes(23 * 60 + 50, 20)).toEqual({ hour: 0, minute: 10 });
   });
 
-  it('orders by weekday then time, so truncation drops the far end predictably', () => {
-    const out = buildLocalNotifications([
-      act({ activity_id: 'pm', title: 'Lift', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO', time_of_day: '18:00' } }),
-      act({ activity_id: 'am', title: 'Run', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO', time_of_day: '06:00' } }),
-      act({ activity_id: 'we', title: 'Swim', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=WE', time_of_day: '06:00' } }),
-    ]);
-    expect(out.map((r) => r.activityId)).toEqual(['am', 'pm', 'we']);
+  it('round-trips through specMinutes', () => {
+    expect(specMinutes(shiftMinutes(9 * 60 + 30, 0))).toBe(9 * 60 + 30);
   });
+});
 
-  it('caps below the iOS ceiling — going over it fails SILENTLY on device', () => {
+describe('the iOS ceiling', () => {
+  it('stays below the platform limit — going over it fails SILENTLY on device', () => {
     expect(MAX_LOCAL_NOTIFICATIONS).toBeLessThan(IOS_PENDING_LIMIT);
-    const many = Array.from({ length: 40 }, (_, i) =>
-      act({ activity_id: `a${i}`, schedule: { recurrence: 'FREQ=DAILY', time_of_day: '07:00' } }),
-    );
-    expect(buildLocalNotifications(many)).toHaveLength(MAX_LOCAL_NOTIFICATIONS); // 40 × 7 = 280 → capped
-  });
-
-  it('writes copy that states the fact and never implies a failure', () => {
-    const bodies = buildLocalNotifications([act({ title: 'Easy run' })]).map((r) => r.body);
-    expect(bodies[0]).toBe('Easy run today.');
-    // Brand: count what happened, never what broke — no streak-shame, no implied failure.
-    for (const b of bodies) expect(b).not.toMatch(/miss|streak|don't|behind|fail/i);
-  });
-
-  it('handles an empty plan', () => {
-    expect(buildLocalNotifications([])).toEqual([]);
   });
 });

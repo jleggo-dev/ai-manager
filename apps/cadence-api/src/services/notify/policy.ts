@@ -9,11 +9,19 @@
  * (unknown timezone, missing prefs, malformed window) resolves to "hold", never "send anyway".
  */
 
+import { DEFAULT_NUDGE_TIER, maxPerDayForTier, tierIncludes, type NudgeTier } from '@cadence/shared';
+
 /** Reasons a send is withheld. Persisted on the skipped row so "why didn't I get it?" is answerable. */
-export type SkipReason = 'disabled' | 'kind_muted' | 'quiet_hours' | 'daily_cap' | 'no_devices' | 'not_configured';
+export type SkipReason =
+  'disabled' | 'kind_muted' | 'tier' | 'quiet_hours' | 'daily_cap' | 'no_devices' | 'not_configured';
 
 export interface NotificationPrefs {
   enabled: boolean;
+  /**
+   * How much the coach may say. The dial the user actually sets; `kinds` below is the per-nudge
+   * escape hatch, not the setting. Cumulative — see @cadence/shared's notification catalog.
+   */
+  tier: NudgeTier;
   /** Local wall-clock minutes from midnight. */
   quietStartMin: number;
   quietEndMin: number;
@@ -24,11 +32,24 @@ export interface NotificationPrefs {
 
 export const DEFAULT_PREFS: NotificationPrefs = {
   enabled: false, // opt-in only — the OS prompt is not consent to be messaged forever
+  tier: DEFAULT_NUDGE_TIER,
   quietStartMin: 21 * 60,
   quietEndMin: 7 * 60,
   kinds: {},
   maxPerDay: 3,
 };
+
+/**
+ * The day's send budget: whatever the tier implies, or the stored column, whichever is SMALLER.
+ *
+ * The tier is the real setting — a user at `few` has asked for one thing a day at most, and that
+ * must hold regardless of what 0026's default left in `max_per_day`. Taking the minimum keeps that
+ * column doing the job it was added for (a blunt guard a scheduler bug cannot exceed) instead of
+ * quietly becoming dead weight that nothing reads.
+ */
+export function effectiveMaxPerDay(prefs: NotificationPrefs): number {
+  return Math.min(prefs.maxPerDay, maxPerDayForTier(prefs.tier));
+}
 
 export interface Decision {
   send: boolean;
@@ -115,8 +136,12 @@ export function decide(input: DecisionInput): Decision {
   if (!apnsConfigured) return { send: false, reason: 'not_configured' };
   if (!prefs.enabled) return { send: false, reason: 'disabled' };
   if (prefs.kinds[kind] === false) return { send: false, reason: 'kind_muted' };
+  // The volume dial, above the cap and above quiet hours: a nudge the user did not ask for is not
+  // "held until later", it is not wanted at all, and the recorded reason should say so. Ordering
+  // it after the explicit per-kind mute keeps the more specific answer when both apply.
+  if (!tierIncludes(prefs.tier, kind)) return { send: false, reason: 'tier' };
   if (deviceCount <= 0) return { send: false, reason: 'no_devices' };
-  if (sentToday >= prefs.maxPerDay) return { send: false, reason: 'daily_cap' };
+  if (sentToday >= effectiveMaxPerDay(prefs)) return { send: false, reason: 'daily_cap' };
 
   // Unknown timezone → we cannot prove it is not the middle of their night, so we hold.
   // Treated as quiet hours rather than a distinct reason: the user-facing fix is the same

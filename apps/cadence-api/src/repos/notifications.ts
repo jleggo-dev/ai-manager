@@ -1,18 +1,30 @@
+import { isNudgeTier } from '@cadence/shared';
 import { sql, json } from '../db/sql.ts';
 import { DEFAULT_PREFS, type NotificationPrefs, type SkipReason } from '../services/notify/policy.ts';
 
-/** Prefs + delivery ledger (migration 0026). */
+/** Prefs + delivery ledger (migrations 0026, 0028). */
 
 /** Read prefs, falling back to defaults when the user has no row yet — no backfill needed. */
 export async function getNotificationPrefs(userId: string): Promise<NotificationPrefs> {
   const rows = await sql<
-    { enabled: boolean; quiet_start_min: number; quiet_end_min: number; kinds: unknown; max_per_day: number }[]
-  >`select enabled, quiet_start_min, quiet_end_min, kinds, max_per_day
+    {
+      enabled: boolean;
+      tier: string | null;
+      quiet_start_min: number;
+      quiet_end_min: number;
+      kinds: unknown;
+      max_per_day: number;
+    }[]
+  >`select enabled, tier, quiet_start_min, quiet_end_min, kinds, max_per_day
       from cadence.notification_prefs where user_id = ${userId}`;
   const r = rows[0];
   if (!r) return { ...DEFAULT_PREFS };
   return {
     enabled: r.enabled,
+    // Re-validated on the way out, not trusted from the column. The check constraint is the
+    // guarantee, but a pre-0028 row read by a post-0028 deploy has no tier at all, and falling
+    // back to the default beats handing `null` to a comparison that would then allow nothing.
+    tier: isNudgeTier(r.tier) ? r.tier : DEFAULT_PREFS.tier,
     quietStartMin: r.quiet_start_min,
     quietEndMin: r.quiet_end_min,
     kinds: (r.kinds ?? {}) as Record<string, boolean>,
@@ -25,11 +37,12 @@ export async function upsertNotificationPrefs(userId: string, patch: Partial<Not
   const next = { ...cur, ...patch };
   await sql`
     insert into cadence.notification_prefs
-      (user_id, enabled, quiet_start_min, quiet_end_min, kinds, max_per_day)
-    values (${userId}, ${next.enabled}, ${next.quietStartMin}, ${next.quietEndMin},
+      (user_id, enabled, tier, quiet_start_min, quiet_end_min, kinds, max_per_day)
+    values (${userId}, ${next.enabled}, ${next.tier}, ${next.quietStartMin}, ${next.quietEndMin},
             ${json(next.kinds)}, ${next.maxPerDay})
     on conflict (user_id) do update set
       enabled = excluded.enabled,
+      tier = excluded.tier,
       quiet_start_min = excluded.quiet_start_min,
       quiet_end_min = excluded.quiet_end_min,
       kinds = excluded.kinds,

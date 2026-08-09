@@ -74,10 +74,28 @@ export interface LocalNotificationsCapability {
   pendingCount(): Promise<number>;
 }
 
+/**
+ * The coach's face on a notification (iOS communication notifications).
+ *
+ * Donating an `INSendMessageIntent` makes iOS render Cadence's notifications as messages from a
+ * person: the chosen portrait replaces the app icon, the icon shrinks to a corner badge, and
+ * Cadence appears under "People" in Focus settings so it can be let through Do Not Disturb the
+ * way a person is. Web has no equivalent and reports unavailable, so every caller degrades to a
+ * plain app-icon notification with no branch of its own.
+ */
+export interface CoachIdentityCapability {
+  isAvailable(): boolean;
+  /** Donate the sender identity. Returns whether iOS accepted it. Never throws. */
+  donate(input: { senderName: string; avatarBase64: string }): Promise<boolean>;
+  /** Register the long-press action categories. Idempotent; safe to call on every sync. */
+  registerCategories(): Promise<void>;
+}
+
 export interface Capabilities {
   health: HealthCapability;
   push: PushCapability;
   localNotifications: LocalNotificationsCapability;
+  coachIdentity: CoachIdentityCapability;
   location: LocationCapability;
   dictation: DictationCapability;
 }

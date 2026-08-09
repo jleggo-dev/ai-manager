@@ -1,10 +1,13 @@
--- OPTION (not adopted, not applied) — schedule the notification tick from Postgres.
+-- The notification tick, scheduled from Postgres.
 --
--- Deliberately NOT in migrations/: the scheduler is still an open choice. This is a worked
--- example so the option can be judged on real SQL rather than a description.
+-- Deliberately NOT in migrations/: this enables two extensions and creates a recurring job that
+-- makes outbound HTTP calls from your production database. That is not a thing a migration should
+-- do to you while you are looking elsewhere. Read it, then run it deliberately.
 --
--- NOT auto-applied: this enables two extensions and creates a recurring job that makes outbound
--- HTTP calls from your production database. Read it, then run it deliberately.
+-- STATUS: the four PUSH producers are now live (services/notify/producers/), so a tick does real
+-- work. Until this file is run, nothing schedules it and no push is ever sent — the framework is
+-- complete and idle. The five LOCAL nudges do not depend on any of this: the device schedules them
+-- from the committed plan, so they work with no cron, no APNs and no network.
 --
 -- WHY HERE RATHER THAN VERCEL OR GITHUB ACTIONS
 --   Vercel Hobby caps cron at 2 jobs, ONCE PER DAY — unusable for a tick. (Pro lifts this to 40
@@ -27,9 +30,13 @@ create extension if not exists pg_net;
 -- (user_id, kind, target) — so a double-fire, a retry, or an overlap with a slow previous run
 -- cannot double-send. That is what makes a short interval safe.
 --
--- Every 15 minutes is a deliberate floor, not a maximum: quiet hours and the daily cap are
--- evaluated per user inside the API, so the tick only needs to be frequent enough that a
--- send lands near its intended local time. Finer than this buys nothing and costs invocations.
+-- Every 15 minutes is a deliberate floor, not a maximum: quiet hours, the tier gate and the daily
+-- cap are all evaluated per user inside the API, so the tick only needs to be frequent enough that
+-- a send lands near its intended local time. Finer than this buys nothing and costs invocations.
+--
+-- Fifteen minutes is also comfortably inside the narrowest window any producer uses. `freeze_save`
+-- and `re_entry` only propose between 07:00 and noon LOCAL — five hours wide in every timezone —
+-- so there is no arrangement of the schedule on which a due notification is missed for the day.
 select cron.schedule(
   'cadence-notifications-tick',
   '*/15 * * * *',

@@ -1,14 +1,16 @@
 /* ════════════════════════════════════════════════════════════════
-   Plan → local notification reminders (pure; no I/O, no platform)
+   On-device notification primitives (pure; no I/O, no platform)
    ════════════════════════════════════════════════════════════════ */
 
 /**
- * Translates a committed plan's activities into **repeating** on-device reminder specs.
+ * The scheduling vocabulary the device speaks: a spec shape, the RRULE/time parsing that turns a
+ * committed plan into one, and the ceilings iOS imposes. What gets scheduled — which nudges, in
+ * which words, at which tier — lives in `./notifications/`, which builds on these.
  *
  * Why local rather than push: the plan is already on the device, so a reminder for it needs no
  * server, no APNs round trip, and no scheduler. It fires exactly on time, works offline, and
  * costs nothing on any hosting plan. Push is reserved for what only the server can know — a
- * re-plan, a week away, a recap being ready.
+ * freeze that fired overnight, tomorrow's forecast, an absence.
  *
  * Why REPEATING matters: iOS keeps at most **64 pending** local notifications per app and
  * silently drops the rest. A repeating calendar trigger occupies ONE slot and fires forever, so
@@ -16,6 +18,9 @@
  * plan lands around 5-15 slots, comfortably clear of the ceiling — which is only reachable here
  * if a plan has more than 64 distinct weekday/time pairs, and `MAX_LOCAL_NOTIFICATIONS` guards that anyway.
  */
+
+import type { GoalArea } from './types/baseline.ts';
+import type { NudgeKind } from './notifications/kinds.ts';
 
 /** iOS's hard ceiling on pending local notifications, app-wide. */
 export const IOS_PENDING_LIMIT = 64;
@@ -33,18 +38,46 @@ export type IosWeekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export interface LocalNotificationSpec {
   /** Stable across re-syncs so rescheduling replaces rather than duplicates. */
   id: number;
+  /** Which nudge this is — carried through to the device so a tap knows what it answered. */
+  kind: NudgeKind;
+  /** The activity this is about; empty for the plan-level nudges that belong to no single one. */
   activityId: string;
   title: string;
   body: string;
-  weekday: IosWeekday;
   hour: number;
   minute: number;
+  /**
+   * Weekly repeat weekday, or null for a one-shot.
+   *
+   * Both trigger shapes are needed and neither substitutes for the other. A weekly repeat is how a
+   * recurring session gets a reminder forever from a single OS slot. A one-shot is how anything
+   * that depends on TODAY works at all — yesterday's count, a waypoint date, whether something is
+   * still unlogged this evening. A repeat cannot know any of that: it was scheduled once and fires
+   * on a calendar, so a "still fits" nudge on a repeat would keep firing on evenings it was wrong
+   * about. One-shots are re-derived on every plan sync instead.
+   */
+  weekday: IosWeekday | null;
+  /** One-shot calendar date (YYYY-MM-DD); null for a weekly repeat. Exactly one of the two is set. */
+  date: string | null;
+  /** iOS category id registering this nudge's long-press actions, when it has any. */
+  actionTypeId?: string;
+  /**
+   * Payload composed at SCHEDULE time and carried on the notification — notably the pre-computed
+   * lighter version of today. Never computed when the button is tapped: a tap arrives with the app
+   * cold and possibly offline, and a plan worked out in that moment is worked out from whatever
+   * was cached.
+   */
+  extra?: Record<string, unknown>;
 }
 
 export interface SchedulableActivity {
   activity_id: string;
   title: string;
   schedule: { recurrence: string; time_of_day?: string };
+  /** The goal area behind this activity, when known — picks the copy register, never shown. */
+  area?: GoalArea | null;
+  /** The activity's free-text category, a second (weaker) signal for the same choice. */
+  category?: string | null;
 }
 
 /** RRULE BYDAY tokens → iOS weekday numbers. */
@@ -114,41 +147,16 @@ export function localNotificationId(activityId: string, weekday: number): number
 }
 
 /**
- * Copy for one reminder. Deterministic, not LLM-written: a notification is the lowest-context,
- * highest-stakes surface Cadence has, and it must never imply the user failed at something.
- * Brand rules that apply here — count what happened never what broke, no streak-shame, plain
- * words — leave very little room, which is exactly why this is a template and not a prompt.
+ * Minutes-from-midnight for a spec's own clock time — the arithmetic the quiet-hours clamp and the
+ * ordering both need, in one place so they cannot disagree about what "before" means.
  */
-export function localNotificationCopy(activityTitle: string): { title: string; body: string } {
-  return { title: 'Cadence', body: `${activityTitle} today.` };
+export function specMinutes(spec: Pick<LocalNotificationSpec, 'hour' | 'minute'>): number {
+  return spec.hour * 60 + spec.minute;
 }
 
-/**
- * Expand activities into reminder specs. Activities without a usable time or an unsupported
- * recurrence are skipped silently — this runs on every plan load, so it must degrade rather
- * than throw.
- *
- * Ordered by weekday then time so truncation at MAX_LOCAL_NOTIFICATIONS drops the far end of the week
- * predictably instead of an arbitrary subset.
- */
-export function buildLocalNotifications(activities: SchedulableActivity[]): LocalNotificationSpec[] {
-  const out: LocalNotificationSpec[] = [];
-  for (const a of activities) {
-    const time = parseTimeOfDay(a.schedule?.time_of_day);
-    if (!time) continue;
-    for (const weekday of weekdaysFromRrule(a.schedule?.recurrence)) {
-      const { title, body } = localNotificationCopy(a.title);
-      out.push({
-        id: localNotificationId(a.activity_id, weekday),
-        activityId: a.activity_id,
-        title,
-        body,
-        weekday,
-        hour: time.hour,
-        minute: time.minute,
-      });
-    }
-  }
-  out.sort((x, y) => x.weekday - y.weekday || x.hour - y.hour || x.minute - y.minute);
-  return out.slice(0, MAX_LOCAL_NOTIFICATIONS);
+/** Shift a wall-clock minute count by an offset, wrapping the day. Used to place a nudge relative
+ *  to something else on the clock (15 minutes before a session, 45 before quiet hours). */
+export function shiftMinutes(minutes: number, delta: number): { hour: number; minute: number } {
+  const m = (((minutes + delta) % 1440) + 1440) % 1440;
+  return { hour: Math.floor(m / 60), minute: m % 60 };
 }

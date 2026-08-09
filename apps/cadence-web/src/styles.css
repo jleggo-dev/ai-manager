@@ -655,6 +655,46 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
 .set-danger-go { flex: 0 0 auto; }
 .set-danger-go:disabled { opacity: .45; }
 
+/* ── Notifications: the volume dial (Settings) ───────────────── */
+/* Three discrete promises, not a slider: there is no meaningful position between "few" and
+   "moderate", and a slider would invent one. */
+.tier-dial { display: flex; gap: 6px; margin-bottom: 10px; }
+.tier-seg { flex: 1; display: flex; flex-direction: column; gap: 1px; align-items: center; text-align: center;
+  background: var(--surface); border: 1px solid var(--line-soft); border-radius: 13px; padding: 9px 6px; }
+.tier-seg:hover:not(:disabled) { border-color: var(--forest); }
+.tier-seg b { font-size: 13.5px; font-weight: 700; }
+.tier-seg span { font-size: 10.5px; color: var(--text-mute); line-height: 1.3; }
+.tier-seg-on { border-color: var(--forest); background: rgba(44, 85, 69, .08); }
+.tier-seg-on b, .tier-seg-on span { color: var(--forest); }
+
+/* The card is the promise. It lists what the tier leaves out as prominently as what it includes —
+   a setting that only shows what you gain is a sales page. */
+.tier-means { background: var(--surface-2); border-radius: 13px; padding: 11px 13px; margin-bottom: 10px; }
+.tier-means-t { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; color: var(--forest);
+  margin-bottom: 5px; }
+.tier-means-off { color: var(--text-mute); margin-top: 9px; }
+.tier-means-list { list-style: none; display: flex; flex-direction: column; gap: 3px;
+  font-size: 12.5px; color: var(--text-dim); line-height: 1.4; }
+.tier-means-list span { color: var(--sage); font-weight: 800; margin-right: 2px; }
+.tier-means-list-off { color: var(--text-mute); }
+.tier-means-list-off span { color: var(--text-mute); }
+.tier-means-cap { margin-top: 9px; font-size: 12px; font-weight: 600; color: var(--text-dim); }
+
+/* Quiet hours. The START is also the bedtime signal the before-quiet-hours nudge counts back
+   from — one setting, so there is no second one to keep in step. */
+.quiet-row { display: block; }
+.quiet-edit { background: var(--surface-2); border-radius: 13px; padding: 11px 13px; margin: -2px 0 8px; }
+.quiet-edit-field { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 13px; color: var(--text-dim); padding: 4px 0; }
+.quiet-edit-field input { font-family: var(--body); font-size: 14px; color: var(--text); padding: 6px 9px;
+  border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface); }
+.quiet-edit-note { margin-top: 6px; font-size: 11.5px; color: var(--text-mute); line-height: 1.45; }
+.quiet-sheet .sheet-body { padding-bottom: 18px; }
+.thead-quiet { background: oklch(92% 0.02 265); color: oklch(40% 0.05 265); font-size: 12px; }
+
+.push-toggle[aria-checked='true'] { border-color: var(--forest); }
+.notif-promise { margin-top: 2px; font-size: 12px; color: var(--text-mute); line-height: 1.5; }
+
 /* ── Progress tab ────────────────────────────────────────────── */
 .prog-card { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 16px; padding: 13px 15px; margin-bottom: 10px; }
 .prog-title { font-family: var(--display); font-weight: 700; font-size: 15px; margin-bottom: 4px; }
