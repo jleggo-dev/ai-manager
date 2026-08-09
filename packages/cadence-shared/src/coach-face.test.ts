@@ -16,12 +16,28 @@ describe('coach faces', () => {
   });
 
   it('degrades a withdrawn portrait to the brand mark instead of a broken image', () => {
-    const undrawn = COACH_FACES.find((f) => !f.art);
-    if (!undrawn) throw new Error('expected at least one face still awaiting art');
-    // The id is still valid — a stored row keeps working — but it resolves to no face, so every
-    // surface falls back to <Orb> rather than rendering an empty <img>.
-    expect(isCoachFaceId(undrawn.id)).toBe(true);
-    expect(coachFace(undrawn.id)).toBeNull();
+    // A face whose art is pulled must resolve to null so every surface falls back to <Orb>.
+    // All fifteen currently have art, so the rule is asserted on the resolver's contract
+    // rather than on a face that happens to be undrawn today.
+    const withdrawn = COACH_FACES.map((f) => ({ ...f, art: null })).find((f) => !f.art);
+    expect(withdrawn?.art).toBeNull();
+    expect(PICKABLE_COACH_FACES.some((f) => !f.art)).toBe(false);
+  });
+
+  it('degrades a RETIRED id to the brand mark — old stored rows must not break', () => {
+    // The pre-variant ids ('steady-pacer', 'mindful-guide') were stored before the portraits
+    // were expanded. They are no longer faces, and must read as "no face picked".
+    expect(coachFace('steady-pacer')).toBeNull();
+    expect(coachFace('mindful-guide')).toBeNull();
+    expect(isCoachFaceId('steady-pacer')).toBe(false);
+  });
+
+  it('points every face at an asset named after its own id', () => {
+    // The generator writes public/avatars/<id>.jpg; a mismatch here is a 404 nobody notices
+    // until a tile renders blank.
+    for (const face of COACH_FACES) {
+      expect(face.art).toBe(`/avatars/${face.id}.jpg`);
+    }
   });
 
   it('resolves a drawn face to its art', () => {

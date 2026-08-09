@@ -6,8 +6,8 @@ import { PICKABLE_COACH_FACES, type CoachFaceId } from '@cadence/shared';
  * **No names under the tiles, on purpose.** Cadence is one coach with one voice; these are
  * pictures. The moment a tile is captioned "Steady Pacer" the grid starts reading as a choice
  * of temperament, and the user reasonably wonders which one remembers them and whether they
- * picked the wrong personality. The names still exist as accessible labels — a screen-reader
- * user needs *some* way to tell four portraits apart — but nothing sighted implies a character.
+ * picked the wrong personality. Accessible labels are positional ("Face 3") for the same
+ * reason, and because a description of a drawn person would be the app asserting who they are.
  *
  * Faces without art aren't rendered as "coming soon" tiles; they're absent (see
  * PICKABLE_COACH_FACES). An unbuildable option is not an option.
@@ -29,7 +29,7 @@ export function CoachFaceGrid({
             type="button"
             role="radio"
             aria-checked={picked}
-            aria-label={face.name}
+            aria-label={face.label}
             className={`cfgrid-tile${picked ? ' is-picked' : ''}`}
             onClick={() => onPick(face.id)}
           >

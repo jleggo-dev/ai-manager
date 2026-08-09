@@ -4,40 +4,63 @@
  * Cadence is ONE coach, with one name and one voice (BRAND.md: "the coach speaks as 'I'").
  * These are **portraits, not personalities** — picking one changes the picture and nothing
  * else: no tone, no copy, no prompt, no plan. That is why nothing here is called a persona,
- * a temperament or a voice; naming it that way is exactly how a picture quietly becomes four
- * different coaches, and the user then has to wonder which one remembers them.
+ * a temperament or a voice; naming it that way is exactly how a picture quietly becomes
+ * fifteen different coaches, and the user then has to wonder which one remembers them.
  *
- * The names below are internal ids and accessibility labels ONLY. The picker renders portraits
- * with no name text under them, so no label on screen can imply a temperament attaches to a
- * face. Rename freely — nothing derives meaning from these strings.
+ * **Why the ids read like categories and the labels don't.** Each id carries the owner's own
+ * vocabulary for the source art (`steady-pacer`, `mindful-guide`, `rhythm-keeper`,
+ * `hearth-anchor` — Body, Mind, Creative, Any). That grouping is a fact about where the
+ * artwork came from, and it keeps ids stable and matched to their asset filenames. It is
+ * deliberately NOT surfaced: the picker renders portraits with no captions, and the
+ * accessible labels are positional, so nothing on screen or in a screen reader implies that
+ * a face carries a temperament — or asserts anything about the person depicted.
+ *
+ * The naming of all of this is an open question (docs/cadence/PLAN.md, "Coach face naming").
+ * Nothing derives meaning from these strings, so renaming is a data edit plus an asset rename.
  *
  * A face is optional. Until someone picks one, every surface falls back to the Metronome Split
  * mark (`<Orb>`) — the product's own voice, which is the honest thing to show when the user
- * hasn't chosen a face rather than assigning them one.
+ * hasn't chosen a face rather than assigning them one. An id that no longer exists resolves the
+ * same way, so withdrawing a portrait degrades to the mark instead of a broken image.
  */
 
-export const COACH_FACE_IDS = ['steady-pacer', 'mindful-guide', 'rhythm-keeper', 'hearth-anchor'] as const;
+export const COACH_FACE_IDS = [
+  'steady-pacer-feminine-1',
+  'steady-pacer-feminine-2',
+  'steady-pacer-masculine-1',
+  'steady-pacer-masculine-2',
+  'steady-pacer-neutral',
+  'mindful-guide-feminine-1',
+  'mindful-guide-feminine-2',
+  'mindful-guide-masculine',
+  'mindful-guide-neutral',
+  'rhythm-keeper-feminine',
+  'rhythm-keeper-masculine',
+  'rhythm-keeper-neutral',
+  'hearth-anchor-feminine',
+  'hearth-anchor-masculine',
+  'hearth-anchor-neutral',
+] as const;
 
 export type CoachFaceId = (typeof COACH_FACE_IDS)[number];
 
 export interface CoachFace {
   id: CoachFaceId;
-  /** Accessibility + internal label. Never rendered as tile text — see the file note. */
-  name: string;
-  /** Public asset path, or null while the portrait is still to be drawn. */
+  /**
+   * Accessible label, never rendered as visible text. Positional on purpose: a sighted user is
+   * choosing from pictures, and a screen-reader user needs the options distinguishable without
+   * the app claiming anything about who is depicted.
+   */
+  label: string;
+  /** Public asset path, or null while a portrait is still to be drawn. */
   art: string | null;
 }
 
-/**
- * The four faces. `art: null` is not a placeholder tile — it removes the face from the picker
- * entirely (see `PICKABLE_COACH_FACES`), so a user is never offered a face that doesn't exist.
- */
-export const COACH_FACES: readonly CoachFace[] = [
-  { id: 'steady-pacer', name: 'Steady Pacer', art: '/avatars/steady-pacer.jpg' },
-  { id: 'mindful-guide', name: 'Mindful Guide', art: '/avatars/mindful-guide.jpg' },
-  { id: 'rhythm-keeper', name: 'Rhythm Keeper', art: null },
-  { id: 'hearth-anchor', name: 'Hearth Anchor', art: null },
-];
+export const COACH_FACES: readonly CoachFace[] = COACH_FACE_IDS.map((id, i) => ({
+  id,
+  label: `Face ${i + 1}`,
+  art: `/avatars/${id}.jpg`,
+}));
 
 /** Faces that can actually be chosen. Art is the gate — no hatched "coming soon" tiles. */
 export const PICKABLE_COACH_FACES: readonly CoachFace[] = COACH_FACES.filter((f) => f.art !== null);
