@@ -18,10 +18,16 @@
  * The naming of all of this is an open question (docs/cadence/PLAN.md, "Coach face naming").
  * Nothing derives meaning from these strings, so renaming is a data edit plus an asset rename.
  *
- * A face is optional. Until someone picks one, every surface falls back to the Metronome Split
- * mark (`<Orb>`) — the product's own voice, which is the honest thing to show when the user
- * hasn't chosen a face rather than assigning them one. An id that no longer exists resolves the
- * same way, so withdrawing a portrait degrades to the mark instead of a broken image.
+ * A face is optional, and `null` always renders the Metronome Split mark (`<Orb>`) — the product's
+ * own voice. An id that no longer exists resolves the same way, so withdrawing a portrait degrades
+ * to the mark instead of a broken image.
+ *
+ * **Who gets a face, and when (owner ruling 2026-08-09).** Onboarding draws one at random when the
+ * user meets Cadence and keeps it. The earlier rule here — never assign a portrait, always start
+ * from the mark — was written for a wizard where the mark was all anyone had seen. It doesn't
+ * survive a product that opens with "Hi, I'm your coach": a logo saying that is a logo pretending
+ * to be a person. So the picker during the plan build opens with her already selected, and `null`
+ * on a live account means someone deliberately chose the mark instead.
  */
 
 export const COACH_FACE_IDS = [

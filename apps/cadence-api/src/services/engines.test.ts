@@ -236,6 +236,25 @@ describe('capture normalizeBaseline (§6.1 — weight lands where the UI reads i
     expect(normalizeBaseline({ weight_lbs: 150 }).weight_unit).toBe('lbs');
   });
 
+  it('keeps availability, in the words people actually use', () => {
+    expect(normalizeBaseline({ time_of_day: 'morning', days_per_week: 3 })).toMatchObject({
+      time_of_day: 'morning',
+      days_per_week: 3,
+    });
+    // The prompt asks for the enum; people say "mornings", "after work", "whenever".
+    expect(normalizeBaseline({ time_of_day: 'Mornings' }).time_of_day).toBe('morning');
+    expect(normalizeBaseline({ time_of_day: 'after work' }).time_of_day).toBe('evening');
+    expect(normalizeBaseline({ time_of_day: 'whenever' }).time_of_day).toBe('flexible');
+  });
+
+  it('drops availability it cannot trust rather than reshaping the week on a guess', () => {
+    expect(normalizeBaseline({ time_of_day: 'Tuesdays at 6' }).time_of_day).toBeUndefined();
+    expect(normalizeBaseline({ days_per_week: 0 }).days_per_week).toBeUndefined();
+    expect(normalizeBaseline({ days_per_week: 9 }).days_per_week).toBeUndefined();
+    expect(normalizeBaseline({ days_per_week: 'three' }).days_per_week).toBeUndefined();
+    expect(normalizeBaseline({ days_per_week: 3.4 }).days_per_week).toBe(3);
+  });
+
   it('passes through age/height and omits weight when none is stated', () => {
     const b = normalizeBaseline({ age: 30, height_cm: 180 });
     expect(b.age).toBe(30);

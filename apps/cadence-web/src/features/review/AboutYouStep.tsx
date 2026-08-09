@@ -1,6 +1,7 @@
-import type { Baseline, Constraint } from '@cadence/shared';
+import { TIMES_OF_DAY, type Baseline, type Constraint } from '@cadence/shared';
 import { updateBaseline, updateName } from '../../lib/api.ts';
 import type { ReviewData } from '../../lib/api.ts';
+import { TIME_OF_DAY_LABELS } from './reviewConstants.ts';
 import { useDraftField } from './useDraftField.ts';
 import { TrashIcon } from './TrashIcon.tsx';
 import {
@@ -145,6 +146,39 @@ export function AboutYouStep({ data, setData, baseline, setBaseline, patchBaseli
                 <option value="lbs">lbs</option>
               </select>
             </div>
+          </label>
+          {/* Availability. Captured from the conversation like everything else here, and editable
+              for the same reason: it is the one pair of answers that decides the SHAPE of the
+              week, so being wrong about it is being wrong about every session in it. */}
+          <label className="wiz-field">
+            <span>When</span>
+            <select
+              className="wiz-sel"
+              value={baseline.time_of_day ?? ''}
+              onChange={(e) => patchBaseline({ time_of_day: (e.target.value || undefined) as Baseline['time_of_day'] })}
+            >
+              <option value="">Not said yet</option>
+              {TIMES_OF_DAY.map((t) => (
+                <option key={t} value={t}>
+                  {TIME_OF_DAY_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="wiz-field">
+            <span>Days a week</span>
+            <select
+              className="wiz-sel"
+              value={baseline.days_per_week ?? ''}
+              onChange={(e) => patchBaseline({ days_per_week: e.target.value ? Number(e.target.value) : undefined })}
+            >
+              <option value="">Not said yet</option>
+              {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
       </div>

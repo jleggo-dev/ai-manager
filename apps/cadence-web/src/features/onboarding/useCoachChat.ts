@@ -22,6 +22,17 @@ export interface CoachTurn {
   text: string;
 }
 
+/**
+ * What the Broker has heard so far, surfaced as it lands rather than saved for the review.
+ * Titles, not a count: "2 goals" tells you the coach heard something, but only the words back
+ * tell you it heard the right thing — and the whole promise is that nothing at review is a surprise.
+ */
+export interface CapturedGoal {
+  id: string;
+  title: string;
+  area: string;
+}
+
 const RECOVER_ATTEMPTS = 6;
 const RECOVER_DELAY_MS = 800;
 
@@ -44,7 +55,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
   const [turns, setTurns] = useState<CoachTurn[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
-  const [captured, setCaptured] = useState(0);
+  const [capturedGoals, setCapturedGoals] = useState<CapturedGoal[]>([]);
   const [restored, setRestored] = useState(false);
   const [foodAction, setFoodAction] = useState<CoachFoodAction | null>(null);
   const sessionId = useRef<string | null>(null);
@@ -52,7 +63,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
   async function refreshCaptured() {
     try {
       const r = await getReview();
-      setCaptured(r.goals.length);
+      setCapturedGoals(r.goals.map((g) => ({ id: g.goal_id, title: g.title, area: g.area })));
     } catch {
       /* ignore */
     }
@@ -113,21 +124,25 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     });
   }
 
-  async function send() {
-    const text = input.trim();
-    if (!text || streaming) return;
-    setInput('');
+  /**
+   * One turn, streamed. `echo: false` is the app opening the conversation on the user's behalf
+   * (they tapped "Say hi") — the coach's question is what they should see, not a synthetic
+   * message in their own voice that they did not write.
+   */
+  async function deliver(text: string, echo: boolean) {
     const window = turnsWindow(turns, text);
-    setTurns((t) => [...t, { role: 'user', text }, { role: 'coach', text: '' }]);
+    setTurns((t) => [...t, ...(echo ? [{ role: 'user' as const, text }] : []), { role: 'coach' as const, text: '' }]);
     setStreaming(true);
-    // Confirm-first food draft in parallel with the coach stream (never blocks reply).
-    void prepareCoachFoodAction({ message: text, window })
-      .then((r) => {
-        if (r.status === 'ok' && r.action) setFoodAction(r.action);
-      })
-      .catch(() => {
-        /* soft-fail — chat still works */
-      });
+    // Confirm-first food draft in parallel with the coach stream (never blocks reply). Only for
+    // something the user actually said — an opener can't be a meal.
+    if (echo)
+      void prepareCoachFoodAction({ message: text, window })
+        .then((r) => {
+          if (r.status === 'ok' && r.action) setFoodAction(r.action);
+        })
+        .catch(() => {
+          /* soft-fail — chat still works */
+        });
     try {
       if (!sessionId.current)
         sessionId.current = (
@@ -150,14 +165,33 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     }
   }
 
+  async function send() {
+    const text = input.trim();
+    if (!text || streaming) return;
+    setInput('');
+    await deliver(text, true);
+  }
+
+  /**
+   * Let the coach speak first. Onboarding used to open with a greeting hard-coded in the client,
+   * which meant the first thing Cadence "said" was a string she had no part in and could not
+   * attach quick picks to. Now the app nudges her and she opens the conversation herself.
+   * No-ops if there is already a transcript, so a restored thread is never re-greeted.
+   */
+  async function kickoff(opener: string) {
+    if (streaming || turns.length) return;
+    await deliver(opener, false);
+  }
+
   return {
     turns,
     input,
     setInput,
     streaming,
-    captured,
+    capturedGoals,
     restored,
     send,
+    kickoff,
     foodAction,
     clearFoodAction: () => setFoodAction(null),
     // Exported for unit tests of recovery / delta helpers without full send path.

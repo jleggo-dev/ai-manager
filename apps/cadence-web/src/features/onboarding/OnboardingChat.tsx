@@ -1,23 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
-import { Orb } from '../../components/Orb.tsx';
-import { MicButton } from '../../components/MicButton.tsx';
+import { useEffect, useMemo, useRef } from 'react';
+import { CoachFace } from '../../components/CoachFace.tsx';
 import { CoachFoodActionSheet } from '../coach/CoachFoodActionSheet.tsx';
+import type { Step } from '../review/reviewConstants.ts';
 import { HealthOfferCard } from './HealthOfferCard.tsx';
 import { findHealthOfferTurn, healthOfferAnswered } from './health-digest.ts';
 import { capabilities } from '../../lib/capability/index.ts';
 import { useCoachChat } from './useCoachChat.ts';
-
-const SendIcon = () => (
-  <svg width="17" height="17" viewBox="0 0 17 17" aria-hidden>
-    <path
-      className="stroke"
-      d="M2 8.5h11M8.5 4l5 4.5-5 4.5"
-      stroke="#fff"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+import { chatProgress, livePicks, viewTurns } from './coachTurns.ts';
+import { ChatTurn } from './ChatTurn.tsx';
+import { ChatComposer } from './ChatComposer.tsx';
+import { QuickPicks } from './QuickPicks.tsx';
+import { CapturedPills } from './CapturedPills.tsx';
+import { ConfirmCard } from './ConfirmCard.tsx';
 
 const GearIcon = () => (
   <svg width="17" height="17" viewBox="0 0 17 17" aria-hidden>
@@ -31,49 +25,79 @@ const GearIcon = () => (
 );
 
 /**
- * The coach chat, Claude-style: the coach speaks in the open (plain full-width text, no bubble);
- * only the user's turns get a bubble, so the type can breathe. Two chromes: 'onboarding' (floating
- * Review pill + the AI disclaimer footer, its own full-screen shell) and 'none' (the Coach TAB,
- * hosted inside MainTabs' .app shell, with a floating settings gear via `onSettings`). Streams the
- * Coach over SSE; the Broker captures goals/equipment in the background. Session/stream logic
- * lives in `useCoachChat` so drop-recovery is unit-testable without this chrome.
+ * What the app says to open the conversation, on the user's behalf.
+ *
+ * Wrapped in `<open>` so the API can drop it from the restored transcript and from the Broker's
+ * capture window (routes/coach.ts, same treatment as `<context`). Without that, reloading mid-
+ * onboarding shows the user a message in their own bubble that they never wrote — and the Broker
+ * would take "the user has just arrived" as something they said.
+ */
+const OPENER = '<open>The user has just arrived and said hello. Open the conversation with your first question.</open>';
+
+const ONGOING_GREETING =
+  "Hey — good to see you 👋 How's your rhythm feeling? If something needs to shift — more, less, a different day — say the word and I'll adjust your plan.";
+
+/**
+ * The coach chat — and, since the v2 redesign, onboarding itself.
+ *
+ * There is no wizard behind this any more. The steps ARE the chat: Cadence asks one question per
+ * turn and ships its answer affordances with it (`QuickPicks`), so she can skip what she already
+ * knows, reorder, or follow up — none of which a client that hard-codes five screens can do. The
+ * client's whole job is to render turns, render whatever picks arrive, and keep the composer
+ * honest about whether it is her turn or yours.
+ *
+ * Two chromes: 'onboarding' (its own full-screen shell with the progress bar, the Broker's live
+ * captures, and the confirmation) and 'none' (the Coach TAB, inside MainTabs' .app shell, with a
+ * floating settings gear). Both use the same turns, the same picks and the same composer —
+ * deliberately, because "one running chat" stops being true the moment the tab is a different chat.
  */
 export function OnboardingChat({
   onReview,
+  onBuild,
   onSettings,
+  onBack,
   intent = 'onboarding',
   chrome = 'onboarding',
 }: {
-  onReview?: () => void;
+  onReview?: (step?: Step) => void;
+  onBuild?: () => void;
   onSettings?: () => void;
+  onBack?: () => void;
   intent?: 'onboarding' | 'ongoing';
   chrome?: 'onboarding' | 'none';
 }) {
-  const { turns, input, setInput, streaming, captured, restored, send, foodAction, clearFoodAction, sessionId } =
-    useCoachChat({
-      intent,
-    });
+  const {
+    turns,
+    input,
+    setInput,
+    streaming,
+    capturedGoals,
+    restored,
+    send,
+    kickoff,
+    foodAction,
+    clearFoodAction,
+    sessionId,
+  } = useCoachChat({ intent });
+
+  const views = useMemo(() => viewTurns(turns), [turns]);
+  const picks = livePicks(views, streaming);
+  const progress = chatProgress(views);
+  const confirming = picks?.layout === 'confirm';
+  const chatRef = useRef<HTMLDivElement | null>(null);
+
   // Goal-gated Apple Health offer (detour pattern): the card renders under the coach turn that
   // offered it in prose — never unprompted. Gate: iOS shell + not yet answered; the turn index
   // recomputes per render so a streamed re-offer moves the card.
   const canOfferHealth = capabilities.health.isAvailable() && !healthOfferAnswered();
   const healthOfferAt = canOfferHealth && !streaming ? findHealthOfferTurn(turns) : -1;
-  const chatRef = useRef<HTMLDivElement | null>(null);
-  const taRef = useRef<HTMLTextAreaElement | null>(null);
-  const [flash, setFlash] = useState(false);
-  const prevCaptured = useRef(captured);
 
-  // Flash the Review pill when the captured-goal count rises — a new goal was just heard, so pull
-  // the eye to Review. One-shot: add the class, clear it after the animation so it can re-fire.
+  // Let Cadence open her own conversation once the restore has settled and found nothing.
   useEffect(() => {
-    if (captured > prevCaptured.current) {
-      setFlash(true);
-      const t = setTimeout(() => setFlash(false), 1600);
-      prevCaptured.current = captured;
-      return () => clearTimeout(t);
-    }
-    prevCaptured.current = captured;
-  }, [captured]);
+    if (restored && intent === 'onboarding') void kickoff(OPENER);
+    // kickoff no-ops on a restored transcript; re-running it on turn changes would be a loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restored, intent]);
 
   // Scroll only the chat pane — scrollIntoView would pan the page/shell on mobile.
   useEffect(() => {
@@ -81,52 +105,6 @@ export function OnboardingChat({
     if (!chat) return;
     chat.scrollTop = chat.scrollHeight;
   }, [turns]);
-
-  // Auto-grow the composer to fit what's typed, up to ~5 rows (the CSS max-height).
-  useEffect(() => {
-    const ta = taRef.current;
-    if (!ta) return;
-    ta.style.overflowY = 'hidden';
-    ta.style.height = 'auto';
-    const max = parseFloat(getComputedStyle(ta).maxHeight) || Infinity;
-    const overflowing = ta.scrollHeight > max;
-    ta.style.height = `${overflowing ? max : ta.scrollHeight}px`;
-    if (overflowing) ta.style.overflowY = 'auto';
-  }, [input]);
-
-  const composer = (
-    <div className="composer-wrap">
-      <div className="composer">
-        <textarea
-          ref={taRef}
-          className="field"
-          rows={1}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          placeholder="Message your coach…"
-        />
-        {input.trim() ? (
-          <button className="send" onClick={send} disabled={streaming} aria-label="Send">
-            <SendIcon />
-          </button>
-        ) : (
-          <MicButton value={input} onChange={setInput} disabled={streaming} />
-        )}
-      </div>
-      {chrome === 'onboarding' && (
-        <div className="chat-disclaimer">
-          <Orb />
-          <span>{"I'm AI and can make mistakes — please double-check what I say."}</span>
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <div className="chatscreen">
@@ -136,62 +114,92 @@ export function OnboardingChat({
         </button>
       )}
       {chrome === 'onboarding' && (
-        <button
-          className={`float-review${flash ? ' flash' : ''}`}
-          onClick={onReview}
-          title="Confirm what I heard & set your rhythm"
-        >
-          {captured > 0 && <span className="pulse" />}
-          <b>{captured}</b>
-          <span>{captured === 1 ? 'goal' : 'goals'} · Review →</span>
-        </button>
+        <div className="chat-top">
+          {onBack && (
+            <button className="chat-back" onClick={onBack} aria-label="Back">
+              ←
+            </button>
+          )}
+          <div
+            className="chat-prog"
+            role="progressbar"
+            aria-label="How far through we are"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress * 100)}
+          >
+            <i style={{ width: `${Math.round(progress * 100)}%` }} />
+          </div>
+        </div>
       )}
-      <div className="chat" ref={chatRef}>
+
+      <div className={`chat${chrome === 'onboarding' ? ' has-top' : ''}`} ref={chatRef}>
         {!restored ? (
           <div className="chat-loading">
-            <span className="typing">
-              <i />
-              <i />
-              <i />
-            </span>
+            <ChatTurn role="coach" text="" pending />
           </div>
         ) : (
-          <div className="coach-msg">
-            {intent === 'ongoing'
-              ? "Hey — good to see you 👋 How's your rhythm feeling? If something needs to shift — more, less, a different day — say the word and I'll adjust your plan."
-              : "Hi — I'm your coach, Cadence 👋 Tell me what you'd like to work on — a first 10k, eating better, a steadier mind, the daily pages — and I'll take notes as we talk. What's on your mind?"}
-          </div>
+          intent === 'ongoing' && !turns.length && <ChatTurn role="coach" text={ONGOING_GREETING} />
         )}
         {restored &&
-          turns.map((t, i) => (
-            <div key={i} style={{ display: 'contents' }}>
-              {t.role === 'coach' ? (
-                <div className="coach-msg">
-                  {t.text || (
-                    <span className="typing">
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div className="bubble me">{t.text}</div>
-              )}
-              {i === healthOfferAt && <HealthOfferCard sessionId={() => sessionId.current} />}
-            </div>
-          ))}
+          views.map((t, i) => {
+            const last = i === views.length - 1;
+            return (
+              <div key={i} style={{ display: 'contents' }}>
+                <ChatTurn
+                  role={t.role}
+                  text={t.text}
+                  pending={t.role === 'coach' && !t.text}
+                  after={
+                    last && picks ? (
+                      confirming ? (
+                        <ConfirmCard
+                          onEdit={(step) => onReview?.(step)}
+                          onTellMore={() => setInput("There's something you missed — ")}
+                        />
+                      ) : (
+                        <QuickPicks key={i} picks={picks} onCompose={setInput} />
+                      )
+                    ) : null
+                  }
+                />
+                {i === healthOfferAt && <HealthOfferCard sessionId={() => sessionId.current} />}
+              </div>
+            );
+          })}
       </div>
-      {composer}
-      {foodAction && (
-        <CoachFoodActionSheet
-          action={foodAction}
-          onClose={clearFoodAction}
-          onDone={() => {
-            clearFoodAction();
-          }}
+
+      {confirming ? (
+        <div className="composer-wrap">
+          <div className="cfm-bar">
+            <button className="cfm-build" onClick={() => onBuild?.()}>
+              Build it
+            </button>
+            <button className="cfm-change" onClick={() => setInput('Actually, ')}>
+              Change something
+            </button>
+          </div>
+          {/* The disclosure holds through the confirmation — this is the turn where someone is
+              deciding whether to trust what they just read back. */}
+          <div className="chat-disclaimer">
+            <CoachFace size={18} ring={false} />
+            <span>{"I'm AI and can make mistakes — please double-check what I say."}</span>
+          </div>
+        </div>
+      ) : (
+        <ChatComposer
+          value={input}
+          onChange={setInput}
+          onSend={send}
+          streaming={streaming}
+          showDisclaimer={chrome === 'onboarding'}
+          above={
+            chrome === 'onboarding' ? <CapturedPills goals={capturedGoals} onFix={() => onReview?.('goals')} /> : null
+          }
         />
       )}
+
+      {foodAction && <CoachFoodActionSheet action={foodAction} onClose={clearFoodAction} onDone={clearFoodAction} />}
     </div>
   );
 }

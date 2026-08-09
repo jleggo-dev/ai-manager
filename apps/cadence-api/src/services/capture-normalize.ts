@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Constraint } from '@cadence/shared';
+import { isTimeOfDay, type Constraint } from '@cadence/shared';
 
 /**
  * Pure, dependency-free transforms for the capture pipeline (no DB, no engine imports) so the
@@ -15,10 +15,33 @@ const LB_TO_KG = 0.453592;
  * the canonical kg in weight_kg AND the user's unit in weight_unit so the app can display it
  * in the UOM they used (fixes weight landing in a field the UI can't read).
  */
+/**
+ * Availability, from however the Broker phrased it. The prompt asks for the enum, but people say
+ * "mornings" and models echo people, so the obvious plurals and near-misses map rather than drop —
+ * a silently-dropped answer is one the user watched themselves give and then never sees again.
+ */
+function normalizeTimeOfDay(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const v = raw.trim().toLowerCase().replace(/s$/, '');
+  if (isTimeOfDay(v)) return v;
+  if (v === 'am' || v === 'early' || v === 'first thing') return 'morning';
+  if (v === 'lunchtime' || v === 'noon' || v === 'afternoon' || v === 'midday') return 'midday';
+  if (v === 'pm' || v === 'night' || v === 'after work') return 'evening';
+  if (v === 'any' || v === 'anytime' || v === 'whenever' || v === 'varies') return 'flexible';
+  return undefined;
+}
+
 export function normalizeBaseline(raw: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (typeof raw.age === 'number') out.age = raw.age;
   if (typeof raw.height_cm === 'number') out.height_cm = raw.height_cm;
+
+  const tod = normalizeTimeOfDay(raw.time_of_day);
+  if (tod) out.time_of_day = tod;
+  // A week has seven days; anything outside that is the model guessing, and a guess here would
+  // quietly reshape someone's plan.
+  const days = Number(raw.days_per_week);
+  if (Number.isFinite(days) && days >= 1 && days <= 7) out.days_per_week = Math.round(days);
 
   let value: number | undefined;
   let unit: 'kg' | 'lbs' | undefined;

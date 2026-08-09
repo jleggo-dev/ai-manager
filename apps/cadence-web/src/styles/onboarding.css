@@ -1,0 +1,269 @@
+/* Sign-in & onboarding v2 — the fork, meeting the coach, the one running chat, the build, the gate.
+   Split out of styles.css for the same reason coach.css was: one feature, one owner, one file you
+   can delete. Imported after styles.css and coach.css in main.tsx, so it may lean on both.
+
+   Colours are the app's tokens, not the design canvas's raw oklch: the canvas draws in Fraunces +
+   Nunito over its own palette, while the shipped brand typeface is Plus Jakarta Sans (BRAND.md,
+   locked 2026-08-07). Translating rather than importing is deliberate — a second type stack and a
+   parallel palette is how a design system quietly becomes two. */
+
+/* ── The chat: Cadence gets a face and a bubble, the user gets a bubble ─────────────── */
+.chat.has-top { padding-top: 18px; }
+.chat-top { display: flex; align-items: center; gap: 14px; padding: 14px 20px 0; flex: none; }
+.chat-back { font-size: 22px; line-height: 1; color: var(--text-dim); padding: 2px 6px 2px 0; }
+.chat-prog { flex: 1; height: 12px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.chat-prog i {
+  display: block; height: 100%; border-radius: 99px; transition: width .5s ease;
+  background: linear-gradient(180deg, oklch(64% 0.11 152), oklch(54% 0.10 152));
+}
+@media (prefers-reduced-motion: reduce) { .chat-prog i { transition: none; } }
+
+.ct-coach { display: flex; flex-direction: column; gap: 9px; align-self: stretch; }
+.ct-row { display: flex; align-items: flex-start; gap: 11px; }
+.ct-face { box-shadow: 0 3px 0 oklch(36% 0.07 152); }
+.ct-bubble {
+  position: relative; background: var(--surface); border-radius: 16px; padding: 13px 16px;
+  font-size: 15.5px; font-weight: 600; line-height: 1.45; color: oklch(30% 0.03 150);
+  box-shadow: 0 3px 0 var(--line-soft); white-space: pre-wrap; text-wrap: pretty; max-width: 84%;
+}
+.ct-bubble::before {
+  content: ''; position: absolute; top: 17px; left: -5px; width: 11px; height: 11px;
+  background: var(--surface); transform: rotate(45deg);
+}
+/* Answers line up with the bubble's left edge (44px face + 11px gap), so they read as belonging
+   to the question rather than floating in the thread. */
+.ct-after { padding-left: 55px; }
+.ct-me {
+  align-self: flex-end; max-width: 84%; background: var(--surface-2);
+  border-radius: 16px 16px 4px 16px; padding: 11px 14px;
+  font-size: 15px; font-weight: 600; line-height: 1.45; color: oklch(30% 0.03 150); white-space: pre-wrap;
+}
+
+/* ── Quick picks ───────────────────────────────────────────────────────────────────── */
+.qp { display: flex; flex-direction: column; gap: 9px; }
+.qp-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.qp-row, .qp-tile {
+  position: relative; background: var(--surface); cursor: pointer;
+  border: 2.5px solid var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, .05);
+  transition: border-color .15s ease, transform .15s ease;
+}
+.qp-row { display: flex; align-items: center; gap: 11px; text-align: left; border-radius: 14px; padding: 12px 15px; }
+.qp-tile { border-radius: 16px; padding: 16px 12px; text-align: center; }
+.qp-row.is-picked, .qp-tile.is-picked { border-color: var(--forest); transform: translateY(-1px); }
+.qp-row:focus-visible, .qp-tile:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; }
+.qp-label { flex: 1; font-size: 14.5px; font-weight: 700; color: oklch(28% 0.03 150); }
+.qp-tile b { display: block; font-family: var(--display); font-size: 25px; font-weight: 700; color: oklch(28% 0.03 150); }
+.qp-tile span { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 600; color: var(--text-dim); }
+.qp-tile.is-picked span { color: oklch(46% 0.08 152); }
+.qp-dot { width: 11px; height: 11px; flex: none; border-radius: 50%; background: var(--line); }
+.qp-dot.is-movement { background: oklch(62% 0.11 150); }
+.qp-dot.is-nourishment { background: oklch(65% 0.12 100); }
+.qp-dot.is-mind { background: oklch(63% 0.11 35); }
+.qp-dot.is-practice { background: oklch(60% 0.10 300); }
+.qp-check {
+  width: 20px; height: 20px; border-radius: 50%; background: var(--forest); color: #fff;
+  font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none;
+}
+.qp-tile .qp-check { position: absolute; top: 7px; right: 7px; }
+
+/* ── The composer's locked state ───────────────────────────────────────────────────── */
+.composer.is-locked { background: rgba(246, 243, 236, .92); box-shadow: none; }
+.composer.is-locked .field { color: var(--text-mute); }
+.composer .send.is-dead {
+  width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto;
+  background: var(--surface-3); box-shadow: none; opacity: .8;
+}
+/* Same stacking fix as `.cappills`: the AI disclosure sits at the very bottom of the wrap, where
+   the scrim is fully opaque, so static positioning hid it behind the gradient entirely. */
+.chat-disclaimer { position: relative; }
+.chat-disclaimer .cface { flex: 0 0 auto; }
+
+/* ── The Broker's live captures ────────────────────────────────────────────────────── */
+/* `position: relative` so the captures paint ABOVE the composer's scrim pseudo-element, which is
+   absolutely positioned and would otherwise sit over anything static in the same stack. */
+.cappills {
+  position: relative; pointer-events: auto; display: flex; flex-direction: column; gap: 6px; padding: 6px 4px 4px;
+}
+/* The captures ride above the composer inside the same floating stack, so they make that stack
+   taller — and the chat's fixed bottom padding, which was sized for the composer alone, stops
+   clearing it. Without this the last turn scrolls to rest UNDER the pills. */
+.chatscreen:has(.cappills) .chat { padding-bottom: 182px; }
+.cappills-k {
+  font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim);
+}
+.cappills-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.cappill {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  background: var(--surface); border: 2px solid oklch(85% 0.05 152); border-radius: 999px;
+  padding: 5px 11px; font-size: 11.5px; font-weight: 700; color: oklch(42% 0.07 152);
+}
+.cappill:hover { border-color: var(--forest); }
+
+/* ── "Here's everything I've heard" ────────────────────────────────────────────────── */
+.cfm { display: flex; flex-direction: column; gap: 9px; }
+.cfm-sec { background: var(--surface); border-radius: 16px; padding: 12px 15px; box-shadow: 0 1px 3px rgba(0, 0, 0, .05); }
+.cfm-head { display: flex; align-items: center; justify-content: space-between; }
+.cfm-k {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim);
+  padding: 0; text-align: left;
+}
+.cfm-k:disabled { opacity: 1; cursor: default; }
+.cfm-edit { font-size: 11px; font-weight: 800; color: var(--forest); padding: 2px 0 2px 8px; }
+.cfm-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-size: 13.5px; font-weight: 700; color: oklch(30% 0.03 150); }
+.cfm-sum { margin-top: 6px; font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
+.cfm-mute { font-weight: 600; color: var(--text-dim); }
+.cfm-goal-t { display: flex; align-items: center; gap: 9px; }
+.cfm-goal-t span { font-weight: 600; color: var(--text-dim); }
+.cfm-goal-u { font-size: 12px; font-weight: 600; color: var(--text-dim); margin-top: 3px; padding-left: 20px; }
+.cfm-more {
+  background: none; border: 2px dashed var(--line); border-radius: 16px; padding: 10px; cursor: pointer;
+  font-size: 12.5px; font-weight: 800; color: var(--text-dim);
+}
+/* `position: relative` for the same reason as `.cappills` — it replaces the composer inside the
+   floating wrap, and static children lose to the wrap's absolutely-positioned scrim. */
+.cfm-bar { position: relative; pointer-events: auto; display: flex; gap: 9px; }
+.cfm-build, .cfm-change { flex: 1; border-radius: 14px; padding: 13px; font-size: 13.5px; font-weight: 800; }
+.cfm-build {
+  border: none; color: #fff;
+  background: linear-gradient(180deg, oklch(60% 0.10 152) 0%, oklch(52% 0.09 152) 46%);
+  box-shadow: 0 4px 0 oklch(39% 0.08 152);
+}
+.cfm-change { background: var(--surface); border: 2px solid var(--line); box-shadow: 0 3px 0 var(--line-soft); color: var(--forest); }
+
+/* ── "Cadence is working" ──────────────────────────────────────────────────────────── */
+.cwork { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.cwork-mark { position: relative; }
+.cwork-ball {
+  position: absolute; inset: 0; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 34% 28%, #fff 0%, var(--ink) 55%, var(--surface-2) 100%);
+  box-shadow: 0 6px 0 var(--line-soft); animation: cwork-pulse 2.2s ease-in-out infinite;
+}
+.cwork-ball .orb { width: 54%; height: 54%; }
+.cwork-orbit { position: absolute; inset: -14px; animation: cwork-orbit 3.6s linear infinite; }
+.cwork-orbit.cwork-rev { animation-direction: reverse; }
+.cwork-dot { position: absolute; left: 50%; border-radius: 50%; }
+.cwork-day { top: 0; margin-left: -4px; width: 8px; height: 8px; background: var(--sun); }
+.cwork-night { bottom: 0; margin-left: -3px; width: 6px; height: 6px; background: var(--dusk); }
+@keyframes cwork-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.06); opacity: .85; } }
+@keyframes cwork-orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .cwork-ball, .cwork-orbit { animation: none; }
+}
+.cwork-label { margin-top: 14px; font-family: var(--display); font-size: 22px; font-weight: 700; color: oklch(28% 0.03 150); }
+.cwork-note { font-size: 12.5px; font-weight: 600; color: var(--text-dim); text-align: center; }
+
+/* ── The build screen ──────────────────────────────────────────────────────────────── */
+.building { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 44px 24px 28px; overflow-y: auto; }
+.build-say { display: flex; align-items: flex-start; gap: 10px; margin-top: 22px; }
+.build-say p {
+  position: relative; background: var(--surface); border-radius: 14px; padding: 10px 13px;
+  font-size: 12.5px; font-weight: 700; line-height: 1.45; color: oklch(34% 0.03 152);
+  box-shadow: 0 3px 0 var(--line-soft); text-wrap: pretty;
+}
+.build-say p::before {
+  content: ''; position: absolute; top: 14px; left: -5px; width: 11px; height: 11px;
+  background: var(--surface); transform: rotate(45deg);
+}
+.build-say .cface { box-shadow: 0 3px 0 oklch(36% 0.07 152); }
+.build-note { margin-top: 12px; font-size: 12px; font-weight: 600; color: var(--text-dim); line-height: 1.5; text-wrap: pretty; }
+.build-foot { margin-top: auto; padding-top: 22px; text-align: center; font-size: 11.5px; font-weight: 600; color: var(--text-mute); }
+.build-fail { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.build-fail p { font-size: 15px; font-weight: 600; line-height: 1.5; color: var(--text-dim); text-wrap: pretty; }
+.build-fail-acts { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.build-back { font-size: 13.5px; font-weight: 700; color: var(--text-dim); text-decoration: underline; text-underline-offset: 3px; }
+/* The mark tile in the picker: the logo sits inside the plate rather than filling it. */
+.cfgrid-mark { display: grid; place-items: center; background: var(--ink); }
+.cfgrid-mark .orb { width: 52%; height: 52%; }
+
+/* ── The fork ──────────────────────────────────────────────────────────────────────── */
+.fork-acts { display: flex; flex-direction: column; gap: 18px; }
+.fork-block { display: flex; flex-direction: column; gap: 11px; }
+.fork-q { text-align: center; font-size: 16px; font-weight: 800; color: oklch(30% 0.03 150); }
+.fork-signin {
+  width: 100%; border-radius: 16px; padding: 14px; background: var(--surface);
+  border: 2px solid var(--line); box-shadow: 0 3px 0 var(--line-soft);
+  color: var(--forest); font-size: 15px; font-weight: 800;
+}
+.fork-foot { margin-top: 20px; text-align: center; font-size: 11.5px; font-weight: 600; color: var(--text-mute); text-wrap: pretty; }
+
+/* ── Meet Cadence ──────────────────────────────────────────────────────────────────── */
+.meetc { justify-content: space-between; }
+.meetc-top { display: flex; }
+.meetc-mid { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; }
+.meetc-say {
+  position: relative; background: var(--surface); border-radius: 16px; padding: 13px 17px; max-width: 290px;
+  font-size: 14.5px; font-weight: 700; line-height: 1.45; color: oklch(30% 0.03 150); text-align: center;
+  box-shadow: 0 3px 0 var(--line-soft); text-wrap: pretty;
+}
+.meetc-say::after {
+  content: ''; position: absolute; bottom: -6px; left: 50%; margin-left: -6px; width: 12px; height: 12px;
+  background: var(--surface); transform: rotate(45deg);
+}
+.meetc-face { margin-top: 22px; box-shadow: 0 8px 0 oklch(36% 0.07 152); border-width: 3px; }
+.meetc-name { margin-top: 14px; font-size: 13px; font-weight: 800; color: oklch(40% 0.03 150); }
+.meetc-disc {
+  width: 100%; margin-top: 26px; background: var(--surface-2); border-radius: 16px; padding: 13px 16px;
+  display: flex; gap: 11px; align-items: flex-start;
+}
+.meetc-disc p { font-size: 12.5px; font-weight: 600; line-height: 1.5; color: var(--text-dim); text-wrap: pretty; }
+
+/* ── Welcome back: accounts on this device ─────────────────────────────────────────── */
+.acctscreen { align-items: center; }
+.acct-hero { display: flex; flex-direction: column; align-items: center; padding-top: 60px; }
+.acct-hero .orb { width: 84px; height: 84px; }
+.acct-h { font-family: var(--display); font-size: 27px; font-weight: 700; color: oklch(28% 0.03 150); margin-top: 24px; }
+.acct-h-edit { font-size: 22px; margin-top: 52px; }
+.acct-list {
+  width: 100%; margin-top: 26px; background: var(--surface); border-radius: 20px;
+  border: 2px solid var(--line-soft); overflow: hidden;
+}
+.acct-row { display: flex; align-items: center; width: 100%; }
+.acct-row + .acct-row { border-top: 2px solid var(--surface-2); }
+.acct-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 13px; padding: 15px 16px; text-align: left; }
+.acct-main:disabled { opacity: 1; cursor: default; }
+.acct-remove {
+  width: 28px; height: 28px; flex: none; margin-left: 14px; border-radius: 50%;
+  background: var(--danger); color: #fff; font-size: 18px; font-weight: 800; line-height: 1;
+  display: grid; place-items: center;
+}
+.acct-face { width: 46px; height: 46px; flex: none; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+  background: var(--surface); border: 2px solid #fff; box-shadow: 0 3px 0 var(--line-soft); }
+.acct-face img { width: 100%; height: 100%; object-fit: cover; }
+.acct-face .orb { width: 62%; height: 62%; }
+.acct-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.acct-who b { font-size: 15.5px; font-weight: 800; color: oklch(28% 0.03 150); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-who span { font-size: 12.5px; font-weight: 600; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-go { color: var(--text-mute); font-size: 18px; font-weight: 800; }
+.acct-add { padding: 15px 16px; gap: 13px; font-size: 15px; font-weight: 700; color: var(--text-dim); }
+.acct-plus {
+  width: 46px; height: 46px; flex: none; border-radius: 50%; border: 2.5px dashed var(--line);
+  display: grid; place-items: center; color: var(--forest); font-size: 22px; font-weight: 700;
+}
+.acct-msg { margin-top: 14px; text-align: center; }
+.acct-manage {
+  margin-top: auto; margin-bottom: 12px; font-size: 12px; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--forest);
+}
+.acct-foot { margin-bottom: 24px; text-align: center; font-size: 11.5px; font-weight: 600; color: var(--text-dim); text-wrap: pretty; }
+
+/* ── The sign-up gate ──────────────────────────────────────────────────────────────── */
+.gate { gap: 0; }
+.gate-prog { margin-top: 8px; }
+.gate-h { font-family: var(--display); font-size: 26px; font-weight: 700; line-height: 1.2; color: oklch(28% 0.03 150); margin-top: 22px; }
+.gate-plan { margin-top: 16px; opacity: .84; display: flex; flex-direction: column; gap: 12px; }
+.gate-week { background: var(--surface); border-radius: 18px; padding: 14px 16px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.gate-day { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.gate-dl { font-size: 10px; font-weight: 800; color: var(--text-dim); }
+.gate-dbox {
+  width: 100%; height: 44px; border-radius: 10px; background: var(--ink);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+}
+.gate-dbox em { font-style: normal; font-size: 9px; font-weight: 800; color: var(--text-mute); }
+.gate-dot { width: 9px; height: 9px; border-radius: 50%; background: oklch(62% 0.11 150); display: block; }
+.gate-dot.is-system { background: oklch(60% 0.10 300); }
+.gate-lines { background: var(--surface); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 11px; }
+.gate-line { display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 700; color: oklch(30% 0.03 150); }
+.gate-line span { font-weight: 600; color: var(--text-dim); }
+.gate .auth { padding: 0; }
+.auth-upgrade { margin-top: 18px; }
+.auth-foot { margin-top: 12px; text-align: center; font-size: 11.5px; font-weight: 600; color: var(--text-mute); text-wrap: pretty; }

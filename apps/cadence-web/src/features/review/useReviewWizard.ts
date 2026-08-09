@@ -39,14 +39,18 @@ export function useReviewWizard({
   mode,
   onBack,
   onLocked,
+  initialStep = 'goals',
 }: {
   mode: ReviewMode;
   onBack: () => void;
   onLocked: () => void;
+  /** Where to open. The chat's confirmation deep-links here — "edit" beside a section should
+   *  land ON that section, not at step one of a wizard the user didn't ask to walk. */
+  initialStep?: Step;
 }) {
   const ORDER = mode === 'manage' ? MANAGE_ORDER : ONBOARD_ORDER;
   const [data, setData] = useState<ReviewData | null>(null);
-  const [step, setStep] = useState<Step>('goals');
+  const [step, setStep] = useState<Step>(ORDER.includes(initialStep) ? initialStep : 'goals');
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<PlanPreview | null>(null);
   const [msg, setMsg] = useState('');

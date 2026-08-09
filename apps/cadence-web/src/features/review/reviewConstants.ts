@@ -1,4 +1,4 @@
-import type { EquipmentCategory, Goal, GoalArea, GoalAssessment, GoalType } from '@cadence/shared';
+import type { EquipmentCategory, Goal, GoalArea, GoalAssessment, GoalType, TimeOfDay } from '@cadence/shared';
 
 export type Step = 'goals' | 'you' | 'gear' | 'face' | 'lock';
 
@@ -18,6 +18,14 @@ export const LABELS: Record<Step, string> = {
   gear: 'Tools',
   face: 'Your Cadence',
   lock: 'Set your rhythm',
+};
+
+/** How availability reads in the UI. "Flexible" is a real answer, not a missing one. */
+export const TIME_OF_DAY_LABELS: Record<TimeOfDay, string> = {
+  morning: 'Mornings work best',
+  midday: 'Middays work best',
+  evening: 'Evenings work best',
+  flexible: 'Any time works',
 };
 
 export const GOAL_AREAS: GoalArea[] = ['movement', 'nourishment', 'mind', 'practice'];

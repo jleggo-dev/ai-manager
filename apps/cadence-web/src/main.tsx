@@ -5,6 +5,9 @@ import './styles.css';
 // After styles.css on purpose: the coach-face rules fill in portraits on placements whose
 // geometry (the header plate, the trail bay disc) is already defined there.
 import './styles/coach.css';
+// Last: the v2 sign-in/onboarding rules lean on both of the above (the chat shell from styles.css,
+// the portrait chip and picker from coach.css).
+import './styles/onboarding.css';
 import { App } from './App.tsx';
 import { createAppQueryClient } from './lib/query/index.ts';
 import { initNativeAuth } from './lib/native-auth.ts';
