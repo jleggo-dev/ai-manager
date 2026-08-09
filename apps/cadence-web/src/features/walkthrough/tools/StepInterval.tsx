@@ -15,6 +15,7 @@ import { formatClock } from './timer.ts';
 import { ringSegments } from './intervalRing.ts';
 import { useIntervalClock } from './useIntervalClock.ts';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
+import { useHandoff } from './useHandoff.ts';
 import { HandsFree } from './HandsFree.tsx';
 import { IntervalEditSheet } from './IntervalEditSheet.tsx';
 import { WhatsThis } from './WhatsThis.tsx';
@@ -96,6 +97,7 @@ export function StepInterval({
   const [skippedWork, setSkippedWork] = useState<readonly number[]>([]);
   const finished = useRef(status === 'done');
   const lastPhase = useRef(-1);
+  const handoff = useHandoff();
 
   const { elapsed, start, pause, reset, seek } = useIntervalClock(log?.elapsedSec ?? 0);
   const phases = useMemo(() => expandIntervalPhases(plan), [plan]);
@@ -144,12 +146,6 @@ export function StepInterval({
   onDoneRef.current = onDone;
   const emitRef = useRef(emit);
   emitRef.current = emit;
-  // The hand-off timer is held in a ref and cleared only on UNMOUNT — deliberately not returned as
-  // this effect's cleanup. The effect's own `setStatus('done')` changes its deps, so a cleanup here
-  // would run half a millisecond later and cancel the very advance it just scheduled; the step
-  // would sit on "All done" forever. `finished.current` is what guarantees it fires exactly once.
-  const advance = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => (advance.current ? clearTimeout(advance.current) : undefined), []);
   useEffect(() => {
     if (status !== 'live' || !at.done || finished.current) return;
     finished.current = true;
@@ -157,8 +153,9 @@ export function StepInterval({
     setStatus('done');
     if (chimeOn) playTones(CHIME_DONE);
     emitRef.current(true);
-    advance.current = setTimeout(() => onDoneRef.current(), 600);
-  }, [status, at.done, chimeOn, pause]);
+    // Never `return () => clearTimeout(...)` here — see useHandoff for why that cancels itself.
+    handoff.schedule(() => onDoneRef.current(), 600);
+  }, [status, at.done, chimeOn, pause, handoff]);
 
   /* ── the frame colours, handed to the shell; released when the step goes away ── */
   useEffect(() => {
@@ -191,6 +188,8 @@ export function StepInterval({
   }
 
   function restart() {
+    // Restart inside the 600 ms hand-off means stay here — don't move on to the next step.
+    handoff.cancel();
     finished.current = false;
     lastPhase.current = -1;
     setSkipped(0);
