@@ -3,10 +3,13 @@ import type { StepLog } from '../state.ts';
 import { TONE, RING_C } from './tone.ts';
 import { playChime } from './chime.ts';
 import { useHandoff } from './useHandoff.ts';
+import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
+import { HandsFree } from './HandsFree.tsx';
 
 type TimerLog = Extract<StepLog, { kind: 'timer' }>;
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 const PREROLL = 5;
+const TIMER_COMMANDS: HandsFreeCommand[] = ['start', 'pause', 'restart'];
 
 /**
  * Timer tool (walkthrough v2, design E) — the ring is the clock (one continuous arc), the centre
@@ -39,6 +42,7 @@ export function StepTimer({
   const [chimeOn, setChimeOn] = useState(chime);
   const finished = useRef(log?.done ?? false);
   const handoff = useHandoff();
+  const [voiceOn, setVoiceOn] = useState(false);
   const remaining = Math.max(0, seconds - elapsed);
 
   useEffect(() => {
@@ -68,6 +72,13 @@ export function StepTimer({
     }
   }, [phase, elapsed, seconds, chimeOn, onLog, onDone, handoff]);
 
+  function reset() {
+    handoff.cancel(); // Reset inside the 600 ms hand-off means stay here, don't move on.
+    setPhase('idle');
+    finished.current = false;
+    setElapsed(0);
+  }
+
   function primary() {
     if (phase === 'running') {
       setPhase('idle');
@@ -81,6 +92,19 @@ export function StepTimer({
       setPhase('preroll');
     }
   }
+
+  // No "skip" here: a countdown is one phase, so there is nothing to skip TO. Offering the word
+  // and then ignoring it is worse than not offering it (see useHandsFree's `accepted`).
+  const voice = useHandsFree(
+    voiceOn,
+    (command: HandsFreeCommand) => {
+      if (command === 'restart') reset();
+      else if (command === 'pause') {
+        if (phase === 'running') primary();
+      } else if (phase !== 'running') primary();
+    },
+    TIMER_COMMANDS,
+  );
 
   const isPre = phase === 'preroll';
   const frac = isPre ? preroll / PREROLL : seconds > 0 ? elapsed / seconds : 0;
@@ -186,15 +210,7 @@ export function StepTimer({
           <button style={secBtn} onClick={() => setElapsed((e) => Math.max(0, e - 60))}>
             +1 min
           </button>
-          <button
-            style={secBtn}
-            onClick={() => {
-              handoff.cancel(); // Reset inside the 600 ms hand-off means stay here, don't move on.
-              setPhase('idle');
-              finished.current = false;
-              setElapsed(0);
-            }}
-          >
+          <button style={secBtn} onClick={reset}>
             Reset
           </button>
           <button style={{ ...secBtn, ...(chimeOn ? chimeOnStyle : null) }} onClick={() => setChimeOn((v) => !v)}>
@@ -202,6 +218,8 @@ export function StepTimer({
           </button>
         </div>
       )}
+
+      <HandsFree state={voice} on={voiceOn} onToggle={() => setVoiceOn((v) => !v)} />
 
       <div style={footnote}>
         Logs {Math.round(seconds / 60) || 1} min and {nextTitle ? `moves to ${nextTitle} on its own` : 'moves on'} when

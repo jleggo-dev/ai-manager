@@ -5,11 +5,15 @@ import { TONE } from './tone.ts';
 import { playChime } from './chime.ts';
 import { useBreathClock } from './useBreathClock.ts';
 import { useHandoff } from './useHandoff.ts';
+import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
+import { HandsFree } from './HandsFree.tsx';
 import { WhatsThis } from './WhatsThis.tsx';
 
 type BreathingLog = Extract<StepLog, { kind: 'breathing' }>;
 
 const PREROLL = 5;
+/** No "skip": a pattern's phases are the practice, and skipping one is not a thing you do. */
+const BREATH_COMMANDS: HandsFreeCommand[] = ['start', 'pause', 'restart'];
 /** The form breathes between these radii — big enough to follow at arm's length, small enough to
  *  leave the phase label readable inside it. */
 const R_MIN = 46;
@@ -52,6 +56,7 @@ export function StepBreathing({
   const [preroll, setPreroll] = useState(PREROLL);
   const finished = useRef(log ? log.roundsDone >= log.totalRounds : false);
   const handoff = useHandoff();
+  const [voiceOn, setVoiceOn] = useState(false);
   const elapsed = useBreathClock(phase === 'running');
 
   const per = cycleSeconds(pattern);
@@ -91,6 +96,18 @@ export function StepBreathing({
       setPhase('preroll');
     }
   }
+
+  // "pause" maps to Stop here: a breath pattern half-finished is a partial round, not a paused
+  // one (see useBreathClock), so the honest action for the word is to end and log what was done.
+  const voice = useHandsFree(
+    voiceOn,
+    (command: HandsFreeCommand) => {
+      if (command === 'pause') {
+        if (phase === 'running') primary();
+      } else if (phase !== 'running') primary();
+    },
+    BREATH_COMMANDS,
+  );
 
   const isPre = phase === 'preroll';
   const isRun = phase === 'running';
@@ -155,6 +172,8 @@ export function StepBreathing({
       </button>
 
       {caution ? <div style={cautionLine}>{caution}</div> : null}
+
+      <HandsFree state={voice} on={voiceOn} onToggle={() => setVoiceOn((v) => !v)} />
 
       {/* Only before you start — an explanation offered mid-breath is an interruption. */}
       {!isRun && <WhatsThis text={pattern.how} />}

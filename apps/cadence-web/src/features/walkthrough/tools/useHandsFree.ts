@@ -20,22 +20,46 @@ import { useEffect, useRef, useState } from 'react';
  * "Restart" is the one destructive-ish word, so it asks once ("Say restart again to confirm")
  * rather than throwing away a run someone is four rounds into.
  */
-export type HandsFreeCommand = 'start' | 'pause' | 'skip' | 'restart';
+export type HandsFreeCommand = 'start' | 'pause' | 'skip' | 'next' | 'restart';
 
-/** The grammar, loosest phrasings first. Matched as a substring of the transcript, so "okay,
- *  pause" and "pause it" both land. Synonyms are the words people actually shout. */
+/**
+ * The grammar. Matched as a substring of the transcript, so "okay, pause" and "pause it" both
+ * land; the synonyms are the words people actually shout.
+ *
+ * `skip` and `next` are deliberately separate commands rather than synonyms, because they mean
+ * opposite things about what you did: **skip** is "don't make me do this bit" (an interval phase
+ * you're cutting short), **next** is "I've finished this bit" (a circuit move you just completed
+ * and want logged). A tool that accepts one must not silently answer to the other — that is the
+ * difference between a rep counted and a rep thrown away.
+ */
 const GRAMMAR: ReadonlyArray<{ command: HandsFreeCommand; words: readonly string[] }> = [
   { command: 'restart', words: ['restart', 'start over', 'start again'] },
   { command: 'pause', words: ['pause', 'stop', 'hold on'] },
-  { command: 'skip', words: ['skip', 'next'] },
+  { command: 'skip', words: ['skip'] },
+  { command: 'next', words: ['next', 'done', 'got it'] },
   { command: 'start', words: ['start', 'resume', 'go', 'continue'] },
 ];
 
-/** Order matters: "restart" contains "start", so the longer word has to be tested first. The array
- *  above is already in that order; this keeps the reason next to the code that depends on it. */
-export function matchCommand(transcript: string): HandsFreeCommand | null {
+/** The word each command is announced by, for the chip's "listening for …" line. */
+export const COMMAND_WORD: Record<HandsFreeCommand, string> = {
+  start: 'start',
+  pause: 'pause',
+  skip: 'skip',
+  next: 'next',
+  restart: 'restart',
+};
+
+/**
+ * The command a transcript names, restricted to what this surface actually accepts. Anything else
+ * — including a real command the surface has no use for — returns null and is ignored in silence.
+ *
+ * Order matters: "restart" contains "start", so the longer word is tested first. The array above is
+ * already in that order; this comment keeps the reason next to the code that depends on it.
+ */
+export function matchCommand(transcript: string, accepted?: readonly HandsFreeCommand[]): HandsFreeCommand | null {
   const said = transcript.toLowerCase();
   for (const entry of GRAMMAR) {
+    if (accepted && !accepted.includes(entry.command)) continue;
     if (entry.words.some((w) => said.includes(w))) return entry.command;
   }
   return null;
@@ -71,6 +95,8 @@ export interface HandsFree {
   status: HandsFreeStatus;
   /** The word that just landed, for the chip's sub-line. Clears itself after two seconds. */
   heard: HandsFreeCommand | null;
+  /** What this surface listens for, so the chip can never promise a word that does nothing here. */
+  accepted: readonly HandsFreeCommand[];
 }
 
 /**
@@ -78,7 +104,14 @@ export interface HandsFree {
  * whenever `enabled` goes false or the component unmounts — leaving the step, backgrounding the
  * app or finishing the session all drop the mic, because scope is the whole safety story here.
  */
-export function useHandsFree(enabled: boolean, onCommand: (c: HandsFreeCommand) => void): HandsFree {
+export function useHandsFree(
+  enabled: boolean,
+  onCommand: (c: HandsFreeCommand) => void,
+  /** The commands this surface can actually act on. A plain countdown has no phase to skip and a
+   *  circuit has no clock to pause — promising those words and then ignoring them is worse than
+   *  not offering them. */
+  accepted: readonly HandsFreeCommand[] = ['start', 'pause', 'skip', 'restart'],
+): HandsFree {
   const [status, setStatus] = useState<HandsFreeStatus>('off');
   const [heard, setHeard] = useState<HandsFreeCommand | null>(null);
   const onCommandRef = useRef(onCommand);
@@ -114,7 +147,7 @@ export function useHandsFree(enabled: boolean, onCommand: (c: HandsFreeCommand) 
     recognition.onresult = (event) => {
       const results = event.results;
       const latest = results[results.length - 1]?.[0]?.transcript ?? '';
-      const command = matchCommand(latest);
+      const command = matchCommand(latest, accepted);
       if (!command) return; // a miss is silent, always
       if (command === 'restart' && !awaitingConfirm.current) {
         awaitingConfirm.current = true;
@@ -162,7 +195,7 @@ export function useHandsFree(enabled: boolean, onCommand: (c: HandsFreeCommand) 
         /* already torn down — nothing to release */
       }
     };
-  }, [enabled]);
+  }, [enabled, accepted]);
 
   // The landed word is a glance, not a log: two seconds, then back to plain listening.
   useEffect(() => {
@@ -171,5 +204,5 @@ export function useHandsFree(enabled: boolean, onCommand: (c: HandsFreeCommand) 
     return () => clearTimeout(id);
   }, [heard]);
 
-  return { status, heard };
+  return { status, heard, accepted };
 }
