@@ -1,61 +1,68 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { deriveWalkthrough, type Walkthrough as WalkthroughData } from '@cadence/shared';
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
 import { coachingMessages, useRotatingMessage } from './coaching-progress.ts';
+import { StartCoachAsk } from './start/StartCoachAsk.tsx';
+import { StartTrim } from './start/StartTrim.tsx';
+import { applyTrim, canTrim, proposeTrim, type TrimProposal } from './start/trim.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
-import { setOccurrence, logOccurrence } from '../../lib/api.ts';
-
-// "I have less time" only earns its place on a real session — multi-step AND more than this many
-// minutes. Below it there's nothing worth trimming; you just do it or skip (owner steer).
-const TIMEFLEX_MIN_MINUTES = 10;
+import { CoachFace } from '../../components/CoachFace.tsx';
+import { getSessionInsight, setOccurrence, logOccurrence, type SessionInsight } from '../../lib/api.ts';
 
 /**
- * Deterministically trim a walkthrough to ~targetMin: keep every core step, then add optional steps
- * in their original order while they still fit the budget. Core is the floor — never dropped. This
- * is step-level (drop whole exercises); set-level trimming (fewer sets) arrives with the sets/reps
- * work, which will let this hit a budget more finely.
- */
-function fitToMinutes(wt: WalkthroughData, targetMin: number): WalkthroughData {
-  const keep = new Set(wt.steps.filter((s) => s.core));
-  let mins = [...keep].reduce((n, s) => n + s.minutes, 0);
-  for (const s of wt.steps) {
-    if (keep.has(s) || mins + s.minutes > targetMin) continue;
-    keep.add(s);
-    mins += s.minutes;
-  }
-  const steps = wt.steps.filter((s) => keep.has(s)); // original order
-  return { ...wt, total_min: steps.reduce((n, s) => n + s.minutes, 0), steps };
-}
-
-const roundUp5 = (x: number) => Math.max(5, Math.ceil(x / 5) * 5);
-
-/**
- * The redesign's task **start sheet** (REQ8 handoff §3) — the pre-flight popup a trail node opens.
+ * The redesign's task **start sheet** (REQ8 handoff §3) — the pre-flight popup a trail node opens,
+ * and the surface where Cadence asks the one question worth asking before you begin.
+ *
  * It fetches the occurrence's coach session (generating it on first open, same as the old sheet),
- * projects it into a walkthrough, and shows the step summary + Start / "I have less time". Start
- * launches the full-screen `Walkthrough`; finishing marks the task done and refreshes the trail
- * (the node then shows its completed state). A task with no session (a system check-in) gets a
- * one-tap "mark it done" step. Food + weigh-in tasks keep their dedicated sheet — this is the
- * stepped-task popup.
+ * projects it into a walkthrough, and shows Cadence's ask + at most one insight + the step summary
+ * + three doors:
+ *
+ *   Start           — run it as planned.
+ *   I have less time — Cadence PROPOSES which steps to cut and the user confirms. It deliberately
+ *                     never asks for a number; see start/trim.ts for why that inversion matters.
+ *   Custom          — hand the whole thing to the coach in the user's own words ("I'd rather do a
+ *                     10-min walking meditation, I'm by the beach"), which can move it, swap it, or
+ *                     design a replacement. Routes through the ordinary suggest→preview→confirm
+ *                     adjust flow, so a session can't be rewritten without being shown first.
+ *
+ * The insight is fetched in PARALLEL with the detail rather than bundled into it: the detail call
+ * can spend seconds generating a session, and the insight is two indexed reads — bundling them
+ * would hold a ready card behind an unready one.
+ *
+ * A task with no session (a system check-in) gets a one-tap "mark it done" step. Food + weigh-in
+ * tasks keep their dedicated sheet — this is the stepped-task popup.
  */
 export function StartSheet({
   occurrenceId,
   title,
   onClose,
   onLogged,
+  onCustom,
+  onTalk,
 }: {
   occurrenceId: string;
   title?: string; // the tapped node's title — lets the loader personalize before the detail lands
   onClose: () => void;
   onLogged?: () => void;
+  /** "Custom — let's talk": opens the adjust flow seeded with this activity. */
+  onCustom?: (steer: string) => void;
+  /** Opens the coach from the post-session celebration. */
+  onTalk?: () => void;
 }) {
   const { detail, state } = useOccurrenceDetail(occurrenceId);
   const messages = useMemo(() => coachingMessages(title), [title]);
   const loadingMsg = useRotatingMessage(state === 'loading', messages);
   const [run, setRun] = useState<WalkthroughData | null>(null);
-  const [timePick, setTimePick] = useState(false); // "I have less time" → the time-definition step
-  const [showCustom, setShowCustom] = useState(false);
-  const [customMin, setCustomMin] = useState('');
+  const [trimLevel, setTrimLevel] = useState<number | null>(null); // null → not trimming
+  const [insight, setInsight] = useState<SessionInsight | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void getSessionInsight(occurrenceId).then((i) => alive && setInsight(i));
+    return () => {
+      alive = false;
+    };
+  }, [occurrenceId]);
 
   const wt = useMemo<WalkthroughData | null>(() => {
     if (!detail) return null;
@@ -89,11 +96,7 @@ export function StartSheet({
     onClose();
   }
 
-  const canFlex = !!wt && wt.steps.length > 2 && wt.total_min > TIMEFLEX_MIN_MINUTES;
-  const total = wt?.total_min ?? 0;
-  const t33 = roundUp5(total / 3);
-  const t66 = roundUp5((total * 2) / 3);
-  const runFit = (min: number) => wt && setRun(fitToMinutes(wt, min));
+  const proposal: TrimProposal | null = wt && trimLevel !== null ? proposeTrim(wt, trimLevel) : null;
 
   return (
     <>
@@ -120,21 +123,21 @@ export function StartSheet({
             {"This one's already "}
             {detail.status === 'done' ? 'done — nice.' : `marked ${detail.status}.`}
           </div>
+        ) : proposal ? (
+          <StartTrim
+            proposal={proposal}
+            onConfirm={() => setRun(applyTrim(wt, proposal))}
+            onTrimMore={() => setTrimLevel((l) => (l ?? 0) + 1)}
+            onBack={() => setTrimLevel(null)}
+          />
         ) : (
           <>
-            <div className="ss-head">
-              <div className="ss-disc" aria-hidden>
-                ▶
-              </div>
-              <div className="ss-headt">
-                <b>{detail.title}</b>
-                <span>
-                  {[detail.schedule?.time_of_day, `${wt.steps.length} STEPS`, `${wt.total_min} MIN`]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-              </div>
-            </div>
+            <StartCoachAsk
+              title={detail.title}
+              timeOfDay={detail.schedule?.time_of_day}
+              minutes={wt.total_min}
+              insight={insight}
+            />
 
             <div className="ss-steps">
               {wt.steps.map((s) => (
@@ -146,63 +149,38 @@ export function StartSheet({
               ))}
             </div>
 
-            {!timePick ? (
-              <>
-                <button className="ss-btn ss-start" onClick={() => setRun(wt)}>
-                  Start · {wt.total_min} min
-                </button>
-                {canFlex && (
-                  <button className="ss-btn ss-less" onClick={() => setTimePick(true)}>
-                    I have less time
-                  </button>
-                )}
-              </>
-            ) : (
-              <div className="ss-timeask">
-                <div className="ss-timeask-q">How much time do you have?</div>
-                <div className="ss-chips">
-                  <button className="ss-chip" onClick={() => runFit(t33)}>
-                    ~{t33} min
-                  </button>
-                  <button className="ss-chip" onClick={() => runFit(t66)}>
-                    ~{t66} min
-                  </button>
-                  <button className="ss-chip" onClick={() => setShowCustom((v) => !v)}>
-                    Other…
-                  </button>
-                </div>
-                {showCustom && (
-                  <div className="ss-custom">
-                    <input
-                      className="ss-custom-in"
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      max={total}
-                      value={customMin}
-                      onChange={(e) => setCustomMin(e.target.value)}
-                      placeholder={`minutes (up to ${total})`}
-                    />
-                    <button
-                      className="ss-chip"
-                      disabled={!Number(customMin)}
-                      onClick={() => runFit(Math.min(total, Math.max(1, Math.round(Number(customMin)))))}
-                    >
-                      Go
-                    </button>
-                  </div>
-                )}
-                <button className="ss-back" onClick={() => setTimePick(false)}>
-                  ← back
-                </button>
-              </div>
+            <button className="ss-btn ss-start" onClick={() => setRun(wt)}>
+              {"I've got time"} · {wt.total_min} min
+            </button>
+            {canTrim(wt) && (
+              <button className="ss-btn ss-less" onClick={() => setTrimLevel(0)}>
+                I have less time
+                <span>{"we'll pick what to trim together"}</span>
+              </button>
+            )}
+            {onCustom && (
+              <button
+                className="ss-btn ss-talk"
+                onClick={() => onCustom(`About today's ${detail.title}: `)}
+                aria-label="Custom — let's talk"
+              >
+                <CoachFace size={28} />
+                <span>{"Custom — let's talk"}</span>
+              </button>
             )}
           </>
         )}
       </div>
 
       {run && detail && (
-        <Walkthrough walkthrough={run} title={detail.title} onClose={() => setRun(null)} onComplete={handleComplete} />
+        <Walkthrough
+          walkthrough={run}
+          title={detail.title}
+          occurrenceId={detail.occurrence_id}
+          onClose={() => setRun(null)}
+          onComplete={handleComplete}
+          onTalk={onTalk}
+        />
       )}
     </>
   );

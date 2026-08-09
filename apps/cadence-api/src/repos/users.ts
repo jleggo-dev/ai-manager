@@ -30,6 +30,10 @@ export interface CadenceUserRow {
   // Present once migration 0020 is applied (REQ8 rewards); undefined pre-migration → callers fall
   // back to initialPointsState().
   points_state?: PointsState | null;
+  // Present once migration 0027 is applied. Which PORTRAIT the user picked — null means they
+  // haven't, which every surface renders as the brand mark. Never read by prompts or planning:
+  // a face is a picture, not a personality (packages/cadence-shared/src/coach-face.ts).
+  coach_face_id?: string | null;
 }
 
 export async function getUser(userId: string): Promise<CadenceUserRow | null> {
@@ -93,6 +97,15 @@ export async function setStreakState(userId: string, state: StreakState): Promis
  *  past days / redeems a freeze. Whole-object replace; the caller owns the merge. */
 export async function setPointsState(userId: string, state: PointsState): Promise<void> {
   await sql`update cadence.users set points_state = ${json(state)} where id = ${userId}`;
+}
+
+/**
+ * Set (or clear, with null) the portrait the user picked for the coach. Clearing is a supported
+ * choice, not an error state — it returns them to the brand mark rather than to a default face
+ * they never chose.
+ */
+export async function setCoachFaceId(userId: string, faceId: string | null): Promise<void> {
+  await sql`update cadence.users set coach_face_id = ${faceId}, updated_at = now() where id = ${userId}`;
 }
 
 /** Read dietary profile jsonb (Req 5). Null only if the user row is missing. */

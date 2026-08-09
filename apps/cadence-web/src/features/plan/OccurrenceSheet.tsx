@@ -137,7 +137,13 @@ export function OccurrenceSheet({
         ) : null}
       </div>
       {run && detail && (
-        <Walkthrough walkthrough={run} title={detail.title} onClose={() => setRun(null)} onComplete={handleComplete} />
+        <Walkthrough
+          walkthrough={run}
+          title={detail.title}
+          occurrenceId={detail.occurrence_id}
+          onClose={() => setRun(null)}
+          onComplete={handleComplete}
+        />
       )}
     </>
   );

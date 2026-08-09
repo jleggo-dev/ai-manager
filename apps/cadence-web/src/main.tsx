@@ -2,6 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import './styles.css';
+// After styles.css on purpose: the coach-face rules fill in portraits on placements whose
+// geometry (the header plate, the trail bay disc) is already defined there.
+import './styles/coach.css';
 import { App } from './App.tsx';
 import { createAppQueryClient } from './lib/query/index.ts';
 import { initNativeAuth } from './lib/native-auth.ts';

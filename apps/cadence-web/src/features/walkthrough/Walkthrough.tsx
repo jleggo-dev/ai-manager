@@ -12,8 +12,9 @@ import { StepCheckoff, StepJournal } from './tools/SimpleTools.tsx';
 import { TONE } from './tools/tone.ts';
 import { Recap } from './Recap.tsx';
 import { AllSteps } from './AllSteps.tsx';
+import { WalkthroughDone } from './WalkthroughDone.tsx';
 import { Pip, StepHeader } from './wt-parts.tsx';
-import { overlay, center, closeBtn, caption, navBtn, greenBtn, shortTitle } from './wt-styles.ts';
+import { overlay, closeBtn, caption, navBtn, shortTitle } from './wt-styles.ts';
 import { type StepLog, type StepLogs, stepStatus, stepFraction, minutesLeft, recapSummary } from './state.ts';
 import { keepJournalEntry } from '../../lib/api.ts';
 
@@ -27,13 +28,21 @@ import { keepJournalEntry } from '../../lib/api.ts';
 export function Walkthrough({
   walkthrough,
   title,
+  occurrenceId,
   onClose,
   onComplete,
+  onTalk,
 }: {
   walkthrough: WalkthroughData;
   title: string;
+  /** Ties the post-session answer to the session it belongs to. Absent for ad-hoc runs and
+   *  previews — the answer is still worth keeping, it just has nothing to hang off. */
+  occurrenceId?: string | null;
   onClose: () => void;
   onComplete: (summary: string) => void;
+  /** Opens the coach from the celebration's "Talk to me". Omitted → the button isn't shown,
+   *  rather than shown and inert. */
+  onTalk?: () => void;
 }) {
   const steps = walkthrough.steps;
   const [idx, setIdx] = useState(0);
@@ -82,20 +91,14 @@ export function Walkthrough({
 
   if (phase === 'done') {
     return (
-      <div style={overlay} role="dialog" aria-label="Task complete">
-        <div style={{ ...center, gap: 12 }}>
-          <div style={{ fontSize: 64, animation: 'pop 0.5s ease' }} aria-hidden>
-            🎉
-          </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: TONE.ink2 }}>Nice work!</div>
-          <div style={{ fontSize: 14, color: 'oklch(45% 0.02 150)', textAlign: 'center', maxWidth: 300 }}>
-            {recapSummary(steps, logs) || `${title} complete`}
-          </div>
-          <button style={{ ...greenBtn, marginTop: 8 }} onClick={finish}>
-            Done
-          </button>
-        </div>
-      </div>
+      <WalkthroughDone
+        steps={steps}
+        logs={logs}
+        title={title}
+        occurrenceId={occurrenceId}
+        onFinish={finish}
+        onTalk={onTalk}
+      />
     );
   }
 

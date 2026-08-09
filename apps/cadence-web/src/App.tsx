@@ -8,6 +8,7 @@ import { DevPanel } from './features/dev/DevPanel.tsx';
 import { AccountSwitcher } from './features/dev/AccountSwitcher.tsx';
 import { AuthScreen } from './features/auth/AuthScreen.tsx';
 import { PhoneFrame } from './components/PhoneFrame.tsx';
+import { CoachFaceProvider } from './features/coach/CoachFaceProvider.tsx';
 import {
   BreathingPreview,
   GroundingPreview,
@@ -18,6 +19,7 @@ import {
 } from './features/dev/BreathingPreview.tsx';
 import { FreeWritePreview } from './features/dev/FreeWritePreview.tsx';
 import { IntervalPreview } from './features/dev/IntervalPreview.tsx';
+import { CoachMomentsPreview } from './features/dev/CoachMomentsPreview.tsx';
 import { getPlan, setAuthToken, isDevMode, getHealthDigest, postHealthDigest } from './lib/api.ts';
 import { syncPlanLocalNotifications } from './lib/local-notifications-sync.ts';
 import { capabilities } from './lib/capability/index.ts';
@@ -79,6 +81,9 @@ function CoachApp({ session }: { session: Session | null }) {
     }).catch(() => {});
   }, []);
 
+  // The picked portrait is loaded once here, above the screen machine: the face has to be the
+  // same on the review wizard, the trail and every sheet, and a per-surface fetch would let them
+  // disagree for a frame after a swap.
   const phone = (
     <PhoneFrame>
       {screen === 'loading' ? (
@@ -101,7 +106,7 @@ function CoachApp({ session }: { session: Session | null }) {
   );
 
   return (
-    <>
+    <CoachFaceProvider>
       {dev ? (
         <div className="devroot">
           {phone}
@@ -123,7 +128,7 @@ function CoachApp({ session }: { session: Session | null }) {
         </>
       )}
       {/* Real-auth sign-out / password / start-over live in the in-app Settings sheet now. */}
-    </>
+    </CoachFaceProvider>
   );
 }
 
@@ -195,6 +200,12 @@ export function App() {
     return (
       <PhoneFrame>
         <IntervalPreview />
+      </PhoneFrame>
+    );
+  if (PREVIEW === 'coach')
+    return (
+      <PhoneFrame>
+        <CoachMomentsPreview />
       </PhoneFrame>
     );
   if (PREVIEW === 'nowmenu')

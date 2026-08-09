@@ -10,8 +10,9 @@ import { logAdhocActivity, logPlannedActivity } from '../services/adhoc-log.ts';
 import { enterEpisode, endEpisode, reviseEpisodeEquipment, postponeEpisodeStart } from '../services/episode.ts';
 import { equipmentFromGymPhotos } from '../services/gym-photo.ts';
 import { recordWeighIn } from '../services/weigh-in.ts';
+import { getSessionInsight } from '../services/session-insight.ts';
 import { setPendingProposal, getUser } from '../repos/users.ts';
-import { setOccurrenceStatus } from '../repos/occurrences.ts';
+import { setOccurrenceStatus, getOccurrenceWithActivity } from '../repos/occurrences.ts';
 import { recordCheckIn } from '../repos/check-ins.ts';
 import {
   BodyValidationError,
@@ -250,6 +251,26 @@ router.get('/occurrences/:id', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /plan/occurrences/:id]', err);
     res.status(500).json({ error: 'failed to load session' });
+  }
+});
+
+/**
+ * GET /plan/occurrences/:id/insight — the ONE thing Cadence noticed about this session, or null.
+ *
+ * Deliberately separate from the detail fetch above rather than folded into it: the detail call
+ * may generate the session (an LLM round-trip, seconds), while this is two indexed reads. Split,
+ * the insight card is on screen the moment the sheet opens instead of popping in late. A failure
+ * resolves to `null` — an absent insight is a normal outcome, not an error worth showing.
+ */
+router.get('/occurrences/:id/insight', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const occ = await getOccurrenceWithActivity(userId, req.params.id as string);
+    if (!occ) return void res.status(404).json({ error: 'occurrence not found' });
+    res.json({ insight: await getSessionInsight(userId, occ) });
+  } catch (err) {
+    console.error('[GET /plan/occurrences/:id/insight]', err);
+    res.json({ insight: null });
   }
 });
 

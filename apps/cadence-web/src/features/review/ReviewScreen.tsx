@@ -5,6 +5,7 @@ import { AboutYouStep } from './AboutYouStep.tsx';
 import { GearStep } from './GearStep.tsx';
 import { GoalsStep } from './GoalsStep.tsx';
 import { LockStep } from './LockStep.tsx';
+import { FaceStep } from './FaceStep.tsx';
 import { useReviewWizard, type ReviewMode } from './useReviewWizard.ts';
 
 /**
@@ -104,6 +105,7 @@ export function ReviewScreen({
             />
           )}
           {step === 'gear' && <GearStep equipment={equipment} setEquip={setEquip} />}
+          {step === 'face' && <FaceStep />}
           {step === 'lock' && (
             <LockStep preview={preview} goals={goals} equipment={equipment} baseline={baseline} name={data.name} />
           )}

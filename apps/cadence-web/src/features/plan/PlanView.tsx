@@ -7,6 +7,7 @@ import { AdjustSheet } from './AdjustSheet.tsx';
 import { taskOpener } from './taskShape.ts';
 import { TodayTrail } from '../today/TodayTrail.tsx';
 import { TrailHeader } from '../today/TrailHeader.tsx';
+import { DailyCheckIn } from '../today/DailyCheckIn.tsx';
 import { TodayFoodSheet } from '../nutrition/TodayFoodSheet.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
 import type { DetourChoice } from './DetourSetup.tsx';
@@ -80,6 +81,7 @@ export function PlanView({
   const [adjustSteer, setAdjustSteer] = useState(''); // pre-filled request (nutrition baseline → Adjust)
   const [adjustMode, setAdjustMode] = useState<'adjust' | 'rebalance'>('adjust');
   const [, setReloadKey] = useState(0); // bumps → aux refetch after a log/adjust (kept for callbacks)
+  const [checkinSettled, setCheckinSettled] = useState(false); // answered/dismissed this mount
 
   // Refetch on mount AND whenever the parent bumps reloadSignal (a ＋ FAB log just landed).
   useEffect(() => {
@@ -448,6 +450,19 @@ export function PlanView({
             refresh();
             bump();
           }}
+          // "Custom — let's talk" rides the SAME steer→preview→confirm flow as every other plan
+          // change, pre-seeded with this activity. A session Cadence redesigned in conversation
+          // still has to be shown before it lands.
+          onCustom={(steer) => {
+            setStartOcc(null);
+            setAdjustSteer(steer);
+            setAdjustMode('adjust');
+            setAdjustOpen(true);
+          }}
+          onTalk={() => {
+            setStartOcc(null);
+            onCoach();
+          }}
         />
       )}
       {captureOcc && (
@@ -481,6 +496,32 @@ export function PlanView({
           }}
         />
       )}
+      {/* Popup discipline (design note): at most ONE Cadence moment on screen, never stacked.
+          Pre- and post-activity are user-initiated and mutually exclusive by construction; the
+          check-in is the only one that arrives uninvited, so it is the one that yields — it
+          mounts (and only then asks the server whether it's due) once nothing else is open. */}
+      {view === 'today' &&
+        !checkinSettled &&
+        !sheetOcc &&
+        !startOcc &&
+        !captureOcc &&
+        !cookOcc &&
+        !foodOpen &&
+        !adjustOpen && (
+          <DailyCheckIn
+            onAdjust={(steer) => {
+              setCheckinSettled(true);
+              setAdjustSteer(steer);
+              setAdjustMode('adjust');
+              setAdjustOpen(true);
+            }}
+            onCoach={() => {
+              setCheckinSettled(true);
+              onCoach();
+            }}
+            onClose={() => setCheckinSettled(true)}
+          />
+        )}
       {adjustOpen && (
         <AdjustSheet
           initialSteer={adjustSteer}
