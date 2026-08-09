@@ -164,4 +164,48 @@ describe('normalizeSession', () => {
     const tools = session!.blocks[0]!.items.map((i) => i.tool);
     expect(tools).toEqual(['timer', 'read', undefined, undefined]);
   });
+
+  it('stores a bounded interval plan, and only on items that are actually intervals', () => {
+    const session = normalizeSession({
+      blocks: [
+        {
+          label: 'Conditioning',
+          items: [
+            // Out of range in every direction — the stored plan must still be playable.
+            {
+              name: 'Bike sprints',
+              tool: 'interval',
+              interval_work_sec: 40,
+              interval_recover_sec: 20,
+              interval_rounds: 999,
+              interval_warmup_sec: 5000,
+            },
+            // EMOM: an explicit 0 recover must survive, not fall back to the 20s default.
+            {
+              name: 'Every minute',
+              tool: 'interval',
+              interval_work_sec: 60,
+              interval_recover_sec: 0,
+              interval_rounds: 10,
+            },
+            // Tagged interval with no numbers at all — defaults, so the player always has a plan.
+            { name: 'Something hard', tool: 'interval' },
+            { name: 'Plank', duration_min: 1, tool: 'timer' },
+          ],
+        },
+      ],
+    });
+    const [sprints, emom, bare, plank] = session!.blocks[0]!.items;
+    expect(sprints).toMatchObject({ interval_rounds: 20, interval_warmup_sec: 900, interval_work_sec: 40 });
+    expect(emom).toMatchObject({ interval_work_sec: 60, interval_recover_sec: 0, interval_rounds: 10 });
+    expect(bare).toMatchObject({ interval_work_sec: 40, interval_recover_sec: 20, interval_rounds: 6 });
+    expect(plank!.interval_work_sec).toBeUndefined();
+  });
+
+  it('infers the interval plan from the numbers alone when the coach forgot the tag', () => {
+    const session = normalizeSession({
+      blocks: [{ label: 'Main', items: [{ name: 'Hill repeats', interval_work_sec: 45, interval_rounds: 8 }] }],
+    });
+    expect(session!.blocks[0]!.items[0]).toMatchObject({ interval_work_sec: 45, interval_rounds: 8 });
+  });
 });

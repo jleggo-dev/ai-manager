@@ -15,6 +15,7 @@ describe('tool catalog', () => {
   const ALL_TOOLS: SessionItemTool[] = [
     'read',
     'timer',
+    'interval',
     'reps',
     'checkoff',
     'photo',
@@ -60,5 +61,14 @@ describe('tool catalog', () => {
     for (const mode of BLOCK_MODE_KINDS) expect(rendered).toContain(`• ${mode} —`);
     // The timer trap (duration ≠ timer) must survive into the render — it's the judgment the coach needs.
     expect(rendered).toMatch(/do NOT pick timer just because/);
+  });
+
+  it('renders the interval bounds and shapes, so the coach never has to guess a legal number', () => {
+    const rendered = renderCoachToolCatalog();
+    expect(rendered).toContain('INTERVALS');
+    expect(rendered).toContain('HIIT = 6 × 40/20');
+    // EMOM has no recover, so its shorthand must NOT print a "/0" the coach could copy back as a field.
+    expect(rendered).toContain('EMOM = 10 × 1:00');
+    expect(rendered).toMatch(/bounds: work 5-600s/);
   });
 });

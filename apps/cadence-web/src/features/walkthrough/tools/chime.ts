@@ -4,12 +4,26 @@
  * visual "done" state is always the real signal; the sound is a nicety.
  */
 export function playChime(): void {
+  playTones([660, 880]);
+}
+
+/**
+ * The same two-note voice, given a direction. Intervals need the ear to carry the whole message —
+ * phone on the floor, three metres away — so **the chime says which way the phase went**: rising
+ * for work, falling for recover, a three-note flourish for the end of the run. Same envelope and
+ * same timing as the plain chime, so it is recognisably the app rather than a new sound.
+ */
+export const CHIME_WORK = [660, 880];
+export const CHIME_RECOVER = [660, 520];
+export const CHIME_DONE = [660, 880, 990];
+
+export function playTones(notes: readonly number[]): void {
   try {
     const Ctor = window.AudioContext;
     if (!Ctor) return;
     const ctx = new Ctor();
     const now = ctx.currentTime;
-    [660, 880].forEach((freq, i) => {
+    notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';

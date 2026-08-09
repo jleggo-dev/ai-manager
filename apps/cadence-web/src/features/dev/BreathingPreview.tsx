@@ -222,6 +222,18 @@ const NOW_MENU_FIXTURE = [
     area: 'practice',
     action: { kind: 'tool', tool: 'meditate', params: { duration_min: 5, meditate_bells: 'start_end' } },
   },
+  {
+    id: 'n4',
+    label: 'Four hard minutes on the bike',
+    area: 'movement',
+    // Also the only route to the interval player inside the real walkthrough SHELL (frame tint,
+    // pips, recap) without a coach-composed plan — `?preview=interval` renders the card alone.
+    action: {
+      kind: 'tool',
+      tool: 'interval',
+      params: { interval_work_sec: 20, interval_recover_sec: 10, interval_rounds: 8 },
+    },
+  },
 ];
 
 /** The "Do something now" section against a stubbed menu, so the sheet's chrome can be judged

@@ -1184,6 +1184,13 @@ textarea.wiz-title { resize: none; line-height: 1.4; min-height: 36px; field-siz
   to   { transform: scale(1.9); opacity: 0; }
 }
 
+/* The hands-free chip's three dots — the only "the mic is live" signal, so it must be unmissable
+   and must never be faked while the mic is off. */
+@keyframes cadence-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
 /* ── "Do something now" — the ＋ sheet's present-tense section (REQ10 §6, Now Door §4f) ──
    Present sits above past because a log can wait a tap and someone who needs three minutes
    cannot. The pillar colour is legal here and ONLY here: inside the sheet, on items that

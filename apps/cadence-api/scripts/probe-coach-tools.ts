@@ -22,6 +22,9 @@ import {
   SESSION_TOOL_KINDS,
   bankFamily,
   clampCycles,
+  clampIntervalPlan,
+  intervalShorthand,
+  intervalTotalMinutes,
   isBreathPatternId,
   isJournalBankId,
   journalBank,
@@ -107,6 +110,28 @@ const SESSIONS: SessionScenario[] = [
     baseline: 'does planks, hates them, does them anyway.',
     equipment: 'a mat',
   },
+  // The interval↔timer boundary. Both are "a clock and an effort", and a bare timer for sprints
+  // is the silent failure: nothing errors, the person just does the counting the app was built to
+  // do. The second scenario is the reverse trap — one continuous hold must NOT become an interval.
+  {
+    name: 'sprints · alternating work and rest is interval, never a bare timer',
+    want: ['interval'],
+    ban: ['timer'],
+    activity: 'Bike sprints — 15 min, movement',
+    goals: 'want to get properly out of breath twice a week, 40 seconds flat out then spin easy',
+    baseline: 'rides an indoor bike 3×/week. no injuries. hates counting in their head.',
+    equipment: 'an indoor bike',
+    phase: 'progress',
+  },
+  {
+    name: 'core finisher · one continuous hold is a timer, never an interval',
+    ban: ['interval'],
+    activity: 'Wall sit — 5 min, movement',
+    goals: 'hold a wall sit for two minutes straight without stopping',
+    baseline: 'gets to about 70 seconds. one long hold, not repeats.',
+    equipment: 'a wall',
+    phase: 'progress',
+  },
   {
     name: 'easy run · mind tools should leave it alone',
     ban: ['breathing', 'meditate', 'grounding', 'feeling_log'],
@@ -191,6 +216,21 @@ function checkItem(i: SessionItem, wantFamily?: JournalFamily): void {
     const bellsOk = i.meditate_bells === undefined || isMeditateBells(i.meditate_bells);
     console.log(`     meditate "${i.name}" → ${i.duration_min ?? '?'} min, bells=${i.meditate_bells ?? '(default)'}`);
     if (!bellsOk) flag(`invented bells "${String(i.meditate_bells)}"`);
+  }
+  if (i.tool === 'interval') {
+    const plan = clampIntervalPlan({
+      warmupSec: i.interval_warmup_sec,
+      workSec: i.interval_work_sec,
+      recoverSec: i.interval_recover_sec,
+      rounds: i.interval_rounds,
+      cooldownSec: i.interval_cooldown_sec,
+    });
+    console.log(`     interval "${i.name}" → ${intervalShorthand(plan)} · ${intervalTotalMinutes(plan)} min`);
+    // The whole point of the tool is that the numbers come from the coach. An item tagged
+    // `interval` with no work length falls back to a generic 40/20 that fits nobody in particular.
+    if (i.interval_work_sec === undefined) flag(`interval item "${i.name}" names no work length`);
+    // A second duration can only contradict the ring, which is arithmetic over the five numbers.
+    if (i.duration_min !== undefined) flag(`interval item "${i.name}" also sent duration_min`);
   }
   if (i.tool === 'grounding') {
     const ok = i.grounding_game === undefined || isGroundingGame(i.grounding_game);

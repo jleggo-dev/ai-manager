@@ -29,6 +29,7 @@ export * from './types/rewards.ts';
 export * from './walkthrough.ts';
 export * from './tool-catalog.ts';
 export * from './breathing.ts';
+export * from './interval.ts';
 export * from './meditate.ts';
 export * from './grounding.ts';
 export * from './feelings.ts';

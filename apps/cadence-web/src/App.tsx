@@ -17,6 +17,7 @@ import {
   JournalPreview,
 } from './features/dev/BreathingPreview.tsx';
 import { FreeWritePreview } from './features/dev/FreeWritePreview.tsx';
+import { IntervalPreview } from './features/dev/IntervalPreview.tsx';
 import { getPlan, setAuthToken, isDevMode, getHealthDigest, postHealthDigest } from './lib/api.ts';
 import { syncPlanLocalNotifications } from './lib/local-notifications-sync.ts';
 import { capabilities } from './lib/capability/index.ts';
@@ -188,6 +189,12 @@ export function App() {
     return (
       <PhoneFrame>
         <FreeWritePreview />
+      </PhoneFrame>
+    );
+  if (PREVIEW === 'interval')
+    return (
+      <PhoneFrame>
+        <IntervalPreview />
       </PhoneFrame>
     );
   if (PREVIEW === 'nowmenu')

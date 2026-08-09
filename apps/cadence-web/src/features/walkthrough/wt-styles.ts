@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { WalkthroughStep } from '@cadence/shared';
+import { type WalkthroughStep, intervalShorthand, intervalTotalMinutes } from '@cadence/shared';
 import { type StepLog, logLine } from './state.ts';
 import { TONE } from './tools/tone.ts';
 
@@ -21,6 +21,7 @@ export function targetChip(step: WalkthroughStep): string {
 export function toolNoun(step: WalkthroughStep): string {
   const t = step.tool;
   if (t.kind === 'circuit') return `Circuit · ${t.rounds} rounds`;
+  if (t.kind === 'interval') return `Intervals · ${intervalShorthand(t.plan)} · ${intervalTotalMinutes(t.plan)} min`;
   if (t.kind === 'timer') return `Timer · ${Math.round(t.seconds / 60) || 1} min`;
   if (t.kind === 'reps') return `${t.sets} × ${t.reps ?? ''}`.trim();
   if (t.kind === 'journal') return 'Journal · one line for the coach';

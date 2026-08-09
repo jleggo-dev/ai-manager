@@ -3,6 +3,7 @@ import {
   type WalkthroughStep,
   feelingLogLine,
   groundingLogLine,
+  intervalLogLine,
   sitLogLine,
 } from '@cadence/shared';
 
@@ -16,6 +17,17 @@ export type StepLog =
   | { kind: 'reps'; sets: number[]; target?: number; load?: string }
   | { kind: 'circuit'; roundsDone: number; totalRounds: number }
   | { kind: 'timer'; elapsedSec: number; targetSec: number; done: boolean }
+  // An interval run logs the ROUNDS finished and the seconds actually spent — never the
+  // prescription. `shorthand` is carried rather than re-derived because the person may have
+  // edited the plan before starting, and the receipt has to describe what they ran.
+  | {
+      kind: 'interval';
+      roundsDone: number;
+      totalRounds: number;
+      elapsedSec: number;
+      targetSec: number;
+      shorthand: string;
+    }
   // Breathing logs ROUNDS, never anything about the person. Partial is the normal case.
   | { kind: 'breathing'; roundsDone: number; totalRounds: number; pattern: string }
   // `returns` is context for the coach ("a busy day, not a bad sit") — never a metric, never
@@ -45,6 +57,7 @@ export function stepFraction(step: WalkthroughStep, log?: StepLog): number {
     }
     case 'circuit':
     case 'breathing':
+    case 'interval':
       return log.totalRounds > 0 ? Math.min(1, log.roundsDone / log.totalRounds) : log.roundsDone > 0 ? 1 : 0;
     case 'timer':
     case 'meditate':
@@ -97,6 +110,8 @@ export function logLine(step: WalkthroughStep, log: StepLog): string {
     }
     case 'circuit':
       return `${log.roundsDone} of ${log.totalRounds} rounds`;
+    case 'interval':
+      return intervalLogLine(log);
     // Never "incomplete" — the rounds you did are the rounds you did.
     case 'breathing':
       return log.roundsDone >= log.totalRounds

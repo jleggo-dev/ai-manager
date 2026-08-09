@@ -3,6 +3,7 @@ import type { Walkthrough as WalkthroughData, WalkthroughStep } from '@cadence/s
 import { StepReps } from './tools/StepReps.tsx';
 import { StepTimer } from './tools/StepTimer.tsx';
 import { StepCircuit } from './tools/StepCircuit.tsx';
+import { StepInterval, type StepChrome } from './tools/StepInterval.tsx';
 import { StepBreathing } from './tools/StepBreathing.tsx';
 import { StepMeditate } from './tools/StepMeditate.tsx';
 import { StepGrounding } from './tools/StepGrounding.tsx';
@@ -40,6 +41,9 @@ export function Walkthrough({
   const [logs, setLogs] = useState<StepLogs>({});
   const [phase, setPhase] = useState<'step' | 'recap' | 'done'>('step');
   const [allSteps, setAllSteps] = useState(false);
+  // A step may recolour the shell while it is on screen — today only the interval player, whose
+  // whole instruction IS the frame colour. Null means the ordinary walkthrough tone.
+  const [chrome, setChrome] = useState<StepChrome | null>(null);
 
   const step = steps[idx];
   const left = minutesLeft(steps, idx, visited);
@@ -113,15 +117,28 @@ export function Walkthrough({
   }
 
   return (
-    <div style={overlay} role="dialog" aria-label="Task walkthrough">
+    <div
+      style={{ ...overlay, background: chrome?.tint ?? overlay.background, transition: 'background 0.7s ease' }}
+      role="dialog"
+      aria-label="Task walkthrough"
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button style={closeBtn} onClick={onClose} aria-label="Close">
           ✕
         </button>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: 'oklch(38% 0.05 60)' }}>{shortTitle(title)}</div>
-            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', color: 'oklch(52% 0.04 62)' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: chrome?.ink ?? 'oklch(38% 0.05 60)' }}>
+              {shortTitle(title)}
+            </div>
+            <div
+              style={{
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                color: chrome?.sub ?? 'oklch(52% 0.04 62)',
+              }}
+            >
               {walkthrough.total_min} MIN TOTAL
             </div>
           </div>
@@ -137,10 +154,10 @@ export function Walkthrough({
             ))}
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-            <div style={caption}>
+            <div style={{ ...caption, color: chrome?.sub ?? caption.color }}>
               Step {idx + 1} of {steps.length}
             </div>
-            <div style={caption}>{left} min left</div>
+            <div style={{ ...caption, color: chrome?.sub ?? caption.color }}>{left} min left</div>
           </div>
         </div>
       </div>
@@ -158,6 +175,19 @@ export function Walkthrough({
             }
             onLog={(l) => setLog(step.id, l)}
             onAdvance={next}
+          />
+        ) : step.tool.kind === 'interval' ? (
+          // Like a circuit, the interval player owns its whole body — the coach chip and the phase
+          // badge replace the shared step header rather than stacking a second one above them.
+          <StepInterval
+            step={step}
+            plan={step.tool.plan}
+            log={
+              logs[step.id]?.kind === 'interval' ? (logs[step.id] as Extract<StepLog, { kind: 'interval' }>) : undefined
+            }
+            onLog={(l) => setLog(step.id, l)}
+            onDone={next}
+            onChrome={setChrome}
           />
         ) : (
           <>
