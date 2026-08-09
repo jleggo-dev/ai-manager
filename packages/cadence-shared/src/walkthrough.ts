@@ -22,7 +22,7 @@ import { type MeditateBells, clampIntervalMinutes, clampSitMinutes, isMeditateBe
 import { type GroundingGame, type GroundingSpec, groundingSpec, isGroundingGame } from './grounding.ts';
 import { type JournalBankId, isJournalBankId, journalBank, todaysPhrasing } from './journal.ts';
 import { clampFreeWriteMinutes } from './freewrite.ts';
-import { type IntervalPlan, clampIntervalPlan, intervalTotalMinutes } from './interval.ts';
+import { type IntervalPlan, intervalTotalMinutes, singleSetPlan } from './interval.ts';
 
 /* ── The tool catalog ────────────────────────────────────────────────────────────────────────
    Three capture classes (see `stepCaptureMode`):
@@ -212,7 +212,8 @@ function meditateTool(item: SessionItem): StepTool {
 function intervalTool(item: SessionItem): StepTool {
   return {
     kind: 'interval',
-    plan: clampIntervalPlan({
+    // The coach's five flat fields describe ONE set; a second set is hand-added in the edit sheet.
+    plan: singleSetPlan({
       warmupSec: item.interval_warmup_sec,
       workSec: item.interval_work_sec,
       recoverSec: item.interval_recover_sec,

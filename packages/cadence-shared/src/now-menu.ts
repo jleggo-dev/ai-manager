@@ -26,7 +26,7 @@
 import { BREATH_PATTERNS, cycleSeconds, clampCycles, patternById } from './breathing.ts';
 import { GROUNDING_NAMES, isGroundingGame, type GroundingGame } from './grounding.ts';
 import { clampSitMinutes } from './meditate.ts';
-import { clampIntervalPlan, intervalShorthand, intervalTotalMinutes } from './interval.ts';
+import { intervalShorthand, intervalTotalMinutes, singleSetPlan } from './interval.ts';
 import { clampFreeWriteMinutes } from './freewrite.ts';
 import type { SessionItemTool } from './types/occurrence.ts';
 
@@ -142,7 +142,7 @@ export function nowMenuMeta(action: NowMenuAction): string | undefined {
     case 'interval': {
       // The shape AND the length, because on this row "intervals" alone tells you nothing about
       // whether you have time for it — and time is the only question this menu answers.
-      const plan = clampIntervalPlan({
+      const plan = singleSetPlan({
         warmupSec: numberOr(p.interval_warmup_sec),
         workSec: numberOr(p.interval_work_sec),
         recoverSec: numberOr(p.interval_recover_sec),

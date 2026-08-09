@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { clampIntervalPlan, expandIntervalPhases } from '@cadence/shared';
+import { expandIntervalPhases, singleSetPlan } from '@cadence/shared';
 import { ringSegments, stripSegments } from './intervalRing.ts';
 import { INTERVAL_KIND, RING_C } from './tone.ts';
 
 const phases = expandIntervalPhases(
-  clampIntervalPlan({ warmupSec: 120, workSec: 40, recoverSec: 20, rounds: 6, cooldownSec: 60 }),
+  singleSetPlan({ warmupSec: 120, workSec: 40, recoverSec: 20, rounds: 6, cooldownSec: 60 }),
 );
 
 const arcOf = (dash: string) => Number(dash.split(' ')[0]);
@@ -56,7 +56,7 @@ describe('ringSegments', () => {
   });
 
   it('keeps a very short phase visible rather than collapsing it to a dot', () => {
-    const long = expandIntervalPhases(clampIntervalPlan({ workSec: 600, recoverSec: 5, rounds: 5 }));
+    const long = expandIntervalPhases(singleSetPlan({ workSec: 600, recoverSec: 5, rounds: 5 }));
     const segs = ringSegments(long, 0, 0, false);
     expect(Math.min(...segs.map((s) => arcOf(s.dash)))).toBeGreaterThanOrEqual(2);
   });

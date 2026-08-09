@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import {
   INTERVAL_TEMPLATES,
+  matchTemplate,
+  addSet,
   clampIntervalPlan,
   intervalShorthand,
   intervalTotalMinutes,
+  singleSetPlan,
   type IntervalPlan,
   type WalkthroughStep,
 } from '@cadence/shared';
@@ -14,7 +17,7 @@ type IntervalLog = Extract<StepLog, { kind: 'interval' }>;
 
 /** Short enough that a whole run finishes inside a dev loop — the completion state, the done
  *  chime and the auto-advance are the things you actually need to watch. */
-const QUICK: IntervalPlan = clampIntervalPlan({ warmupSec: 0, workSec: 5, recoverSec: 5, rounds: 3, cooldownSec: 0 });
+const QUICK: IntervalPlan = singleSetPlan({ workSec: 5, recoverSec: 5, rounds: 3 });
 
 const step = (title: string): WalkthroughStep => ({
   id: 'preview',
@@ -71,10 +74,8 @@ export function IntervalPreview() {
           <Chip
             key={t.id}
             label={t.label}
-            active={plan.workSec === t.workSec && plan.recoverSec === t.recoverSec && plan.rounds === t.rounds}
-            onClick={() =>
-              choose(clampIntervalPlan({ workSec: t.workSec, recoverSec: t.recoverSec, rounds: t.rounds }))
-            }
+            active={plan.sets.length === 1 && matchTemplate(plan.sets[0]) === t.id}
+            onClick={() => choose(singleSetPlan({ workSec: t.workSec, recoverSec: t.recoverSec, rounds: t.rounds }))}
           />
         ))}
         <Chip
@@ -82,11 +83,26 @@ export function IntervalPreview() {
           active={plan.warmupSec > 0}
           onClick={() => choose(clampIntervalPlan({ ...plan, warmupSec: 20, cooldownSec: 15 }))}
         />
+        {/* Two sets in one tap — the rest row, the per-set round numbering and the "6 × 5/5 +
+            2 × 10" chip are only judgeable by watching a real two-set run. */}
+        <Chip
+          label="Two sets"
+          active={plan.sets.length > 1}
+          onClick={() =>
+            choose(
+              clampIntervalPlan({
+                ...addSet(QUICK),
+                restBetweenSetsSec: 10,
+                sets: [...QUICK.sets, { workSec: 10, recoverSec: 0, rounds: 2 }],
+              }),
+            )
+          }
+        />
       </div>
 
       <div style={{ fontSize: 11.5, fontWeight: 800, opacity: 0.7 }}>
         {intervalShorthand(plan)} · {intervalTotalMinutes(plan)} min · warm-up {plan.warmupSec}s · cool-down{' '}
-        {plan.cooldownSec}s
+        {plan.cooldownSec}s{plan.sets.length > 1 ? ` · rest ${plan.restBetweenSetsSec}s` : ''}
       </div>
 
       <StepInterval

@@ -1,15 +1,36 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   INTERVAL_HOW,
   expandIntervalPhases,
   intervalShorthand,
   intervalTotalSeconds,
   positionAt,
+  totalRounds,
+  type IntervalPhase,
   type IntervalPlan,
   type WalkthroughStep,
 } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
 import { INTERVAL_KIND, RING_C, TONE } from './tone.ts';
+import {
+  RING_PX,
+  badge,
+  card,
+  chimeOnStyle,
+  coachChip,
+  coachLabel,
+  editLink,
+  eyebrow,
+  greyBtn,
+  metric,
+  metricCaps,
+  nextLine,
+  numeral,
+  primaryBtn,
+  roundLine,
+  secBtn,
+  stage,
+} from './intervalStyles.ts';
 import { CHIME_DONE, CHIME_RECOVER, CHIME_WORK, playTones } from './chime.ts';
 import { formatClock } from './timer.ts';
 import { ringSegments } from './intervalRing.ts';
@@ -23,7 +44,6 @@ import { WhatsThis } from './WhatsThis.tsx';
 type IntervalLog = Extract<StepLog, { kind: 'interval' }>;
 
 const PREROLL = 5;
-const RING_PX = 232;
 
 type Status = 'idle' | 'preroll' | 'live' | 'paused' | 'done';
 
@@ -111,7 +131,7 @@ export function StepInterval({
     onLog({
       kind: 'interval',
       roundsDone,
-      totalRounds: plan.rounds,
+      totalRounds: totalRounds(plan),
       elapsedSec: Math.round(done ? total - skipped : spent),
       targetSec: total,
       shorthand: intervalShorthand(plan),
@@ -202,8 +222,10 @@ export function StepInterval({
   function skipPhase() {
     if (status === 'done') return;
     setSkipped((s) => s + at.remaining);
-    if (at.phase.kind === 'work' && at.phase.round != null && at.remaining > 0) {
-      const round = at.phase.round;
+    // Keyed on globalRound: per-set round numbers restart at 1, so keying on `round` would mark
+    // set 2's round 1 as skipped the moment you skipped set 1's.
+    if (at.phase.kind === 'work' && at.phase.globalRound != null && at.remaining > 0) {
+      const round = at.phase.globalRound;
       setSkippedWork((rs) => (rs.includes(round) ? rs : [...rs, round]));
     }
     seek(Math.min(total, elapsed + at.remaining));
@@ -300,9 +322,7 @@ export function StepInterval({
             {/* Always occupies its line so the countdown doesn't jump between phases, but empty
                 on warm-up and cool-down — they sit outside the rounds, and a screen reader must
                 not announce "round 1 of 5" during a warm-up that belongs to no round. */}
-            <div style={{ ...roundLine, minHeight: 13 }}>
-              {at.phase.round && !isDone && !isPre ? `Round ${at.phase.round} of ${plan.rounds}` : ''}
-            </div>
+            <div style={{ ...roundLine, minHeight: 13 }}>{roundLineText(at.phase, plan, isDone || isPre)}</div>
             <div style={{ ...numeral, opacity: paused ? 0.62 : 1 }}>
               {isPre ? String(preroll) : formatClock(isDone ? 0 : at.remaining)}
             </div>
@@ -374,6 +394,18 @@ export function StepInterval({
   );
 }
 
+/**
+ * "Round 3 of 6", and "Set 2 · Round 3 of 4" once a second set exists — per-set numbering, because
+ * that is how anyone counts mid-effort. Empty on warm-up, rest and cool-down: they sit outside the
+ * rounds, and a screen reader must not announce a round number during a phase that has none.
+ */
+function roundLineText(phase: IntervalPhase, plan: IntervalPlan, hidden: boolean): string {
+  if (hidden || phase.round == null || phase.set == null) return '';
+  const inSet = plan.sets[phase.set - 1]?.rounds ?? phase.round;
+  const prefix = plan.sets.length > 1 ? `Set ${phase.set} · ` : '';
+  return `${prefix}Round ${phase.round} of ${inSet}`;
+}
+
 /** "Next · recover 0:20" — the handover is never a surprise. */
 function nextLabel(
   next: { kind: string; label: string; seconds: number } | undefined,
@@ -415,142 +447,3 @@ function ClockGlyph() {
     </svg>
   );
 }
-
-const badge: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 7,
-  color: 'white',
-  borderRadius: 999,
-  padding: '5px 12px',
-  transition: 'background 0.7s ease',
-};
-const coachChip: CSSProperties = {
-  background: 'oklch(100% 0 0 / 0.7)',
-  border: '1px solid oklch(86% 0.04 66)',
-  borderRadius: 12,
-  padding: '7px 11px',
-  display: 'flex',
-  alignItems: 'baseline',
-  gap: 6,
-};
-const coachLabel: CSSProperties = {
-  fontSize: 9.5,
-  fontWeight: 900,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  color: 'oklch(55% 0.04 62)',
-};
-const editLink: CSSProperties = {
-  border: 'none',
-  background: 'transparent',
-  padding: 0,
-  fontSize: 11,
-  fontWeight: 900,
-  color: 'oklch(45% 0.09 152)',
-  cursor: 'pointer',
-};
-const card: CSSProperties = {
-  background: 'white',
-  border: '1px solid oklch(91% 0.015 85)',
-  borderRadius: 18,
-  padding: 16,
-  boxShadow: '0 1px 3px oklch(0% 0 0 / 0.04)',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 12,
-};
-const stage: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  position: 'relative',
-  height: RING_PX,
-};
-const eyebrow: CSSProperties = {
-  fontSize: 10.5,
-  fontWeight: 900,
-  letterSpacing: '0.09em',
-  textTransform: 'uppercase',
-  transition: 'color 0.7s ease',
-};
-const roundLine: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 800,
-  letterSpacing: '0.07em',
-  textTransform: 'uppercase',
-  color: TONE.sub,
-};
-/** The biggest numeral in the app — this is the phone-on-the-floor screen. */
-const numeral: CSSProperties = {
-  fontFamily: 'var(--display), serif',
-  fontWeight: 600,
-  fontSize: 56,
-  lineHeight: 1,
-  color: TONE.ink,
-  fontVariantNumeric: 'tabular-nums',
-};
-const nextLine: CSSProperties = {
-  fontSize: 10.5,
-  fontWeight: 800,
-  letterSpacing: '0.04em',
-  textTransform: 'uppercase',
-  color: TONE.sub,
-  textAlign: 'center',
-  // The ring's inner clearance at r=54 / stroke 12. Anything longer wraps inside the ring rather
-  // than running out across the wedges.
-  maxWidth: 156,
-  lineHeight: 1.25,
-};
-const metric: CSSProperties = {
-  fontSize: 15,
-  fontWeight: 900,
-  color: 'oklch(32% 0.02 150)',
-  fontVariantNumeric: 'tabular-nums',
-};
-const metricCaps: CSSProperties = {
-  fontSize: 9.5,
-  fontWeight: 900,
-  letterSpacing: '0.07em',
-  textTransform: 'uppercase',
-  color: TONE.sub,
-};
-const primaryBtn: CSSProperties = {
-  border: 'none',
-  borderRadius: 16,
-  padding: 15,
-  fontSize: 15,
-  fontWeight: 900,
-  color: 'white',
-  cursor: 'pointer',
-  background: `linear-gradient(180deg, ${TONE.fillA} 0%, ${TONE.fillB} 46%)`,
-  boxShadow: `0 5px 0 ${TONE.deep}`,
-};
-const greyBtn: CSSProperties = {
-  border: 'none',
-  borderRadius: 16,
-  padding: 15,
-  fontSize: 15,
-  fontWeight: 900,
-  color: 'oklch(42% 0.02 150)',
-  cursor: 'pointer',
-  background: 'linear-gradient(180deg, oklch(96% 0.008 85) 0%, oklch(93% 0.01 85) 46%)',
-  boxShadow: '0 5px 0 oklch(87% 0.015 85)',
-};
-const secBtn: CSSProperties = {
-  flex: 1,
-  textAlign: 'center',
-  background: 'white',
-  border: '1.5px solid oklch(90% 0.015 95)',
-  borderRadius: 12,
-  padding: '10px 0',
-  fontSize: 12,
-  fontWeight: 900,
-  color: 'oklch(40% 0.02 150)',
-  cursor: 'pointer',
-};
-const chimeOnStyle: CSSProperties = {
-  background: 'oklch(97% 0.02 74)',
-  border: '1.5px solid oklch(86% 0.04 66)',
-  color: TONE.chipInk,
-};

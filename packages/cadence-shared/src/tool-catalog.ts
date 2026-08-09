@@ -30,7 +30,7 @@ import {
   MAX_ROUNDS,
   MAX_WORK_SEC,
   MIN_WORK_SEC,
-  intervalShorthand,
+  setShorthand,
 } from './interval.ts';
 import { DEFAULT_SIT_MINUTES, MAX_SIT_MINUTES, MEDITATE_BELL_KINDS } from './meditate.ts';
 import { GROUNDING_GAMES, GROUNDING_NAMES } from './grounding.ts';
@@ -290,16 +290,7 @@ export function renderCoachToolCatalog(): string {
     'to name and no mode to pick: the familiar ones are just numbers, and anything between them is',
     'equally legal. Say what this person should actually do.',
   );
-  for (const t of INTERVAL_TEMPLATES) {
-    const shape = intervalShorthand({
-      warmupSec: 0,
-      workSec: t.workSec,
-      recoverSec: t.recoverSec,
-      rounds: t.rounds,
-      cooldownSec: 0,
-    });
-    lines.push(`  • ${t.label} = ${shape} — ${t.summary}`);
-  }
+  for (const t of INTERVAL_TEMPLATES) lines.push(`  • ${t.label} = ${setShorthand(t)} — ${t.summary}`);
   lines.push(
     `  bounds: work ${MIN_WORK_SEC}-${MAX_WORK_SEC}s, recover 0-${MAX_WORK_SEC}s (0 = EMOM), rounds 1-${MAX_ROUNDS},`,
     `  warm-up/cool-down 0-900s each. The whole run is capped at ${Math.round(MAX_INTERVAL_SEC / 60)} min — ask for`,

@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { HandsFree as HandsFreeState } from './useHandsFree.ts';
+import { COMMAND_WORD, type HandsFree as HandsFreeState } from './useHandsFree.ts';
 
 /**
  * The hands-free chip (interval design D). One shared component for every timer — the interval
@@ -75,7 +75,8 @@ function subLine(state: HandsFreeState, on: boolean, unavailable: boolean): stri
   if (!on) return 'Off — tap to control the timer by voice';
   // Restart is the one word that can throw away a run someone is four rounds into.
   if (state.status === 'confirm') return 'Say “restart” again to confirm';
-  return 'Listening for start · pause · skip · restart';
+  // Built from what this surface actually accepts — a plain countdown must not advertise "skip".
+  return `Listening for ${state.accepted.map((c) => COMMAND_WORD[c]).join(' · ')}`;
 }
 
 const chip: CSSProperties = {

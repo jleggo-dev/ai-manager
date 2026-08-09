@@ -20,9 +20,9 @@
  * clamped to something a person can actually finish, silently and safely.
  *
  * The vocabulary is one ladder, used in the schema, the player and the UI alike: a **round** is one
- * work + recover pair; **rounds** repeat back to back; warm-up and cool-down sit OUTSIDE the
- * rounds, so they are never multiplied. v1 plays one set of rounds — the design's "Add set 2"
- * (a second, differently-shaped block after a rest) is deliberately not built yet.
+ * work + recover pair; a **set** is rounds repeated back to back; warm-up, cool-down and the rest
+ * between sets sit OUTSIDE the rounds, so they are never multiplied. A run is one or more sets —
+ * a HIIT block then an EMOM finisher — but the COACH only ever prescribes one (see `IntervalPlan`).
  */
 
 /** What a phase is for. The player colours the whole frame by this and nothing else: amber means
@@ -32,22 +32,46 @@ export type IntervalPhaseKind = 'work' | 'recover' | 'neutral';
 /** One phase of an expanded interval run. */
 export interface IntervalPhase {
   kind: IntervalPhaseKind;
-  /** User-facing name — "Warm-up", "Work", "Recover", "Cool-down". */
+  /** User-facing name — "Warm-up", "Work", "Recover", "Rest", "Cool-down". */
   label: string;
   seconds: number;
-  /** 1-based round this phase belongs to. Absent on warm-up/cool-down, which sit outside the rounds. */
+  /** 1-based round WITHIN its set. Absent on warm-up, cool-down and the rest between sets — all
+   *  three sit outside the rounds, which is why the round count never multiplies them. */
   round?: number;
+  /** 1-based set this phase belongs to. Absent for the same three. */
+  set?: number;
+  /** Globally 1-based across the whole run, so a log can count rounds without knowing about sets. */
+  globalRound?: number;
 }
 
-/** The whole prescription, as numbers. Everything else in this module is derived from it. */
-export interface IntervalPlan {
-  /** Runs once, before the rounds. 0 = skipped (the player's 5s "get in position" pre-roll takes over). */
-  warmupSec: number;
+/**
+ * One set: the work/recover pair and how many times it repeats back to back. The vocabulary ladder
+ * the whole tool uses — a **round** is work + recover; a **set** is rounds repeated.
+ */
+export interface IntervalSet {
   workSec: number;
   /** 0 = EMOM-style: the chime marks each work start and you rest inside whatever is left. */
   recoverSec: number;
   rounds: number;
-  /** Runs once, after the last round. 0 = skipped. */
+}
+
+/**
+ * The whole prescription, as numbers. Everything else in this module is derived from it.
+ *
+ * **The coach only ever prescribes ONE set**, and that is deliberate rather than a gap: the flat
+ * `interval_*` fields on `SessionItem` describe a single set, because models fill sibling fields
+ * far more reliably than nested arrays (REQ9 §7 — the same reason the now-menu flattens its
+ * output). A second set is **hand-added in the edit sheet**, which is exactly how the design
+ * framed it: "templates describe one set — a second set is always added by hand."
+ */
+export interface IntervalPlan {
+  /** Runs once, before the first set. 0 = skipped (the player's 5s "get in position" pre-roll takes over). */
+  warmupSec: number;
+  /** At least one. The sheet can add more; the coach never sends more than one. */
+  sets: IntervalSet[];
+  /** A neutral breather inserted before every set after the first. Ignored when there is one set. */
+  restBetweenSetsSec: number;
+  /** Runs once, after the last set. 0 = skipped. */
   cooldownSec: number;
 }
 
@@ -62,6 +86,9 @@ export const MIN_ROUNDS = 1;
 export const MAX_ROUNDS = 20;
 /** Fifteen minutes of warm-up or cool-down is already its own step. */
 export const MAX_EDGE_SEC = 900;
+/** Two shapes back to back is a finisher; past this it is two sessions wearing one hat. */
+export const MAX_SETS = 4;
+export const DEFAULT_REST_BETWEEN_SETS_SEC = 60;
 /** The whole run, warm-up and cool-down included. Rounds are trimmed to fit rather than refused. */
 export const MAX_INTERVAL_SEC = 3600;
 
@@ -124,20 +151,54 @@ export const INTERVAL_TEMPLATES: readonly IntervalTemplate[] = [
   },
 ];
 
-/** Which template a plan's SET matches, or null for a shape someone built by hand. Warm-up and
- *  cool-down are ignored on purpose — they sit outside the rounds a template describes. */
-export function matchTemplate(plan: IntervalPlan): IntervalTemplateId | null {
+/** Which template one SET matches, or null for a shape someone built by hand. Warm-up, cool-down
+ *  and the rest between sets are ignored on purpose — they sit outside the rounds a template
+ *  describes, which is why adding a warm-up doesn't stop something being a Tabata. */
+export function matchTemplate(set: IntervalSet | undefined): IntervalTemplateId | null {
+  if (!set) return null;
   const hit = INTERVAL_TEMPLATES.find(
-    (t) => t.workSec === plan.workSec && t.recoverSec === plan.recoverSec && t.rounds === plan.rounds,
+    (t) => t.workSec === set.workSec && t.recoverSec === set.recoverSec && t.rounds === set.rounds,
   );
   return hit ? hit.id : null;
 }
 
-/** Apply a template's set to a plan, leaving warm-up and cool-down alone. */
-export function applyTemplate(plan: IntervalPlan, id: IntervalTemplateId): IntervalPlan {
+/** Seed one set from a template, leaving every other set and the edges alone. */
+export function applyTemplate(plan: IntervalPlan, setIndex: number, id: IntervalTemplateId): IntervalPlan {
   const t = INTERVAL_TEMPLATES.find((x) => x.id === id);
   if (!t) return plan;
-  return clampIntervalPlan({ ...plan, workSec: t.workSec, recoverSec: t.recoverSec, rounds: t.rounds });
+  const sets = plan.sets.map((s, i) =>
+    i === setIndex ? { workSec: t.workSec, recoverSec: t.recoverSec, rounds: t.rounds } : s,
+  );
+  return clampIntervalPlan({ ...plan, sets });
+}
+
+/** The plan with one more set on the end, seeded from HIIT. Capped at `MAX_SETS`. */
+export function addSet(plan: IntervalPlan): IntervalPlan {
+  if (plan.sets.length >= MAX_SETS) return plan;
+  const seed = INTERVAL_TEMPLATES[0] ?? {
+    workSec: DEFAULT_WORK_SEC,
+    recoverSec: DEFAULT_RECOVER_SEC,
+    rounds: DEFAULT_ROUNDS,
+  };
+  const sets = [...plan.sets, { workSec: seed.workSec, recoverSec: seed.recoverSec, rounds: seed.rounds }];
+  // The rest row only exists once there is a gap to fill, so it appears with the second set.
+  const rest = plan.restBetweenSetsSec > 0 ? plan.restBetweenSetsSec : DEFAULT_REST_BETWEEN_SETS_SEC;
+  return clampIntervalPlan({ ...plan, sets, restBetweenSetsSec: rest });
+}
+
+/** The plan without set `setIndex`. Removing the last remaining set is a no-op — a run with no
+ *  work in it is not a state the player can render, and "delete" should never empty the screen. */
+export function removeSet(plan: IntervalPlan, setIndex: number): IntervalPlan {
+  if (plan.sets.length <= 1) return plan;
+  return clampIntervalPlan({ ...plan, sets: plan.sets.filter((_, i) => i !== setIndex) });
+}
+
+/** Replace one set's numbers, clamping the result. */
+export function updateSet(plan: IntervalPlan, setIndex: number, patch: Partial<IntervalSet>): IntervalPlan {
+  return clampIntervalPlan({
+    ...plan,
+    sets: plan.sets.map((s, i) => (i === setIndex ? { ...s, ...patch } : s)),
+  });
 }
 
 /* ── The plan ─────────────────────────────────────────────────────────────────────────────── */
@@ -155,39 +216,101 @@ const bounded = (v: unknown, lo: number, hi: number, fallback: number): number =
  */
 export function clampIntervalPlan(plan: Partial<IntervalPlan> | null | undefined): IntervalPlan {
   const p = plan ?? {};
-  const workSec = bounded(p.workSec, MIN_WORK_SEC, MAX_WORK_SEC, DEFAULT_WORK_SEC);
-  const recoverSec = bounded(p.recoverSec, 0, MAX_RECOVER_SEC, DEFAULT_RECOVER_SEC);
   const warmupSec = bounded(p.warmupSec, 0, MAX_EDGE_SEC, 0);
   const cooldownSec = bounded(p.cooldownSec, 0, MAX_EDGE_SEC, 0);
-  const asked = bounded(p.rounds, MIN_ROUNDS, MAX_ROUNDS, DEFAULT_ROUNDS);
-  const perRound = workSec + recoverSec;
-  const room = Math.max(0, MAX_INTERVAL_SEC - warmupSec - cooldownSec);
-  const byTime = perRound > 0 ? Math.floor(room / perRound) : MAX_ROUNDS;
-  const rounds = Math.max(MIN_ROUNDS, Math.min(asked, byTime));
-  return { warmupSec, workSec, recoverSec, rounds, cooldownSec };
+  const restBetweenSetsSec = bounded(p.restBetweenSetsSec, 0, MAX_EDGE_SEC, DEFAULT_REST_BETWEEN_SETS_SEC);
+  const given: Array<Partial<IntervalSet> | undefined> = Array.isArray(p.sets) && p.sets.length > 0 ? p.sets : [{}];
+  const sets: IntervalSet[] = given.slice(0, MAX_SETS).map((s) => ({
+    workSec: bounded(s?.workSec, MIN_WORK_SEC, MAX_WORK_SEC, DEFAULT_WORK_SEC),
+    recoverSec: bounded(s?.recoverSec, 0, MAX_RECOVER_SEC, DEFAULT_RECOVER_SEC),
+    rounds: bounded(s?.rounds, MIN_ROUNDS, MAX_ROUNDS, DEFAULT_ROUNDS),
+  }));
+  return {
+    warmupSec,
+    sets: trimToFit(sets, warmupSec, cooldownSec, restBetweenSetsSec),
+    restBetweenSetsSec,
+    cooldownSec,
+  };
 }
 
 /**
- * Expand a plan into the phases the player walks. A zero-length warm-up, recover or cool-down
- * simply is not there — the ring has no wedge for it and the clock never stops on it, which is
- * exactly how EMOM works without a special case.
+ * Shave rounds until the whole run fits the hour cap — **from the last set backwards**, because
+ * the later sets are the finishers someone bolted on and the first set is the session's point.
+ * Never below one round per set: an empty set is not a state the player can render, so the cap is
+ * a guardrail here rather than an invariant.
+ */
+function trimToFit(sets: IntervalSet[], warmupSec: number, cooldownSec: number, restSec: number): IntervalSet[] {
+  const edges = warmupSec + cooldownSec + Math.max(0, sets.length - 1) * restSec;
+  const out = sets.map((s) => ({ ...s }));
+  const body = () => out.reduce((n, s) => n + s.rounds * (s.workSec + s.recoverSec), 0);
+  for (let i = out.length - 1; i >= 0 && edges + body() > MAX_INTERVAL_SEC; i -= 1) {
+    const set = out[i];
+    if (!set) continue;
+    const perRound = set.workSec + set.recoverSec;
+    if (perRound <= 0) continue;
+    const others = body() - set.rounds * perRound;
+    const room = MAX_INTERVAL_SEC - edges - others;
+    set.rounds = Math.max(MIN_ROUNDS, Math.min(set.rounds, Math.floor(room / perRound)));
+  }
+  return out;
+}
+
+/** The single-set plan the COACH prescribes, from its five flat fields. The only constructor any
+ *  caller outside the edit sheet should need. */
+export function singleSetPlan(f: {
+  warmupSec?: number;
+  workSec?: number;
+  recoverSec?: number;
+  rounds?: number;
+  cooldownSec?: number;
+}): IntervalPlan {
+  return clampIntervalPlan({
+    warmupSec: f.warmupSec,
+    cooldownSec: f.cooldownSec,
+    sets: [{ workSec: f.workSec as number, recoverSec: f.recoverSec as number, rounds: f.rounds as number }],
+  });
+}
+
+/**
+ * Expand a plan into the phases the player walks. A zero-length warm-up, recover, rest or
+ * cool-down simply is not there — the ring has no wedge for it and the clock never stops on it,
+ * which is exactly how EMOM works without a special case.
+ *
+ * Rounds are numbered per set for what the player says ("Round 3 of 6" restarts in set 2, because
+ * that is how anyone counts), and ALSO globally, so the log can total the work without caring how
+ * it was grouped.
  */
 export function expandIntervalPhases(plan: IntervalPlan): IntervalPhase[] {
   const p = clampIntervalPlan(plan);
   const phases: IntervalPhase[] = [];
   if (p.warmupSec > 0) phases.push({ kind: 'neutral', label: 'Warm-up', seconds: p.warmupSec });
-  for (let r = 1; r <= p.rounds; r += 1) {
-    phases.push({ kind: 'work', label: 'Work', seconds: p.workSec, round: r });
-    if (p.recoverSec > 0) phases.push({ kind: 'recover', label: 'Recover', seconds: p.recoverSec, round: r });
-  }
+  let globalRound = 0;
+  p.sets.forEach((set, i) => {
+    if (i > 0 && p.restBetweenSetsSec > 0) {
+      phases.push({ kind: 'neutral', label: 'Rest', seconds: p.restBetweenSetsSec });
+    }
+    for (let r = 1; r <= set.rounds; r += 1) {
+      globalRound += 1;
+      const tag = { round: r, set: i + 1, globalRound };
+      phases.push({ kind: 'work', label: 'Work', seconds: set.workSec, ...tag });
+      if (set.recoverSec > 0) phases.push({ kind: 'recover', label: 'Recover', seconds: set.recoverSec, ...tag });
+    }
+  });
   if (p.cooldownSec > 0) phases.push({ kind: 'neutral', label: 'Cool-down', seconds: p.cooldownSec });
   return phases;
+}
+
+/** Every round in the run, across all sets — what the log counts against. */
+export function totalRounds(plan: IntervalPlan): number {
+  return clampIntervalPlan(plan).sets.reduce((n, s) => n + s.rounds, 0);
 }
 
 /** Seconds the whole run takes, warm-up and cool-down included. */
 export function intervalTotalSeconds(plan: IntervalPlan): number {
   const p = clampIntervalPlan(plan);
-  return p.warmupSec + p.rounds * (p.workSec + p.recoverSec) + p.cooldownSec;
+  const body = p.sets.reduce((n, s) => n + s.rounds * (s.workSec + s.recoverSec), 0);
+  const rests = Math.max(0, p.sets.length - 1) * p.restBetweenSetsSec;
+  return p.warmupSec + body + rests + p.cooldownSec;
 }
 
 /** Whole minutes an interval step occupies, floored at 1 so it never renders as "0 min". */
@@ -259,14 +382,17 @@ export function positionAt(phases: readonly IntervalPhase[], elapsed: number): I
   return { index: phases.length - 1, phase: last, remaining: 0, progress: 1, roundsDone: 0, done: true };
 }
 
-/** How many rounds have fully ended by `elapsed` — a round ends when the last phase carrying its
- *  number ends. Kept separate so `positionAt` stays readable. */
+/**
+ * How many rounds have fully ended by `elapsed` — a round ends when the last phase carrying its
+ * number ends. Keyed on `globalRound`, never `round`: per-set numbering restarts at 1, so keying
+ * on that would collapse set 2's round 1 onto set 1's and undercount the whole run.
+ */
 export function roundsCompleted(phases: readonly IntervalPhase[], elapsed: number): number {
   const endsAt = new Map<number, number>();
   let acc = 0;
   for (const phase of phases) {
     acc += Math.max(0, phase.seconds);
-    if (phase.round != null) endsAt.set(phase.round, acc);
+    if (phase.globalRound != null) endsAt.set(phase.globalRound, acc);
   }
   let done = 0;
   for (const end of endsAt.values()) if (elapsed >= end) done += 1;
@@ -299,11 +425,17 @@ export function intervalCount(seconds: number): string {
   return t < 60 ? String(t) : clock(t);
 }
 
-/** The prescription stated once — "6 × 40/20", or "10 × 1:00" when there is no separate recover. */
+/** One set, stated the way the coach chip draws it — "6 × 40/20", or "10 × 1:00" when there is no
+ *  separate recover (printing "/0" would read as a field someone could copy back). */
+export function setShorthand(set: IntervalSet): string {
+  const work = intervalCount(set.workSec);
+  return set.recoverSec > 0 ? `${set.rounds} × ${work}/${intervalCount(set.recoverSec)}` : `${set.rounds} × ${work}`;
+}
+
+/** The whole run, stated once. Two sets read as "6 × 40/20 + 10 × 1:00" — the plus is the rest
+ *  between them, which needs no number here because the chip is a summary, not the plan. */
 export function intervalShorthand(plan: IntervalPlan): string {
-  const p = clampIntervalPlan(plan);
-  const work = intervalCount(p.workSec);
-  return p.recoverSec > 0 ? `${p.rounds} × ${work}/${intervalCount(p.recoverSec)}` : `${p.rounds} × ${work}`;
+  return clampIntervalPlan(plan).sets.map(setShorthand).join(' + ');
 }
 
 /**

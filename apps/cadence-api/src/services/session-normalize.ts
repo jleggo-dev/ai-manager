@@ -8,7 +8,7 @@ import {
   SESSION_TOOL_KINDS,
   clampCycles,
   clampIntervalMinutes,
-  clampIntervalPlan,
+  singleSetPlan,
   clampSitMinutes,
   isBreathPatternId,
   isGroundingGame,
@@ -82,17 +82,19 @@ export const intervalFieldsOf = (
 > => {
   const declared = i.tool === 'interval' || num(i.interval_work_sec) !== undefined;
   if (!declared) return {};
-  const plan = clampIntervalPlan({
+  const plan = singleSetPlan({
     warmupSec: num(i.interval_warmup_sec) ?? 0,
     workSec: num(i.interval_work_sec),
     recoverSec: typeof i.interval_recover_sec === 'number' ? i.interval_recover_sec : undefined,
     rounds: num(i.interval_rounds),
     cooldownSec: num(i.interval_cooldown_sec) ?? 0,
   });
+  const set = plan.sets[0];
+  if (!set) return {};
   return {
-    interval_work_sec: plan.workSec,
-    interval_recover_sec: plan.recoverSec,
-    interval_rounds: plan.rounds,
+    interval_work_sec: set.workSec,
+    interval_recover_sec: set.recoverSec,
+    interval_rounds: set.rounds,
     interval_warmup_sec: plan.warmupSec,
     interval_cooldown_sec: plan.cooldownSec,
   };

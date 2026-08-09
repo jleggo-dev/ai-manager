@@ -3,9 +3,14 @@ import type { CircuitExercise, WalkthroughStep } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
 import { TONE, RING_C } from './tone.ts';
 import { YouTubeLink } from './YouTubeLink.tsx';
+import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
+import { HandsFree } from './HandsFree.tsx';
 
 type CircuitLog = Extract<StepLog, { kind: 'circuit' }>;
 const GAP = 10;
+/** A circuit has no clock, so there is nothing to start, pause or skip — the only thing voice can
+ *  usefully do is what the thumb does: log the move you just finished and move on. */
+const CIRCUIT_COMMANDS: HandsFreeCommand[] = ['next'];
 const ordinal = (i: number) => ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'][i] ?? `${i + 1}th`;
 
 /**
@@ -34,6 +39,7 @@ export function StepCircuit({
   const [round, setRound] = useState(log?.roundsDone ?? 0); // completed rounds
   const [pos, setPos] = useState(0); // move index in the current round
   const [dial, setDial] = useState<number | null>(null);
+  const [voiceOn, setVoiceOn] = useState(false);
   const complete = round >= rounds;
   const ex = exercises[Math.min(pos, n - 1)]!;
   const lastMove = pos >= n - 1;
@@ -53,6 +59,10 @@ export function StepCircuit({
       if (nr >= rounds) onAdvance();
     }
   }
+
+  // "next", never "skip": on a circuit the word means "I finished that one", and it LOGS the move.
+  // Answering to "skip" here would throw a rep away on a word that promised the opposite.
+  const voice = useHandsFree(voiceOn, () => logMove(), CIRCUIT_COMMANDS);
 
   const wedge = RING_C / rounds;
   const arc = Math.max(2, wedge - GAP);
@@ -241,6 +251,8 @@ export function StepCircuit({
         <button style={{ ...logBtn, ...(complete ? { opacity: 0.62 } : null) }} onClick={logMove} disabled={complete}>
           {primaryLabel}
         </button>
+
+        {!complete && <HandsFree state={voice} on={voiceOn} onToggle={() => setVoiceOn((v) => !v)} />}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {exercises.map((e, i) => {

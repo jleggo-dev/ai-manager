@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { clampIntervalPlan, patternById, type WalkthroughStep } from '@cadence/shared';
+import { patternById, singleSetPlan, type WalkthroughStep } from '@cadence/shared';
 import { StepTimer } from './StepTimer.tsx';
 import { StepBreathing } from './StepBreathing.tsx';
 import { StepInterval } from './StepInterval.tsx';
@@ -130,7 +130,7 @@ describe('walkthrough tools that auto-advance', () => {
     tool: { kind: 'read' },
     skippable: true,
   };
-  const quickPlan = () => clampIntervalPlan({ workSec: 5, recoverSec: 5, rounds: 2 });
+  const quickPlan = () => singleSetPlan({ workSec: 5, recoverSec: 5, rounds: 2 });
 
   it('StepInterval hands off to the next step when the last phase ends', () => {
     const onDone = vi.fn();

@@ -1,44 +1,48 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type CSSProperties } from 'react';
 import {
   EDGE_STEP_SEC,
   INTERVAL_TEMPLATES,
   MAX_EDGE_SEC,
   MAX_RECOVER_SEC,
   MAX_ROUNDS,
+  MAX_SETS,
   MAX_WORK_SEC,
   MIN_ROUNDS,
   MIN_WORK_SEC,
   WORK_STEP_SEC,
+  addSet,
   applyTemplate,
   clampIntervalPlan,
   expandIntervalPhases,
   intervalShorthand,
   intervalTotalSeconds,
   matchTemplate,
-  type IntervalPhaseKind,
+  removeSet,
+  updateSet,
   type IntervalPlan,
+  type IntervalSet,
 } from '@cadence/shared';
-import { INTERVAL_KIND, TONE } from './tone.ts';
+import { TONE } from './tone.ts';
 import { stripSegments } from './intervalRing.ts';
+import { StepperRow } from './IntervalRows.tsx';
 import { formatClock } from './timer.ts';
 import { grab, sheet } from '../wt-styles.ts';
 
 /**
  * "Edit intervals" (interval design C) — the coach's plan is the **starting point, not the rule**.
  *
- * Three things carry the whole sheet:
+ * Four things carry the whole sheet:
  *   • **containment is drawn, not explained.** Work and Recover live inside a set card behind an
- *     amber repeat rail, because those are the two rows the round count multiplies; warm-up and
- *     cool-down sit outside it, because they run once. Nobody should have to read a sentence to
- *     learn that.
- *   • **templates seed, never lock.** HIIT / EMOM / Tabata are three numbers each; touching any
- *     stepper flips the chip to Custom and nothing is disabled. There is no "mode".
+ *     amber repeat rail, because those are the two rows the round count multiplies; warm-up,
+ *     cool-down and the rest between sets sit outside it, because they run once. Nobody should
+ *     have to read a sentence to learn that.
+ *   • **templates seed, never lock.** HIIT / EMOM / Tabata are three numbers each, applied to ONE
+ *     set; touching any stepper flips that set's chip to Custom and nothing is disabled.
+ *   • **a second set is a whole second card**, not a mode — an EMOM finisher after a HIIT block.
+ *     A neutral "Rest between sets" row appears with it, because that gap is real time.
  *   • **the strip is the receipt.** One segment per phase, width = seconds — edit a number and
  *     watch the session's shape change. Below it the delta line IS the reset control: a colour
  *     change, never a warning, because changing the plan is allowed.
- *
- * Explanations live behind a 17px `?` disc, one open at a time — rows carry only their name, so
- * the sheet stays scannable for the person who already knows what a Tabata is.
  */
 export function IntervalEditSheet({
   plan,
@@ -53,15 +57,14 @@ export function IntervalEditSheet({
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<IntervalPlan>(plan);
-  // The set-header tooltip restates the maths live, and is the one shown open on arrival — it is
+  // The first set's tooltip restates the maths live, and is the one shown open on arrival — it is
   // the only thing in here someone might genuinely not know.
-  const [openTip, setOpenTip] = useState<string | null>('rounds');
+  const [openTip, setOpenTip] = useState<string | null>('rounds-0');
 
-  const adjust = (field: keyof IntervalPlan, delta: number, lo: number, hi: number) => () =>
-    setDraft((d) => clampIntervalPlan({ ...d, [field]: Math.min(hi, Math.max(lo, d[field] + delta)) }));
+  const edge = (field: 'warmupSec' | 'cooldownSec' | 'restBetweenSetsSec', delta: number) => () =>
+    setDraft((d) => clampIntervalPlan({ ...d, [field]: clamp(d[field] + delta, 0, MAX_EDGE_SEC) }));
   const tip = (id: string) => () => setOpenTip((cur) => (cur === id ? null : id));
 
-  const template = matchTemplate(draft);
   const total = intervalTotalSeconds(draft);
   const matchesCoach =
     intervalShorthand(draft) === intervalShorthand(coachPlan) &&
@@ -75,20 +78,6 @@ export function IntervalEditSheet({
         <div style={{ ...grab, height: 5, marginBottom: 12 }} aria-hidden />
         <div style={heading}>Edit intervals</div>
 
-        <div style={{ display: 'flex', gap: 6 }}>
-          {INTERVAL_TEMPLATES.map((t) => (
-            <button
-              key={t.id}
-              style={templateChip(template === t.id)}
-              onClick={() => setDraft((d) => applyTemplate(d, t.id))}
-            >
-              {t.label}
-            </button>
-          ))}
-          {/* Not a mode you switch into — it lights up when the numbers match no template. */}
-          <div style={{ ...templateChip(template === null), cursor: 'default' }}>Custom</div>
-        </div>
-
         <StepperRow
           label="Warm-up"
           kind="neutral"
@@ -96,50 +85,47 @@ export function IntervalEditSheet({
           tip="Runs once, before the rounds. Take it to 0:00 to skip — a 5s “get in position” count runs instead."
           tipOpen={openTip === 'warm'}
           onTip={tip('warm')}
-          onMinus={adjust('warmupSec', -EDGE_STEP_SEC, 0, MAX_EDGE_SEC)}
-          onPlus={adjust('warmupSec', EDGE_STEP_SEC, 0, MAX_EDGE_SEC)}
+          onMinus={edge('warmupSec', -EDGE_STEP_SEC)}
+          onPlus={edge('warmupSec', EDGE_STEP_SEC)}
         />
 
-        <div style={setCard}>
-          <StepperRow
-            bare
-            // The design draws "Set 1 · 6 rounds", which earns its "Set 1" from the "Add set 2"
-            // affordance beside it. That second set is not built yet, so naming this one "Set 1"
-            // would promise a sibling that doesn't exist — and the two words it costs are exactly
-            // the two that make the header wrap at 390px. The ladder still lives in the tooltip.
-            label={`${draft.rounds} round${draft.rounds === 1 ? '' : 's'}`}
-            kind="work"
-            icon
-            value={`× ${draft.rounds}`}
-            tip={roundsTip(draft)}
-            tipOpen={openTip === 'rounds'}
-            onTip={tip('rounds')}
-            onMinus={adjust('rounds', -1, MIN_ROUNDS, MAX_ROUNDS)}
-            onPlus={adjust('rounds', 1, MIN_ROUNDS, MAX_ROUNDS)}
-          />
-          <div style={repeatRail}>
-            <StepperRow
-              label="Work"
-              kind="work"
-              value={formatClock(draft.workSec)}
-              tip="The push. Amber on the ring, rising chime when it starts."
-              tipOpen={openTip === 'work'}
-              onTip={tip('work')}
-              onMinus={adjust('workSec', -WORK_STEP_SEC, MIN_WORK_SEC, MAX_WORK_SEC)}
-              onPlus={adjust('workSec', WORK_STEP_SEC, MIN_WORK_SEC, MAX_WORK_SEC)}
-            />
-            <StepperRow
-              label="Recover"
-              kind="recover"
-              value={formatClock(draft.recoverSec)}
-              tip="The breather. Green on the ring. At 0:00 it’s EMOM-style — rest inside whatever’s left of each minute."
-              tipOpen={openTip === 'recover'}
-              onTip={tip('recover')}
-              onMinus={adjust('recoverSec', -WORK_STEP_SEC, 0, MAX_RECOVER_SEC)}
-              onPlus={adjust('recoverSec', WORK_STEP_SEC, 0, MAX_RECOVER_SEC)}
+        {draft.sets.map((set, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            {/* The gap between two sets is real time, so it gets a real row — auto-inserted with
+                the second set rather than hidden inside it. */}
+            {i > 0 && (
+              <StepperRow
+                // "Rest", not "Rest between sets": it is the one label too long for the row, it
+                // sits literally between the two set cards, and it is the word the PLAYER uses for
+                // this phase — so the short form is also the consistent one.
+                label="Rest"
+                kind="neutral"
+                value={formatClock(draft.restBetweenSetsSec)}
+                tip="The breather between one set and the next. It runs once per gap, outside both sets' rounds."
+                tipOpen={openTip === 'rest'}
+                onTip={tip('rest')}
+                onMinus={edge('restBetweenSetsSec', -EDGE_STEP_SEC)}
+                onPlus={edge('restBetweenSetsSec', EDGE_STEP_SEC)}
+              />
+            )}
+            <SetCard
+              set={set}
+              index={i}
+              plural={draft.sets.length > 1}
+              openTip={openTip}
+              onTip={tip}
+              onChange={(patch) => setDraft((d) => updateSet(d, i, patch))}
+              onTemplate={(id) => setDraft((d) => applyTemplate(d, i, id))}
+              onRemove={draft.sets.length > 1 ? () => setDraft((d) => removeSet(d, i)) : undefined}
             />
           </div>
-        </div>
+        ))}
+
+        {draft.sets.length < MAX_SETS && (
+          <button style={addSetBtn} onClick={() => setDraft(addSet)}>
+            ＋ Add set {draft.sets.length + 1}
+          </button>
+        )}
 
         <StepperRow
           label="Cool-down"
@@ -148,8 +134,8 @@ export function IntervalEditSheet({
           tip="Runs once, after the last round. 0:00 skips it."
           tipOpen={openTip === 'cool'}
           onTip={tip('cool')}
-          onMinus={adjust('cooldownSec', -EDGE_STEP_SEC, 0, MAX_EDGE_SEC)}
-          onPlus={adjust('cooldownSec', EDGE_STEP_SEC, 0, MAX_EDGE_SEC)}
+          onMinus={edge('cooldownSec', -EDGE_STEP_SEC)}
+          onPlus={edge('cooldownSec', EDGE_STEP_SEC)}
         />
 
         <div style={stripCard}>
@@ -158,7 +144,7 @@ export function IntervalEditSheet({
               <div key={s.key} style={{ flex: s.flex, borderRadius: 3, background: s.bg, minWidth: 2 }} />
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
             <div style={stripLabel}>Total · {formatClock(total)}</div>
             <button
               style={{ ...deltaLine, color: matchesCoach ? 'oklch(45% 0.09 152)' : TONE.off }}
@@ -180,108 +166,111 @@ export function IntervalEditSheet({
   );
 }
 
-/** The maths, restated in the numbers currently on screen — the one explanation worth showing
- *  unprompted, because "round" and "set" are the words the player will use back at you. */
-function roundsTip(plan: IntervalPlan): string {
-  const one =
-    plan.recoverSec > 0
-      ? `One round = ${formatClock(plan.workSec)} work + ${formatClock(plan.recoverSec)} recover`
-      : `One round = ${formatClock(plan.workSec)} work with no recover`;
-  return `${one}, done ${plan.rounds}× back to back. Warm-up and cool-down sit outside the rounds.`;
-}
-
-/** One row: kind dot + label + `?` + `− pill +`. Every editable number in the sheet is this shape,
- *  so the steppers are learned once. */
-function StepperRow({
-  label,
-  kind,
-  value,
-  tip,
-  tipOpen,
+/**
+ * One set: its own template chips, a rounds header, and the two rows the rounds multiply bracketed
+ * by the amber repeat rail. The card is what makes "these two repeat, those don't" visible without
+ * a word of explanation.
+ */
+function SetCard({
+  set,
+  index,
+  plural,
+  openTip,
   onTip,
-  onMinus,
-  onPlus,
-  bare,
-  icon,
+  onChange,
+  onTemplate,
+  onRemove,
 }: {
-  label: string;
-  kind: IntervalPhaseKind;
-  value: string;
-  tip: string;
-  tipOpen: boolean;
-  onTip: () => void;
-  onMinus: () => void;
-  onPlus: () => void;
-  /** The set-card header sits ON the card, so it drops the row's own white surface. */
-  bare?: boolean;
-  icon?: boolean;
+  set: IntervalSet;
+  index: number;
+  /** Only name it "Set 1" once a Set 2 exists — otherwise the label promises a sibling that doesn't. */
+  plural: boolean;
+  openTip: string | null;
+  onTip: (id: string) => () => void;
+  onChange: (patch: Partial<IntervalSet>) => void;
+  onTemplate: (id: (typeof INTERVAL_TEMPLATES)[number]['id']) => void;
+  /** Absent on the only set — deleting it would empty the screen. */
+  onRemove?: () => void;
 }) {
-  const pill = PILL[kind];
+  const template = matchTemplate(set);
+  const scope = plural ? `set ${index + 1}` : '';
+  // The "× 3" pill beside it already carries the count, so the header doesn't repeat it — at 390px
+  // with a delete control in the row, "Set 1 · 3 rounds" is the string that truncates.
+  const rounds = `${set.rounds} round${set.rounds === 1 ? '' : 's'}`;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <div style={bare ? bareRow : row}>
-        {icon ? (
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={pill.ink}
-            strokeWidth={2.4}
-            strokeLinecap="round"
-            aria-hidden
-          >
-            <path d="M20 12a8 8 0 1 1-2.6-5.9" />
-            <path d="M20 4v4h-4" />
-          </svg>
-        ) : (
-          <div style={{ width: 10, height: 10, flex: 'none', borderRadius: '50%', background: pill.dot }} aria-hidden />
-        )}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 7 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 900, color: TONE.ink }}>{label}</div>
-          <button style={tipDisc} onClick={onTip} aria-expanded={tipOpen} aria-label={`What is ${label}?`}>
-            ?
+    <div style={setCard}>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {INTERVAL_TEMPLATES.map((t) => (
+          <button key={t.id} style={templateChip(template === t.id)} onClick={() => onTemplate(t.id)}>
+            {t.label}
           </button>
-        </div>
-        <Stepper sign="−" onClick={onMinus} label={`Less ${label}`} />
-        <div style={{ ...valuePill, background: pill.bg, border: `1.5px solid ${pill.border}`, color: pill.ink }}>
-          {value}
-        </div>
-        <Stepper sign="+" onClick={onPlus} label={`More ${label}`} />
+        ))}
+        {/* Not a mode you switch into — it lights up when the numbers match no template. */}
+        <div style={{ ...templateChip(template === null), cursor: 'default' }}>Custom</div>
       </div>
-      {tipOpen && <div style={tipBubble}>{tip}</div>}
+
+      <StepperRow
+        bare
+        icon
+        scope={scope}
+        label={plural ? `Set ${index + 1}` : rounds}
+        kind="work"
+        value={`× ${set.rounds}`}
+        tip={roundsTip(set, index, plural)}
+        tipOpen={openTip === `rounds-${index}`}
+        onTip={onTip(`rounds-${index}`)}
+        onMinus={() => onChange({ rounds: clamp(set.rounds - 1, MIN_ROUNDS, MAX_ROUNDS) })}
+        onPlus={() => onChange({ rounds: clamp(set.rounds + 1, MIN_ROUNDS, MAX_ROUNDS) })}
+        trailing={
+          onRemove ? (
+            <button style={removeBtn} onClick={onRemove} aria-label={`Remove set ${index + 1}`}>
+              −
+            </button>
+          ) : undefined
+        }
+      />
+
+      <div style={repeatRail}>
+        <StepperRow
+          label="Work"
+          scope={scope}
+          kind="work"
+          value={formatClock(set.workSec)}
+          tip="The push. Amber on the ring, rising chime when it starts."
+          tipOpen={openTip === `work-${index}`}
+          onTip={onTip(`work-${index}`)}
+          onMinus={() => onChange({ workSec: clamp(set.workSec - WORK_STEP_SEC, MIN_WORK_SEC, MAX_WORK_SEC) })}
+          onPlus={() => onChange({ workSec: clamp(set.workSec + WORK_STEP_SEC, MIN_WORK_SEC, MAX_WORK_SEC) })}
+        />
+        <StepperRow
+          label="Recover"
+          scope={scope}
+          kind="recover"
+          value={formatClock(set.recoverSec)}
+          tip="The breather. Green on the ring. At 0:00 it’s EMOM-style — rest inside whatever’s left of each minute."
+          tipOpen={openTip === `recover-${index}`}
+          onTip={onTip(`recover-${index}`)}
+          onMinus={() => onChange({ recoverSec: clamp(set.recoverSec - WORK_STEP_SEC, 0, MAX_RECOVER_SEC) })}
+          onPlus={() => onChange({ recoverSec: clamp(set.recoverSec + WORK_STEP_SEC, 0, MAX_RECOVER_SEC) })}
+        />
+      </div>
     </div>
   );
 }
 
-function Stepper({ sign, onClick, label }: { sign: ReactNode; onClick: () => void; label: string }) {
-  return (
-    <button style={stepperBtn} onClick={onClick} aria-label={label}>
-      {sign}
-    </button>
-  );
-}
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-const PILL: Record<IntervalPhaseKind, { bg: string; border: string; ink: string; dot: string }> = {
-  work: {
-    bg: 'oklch(97% 0.02 74)',
-    border: 'oklch(86% 0.04 66)',
-    ink: 'oklch(48% 0.11 60)',
-    dot: INTERVAL_KIND.work.done,
-  },
-  recover: {
-    bg: 'oklch(97% 0.015 152)',
-    border: 'oklch(85% 0.04 152)',
-    ink: 'oklch(42% 0.08 152)',
-    dot: INTERVAL_KIND.recover.done,
-  },
-  neutral: {
-    bg: 'oklch(97.5% 0.008 85)',
-    border: 'oklch(90% 0.015 85)',
-    ink: 'oklch(42% 0.02 150)',
-    dot: INTERVAL_KIND.neutral.done,
-  },
-};
+/** The maths, restated in the numbers currently on screen — the one explanation worth showing
+ *  unprompted, because "round" and "set" are the words the player will use back at you. */
+function roundsTip(set: IntervalSet, index: number, plural: boolean): string {
+  const one =
+    set.recoverSec > 0
+      ? `One round = ${formatClock(set.workSec)} work + ${formatClock(set.recoverSec)} recover`
+      : `One round = ${formatClock(set.workSec)} work with no recover`;
+  const where = plural ? ` in set ${index + 1}` : '';
+  return `${one}${where}, done ${set.rounds}× back to back. Warm-up, cool-down and any rest between sets sit outside the rounds.`;
+}
 
 const backdrop: CSSProperties = {
   position: 'absolute',
@@ -317,16 +306,6 @@ const templateChip = (active: boolean): CSSProperties => ({
   background: active ? 'oklch(97% 0.02 74)' : 'white',
   cursor: 'pointer',
 });
-const row: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  background: 'white',
-  border: '1px solid oklch(91% 0.015 85)',
-  borderRadius: 14,
-  padding: 12,
-};
-const bareRow: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '2px 2px 2px 4px' };
 const setCard: CSSProperties = {
   background: 'oklch(98.5% 0.012 74)',
   border: '1.5px solid oklch(88% 0.04 70)',
@@ -345,55 +324,34 @@ const repeatRail: CSSProperties = {
   paddingLeft: 8,
   marginLeft: 5,
 };
-const tipDisc: CSSProperties = {
-  width: 17,
-  height: 17,
+/** The reference app's red minus, made quiet — destructive, but not shouting about it. */
+const removeBtn: CSSProperties = {
+  width: 22,
+  height: 22,
   flex: 'none',
   borderRadius: '50%',
-  border: '1.5px solid oklch(85% 0.02 85)',
+  border: '1.5px solid oklch(84% 0.05 30)',
   background: 'transparent',
-  color: 'oklch(55% 0.02 120)',
-  fontSize: 10,
+  color: 'oklch(55% 0.13 30)',
+  fontSize: 15,
   fontWeight: 900,
   lineHeight: 1,
   padding: 0,
   cursor: 'pointer',
 };
-const tipBubble: CSSProperties = {
-  alignSelf: 'flex-start',
-  margin: '5px 0 2px 20px',
-  background: 'oklch(30% 0.02 150)',
-  color: 'oklch(96% 0.008 85)',
-  fontSize: 11,
-  fontWeight: 700,
-  lineHeight: 1.45,
-  borderRadius: 10,
-  padding: '7px 11px',
-  maxWidth: 280,
-};
-const stepperBtn: CSSProperties = {
-  width: 38,
-  height: 34,
-  flex: 'none',
-  border: 'none',
-  borderRadius: 999,
-  background: 'linear-gradient(180deg, #fff 0%, oklch(96% 0.01 85) 46%)',
-  boxShadow: '0 3px 0 oklch(88% 0.02 85), 0 0 0 1px oklch(92% 0.015 85)',
-  fontSize: 18,
-  fontWeight: 800,
-  color: 'oklch(40% 0.02 150)',
-  cursor: 'pointer',
-  padding: 0,
-  lineHeight: 1,
-};
-const valuePill: CSSProperties = {
-  minWidth: 58,
-  textAlign: 'center',
-  borderRadius: 999,
-  padding: '6px 10px',
-  fontSize: 13.5,
+const addSetBtn: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  border: '1.5px dashed oklch(86% 0.03 85)',
+  borderRadius: 16,
+  padding: 11,
+  fontSize: 12.5,
   fontWeight: 900,
-  fontVariantNumeric: 'tabular-nums',
+  color: 'oklch(52% 0.02 120)',
+  background: 'transparent',
+  cursor: 'pointer',
 };
 const stripCard: CSSProperties = {
   display: 'flex',
@@ -410,6 +368,7 @@ const stripLabel: CSSProperties = {
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
   color: 'oklch(52% 0.02 120)',
+  whiteSpace: 'nowrap',
 };
 const deltaLine: CSSProperties = {
   border: 'none',
