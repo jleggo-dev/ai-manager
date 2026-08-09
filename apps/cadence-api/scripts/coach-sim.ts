@@ -10,17 +10,19 @@
  *   node --import tsx apps/cadence-api/scripts/coach-sim.ts end   (cleanup)
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { buildContextPack } from '../src/services/context-pack.ts';
 import { openCoachSession, injectCoachContext, sendCoachMessage, recordCoachReply } from '../src/ai/aim.ts';
+import { renderCapabilities } from '../src/services/coach-capabilities.ts';
+import { renderPickProtocol } from '../src/services/coach-picks-protocol.ts';
 import { runCaptureExtract } from '../src/services/capture.ts';
 import { sql } from '../src/db/sql.ts';
 
 const DEV = '00000000-0000-4000-a000-000000000001';
-const SESSION_FILE = path.join(
-  'C:/Users/jfleg/AppData/Local/Temp/claude/C--Users-jfleg/aa690f49-9958-421f-9c84-ebbb929f836f/scratchpad',
-  'coach-sim-session.txt',
-);
+// Was an absolute Windows path from the machine this was written on, so the script could not run
+// anywhere else. The OS temp dir is the portable equivalent of what it was reaching for.
+const SESSION_FILE = path.join(os.tmpdir(), 'cadence-coach-sim-session.txt');
 
 async function clean() {
   await sql`delete from cadence.goals where user_id = ${DEV}`;
@@ -35,9 +37,17 @@ async function start() {
   const pack = await buildContextPack(DEV, 'onboarding');
   const s = await openCoachSession(DEV);
   await injectCoachContext(DEV, s.sessionId, pack.rendered, { source: 'registry-pack', version: 1 });
+  // The route injects three blocks at session open, not one. The capability manifest and the
+  // quick-pick protocol were missing here, which made this a mirror of a route that no longer
+  // existed — and quietly meant the sim could never reproduce a pick set.
+  await injectCoachContext(DEV, s.sessionId, renderCapabilities({}), { source: 'capabilities', version: 1 });
+  await injectCoachContext(DEV, s.sessionId, renderPickProtocol({ intent: 'onboarding' }), {
+    source: 'pick-protocol',
+    version: 1,
+  });
   fs.writeFileSync(SESSION_FILE, s.sessionId);
   console.log(`session started (${s.sessionId}) · pack ${pack.mode} · fns: ${pack.provenance.map((p) => p.fn).join(', ')}`);
-  console.log('(UI shows a fixed greeting; the coach LLM replies to your first message)');
+  console.log('(the client opens with an <open> turn; the coach asks the first question)');
 }
 
 async function msg(text: string) {
