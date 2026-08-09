@@ -11,6 +11,7 @@ import {
 } from '../ai/aim.ts';
 import { runCaptureExtract } from '../services/capture.ts';
 import { renderCapabilities } from '../services/coach-capabilities.ts';
+import { renderPickProtocol } from '../services/coach-picks-protocol.ts';
 import { renderScreenNotes } from '../services/goal-screen.ts';
 import { runDetourCapture } from '../services/detour-capture.ts';
 import { assembleTurn } from '../services/coach-context.ts';
@@ -23,14 +24,27 @@ import { ensureHorizon } from '../services/plan-horizon.ts';
 import { createConversation, getLatestConversation, touchConversation } from '../repos/conversations.ts';
 import { getActivePlan, getFirstPlanCommitAt } from '../repos/plans.ts';
 
+/**
+ * Turns the app authored rather than the user: the injected `<context>` packs, and the `<open>`
+ * nudge the client sends so Cadence speaks first (OnboardingChat's OPENER).
+ *
+ * Both must be invisible everywhere the conversation is read back. In the restored transcript an
+ * `<open>` turn would render as a message in the user's own bubble that they never wrote; in the
+ * Broker's capture window it would be extracted as something they said.
+ */
+const APP_AUTHORED = /^\s*<(context|open)\b/;
+
+export const isRealTurn = (m: { role?: string; content?: string }) =>
+  (m.role === 'user' || m.role === 'assistant') && !APP_AUTHORED.test(m.content ?? '');
+
 /** Build the capture window from the FULL conversation (user + coach turns), excluding the
- *  injected <context> turn. Falls back to the latest message if history can't be read. */
+ *  app-authored turns above. Falls back to the latest message if history can't be read. */
 async function captureWindow(userId: string, sessionId: string, latest: string): Promise<string> {
   try {
     const hist = (await getCoachHistory(userId, sessionId)) as { messages?: unknown; data?: unknown };
     const msgs = (hist.messages ?? hist.data ?? []) as Array<{ role?: string; content?: string }>;
     const w = msgs
-      .filter((m) => (m.role === 'user' || m.role === 'assistant') && !(m.content ?? '').startsWith('<context'))
+      .filter(isRealTurn)
       .map((m) => `${m.role === 'assistant' ? 'Coach' : 'User'}: ${(m.content ?? '').trim()}`)
       .join('\n');
     return w || latest;
@@ -75,6 +89,13 @@ router.post('/sessions', async (req: Request, res: Response) => {
     // worse than one that says "not yet". Cheap and static, so it rides the same session-open turn.
     await injectCoachContext(userId, session.sessionId, renderCapabilities({ healthAvailable }), {
       source: 'capabilities',
+      version: 1,
+    });
+    // The quick-pick protocol (coach-picks-protocol.ts) — the format the client parses out of a
+    // turn to render tappable answers, plus the suggested first-conversation running order. Same
+    // reasoning as the capability manifest: the parser ships in code, so the format does too.
+    await injectCoachContext(userId, session.sessionId, renderPickProtocol({ intent }), {
+      source: 'pick-protocol',
       version: 1,
     });
     // Persist conversation_id <-> ai_session_id mapping (§C6).
@@ -127,7 +148,7 @@ router.get('/current', async (req: Request, res: Response) => {
     const hist = (await getCoachHistory(userId, conv.ai_session_id)) as { messages?: unknown; data?: unknown };
     const raw = (hist.messages ?? hist.data ?? []) as Array<{ role?: string; content?: string }>;
     const messages = raw
-      .filter((m) => (m.role === 'user' || m.role === 'assistant') && !(m.content ?? '').startsWith('<context'))
+      .filter(isRealTurn)
       .map((m) => ({ role: m.role === 'assistant' ? 'coach' : 'user', content: m.content ?? '' }));
     res.json({ sessionId: conv.ai_session_id, messages, stale, staleReason });
   } catch (err) {

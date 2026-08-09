@@ -6,6 +6,7 @@ import { GearStep } from './GearStep.tsx';
 import { GoalsStep } from './GoalsStep.tsx';
 import { LockStep } from './LockStep.tsx';
 import { FaceStep } from './FaceStep.tsx';
+import type { Step } from './reviewConstants.ts';
 import { useReviewWizard, type ReviewMode } from './useReviewWizard.ts';
 
 /**
@@ -17,10 +18,13 @@ export function ReviewScreen({
   onBack,
   onLocked,
   mode = 'onboard',
+  initialStep,
 }: {
   onBack: () => void;
   onLocked: () => void;
   mode?: ReviewMode;
+  /** Open on a specific step — the chat's confirmation deep-links "edit" straight to it. */
+  initialStep?: Step;
 }) {
   const {
     ORDER,
@@ -37,7 +41,7 @@ export function ReviewScreen({
     doPreview,
     doConfirmLock,
     doDismissPreview,
-  } = useReviewWizard({ mode, onBack, onLocked });
+  } = useReviewWizard({ mode, onBack, onLocked, initialStep });
 
   const head = (
     <>

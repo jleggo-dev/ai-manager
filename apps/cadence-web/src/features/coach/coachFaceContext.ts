@@ -11,6 +11,9 @@ import { coachFace, type CoachFace, type CoachFaceId } from '@cadence/shared';
  *
  * `faceId: null` is a first-class state meaning "hasn't picked", not "still loading" — see
  * `ready` for that. Both render the brand mark, but only one of them should ever prompt.
+ *
+ * In practice onboarding fills this in before the first turn (MeetCadence draws one at random and
+ * keeps it), so null on a live account means they went to Settings and cleared it deliberately.
  */
 export interface CoachFaceState {
   /** The chosen id, or null for "hasn't picked". */

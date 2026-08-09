@@ -1,25 +1,22 @@
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Welcome } from './features/welcome/Welcome.tsx';
+import { MeetCadence } from './features/onboarding/MeetCadence.tsx';
 import { OnboardingChat } from './features/onboarding/OnboardingChat.tsx';
+import { BuildingScreen } from './features/onboarding/BuildingScreen.tsx';
 import { ReviewScreen } from './features/review/ReviewScreen.tsx';
+import type { Step } from './features/review/reviewConstants.ts';
 import { MainTabs } from './features/shell/MainTabs.tsx';
 import { DevPanel } from './features/dev/DevPanel.tsx';
 import { AccountSwitcher } from './features/dev/AccountSwitcher.tsx';
+import { previewScreen } from './features/dev/previewRoutes.tsx';
 import { AuthScreen } from './features/auth/AuthScreen.tsx';
+import { AccountPicker } from './features/auth/AccountPicker.tsx';
+import { SignInFork } from './features/auth/SignInFork.tsx';
+import { SignUpGate } from './features/auth/SignUpGate.tsx';
+import { isAnonymousSession } from './features/auth/anonymous.ts';
+import { listDeviceAccounts, rememberDeviceAccount } from './features/auth/deviceAccounts.ts';
 import { PhoneFrame } from './components/PhoneFrame.tsx';
 import { CoachFaceProvider } from './features/coach/CoachFaceProvider.tsx';
-import {
-  BreathingPreview,
-  GroundingPreview,
-  MeditatePreview,
-  NowMenuPreview,
-  FeelingLogPreview,
-  JournalPreview,
-} from './features/dev/BreathingPreview.tsx';
-import { FreeWritePreview } from './features/dev/FreeWritePreview.tsx';
-import { IntervalPreview } from './features/dev/IntervalPreview.tsx';
-import { CoachMomentsPreview } from './features/dev/CoachMomentsPreview.tsx';
 import { getPlan, setAuthToken, isDevMode, getHealthDigest, postHealthDigest } from './lib/api.ts';
 import { syncPlanLocalNotifications } from './lib/local-notifications-sync.ts';
 import { capabilities } from './lib/capability/index.ts';
@@ -27,7 +24,7 @@ import { maybeRefreshHealthDigest } from './features/onboarding/health-digest.ts
 import { supabase } from './lib/supabase.ts';
 import { screenFromPlanStage } from './screenFromPlanStage.ts';
 
-type Screen = 'loading' | 'welcome' | 'onboarding' | 'review' | 'plan';
+type Screen = 'loading' | 'meet' | 'onboarding' | 'review' | 'building' | 'gate' | 'plan';
 
 // Resolved once at load (the URL doesn't change without a reload). Dev mode uses the header-based
 // test accounts and skips real auth; everything else requires a Supabase session.
@@ -50,27 +47,38 @@ const Loading = () => (
 );
 
 /**
- * The signed-in app: the phone shell + the onboarding→review→plan screen machine. Mounts only once
- * an identity is resolved (a dev account, or a real session), so its getPlan() fires with auth in
- * place. Dev affordances (account switcher, X-ray toggle) render only in dev mode; real-auth mode
- * gets a small sign-out control in the same corner instead.
+ * The signed-in app: the phone shell + the onboarding→build→plan screen machine. Mounts only once
+ * an identity is resolved (a dev account, a real session, or the anonymous session onboarding
+ * opens), so its getPlan() fires with auth in place.
+ *
+ * Since the v2 redesign the flow is: meet the coach → one running chat (the coach drives it, the
+ * old wizard is gone) → build the week → save it. `review` is still here but is no longer a step
+ * anyone walks through: it is what "edit" on the confirmation opens, and what Settings opens later.
+ *
+ * The sign-up gate sits between `building` and `plan` and ONLY for an anonymous session. Everyone
+ * who signed in first goes straight to their plan — being asked to sign up twice is worse than
+ * being asked once at the wrong time.
  */
 function CoachApp({ session }: { session: Session | null }) {
   const [screen, setScreen] = useState<Screen>('loading');
-  const [coachIntent, setCoachIntent] = useState<'onboarding' | 'ongoing'>('onboarding');
+  const [reviewStep, setReviewStep] = useState<Step>('goals');
   const [dev, setDev] = useState(DEV_MODE);
+  const anonymous = isAnonymousSession(session);
 
   useEffect(() => {
     getPlan()
       .then((p) => {
-        setScreen(screenFromPlanStage(p.stage));
+        const next = screenFromPlanStage(p.stage);
+        // A finished plan on an account that never signed up: the gate is what stands between
+        // them and it, so land there rather than on a plan that could evaporate with the browser.
+        setScreen(next === 'plan' && anonymous ? 'gate' : next);
         // Reconcile on-device local notifications with the plan we just loaded. Full replace, native-only,
         // and a no-op without permission — so it is safe to run on every load, and running it
         // often is the point: a reminder for a session that was replanned away reads as the app
         // not having listened.
         void syncPlanLocalNotifications();
       })
-      .catch(() => setScreen('welcome'));
+      .catch(() => setScreen('meet'));
     // Silent Apple Health refresh (iOS shell, permission already granted): keeps the coach's
     // view of recent activity current without re-asking. Throttled + content-diffed inside.
     void maybeRefreshHealthDigest({
@@ -79,7 +87,14 @@ function CoachApp({ session }: { session: Session | null }) {
       getLatest: getHealthDigest,
       post: (d) => postHealthDigest(d),
     }).catch(() => {});
+    // anonymous is fixed for the life of a session object; re-running on it would refetch the plan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const openReview = (step: Step = 'goals') => {
+    setReviewStep(step);
+    setScreen('review');
+  };
 
   // The picked portrait is loaded once here, above the screen machine: the face has to be the
   // same on the review wizard, the trail and every sheet, and a per-surface fetch would let them
@@ -88,17 +103,23 @@ function CoachApp({ session }: { session: Session | null }) {
     <PhoneFrame>
       {screen === 'loading' ? (
         <Loading />
-      ) : screen === 'welcome' ? (
-        <Welcome
-          onStart={() => {
-            setCoachIntent('onboarding');
-            setScreen('onboarding');
-          }}
-        />
+      ) : screen === 'meet' ? (
+        <MeetCadence onSayHi={() => setScreen('onboarding')} />
       ) : screen === 'onboarding' ? (
-        <OnboardingChat intent={coachIntent} onReview={() => setScreen('review')} />
+        <OnboardingChat onReview={openReview} onBuild={() => setScreen('building')} />
       ) : screen === 'review' ? (
-        <ReviewScreen onBack={() => setScreen('onboarding')} onLocked={() => setScreen('plan')} />
+        <ReviewScreen
+          initialStep={reviewStep}
+          onBack={() => setScreen('onboarding')}
+          onLocked={() => setScreen('plan')}
+        />
+      ) : screen === 'building' ? (
+        <BuildingScreen
+          onReady={() => setScreen(anonymous ? 'gate' : 'plan')}
+          onBackToChat={() => setScreen('onboarding')}
+        />
+      ) : screen === 'gate' ? (
+        <SignUpGate />
       ) : (
         <MainTabs email={session?.user.email ?? null} />
       )}
@@ -133,10 +154,34 @@ function CoachApp({ session }: { session: Session | null }) {
 }
 
 /**
+ * Pre-auth. Three doors, and which one opens first is the whole point of the redesign:
+ * accounts already on this phone get "welcome back" (one tap, no typing); everyone else gets the
+ * fork, where "get started" opens an anonymous session and the account comes after the plan exists.
+ * The provider sheet is unchanged — it is what "sign in" and "add another account" open.
+ */
+function PreAuth() {
+  const [view, setView] = useState<'picker' | 'fork' | 'signin'>(() =>
+    listDeviceAccounts().length ? 'picker' : 'fork',
+  );
+  if (view === 'picker')
+    return (
+      <AccountPicker
+        onAddAccount={() => setView('fork')}
+        // The session change is what actually swaps the screen (App's auth listener); this only
+        // matters if a resume lands without one.
+        onResumed={() => setView('fork')}
+      />
+    );
+  if (view === 'signin') return <AuthScreen />;
+  return <SignInFork onSignIn={() => setView('signin')} onStarted={() => setView('fork')} />;
+}
+
+/**
  * Auth gate. Dev mode renders the app straight away (dev-account header). Otherwise we resolve the
- * Supabase session first: no session → the sign-in screen; a session → the app. `onAuthStateChange`
- * keeps the API's bearer token in sync and swaps the sign-in screen for the app on login (and back
- * on sign-out) without a reload.
+ * Supabase session first: no session → the pre-auth doors; a session (including an anonymous one)
+ * → the app. `onAuthStateChange` keeps the API's bearer token in sync, swaps the screens on login
+ * (and back on sign-out) without a reload, and keeps this device's account roster current — the
+ * stored refresh token has to follow rotation or "welcome back" stops working after a day.
  */
 export function App() {
   const [ready, setReady] = useState(DEV_MODE);
@@ -147,73 +192,21 @@ export function App() {
     supabase.auth.getSession().then(({ data }) => {
       setAuthToken(data.session?.access_token ?? null);
       setSession(data.session);
+      if (data.session) rememberDeviceAccount(data.session);
       setReady(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setAuthToken(s?.access_token ?? null);
       setSession(s);
+      if (s) rememberDeviceAccount(s);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // Tool previews (`?preview=breathing`) short-circuit auth and the plan entirely — they render one
-  // component against fixture data so a temporal tool can be watched without a coach-composed
-  // session. Dev affordance only; nothing links here. Sits below the hooks so the hook order is
-  // identical on every render.
-  if (PREVIEW === 'breathing')
-    return (
-      <PhoneFrame>
-        <BreathingPreview />
-      </PhoneFrame>
-    );
-  if (PREVIEW === 'meditate')
-    return (
-      <PhoneFrame>
-        <MeditatePreview />
-      </PhoneFrame>
-    );
-  if (PREVIEW === 'grounding')
-    return (
-      <PhoneFrame>
-        <GroundingPreview />
-      </PhoneFrame>
-    );
-  if (PREVIEW === 'feeling')
-    return (
-      <PhoneFrame>
-        <FeelingLogPreview />
-      </PhoneFrame>
-    );
-  if (PREVIEW === 'journal')
-    return (
-      <PhoneFrame>
-        <JournalPreview />
-      </PhoneFrame>
-    );
-  if (PREVIEW === 'freewrite')
-    return (
-      <PhoneFrame>
-        <FreeWritePreview />
-      </PhoneFrame>
-    );
-  if (PREVIEW === 'interval')
-    return (
-      <PhoneFrame>
-        <IntervalPreview />
-      </PhoneFrame>
-    );
-  if (PREVIEW === 'coach')
-    return (
-      <PhoneFrame>
-        <CoachMomentsPreview />
-      </PhoneFrame>
-    );
-  if (PREVIEW === 'nowmenu')
-    return (
-      <PhoneFrame>
-        <NowMenuPreview />
-      </PhoneFrame>
-    );
+  // Tool previews short-circuit auth and the plan entirely. Sits below the hooks so the hook
+  // order is identical on every render.
+  const preview = previewScreen(PREVIEW);
+  if (preview) return <PhoneFrame>{preview}</PhoneFrame>;
 
   if (!ready)
     return (
@@ -224,7 +217,7 @@ export function App() {
   if (!DEV_MODE && !session)
     return (
       <PhoneFrame>
-        <AuthScreen />
+        <PreAuth />
       </PhoneFrame>
     );
   return <CoachApp session={session} />;

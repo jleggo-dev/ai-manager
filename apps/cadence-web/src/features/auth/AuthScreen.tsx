@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { supabase, authConfigured } from '../../lib/supabase.ts';
-import { isNativeShell, signInWithProviderNative, type NativeOAuthProvider } from '../../lib/native-auth.ts';
+import {
+  isNativeShell,
+  linkProviderNative,
+  signInWithProviderNative,
+  type NativeOAuthProvider,
+} from '../../lib/native-auth.ts';
 import { Orb } from '../../components/Orb.tsx';
 
 /** Google's brand "G" for the sign-in button (their sanctioned use for exactly this). */
@@ -43,13 +48,21 @@ const AppleLogo = () => (
  */
 type Mode = 'signin' | 'signup';
 
+/**
+ * `gate` is the standalone sign-in screen. `upgrade` is the same providers behind the finished
+ * plan (SignUpGate): the session already exists and is anonymous, so every path here LINKS to it
+ * rather than starting a new one — otherwise agreeing to save the plan is what loses it.
+ */
+export type AuthScreenMode = 'gate' | 'upgrade';
+
 function authErrorMessage(error: { message?: string } | null | undefined, fallback: string): string {
   const message = error?.message?.trim();
   return message || fallback;
 }
 
-export function AuthScreen() {
-  const [mode, setMode] = useState<Mode>('signin');
+export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMode } = {}) {
+  const upgrading = screenMode === 'upgrade';
+  const [mode, setMode] = useState<Mode>(upgrading ? 'signup' : 'signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -65,7 +78,7 @@ export function AuthScreen() {
     // Native shell: system browser sheet + cadence:// deep link (lib/native-auth.ts); the
     // appUrlOpen listener finishes the session, and App's auth listener takes over.
     if (isNativeShell()) {
-      const errMsg = await signInWithProviderNative(provider);
+      const errMsg = await (upgrading ? linkProviderNative(provider) : signInWithProviderNative(provider));
       if (errMsg) setMsg(errMsg);
       setBusy(false); // the sheet is up (or failed); this screen stays interactive behind it
       return;
@@ -73,10 +86,10 @@ export function AuthScreen() {
     // Web: redirects the browser to the provider, then back to the app; the returned session is
     // parsed by the client (detectSessionInUrl) and App's listener takes over. No dev query param
     // to keep — this screen only renders in real-auth mode.
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: window.location.origin },
-    });
+    const options = { redirectTo: window.location.origin };
+    const { error } = upgrading
+      ? await supabase.auth.linkIdentity({ provider, options })
+      : await supabase.auth.signInWithOAuth({ provider, options });
     if (error) {
       setMsg(authErrorMessage(error, `Could not start ${label} sign-in — try again.`));
       setBusy(false);
@@ -87,10 +100,26 @@ export function AuthScreen() {
 
   async function submit() {
     const e = email.trim();
-    if (busy || !e || !password) return;
+    // Upgrading takes the email alone — see below for why there is no password field to require.
+    if (busy || !e || (!password && !upgrading)) return;
     setBusy(true);
     setMsg('');
     setNotice('');
+
+    if (mode === 'signup' && upgrading) {
+      // Attach the email to the session already in hand. A fresh signUp would mint a SECOND user
+      // and strand the plan they just agreed to keep.
+      //
+      // Email only, deliberately: Supabase will not set a password on an anonymous user until the
+      // address is verified, so asking for one here would collect a password we then quietly fail
+      // to save. They confirm the address, and "Change password" in Settings (the existing reset-
+      // link flow) is how they add one — or they just keep using the provider they signed up with.
+      const { error } = await supabase.auth.updateUser({ email: e });
+      setMsg(error ? authErrorMessage(error, 'Something went wrong — try again.') : '');
+      if (!error) setNotice('Check your email to confirm it — your week is saved either way.');
+      setBusy(false);
+      return;
+    }
 
     if (mode === 'signup') {
       const { data, error } = await supabase.auth.signUp({ email: e, password });
@@ -119,12 +148,16 @@ export function AuthScreen() {
   }
 
   return (
-    <div className="welcome auth">
-      <div className="hero">
-        <Orb hero />
-        <div className="w-word">Cadence</div>
-        <p className="w-tag">{mode === 'signin' ? 'Welcome back.' : 'A rhythm you can keep.'}</p>
-      </div>
+    <div className={`welcome auth${upgrading ? ' auth-upgrade' : ''}`}>
+      {/* In upgrade mode the plan behind the gate is the hero; a second wordmark above it would
+          re-introduce the app just as someone is deciding to keep what it built. */}
+      {!upgrading && (
+        <div className="hero">
+          <Orb hero />
+          <div className="w-word">Cadence</div>
+          <p className="w-tag">{mode === 'signin' ? 'Welcome back.' : 'A rhythm you can keep.'}</p>
+        </div>
+      )}
 
       <button className="auth-google" onClick={() => continueWith('google')} disabled={busy || !authConfigured}>
         <GoogleG />
@@ -148,39 +181,50 @@ export function AuthScreen() {
           type="email"
           value={email}
           onChange={(ev) => setEmail(ev.target.value)}
+          onKeyDown={(ev) => upgrading && ev.key === 'Enter' && submit()}
           placeholder="Email"
           aria-label="Email"
           autoComplete="email"
           autoCapitalize="none"
           spellCheck={false}
         />
-        <input
-          className="field"
-          type="password"
-          value={password}
-          onChange={(ev) => setPassword(ev.target.value)}
-          onKeyDown={(ev) => ev.key === 'Enter' && submit()}
-          placeholder="Password"
-          aria-label="Password"
-          autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-        />
+        {/* No password field at the gate: Supabase refuses to set one on an anonymous user until
+            the address is verified, and a field whose value we can't save is worse than no field. */}
+        {!upgrading && (
+          <input
+            className="field"
+            type="password"
+            value={password}
+            onChange={(ev) => setPassword(ev.target.value)}
+            onKeyDown={(ev) => ev.key === 'Enter' && submit()}
+            placeholder="Password"
+            aria-label="Password"
+            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+          />
+        )}
         {msg && <div className="auth-error">{msg}</div>}
         {!authConfigured && <div className="auth-error">{"Sign-in isn't configured yet (missing Supabase keys)."}</div>}
       </div>
 
       <button className="cta" onClick={submit} disabled={busy || !authConfigured}>
-        {busy ? 'One moment…' : mode === 'signin' ? 'Sign in →' : 'Create account →'}
+        {busy ? 'One moment…' : upgrading ? 'Save my week →' : mode === 'signin' ? 'Sign in →' : 'Create account →'}
       </button>
-      <button
-        className="auth-toggle"
-        onClick={() => {
-          setMode(mode === 'signin' ? 'signup' : 'signin');
-          setMsg('');
-          setNotice('');
-        }}
-      >
-        {mode === 'signin' ? 'New here? Create an account' : 'Already have an account? Sign in'}
-      </button>
+      {upgrading ? (
+        // Decided 2026-08-06: one account per verified email, providers link into it. Said out
+        // loud here because this is the screen where someone picks which provider to use.
+        <div className="auth-foot">One account per email — providers link into it.</div>
+      ) : (
+        <button
+          className="auth-toggle"
+          onClick={() => {
+            setMode(mode === 'signin' ? 'signup' : 'signin');
+            setMsg('');
+            setNotice('');
+          }}
+        >
+          {mode === 'signin' ? 'New here? Create an account' : 'Already have an account? Sign in'}
+        </button>
+      )}
     </div>
   );
 }

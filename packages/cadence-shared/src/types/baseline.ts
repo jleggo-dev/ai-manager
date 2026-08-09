@@ -40,9 +40,32 @@ export interface WeightTrend {
   updated_at: string; // ISO date
 }
 
+/**
+ * When in the day someone can realistically train/practise. Coarse on purpose: the planner needs
+ * a slot, not a clock time, and "mornings, but not before 7" is a constraint, not a preference.
+ */
+export type TimeOfDay = 'morning' | 'midday' | 'evening' | 'flexible';
+
+export const TIMES_OF_DAY: readonly TimeOfDay[] = ['morning', 'midday', 'evening', 'flexible'];
+
+export function isTimeOfDay(value: unknown): value is TimeOfDay {
+  return typeof value === 'string' && (TIMES_OF_DAY as readonly string[]).includes(value);
+}
+
 export interface Baseline {
   age?: number;
   height_cm?: number;
+  /**
+   * Availability — the two answers every first conversation ends up producing ("mornings work
+   * best", "three days a week"). Top-level rather than under `preferences` because the baseline
+   * is persisted with a shallow jsonb merge, and a nested write would clobber its siblings.
+   *
+   * These shape the plan either way (the whole conversation is what synthesis reads); storing them
+   * is what lets the confirmation card show someone their own answer instead of omitting it.
+   */
+  time_of_day?: TimeOfDay;
+  /** How many days a week they can honestly give it. 1–7. */
+  days_per_week?: number;
   weight_kg?: WeightTrend; // canonical store (kg); the UOM the user prefers is weight_unit
   weight_unit?: 'kg' | 'lbs';
   height_unit?: 'cm' | 'ft'; // canonical store is always height_cm; this is the display UOM

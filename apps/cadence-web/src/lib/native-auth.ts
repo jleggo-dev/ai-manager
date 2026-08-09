@@ -58,6 +58,24 @@ export async function signInWithProviderNative(provider: NativeOAuthProvider): P
   return null;
 }
 
+/**
+ * The same launch, but LINKING a provider to the session already in hand instead of starting a
+ * new one. This is the sign-up gate's path: onboarding ran anonymously, the plan hangs off that
+ * user id, and `signInWithOAuth` here would hand back a different id — a plan silently orphaned
+ * at the exact moment someone agreed to keep it. Linking upgrades the id in place.
+ */
+export async function linkProviderNative(provider: NativeOAuthProvider): Promise<string | null> {
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider,
+    options: { redirectTo: NATIVE_AUTH_CALLBACK, skipBrowserRedirect: true },
+  });
+  if (error || !data?.url) {
+    return error?.message?.trim() || `Could not start ${PROVIDER_LABEL[provider]} sign-in — try again.`;
+  }
+  await Browser.open({ url: data.url });
+  return null;
+}
+
 /** @deprecated Use `signInWithProviderNative('google')`. Kept so existing callers keep compiling. */
 export async function signInWithGoogleNative(): Promise<string | null> {
   return signInWithProviderNative('google');

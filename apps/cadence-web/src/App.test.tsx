@@ -24,8 +24,14 @@ vi.mock('./lib/supabase.ts', () => ({
   },
 }));
 
-vi.mock('./features/welcome/Welcome.tsx', () => ({
-  Welcome: () => <div>Welcome screen</div>,
+vi.mock('./features/onboarding/MeetCadence.tsx', () => ({
+  MeetCadence: () => <div>Meet Cadence</div>,
+}));
+vi.mock('./features/onboarding/BuildingScreen.tsx', () => ({
+  BuildingScreen: () => <div>Building</div>,
+}));
+vi.mock('./features/auth/SignUpGate.tsx', () => ({
+  SignUpGate: () => <div>Sign-up gate</div>,
 }));
 vi.mock('./features/onboarding/OnboardingChat.tsx', () => ({
   OnboardingChat: () => <div>Onboarding chat</div>,
@@ -49,8 +55,8 @@ describe('screenFromPlanStage', () => {
   it('maps plan stages to the top-level screen machine', () => {
     expect(screenFromPlanStage('committed')).toBe('plan');
     expect(screenFromPlanStage('in_progress')).toBe('onboarding');
-    expect(screenFromPlanStage('new')).toBe('welcome');
-    expect(screenFromPlanStage('anything-else')).toBe('welcome');
+    expect(screenFromPlanStage('new')).toBe('meet');
+    expect(screenFromPlanStage('anything-else')).toBe('meet');
   });
 });
 
@@ -62,7 +68,7 @@ describe('App (dev mode)', () => {
 
   it('routes getPlan stage to the matching screen', async () => {
     const { unmount } = render(<App />);
-    await waitFor(() => expect(screen.getByText('Welcome screen')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Meet Cadence')).toBeInTheDocument());
     unmount();
 
     getPlan.mockResolvedValueOnce({ stage: 'in_progress' });
@@ -75,9 +81,9 @@ describe('App (dev mode)', () => {
     await waitFor(() => expect(screen.getByText('Main tabs')).toBeInTheDocument());
   });
 
-  it('falls back to welcome when getPlan fails', async () => {
+  it('falls back to meeting the coach when getPlan fails', async () => {
     getPlan.mockRejectedValueOnce(new Error('offline'));
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Welcome screen')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Meet Cadence')).toBeInTheDocument());
   });
 });

@@ -537,6 +537,46 @@ HealthKit (the deciding constraint, §7/§8). The path:
   diagnostics (composed prompt + token/cost). Minor polish: `pack-summarize` sometimes wraps
   output in ``` fences — tighten its prompt/rules.
 
+### Sign-in & onboarding v2 — the wizard becomes the chat (2026-08-09)
+
+Design: *Cadence Sign-in & Onboarding v2.dc.html*. The five-screen intake wizard is gone. Cadence
+asks one question per turn and ships that turn's answer affordances with it, so she can skip what
+she already knows, reorder, or follow up — none of which a client that hard-codes the questions
+can do.
+
+- **The protocol** (`packages/cadence-shared/src/coach-picks.ts`): a fenced `cadence-picks` block
+  on the end of a turn, parsed out before render. `list` (labelled options) and `tiles` (short
+  scalars) are the entire answer vocabulary; `confirm` is the one exception and carries no options
+  — it tells the client to render everything captured so far. Stream-safe by construction (an
+  unclosed fence is withheld, never painted as JSON) and every failure degrades to plain chat.
+- **Where the format lives:** injected at session open by `services/coach-picks-protocol.ts`,
+  NOT written into the persona — same reasoning as `coach-capabilities.ts`. The parser ships in
+  code, so the format does too, and **no job sync is needed** to change it.
+- **Taps compose, they never send.** A pick writes plain words into the composer; the user still
+  presses send and can edit first. That is what keeps a tap and a typed sentence the same act, and
+  it is why there is no CONTINUE button and no "something else" row.
+- **The order of the flow changed:** fork (get started / sign in) → meet Cadence (AI disclosed
+  first) → one running chat → confirm what she heard → build → **sign-up gate last**, standing in
+  front of a week you can already see. Onboarding runs on a Supabase anonymous session that the
+  gate upgrades in place (same user id, so nothing is migrated). See **backlog A0** for the
+  abuse/cleanup/RLS work that opens up.
+- **Multi-account on a device** (`features/auth/deviceAccounts.ts`): a roster in the same
+  localStorage Supabase already uses for the live session. Removing a row signs out here only.
+- **OWNER RULING — the coach's face is drawn at random and kept.** Meeting Cadence assigns a
+  random portrait immediately; the picker during the plan build opens with her already selected,
+  and the mark tile sits **last** as a deliberate opt-out. This supersedes the earlier "never
+  assign a portrait, always start from the mark" rule in `coach-face.ts` — that rule was written
+  for a wizard where the mark was all anyone had seen, and it does not survive a product that
+  opens with "Hi, I'm your coach". Still a picture, never a personality; naming stays open (see
+  Known issues).
+- **Availability is now captured** (`baseline.time_of_day` / `days_per_week`, top-level so the
+  shallow jsonb merge can't clobber siblings). Extraction added to the `capture-extract` prompt —
+  **needs `sync-jobs.ts` to go live.**
+- **Two beats deliberately dropped:** the client-authored greeting (Cadence opens the conversation
+  herself now, via an `<open>` turn the API filters out of the transcript and the capture window),
+  and the separate see-the-plan-then-commit step (the confirmation moved earlier, into the chat;
+  the built week is the reveal behind the gate). Owner: fine — the plan is talkable-to afterwards.
+
 ### Done & verified — the Mind pillar (added in the 2026-08-04 refresh; this section had no record of it)
 
 REQ9's toolkit shipped whole and this backlog never mentioned it. Each tool is a `COACH_TOOLS`
@@ -561,6 +601,35 @@ the journal is a writing tool, not a feelings tool (§4.5); mind practices log a
 occurrences with `skipped`/`missed`; the coach names no crisis phone number.
 
 ### Backlog — detailed
+
+**A0. Anonymous onboarding — abuse, cleanup, and the RLS audit (opened 2026-08-09, NOT BUILT)**
+
+Sign-in & onboarding v2 moved the sign-up gate to the *end*: "Get started" opens a Supabase
+**anonymous** session so the coach can build a first week before asking for an account
+(`features/auth/anonymous.ts`). Anonymous sign-ins and manual linking are enabled on the project.
+Three consequences to close out, none of which block the flow but all of which get worse with
+traffic:
+
+- **RLS audit — do this first.** Anonymous users assume the **`authenticated`** Postgres role,
+  exactly like permanent users. Any policy written against `authenticated` or `public` now admits
+  them. Cadence's own app data is *not* currently exposed by this — `apps/cadence-api` validates
+  the JWT and then talks to Postgres directly through `db/sql.ts`, scoped by `req.cadenceUserId`,
+  and Storage goes through the server-only service-role client — but that is a property of today's
+  access path, not a guarantee. Audit every policy on `cadence.*` and on Storage buckets, and gate
+  the ones that should be permanent-users-only on
+  `(select (auth.jwt()->>'is_anonymous')::boolean) is false`, as a **restrictive** policy.
+  Supabase's advisor lint `0012_auth_allow_anonymous_sign_ins` flags this; run `get_advisors`
+  after any policy change.
+- **Abuse prevention.** The endpoint writes a real `auth.users` row per call, so it is a
+  database-growth vector. Supabase caps it at 30/hour per IP by default; turn on invisible CAPTCHA
+  / Cloudflare Turnstile (Auth → Attack Protection) before any public launch, and review the rate
+  limit alongside it.
+- **Cleanup.** There is no automatic reaping of abandoned onboardings. Add a periodic
+  `delete from auth.users where is_anonymous is true and created_at < now() - interval '30 days'`,
+  plus the matching `cadence.users` rows, ideally as a step alongside `npm run cleanup:test-data`
+  so it is one documented chore rather than two. Note the interval must comfortably exceed how
+  long an unsaved draft plan is allowed to live — still an open design question (see the v2
+  design doc's own "open call").
 
 **A. Context/memory (MEMORY-ARCHITECTURE.md §9 phasing)**
 - **P3 — pack reuse: BUILT 2026-08-04** (the reuse half; enrichment deliberately dropped — see
