@@ -82,17 +82,44 @@ function sendToToken(token: string, payload: object, jwt: string): Promise<PushR
   });
 }
 
+export interface PushOptions {
+  /**
+   * iOS notification category — the id of a button set registered by the app at launch. Without
+   * it a long press offers nothing, so a nudge whose whole point is a one-tap answer ("Ease back
+   * in" / "Extend a few days") becomes a notification you must open the app to reply to.
+   */
+  categoryId?: string;
+  /**
+   * Extra payload the app reads when the notification is acted on. Composed HERE, at send time,
+   * for the same reason the local nudges compose theirs at schedule time: a tap arrives with the
+   * app cold, and anything worked out in that moment is worked out from whatever was cached.
+   */
+  extra?: Record<string, unknown>;
+}
+
 /**
  * Send an alert push to every device a user has registered. Dead tokens (410, or 400
  * BadDeviceToken) are pruned as APNs reports them. Returns per-token results for the caller to
  * log; throws only when APNs is unconfigured or unreachable.
  */
-export async function sendPushToUser(userId: string, title: string, bodyText: string): Promise<PushResult[]> {
+export async function sendPushToUser(
+  userId: string,
+  title: string,
+  bodyText: string,
+  options: PushOptions = {},
+): Promise<PushResult[]> {
   if (!apnsConfigured()) throw new Error('APNs is not configured (APNS_KEY_ID/TEAM_ID/PRIVATE_KEY)');
   const tokens = await listDeviceTokens(userId);
   if (tokens.length === 0) return [];
   const jwt = providerJwt();
-  const payload = { aps: { alert: { title, body: bodyText }, sound: 'default' } };
+  const payload = {
+    aps: {
+      alert: { title, body: bodyText },
+      sound: 'default',
+      ...(options.categoryId ? { category: options.categoryId } : {}),
+    },
+    ...(options.extra ?? {}),
+  };
   const results: PushResult[] = [];
   for (const token of tokens) {
     const r = await sendToToken(token, payload, jwt);

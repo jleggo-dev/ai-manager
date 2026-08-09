@@ -1,5 +1,6 @@
 import { useTodayHeader } from './useTodayHeader.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
+import { QuietHoursChip } from './QuietHoursChip.tsx';
 
 /**
  * The top header for the Today/Week surface (redesign) — pinned ABOVE the Today/Week switch.
@@ -67,6 +68,8 @@ export function TrailHeader({ streak, xp }: { streak: number; xp: number }) {
       </div>
 
       <div className="thead-pills">
+        {/* From early evening: when the coach stops talking tonight, and one tap to move it. */}
+        <QuietHoursChip />
         {streak > 0 && (
           <div className="thead-pill thead-streak" aria-label={`${streak} day streak`}>
             <span aria-hidden>🔥</span>

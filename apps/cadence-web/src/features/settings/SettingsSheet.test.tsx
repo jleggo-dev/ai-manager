@@ -25,6 +25,8 @@ vi.mock('../../lib/api.ts', () => ({
   logAdhoc: vi.fn(),
   registerPushToken: vi.fn(),
   removePushToken: vi.fn(),
+  getNotificationPrefs: vi.fn().mockResolvedValue(null),
+  saveNotificationPrefs: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../../lib/capability/index.ts', () => ({
@@ -36,6 +38,7 @@ vi.mock('../../lib/capability/index.ts', () => ({
     // Web-shaped: Apple Health + notifications sections render null (native shell only).
     health: { isAvailable: () => false },
     push: { isAvailable: () => false },
+    coachIdentity: { isAvailable: () => false },
   },
 }));
 

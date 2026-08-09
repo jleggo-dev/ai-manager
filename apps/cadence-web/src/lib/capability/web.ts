@@ -50,6 +50,13 @@ export const webCapabilities: Capabilities = {
     cancelAll: async () => {},
     pendingCount: async () => 0,
   },
+  // No web equivalent: communication notifications are an iOS system feature, and there is no
+  // browser API that makes a notification look like it came from a person.
+  coachIdentity: {
+    isAvailable: () => false,
+    donate: async () => false,
+    registerCategories: async () => {},
+  },
   dictation: {
     isAvailable: () => getSpeechRecognitionCtor() !== null,
     createSession: () => {

@@ -7,11 +7,13 @@
  * quiet hours, the daily cap, muting and dedupe all live in the dispatcher, so a new
  * notification type cannot accidentally ship without them.
  *
- * The registry is EMPTY on purpose. This is the framework landing before any notification
- * content is designed; a tick today does nothing but prove the path works end to end. Adding a
- * type is one entry here plus a function that returns candidates.
+ * The registry holds the four PUSH nudges — the ones only the server can know about. The other
+ * five in the catalog are LOCAL: the device schedules them from the committed plan, so they need
+ * no tick, no APNs and no network. Adding a type is one entry in `producers/index.ts` plus a
+ * function that returns candidates.
  */
 import { notify, type NotifyRequest, type NotifyStatus } from './dispatch.ts';
+import { PUSH_PRODUCERS } from './producers/index.ts';
 
 /**
  * Returns everything due at `now`, across all users. A producer must be cheap and side-effect
@@ -25,10 +27,13 @@ export interface RegisteredProducer {
 }
 
 /**
- * No producers yet — see the module note. Deliberately not seeded with a placeholder: an
- * "example" producer that nobody wired is how a test notification reaches a real phone.
+ * The live registry — the four PUSH nudges. Order is the tie-break when several become due on the
+ * same day and only one fits under the cap; see `producers/index.ts` for why it is this order.
+ *
+ * The producers type-import `RegisteredProducer` from here, which is erased at build time, so this
+ * import is one-directional at runtime despite reading like a cycle.
  */
-export const PRODUCERS: RegisteredProducer[] = [];
+export const PRODUCERS: RegisteredProducer[] = PUSH_PRODUCERS;
 
 export interface TickResult {
   candidates: number;

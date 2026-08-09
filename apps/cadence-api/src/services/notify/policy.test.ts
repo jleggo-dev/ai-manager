@@ -4,7 +4,15 @@
  * neither is visible in local testing from one timezone.
  */
 import { describe, it, expect } from 'vitest';
-import { decide, inQuietHours, localMinutes, localDate, DEFAULT_PREFS, type NotificationPrefs } from './policy.ts';
+import {
+  decide,
+  effectiveMaxPerDay,
+  inQuietHours,
+  localMinutes,
+  localDate,
+  DEFAULT_PREFS,
+  type NotificationPrefs,
+} from './policy.ts';
 
 const prefs = (over: Partial<NotificationPrefs> = {}): NotificationPrefs => ({
   ...DEFAULT_PREFS,
@@ -100,6 +108,51 @@ describe('decide', () => {
     const p = prefs({ kinds: { session_reminder: false } });
     expect(decide({ ...base, prefs: p, timezone: 'UTC', now: noon }).reason).toBe('kind_muted');
     expect(decide({ ...base, prefs: p, kind: 'weekly_recap', timezone: 'UTC', now: noon }).send).toBe(true);
+  });
+
+  it('holds a kind the user\u2019s tier does not include, and says so', () => {
+    // "few" is three kinds; almost_time is not one of them. The reason must be `tier` rather than
+    // a cap or quiet hours, because those imply "later" and this one means "not wanted".
+    const d = decide({ ...base, prefs: prefs({ tier: 'few' }), kind: 'almost_time', timezone: 'UTC', now: noon });
+    expect(d).toEqual({ send: false, reason: 'tier' });
+  });
+
+  it('lets the same kind through once the dial is turned up', () => {
+    expect(
+      decide({ ...base, prefs: prefs({ tier: 'moderate' }), kind: 'almost_time', timezone: 'UTC', now: noon }).send,
+    ).toBe(true);
+  });
+
+  it('reports an explicit per-kind mute ahead of the tier \u2014 the more specific answer wins', () => {
+    const d = decide({
+      ...base,
+      prefs: prefs({ tier: 'few', kinds: { weather_move: false } }),
+      kind: 'weather_move',
+      timezone: 'UTC',
+      now: noon,
+    });
+    expect(d.reason).toBe('kind_muted');
+  });
+
+  it('does not tier-gate a kind outside the catalog', () => {
+    // The dial speaks for the nine designed nudges. Silently swallowing anything else would hide a
+    // wiring bug behind a non-delivery nobody can trace.
+    expect(
+      decide({ ...base, prefs: prefs({ tier: 'few' }), kind: 'session_reminder', timezone: 'UTC', now: noon }).send,
+    ).toBe(true);
+  });
+
+  it('derives the day\u2019s cap from the tier', () => {
+    // Two at lots, one below it \u2014 regardless of what 0026 left in max_per_day.
+    expect(effectiveMaxPerDay(prefs({ tier: 'lots' }))).toBe(2);
+    expect(effectiveMaxPerDay(prefs({ tier: 'moderate' }))).toBe(1);
+    const p = prefs({ tier: 'lots' });
+    expect(decide({ ...base, prefs: p, sentToday: 1, timezone: 'UTC', now: noon }).send).toBe(true);
+    expect(decide({ ...base, prefs: p, sentToday: 2, timezone: 'UTC', now: noon }).reason).toBe('daily_cap');
+  });
+
+  it('still honours a LOWER stored cap \u2014 the belt-and-braces guard keeps working', () => {
+    expect(effectiveMaxPerDay(prefs({ tier: 'lots', maxPerDay: 0 }))).toBe(0);
   });
 
   it('enforces the daily cap', () => {

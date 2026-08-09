@@ -68,7 +68,7 @@ function CoachApp({ session }: { session: Session | null }) {
         // and a no-op without permission — so it is safe to run on every load, and running it
         // often is the point: a reminder for a session that was replanned away reads as the app
         // not having listened.
-        void syncPlanLocalNotifications(p.activities);
+        void syncPlanLocalNotifications();
       })
       .catch(() => setScreen('welcome'));
     // Silent Apple Health refresh (iOS shell, permission already granted): keeps the coach's

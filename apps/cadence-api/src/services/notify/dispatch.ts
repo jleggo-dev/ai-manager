@@ -11,6 +11,7 @@
  * occupies the slot, so a tick running every 15 minutes does not re-evaluate the same candidate
  * all day and then fire the instant quiet hours lift.
  */
+import { categoryForKind, isNudgeKind } from '@cadence/shared';
 import { apnsConfigured, sendPushToUser } from '../push-apns.ts';
 import { listDeviceTokens } from '../../repos/device-tokens.ts';
 import { getUser } from '../../repos/users.ts';
@@ -30,6 +31,9 @@ export interface NotifyRequest {
   target: string;
   title: string;
   body: string;
+  /** Payload the app reads when an action button is tapped. Composed by the producer, at send
+   *  time — never worked out when the notification is acted on. */
+  extra?: Record<string, unknown>;
 }
 
 export type NotifyStatus = 'sent' | 'failed' | 'skipped' | 'duplicate';
@@ -93,7 +97,13 @@ export async function notify(req: NotifyRequest, now: Date = new Date()): Promis
     }
 
     // 3. Send. Per-token results; a user can have several devices and partial success is normal.
-    const results = await sendPushToUser(userId, title, body);
+    // The category is derived from the kind rather than passed in, so a nudge cannot ship with the
+    // wrong button set — or with none, which is the failure a caller would never notice.
+    const categoryId = isNudgeKind(kind) ? categoryForKind(kind) : null;
+    const results = await sendPushToUser(userId, title, body, {
+      ...(categoryId ? { categoryId } : {}),
+      ...(req.extra ? { extra: req.extra } : {}),
+    });
     const delivered = results.filter((r) => r.status === 200).length;
     if (delivered > 0) {
       await settleNotification(id, 'sent', `${delivered}/${results.length} device(s)`);

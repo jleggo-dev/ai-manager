@@ -17,6 +17,7 @@ import mealPlansRoutes from './routes/meal-plans.ts';
 import meRoutes from './routes/me.ts';
 import healthDigestRoutes from './routes/health-digest.ts';
 import deviceRoutes from './routes/devices.ts';
+import notificationPrefsRoutes from './routes/notification-prefs.ts';
 import coachMomentRoutes from './routes/coach-moments.ts';
 import journalRoutes from './routes/journal.ts';
 import devRoutes from './routes/dev.ts';
@@ -43,6 +44,7 @@ export function createApp() {
   app.use('/me', meRoutes);
   app.use('/me', healthDigestRoutes);
   app.use('/me', deviceRoutes);
+  app.use('/me', notificationPrefsRoutes);
   app.use('/me', coachMomentRoutes);
   // Machine-to-machine (cron). Owns its own shared-secret gate — see routes/internal.ts.
   app.use('/internal', internalRoutes);

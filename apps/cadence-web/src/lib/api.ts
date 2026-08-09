@@ -21,6 +21,15 @@ export { openCoachSession, getCurrentCoach, sendCoachMessage } from './api/coach
 
 export { registerPushToken, removePushToken } from './api/devices.ts';
 
+export {
+  getNotificationPrefs,
+  saveNotificationPrefs,
+  getLocalNudgePlan,
+  type NotificationPrefs,
+  type NotificationPrefsPatch,
+  type LocalNudgePlan,
+} from './api/notification-prefs.ts';
+
 export { postHealthDigest, getHealthDigest } from './api/health.ts';
 
 export {

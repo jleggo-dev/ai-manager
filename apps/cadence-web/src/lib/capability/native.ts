@@ -1,10 +1,66 @@
 import { Health } from 'capacitor-health';
+import { registerPlugin } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
-import { LocalNotifications } from '@capacitor/local-notifications';
-import type { LocalNotificationSpec } from '@cadence/shared';
+import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/local-notifications';
+import { NUDGE_CATEGORIES, type LocalNotificationSpec } from '@cadence/shared';
 import { Geolocation } from '@capacitor/geolocation';
 import type { Capabilities, Workout } from './index.ts';
 import { webCapabilities } from './web.ts';
+
+/**
+ * The local Swift plugin that donates the coach's portrait (ios/App/App/CadenceCoachIdentity).
+ * `registerPlugin` resolves lazily, so a build without the plugin compiled in fails at CALL time
+ * rather than at import — which is why every use below is wrapped and falls back silently.
+ */
+const CoachIdentity = registerPlugin<{
+  donate(options: { senderName: string; avatarBase64: string }): Promise<{ donated: boolean }>;
+  /**
+   * Schedules with the donated identity applied. Separate from `donate` because
+   * `UNNotificationContent.updating(from:)` — the call that actually attaches the portrait — can
+   * only be made on the content about to be posted, and for a LOCAL notification that content is
+   * built by whoever schedules it. `decorated: false` means no donation was in effect, and the
+   * caller then schedules the ordinary way rather than posting undecorated notifications it
+   * believes are decorated.
+   */
+  scheduleWithIdentity(options: { notifications: LocalNotificationSpec[] }): Promise<{
+    scheduled: number;
+    decorated: boolean;
+  }>;
+}>('CadenceCoachIdentity');
+
+/**
+ * One spec → one Capacitor notification.
+ *
+ * The two trigger shapes are not interchangeable. A weekly repeat occupies ONE of the OS's 64
+ * pending slots and fires forever, which is what keeps a full plan far below the ceiling. A
+ * one-shot is how anything that depends on TODAY works at all — yesterday's count, a waypoint
+ * date, whether something is still unlogged this evening — none of which a calendar repeat can
+ * know, because it was scheduled once and fires blind from then on.
+ */
+function toNotification(r: LocalNotificationSpec): LocalNotificationSchema {
+  const base = {
+    id: r.id,
+    title: r.title,
+    body: r.body,
+    // Carries the pre-composed lighter day and the nudge's own kind, so an action button never
+    // has to work anything out with the app cold and possibly offline.
+    extra: { kind: r.kind, activityId: r.activityId, ...(r.extra ?? {}) },
+    ...(r.actionTypeId ? { actionTypeId: r.actionTypeId } : {}),
+  };
+  if (r.weekday != null) {
+    return {
+      ...base,
+      schedule: { on: { weekday: r.weekday, hour: r.hour, minute: r.minute }, repeats: true, allowWhileIdle: true },
+    };
+  }
+  // A one-shot's date is the DEVICE's calendar day, so building it with the local Date constructor
+  // is correct here — the same wall-clock time the builder clamped against quiet hours.
+  const [y, m, d] = (r.date ?? '').split('-').map(Number);
+  return {
+    ...base,
+    schedule: { at: new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1, r.hour, r.minute), allowWhileIdle: true },
+  };
+}
 
 /** Shape of one workout row from capacitor-health's queryWorkouts. */
 interface PluginWorkout {
@@ -106,15 +162,16 @@ export const nativeCapabilities: Capabilities = {
       }
       if (specs.length === 0) return 0;
 
-      await LocalNotifications.schedule({
-        notifications: specs.map((r) => ({
-          id: r.id,
-          title: r.title,
-          body: r.body,
-          schedule: { on: { weekday: r.weekday, hour: r.hour, minute: r.minute }, repeats: true, allowWhileIdle: true },
-          extra: { activityId: r.activityId },
-        })),
-      });
+      // Try the portrait path first. It writes to the same UNUserNotificationCenter, so the
+      // cancel-then-schedule above still governs both, and a plugin that is missing or has no
+      // donation in effect falls through to exactly what shipped before the portrait existed.
+      try {
+        const { decorated } = await CoachIdentity.scheduleWithIdentity({ notifications: specs });
+        if (decorated) return specs.length;
+      } catch {
+        /* plugin absent → the ordinary path below */
+      }
+      await LocalNotifications.schedule({ notifications: specs.map(toNotification) });
       return specs.length;
     },
     cancelAll: async () => {
@@ -123,6 +180,37 @@ export const nativeCapabilities: Capabilities = {
       await LocalNotifications.cancel({ notifications: pending.notifications.map((p) => ({ id: p.id })) });
     },
     pendingCount: async () => (await LocalNotifications.getPending()).notifications.length,
+  },
+  /**
+   * The coach's face on a notification, plus the long-press actions.
+   *
+   * `registerCategories` is idempotent and cheap, so it runs on every sync rather than once at
+   * launch: a category registered at launch is lost if the app is killed before a notification
+   * fires, and a notification whose category is unknown quietly renders with no buttons at all.
+   */
+  coachIdentity: {
+    isAvailable: () => true,
+    donate: async ({ senderName, avatarBase64 }) => {
+      try {
+        return (await CoachIdentity.donate({ senderName, avatarBase64 })).donated;
+      } catch {
+        // Plugin absent, or iOS refused the donation. The notification still goes out with the
+        // app icon, which is what shipped before the portrait existed.
+        return false;
+      }
+    },
+    registerCategories: async () => {
+      try {
+        await LocalNotifications.registerActionTypes({
+          types: NUDGE_CATEGORIES.map((c) => ({
+            id: c.id,
+            actions: c.actions.map((a) => ({ id: a.id, title: a.title, foreground: a.foreground })),
+          })),
+        });
+      } catch {
+        /* no actions is a worse notification, never a broken one */
+      }
+    },
   },
   location: {
     isAvailable: () => true,
