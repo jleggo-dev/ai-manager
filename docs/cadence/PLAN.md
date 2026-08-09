@@ -855,6 +855,24 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
 - Cross-session longitudinal variables.
 
 ### Known issues
+- **UNRESOLVED — coach face naming** (raised 2026-08-09, owner). The fifteen portraits ship with
+  ids carrying the source-art vocabulary: `steady-pacer` (Athlete/Body), `mindful-guide`
+  (Yogi/Mind), `rhythm-keeper` (Artist/Creative/Spiritual), `hearth-anchor` (General/any), each
+  with feminine/masculine/neutral variants. **These names are not settled.** The design doc's own
+  attempt (`Bright Spark`, `Quiet Pro`) was a hallucination but, per the owner, *"arguably better
+  names"* — so the whole scheme is open.
+  - **Why it is only a naming problem, not a design one:** the standing ruling is that a face is a
+    PICTURE, not a personality — one Cadence, one voice, and picking a face changes nothing but the
+    picture. So the type names are never shown to the user: the picker renders portraits with no
+    captions and the accessible labels are positional (`Face 1`…`Face 15`). Nothing derives meaning
+    from these strings.
+  - **Cost to change:** rename the ids in `packages/cadence-shared/src/coach-face.ts`, rename the
+    matching files in `apps/cadence-web/public/avatars/` (the test
+    `coachFaceAssets.test.ts` fails loudly on a mismatch), and migrate any stored
+    `cadence.users.coach_face_id`. A retired id already degrades to the brand mark rather than a
+    broken image, so a missed row is cosmetic, not a break.
+  - **Open sub-question:** whether the four types should survive at all as an organising concept,
+    given users never see them and the ruling says they carry no behaviour.
 - ~~**Capture over-extraction / baseline drift**~~ — FIXED 2026-07-15 (see C).
 - **Backend `tsc` fails on EXTERNAL `devs-ai-v2` code** (not Cadence): `devs-ai-v2/client.ts:101`
   (`role` on the response message type), `devs-ai-v2/sse-transform.ts:105` (duplicate `type`),

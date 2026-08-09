@@ -17,7 +17,9 @@
 .cface-ring { border: 2px solid #fff; }
 
 /* ── The picker (onboarding + Settings) ──────────────────────────────── */
-.cfgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; margin-top: 16px; }
+/* Three across, not two: with fifteen portraits a 2-col grid is eight rows of scrolling, and
+   the choice reads faster when more of the set is on screen at once. */
+.cfgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: 16px; }
 .cfgrid-tile {
   position: relative; padding: 0; overflow: hidden; cursor: pointer;
   aspect-ratio: 1; border-radius: 18px; background: var(--surface);
