@@ -157,7 +157,12 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       if (!completed && !(await recoverFromServer())) {
         fillLastCoach('⚠️ Connection dropped — send again to continue.');
       }
-    } catch {
+    } catch (err) {
+      // The user gets a warm, useless sentence — correct, they can't act on a stack trace. But it
+      // was ALSO all anyone got: this catch discarded the error, so "Auth failed" from the API and
+      // a dropped wifi connection produced the identical screen, and the only way to tell them
+      // apart was to reproduce the call by hand against production. Log what actually happened.
+      console.error('[cadence/coach] turn failed', err);
       if (!(await recoverFromServer())) fillLastCoach('Something hiccuped on my end — say that again?');
     } finally {
       setStreaming(false);
