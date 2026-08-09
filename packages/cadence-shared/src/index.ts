@@ -26,6 +26,8 @@ export * from './types/broker-contracts.ts';
 export * from './types/tripwires.ts';
 export * from './types/streak.ts';
 export * from './types/rewards.ts';
+export * from './coach-face.ts';
+export * from './session-feedback.ts';
 export * from './walkthrough.ts';
 export * from './tool-catalog.ts';
 export * from './breathing.ts';

@@ -6,6 +6,7 @@ import { DietaryProfileEditor } from './DietaryProfileEditor.tsx';
 import { LocationSettings } from './LocationSettings.tsx';
 import { AppleHealthSettings } from './AppleHealthSettings.tsx';
 import { NotificationSettings } from './NotificationSettings.tsx';
+import { CoachFaceSettings } from './CoachFaceSettings.tsx';
 
 /**
  * Settings, as a sheet from the header gear. Real-auth: email, sign out, password reset (email
@@ -91,6 +92,8 @@ export function SettingsSheet({
             <b>Edit goals & equipment</b>
             <span>Add, tweak, or retire what the plan is built from</span>
           </button>
+
+          <CoachFaceSettings />
 
           <NutritionTargets />
 

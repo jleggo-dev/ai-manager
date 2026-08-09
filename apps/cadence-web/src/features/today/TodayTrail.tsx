@@ -3,6 +3,7 @@ import { getTodayBrief, type PlanViewData, type PlanDay, type PlanOccurrence } f
 import { TrailFoodStrip } from '../nutrition/TrailFoodStrip.tsx';
 import { categoryOf, ICON } from './category.ts';
 import { useFitText } from './useFitText.ts';
+import { CoachFace } from '../../components/CoachFace.tsx';
 
 /**
  * The Visual Today — the redesign's sky-trail (REQ8 handoff `docs/cadence/design/redesign-today-trail`).
@@ -127,8 +128,6 @@ function prettyDate(dateStr: string): string {
   return `${MONTHS_FULL[(m ?? 1) - 1]} ${ordinal(d ?? 1)}`;
 }
 const COACH_TEXTS = ['Not feeling it? Talk to me.', 'Want to shuffle tomorrow?', "Planning ahead? Let's talk."];
-const LEAF =
-  'M20.6 3.4C7.6 4.6 3.4 12.9 4.6 19.2c1.5-3.6 4.2-6.8 8.6-9.4-3.4 2.9-5.4 6.2-6.5 9.9 6.2 1.2 14.7-3.1 13.9-16.3Z';
 
 function TrailNode({
   occ,
@@ -232,10 +231,10 @@ export function TodayTrail({
   return (
     <div className="trail">
       <TrailFoodStrip date={todayDate} onOpen={onOpenFood} />
+      {/* The recap is Cadence talking about your day in the first person, so it carries that face
+          rather than a generic speech bubble (and the mark, until a face is picked). */}
       <div className="trail-coach">
-        <svg className="stroke" viewBox="0 0 24 24" width="20" height="20" aria-hidden>
-          <path d="M20 11.5a7.5 7.5 0 01-10.9 6.7L4 19l1-4.3A7.5 7.5 0 1120 11.5z" strokeLinejoin="round" />
-        </svg>
+        <CoachFace size={34} />
         <span ref={fit.ref} style={{ fontSize: `${fit.size}px` }}>
           <b>It&apos;s {todayPretty} —</b>{' '}
           <span style={{ opacity: recap ? 1 : 0.9, transition: 'opacity 0.4s ease' }}>
@@ -284,11 +283,7 @@ export function TodayTrail({
           </div>
           {day.occurrences.length > 0 && (
             <div className={`trail-bay ${di % 2 === 0 ? 'is-left' : 'is-right'}`}>
-              <div className="trail-bay-mark" aria-hidden>
-                <svg viewBox="0 0 24 24" width="30" height="30">
-                  <path d={LEAF} fill="#fff" />
-                </svg>
-              </div>
+              <CoachFace size={58} className="trail-bay-mark" />
               <button className="trail-bay-bubble" onClick={onCoach}>
                 {COACH_TEXTS[di % COACH_TEXTS.length]}
               </button>

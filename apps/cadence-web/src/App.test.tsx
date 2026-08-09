@@ -10,6 +10,9 @@ vi.mock('./lib/api.ts', () => ({
   isDevMode: () => true,
   getHealthDigest: vi.fn(async () => ({ digest: null, created_at: null })),
   postHealthDigest: vi.fn(async () => true),
+  // App now wraps the screen machine in CoachFaceProvider, which reads the picked portrait.
+  getCoachFace: vi.fn(async () => null),
+  setCoachFace: vi.fn(async () => null),
 }));
 
 vi.mock('./lib/supabase.ts', () => ({

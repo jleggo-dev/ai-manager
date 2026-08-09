@@ -1,5 +1,5 @@
 import { useTodayHeader } from './useTodayHeader.ts';
-import { Orb } from '../../components/Orb.tsx';
+import { CoachFace } from '../../components/CoachFace.tsx';
 
 /**
  * The top header for the Today/Week surface (redesign) — pinned ABOVE the Today/Week switch.
@@ -8,9 +8,10 @@ import { Orb } from '../../components/Orb.tsx';
  * prompt (never a fabricated place). Right: the streak and XP pills. Weather/location come from
  * `useTodayHeader` (auto-detect on first load); `streak`/`xp` are passed from the loaded plan.
  *
- * The avatar was a bespoke leaf glyph that appears in no brand document — a third mark competing
- * with the sunrise arch it sat beside, and now with Metronome Split. It is the shared `Orb`, so
- * the mark stays in exactly one file.
+ * The identity chip is the coach's face once one has been picked, and the Metronome Split mark
+ * until then (`CoachFace` handles both, so there is no branch here). It was a bespoke leaf glyph
+ * that appears in no brand document — a third mark competing with the sunrise arch it sat beside,
+ * and then with Metronome Split.
  */
 
 const cap = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -32,9 +33,7 @@ export function TrailHeader({ streak, xp }: { streak: number; xp: number }) {
 
   return (
     <div className="thead">
-      <div className="thead-avatar" aria-hidden>
-        <Orb />
-      </div>
+      <CoachFace size={36} className="thead-avatar" />
 
       <div className="thead-main">
         {wx ? (

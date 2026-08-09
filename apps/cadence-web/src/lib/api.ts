@@ -197,6 +197,17 @@ export { getNowMenu } from './api/now-menu.ts';
 export { exportJournal, keepJournalEntry, listJournal, setJournalSecret } from './api/journal.ts';
 
 export {
+  getCoachFace,
+  setCoachFace,
+  sendSessionFeedback,
+  getDailyCheckinStatus,
+  sendDailyCheckin,
+  getSessionInsight,
+  type DailyCheckinStatus,
+  type SessionInsight,
+} from './api/coach-moments.ts';
+
+export {
   getHomeLocation,
   saveHomeLocation,
   clearHomeLocation,
