@@ -52,9 +52,14 @@ the plan bends instead of breaking.
   superseded the sunrise arch). Copy must never turn it into a scoreboard: a streak is a warm
   momentum counter (protected by freezes and detours), never a cudgel — no streak-shame, no red
   marks, and it never resets to zero because life happened.
-- **Typeface: Plus Jakarta Sans** (2026-08-07). Brand face for wordmark, display, headers, and
-  web/Android UI. On native iOS, SF Pro remains the chat/chrome workhorse for Dynamic Type;
-  Plus Jakarta Sans still owns the wordmark and display moments.
+- **Typeface: Plus Jakarta Sans** (2026-08-07; iOS carve-out removed 2026-08-10). Brand face for
+  wordmark, display, headers and body — **on every platform, including native iOS**. The original
+  ruling kept SF Pro as the iOS chat/chrome workhorse for Dynamic Type and reading comfort; the
+  owner reversed it: *"that's our font — if it's hard to read, we should change fonts."* One
+  typeface everywhere, and legibility is fixed for everyone or not at all. Worth knowing the
+  carve-out was never real: the CSS rule meant to apply it keyed off an `html.native` class nothing
+  ever set, so iOS had been rendering Plus Jakarta Sans the whole time — which is the evidence it
+  reads fine at chat sizes.
 
 ## Voice principles
 

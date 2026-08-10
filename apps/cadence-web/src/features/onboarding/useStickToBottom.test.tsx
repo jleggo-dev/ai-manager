@@ -82,4 +82,71 @@ describe('useStickToBottom', () => {
     rerender({ d: 2 });
     expect(el.scrollTop).toBe(1400);
   });
+
+  /**
+   * The reported failure, and the reason `onScroll` alone was not enough: streamed deltas run
+   * synchronously many times a second, while scroll events are passive and coalesced. Mid-drag the
+   * finger loses the race — the delta snaps the view back before the scroll event can detach us.
+   * A touch going down has to stop the following immediately.
+   */
+  it('stops following the moment a finger goes down, before any scroll event', () => {
+    const ref = createRef<HTMLElement>();
+    const el = makeEl(1000, 500, 500);
+    (ref as { current: HTMLElement | null }).current = el;
+    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+
+    // Mounting follows to the bottom, which is correct — that is the baseline this test moves from.
+    expect(el.scrollTop).toBe(1000);
+
+    act(() => result.current.onTouchStart()); // finger down; no scroll event has fired yet
+    (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
+    rerender({ d: 2 });
+
+    expect(el.scrollTop).toBe(1000); // held where they grabbed it — this used to jump to 1400
+  });
+
+  it('resumes following if they let go still at the bottom', () => {
+    const ref = createRef<HTMLElement>();
+    const el = makeEl(1000, 500, 500);
+    (ref as { current: HTMLElement | null }).current = el;
+    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+
+    act(() => result.current.onTouchStart());
+    act(() => result.current.onTouchEnd()); // a tap, not a drag — still at the bottom
+
+    (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
+    rerender({ d: 2 });
+    expect(el.scrollTop).toBe(1400);
+  });
+
+  it('leaves the viewport alone after they drag away and lift', () => {
+    const ref = createRef<HTMLElement>();
+    const el = makeEl(1000, 500, 500);
+    (ref as { current: HTMLElement | null }).current = el;
+    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+
+    act(() => result.current.onTouchStart());
+    el.scrollTop = 0; // dragged to the top
+    act(() => result.current.onTouchEnd());
+
+    (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
+    rerender({ d: 2 });
+    expect(el.scrollTop).toBe(0);
+  });
+
+  /** A scroll event mid-drag must not re-arm the follow under their finger. */
+  it('ignores scroll events while a finger is still down', () => {
+    const ref = createRef<HTMLElement>();
+    const el = makeEl(1000, 500, 0);
+    (ref as { current: HTMLElement | null }).current = el;
+    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+
+    act(() => result.current.onTouchStart());
+    el.scrollTop = 500; // overshoot back to the bottom mid-drag
+    act(() => result.current.onScroll());
+
+    (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
+    rerender({ d: 2 });
+    expect(el.scrollTop).toBe(500); // still theirs; not snapped to 1400
+  });
 });

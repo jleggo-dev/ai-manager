@@ -1,10 +1,17 @@
 /* Cadence design system — "Trust & Wellness" palette (2026-07-11): sunlight on natural materials,
    not neon in the dark. Oat/Alabaster canvas, Deep Slate text, Sage & Forest Green (vitality),
    Terracotta/Dawn Peach (the human accent) replacing the old dark-violet/ember scheme. */
-/* Typeface: Plus Jakarta Sans (BRAND.md, locked 2026-08-07) — wordmark, display, headers AND
-   web/Android UI body, replacing Bricolage Grotesque + Hanken Grotesk. Inter is the documented
+/* Typeface: Plus Jakarta Sans (BRAND.md, locked 2026-08-07) — wordmark, display, headers and body,
+   on EVERY platform, replacing Bricolage Grotesque + Hanken Grotesk. Inter is the documented
    last-resort body fallback but "must never replace Plus Jakarta Sans at display sizes", so it is
-   listed only in the stack, never assigned to --display. */
+   listed only in the stack, never assigned to --display.
+
+   There used to be an `html.native` rule swapping body text to SF Pro on iOS for reading comfort.
+   Removed by owner ruling 2026-08-10: "that's our font — if it's hard to read, we should change
+   fonts." One typeface everywhere, and a legibility problem is solved by changing the typeface for
+   everyone rather than forking it per platform. (The rule had never actually applied: nothing ever
+   set the `native` class, so iOS has always rendered Plus Jakarta Sans — which is how we know it
+   reads fine.) */
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
 
 :root {
@@ -20,13 +27,6 @@
   --display: 'Plus Jakarta Sans', sans-serif;
   --body: 'Plus Jakarta Sans', Inter, sans-serif;
   --mono: 'Space Mono', monospace;
-}
-/* Native iOS only: SF Pro is the chat/chrome workhorse for Dynamic Type (audience is 30-60;
-   reading comfort beats brand distinctiveness in long chat). The wordmark and display moments
-   stay Plus Jakarta Sans — hence --body is overridden here and --display is not. The `native`
-   class is set on <html> by the Capacitor shell; on web this rule never applies. */
-html.native {
-  --body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
 /* WKWebView inflates text ("font boosting") when the layout width changes, and frequently fails

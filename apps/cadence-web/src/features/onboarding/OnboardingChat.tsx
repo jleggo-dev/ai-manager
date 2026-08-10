@@ -107,7 +107,7 @@ export function OnboardingChat({
 
   // Follow the newest turn, but never steal the viewport from someone reading back — see
   // useStickToBottom. Scrolls the pane only; scrollIntoView would pan the whole shell on mobile.
-  const { onScroll, stickNow } = useStickToBottom(chatRef, turns);
+  const { onScroll, onTouchStart, onTouchEnd, stickNow } = useStickToBottom(chatRef, turns);
   // The floating stack's real height, so no turn ever sits underneath it (useFloatingInset).
   const { inset, floatRef } = useFloatingInset();
 
@@ -142,6 +142,9 @@ export function OnboardingChat({
         className={`chat${chrome === 'onboarding' ? ' has-top' : ''}`}
         ref={chatRef}
         onScroll={onScroll}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
         style={{ paddingBottom: inset }}
       >
         {!restored ? (
