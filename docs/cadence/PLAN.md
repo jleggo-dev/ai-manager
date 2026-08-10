@@ -735,6 +735,49 @@ when there is a visible Continue to pair with them.
   PARTIAL the user saw rather than nothing or something longer — a restore that disagrees with what
   was on screen is the bug this feature exists to remove.
 
+**A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
+
+Hit on device: at the end of onboarding every way of saving the plan answered "you already have an
+account", with no way forward and no way back. #173 ended the dead end by offering "sign in to that
+account instead". That is the FLOOR, not the fix — its price is "this week won't carry over", and
+discarding the run is precisely what BRAND.md forbids:
+
+> Cadence never makes you repeat yourself and never makes you start over.
+
+**Why our version is harder than the one everyone copies.** Duolingo-style apps gate EARLY — a
+lesson or two in — so a collision costs about ninety seconds and "log in instead" is a fine answer.
+Cadence gates at the far end: fifteen minutes of conversation, two corrections, injuries, a race
+date, and a built plan. Copying their recovery copies the wrong half; their recovery is cheap
+because their exposure is small.
+
+**The shape of the real fix (deliberately not scoped yet — owner wants to think it through).**
+Merge rather than discard. The data model is unusually friendly to it: `goals`, `plans`,
+`occurrences`, `conversations` are rows keyed by `user_id`, so claiming an anonymous session is
+largely reassignment, not migration. The hard part is the one genuine conflict — the existing
+account already has an active plan — which needs a single explicit choice ("keep the week you just
+built" or "keep the plan you already had"), asked once, in the confirm-before-committing style the
+coach already uses.
+
+Open questions, none answered yet:
+- What merges silently (constraints, equipment, baseline) versus what must be chosen (an active
+  plan, conflicting goals, a different name)?
+- What happens to the anonymous run's conversation history — adopted, archived, or dropped?
+- Is a claim reversible, and for how long? An unreversible merge is its own way to lose work.
+- Does the coach narrate it, or is it silent chrome? A merge the user cannot see is a surprise at
+  the next weekly check-in.
+
+**Cheap complement, independent of the above:** ask earlier. A line near the start of onboarding —
+"Been here before? Sign in." — costs nothing and stops most collisions forming. Returning users on
+a new device currently get no signal until the very end. Note Supabase deliberately does NOT expose
+"does this email exist" (account enumeration), and for OAuth nothing is knowable until the provider
+returns — so prevention has to be a PROMPT, not a lookup.
+
+**Related and already shipped:** #171 (silent OAuth failures were creating the orphaned identities
+in the first place), #173 (the way out). The account that triggered this was an empty husk holding
+the Google and Apple identities — earlier silent link attempts had succeeded server-side while the
+client never learned, and clearing production removed the `cadence.*` rows but not `auth.users`.
+Escaping it required database access, which is exactly what must not be true for a real user.
+
 **A. Context/memory (MEMORY-ARCHITECTURE.md §9 phasing)**
 - **P3 — pack reuse: BUILT 2026-08-04** (the reuse half; enrichment deliberately dropped — see
   below). A coach session open now serves a cached dossier and skips BOTH Broker calls whenever
