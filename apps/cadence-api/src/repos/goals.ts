@@ -20,9 +20,9 @@ export async function getGoal(userId: string, goalId: string): Promise<Goal | nu
 /** Insert a Broker-captured goal (status defaults to 'captured'; linked_equipment → DB default). */
 export async function insertGoal(userId: string, goal: Partial<Goal>): Promise<Goal> {
   const [row] = await sql<Goal[]>`
-    insert into cadence.goals (user_id, title, area, type, measure, timeframe, milestones, status, source, confidence)
+    insert into cadence.goals (user_id, title, brief, area, type, measure, timeframe, milestones, status, source, confidence)
     values (
-      ${userId}, ${goal.title ?? ''}, ${goal.area ?? 'practice'}, ${goal.type ?? 'milestone'},
+      ${userId}, ${goal.title ?? ''}, ${goal.brief ?? null}, ${goal.area ?? 'practice'}, ${goal.type ?? 'milestone'},
       ${json(goal.measure ?? {})}, ${json(goal.timeframe ?? {})}, ${json(goal.milestones ?? [])},
       ${goal.status ?? 'captured'}, ${goal.source ?? 'captured'}, ${goal.confidence ?? null}
     )
@@ -49,6 +49,7 @@ export async function updateGoal(userId: string, goalId: string, f: Partial<Goal
   await sql`
     update cadence.goals set
       title = coalesce(${f.title ?? null}, title),
+      brief = coalesce(${f.brief ?? null}, brief),
       area = coalesce(${f.area ?? null}, area),
       type = coalesce(${f.type ?? null}, type),
       measure = coalesce(${f.measure ? json(f.measure) : null}, measure),

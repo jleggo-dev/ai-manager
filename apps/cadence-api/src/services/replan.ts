@@ -8,6 +8,7 @@ import { listNutritionLogs } from '../repos/nutrition.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { rollingConsistency } from './metrics.ts';
 import { describeRecurrence } from './scheduling.ts';
+import { observedHealthForPlanning, PLAN_COUNTS_NOTE } from './observed-health.ts';
 import { type CommitResult, type PlanFlowResult } from './plan-synthesis.ts';
 import { planSynthesize, planSynthesizeVetCommit } from './plan-fanout.ts';
 import { confirmPendingPlan } from './plan-commit-flow.ts';
@@ -15,7 +16,18 @@ import type { Goal } from '@cadence/shared';
 
 const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10);
 
-/** How the user has ACTUALLY been doing — the signal the re-plan adapts to. */
+/**
+ * How the user has ACTUALLY been doing — the signal the re-plan adapts to.
+ *
+ * TWO sources, deliberately kept apart. The occurrence/nutrition counts describe how they engaged
+ * with OUR plan; `observed_health` describes what their own devices measured, plan or no plan.
+ * Someone can be training hard and still miss every session we scheduled, so folding one into the
+ * other would produce a confident wrong answer in whichever direction happened to dominate.
+ *
+ * The occurrence keys stay at the TOP level on purpose: the synthesize_plan template already names
+ * `food_log` and reasons about the size of this object, and re-nesting them to look tidier would
+ * quietly break prompt language this change does not own. PLAN_COUNTS_NOTE labels them in place.
+ */
 async function recentActivity(userId: string, days = 14) {
   const now = new Date();
   const base = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
@@ -27,8 +39,10 @@ async function recentActivity(userId: string, days = 14) {
   // Observe-phase food signal: days_logged is the nutrition module's phase gate — synthesis
   // holds off on eating changes below ~7 logged days, then introduces ONE at a time.
   const nutrition = summarizeNutrition(await listNutritionLogs(userId, from, to), days);
+  const observed = await observedHealthForPlanning(userId);
   return {
     window_days: days,
+    what_these_counts_mean: PLAN_COUNTS_NOTE,
     consistency_last_7_days: `${kept} of ${window} days`,
     done: count('done'),
     skipped: count('skipped'),
@@ -44,6 +58,7 @@ async function recentActivity(userId: string, days = 14) {
           },
         }
       : {}),
+    ...(observed ? { observed_health: observed } : {}),
   };
 }
 

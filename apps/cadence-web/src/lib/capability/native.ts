@@ -1,4 +1,4 @@
-import { Health } from 'capacitor-health';
+import { Health, type HealthPermission } from 'capacitor-health';
 import { registerPlugin } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/local-notifications';
@@ -6,6 +6,7 @@ import { NUDGE_CATEGORIES, type LocalNotificationSpec } from '@cadence/shared';
 import { Geolocation } from '@capacitor/geolocation';
 import type { Capabilities, Workout } from './index.ts';
 import { grantedFromPermissionResponse } from './health-permissions.ts';
+import { readDailySteps } from './health-steps.ts';
 import { webCapabilities } from './web.ts';
 
 /**
@@ -87,9 +88,36 @@ function toSeamWorkout(w: PluginWorkout): Workout {
 const PUSH_REGISTER_TIMEOUT_MS = 10_000;
 
 /**
- * Native (Capacitor iOS) capabilities. Health = HealthKit via capacitor-health (workouts only —
- * the plugin has no weight/sleep queries yet, so those stay null; a custom Swift extension is the
- * future path). Push = APNs via @capacitor/push-notifications. Location = CoreLocation via
+ * Everything Cadence reads from Apple Health, in one list so the request and any later re-request
+ * can never drift apart.
+ *
+ * READ_STEPS joined this set after people had already granted the other four. iOS does not
+ * re-prompt for a newly-added type, so existing installs need the one-time re-ask in
+ * health-steps.ts — see that file for why an empty step read is ambiguous rather than conclusive.
+ */
+const HEALTH_PERMISSIONS: HealthPermission[] = [
+  'READ_WORKOUTS',
+  'READ_DISTANCE',
+  'READ_ACTIVE_CALORIES',
+  'READ_HEART_RATE',
+  'READ_STEPS',
+];
+
+/** Whether the one-time steps re-ask has happened. User-scoped (see features/auth/localUserState). */
+const STEPS_ASKED_KEY = 'cadence.healthStepsAsked';
+
+const readFlag = (key: string): string | null => {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null; // storage disabled — worst case we ask once more, never a broken read
+  }
+};
+
+/**
+ * Native (Capacitor iOS) capabilities. Health = HealthKit via capacitor-health: workouts, plus
+ * daily steps as aggregated buckets (the plugin still has no weight/sleep queries, so those stay
+ * null; a custom Swift extension is the future path). Push = APNs via @capacitor/push-notifications. Location = CoreLocation via
  * @capacitor/geolocation (not WKWebView navigator.geolocation — capacitor:// is not a secure
  * origin).
  *
@@ -104,9 +132,14 @@ export const nativeCapabilities: Capabilities = {
   health: {
     isAvailable: () => true,
     requestPermissions: async () => {
-      const res = await Health.requestHealthPermissions({
-        permissions: ['READ_WORKOUTS', 'READ_DISTANCE', 'READ_ACTIVE_CALORIES', 'READ_HEART_RATE'],
-      });
+      const res = await Health.requestHealthPermissions({ permissions: HEALTH_PERMISSIONS });
+      // A fresh grant covers steps too, so the one-time re-ask has nothing left to do. Recording
+      // it here is what stops a genuinely step-less person meeting a second sheet on next launch.
+      try {
+        window.localStorage.setItem(STEPS_ASKED_KEY, '1');
+      } catch {
+        /* storage disabled — see readFlag */
+      }
       // Shape-tolerant on purpose: the plugin's types promise an array and iOS does not send one,
       // so reading it directly threw before a single workout was ever fetched. See
       // health-permissions.ts — on iOS this answer carries no information anyway.
@@ -122,6 +155,22 @@ export const nativeCapabilities: Capabilities = {
       });
       return (res.workouts as PluginWorkout[]).map(toSeamWorkout);
     },
+    // Aggregated DAY buckets, never raw samples: ~90 numbers instead of the tens of thousands of
+    // individual step records behind them, and the only shape the digest has any use for.
+    getDailySteps: (sinceISO: string) =>
+      readDailySteps(sinceISO, {
+        queryDailySteps: async (range) =>
+          (await Health.queryAggregated({ ...range, dataType: 'steps', bucket: 'day' })).aggregatedData,
+        requestSteps: () => Health.requestHealthPermissions({ permissions: ['READ_STEPS'] }),
+        hasAskedForSteps: () => readFlag(STEPS_ASKED_KEY) === '1',
+        markAskedForSteps: () => {
+          try {
+            window.localStorage.setItem(STEPS_ASKED_KEY, '1');
+          } catch {
+            /* storage disabled — see readFlag */
+          }
+        },
+      }),
     getLatestWeightKg: async () => null,
     getSleepHours: async () => null,
   },

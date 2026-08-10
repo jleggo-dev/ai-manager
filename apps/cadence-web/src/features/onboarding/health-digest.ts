@@ -5,8 +5,9 @@
  * apps/cadence-api/src/validation/health.ts: ≤25 types, ≤10 recent.
  */
 import type { HealthDigest, HealthDigestTypeSummary } from '@cadence/shared';
-import type { Workout } from '../../lib/capability/index.ts';
+import type { DailySteps, Workout } from '../../lib/capability/index.ts';
 import { humanizeWorkoutType } from '../settings/health-import.ts';
+import { summarizeDailySteps } from './steps-summary.ts';
 
 export const DIGEST_PERIOD_DAYS = 90;
 export const HEALTH_OFFER_FLAG_KEY = 'cadence.healthOffer'; // 'done' | 'dismissed'
@@ -64,6 +65,9 @@ export function digestsEqual(a: unknown, b: unknown): boolean {
 export async function maybeRefreshHealthDigest(deps: {
   isAvailable: () => boolean;
   getWorkouts: (sinceISO: string) => Promise<Workout[]>;
+  /** Optional so a caller that only has workouts still compiles; a failure here degrades to
+   *  workouts-only rather than losing the refresh. */
+  getDailySteps?: (sinceISO: string) => Promise<DailySteps[]>;
   getLatest: () => Promise<{ digest: HealthDigest | null; created_at: string | null }>;
   post: (digest: HealthDigest) => Promise<boolean>;
   now?: () => number;
@@ -76,7 +80,13 @@ export async function maybeRefreshHealthDigest(deps: {
   const latest = await deps.getLatest();
   if (!digestIsStale(latest.created_at, now())) return 'fresh';
   const since = new Date(now() - DIGEST_PERIOD_DAYS * 86_400_000).toISOString();
-  const digest = buildDigestFromWorkouts(await deps.getWorkouts(since));
+  // Steps must never be able to cost us the workouts. They are the newer, more fragile read (a
+  // permission existing users were never asked for), so they degrade to [] on their own.
+  const [workouts, steps] = await Promise.all([
+    deps.getWorkouts(since),
+    deps.getDailySteps?.(since).catch(() => []) ?? Promise.resolve([]),
+  ]);
+  const digest = buildDigestFromWorkouts(workouts, DIGEST_PERIOD_DAYS, steps);
   if (latest.digest && digestsEqual(digest, latest.digest)) return 'unchanged';
   await deps.post(digest);
   return 'posted';
@@ -117,7 +127,11 @@ function avg(nums: number[]): number | null {
   return nums.length ? round1(nums.reduce((a, b) => a + b, 0) / nums.length) : null;
 }
 
-export function buildDigestFromWorkouts(workouts: Workout[], periodDays = DIGEST_PERIOD_DAYS): HealthDigest {
+export function buildDigestFromWorkouts(
+  workouts: Workout[],
+  periodDays = DIGEST_PERIOD_DAYS,
+  steps: DailySteps[] = [],
+): HealthDigest {
   const byType = new Map<string, Workout[]>();
   for (const w of workouts) {
     const t = humanizeWorkoutType(w.type);
@@ -149,11 +163,15 @@ export function buildDigestFromWorkouts(workouts: Workout[], periodDays = DIGEST
       distanceKm: clamp(w.distanceKm ?? null, MAX_KM),
     }));
 
+  // Omitted, never zeroed, when nothing was read — see summarizeDailySteps.
+  const dailySteps = summarizeDailySteps(steps);
+
   return {
     periodDays,
     totalWorkouts: workouts.length,
     weeklyFrequency: round1(workouts.length / weeks),
     byType: typeSummaries,
     recent,
+    ...(dailySteps ? { dailySteps } : {}),
   };
 }

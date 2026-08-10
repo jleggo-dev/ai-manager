@@ -7,6 +7,8 @@ export const runSlotSchema = z.object({
     providerId: z.string().uuid().optional().nullable(),
     externalAiId: z.string().max(200).optional().nullable(),
     runtimeOptions: z.record(z.string(), z.unknown()).optional(),
+    /** The job's expectedSchema, so a run can exercise native structured output (see ai-matcher.ts). */
+    expectedSchema: z.record(z.string(), z.unknown()).optional().nullable(),
   }),
   prompt: z.string().min(1).max(50_000),
   formattingRules: z.array(z.record(z.string(), z.unknown())).optional(),

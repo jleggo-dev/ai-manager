@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { isTimeOfDay, type Constraint } from '@cadence/shared';
+import {
+  isTimeOfDay,
+  type Availability,
+  type AvailabilityWindow,
+  type Constraint,
+  type StartingPoint,
+} from '@cadence/shared';
 
 /**
  * Pure, dependency-free transforms for the capture pipeline (no DB, no engine imports) so the
@@ -8,13 +14,17 @@ import { isTimeOfDay, type Constraint } from '@cadence/shared';
  */
 
 const LB_TO_KG = 0.453592;
+/** A brief is a few plain sentences. Past this the model is writing, not transcribing. */
+const BRIEF_MAX = 800;
+/** One phrase per thing they do, and no more things than a person credibly lists in a chat. */
+const ROUTINE_ITEM_MAX = 120;
+const ROUTINE_ITEMS_MAX = 12;
 
-/**
- * Coerce the Broker's free-form baseline_updates into the typed Baseline shape. Notably,
- * weight can arrive as { value, unit }, weight_kg, weight_lbs, or a bare number — we store
- * the canonical kg in weight_kg AND the user's unit in weight_unit so the app can display it
- * in the UOM they used (fixes weight landing in a field the UI can't read).
- */
+/** "2026-08-14" and nothing else. A half-parsed date schedules someone in the wrong week. */
+function isYmd(raw: unknown): raw is string {
+  return typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.trim()) && !Number.isNaN(Date.parse(raw.trim()));
+}
+
 /**
  * Availability, from however the Broker phrased it. The prompt asks for the enum, but people say
  * "mornings" and models echo people, so the obvious plurals and near-misses map rather than drop —
@@ -31,17 +41,113 @@ function normalizeTimeOfDay(raw: unknown): string | undefined {
   return undefined;
 }
 
+/** "19:00", "7:00", "07:00" → "HH:MM"; anything else → undefined (a mangled clock time is worse
+ *  than no clock time — it schedules someone somewhere they never said they were free). */
+function normalizeClock(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(raw.trim());
+  if (!m) return undefined;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return undefined;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+/**
+ * The windows they named and how long one session runs. Bounds are deliberately generous but
+ * real: a session is at least a minute and at most a day's worth of waking hours (10 h) — past
+ * that the model is transcribing something that wasn't a session length, and a bad number here
+ * sizes every commitment in the week.
+ *
+ * Duplicated slots collapse (a model listing "morning" twice is one window), and 'flexible'
+ * alongside a named slot is dropped: "any time" plus "evenings" is a contradiction, and the
+ * specific answer is the one they actually gave.
+ */
+function normalizeAvailability(raw: unknown): Availability | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const src = raw as { windows?: unknown; session_minutes?: unknown };
+
+  const windows: AvailabilityWindow[] = [];
+  const seen = new Set<string>();
+  for (const w of Array.isArray(src.windows) ? src.windows : []) {
+    const part = normalizeTimeOfDay(typeof w === 'string' ? w : (w as { part_of_day?: unknown })?.part_of_day);
+    if (!part || !isTimeOfDay(part) || seen.has(part)) continue;
+    seen.add(part);
+    const obj = (typeof w === 'object' && w !== null ? w : {}) as Record<string, unknown>;
+    windows.push({
+      part_of_day: part,
+      ...(normalizeClock(obj.earliest) ? { earliest: normalizeClock(obj.earliest)! } : {}),
+      ...(normalizeClock(obj.latest) ? { latest: normalizeClock(obj.latest)! } : {}),
+    });
+  }
+  const named = windows.filter((w) => w.part_of_day !== 'flexible');
+  const kept = named.length ? named : windows;
+
+  let session: Availability['session_minutes'];
+  const sm = src.session_minutes as { min?: unknown; max?: unknown } | number | undefined;
+  const inRange = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 1 && n <= 600;
+  if (typeof sm === 'number' && inRange(sm)) session = { min: Math.round(sm) };
+  else if (sm && typeof sm === 'object' && inRange(sm.min)) {
+    session = { min: Math.round(sm.min) };
+    // A max below the min is the model getting them backwards; keep the honest half, drop the rest.
+    if (inRange(sm.max) && sm.max >= sm.min) session.max = Math.round(sm.max);
+  }
+
+  if (!kept.length && !session) return undefined;
+  return { windows: kept, ...(session ? { session_minutes: session } : {}) };
+}
+
+/**
+ * What they say they already do. Kept as phrases, not parsed into numbers: "runs 4-5 k a few
+ * times a week" is worth more to a planner whole than it is dismantled into a frequency the app
+ * would then be tempted to enforce as a limit.
+ */
+function normalizeStartingPoint(raw: unknown): StartingPoint | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const src = raw as { doing_now?: unknown; trend?: unknown };
+  const doing = (Array.isArray(src.doing_now) ? src.doing_now : [])
+    .filter((x): x is string => typeof x === 'string')
+    .map((x) => x.replace(/\s+/g, ' ').trim().slice(0, ROUTINE_ITEM_MAX))
+    .filter(Boolean)
+    .slice(0, ROUTINE_ITEMS_MAX);
+  const trend = typeof src.trend === 'string' ? src.trend.replace(/\s+/g, ' ').trim().slice(0, ROUTINE_ITEM_MAX) : '';
+  if (!doing.length && !trend) return undefined;
+  return { doing_now: doing, ...(trend ? { trend } : {}) };
+}
+
+/**
+ * Coerce the Broker's free-form baseline_updates into the typed Baseline shape. Notably,
+ * weight can arrive as { value, unit }, weight_kg, weight_lbs, or a bare number — we store
+ * the canonical kg in weight_kg AND the user's unit in weight_unit so the app can display it
+ * in the UOM they used (fixes weight landing in a field the UI can't read).
+ */
 export function normalizeBaseline(raw: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (typeof raw.age === 'number') out.age = raw.age;
   if (typeof raw.height_cm === 'number') out.height_cm = raw.height_cm;
+  // Only the two values the energy formulas take. Anything else stays absent rather than being
+  // coerced into one of them, and absent is never a blocker.
+  if (raw.sex === 'male' || raw.sex === 'female') out.sex = raw.sex;
 
-  const tod = normalizeTimeOfDay(raw.time_of_day);
+  const startingPoint = normalizeStartingPoint(raw.starting_point);
+  if (startingPoint) out.starting_point = startingPoint;
+
+  // Availability is what capture writes now. `time_of_day` is still accepted (the review wizard
+  // patches it by hand, and older Broker output still sends it) and is DERIVED from a single
+  // window so the coarse key can never contradict the richer one. Two or more windows have no
+  // honest coarse equivalent — "mornings and evenings" is not "flexible" — so it is left alone.
+  const availability = normalizeAvailability(raw.availability);
+  if (availability) out.availability = availability;
+  const tod =
+    normalizeTimeOfDay(raw.time_of_day) ??
+    (availability?.windows.length === 1 ? availability.windows[0]!.part_of_day : undefined);
   if (tod) out.time_of_day = tod;
-  // A week has seven days; anything outside that is the model guessing, and a guess here would
-  // quietly reshape someone's plan.
-  const days = Number(raw.days_per_week);
-  if (Number.isFinite(days) && days >= 1 && days <= 7) out.days_per_week = Math.round(days);
+  // days_per_week is deliberately NOT read here. It was captured once and it went null → 1 →
+  // 2.5 → 2 for a man training for a 50 km ultra — every value a reading of what he was already
+  // doing, none of them a statement of capacity — and it then capped his week. No prompt rule
+  // survived that; the field is gone from capture. It stays readable (existing rows, and the
+  // manual field in the review wizard), but nothing infers it. Frequency comes from what the
+  // goal demands, the availability windows, and observed history.
 
   let value: number | undefined;
   let unit: 'kg' | 'lbs' | undefined;
@@ -68,19 +174,30 @@ export function normalizeBaseline(raw: Record<string, unknown>): Record<string, 
   }
 
   // Unified "what we work around" list. The prompt asks for constraints
-  // [{label, kind, plan_around}]; legacy shapes (injuries [{area, condition}] or bare
-  // strings) are mapped, never dropped.
+  // [{label, kind, status, until, plan_around}]; legacy shapes (injuries [{area, condition}] or
+  // bare strings) are mapped, never dropped.
   const constraints: Constraint[] = [];
-  const pushConstraint = (label: string, kind: Constraint['kind'], plan_around: boolean) => {
+  const pushConstraint = (
+    label: string,
+    kind: Constraint['kind'],
+    plan_around: boolean,
+    extra?: Partial<Constraint>,
+  ) => {
     const l = label.trim();
-    if (l) constraints.push({ id: randomUUID(), label: l, kind, plan_around });
+    if (l) constraints.push({ id: randomUUID(), label: l, kind, plan_around, ...extra });
   };
   if (Array.isArray(raw.constraints)) {
     for (const c of raw.constraints as Array<Record<string, unknown> | string>) {
       if (typeof c === 'string') pushConstraint(c, 'life', false);
       else if (c && typeof c === 'object') {
         const kind = c.kind === 'physical' || c.kind === 'life' || c.kind === 'other' ? c.kind : 'other';
-        pushConstraint(String(c.label ?? [c.area, c.condition].filter(Boolean).join(' — ')), kind, !!c.plan_around);
+        // Only the two stated statuses land; anything else stays absent, and absent reads as
+        // active downstream — the cautious default is the safe one.
+        const status = c.status === 'active' || c.status === 'quiet' ? c.status : undefined;
+        pushConstraint(String(c.label ?? [c.area, c.condition].filter(Boolean).join(' — ')), kind, !!c.plan_around, {
+          ...(status ? { status } : {}),
+          ...(isYmd(c.until) ? { until: c.until } : {}),
+        });
       }
     }
   }
@@ -93,6 +210,73 @@ export function normalizeBaseline(raw: Record<string, unknown>): Record<string, 
   }
   if (constraints.length) out.constraints = constraints;
   return out;
+}
+
+/** A measure number however the model typed it — 195, "195", "195 lbs". Non-numeric → undefined. */
+function measureNumber(raw: unknown): number | undefined {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : undefined;
+  if (typeof raw !== 'string') return undefined;
+  const n = Number.parseFloat(raw.trim());
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * Why this measure cannot be true, or null when the arithmetic holds.
+ *
+ * Production stored { metric: "body weight", target: 195, start: 195, direction: "decrease" } for
+ * a man whose baseline weight was 195 — "lose weight, from 195 to 195". The model had copied his
+ * current weight into the target slot, and nothing checked that a target, a start and a direction
+ * agree, so it persisted and became the number every plan and every progress read anchored to.
+ * A goal that can be neither reached nor missed is worse than no goal at all: the user never
+ * chose it, and it is invisible precisely because it looks like data.
+ *
+ * ONLY the arithmetic is judged, never the ambition — a 40 kg loss is a real thing to want, and
+ * this must never become a place where the app decides what someone is allowed to aim for.
+ */
+export function describeIncoherentMeasure(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const m = raw as { target?: unknown; start?: unknown; direction?: unknown };
+  const target = measureNumber(m.target);
+  const start = measureNumber(m.start);
+  // No start (or a non-numeric target, e.g. a time like "5:30") means there is nothing to compare
+  // against — say nothing rather than guess, exactly as everywhere else in capture.
+  if (target === undefined || start === undefined) return null;
+  if (target === start) return `target equals start (${target}) — that describes no change`;
+  if (m.direction === 'decrease' && target > start)
+    return `direction decrease but target ${target} is above start ${start}`;
+  if (m.direction === 'increase' && target < start)
+    return `direction increase but target ${target} is below start ${start}`;
+  return null;
+}
+
+/**
+ * An IANA timezone the user stated ("I'm in Quebec, so Eastern"). Validated by asking Intl to
+ * actually use it: a name the runtime rejects is a name that would throw somewhere far away, in
+ * the middle of scheduling someone's morning. Anything else — an abbreviation, a UTC offset, a
+ * country — is dropped rather than guessed at, because a wrong timezone moves every notification
+ * and every "today" the app has.
+ */
+export function normalizeTimezone(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const tz = raw.trim();
+  if (!tz.includes('/')) return undefined; // region/city only; "EST" and "UTC-5" are not zones
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz }).format();
+    return tz;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A goal's load-determining facts, in the user's own words. Whitespace-collapsed and capped —
+ * a brief is a few plain sentences, and a model that starts writing an essay here is a model
+ * that has started inventing.
+ */
+export function normalizeBrief(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const s = raw.replace(/\s+/g, ' ').trim();
+  return s ? s.slice(0, BRIEF_MAX) : undefined;
 }
 
 /** Normalize a goal title for fuzzy comparison: lowercase, punctuation→spaces, collapsed. */

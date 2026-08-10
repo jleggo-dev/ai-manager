@@ -3,6 +3,7 @@ import { getAiProfileWithKeys } from '../models/ai-profiles.ts';
 import { getProvider } from '../models/providers.ts';
 import { createLlmClientForProvider } from '../integrations/client-factory.ts';
 import { buildProviderChatOptions } from '../services/ai-profile-runtime-options.ts';
+import type { ExpectedSchemaInput } from '../services/expected-schema-to-json-schema.ts';
 import { applyFormattingRules } from '../services/formatting-rules.ts';
 import { getSetting } from '../models/app-settings.ts';
 import { resolveAttachmentsAsText } from '../services/attachment-resolver.ts';
@@ -23,6 +24,15 @@ interface SlotConfig {
   providerId?: string;
   externalAiId?: string;
   runtimeOptions?: Record<string, unknown>;
+  /**
+   * The job's expectedSchema, so a comparison can exercise NATIVE structured output.
+   *
+   * Without it the matcher only ever measured prompt-following: a model-vs-model run looked
+   * conclusive while the strict json_schema that production actually sends was absent, so a model
+   * could emit a field the schema forbids and still appear to pass. Comparing models for a
+   * schema-bound job is exactly what this tool is for, and it could not do it.
+   */
+  expectedSchema?: ExpectedSchemaInput | null;
 }
 
 interface ResolvedSlot {
@@ -55,7 +65,9 @@ async function resolveSlot(slot: SlotConfig): Promise<ResolvedSlot> {
     if (!provider) throw new Error(`Provider not found for profile "${profile.name}"`);
     const client = createLlmClientForProvider(provider);
     const model = String(profile.external_ai_id || '').trim();
-    const chatOptions = buildProviderChatOptions(provider.type, profile.runtime_options ?? undefined);
+    const chatOptions = buildProviderChatOptions(provider.type, profile.runtime_options ?? undefined, {
+      expectedSchema: slot.expectedSchema ?? null,
+    });
     const timeoutMs = Number(provider.request_timeout_ms) || (await getDefaultTimeout());
     return {
       client,
@@ -74,7 +86,9 @@ async function resolveSlot(slot: SlotConfig): Promise<ResolvedSlot> {
     if (!provider) throw new Error(`Provider "${slot.providerId}" not found`);
     const client = createLlmClientForProvider(provider);
     const model = String(slot.externalAiId || '').trim();
-    const chatOptions = buildProviderChatOptions(provider.type, slot.runtimeOptions || {});
+    const chatOptions = buildProviderChatOptions(provider.type, slot.runtimeOptions || {}, {
+      expectedSchema: slot.expectedSchema ?? null,
+    });
     const timeoutMs = Number(provider.request_timeout_ms) || (await getDefaultTimeout());
     return {
       client,

@@ -11,6 +11,7 @@ const insertEquipment = vi.fn();
 const deleteAllEquipment = vi.fn();
 const mergeBaseline = vi.fn();
 const setName = vi.fn();
+const setTimezoneIfUnset = vi.fn();
 const logAi = vi.fn();
 
 vi.mock('../ai/aim.ts', () => ({
@@ -37,6 +38,7 @@ vi.mock('../repos/equipment.ts', () => ({
 vi.mock('../repos/users.ts', () => ({
   mergeBaseline: (...a: unknown[]) => mergeBaseline(...a),
   setName: (...a: unknown[]) => setName(...a),
+  setTimezoneIfUnset: (...a: unknown[]) => setTimezoneIfUnset(...a),
   // The goal screen reads baseline weight to price a loss rate; no home_location, so the
   // geocode branch stays off.
   getUser: async () => ({ baseline: { weight_kg: 80 }, home_location: null, timezone: null }),
@@ -60,6 +62,7 @@ describe('runCaptureExtract', () => {
     deleteAllEquipment.mockResolvedValue(undefined);
     mergeBaseline.mockResolvedValue(undefined);
     setName.mockResolvedValue(undefined);
+    setTimezoneIfUnset.mockResolvedValue(undefined);
     logAi.mockResolvedValue(undefined);
   });
 
@@ -84,6 +87,36 @@ describe('runCaptureExtract', () => {
     warn.mockRestore();
   });
 
+  // The goal survives; only the impossible number is dropped. Losing the goal too would be the
+  // "start over" feeling the brand promises never to cause, over a mistake the model made.
+  it('drops a measure whose arithmetic cannot be true, and keeps the goal', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    runJobBySlug.mockResolvedValue({
+      formatted: JSON.stringify({
+        goals: [
+          {
+            title: 'Lose weight',
+            area: 'nourishment',
+            type: 'target',
+            measure: { metric: 'body weight', target: 195, start: 195, direction: 'decrease' },
+          },
+        ],
+        equipment: [],
+        baseline_updates: {},
+        confidence: 'high',
+      }),
+    });
+
+    const out = await runCaptureExtract(USER, { conversation_window: 'I want to lose weight' });
+    expect(out.persisted.goals).toBe(1);
+    expect(insertGoal).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ title: 'Lose weight', measure: undefined }),
+    );
+    expect(warn).toHaveBeenCalled(); // never silent — it lands in the coercion log
+    warn.mockRestore();
+  });
+
   it('dedupes near-duplicate goals from one capture run to a single insert', async () => {
     runJobBySlug.mockResolvedValue({
       formatted: JSON.stringify({
@@ -100,6 +133,49 @@ describe('runCaptureExtract', () => {
     const out = await runCaptureExtract(USER, { conversation_window: 'books' });
     expect(out.persisted.goals).toBe(1);
     expect(insertGoal).toHaveBeenCalledTimes(1);
+  });
+
+  // The facts that decide how hard the work has to be ride WITH the goal, because the plan job
+  // never sees the transcript they were said in.
+  it('persists a goal brief alongside the goal', async () => {
+    runJobBySlug.mockResolvedValue({
+      formatted: JSON.stringify({
+        goals: [
+          {
+            title: 'Complete the Spartan Ultra Beast in Quebec',
+            brief: "It's 50 km  in the mountains,\n30+ obstacles.",
+            area: 'movement',
+            type: 'milestone',
+          },
+        ],
+        equipment: [],
+        baseline_updates: {},
+        confidence: 'high',
+      }),
+    });
+
+    await runCaptureExtract(USER, { conversation_window: 'ultra beast' });
+    expect(insertGoal).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ brief: "It's 50 km in the mountains, 30+ obstacles." }),
+    );
+  });
+
+  // "I live in Quebec, so that's Eastern" used to go nowhere: users.timezone stayed null while
+  // date-context, the daily check-in and every notification schedule ran on a default.
+  it('records a stated timezone, and only a real one', async () => {
+    const withTz = (timezone: unknown) => ({
+      formatted: JSON.stringify({ goals: [], equipment: [], baseline_updates: {}, timezone, confidence: 'high' }),
+    });
+
+    runJobBySlug.mockResolvedValue(withTz('America/Toronto'));
+    await runCaptureExtract(USER, { conversation_window: 'eastern time' });
+    expect(setTimezoneIfUnset).toHaveBeenCalledWith(USER, 'America/Toronto');
+
+    setTimezoneIfUnset.mockClear();
+    runJobBySlug.mockResolvedValue(withTz('EST'));
+    await runCaptureExtract(USER, { conversation_window: 'eastern time' });
+    expect(setTimezoneIfUnset).not.toHaveBeenCalled();
   });
 
   it('coerces unknown equipment categories to other', async () => {

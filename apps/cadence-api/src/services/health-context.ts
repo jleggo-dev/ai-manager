@@ -15,9 +15,28 @@ function fmtType(t: HealthDigest['byType'][number], periodDays: number): string 
   return `  - ${t.type}: ${bits.join(', ')}`;
 }
 
+/**
+ * Everyday movement, in the coach's words.
+ *
+ * It gets its own line rather than being folded into the workout counts because for a lot of
+ * people it IS the activity — someone walking 16,000 steps a day and never pressing start on a
+ * watch has no workouts at all, and reading only the workout lines would have the coach telling an
+ * active person they are sedentary.
+ */
+function fmtSteps(digest: HealthDigest): string | null {
+  const s = digest.dailySteps;
+  if (!s || !s.daysObserved) return null;
+  const bits = [`~${s.avgPerDay.toLocaleString('en-US')} steps/day across ${s.daysObserved} days`];
+  if (s.avgPerDayLast7 != null) bits.push(`~${s.avgPerDayLast7.toLocaleString('en-US')}/day this past week`);
+  return `  everyday movement: ${bits.join(', ')}`;
+}
+
 export function renderHealthDigest(digest: HealthDigest, createdAtISO?: string): string {
   if (!digest.totalWorkouts) {
-    return `Recent activity (Apple Health, last ${digest.periodDays} days): no workouts recorded.`;
+    const steps = fmtSteps(digest);
+    const head = `Recent activity (Apple Health, last ${digest.periodDays} days): no workouts recorded`;
+    // "No workouts" alone reads as "does nothing" — say what they DO do whenever we know it.
+    return steps ? `${head}, but their phone did record everyday movement.\n${steps}` : `${head}.`;
   }
   const lines = [
     `Recent activity (Apple Health, last ${digest.periodDays} days${
@@ -25,6 +44,8 @@ export function renderHealthDigest(digest: HealthDigest, createdAtISO?: string):
     }): ${digest.totalWorkouts} workouts, ~${digest.weeklyFrequency}/week overall.`,
     ...digest.byType.map((t) => fmtType(t, digest.periodDays)),
   ];
+  const steps = fmtSteps(digest);
+  if (steps) lines.push(steps);
   const latest = digest.recent[0];
   if (latest) {
     const bits = [latest.type, latest.start.slice(0, 10)];

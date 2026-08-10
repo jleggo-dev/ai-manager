@@ -14,10 +14,25 @@ export interface Workout {
   start: string; // ISO
 }
 
+/** One day's step count, as an aggregated bucket — never the individual samples behind it. */
+export interface DailySteps {
+  /** ISO date, YYYY-MM-DD, in the DEVICE's calendar — a step day is a wall-clock day. */
+  date: string;
+  steps: number;
+}
+
 export interface HealthCapability {
   isAvailable(): boolean;
   requestPermissions(scopes: string[]): Promise<boolean>;
   getWorkouts(sinceISO: string): Promise<Workout[]>;
+  /**
+   * Daily step buckets since `sinceISO`, oldest first.
+   *
+   * Returns `[]` rather than throwing on any failure, and `[]` means "we could not read it" —
+   * never "they took no steps". Steps are a strictly-additional signal: a caller must be able to
+   * ask for them and still end up with the workouts it would have had without asking.
+   */
+  getDailySteps(sinceISO: string): Promise<DailySteps[]>;
   getLatestWeightKg(): Promise<number | null>;
   getSleepHours(dateISO: string): Promise<number | null>;
 }
