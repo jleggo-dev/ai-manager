@@ -83,13 +83,20 @@ export function MicButton({
     rec.onend = () => {
       if (aliveRef.current) setListening(false); // fires without onerror on silence — sync here
     };
-    rec.onerror = () => {
-      if (aliveRef.current) setListening(false); // not-allowed/network — quiet reset, no coach-voice error
+    rec.onerror = (e: { error?: string }) => {
+      // Quiet for the USER — a failed dictation attempt should not become an error screen; the
+      // keyboard is right there. Never quiet for US: this discarded the error object entirely,
+      // and a dead mic on all nine of its render sites went unnoticed for exactly that reason.
+      // `not-allowed` here means iOS refused the permission, which on this app meant the Info.plist
+      // had no NSMicrophoneUsageDescription / NSSpeechRecognitionUsageDescription to ask with.
+      console.warn('[cadence/dictation] recognition error:', e?.error ?? e);
+      if (aliveRef.current) setListening(false);
     };
     try {
       rec.start();
       setListening(true);
-    } catch {
+    } catch (err) {
+      console.warn('[cadence/dictation] could not start recognition', err);
       setListening(false);
     }
   }
