@@ -8,6 +8,7 @@ import { capabilities } from '../../lib/capability/index.ts';
 import { OPENING_PICKS, OPENING_PLACEHOLDER, OPENING_QUESTION } from '@cadence/shared';
 import { useEnsureCoachFace } from '../coach/useEnsureCoachFace.ts';
 import { useStickToBottom } from './useStickToBottom.ts';
+import { useFloatingInset } from './useFloatingInset.ts';
 import { useCoachChat } from './useCoachChat.ts';
 import { chatProgress, livePicks, viewTurns } from './coachTurns.ts';
 import { ChatTurn } from './ChatTurn.tsx';
@@ -110,6 +111,8 @@ export function OnboardingChat({
   // Follow the newest turn, but never steal the viewport from someone reading back — see
   // useStickToBottom. Scrolls the pane only; scrollIntoView would pan the whole shell on mobile.
   const { onScroll, stickNow } = useStickToBottom(chatRef, turns);
+  // The floating stack's real height, so no turn ever sits underneath it (useFloatingInset).
+  const { inset, floatRef } = useFloatingInset();
 
   return (
     <div className="chatscreen">
@@ -138,7 +141,12 @@ export function OnboardingChat({
         </div>
       )}
 
-      <div className={`chat${chrome === 'onboarding' ? ' has-top' : ''}`} ref={chatRef} onScroll={onScroll}>
+      <div
+        className={`chat${chrome === 'onboarding' ? ' has-top' : ''}`}
+        ref={chatRef}
+        onScroll={onScroll}
+        style={{ paddingBottom: inset }}
+      >
         {!restored ? (
           <div className="chat-loading">
             <ChatTurn role="coach" text="" pending />
@@ -191,7 +199,7 @@ export function OnboardingChat({
       </div>
 
       {confirming ? (
-        <div className="composer-wrap">
+        <div className="composer-wrap" ref={floatRef}>
           <div className="cfm-bar">
             <button className="cfm-build" onClick={() => onBuild?.()}>
               Build it
@@ -222,8 +230,19 @@ export function OnboardingChat({
           // Only while the opening question is the live one: after that she is asking real
           // questions, and an example of a goal would be answering the wrong thing.
           placeholder={onOpeningTurn ? OPENING_PLACEHOLDER : undefined}
+          rootRef={floatRef}
           above={
-            chrome === 'onboarding' ? <CapturedPills goals={capturedGoals} onFix={() => onReview?.('goals')} /> : null
+            chrome === 'onboarding' ? (
+              <CapturedPills
+                goals={capturedGoals}
+                onFix={(g) => {
+                  // Drafted, never sent — the same contract as a quick pick, so a correction is
+                  // something they read back and edit rather than something the tap asserts.
+                  stickNow();
+                  setInput(`About "${g.title}" — `);
+                }}
+              />
+            ) : null
           }
         />
       )}

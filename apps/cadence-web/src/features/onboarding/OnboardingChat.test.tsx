@@ -172,4 +172,24 @@ describe('OnboardingChat', () => {
     await screen.findByText(/good to see you/);
     expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
   });
+
+  /**
+   * The pills used to open the pre-v2 curate wizard — the UI this redesign exists to replace —
+   * which threw you out of the conversation mid-way and into a form. A tap now drafts the
+   * correction into the composer, same contract as a quick pick: read it back, edit, send.
+   */
+  it('drafts a goal correction into the composer instead of opening the old wizard', async () => {
+    const onReview = vi.fn();
+    getReview.mockResolvedValue({ goals: [{ goal_id: 'g1', title: 'Run a first 10k', area: 'movement' }] });
+    render(<OnboardingChat onReview={onReview} />);
+
+    const pill = await screen.findByRole('button', { name: /Run a first 10k/ });
+    fireEvent.click(pill);
+
+    expect(onReview).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText(OPENING_PLACEHOLDER)).toHaveValue('About "Run a first 10k" — '),
+    );
+    expect(sendCoachMessage).not.toHaveBeenCalled();
+  });
 });
