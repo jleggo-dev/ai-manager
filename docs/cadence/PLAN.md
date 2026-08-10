@@ -640,6 +640,31 @@ traffic:
   Before submission: drive it from build configuration (a `CAPACITOR_DEBUG` Info.plist value set
   per-configuration is the documented seam) rather than a flat `true`.
 
+**A1. Coach voice in intake — three open judgements (opened 2026-08-10, owner's call)**
+
+All three came out of reading real onboarding transcripts against production after the v2 redesign
+(#152–#161). None is a code defect; each is a wording or framing decision that needs the owner, and
+all three live in `apps/cadence-api/src/services/coach-picks-protocol.ts` — **prompt text, injected
+from code, so changing them needs a redeploy but NO `sync-jobs.ts` run.**
+
+1. **The `0 / ~1 / 2-3 / 4+` tiles are a week-count grid by another name.** Cadence uses them for
+   "where are you starting from", which is genuinely different in intent from a commitment quota —
+   it is `measure.start`, where they are today, which the Broker wants. But on screen it is a
+   four-tile weekly-frequency grid, and the owner's ruling (2026-08-10) was that "how many days a
+   week" is a fitness-app question Cadence should not ask (see the daily-rhythm rework in #156).
+   Open: does the *baseline* question survive in that shape, or should it be framed by distance,
+   minutes, or plain words ("not at all / here and there / regularly")?
+
+2. **"But before I can build anything, I need to know…"** — observed verbatim when a user answered
+   a question she had not asked and she circled back to hers. Re-asking is correct behaviour; that
+   phrasing turns it into a demand, and the voice is "warm, level, unhyped" (BRAND.md).
+
+3. **The day question has never been heard in a real conversation.** #156 replaced the weekly
+   day-count with "what does your day usually look like?" and "what sort of time do we have to work
+   with?", plus a SAY IT LIKE A PERSON rule — because the model echoes the phrasing it is handed and
+   was reading our shorthand aloud. Four live turns never reached that far, so the fix is verified
+   by unit test (the strings are in the prompt) and NOT by ear. Needs one full walkthrough.
+
 **A. Context/memory (MEMORY-ARCHITECTURE.md §9 phasing)**
 - **P3 — pack reuse: BUILT 2026-08-04** (the reuse half; enrichment deliberately dropped — see
   below). A coach session open now serves a cached dossier and skips BOTH Broker calls whenever
@@ -933,6 +958,14 @@ traffic:
 - Cross-session longitudinal variables.
 
 ### Known issues
+- **Flaky under load: three DB-backed `nutrition-service` tests (seen 2026-08-10).** `logMeal marks
+  low-confidence macros provisional` and two siblings time out on their `beforeEach` (10s hook
+  timeout) during a full `vitest run` of `apps/cadence-api`, and pass in isolation — the file takes
+  ~91s of real Supabase work, so under parallel load the hook simply does not get its connection in
+  time. Not caused by any recent change; it predates the onboarding v2 work and was noticed while
+  gating it. **Why it matters:** it reddens a full local run for no reason, which trains people to
+  ignore red. Fix by raising the hook timeout for the DB-backed suites or serialising them
+  (`--no-file-parallelism` for that project), not by deleting coverage.
 - **UNRESOLVED — coach face naming** (raised 2026-08-09, owner). The fifteen portraits ship with
   ids carrying the source-art vocabulary: `steady-pacer` (Athlete/Body), `mindful-guide`
   (Yogi/Mind), `rhythm-keeper` (Artist/Creative/Spiritual), `hearth-anchor` (General/any), each
