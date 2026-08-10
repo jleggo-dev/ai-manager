@@ -142,9 +142,10 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
         sessionId.current = (
           await openCoachSession({
             intent,
-            // Declares the goal-gated Apple Health offer as possible: iOS shell + not yet answered.
-            // The persona only offers when this note is present AND the goal warrants it.
-            healthAvailable: capabilities.health.isAvailable() && !healthOfferAnswered(),
+            // TWO facts, kept apart on purpose. Sending "already asked" as "not available" made
+            // the coach tell an iPhone user that Apple Health only works on iPhone.
+            healthAvailable: capabilities.health.isAvailable(),
+            healthAnswered: healthOfferAnswered(),
           })
         ).sessionId;
       const { completed } = await sendCoachMessage(sessionId.current, text, applyStreamDelta);

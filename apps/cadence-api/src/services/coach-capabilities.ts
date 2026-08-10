@@ -86,14 +86,22 @@ export const NOT_YET: string[] = [
  * — the SAME catalog the session-authoring job is given, so the chat coach can never offer a step
  * the app has no renderer for.
  */
-export function renderCapabilities(opts: { healthAvailable?: boolean } = {}): string {
+export function renderCapabilities(opts: { healthAvailable?: boolean; healthAnswered?: boolean } = {}): string {
   const lines: string[] = ['== WHAT CADENCE CAN DO (this build — authoritative; do not invent beyond it) =='];
   for (const g of CAPABILITIES) {
     lines.push(`${g.heading}: ${g.can.join('; ')}.`);
   }
+  // Two DIFFERENT facts, and collapsing them told the coach a lie. "We already asked" was being
+  // sent as "not on this device", so after someone dismissed the offer once she started saying
+  // "Apple Health only works on iPhone" — to a user holding an iPhone with access already granted.
   if (opts.healthAvailable !== true) {
-    // Suppress the one line that is device-gated, so the coach never offers a card that cannot appear.
     lines.push('Not on this device: Apple Health — do not offer to read their activity here.');
+  } else if (opts.healthAnswered === true) {
+    lines.push(
+      'Apple Health IS available here and they have already been offered it once — do not offer ' +
+        'again unprompted. If they ASK for it, say yes plainly and it will appear for them to ' +
+        'confirm. Never tell them it is unavailable or that it only works on iPhone; they are on one.',
+    );
   }
   lines.push(`Cannot do yet: ${NOT_YET.join('; ')}.`);
   lines.push(

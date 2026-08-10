@@ -3,7 +3,7 @@ import { CoachFace } from '../../components/CoachFace.tsx';
 import { CoachFoodActionSheet } from '../coach/CoachFoodActionSheet.tsx';
 import type { Step } from '../review/reviewConstants.ts';
 import { HealthOfferCard } from './HealthOfferCard.tsx';
-import { findHealthOfferTurn, healthOfferAnswered } from './health-digest.ts';
+import { findHealthOfferTurn, healthAlreadyShared } from './health-digest.ts';
 import { capabilities } from '../../lib/capability/index.ts';
 import { OPENING_PICKS, OPENING_PLACEHOLDER, OPENING_QUESTION } from '@cadence/shared';
 import { useEnsureCoachFace } from '../coach/useEnsureCoachFace.ts';
@@ -79,7 +79,10 @@ export function OnboardingChat({
   // Goal-gated Apple Health offer (detour pattern): the card renders under the coach turn that
   // offered it in prose — never unprompted. Gate: iOS shell + not yet answered; the turn index
   // recomputes per render so a streamed re-offer moves the card.
-  const canOfferHealth = capabilities.health.isAvailable() && !healthOfferAnswered();
+  // Gated on "we already have the data", not "we already asked". Dismissing once must not mean
+  // the card can never appear again — if they ask for Apple Health later and she agrees to pull
+  // it, the thing they confirm with has to be there.
+  const canOfferHealth = capabilities.health.isAvailable() && !healthAlreadyShared();
   const healthOfferAt = canOfferHealth && !streaming ? findHealthOfferTurn(turns) : -1;
 
   // Follow the newest turn, but never steal the viewport from someone reading back — see
