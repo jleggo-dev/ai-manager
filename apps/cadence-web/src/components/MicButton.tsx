@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { capabilities } from '../lib/capability/index.ts';
 import type { DictationSession } from '../lib/capability/index.ts';
+import { joinSpeech } from './joinSpeech.ts';
 
 /**
  * Voice input via the capability seam (Web Speech API on web). Feature-detected:
@@ -30,13 +31,23 @@ export function MicButton({
   value,
   onChange,
   disabled,
+  onListeningChange,
 }: {
   value: string;
   onChange: (next: string) => void;
   disabled?: boolean;
+  /** Told whenever dictation starts or stops, so a caller can keep the control on screen. */
+  onListeningChange?: (listening: boolean) => void;
 }) {
   const [supported] = useState(() => capabilities.dictation.isAvailable());
-  const [listening, setListening] = useState(false);
+  const [listening, setListeningState] = useState(false);
+  const wantOnRef = useRef(false);
+  const onListeningRef = useRef(onListeningChange);
+  onListeningRef.current = onListeningChange;
+  const setListening = useCallback((next: boolean) => {
+    setListeningState(next);
+    onListeningRef.current?.(next);
+  }, []);
   const recRef = useRef<DictationSession | null>(null);
   const baseRef = useRef('');
   const aliveRef = useRef(true);
@@ -55,6 +66,7 @@ export function MicButton({
   if (!supported) return null;
 
   function stop() {
+    wantOnRef.current = false;
     recRef.current?.stop();
     setListening(false);
   }
@@ -67,7 +79,7 @@ export function MicButton({
     baseRef.current = valueRef.current ? valueRef.current.replace(/\s+$/, '') + ' ' : '';
     let finals = '';
     rec.lang = navigator.language || 'en-US';
-    rec.continuous = false;
+    rec.continuous = true;
     rec.interimResults = true;
     rec.onresult = (e) => {
       if (!aliveRef.current) return;
@@ -78,10 +90,28 @@ export function MicButton({
         if (r.isFinal) finals += r[0].transcript;
         else interim += r[0].transcript;
       }
-      onChange((baseRef.current + finals + interim).trimStart());
+      // Join with a space unless the transcript already brings its own leading whitespace —
+      // Chrome does, WebKit's behaviour here is not something the types promise either way, and
+      // "helloworld" is a worse failure than a double space (which the trim below tidies anyway).
+      onChange(joinSpeech(baseRef.current, finals, interim));
     };
     rec.onend = () => {
-      if (aliveRef.current) setListening(false); // fires without onerror on silence — sync here
+      if (!aliveRef.current) return;
+      // WebKit ends the stream by itself after a pause, mid-sentence and without an error. If the
+      // user still has the mic ON, restart the SAME recognizer so the accumulated `finals` closure
+      // survives — calling the component's start() would re-read baseRef from the field this very
+      // session has been writing into, and duplicate everything said so far. Same approach as
+      // features/walkthrough/tools/useHandsFree.ts.
+      if (wantOnRef.current) {
+        try {
+          rec.start();
+          return;
+        } catch (err) {
+          // InvalidStateError when it has not finished tearing down — fall through and stop.
+          console.warn('[cadence/dictation] could not resume after pause', err);
+        }
+      }
+      setListening(false);
     };
     rec.onerror = (e: { error?: string }) => {
       // Quiet for the USER — a failed dictation attempt should not become an error screen; the
@@ -93,9 +123,11 @@ export function MicButton({
       if (aliveRef.current) setListening(false);
     };
     try {
+      wantOnRef.current = true;
       rec.start();
       setListening(true);
     } catch (err) {
+      wantOnRef.current = false;
       console.warn('[cadence/dictation] could not start recognition', err);
       setListening(false);
     }

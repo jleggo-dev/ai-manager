@@ -29,7 +29,10 @@ html.native {
   --body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
-html { height: 100%; }
+/* WKWebView inflates text ("font boosting") when the layout width changes, and frequently fails
+   to undo it — rotating to landscape and back left every font enormous until a reload. 100%, not
+   `none`: `none` also blocks the user's own accessibility text scaling and buys nothing here. */
+html { height: 100%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
   font-family: var(--body); color: var(--text); min-height: 100vh;
   display: flex; align-items: center; justify-content: center; padding: 24px;

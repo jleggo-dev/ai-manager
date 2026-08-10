@@ -186,7 +186,9 @@ describe('OnboardingChat', () => {
     fireEvent.click(pill);
 
     await waitFor(() =>
-      expect(screen.getByPlaceholderText(OPENING_PLACEHOLDER)).toHaveValue('About "Run a first 10k" — '),
+      expect(screen.getByPlaceholderText(OPENING_PLACEHOLDER)).toHaveValue(
+        'About "Run a first 10k" — that\'s not quite right. ',
+      ),
     );
     expect(sendCoachMessage).not.toHaveBeenCalled();
   });

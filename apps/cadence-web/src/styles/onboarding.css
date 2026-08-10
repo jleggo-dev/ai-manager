@@ -294,3 +294,8 @@
    speaks in her voice without her face reads as the app, which is the one thing it isn't. */
 .health-offer { position: relative; }
 .health-offer-face { position: absolute; top: 12px; left: -13px; box-shadow: 0 2px 0 oklch(36% 0.07 152); }
+
+/* The mic is hidden, never unmounted — unmounting it mid-dictation aborts recognition and throws
+   away the words already spoken. See ChatComposer. */
+.mic-slot { display: flex; }
+.mic-slot.is-hidden { display: none; }
