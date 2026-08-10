@@ -6,6 +6,7 @@ import { getUser, mergeBaseline, setHomeLocation, setName, setTimezoneIfUnset } 
 import { geocodeCity } from './weather/weather.ts';
 import { logAi } from './ai-log.ts';
 import {
+  describeIncoherentMeasure,
   normalizeBaseline,
   normalizeBrief,
   normalizeTimezone,
@@ -139,9 +140,21 @@ export async function runCaptureExtract(
     const result = screenGoal({ ...g, area, type }, Number.isFinite(weightKg) ? weightKg : undefined);
     screened.push({ title: g.title ?? '(untitled)', result });
     if (result.verdict === 'refuse') continue;
+    // A measure whose arithmetic cannot be true ("lose weight, from 195 to 195" — a real capture)
+    // is dropped rather than persisted: the GOAL still lands, so nothing the user said is lost and
+    // the coach can ask again, but a number they never chose never becomes the thing every plan
+    // and every progress read anchors to. Logged like every other coercion, never silent.
+    const badMeasure = describeIncoherentMeasure(g.measure);
+    if (badMeasure) coerced.push(`measure dropped on "${g.title ?? '(untitled)'}" — ${badMeasure}`);
     // The brief carries the facts that decide how hard the work has to be (see Goal.brief). It is
     // capped and whitespace-collapsed here, never rewritten — it is their sentences, not ours.
-    await insertGoal(userId, { ...g, area, type, brief: normalizeBrief(g.brief) });
+    await insertGoal(userId, {
+      ...g,
+      area,
+      type,
+      brief: normalizeBrief(g.brief),
+      measure: badMeasure ? undefined : g.measure,
+    });
     goals++;
   }
 

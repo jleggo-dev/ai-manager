@@ -6,6 +6,7 @@ import { parseRecurrence, expandRecurrence, describeRecurrence } from './schedul
 import { wearStatus, applyRun } from './shoe-mileage.ts';
 import { detectTripwires, haversineKm } from './tripwires.ts';
 import {
+  describeIncoherentMeasure,
   selectCapturedGoals,
   normalizeBaseline,
   normalizeBrief,
@@ -359,6 +360,26 @@ describe('capture normalizeBrief / normalizeTimezone (§6.1 — their words, our
     expect(normalizeBrief('x'.repeat(2000))).toHaveLength(800);
     expect(normalizeBrief('   ')).toBeUndefined();
     expect(normalizeBrief(42)).toBeUndefined();
+  });
+
+  // "Lose weight, from 195 to 195" reached production: the model copied his current weight into
+  // the target slot and nothing checked that target, start and direction agree.
+  it('names the arithmetic that cannot be true, and stays silent otherwise', () => {
+    expect(
+      describeIncoherentMeasure({ metric: 'body weight', target: 195, start: 195, direction: 'decrease' }),
+    ).toMatch(/target equals start/);
+    expect(describeIncoherentMeasure({ target: 210, start: 195, direction: 'decrease' })).toMatch(/above start/);
+    expect(describeIncoherentMeasure({ target: 5, start: 10, direction: 'increase' })).toMatch(/below start/);
+    // Numbers the model typed as strings are the same numbers.
+    expect(describeIncoherentMeasure({ target: '195', start: '195' })).toMatch(/target equals start/);
+
+    // Coherent, and none of the app's business how ambitious it is — a 40 kg loss is a real want.
+    expect(describeIncoherentMeasure({ target: 155, start: 195, direction: 'decrease' })).toBeNull();
+    // Nothing to compare against: no start, a non-numeric target (a race time), or no measure.
+    expect(describeIncoherentMeasure({ target: 175, direction: 'decrease' })).toBeNull();
+    expect(describeIncoherentMeasure({ target: '5:30', start: '6:10', direction: 'decrease' })).toBeNull();
+    expect(describeIncoherentMeasure({})).toBeNull();
+    expect(describeIncoherentMeasure(undefined)).toBeNull();
   });
 
   // A wrong timezone moves every notification and every "today" the app has, so only a name the

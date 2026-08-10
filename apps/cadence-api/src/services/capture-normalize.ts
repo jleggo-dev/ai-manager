@@ -212,6 +212,43 @@ export function normalizeBaseline(raw: Record<string, unknown>): Record<string, 
   return out;
 }
 
+/** A measure number however the model typed it — 195, "195", "195 lbs". Non-numeric → undefined. */
+function measureNumber(raw: unknown): number | undefined {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : undefined;
+  if (typeof raw !== 'string') return undefined;
+  const n = Number.parseFloat(raw.trim());
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * Why this measure cannot be true, or null when the arithmetic holds.
+ *
+ * Production stored { metric: "body weight", target: 195, start: 195, direction: "decrease" } for
+ * a man whose baseline weight was 195 — "lose weight, from 195 to 195". The model had copied his
+ * current weight into the target slot, and nothing checked that a target, a start and a direction
+ * agree, so it persisted and became the number every plan and every progress read anchored to.
+ * A goal that can be neither reached nor missed is worse than no goal at all: the user never
+ * chose it, and it is invisible precisely because it looks like data.
+ *
+ * ONLY the arithmetic is judged, never the ambition — a 40 kg loss is a real thing to want, and
+ * this must never become a place where the app decides what someone is allowed to aim for.
+ */
+export function describeIncoherentMeasure(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const m = raw as { target?: unknown; start?: unknown; direction?: unknown };
+  const target = measureNumber(m.target);
+  const start = measureNumber(m.start);
+  // No start (or a non-numeric target, e.g. a time like "5:30") means there is nothing to compare
+  // against — say nothing rather than guess, exactly as everywhere else in capture.
+  if (target === undefined || start === undefined) return null;
+  if (target === start) return `target equals start (${target}) — that describes no change`;
+  if (m.direction === 'decrease' && target > start)
+    return `direction decrease but target ${target} is above start ${start}`;
+  if (m.direction === 'increase' && target < start)
+    return `direction increase but target ${target} is below start ${start}`;
+  return null;
+}
+
 /**
  * An IANA timezone the user stated ("I'm in Quebec, so Eastern"). Validated by asking Intl to
  * actually use it: a name the runtime rejects is a name that would throw somewhere far away, in

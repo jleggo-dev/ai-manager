@@ -87,6 +87,36 @@ describe('runCaptureExtract', () => {
     warn.mockRestore();
   });
 
+  // The goal survives; only the impossible number is dropped. Losing the goal too would be the
+  // "start over" feeling the brand promises never to cause, over a mistake the model made.
+  it('drops a measure whose arithmetic cannot be true, and keeps the goal', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    runJobBySlug.mockResolvedValue({
+      formatted: JSON.stringify({
+        goals: [
+          {
+            title: 'Lose weight',
+            area: 'nourishment',
+            type: 'target',
+            measure: { metric: 'body weight', target: 195, start: 195, direction: 'decrease' },
+          },
+        ],
+        equipment: [],
+        baseline_updates: {},
+        confidence: 'high',
+      }),
+    });
+
+    const out = await runCaptureExtract(USER, { conversation_window: 'I want to lose weight' });
+    expect(out.persisted.goals).toBe(1);
+    expect(insertGoal).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ title: 'Lose weight', measure: undefined }),
+    );
+    expect(warn).toHaveBeenCalled(); // never silent — it lands in the coercion log
+    warn.mockRestore();
+  });
+
   it('dedupes near-duplicate goals from one capture run to a single insert', async () => {
     runJobBySlug.mockResolvedValue({
       formatted: JSON.stringify({
