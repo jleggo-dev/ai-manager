@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { COACH_PICKS_FENCE } from '@cadence/shared';
+import { COACH_PICKS_FENCE, OPENING_PICKS, OPENING_QUESTION } from '@cadence/shared';
 import { OnboardingChat } from './OnboardingChat.tsx';
 
 const sendCoachMessage = vi.fn();
+const openCoachSession = vi.fn();
 const getReview = vi.fn();
 
 const PICKS = {
@@ -16,12 +17,12 @@ const PICKS = {
   ],
 };
 
-const OPENING = `So — what would you like to work on?\n\n\`\`\`${COACH_PICKS_FENCE}\n${JSON.stringify(PICKS)}\n\`\`\``;
+const REPLY = `Good pair. So — what would you like to work on next?\n\n\`\`\`${COACH_PICKS_FENCE}\n${JSON.stringify(PICKS)}\n\`\`\``;
 
 vi.mock('../../lib/api.ts', () => ({
   getCurrentCoach: vi.fn().mockResolvedValue({ sessionId: null, messages: [] }),
   getReview: (...args: unknown[]) => getReview(...args),
-  openCoachSession: vi.fn().mockResolvedValue({ sessionId: 'test-session' }),
+  openCoachSession: (...args: unknown[]) => openCoachSession(...args),
   sendCoachMessage: (...args: unknown[]) => sendCoachMessage(...args),
   prepareCoachFoodAction: vi.fn().mockResolvedValue({ status: 'ok', action: null }),
   getCoachFace: vi.fn().mockResolvedValue(null),
@@ -37,31 +38,53 @@ vi.mock('../../components/MicButton.tsx', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   getReview.mockResolvedValue({ goals: [] });
+  openCoachSession.mockResolvedValue({ sessionId: 'test-session' });
   sendCoachMessage.mockImplementation(async (_id: string, _text: string, onDelta: (d: string) => void) => {
-    onDelta(OPENING);
+    onDelta(REPLY);
     return { completed: true, responseId: null };
   });
 });
 
 describe('OnboardingChat', () => {
-  it('lets Cadence open the conversation, and renders the picks she shipped with it', async () => {
+  it("opens with the app's own question and picks, without asking the model anything", async () => {
     render(<OnboardingChat />);
 
-    expect(await screen.findByText(/what would you like to work on/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Run a first 10k' })).toBeInTheDocument();
-    // The block itself is never shown — only the buttons it describes.
+    expect(await screen.findByText(OPENING_QUESTION)).toBeInTheDocument();
+    for (const o of OPENING_PICKS.options) {
+      expect(screen.getByRole('button', { name: o.label })).toBeInTheDocument();
+    }
+    // The whole point of making turn 1 deterministic: no round-trip before the user has acted.
+    expect(sendCoachMessage).not.toHaveBeenCalled();
+    expect(openCoachSession).not.toHaveBeenCalled();
+  });
+
+  it('renders the picks the coach ships with her reply, never the block itself', async () => {
+    render(<OnboardingChat />);
+    await screen.findByText(OPENING_QUESTION);
+
+    fireEvent.change(screen.getByPlaceholderText('Message your coach…'), { target: { value: 'hello' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByText(/what would you like to work on next/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'A steadier mind' })).toBeInTheDocument();
     expect(screen.queryByText(new RegExp(COACH_PICKS_FENCE))).not.toBeInTheDocument();
   });
 
   it("reports the coach's own read of how far through intake she is", async () => {
     render(<OnboardingChat />);
-    await screen.findByText(/what would you like to work on/);
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '20');
+    await screen.findByText(OPENING_QUESTION);
+    // The opening turn carries its own progress; the coach's reply supersedes it.
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '10');
+
+    fireEvent.change(screen.getByPlaceholderText('Message your coach…'), { target: { value: 'hello' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '20'));
   });
 
   it('composes picks into the composer as plain words, and does not send them', async () => {
     render(<OnboardingChat />);
-    await screen.findByText(/what would you like to work on/);
+    await screen.findByText(OPENING_QUESTION);
     const sendsBefore = sendCoachMessage.mock.calls.length;
 
     fireEvent.click(screen.getByRole('button', { name: 'Run a first 10k' }));
@@ -82,12 +105,15 @@ describe('OnboardingChat', () => {
       (_id: string, _t: string, onDelta: (d: string) => void) =>
         new Promise((resolve) => {
           release = () => {
-            onDelta(OPENING);
+            onDelta(REPLY);
             resolve({ completed: true, responseId: null });
           };
         }),
     );
     render(<OnboardingChat />);
+    await screen.findByText(OPENING_QUESTION);
+    fireEvent.change(screen.getByPlaceholderText('Message your coach…'), { target: { value: 'hello' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => expect(screen.getByPlaceholderText('Cadence is replying…')).toBeDisabled());
     expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();

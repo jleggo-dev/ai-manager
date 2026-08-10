@@ -124,25 +124,19 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     });
   }
 
-  /**
-   * One turn, streamed. `echo: false` is the app opening the conversation on the user's behalf
-   * (they tapped "Say hi") — the coach's question is what they should see, not a synthetic
-   * message in their own voice that they did not write.
-   */
-  async function deliver(text: string, echo: boolean) {
+  /** One turn, streamed: the user's message, then the coach's reply filling in behind it. */
+  async function deliver(text: string) {
     const window = turnsWindow(turns, text);
-    setTurns((t) => [...t, ...(echo ? [{ role: 'user' as const, text }] : []), { role: 'coach' as const, text: '' }]);
+    setTurns((t) => [...t, { role: 'user' as const, text }, { role: 'coach' as const, text: '' }]);
     setStreaming(true);
-    // Confirm-first food draft in parallel with the coach stream (never blocks reply). Only for
-    // something the user actually said — an opener can't be a meal.
-    if (echo)
-      void prepareCoachFoodAction({ message: text, window })
-        .then((r) => {
-          if (r.status === 'ok' && r.action) setFoodAction(r.action);
-        })
-        .catch(() => {
-          /* soft-fail — chat still works */
-        });
+    // Confirm-first food draft in parallel with the coach stream (never blocks reply).
+    void prepareCoachFoodAction({ message: text, window })
+      .then((r) => {
+        if (r.status === 'ok' && r.action) setFoodAction(r.action);
+      })
+      .catch(() => {
+        /* soft-fail — chat still works */
+      });
     try {
       if (!sessionId.current)
         sessionId.current = (
@@ -174,18 +168,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     const text = input.trim();
     if (!text || streaming) return;
     setInput('');
-    await deliver(text, true);
-  }
-
-  /**
-   * Let the coach speak first. Onboarding used to open with a greeting hard-coded in the client,
-   * which meant the first thing Cadence "said" was a string she had no part in and could not
-   * attach quick picks to. Now the app nudges her and she opens the conversation herself.
-   * No-ops if there is already a transcript, so a restored thread is never re-greeted.
-   */
-  async function kickoff(opener: string) {
-    if (streaming || turns.length) return;
-    await deliver(opener, false);
+    await deliver(text);
   }
 
   return {
@@ -196,7 +179,6 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     capturedGoals,
     restored,
     send,
-    kickoff,
     foodAction,
     clearFoodAction: () => setFoodAction(null),
     // Exported for unit tests of recovery / delta helpers without full send path.
