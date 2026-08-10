@@ -3,8 +3,6 @@ import type { Session } from '@supabase/supabase-js';
 import { MeetCadence } from './features/onboarding/MeetCadence.tsx';
 import { OnboardingChat } from './features/onboarding/OnboardingChat.tsx';
 import { BuildingScreen } from './features/onboarding/BuildingScreen.tsx';
-import { ReviewScreen } from './features/review/ReviewScreen.tsx';
-import type { Step } from './features/review/reviewConstants.ts';
 import { MainTabs } from './features/shell/MainTabs.tsx';
 import { DevPanel } from './features/dev/DevPanel.tsx';
 import { AccountSwitcher } from './features/dev/AccountSwitcher.tsx';
@@ -25,7 +23,13 @@ import { maybeRefreshHealthDigest } from './features/onboarding/health-digest.ts
 import { supabase } from './lib/supabase.ts';
 import { screenFromPlanStage } from './screenFromPlanStage.ts';
 
-type Screen = 'loading' | 'meet' | 'onboarding' | 'review' | 'building' | 'gate' | 'plan';
+/**
+ * `review` is gone from the onboarding machine on purpose. Corrections during the first
+ * conversation happen IN the conversation now — the capture pills and the confirmation's "fix"
+ * both draft a message rather than opening the pre-v2 curate wizard. That wizard still exists and
+ * is still reachable from Settings (MainTabs), where editing a committed plan really is the task.
+ */
+type Screen = 'loading' | 'meet' | 'onboarding' | 'building' | 'gate' | 'plan';
 
 // Resolved once at load (the URL doesn't change without a reload). Dev mode uses the header-based
 // test accounts and skips real auth; everything else requires a Supabase session.
@@ -53,8 +57,8 @@ const Loading = () => (
  * opens), so its getPlan() fires with auth in place.
  *
  * Since the v2 redesign the flow is: meet the coach → one running chat (the coach drives it, the
- * old wizard is gone) → build the week → save it. `review` is still here but is no longer a step
- * anyone walks through: it is what "edit" on the confirmation opens, and what Settings opens later.
+ * old wizard is gone) → build the week → save it. Nothing here opens the curate wizard any more:
+ * corrections during the first conversation are made by talking to her.
  *
  * The sign-up gate sits between `building` and `plan` and ONLY for an anonymous session. Everyone
  * who signed in first goes straight to their plan — being asked to sign up twice is worse than
@@ -62,7 +66,6 @@ const Loading = () => (
  */
 function CoachApp({ session }: { session: Session | null }) {
   const [screen, setScreen] = useState<Screen>('loading');
-  const [reviewStep, setReviewStep] = useState<Step>('goals');
   const [dev, setDev] = useState(DEV_MODE);
   const anonymous = isAnonymousSession(session);
 
@@ -91,11 +94,6 @@ function CoachApp({ session }: { session: Session | null }) {
     // anonymous is fixed for the life of a session object; re-running on it would refetch the plan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const openReview = (step: Step = 'goals') => {
-    setReviewStep(step);
-    setScreen('review');
-  };
 
   /**
    * The way out of onboarding, and the reason it has to be a sign-out rather than a screen change.
@@ -126,13 +124,7 @@ function CoachApp({ session }: { session: Session | null }) {
       ) : screen === 'meet' ? (
         <MeetCadence onSayHi={() => setScreen('onboarding')} onLeave={leaveOnboarding} warnUnsaved={anonymous} />
       ) : screen === 'onboarding' ? (
-        <OnboardingChat onReview={openReview} onBuild={() => setScreen('building')} onBack={() => setScreen('meet')} />
-      ) : screen === 'review' ? (
-        <ReviewScreen
-          initialStep={reviewStep}
-          onBack={() => setScreen('onboarding')}
-          onLocked={() => setScreen('plan')}
-        />
+        <OnboardingChat onBuild={() => setScreen('building')} onBack={() => setScreen('meet')} />
       ) : screen === 'building' ? (
         <BuildingScreen
           onReady={() => setScreen(anonymous ? 'gate' : 'plan')}

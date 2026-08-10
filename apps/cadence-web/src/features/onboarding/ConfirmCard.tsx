@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Baseline, Goal } from '@cadence/shared';
 import { getReview, type ReviewData } from '../../lib/api.ts';
-import { TIME_OF_DAY_LABELS, type Step } from '../review/reviewConstants.ts';
+import { TIME_OF_DAY_LABELS } from '../review/reviewConstants.ts';
 import { cmToFtIn, kgToLbs } from '../review/unitConversion.ts';
 
 /**
@@ -15,8 +15,12 @@ import { cmToFtIn, kgToLbs } from '../review/unitConversion.ts';
  * Long sections collapse to a one-line summary. A confirmation that takes four screens of
  * scrolling gets skimmed and waved through, which is the opposite of what confirming is for.
  *
- * `edit` opens the curate wizard the app already has, rather than reinventing editors in the
- * chat — the same cards, reachable later from Settings, so there is one place a goal is fixed.
+ * **Corrections happen in the conversation.** "fix" used to open the pre-v2 curate wizard, which
+ * threw someone out of the chat at the exact moment they were being asked to confirm it — and
+ * confirming is the one turn where leaving the conversation costs the most. A tap now drafts the
+ * correction into the composer, the same contract as a quick pick and as the capture pills: read
+ * it back, edit it, send it. Cadence can just be told. The wizard still exists for Settings, where
+ * editing a committed plan IS the task.
  */
 
 /** Sections beyond this many rows arrive folded; the summary says what's inside. */
@@ -26,12 +30,12 @@ function Section({
   title,
   summary,
   rows,
-  onEdit,
+  onCorrect,
 }: {
   title: string;
   summary: string;
   rows: ReactNode[];
-  onEdit?: () => void;
+  onCorrect?: () => void;
 }) {
   const foldable = rows.length > FOLD_OVER;
   const [open, setOpen] = useState(!foldable);
@@ -49,9 +53,9 @@ function Section({
           {title}
           {foldable && <span aria-hidden>{open ? ' ▾' : ' ▸'}</span>}
         </button>
-        {onEdit && (
-          <button type="button" className="cfm-edit" onClick={onEdit}>
-            edit
+        {onCorrect && (
+          <button type="button" className="cfm-edit" onClick={onCorrect}>
+            fix
           </button>
         )}
       </div>
@@ -96,7 +100,14 @@ function availabilityLine(b: Baseline): string {
   return bits.join(' · ');
 }
 
-export function ConfirmCard({ onEdit, onTellMore }: { onEdit: (step: Step) => void; onTellMore: () => void }) {
+export function ConfirmCard({
+  onCorrect,
+  onTellMore,
+}: {
+  /** Draft a correction about `topic` into the composer — never a wizard. */
+  onCorrect: (topic: string) => void;
+  onTellMore: () => void;
+}) {
   const [data, setData] = useState<ReviewData | null>(null);
 
   useEffect(() => {
@@ -122,7 +133,7 @@ export function ConfirmCard({ onEdit, onTellMore }: { onEdit: (step: Step) => vo
       <Section
         title="Goals"
         summary={`${data.goals.length} goals${milestones ? ` · ${milestones} milestones` : ''}`}
-        onEdit={() => onEdit('goals')}
+        onCorrect={() => onCorrect('my goals')}
         rows={data.goals.map((g) => (
           <div key={g.goal_id} className="cfm-goal">
             <div className="cfm-goal-t">
@@ -137,7 +148,7 @@ export function ConfirmCard({ onEdit, onTellMore }: { onEdit: (step: Step) => vo
       <Section
         title="About you"
         summary={about}
-        onEdit={() => onEdit('you')}
+        onCorrect={() => onCorrect('my details')}
         rows={[
           about ? <div key="about">{about}</div> : null,
           avail ? (
@@ -150,7 +161,7 @@ export function ConfirmCard({ onEdit, onTellMore }: { onEdit: (step: Step) => vo
       <Section
         title="What we work around"
         summary={`${baseline.constraints.length} things`}
-        onEdit={() => onEdit('you')}
+        onCorrect={() => onCorrect('what we work around')}
         rows={baseline.constraints.map((c) => (
           <div key={c.id}>
             {c.label}
@@ -161,7 +172,7 @@ export function ConfirmCard({ onEdit, onTellMore }: { onEdit: (step: Step) => vo
       <Section
         title="Tools"
         summary={`${data.equipment.length} things`}
-        onEdit={() => onEdit('gear')}
+        onCorrect={() => onCorrect('what I have to work with')}
         rows={data.equipment.length ? [<div key="gear">{data.equipment.map((e) => e.name).join(' · ')}</div>] : []}
       />
       <button type="button" className="cfm-more" onClick={onTellMore}>

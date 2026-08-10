@@ -1,7 +1,6 @@
 import { useMemo, useRef } from 'react';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { CoachFoodActionSheet } from '../coach/CoachFoodActionSheet.tsx';
-import type { Step } from '../review/reviewConstants.ts';
 import { HealthOfferCard } from './HealthOfferCard.tsx';
 import { findHealthOfferTurn, healthAlreadyShared } from './health-digest.ts';
 import { capabilities } from '../../lib/capability/index.ts';
@@ -57,14 +56,12 @@ const ONGOING_GREETING =
  * deliberately, because "one running chat" stops being true the moment the tab is a different chat.
  */
 export function OnboardingChat({
-  onReview,
   onBuild,
   onSettings,
   onBack,
   intent = 'onboarding',
   chrome = 'onboarding',
 }: {
-  onReview?: (step?: Step) => void;
   onBuild?: () => void;
   onSettings?: () => void;
   onBack?: () => void;
@@ -178,8 +175,14 @@ export function OnboardingChat({
                     last && picks ? (
                       confirming ? (
                         <ConfirmCard
-                          onEdit={(step) => onReview?.(step)}
-                          onTellMore={() => setInput("There's something you missed — ")}
+                          onCorrect={(topic) => {
+                            stickNow();
+                            setInput(`About ${topic} — `);
+                          }}
+                          onTellMore={() => {
+                            stickNow();
+                            setInput("There's something you missed — ");
+                          }}
                         />
                       ) : (
                         <QuickPicks key={i} picks={picks} onCompose={setInput} />
