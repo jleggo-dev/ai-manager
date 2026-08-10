@@ -15,6 +15,7 @@ import { SignInFork } from './features/auth/SignInFork.tsx';
 import { SignUpGate } from './features/auth/SignUpGate.tsx';
 import { isAnonymousSession } from './features/auth/anonymous.ts';
 import { listDeviceAccounts, rememberDeviceAccount } from './features/auth/deviceAccounts.ts';
+import { syncLocalStateToUser } from './features/auth/localUserState.ts';
 import { PhoneFrame } from './components/PhoneFrame.tsx';
 import { CoachFaceProvider } from './features/coach/CoachFaceProvider.tsx';
 import { getPlan, setAuthToken, isDevMode, getHealthDigest, postHealthDigest } from './lib/api.ts';
@@ -211,12 +212,16 @@ export function App() {
     supabase.auth.getSession().then(({ data }) => {
       setAuthToken(data.session?.access_token ?? null);
       setSession(data.session);
+      // Before anything reads a local answer: a different person means the last person's answers
+      // are not theirs to inherit (features/auth/localUserState.ts).
+      syncLocalStateToUser(data.session?.user.id ?? null);
       if (data.session) rememberDeviceAccount(data.session);
       setReady(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setAuthToken(s?.access_token ?? null);
       setSession(s);
+      syncLocalStateToUser(s?.user.id ?? null);
       if (s) rememberDeviceAccount(s);
     });
     return () => sub.subscription.unsubscribe();
