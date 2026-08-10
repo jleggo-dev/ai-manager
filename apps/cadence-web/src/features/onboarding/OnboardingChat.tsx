@@ -27,6 +27,17 @@ const GearIcon = () => (
   </svg>
 );
 
+/**
+ * What the app tells Cadence the moment someone shares their Apple Health history. Without it she
+ * holds months of their training and says nothing until they ask — which is the app taking
+ * something and giving nothing back for it.
+ */
+const HEALTH_SHARED_NOTE =
+  'The user has just shared their Apple Health history with you and it is in your context now. ' +
+  'Say what you actually see in it — what they have been doing, how often, and what it means for ' +
+  'the goal they told you about. Be specific about their numbers; that is the whole point of them ' +
+  'having shared it. Then carry on with your next question.';
+
 const ONGOING_GREETING =
   "Hey — good to see you 👋 How's your rhythm feeling? If something needs to shift — more, less, a different day — say the word and I'll adjust your plan.";
 
@@ -59,8 +70,19 @@ export function OnboardingChat({
   intent?: 'onboarding' | 'ongoing';
   chrome?: 'onboarding' | 'none';
 }) {
-  const { turns, input, setInput, streaming, capturedGoals, restored, send, foodAction, clearFoodAction, sessionId } =
-    useCoachChat({ intent });
+  const {
+    turns,
+    input,
+    setInput,
+    streaming,
+    capturedGoals,
+    restored,
+    send,
+    nudge,
+    foodAction,
+    clearFoodAction,
+    sessionId,
+  } = useCoachChat({ intent });
 
   // Someone resuming mid-onboarding lands here directly, never passing MeetCadence — so the draw
   // has to happen here too, or Cadence speaks the whole conversation wearing the brand mark.
@@ -157,7 +179,12 @@ export function OnboardingChat({
                     ) : null
                   }
                 />
-                {i === healthOfferAt && <HealthOfferCard sessionId={() => sessionId.current} />}
+                {i === healthOfferAt && (
+                  <HealthOfferCard
+                    sessionId={() => sessionId.current}
+                    onShared={() => void nudge(HEALTH_SHARED_NOTE)}
+                  />
+                )}
               </div>
             );
           })}

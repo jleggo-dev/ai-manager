@@ -124,19 +124,24 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     });
   }
 
-  /** One turn, streamed: the user's message, then the coach's reply filling in behind it. */
-  async function deliver(text: string) {
+  /**
+   * One turn, streamed. `echo: false` is the app speaking on the user's behalf — her reply is
+   * what they should see, not a synthetic message in their voice that they did not write.
+   */
+  async function deliver(text: string, echo = true) {
     const window = turnsWindow(turns, text);
-    setTurns((t) => [...t, { role: 'user' as const, text }, { role: 'coach' as const, text: '' }]);
+    setTurns((t) => [...t, ...(echo ? [{ role: 'user' as const, text }] : []), { role: 'coach' as const, text: '' }]);
     setStreaming(true);
-    // Confirm-first food draft in parallel with the coach stream (never blocks reply).
-    void prepareCoachFoodAction({ message: text, window })
-      .then((r) => {
-        if (r.status === 'ok' && r.action) setFoodAction(r.action);
-      })
-      .catch(() => {
-        /* soft-fail — chat still works */
-      });
+    // Confirm-first food draft in parallel with the coach stream (never blocks reply). Only for
+    // something the user actually said — an app note is not a meal.
+    if (echo)
+      void prepareCoachFoodAction({ message: text, window })
+        .then((r) => {
+          if (r.status === 'ok' && r.action) setFoodAction(r.action);
+        })
+        .catch(() => {
+          /* soft-fail — chat still works */
+        });
     try {
       if (!sessionId.current)
         sessionId.current = (
@@ -165,6 +170,20 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     }
   }
 
+  /**
+   * Ask Cadence to speak without the user having typed. Used when the app hands her something
+   * mid-conversation — today, the Apple Health history someone just shared — and she needs to
+   * actually say what she makes of it rather than sitting on it until the next question.
+   *
+   * The prompt is wrapped so the API strips it from the restored transcript and the Broker's
+   * capture window (routes/coach.ts): it is the app talking, and rendering it in the user's own
+   * bubble would show them a message they never wrote.
+   */
+  async function nudge(note: string) {
+    if (streaming) return;
+    await deliver(`<note>${note}</note>`, false);
+  }
+
   async function send() {
     const text = input.trim();
     if (!text || streaming) return;
@@ -180,6 +199,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     capturedGoals,
     restored,
     send,
+    nudge,
     foodAction,
     clearFoodAction: () => setFoodAction(null),
     // Exported for unit tests of recovery / delta helpers without full send path.
