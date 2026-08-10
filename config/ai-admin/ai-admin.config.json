@@ -34,7 +34,7 @@
     {
       "slug": "capture-extract",
       "name": "capture_extract",
-      "ai_profile_id": "<CADENCE_BROKER_PROFILE_UUID>",
+      "ai_profile_id": "1e264d66-0e48-44ee-b3c6-ec90f42848a7",
       "description": "Ambient capture (spec §6.1/§C4). Conversation window -> flat capture deltas.",
       "config": {
         "expectedResponseFormat": "json",
