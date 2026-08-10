@@ -20,6 +20,7 @@ export const webCapabilities: Capabilities = {
     isAvailable: () => false,
     requestPermissions: async () => false,
     getWorkouts: async () => [],
+    getDailySteps: async () => [],
     getLatestWeightKg: async () => null,
     getSleepHours: async () => null,
   },

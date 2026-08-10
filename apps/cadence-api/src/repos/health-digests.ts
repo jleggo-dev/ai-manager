@@ -19,3 +19,24 @@ export async function latestHealthDigest(
   const r = rows[0];
   return r ? { digest: r.digest, createdAt: r.created_at, source: r.source } : null;
 }
+
+export interface StoredHealthDigest {
+  digest: HealthDigest;
+  createdAt: string;
+}
+
+/**
+ * The digest SERIES, newest first — the reason this table has always been insert-only.
+ *
+ * Every row is a rolling 90-day window, so consecutive rows overlap almost entirely and a single
+ * one can only ever say "here is the average". The series is what turns that into a history:
+ * comparing windows taken weeks apart is how "building" and "fading" become visible at all, and
+ * neither is a thing any one snapshot can show. `latestHealthDigest` stays the right call for
+ * anything that just wants today's picture.
+ */
+export async function listHealthDigests(userId: string, limit = 30): Promise<StoredHealthDigest[]> {
+  const rows = await sql<{ digest: HealthDigest; created_at: string }[]>`
+    select digest, created_at from cadence.health_digests
+    where user_id = ${userId} order by created_at desc limit ${limit}`;
+  return rows.map((r) => ({ digest: r.digest, createdAt: r.created_at }));
+}

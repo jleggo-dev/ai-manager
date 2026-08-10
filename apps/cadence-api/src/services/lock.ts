@@ -7,6 +7,7 @@ import { listGoalsByStatus, setGoalStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
 import { getUser, setPendingPlan } from '../repos/users.ts';
 import { evaluateGuardrail } from './goal-guardrail.ts';
+import { observedHealthForPlanning } from './observed-health.ts';
 import { type PlanFlowResult } from './plan-synthesis.ts';
 import { planSynthesize } from './plan-fanout.ts';
 import { confirmPendingPlan } from './plan-commit-flow.ts';
@@ -43,7 +44,22 @@ export async function previewLock(userId: string): Promise<PlanFlowResult> {
     return { status: 'needs_focus', guardrail: { weightedLoad: g.weightedLoad, activeCount: g.activeCount } };
   }
 
-  const s = await planSynthesize(userId, { goals, baseline, equipment });
+  // A FIRST plan is exactly when observed history matters most, and it used to be the one path
+  // that sent none: `recentActivity` was simply omitted here, which plan-synthesis renders as the
+  // empty string. So an ultra runner with ten logged runs in the last ninety days — the most
+  // recent of them yesterday — was planned for as though nobody had ever seen him move, and got a
+  // weekly walk. We have no occurrences of our own yet at this point; his own devices are the ONLY
+  // evidence in existence, and passing nothing threw it away.
+  //
+  // `current_plan` stays empty, so the template's first-plan branch is untouched: this adds
+  // evidence about the person, it does not turn a first plan into a re-plan.
+  const observed = await observedHealthForPlanning(userId);
+  const s = await planSynthesize(userId, {
+    goals,
+    baseline,
+    equipment,
+    ...(observed ? { recentActivity: { observed_health: observed } } : {}),
+  });
   if (s.status === 'vetoed') return { status: 'vetoed', violations: s.violations };
 
   const goalIds = goals.map((gg) => gg.goal_id);
