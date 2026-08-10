@@ -19,6 +19,8 @@ import {
   getProcessingJobBySlug,
   getChatHistory,
   purgeRemoteChatsForUser,
+  pauseV2ChatResponse,
+  cancelV2ChatResponse,
   type RequestAuthContext,
 } from '@ai-admin/core';
 import { cadenceConfig } from '../config.ts';
@@ -217,6 +219,27 @@ export function injectCoachContext(
 /** Read a session's stored chat history (for the full-conversation capture window). */
 export function getCoachHistory(cadenceUserId: string, sessionId: string) {
   return withAim(cadenceUserId, () => getChatHistory(sessionId));
+}
+
+/**
+ * Stop the in-flight reply for a session — the Stop button's server half.
+ *
+ * Devs.ai v2 exposes cancel, pause AND resume on a response. This uses CANCEL, which is what every
+ * mainstream chat UI means by "stop generating": the turn ends, what she already said stands, and
+ * the user moves on. Pause is a different interaction — "hold on, I'll be back" — and behind a
+ * Stop button it would leave a response suspended upstream that nothing will ever resume. It earns
+ * its keep only alongside a visible Continue; `pauseCoachTurn` is here for when that exists.
+ *
+ * Without either, stopping ended only the CLIENT's listening: the reply ran to completion
+ * upstream, was billed in full, and reappeared whole on the next restore.
+ */
+export function cancelCoachTurn(cadenceUserId: string, sessionId: string, responseId: string) {
+  return withAim(cadenceUserId, () => cancelV2ChatResponse(sessionId, responseId)).catch(rejectAsAimError);
+}
+
+/** Pause instead of ending it — for a future explicit Pause/Continue affordance (PLAN.md A3). */
+export function pauseCoachTurn(cadenceUserId: string, sessionId: string) {
+  return withAim(cadenceUserId, () => pauseV2ChatResponse(sessionId)).catch(rejectAsAimError);
 }
 
 /** Dev X-ray: read the Coach persona (the coach job's system prompt) for the trace panel. */

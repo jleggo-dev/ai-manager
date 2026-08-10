@@ -6,6 +6,7 @@ const getReview = vi.fn();
 const openCoachSession = vi.fn();
 const sendCoachMessage = vi.fn();
 const prepareCoachFoodAction = vi.fn();
+const stopCoachTurn = vi.fn();
 
 vi.mock('../../lib/api.ts', () => ({
   getCurrentCoach: (...args: unknown[]) => getCurrentCoach(...args),
@@ -13,6 +14,7 @@ vi.mock('../../lib/api.ts', () => ({
   openCoachSession: (...args: unknown[]) => openCoachSession(...args),
   sendCoachMessage: (...args: unknown[]) => sendCoachMessage(...args),
   prepareCoachFoodAction: (...args: unknown[]) => prepareCoachFoodAction(...args),
+  stopCoachTurn: (...args: unknown[]) => stopCoachTurn(...args),
 }));
 
 describe('useCoachChat', () => {
@@ -206,11 +208,15 @@ describe('stop', () => {
     const texts = result.current.turns.map((t) => t.text).join(' ');
     expect(texts).toContain('Right — so you have been'); // what she said is kept
     expect(texts).not.toMatch(/Connection dropped|hiccuped/); // stopping is not a failure
+    // Aborting only ends OUR read; without this call the turn ran on upstream, billed in full and
+    // reappearing whole on the next restore — the opposite of what the button says.
+    expect(stopCoachTurn).toHaveBeenCalledWith('sess-new');
   });
 
   it('is a no-op when nothing is streaming', async () => {
     const { result } = renderHook(() => useCoachChat());
     await waitFor(() => expect(result.current.restored).toBe(true));
     expect(() => result.current.stop()).not.toThrow();
+    expect(stopCoachTurn).not.toHaveBeenCalled();
   });
 });

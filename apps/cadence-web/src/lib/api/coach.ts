@@ -21,6 +21,23 @@ export async function openCoachSession(
   return res.json();
 }
 
+/**
+ * End the in-flight reply upstream. Called alongside aborting the local read, because the server
+ * deliberately keeps draining a dropped stream (so a phone that loses signal never loses a reply)
+ * — without this, "stop" would only stop the listening.
+ *
+ * Soft-fails by design: the composer is already back in the user's hands, so a failure here costs
+ * a wasted generation rather than a broken screen.
+ */
+export async function stopCoachTurn(sessionId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE}/coach/sessions/${sessionId}/stop`, { method: 'POST', headers: headers() });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** The user's current coach session + history (to restore the chat on refresh). `stale` = the
  *  server's freshness verdict (idle >7d, or an onboarding-era thread after the plan committed):
  *  the client should start a fresh thread and not render the old transcript. */
@@ -41,11 +58,9 @@ export async function getCurrentCoach(): Promise<{
  * resolves with `completed:false` so the caller can recover the durably-persisted reply from
  * GET /coach/current. 409-safe: disable send until resolved.
  *
- * `signal` lets the caller stop listening — the Stop button. Aborting only ends OUR read: the
- * server keeps draining the upstream on purpose so a dropped phone never loses a reply, so the
- * full turn is still persisted and will appear on a later restore. That is the honest trade for
- * now — stopping gives the user their composer back, it does not un-say what she said. A true
- * interrupt needs upstream pause/resume; see PLAN.md A3.
+ * `signal` lets the caller stop listening — the Stop button's local half. The other half is
+ * `stopCoachTurn`, which actually ends the generation upstream; aborting alone would leave the
+ * reply running, billed in full, and reappearing whole on the next restore.
  */
 export async function sendCoachMessage(
   sessionId: string,

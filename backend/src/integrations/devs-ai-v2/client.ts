@@ -176,6 +176,15 @@ export class DevsAiV2Client {
   }
 
   /**
+   * Pause an in-flight response. Unlike cancel, the response can be picked up again with
+   * `resumeResponse` — generation stops (so it stops costing) without throwing the turn away.
+   * @see https://docs.devs.ai/api-spec — Pause a response
+   */
+  async pauseResponse(responseId: string): Promise<void> {
+    await this._request('POST', `/api/v2/responses/${responseId}/pause`);
+  }
+
+  /**
    * Reconnect to an in-progress v2 response stream (GET .../stream?lastSequence=).
    * Re-emits SSE in the same chat-compatible shape as chatCompletionStream.
    */

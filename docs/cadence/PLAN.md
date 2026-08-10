@@ -693,32 +693,47 @@ What has to change, and why it is more than a media query:
 
 Do NOT unlock the plist before the CSS is ready — that is exactly the state that was just fixed.
 
-**A3. Interrupting Cadence — a real stop, not just a client-side one (opened 2026-08-10)**
+**A3. Interrupting Cadence — Stop shipped, Pause/Continue still open (2026-08-10)**
 
-**Shipped:** a Stop button in the composer while she is replying (#168). It aborts the client's
-read of the SSE stream, keeps whatever she had already said on screen, and hands the composer back
-so the user can correct themselves — which is the reason they reached for Stop ("I mistyped
-something and don't want to wait for an answer to the wrong question").
+**Shipped (#168, #169):** a Stop button in the composer while she is replying. It aborts the
+client's read AND cancels the response upstream, so generation actually halts. Whatever she had
+already said stays on screen, and the composer comes back — which is why someone reaches for Stop
+("I mistyped something and don't want to wait for an answer to the wrong question").
 
-**The honest limit:** the server keeps draining the upstream on purpose, so a phone that drops mid-
-turn never loses a reply (`relayAndAccumulate` + `recordCoachReply` in `routes/coach.ts`). So a
-stop ends only OUR listening: the full turn is still generated, billed, and persisted, and a later
-restore of that conversation shows the whole thing rather than the truncated version the user saw.
-Stopping gives you your composer back; it does not un-say what she said.
+Cancelling needed one piece that did not exist: the id of the response generating *right now*.
+AI Admin's HTTP chat route stashes that in the chat session's `provider_metadata`, but Cadence
+consumes the coach stream **in-process** and never goes through that route, so for a coach turn
+that field is empty or still holds the PREVIOUS turn's id — cancelling it would have reported
+success while the live reply carried on. The relay now records the id on
+`cadence.conversations.in_flight_response_id` (migration 0029) the moment the stream announces it,
+and clears it when the turn ends. Writing `provider_metadata.previous_response_id` instead was
+rejected: it would switch every Cadence turn to upstream response-chaining — a real change to how
+prompts are built, smuggled in behind a Stop button.
 
-**What a true interrupt needs**, in rough order of cost:
+**Correction to what this entry first said.** It claimed Devs.ai v2 "does not expose pause/resume".
+That was wrong, and it was wrong because it was copied from a stale comment in `ChatComposer`
+rather than checked. The v2 Responses API has the full lifecycle —
+`POST /api/v2/responses/{id}/cancel`, `/pause` and `/resume`
+(https://docs.devs.ai/api-spec#tag/Responses-API-v2). Our own client had implemented cancel and
+never implemented pause, which is what made the gap look like an API limitation.
 
-1. **Upstream pause/resume.** Devs.ai v2 does not expose it today. This is the real fix and the
-   reason the client comment in `ChatComposer` has always called the locked composer a stopgap.
-   Watch for it in the v2 Responses API; it would also let a dropped connection RESUME rather than
-   re-fetch, which is a second win for the same feature.
-2. **A stop endpoint** that marks the turn stopped so the server records the PARTIAL content
-   instead of the full reply, keeping what is persisted equal to what the user saw. Needs shared
-   state between the stopping request and the streaming one — fine in a long-running Vercel
-   Service, unreliable the moment there is more than one instance, so it wants the session row
-   rather than process memory.
-3. **Cost.** Until 1 or 2 lands, a stopped turn still costs a full generation. Worth knowing before
-   Stop is somewhere people press often.
+**Why Stop uses CANCEL and not pause.** Cancel is what every mainstream chat UI means by "stop
+generating": the turn ends, what she already said stands, the user moves on. Pause is a different
+interaction — "hold on, I'll be back" — and behind a Stop button it would suspend a response
+upstream that nothing would ever resume. `pauseV2ChatResponse` / `pauseCoachTurn` now exist for
+when there is a visible Continue to pair with them.
+
+**Still open:**
+- **Pause / Continue as its own affordance.** The plumbing is in (`client.pauseResponse` →
+  `pauseV2ChatResponse` → `pauseCoachTurn`); it needs the UI and a rule for how long a paused
+  response may sit before it is cancelled.
+- **Resume a DROPPED turn instead of re-fetching.** `reconnectResponseStream` +
+  `reconnectV2ChatStream` already exist and are unused by Cadence: today a dropped connection
+  re-reads the persisted reply from `/coach/current`. Reconnecting mid-stream would be better and
+  is the same family of work.
+- **What is persisted on a stop.** Cancel stops generation, but confirm the recorded turn is the
+  PARTIAL the user saw rather than nothing or something longer — a restore that disagrees with what
+  was on screen is the bug this feature exists to remove.
 
 **A. Context/memory (MEMORY-ARCHITECTURE.md §9 phasing)**
 - **P3 — pack reuse: BUILT 2026-08-04** (the reuse half; enrichment deliberately dropped — see
