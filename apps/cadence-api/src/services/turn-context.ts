@@ -19,7 +19,8 @@ import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 import { validateCalls, executeCalls, type FnCall } from './retrieval/select-and-run.ts';
 import { renderCatalogDoc } from './retrieval/catalog.ts';
 import { runJobBySlug } from '../ai/aim.ts';
-import { injectCoachContext } from '../ai/aim.ts';
+import { getCoachHistory, injectCoachContext } from '../ai/aim.ts';
+import { classifyFreshness, renderContextBlock, type RenderedPart } from './turn-context-memory.ts';
 import { updateTrace } from './dev-trace.ts';
 import { logAi } from './ai-log.ts';
 
@@ -47,6 +48,23 @@ async function turnSelect(userId: string, message: string): Promise<{ calls: FnC
  * into the AI Admin session (when something is fetched) and records the tool calls by name into the
  * X-ray trace + ai_log. Never throws; the caller sends the user's message unchanged regardless.
  */
+/**
+ * Every context block this session has already been given, as one searchable string. Only the
+ * app-authored `<context` turns — the user's own words are not a record of what she was handed.
+ */
+async function priorInjectedContext(userId: string, sessionId: string): Promise<string> {
+  try {
+    const hist = (await getCoachHistory(userId, sessionId)) as { messages?: unknown; data?: unknown };
+    const msgs = (hist.messages ?? hist.data ?? []) as Array<{ content?: string }>;
+    return msgs
+      .map((m) => m.content ?? '')
+      .filter((c) => c.startsWith('<context'))
+      .join('\n');
+  } catch {
+    return '';
+  }
+}
+
 export async function injectTurnContext(userId: string, sessionId: string, message: string): Promise<void> {
   const sel = await turnSelect(userId, message);
 
@@ -78,11 +96,15 @@ export async function injectTurnContext(userId: string, sessionId: string, messa
     at,
     logLabel: 'turn-context',
   });
-  const parts: string[] = [];
+  // What she has already been handed in this session, so identical data can be framed as a
+  // reminder rather than as news (turn-context-memory.ts). Best-effort: an unreadable history
+  // means everything reads as new, which is precisely the old behaviour.
+  const priorContext = await priorInjectedContext(userId, sessionId);
+  const parts: RenderedPart[] = [];
   for (const { fn } of provenance) {
     const f = RETRIEVAL_FUNCTIONS[fn];
     const rendered = f?.render(results[fn]);
-    if (rendered) parts.push(rendered);
+    if (rendered) parts.push({ fn, rendered, freshness: classifyFreshness(priorContext, fn, rendered) });
   }
 
   const fns = provenance.map((p) => p.fn);
@@ -100,10 +122,7 @@ export async function injectTurnContext(userId: string, sessionId: string, messa
 
   // Step 3 — inject as a non-triggering context turn right before the user's message.
   if (!injected) return;
-  const block = [
-    `Fetched for this turn (${fns.join(', ')})${sel.reason ? ` — ${sel.reason}` : ''}:`,
-    parts.join('\n'),
-  ].join('\n');
+  const block = renderContextBlock(parts, sel.reason);
   await injectCoachContext(userId, sessionId, block, { source: 'turn-context', version: 1 }).catch((e) =>
     console.error('[turn-context inject]', e),
   );
