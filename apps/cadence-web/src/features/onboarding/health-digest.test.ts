@@ -54,6 +54,17 @@ describe('buildDigestFromWorkouts', () => {
     expect(d.recent[0]?.type).toBe('running');
   });
 
+  it('carries everyday movement, and omits it entirely when there was none to read', () => {
+    // Absent must stay distinguishable from zero all the way to the planner: one of them is a
+    // reason to build a bigger plan, the other is a reason to build a smaller one.
+    const withSteps = buildDigestFromWorkouts([run('2026-08-01T08:00:00Z', 5, 30)], 90, [
+      { date: '2026-08-01', steps: 16000 },
+      { date: '2026-08-02', steps: 15000 },
+    ]);
+    expect(withSteps.dailySteps).toMatchObject({ daysObserved: 2, avgPerDay: 15500 });
+    expect(buildDigestFromWorkouts([run('2026-08-01T08:00:00Z', 5, 30)], 90, [])).not.toHaveProperty('dailySteps');
+  });
+
   it('handles the empty case', () => {
     const d = buildDigestFromWorkouts([], 90);
     expect(d.totalWorkouts).toBe(0);
@@ -150,6 +161,22 @@ describe('maybeRefreshHealthDigest', () => {
         }),
       ),
     ).toBe('unchanged');
+  });
+
+  it('still posts the workouts when the step read fails', async () => {
+    // Steps are the newer and more fragile read — a permission existing users were never asked
+    // for. Letting a step failure take the refresh down with it would trade a fixed bug for a
+    // worse one: no health history at all instead of an incomplete one.
+    window.localStorage.setItem(HEALTH_OFFER_FLAG_KEY, 'done');
+    expect(
+      await maybeRefreshHealthDigest(
+        deps({
+          getDailySteps: async () => {
+            throw new Error('steps permission never granted');
+          },
+        }),
+      ),
+    ).toBe('posted');
   });
 });
 

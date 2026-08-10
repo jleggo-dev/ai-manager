@@ -26,6 +26,10 @@ const LAST_USER_KEY = 'cadence.lastUserId';
 export const USER_SCOPED_KEYS = [
   'cadence.healthOffer',
   'cadence.healthRefreshAt',
+  // Whether the one-time Apple Health steps re-ask has happened (lib/capability/health-steps.ts).
+  // User-scoped like the offer itself: a new identity has granted nothing, so inheriting "already
+  // asked" would leave them permanently step-blind with no prompt to fix it.
+  'cadence.healthStepsAsked',
   'cadence.journalDisclosed',
   'cadence.locationOffer.dismissed',
   'cadence.pushToken',

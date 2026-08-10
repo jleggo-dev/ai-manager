@@ -38,13 +38,20 @@ export function HealthOfferCard({
     try {
       await capabilities.health.requestPermissions(['workouts']);
       const since = new Date(Date.now() - DIGEST_PERIOD_DAYS * 86_400_000).toISOString();
-      const workouts = await capabilities.health.getWorkouts(since);
-      if (!workouts.length) {
+      // Steps ride along, and must never take the workouts down with them (health-steps.ts).
+      const [workouts, steps] = await Promise.all([
+        capabilities.health.getWorkouts(since),
+        capabilities.health.getDailySteps(since).catch(() => []),
+      ]);
+      // "No recorded workouts" is NOT "no activity". Somebody walking 16k steps a day and never
+      // pressing start on a watch used to land here and share nothing at all — and then got a plan
+      // built for someone sedentary. Any signal at all is worth sharing.
+      if (!workouts.length && !steps.length) {
         window.localStorage.setItem(FLAG_KEY, 'done');
         setPhase('empty');
         return;
       }
-      const ok = await postHealthDigest(buildDigestFromWorkouts(workouts), sessionId());
+      const ok = await postHealthDigest(buildDigestFromWorkouts(workouts, DIGEST_PERIOD_DAYS, steps), sessionId());
       if (!ok) throw new Error('post failed');
       window.localStorage.setItem(FLAG_KEY, 'done');
       setPhase('done');

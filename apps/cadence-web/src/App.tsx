@@ -88,6 +88,7 @@ function CoachApp({ session }: { session: Session | null }) {
     void maybeRefreshHealthDigest({
       isAvailable: () => capabilities.health.isAvailable(),
       getWorkouts: (since) => capabilities.health.getWorkouts(since),
+      getDailySteps: (since) => capabilities.health.getDailySteps(since),
       getLatest: getHealthDigest,
       post: (d) => postHealthDigest(d),
     }).catch(() => {});

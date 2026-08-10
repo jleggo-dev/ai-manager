@@ -29,12 +29,43 @@ describe('renderHealthDigest', () => {
     const s = renderHealthDigest({ ...digest, totalWorkouts: 0, byType: [], recent: [] });
     expect(s).toBe('Recent activity (Apple Health, last 90 days): no workouts recorded.');
   });
+
+  const steps = { daysObserved: 88, avgPerDay: 15_900, avgPerDayLast7: 16_400, byWeek: [] };
+
+  it('reports everyday movement alongside the workouts', () => {
+    const s = renderHealthDigest({ ...digest, dailySteps: steps });
+    expect(s).toContain('everyday movement: ~15,900 steps/day across 88 days, ~16,400/day this past week');
+  });
+
+  it('never calls a 16k-steps-a-day walker inactive just because they log no workouts', () => {
+    // Workouts describe people who press start on a watch. Reading only those would have the coach
+    // telling one of the most active users she has that she does nothing.
+    const s = renderHealthDigest({ ...digest, totalWorkouts: 0, byType: [], recent: [], dailySteps: steps });
+    expect(s).toContain('their phone did record everyday movement');
+    expect(s).toContain('~15,900 steps/day');
+  });
 });
 
 describe('healthDigestBodySchema', () => {
   it('accepts a valid body with optional sessionId', () => {
     expect(healthDigestBodySchema.safeParse({ digest }).success).toBe(true);
     expect(healthDigestBodySchema.safeParse({ digest, sessionId: 'abc-123' }).success).toBe(true);
+  });
+
+  it('accepts a step summary, and still accepts a digest without one', () => {
+    // Absent means "not read" — every digest stored before steps existed has none, and a device
+    // that refused only the step permission must still be able to share its workouts.
+    const dailySteps = {
+      daysObserved: 88,
+      avgPerDay: 15_900,
+      avgPerDayLast7: 16_400,
+      byWeek: [{ weekStartISO: '2026-08-03', avgPerDay: 16_400, daysObserved: 7 }],
+    };
+    expect(healthDigestBodySchema.safeParse({ digest: { ...digest, dailySteps } }).success).toBe(true);
+    expect(healthDigestBodySchema.safeParse({ digest }).success).toBe(true);
+    // Raw daily samples are exactly what the digest is an abstraction over.
+    const tooManyWeeks = { ...dailySteps, byWeek: Array.from({ length: 15 }, () => dailySteps.byWeek[0]) };
+    expect(healthDigestBodySchema.safeParse({ digest: { ...digest, dailySteps: tooManyWeeks } }).success).toBe(false);
   });
 
   it('rejects oversized or malformed digests', () => {
