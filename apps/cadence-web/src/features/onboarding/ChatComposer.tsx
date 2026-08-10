@@ -2,6 +2,13 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { MicButton } from '../../components/MicButton.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 
+/** A plain square. Every chat app uses one for stop; there is nothing to be clever about here. */
+const StopIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden>
+    <rect x="3.5" y="3.5" width="8" height="8" rx="1.6" fill="#fff" />
+  </svg>
+);
+
 const SendIcon = () => (
   <svg width="17" height="17" viewBox="0 0 17 17" aria-hidden>
     <path
@@ -35,6 +42,7 @@ export function ChatComposer({
   above,
   placeholder = 'Message your coach…',
   rootRef,
+  onStop,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -45,6 +53,8 @@ export function ChatComposer({
   placeholder?: string;
   /** Measured by the chat so it can reserve exactly this much room (useFloatingInset). */
   rootRef?: (el: HTMLElement | null) => void;
+  /** Interrupt her mid-sentence. Absent = no stop offered (the ongoing tab passes it too). */
+  onStop?: () => void;
   /** Rides above the field inside the same floating stack (the Broker's live captures). */
   above?: ReactNode;
 }) {
@@ -89,12 +99,14 @@ export function ChatComposer({
               onSend();
             }
           }}
-          placeholder={streaming ? 'Cadence is replying…' : placeholder}
+          placeholder={streaming ? 'Cadence is replying — tap stop to interrupt' : placeholder}
         />
         {streaming ? (
-          <span className="send is-dead" aria-hidden>
-            <SendIcon />
-          </span>
+          // A live Stop, not a dead arrow. Someone who has just realised they mistyped should not
+          // have to sit and watch an answer to the wrong question arrive before they can fix it.
+          <button className="send send-stop" onClick={onStop} aria-label="Stop" disabled={!onStop}>
+            <StopIcon />
+          </button>
         ) : (
           <>
             {/* The mic stays MOUNTED whether or not there is text. It used to be the `else` branch

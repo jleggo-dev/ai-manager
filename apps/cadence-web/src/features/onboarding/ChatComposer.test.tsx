@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { ChatComposer } from './ChatComposer.tsx';
 
 vi.mock('../../components/CoachFace.tsx', () => ({ CoachFace: () => <span>face</span> }));
@@ -67,8 +67,28 @@ describe('ChatComposer', () => {
 
   it('locks everything while Cadence is replying', () => {
     render(<ChatComposer value="hi" onChange={noop} onSend={noop} streaming showDisclaimer={false} />);
-    expect(screen.getByPlaceholderText('Cadence is replying…')).toBeDisabled();
+    expect(screen.getByPlaceholderText(/Cadence is replying/)).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Dictate' })).not.toBeInTheDocument();
+  });
+
+  /**
+   * "I mistyped something and want to pause" — the composer used to show a dead arrow and make you
+   * watch an answer to the wrong question arrive before you could fix it.
+   */
+  it('offers a live Stop while she is replying, not a dead arrow', () => {
+    const onStop = vi.fn();
+    render(<ChatComposer value="hi" onChange={noop} onSend={noop} streaming showDisclaimer={false} onStop={onStop} />);
+
+    const stop = screen.getByRole('button', { name: 'Stop' });
+    expect(stop).toBeEnabled();
+    fireEvent.click(stop);
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(screen.getByPlaceholderText(/tap stop to interrupt/)).toBeDisabled();
+  });
+
+  it('disables Stop when the caller offers no way to stop', () => {
+    render(<ChatComposer value="hi" onChange={noop} onSend={noop} streaming showDisclaimer={false} />);
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeDisabled();
   });
 });

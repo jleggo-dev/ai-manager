@@ -693,6 +693,33 @@ What has to change, and why it is more than a media query:
 
 Do NOT unlock the plist before the CSS is ready — that is exactly the state that was just fixed.
 
+**A3. Interrupting Cadence — a real stop, not just a client-side one (opened 2026-08-10)**
+
+**Shipped:** a Stop button in the composer while she is replying (#168). It aborts the client's
+read of the SSE stream, keeps whatever she had already said on screen, and hands the composer back
+so the user can correct themselves — which is the reason they reached for Stop ("I mistyped
+something and don't want to wait for an answer to the wrong question").
+
+**The honest limit:** the server keeps draining the upstream on purpose, so a phone that drops mid-
+turn never loses a reply (`relayAndAccumulate` + `recordCoachReply` in `routes/coach.ts`). So a
+stop ends only OUR listening: the full turn is still generated, billed, and persisted, and a later
+restore of that conversation shows the whole thing rather than the truncated version the user saw.
+Stopping gives you your composer back; it does not un-say what she said.
+
+**What a true interrupt needs**, in rough order of cost:
+
+1. **Upstream pause/resume.** Devs.ai v2 does not expose it today. This is the real fix and the
+   reason the client comment in `ChatComposer` has always called the locked composer a stopgap.
+   Watch for it in the v2 Responses API; it would also let a dropped connection RESUME rather than
+   re-fetch, which is a second win for the same feature.
+2. **A stop endpoint** that marks the turn stopped so the server records the PARTIAL content
+   instead of the full reply, keeping what is persisted equal to what the user saw. Needs shared
+   state between the stopping request and the streaming one — fine in a long-running Vercel
+   Service, unreliable the moment there is more than one instance, so it wants the session row
+   rather than process memory.
+3. **Cost.** Until 1 or 2 lands, a stopped turn still costs a full generation. Worth knowing before
+   Stop is somewhere people press often.
+
 **A. Context/memory (MEMORY-ARCHITECTURE.md §9 phasing)**
 - **P3 — pack reuse: BUILT 2026-08-04** (the reuse half; enrichment deliberately dropped — see
   below). A coach session open now serves a cached dossier and skips BOTH Broker calls whenever

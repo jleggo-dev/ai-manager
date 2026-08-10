@@ -167,3 +167,50 @@ describe('nudge', () => {
     expect(prepareCoachFoodAction).not.toHaveBeenCalled();
   });
 });
+
+/** "I mistyped something" — stop must hand the composer back without looking like a failure. */
+describe('stop', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCurrentCoach.mockResolvedValue({ sessionId: null, messages: [], stale: false });
+    getReview.mockResolvedValue({ goals: [] });
+    openCoachSession.mockResolvedValue({ sessionId: 'sess-new' });
+    prepareCoachFoodAction.mockResolvedValue({ status: 'ok', action: null });
+  });
+
+  it('ends the turn without the dropped-connection warning', async () => {
+    // A stream that never finishes on its own; only an abort ends it.
+    sendCoachMessage.mockImplementation(
+      (_id: string, _t: string, onDelta: (d: string) => void, signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          onDelta('Right — so you have been ');
+          signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        }),
+    );
+    const { result } = renderHook(() => useCoachChat());
+    await waitFor(() => expect(result.current.restored).toBe(true));
+
+    act(() => result.current.setInput('teling you about my kne'));
+    let sending: Promise<void>;
+    act(() => {
+      sending = result.current.send();
+    });
+    await waitFor(() => expect(result.current.streaming).toBe(true));
+
+    await act(async () => {
+      result.current.stop();
+      await sending!;
+    });
+
+    expect(result.current.streaming).toBe(false);
+    const texts = result.current.turns.map((t) => t.text).join(' ');
+    expect(texts).toContain('Right — so you have been'); // what she said is kept
+    expect(texts).not.toMatch(/Connection dropped|hiccuped/); // stopping is not a failure
+  });
+
+  it('is a no-op when nothing is streaming', async () => {
+    const { result } = renderHook(() => useCoachChat());
+    await waitFor(() => expect(result.current.restored).toBe(true));
+    expect(() => result.current.stop()).not.toThrow();
+  });
+});
