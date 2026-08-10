@@ -31,6 +31,32 @@ describe('renderPickProtocol', () => {
     expect(out).toMatch(/TILES question/i);
   });
 
+  /**
+   * Owner ruling 2026-08-10: "how many days a week" is a fitness-app question, and Cadence is not
+   * one — nobody eats well three days a week. Capacity is asked as where the room in the DAY is
+   * and how long they have, so the plan can point at every day rather than three of them.
+   */
+  it('never asks for a weekly day count, and asks about the day instead', () => {
+    const out = renderPickProtocol({ intent: 'onboarding' });
+    expect(out).toContain('NEVER ask how many days a week');
+    expect(out).toMatch(/What does your day usually look like\?/);
+    expect(out).toMatch(/time do we have to work with/i);
+    // The old tiles exemplar was the day-count question; it must not survive as an example either.
+    expect(out).not.toMatch(/"How many days a week\?" is tiles/);
+  });
+
+  /**
+   * The model echoes the phrasing it is given, so shorthand written for us leaks into her mouth as
+   * clipped, unnatural questions. The script has to say so, and carry sayable examples.
+   */
+  it('tells the coach the notes are shorthand, not a script to read aloud', () => {
+    expect(renderPickProtocol({ intent: 'onboarding' })).toContain('SAY IT LIKE A PERSON');
+  });
+
+  it('bounds the narrowing so intake cannot turn into an interrogation', () => {
+    expect(renderPickProtocol({ intent: 'onboarding' })).toMatch(/One or two narrowing turns per goal/);
+  });
+
   it('adds the first-conversation script only for onboarding', () => {
     expect(renderPickProtocol({ intent: 'onboarding' })).toContain('FIRST CONVERSATION');
     expect(renderPickProtocol({ intent: 'ongoing' })).not.toContain('FIRST CONVERSATION');
