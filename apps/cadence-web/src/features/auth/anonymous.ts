@@ -16,11 +16,40 @@ import { supabase } from '../../lib/supabase.ts';
  */
 export type AnonymousStart = 'ok' | 'unavailable';
 
+/**
+ * Which Supabase project this build is actually pointing at. In the message below, not decoration:
+ * the web build and the iOS build read different env files, this repo's owner has four projects,
+ * and "I enabled it" plus "it still doesn't work" is a long afternoon unless the log says *where*.
+ */
+function projectHost(): string {
+  const url = import.meta.env.VITE_CADENCE_SUPABASE_URL as string | undefined;
+  try {
+    return url ? new URL(url).host : 'no VITE_CADENCE_SUPABASE_URL set';
+  } catch {
+    return String(url);
+  }
+}
+
+/**
+ * The fallback is silent **to the user** on purpose — "sign up first" is a coherent flow, not an
+ * error screen, and a Supabase provider setting is an operator's problem, not theirs.
+ *
+ * It must never be silent to us. This warned about nothing on its first outing, so a disabled
+ * toggle on the wrong project looked exactly like the feature working as designed, from the
+ * outside and from the console. The reason and the project now both land in the log.
+ */
 export async function startAnonymousSession(): Promise<AnonymousStart> {
   try {
     const { data, error } = await supabase.auth.signInAnonymously();
-    return !error && data.session ? 'ok' : 'unavailable';
-  } catch {
+    if (!error && data.session) return 'ok';
+    console.warn(
+      `[cadence/auth] Anonymous onboarding is unavailable on ${projectHost()} — falling back to ` +
+        'sign-up-first. To restore the gate-last flow, enable "Anonymous sign-ins" (Authentication → ' +
+        `Sign In / Providers) on THAT project. Reason: ${error?.message ?? 'no session returned'}`,
+    );
+    return 'unavailable';
+  } catch (err) {
+    console.warn(`[cadence/auth] Anonymous onboarding threw on ${projectHost()} — falling back.`, err);
     return 'unavailable';
   }
 }
