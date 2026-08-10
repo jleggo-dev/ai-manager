@@ -59,6 +59,9 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
   const [restored, setRestored] = useState(false);
   const [foodAction, setFoodAction] = useState<CoachFoodAction | null>(null);
   const sessionId = useRef<string | null>(null);
+  // Live only while a turn is streaming — the Stop button's handle on it.
+  const abort = useRef<AbortController | null>(null);
+  const stopped = useRef(false);
 
   async function refreshCaptured() {
     try {
@@ -153,11 +156,18 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
             healthAnswered: healthOfferAnswered(),
           })
         ).sessionId;
-      const { completed } = await sendCoachMessage(sessionId.current, text, applyStreamDelta);
-      if (!completed && !(await recoverFromServer())) {
+      abort.current = new AbortController();
+      stopped.current = false;
+      const { completed } = await sendCoachMessage(sessionId.current, text, applyStreamDelta, abort.current.signal);
+      if (!completed && !stopped.current && !(await recoverFromServer())) {
         fillLastCoach('⚠️ Connection dropped — send again to continue.');
       }
     } catch (err) {
+      // A deliberate stop is not a failure: keep what she had said and hand the composer back.
+      if (stopped.current) {
+        fillLastCoach('…');
+        return;
+      }
       // The user gets a warm, useless sentence — correct, they can't act on a stack trace. But it
       // was ALSO all anyone got: this catch discarded the error, so "Auth failed" from the API and
       // a dropped wifi connection produced the identical screen, and the only way to tell them
@@ -165,6 +175,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       console.error('[cadence/coach] turn failed', err);
       if (!(await recoverFromServer())) fillLastCoach('Something hiccuped on my end — say that again?');
     } finally {
+      abort.current = null;
       setStreaming(false);
       setTimeout(refreshCaptured, 900);
     }
@@ -184,6 +195,22 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     await deliver(`<note>${note}</note>`, false);
   }
 
+  /**
+   * Stop her mid-sentence. Whatever she had already said stays on screen — it is part of the
+   * conversation and deleting it would be pretending it never happened — and the composer comes
+   * back so the user can correct themselves, which is the reason they reached for Stop.
+   *
+   * The server keeps draining the upstream by design (a dropped phone must never lose a reply), so
+   * the FULL turn is still persisted and a later restore will show it. Honest limit, recorded in
+   * PLAN.md A3: a true interrupt needs upstream pause/resume.
+   */
+  function stop() {
+    if (!abort.current) return;
+    stopped.current = true;
+    abort.current.abort();
+    abort.current = null;
+  }
+
   async function send() {
     const text = input.trim();
     if (!text || streaming) return;
@@ -199,6 +226,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     capturedGoals,
     restored,
     send,
+    stop,
     nudge,
     foodAction,
     clearFoodAction: () => setFoodAction(null),

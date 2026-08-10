@@ -40,16 +40,24 @@ export async function getCurrentCoach(): Promise<{
  * clean `[DONE]` is seen. If the stream ends WITHOUT `[DONE]` (a dropped connection mid-turn),
  * resolves with `completed:false` so the caller can recover the durably-persisted reply from
  * GET /coach/current. 409-safe: disable send until resolved.
+ *
+ * `signal` lets the caller stop listening — the Stop button. Aborting only ends OUR read: the
+ * server keeps draining the upstream on purpose so a dropped phone never loses a reply, so the
+ * full turn is still persisted and will appear on a later restore. That is the honest trade for
+ * now — stopping gives the user their composer back, it does not un-say what she said. A true
+ * interrupt needs upstream pause/resume; see PLAN.md A3.
  */
 export async function sendCoachMessage(
   sessionId: string,
   message: string,
   onDelta: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<{ completed: boolean; responseId: string | null }> {
   const res = await fetch(`${BASE}/coach/sessions/${sessionId}/messages`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({ message }),
+    signal,
   });
   if (!res.body) throw new Error('No stream body');
   const reader = res.body.getReader();

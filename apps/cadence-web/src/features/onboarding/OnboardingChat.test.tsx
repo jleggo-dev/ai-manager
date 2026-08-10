@@ -142,8 +142,10 @@ describe('OnboardingChat', () => {
     fireEvent.change(screen.getByPlaceholderText(OPENING_PLACEHOLDER), { target: { value: 'hello' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await waitFor(() => expect(screen.getByPlaceholderText('Cadence is replying…')).toBeDisabled());
+    await waitFor(() => expect(screen.getByPlaceholderText(/Cadence is replying/)).toBeDisabled());
     expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
+    // Interrupting her is offered, not just implied — see A3.
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeEnabled();
 
     release!();
     await screen.findByPlaceholderText('Message your coach…');

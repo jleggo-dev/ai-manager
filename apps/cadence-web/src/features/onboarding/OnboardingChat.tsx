@@ -78,6 +78,7 @@ export function OnboardingChat({
     capturedGoals,
     restored,
     send,
+    stop,
     nudge,
     foodAction,
     clearFoodAction,
@@ -239,6 +240,7 @@ export function OnboardingChat({
           // questions, and an example of a goal would be answering the wrong thing.
           placeholder={onOpeningTurn ? OPENING_PLACEHOLDER : undefined}
           rootRef={floatRef}
+          onStop={stop}
           above={
             chrome === 'onboarding' ? (
               <CapturedPills
