@@ -665,6 +665,34 @@ from code, so changing them needs a redeploy but NO `sync-jobs.ts` run.**
    was reading our shorthand aloud. Four live turns never reached that far, so the fix is verified
    by unit test (the strings are in the prompt) and NOT by ear. Needs one full walkthrough.
 
+**A2. Landscape mode (opened 2026-08-10, NOT BUILT — owner wants it)**
+
+The app is locked to portrait as of #165 (`apps/cadence-ios/ios/App/App/Info.plist`,
+`UISupportedInterfaceOrientations`). That was a **fix, not a decision**: rotating produced a broken
+screen, and locking removed it rather than shipping a layout nobody had drawn. The owner wants real
+landscape support.
+
+What has to change, and why it is more than a media query:
+
+- **The full-bleed rules key off screen WIDTH, not the shell.** `styles.css`'s
+  `@media (max-width: 480px)` block is what turns the fake phone frame into a real full-screen app.
+  An iPhone in landscape is ~852pt wide, so the query stops matching and the app falls back to the
+  desktop 390×760 mockup — clipped, with a second fake status bar over the real one. **This is the
+  same root cause as iPad showing the mockup in portrait.** Fixing the signal (native shell rather
+  than width) is a prerequisite for landscape and fixes iPad for free — see the open question in
+  A0's neighbourhood, tracked here so the two are not solved twice.
+- **The chat's vertical assumptions.** `.chat` reserves room for a floating composer stack measured
+  at runtime (`useFloatingInset`); in landscape the usable height roughly halves and the composer,
+  capture pills and confirmation bar together can exceed the viewport. The confirmation card and the
+  face-picker grid in particular are designed as tall columns.
+- **`PhoneFrame` syncs `--app-height`/`--app-top` from visualViewport** for the iOS keyboard. In
+  landscape with the keyboard up there is very little left; the chat may need the composer to
+  collapse or the transcript to scroll under it.
+- **Unlock the orientations** in Info.plist (iPhone + the `~ipad` array) once there is a layout worth
+  rotating into.
+
+Do NOT unlock the plist before the CSS is ready — that is exactly the state that was just fixed.
+
 **A. Context/memory (MEMORY-ARCHITECTURE.md §9 phasing)**
 - **P3 — pack reuse: BUILT 2026-08-04** (the reuse half; enrichment deliberately dropped — see
   below). A coach session open now serves a cached dossier and skips BOTH Broker calls whenever

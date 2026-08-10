@@ -13,6 +13,15 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react';
  * re-read something, they own the viewport until they come back down. `stickNow` re-arms it for
  * the one case where jumping IS what they want — they just sent a message, so the newest turn is
  * the thing they are waiting for.
+ *
+ * **Why a touch handler and not just `onScroll`.** The first version of this detached only when a
+ * scroll event said they had moved away from the bottom, and it still felt impossible to scroll on
+ * a phone mid-reply. Scroll events are passive and coalesced; the streaming effect runs
+ * synchronously on every SSE delta, many times a second. The finger drags, the next delta snaps
+ * the view back, and the scroll event that would have detached us arrives too late to matter — the
+ * user loses the race with the network. A finger going down IS the intent, so it detaches
+ * immediately and nothing auto-scrolls until it lifts. On release we look at where they actually
+ * are: still at the bottom means keep following; scrolled up means the viewport is theirs.
  */
 
 /** How close to the bottom still counts as "reading the newest turn" (px). */
@@ -20,23 +29,42 @@ const STICK_THRESHOLD_PX = 80;
 
 export function useStickToBottom<T>(ref: RefObject<HTMLElement | null>, dep: T) {
   const sticking = useRef(true);
+  const touching = useRef(false);
+
+  /** Are they looking at the newest turn, or reading something further up? */
+  const atBottom = useCallback(() => {
+    const el = ref.current;
+    return !el || el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD_PX;
+  }, [ref]);
 
   const onScroll = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    sticking.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD_PX;
-  }, [ref]);
+    // Ignored while a finger is down: mid-drag the position is theirs to decide, and reading it
+    // here would let a momentary overshoot back to the bottom re-arm the follow under them.
+    if (!touching.current) sticking.current = atBottom();
+  }, [atBottom]);
+
+  /** A finger on the transcript means they want to move it — stop following before the next delta. */
+  const onTouchStart = useCallback(() => {
+    touching.current = true;
+  }, []);
+
+  /** Momentum may still be running; where they ended up is what decides whether we resume. */
+  const onTouchEnd = useCallback(() => {
+    touching.current = false;
+    sticking.current = atBottom();
+  }, [atBottom]);
 
   /** Force-follow again — for when the user's own action means they want the newest turn. */
   const stickNow = useCallback(() => {
+    touching.current = false;
     sticking.current = true;
   }, []);
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || !sticking.current) return;
+    if (!el || touching.current || !sticking.current) return;
     el.scrollTop = el.scrollHeight;
   }, [ref, dep]);
 
-  return { onScroll, stickNow };
+  return { onScroll, onTouchStart, onTouchEnd, stickNow };
 }
