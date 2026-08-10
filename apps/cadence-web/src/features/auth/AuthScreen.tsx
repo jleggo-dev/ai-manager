@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase, authConfigured } from '../../lib/supabase.ts';
 import {
   isNativeShell,
   linkProviderNative,
   signInWithProviderNative,
   type NativeOAuthProvider,
+  AUTH_FAILED_EVENT,
+  AUTH_SHEET_CLOSED_EVENT,
 } from '../../lib/native-auth.ts';
 import { Orb } from '../../components/Orb.tsx';
 
@@ -79,8 +81,17 @@ export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMod
     // appUrlOpen listener finishes the session, and App's auth listener takes over.
     if (isNativeShell()) {
       const errMsg = await (upgrading ? linkProviderNative(provider) : signInWithProviderNative(provider));
-      if (errMsg) setMsg(errMsg);
-      setBusy(false); // the sheet is up (or failed); this screen stays interactive behind it
+      if (errMsg) {
+        setMsg(errMsg);
+        setBusy(false);
+        return;
+      }
+      // STAY BUSY while the sheet is up. This screen used to unlock the moment the sheet opened,
+      // which let a second tap start a second flow — and each launch mints a fresh PKCE challenge
+      // that overwrites the stored verifier, so the code the FIRST sheet comes back with can no
+      // longer be exchanged. Two `provider=google` authorize calls five seconds apart is exactly
+      // what a real trace showed, and the resulting failure was silent. The sheet closing or the
+      // callback failing is what releases the button now (see the listeners below).
       return;
     }
     // Web: redirects the browser to the provider, then back to the app; the returned session is
@@ -97,6 +108,23 @@ export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMod
     }
     // Success → the page is navigating to the provider; leave busy set (no inline continuation).
   }
+
+  // The deep-link listener lives at module scope in lib/native-auth.ts and finishes long after
+  // the tap, so it reports back by event. Without this the screen would sit locked behind a
+  // dismissed sheet, or stay silent on a failed exchange.
+  useEffect(() => {
+    const onFailed = (e: Event) => {
+      setMsg((e as CustomEvent<string>).detail || 'Could not finish signing in — try again.');
+      setBusy(false);
+    };
+    const onClosed = () => setBusy(false);
+    window.addEventListener(AUTH_FAILED_EVENT, onFailed);
+    window.addEventListener(AUTH_SHEET_CLOSED_EVENT, onClosed);
+    return () => {
+      window.removeEventListener(AUTH_FAILED_EVENT, onFailed);
+      window.removeEventListener(AUTH_SHEET_CLOSED_EVENT, onClosed);
+    };
+  }, []);
 
   async function submit() {
     const e = email.trim();

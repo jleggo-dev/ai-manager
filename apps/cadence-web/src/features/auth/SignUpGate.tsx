@@ -50,9 +50,10 @@ export function SignUpGate() {
 
   return (
     <div className="welcome gate">
-      <div className="chat-prog gate-prog" aria-hidden>
-        <i style={{ width: '100%' }} />
-      </div>
+      {/* No progress bar here. A 100%-complete bar says nothing at the one screen that IS the end,
+          and `.chat-prog` is built for the chat header's flex ROW — `flex: 1` in this column
+          container grew it vertically instead, overriding its 12px height into a full-width green
+          slab above the headline. */}
       <div className="gate-h">
         Your first week is ready.
         <br />

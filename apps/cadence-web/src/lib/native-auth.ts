@@ -14,16 +14,54 @@ import { supabase } from './supabase.ts';
  */
 export const NATIVE_AUTH_CALLBACK = 'cadence://auth-callback';
 
+/**
+ * How the deep-link listener talks back to whatever screen started the flow. It runs at module
+ * scope, long after the button was tapped, so there is no promise left to reject into — and the
+ * cost of having nowhere to report was the bug: an exchange could fail and the user saw a sheet
+ * close, no error, and no progress.
+ */
+export const AUTH_FAILED_EVENT = 'cadence:auth-failed';
+export const AUTH_SHEET_CLOSED_EVENT = 'cadence:auth-sheet-closed';
+
+function announce(event: string, detail?: string) {
+  window.dispatchEvent(new CustomEvent(event, { detail }));
+}
+
 export const isNativeShell = () => Capacitor.isNativePlatform();
 
 /** Wire the deep-link listener. Call once at startup; no-op outside the native shell. */
 export function initNativeAuth(): void {
   if (!isNativeShell()) return;
+  // The sheet being dismissed is the only signal that a cancelled flow is over. Without it the
+  // screen that launched it stays locked, or — worse — unlocks immediately and lets a second tap
+  // start a second flow (see below).
+  void Browser.addListener('browserFinished', () => announce(AUTH_SHEET_CLOSED_EVENT));
+
   void App.addListener('appUrlOpen', ({ url }) => {
     if (!url.startsWith(NATIVE_AUTH_CALLBACK)) return;
-    const code = new URL(url).searchParams.get('code');
     void Browser.close().catch(() => undefined); // dismiss the sheet even if close is a no-op
-    if (code) void supabase.auth.exchangeCodeForSession(code);
+
+    const parsed = new URL(url);
+    const code = parsed.searchParams.get('code');
+    // The provider can also come back with a refusal rather than a code.
+    const denied = parsed.searchParams.get('error_description') || parsed.searchParams.get('error');
+    if (!code) {
+      announce(AUTH_FAILED_EVENT, denied?.trim() || 'That sign-in did not complete — try again.');
+      return;
+    }
+
+    // Every failure below used to be discarded by a bare `void`: the PKCE verifier having been
+    // overwritten by a second launch, an expired code, a network blip. All of them looked
+    // identical from the outside — the sheet closed and nothing happened.
+    supabase.auth
+      .exchangeCodeForSession(code)
+      .then(({ error }) => {
+        if (error) announce(AUTH_FAILED_EVENT, error.message?.trim() || 'Could not finish signing in — try again.');
+      })
+      .catch((err: unknown) => {
+        console.error('[cadence/auth] code exchange failed', err);
+        announce(AUTH_FAILED_EVENT, 'Could not finish signing in — try again.');
+      });
   });
 }
 
