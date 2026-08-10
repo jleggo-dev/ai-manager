@@ -5,7 +5,7 @@ import type { Step } from '../review/reviewConstants.ts';
 import { HealthOfferCard } from './HealthOfferCard.tsx';
 import { findHealthOfferTurn, healthOfferAnswered } from './health-digest.ts';
 import { capabilities } from '../../lib/capability/index.ts';
-import { OPENING_PICKS, OPENING_QUESTION } from '@cadence/shared';
+import { OPENING_PICKS, OPENING_PLACEHOLDER, OPENING_QUESTION } from '@cadence/shared';
 import { useEnsureCoachFace } from '../coach/useEnsureCoachFace.ts';
 import { useCoachChat } from './useCoachChat.ts';
 import { chatProgress, livePicks, viewTurns } from './coachTurns.ts';
@@ -72,6 +72,7 @@ export function OnboardingChat({
   // everyone sees. Fall back to what the opening turn itself claims.
   const progress = chatProgress(views) || (intent === 'onboarding' ? (OPENING_PICKS.progress ?? 0) : 0);
   const confirming = picks?.layout === 'confirm';
+  const onOpeningTurn = intent === 'onboarding' && restored && !turns.length;
   const chatRef = useRef<HTMLDivElement | null>(null);
 
   // Goal-gated Apple Health offer (detour pattern): the card renders under the coach turn that
@@ -185,6 +186,9 @@ export function OnboardingChat({
           onSend={send}
           streaming={streaming}
           showDisclaimer={chrome === 'onboarding'}
+          // Only while the opening question is the live one: after that she is asking real
+          // questions, and an example of a goal would be answering the wrong thing.
+          placeholder={onOpeningTurn ? OPENING_PLACEHOLDER : undefined}
           above={
             chrome === 'onboarding' ? <CapturedPills goals={capturedGoals} onFix={() => onReview?.('goals')} /> : null
           }
