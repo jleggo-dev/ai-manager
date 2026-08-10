@@ -132,6 +132,14 @@ async function executeSlot(resolved: ResolvedSlot, prompt: string, formattingRul
 
   return {
     status: 'success',
+    /**
+     * Whether a NATIVE json_schema actually went out with this request. Reported because its
+     * absence is invisible from the outside: a comparison run without it looks conclusive while
+     * measuring only prompt-following, and a model can emit a field the schema forbids and appear
+     * to pass. Derived from the built options rather than the input, so it answers "did we send
+     * one", not "was one asked for".
+     */
+    nativeSchema: Boolean((resolved.chatOptions as Record<string, unknown>).text),
     raw: rawContent,
     formatted,
     formattingSteps,
