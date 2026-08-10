@@ -36,7 +36,9 @@ const HEALTH_SHARED_NOTE =
   'The user has just shared their Apple Health history with you and it is in your context now. ' +
   'Say what you actually see in it — what they have been doing, how often, and what it means for ' +
   'the goal they told you about. Be specific about their numbers; that is the whole point of them ' +
-  'having shared it. Then carry on with your next question.';
+  'having shared it. Then carry on with your next question. Do this ONCE: the same history will ' +
+  'keep being put in front of you as the conversation grows so that you do not lose it, and ' +
+  'reading it back a second time makes you sound like you have just noticed it.';
 
 const ONGOING_GREETING =
   "Hey — good to see you 👋 How's your rhythm feeling? If something needs to shift — more, less, a different day — say the word and I'll adjust your plan.";
