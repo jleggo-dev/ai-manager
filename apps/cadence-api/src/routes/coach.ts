@@ -25,12 +25,15 @@ import { createConversation, getLatestConversation, touchConversation } from '..
 import { getActivePlan, getFirstPlanCommitAt } from '../repos/plans.ts';
 
 /**
- * Turns the app authored rather than the user: the injected `<context>` packs, and the `<open>`
- * nudge the client sends so Cadence speaks first (OnboardingChat's OPENER).
+ * Turns the app authored rather than the user. They must be invisible everywhere the conversation
+ * is read back: in a restored transcript they render as a message in the user's own bubble that
+ * they never wrote, and in the Broker's capture window they get extracted as something they said.
  *
- * Both must be invisible everywhere the conversation is read back. In the restored transcript an
- * `<open>` turn would render as a message in the user's own bubble that they never wrote; in the
- * Broker's capture window it would be extracted as something they said.
+ * `<context` is live — the injected packs. **`<open>` is legacy** and deliberately kept: the
+ * client briefly opened onboarding by asking the model to speak first, and sessions created in
+ * that window still carry the nudge. The opening question is a constant now
+ * (`@cadence/shared`'s OPENING_QUESTION, painted client-side and never sent), so nothing new
+ * writes one — but dropping the pattern would make those existing transcripts render wrong.
  */
 const APP_AUTHORED = /^\s*<(context|open)\b/;
 

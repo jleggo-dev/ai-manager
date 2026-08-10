@@ -5,6 +5,7 @@ import type { Step } from '../review/reviewConstants.ts';
 import { HealthOfferCard } from './HealthOfferCard.tsx';
 import { findHealthOfferTurn, healthOfferAnswered } from './health-digest.ts';
 import { capabilities } from '../../lib/capability/index.ts';
+import { OPENING_PICKS, OPENING_QUESTION } from '@cadence/shared';
 import { useCoachChat } from './useCoachChat.ts';
 import { chatProgress, livePicks, viewTurns } from './coachTurns.ts';
 import { ChatTurn } from './ChatTurn.tsx';
@@ -23,16 +24,6 @@ const GearIcon = () => (
     />
   </svg>
 );
-
-/**
- * What the app says to open the conversation, on the user's behalf.
- *
- * Wrapped in `<open>` so the API can drop it from the restored transcript and from the Broker's
- * capture window (routes/coach.ts, same treatment as `<context`). Without that, reloading mid-
- * onboarding shows the user a message in their own bubble that they never wrote — and the Broker
- * would take "the user has just arrived" as something they said.
- */
-const OPENER = '<open>The user has just arrived and said hello. Open the conversation with your first question.</open>';
 
 const ONGOING_GREETING =
   "Hey — good to see you 👋 How's your rhythm feeling? If something needs to shift — more, less, a different day — say the word and I'll adjust your plan.";
@@ -66,23 +57,15 @@ export function OnboardingChat({
   intent?: 'onboarding' | 'ongoing';
   chrome?: 'onboarding' | 'none';
 }) {
-  const {
-    turns,
-    input,
-    setInput,
-    streaming,
-    capturedGoals,
-    restored,
-    send,
-    kickoff,
-    foodAction,
-    clearFoodAction,
-    sessionId,
-  } = useCoachChat({ intent });
+  const { turns, input, setInput, streaming, capturedGoals, restored, send, foodAction, clearFoodAction, sessionId } =
+    useCoachChat({ intent });
 
   const views = useMemo(() => viewTurns(turns), [turns]);
   const picks = livePicks(views, streaming);
-  const progress = chatProgress(views);
+  // `chatProgress` only sees turns that came from the server, and the opening turn never does —
+  // so before the first reply it would report 0 and the bar would sit empty on the one screen
+  // everyone sees. Fall back to what the opening turn itself claims.
+  const progress = chatProgress(views) || (intent === 'onboarding' ? (OPENING_PICKS.progress ?? 0) : 0);
   const confirming = picks?.layout === 'confirm';
   const chatRef = useRef<HTMLDivElement | null>(null);
 
@@ -91,19 +74,6 @@ export function OnboardingChat({
   // recomputes per render so a streamed re-offer moves the card.
   const canOfferHealth = capabilities.health.isAvailable() && !healthOfferAnswered();
   const healthOfferAt = canOfferHealth && !streaming ? findHealthOfferTurn(turns) : -1;
-
-  // Let Cadence open her own conversation once the restore has settled and found nothing.
-  // The ref belts what `kickoff`'s own empty-transcript check braces: two opens would mean two
-  // upstream sessions and two greetings, and the guard inside kickoff reads a `turns` captured
-  // before either call had a chance to append to it.
-  const kickedOff = useRef(false);
-  useEffect(() => {
-    if (!restored || intent !== 'onboarding' || kickedOff.current) return;
-    kickedOff.current = true;
-    void kickoff(OPENER);
-    // kickoff no-ops on a restored transcript; re-running it on turn changes would be a loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restored, intent]);
 
   // Scroll only the chat pane — scrollIntoView would pan the page/shell on mobile.
   useEffect(() => {
@@ -146,6 +116,17 @@ export function OnboardingChat({
           </div>
         ) : (
           intent === 'ongoing' && !turns.length && <ChatTurn role="coach" text={ONGOING_GREETING} />
+        )}
+        {/* The opening turn is the app's, not the model's — always the same question, so it paints
+            instantly instead of costing a round-trip before the user has done anything. It stays at
+            the top of a restored transcript too: it IS the first thing they saw, even though it was
+            never sent upstream. Its picks go live only while it is still the newest turn. */}
+        {restored && intent === 'onboarding' && (
+          <ChatTurn
+            role="coach"
+            text={OPENING_QUESTION}
+            after={!turns.length ? <QuickPicks key="opening" picks={OPENING_PICKS} onCompose={setInput} /> : undefined}
+          />
         )}
         {restored &&
           views.map((t, i) => {

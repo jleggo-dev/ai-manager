@@ -28,6 +28,7 @@ export * from './types/streak.ts';
 export * from './types/rewards.ts';
 export * from './coach-face.ts';
 export * from './coach-picks.ts';
+export * from './onboarding-opening.ts';
 export * from './session-feedback.ts';
 export * from './walkthrough.ts';
 export * from './tool-catalog.ts';

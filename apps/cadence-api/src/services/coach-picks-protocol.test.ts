@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COACH_PICKS_FENCE, parseCoachTurn } from '@cadence/shared';
+import { COACH_PICKS_FENCE, OPENING_QUESTION, parseCoachTurn } from '@cadence/shared';
 import { renderPickProtocol } from './coach-picks-protocol.ts';
 
 describe('renderPickProtocol', () => {
@@ -16,6 +16,19 @@ describe('renderPickProtocol', () => {
     expect(parsed.picks?.multi).toBe(true);
     expect(parsed.picks?.lead).toBe("I'd like to");
     expect(parsed.picks?.options).toHaveLength(4);
+  });
+
+  it('quotes the opening question verbatim so the coach never asks it twice', () => {
+    // The app paints turn 1 itself and never sends it upstream, so the coach's only knowledge of
+    // what was already asked is this quote. If the two drift, she re-asks it and the user answers
+    // the same question twice.
+    expect(renderPickProtocol({ intent: 'onboarding' })).toContain(OPENING_QUESTION);
+  });
+
+  it('tells the coach to default to picks rather than treating them as optional', () => {
+    const out = renderPickProtocol({ intent: 'onboarding' });
+    expect(out).toContain('DEFAULT TO PICKS');
+    expect(out).toMatch(/TILES question/i);
   });
 
   it('adds the first-conversation script only for onboarding', () => {

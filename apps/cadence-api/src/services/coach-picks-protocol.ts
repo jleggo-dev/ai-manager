@@ -14,11 +14,10 @@
  *
  * Mirrors `@cadence/shared`'s `coach-picks.ts` parser. Change one, change both.
  */
-import { COACH_PICKS_FENCE } from '@cadence/shared';
+import { COACH_PICKS_FENCE, OPENING_QUESTION } from '@cadence/shared';
 
 /** Question order for a first conversation. Suggested, in the coach's own judgement. */
 const INTAKE_SCRIPT: string[] = [
-  'what they want to work on (list, multi, lead "I\'d like to", one row per area they might name)',
   'how many days a week they can honestly give it (tiles: 2 / 3 / 4 / 5+, with a short hint under each)',
   'what time of day works best (list, single)',
   'what they are working around — an injury, a day that is always gone, a hard stretch (list, multi)',
@@ -33,12 +32,15 @@ const RULES: string[] = [
   'Ask ONE question per turn. Two or three sentences at most before the block.',
   'layout "list" for labelled choices; layout "tiles" for short scalars (counts, days, ratings) — a tile label is one or two characters and carries a "hint" line.',
   'layout "confirm" is the ONE exception and takes no options: it tells the app to show everything it has captured so far — goals, about them, what you work around, what they have to work with — for them to check and correct. Use it exactly once, when you have enough to build a first week, with prose like "Before I build anything — here\'s everything I\'ve heard. Tap anything that\'s off." Do not list the captures yourself in that turn; the app renders them.',
+  'DEFAULT TO PICKS. Most intake questions have a small, guessable answer set, and those all get a block. Leaving it off is the exception you justify, not the easy option — a bare question makes someone type what they could have tapped.',
+  'A narrowing follow-up — how many, how often, how long, how far along, which end of a range — is a TILES question, always. "How many days a week?" is tiles 2/3/4/5+. "Roughly when?" is tiles of months. "Where are you starting from?" is tiles. Do not ask these as open prose.',
+  'Never ask two open, pick-less questions in a row during the first conversation. If the last turn had no block, this one needs one.',
   'multi: true only when several answers can be true at once.',
   '"say" is the user\'s own words for that option — it is dropped into their composer and they can edit it, so write it as something a person would actually type.',
   'With "lead" (e.g. "I\'d like to") the "say" fragments are joined into one sentence; without it a single "say" is used verbatim, so make it a whole sentence.',
   '"area" is one of movement | nourishment | mind | practice, and only colours a dot.',
   '"progress" is your own read of how far through this first conversation you are, 0 to 1.',
-  'Omit the block entirely when picks would not help — an open question, a follow-up, a reflection, or anything where a menu would put words in their mouth.',
+  'Omit the block ONLY when a menu would genuinely put words in their mouth — "why does this matter to you?", "how did that go?", anything whose answer is theirs alone. Not merely because a question feels conversational.',
   'Never offer more than six options. Never add a "something else" row: typing is always available and the composer already says so.',
 ];
 
@@ -67,6 +69,12 @@ export function renderPickProtocol(opts: { intent?: string } = {}): string {
     lines.push(
       '',
       '== FIRST CONVERSATION — a suggested running order, not a checklist ==',
+      // The app paints question 1 itself and never sends it upstream, so from the coach's side the
+      // conversation opens mid-flow with an answer to a question it did not ask. Quote it verbatim
+      // (from @cadence/shared, so the two can never drift) or it asks the same thing again.
+      `The app has ALREADY asked the opening question and shown its own picks: "${OPENING_QUESTION}" — ` +
+        'their first message is the answer to it. Do not ask it again, and do not re-greet them; ' +
+        'acknowledge what they said in a few words and move to the next question.',
       ...INTAKE_SCRIPT.map((s, i) => `${i + 1}. ${s}`),
       'Skip anything they have already told you, reorder when the conversation goes somewhere, and follow up when an answer needs one. When you have enough to build a first week, say so and stop asking.',
     );
