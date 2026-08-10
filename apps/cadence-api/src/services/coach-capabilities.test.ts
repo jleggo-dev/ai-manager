@@ -29,3 +29,29 @@ describe('coach capability manifest', () => {
     expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(4000);
   });
 });
+
+/**
+ * Owner-reported, 2026-08-10: with Apple Health fully granted on an iPhone, Cadence answered
+ * "Can't on this device — Apple Health only works on iPhone." The client was sending
+ * `isAvailable() && !alreadyAsked` as one boolean, so "we already asked" arrived as "no Health
+ * here" and she repeated it back as fact.
+ */
+describe('renderCapabilities — availability vs already-asked', () => {
+  it('says not-on-this-device only when the device really lacks it', () => {
+    expect(renderCapabilities({ healthAvailable: false })).toContain('Not on this device: Apple Health');
+  });
+
+  it('never claims Apple Health is unavailable just because we already asked', () => {
+    const out = renderCapabilities({ healthAvailable: true, healthAnswered: true });
+    expect(out).not.toContain('Not on this device');
+    expect(out).toContain('do not offer');
+    expect(out).toMatch(/if they ASK for it/i);
+    expect(out).toMatch(/only works on iPhone; they are on one/i);
+  });
+
+  it('leaves a fresh, capable device free to be offered', () => {
+    const out = renderCapabilities({ healthAvailable: true, healthAnswered: false });
+    expect(out).not.toContain('Not on this device');
+    expect(out).not.toContain('do not offer');
+  });
+});

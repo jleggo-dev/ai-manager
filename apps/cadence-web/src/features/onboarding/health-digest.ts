@@ -12,6 +12,17 @@ export const DIGEST_PERIOD_DAYS = 90;
 export const HEALTH_OFFER_FLAG_KEY = 'cadence.healthOffer'; // 'done' | 'dismissed'
 
 /** True once the user has answered the onboarding offer either way. */
+/**
+ * Have we already SHARED their activity? 'done' means the digest is stored, so re-offering would
+ * be asking for something we have. Deliberately narrower than `healthOfferAnswered`: a dismissal
+ * is "not now", and treating it as "never" left someone who later ASKED for Apple Health with a
+ * coach agreeing to pull it and no card to confirm with.
+ */
+export function healthAlreadyShared(): boolean {
+  return window.localStorage.getItem(HEALTH_OFFER_FLAG_KEY) === 'done';
+}
+
+/** Have we offered at all — used only to stop the coach offering again unprompted. */
 export function healthOfferAnswered(): boolean {
   const v = window.localStorage.getItem(HEALTH_OFFER_FLAG_KEY);
   return v === 'done' || v === 'dismissed';

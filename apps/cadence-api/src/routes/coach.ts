@@ -69,7 +69,7 @@ router.use(requireCadenceUser);
 router.post('/sessions', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
-    const { intent, topic, healthAvailable } = req.body ?? {};
+    const { intent, topic, healthAvailable, healthAnswered } = req.body ?? {};
     // Roll the plan horizon forward (idempotent) whenever the user comes back to the coach —
     // this is the top-up that keeps a long/undated plan materialized ~2 weeks ahead. Best-effort.
     void ensureHorizon(userId).catch((e) => console.error('[ensureHorizon]', e));
@@ -90,7 +90,7 @@ router.post('/sessions', async (req: Request, res: Response) => {
     // rather than written into the persona because features ship in code and the persona is edited
     // in AI Admin — a hard-coded list drifts, and a coach that offers a feature the build lacks is
     // worse than one that says "not yet". Cheap and static, so it rides the same session-open turn.
-    await injectCoachContext(userId, session.sessionId, renderCapabilities({ healthAvailable }), {
+    await injectCoachContext(userId, session.sessionId, renderCapabilities({ healthAvailable, healthAnswered }), {
       source: 'capabilities',
       version: 1,
     });

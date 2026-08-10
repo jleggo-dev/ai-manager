@@ -2,7 +2,15 @@ import { BASE, headers } from './http.ts';
 import { createCoachSseParseState, pushCoachSseChunk } from './coach-sse.ts';
 
 export async function openCoachSession(
-  opts: { intent?: string; topic?: string; systemPrompt?: string; healthAvailable?: boolean } = {},
+  opts: {
+    intent?: string;
+    topic?: string;
+    systemPrompt?: string;
+    /** Does this device have Apple Health at all. */
+    healthAvailable?: boolean;
+    /** Have we already offered it once (so she should not offer again unprompted). */
+    healthAnswered?: boolean;
+  } = {},
 ): Promise<{ sessionId: string }> {
   const res = await fetch(`${BASE}/coach/sessions`, {
     method: 'POST',
