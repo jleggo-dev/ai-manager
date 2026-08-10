@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { MicButton } from '../../components/MicButton.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 
@@ -34,6 +34,7 @@ export function ChatComposer({
   showDisclaimer,
   above,
   placeholder = 'Message your coach…',
+  rootRef,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -42,6 +43,8 @@ export function ChatComposer({
   showDisclaimer: boolean;
   /** Overridden on the opening turn to model what a useful answer looks like. */
   placeholder?: string;
+  /** Measured by the chat so it can reserve exactly this much room (useFloatingInset). */
+  rootRef?: (el: HTMLElement | null) => void;
   /** Rides above the field inside the same floating stack (the Broker's live captures). */
   above?: ReactNode;
 }) {
@@ -49,7 +52,12 @@ export function ChatComposer({
 
   // Auto-grow to fit what's typed, up to ~5 rows (the CSS max-height). Picks compose into the
   // same field, so a multi-select answer grows it exactly as typing would.
-  useEffect(() => {
+  //
+  // A LAYOUT effect, and the ordering is load-bearing: the chat measures this whole stack in its
+  // own layout effect to know how much room to reserve, and React runs a child's layout effects
+  // BEFORE its parent's. As a plain useEffect this ran *after* that measurement, so the chat
+  // reserved the height the composer had before it grew and the newest turn hid underneath it.
+  useLayoutEffect(() => {
     const ta = taRef.current;
     if (!ta) return;
     ta.style.overflowY = 'hidden';
@@ -64,7 +72,7 @@ export function ChatComposer({
   }, [value, streaming]);
 
   return (
-    <div className="composer-wrap">
+    <div className="composer-wrap" ref={rootRef}>
       {above}
       <div className={`composer${streaming ? ' is-locked' : ''}`}>
         <textarea

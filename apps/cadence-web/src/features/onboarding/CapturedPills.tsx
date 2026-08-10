@@ -10,15 +10,26 @@ import type { CapturedGoal } from './useCoachChat.ts';
  *
  * Nothing renders until there is something to show: an empty "here's what I've got" strip on the
  * first question is a promise the coach hasn't earned yet.
+ *
+ * **Tapping one corrects it in the conversation, not in a wizard.** These used to open the curate
+ * screens — the pre-v2 UI the redesign exists to replace — which meant "tap to fix" threw you out
+ * of the chat you were mid-way through and into a form. A tap now drafts the correction into the
+ * composer, exactly like a quick pick: same gesture, same place, and Cadence can just be told.
  */
-export function CapturedPills({ goals, onFix }: { goals: readonly CapturedGoal[]; onFix?: (id: string) => void }) {
+export function CapturedPills({
+  goals,
+  onFix,
+}: {
+  goals: readonly CapturedGoal[];
+  onFix?: (goal: CapturedGoal) => void;
+}) {
   if (!goals.length) return null;
   return (
     <div className="cappills">
       <div className="cappills-k">{"What I've got so far — tap to fix"}</div>
       <div className="cappills-row">
         {goals.map((g) => (
-          <button key={g.id} type="button" className="cappill" onClick={() => onFix?.(g.id)}>
+          <button key={g.id} type="button" className="cappill" onClick={() => onFix?.(g)}>
             <span aria-hidden>✓</span>
             {g.title}
           </button>
