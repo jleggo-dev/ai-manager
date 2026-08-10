@@ -96,6 +96,25 @@ function CoachApp({ session }: { session: Session | null }) {
     setScreen('review');
   };
 
+  /**
+   * The way out of onboarding, and the reason it has to be a sign-out rather than a screen change.
+   *
+   * A Supabase session — anonymous ones included — is persisted, so it survives a hard close. That
+   * made onboarding a one-way street: the fork and the sign-in screen only render when there is NO
+   * session, so once an anonymous one existed every launch dropped straight back into the chat with
+   * no route to sign in, switch accounts, or start fresh. Dropping the session is what puts the
+   * fork back on screen.
+   *
+   * Nothing is deleted server-side. For an anonymous draft that is academic — there is no way to
+   * sign back in to reach it, which is exactly why the caller confirms first.
+   */
+  const leaveOnboarding = () => {
+    void supabase.auth.signOut().catch(() => {
+      // Already gone, or offline. The listener drives the screen either way; a failure here must
+      // not strand someone on the screen they asked to leave.
+    });
+  };
+
   // The picked portrait is loaded once here, above the screen machine: the face has to be the
   // same on the review wizard, the trail and every sheet, and a per-surface fetch would let them
   // disagree for a frame after a swap.
@@ -104,9 +123,9 @@ function CoachApp({ session }: { session: Session | null }) {
       {screen === 'loading' ? (
         <Loading />
       ) : screen === 'meet' ? (
-        <MeetCadence onSayHi={() => setScreen('onboarding')} />
+        <MeetCadence onSayHi={() => setScreen('onboarding')} onLeave={leaveOnboarding} warnUnsaved={anonymous} />
       ) : screen === 'onboarding' ? (
-        <OnboardingChat onReview={openReview} onBuild={() => setScreen('building')} />
+        <OnboardingChat onReview={openReview} onBuild={() => setScreen('building')} onBack={() => setScreen('meet')} />
       ) : screen === 'review' ? (
         <ReviewScreen
           initialStep={reviewStep}

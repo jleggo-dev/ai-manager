@@ -18,6 +18,8 @@ import { COACH_PICKS_FENCE, OPENING_QUESTION } from '@cadence/shared';
 
 /** Question order for a first conversation. Suggested, in the coach's own judgement. */
 const INTAKE_SCRIPT: string[] = [
+  'MAKE IT CONCRETE FIRST. The opening options are deliberately broad — "improve my fitness", "build my creative muscle" — so nobody has to see their own goal spelled out to feel included. You cannot build a week from them. Before anything else, turn each one they picked into something specific enough to schedule: what KIND of fitness (running, lifting, swimming, getting up the stairs without stopping), what creative work (writing, music, drawing), what "eat better" means to them. Offer picks for this — it is a list question with 4-6 concrete kinds — and follow up on a vague answer rather than accepting it. A goal you cannot put on a calendar is not captured yet.',
+  'whether there is something they are aiming AT — a race, a date, a number, a piece finished — or whether this is an ongoing practice with no finish line. Both are fine; the plan differs.',
   'how many days a week they can honestly give it (tiles: 2 / 3 / 4 / 5+, with a short hint under each)',
   'what time of day works best (list, single)',
   'what they are working around — an injury, a day that is always gone, a hard stretch (list, multi)',
