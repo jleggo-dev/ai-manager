@@ -152,3 +152,38 @@ describe('maybeRefreshHealthDigest', () => {
     ).toBe('unchanged');
   });
 });
+
+/**
+ * The digest is validated as a whole at the API boundary, so anything one workout can do to the
+ * payload, it can do to the entire history. Each of these produced a 400, which the user only ever
+ * saw as "I couldn't read Apple Health just now".
+ */
+describe('buildDigestFromWorkouts — one bad workout must not sink the digest', () => {
+  it('names a workout HealthKit left untyped', () => {
+    const d = buildDigestFromWorkouts([{ type: '', start: '2026-08-01T07:00:00.000Z', durationMin: 30 }]);
+    expect(d.byType[0]!.type).toBe('workout');
+    expect(d.recent[0]!.type).toBe('workout');
+  });
+
+  it('clamps a tracker left running for two days', () => {
+    const d = buildDigestFromWorkouts([{ type: 'running', start: '2026-08-01T07:00:00.000Z', durationMin: 4000 }]);
+    expect(d.byType[0]!.avgDurationMin).toBe(1440);
+    expect(d.recent[0]!.durationMin).toBe(1440);
+  });
+
+  it('clamps an implausible distance and drops a non-finite one', () => {
+    const d = buildDigestFromWorkouts([
+      { type: 'cycling', start: '2026-08-01T07:00:00.000Z', distanceKm: 99_999 },
+      { type: 'rowing', start: '2026-08-02T07:00:00.000Z', distanceKm: Number.NaN },
+    ]);
+    const cycling = d.byType.find((t) => t.type === 'cycling')!;
+    const rowing = d.byType.find((t) => t.type === 'rowing')!;
+    expect(cycling.avgDistanceKm).toBe(1000);
+    expect(rowing.avgDistanceKm).toBeNull();
+  });
+
+  it('keeps every type name inside the schema length', () => {
+    const d = buildDigestFromWorkouts([{ type: 'x'.repeat(300), start: '2026-08-01T07:00:00.000Z' }]);
+    expect(d.byType[0]!.type.length).toBeLessThanOrEqual(80);
+  });
+});

@@ -88,6 +88,20 @@ const MAX_RECENT = 5;
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
+/**
+ * The digest's own API schema bounds every number, and it validates the payload as a WHOLE — so a
+ * single implausible workout (a tracker left running for two days, a distance in the wrong unit)
+ * used to reject the entire digest and surface as "I couldn't read Apple Health just now". One bad
+ * row should cost its own accuracy, never the other months of history.
+ * Mirrors apps/cadence-api/src/validation/health.ts.
+ */
+const MAX_MINUTES = 1_440;
+const MAX_KM = 1_000;
+const MAX_TYPE_CHARS = 80;
+
+const clamp = (n: number | null, hi: number): number | null =>
+  n == null || !Number.isFinite(n) ? null : Math.min(Math.max(n, 0), hi);
+
 function avg(nums: number[]): number | null {
   return nums.length ? round1(nums.reduce((a, b) => a + b, 0) / nums.length) : null;
 }
@@ -101,10 +115,10 @@ export function buildDigestFromWorkouts(workouts: Workout[], periodDays = DIGEST
   const weeks = Math.max(1, periodDays / 7);
   const typeSummaries: HealthDigestTypeSummary[] = [...byType.entries()]
     .map(([type, list]) => ({
-      type,
+      type: type.slice(0, MAX_TYPE_CHARS),
       count: list.length,
-      avgDurationMin: avg(list.map((w) => w.durationMin).filter((n): n is number => n != null)),
-      avgDistanceKm: avg(list.map((w) => w.distanceKm).filter((n): n is number => n != null)),
+      avgDurationMin: clamp(avg(list.map((w) => w.durationMin).filter((n): n is number => n != null)), MAX_MINUTES),
+      avgDistanceKm: clamp(avg(list.map((w) => w.distanceKm).filter((n): n is number => n != null)), MAX_KM),
       lastISO:
         list
           .map((w) => w.start)
@@ -118,10 +132,10 @@ export function buildDigestFromWorkouts(workouts: Workout[], periodDays = DIGEST
     .sort((a, b) => b.start.localeCompare(a.start))
     .slice(0, MAX_RECENT)
     .map((w) => ({
-      type: humanizeWorkoutType(w.type),
+      type: humanizeWorkoutType(w.type).slice(0, MAX_TYPE_CHARS),
       start: w.start,
-      durationMin: w.durationMin ?? null,
-      distanceKm: w.distanceKm ?? null,
+      durationMin: clamp(w.durationMin ?? null, MAX_MINUTES),
+      distanceKm: clamp(w.distanceKm ?? null, MAX_KM),
     }));
 
   return {

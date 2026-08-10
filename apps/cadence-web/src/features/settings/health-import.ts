@@ -2,13 +2,21 @@ import type { Workout } from '../../lib/capability/index.ts';
 
 /** Pure helpers for the Apple Health import (kept out of the component file for fast refresh). */
 
-/** "HKWorkoutActivityTypeTraditionalStrengthTraining" → "strength training". */
+/**
+ * "HKWorkoutActivityTypeTraditionalStrengthTraining" → "strength training".
+ *
+ * Never returns blank. HealthKit hands back an empty activity type for some workouts, and the
+ * digest's own schema requires a non-empty name — so an unnamed workout used to reject the WHOLE
+ * digest at the API boundary, which the user saw as "I couldn't read Apple Health just now".
+ */
 export function humanizeWorkoutType(rawType: string): string {
-  return rawType
+  const name = (rawType ?? '')
     .replace(/^HKWorkoutActivityType/, '')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/^traditional /i, '')
+    .trim()
     .toLowerCase();
+  return name || 'workout';
 }
 
 export function humanizeWorkout(w: Workout): string {

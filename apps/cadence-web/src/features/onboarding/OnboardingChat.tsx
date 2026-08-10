@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { CoachFoodActionSheet } from '../coach/CoachFoodActionSheet.tsx';
 import type { Step } from '../review/reviewConstants.ts';
@@ -7,6 +7,7 @@ import { findHealthOfferTurn, healthOfferAnswered } from './health-digest.ts';
 import { capabilities } from '../../lib/capability/index.ts';
 import { OPENING_PICKS, OPENING_PLACEHOLDER, OPENING_QUESTION } from '@cadence/shared';
 import { useEnsureCoachFace } from '../coach/useEnsureCoachFace.ts';
+import { useStickToBottom } from './useStickToBottom.ts';
 import { useCoachChat } from './useCoachChat.ts';
 import { chatProgress, livePicks, viewTurns } from './coachTurns.ts';
 import { ChatTurn } from './ChatTurn.tsx';
@@ -81,12 +82,9 @@ export function OnboardingChat({
   const canOfferHealth = capabilities.health.isAvailable() && !healthOfferAnswered();
   const healthOfferAt = canOfferHealth && !streaming ? findHealthOfferTurn(turns) : -1;
 
-  // Scroll only the chat pane — scrollIntoView would pan the page/shell on mobile.
-  useEffect(() => {
-    const chat = chatRef.current;
-    if (!chat) return;
-    chat.scrollTop = chat.scrollHeight;
-  }, [turns]);
+  // Follow the newest turn, but never steal the viewport from someone reading back — see
+  // useStickToBottom. Scrolls the pane only; scrollIntoView would pan the whole shell on mobile.
+  const { onScroll, stickNow } = useStickToBottom(chatRef, turns);
 
   return (
     <div className="chatscreen">
@@ -115,7 +113,7 @@ export function OnboardingChat({
         </div>
       )}
 
-      <div className={`chat${chrome === 'onboarding' ? ' has-top' : ''}`} ref={chatRef}>
+      <div className={`chat${chrome === 'onboarding' ? ' has-top' : ''}`} ref={chatRef} onScroll={onScroll}>
         {!restored ? (
           <div className="chat-loading">
             <ChatTurn role="coach" text="" pending />
@@ -183,7 +181,12 @@ export function OnboardingChat({
         <ChatComposer
           value={input}
           onChange={setInput}
-          onSend={send}
+          onSend={() => {
+            // Their own message is the thing they are waiting on, so re-arm the follow even if
+            // they had scrolled up to check something before sending.
+            stickNow();
+            void send();
+          }}
           streaming={streaming}
           showDisclaimer={chrome === 'onboarding'}
           // Only while the opening question is the live one: after that she is asking real
