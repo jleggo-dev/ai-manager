@@ -76,18 +76,21 @@
 	<array>
 		<string>armv7</string>
 	</array>
+	<!-- Portrait only. The UI is a phone-shaped chat and there is no landscape design: the CSS
+	     that makes the app full-bleed is behind `@media (max-width: 480px)`, which cannot match at
+	     a ~852pt landscape width, so rotating fell back to the DESKTOP mockup — a clipped 390x760
+	     fake phone complete with a second, fake status bar. Locking the orientation removes the
+	     broken layout rather than building one nobody designed. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- TARGETED_DEVICE_FAMILY is "1,2", so this installs on iPad and the ~ipad array is live.
+	     Upside-down is normal on iPad; it is not on a Face ID iPhone, which is why it is only here. -->
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>

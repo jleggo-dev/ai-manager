@@ -177,11 +177,11 @@ export function OnboardingChat({
                         <ConfirmCard
                           onCorrect={(topic) => {
                             stickNow();
-                            setInput(`About ${topic} — `);
+                            setInput(`About ${topic} — that's not quite right. `);
                           }}
                           onTellMore={() => {
                             stickNow();
-                            setInput("There's something you missed — ");
+                            setInput("There's something you missed. ");
                           }}
                         />
                       ) : (
@@ -207,7 +207,7 @@ export function OnboardingChat({
             <button className="cfm-build" onClick={() => onBuild?.()}>
               Build it
             </button>
-            <button className="cfm-change" onClick={() => setInput('Actually, ')}>
+            <button className="cfm-change" onClick={() => setInput("Actually, I'd like to change something. ")}>
               Change something
             </button>
           </div>
@@ -239,10 +239,12 @@ export function OnboardingChat({
               <CapturedPills
                 goals={capturedGoals}
                 onFix={(g) => {
-                  // Drafted, never sent — the same contract as a quick pick, so a correction is
-                  // something they read back and edit rather than something the tap asserts.
+                  // A COMPLETE sentence, like a quick pick composes. The first version drafted a
+                  // dangling "About "X" — ", which the send arrow happily lit up for: someone sent
+                  // the fragment, and the coach — given a turn with no content — simply re-asked
+                  // her live question. Trailing space so carrying on types a new sentence.
                   stickNow();
-                  setInput(`About "${g.title}" — `);
+                  setInput(`About "${g.title}" — that's not quite right. `);
                 }}
               />
             ) : null

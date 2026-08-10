@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { MicButton } from '../../components/MicButton.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 
@@ -49,6 +49,7 @@ export function ChatComposer({
   above?: ReactNode;
 }) {
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const [dictating, setDictating] = useState(false);
 
   // Auto-grow to fit what's typed, up to ~5 rows (the CSS max-height). Picks compose into the
   // same field, so a multi-select answer grows it exactly as typing would.
@@ -94,12 +95,23 @@ export function ChatComposer({
           <span className="send is-dead" aria-hidden>
             <SendIcon />
           </span>
-        ) : value.trim() ? (
-          <button className="send" onClick={onSend} aria-label="Send">
-            <SendIcon />
-          </button>
         ) : (
-          <MicButton value={value} onChange={onChange} disabled={false} />
+          <>
+            {/* The mic stays MOUNTED whether or not there is text. It used to be the `else` branch
+                of the send button, so the first dictated word made the field non-empty, React
+                unmounted MicButton, and its cleanup called abort() — which also discards the
+                pending final result. Dictation killed itself after one word. It is hidden with
+                CSS when there is text and nothing is being said, and stays visible while
+                dictating so there is always something to tap to stop. */}
+            <span className={`mic-slot${value.trim() && !dictating ? ' is-hidden' : ''}`}>
+              <MicButton value={value} onChange={onChange} disabled={false} onListeningChange={setDictating} />
+            </span>
+            {value.trim() && (
+              <button className="send" onClick={onSend} aria-label="Send">
+                <SendIcon />
+              </button>
+            )}
+          </>
         )}
       </div>
       {showDisclaimer && (

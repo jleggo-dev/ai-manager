@@ -62,4 +62,16 @@ describe('renderPickProtocol', () => {
     expect(renderPickProtocol({ intent: 'ongoing' })).not.toContain('FIRST CONVERSATION');
     expect(renderPickProtocol()).not.toContain('FIRST CONVERSATION');
   });
+
+  /**
+   * Observed on device: the user tapped a captured goal, sent the drafted fragment, and the coach
+   * — handed a turn with no content while her own question was live — simply re-asked it. The
+   * client now drafts a complete sentence, but the coach also has to know a correction when she
+   * sees one, including a badly-worded one someone typed by hand.
+   */
+  it('teaches the coach to treat a correction as a turn, and never to re-ask its own question', () => {
+    const out = renderPickProtocol({ intent: 'onboarding' });
+    expect(out).toContain('A CORRECTION IS A NORMAL TURN');
+    expect(out).toContain('NEVER RE-ASK OR RE-ANSWER THE QUESTION YOU JUST ASKED');
+  });
 });
