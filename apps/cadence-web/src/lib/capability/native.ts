@@ -91,7 +91,14 @@ const PUSH_REGISTER_TIMEOUT_MS = 10_000;
  * the plugin has no weight/sleep queries yet, so those stay null; a custom Swift extension is the
  * future path). Push = APNs via @capacitor/push-notifications. Location = CoreLocation via
  * @capacitor/geolocation (not WKWebView navigator.geolocation — capacitor:// is not a secure
- * origin). Dictation reuses web: WKWebView has no Web Speech API so it correctly reports unavailable.
+ * origin).
+ *
+ * Dictation reuses the web implementation, and the note that used to sit here — "WKWebView has no
+ * Web Speech API so it correctly reports unavailable" — was simply false. WKWebView DOES expose
+ * `webkitSpeechRecognition`, so feature detection passes and the mic button renders. What was
+ * missing was permission to use it: the Info.plist carried no NSMicrophoneUsageDescription or
+ * NSSpeechRecognitionUsageDescription, so iOS refused the request before it could be shown, and
+ * the button did nothing on all nine of its render sites. Those strings are now there.
  */
 export const nativeCapabilities: Capabilities = {
   health: {

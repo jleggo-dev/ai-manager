@@ -151,7 +151,7 @@ describe('OnboardingChat', () => {
 
   it('shows the captures and the AI disclaimer in onboarding chrome, but not in tab chrome', async () => {
     getReview.mockResolvedValue({ goals: [{ goal_id: 'g1', title: 'Run a first 10k', area: 'movement' }] });
-    const { unmount } = render(<OnboardingChat chrome="onboarding" onReview={() => {}} />);
+    const { unmount } = render(<OnboardingChat chrome="onboarding" />);
     expect(await screen.findByText(/tap to fix/i)).toBeInTheDocument();
     expect(screen.getByText(/double-check what I say/)).toBeInTheDocument();
     unmount();
@@ -179,14 +179,12 @@ describe('OnboardingChat', () => {
    * correction into the composer, same contract as a quick pick: read it back, edit, send.
    */
   it('drafts a goal correction into the composer instead of opening the old wizard', async () => {
-    const onReview = vi.fn();
     getReview.mockResolvedValue({ goals: [{ goal_id: 'g1', title: 'Run a first 10k', area: 'movement' }] });
-    render(<OnboardingChat onReview={onReview} />);
+    render(<OnboardingChat />);
 
     const pill = await screen.findByRole('button', { name: /Run a first 10k/ });
     fireEvent.click(pill);
 
-    expect(onReview).not.toHaveBeenCalled();
     await waitFor(() =>
       expect(screen.getByPlaceholderText(OPENING_PLACEHOLDER)).toHaveValue('About "Run a first 10k" — '),
     );
