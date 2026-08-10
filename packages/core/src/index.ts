@@ -54,6 +54,8 @@ export {
   resetChatSession,
   removeChatSession,
   purgeRemoteChatsForUser,
+  pauseV2ChatResponse,
+  cancelV2ChatResponse,
 } from '../../../backend/src/ai-manager/index.ts';
 
 /**

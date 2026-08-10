@@ -42,6 +42,7 @@ export {
   submitV2ToolOutputs,
   updateV2ProviderMetadata,
   cancelV2ChatResponse,
+  pauseV2ChatResponse,
   reconnectV2ChatStream,
 } from './chat-messaging.ts';
 

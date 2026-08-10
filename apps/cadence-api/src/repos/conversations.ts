@@ -33,6 +33,18 @@ export async function listConversations(userId: string): Promise<Conversation[]>
   return sql<Conversation[]>`select * from cadence.conversations where user_id = ${userId}`;
 }
 
+/**
+ * Record which upstream response is generating right now, so Stop can cancel THAT one.
+ *
+ * Best-effort on purpose: this is bookkeeping for a button, and a failed write must never take
+ * down the turn the user is actually waiting on. Pass null when the turn ends.
+ */
+export async function setInFlightResponse(aiSessionId: string, responseId: string | null): Promise<void> {
+  await sql`
+    update cadence.conversations set in_flight_response_id = ${responseId}
+    where ai_session_id = ${aiSessionId}`;
+}
+
 /** Bump updated_at on message activity — feeds the coach-session idle-staleness rule. */
 export async function touchConversation(aiSessionId: string): Promise<void> {
   await sql`update cadence.conversations set updated_at = now() where ai_session_id = ${aiSessionId}`;

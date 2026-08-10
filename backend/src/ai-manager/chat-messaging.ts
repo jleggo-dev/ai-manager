@@ -262,8 +262,17 @@ export async function updateV2ProviderMetadata(
 /**
  * Cancel the in-flight Devs.ai v2 response for a chat session.
  * Only supported when provider_type is devs-ai-v2.
+ *
+ * `explicitResponseId` is for callers that know the id of the response actually in flight and
+ * cannot rely on `provider_metadata`. The metadata fallback is written by the HTTP chat route as
+ * it streams; an in-process consumer that reads the stream itself (Cadence's coach relay) never
+ * writes it, and cancelling `previous_response_id` there would either fail or — worse — target the
+ * PREVIOUS turn.
  */
-export async function cancelV2ChatResponse(sessionId: string): Promise<{ cancelled: boolean; responseId: string }> {
+export async function cancelV2ChatResponse(
+  sessionId: string,
+  explicitResponseId?: string,
+): Promise<{ cancelled: boolean; responseId: string }> {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
   if (session.provider_type !== 'devs-ai-v2') {
@@ -277,7 +286,7 @@ export async function cancelV2ChatResponse(sessionId: string): Promise<{ cancell
   const meta = (session.provider_metadata || {}) as {
     previous_response_id?: string;
   };
-  const responseId = meta.previous_response_id;
+  const responseId = explicitResponseId || meta.previous_response_id;
   if (!responseId) throw new Error('No v2 response id in provider_metadata to cancel');
 
   const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
@@ -285,6 +294,37 @@ export async function cancelV2ChatResponse(sessionId: string): Promise<{ cancell
 
   console.info('[ai-manager] cancelled v2 response', { sessionId, responseId });
   return { cancelled: true, responseId };
+}
+
+/**
+ * Pause the in-flight Devs.ai v2 response for a chat session.
+ *
+ * Differs from cancel in the way that matters to a user: the response is stoppable AND resumable,
+ * so "hold on a second" does not have to mean "throw away what you were saying". Generation halts
+ * either way, which is what stops it costing.
+ *
+ * Only supported when provider_type is devs-ai-v2.
+ */
+export async function pauseV2ChatResponse(sessionId: string): Promise<{ paused: boolean; responseId: string }> {
+  const session = await dbGetSession(sessionId);
+  if (!session) throw new Error(`Chat session ${sessionId} not found`);
+  if (session.provider_type !== 'devs-ai-v2') {
+    throw new Error(`pause is only supported for devs-ai-v2 sessions (got "${session.provider_type}")`);
+  }
+
+  const profile = session.ai_profile;
+  if (!profile?.provider) throw new Error('Chat session AI profile has no provider');
+  const provider = await getSessionProviderWithKey(session);
+
+  const meta = (session.provider_metadata || {}) as { previous_response_id?: string };
+  const responseId = meta.previous_response_id;
+  if (!responseId) throw new Error('No v2 response id in provider_metadata to pause');
+
+  const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
+  await client.pauseResponse(responseId);
+
+  console.info('[ai-manager] paused v2 response', { sessionId, responseId });
+  return { paused: true, responseId };
 }
 
 /**

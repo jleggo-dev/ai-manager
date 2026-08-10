@@ -160,4 +160,38 @@ describe('relayAndAccumulate', () => {
       clientDropped: false,
     });
   });
+
+  /**
+   * The Stop button's whole dependency. The id has to arrive WHILE the turn is generating — after
+   * relayAndAccumulate returns there is nothing left to cancel — and it must arrive once, not on
+   * every subsequent frame that repeats it.
+   */
+  it('announces the upstream response id mid-stream, exactly once', async () => {
+    const payload =
+      'data: {"type":"v2.response.created","responseId":"resp_1"}\n\n' +
+      'data: {"choices":[{"delta":{"content":"Right — so "}}]}\n\n' +
+      'data: {"type":"message.complete","responseId":"resp_1","text":"Right — so you have been"}\n\n';
+
+    const seen: Array<{ id: string; contentSoFar: string }> = [];
+    const state = { content: '' };
+    const result = await relayAndAccumulate(streamFromChunks([payload.slice(0, 60), payload.slice(60)]), {
+      writeChunk: (c) => {
+        state.content += c;
+      },
+      onResponseId: (id) => seen.push({ id, contentSoFar: state.content }),
+    });
+
+    expect(seen.map((s) => s.id)).toEqual(['resp_1']);
+    // Announced off the FIRST frame — before she had said anything, which is when Stop needs it.
+    expect(seen[0]?.contentSoFar).not.toContain('Right — so');
+    expect(result.responseId).toBe('resp_1');
+  });
+
+  it('says nothing when the stream never names a response', async () => {
+    const onResponseId = vi.fn();
+    await relayAndAccumulate(streamFromChunks(['data: {"choices":[{"delta":{"content":"x"}}]}\n\n']), {
+      onResponseId,
+    });
+    expect(onResponseId).not.toHaveBeenCalled();
+  });
 });

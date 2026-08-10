@@ -8,6 +8,7 @@ import {
   recordCoachReply,
   getCoachPersona,
   getCoachHistory,
+  cancelCoachTurn,
 } from '../ai/aim.ts';
 import { runCaptureExtract } from '../services/capture.ts';
 import { renderCapabilities } from '../services/coach-capabilities.ts';
@@ -21,7 +22,13 @@ import { ensureDateStamped } from '../services/date-context.ts';
 import { getTrace, updateTrace } from '../services/dev-trace.ts';
 import { logAi, recentAiLog } from '../services/ai-log.ts';
 import { ensureHorizon } from '../services/plan-horizon.ts';
-import { createConversation, getLatestConversation, touchConversation } from '../repos/conversations.ts';
+import {
+  createConversation,
+  getConversationByAiSession,
+  getLatestConversation,
+  setInFlightResponse,
+  touchConversation,
+} from '../repos/conversations.ts';
 import { getActivePlan, getFirstPlanCommitAt } from '../repos/plans.ts';
 
 /**
@@ -191,9 +198,10 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
   res.on('close', markGone);
   res.on('error', markGone);
 
+  const sessionIdParam = req.params.id as string;
   try {
     // Message activity bumps the conversation's updated_at (idle-staleness signal). Fire-and-forget.
-    void touchConversation(req.params.id as string).catch(() => {});
+    void touchConversation(sessionIdParam).catch(() => {});
     await ensureDateStamped(userId, req.params.id as string).catch((e) => console.error('[ensureDateStamped]', e));
     const turnMessage = await assembleTurn(userId, req.params.id as string, message);
     const { response, sessionId, diagnosticSession, resolvedMessage } = await sendCoachMessage(
@@ -209,6 +217,11 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     const { content, promptTokens, completionTokens, model, responseId, firstTokenMs, clientDropped } =
       await relayAndAccumulate(response.body, {
         isClientAlive: () => clientAlive,
+        // Recorded mid-stream because that is the only moment it is useful: Stop needs the id of
+        // the response generating RIGHT NOW. Fire-and-forget — bookkeeping for a button must never
+        // interrupt the turn the user is waiting on.
+        onResponseId: (id) =>
+          void setInFlightResponse(sessionIdParam, id).catch((e) => console.error('[setInFlightResponse]', e)),
         writeChunk: (chunk) => {
           try {
             res.write(chunk);
@@ -218,6 +231,10 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
           }
         },
       });
+    // Nothing is generating any more, however this ended — a leftover id would let a later Stop
+    // fire at a finished response. (Harmless upstream, but it would report a cancel that cancelled
+    // nothing.)
+    void setInFlightResponse(sessionIdParam, null).catch(() => {});
     // writeChunk may have flipped clientAlive on a failed write; also honor stream result.
     if (clientDropped) clientAlive = false;
     if (clientAlive) {
@@ -292,6 +309,43 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       res.write(`data: ${JSON.stringify({ error: 'stream failed', kind: aim.kind })}\n\n`);
       res.end();
     }
+  }
+});
+
+/**
+ * POST /coach/sessions/:id/stop — end the in-flight reply.
+ *
+ * The client aborts its own read the moment Stop is pressed; this is what stops the GENERATION.
+ * Without it the reply ran to completion upstream regardless — billed in full, and reappearing
+ * whole the next time the conversation was restored, contradicting what the user saw.
+ *
+ * Ownership is checked against `cadence.conversations` rather than trusted from the URL: a session
+ * id is the only thing standing between one user and another's in-flight turn.
+ */
+router.post('/sessions/:id/stop', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const sessionId = req.params.id as string;
+  try {
+    const conv = await getConversationByAiSession(sessionId);
+    if (!conv || conv.user_id !== userId) {
+      res.status(404).json({ error: 'No such session' });
+      return;
+    }
+    // Cancel the response THIS turn is generating (recorded by the relay above). Falling back to
+    // the session's provider_metadata would be worse than nothing here: Cadence streams
+    // in-process, so that field holds an older turn's id, and cancelling it would report success
+    // while the live reply carried on.
+    if (!conv.in_flight_response_id) {
+      res.json({ cancelled: false, reason: 'nothing-in-flight' });
+      return;
+    }
+    res.json(await cancelCoachTurn(userId, sessionId, conv.in_flight_response_id));
+  } catch (err) {
+    const aim = AimError.fromUnknown(err);
+    // Soft-fail: the client has already stopped listening and handed the composer back, so a
+    // failure here costs a wasted generation, not a broken screen.
+    console.error('[POST /coach/sessions/:id/stop]', aim.kind, aim.message);
+    res.status(200).json({ cancelled: false, reason: aim.kind });
   }
 });
 

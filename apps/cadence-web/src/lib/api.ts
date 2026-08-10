@@ -17,7 +17,7 @@ export {
   type DevAccount,
 } from './api/http.ts';
 
-export { openCoachSession, getCurrentCoach, sendCoachMessage } from './api/coach.ts';
+export { openCoachSession, getCurrentCoach, sendCoachMessage, stopCoachTurn } from './api/coach.ts';
 
 export { registerPushToken, removePushToken } from './api/devices.ts';
 

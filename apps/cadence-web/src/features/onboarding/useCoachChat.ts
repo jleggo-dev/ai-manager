@@ -12,6 +12,7 @@ import {
   getReview,
   getCurrentCoach,
   prepareCoachFoodAction,
+  stopCoachTurn,
   type CoachFoodAction,
 } from '../../lib/api.ts';
 import { capabilities } from '../../lib/capability/index.ts';
@@ -200,15 +201,17 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
    * conversation and deleting it would be pretending it never happened — and the composer comes
    * back so the user can correct themselves, which is the reason they reached for Stop.
    *
-   * The server keeps draining the upstream by design (a dropped phone must never lose a reply), so
-   * the FULL turn is still persisted and a later restore will show it. Honest limit, recorded in
-   * PLAN.md A3: a true interrupt needs upstream pause/resume.
+   * Two halves, and both are needed. Aborting ends our read; `stopCoachTurn` ends the GENERATION,
+   * because the server deliberately keeps draining a dropped stream so a phone that loses signal
+   * never loses a reply. Without the second half, stopping cost a full billed turn that reappeared
+   * whole on the next restore — the opposite of what the button says.
    */
   function stop() {
     if (!abort.current) return;
     stopped.current = true;
     abort.current.abort();
     abort.current = null;
+    if (sessionId.current) void stopCoachTurn(sessionId.current);
   }
 
   async function send() {

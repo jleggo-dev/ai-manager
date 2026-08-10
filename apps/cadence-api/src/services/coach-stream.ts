@@ -29,6 +29,12 @@ export interface RelayAndAccumulateOptions {
   writeChunk?: (chunk: string) => boolean | void;
   /** Optional alive check before each write (e.g. Express `close` flag). */
   isClientAlive?: () => boolean;
+  /**
+   * Fired ONCE, as soon as the stream names the upstream response. The Stop button needs the id of
+   * the response that is generating right now, and it needs it mid-stream — by the time this
+   * function returns, there is nothing left to stop.
+   */
+  onResponseId?: (responseId: string) => void;
 }
 
 /** Mutable accumulate state — shared by the stream loop and per-line parser. */
@@ -141,7 +147,9 @@ export async function relayAndAccumulate(
     }
 
     for (const line of pushSseChunk(lineBuf, chunk)) {
+      const had = state.responseId;
       applySseLine(state, line);
+      if (!had && state.responseId) options.onResponseId?.(state.responseId);
     }
   }
 
