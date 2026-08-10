@@ -289,3 +289,8 @@
   background: linear-gradient(180deg, oklch(60% 0.10 152) 0%, oklch(52% 0.09 152) 46%);
   box-shadow: 0 3px 0 oklch(39% 0.08 152);
 }
+
+/* Cadence's face on the Apple Health card — every line on it is her talking, and a card that
+   speaks in her voice without her face reads as the app, which is the one thing it isn't. */
+.health-offer { position: relative; }
+.health-offer-face { position: absolute; top: 12px; left: -13px; box-shadow: 0 2px 0 oklch(36% 0.07 152); }

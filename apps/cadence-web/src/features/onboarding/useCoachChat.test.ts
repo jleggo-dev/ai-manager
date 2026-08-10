@@ -120,3 +120,50 @@ describe('useCoachChat', () => {
     expect(result.current.turns.some((t) => t.text.includes('Connection dropped'))).toBe(false);
   });
 });
+
+/**
+ * Sharing months of Apple Health history and getting "just keep talking" back is the app taking
+ * something and saying nothing with it. `nudge` is how the card asks her to read it out loud —
+ * and the note itself must never appear as a message the user wrote.
+ */
+describe('nudge', () => {
+  // The suite's other beforeEach lives inside its own describe, so this block needs its own —
+  // without it the assertions read mock calls left over from the tests above.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCurrentCoach.mockResolvedValue({ sessionId: null, messages: [], stale: false });
+    getReview.mockResolvedValue({ goals: [] });
+    openCoachSession.mockResolvedValue({ sessionId: 'sess-new' });
+    sendCoachMessage.mockResolvedValue({ completed: true, responseId: null });
+    prepareCoachFoodAction.mockResolvedValue({ status: 'ok', action: null });
+  });
+
+  it("streams a coach turn without putting words in the user's bubble", async () => {
+    const { result } = renderHook(() => useCoachChat());
+    await waitFor(() => expect(result.current.restored).toBe(true));
+
+    sendCoachMessage.mockImplementation(async (_id: string, _t: string, onDelta: (d: string) => void) => {
+      onDelta('Three runs a week — good base.');
+      return { completed: true, responseId: null };
+    });
+
+    await act(async () => {
+      await result.current.nudge('They shared Apple Health.');
+    });
+
+    expect(result.current.turns.filter((t) => t.role === 'user')).toHaveLength(0);
+    expect(result.current.turns.at(-1)).toEqual({ role: 'coach', text: 'Three runs a week — good base.' });
+    expect(sendCoachMessage.mock.calls[0]![1]).toContain('<note>');
+  });
+
+  it('never runs the food classifier over an app note', async () => {
+    const { result } = renderHook(() => useCoachChat());
+    await waitFor(() => expect(result.current.restored).toBe(true));
+
+    await act(async () => {
+      await result.current.nudge('They shared Apple Health.');
+    });
+
+    expect(prepareCoachFoodAction).not.toHaveBeenCalled();
+  });
+});

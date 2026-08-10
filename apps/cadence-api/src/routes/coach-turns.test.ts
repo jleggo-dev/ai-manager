@@ -32,3 +32,18 @@ describe('isRealTurn', () => {
     expect(isRealTurn({ content: 'no role' })).toBe(false);
   });
 });
+
+/**
+ * Notes the app hands the coach mid-conversation (today: "they just shared their Apple Health
+ * history — say what you see in it"). They are the app talking, so they must never render in the
+ * user's own bubble, and the Broker must never extract them as something the user said.
+ */
+describe('app notes', () => {
+  it('keeps <note> turns out of the transcript and the capture window', () => {
+    expect(isRealTurn({ role: 'user', content: '<note>They just shared Apple Health.</note>' })).toBe(false);
+  });
+
+  it('still lets a user write about a note', () => {
+    expect(isRealTurn({ role: 'user', content: 'I left a note on the fridge' })).toBe(true);
+  });
+});

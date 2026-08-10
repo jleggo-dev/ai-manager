@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CoachFace } from '../../components/CoachFace.tsx';
 import { capabilities } from '../../lib/capability/index.ts';
 import { postHealthDigest } from '../../lib/api.ts';
 import { buildDigestFromWorkouts, DIGEST_PERIOD_DAYS, HEALTH_OFFER_FLAG_KEY as FLAG_KEY } from './health-digest.ts';
@@ -9,10 +10,24 @@ import { buildDigestFromWorkouts, DIGEST_PERIOD_DAYS, HEALTH_OFFER_FLAG_KEY as F
  * user hasn't already answered. Accepting shows the native permission sheet right here in the
  * coach view; the digest is POSTed with the live sessionId so the coach can use it on the
  * very next reply. Copy rule: describe the behaviour, never the machinery (no "digest").
+ *
+ * **Sharing has to lead somewhere.** Handing over months of history and getting "just keep
+ * talking" back is the app taking something and saying nothing — and the coach genuinely has it
+ * by then, sitting unused in the session. `onShared` is how the card asks her to actually read
+ * it out loud, which is the only reason the user agreed to any of this.
+ *
+ * She wears her face on every state, because every line on this card is her talking.
  */
 type Phase = 'offer' | 'reading' | 'done' | 'empty' | 'error';
 
-export function HealthOfferCard({ sessionId }: { sessionId: () => string | null }) {
+export function HealthOfferCard({
+  sessionId,
+  onShared,
+}: {
+  sessionId: () => string | null;
+  /** Fired once the history is with her — the caller asks her to say what she makes of it. */
+  onShared?: () => void;
+}) {
   const [phase, setPhase] = useState<Phase>('offer');
   const [gone, setGone] = useState(false);
 
@@ -33,6 +48,7 @@ export function HealthOfferCard({ sessionId }: { sessionId: () => string | null 
       if (!ok) throw new Error('post failed');
       window.localStorage.setItem(FLAG_KEY, 'done');
       setPhase('done');
+      onShared?.();
     } catch (err) {
       // Fifth swallowed error in this feature, and the one that cost the most: "I couldn't read
       // Apple Health just now" is indistinguishable from a denied permission, a plugin throw and a
@@ -49,6 +65,7 @@ export function HealthOfferCard({ sessionId }: { sessionId: () => string | null 
 
   return (
     <div className="health-offer" role="group" aria-label="Apple Health">
+      <CoachFace size={30} className="health-offer-face" />
       {phase === 'offer' && (
         <>
           <p>I can look at your recent workouts in Apple Health, so you don&apos;t have to type your history — okay?</p>
@@ -64,14 +81,9 @@ export function HealthOfferCard({ sessionId }: { sessionId: () => string | null 
       )}
       {phase === 'reading' && <p>Reading your recent activity…</p>}
       {phase === 'done' && (
-        <>
-          <p>Got it — I can see your recent activity now. Just keep talking.</p>
-          <div className="health-offer-actions">
-            <button className="btn-quiet" onClick={() => setGone(true)}>
-              Close
-            </button>
-          </div>
-        </>
+        // No Close button: she is about to speak, so the card's job is done and dismissing it is
+        // one more decision for no reason. It stays as the record of what was shared.
+        <p>{'Got it — I can see your recent activity now. Give me a minute to look at it properly.'}</p>
       )}
       {phase === 'empty' && (
         <>
