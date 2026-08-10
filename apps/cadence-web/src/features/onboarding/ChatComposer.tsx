@@ -33,12 +33,15 @@ export function ChatComposer({
   streaming,
   showDisclaimer,
   above,
+  placeholder = 'Message your coach…',
 }: {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
   streaming: boolean;
   showDisclaimer: boolean;
+  /** Overridden on the opening turn to model what a useful answer looks like. */
+  placeholder?: string;
   /** Rides above the field inside the same floating stack (the Broker's live captures). */
   above?: ReactNode;
 }) {
@@ -77,7 +80,7 @@ export function ChatComposer({
               onSend();
             }
           }}
-          placeholder={streaming ? 'Cadence is replying…' : 'Message your coach…'}
+          placeholder={streaming ? 'Cadence is replying…' : placeholder}
         />
         {streaming ? (
           <span className="send is-dead" aria-hidden>

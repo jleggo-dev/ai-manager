@@ -29,6 +29,20 @@ import type { CoachPicks } from './coach-picks.ts';
  */
 export const OPENING_QUESTION = 'So — what would you like to work on? Pick as many as you like, or just tell me.';
 
+/**
+ * What the composer says under the opening question — and the other half of the specifics problem.
+ *
+ * The four options have to stay broad, because a pick composes words into the user's mouth and
+ * sends them as theirs: a tappable "I have a half-marathon in July" is a lie for everyone who
+ * taps it without one. But that leaves nobody shown what a genuinely useful answer looks like,
+ * and "improve my fitness" is the least useful thing they could say.
+ *
+ * A placeholder carries the specific without asserting it. It models the standard for anyone who
+ * would rather type, and costs nothing to anyone who taps instead. Only on the opening turn —
+ * afterwards the coach is asking real questions and the generic prompt is right again.
+ */
+export const OPENING_PLACEHOLDER = 'e.g. “I have a half-marathon in July”';
+
 export const OPENING_PICKS: CoachPicks = {
   layout: 'list',
   multi: true,

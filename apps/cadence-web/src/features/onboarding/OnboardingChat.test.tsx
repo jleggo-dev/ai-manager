@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { COACH_PICKS_FENCE, OPENING_PICKS, OPENING_QUESTION } from '@cadence/shared';
+import { COACH_PICKS_FENCE, OPENING_PICKS, OPENING_PLACEHOLDER, OPENING_QUESTION } from '@cadence/shared';
 import { OnboardingChat } from './OnboardingChat.tsx';
 
 const sendCoachMessage = vi.fn();
@@ -62,12 +62,36 @@ describe('OnboardingChat', () => {
     render(<OnboardingChat />);
     await screen.findByText(OPENING_QUESTION);
 
-    fireEvent.change(screen.getByPlaceholderText('Message your coach…'), { target: { value: 'hello' } });
+    fireEvent.change(screen.getByPlaceholderText(OPENING_PLACEHOLDER), { target: { value: 'hello' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     expect(await screen.findByText(/what would you like to work on next/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'A steadier mind' })).toBeInTheDocument();
     expect(screen.queryByText(new RegExp(COACH_PICKS_FENCE))).not.toBeInTheDocument();
+  });
+
+  /**
+   * The specifics the broad options can't carry. A tappable "I have a half-marathon in July" would
+   * be a lie for whoever taps it without one — a placeholder shows the standard without asserting
+   * it. It belongs to the opening question alone: once she is asking real questions, an example of
+   * a GOAL would be modelling an answer to the wrong thing.
+   */
+  it('models a specific answer on the opening turn, then gets out of the way', async () => {
+    render(<OnboardingChat />);
+    await screen.findByText(OPENING_QUESTION);
+    expect(screen.getByPlaceholderText(OPENING_PLACEHOLDER)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(OPENING_PLACEHOLDER), { target: { value: 'hello' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByPlaceholderText('Message your coach…')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(OPENING_PLACEHOLDER)).not.toBeInTheDocument();
+  });
+
+  it('never models a goal in the ongoing Coach tab', async () => {
+    render(<OnboardingChat chrome="none" intent="ongoing" />);
+    await screen.findByText(/good to see you/);
+    expect(screen.getByPlaceholderText('Message your coach…')).toBeInTheDocument();
   });
 
   it("reports the coach's own read of how far through intake she is", async () => {
@@ -76,7 +100,7 @@ describe('OnboardingChat', () => {
     // The opening turn carries its own progress; the coach's reply supersedes it.
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '10');
 
-    fireEvent.change(screen.getByPlaceholderText('Message your coach…'), { target: { value: 'hello' } });
+    fireEvent.change(screen.getByPlaceholderText(OPENING_PLACEHOLDER), { target: { value: 'hello' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '20'));
@@ -94,7 +118,7 @@ describe('OnboardingChat', () => {
     fireEvent.click(screen.getByRole('button', { name: third!.label }));
 
     await waitFor(() =>
-      expect(screen.getByPlaceholderText('Message your coach…')).toHaveValue(
+      expect(screen.getByPlaceholderText(OPENING_PLACEHOLDER)).toHaveValue(
         `${OPENING_PICKS.lead} ${first!.say} and ${third!.say}.`,
       ),
     );
@@ -115,7 +139,7 @@ describe('OnboardingChat', () => {
     );
     render(<OnboardingChat />);
     await screen.findByText(OPENING_QUESTION);
-    fireEvent.change(screen.getByPlaceholderText('Message your coach…'), { target: { value: 'hello' } });
+    fireEvent.change(screen.getByPlaceholderText(OPENING_PLACEHOLDER), { target: { value: 'hello' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => expect(screen.getByPlaceholderText('Cadence is replying…')).toBeDisabled());
