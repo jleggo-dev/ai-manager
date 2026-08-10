@@ -33,7 +33,11 @@ export function HealthOfferCard({ sessionId }: { sessionId: () => string | null 
       if (!ok) throw new Error('post failed');
       window.localStorage.setItem(FLAG_KEY, 'done');
       setPhase('done');
-    } catch {
+    } catch (err) {
+      // Fifth swallowed error in this feature, and the one that cost the most: "I couldn't read
+      // Apple Health just now" is indistinguishable from a denied permission, a plugin throw and a
+      // failed post, so there was nothing to act on from either side of the screen.
+      console.error('[cadence/health] could not read Apple Health', err);
       setPhase('error');
     }
   }
@@ -81,10 +85,17 @@ export function HealthOfferCard({ sessionId }: { sessionId: () => string | null 
       )}
       {phase === 'error' && (
         <>
-          <p>I couldn&apos;t read Apple Health just now — we can try again from Settings any time.</p>
+          {/* No "open settings" button, deliberately. The plugin's openAppleHealthSettings lands
+              on the app's OWN settings page, which does not list Health at all — iOS keeps per-app
+              Health access somewhere else and offers no deep link to it. A button onto a page
+              without the control is worse than words naming the right one. */}
+          <p>
+            I couldn&apos;t read Apple Health just now. Worth a look in Settings &rsaquo; Health &rsaquo; Data Access
+            &amp; Devices &rsaquo; Cadence — or skip it and just tell me as we go.
+          </p>
           <div className="health-offer-actions">
             <button className="btn-quiet" onClick={dismiss}>
-              Close
+              Not now
             </button>
           </div>
         </>
