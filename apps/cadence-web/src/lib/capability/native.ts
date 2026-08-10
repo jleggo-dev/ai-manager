@@ -5,6 +5,7 @@ import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/loc
 import { NUDGE_CATEGORIES, type LocalNotificationSpec } from '@cadence/shared';
 import { Geolocation } from '@capacitor/geolocation';
 import type { Capabilities, Workout } from './index.ts';
+import { grantedFromPermissionResponse } from './health-permissions.ts';
 import { webCapabilities } from './web.ts';
 
 /**
@@ -99,9 +100,10 @@ export const nativeCapabilities: Capabilities = {
       const res = await Health.requestHealthPermissions({
         permissions: ['READ_WORKOUTS', 'READ_DISTANCE', 'READ_ACTIVE_CALORIES', 'READ_HEART_RATE'],
       });
-      // iOS never reveals read-permission state (HealthKit privacy design) — the request call
-      // succeeding is all we get; queries simply return empty for denied types.
-      return res.permissions.some((p) => Object.values(p).some(Boolean));
+      // Shape-tolerant on purpose: the plugin's types promise an array and iOS does not send one,
+      // so reading it directly threw before a single workout was ever fetched. See
+      // health-permissions.ts — on iOS this answer carries no information anyway.
+      return grantedFromPermissionResponse(res);
     },
     getWorkouts: async (sinceISO: string) => {
       const res = await Health.queryWorkouts({

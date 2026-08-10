@@ -631,6 +631,15 @@ traffic:
   long an unsaved draft plan is allowed to live — still an open design question (see the v2
   design doc's own "open call").
 
+- **Gate the inspectable webview before App Store submission (opened 2026-08-10).**
+  `apps/cadence-ios/capacitor.config.ts` sets `ios.webContentsDebuggingEnabled: true` so Safari's
+  Web Inspector can attach to the running app — set explicitly because this project consumes
+  Capacitor via SPM, where Capacitor's own `#if DEBUG` default is evaluated against the framework's
+  build, not the app's, and a debug app build can still ship a non-inspectable webview. As written
+  it applies to **Release** builds too, so anyone holding the device could inspect the webview.
+  Before submission: drive it from build configuration (a `CAPACITOR_DEBUG` Info.plist value set
+  per-configuration is the documented seam) rather than a flat `true`.
+
 **A. Context/memory (MEMORY-ARCHITECTURE.md §9 phasing)**
 - **P3 — pack reuse: BUILT 2026-08-04** (the reuse half; enrichment deliberately dropped — see
   below). A coach session open now serves a cached dossier and skips BOTH Broker calls whenever
