@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { Baseline, Goal } from '@cadence/shared';
+import type { AvailabilityWindow, Baseline, Constraint, Goal } from '@cadence/shared';
 import { getReview, type ReviewData } from '../../lib/api.ts';
-import { TIME_OF_DAY_LABELS } from '../review/reviewConstants.ts';
+import { TIME_OF_DAY_LABELS, TIME_OF_DAY_SHORT } from '../review/reviewConstants.ts';
 import { cmToFtIn, kgToLbs } from '../review/unitConversion.ts';
 
 /**
@@ -92,11 +92,46 @@ function aboutYouLine(name: string, b: Baseline): string {
   return bits.join(' · ');
 }
 
-/** The second line: when they can do it, and how often. Empty until they've said. */
+/** "evenings from 19:00" — the clock edge is shown because it is the part someone spots is wrong. */
+function windowLabel(w: AvailabilityWindow): string {
+  const clock = [w.earliest ? `from ${w.earliest}` : '', w.latest ? `until ${w.latest}` : ''].filter(Boolean).join(' ');
+  return clock ? `${TIME_OF_DAY_SHORT[w.part_of_day]} ${clock}` : TIME_OF_DAY_SHORT[w.part_of_day];
+}
+
+/**
+ * The second line: when they can do it, and for how long. Empty until they've said.
+ *
+ * Windows win over the older single `time_of_day` when both exist — "early morning and after
+ * seven" is the answer they actually gave, and "Any time works" is what it used to be flattened
+ * into on the way to a plan scheduled at noon.
+ */
 function availabilityLine(b: Baseline): string {
   const bits: string[] = [];
-  if (b.time_of_day) bits.push(TIME_OF_DAY_LABELS[b.time_of_day]);
+  const windows = b.availability?.windows ?? [];
+  if (windows.length) {
+    const joined = windows.map(windowLabel).join(' · ');
+    bits.push(joined.charAt(0).toUpperCase() + joined.slice(1));
+  } else if (b.time_of_day) bits.push(TIME_OF_DAY_LABELS[b.time_of_day]);
+  const s = b.availability?.session_minutes;
+  if (s) bits.push(s.max && s.max > s.min ? `${s.min}–${s.max} min a session` : `${s.min} min a session`);
   if (b.days_per_week) bits.push(`${b.days_per_week} ${b.days_per_week === 1 ? 'day' : 'days'} a week`);
+  return bits.join(' · ');
+}
+
+/** What they already do — shown because it is the floor every plan gets built from, so a wrong
+ *  one is worth catching here rather than in a week of sessions that are too easy. */
+function routineLine(b: Baseline): string {
+  const sp = b.starting_point;
+  if (!sp) return '';
+  return [sp.doing_now.join(' · '), sp.trend].filter(Boolean).join(' — ');
+}
+
+/** The trailing clause on a constraint: what we do about it, in plain words. */
+function constraintNote(c: Constraint): string {
+  const bits: string[] = [];
+  if (c.status === 'quiet') bits.push('not bothering you now, so we build up gently rather than skip it');
+  if (c.until) bits.push(`until ${c.until}`);
+  if (c.plan_around) bits.push('we plan around it');
   return bits.join(' · ');
 }
 
@@ -126,6 +161,7 @@ export function ConfirmCard({
   };
   const about = aboutYouLine(data.name, baseline);
   const avail = availabilityLine(baseline);
+  const routine = routineLine(baseline);
   const milestones = data.goals.reduce((n, g) => n + (g.milestones?.length ?? 0), 0);
 
   return (
@@ -141,6 +177,7 @@ export function ConfirmCard({
               <b>{g.title}</b>
               <span>{goalWhen(g)}</span>
             </div>
+            {g.brief && <div className="cfm-goal-u">{g.brief}</div>}
             {goalUnder(g) && <div className="cfm-goal-u">↳ {goalUnder(g)}</div>}
           </div>
         ))}
@@ -156,6 +193,11 @@ export function ConfirmCard({
               {avail}
             </div>
           ) : null,
+          routine ? (
+            <div key="routine" className="cfm-mute">
+              Already doing · {routine}
+            </div>
+          ) : null,
         ].filter(Boolean)}
       />
       <Section
@@ -165,7 +207,7 @@ export function ConfirmCard({
         rows={baseline.constraints.map((c) => (
           <div key={c.id}>
             {c.label}
-            {c.plan_around && <span className="cfm-mute"> — we plan around it</span>}
+            {constraintNote(c) && <span className="cfm-mute"> — {constraintNote(c)}</span>}
           </div>
         ))}
       />

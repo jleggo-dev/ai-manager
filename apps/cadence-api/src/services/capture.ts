@@ -2,10 +2,16 @@ import { runJobBySlug } from '../ai/aim.ts';
 import type { CaptureExtractResult, GoalArea, GoalType, EquipmentCategory } from '@cadence/shared';
 import { insertGoal, listGoalsByStatus, deleteCapturedWithoutMilestones } from '../repos/goals.ts';
 import { insertEquipment, deleteAllEquipment } from '../repos/equipment.ts';
-import { getUser, mergeBaseline, setHomeLocation, setName } from '../repos/users.ts';
+import { getUser, mergeBaseline, setHomeLocation, setName, setTimezoneIfUnset } from '../repos/users.ts';
 import { geocodeCity } from './weather/weather.ts';
 import { logAi } from './ai-log.ts';
-import { normalizeBaseline, normTitle, selectCapturedGoals } from './capture-normalize.ts';
+import {
+  normalizeBaseline,
+  normalizeBrief,
+  normalizeTimezone,
+  normTitle,
+  selectCapturedGoals,
+} from './capture-normalize.ts';
 import { extractCity } from './capture-location.ts';
 import { screenGoal, type GoalScreenResult } from './goal-screen.ts';
 
@@ -133,7 +139,9 @@ export async function runCaptureExtract(
     const result = screenGoal({ ...g, area, type }, Number.isFinite(weightKg) ? weightKg : undefined);
     screened.push({ title: g.title ?? '(untitled)', result });
     if (result.verdict === 'refuse') continue;
-    await insertGoal(userId, { ...g, area, type });
+    // The brief carries the facts that decide how hard the work has to be (see Goal.brief). It is
+    // capped and whitespace-collapsed here, never rewritten — it is their sentences, not ours.
+    await insertGoal(userId, { ...g, area, type, brief: normalizeBrief(g.brief) });
     goals++;
   }
 
@@ -161,6 +169,14 @@ export async function runCaptureExtract(
     await mergeBaseline(userId, normBaseline as unknown as Parameters<typeof mergeBaseline>[1]);
     baseline = true;
   }
+
+  // The timezone they stated, when we don't already have one. Separate from — and independent of
+  // — the home-location branch below: "I'm in Quebec, so Eastern time" fixes their timezone
+  // without naming a city we can geocode, and until now that sentence went nowhere while
+  // date-context, the daily check-in and every notification schedule ran on a default. Never
+  // overrides an existing zone (the repo guards that), never inferred from language or locale.
+  const statedTz = normalizeTimezone(parsed.timezone);
+  if (statedTz) await setTimezoneIfUnset(userId, statedTz);
 
   // Home location the Broker heard — so weather can default from what they told the coach, not a
   // second ask. Geocode the stated city via OWM → coarse coords, and set it ONLY when the user hasn't

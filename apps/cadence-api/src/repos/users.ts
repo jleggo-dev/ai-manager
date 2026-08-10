@@ -138,6 +138,19 @@ export async function setHomeLocation(userId: string, location: HomeLocation, ti
     where id = ${userId}`;
 }
 
+/**
+ * Set the IANA timezone ONLY when we don't already have one — the conversational path fills a
+ * gap, it never argues with a device-reported or user-chosen zone. Separate from setHomeLocation
+ * because someone can tell the coach their timezone without ever naming a city, and until now
+ * that sentence went nowhere: `users.timezone` sat null while date-context, the daily check-in
+ * and every notification schedule quietly ran on a default.
+ */
+export async function setTimezoneIfUnset(userId: string, timezone: string): Promise<void> {
+  await sql`
+    update cadence.users set timezone = ${timezone}, updated_at = now()
+    where id = ${userId} and timezone is null`;
+}
+
 /** Clear home location (and optionally timezone) — Settings "forget this place". */
 export async function clearHomeLocation(userId: string, clearTimezone = false): Promise<void> {
   if (clearTimezone) {

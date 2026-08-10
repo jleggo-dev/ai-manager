@@ -28,6 +28,15 @@ export const TIME_OF_DAY_LABELS: Record<TimeOfDay, string> = {
   flexible: 'Any time works',
 };
 
+/** The same slots, said briefly. Someone who gave two windows gets a list, and "Mornings work
+ *  best · Evenings work best" is not a sentence anyone would say out loud. */
+export const TIME_OF_DAY_SHORT: Record<TimeOfDay, string> = {
+  morning: 'mornings',
+  midday: 'middays',
+  evening: 'evenings',
+  flexible: 'any time',
+};
+
 export const GOAL_AREAS: GoalArea[] = ['movement', 'nourishment', 'mind', 'practice'];
 export const AREA_LABELS: Record<GoalArea, string> = {
   movement: 'Movement',

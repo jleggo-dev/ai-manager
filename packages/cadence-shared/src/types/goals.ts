@@ -39,6 +39,20 @@ export interface GoalMilestone {
 export interface Goal {
   goal_id: string;
   title: string;
+  /**
+   * The few plain facts that decide how hard the work has to be, in the user's own terms —
+   * distance, terrain, what the day actually demands, what they've done before, where they're
+   * starting from.
+   *
+   * A title plus an empty measure is not a goal, it is a label. "Complete the Spartan Ultra Beast
+   * in Quebec" with `measure: {}` told planning nothing: the 50 km, the mountain, the 30+
+   * obstacles, the five-hour finish times, the half marathon last October — every fact that sets
+   * the training load lived only in the transcript, which the plan job never sees. So the Broker
+   * writes them down here, and they ride along with the goal wherever it goes.
+   *
+   * Only what was said. Never a summary of what the coach thinks the goal implies.
+   */
+  brief?: string;
   area: GoalArea;
   type: GoalType;
   measure: GoalMeasure;

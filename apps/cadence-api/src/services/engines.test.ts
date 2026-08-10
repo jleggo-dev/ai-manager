@@ -5,7 +5,13 @@ import { budgetTier } from './token-budget.ts';
 import { parseRecurrence, expandRecurrence, describeRecurrence } from './scheduling.ts';
 import { wearStatus, applyRun } from './shoe-mileage.ts';
 import { detectTripwires, haversineKm } from './tripwires.ts';
-import { selectCapturedGoals, normalizeBaseline, normTitle } from './capture-normalize.ts';
+import {
+  selectCapturedGoals,
+  normalizeBaseline,
+  normalizeBrief,
+  normalizeTimezone,
+  normTitle,
+} from './capture-normalize.ts';
 import { matchGoal } from './plan-match.ts';
 import { startingPointGaps } from './intake.ts';
 import { summarizeNutrition, renderNutritionLine } from './nutrition-summarize.ts';
@@ -237,10 +243,7 @@ describe('capture normalizeBaseline (§6.1 — weight lands where the UI reads i
   });
 
   it('keeps availability, in the words people actually use', () => {
-    expect(normalizeBaseline({ time_of_day: 'morning', days_per_week: 3 })).toMatchObject({
-      time_of_day: 'morning',
-      days_per_week: 3,
-    });
+    expect(normalizeBaseline({ time_of_day: 'morning' })).toMatchObject({ time_of_day: 'morning' });
     // The prompt asks for the enum; people say "mornings", "after work", "whenever".
     expect(normalizeBaseline({ time_of_day: 'Mornings' }).time_of_day).toBe('morning');
     expect(normalizeBaseline({ time_of_day: 'after work' }).time_of_day).toBe('evening');
@@ -249,10 +252,65 @@ describe('capture normalizeBaseline (§6.1 — weight lands where the UI reads i
 
   it('drops availability it cannot trust rather than reshaping the week on a guess', () => {
     expect(normalizeBaseline({ time_of_day: 'Tuesdays at 6' }).time_of_day).toBeUndefined();
-    expect(normalizeBaseline({ days_per_week: 0 }).days_per_week).toBeUndefined();
-    expect(normalizeBaseline({ days_per_week: 9 }).days_per_week).toBeUndefined();
-    expect(normalizeBaseline({ days_per_week: 'three' }).days_per_week).toBeUndefined();
-    expect(normalizeBaseline({ days_per_week: 3.4 }).days_per_week).toBe(3);
+  });
+
+  // days_per_week was the field that capped a 50 km ultra runner's week at two sessions: the
+  // Broker read it off what he was already doing, twice, and no prompt rule survived that. It is
+  // gone from capture entirely, and the key stays writable ONLY by hand (review wizard).
+  it('never writes days_per_week, whatever the Broker sends', () => {
+    expect(normalizeBaseline({ days_per_week: 3 }).days_per_week).toBeUndefined();
+    expect(normalizeBaseline({ days_per_week: 2.5 }).days_per_week).toBeUndefined();
+  });
+
+  it('keeps the windows and session length someone actually gave', () => {
+    const b = normalizeBaseline({
+      availability: {
+        windows: [{ part_of_day: 'mornings' }, { part_of_day: 'evening', earliest: '19:00' }],
+        session_minutes: { min: 60, max: 120 },
+      },
+    });
+    expect(b.availability).toEqual({
+      windows: [{ part_of_day: 'morning' }, { part_of_day: 'evening', earliest: '19:00' }],
+      session_minutes: { min: 60, max: 120 },
+    });
+    // Two windows have no honest coarse equivalent — "mornings and evenings" is not "any time" —
+    // so the legacy key is left alone rather than flattened into a lie.
+    expect(b.time_of_day).toBeUndefined();
+  });
+
+  it('derives the legacy time_of_day from a single window so the two can never disagree', () => {
+    expect(normalizeBaseline({ availability: { windows: [{ part_of_day: 'evening' }] } }).time_of_day).toBe('evening');
+  });
+
+  it('drops availability values a plan should not be built on', () => {
+    const b = normalizeBaseline({
+      availability: {
+        // "any time" alongside a named slot is a contradiction; the specific answer is the real one.
+        windows: [{ part_of_day: 'flexible' }, { part_of_day: 'morning' }, { part_of_day: 'morning' }],
+        session_minutes: { min: 90, max: 30 }, // backwards: keep the honest half
+      },
+    });
+    expect(b.availability).toEqual({ windows: [{ part_of_day: 'morning' }], session_minutes: { min: 90 } });
+    // A mangled clock time schedules someone where they never said they were free.
+    const clocks = normalizeBaseline({
+      availability: { windows: [{ part_of_day: 'morning', earliest: 'seven-ish', latest: '25:00' }] },
+    });
+    expect(clocks.availability).toEqual({ windows: [{ part_of_day: 'morning' }] });
+    expect(normalizeBaseline({ availability: { session_minutes: { min: 4000 } } }).availability).toBeUndefined();
+  });
+
+  it('keeps what someone already does, and only the sex the formulas take', () => {
+    const b = normalizeBaseline({
+      sex: 'male',
+      starting_point: { doing_now: ['mostly running  or other cardio', '', 'some bodyweight'], trend: 'picked up' },
+    });
+    expect(b.sex).toBe('male');
+    expect(b.starting_point).toEqual({
+      doing_now: ['mostly running or other cardio', 'some bodyweight'],
+      trend: 'picked up',
+    });
+    expect(normalizeBaseline({ sex: 'unspecified' }).sex).toBeUndefined();
+    expect(normalizeBaseline({ starting_point: { doing_now: [] } }).starting_point).toBeUndefined();
   });
 
   it('passes through age/height and omits weight when none is stated', () => {
@@ -273,6 +331,45 @@ describe('capture normalizeBaseline (§6.1 — weight lands where the UI reads i
     const inj = normalizeBaseline({ injuries: [{ area: 'left knee', condition: 'patellar tendinopathy' }] })
       .constraints as Array<{ label: string; kind: string; plan_around: boolean }>;
     expect(inj[0]!).toMatchObject({ label: 'left knee — patellar tendinopathy', kind: 'physical', plan_around: true });
+  });
+
+  // "It isn't bothering me right now" and "I can't put weight on it" are different facts, and
+  // collapsing them into plan_around cost a runner his running. Absent stays absent: readers
+  // treat an unsaid status as active, and inventing one here would defeat that.
+  it('keeps a constraint settled-vs-live distinction, and its end date', () => {
+    const c = normalizeBaseline({
+      constraints: [
+        { label: 'tendinitis in left knee', kind: 'physical', status: 'quiet', plan_around: true },
+        { label: 'travelling', kind: 'life', status: 'active', until: '2026-08-14', plan_around: true },
+        { label: 'work runs hot some months', kind: 'life', status: 'sometimes', until: 'Friday', plan_around: true },
+      ],
+    }).constraints as Array<Record<string, unknown>>;
+    expect(c[0]).toMatchObject({ status: 'quiet' });
+    expect(c[1]).toMatchObject({ status: 'active', until: '2026-08-14' });
+    expect(c[2]!.status).toBeUndefined();
+    expect(c[2]!.until).toBeUndefined(); // "Friday" is not a date; a half-parsed one is worse than none
+  });
+});
+
+describe('capture normalizeBrief / normalizeTimezone (§6.1 — their words, our bounds)', () => {
+  it('collapses whitespace and caps a brief, and drops a non-string', () => {
+    expect(normalizeBrief('  It is 50 km.\n  Mountain, 30+ obstacles.  ')).toBe(
+      'It is 50 km. Mountain, 30+ obstacles.',
+    );
+    expect(normalizeBrief('x'.repeat(2000))).toHaveLength(800);
+    expect(normalizeBrief('   ')).toBeUndefined();
+    expect(normalizeBrief(42)).toBeUndefined();
+  });
+
+  // A wrong timezone moves every notification and every "today" the app has, so only a name the
+  // runtime will actually accept survives.
+  it('accepts a real IANA zone and nothing else', () => {
+    expect(normalizeTimezone('America/Toronto')).toBe('America/Toronto');
+    expect(normalizeTimezone(' Europe/London ')).toBe('Europe/London');
+    expect(normalizeTimezone('EST')).toBeUndefined();
+    expect(normalizeTimezone('UTC-5')).toBeUndefined();
+    expect(normalizeTimezone('Eastern/Nowhere')).toBeUndefined();
+    expect(normalizeTimezone(null)).toBeUndefined();
   });
 });
 
