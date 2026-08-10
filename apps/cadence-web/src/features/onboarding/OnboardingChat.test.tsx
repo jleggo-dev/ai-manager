@@ -87,12 +87,15 @@ describe('OnboardingChat', () => {
     await screen.findByText(OPENING_QUESTION);
     const sendsBefore = sendCoachMessage.mock.calls.length;
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run a first 10k' }));
-    fireEvent.click(screen.getByRole('button', { name: 'A steadier mind' }));
+    // Driven off the real constants so a copy change to the opening options can never quietly
+    // break composition — the wording is the owner's to change, the joining is ours to keep right.
+    const [first, , third] = OPENING_PICKS.options;
+    fireEvent.click(screen.getByRole('button', { name: first!.label }));
+    fireEvent.click(screen.getByRole('button', { name: third!.label }));
 
     await waitFor(() =>
       expect(screen.getByPlaceholderText('Message your coach…')).toHaveValue(
-        "I'd like to run a first 10k and build a steadier mind.",
+        `${OPENING_PICKS.lead} ${first!.say} and ${third!.say}.`,
       ),
     );
     expect(sendCoachMessage.mock.calls.length).toBe(sendsBefore);

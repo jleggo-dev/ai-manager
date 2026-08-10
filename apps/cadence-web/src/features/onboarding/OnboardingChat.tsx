@@ -6,6 +6,7 @@ import { HealthOfferCard } from './HealthOfferCard.tsx';
 import { findHealthOfferTurn, healthOfferAnswered } from './health-digest.ts';
 import { capabilities } from '../../lib/capability/index.ts';
 import { OPENING_PICKS, OPENING_QUESTION } from '@cadence/shared';
+import { useEnsureCoachFace } from '../coach/useEnsureCoachFace.ts';
 import { useCoachChat } from './useCoachChat.ts';
 import { chatProgress, livePicks, viewTurns } from './coachTurns.ts';
 import { ChatTurn } from './ChatTurn.tsx';
@@ -59,6 +60,10 @@ export function OnboardingChat({
 }) {
   const { turns, input, setInput, streaming, capturedGoals, restored, send, foodAction, clearFoodAction, sessionId } =
     useCoachChat({ intent });
+
+  // Someone resuming mid-onboarding lands here directly, never passing MeetCadence — so the draw
+  // has to happen here too, or Cadence speaks the whole conversation wearing the brand mark.
+  useEnsureCoachFace(intent === 'onboarding');
 
   const views = useMemo(() => viewTurns(turns), [turns]);
   const picks = livePicks(views, streaming);

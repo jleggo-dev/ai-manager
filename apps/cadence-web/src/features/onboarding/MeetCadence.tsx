@@ -1,7 +1,6 @@
-import { useEffect } from 'react';
-import { PICKABLE_COACH_FACES } from '@cadence/shared';
+import { useState } from 'react';
 import { CoachFace } from '../../components/CoachFace.tsx';
-import { useCoachFace } from '../coach/coachFaceContext.ts';
+import { useEnsureCoachFace } from '../coach/useEnsureCoachFace.ts';
 
 /**
  * Meeting the coach — and being told she's AI, before she asks anything.
@@ -21,24 +20,50 @@ import { useCoachFace } from '../coach/coachFaceContext.ts';
  * One coach, one name: the portrait carries no label, no temperament, no second name. She is
  * Cadence whichever picture she is wearing.
  */
-export function MeetCadence({ onSayHi, onBack }: { onSayHi: () => void; onBack?: () => void }) {
-  const { face, ready, setFaceId } = useCoachFace();
-
-  // Only once the first load has settled: `face` is null both for "hasn't picked" and for "still
-  // loading", and drawing on the second would overwrite a face they chose weeks ago.
-  useEffect(() => {
-    if (!ready || face) return;
-    const drawn = PICKABLE_COACH_FACES[Math.floor(Math.random() * PICKABLE_COACH_FACES.length)];
-    if (drawn) void setFaceId(drawn.id);
-  }, [ready, face, setFaceId]);
+export function MeetCadence({
+  onSayHi,
+  onLeave,
+  warnUnsaved = false,
+}: {
+  onSayHi: () => void;
+  /** Leave onboarding entirely — signs out, which lands them back on the fork. */
+  onLeave?: () => void;
+  /** True for an anonymous draft: leaving is unrecoverable, so it asks first. */
+  warnUnsaved?: boolean;
+}) {
+  useEnsureCoachFace(true);
+  const [confirming, setConfirming] = useState(false);
 
   return (
     <div className="welcome meetc">
-      {onBack && (
+      {onLeave && (
         <div className="meetc-top">
-          <button className="chat-back" onClick={onBack} aria-label="Back">
+          {/* The only door out of onboarding. Without it an anonymous session — which survives a
+              hard close — is a one-way street: every launch lands back in the chat with no way to
+              reach sign-in or start over. */}
+          <button
+            className="chat-back"
+            onClick={() => (warnUnsaved ? setConfirming(true) : onLeave())}
+            aria-label="Back"
+          >
             ←
           </button>
+        </div>
+      )}
+
+      {confirming && (
+        <div className="meetc-leave" role="alertdialog" aria-label="Leave onboarding">
+          <p>
+            {"Start over? You haven't saved an account yet, so this conversation won't be here when you come back."}
+          </p>
+          <div className="meetc-leave-acts">
+            <button className="meetc-leave-go" onClick={onLeave}>
+              Start over
+            </button>
+            <button className="meetc-leave-stay" onClick={() => setConfirming(false)}>
+              Keep going
+            </button>
+          </div>
         </div>
       )}
 

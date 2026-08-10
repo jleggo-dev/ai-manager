@@ -18,6 +18,14 @@ import type { CoachPicks } from './coach-picks.ts';
  * **The four options are one per `area`, in a deliberate order.** Fitness first, then nourishment,
  * mind, practice — BRAND.md's "fitness-first via example order, not taxonomy". They are examples,
  * not a taxonomy the user has to fit into, which is what "or just tell me" is doing in the copy.
+ *
+ * **They are deliberately broad, and that is a trade.** An earlier draft used specifics ("Run a
+ * first 10k", "The daily pages") because they read warmer — but a stranger's first screen is the
+ * wrong place for them: someone who wants to swim sees four things that aren't theirs and concludes
+ * the app isn't either, and "the daily pages" means nothing unless you already know the phrase.
+ * Broad options are recognisable to everyone at the cost of being unplannable on their own, so the
+ * coach's FIRST job after this answer is to make it concrete — see `renderPickProtocol`, which is
+ * where that obligation is written down.
  */
 export const OPENING_QUESTION = 'So — what would you like to work on? Pick as many as you like, or just tell me.';
 
@@ -27,9 +35,9 @@ export const OPENING_PICKS: CoachPicks = {
   lead: "I'd like to",
   progress: 0.1,
   options: [
-    { label: 'Run a first 10k', say: 'run a first 10k', area: 'movement' },
+    { label: 'Improve my fitness', say: 'improve my fitness', area: 'movement' },
     { label: 'Eat better', say: 'eat better', area: 'nourishment' },
     { label: 'A steadier mind', say: 'build a steadier mind', area: 'mind' },
-    { label: 'The daily pages', say: 'keep up the daily pages', area: 'practice' },
+    { label: 'Build my creative muscle', say: 'build my creative muscle', area: 'practice' },
   ],
 };

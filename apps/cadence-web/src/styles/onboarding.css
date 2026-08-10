@@ -267,3 +267,25 @@
 .gate .auth { padding: 0; }
 .auth-upgrade { margin-top: 18px; }
 .auth-foot { margin-top: 12px; text-align: center; font-size: 11.5px; font-weight: 600; color: var(--text-mute); text-wrap: pretty; }
+
+/* ── Leaving onboarding ──────────────────────────────────────────────── */
+/* Asking before dropping an anonymous draft. Inline rather than a modal: it is one question, and
+   a dialog over the coach's own face would make leaving feel like an error state rather than a
+   choice. Sits under the back arrow so it reads as belonging to the control that opened it. */
+.meetc-leave {
+  margin: 6px 0 -4px; background: var(--surface); border: 2px solid oklch(88% 0.02 85);
+  border-radius: 16px; padding: 13px 15px; box-shadow: 0 3px 0 var(--line-soft);
+}
+.meetc-leave p { font-size: 13px; font-weight: 700; line-height: 1.45; color: oklch(32% 0.03 150); text-wrap: pretty; }
+.meetc-leave-acts { display: flex; gap: 9px; margin-top: 12px; }
+.meetc-leave-go, .meetc-leave-stay {
+  flex: 1; border-radius: 13px; padding: 11px; font-size: 13px; font-weight: 800; cursor: pointer;
+}
+/* The destructive option is the plain one and "keep going" carries the weight — leaving is
+   recoverable only by starting over, so it should never be the easier tap. */
+.meetc-leave-go { background: none; border: 1.5px solid oklch(88% 0.02 85); color: var(--danger); }
+.meetc-leave-stay {
+  border: none; color: #fff;
+  background: linear-gradient(180deg, oklch(60% 0.10 152) 0%, oklch(52% 0.09 152) 46%);
+  box-shadow: 0 3px 0 oklch(39% 0.08 152);
+}
