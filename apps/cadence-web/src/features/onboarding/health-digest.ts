@@ -4,10 +4,12 @@
  * abstraction (workouts by type/week), never raw samples. Server bounds mirror
  * apps/cadence-api/src/validation/health.ts: ≤25 types, ≤10 recent.
  */
-import type { HealthDigest, HealthDigestTypeSummary } from '@cadence/shared';
+import type { HealthDigest } from '@cadence/shared';
 import type { DailySteps, Workout } from '../../lib/capability/index.ts';
+import { isRecordedDistance } from '../../lib/capability/workout-distance.ts';
 import { humanizeWorkoutType } from '../settings/health-import.ts';
 import { summarizeDailySteps } from './steps-summary.ts';
+import { clamp, MAX_KM, MAX_MINUTES, MAX_TYPE_CHARS, round1, summarizeWorkoutTypes } from './workout-summary.ts';
 
 export const DIGEST_PERIOD_DAYS = 90;
 export const HEALTH_OFFER_FLAG_KEY = 'cadence.healthOffer'; // 'done' | 'dismissed'
@@ -86,7 +88,8 @@ export async function maybeRefreshHealthDigest(deps: {
     deps.getWorkouts(since),
     deps.getDailySteps?.(since).catch(() => []) ?? Promise.resolve([]),
   ]);
-  const digest = buildDigestFromWorkouts(workouts, DIGEST_PERIOD_DAYS, steps);
+  // Same clock the `since` window was cut from, so the recency figures cannot straddle two.
+  const digest = buildDigestFromWorkouts(workouts, DIGEST_PERIOD_DAYS, steps, now());
   if (latest.digest && digestsEqual(digest, latest.digest)) return 'unchanged';
   await deps.post(digest);
   return 'posted';
@@ -104,54 +107,24 @@ export function findHealthOfferTurn(turns: { role: string; text: string }[]): nu
   }
   return -1;
 }
-const MAX_TYPES = 25;
-const MAX_RECENT = 5;
-
-const round1 = (n: number) => Math.round(n * 10) / 10;
-
 /**
- * The digest's own API schema bounds every number, and it validates the payload as a WHOLE — so a
- * single implausible workout (a tracker left running for two days, a distance in the wrong unit)
- * used to reject the entire digest and surface as "I couldn't read Apple Health just now". One bad
- * row should cost its own accuracy, never the other months of history.
- * Mirrors apps/cadence-api/src/validation/health.ts.
+ * How many individual sessions travel with the digest. They are the cheapest signal we have —
+ * already collected, already bounded, already validated — and for a long time exactly one of them
+ * was ever rendered. "Your last five runs were 5.2, 5.8, 4.9, 6.1 and 5.4 km, all in the past nine
+ * days" is a different conversation from "you average 4.3 km", and it needs no arithmetic at all.
+ * The server schema allows 10; raising this is a one-line change when we want it.
  */
-const MAX_MINUTES = 1_440;
-const MAX_KM = 1_000;
-const MAX_TYPE_CHARS = 80;
-
-const clamp = (n: number | null, hi: number): number | null =>
-  n == null || !Number.isFinite(n) ? null : Math.min(Math.max(n, 0), hi);
-
-function avg(nums: number[]): number | null {
-  return nums.length ? round1(nums.reduce((a, b) => a + b, 0) / nums.length) : null;
-}
+const MAX_RECENT = 5;
 
 export function buildDigestFromWorkouts(
   workouts: Workout[],
   periodDays = DIGEST_PERIOD_DAYS,
   steps: DailySteps[] = [],
+  /** Injected for tests; the recency window is measured back from here. */
+  nowMs: number = Date.now(),
 ): HealthDigest {
-  const byType = new Map<string, Workout[]>();
-  for (const w of workouts) {
-    const t = humanizeWorkoutType(w.type);
-    byType.set(t, [...(byType.get(t) ?? []), w]);
-  }
   const weeks = Math.max(1, periodDays / 7);
-  const typeSummaries: HealthDigestTypeSummary[] = [...byType.entries()]
-    .map(([type, list]) => ({
-      type: type.slice(0, MAX_TYPE_CHARS),
-      count: list.length,
-      avgDurationMin: clamp(avg(list.map((w) => w.durationMin).filter((n): n is number => n != null)), MAX_MINUTES),
-      avgDistanceKm: clamp(avg(list.map((w) => w.distanceKm).filter((n): n is number => n != null)), MAX_KM),
-      lastISO:
-        list
-          .map((w) => w.start)
-          .sort()
-          .at(-1) ?? '',
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, MAX_TYPES);
+  const typeSummaries = summarizeWorkoutTypes(workouts, nowMs);
 
   const recent = [...workouts]
     .sort((a, b) => b.start.localeCompare(a.start))
@@ -160,7 +133,9 @@ export function buildDigestFromWorkouts(
       type: humanizeWorkoutType(w.type).slice(0, MAX_TYPE_CHARS),
       start: w.start,
       durationMin: clamp(w.durationMin ?? null, MAX_MINUTES),
-      distanceKm: clamp(w.distanceKm ?? null, MAX_KM),
+      // Same rule as the seam applies: a 0 here is "HealthKit had no distance for this session",
+      // and a Workout can reach us from any capability implementation, not only the native one.
+      distanceKm: isRecordedDistance(w.distanceKm) ? clamp(w.distanceKm, MAX_KM) : null,
     }));
 
   // Omitted, never zeroed, when nothing was read — see summarizeDailySteps.

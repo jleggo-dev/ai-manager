@@ -21,6 +21,9 @@ const lift = (start: string, min: number): Workout => ({
   start,
 });
 
+/** Fixed clock so the trailing-28-day window is the same one on every run. */
+const NOW = Date.parse('2026-08-11T12:00:00Z');
+
 describe('buildDigestFromWorkouts', () => {
   it('aggregates by humanized type with averages and weekly frequency', () => {
     const d = buildDigestFromWorkouts(
@@ -71,6 +74,97 @@ describe('buildDigestFromWorkouts', () => {
     expect(d.weeklyFrequency).toBe(0);
     expect(d.byType).toEqual([]);
     expect(d.recent).toEqual([]);
+  });
+
+  /**
+   * The complaint this whole slice answers, in one test: a man training for a 50 km ultra ran
+   * 5–6 km five times in a week and was told "you're averaging 4.3 km a run at 36 mins". Both the
+   * 90-day mean and the treadmill zeros feeding it were doing exactly what they were built to do.
+   */
+  it('puts the last four weeks beside the 90-day mean, so a build-up cannot read as a taper', () => {
+    const d = buildDigestFromWorkouts(
+      [
+        // Spring: short, occasional runs — the ones dragging the 90-day mean down.
+        run('2026-05-20T08:00:00Z', 3, 25),
+        run('2026-06-02T08:00:00Z', 3.4, 27),
+        run('2026-06-20T08:00:00Z', 3.6, 28),
+        // The past week, which the mean makes invisible.
+        run('2026-08-05T06:30:00Z', 5.2, 30),
+        run('2026-08-06T06:30:00Z', 5.8, 33),
+        run('2026-08-08T06:30:00Z', 4.9, 29),
+        run('2026-08-09T06:30:00Z', 6.1, 34),
+        run('2026-08-10T06:30:00Z', 5.4, 31),
+      ],
+      90,
+      [],
+      NOW,
+    );
+    const running = d.byType.find((t) => t.type === 'running')!;
+    // The flat mean is still there and still not wrong — it was only ever wrong as the ONLY line.
+    expect(running.avgDistanceKm).toBeCloseTo(4.7, 1);
+    expect(running.last28).toEqual({ count: 5, avgDurationMin: 31.4, avgDistanceKm: 5.5, totalDistanceKm: 27.4 });
+  });
+
+  it('reports zero recent sessions rather than omitting the window', () => {
+    // A modality someone has not touched in a month is exactly what a 90-day mean hides, and the
+    // coach needs it. Absent must keep meaning "this digest predates the field".
+    const d = buildDigestFromWorkouts([run('2026-05-20T08:00:00Z', 5, 30)], 90, [], NOW);
+    expect(d.byType[0]!.last28).toEqual({
+      count: 0,
+      avgDurationMin: null,
+      avgDistanceKm: null,
+      totalDistanceKm: null,
+    });
+  });
+
+  it('records the longest distance and the longest session, each with its date', () => {
+    // A best is the anti-streak: it counts what happened and never resets to zero. Without the
+    // date it is not a usable fact — "21 km, back in March" and "21 km last week" size different
+    // milestones.
+    const d = buildDigestFromWorkouts(
+      [run('2026-03-14T08:00:00Z', 21.1, 128), run('2026-08-09T06:30:00Z', 6.1, 34), lift('2026-08-01T18:00:00Z', 55)],
+      90,
+      [],
+      NOW,
+    );
+    const running = d.byType.find((t) => t.type === 'running')!;
+    expect(running.bestDistanceKm).toEqual({ value: 21.1, dateISO: '2026-03-14' });
+    expect(running.bestDurationMin).toEqual({ value: 128, dateISO: '2026-03-14' });
+    const strength = d.byType.find((t) => t.type === 'strength training')!;
+    expect(strength.bestDurationMin).toEqual({ value: 55, dateISO: '2026-08-01' });
+    expect(strength.bestDistanceKm).toBeNull(); // lifting has no distance, and never a 0 km one
+  });
+
+  it('dates a matched best to the most recent time they did it', () => {
+    // "You did that again last week" and "you did that once in March" are different conversations.
+    const d = buildDigestFromWorkouts(
+      [run('2026-03-14T08:00:00Z', 10, 60), run('2026-08-09T08:00:00Z', 10, 60)],
+      90,
+      [],
+      NOW,
+    );
+    expect(d.byType[0]!.bestDistanceKm).toEqual({ value: 10, dateISO: '2026-08-09' });
+  });
+
+  /**
+   * The other half of the 4.3 km: HealthPlugin.swift's `totalDistance ?? 0` makes an indoor run
+   * indistinguishable from a 0 km one, and the mean swallows the difference.
+   */
+  it('treats a 0 km run as a session with no distance, never as zero kilometres', () => {
+    const d = buildDigestFromWorkouts(
+      [run('2026-08-09T06:30:00Z', 6, 35), run('2026-08-08T18:00:00Z', 0, 40)],
+      90,
+      [],
+      NOW,
+    );
+    const running = d.byType[0]!;
+    expect(running.count).toBe(2); // the treadmill session still HAPPENED — only its distance is gone
+    expect(running.avgDistanceKm).toBe(6); // not 3
+    expect(running.last28).toMatchObject({ count: 2, totalDistanceKm: 6 });
+    expect(d.recent.find((r) => r.start === '2026-08-08T18:00:00Z')).toMatchObject({
+      distanceKm: null,
+      durationMin: 40,
+    });
   });
 
   it('never exceeds the server bound of 25 types', () => {
