@@ -868,6 +868,23 @@ calculation: an offer is only made when it fits, and it is weighed against the g
 
 Not scoped. Needs a design pass before any code.
 
+**A14. Cadence's canonical workout history — one store, many sources (owner 2026-08-11, STUB)**
+
+Owner requirements 4 and 8: write our own completed sessions to HealthKit so they count for the
+rings, and give people who trained before us a way to bring that history in. Both land on the same
+question, and the owner answered it: *"I think that's why we kind of have to try to compose our own
+historical, no?"* — Cadence keeps THE canonical per-workout history, composed from HealthKit reads,
+our own in-app sessions, Strava imports (A16) and later Oura.
+
+First finding, verified: **`capacitor-health` cannot write.** `WRITE_WORKOUTS` is in the
+`HealthPermission` union in `node_modules/capacitor-health/dist/esm/definitions.d.ts`, but the
+`HealthPlugin` interface has no save/write method at all — only `isHealthAvailable`,
+`checkHealthPermissions`, `requestHealthPermissions`, the two settings openers, `queryAggregated`,
+`queryWorkouts` and `queryRecords`. The constant is a permission we can ask for and then have no way
+to exercise. So the write path needs code we own.
+
+Rest of the design in progress.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
