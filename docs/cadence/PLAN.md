@@ -766,13 +766,16 @@ mechanical faults it surfaced.
 2. **The captured-goal pills vanish mid-conversation** (observed once the coach asked about time in
    the day). They are the running proof that she heard you — disappearing silently is the opposite
    of the promise, and worse than never showing them.
-3. **"Change something" and "+ Did I miss something? Tell me" do nothing — same cause.**
+3. **FIXED (#176) — "Change something" and "+ Did I miss something? Tell me" did nothing, same cause.**
    `OnboardingChat.tsx`: `{confirming ? <cfm-bar> : <composer>}`. While the confirm card is up the
    composer is REPLACED by the Build/Change bar, and both buttons only call `setInput(...)` — they
    prefill an input that is not on screen. The fix is to leave confirm mode (restoring the composer,
    focused, with the prefilled text) rather than to write into nothing. Both are the app's only
-   offered way to correct the plan at the moment of committing to it, so this is the highest-value
-   of the four.
+   offered way to correct the plan at the moment of committing to it, so this was the highest-value
+   of the four. A correction now sets an explicit override that suppresses the confirm bar and
+   restores the composer; her next turn clears it so the following card can still offer "Build it".
+   Shipped WITHOUT a regression test — the harness needs a driven confirm turn — and the failure was
+   invisible to all 331 existing tests, which is exactly the kind of bug a test should catch.
 4. **The progress bar reads 90% at the end.** It is driven by the coach-emitted `progress` on quick
    picks, which never reaches 1. Either the last turn must carry 1, or the confirm stage should pin
    it — a bar that never completes undercuts the one screen that says "done".
