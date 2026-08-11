@@ -906,6 +906,12 @@ the per-meal split (7a9366e) put FOUR daily occurrences in that window — 56 of
 makes permanent what is already firing weekly. Whatever else we do here, a system meal-log task is
 not evidence someone is drifting, and the tripwire should not count it.
 
+The fix has a precedent in the repo, which is the tell that the distinction is already understood:
+`pauseUserOccurrencesInWindow` (`repos/occurrences.ts:336`) shelves an episode's occurrences with
+`and a.kind = 'user'`, and its comment says why — "the effortful ones — system tracking like
+food/weigh-in keeps running". `situation.ts` should read the same predicate. Ticking a food log is
+not the work; it is how we watch the work.
+
 ### The thing we got wrong
 
 **`synthesize_plan` already knows exactly what to do.** The prompt has carried a FASTING/OBSERVANCE
@@ -950,9 +956,10 @@ allergen pass would then have to defend against.
 export interface EatingWindowSpan {
   earliest?: string;  // "12:00"
   latest?: string;    // "20:00"
-  /** Days this span applies to. Absent = every day. Present is how 5:2 and
-   *  "weekdays only" are expressed — two different days, two different spans. */
-  days?: Weekday[];
+  /** Days this span applies to, as the RRULE codes `scheduling.ts` already parses
+   *  ('MO'|'TU'|…). Absent = every day. Present is how 5:2 and "weekdays only" are
+   *  expressed — two different days, two different spans. */
+  days?: string[];
 }
 
 export interface EatingWindow {
@@ -1056,7 +1063,7 @@ read that as a thin log. When a window is on file, fewer meals per day IS the pa
 | Plan vet | `plan_vet` prompt | existing | Already flags fasting-to-compensate; no change |
 | Occurrence materializer | `apps/cadence-api/src/services/plan-horizon.ts` | existing | 14-day rolling horizon; **the reason a snapshot fix is not enough** |
 | Mid-plan retirement | new service beside `episode-overlay.ts` | **proposed** | On a window write: drop the out-of-window meal activities + clear their FUTURE pending occurrences (replan already does this wipe). Not `skipped` (that is the user's acknowledgement) and not `paused` (that is episode-owned and an episode is a rough patch, which a way of eating is not) |
-| Tripwire | `apps/cadence-api/src/services/situation.ts:82` | **proposed** (fix) | Exclude `category = 'nutrition'` system tasks from `missedCount`. Fixes the collateral bug above for everyone |
+| Tripwire | `apps/cadence-api/src/services/situation.ts:82` | **proposed** (fix) | Count only `a.kind = 'user'` occurrences in `missedCount` — the predicate `pauseUserOccurrencesInWindow` already uses. Fixes the collateral bug above for everyone |
 | Replan signal | `apps/cadence-api/src/services/replan.ts:31` | **proposed** (fix) | `scheduled` should not count meal-log tasks a fasting user was never meant to tick |
 | Consistency / streak | `metrics.ts`, `streak.ts` | existing — **no change** | Per-day and already correct |
 | Coach retrieval | `retrieval/registry.ts` → `get_dietary_profile` | **proposed** (extend render) | How the fact reaches a turn and survives compaction |
@@ -1077,8 +1084,8 @@ Ship the four changes that remove the harm, in one PR each:
 1. `EatingWindow` type + `baseline.eating_window` + `capture_extract` writes it. Nothing else
    changes and the FASTING clause becomes reachable for the first time.
 2. `get_dietary_profile` renders it — the coach stops offering breakfast.
-3. Exclude nutrition system tasks from `situation.ts` `missedCount`. Independently correct, and it
-   is a live bug for every user with a food goal, not just fasting ones.
+3. Count only `kind = 'user'` occurrences in `situation.ts` `missedCount`. Independently correct,
+   already precedented, and a live bug for every user with a food goal, not just fasting ones.
 4. Mid-plan retirement of out-of-window meal activities, so week five works like week one.
 
 `eaten_at`, the 5:2 `days` handling, and the `nutrition_baseline` clauses follow. Not scoped yet.
