@@ -8,6 +8,7 @@
  */
 import type {
   DietaryProfile,
+  EatingWindow,
   Food,
   NutritionLog,
   NutritionSummary,
@@ -28,6 +29,13 @@ import { renderHealthDigest } from '../health-context.ts';
 import { buildProgress } from '../progress.ts';
 import { summarizeNutrition, renderNutritionLine } from '../nutrition-summarize.ts';
 import { searchFoodsWithUsda } from '../food-sources/usda-enrich.ts';
+import { renderEatingWindow } from './eating-window-line.ts';
+
+/** What `get_dietary_profile` returns: what they can't eat, plus when they eat. */
+interface DietaryPlusWindow {
+  profile: DietaryProfile;
+  eating_window: EatingWindow | null;
+}
 
 export interface RetrievalFunction {
   name: string;
@@ -380,28 +388,45 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
     },
   },
 
+  /**
+   * WHAT they eat and WHEN — two facts from two different columns, deliberately in one place.
+   *
+   * `dietary_profile` is a safety input (hard allergen excludes). `baseline.eating_window` is how
+   * someone has chosen to eat, and it belongs nowhere near the allergen list as STORAGE — but this
+   * is the moment both matter, "before suggesting foods/recipes", and minting a fifteenth retrieval
+   * function for one line would mean a catalog change and a selection the model has to remember to
+   * make. Storage stays apart; the render joins them.
+   */
   get_dietary_profile: {
     name: 'get_dietary_profile',
     description:
-      'Allergies (hard excludes), diet pattern (vegan/vegetarian/…), and soft dislikes. Use before suggesting foods/recipes and when the user mentions allergies or diet.',
+      'Allergies (hard excludes), diet pattern (vegan/vegetarian/…), soft dislikes, and the hours they eat in (16:8, OMAD, Ramadan) when they have said. Use before suggesting foods/recipes and when the user mentions allergies, diet, or meal timing.',
     domains: ['nutrition', 'safety'],
     async run(userId) {
-      const raw = await getDietaryProfile(userId);
-      return sanitizeDietaryProfile(raw) ?? { ...EMPTY_DIETARY_PROFILE };
+      const [raw, user] = await Promise.all([getDietaryProfile(userId), getUser(userId)]);
+      return {
+        profile: sanitizeDietaryProfile(raw) ?? { ...EMPTY_DIETARY_PROFILE },
+        eating_window: user?.baseline?.eating_window ?? null,
+      };
     },
     render(r) {
-      const p = r as DietaryProfile;
+      const { profile: p, eating_window: w } = r as DietaryPlusWindow;
       const bits: string[] = [];
       if (p.allergies.length) bits.push(`allergies (hard): ${p.allergies.join(', ')}`);
       if (p.diet) bits.push(`diet: ${p.diet}`);
       if (p.dislikes.length) bits.push(`dislikes: ${p.dislikes.join(', ')}`);
       if (p.notes?.trim()) bits.push(`notes: ${p.notes.trim()}`);
-      if (!bits.length) return 'Dietary profile: none set yet (ask before first recipe if relevant).';
-      return `Dietary profile: ${bits.join('; ')}`;
+      const head = bits.length
+        ? `Dietary profile: ${bits.join('; ')}`
+        : 'Dietary profile: none set yet (ask before first recipe if relevant).';
+      const window = renderEatingWindow(w);
+      return window ? `${head}\n${window}` : head;
     },
     rows(r) {
-      const p = r as DietaryProfile;
-      return p.allergies.length + p.dislikes.length + (p.diet ? 1 : 0) + (p.notes?.trim() ? 1 : 0);
+      const { profile: p, eating_window: w } = r as DietaryPlusWindow;
+      return (
+        p.allergies.length + p.dislikes.length + (p.diet ? 1 : 0) + (p.notes?.trim() ? 1 : 0) + (w?.said_as ? 1 : 0)
+      );
     },
   },
 

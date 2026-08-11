@@ -105,6 +105,58 @@ export interface Availability {
 }
 
 /**
+ * ONE span they can eat in. Clock edges only when they gave them — "I eat between noon and eight"
+ * is {earliest:"12:00", latest:"20:00"}; "I just skip breakfast" is a span with neither.
+ */
+export interface EatingWindowSpan {
+  /** "HH:MM", only when they named a clock time the fast opens at. */
+  earliest?: string;
+  /** "HH:MM", only when they named a clock time the fast closes at. */
+  latest?: string;
+  /**
+   * Days this span applies to, as the RRULE codes `scheduling.ts` already parses
+   * ('MO'|'TU'|'WE'|'TH'|'FR'|'SA'|'SU'). Absent = every day. Present is how 5:2 and
+   * "weekdays only" are expressed — two different days, two different spans.
+   */
+  days?: string[];
+}
+
+/**
+ * How someone has chosen to eat — the hours of the day they eat in, not a list of foods.
+ *
+ * This is NOT a constraint and it is NOT part of `dietary_profile`. `constraints` is "what we work
+ * around" and `plan_around: true` starts deleting things; a way of eating is not an impairment.
+ * `dietary_profile` is a safety input — hard allergen excludes consumed before anything is
+ * suggested — and an eating window excludes no food; parking it there would make the allergen pass
+ * defend against a category error.
+ *
+ * Read by exactly two readers, each through the door it already uses, and that asymmetry is
+ * deliberate: the planner sees it inside `<baseline>` (the FASTING/OBSERVANCE clause in
+ * `synthesize_plan` drops the meal tasks that fall outside the window — fewer tasks, never
+ * rescheduled ones, because a "Log breakfast" card at 13:00 is a lie about what breakfast is), and
+ * the coach sees it rendered inside `get_dietary_profile` (retrieval registry), which is what makes
+ * it survive compaction and stops her offering breakfast. Do not "tidy" this by moving the field.
+ *
+ * Nothing here is ever scored. There is deliberately no off-window flag anywhere: a flag exists to
+ * be counted, and a count of broken fasts is a scoreboard (BRAND.md — count what happened, never
+ * what broke). The coach may notice timing warmly; she may never keep a tally of it.
+ */
+export interface EatingWindow {
+  /** Their words, always — "16:8", "OMAD", "I just skip breakfast", "Ramadan". Never our label. */
+  said_as: string;
+  /**
+   * Empty means they named a pattern we could not turn into clock times. Still keep it: the coach
+   * reads `said_as` and can ask. Never a guess.
+   */
+  windows: EatingWindowSpan[];
+  /**
+   * YYYY-MM-DD it stops being true, when they said so (Ramadan, a trial month) — same semantics
+   * as `Constraint.until`. Absent = open-ended.
+   */
+  until?: string;
+}
+
+/**
  * What they already do, in their own words — the floor a plan builds up from.
  *
  * Cadence prescribed a 45-minute flat WALK to a man who runs 4–5 km several times a week, because
@@ -142,6 +194,18 @@ export interface Baseline {
    */
   time_of_day?: TimeOfDay;
   availability?: Availability;
+  /**
+   * How they've chosen to eat — the hours, in their words. Top-level for the same reason
+   * `availability` is: the baseline persists as a shallow jsonb merge and a nested write would
+   * clobber its siblings.
+   *
+   * ABSENT MEANS THEY NEVER SAID, AND NOTHING MAY INFER IT. This is load-bearing, and it is not a
+   * nicety — the `days_per_week` scar below is the same mistake with a smaller blast radius. "He
+   * hasn't logged breakfast in nine days, he must be fasting" is a person who was simply busy in
+   * the mornings, having breakfast quietly deleted from his plan by a coach who then stops
+   * mentioning it. Written when someone says it, or by hand in Settings, or not at all.
+   */
+  eating_window?: EatingWindow;
   /** What they already do — the floor, not the ceiling. See StartingPoint. */
   starting_point?: StartingPoint;
   /**
