@@ -868,6 +868,19 @@ calculation: an offer is only made when it fits, and it is weighed against the g
 
 Not scoped. Needs a design pass before any code.
 
+**A9. Intermittent fasting — we mark a skipped meal as a missed activity (2026-08-11)**
+
+STUB — being written. A real generated plan carried the recurring activities "Log breakfast —
+Every day" and "Log lunch — Every day". For a 16:8 eater breakfast is skipped *by design*, so
+every single day they are recorded as missing a scheduled activity. `rollingConsistency` and the
+recap read occurrence status, so a person doing exactly what they intended is counted as failing,
+daily. That is BRAND.md inverted — "count what happened, never what broke", no streak-shame.
+
+Design pass in progress: eating window on `baseline` vs. in the nutrition module; whether a
+fasting user needs per-meal activities at all; how a broken fast is recorded without reading as
+failure; what the coach must know to stop offering breakfast, and where that lives so it survives
+compaction.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
