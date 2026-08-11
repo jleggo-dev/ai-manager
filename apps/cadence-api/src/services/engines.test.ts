@@ -354,6 +354,82 @@ describe('capture normalizeBaseline (§6.1 — weight lands where the UI reads i
   });
 });
 
+// A 16:8 eater used to have nowhere to put "I eat between noon and eight": the FASTING clause in
+// synthesize_plan fired only off a goal or a constraint, and filing a way of eating under "what we
+// work around" tells the planner to treat it as an impairment.
+describe('capture normalizeBaseline — eating_window (§A9, how they eat is not a constraint)', () => {
+  it('keeps the clock edges and the words they used', () => {
+    const b = normalizeBaseline({
+      eating_window: { said_as: '16:8', windows: [{ earliest: '12:00', latest: '20:00' }] },
+    });
+    expect(b.eating_window).toEqual({ said_as: '16:8', windows: [{ earliest: '12:00', latest: '20:00' }] });
+  });
+
+  it('keeps a pattern with no clock times at all, so the coach can ask', () => {
+    const b = normalizeBaseline({ eating_window: { said_as: 'I just skip breakfast', windows: [] } });
+    expect(b.eating_window).toEqual({ said_as: 'I just skip breakfast', windows: [] });
+  });
+
+  it('keeps a window that crosses midnight rather than "correcting" an observance', () => {
+    // Iftar at 20:00 to suhoor at 04:00 is not the model getting them backwards.
+    const b = normalizeBaseline({
+      eating_window: { said_as: 'Ramadan', windows: [{ earliest: '20:00', latest: '04:00' }], until: '2026-03-19' },
+    });
+    expect(b.eating_window).toEqual({
+      said_as: 'Ramadan',
+      windows: [{ earliest: '20:00', latest: '04:00' }],
+      until: '2026-03-19',
+    });
+  });
+
+  it('keeps per-day spans as the RRULE codes scheduling.ts parses (5:2, weekdays only)', () => {
+    const b = normalizeBaseline({
+      eating_window: {
+        said_as: '5:2 — two light days',
+        windows: [{ days: ['mo', 'Tu', 'we', 'th', 'fr'], earliest: '07:00', latest: '21:00' }, { days: ['SA', 'SU'] }],
+      },
+    });
+    expect(b.eating_window).toEqual({
+      said_as: '5:2 — two light days',
+      windows: [{ earliest: '07:00', latest: '21:00', days: ['MO', 'TU', 'WE', 'TH', 'FR'] }, { days: ['SA', 'SU'] }],
+    });
+  });
+
+  it('drops what it cannot trust instead of guessing a window', () => {
+    // No said_as: their words are what the coach reads back, and without them the record is our
+    // label for someone else's life.
+    expect(normalizeBaseline({ eating_window: { windows: [{ earliest: '12:00' }] } }).eating_window).toBeUndefined();
+    expect(normalizeBaseline({ eating_window: { said_as: '   ' } }).eating_window).toBeUndefined();
+    expect(normalizeBaseline({ eating_window: 'OMAD' }).eating_window).toBeUndefined();
+    // A mangled clock time would move the edge of a fast; an unknown day code would move which
+    // days it applies to. Both drop, and a span left saying nothing drops with them.
+    const junk = normalizeBaseline({
+      eating_window: { said_as: 'OMAD', windows: [{ earliest: 'noonish', latest: '25:00', days: ['someday'] }] },
+    });
+    expect(junk.eating_window).toEqual({ said_as: 'OMAD', windows: [] });
+    // All seven days IS every day — say that by omission, not by listing the week.
+    const week = normalizeBaseline({
+      eating_window: {
+        said_as: 'OMAD',
+        windows: [{ earliest: '18:00', days: ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] }],
+      },
+    });
+    expect(week.eating_window).toEqual({ said_as: 'OMAD', windows: [{ earliest: '18:00' }] });
+    // Same rule as Constraint.until: a half-parsed date is worse than none.
+    const until = normalizeBaseline({ eating_window: { said_as: 'a trial month', windows: [], until: 'next month' } });
+    expect(until.eating_window).toEqual({ said_as: 'a trial month', windows: [] });
+  });
+
+  // The days_per_week scar, with a worse ending: "he hasn't logged breakfast in nine days" is a
+  // man who was busy in the mornings, having breakfast deleted from his plan. Nothing infers it.
+  it('writes nothing at all when they never said', () => {
+    expect(normalizeBaseline({}).eating_window).toBeUndefined();
+    expect(
+      normalizeBaseline({ starting_point: { doing_now: ['skips breakfast most days'] } }).eating_window,
+    ).toBeUndefined();
+  });
+});
+
 describe('capture normalizeBrief / normalizeTimezone (§6.1 — their words, our bounds)', () => {
   it('collapses whitespace and caps a brief, and drops a non-string', () => {
     expect(normalizeBrief('  It is 50 km.\n  Mountain, 30+ obstacles.  ')).toBe(

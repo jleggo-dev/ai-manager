@@ -4,6 +4,8 @@ import {
   type Availability,
   type AvailabilityWindow,
   type Constraint,
+  type EatingWindow,
+  type EatingWindowSpan,
   type StartingPoint,
 } from '@cadence/shared';
 import { normTitle, sameGoalIdentity, sameGoalTitle } from './goal-identity.ts';
@@ -24,6 +26,12 @@ const BRIEF_MAX = 800;
 /** One phrase per thing they do, and no more things than a person credibly lists in a chat. */
 const ROUTINE_ITEM_MAX = 120;
 const ROUTINE_ITEMS_MAX = 12;
+/** "16:8", "OMAD", "I only eat between noon and eight" — a phrase, not a paragraph. */
+const SAID_AS_MAX = 120;
+/** One span per day is the most anyone can mean; more is a model listing rather than transcribing. */
+const EATING_SPANS_MAX = 7;
+/** The RRULE day codes `scheduling.ts` parses — the same vocabulary, so a span can become a BYDAY. */
+const RRULE_DAYS: readonly string[] = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
 
 /** "2026-08-14" and nothing else. A half-parsed date schedules someone in the wrong week. */
 function isYmd(raw: unknown): raw is string {
@@ -102,6 +110,61 @@ function normalizeAvailability(raw: unknown): Availability | undefined {
   return { windows: kept, ...(session ? { session_minutes: session } : {}) };
 }
 
+/** The days a span applies to, as RRULE codes. Anything we don't recognise is dropped rather than
+ *  guessed: a mangled day code would narrow someone's window to the wrong days of the week. */
+function normalizeSpanDays(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const d of raw) {
+    if (typeof d !== 'string') continue;
+    const code = d.trim().toUpperCase().slice(0, 2);
+    if (RRULE_DAYS.includes(code) && !out.includes(code)) out.push(code);
+  }
+  return out.length === RRULE_DAYS.length ? [] : out; // all seven IS "every day" — say it by omission
+}
+
+/**
+ * How they've chosen to eat, from however the Broker phrased it.
+ *
+ * `said_as` is REQUIRED and the whole record is dropped without it: it is their words, it is what
+ * the coach reads back, and a window with no phrasing behind it is our label for someone else's
+ * life. Clock edges are optional in both directions — "I just skip breakfast" is a real answer with
+ * no times in it, and the record is worth keeping anyway so the coach can ask.
+ *
+ * NOTE what is deliberately NOT validated: a `latest` earlier than its `earliest`. That is not the
+ * model getting them backwards, it is a window that crosses midnight — iftar at 20:00 to suhoor at
+ * 04:00 — and "correcting" it would invert an observance.
+ *
+ * Nothing here is ever inferred. Absent means they never said, and this normalizer only ever sees
+ * what the Broker heard the USER say.
+ */
+function normalizeEatingWindow(raw: unknown): EatingWindow | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const src = raw as { said_as?: unknown; windows?: unknown; until?: unknown };
+
+  const saidAs = typeof src.said_as === 'string' ? src.said_as.replace(/\s+/g, ' ').trim().slice(0, SAID_AS_MAX) : '';
+  if (!saidAs) return undefined;
+
+  const windows: EatingWindowSpan[] = [];
+  for (const w of Array.isArray(src.windows) ? src.windows : []) {
+    if (!w || typeof w !== 'object') continue;
+    const obj = w as Record<string, unknown>;
+    const earliest = normalizeClock(obj.earliest);
+    const latest = normalizeClock(obj.latest);
+    const days = normalizeSpanDays(obj.days);
+    // A span with no edges and no days says nothing the empty list doesn't already say.
+    if (!earliest && !latest && !days.length) continue;
+    windows.push({
+      ...(earliest ? { earliest } : {}),
+      ...(latest ? { latest } : {}),
+      ...(days.length ? { days } : {}),
+    });
+    if (windows.length === EATING_SPANS_MAX) break;
+  }
+
+  return { said_as: saidAs, windows, ...(isYmd(src.until) ? { until: src.until } : {}) };
+}
+
 /**
  * What they say they already do. Kept as phrases, not parsed into numbers: "runs 4-5 k a few
  * times a week" is worth more to a planner whole than it is dismantled into a frequency the app
@@ -136,6 +199,11 @@ export function normalizeBaseline(raw: Record<string, unknown>): Record<string, 
 
   const startingPoint = normalizeStartingPoint(raw.starting_point);
   if (startingPoint) out.starting_point = startingPoint;
+
+  // How they eat — the hours, in their words. Written ONLY when they said it: nothing here, and
+  // nothing anywhere else, may read a sparse food log as evidence of a fast. See Baseline.
+  const eatingWindow = normalizeEatingWindow(raw.eating_window);
+  if (eatingWindow) out.eating_window = eatingWindow;
 
   // Availability is what capture writes now. `time_of_day` is still accepted (the review wizard
   // patches it by hand, and older Broker output still sends it) and is DERIVED from a single
