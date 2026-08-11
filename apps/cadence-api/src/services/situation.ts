@@ -65,7 +65,7 @@ function timezoneOffsetMin(timezone: string | null | undefined, now = new Date()
 
 /**
  * Deterministic snapshot (spec §B4) — no LLM, only signals the app can actually observe today:
- * rolling consistency, its week-over-week dip, past-due-still-pending occurrences read as
+ * rolling consistency, its week-over-week dip, past-due-still-pending EFFORTFUL occurrences read as
  * "missed", home timezone/location when persisted, and weatherTempC from OpenWeatherMap at
  * home_location (§B1). detectTripwires guards every check on `!= null`.
  */
@@ -79,7 +79,17 @@ async function buildSnapshot(userId: string): Promise<TripwireSnapshot> {
 
   const last7 = rollingConsistency(occ, now, 7);
   const prev7 = rollingConsistency(occ, new Date(base - 7 * 86_400_000), 7);
-  const missedCount = occ.filter((o) => o.status === 'pending' && iso(o.date) < iso(new Date(base))).length;
+  // Nothing ever writes status 'missed', so "missed" is DERIVED: past-due and still pending. That
+  // derivation is only honest for EFFORTFUL work (kind 'user') — the same line
+  // `pauseUserOccurrencesInWindow` draws, where system tracking rows keep running while the
+  // effortful ones pause. The food log alone is four per-meal system tasks a day, i.e. up to 56
+  // past-due-pending rows in this 14-day window against a default threshold of 3, so counting
+  // system rows made the tripwire fire for every nutrition user after one forgetful day — and
+  // permanently, by design, for anyone who deliberately skips a meal (16:8). An untapped food card
+  // is not a missed session: count what happened, never what broke (BRAND.md).
+  const missedCount = occ.filter(
+    (o) => o.kind === 'user' && o.status === 'pending' && iso(o.date) < iso(new Date(base)),
+  ).length;
 
   const weather = await getWeatherForUser(userId).catch(() => null);
   const homeTzOff = timezoneOffsetMin(user?.timezone, now);
