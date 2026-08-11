@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { CoachFoodActionSheet } from '../coach/CoachFoodActionSheet.tsx';
 import { HealthOfferCard } from './HealthOfferCard.tsx';
@@ -95,8 +95,24 @@ export function OnboardingChat({
   // so before the first reply it would report 0 and the bar would sit empty on the one screen
   // everyone sees. Fall back to what the opening turn itself claims.
   const progress = chatProgress(views) || (intent === 'onboarding' ? (OPENING_PICKS.progress ?? 0) : 0);
-  const confirming = picks?.layout === 'confirm';
+  /**
+   * The user asked to correct something on the confirm card, so the composer must come back.
+   *
+   * `confirming` is DERIVED from the coach's last turn, not state, so there was nothing to turn
+   * off — and while it held, the composer was replaced by the Build/Change bar. Both correction
+   * affordances only called `setInput`, which prefilled an input that was not on screen: tapping
+   * "Change something" or "Did I miss something?" did nothing at all. They are the only offered
+   * way to correct a plan at the moment of committing to it, so silence there is the worst
+   * possible answer.
+   */
+  const [correcting, setCorrecting] = useState(false);
+  const confirming = picks?.layout === 'confirm' && !correcting;
   const onOpeningTurn = intent === 'onboarding' && restored && !turns.length;
+  // Her next turn answers the correction, so the confirm card is allowed to take over again —
+  // otherwise one correction would hide "Build it" for the rest of the conversation.
+  useEffect(() => {
+    setCorrecting(false);
+  }, [turns.length]);
   const chatRef = useRef<HTMLDivElement | null>(null);
 
   // Goal-gated Apple Health offer (detour pattern): the card renders under the coach turn that
@@ -183,10 +199,12 @@ export function OnboardingChat({
                         <ConfirmCard
                           onCorrect={(topic) => {
                             stickNow();
+                            setCorrecting(true);
                             setInput(`About ${topic} — that's not quite right. `);
                           }}
                           onTellMore={() => {
                             stickNow();
+                            setCorrecting(true);
                             setInput("There's something you missed. ");
                           }}
                         />
@@ -213,7 +231,13 @@ export function OnboardingChat({
             <button className="cfm-build" onClick={() => onBuild?.()}>
               Build it
             </button>
-            <button className="cfm-change" onClick={() => setInput("Actually, I'd like to change something. ")}>
+            <button
+              className="cfm-change"
+              onClick={() => {
+                setCorrecting(true);
+                setInput("Actually, I'd like to change something. ");
+              }}
+            >
               Change something
             </button>
           </div>
