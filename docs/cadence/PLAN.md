@@ -868,6 +868,137 @@ calculation: an offer is only made when it fits, and it is weighed against the g
 
 Not scoped. Needs a design pass before any code.
 
+**A16. Strava: the terms forbid the product we would build (2026-08-11)**
+
+Owner requirement: *"Integrate to Strava to retrieve/store workout history (bi-directional
+integration)"*, priority below Apple Watch and above Oura — *"I have a Strava."* The HealthKit half
+of history-migration is A14's; this is the Strava half.
+
+**Verdict up front: the current Strava API terms prohibit the architecture the owner described, and
+they prohibit it by name.** Not ambiguously, not by strained reading — the June 1 2026 Strava API
+Policy enumerates the exact steps of our design as prohibited activities. This is not a "get a
+lawyer to bless it" situation. It is a "the clause says the thing we want to do" situation. If we
+integrate Strava's API at all, we integrate it as a **write-only publisher** and get history from
+somewhere else.
+
+**Where the rules actually live — and why the first look missed them.** The API Agreement at
+`strava.com/legal/api` (Effective June 1, 2026) contains **no AI clause at all**; grep it for
+"artificial intelligence", "model", or "AI" and you get nothing. Everything that matters is in the
+separate **API Policy** at `strava.com/legal/api_policy`, which the Agreement pulls in: *"which
+incorporate by reference the Strava Terms of Service, the Strava Privacy Policy…, the Strava API
+Brand Guidelines, and the Strava API Policy (the "Policy"). The Policy is incorporated by reference
+into, and forms part of, this Agreement."* Anyone who reads only the Agreement — as the owner
+reasonably might, and as my first fetch did — concludes Strava has no AI position. They have a very
+detailed one.
+
+The public history is worth knowing: the November 11 2024 change was announced as narrow, and
+Strava's own press note said it would affect *"less than .1% of applications"* with most use cases
+still permitted *"including coaching platforms and performance analysis tools"*. That reassurance
+described the 2024 text. **The 2026 Policy is a different and far harder document**, and the 2024
+press framing should not be cited as cover for it.
+
+**(a) May Strava-sourced data, stored in our DB and merged with other sources, be read by an LLM in
+service of the user who owns it? No.** Policy §5.3, titled *"No AI/ML Training, Fine-Tuning,
+Grounding, Evaluation, Embedding, or Retrieval-Augmented Generation"*:
+
+> "You may not use the Strava API Materials or Strava Data, directly or indirectly, in connection
+> with the development, training, evaluation, or **operation** of any AI Application. This
+> prohibition extends to: Any data **derived from, aggregated from, anonymized from, or generated
+> using Strava Data**, in any form (including original, derivative, aggregated, anonymized,
+> de-identified, or model-output form); and Any of the following activities with respect to an AI
+> Application: training, pre-training, post-training, fine-tuning, reinforcement learning,
+> alignment, grounding, evaluation, benchmarking, embedding generation, retrieval-augmented
+> generation, **ingestion into a context window or working memory**, and any other activity
+> intended or reasonably likely to develop, improve, evaluate, or **operate** an AI Application."
+> *(emphasis mine)*
+
+The owner's clarification was: *"I'm not proposing passing Strava data to an LLM [directly]. I'm
+proposing we use it to populate a history in our app, where it's combined with our data or a
+history from other applications… The LLM reads the data in our app, which is aggregate across all
+data sources."* Read that against the clause. **"Directly or indirectly"** closes the indirection.
+**"Any data derived from, aggregated from… in any form"** closes the aggregation. **"Ingestion into
+a context window or working memory"** is a literal description of what our retrieval layer does
+when it assembles coach context. And **"operation"**, repeated twice, is what distinguishes this
+from a training ban: §5.3 is not a rule about building models, it is a rule about *running* one on
+their data. The distinction the task asked me to draw — training bans (near-certain) vs
+serving-the-user's-own-data-through-an-LLM (the real question) — resolves the wrong way here.
+Strava drafted for exactly this case and forbade both.
+
+Note also what §3.5 gives away: Strava built the **Strava MCP** as *"the sole authorized first-party
+agent-mediated interface"*, on which *"Subscribers to Strava may access the Strava MCP in connection
+with their personal use of their own Strava data… and may bring their own AI Application to interact
+with their own data."* So the personal-use-of-your-own-data-with-an-LLM case is explicitly carved
+out — **and routed through Strava's own surface, not ours.** §5.16 then forbids us from operating
+*"any MCP Server, agent-mediated interface, or analogous mechanism"* ourselves, *"regardless of
+name"*. The gap in the wall exists and it is deliberately not the shape of a third-party app. That
+is the strongest available evidence that our reading is the intended one rather than an
+over-cautious one: they thought about the exact use case and built a different door for it.
+
+**(b) Does aggregation or derivation help? It is specifically what §5.4 forbids.** Titled *"No
+Aggregation, Analytics, or De-Identified Processing"*:
+
+> "You may not process or disclose Strava Data—even publicly viewable Strava Data—including in an
+> aggregated, de-identified, or anonymized manner, for the purposes of analytics, analyses,
+> customer insight generation, or product or service improvements. **You may not combine Strava
+> Data with other customer data for these or any other purposes.** The restrictions in this Section
+> 5.4 apply to data derived from Strava Data and to output that incorporates or was generated using
+> Strava Data."
+
+"You may not combine Strava Data with other customer data … for any other purposes" is the
+one-sentence answer to the migrate-then-merge architecture. Merging with HealthKit history is the
+combination the sentence names. And the trailing sentence — restrictions attach to *"output that
+incorporates or was generated using Strava Data"* — confirms the general principle the task flagged:
+**restrictions follow the data, not the call.** Laundering a Strava run through our own
+`workout_history` table does not produce a non-Strava row; it produces Strava Data in a new
+location, still carrying every restriction, plus a derived-data tail that catches the coach's
+summary of it.
+
+**(c) Retention: seven days, and that alone ends it.** §6.2: *"You may not retain Strava Data in
+your cache for longer than seven (7) days… Except for such limited caching, you may not store
+Strava Data."* §5.5: *"You may not bulk-export Strava Data, including by accumulating Strava Data
+through repeated authorized API calls into a corpus, dataset, archive, or database that exceeds the
+operational scope of your Developer Application"*, and *"You may not store Strava Data, or any data
+derived from Strava Data, in any **Persistent Index**… indefinite storage in vector stores,
+embedding stores, search indexes, knowledge graphs, retrieval-augmented data stores, **archives**,
+and any other storage configured to enable subsequent retrieval, query, or use."* §6.4 caps
+retention at *"only so long as necessary for the purpose for which it was originally obtained."*
+
+**A seven-day cache is not a history.** The owner's requirement is the word "history" — the whole
+point is a durable record of what someone has done, going back years, that the coach can reason
+over. Even with §5.3 and §5.4 struck out, §6.2 would still forbid the thing being asked for. Three
+independent clauses each kill it.
+
+On disconnect, §7.4 requires deletion within **thirty (30) days** of *"all Strava Data and all
+Personal Data derived from Strava Data relating to the requesting or revoking user"* on user
+request, revocation, **or** Strava-account deletion — and *"regardless of user"* if we stop using
+the API or the agreement terminates. §6.3 requires deletions the user makes on Strava to propagate
+to us **within 48 hours**, which on its own implies a live mirror we must poll or webhook, not an
+archive. Agreement §4.4 repeats it: on termination we *"must promptly cease using and permanently
+delete… all Strava Data provided hereunder and so certify in writing to Strava."* Note the shape of
+that risk: an imported-then-merged history means a disconnect obliges us to **surgically unpick
+Strava-derived rows out of a merged store, and arguably any coach memory derived from them, within
+30 days** — which is only possible if provenance is tracked per-row from day one. A16 assumes A14's
+canonical store carries per-row provenance regardless of what we decide here.
+
+**One honest caveat, which does not change the answer.** The Policy uses **"AI Application"** as a
+defined term four times and **never defines it**; the word does not appear in the Agreement at all.
+Same for "Persistent Index" — used, capitalised, undefined. A drafting gap. It is tempting to build
+on it. Don't: §5 opens with *"Strava shall determine in its sole discretion whether your Developer
+Application's use of the Strava API Materials complies with this Section and the Agreement"*, and
+§6.2 of the Agreement plus §3.2/§6.2 of the Policy give them audit rights and unilateral
+termination. An undefined term interpreted at the counterparty's sole discretion is not a loophole,
+it is an unbounded risk. Cadence is a coach whose entire value is an LLM reading your history; there
+is no reading of "AI Application" under which we are not one.
+
+**What this means for the requirement.** The bi-directional integration the owner asked for splits
+cleanly, and only one half survives:
+
+- **Read/import into a durable history the coach reasons over — dead.** §5.3, §5.4, §6.2 each
+  independently. Not "risky", not "needs review". Prohibited in terms.
+- **Write/publish our workouts to Strava — alive**, and genuinely useful. Pushing an activity we
+  own to a user's Strava feed sends no Strava Data anywhere; nothing lands in our store and nothing
+  reaches a model. See the write section below.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
