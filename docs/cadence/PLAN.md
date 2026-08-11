@@ -2508,6 +2508,46 @@ watch-specific code exists.
   card better? It is the only piece of native UI this feature would otherwise need.
 
 Not scoped beyond v1's first slice. v0 is rejected; v2 waits on v1 proving the read-back.
+**A17. Oura — a recovery signal, parked on purpose (owner 2026-08-11, LOWEST priority)**
+
+Owner: *"Integrate to Oura"* — and explicitly last in line: Apple Watch first, then Strava, then
+Oura (*"I don't even have an Oura ring"*). Logged so the bet is placed, not so anyone builds it.
+
+**What Oura is for: recovery, not workouts.** Sleep staging, overnight HRV, resting HR, temperature
+deviation, and a daily readiness score. The brand fit is exact — "you've slept badly three nights
+running, want today's session to bend?" is plan-bends-not-breaks with a physiological signal behind
+it. Honest overlap check: an Apple Watch worn to bed already writes sleep stages, HRV and resting
+HR into HealthKit, which we integrate first anyway — that covers most of Oura's value for
+watch-wearers. Oura's residual edge is night-time measurement quality (finger PPG, temperature
+trend), the synthesized readiness score itself, and being the ONLY signal for ring-not-watch
+people. That residual is what has to earn the build cost, and today it doesn't.
+
+**API facts (verified 2026-08-11).** v2 REST, OAuth2 authorization-code; scoped tokens (`daily`
+covers the daily_sleep/daily_readiness summaries; `heartrate`, `workout`, `session`, `spo2` are
+separate scopes). Rate limit 5000 req/5 min — irrelevant at our scale. A webhook subscription API
+exists (per data_type + event_type, HMAC-verified callback), but data only lands after the user
+opens the Oura app and the ring syncs — so in practice it is a **morning batch, not a stream**.
+Critical caveat: Gen3+ users **without an active Oura membership get no API data at all** — a
+connected ring can silently go dark when the subscription lapses, so the connection UI must render
+"connected but nothing arriving" as state, never as the user's failure.
+
+**PROPOSED shape: A16's pattern, three deltas.** Oura is the second consumer of the generic
+OAuth-connection pattern A16 (Strava) owns — no framework work here. Deltas only: (1) **cadence** —
+a morning batch keyed off the daily_* webhook events (or a daily poll), not near-live workout
+ingestion; (2) the **membership check** above; (3) **where it lands** — Oura workouts join A14's
+canonical workout store like everyone else's, but daily readiness/sleep is a different shape (one
+scored row per day, not an event) and goes into a small daily-signals table the context engine
+reads, not the workout store.
+
+**Readiness ethics, settled now so it isn't relitigated:** a readiness score is an opinion — a
+vendor's model of your night, not a fact about your day. The coach may OFFER to bend the plan on it
+("your body's asking for an easier day — want to swap?"); she never scolds from it, never withholds
+anything because of it, and never overrides what the user says they feel. Someone who feels great
+on a "poor readiness" morning is right.
+
+**Trigger:** start only when (a) A16's connection pattern has shipped and survived contact with
+Strava, AND (b) the owner owns a ring or real users ask for it. Until both, this entry is the whole
+deliverable.
 
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
