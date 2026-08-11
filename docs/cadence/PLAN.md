@@ -868,6 +868,208 @@ calculation: an offer is only made when it fits, and it is weighed against the g
 
 Not scoped. Needs a design pass before any code.
 
+**A15. Weather on the workout you actually did — we feed the forecast and never keep the record (owner 2026-08-11)**
+
+> *"Store/track weather by workout performed outside (performance in rain, snow, ice, high winds,
+> cold days, hot days) can help the coach better understand performance and how the user will
+> perform in different conditions."*
+
+**Weather is not greenfield — it is one of the most built-out subsystems in the app, and almost all
+of it points at the future.** The requirement is therefore much smaller and much sharper than it
+looks: we already spend provider calls on conditions, we simply throw the answer away the moment the
+session is over. This is about keeping the record, not about adding weather.
+
+**What exists today (all shipped):**
+
+- `apps/cadence-api/src/services/weather/weather.ts` — a two-provider engine. WeatherKit preferred
+  (so an iOS user's Cadence forecast matches their lock screen), OpenWeatherMap as fallback and as
+  the only geocoder. Two cache layers: an in-process `Map`, and `cadence.weather_cache`
+  (migration 0025) shared across instances, keyed `roundedLat,roundedLon:localDate` — a ~11 km cell
+  with **no `user_id`**, because weather is a property of a place, not a person.
+- `apps/cadence-api/src/services/weather/weatherkit-http.ts` — the REST client, ES256 provider JWT
+  minted from the `.p8` in `cadenceConfig.weatherkit` (`apps/cadence-api/src/config.ts:141`).
+  Requests `dataSets=currentWeather,forecastHourly` for one coordinate.
+- **The `weather` VARIABLE on `synthesize-plan` is already populated** — `plan-synthesis.ts:93` calls
+  `weatherVarsForUser`, which is *current conditions at `users.home_location`*. So does
+  `prescribe-session` (`session-generate.ts:97`, outdoor activities only), the Today header
+  (`routes/me.ts:52`), `date-context.ts`, `situation.ts` (tripwires), and `day-recap.ts`.
+- `notify/producers/weather-move.ts` is the only consumer of a real forecast SERIES
+  (`weather/forecast.ts`, OWM-only) — "it's wet at seven tomorrow, here's a drier hour".
+
+**And a per-occurrence stamp already exists — pointed at the wrong moment.** `OccurrenceWeather`
+(`packages/cadence-shared/src/types/occurrence.ts:16` → `occurrences.weather` jsonb) is written by
+`attachOutdoorWeather` (`session-generate.ts:163`) through `setOccurrenceWeatherIfEmpty`
+(`repos/occurrences.ts:148`). Three things are wrong with it, and they are why this entry exists:
+
+1. **It fires on OPEN, not on completion.** `getOccurrenceDetail` stamps the row when the user first
+   taps the card — which for a pending session is usually *before* they go out, and sometimes days
+   before. What we store is a forecast wearing a record's clothes.
+2. **It has no date guard.** `attachOutdoorWeather` runs before the today-or-future gate that
+   protects session generation, so opening a three-week-old outdoor run for the first time stamps it
+   with **today's** weather at home. `logged_at` makes the skew detectable and nothing checks it.
+   This is a live data-integrity bug, not just a design gap — it should be fixed even if the rest of
+   this entry is never built.
+3. **The log path never stamps at all.** The doc comment on `setOccurrenceWeatherIfEmpty` says
+   "outdoor open/log paths race-safe" — but `logOccurrence` (`services/session-log.ts:52`), the one
+   function that knows a session actually happened, does not call it. The intent was written down
+   and never wired.
+
+So the work is: move the stamp to the moment of truth, give it the right place and time, and give
+the coach permission to reason from it.
+
+**Which location — coarse, and only when we have a reason to believe it.** Recommendation: keep
+`users.home_location` as the default, but record on the stamp *which* location it came from and how
+confident we are, and let a workout override it. Rationale:
+
+- Home is free and correct most days. It is wrong exactly when it matters most — the owner was
+  travelling during a recent onboarding run, and a hotel week silently attributes another city's
+  weather to every run.
+- **Never store precise per-workout coordinates.** The cache already proves we do not need them:
+  weather resolves identically anywhere inside an ~11 km cell. Store the rounded cell and a place
+  label, nothing finer. A row that says "Boulder, CO" is a weather fact; a row that says
+  `40.0176,-105.2797` is a movement record we did not ask for and do not want to hold.
+- **Routes stay off the table** (already settled). We do not read HealthKit workout routes, and
+  nothing here reopens that.
+- Practically: the client can offer a coarse fix at log time on the same footing as `LocationOffer`
+  (`apps/cadence-web/src/features/shell/LocationOffer.tsx`) already uses for home — one tap, rounded
+  before it leaves the device, no prompt if home is fine. When the user declines or the read fails,
+  fall back to home and *say so on the stamp*, so the coach can weigh it later.
+
+**Which moment — at completion, live.** `logOccurrence` is the seam: it already knows the session
+happened, already writes `log`/`value`/`provenance`/`status='done'` in one place, and already runs
+on every path (self-report, ad-hoc `adhoc-log.ts`, and the reply path). Stamping there costs at most
+one provider call per outdoor session, and usually zero — the L1/L2 cache almost always has the cell
+for today already, because the Today header fetched it that morning.
+
+This is also the honest ordering. Conditions read at the completion of a 6 a.m. run are not the
+conditions of the run if it is logged at 9 p.m., so the stamp must carry the *session's* time, not
+the fetch time. See the historical read below.
+
+**Backfill — possible, and worth doing narrowly.** WeatherKit's hourly and daily datasets accept
+start/end parameters and serve history back to **1 August 2021**, on the *same* metered quota as a
+forecast call (there is no separate historical product or price). *Verify the exact parameter names
+against the live REST reference before building* — Apple's docs page did not render for this pass,
+and the figures here come from Apple's WWDC24 session and developer-forum threads. OWM's history is
+a paid add-on we do not have, so backfill is **WeatherKit-only** and must degrade to "no stamp"
+rather than to a wrong one.
+
+That gives a clean rule: **stamp forward always; backfill only where we have a real timestamp and a
+credible location.** For A14's imported history that means the ones with an honest start time and a
+plausible home at that date — and it means accepting that older imported rows will have no
+conditions at all. An unstamped row is fine. A row stamped from the wrong city is worse than nothing,
+because the coach will cite it.
+
+**Where it is stored — in A14's store, not next to it.** A14 is designing the canonical workout
+history; the conditions stamp is a column/blob on *that* record, not a parallel table. This entry
+should not mint a second home for the same fact. Concretely: extend `OccurrenceWeather` rather than
+replacing it (`occurrences.weather` is the row A14 inherits), following the small-blob-with-a-comment
+pattern of `streak_state` (0015) and `macro_targets` (0001):
+
+```
+temp_c, feels_like_c, conditions, wind_kph, precip_mm   -- existing shape, mostly already there
+observed_at        -- the SESSION's instant, not the fetch time (the current field conflates them)
+place: 'home' | 'workout' | 'unknown'   -- provenance of the location, so the coach can discount it
+place_label        -- coarse, human ("Boulder, CO"); never coordinates
+source: 'weather_api' | 'weather_api_historical'   -- forward stamp vs backfill
+```
+
+`source` earns its place: a backfilled hourly reading and a live read at the finish line are not the
+same evidence, and the day we find a systematic bias in one we need to be able to find those rows.
+
+**How the coach uses it — the entire point, and the easiest thing to get wrong.**
+
+Three behaviours worth building:
+
+1. **Explain a number that would otherwise read as a decline.** *"You were about forty seconds a
+   kilometre slower than usual — it was 31°C. That's the heat, not you."* This is the highest-value
+   one by a distance: without conditions, a hot-week slowdown looks like lost fitness, and the plan
+   adapts *downward* against a cause that will pass on its own.
+2. **Set expectations before a session, from their own history.** *"It's going to be near freezing
+   Thursday. Last two cold mornings you ran easier than planned and that worked well — want to do
+   the same?"* Distinct from the existing `weather_move` nudge, which only knows the forecast; this
+   one knows what *they* did last time.
+3. **Offer a detour the user has not had to ask for.** Ice and high wind are safety facts, not
+   excuses. *"Thursday looks icy. I can move the run to Friday, or swap it for something indoors —
+   your call."* This routes into the existing detour vocabulary, which is where "life happened"
+   already lives.
+
+Anti-behaviours, stated as hard rules:
+
+- **Never "you skip rain days".** That is a streak-shame sentence with a weather variable in it, and
+  BRAND.md forbids the shape: *count what happened, never what broke.* If someone consistently does
+  not go out in rain, the coaching move is to offer a rainy-day alternative, not to report their
+  record back to them.
+- **Never let conditions become an excuse the coach supplies unprompted.** "It's cold, want to skip?"
+  is not warmth, it is lowering the bar on someone's behalf.
+- **Never a weather scoreboard.** No "tough conditions" badge, no bad-weather points. Hearth, not
+  scoreboard — and A12 is already unpicking one points system; do not feed it a second.
+- **Never assert a physiological mechanism.** "Heat raises your cardiac drift" is a claim we cannot
+  support. "You ran slower and it was hot" is an observation we can.
+
+**Evidence threshold — she may not generalise from one bad Tuesday.** Before the coach states a
+pattern as fact she needs, for the *same activity type*: **at least three sessions inside the
+condition band and three outside it, within a rolling 12 weeks**, with a comparable metric present
+(pace needs both distance and duration; `occurrences.value` and `log.items` already carry these) —
+and the gap has to be bigger than that person's ordinary session-to-session spread, not merely
+non-zero. Below that bar she may only *ask*: *"That felt harder than usual and it was pretty hot —
+does heat tend to hit you?"* A question invites correction; an assertion the user knows is wrong
+costs more trust than the insight was ever worth. The threshold is deliberately conservative because
+the failure is asymmetric: a missed pattern is invisible, a confidently wrong one is memorable.
+
+Open: whether the threshold is computed in code (a deterministic helper, auditable, testable) or
+left as a rule in the prompt. Strong lean toward code — this is arithmetic, and every other
+deterministic fact in the app is computed and injected rather than trusted to a model.
+
+**Architecture scaffold (existing → proposed):**
+
+| Component | File | Status |
+|---|---|---|
+| Provider client + JWT | `apps/cadence-api/src/services/weather/weatherkit-http.ts` | exists — needs a historical variant |
+| Historical read | `apps/cadence-api/src/services/weather/weather-history.ts` | **proposed** — `getWeatherAtInstant(lat, lon, iso, tz)`; hourly dataset with start/end, WeatherKit-only, returns null on OWM-only deployments |
+| Cache | `apps/cadence-api/src/repos/weather-cache.ts` + migration 0025 | exists — reuse as-is; the key is `text`, so a historical key can carry the hour with **no migration** |
+| Snapshot mapping | `weather/weatherkit-map.ts`, `weather/weather-map.ts` | exists — historical hourly needs a small sibling mapper |
+| Stamp writer | `apps/cadence-api/src/services/weather/stamp-conditions.ts` | **proposed** — owns "should this be stamped, from where, for when" |
+| Stamp storage | `occurrences.weather` jsonb / `OccurrenceWeather` | exists — extend (fields above), **owned by A14** |
+| Completion hook | `apps/cadence-api/src/services/session-log.ts` (`logOccurrence`) | exists — **add the stamp call here** |
+| Wrong-moment stamp | `session-generate.ts` (`attachOutdoorWeather`) | exists — **remove or date-guard**; it is the bug above |
+| Outdoor predicate | `isOutdoorActivity` (`weather/weather-map.ts:171`) | exists — a keyword regex; see open questions |
+| Pattern read | `weather-patterns.ts` (deterministic aggregate) | **proposed** — computes the evidence threshold, emits a fact or nothing |
+| Coach injection | `date-context.ts` / `situation.ts` / context pack | exists — the aggregate rides the same rails as every other deterministic fact |
+
+Data flow: *session completed* → `logOccurrence` writes log/value/status → `stamp-conditions`
+resolves place (workout fix if offered, else home, recorded either way) → cache or
+`getWeatherAtInstant` for the session's instant → `setOccurrenceWeatherIfEmpty` → later,
+`weather-patterns` aggregates stamped rows per activity type → threshold met → one deterministic
+sentence injected into coach context → *she can cite conditions.*
+
+**Cost.** WeatherKit's free tier is 500k calls/month, pooled per Team ID across every app and both
+the Swift and REST surfaces; over it you move to the next subscription tier rather than paying
+per call. One stamp per outdoor session is negligible against that, and most stamps are cache hits.
+A one-off historical backfill is the only spiky consumer — it should be rate-limited and
+resumable, not a loop.
+
+**Open questions:**
+
+- `isOutdoorActivity` is a keyword regex over category + title. "Track workout" matches nothing;
+  "treadmill run" matches `run` and gets stamped with outdoor weather it never saw. Does the stamp
+  need a real indoor/outdoor signal — the coach's own tag on the activity, or a confirmation at log
+  time — before any of this is trustworthy?
+- Does the user get to see and correct the stamp? "It was actually pouring" is a correction the
+  brand's confirm-before-committing instinct says we should accept, but per-workout weather editing
+  is a lot of UI for a small fact.
+- Apple Health-observed workouts have **no location at all** — `HealthDigest`
+  (`packages/cadence-shared/src/types/health.ts`) is an aggregate digest with type/start/duration/
+  distance and nothing else, and it is client-built. Stamping those means assuming home. Is that
+  assumption acceptable, or do observed workouts simply go unstamped?
+- Which conditions actually matter? The owner named rain, snow, ice, wind, cold, heat — but ice is
+  not a WeatherKit field (it is inferred from temperature plus precipitation), and humidity, which is
+  arguably the strongest driver of perceived heat effort, is not on the list. Do we band conditions
+  into a small vocabulary the coach can reason over, or hand her the numbers?
+- Does the same stamp belong on interval-tool sessions and other non-occurrence logs, or is
+  the occurrence row the only spine? (A14's answer probably settles this.)
+
+Not scoped. The date-guard bug (defect 2) is separable and should be fixed first.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
