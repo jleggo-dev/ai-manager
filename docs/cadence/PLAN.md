@@ -2300,6 +2300,214 @@ ledger back into a coaching decision, which is what keeps it safe to write best-
   diagnostics it derives from.
 - "Cost of an onboarding" is a distribution, not a number. Do we report median, p90, or mean? An
   onboarding that ran long because the user was chatty is not the same fact as one that looped.
+**A13. Run tracking, heart rate, and the watch — the WorkoutKit hand-off is v1 (owner 2026-08-11)**
+
+The owner's three requirements, in priority order: **(1)** run tracking in our application, **(2)**
+heart rate for the non-running work — HIIT, resistance, meditation, **(3)** Apple Watch
+notifications.
+
+**The ruling — settled, do not reopen.** Our phone app *composes* the workout (goal / pace /
+interval structure) with **WorkoutKit**, hands it to Apple's own Workout app on the watch — where it
+appears with our icon and name — Apple does all the live tracking (GPS, heart rate,
+battery-optimised), the result lands in HealthKit, and we read it back through the path we already
+have. Accepted trade-off: during the run the user is in Apple's UI, so **no live coach nudges in
+v1**. A native watchOS app is wanted eventually; it is v2.
+
+**Verified against the SDK, not from memory.** Every API claim below was read out of the iOS 26.5
+SDK's own `WorkoutKit.swiftinterface` (under `iPhoneOS.sdk/System/Library/Frameworks/`, in
+`WorkoutKit.framework/Modules/WorkoutKit.swiftmodule/`) and cross-checked against
+[Apple's docs](https://developer.apple.com/documentation/workoutkit). Framework floor is **iOS 17 /
+watchOS 10**. What it actually gives us:
+
+- **Four composition types.** `SingleGoalWorkout` (one goal), `PacerWorkout` (distance *and* time —
+  this is the "run 5 k in 28 min" shape), `CustomWorkout` (warm-up + `[IntervalBlock]` + cool-down),
+  `SwimBikeRunWorkout`. Goals are `WorkoutGoal.open | .distance | .time | .energy` (+
+  `.poolSwimDistanceWithTime`, iOS 18).
+- **Interval structure maps onto ours almost exactly.**
+  `IntervalBlock(steps: [IntervalStep], iterations: Int)`, and
+  `IntervalStep(.work | .recovery, goal:alert:)`. Our own
+  `IntervalSet { workSec, recoverSec, rounds }` (`packages/cadence-shared/src/interval.ts`) **is**
+  one `IntervalBlock`, so `IntervalPlan.sets` → `blocks` and multi-set falls out for free. Two
+  mismatches: `restBetweenSetsSec` has no home in WorkoutKit's model (not a block, not a step), and
+  EMOM (`recoverSec: 0`) must emit a work-only step rather than a zero-length recovery.
+- **Support is a runtime question, not a table.** `CustomWorkout.supportsActivity(_:)`,
+  `.supportsGoal(_:activity:location:)` and `.supportsAlert(_:activity:location:)` are static
+  functions the SDK answers at run time. **Probe them on a device and write down what comes back** —
+  a hardcoded matrix of "which activities WorkoutKit allows" will be wrong and will rot.
+- **Scheduled, not started.** `WorkoutPlan.openInWorkoutApp()` is `@available(watchOS 10.0, *)` and
+  `@available(iOS, unavailable)` — confirmed in the interface file. From an iPhone the *only* route
+  is `WorkoutScheduler.shared.schedule(_:at: DateComponents)`, plus `scheduledWorkouts`,
+  `remove`, `markComplete`, `removeAllWorkouts`, and the cap `maxAllowedScheduledWorkoutCount`. So v1 is
+  "it's on your watch for Thursday", never "tap here and it starts on your wrist". Users see the
+  coming seven days and the previous seven (WWDC23-10016).
+- **No watch, no problem — and we can tell.** `WorkoutScheduler.isSupported`, `authorizationState`
+  / `requestAuthorization()` (`notDetermined | restricted | denied | authorized`), and
+  `StateError.watchNotPaired` / `.workoutApplicationNotInstalled`. The affordance must not render
+  at all when these say no; a dead "send to your watch" button is exactly the class of defect A5/A6
+  keep finding.
+- **The join key we did not know we had.** `WorkoutPlan.init(_:id: UUID = UUID())` lets *us* choose
+  the id, and `HKWorkout.workoutPlan` (async, iOS 17+) hands the plan back off a completed workout.
+  So a HealthKit workout can be **matched to our occurrence by id** instead of guessed at by
+  timestamp and type. This is the most valuable thing in the framework for us and it is the clean
+  hand-off to A14.
+
+**v0 — phone-only Core Location + MapKit tracking. Verdict: don't build it.** Asked honestly, it is
+not a smaller first step than the hand-off; it is a bigger one.
+
+- *What it costs.* A continuous `CLLocationManager` session, the `location` background mode (a new
+  `UIBackgroundModes` entry in `apps/cadence-ios/ios/App/App/Info.plist` plus an App Review
+  justification), `NSLocationAlwaysAndWhenInUseUsageDescription` — we have when-in-use only, and its
+  copy promises *"It never tracks where you go"*, which continuous route tracking makes false — a
+  route store, GPS-noise filtering, pace maths, auto-pause, a live map, screen-wake, battery
+  behaviour, and crash-safe partial-run recovery. `@capacitor/geolocation` is already installed but
+  gives one coarse `getCurrentPosition` for weather (`capability/native.ts`); it is not a run
+  tracker, and streaming location through the webview bridge is the wrong place for one.
+- *What it buys.* A run recorded less accurately than the watch, on a device many runners don't
+  carry, **with no heart rate at all** — requirement 2 gets nothing. And to reach A14's store by the
+  same path as everything else it would have to be written *into* HealthKit, which means
+  `WRITE_WORKOUTS` and rewriting the `NSHealthUpdateUsageDescription` string we currently use to say
+  we don't write.
+- *Against v1:* a pure composer plus a small plugin, **no entitlement, no new background mode, no
+  new permission**, and it returns GPS *and* heart rate.
+- *The one thing it would cover:* someone with no Apple Watch. That is real and worth naming rather
+  than hiding — but the answer for them is the manual log and the Apple Health import we already
+  have, not a second tracking stack. Revisit only if watchless users turn out to be the majority.
+
+**v1 — the committed slice. Architecture.**
+
+| Component | Where | Status |
+|---|---|---|
+| Composer: `SessionItem` → `WorkoutPlanSpec` (pure) | `packages/cadence-shared/src/workout-plan.ts` | **new** |
+| Capability seam entry `WorkoutPlanCapability` | `apps/cadence-web/src/lib/capability/index.ts` | extend |
+| Native impl / web no-op | `…/capability/native.ts`, `…/capability/web.ts` | extend |
+| Native bridge `CadenceWorkoutPlanPlugin` | `apps/cadence-ios/ios/App/App/CadenceWorkoutPlan/` | **new** |
+| Prescription source | `occurrences.session` (migration 0010), built by `session-generate.ts` | existing |
+| Interval vocabulary + bounds | `packages/cadence-shared/src/interval.ts` | existing, reuse |
+| Read-back | `capacitor-health` → `capability.health.getWorkouts` | existing |
+| Where completed workouts land | **A14's cross-source store** | not designed here |
+
+- **The bridge is ours and it has to be native.** A webview cannot run on watchOS and cannot call
+  WorkoutKit, so the calls live in a Capacitor plugin in the **App target** — modelled on
+  `apps/cadence-ios/ios/App/App/CadenceCoachIdentity/CadenceCoachIdentityPlugin.swift`
+  (`@objc(...)`, `CAPPlugin, CAPBridgedPlugin`, `pluginMethods`). Methods: `isSupported()`,
+  `requestAuthorization()`, `schedule({plans})`, `listScheduled()`, `remove({id, dateISO})`,
+  `markComplete({id, dateISO})`, `removeAll()`. Same manual Xcode wiring caveat as
+  CadenceCoachIdentity — Capacitor's SPM layout does not auto-discover loose Swift files, so the
+  folder must be dragged into the App target (that plugin's README documents the step, and is itself
+  still marked UNVERIFIED ON DEVICE; a second hand-wired plugin doubles that debt).
+- **Everything decidable is decided in TypeScript.** The Swift side decodes a spec and calls the
+  framework; it makes no judgements. `tool: 'interval'` + the five `interval_*` fields →
+  `CustomWorkout`; a run with both `distance_km` and `duration_min` → `PacerWorkout`; one or the
+  other → `SingleGoalWorkout(.distance / .time)`; anything else → nothing at all rather than a
+  meaningless `.open` goal. Reuse the existing clamps (`MAX_SETS 4`, `MAX_ROUNDS 20`,
+  `MAX_INTERVAL_SEC 3600`) — do not invent a second set of bounds on the Swift side.
+- **Plan id = f(occurrence_id), deterministic.** Makes scheduling idempotent under replan *and*
+  makes the read-back attributable. This is the contract A14 consumes.
+- **The server needs nothing.** Scheduling is device-local and HealthKit-adjacent; the phone already
+  holds the session. If the API ever needs to know what is on a watch, that is a projection of A14's
+  store, not a second source of truth.
+- **Flow:** coach turn → `occurrences.session` → user opens the session → "Send this to your watch"
+  → composer → seam → plugin → `WorkoutScheduler.schedule` → Apple's Workout app → `HKWorkout`
+  carrying `workoutPlan.id` → `queryWorkouts` → A14 → occurrence done.
+- **Build order.** (1) the pure composer and its tests — all the design risk is here and it needs no
+  Xcode; (2) the plugin with `isSupported` / `requestAuthorization` only, confirmed on a device;
+  (3) `schedule` + `listScheduled` and one real run end-to-end; (4) read-back matching by plan id.
+- **Provisioning.** WorkoutKit needs **no entitlement** — nothing is added to `App.entitlements`,
+  no new usage-description string, so Debug sideload and the free-team story are unchanged. The one
+  real build change is the floor: the project is `IPHONEOS_DEPLOYMENT_TARGET = 15.0` and WorkoutKit
+  is iOS 17. `CapApp-SPM/Package.swift` declares `.iOS(.v15)` and is stamped "DO NOT MODIFY —
+  managed by Capacitor CLI", which is a second reason the bridge belongs in the App target behind
+  `@available(iOS 17, *)` guards rather than in the SPM package.
+
+**v2 — a native watchOS app (scaffolded, not designed).** Only start it once v1's read-back is
+proven against real HealthKit data. What it structurally adds: `HKWorkoutSession` +
+`HKLiveWorkoutBuilder` for **live** heart rate, distance and energy in *our* UI; mid-run coaching,
+the thing v1 knowingly gives up; `openInWorkoutApp()`, so "start this now" becomes possible at all;
+and standalone use with the phone left behind. What it costs: a second app target and a second UI
+codebase in SwiftUI — **this is the point at which "one codebase behind a capability seam" ends** —
+plus complications, watch-side notification layouts, and another review surface.
+
+**Requirement 2 — heart rate, path by path.**
+
+| | v0 phone GPS | v1 hand-off | v2 watch app |
+|---|---|---|---|
+| Running HR | none | after the fact, from HealthKit | live |
+| HIIT / resistance HR | none | after the fact | live |
+| HR *targets during* the work | none | yes — Apple enforces them | yes |
+| Meditation | none | not a WorkoutKit activity | possible, see below |
+
+- **Targets are free in v1.** `HeartRateRangeAlert` (`.heartRate(120...150, unit:)`) and
+  `HeartRateZoneAlert` (`.heartRate(zone: 3)`) attach per step, and the watch does the alerting.
+  Legality per activity is `supportsAlert(_:activity:location:)` — probe, don't assume.
+- **Reading HR back is where the actual bug is, and it has nothing to do with the watch.**
+  `capacitor-health`'s `Workout` payload declares `heartRate?: HeartRateSample[]` and **no
+  `avgHeartRate` field at all** (`node_modules/capacitor-health/dist/esm/definitions.d.ts`; its
+  `HealthPlugin.swift` never emits one). Our seam's `toSeamWorkout` reads `w.avgHeartRate`
+  (`apps/cadence-web/src/lib/capability/native.ts`), so **`Workout.avgHr` has always been
+  `undefined`** — and we pass `includeHeartRate: false` regardless. Requirement 2 is blocked on
+  this, not on hardware. Fixing it means asking for the samples and reducing them, and the series is
+  unbounded (`HKObjectQueryNoLimit` — 700+ samples for an hour), so the reduction happens natively
+  or at the seam, never as a raw array crossing into React state.
+- **Meditation is not a workout and must not be made into one.** HealthKit models it as
+  `mindfulSession`, and the plugin already supports it — `READ_MINDFULNESS` in `HealthPermission`,
+  and `queryAggregated({ dataType: 'mindfulness' })`. We request neither today
+  (`HEALTH_PERMISSIONS` in `native.ts` is five read scopes; mindfulness is not among them), so
+  adding it is small. But heart rate during a sit is a **calm/recovery signal and nothing else**:
+  never a target, never a score, and the coach never says a sit went better because a number went
+  down. Hearth, not scoreboard. Our `meditate` tool already runs in-app with bells; the watch adds a
+  measured minute count and resting-HR context, not a grade.
+
+**Requirement 3 — Apple Watch notifications: free vs. work.**
+
+**Free today, zero code:** an iPhone notification is shown on the paired watch whenever the phone is
+locked — Apple's default forwarding, with "Mirror my iPhone" the default per-app setting ([Apple
+Support HT108369](https://support.apple.com/en-us/108369)). So every push already sent through
+`apps/cadence-api/src/services/notify/dispatch.ts` → `push-apns.ts`, and every local nudge
+scheduled by `apps/cadence-web/src/lib/local-notifications-sync.ts`, **already reaches the wrist**.
+There is no watch-side work required to get a notification onto a watch.
+
+What actually needs work, most valuable first:
+
+- **Nothing consumes a tap.** There is no `pushNotificationActionPerformed` listener, and no
+  `localNotificationActionPerformed` one, anywhere in `apps/cadence-web` or `apps/cadence-ios`, and
+  no `UNUserNotificationCenterDelegate` in `AppDelegate.swift`. The categories and the seven action
+  ids in `packages/cadence-shared/src/notifications/actions.ts` are registered and carried on push
+  as `aps.category` — and the buttons they draw do nothing. **On the wrist that is worse than on the
+  phone**, because an actionable notification *is* the whole interaction; there is no natural "open
+  the app and go find it" fallback. Highest-value item in requirement 3, and it is not watch work at
+  all.
+- **Interruption level and thread id are unset.** `push-apns.ts` builds
+  `{aps: {alert, sound, category}}` — no `interruption-level`, no `thread-id`, no
+  `relevance-score`. `almost_time` for a session starting in ten minutes is the textbook
+  time-sensitive case, and on the watch relevance ordering decides what is seen first. Payload-only,
+  cheap.
+- **A watch app would add** our own notification layout, complications and the Smart Stack. All v2,
+  all optional, none of it needed for a nudge to arrive.
+
+And note that a scheduled WorkoutKit workout is itself watch presence: it sits at the top of the
+Workout app's list on its day, with our icon and name, without any notification at all. Pair that
+with the existing `almost_time` nudge and requirement 3 is largely answered before any
+watch-specific code exists.
+
+**Open questions.**
+- `restBetweenSetsSec` has no WorkoutKit representation. Drop it, or fold it in as a leading
+  recovery step of the next block? (Dropping it silently changes what the user was told they'd do.)
+- Raise the deployment floor to iOS 17, or `@available`-guard indefinitely? Raising it is cleaner
+  and should be an explicit decision, not a side effect of this feature.
+- **When do we schedule?** The whole committed week up front, or a rolling day or two? Users only
+  see ±7 days, and `maxAllowedScheduledWorkoutCount` is a real cap we must read rather than assume.
+  What happens on a detour or a replan — `remove` then re-`schedule`, and does an in-progress
+  workout survive that?
+- **Who marks an occurrence done** — our read-back, or `markComplete`? Both exist and they are
+  different truths: `markComplete` tells Apple's list it happened; a HealthKit read tells us *what*
+  happened. When they disagree, ours wins — but that needs saying out loud.
+- Does "send this to your watch" live on the session screen, or does the coach offer it in
+  conversation? Every other tool in Cadence is offered by the coach.
+- Is SwiftUI's `workoutPreview(_:isPresented:)` (iOS 17+, the `_WorkoutKit_SwiftUI` cross-import
+  overlay) worth presenting over the webview as an Apple-drawn confirmation, or is our own confirm
+  card better? It is the only piece of native UI this feature would otherwise need.
+
+Not scoped beyond v1's first slice. v0 is rejected; v2 waits on v1 proving the read-back.
 
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
