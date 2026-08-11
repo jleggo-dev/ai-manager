@@ -62,6 +62,14 @@ function authErrorMessage(error: { message?: string } | null | undefined, fallba
   return message || fallback;
 }
 
+/**
+ * Supabase says this several ways depending on provider and on whether it surfaced from the link
+ * call or came back on the deep link, so match on meaning rather than one exact string.
+ */
+function isAlreadyTakenMessage(message: string): boolean {
+  return /already (been )?(registered|exists|linked|in use)|identity_already_exists|user_already_exists/i.test(message);
+}
+
 export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMode } = {}) {
   const upgrading = screenMode === 'upgrade';
   const [mode, setMode] = useState<Mode>(upgrading ? 'signup' : 'signin');
@@ -70,6 +78,15 @@ export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMod
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [notice, setNotice] = useState('');
+  /**
+   * The identity they just offered is already attached to ANOTHER account.
+   *
+   * Without a way out this is a dead end, and a real one: onboarding runs anonymously, the gate
+   * only ever offers LINKING (linking is what keeps the plan attached to the id it was built on),
+   * so "you already have an account" leaves someone unable to finish and unable to leave. The way
+   * out has to be explicit, because it costs them this run.
+   */
+  const [existingAccount, setExistingAccount] = useState(false);
 
   async function continueWith(provider: NativeOAuthProvider) {
     if (busy) return;
@@ -82,7 +99,8 @@ export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMod
     if (isNativeShell()) {
       const errMsg = await (upgrading ? linkProviderNative(provider) : signInWithProviderNative(provider));
       if (errMsg) {
-        setMsg(errMsg);
+        if (isAlreadyTakenMessage(errMsg)) setExistingAccount(true);
+        else setMsg(errMsg);
         setBusy(false);
         return;
       }
@@ -114,7 +132,13 @@ export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMod
   // dismissed sheet, or stay silent on a failed exchange.
   useEffect(() => {
     const onFailed = (e: Event) => {
-      setMsg((e as CustomEvent<string>).detail || 'Could not finish signing in — try again.');
+      const detail = (e as CustomEvent<string>).detail || '';
+      if (isAlreadyTakenMessage(detail)) {
+        setMsg('');
+        setExistingAccount(true);
+      } else {
+        setMsg(detail || 'Could not finish signing in — try again.');
+      }
       setBusy(false);
     };
     const onClosed = () => setBusy(false);
@@ -125,6 +149,19 @@ export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMod
       window.removeEventListener(AUTH_SHEET_CLOSED_EVENT, onClosed);
     };
   }, []);
+
+  /**
+   * Drop the anonymous session and land on the sign-in screen. Signing out is what returns the app
+   * to its signed-out state, and App's auth listener does the rest — the same path as Settings'
+   * sign-out, so there is no second notion of "logged out" to keep in step.
+   *
+   * This abandons the anonymous run, which is why it is never automatic and why the copy says so
+   * before they tap.
+   */
+  async function leaveForSignIn() {
+    setBusy(true);
+    await supabase.auth.signOut().catch(() => undefined);
+  }
 
   async function submit() {
     const e = email.trim();
@@ -143,6 +180,13 @@ export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMod
       // to save. They confirm the address, and "Change password" in Settings (the existing reset-
       // link flow) is how they add one — or they just keep using the provider they signed up with.
       const { error } = await supabase.auth.updateUser({ email: e });
+      // The same dead end as the providers, reached by typing the address instead: this email is
+      // already somebody's account, and linking is the only thing this screen does.
+      if (error && isAlreadyTakenMessage(error.message ?? '')) {
+        setExistingAccount(true);
+        setBusy(false);
+        return;
+      }
       setMsg(error ? authErrorMessage(error, 'Something went wrong — try again.') : '');
       if (!error) setNotice('Check your email to confirm it — your week is saved either way.');
       setBusy(false);
@@ -229,6 +273,14 @@ export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMod
             aria-label="Password"
             autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
           />
+        )}
+        {existingAccount && (
+          <div className="auth-error auth-existing">
+            <p>You already have an account with that. Sign in to it instead — this week won&rsquo;t carry over.</p>
+            <button type="button" className="auth-existing-go" onClick={() => void leaveForSignIn()}>
+              Sign in to that account
+            </button>
+          </div>
         )}
         {msg && <div className="auth-error">{msg}</div>}
         {!authConfigured && <div className="auth-error">{"Sign-in isn't configured yet (missing Supabase keys)."}</div>}
