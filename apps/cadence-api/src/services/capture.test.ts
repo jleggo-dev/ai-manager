@@ -6,7 +6,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const runJobBySlug = vi.fn();
 const insertGoal = vi.fn();
 const listGoalsByStatus = vi.fn();
-const deleteCapturedWithoutMilestones = vi.fn();
+const updateGoal = vi.fn();
+const deleteGoal = vi.fn();
 const insertEquipment = vi.fn();
 const deleteAllEquipment = vi.fn();
 const mergeBaseline = vi.fn();
@@ -29,7 +30,8 @@ vi.mock('../config.ts', () => ({
 vi.mock('../repos/goals.ts', () => ({
   insertGoal: (...a: unknown[]) => insertGoal(...a),
   listGoalsByStatus: (...a: unknown[]) => listGoalsByStatus(...a),
-  deleteCapturedWithoutMilestones: (...a: unknown[]) => deleteCapturedWithoutMilestones(...a),
+  updateGoal: (...a: unknown[]) => updateGoal(...a),
+  deleteGoal: (...a: unknown[]) => deleteGoal(...a),
 }));
 vi.mock('../repos/equipment.ts', () => ({
   insertEquipment: (...a: unknown[]) => insertEquipment(...a),
@@ -56,7 +58,8 @@ describe('runCaptureExtract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listGoalsByStatus.mockResolvedValue([]);
-    deleteCapturedWithoutMilestones.mockResolvedValue(undefined);
+    updateGoal.mockResolvedValue(undefined);
+    deleteGoal.mockResolvedValue(undefined);
     insertGoal.mockResolvedValue({ goal_id: 'g1' });
     insertEquipment.mockResolvedValue({ equipment_id: 'e1' });
     deleteAllEquipment.mockResolvedValue(undefined);

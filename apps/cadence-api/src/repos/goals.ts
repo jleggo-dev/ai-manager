@@ -5,10 +5,12 @@ export async function listGoals(userId: string): Promise<Goal[]> {
   return sql<Goal[]>`select * from cadence.goals where user_id = ${userId}`;
 }
 
+/** Oldest first — capture's duplicate-folding picks a survivor by age, so the order is load-bearing. */
 export async function listGoalsByStatus(userId: string, statuses: GoalStatus[]): Promise<Goal[]> {
   return sql<Goal[]>`
     select * from cadence.goals
-    where user_id = ${userId} and status = any(${statuses})`;
+    where user_id = ${userId} and status = any(${statuses})
+    order by created_at asc`;
 }
 
 export async function getGoal(userId: string, goalId: string): Promise<Goal | null> {
@@ -34,14 +36,6 @@ export async function insertGoal(userId: string, goal: Partial<Goal>): Promise<G
 /** Clear goals in a given status (used to replace pre-confirmation 'captured' goals). */
 export async function deleteGoalsByStatus(userId: string, status: GoalStatus): Promise<void> {
   await sql`delete from cadence.goals where user_id = ${userId} and status = ${status}`;
-}
-
-/** Replace-captured churn, but SPARE goals the user has invested stepping-stones into — durable
- *  intent (milestones) must survive a capture re-run even though the goal is still 'captured'. */
-export async function deleteCapturedWithoutMilestones(userId: string): Promise<void> {
-  await sql`
-    delete from cadence.goals
-    where user_id = ${userId} and status = 'captured' and coalesce(jsonb_array_length(milestones), 0) = 0`;
 }
 
 /** User edit from the review wizard — update the editable fields (null keeps existing). */
