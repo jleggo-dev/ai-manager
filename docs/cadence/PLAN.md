@@ -999,6 +999,71 @@ cleanly, and only one half survives:
   own to a user's Strava feed sends no Strava Data anywhere; nothing lands in our store and nothing
   reaches a model. See the write section below.
 
+**The generic connections pattern (this is the durable deliverable)**
+
+Strava would be our first third-party OAuth integration, and whatever we conclude about Strava
+specifically, **the pattern outlives it** — A17 (Oura) consumes it, Google Fit / Health Connect
+would, Garmin would. `Connection` in
+[`packages/cadence-shared/src/types/baseline.ts:169`](../../packages/cadence-shared/src/types/baseline.ts)
+is currently a stub with nothing behind it:
+
+```ts
+export interface Connection {
+  source: 'apple_health' | string;   // `| string` = "we haven't decided yet"
+  scopes: string[];
+  status: 'connected' | 'disconnected';
+}
+```
+
+It lives on `UserProfile.connections` and no table backs it. Note the shape already leaks a wrong
+assumption: `apple_health` is not a connection in this sense at all — HealthKit is an on-device
+grant with no server-side token, no refresh, and no revocation webhook (see
+`migrations/cadence/0024_health_digests.sql`, where the client builds the digest and POSTs it). Two
+genuinely different things are sharing one type. The generic pattern should model **server-side
+OAuth connections**, and `apple_health` should either move out or be explicitly marked as the
+device-grant variant.
+
+*Generic — belongs to the pattern, not to Strava:*
+
+1. **`cadence.connections` table** (new migration, `0031_connections.sql`): `user_id`, `provider`,
+   `provider_user_id`, `scopes text[]`, `status`, `connected_at`, `last_sync_at`, `expires_at`, and
+   the encrypted token blob. One row per (user, provider). RLS owner policy like every other
+   Cadence table; `pack_touch` trigger if a connection's existence should invalidate the context
+   pack. **The refresh token must never be readable by the client** — no `VITE_*`, no anon-key
+   read path; the row is service-role-only, which means the RLS policy here is *deny-to-user*,
+   unlike the rest of the schema.
+2. **Encrypted-at-rest token store** (`apps/cadence-api/src/services/connections/token-store.ts`):
+   AES-256-GCM via `node:crypto` with a key from `CADENCE_CONNECTIONS_KEY`, added to
+   `apps/cadence-api/src/config.ts` beside the existing `apns` / `weatherkit` blocks. Include a
+   `key_version` column from day one so rotation is possible without a migration.
+   `apps/cadence-api/src/services/weather/weatherkit-http.ts` is the precedent for
+   "third-party credentials, no SDK, config-gated, absent block means feature-off" — follow its
+   `isWeatherKitConfigured()` shape so an unconfigured deploy degrades rather than crashes.
+3. **Generic OAuth routes** (`apps/cadence-api/src/routes/connections.ts`, mounted in
+   `apps/cadence-api/src/app.ts` next to the other `/me` routes): `GET /me/connections` (status
+   list — never tokens), `POST /me/connections/:provider/start` (returns the authorize URL with a
+   signed, single-use, short-TTL `state`), `GET /connections/:provider/callback` (public, exchanges
+   code, stores tokens), `DELETE /me/connections/:provider` (revoke upstream, then delete local).
+   Provider-specific bits (authorize URL, scope strings, token endpoint, revoke endpoint) live in a
+   small per-provider module the generic router looks up.
+4. **Refresh-on-use with a single-flight lock.** Serverless means N concurrent lambdas can each
+   notice an expired token and each burn a refresh; providers that rotate refresh tokens will
+   invalidate all but one and the connection dies. A row-level advisory lock (or a `refreshing_at`
+   claim column) is not optional here.
+5. **Revocation is three-sided:** the user disconnects in Cadence, the user revokes at the provider
+   (we learn via webhook or a 401), or we shut the integration down. All three must converge on the
+   same code path — the same lesson as A5's "sign out and start over should share one path".
+6. **A per-provider retention policy is part of the pattern, not a Strava special case.** Strava's
+   is 7 days plus a 30-day deletion SLA; Oura's will differ. The connection row should carry the
+   provider's policy so a sweeper can enforce it generically rather than each integration
+   remembering its own rules.
+
+*Strava-specific — must NOT leak into the generic layer:* the seven-day cache ceiling and the
+48-hour deletion-propagation SLA; the single-webhook-subscription-per-application constraint (§below);
+the attribution/branding obligations; and the fact that for Strava the store is write-only. If those
+end up hard-coded in `connections.ts` rather than in a `providers/strava.ts` descriptor, Oura will
+inherit rules that were never about it.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
