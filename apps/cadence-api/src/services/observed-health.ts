@@ -37,6 +37,12 @@ const MAX_MODALITIES = 8;
 const day = (iso: string): string => iso.slice(0, 10);
 const round1 = (n: number): number => Math.round(n * 10) / 10;
 
+/** One previous best and the day it was set. Both halves matter — see the digest's own comment. */
+export interface ObservedBest {
+  value: number;
+  date: string;
+}
+
 export interface ObservedModality {
   /** "running", "strength training" — the thing they actually do. */
   type: string;
@@ -45,6 +51,22 @@ export interface ObservedModality {
   avg_duration_min: number | null;
   avg_distance_km: number | null;
   last: string;
+  /**
+   * The same figures over the trailing four weeks. Null only when the digest predates the field —
+   * `sessions: 0` is how "none lately" is said. Steps have always had this recency half
+   * (`avg_per_day_last_7`); training had none, so the planner could not tell a build-up from a
+   * taper and read a man mid-build as a 4.3 km jogger.
+   */
+  last_28_days: {
+    sessions: number;
+    avg_duration_min: number | null;
+    avg_distance_km: number | null;
+    total_distance_km: number | null;
+  } | null;
+  /** Furthest single session, ever, inside the period. */
+  best_distance_km: ObservedBest | null;
+  /** Longest single session by time. */
+  best_duration_min: ObservedBest | null;
 }
 
 export interface ObservedHealth {
@@ -57,6 +79,12 @@ export interface ObservedHealth {
   total_workouts: number;
   workouts_per_week: number;
   most_recent_workout: { type: string; date: string; duration_min: number | null; distance_km: number | null } | null;
+  /**
+   * The individual sessions, newest first — not a statistic, the list. Five 5–6 km runs in nine
+   * days is visible the moment they stop being collapsed into a mean, and the digest has always
+   * carried them; only the newest one was ever read.
+   */
+  recent_workouts: { date: string; type: string; duration_min: number | null; distance_km: number | null }[];
   days_since_last_workout: number | null;
   daily_steps?: {
     what_this_is: string;
@@ -73,7 +101,12 @@ const WHAT_THIS_IS =
   "Measured by this person's own phone/watch (Apple Health) and shared by them. This is what they " +
   'ACTUALLY did in the world over the period below, independent of any Cadence plan. Treat it as ' +
   'evidence of the capacity they already have and build FROM it — it is a floor, never a ceiling, ' +
-  'and never a target to be reached.';
+  'and never a target to be reached. READ THE RECENT FIGURES FIRST: last_28_days and ' +
+  'recent_workouts are what they are doing NOW, and the period-long averages are the longer ' +
+  'baseline behind them — a build-up and a taper produce the same average, so plan from the ' +
+  'recent pair and the dated sessions. best_distance_km and best_duration_min are things this ' +
+  'person has ALREADY done, with the date they did them; they size what is realistic and are ' +
+  'never themselves a target.';
 
 /**
  * The label that keeps the OTHER half of `recent_activity` honest.
@@ -93,6 +126,10 @@ const STEPS_WHAT_THIS_IS =
   'Everyday movement outside recorded workouts. A high step count with few workouts means an active ' +
   'person who does not press start on a watch, NOT a sedentary one.';
 
+/** Absent stays absent: a digest built before bests existed must not report a null-valued one. */
+const best = (b: HealthDigest['byType'][number]['bestDistanceKm']): ObservedBest | null =>
+  b ? { value: b.value, date: b.dateISO } : null;
+
 function modalities(digest: HealthDigest): ObservedModality[] {
   const weeks = Math.max(1, digest.periodDays / 7);
   return digest.byType.slice(0, MAX_MODALITIES).map((t) => ({
@@ -102,15 +139,37 @@ function modalities(digest: HealthDigest): ObservedModality[] {
     avg_duration_min: t.avgDurationMin,
     avg_distance_km: t.avgDistanceKm,
     last: day(t.lastISO),
+    last_28_days: t.last28
+      ? {
+          sessions: t.last28.count,
+          avg_duration_min: t.last28.avgDurationMin,
+          avg_distance_km: t.last28.avgDistanceKm,
+          total_distance_km: t.last28.totalDistanceKm,
+        }
+      : null,
+    best_distance_km: best(t.bestDistanceKm),
+    best_duration_min: best(t.bestDurationMin),
   }));
 }
 
-function mostRecent(
+/**
+ * The newest session, the days since it, and the whole dated list.
+ *
+ * `most_recent_workout` stays exactly as it was — the planner template has read it since this file
+ * shipped — and `recent_workouts` is the four sessions behind it that nothing ever looked at.
+ */
+function recentSessions(
   digest: HealthDigest,
   nowMs: number,
-): Pick<ObservedHealth, 'most_recent_workout' | 'days_since_last_workout'> {
+): Pick<ObservedHealth, 'most_recent_workout' | 'recent_workouts' | 'days_since_last_workout'> {
+  const recent_workouts = digest.recent.map((r) => ({
+    date: day(r.start),
+    type: r.type,
+    duration_min: r.durationMin,
+    distance_km: r.distanceKm,
+  }));
   const r = digest.recent[0];
-  if (!r) return { most_recent_workout: null, days_since_last_workout: null };
+  if (!r) return { most_recent_workout: null, recent_workouts, days_since_last_workout: null };
   const t = Date.parse(r.start);
   return {
     most_recent_workout: {
@@ -119,6 +178,7 @@ function mostRecent(
       duration_min: r.durationMin,
       distance_km: r.distanceKm,
     },
+    recent_workouts,
     days_since_last_workout: Number.isFinite(t) ? Math.max(0, Math.floor((nowMs - t) / DAY_MS)) : null,
   };
 }
@@ -171,7 +231,7 @@ export function toObservedHealth(rows: StoredHealthDigest[], nowMs = Date.now())
     trains: modalities(digest),
     total_workouts: digest.totalWorkouts,
     workouts_per_week: digest.weeklyFrequency,
-    ...mostRecent(digest, nowMs),
+    ...recentSessions(digest, nowMs),
     ...(steps
       ? {
           daily_steps: {
