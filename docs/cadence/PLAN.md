@@ -868,6 +868,179 @@ calculation: an offer is only made when it fits, and it is weighed against the g
 
 Not scoped. Needs a design pass before any code.
 
+**A11. What does this cost? — token accounting by user, task, day, week and phase (2026-08-11)**
+
+Owner: *"We will want to start tracking token usage: by user, by task, by day, by week, etc
+(including by onboarding) so that we can begin to assess the cost of running this application.
+Eventually we can build an admin view to review the data, but for now we just need to start
+tracking it."* So: capture must be complete and correct now, aggregation must be answerable in SQL,
+and there is no admin UI in this entry.
+
+**What was already captured — verified against production, not assumed.**
+AI Admin writes one `diagnostic_logs` row per model call, and for Cadence it is in far better shape
+than expected. Over the whole corpus (4,780 rows, 2026-02-08 → 2026-08-11), the Cadence slice is
+1,283 rows and every axis the owner named is already on them:
+
+| axis | column | Cadence coverage |
+|---|---|---|
+| by user | `user_id` | **1,283 / 1,283 — zero nulls** |
+| by task | `processing_job_id` → `processing_jobs.slug` | every job row |
+| by day/week | `created_at` (timestamptz) | every row |
+| tokens | `llm_response.usage.{prompt,completion,total}_tokens` | see below |
+| model | `llm_timing.model` | every row that reached a model |
+
+The `user_id` question mattered most and the answer is the good one: `DiagnosticSession`'s
+constructor reads `effectiveUserId(getAuthContext())`, and for `mode: 'api_key'` that returns
+`forwardedUserId` (`backend/src/db/tenant.ts`) — which `aim.ts`'s `aimContext()` sets to the
+**Cadence end-user id**, not the workspace or the sentinel api-key uuid. Confirmed on live rows: 26
+distinct `user_id`s, all real Cadence users. Per-user attribution needed nothing built.
+
+Per-job usage coverage is also near-perfect, because no Cadence job sets `advanced.diagnostics`, so
+`shouldRunDiagnostics` returns `{enabled: true, persist: true}` for all 28 and the verbose branch
+that calls `endLlmTimer` always runs. Verified: `prescribe-session` 189/189, `context-select`
+187/187, `synthesize-plan` 93/93, `pack-select` 80/80, `pack-summarize` 73/73, `capture-detour`
+60/60, `plan-vet` 53/53, `capture-extract` 288/290. **Broker fire-and-forget calls are fully
+attributed** — `void runCaptureExtract(...)` still runs inside `withAim`, so the ALS context is
+live when the diagnostic row is constructed. That was the third suspected gap and it is not one.
+
+Sample query that produced the table above (AI Admin DB, `platform:cadence` slice):
+
+```sql
+select date_trunc('day', d.created_at) as day, coalesce(j.slug, 'coach-chat') as task,
+       count(*) as calls,
+       count(*) filter (where d.llm_response->'usage'->>'prompt_tokens' is not null) as with_usage,
+       sum((d.llm_response->'usage'->>'prompt_tokens')::bigint)     as prompt_tokens,
+       sum((d.llm_response->'usage'->>'completion_tokens')::bigint) as completion_tokens
+from diagnostic_logs d left join processing_jobs j on j.id = d.processing_job_id
+where d.calling_application = 'platform:cadence'
+group by 1, 2 order by 1 desc, 5 desc nulls last;
+```
+
+**Gap 1 — the most expensive call in the app is the one we half-measure.** The coach chat is
+`anthropic-claude-4-5-sonnet` at ~10k prompt tokens a turn, and it is the only Cadence call whose
+usage does not come from AI Admin's own LLM client: Cadence streams in-process and reconstructs
+usage from the SSE frames in `coach-stream.ts`, then hands it to `recordCoachReply`. Of 184 coach
+turns, **141 carry usage — and the trend is the wrong way: July 111/130 (85%), August 25/49 (51%)**.
+The mechanism is exact, not mysterious. Upstream sometimes ends the stream with `inputTokens: 0` /
+no usage frame at all; `relayAndAccumulate` faithfully returns `0`; and then `aim.ts` line 187 —
+`args.metrics.promptTokens || args.metrics.completionTokens` — sees `0 || 0`, decides there is no
+usage, and writes `usage: null`. Live proof, one conversation on 2026-08-11 where the prompt-token
+count climbs turn over turn (9252 → 9616 → 9857 → 9999 → 10085 → 10360 → 10491) with **zero-token
+turns interleaved between them** — turns that plainly consumed ~10k prompt tokens each and are
+recorded as having consumed nothing. Same in `cadence.ai_log`: `promptTokens: "0"` on a 1,523-char
+reply. We are under-reporting coach spend by roughly half, on the dominant cost line.
+
+Two things follow, and they are different. (a) A zero we invented must be distinguishable from a
+zero we measured — `usage: null` is a lie either way, so the row has to say *how* it knows. (b) When
+upstream tells us nothing, we still hold the resolved prompt and the full reply text, so a
+characters/4 estimate is available and is enormously better than zero. Cost math needs a floor, and
+an honest flag on the estimate is what keeps the floor from becoming a fiction.
+
+**Gap 2 — "by onboarding" is not answerable at all today, and cannot be answered by a join.**
+`POST /coach/sessions` receives `intent: 'onboarding' | 'ongoing'`, uses it for `buildContextPack`
+and `renderPickProtocol`, and then **drops it** — it is not passed to `openCoachSession`, not stored
+on `cadence.conversations`, not in any diagnostic row. Worse, the obvious fix does not exist:
+`diagnostic_logs` lives in the **AI Admin Supabase project** (`mkxynwtuqceiblilxkvz`) and every
+`cadence.*` table lives in a **different project** (`qvukqinwmyvewzgcsgzt`). There is no cross-database
+join. Any Cadence-side fact — phase, conversation, plan state — either gets written into the AI
+Admin row at call time, or it is never queryable alongside the tokens. This is the single constraint
+that decides the design.
+
+**Gap 3 — a coach turn that produces no text produces no row.** `recordCoachReply` is called only
+`if (content.trim())`, and it is the *only* caller of `diag.complete()` on the chat path. A turn the
+user Stops, or one that errors after tokens were spent, never completes its `DiagnosticSession` —
+so there is no row at all, not even a zero one. It also always reports `complete('success')`,
+including for a turn the client dropped. (Failed *job* calls do log: `job-execution.ts` calls
+`diag.complete('error', …)` — 579 error rows exist corpus-wide. Those legitimately carry no usage
+because the call threw before a response; the failover case where a primary burned tokens and then
+succeeded on failover does lose the primary's tokens, which is real but rare and out of scope here.)
+
+**Gap 4 — estimated tokens are already silently mixed in.** `v2-stream-events.ts` and
+`coach-stream.ts` both fall back `inputTokens ?? estimatedInputTokens`, and nothing downstream
+records which one arrived. Provider-estimated and provider-metered tokens are being summed as if
+identical.
+
+**The design: one Cadence-side ledger, written at the single seam every Cadence AI call passes
+through.** Given the two-project split, the choice is between stamping Cadence facts into AI Admin
+rows (touches the core engine's job signature, and still leaves the numbers un-joinable to Cadence
+users) or mirroring the usage into Cadence. The second wins on every count and is smaller:
+`apps/cadence-api/src/ai/aim.ts` is a genuine chokepoint — all 28 job slugs reach the model through
+`runJobBySlug`/`runJob`, and the coach reaches it through `recordCoachReply`. Nothing else calls a
+model. One write in three functions covers 100% of Cadence AI traffic, in the same database as the
+users, conversations and plans it needs to be sliced by.
+
+Diagnostics stay exactly as they are — they remain the auditable per-call record, and the ledger is
+deliberately a *derived* mirror, not a replacement. If the two disagree, `diagnostic_logs` is right.
+
+Phase attribution rides an AsyncLocalStorage scope rather than 28 changed signatures. `void
+runCaptureExtract(...)` inherits the store from the request that started it (the same property
+`runWithAuth` already depends on), so a fire-and-forget Broker call started during an onboarding
+turn is attributed to that onboarding session without its call site knowing anything. Phase itself
+is *derived at query time* by joining the recorded `session_id` to `conversations.intent` — one
+column, written once at session open, rather than a phase copied onto every row.
+
+Prices live in `cadence.model_prices` (model, $/1M in, $/1M out, `effective_from`), seeded by the
+migration and joined by the views — one maintainable place, no price literal in any query. A model
+we have not priced shows as `null` cost rather than `0`, so an unpriced model is visible as a hole
+instead of quietly reading as free.
+
+**ARCHITECTURE**
+
+```
+                    ┌──────────────────────── Cadence API (apps/cadence-api) ────────────────────────┐
+                    │                                                                                │
+ POST /coach/       │  routes/coach.ts ──► runWithUsageContext({ sessionId })   [PROPOSED wrapper]   │
+   sessions         │        │              └─ ALS scope; inherited by fire-and-forget Broker calls  │
+   sessions/:id/    │        │                                                                       │
+   messages         │        ├─► services/context-pack.ts ─┐                                         │
+                    │        ├─► services/capture.ts ──────┤                                         │
+                    │        ├─► services/turn-context.ts ─┼─► ai/aim.ts  ◄── THE SEAM (existing)    │
+                    │        └─► …25 more services ────────┘     runJobBySlug / runJob               │
+                    │                                            recordCoachReply                    │
+                    │                                                   │                            │
+                    │                            services/ai-usage.ts ──┘  [PROPOSED]                │
+                    │                              recordUsage() — best-effort, never throws         │
+                    └───────────────────┬────────────────────────────────────┬─────────────────────-─┘
+                                        │ in-process @ai-admin/core          │ postgres (pooler)
+                                        ▼                                    ▼
+        ┌── AI Admin Supabase (mkxyn…) ──────────┐   ┌── Cadence Supabase (qvukq…) ──────────────┐
+        │  diagnostic_logs   [EXISTING, source   │   │  cadence.ai_usage      [PROPOSED 0031]    │
+        │    user_id ✓ job ✓ created_at ✓        │   │  cadence.model_prices  [PROPOSED 0031]    │
+        │    llm_response.usage ~                │   │  cadence.conversations.intent [PROPOSED]  │
+        │    of truth — audit trail, unchanged]  │   │  cadence.v_ai_cost / _daily / _weekly /   │
+        │                                        │   │    _by_user / _by_task / _onboarding      │
+        │  ✗ no cross-DB join possible ──────────┼─X─┤  cadence.users / conversations / plans    │
+        └────────────────────────────────────────┘   └───────────────────────────────────────────┘
+```
+
+| component | file | status |
+|---|---|---|
+| the seam every model call crosses | `apps/cadence-api/src/ai/aim.ts` | existing, +3 write calls |
+| usage writer + token estimator | `apps/cadence-api/src/services/ai-usage.ts` | proposed |
+| phase/session ALS scope | `apps/cadence-api/src/services/ai-usage-context.ts` | proposed |
+| `intent` persisted at session open | `apps/cadence-api/src/repos/conversations.ts`, `routes/coach.ts` | existing, +1 column |
+| ledger, prices, views | `migrations/cadence/0031_ai_usage.sql` | proposed, **not applied** |
+| per-call audit record | `backend/src/services/ai-diagnostics.ts` | existing, unchanged |
+| the aggregation queries | `docs/cadence/TOKEN-ACCOUNTING.md` | proposed |
+
+Ownership: Cadence owns the ledger and the prices; AI Admin owns the diagnostic record and is not
+modified by this entry. Data flow is one-way (call → engine → result → ledger); nothing reads the
+ledger back into a coaching decision, which is what keeps it safe to write best-effort.
+
+**Open questions, unanswered:**
+- Is a Devs.ai-reported token our real cost, or is Devs.ai's own margin on top of it the number the
+  owner actually wants? The ledger prices *model list rates*, which is a lower bound on the invoice.
+- Cache reads and cache writes price differently on every provider and we capture neither. The
+  persona prefix is deliberately cacheable (MEMORY-ARCHITECTURE P0) — so the coach's real bill is
+  probably *below* what list-rate prompt tokens imply, and we cannot yet say by how much.
+- Should the estimate fallback be char/4 or a real tokenizer? char/4 is wrong by 10-20% per model
+  and needs no dependency; a tokenizer is right and is a package per provider family.
+- Retention: `diagnostic_logs` stores full prompts and replies and nothing prunes it. The ledger
+  stores no content, so it can be kept forever — but nobody has decided what happens to the
+  diagnostics it derives from.
+- "Cost of an onboarding" is a distribution, not a number. Do we report median, p90, or mean? An
+  onboarding that ran long because the user was chatty is not the same fact as one that looped.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
