@@ -1125,6 +1125,34 @@ charge *"for access to or use of the Strava API Materials"*, though we may charg
 functionality offered by Strava"* — so Strava publishing must never sit behind the paywall as a
 named feature.
 
+**Dedup — no Strava store, ever**
+
+There is **no `cadence.strava_activities` table** in any version of this design, and that is a
+deliberate ruling, not an omission. Imported workouts land in **A14's canonical history store** with
+per-row provenance; a Strava row is a row in the same table with `source = 'strava'`. Two reasons,
+and the second is the one that matters: a separate store makes the same run appear twice to the
+coach, and — under the terms above — provenance is the only thing that makes §7.4's *"delete all
+Strava Data and all Personal Data derived from Strava Data relating to the revoking user"* an
+executable query rather than a forensic exercise. **Whatever we decide about Strava, A14's store
+needs per-row provenance for this reason alone.**
+
+Recognising a Strava copy of a run we already know from HealthKit:
+
+- **Match on start time + duration proximity**, not on distance or title. Start times drift between
+  sources (device clock, upload rounding, timezone handling): treat two workouts as the same event
+  when starts are within ~2 minutes *and* durations within ~5%. Distance is the weaker signal —
+  GPS and wrist-derived distance for the same run differ by more than you would expect, and an
+  indoor workout has no distance at all.
+- **The obvious cases first, before fuzzy matching.** If the Strava activity carries an
+  `external_id` we wrote, it is our own echo — drop it. If the HealthKit workout's source is
+  Strava's own bundle, the two records are literally the same object arriving by two doors.
+- **Fidelity wins, provenance is kept.** When the same event arrives twice, keep the richer record
+  and note both sources on the row. Dropping the second copy silently loses the fact that we saw
+  it, which matters when a disconnect requires unpicking one source.
+- **Same-day repeats are real.** Two 30-minute runs in one day is a normal Tuesday for some people.
+  The window must be tight enough not to collapse them, which is why it is start-time-anchored
+  rather than day-anchored.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
