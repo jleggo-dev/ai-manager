@@ -735,6 +735,91 @@ when there is a visible Continue to pair with them.
   PARTIAL the user saw rather than nothing or something longer — a restore that disagrees with what
   was on screen is the bug this feature exists to remove.
 
+**A7. Never leave someone with an empty week — companion goals and next milestones (owner 2026-08-11)**
+
+Owner's framing: *"The objective is to always have a schedule of routines ready for the user. If
+their schedule of tasks is relatively empty, then their habits will have fallen off and we'll have
+been a bad lifestyle coach."*
+
+Three moments, one principle:
+
+1. **End of onboarding with a single goal.** Cadence asks whether they want to take on anything
+   else, and SUGGESTS related ones — analysing the goal to propose routines that serve the primary
+   objective. Owner's examples: a race in October → learning to optimise nutrition alongside it; a
+   gratitude practice → breath work or meditation; writing a novel → walking meditation.
+2. **A major milestone lands.** She helps them line up the next one rather than letting the plan
+   quietly run out.
+3. **A thinning schedule** is itself the signal that habits have fallen off.
+
+**There is no tension here, and framing it as one (my first draft did) gets the design wrong.**
+Owner's correction, 2026-08-11, and it reshapes the guardrail rather than fitting around it.
+
+"Don't take on too much" is NOT a cap on how many goals someone may hold. It is a question about
+FEASIBILITY AGAINST THEIR ACTUAL AVAILABILITY, and it cuts both ways:
+
+- **Does it fit?** Fifteen activities a day does not fit anyone's Tuesday.
+- **Is it ENOUGH?** *"Cadence needs to discover that they won't be able to achieve their objective
+  of running a marathon if they can only run twice 15 minutes a week, because they're writing a
+  novel and practicing piano."* A plan can be comfortably inside someone's time and still be
+  nowhere near what their stated objective demands. Saying so plainly is the coach's job — it is
+  BRAND.md's "plain kind words for hard things", not discouragement.
+
+And the ceiling is personal, not a constant: *"unless they're retired, you know then... shit, take
+on 20 things at once if you want."* Someone with open days can carry what would crush someone with
+two 15-minute windows. So the number that matters is availability against demand, per person —
+never a fixed count of goals.
+
+**This means `goal-guardrail.ts` is probably the wrong shape**, not merely something to route
+around. A weighted focus budget with a hard cap on goal COUNT answers a question nobody asked. The
+question is whether the WEEK'S DEMAND fits the week's availability, and whether that demand is
+sufficient for the objectives on the books. `baseline.availability` (windows + session length,
+shipped this week) is the input that makes the first half computable for the first time; the
+second half needs the goal's `brief` to know what the objective actually demands. Both landed in
+the last few days, which is why this is newly buildable.
+
+Companion suggestions then stop being a threat to the guardrail and become part of the same
+calculation: an offer is only made when it fits, and it is weighed against the goals already held.
+
+**Brand constraints this must not break:**
+- *The offer is justified by THEIR objective, never by their emptiness.* Owner's correction: the
+  framing is never "your schedule is looking empty". It is *"good eating habits will improve your
+  marathon performance, want to explore that?"* or *"cold showers and meditation can lower your
+  cortisol before bedtime and help with that sleeping routine, are you open to exploring these
+  practices?"* — the suggestion earns its place by serving something they already told us they
+  want. That is coaching. Emptiness-framing would be shame, and BRAND.md forbids it; the thin
+  schedule is our SIGNAL to look, never our opening line.
+- *Confirm before committing.* A suggested goal is an offer, never an addition. It goes through the
+  same "here's what I heard — did I get it right?" gate.
+- *Hearth, not scoreboard.* "Always have a schedule ready" must not become "always be busy". Rest
+  weeks, taper weeks and deliberately quiet periods are legitimate and must not read as decay.
+
+**What already exists to build on:**
+- `Goal.brief` (migration 0030, this week) is what makes "analyse the goal" possible at all — the
+  load-determining facts in the user's own words now travel with the goal to any job that needs
+  them. Before it, a proposer would have had a title and nothing else.
+- `ensureHorizon` already tops the plan up ~2 weeks ahead, so "the schedule runs out" has partial
+  cover; what it cannot do is notice that the GOALS have run out.
+- `evaluateGuardrail` already computes weighted load — the number a proposer needs to size against.
+- The quick-pick protocol already renders an offer as tappable options.
+
+**Open questions, none answered:**
+- What counts as "relatively empty"? Occurrences per week, or goals with any live activity? A taper
+  week is empty by design. (Note the signal is for US, to prompt a look — it is never said aloud in
+  those terms.)
+- What does the two-sided feasibility check actually compute, and does it replace `evaluateGuardrail`
+  or wrap it? "Enough for the objective" needs a notion of what a 50 km in ten months demands, which
+  is judgement, not arithmetic — likely a job reading the goal's `brief` against the week's load.
+- Does a companion suggestion create a GOAL, or a lighter thing (a routine attached to an existing
+  goal)? The nomenclature table has no word for the lighter thing, and inventing one is a brand
+  decision.
+- Who proposes — the coach mid-conversation, or a job (`suggest-companions`) whose output she
+  offers? A job is auditable and testable; a coach turn is warmer.
+- On milestone completion, how soon? Immediately risks stepping on the moment. There is a real
+  argument for letting an achievement stand for a day before asking "what's next".
+- How often may she re-offer after a no? Once declined, silence for how long?
+
+Not scoped. Needs a design pass before any code.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
