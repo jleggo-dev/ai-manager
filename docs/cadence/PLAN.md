@@ -1785,6 +1785,349 @@ resumable, not a loop.
   the occurrence row the only spine? (A14's answer probably settles this.)
 
 Not scoped. The date-guard bug (defect 2) is separable and should be fixed first.
+**A16. Strava: the terms forbid the product we would build (2026-08-11)**
+
+Owner requirement: *"Integrate to Strava to retrieve/store workout history (bi-directional
+integration)"*, priority below Apple Watch and above Oura — *"I have a Strava."* The HealthKit half
+of history-migration is A14's; this is the Strava half.
+
+**Verdict up front: the current Strava API terms prohibit the architecture the owner described, and
+they prohibit it by name.** Not ambiguously, not by strained reading — the June 1 2026 Strava API
+Policy enumerates the exact steps of our design as prohibited activities. This is not a "get a
+lawyer to bless it" situation. It is a "the clause says the thing we want to do" situation. If we
+integrate Strava's API at all, we integrate it as a **write-only publisher** and get history from
+somewhere else.
+
+**Where the rules actually live — and why the first look missed them.** The API Agreement at
+`strava.com/legal/api` (Effective June 1, 2026) contains **no AI clause at all**; grep it for
+"artificial intelligence", "model", or "AI" and you get nothing. Everything that matters is in the
+separate **API Policy** at `strava.com/legal/api_policy`, which the Agreement pulls in: *"which
+incorporate by reference the Strava Terms of Service, the Strava Privacy Policy…, the Strava API
+Brand Guidelines, and the Strava API Policy (the "Policy"). The Policy is incorporated by reference
+into, and forms part of, this Agreement."* Anyone who reads only the Agreement — as the owner
+reasonably might, and as my first fetch did — concludes Strava has no AI position. They have a very
+detailed one.
+
+The public history is worth knowing: the November 11 2024 change was announced as narrow, and
+Strava's own press note said it would affect *"less than .1% of applications"* with most use cases
+still permitted *"including coaching platforms and performance analysis tools"*. That reassurance
+described the 2024 text. **The 2026 Policy is a different and far harder document**, and the 2024
+press framing should not be cited as cover for it.
+
+**(a) May Strava-sourced data, stored in our DB and merged with other sources, be read by an LLM in
+service of the user who owns it? No.** Policy §5.3, titled *"No AI/ML Training, Fine-Tuning,
+Grounding, Evaluation, Embedding, or Retrieval-Augmented Generation"*:
+
+> "You may not use the Strava API Materials or Strava Data, directly or indirectly, in connection
+> with the development, training, evaluation, or **operation** of any AI Application. This
+> prohibition extends to: Any data **derived from, aggregated from, anonymized from, or generated
+> using Strava Data**, in any form (including original, derivative, aggregated, anonymized,
+> de-identified, or model-output form); and Any of the following activities with respect to an AI
+> Application: training, pre-training, post-training, fine-tuning, reinforcement learning,
+> alignment, grounding, evaluation, benchmarking, embedding generation, retrieval-augmented
+> generation, **ingestion into a context window or working memory**, and any other activity
+> intended or reasonably likely to develop, improve, evaluate, or **operate** an AI Application."
+> *(emphasis mine)*
+
+The owner's clarification was: *"I'm not proposing passing Strava data to an LLM [directly]. I'm
+proposing we use it to populate a history in our app, where it's combined with our data or a
+history from other applications… The LLM reads the data in our app, which is aggregate across all
+data sources."* Read that against the clause. **"Directly or indirectly"** closes the indirection.
+**"Any data derived from, aggregated from… in any form"** closes the aggregation. **"Ingestion into
+a context window or working memory"** is a literal description of what our retrieval layer does
+when it assembles coach context. And **"operation"**, repeated twice, is what distinguishes this
+from a training ban: §5.3 is not a rule about building models, it is a rule about *running* one on
+their data. The distinction the task asked me to draw — training bans (near-certain) vs
+serving-the-user's-own-data-through-an-LLM (the real question) — resolves the wrong way here.
+Strava drafted for exactly this case and forbade both.
+
+Note also what §3.5 gives away: Strava built the **Strava MCP** as *"the sole authorized first-party
+agent-mediated interface"*, on which *"Subscribers to Strava may access the Strava MCP in connection
+with their personal use of their own Strava data… and may bring their own AI Application to interact
+with their own data."* So the personal-use-of-your-own-data-with-an-LLM case is explicitly carved
+out — **and routed through Strava's own surface, not ours.** §5.16 then forbids us from operating
+*"any MCP Server, agent-mediated interface, or analogous mechanism"* ourselves, *"regardless of
+name"*. The gap in the wall exists and it is deliberately not the shape of a third-party app. That
+is the strongest available evidence that our reading is the intended one rather than an
+over-cautious one: they thought about the exact use case and built a different door for it.
+
+**(b) Does aggregation or derivation help? It is specifically what §5.4 forbids.** Titled *"No
+Aggregation, Analytics, or De-Identified Processing"*:
+
+> "You may not process or disclose Strava Data—even publicly viewable Strava Data—including in an
+> aggregated, de-identified, or anonymized manner, for the purposes of analytics, analyses,
+> customer insight generation, or product or service improvements. **You may not combine Strava
+> Data with other customer data for these or any other purposes.** The restrictions in this Section
+> 5.4 apply to data derived from Strava Data and to output that incorporates or was generated using
+> Strava Data."
+
+"You may not combine Strava Data with other customer data … for any other purposes" is the
+one-sentence answer to the migrate-then-merge architecture. Merging with HealthKit history is the
+combination the sentence names. And the trailing sentence — restrictions attach to *"output that
+incorporates or was generated using Strava Data"* — confirms the general principle the task flagged:
+**restrictions follow the data, not the call.** Laundering a Strava run through our own
+`workout_history` table does not produce a non-Strava row; it produces Strava Data in a new
+location, still carrying every restriction, plus a derived-data tail that catches the coach's
+summary of it.
+
+**(c) Retention: seven days, and that alone ends it.** §6.2: *"You may not retain Strava Data in
+your cache for longer than seven (7) days… Except for such limited caching, you may not store
+Strava Data."* §5.5: *"You may not bulk-export Strava Data, including by accumulating Strava Data
+through repeated authorized API calls into a corpus, dataset, archive, or database that exceeds the
+operational scope of your Developer Application"*, and *"You may not store Strava Data, or any data
+derived from Strava Data, in any **Persistent Index**… indefinite storage in vector stores,
+embedding stores, search indexes, knowledge graphs, retrieval-augmented data stores, **archives**,
+and any other storage configured to enable subsequent retrieval, query, or use."* §6.4 caps
+retention at *"only so long as necessary for the purpose for which it was originally obtained."*
+
+**A seven-day cache is not a history.** The owner's requirement is the word "history" — the whole
+point is a durable record of what someone has done, going back years, that the coach can reason
+over. Even with §5.3 and §5.4 struck out, §6.2 would still forbid the thing being asked for. Three
+independent clauses each kill it.
+
+On disconnect, §7.4 requires deletion within **thirty (30) days** of *"all Strava Data and all
+Personal Data derived from Strava Data relating to the requesting or revoking user"* on user
+request, revocation, **or** Strava-account deletion — and *"regardless of user"* if we stop using
+the API or the agreement terminates. §6.3 requires deletions the user makes on Strava to propagate
+to us **within 48 hours**, which on its own implies a live mirror we must poll or webhook, not an
+archive. Agreement §4.4 repeats it: on termination we *"must promptly cease using and permanently
+delete… all Strava Data provided hereunder and so certify in writing to Strava."* Note the shape of
+that risk: an imported-then-merged history means a disconnect obliges us to **surgically unpick
+Strava-derived rows out of a merged store, and arguably any coach memory derived from them, within
+30 days** — which is only possible if provenance is tracked per-row from day one. A16 assumes A14's
+canonical store carries per-row provenance regardless of what we decide here.
+
+**One honest caveat, which does not change the answer.** The Policy uses **"AI Application"** as a
+defined term four times and **never defines it**; the word does not appear in the Agreement at all.
+Same for "Persistent Index" — used, capitalised, undefined. A drafting gap. It is tempting to build
+on it. Don't: §5 opens with *"Strava shall determine in its sole discretion whether your Developer
+Application's use of the Strava API Materials complies with this Section and the Agreement"*, and
+§6.2 of the Agreement plus §3.2/§6.2 of the Policy give them audit rights and unilateral
+termination. An undefined term interpreted at the counterparty's sole discretion is not a loophole,
+it is an unbounded risk. Cadence is a coach whose entire value is an LLM reading your history; there
+is no reading of "AI Application" under which we are not one.
+
+**What this means for the requirement.** The bi-directional integration the owner asked for splits
+cleanly, and only one half survives:
+
+- **Read/import into a durable history the coach reasons over — dead.** §5.3, §5.4, §6.2 each
+  independently. Not "risky", not "needs review". Prohibited in terms.
+- **Write/publish our workouts to Strava — alive**, and genuinely useful. Pushing an activity we
+  own to a user's Strava feed sends no Strava Data anywhere; nothing lands in our store and nothing
+  reaches a model. See the write section below.
+
+**The generic connections pattern (this is the durable deliverable)**
+
+Strava would be our first third-party OAuth integration, and whatever we conclude about Strava
+specifically, **the pattern outlives it** — A17 (Oura) consumes it, Google Fit / Health Connect
+would, Garmin would. `Connection` in
+[`packages/cadence-shared/src/types/baseline.ts:169`](../../packages/cadence-shared/src/types/baseline.ts)
+is currently a stub with nothing behind it:
+
+```ts
+export interface Connection {
+  source: 'apple_health' | string;   // `| string` = "we haven't decided yet"
+  scopes: string[];
+  status: 'connected' | 'disconnected';
+}
+```
+
+It lives on `UserProfile.connections` and no table backs it. Note the shape already leaks a wrong
+assumption: `apple_health` is not a connection in this sense at all — HealthKit is an on-device
+grant with no server-side token, no refresh, and no revocation webhook (see
+`migrations/cadence/0024_health_digests.sql`, where the client builds the digest and POSTs it). Two
+genuinely different things are sharing one type. The generic pattern should model **server-side
+OAuth connections**, and `apple_health` should either move out or be explicitly marked as the
+device-grant variant.
+
+*Generic — belongs to the pattern, not to Strava:*
+
+1. **`cadence.connections` table** (new migration, `0031_connections.sql`): `user_id`, `provider`,
+   `provider_user_id`, `scopes text[]`, `status`, `connected_at`, `last_sync_at`, `expires_at`, and
+   the encrypted token blob. One row per (user, provider). RLS owner policy like every other
+   Cadence table; `pack_touch` trigger if a connection's existence should invalidate the context
+   pack. **The refresh token must never be readable by the client** — no `VITE_*`, no anon-key
+   read path; the row is service-role-only, which means the RLS policy here is *deny-to-user*,
+   unlike the rest of the schema.
+2. **Encrypted-at-rest token store** (`apps/cadence-api/src/services/connections/token-store.ts`):
+   AES-256-GCM via `node:crypto` with a key from `CADENCE_CONNECTIONS_KEY`, added to
+   `apps/cadence-api/src/config.ts` beside the existing `apns` / `weatherkit` blocks. Include a
+   `key_version` column from day one so rotation is possible without a migration.
+   `apps/cadence-api/src/services/weather/weatherkit-http.ts` is the precedent for
+   "third-party credentials, no SDK, config-gated, absent block means feature-off" — follow its
+   `isWeatherKitConfigured()` shape so an unconfigured deploy degrades rather than crashes.
+3. **Generic OAuth routes** (`apps/cadence-api/src/routes/connections.ts`, mounted in
+   `apps/cadence-api/src/app.ts` next to the other `/me` routes): `GET /me/connections` (status
+   list — never tokens), `POST /me/connections/:provider/start` (returns the authorize URL with a
+   signed, single-use, short-TTL `state`), `GET /connections/:provider/callback` (public, exchanges
+   code, stores tokens), `DELETE /me/connections/:provider` (revoke upstream, then delete local).
+   Provider-specific bits (authorize URL, scope strings, token endpoint, revoke endpoint) live in a
+   small per-provider module the generic router looks up.
+4. **Refresh-on-use with a single-flight lock.** Serverless means N concurrent lambdas can each
+   notice an expired token and each burn a refresh; providers that rotate refresh tokens will
+   invalidate all but one and the connection dies. A row-level advisory lock (or a `refreshing_at`
+   claim column) is not optional here.
+5. **Revocation is three-sided:** the user disconnects in Cadence, the user revokes at the provider
+   (we learn via webhook or a 401), or we shut the integration down. All three must converge on the
+   same code path — the same lesson as A5's "sign out and start over should share one path".
+6. **A per-provider retention policy is part of the pattern, not a Strava special case.** Strava's
+   is 7 days plus a 30-day deletion SLA; Oura's will differ. The connection row should carry the
+   provider's policy so a sweeper can enforce it generically rather than each integration
+   remembering its own rules.
+
+*Strava-specific — must NOT leak into the generic layer:* the seven-day cache ceiling and the
+48-hour deletion-propagation SLA; the single-webhook-subscription-per-application constraint (§below);
+the attribution/branding obligations; and the fact that for Strava the store is write-only. If those
+end up hard-coded in `connections.ts` rather than in a `providers/strava.ts` descriptor, Oura will
+inherit rules that were never about it.
+
+**The write half — what actually survives**
+
+Agreement §7.1 expressly contemplates it: *"Your Developer Applications may include the option to
+upload activities or information to the Strava Platform."* And the compliance story is clean, which
+is the point: **an activity the user logged in Cadence is our data, not Strava Data.** It never
+becomes Strava Data by being sent *to* Strava — §2.3(i) defines Strava Data as *"all data you access
+or collect from the Strava API Materials"*, i.e. data flowing outward from Strava to us. Sending
+in the other direction touches none of §5.3, §5.4, §5.5 or §6.2.
+
+What we would push: occurrences the user logged against a movement-area activity, where we hold
+enough to make a real Strava entry — type, start time, elapsed time, distance where we have it,
+and the user's own note. No GPS (we do not record tracks), so these are manual-style entries, not
+routes. Off-plan logs (`ADHOC_CATEGORY` in `apps/cadence-api/src/repos/activities.ts`) qualify
+equally — the user did them.
+
+Design constraints on the write path:
+
+- **Opt-in per push, or one explicit standing consent — never silent.** Publishing to someone's
+  Strava feed is a social act with an audience. It is exactly BRAND.md's *"confirm before
+  committing"*, and getting this wrong posts to a user's followers on our initiative.
+- **Idempotency.** Store the returned Strava activity id on our occurrence so a retry, a webhook
+  echo, or a re-log does not create a second copy. Without it, a serverless retry duplicates a
+  post on a stranger's feed.
+- **API-created activities are visibly attributed.** Strava shows an "uploaded via *App*" line on
+  activities created through the API; there is no hidden write. That is fine — desirable, even —
+  but it means the push is a branding surface, not a silent sync, and it must therefore respect
+  §4.3 (no implied endorsement) and §4.6 (**no press release mentioning Strava without their prior
+  written consent** — a launch-blog trap worth flagging now).
+- **We must not create the round-trip we just banned.** If we push an activity to Strava and the
+  user also has Strava→Apple Health sync on, that activity can come back to us through HealthKit.
+  Harmless in itself (it is our own data returning), but the dedup rules below must recognise our
+  own echo or the coach will see every logged workout twice.
+- **Reading back what we wrote is still reading.** Fetching the activity id we just created is a
+  Strava API call returning Strava Data. Keep the id, do not re-fetch the object.
+
+**Attribution and display obligations (Brand Guidelines, apply the moment we ship anything):**
+
+- Interoperability must be described as exactly *"Powered by Strava"* or *"Compatible with
+  Strava"* — those two phrasings, not a paraphrase. (Note both are stiffer than Cadence's voice;
+  the copy around them has to carry the warmth.)
+- *"Never use any part of a Strava logo as the icon for your application"*; the Strava logo must be
+  *"completely separate and apart from (and should not appear more prominently than) the name/logo
+  of your application"*; never modified, altered or animated.
+- OAuth must go through `https://www.strava.com/oauth/authorize` or `.../oauth/mobile/authorize`,
+  presented as the Connect-with-Strava button.
+- Any link to a source activity must read exactly *"View on Strava"*, styled legibly (bold,
+  underline, or Strava orange `#FC5200`).
+- *"You must not use the Strava name in your application name."*
+
+**And the clause nobody thinks to read: §5.2, "No Competing or Imitating Applications".** *"You may
+not use the Strava API Materials in any manner that is competitive to Strava or the Strava
+Platform."* Strava has since shipped its own AI analytics features. An AI coach that reads your
+training history and tells you what to do next is not obviously non-competitive with that, and
+§5 leaves the judgement to *"Strava… in its sole discretion"*. Even the surviving write-only path
+should be presented to Strava as *feeding* their platform, because that framing is both true and
+the one that keeps the integration alive. §5.8 is the related trap for a paid app: we may not
+charge *"for access to or use of the Strava API Materials"*, though we may charge for
+*"functionality not provided by the Strava Platform… and that is not substantially duplicative of
+functionality offered by Strava"* — so Strava publishing must never sit behind the paywall as a
+named feature.
+
+**Dedup — no Strava store, ever**
+
+There is **no `cadence.strava_activities` table** in any version of this design, and that is a
+deliberate ruling, not an omission. Imported workouts land in **A14's canonical history store** with
+per-row provenance; a Strava row is a row in the same table with `source = 'strava'`. Two reasons,
+and the second is the one that matters: a separate store makes the same run appear twice to the
+coach, and — under the terms above — provenance is the only thing that makes §7.4's *"delete all
+Strava Data and all Personal Data derived from Strava Data relating to the revoking user"* an
+executable query rather than a forensic exercise. **Whatever we decide about Strava, A14's store
+needs per-row provenance for this reason alone.**
+
+Recognising a Strava copy of a run we already know from HealthKit:
+
+- **Match on start time + duration proximity**, not on distance or title. Start times drift between
+  sources (device clock, upload rounding, timezone handling): treat two workouts as the same event
+  when starts are within ~2 minutes *and* durations within ~5%. Distance is the weaker signal —
+  GPS and wrist-derived distance for the same run differ by more than you would expect, and an
+  indoor workout has no distance at all.
+- **The obvious cases first, before fuzzy matching.** If the Strava activity carries an
+  `external_id` we wrote, it is our own echo — drop it. If the HealthKit workout's source is
+  Strava's own bundle, the two records are literally the same object arriving by two doors.
+- **Fidelity wins, provenance is kept.** When the same event arrives twice, keep the richer record
+  and note both sources on the row. Dropping the second copy silently loses the fact that we saw
+  it, which matters when a disconnect requires unpicking one source.
+- **Same-day repeats are real.** Two 30-minute runs in one day is a normal Tuesday for some people.
+  The window must be tight enough not to collapse them, which is why it is start-time-anchored
+  rather than day-anchored.
+
+**Architecture scaffold**
+
+Two columns, because the terms split the design. **Everything in the right-hand column is scaffolded
+for completeness and must not be built** unless the terms change or Strava grants a written
+exception — see the closing note.
+
+| Component | File (existing / proposed) | Owner | Ships? |
+|---|---|---|---|
+| `Connection` type, fleshed out | `packages/cadence-shared/src/types/baseline.ts:169` *(exists, stub)* | shared | yes |
+| `connections` table + RLS | `migrations/cadence/0031_connections.sql` *(proposed)* | api | yes |
+| Encrypted token store | `apps/cadence-api/src/services/connections/token-store.ts` *(proposed)* | api | yes |
+| Generic OAuth routes | `apps/cadence-api/src/routes/connections.ts` *(proposed)*, mounted in `apps/cadence-api/src/app.ts:44` | api | yes |
+| Provider descriptor | `apps/cadence-api/src/services/connections/providers/strava.ts` *(proposed)* | api | yes |
+| Strava HTTP client | `apps/cadence-api/src/services/strava/strava-http.ts` *(proposed; mirror `services/weather/weatherkit-http.ts`)* | api | yes |
+| **Publish occurrence → Strava** | `apps/cadence-api/src/services/strava/publish.ts` *(proposed)* | api | **yes** |
+| Config block + secrets | `apps/cadence-api/src/config.ts:141` *(exists — add beside `weatherkit`)* | api | yes |
+| Canonical history store + provenance | **A14** *(sibling entry)* | A14 | yes |
+| Retention sweeper (per-provider) | `apps/cadence-api/src/services/connections/retention.ts` *(proposed)* | api | yes |
+| ~~Webhook receiver~~ | ~~`apps/cadence-api/src/routes/strava-webhook.ts`~~ | — | **no — §5.3/§6.2** |
+| ~~Backfill worker~~ | ~~`apps/cadence-api/src/services/strava/backfill.ts`~~ | — | **no — §5.5 bulk-export** |
+| ~~Strava rows in canonical history~~ | ~~A14 store, `source='strava'`~~ | — | **no — §5.4 combine** |
+| ~~Coach reads Strava-derived rows~~ | ~~`services/retrieval/catalog.ts` `renderCatalogDoc`~~ | — | **no — §5.3 context window** |
+
+The last row is the sharpest illustration of why this is not a solvable engineering problem.
+`renderCatalogDoc` in `apps/cadence-api/src/services/retrieval/catalog.ts` exists to assemble
+domain rows into the coach's prompt. §5.3 prohibits *"ingestion into a context window or working
+memory"*. There is no version of Cadence in which imported history reaches the user and does not
+pass through that function.
+
+*Flow 1 — publish (ships).* User logs an occurrence → `POST /me/connections/strava/publish` (or a
+standing opt-in fires it) → `token-store` decrypts + refreshes if needed → Strava upload endpoint →
+returned activity id stored on the occurrence for idempotency → UI shows "View on Strava". No
+inbound data at any step.
+
+*Flow 2 — webhook incremental sync (scaffolded, not built).* Strava allows **one push-subscription
+per application**, created once out-of-band; the callback is a single public URL that must answer
+Strava's `GET` validation handshake by echoing `hub.challenge` when `hub.verify_token` matches, then
+accept `POST` events (`object_type`, `aspect_type` create/update/delete, `object_id`, `owner_id`).
+Two Cadence-specific hazards worth recording even though we are not building it: **(i)** Strava
+expects a fast acknowledgement, and cadence-api runs as an Express service on Vercel
+(`apps/cadence-api/vercel.json`, catch-all rewrite) — a cold start can exceed the window, so the
+handler must be a thin enqueue-and-200 with the real work deferred, and the endpoint wants keeping
+warm. **(ii)** The route must mount **outside** `requireCadenceUser`; every other `/me` route sits
+behind it (`apps/cadence-api/src/app.ts`), so a webhook route added carelessly would either 401
+Strava forever or, worse, be added by disabling the guard. Verification is the shared `verify_token`
+plus an `owner_id`→`connections.provider_user_id` lookup — Strava does not sign payloads, so the
+event body is a **notification, not evidence**: it says "activity N changed", and the object must be
+fetched. Delete events are the one case where the event alone is actionable, and §6.3's 48-hour
+propagation SLA means they cannot be dropped on the floor.
+
+*Flow 3 — rate-limited historical backfill (scaffolded, not built).* This is the migration the
+owner asked for and the one §5.5 names: *"accumulating Strava Data through repeated authorized API
+calls into a corpus, dataset, archive, or database."* Shape, for the record: page
+`GET /athlete/activities` with `after`/`before` epochs and `per_page`, walking backwards from today;
+persist a cursor per connection so a lambda timeout resumes rather than restarts; back off on 429
+using the returned usage headers rather than a fixed sleep; and decide up front whether summaries
+suffice — a per-activity `GET /activities/{id}` for splits and laps multiplies the call count by the
+number of activities and turns a minutes-long job into an hours-long one.
 
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
