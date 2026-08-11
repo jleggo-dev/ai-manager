@@ -945,13 +945,17 @@ This is also the honest ordering. Conditions read at the completion of a 6 a.m. 
 conditions of the run if it is logged at 9 p.m., so the stamp must carry the *session's* time, not
 the fetch time. See the historical read below.
 
-**Backfill — possible, and worth doing narrowly.** WeatherKit's hourly and daily datasets accept
-start/end parameters and serve history back to **1 August 2021**, on the *same* metered quota as a
-forecast call (there is no separate historical product or price). *Verify the exact parameter names
-against the live REST reference before building* — Apple's docs page did not render for this pass,
-and the figures here come from Apple's WWDC24 session and developer-forum threads. OWM's history is
-a paid add-on we do not have, so backfill is **WeatherKit-only** and must degrade to "no stamp"
-rather than to a wrong one.
+**Backfill — possible, and worth doing narrowly.** WeatherKit serves history back to **1 August
+2021** on the *same* metered quota as a forecast call: no separate historical product, no separate
+price. The existing client already speaks this dialect — it is the same
+`/weather/{lang}/{lat}/{lon}?dataSets=…` call with `hourlyStart`/`hourlyEnd` (or
+`dailyStart`/`dailyEnd`) added; absent those, hourly simply starts at the current hour, which is
+what `weatherkit-http.ts` does today. **One request is capped at a single contiguous ~10-day
+window**, so a backfill is inherently a paged, resumable job and never one call. OWM's history is a
+paid add-on we do not have, so backfill is **WeatherKit-only** and must degrade to "no stamp" rather
+than to a wrong one. (Sources are Apple's developer forums and WWDC24 rather than the REST reference
+page, which would not render for this pass — worth a five-minute confirmation against the live docs
+before building, but the shape is not in doubt.)
 
 That gives a clean rule: **stamp forward always; backfill only where we have a real timestamp and a
 credible location.** For A14's imported history that means the ones with an honest start time and a
@@ -1025,7 +1029,7 @@ deterministic fact in the app is computed and injected rather than trusted to a 
 | Component | File | Status |
 |---|---|---|
 | Provider client + JWT | `apps/cadence-api/src/services/weather/weatherkit-http.ts` | exists — needs a historical variant |
-| Historical read | `apps/cadence-api/src/services/weather/weather-history.ts` | **proposed** — `getWeatherAtInstant(lat, lon, iso, tz)`; hourly dataset with start/end, WeatherKit-only, returns null on OWM-only deployments |
+| Historical read | `apps/cadence-api/src/services/weather/weather-history.ts` | **proposed** — `getWeatherAtInstant(lat, lon, iso, tz)`; `forecastHourly` + `hourlyStart`/`hourlyEnd`, WeatherKit-only, returns null on OWM-only deployments |
 | Cache | `apps/cadence-api/src/repos/weather-cache.ts` + migration 0025 | exists — reuse as-is; the key is `text`, so a historical key can carry the hour with **no migration** |
 | Snapshot mapping | `weather/weatherkit-map.ts`, `weather/weather-map.ts` | exists — historical hourly needs a small sibling mapper |
 | Stamp writer | `apps/cadence-api/src/services/weather/stamp-conditions.ts` | **proposed** — owns "should this be stamped, from where, for when" |
