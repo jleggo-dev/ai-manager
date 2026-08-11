@@ -11,7 +11,6 @@ import {
   normalizeBaseline,
   normalizeBrief,
   normalizeTimezone,
-  normTitle,
 } from './capture-normalize.ts';
 import { matchGoal } from './plan-match.ts';
 import { startingPointGaps } from './intake.ts';
@@ -194,34 +193,37 @@ describe('capture selectCapturedGoals (§6.1 — no duplicate goal cards)', () =
   const titles = (gs: { title?: string }[]) => gs.map((g) => g.title);
 
   it('collapses intra-run near-duplicates to one, keeping the first seen', () => {
-    const kept = selectCapturedGoals([{ title: 'Run a 10k' }, { title: 'Run a 10k this spring' }], new Set(), []);
+    const kept = selectCapturedGoals([{ title: 'Run a 10k' }, { title: 'Run a 10k this spring' }], []);
     expect(titles(kept)).toEqual(['Run a 10k']);
   });
 
+  // The observed failure: one race, extracted twice in one answer, spelled two ways.
+  it('collapses a re-spelling that only moved a word boundary', () => {
+    const kept = selectCapturedGoals([{ title: 'Spartan Ultrabeast' }, { title: 'Spartan Ultra Beast' }], []);
+    expect(titles(kept)).toEqual(['Spartan Ultrabeast']);
+  });
+
   it('keeps genuinely distinct goals that merely share a word', () => {
-    const kept = selectCapturedGoals([{ title: 'Run a 10k' }, { title: 'Run a marathon' }], new Set(), []);
+    const kept = selectCapturedGoals([{ title: 'Run a 10k' }, { title: 'Run a marathon' }], []);
     expect(titles(kept)).toEqual(['Run a 10k', 'Run a marathon']);
   });
 
-  it('drops an EXACT match of a confirmed/committed goal, but not a mere superstring', () => {
-    const confirmed = new Set([normTitle('Run a 10k')]);
-    // exact-confirmed dropped; the distinct new goal kept
-    expect(titles(selectCapturedGoals([{ title: 'Run a 10k' }, { title: 'Meditate daily' }], confirmed, []))).toEqual([
+  it('drops an IDENTITY match of a confirmed/committed goal, but not a mere superstring', () => {
+    const confirmed = ['Run a 10k'];
+    // confirmed goal dropped; the distinct new goal kept
+    expect(titles(selectCapturedGoals([{ title: 'Run a 10k' }, { title: 'Meditate daily' }], confirmed))).toEqual([
       'Meditate daily',
     ]);
-    // a superstring of a confirmed goal is a NEW, more specific goal — confirmed match is exact-only
-    expect(titles(selectCapturedGoals([{ title: 'Run a 10k this spring' }], confirmed, []))).toEqual([
+    // a superstring of a confirmed goal is a NEW, more specific goal — confirmed match is identity-only
+    expect(titles(selectCapturedGoals([{ title: 'Run a 10k this spring' }], confirmed))).toEqual([
       'Run a 10k this spring',
     ]);
-  });
-
-  it('fuzzy-skips a re-extraction of a milestone-bearing "sticky" captured goal', () => {
-    const sticky = [normTitle('Run a 10k')];
-    expect(selectCapturedGoals([{ title: 'Run a 10k this spring' }], new Set(), sticky)).toHaveLength(0);
+    // ...but a pure re-spelling of a confirmed goal is that same goal, not a new one
+    expect(selectCapturedGoals([{ title: 'run a 10K!' }], confirmed)).toHaveLength(0);
   });
 
   it('drops empty/whitespace titles', () => {
-    const kept = selectCapturedGoals([{ title: '' }, { title: '   ' }, { title: 'Read more' }], new Set(), []);
+    const kept = selectCapturedGoals([{ title: '' }, { title: '   ' }, { title: 'Read more' }], []);
     expect(titles(kept)).toEqual(['Read more']);
   });
 });

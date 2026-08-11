@@ -1,23 +1,14 @@
 import { runJobBySlug } from '../ai/aim.ts';
-import type { CaptureExtractResult, GoalArea, GoalType, EquipmentCategory } from '@cadence/shared';
-import { insertGoal, listGoalsByStatus, deleteCapturedWithoutMilestones } from '../repos/goals.ts';
+import type { CaptureExtractResult, EquipmentCategory } from '@cadence/shared';
 import { insertEquipment, deleteAllEquipment } from '../repos/equipment.ts';
 import { getUser, mergeBaseline, setHomeLocation, setName, setTimezoneIfUnset } from '../repos/users.ts';
 import { geocodeCity } from './weather/weather.ts';
 import { logAi } from './ai-log.ts';
-import {
-  describeIncoherentMeasure,
-  normalizeBaseline,
-  normalizeBrief,
-  normalizeTimezone,
-  normTitle,
-  selectCapturedGoals,
-} from './capture-normalize.ts';
+import { normalizeBaseline, normalizeTimezone } from './capture-normalize.ts';
 import { extractCity } from './capture-location.ts';
-import { screenGoal, type GoalScreenResult } from './goal-screen.ts';
+import { persistCapturedGoals } from './capture-goals.ts';
+import type { GoalScreenResult } from './goal-screen.ts';
 
-const GOAL_AREAS: GoalArea[] = ['movement', 'nourishment', 'mind', 'practice'];
-const GOAL_TYPES: GoalType[] = ['milestone', 'target', 'recurring'];
 const EQUIP_CATEGORIES: EquipmentCategory[] = [
   'footwear',
   'cardio',
@@ -29,38 +20,6 @@ const EQUIP_CATEGORIES: EquipmentCategory[] = [
   'study',
   'other',
 ];
-
-/**
- * NEVER silently drop a capture (brand promise: nothing you say is lost). Unknown or
- * legacy area labels are coerced to the nearest area and the coercion is logged, so
- * prompt/validator skew during rollouts is visible instead of eating goals.
- */
-const LEGACY_AREA: Record<string, GoalArea> = {
-  fitness: 'movement',
-  training: 'movement',
-  body: 'movement',
-  nutrition: 'nourishment',
-  weight: 'nourishment',
-  habit: 'practice',
-  mental_health: 'mind',
-  mental: 'mind',
-  sobriety: 'mind',
-  spiritual: 'practice',
-  spirit: 'practice',
-  creative: 'practice',
-  craft: 'practice',
-  learning: 'practice',
-};
-
-function coerceArea(raw: unknown, coerced: string[]): GoalArea {
-  const s = String(raw ?? '')
-    .trim()
-    .toLowerCase();
-  if ((GOAL_AREAS as string[]).includes(s)) return s as GoalArea;
-  const mapped = LEGACY_AREA[s];
-  coerced.push(`area "${s || '(empty)'}" → ${mapped ?? 'practice'}`);
-  return mapped ?? 'practice';
-}
 
 export interface CaptureResult extends CaptureExtractResult {
   persisted: { goals: number; equipment: number; baseline: boolean };
@@ -105,58 +64,14 @@ export async function runCaptureExtract(
   const name = typeof parsed.name === 'string' ? parsed.name.trim() : '';
   if (name) await setName(userId, name);
 
-  // Capture runs on the FULL conversation and returns the user's consolidated set, so we REPLACE
-  // the pre-confirmation goals each run (rather than append) — robust against the model rephrasing
-  // a goal between turns, which exact-title dedup missed. Confirmed/locked goals are preserved and
-  // never re-inserted; milestone-bearing captured goals are "sticky" (durable intent — the user
-  // added stepping-stones) so they survive a re-run and their rephrased re-extractions are skipped.
-  const confirmed = new Set(
-    (await listGoalsByStatus(userId, ['confirmed', 'committed'])).map((g) => normTitle(g.title)),
-  );
-  const stickyTitles = (await listGoalsByStatus(userId, ['captured']))
-    .filter((g) => (g.milestones?.length ?? 0) > 0)
-    .map((g) => normTitle(g.title));
-  await deleteCapturedWithoutMilestones(userId);
-
-  // Persist goals — de-duplicated against confirmed, sticky, AND each other (selectCapturedGoals is
-  // the deterministic backstop: a model that returns two near-duplicate goals in one run yields ONE
-  // card), then coerced — never dropped for out-of-enum labels (see coerceArea).
-  const coerced: string[] = [];
-  const screened: CaptureResult['screened'] = [];
-  let goals = 0;
+  // Goals are matched and merged against what the user already has, never replaced wholesale —
+  // capture re-runs on the whole conversation every turn, so most of what comes back is the model
+  // re-wording its own earlier extraction. See capture-goals.ts / capture-goal-merge.ts.
   const weightKg = Number((await getUser(userId))?.baseline?.weight_kg ?? NaN);
-  for (const g of selectCapturedGoals(out.goals, confirmed, stickyTitles)) {
-    // The prompt emits `area`; tolerate the legacy `category` key from stale prompts.
-    const rawArea = g.area ?? (g as Record<string, unknown>).category;
-    const area = coerceArea(rawArea, coerced);
-    let type = g.type;
-    if (!type || !GOAL_TYPES.includes(type)) {
-      coerced.push(`type "${String(g.type ?? '(empty)')}" → recurring`);
-      type = 'recurring';
-    }
-    // Scope/safety screen (goal-screen.ts). 'refuse' is the ONE case where the never-drop rule
-    // yields: a self-harm goal must not become a card the user can commit. It is not silent —
-    // the note goes to the coach, who has to address it in the conversation this turn.
-    const result = screenGoal({ ...g, area, type }, Number.isFinite(weightKg) ? weightKg : undefined);
-    screened.push({ title: g.title ?? '(untitled)', result });
-    if (result.verdict === 'refuse') continue;
-    // A measure whose arithmetic cannot be true ("lose weight, from 195 to 195" — a real capture)
-    // is dropped rather than persisted: the GOAL still lands, so nothing the user said is lost and
-    // the coach can ask again, but a number they never chose never becomes the thing every plan
-    // and every progress read anchors to. Logged like every other coercion, never silent.
-    const badMeasure = describeIncoherentMeasure(g.measure);
-    if (badMeasure) coerced.push(`measure dropped on "${g.title ?? '(untitled)'}" — ${badMeasure}`);
-    // The brief carries the facts that decide how hard the work has to be (see Goal.brief). It is
-    // capped and whitespace-collapsed here, never rewritten — it is their sentences, not ours.
-    await insertGoal(userId, {
-      ...g,
-      area,
-      type,
-      brief: normalizeBrief(g.brief),
-      measure: badMeasure ? undefined : g.measure,
-    });
-    goals++;
-  }
+  const goalOutcome = await persistCapturedGoals(userId, out.goals, Number.isFinite(weightKg) ? weightKg : undefined);
+  const coerced = goalOutcome.coerced;
+  const screened: CaptureResult['screened'] = goalOutcome.screened;
+  const goals = goalOutcome.persisted;
 
   // Equipment has no confirm status pre-lock; replace the set when capture returned any (an
   // empty capture leaves existing equipment untouched so we don't wipe on a sparse turn).

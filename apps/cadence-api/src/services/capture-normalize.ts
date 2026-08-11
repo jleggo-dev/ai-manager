@@ -6,12 +6,17 @@ import {
   type Constraint,
   type StartingPoint,
 } from '@cadence/shared';
+import { normTitle, sameGoalIdentity, sameGoalTitle } from './goal-identity.ts';
 
 /**
  * Pure, dependency-free transforms for the capture pipeline (no DB, no engine imports) so the
  * trust-critical logic — weight normalization and goal de-duplication — is unit-testable in
  * isolation. `capture.ts` orchestrates; this module decides shape.
  */
+
+// Re-exported: goal identity moved to goal-identity.ts, but plan-coverage compares plan activities
+// against goals with the SAME rule capture de-dupes with, and that is the point of sharing it.
+export { normTitle } from './goal-identity.ts';
 
 const LB_TO_KG = 0.453592;
 /** A brief is a few plain sentences. Past this the model is writing, not transcribing. */
@@ -279,44 +284,26 @@ export function normalizeBrief(raw: unknown): string | undefined {
   return s ? s.slice(0, BRIEF_MAX) : undefined;
 }
 
-/** Normalize a goal title for fuzzy comparison: lowercase, punctuation→spaces, collapsed. */
-export const normTitle = (s: string): string =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-
 /**
- * Two normalized titles are "the same goal" when identical, or one contains the other — this
- * catches the model rephrasing a goal ("Run a 10k" → "Run a 10k this spring") while leaving
- * genuinely distinct goals apart ("Run a 10k" vs "Run a marathon"). Both inputs must already be
- * normalized via normTitle.
+ * Decide which of this run's extractions are worth persisting at all. Drops, in order: empty
+ * titles; re-extractions of an already confirmed/committed goal (a goal the user has locked is
+ * never re-captured as a fresh card); and intra-run near-duplicates, keeping the first seen — the
+ * deterministic backstop for a model that names one race twice in a single answer.
+ *
+ * Confirmed matching is IDENTITY-strict (case/punctuation/word-boundary only): "Spartan Ultra
+ * Beast" is the confirmed "Spartan Ultrabeast" reworded, but "Run a 10k this spring" alongside a
+ * confirmed "Run a 10k" is a more specific goal the user is entitled to state separately.
+ * Intra-run matching is looser, because everything here is pre-confirmation and one card is the
+ * point. What survives is then matched against existing rows by capture-goal-merge.
  */
-const sameNormTitle = (a: string, b: string): boolean =>
-  a.length > 0 && b.length > 0 && (a === b || a.includes(b) || b.includes(a));
-
-/**
- * Decide which freshly-captured goals to persist. Drops, in order: empty titles; EXACT matches of
- * an already confirmed/committed goal (a locked goal is never re-captured); FUZZY matches of a
- * milestone-bearing "sticky" captured goal (survives a rephrase between runs); and — the
- * deterministic backstop against duplicate goal cards — intra-run near-duplicates (keep the first
- * seen). `confirmedExact` and `stickyFuzzy` must already be normalized via normTitle.
- */
-export function selectCapturedGoals<T extends { title?: string }>(
-  goals: T[],
-  confirmedExact: ReadonlySet<string>,
-  stickyFuzzy: readonly string[],
-): T[] {
+export function selectCapturedGoals<T extends { title?: string }>(goals: T[], confirmedTitles: readonly string[]): T[] {
   const kept: T[] = [];
-  const keptNorm: string[] = [];
   for (const g of goals) {
-    const nt = normTitle(g.title ?? '');
-    if (!nt) continue;
-    if (confirmedExact.has(nt)) continue;
-    if (stickyFuzzy.some((s) => sameNormTitle(s, nt))) continue;
-    if (keptNorm.some((k) => sameNormTitle(k, nt))) continue; // intra-run dedup
+    const title = g.title ?? '';
+    if (!normTitle(title)) continue;
+    if (confirmedTitles.some((c) => sameGoalIdentity(c, title))) continue;
+    if (kept.some((k) => sameGoalTitle(k.title ?? '', title))) continue;
     kept.push(g);
-    keptNorm.push(nt);
   }
   return kept;
 }

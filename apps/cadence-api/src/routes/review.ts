@@ -120,9 +120,9 @@ router.post('/goals', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
     const body = parseBody(createGoalBodySchema, req.body);
-    // confirm:true → insert as CONFIRMED (Settings "manage" mode): captured goals are both
-    // invisible to replan AND eaten by the next capture churn (deleteCapturedWithoutMilestones);
-    // a goal the user typed in Settings must be neither.
+    // confirm:true → insert as CONFIRMED (Settings "manage" mode): a 'captured' goal is invisible
+    // to replan and still subject to capture's merge pass, and a goal the user typed by hand in
+    // Settings is neither a draft nor something the Broker gets to reword.
     const g = await insertGoal(userId, {
       title: body.title,
       area: body.area,
