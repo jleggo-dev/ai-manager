@@ -1064,6 +1064,67 @@ the attribution/branding obligations; and the fact that for Strava the store is 
 end up hard-coded in `connections.ts` rather than in a `providers/strava.ts` descriptor, Oura will
 inherit rules that were never about it.
 
+**The write half — what actually survives**
+
+Agreement §7.1 expressly contemplates it: *"Your Developer Applications may include the option to
+upload activities or information to the Strava Platform."* And the compliance story is clean, which
+is the point: **an activity the user logged in Cadence is our data, not Strava Data.** It never
+becomes Strava Data by being sent *to* Strava — §2.3(i) defines Strava Data as *"all data you access
+or collect from the Strava API Materials"*, i.e. data flowing outward from Strava to us. Sending
+in the other direction touches none of §5.3, §5.4, §5.5 or §6.2.
+
+What we would push: occurrences the user logged against a movement-area activity, where we hold
+enough to make a real Strava entry — type, start time, elapsed time, distance where we have it,
+and the user's own note. No GPS (we do not record tracks), so these are manual-style entries, not
+routes. Off-plan logs (`ADHOC_CATEGORY` in `apps/cadence-api/src/repos/activities.ts`) qualify
+equally — the user did them.
+
+Design constraints on the write path:
+
+- **Opt-in per push, or one explicit standing consent — never silent.** Publishing to someone's
+  Strava feed is a social act with an audience. It is exactly BRAND.md's *"confirm before
+  committing"*, and getting this wrong posts to a user's followers on our initiative.
+- **Idempotency.** Store the returned Strava activity id on our occurrence so a retry, a webhook
+  echo, or a re-log does not create a second copy. Without it, a serverless retry duplicates a
+  post on a stranger's feed.
+- **API-created activities are visibly attributed.** Strava shows an "uploaded via *App*" line on
+  activities created through the API; there is no hidden write. That is fine — desirable, even —
+  but it means the push is a branding surface, not a silent sync, and it must therefore respect
+  §4.3 (no implied endorsement) and §4.6 (**no press release mentioning Strava without their prior
+  written consent** — a launch-blog trap worth flagging now).
+- **We must not create the round-trip we just banned.** If we push an activity to Strava and the
+  user also has Strava→Apple Health sync on, that activity can come back to us through HealthKit.
+  Harmless in itself (it is our own data returning), but the dedup rules below must recognise our
+  own echo or the coach will see every logged workout twice.
+- **Reading back what we wrote is still reading.** Fetching the activity id we just created is a
+  Strava API call returning Strava Data. Keep the id, do not re-fetch the object.
+
+**Attribution and display obligations (Brand Guidelines, apply the moment we ship anything):**
+
+- Interoperability must be described as exactly *"Powered by Strava"* or *"Compatible with
+  Strava"* — those two phrasings, not a paraphrase. (Note both are stiffer than Cadence's voice;
+  the copy around them has to carry the warmth.)
+- *"Never use any part of a Strava logo as the icon for your application"*; the Strava logo must be
+  *"completely separate and apart from (and should not appear more prominently than) the name/logo
+  of your application"*; never modified, altered or animated.
+- OAuth must go through `https://www.strava.com/oauth/authorize` or `.../oauth/mobile/authorize`,
+  presented as the Connect-with-Strava button.
+- Any link to a source activity must read exactly *"View on Strava"*, styled legibly (bold,
+  underline, or Strava orange `#FC5200`).
+- *"You must not use the Strava name in your application name."*
+
+**And the clause nobody thinks to read: §5.2, "No Competing or Imitating Applications".** *"You may
+not use the Strava API Materials in any manner that is competitive to Strava or the Strava
+Platform."* Strava has since shipped its own AI analytics features. An AI coach that reads your
+training history and tells you what to do next is not obviously non-competitive with that, and
+§5 leaves the judgement to *"Strava… in its sole discretion"*. Even the surviving write-only path
+should be presented to Strava as *feeding* their platform, because that framing is both true and
+the one that keeps the integration alive. §5.8 is the related trap for a paid app: we may not
+charge *"for access to or use of the Strava API Materials"*, though we may charge for
+*"functionality not provided by the Strava Platform… and that is not substantially duplicative of
+functionality offered by Strava"* — so Strava publishing must never sit behind the paywall as a
+named feature.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
