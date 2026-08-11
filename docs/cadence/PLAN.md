@@ -751,20 +751,43 @@ Three moments, one principle:
    quietly run out.
 3. **A thinning schedule** is itself the signal that habits have fallen off.
 
-**This runs straight at the guardrail, and that tension is the whole design problem.**
-`goal-guardrail.ts` exists to STOP people taking on too much: a weighted focus budget plus a hard
-cap that blocks the commit. It was built because a coach that lets someone start five things in
-week one is how they end up doing none. A feature that PROPOSES more goals must not become the
-thing that trips the cap — so the suggestion has to be load-aware, and "here's one more" must be
-sized against what they are already carrying, not appended to it. The examples above are all
-SUPPORTING routines (nutrition for a race, breath work for gratitude) rather than second
-objectives, and that distinction is probably the resolution: propose things that serve the goal
-they already have, not rivals to it. That needs stating in the prompt, because a model asked to
-"suggest more goals" will happily suggest a marathon to a novelist.
+**There is no tension here, and framing it as one (my first draft did) gets the design wrong.**
+Owner's correction, 2026-08-11, and it reshapes the guardrail rather than fitting around it.
+
+"Don't take on too much" is NOT a cap on how many goals someone may hold. It is a question about
+FEASIBILITY AGAINST THEIR ACTUAL AVAILABILITY, and it cuts both ways:
+
+- **Does it fit?** Fifteen activities a day does not fit anyone's Tuesday.
+- **Is it ENOUGH?** *"Cadence needs to discover that they won't be able to achieve their objective
+  of running a marathon if they can only run twice 15 minutes a week, because they're writing a
+  novel and practicing piano."* A plan can be comfortably inside someone's time and still be
+  nowhere near what their stated objective demands. Saying so plainly is the coach's job — it is
+  BRAND.md's "plain kind words for hard things", not discouragement.
+
+And the ceiling is personal, not a constant: *"unless they're retired, you know then... shit, take
+on 20 things at once if you want."* Someone with open days can carry what would crush someone with
+two 15-minute windows. So the number that matters is availability against demand, per person —
+never a fixed count of goals.
+
+**This means `goal-guardrail.ts` is probably the wrong shape**, not merely something to route
+around. A weighted focus budget with a hard cap on goal COUNT answers a question nobody asked. The
+question is whether the WEEK'S DEMAND fits the week's availability, and whether that demand is
+sufficient for the objectives on the books. `baseline.availability` (windows + session length,
+shipped this week) is the input that makes the first half computable for the first time; the
+second half needs the goal's `brief` to know what the objective actually demands. Both landed in
+the last few days, which is why this is newly buildable.
+
+Companion suggestions then stop being a threat to the guardrail and become part of the same
+calculation: an offer is only made when it fits, and it is weighed against the goals already held.
 
 **Brand constraints this must not break:**
-- *Count what happened, never what broke.* An empty week must never be delivered as a failure or a
-  streak reset. "Your schedule is thin" is one sentence away from shame, and BRAND.md forbids it.
+- *The offer is justified by THEIR objective, never by their emptiness.* Owner's correction: the
+  framing is never "your schedule is looking empty". It is *"good eating habits will improve your
+  marathon performance, want to explore that?"* or *"cold showers and meditation can lower your
+  cortisol before bedtime and help with that sleeping routine, are you open to exploring these
+  practices?"* — the suggestion earns its place by serving something they already told us they
+  want. That is coaching. Emptiness-framing would be shame, and BRAND.md forbids it; the thin
+  schedule is our SIGNAL to look, never our opening line.
 - *Confirm before committing.* A suggested goal is an offer, never an addition. It goes through the
   same "here's what I heard — did I get it right?" gate.
 - *Hearth, not scoreboard.* "Always have a schedule ready" must not become "always be busy". Rest
@@ -781,7 +804,11 @@ they already have, not rivals to it. That needs stating in the prompt, because a
 
 **Open questions, none answered:**
 - What counts as "relatively empty"? Occurrences per week, or goals with any live activity? A taper
-  week is empty by design.
+  week is empty by design. (Note the signal is for US, to prompt a look — it is never said aloud in
+  those terms.)
+- What does the two-sided feasibility check actually compute, and does it replace `evaluateGuardrail`
+  or wrap it? "Enough for the objective" needs a notion of what a 50 km in ten months demands, which
+  is judgement, not arithmetic — likely a job reading the goal's `brief` against the week's load.
 - Does a companion suggestion create a GOAL, or a lighter thing (a routine attached to an existing
   goal)? The nomenclature table has no word for the lighter thing, and inventing one is a brand
   decision.
