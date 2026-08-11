@@ -868,6 +868,31 @@ calculation: an offer is only made when it fits, and it is weighed against the g
 
 Not scoped. Needs a design pass before any code.
 
+**A8. Averages are the wrong question — recent performance, previous bests, and analysing a run (owner 2026-08-11)**
+
+Owner: *"Cadence captures AVERAGES from Apple Health but doesn't look at max distance (previous
+achievements) or recent performance. She should consider these as she would in a weekly check-in —
+what did the last month ACTUALLY look like, not averages. During onboarding she said 'you're
+averaging 4.3km a run at 36 mins' — I've done 3-5 runs of 5-6km in the past 7 days and 16K
+steps/day. Where did that number come from?"*
+
+STUB — investigation in progress. Verified so far:
+
+- The number is `fmtType` in `apps/cadence-api/src/services/health-context.ts` rendering the
+  `byType` row for running: count over a **90-day** window (`DIGEST_PERIOD_DAYS = 90`), with
+  `avgDurationMin` / `avgDistanceKm` as flat means over every run in it. The same ten runs are
+  quoted in the header of `apps/cadence-api/src/services/observed-health.ts`.
+- The digest ALREADY carries the last five workouts individually (`recent[]`, capped 10 server
+  side) and **nothing renders more than `recent[0]`** — `renderHealthDigest` prints one "most
+  recent" line, `toObservedHealth` builds `most_recent_workout` from the same single row. Four
+  dated sessions we already collect never reach a model.
+- `HealthPlugin.swift` returns `"distance": workout.totalDistance?.doubleValue(for: .meter()) ?? 0`
+  — absence becomes **0**, and `buildDigestFromWorkouts` filters `!= null`, so a distance-less run
+  is averaged in as a 0 km run and drags the mean down.
+- `includeHeartRate` / `includeRoute` are passed `false` in `native.ts`; the plugin supports both,
+  and exposes per-workout `id` / `sourceName` / `sourceBundleId` that our `PluginWorkout` interface
+  drops on the floor.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
