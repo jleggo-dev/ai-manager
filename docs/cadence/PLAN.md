@@ -1106,6 +1106,227 @@ views (digest, `observed_health`, recap) → coach.
   which bests are worth keeping per area, and does a `mind`-pillar session have one at all?
 - The 0 km fix changes historical digests silently — do we re-derive stored digests, or let the
   series carry a known discontinuity?
+**A9. Intermittent fasting — a meal skipped on purpose still counts against you (2026-08-11)**
+
+A real generated plan carried the recurring activities "Log breakfast — Every day" and "Log lunch
+— Every day". For a 16:8 eater breakfast is skipped *by design*, so every single day they leave a
+scheduled activity unfulfilled. That is BRAND.md inverted — "count what happened, never what
+broke".
+
+**The defect is real, and it is narrower and nastier than "consistency drops".** Reading the code
+first, because the exact blast radius decides the fix:
+
+- `rollingConsistency` (`apps/cadence-api/src/services/metrics.ts`) is **per-day, not
+  per-activity**: it counts days with ≥1 `done` occurrence. A fasting user who logs lunch and
+  dinner still has a kept day. The headline "5 of 7" is NOT wrong.
+- Nothing in the codebase ever writes `'missed'`. The status exists in the enum
+  (`migrations/cadence/0001_init.sql:96`, widened in `0016_episode_engine.sql:16`) and readers
+  branch on it, but a forgotten occurrence just stays `pending` forever. "Missed" is *derived*:
+  `situation.ts:82` counts `status === 'pending' && date < today`.
+- That derived count is what does the damage. It feeds `missedCount` →
+  `detectTripwires` against `steer_back.missed_threshold` (default 3). **A 16:8 eater trips the
+  "they're falling off" tripwire on day three and never stops tripping it.**
+- `evaluateStreak` (`streak.ts:60`) puts `pending` into `dueDays`, so every fasting day is a day
+  with an unmet obligation. It is rescued only by `engaged` (any `done` that day) — so the streak
+  survives, but only accidentally, and only while they log something else.
+- `replan.ts:31 recentActivity` ships `scheduled: occ.length` alongside `done`, so synthesis sees
+  a person completing ~2/3 of their plan forever and keeps re-planning around a shortfall that
+  does not exist.
+
+So: consistency is fine, the tripwire and the replan signal are not, and the *daily lived
+experience* — a breakfast card sitting there unfulfilled every morning, a coach asking about a
+meal you deliberately did not eat — is the worst part and is not a metric at all.
+
+**Collateral, and worse than the fasting case: the tripwire is already broken for everyone with a
+nutrition goal.** `missedCount` counts every past-due pending occurrence over a 14-day window, and
+the per-meal split (7a9366e) put FOUR daily occurrences in that window — 56 of them. The default
+`missed_threshold` is 3. One forgetful Tuesday trips "they're falling off the plan". Fasting only
+makes permanent what is already firing weekly. Whatever else we do here, a system meal-log task is
+not evidence someone is drifting, and the tripwire should not count it.
+
+The fix has a precedent in the repo, which is the tell that the distinction is already understood:
+`pauseUserOccurrencesInWindow` (`repos/occurrences.ts:336`) shelves an episode's occurrences with
+`and a.kind = 'user'`, and its comment says why — "the effortful ones — system tracking like
+food/weigh-in keeps running". `situation.ts` should read the same predicate. Ticking a food log is
+not the work; it is how we watch the work.
+
+### The thing we got wrong
+
+**`synthesize_plan` already knows exactly what to do.** The prompt has carried a FASTING/OBSERVANCE
+clause since 7a9366e, the same commit that split the food log into per-meal tasks:
+
+> if a goal or constraint involves fasting or a set eating window (16:8, OMAD, etc.), DROP the meal
+> tasks that fall outside the window — 16:8 usually means no breakfast (keep lunch, snack, dinner),
+> OMAD keeps a single meal; if a constraint notes Ramadan, use suhoor (pre-dawn) and iftar
+> (post-sunset) instead of the usual set.
+
+So this is not a coach that doesn't know. **It is a coach nothing can tell.** The clause fires only
+"if a goal or constraint involves fasting", and there is no field anywhere that holds an eating
+window. The Broker's `baseline_updates` contract (`capture-extract`) accepts age, sex, height,
+weight, `availability`, `starting_point`, `constraints` — and nothing else. "I eat between noon and
+eight" has nowhere to land. Today the clause only fires by luck: the user phrases fasting as a
+*goal* ("Do a 16:8 intermittent fasting window"), or the Broker files it as a *constraint* — which
+is wrong, and wrong in a way that matters. `constraints` is "what we work around". Fasting is not
+something you work around; it is how you eat. Filing it there tells the whole planner to treat a
+person's chosen rhythm as an impairment, and `plan_around: true` will start deleting things.
+
+Second thing the clause cannot fix: **the plan is a snapshot.** Someone who starts 16:8 in week
+five keeps "Log breakfast" until the next replan, and someone who mentions it mid-conversation gets
+nothing at all. `ensureHorizon` (`plan-horizon.ts`) has already materialized 14 days of pending
+occurrences from the old recurrence.
+
+### The model
+
+**1. `baseline.eating_window`, modelled on `availability` — not on the dietary profile.**
+
+`availability` is the precedent and it fits almost exactly: it is the shape of someone's day, stated
+in their own words, with optional clock edges, held top-level on `Baseline` (the comment in
+`types/baseline.ts` says why — the baseline persists as a shallow jsonb merge and a nested write
+would clobber its siblings). An eating window is the same kind of fact about the same day.
+
+It does *not* belong on `dietary_profile`. That column is a safety input — hard allergen excludes
+consumed by `dietary-safety.ts` before anything is suggested. An eating window excludes no food.
+Putting a way of eating next to a list of things that could hurt you is a category error the
+allergen pass would then have to defend against.
+
+```ts
+/** One span they can eat in. Clock edges only when they gave them. */
+export interface EatingWindowSpan {
+  earliest?: string;  // "12:00"
+  latest?: string;    // "20:00"
+  /** Days this span applies to, as the RRULE codes `scheduling.ts` already parses
+   *  ('MO'|'TU'|…). Absent = every day. Present is how 5:2 and "weekdays only" are
+   *  expressed — two different days, two different spans. */
+  days?: string[];
+}
+
+export interface EatingWindow {
+  /** Their words, always — "16:8", "OMAD", "I just skip breakfast", "Ramadan". Never our label. */
+  said_as: string;
+  /** Empty means they named a pattern we could not turn into clock times. Still keep it:
+   *  the coach reads `said_as` and can ask. Never a guess. */
+  windows: EatingWindowSpan[];
+  /** YYYY-MM-DD it stops being true, when they said so (Ramadan, a trial month) — same
+   *  semantics as `Constraint.until`. Absent = open-ended. */
+  until?: string;
+}
+```
+
+`baseline.eating_window?: EatingWindow`. No migration — `baseline` is jsonb. `capture-extract`'s
+`baseline_updates` gains the key, and that single change is what makes the existing FASTING clause
+reachable at all.
+
+**Absent means they never said, and nothing may infer it.** This is the load-bearing rule and it is
+not a nicety: we have already run this experiment. `days_per_week` was captured, went 1 → 2.5 → 2
+for a man training for a 50 km ultra because the app kept reading descriptions of the present as
+statements of capacity, and the number then acted as a hard ceiling on his plan. "He hasn't logged
+breakfast in nine days, he must be fasting" is the identical mistake with a worse ending: a person
+who was simply busy in the mornings gets breakfast quietly deleted from their plan and a coach who
+stops mentioning it. The window is written when someone says it, by hand in Settings, or not at all.
+
+**2. Fewer meal tasks, never rescheduled ones.** The clause's DROP is right and should stay. A "Log
+breakfast" card sitting at 13:00 is a lie about what breakfast is, and the entire point of the
+per-meal split was that each task lands at the moment you'd actually do the thing. 16:8 →
+lunch/snack/dinner. OMAD → one meal task. Ramadan → suhoor and iftar. 5:2 → the `days` field on a
+span lets synthesis emit `FREQ=WEEKLY;BYDAY=…` for the fuller days and a lighter set on the two low
+ones, which is the only one of these patterns the current all-or-nothing clause cannot express.
+
+**3. Eating at 11 instead of 12 is not failing at anything, so record nothing.** There is no
+breakfast occurrence to fail, and the meal itself logs normally — `parse-meal` infers `meal` from
+the user's words and an 11am meal comes back `lunch` or `other`. That is the whole mechanism, and it
+is enough.
+
+**Explicitly do NOT add an `off_window` flag to `nutrition_logs`.** A flag exists to be counted, and
+the only thing you can build from a count of off-window meals is a tally of the times someone broke
+their fast. That is a scoreboard, and it is the exact move BRAND.md bans. The coach may notice
+timing out loud and warmly ("you ate earlier today") — she may never keep score of it.
+
+The one thing genuinely missing is the opposite of a flag. **`nutrition_logs` has no clock time at
+all** — `date` (a date), `meal`, and `created_at`, which is an insert timestamp, not an eating time.
+So `nutrition_baseline`'s prompt asks the coach for a read on "timing" from data that contains none,
+and for a fasting user timing is the whole subject. An optional `eaten_at` is the honest addition
+here: know when they ate, describe it, never score it.
+
+**4. What the coach must know, and where it survives compaction.** Storage is durable; that is not
+the same as present in the turn. The retrieval registry (`services/retrieval/registry.ts`) is the
+layer that decides what reaches the coach, and it has `get_constraints`, `get_weight`,
+`get_dietary_profile`, `get_food_log` — and **nothing that renders `availability`**. Copying
+availability's storage pattern and stopping there would faithfully reproduce its hole.
+
+So: store on `baseline`, but render inside **`get_dietary_profile`** rather than minting a
+fifteenth function. Its description already reads "use before suggesting foods/recipes" — precisely
+the moment the coach must not offer breakfast — and its domains are already `['nutrition','safety']`,
+so `context_select` pulls it for any food turn without a catalog change. One line in the render:
+
+> `Eats between 12:00 and 20:00 (their words: "16:8").`
+
+One fact, two readers, each through the door it already uses: the planner reads `<baseline>`, the
+coach reads the dietary block. Write that asymmetry down where the column is defined so nobody
+tidies it up later by moving the field.
+
+**5. Safety: change nothing, and that is a recommendation, not a dodge.** The house already drew
+this line and drew it well. `goal-screen.ts` deliberately omits "fast" from `HARM_TERMS` — its own
+comment says these words are "ordinary and the false positive would be brutal" — and *"Do a 16:8
+intermittent fasting window"* is a committed passing test case (`goal-screen.test.ts:22`). The coach
+persona refuses *"fasting to compensate for eating"*, and `plan-vet` repeats it. That is the correct
+distinction, already implemented: the harmful thing is a compensatory act, not a way of eating.
+
+No pregnancy/ED/medication interstitial. Cadence does not know a user is pregnant, holds no
+medication list, and cannot ask without imputing a category to someone who just told us how they
+eat. Over-warning is its own harm and it lands hardest on exactly the person the warning is for: a
+user with an ED history, being told by an app that their eating is suspect. We have a crisis
+boundary in the persona for real signals; a stated eating window is not one.
+
+The one gap worth closing is the mirror image — Cadence must never *propose* fasting.
+`nutrition_baseline`'s `suggestion` is the only place the app proposes an eating change, and its
+rule is already "additive or a gentle swap". One clause making it explicit that narrowing an eating
+window or dropping a meal is never the suggested change delivers the "never prescribes" half of the
+requirement for the price of a prompt edit.
+
+**6. The observe phase needs one clause.** `OBSERVE_DAYS_NEEDED = 7` (`nutrition.ts:328`) counts
+distinct dates with any meal, so a fasting user reaches it on schedule. But
+`meals_per_logged_day` will read ~2 where the prompt expects ~3.5, and `nutrition_baseline` must not
+read that as a thin log. When a window is on file, fewer meals per day IS the pattern.
+
+### ARCHITECTURE
+
+| Component | File | Status | Role |
+|---|---|---|---|
+| `EatingWindow` / `EatingWindowSpan` types | `packages/cadence-shared/src/types/baseline.ts` | **proposed** | Alongside `Availability`; `baseline.eating_window?` |
+| Baseline storage | `cadence.users.baseline` jsonb | existing | No migration; shallow-merge write, top-level key |
+| Broker capture | `capture-extract` → `baseline_updates` in `config/ai-admin/ai-admin.config.json` | **proposed** (extend) | The missing input. Only writes what was said |
+| Capture normalize/guard | `apps/cadence-api/src/services/capture-normalize.ts` | **proposed** (extend) | Assert model output before commit — same as `isTimeOfDay` |
+| Manual edit | Settings / review wizard (`apps/cadence-web`) | **proposed** | Like `time_of_day` — hand-editable, never inferred |
+| Plan synthesis | `synthesize_plan` prompt (FASTING/OBSERVANCE clause) | existing; **extend** for 5:2 `days` | Drops out-of-window meal tasks at generation |
+| Plan vet | `plan_vet` prompt | existing | Already flags fasting-to-compensate; no change |
+| Occurrence materializer | `apps/cadence-api/src/services/plan-horizon.ts` | existing | 14-day rolling horizon; **the reason a snapshot fix is not enough** |
+| Mid-plan retirement | new service beside `episode-overlay.ts` | **proposed** | On a window write: drop the out-of-window meal activities + clear their FUTURE pending occurrences (replan already does this wipe). Not `skipped` (that is the user's acknowledgement) and not `paused` (that is episode-owned and an episode is a rough patch, which a way of eating is not) |
+| Tripwire | `apps/cadence-api/src/services/situation.ts:82` | **proposed** (fix) | Count only `a.kind = 'user'` occurrences in `missedCount` — the predicate `pauseUserOccurrencesInWindow` already uses. Fixes the collateral bug above for everyone |
+| Replan signal | `apps/cadence-api/src/services/replan.ts:31` | **proposed** (fix) | `scheduled` should not count meal-log tasks a fasting user was never meant to tick |
+| Consistency / streak | `metrics.ts`, `streak.ts` | existing — **no change** | Per-day and already correct |
+| Coach retrieval | `retrieval/registry.ts` → `get_dietary_profile` | **proposed** (extend render) | How the fact reaches a turn and survives compaction |
+| Meal parse | `parse-meal` prompt, `nutrition_logs.meal` | existing | An off-window meal is just a meal; no new field |
+| Meal clock time | `nutrition_logs.eaten_at` | **proposed** (migration) | The only new column; makes "timing" real for a prompt that already asks for it |
+| Baseline read | `nutrition_baseline` prompt | **proposed** (extend) | Never propose narrowing a window; low `meals_per_logged_day` is the pattern, not a gap |
+| Safety screens | `goal-screen.ts`, coach persona | existing — **no change** | Line already correctly drawn |
+
+Data flow: **user says it → `capture_extract` → `baseline.eating_window`** → read by
+`synthesize_plan` (via `<baseline>`, drops the tasks) *and* by `get_dietary_profile` (via the
+context pack, stops the breakfast suggestion). Meal logs flow independently and are never scored
+against the window.
+
+### First slice
+
+Ship the four changes that remove the harm, in one PR each:
+
+1. `EatingWindow` type + `baseline.eating_window` + `capture_extract` writes it. Nothing else
+   changes and the FASTING clause becomes reachable for the first time.
+2. `get_dietary_profile` renders it — the coach stops offering breakfast.
+3. Count only `kind = 'user'` occurrences in `situation.ts` `missedCount`. Independently correct,
+   already precedented, and a live bug for every user with a food goal, not just fasting ones.
+4. Mid-plan retirement of out-of-window meal activities, so week five works like week one.
+
+`eaten_at`, the 5:2 `days` handling, and the `nutrition_baseline` clauses follow. Not scoped yet.
 
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
