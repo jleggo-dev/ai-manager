@@ -735,6 +735,51 @@ when there is a visible Continue to pair with them.
   PARTIAL the user saw rather than nothing or something longer — a restore that disagrees with what
   was on screen is the bug this feature exists to remove.
 
+**A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
+
+Deleting an auth user while the app held its session left the phone unusable: every turn answered
+"Something hiccuped on my end". Evidence, in the order that settled it — AI Admin had NO diagnostic
+log for the failing turn (so nothing reached a model), and Supabase had ZERO auth requests in two
+hours (so it was not a rejected sign-in, it was no attempt). supabase-js found a stored session in
+local storage, considered itself authenticated, and never called `signInAnonymously`; every API
+call then carried a JWT for a user that no longer existed.
+
+Self-inflicted here, but the general case is real and is NOT: a revoked refresh token, rotated
+project keys, or an account deleted by support all produce the same state. There is no path from
+"the stored session is invalid" back to "bootstrap a fresh anonymous one", so the app is bricked
+permanently. Clearing it needed a machine with `devicectl`; a real user just has a dead app.
+
+Fix, next to the auth bootstrap: on a 401 / `user_not_found` from the API, or a failed token
+refresh, clear the stored session and start a new anonymous one. Guard it against a loop (a genuine
+outage must not spin up anonymous users), and note it is the same recovery a "sign out and start
+over" would take — so it should share that code path rather than invent a second one.
+
+**A6. First full run on the new capture — four defects (2026-08-11)**
+
+The A-Z run after the capture/health/schema work. The plan itself is not yet assessed; these are the
+mechanical faults it surfaced.
+
+1. **Duplicate goals from a spelling variant.** Two captured goals for one race — "Spartan
+   Ultrabeast" and later "Spartan Ultra Beast" (with a space) — which then collapsed back to one.
+   Dedup is matching on the title string, so the model rewording its own extraction mints a second
+   goal. Goals need identity that survives rewording; the title is not it.
+2. **The captured-goal pills vanish mid-conversation** (observed once the coach asked about time in
+   the day). They are the running proof that she heard you — disappearing silently is the opposite
+   of the promise, and worse than never showing them.
+3. **FIXED (#176) — "Change something" and "+ Did I miss something? Tell me" did nothing, same cause.**
+   `OnboardingChat.tsx`: `{confirming ? <cfm-bar> : <composer>}`. While the confirm card is up the
+   composer is REPLACED by the Build/Change bar, and both buttons only call `setInput(...)` — they
+   prefill an input that is not on screen. The fix is to leave confirm mode (restoring the composer,
+   focused, with the prefilled text) rather than to write into nothing. Both are the app's only
+   offered way to correct the plan at the moment of committing to it, so this was the highest-value
+   of the four. A correction now sets an explicit override that suppresses the confirm bar and
+   restores the composer; her next turn clears it so the following card can still offer "Build it".
+   Shipped WITHOUT a regression test — the harness needs a driven confirm turn — and the failure was
+   invisible to all 331 existing tests, which is exactly the kind of bug a test should catch.
+4. **The progress bar reads 90% at the end.** It is driven by the coach-emitted `progress` on quick
+   picks, which never reaches 1. Either the last turn must carry 1, or the confirm stage should pin
+   it — a bar that never completes undercuts the one screen that says "done".
+
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 
 Hit on device: at the end of onboarding every way of saving the plan answered "you already have an
