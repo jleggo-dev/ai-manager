@@ -868,7 +868,7 @@ calculation: an offer is only made when it fits, and it is weighed against the g
 
 Not scoped. Needs a design pass before any code.
 
-**A9. Intermittent fasting — we mark a skipped meal as a missed activity (2026-08-11)**
+**A9. Intermittent fasting — a meal skipped on purpose still counts against you (2026-08-11)**
 
 A real generated plan carried the recurring activities "Log breakfast — Every day" and "Log lunch
 — Every day". For a 16:8 eater breakfast is skipped *by design*, so every single day they leave a
