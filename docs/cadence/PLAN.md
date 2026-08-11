@@ -735,6 +735,64 @@ when there is a visible Continue to pair with them.
   PARTIAL the user saw rather than nothing or something longer — a restore that disagrees with what
   was on screen is the bug this feature exists to remove.
 
+**A7. Never leave someone with an empty week — companion goals and next milestones (owner 2026-08-11)**
+
+Owner's framing: *"The objective is to always have a schedule of routines ready for the user. If
+their schedule of tasks is relatively empty, then their habits will have fallen off and we'll have
+been a bad lifestyle coach."*
+
+Three moments, one principle:
+
+1. **End of onboarding with a single goal.** Cadence asks whether they want to take on anything
+   else, and SUGGESTS related ones — analysing the goal to propose routines that serve the primary
+   objective. Owner's examples: a race in October → learning to optimise nutrition alongside it; a
+   gratitude practice → breath work or meditation; writing a novel → walking meditation.
+2. **A major milestone lands.** She helps them line up the next one rather than letting the plan
+   quietly run out.
+3. **A thinning schedule** is itself the signal that habits have fallen off.
+
+**This runs straight at the guardrail, and that tension is the whole design problem.**
+`goal-guardrail.ts` exists to STOP people taking on too much: a weighted focus budget plus a hard
+cap that blocks the commit. It was built because a coach that lets someone start five things in
+week one is how they end up doing none. A feature that PROPOSES more goals must not become the
+thing that trips the cap — so the suggestion has to be load-aware, and "here's one more" must be
+sized against what they are already carrying, not appended to it. The examples above are all
+SUPPORTING routines (nutrition for a race, breath work for gratitude) rather than second
+objectives, and that distinction is probably the resolution: propose things that serve the goal
+they already have, not rivals to it. That needs stating in the prompt, because a model asked to
+"suggest more goals" will happily suggest a marathon to a novelist.
+
+**Brand constraints this must not break:**
+- *Count what happened, never what broke.* An empty week must never be delivered as a failure or a
+  streak reset. "Your schedule is thin" is one sentence away from shame, and BRAND.md forbids it.
+- *Confirm before committing.* A suggested goal is an offer, never an addition. It goes through the
+  same "here's what I heard — did I get it right?" gate.
+- *Hearth, not scoreboard.* "Always have a schedule ready" must not become "always be busy". Rest
+  weeks, taper weeks and deliberately quiet periods are legitimate and must not read as decay.
+
+**What already exists to build on:**
+- `Goal.brief` (migration 0030, this week) is what makes "analyse the goal" possible at all — the
+  load-determining facts in the user's own words now travel with the goal to any job that needs
+  them. Before it, a proposer would have had a title and nothing else.
+- `ensureHorizon` already tops the plan up ~2 weeks ahead, so "the schedule runs out" has partial
+  cover; what it cannot do is notice that the GOALS have run out.
+- `evaluateGuardrail` already computes weighted load — the number a proposer needs to size against.
+- The quick-pick protocol already renders an offer as tappable options.
+
+**Open questions, none answered:**
+- What counts as "relatively empty"? Occurrences per week, or goals with any live activity? A taper
+  week is empty by design.
+- Does a companion suggestion create a GOAL, or a lighter thing (a routine attached to an existing
+  goal)? The nomenclature table has no word for the lighter thing, and inventing one is a brand
+  decision.
+- Who proposes — the coach mid-conversation, or a job (`suggest-companions`) whose output she
+  offers? A job is auditable and testable; a coach turn is warmer.
+- On milestone completion, how soon? Immediately risks stepping on the moment. There is a real
+  argument for letting an achievement stand for a day before asking "what's next".
+- How often may she re-offer after a no? Once declined, silence for how long?
+
+Not scoped. Needs a design pass before any code.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
