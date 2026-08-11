@@ -960,6 +960,153 @@ stop raw-sample-sized payloads reaching the server, and both series above are ex
 36-minute run is roughly 430 HR samples and a couple of thousand locations. **Derive on device,
 ship derived shapes.**
 
+**What she should look at instead.**
+
+The test every field below has to pass: *it changes a coaching decision*. A number that only makes
+the payload look thorough is a number that costs context and buys nothing.
+
+1. **The sessions themselves, dated — the cheapest fix in this entry.** Not a statistic: the list.
+   "6.1 km / 34 min on the 9th, 5.4 km / 31 min on the 7th, 5.8 km / 33 min on the 4th…" answers
+   the owner's complaint with no arithmetic at all, because five 5–6 km runs in seven days is
+   *visible* the moment you stop collapsing them. We already collect, validate and store these
+   rows; `MAX_RECENT = 5` on the client, 10 in the schema, and exactly one is ever rendered.
+   Decision it changes: what to schedule next week, and whether the plan we already wrote is
+   remotely near what this person does.
+2. **A recent window beside the baseline one.** Per modality: sessions, total km and mean distance
+   over the last **28 days**, next to the same over the full period. Twenty-eight rather than seven
+   because one week is one bad week — 28 days is the owner's "last month" and survives a missed
+   one. Decision: whether to build on what they are doing now or on what they were doing in May.
+3. **Previous bests, each with its date.** Longest distance, longest duration, and — where both
+   distance and duration exist — the quickest pace over a comparable distance. This is the
+   *anti-streak*: a best is counting what happened, and it never resets to zero, which is exactly
+   what the brand promise asks for. The date is not optional decoration: "your longest is 12 km"
+   and "your longest is 12 km, back in March" are different facts and lead to different sessions.
+   Decision: how to size a milestone, and whether today's 8 km is a stretch or a Tuesday.
+4. **Direction of travel — last 28 days against the 28 before them.** Sessions and total volume,
+   two plain numbers, no slope and no index. Decision: add load, hold, or back off. Naming rule:
+   the field is `prior_28`, never `decline` or `dropoff` — the payload carries numbers and the
+   persona decides how to speak, and a quiet fortnight must be able to read as a taper, a holiday
+   or a hard week rather than decay. Hearth, not scoreboard.
+5. **Pacing consistency.** Over the sessions with both distance and duration: typical pace plus the
+   spread (median and range, not a standard deviation — a coach reasons in "your easy runs and your
+   quick ones", not in variance). Decision: someone whose every run lands between 5:45 and 6:00/km
+   is running the same run over and over and should be offered variation; someone ranging 4:30 to
+   7:30 is already doing genuinely different sessions and needs the opposite advice. Derivable
+   today from data we already hold — no new permission, no new read.
+6. **How much of the average is actually measured.** `distance_recorded_for: 6 of 10 sessions`.
+   Given the `?? 0` above, an average distance can rest on a minority of the runs and nothing says
+   so. Decision: whether to trust the number, and whether to ask about the rest instead of
+   asserting. Paired with the seam fix — treat a `distance` of exactly `0` as *not recorded* rather
+   than as zero kilometres, since HealthKit's `?? 0` makes the two indistinguishable and no real
+   run covers 0.000 m — this is what stops treadmill sessions dragging the mean down.
+7. **The 16k-steps person, read correctly.** Steps are already the one half of this that works:
+   `avgPerDayLast7` sits beside the 90-day mean with a `byWeek` series, and `observed-health.ts`
+   ships all of it under a `what_this_is` that says in words that high steps with few workouts
+   means an active person who does not press start, not a sedentary one. The asymmetry is the bug:
+   **workouts get no last-7 or last-28 figure at all**, so the recent half of the picture exists
+   for steps and not for training. Items 2 and 4 make the two halves symmetric, and that is the
+   whole fix — we should NOT add an `unrecorded_activity_likely` flag. That is an inference dressed
+   as a measurement, and both series in front of the coach are better than one guess.
+
+Deliberately **rejected**, so nobody adds them later without an argument:
+
+- *Average heart rate per workout.* Even once the seam is fixed (A13), an average bpm with no
+  resting HR and no max is uninterpretable — and resting HR, HRV and VO₂max are precisely what the
+  plugin cannot read. HR earns its place inside single-run analysis, not in the standing digest.
+- *Calories.* Emitted on every row and permissioned already, but nothing Cadence decides turns on
+  it, and activity calories invite an in/out conversation the nutrition side deliberately avoids.
+- *Any composite score or fitness index.* Scoreboard.
+- *Deleting `avgDistanceKm`.* It is not wrong; it was only ever wrong as the **only** line.
+
+**Where these are computed, and why it is not the digest.** A14 established the canonical
+per-workout store (`workouts`, a new table — **not** `cadence.occurrences`, which is date-keyed
+with `unique (activity_id, date)` and has no instant, so two runs on one Tuesday collapse into one
+row). Every shape above is a **view over that store, derived server-side**, not a new column on
+`health_digests`. The device's job shrinks to what only the device can do: read HealthKit and ship
+per-workout rows — with the `id`, `endDate`, `sourceName` and `sourceBundleId` the seam currently
+throws away — into the canonical store. A workout row is not a raw sample: ten to a few hundred
+rows over ninety days, against the tens of thousands of HR samples and locations behind them. The
+`validation/health.ts` rule is satisfied by that distinction, not violated by it, and we already
+send ten such rows today. `renderHealthDigest` and `toObservedHealth` become two renderings of the
+canonical store, which is also what stops them drifting into two phrasings of the same facts.
+
+**What she should look at instead.**
+
+The frame is the owner's: what did the last month ACTUALLY look like. Every field below has to
+change a coaching decision or it does not go in.
+
+- **Fix the zero first.** Until `distance ?? 0` is distinguished from a real zero, every figure
+  below inherits the same lie. Absent distance must be `null` at the Swift seam, and the digest's
+  `.filter((n) => n != null)` then does what it already claims to. This is a prerequisite, not a
+  feature — and it is the cheapest fix in this entry.
+- **A recency pair, not one mean.** Steps already model this correctly (`avgPerDayLast7` beside
+  the 90-day figure, plus `byWeek`); workouts get the same shape — last-4-weeks beside the 90-day
+  baseline. Two numbers side by side ARE the direction of travel, and they cost nothing but a
+  second reduce over data we already hold.
+- **Bests, which do not exist anywhere today.** Longest distance and longest duration per type,
+  each with its date. A previous best is the single most useful thing a coach knows about someone
+  training for a distance goal: it is what makes "you've run 21 km before, 50 km is a different
+  animal but not an unknown one" sayable at all.
+- **The last five sessions, individually, with dates.** We already collect, bound and validate
+  them; only `recent[0]` is ever read. Rendering the other four is free signal, already paid for,
+  and it is the difference between "you average 4.3 km" and "your last five runs were 5.2, 5.8,
+  4.9, 6.1 and 5.4 km, all in the past nine days".
+- **The walker case.** High steps with few recorded workouts must read as an active person who
+  does not press start, never as a sedentary one. `dailySteps` already carries this; the coaching
+  language around it does not exist yet.
+
+Deliberately NOT included: anything derived from HR (the seam is broken — see above), and any
+per-sample series crossing the boundary. `validation/health.ts`'s rule holds — derive on device,
+ship the derived shape, and let the bound be part of the schema.
+
+**Analysing a run — feasibility, then shape.**
+
+Split analysis is possible for OUTDOOR runs only, and it is ours to compute: `route` gives
+`{timestamp, lat, lng, alt}` per CLLocation, so per-kilometre splits fall out of consecutive-point
+distance against elapsed time. It requires adding `READ_ROUTE` — a new HealthKit ask, on a
+permission surface that has already bitten us twice, and one the user may reasonably decline for a
+coaching app. Note also the privacy asymmetry: we need the SHAPE of the effort, not where they
+went, so the route must be reduced to splits on device and the coordinates discarded — they must
+never reach our server.
+
+An indoor or treadmill run **cannot be split at all** (no route, no distance timeline,
+`queryRecords` refuses anything but steps). Its only derivable detail is average cadence from
+`steps ÷ duration`. Say so plainly in the UI rather than silently offering less.
+
+Where it lives: on demand, from a completed session, because "how did that run go?" is a question
+asked the same evening — with the weekly check-in citing the same derived summary rather than
+recomputing it. That implies one new job (`analyse-run`) taking a bounded split summary plus the
+goal's `brief`, and never raw samples.
+
+Brand: the splits are evidence, not a verdict. "Your last kilometre was your fastest — you had
+more left than you thought" is coaching. "You faded after 3 km" is a scoreboard, and on a bad day
+it is a wound. Count what happened.
+
+**Architecture scaffold.**
+
+| Component | Owns | Status |
+|---|---|---|
+| `HealthPlugin.swift` (vendored) | `distance ?? 0` → null; already emits `id`, `sourceName`, `sourceBundleId`, `endDate`, `calories`, `steps`, `heartRate`, `route` | EXISTING, under-consumed |
+| `lib/capability/native.ts` | the seam: pass through the dropped fields; add `READ_ROUTE` only when split analysis ships | EXISTING, needs widening |
+| `features/onboarding/health-digest.ts` | derive on device: last-4-week aggregates, bests, the five recent sessions, split summaries | EXISTING, extend |
+| `validation/health.ts` | bounded schema for the above; the abstraction rule stays | EXISTING, extend |
+| A14's `workouts` store | per-workout canonical rows, keyed by the plugin's `uuid` | PROPOSED (A14) |
+| `services/observed-health.ts` | becomes a VIEW over A14's store rather than a parallel pipeline | EXISTING, re-point |
+| `analyse-run` job | one run's derived splits + goal `brief` → coaching read | PROPOSED |
+
+Flow: HealthKit → plugin (all fields) → seam → on-device derivation → bounded POST → A14's store →
+views (digest, `observed_health`, recap) → coach.
+
+**Open questions.**
+- Is `READ_ROUTE` worth the permission cost, given it buys splits for outdoor runs only? A
+  reasonable first slice ships everything above WITHOUT it and adds it if users ask.
+- Four weeks is asserted, not derived — is it the right recency window for someone training across
+  a ten-month build?
+- A "best" needs a per-type comparison rule (fastest 5 km is not the same question as longest run);
+  which bests are worth keeping per area, and does a `mind`-pillar session have one at all?
+- The 0 km fix changes historical digests silently — do we re-derive stored digests, or let the
+  series carry a known discontinuity?
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
