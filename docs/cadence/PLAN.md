@@ -870,13 +870,36 @@ Not scoped. Needs a design pass before any code.
 
 **A9. Intermittent fasting — we mark a skipped meal as a missed activity (2026-08-11)**
 
-STUB — being written. A real generated plan carried the recurring activities "Log breakfast —
-Every day" and "Log lunch — Every day". For a 16:8 eater breakfast is skipped *by design*, so
-every single day they are recorded as missing a scheduled activity. `rollingConsistency` and the
-recap read occurrence status, so a person doing exactly what they intended is counted as failing,
-daily. That is BRAND.md inverted — "count what happened, never what broke", no streak-shame.
+IN PROGRESS. A real generated plan carried the recurring activities "Log breakfast — Every day"
+and "Log lunch — Every day". For a 16:8 eater breakfast is skipped *by design*, so every single
+day they leave a scheduled activity unfulfilled. That is BRAND.md inverted — "count what
+happened, never what broke".
 
-Design pass in progress: eating window on `baseline` vs. in the nutrition module; whether a
+**The defect is real, and it is narrower and nastier than "consistency drops".** Reading the code
+first, because the exact blast radius decides the fix:
+
+- `rollingConsistency` (`apps/cadence-api/src/services/metrics.ts`) is **per-day, not
+  per-activity**: it counts days with ≥1 `done` occurrence. A fasting user who logs lunch and
+  dinner still has a kept day. The headline "5 of 7" is NOT wrong.
+- Nothing in the codebase ever writes `'missed'`. The status exists in the enum
+  (`migrations/cadence/0001_init.sql:96`, widened in `0016_episode_engine.sql:16`) and readers
+  branch on it, but a forgotten occurrence just stays `pending` forever. "Missed" is *derived*:
+  `situation.ts:82` counts `status === 'pending' && date < today`.
+- That derived count is what does the damage. It feeds `missedCount` →
+  `detectTripwires` against `steer_back.missed_threshold` (default 3). **A 16:8 eater trips the
+  "they're falling off" tripwire on day three and never stops tripping it.**
+- `evaluateStreak` (`streak.ts:60`) puts `pending` into `dueDays`, so every fasting day is a day
+  with an unmet obligation. It is rescued only by `engaged` (any `done` that day) — so the streak
+  survives, but only accidentally, and only while they log something else.
+- `replan.ts:31 recentActivity` ships `scheduled: occ.length` alongside `done`, so synthesis sees
+  a person completing ~2/3 of their plan forever and keeps re-planning around a shortfall that
+  does not exist.
+
+So: consistency is fine, the tripwire and the replan signal are not, and the *daily lived
+experience* — a breakfast card sitting there unfulfilled every morning, a coach asking about a
+meal you deliberately did not eat — is the worst part and is not a metric at all.
+
+Design pass continues below: eating window on `baseline` vs. in the nutrition module; whether a
 fasting user needs per-meal activities at all; how a broken fast is recorded without reading as
 failure; what the coach must know to stop offering breakfast, and where that lives so it survives
 compaction.
