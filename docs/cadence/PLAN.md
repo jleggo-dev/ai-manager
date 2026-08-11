@@ -735,6 +735,55 @@ when there is a visible Continue to pair with them.
   PARTIAL the user saw rather than nothing or something longer — a restore that disagrees with what
   was on screen is the bug this feature exists to remove.
 
+**A12. Points/XP and streaks were never actually settled — and our own logic contradicts itself (owner 2026-08-11)**
+
+Parked deliberately. Recording it now so it is decided on purpose rather than inherited from
+whatever the next feature happens to need.
+
+**What exists.** `cadence.users.streak_state` (migration 0015) — `{current, longest, freezes,
+freeze_credit, last_evaluated, last_saved_by_freeze}`, computed forward-only in
+`services/streak.ts`, seeded with one freeze so a new user's first streak has a cushion. Points/XP
+appear ON THE MAIN SCREEN. But there is **no points service, no ledger and no award rules anywhere
+on the API side** — searched. So we shipped the surface without the system, and nobody has defined
+what a point is, what earns one, or what it is worth.
+
+**The contradiction, owner's own observation.** CLAUDE.md bans "streaks that reset to zero", and
+0015's header justifies the reinstated streak precisely by saying the freeze economy keeps it from
+resetting. But as the owner put it: *resetting a streak to 0 does make sense if we have streak
+freezes* — that is what the freezes are FOR. A freeze you can spend, that then still cannot lose
+you the streak, is not an economy; it is decoration. So the ban and the shipped mechanism disagree,
+and one of them has to give. Not resolved here.
+
+**Questions this needs to answer when it is picked up:**
+- What earns points, and at what weight? A 9,000-step day and finishing a 50 km should not be equal.
+- Monotonic, or can it go down? (The brand argument for never-decreasing is strong; the freeze
+  economy is a real counter-argument that a stake is what makes consistency mean anything.)
+- What IS the number on the main screen today, and is a prominent score compatible with
+  "hearth, not scoreboard"? A number on the home screen is a scoreboard whatever its rules are.
+- How do points, the streak, and the honest 5-of-7 rolling metric relate? Three measures of the
+  same thing that disagree is worse than one.
+
+**Explicitly NOT the near-term problem.** The owner's refocus, verbatim:
+
+> For now let's just really consider "is a task done?" and "do we show the user that it's done?"
+> and how does the coach assess your progress... which is really about hitting your targets. The
+> coach isn't going to care that you're 10% off or not, they'll use that as a data point to help
+> you adjust your program for the following week.
+
+That is the frame for daily targets (the A10 exploration, cancelled mid-flight): the day's quantity
+is **a data point for RE-PLANNING, not a score**. Its value is the signal it gives `replan.ts` /
+`synthesize-plan` — "this 9K target was consistently 60% met, lower it or re-shape it" — not any
+award. Which dissolves the threshold argument entirely: nothing is being awarded, so there is no
+tolerance to place and no curve to choose.
+
+For the record, since it came up and would otherwise be re-litigated: a flat ~10% "close enough"
+rule is wrong on two counts. It is **direction-blind** — 10% over a calorie LIMIT is not close
+enough, it is over — and it **does not scale**: 10% of 9,000 steps is a ten-minute walk, 10% of a
+marathon is 4.2 km. "Met or exceeded" needs no tolerance, and a near miss deserves honest warm
+words ("900 short — that's a ten-minute walk if you fancy it") rather than being rounded up on the
+user's behalf. Telling someone they hit a goal they missed is flattery, and it makes the number
+mean nothing.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
