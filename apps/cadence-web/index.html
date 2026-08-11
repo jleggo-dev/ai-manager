@@ -2,7 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- maximum-scale/user-scalable are deliberate: this ships as a native app, not a web page.
+      A WKWebView honours pinch-zoom and KEEPS it, so one stray two-finger touch (easy to do while
+      scrolling a chat) leaves every screen zoomed and panning side to side, for the rest of the
+      session and across navigations. There is no browser chrome to reset it and no gesture a user
+      would think to look for. The accessibility answer here is the OS one — Dynamic Type and
+      Display Zoom, which apply to the whole device — not a webview scale the app cannot see. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>Cadence</title>
     <meta
       name="description"

@@ -14,6 +14,17 @@ const config: CapacitorConfig = {
   webDir: '../cadence-web/dist',
   ios: {
     /**
+     * A WKWebView honours pinch-zoom and KEEPS it. One stray two-finger touch while scrolling a
+     * chat left every screen zoomed and panning side to side for the rest of the session, across
+     * navigations, with no browser chrome to reset it. iOS deliberately ignores the viewport's
+     * `user-scalable=no` in many cases, so the meta tag alone does not hold — this is the setting
+     * that actually turns the gesture off. An app should always fit its screen.
+     *
+     * The accessibility answer is the OS one (Dynamic Type, Display Zoom), which applies device
+     * wide and which the app respects; a webview scale the app cannot read or reset is not it.
+     */
+    zoomEnabled: false,
+    /**
      * Makes the WKWebView visible to Safari's Web Inspector — the only way to see the console of
      * the app as it actually runs on a phone, which is where most of this app's bugs live.
      *
