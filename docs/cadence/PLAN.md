@@ -868,22 +868,259 @@ calculation: an offer is only made when it fits, and it is weighed against the g
 
 Not scoped. Needs a design pass before any code.
 
-**A14. Cadence's canonical workout history — one store, many sources (owner 2026-08-11, STUB)**
+**A14. One history, many doors — Cadence's canonical workout store (owner 2026-08-11, NOT BUILT)**
 
 Owner requirements 4 and 8: write our own completed sessions to HealthKit so they count for the
-rings, and give people who trained before us a way to bring that history in. Both land on the same
-question, and the owner answered it: *"I think that's why we kind of have to try to compose our own
-historical, no?"* — Cadence keeps THE canonical per-workout history, composed from HealthKit reads,
-our own in-app sessions, Strava imports (A16) and later Oura.
+rings, and give people who trained before us a way to bring their history in. Both land on the same
+question — what happens when the same run arrives twice — and the owner answered it: *"I think
+that's why we kind of have to try to compose our own historical, no?"* So **Cadence keeps THE
+canonical per-workout history**, composed from HealthKit reads, our own in-app sessions, Strava
+imports (A16) and later Oura. It is the hub the coach reads; everything else is a door into it.
 
-First finding, verified: **`capacitor-health` cannot write.** `WRITE_WORKOUTS` is in the
-`HealthPermission` union in `node_modules/capacitor-health/dist/esm/definitions.d.ts`, but the
-`HealthPlugin` interface has no save/write method at all — only `isHealthAvailable`,
-`checkHealthPermissions`, `requestHealthPermissions`, the two settings openers, `queryAggregated`,
-`queryWorkouts` and `queryRecords`. The constant is a permission we can ask for and then have no way
-to exercise. So the write path needs code we own.
+**Verified: `capacitor-health` cannot write, and the permission constant is a trap.**
+`WRITE_WORKOUTS` is in the `HealthPermission` union (`node_modules/capacitor-health/dist/esm/
+definitions.d.ts`, v8.1.2, unpatched — no `patches/`, no override), and the Swift side really does
+honour it: `permissionToHKObjectWriteType("WRITE_WORKOUTS")` returns `[HKObjectType.workoutType()]`
+and feeds it to `healthStore.requestAuthorization(toShare:read:)`
+(`node_modules/capacitor-health/ios/Sources/HealthPluginPlugin/HealthPlugin.swift:44,72`). But
+`HealthPlugin` exposes **no save method at all** — `isHealthAvailable`, `checkHealthPermissions`,
+`requestHealthPermissions`, two settings openers, `queryAggregated`, `queryWorkouts`, `queryRecords`,
+and nothing else. We can ask the user for permission to write and then have no way to write. Asking
+for a scope we cannot exercise is worse than not asking: it spends the one prompt iOS gives us.
 
-Rest of the design in progress.
+**Recommendation: a small owned native bridge, not a fork.** `apps/cadence-ios/ios/App/App/
+CadenceHealthWrite/CadenceHealthWritePlugin.swift`, modelled exactly on the existing
+`CadenceCoachIdentity/CadenceCoachIdentityPlugin.swift` (lazy `registerPlugin`, every call wrapped,
+silent fallback — see `apps/cadence-web/src/lib/capability/native.ts`). Forking `capacitor-health`
+means owning a fork of the dependency our READ path depends on, for one method; the repo convention
+is small owned code over forks. Two things the bridge gets that the plugin could not give us anyway:
+
+- **`HKWorkoutBuilder` is mandatory, not a preference.** Every `+workoutWithActivityType:…`
+  initializer on `HKWorkout` is `API_DEPRECATED("Use HKWorkoutBuilder", ios(8.0, 17.0))` — checked
+  against the iOS 26.5 SDK header. `HKWorkoutBuilder`'s own header describes it as the way to record
+  "a workout that occurred in the past", which is precisely our case: `initWithHealthStore:
+  configuration:device:` → `beginCollectionWithStartDate:` → `addMetadata:` → `endCollectionWithEndDate:`
+  → `finishWorkoutWithCompletion:`.
+- **Write authorization is knowable; read authorization is not.** `health-permissions.ts` exists
+  because iOS returns no usable answer to a read request. Write is different:
+  `HKHealthStore.authorizationStatusForType:` returns `HKAuthorizationStatus` whose three cases are
+  documented purely in terms of *saving* — `NotDetermined` / `SharingDenied` / `SharingAuthorized`
+  (`HKDefines.h:85`). So our bridge can report the real state and the UI can stop guessing. That is
+  a capability `capacitor-health` never surfaces, and it is a second reason to own this.
+
+**Why the canonical store cannot be `occurrences`.** `cadence.occurrences` is DATE-keyed with
+`create unique index occurrences_activity_date_idx on (activity_id, date)`
+(`migrations/cadence/0001_*.sql:91-102`). One occurrence per activity per day, a `date` column and
+no instant anywhere. Two 30-minute runs on one Tuesday are one row, and A16's dedup heuristic
+(start-time proximity) has nothing to anchor to. `health_digests` (0024) is the other candidate and
+is worse: one jsonb row per *share*, holding an aggregate, deliberately bounded to "≤25 types, ≤10
+recent" by `apps/cadence-api/src/validation/health.ts`. Neither is a per-event record. This needs a
+table.
+
+### The shape — two tables, and the second one is the whole point
+
+**`cadence.workout_sources`** — immutable, one row per *(source, source_id)*, never edited, never
+merged. `ingest_id`, `user_id`, `workout_id` (nullable — the composition it currently belongs to),
+`source` (`healthkit | cadence_app | strava | oura | manual`), `source_bundle_id` (HealthKit's
+originating app, e.g. Strava's own bundle), `source_id` (HKWorkout UUID / Strava activity id /
+occurrence id), `external_uuid` (the id WE put in, see below), `started_at`, `ended_at`, `payload`
+jsonb (that source's own fields, as read), `ingested_at`. Unique on `(user_id, source, source_id)` —
+which makes re-import idempotent for free.
+
+**`cadence.workouts`** — the canonical row, one per real-world event, **composed** from its sources.
+`workout_id`, `user_id`, `started_at` (the instant occurrences lack), `ended_at`, `duration_sec`,
+`local_date` (device calendar day, so day-bucketed reads need no timezone maths), `type`,
+`distance_km`, `avg_hr`, `max_hr`, `energy_kcal` (nullable and often null — see below),
+`occurrence_id` (nullable FK: the join to OUR plan, when there was one), `primary_source`,
+`sources text[]`, `weather` jsonb, `detail` jsonb (splits/laps from whoever had them), `composed_at`.
+RLS owner policy and a `pack_touch` trigger like every other Cadence table (0022 rule).
+
+**Argue the second table, because it costs a table and roughly doubles the rows.** Without it,
+dedup is destructive: the first bad heuristic merges two real Tuesday runs into one and the inputs
+are gone. With it, composition is a pure function of immutable ingests and can be re-run after the
+heuristic is fixed. It is also the only way to satisfy A16's §7.4 obligation — *delete all Strava
+Data within 30 days* — as an executable query rather than a forensic exercise: delete the
+`source='strava'` ingests and recompose. A field-level merge into a single table cannot un-merge.
+
+### Dedup — exact identity first, heuristics only as the last resort
+
+Ordered, and the order matters more than any single rule:
+
+1. **Our own bundle never re-enters.** `queryWorkouts` already returns `sourceBundleId` on every
+   workout, and our bundle is `builders.cadence.app` (`apps/cadence-ios/ios/App/App/
+   capacitor.config.json`). The HealthKit read path drops those rows **on the device, before the
+   wire**. This is the one dedup rule that is guaranteed correct rather than probably correct, and
+   it is currently impossible: `PluginWorkout` in `native.ts:69` declares only `workoutType`,
+   `startDate`, `endDate`, `duration`, `distance`, `avgHeartRate` — it drops `sourceBundleId`, `id`
+   and `sourceName`, all of which the plugin actually returns. Adding those three fields to
+   `PluginWorkout`, `toSeamWorkout` and the seam's `Workout` is the smallest prerequisite in this
+   entry and unblocks the largest part of it.
+2. **Explicit id match.** A13's ruling gives us one for free: `WorkoutPlan.init(_:id:)` lets us
+   choose the UUID and `HKWorkout.workoutPlan` hands it back, with plan id = f(occurrence_id),
+   deterministic. Our own writes carry the same id as `HKMetadataKeyExternalUUID` (verified present
+   since iOS 8.0, `HKMetadata.h:136`). So a watch-completed session matches our occurrence **by id**
+   — no timestamps involved.
+3. **Known self-echo.** A Strava activity carrying an `external_id` we wrote (A16's publish path) is
+   our own round trip. A HealthKit workout whose `source_bundle_id` is Strava's is the same object
+   arriving by a second door.
+4. **Only then, fuzzy.** Same event when **starts are within 120 s AND durations within 5% AND the
+   activity types are compatible**. Adopted verbatim from A16 so the two entries cannot drift.
+   Distance is deliberately excluded — GPS and wrist-derived distance for one run differ by more
+   than people expect, and an indoor session has none. Day-bucketing is excluded for the same reason
+   the occurrence table fails: two runs in one day are normal.
+
+**Merge fields, do not pick a winner — but pick a winner per FIELD.** The owner's question was
+merge-or-winner; the answer is that row-level winner-takes-all throws away real data (Strava has the
+splits, HealthKit has the HR samples, we have which prescribed items they actually did), and
+free-for-all field merging produces a row nobody can explain. So: one canonical row, a
+`primary_source` for the record as a whole, and a fixed precedence **per field** —
+
+| field | precedence | why |
+|---|---|---|
+| `started_at` / `duration_sec` | device-measured (healthkit, oura) → api-imported (strava) → self-reported | the recorder that held the clock wins |
+| `distance_km` | GPS-bearing source → device → self-reported | |
+| `avg_hr` / `max_hr` | whoever actually has samples | usually only one source does |
+| `energy_kcal` | device only; **never** derived, never imported into an empty field | see below |
+| `detail` (splits/laps) | strava → healthkit | only Strava reliably has them |
+| `occurrence_id`, `type` | `cadence_app` wins — it is the only source that knows what we asked for | |
+
+`sources[]` records every contributor regardless. When two device sources disagree on duration by
+more than the fuzzy window we should *not* have merged them — that is the signal the heuristic was
+wrong, and it belongs in a log, not in a silent average.
+
+### Flow A — write-back (our session → HealthKit → the rings)
+
+1. Walkthrough finishes (`apps/cadence-web/src/features/walkthrough/`). **Gap: we do not currently
+   keep the instants.** `state.ts` holds elapsed/round counts and composes a text line; the log goes
+   through `logOccurrence` (`apps/cadence-api/src/services/session-log.ts:52`) onto a *date*. The
+   walkthrough must start carrying real `startedAt` / `endedAt`, or the write has nothing to say.
+2. `POST /me/occurrences/:id/log` as today → occurrence `done`. Unchanged.
+3. Client → `capability.health.saveWorkout(...)` → `CadenceHealthWrite` → `HKWorkoutBuilder`.
+4. Ingest row `source='cadence_app'`, `source_id = occurrence_id`, plus the returned HKWorkout UUID.
+5. Compose → canonical row. **Dedup does not run here.** Its position is step 3 of Flow B, where the
+   bundle filter drops our echo before any comparison happens.
+
+**What we write, exactly.** `HKWorkoutActivityType` mapped from the session's area/tool, falling
+back to `.other` rather than guessing something specific; `startDate`/`endDate` from step 1 (duration
+is derived, never sent separately); `distance` only when the user actually reported it or the
+prescription carried it *and* they completed it. Metadata: `HKMetadataKeyExternalUUID` = the
+occurrence/plan id, `HKMetadataKeyWasUserEntered = YES` (verified, `HKMetadata.h:211`) — honest,
+because no sensor measured this, and it is the flag other apps use to weight our row.
+
+**No calories. Ever.** We have no heart rate (A13: `avgHeartRate` is never emitted and
+`Workout.avgHr` has always been `undefined`), no motion data, and no body mass at that instant.
+`totalEnergyBurned` is what feeds the Move ring, which is the one number the user will check, and a
+fabricated figure there is a lie inside Apple's own UI. Omitting it is not a degraded write: a
+workout with duration and no energy still contributes Exercise minutes, which is the honest share of
+what we know. (`HKWorkout.totalEnergyBurned` is itself deprecated as of iOS 18 in favour of
+`statisticsForType:` — another reason the builder path is the only one worth writing.)
+
+### Flow B — backfill (history import)
+
+1. **Permission moment.** WRITE is a new ask and iOS does not re-prompt for a newly-added type —
+   `native.ts`'s `HEALTH_PERMISSIONS` comment records exactly this happening when `READ_STEPS`
+   joined the set after people had granted the other four. So existing installs need the one-time
+   re-ask, reusing the `STEPS_ASKED_KEY` pattern in `health-steps.ts` verbatim with its own flag.
+   Ask at the moment of value ("want this to count toward your rings?"), never at onboarding, and
+   use `authorizationStatusForType:` rather than the uninformative request response.
+2. Client pages `queryWorkouts` in 90-day windows back to the bound, `includeHeartRate: false`,
+   `includeRoute: false`.
+3. **Filter `sourceBundleId === 'builders.cadence.app'` on the device.** Dedup step 1, here.
+4. `POST /me/workouts/import`, pages of ≤200 workouts → one `workout_sources` row each.
+5. **Compose on the server, per page, in one transaction**: dedup steps 2 → 3 → 4 above, then the
+   per-field merge, then `sources[]`.
+6. Views recompute (below). `pack_touch` fires once per page, not once per workout.
+
+**Bound: default 2 years, hard cap 5, and "further back" is a second explicit ask.** A 4×/week
+athlete is ~208 workouts a year: two years is ~420 rows, five is ~1,000, and ten years of someone
+training twice a day is 5,000+ rows whose 2016 tempo run tells the coach nothing it cannot learn
+from 2025. **Per-WORKOUT rows only.** That does not violate `validation/health.ts`'s abstraction rule
+— a workout row is already an abstraction over thousands of samples — but the HR series is exactly
+what the rule exists to stop: `heartRate?: HeartRateSample[]` is unbounded (700+ samples an hour), so
+backfill must never request it, and the recent-window read that does must reduce to avg/max natively
+before anything crosses into React state. The import route gets its own file
+(`apps/cadence-api/src/routes/workouts.ts`) and its own zod boundary alongside `health.ts`, bounded
+the same way.
+
+### Read side — views, not a second pipeline
+
+`observed-health.ts` is the thing to preserve, not replace: its `ObservedHealth` payload is what the
+planner sees, and its shape is referenced by the `synthesize_plan` template, so changing it is a
+prompt change requiring `sync-jobs.ts`. Migration path from today's `health_digests` series:
+
+1. **Free first step.** `HealthOfferCard.tsx` already calls `getWorkouts(since)` over 90 days and
+   throws the individual rows away after `buildDigestFromWorkouts` aggregates them
+   (`apps/cadence-web/src/features/onboarding/health-digest.ts:130`). Send them instead of dropping
+   them. Both paths run; nothing changes downstream.
+2. `observedHealthFromWorkouts(userId)` computes the identical `ObservedHealth` from the store;
+   `observedHealthForPlanning` prefers it, falls back to digests. No prompt change, no job sync.
+3. `health_digests` stops being written. The `trend` array improves in the process: today
+   `trendFromSeries` samples successive *shares* (`observed-health.ts:133`), so the trend records
+   when the user happened to open the app, not when they trained. From the store it becomes real
+   weeks.
+4. Retire, or keep the table as a frozen audit of what was shared and when.
+
+One rename is unavoidable and is prompt-visible: `ObservedHealth.source: 'apple_health'` becomes
+multi-source. That is the one change in this entry that needs a job sync.
+
+### A15's weather stamp lands here, and A15's assumption needs correcting
+
+A15 puts the conditions stamp on `occurrences.weather` and says the row is "owned by A14". It cannot
+be: A15's own headline field is `observed_at` — *the SESSION's instant, not the fetch time* — and the
+occurrence has no instant, which is exactly why A15's defect 2 (opening a three-week-old run stamps
+it with today's weather) is possible at all. So the stamp belongs on `workouts.weather`, typed with
+A15's field list adopted unchanged (`temp_c`, `feels_like_c`, `conditions`, `wind_kph`, `precip_mm`,
+`observed_at`, `place`, `place_label`, `source`). `occurrences.weather` stays for non-workout
+occurrences and for the existing rows. A15's date-guard fix is still separable and still first.
+
+### Architecture
+
+| Component | Where | Status |
+|---|---|---|
+| Canonical store + ingest table | migration **0032** (see below) | **new, not written** |
+| Repo | `apps/cadence-api/src/repos/workouts.ts` | **new** |
+| Composition + dedup (pure, testable) | `apps/cadence-api/src/services/workouts/compose.ts` | **new** |
+| Import route + zod bound | `apps/cadence-api/src/routes/workouts.ts`, `validation/workouts.ts` | **new** (own files — size rule) |
+| Native write bridge | `apps/cadence-ios/ios/App/App/CadenceHealthWrite/` | **new**, copy `CadenceCoachIdentity` |
+| Seam entry `saveWorkout` + write auth status | `apps/cadence-web/src/lib/capability/index.ts`, `native.ts`, `web.ts` | extend |
+| `sourceBundleId` / `id` / `sourceName` on reads | `native.ts:69` `PluginWorkout`, `toSeamWorkout` | **fix — prerequisite** |
+| Session instants | `apps/cadence-web/src/features/walkthrough/state.ts` | **fix — prerequisite** |
+| Backfill pager | `apps/cadence-web/src/features/settings/health-import.ts` | extend |
+| Planner view | `apps/cadence-api/src/services/observed-health.ts` | becomes a view |
+| Digest series | `migrations/cadence/0024_health_digests.sql` | frozen, then retired |
+| Occurrence join | `cadence.occurrences` (0001) | unchanged — stays the PLAN record |
+| Weather stamp | `workouts.weather` (A15's fields) | A15 |
+| Strava ingests | `source='strava'` rows in this store | A16 — **no `strava_activities` table** |
+| Watch hand-off id | A13's deterministic `WorkoutPlan` UUID | A13 |
+
+**Migration number collision, flag it now.** 0031 is taken by token accounting. A16 also claims
+`0031_connections.sql`. This entry reserves **0032** and does not write it; A16 needs renumbering,
+and whichever lands second takes the next free number.
+
+### Open questions
+
+- **The table is called `workouts` and the product is not a fitness app.** Meditation, breathwork
+  and morning pages are sessions too and belong in the same store; `sessions` collides with coach
+  chat sessions and `occurrences` means the scheduled thing. The nomenclature table has no entry
+  for this. Owner's call.
+- **Who composes — the writer or a reader?** Composing on ingest keeps reads cheap and makes the
+  canonical row a cache that can be rebuilt; composing on read is always correct and always slower.
+  Leaning ingest-time, because A16's deletion obligation wants a recompute button anyway.
+- **What does the coach do when it notices a duplicate it did not merge?** Silence is wrong and a
+  "we found 2 possible duplicates" modal is a scoreboard. Probably nothing user-facing in v1.
+- **120 s / 5% are A16's numbers, and neither entry has tested them.** A treadmill run started on
+  the watch and logged in the app can be minutes apart. Needs real data before it ships.
+- **Does an imported historical workout count toward consistency or the streak?** It must not —
+  those count engagement with OUR plan (`PLAN_COUNTS_NOTE`, `observed-health.ts:87`) — but the rule
+  needs writing down before someone imports five years and lights up a streak.
+- **Backfill and anonymous sessions.** A pre-account user importing two years of history, who then
+  abandons the session, is a lot of rows in a scratch account (A0).
+- **Oura.** Named as a future source and not designed. Its sleep and readiness data are not
+  workouts at all, so it is a different table with the same provenance discipline, not a fifth
+  `source` value.
+
+Not scoped. The `sourceBundleId` fix and the walkthrough instants are the two prerequisites, and
+both are small enough to land independently of the rest.
 
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
