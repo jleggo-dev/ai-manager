@@ -1552,8 +1552,10 @@ occurrences and for the existing rows. A15's date-guard fix is still separable a
 | Strava ingests | `source='strava'` rows in this store | A16 — **no `strava_activities` table** |
 | Watch hand-off id | A13's deterministic `WorkoutPlan` UUID | A13 |
 
-**Migration number collision, flag it now.** 0031 is taken by token accounting. A16 also claims
-`0031_connections.sql`. This entry reserves **0032** and does not write it; A16 needs renumbering,
+**Migration numbering, resolved 2026-08-11.** Three entries wanted a number at once. Settled:
+**0031** = token accounting (`ai_usage`, A11 — it already has code on a branch, so it keeps the
+number it was written against), **0032** = this entry's workouts store, **0033** = A16's
+`connections`. None are written or applied yet; A16's references were renumbered here rather than
 and whichever lands second takes the next free number.
 
 ### Open questions
@@ -1942,7 +1944,7 @@ device-grant variant.
 
 *Generic — belongs to the pattern, not to Strava:*
 
-1. **`cadence.connections` table** (new migration, `0031_connections.sql`): `user_id`, `provider`,
+1. **`cadence.connections` table** (new migration, `0033_connections.sql`): `user_id`, `provider`,
    `provider_user_id`, `scopes text[]`, `status`, `connected_at`, `last_sync_at`, `expires_at`, and
    the encrypted token blob. One row per (user, provider). RLS owner policy like every other
    Cadence table; `pack_touch` trigger if a connection's existence should invalidate the context
@@ -2079,7 +2081,7 @@ exception — see the closing note.
 | Component | File (existing / proposed) | Owner | Ships? |
 |---|---|---|---|
 | `Connection` type, fleshed out | `packages/cadence-shared/src/types/baseline.ts:169` *(exists, stub)* | shared | yes |
-| `connections` table + RLS | `migrations/cadence/0031_connections.sql` *(proposed)* | api | yes |
+| `connections` table + RLS | `migrations/cadence/0033_connections.sql` *(proposed)* | api | yes |
 | Encrypted token store | `apps/cadence-api/src/services/connections/token-store.ts` *(proposed)* | api | yes |
 | Generic OAuth routes | `apps/cadence-api/src/routes/connections.ts` *(proposed)*, mounted in `apps/cadence-api/src/app.ts:44` | api | yes |
 | Provider descriptor | `apps/cadence-api/src/services/connections/providers/strava.ts` *(proposed)* | api | yes |
