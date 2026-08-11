@@ -876,22 +876,89 @@ what did the last month ACTUALLY look like, not averages. During onboarding she 
 averaging 4.3km a run at 36 mins' — I've done 3-5 runs of 5-6km in the past 7 days and 16K
 steps/day. Where did that number come from?"*
 
-STUB — investigation in progress. Verified so far:
+**Where the 4.3 km came from — settled.**
 
-- The number is `fmtType` in `apps/cadence-api/src/services/health-context.ts` rendering the
-  `byType` row for running: count over a **90-day** window (`DIGEST_PERIOD_DAYS = 90`), with
-  `avgDurationMin` / `avgDistanceKm` as flat means over every run in it. The same ten runs are
-  quoted in the header of `apps/cadence-api/src/services/observed-health.ts`.
-- The digest ALREADY carries the last five workouts individually (`recent[]`, capped 10 server
-  side) and **nothing renders more than `recent[0]`** — `renderHealthDigest` prints one "most
-  recent" line, `toObservedHealth` builds `most_recent_workout` from the same single row. Four
-  dated sessions we already collect never reach a model.
-- `HealthPlugin.swift` returns `"distance": workout.totalDistance?.doubleValue(for: .meter()) ?? 0`
-  — absence becomes **0**, and `buildDigestFromWorkouts` filters `!= null`, so a distance-less run
-  is averaged in as a 0 km run and drags the mean down.
-- `includeHeartRate` / `includeRoute` are passed `false` in `native.ts`; the plugin supports both,
-  and exposes per-workout `id` / `sourceName` / `sourceBundleId` that our `PluginWorkout` interface
-  drops on the floor.
+The number is not a bug in anything. It is exactly what the pipeline is built to produce, and every
+step of it is wrong for the question the owner was actually asking.
+
+- `buildDigestFromWorkouts` (`apps/cadence-web/src/features/onboarding/health-digest.ts`) buckets
+  every workout by type and takes a **flat arithmetic mean** of `distanceKm` and `durationMin` per
+  bucket, over a **rolling 90-day window** (`DIGEST_PERIOD_DAYS = 90`). `fmtType` in
+  `apps/cadence-api/src/services/health-context.ts` renders that row verbatim: "avg 36 min, avg
+  4.3 km". The same ten runs are quoted in the header of
+  `apps/cadence-api/src/services/observed-health.ts`.
+- So five 5–6 km runs this week are averaged against everything back to mid-May, and a build-up is
+  indistinguishable from a taper. **Nothing anywhere in the pipeline computes a maximum, a personal
+  best, a last-4-weeks figure, or any recency weighting.** There is no field for one to live in.
+- `HealthPlugin.swift:395` returns `"distance": workout.totalDistance?.doubleValue(for: .meter())
+  ?? 0` — absence becomes **0**. `toSeamWorkout`'s `typeof w.distance === 'number'` is therefore
+  ALWAYS true, and `buildDigestFromWorkouts`'s `.filter((n) => n != null)` never drops a thing. A
+  treadmill run, or a session mistyped as a run, is averaged in as a 0 km run and pulls the mean
+  down. "No distance recorded" and "0 km" are the same value by the time we see them.
+- The digest ALREADY carries the last **five** workouts individually (`MAX_RECENT = 5`; the server
+  schema allows 10) and **nothing renders more than `recent[0]`** — `renderHealthDigest` prints one
+  "most recent" line, `toObservedHealth` builds `most_recent_workout` from the same single row.
+  Four dated sessions we already collect, store and validate never reach a model.
+- Steps are the one part that already does this right: `dailySteps` carries `avgPerDayLast7`
+  alongside the 90-day mean and a `byWeek` series, and `observed-health.ts` passes all of it. The
+  16k-steps-a-day reading is fine. Workouts have no equivalent.
+
+**What the plugin can actually give — audited (`node_modules/capacitor-health`, both the TS
+definitions and the Swift it ships).**
+
+Available today and unused, no native code required:
+
+- `id` = `workout.uuid.uuidString` (`HealthPlugin.swift:392`). A stable per-workout identity —
+  the join key A14's canonical history store needs. `PluginWorkout` in `native.ts` drops it.
+- `sourceName` / `sourceBundleId` (`:390–391`). Which device or app recorded it: the only way to
+  tell a Watch run from the iPhone's duplicate of the same run, or a Strava import from a native one.
+- `calories` (`:394`) and `endDate` (`:388`) — emitted on every row, both discarded at the seam,
+  and we already hold the `READ_ACTIVE_CALORIES` permission for the first.
+- `steps?: number` per workout, behind `includeSteps: true` (`:426–433`) — HealthKit's stepCount
+  aggregated over the workout's own interval. Divided by duration this is the **only** cadence
+  figure obtainable: one average steps/min for the whole run. Not per-split, not Apple's stride data.
+- `heartRate?: HeartRateSample[]` behind `includeHeartRate: true` (`:403–412`, `:456–484`) — the
+  raw `{timestamp, bpm}` series, one entry per HealthKit sample. It is **not** an average: the
+  plugin never emits an `avgHeartRate` key at all, which is why `toSeamWorkout`'s `w.avgHeartRate`
+  read has always been `undefined` and `Workout.avgHr` has never once been populated (verified by
+  A13). HR coaching is blocked on this seam, not on the hardware. Any average is ours to compute.
+- `route?: RouteSample[]` behind `includeRoute: true` (`:415–424`, `:487–543`) —
+  `{timestamp, lat, lng, alt}` per CLLocation. **It also needs the `READ_ROUTE` permission, which
+  `HEALTH_PERMISSIONS` in `native.ts` does not request.** Setting the flag without adding the
+  permission returns an empty array, not an error — a silent nothing.
+
+Genuinely NOT available without writing Swift:
+
+- **Apple's own lap and segment markers** (`HKWorkoutEvent`). Never queried. Any splits are ours
+  to derive; we cannot show the user the same splits the Fitness app shows them.
+- **Running form metrics** — `runningSpeed`, `runningPower`, `runningStrideLength`,
+  `runningVerticalOscillation`, `runningGroundContactTime`. No constant for them exists in the
+  `HealthPermission` union, and no query path reaches them.
+- **A distance time-series.** `queryRecords` hard-rejects everything but steps ("queryRecords
+  currently only supports dataType 'steps'", `:291–292`) and `queryAggregated` knows only
+  `steps | active-calories | mindfulness`. `distanceWalkingRunning` samples are unreachable, so
+  **an indoor or treadmill run has no route, no distance timeline, and cannot be split at all** —
+  its only derivable detail is average cadence from `steps`.
+- Resting HR, HRV, VO₂max, weight, sleep — no permission constants, no queries. (`native.ts`
+  already returns `null` for weight and sleep and says a Swift extension is the future path.)
+- Anything incremental. There is no anchored query; every read re-fetches the whole window.
+
+Hazards in the plugin's own code that a richer read has to handle:
+
+- **Nothing is sorted.** Both `HKSampleQuery` calls pass `sortDescriptors: nil`, and `queryRoute`
+  appends the locations of multiple `HKWorkoutRoute` objects in completion order (`:501–507`).
+  Splits maths must sort by timestamp before it does anything else.
+- **`includeRoute` is all-or-nothing across the whole window.** One `queryWorkouts` call fetches
+  the full route of EVERY workout between `startDate` and `endDate`. Over the 90-day digest window
+  that is potentially hundreds of thousands of CLLocations serialised through WKWebView. Route can
+  only ever be fetched **per run**, with the dates narrowed to that one workout.
+- The response carries an `errors` map (`{'heart-rate', 'route'}`, `:446`) that our TS types do not
+  declare, so a partial failure is currently invisible to us.
+
+And the boundary rule holds over all of it: `apps/cadence-api/src/validation/health.ts` exists to
+stop raw-sample-sized payloads reaching the server, and both series above are exactly that — a
+36-minute run is roughly 430 HR samples and a couple of thousand locations. **Derive on device,
+ship derived shapes.**
 
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
