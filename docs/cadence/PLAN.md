@@ -1153,6 +1153,65 @@ Recognising a Strava copy of a run we already know from HealthKit:
   The window must be tight enough not to collapse them, which is why it is start-time-anchored
   rather than day-anchored.
 
+**Architecture scaffold**
+
+Two columns, because the terms split the design. **Everything in the right-hand column is scaffolded
+for completeness and must not be built** unless the terms change or Strava grants a written
+exception — see the closing note.
+
+| Component | File (existing / proposed) | Owner | Ships? |
+|---|---|---|---|
+| `Connection` type, fleshed out | `packages/cadence-shared/src/types/baseline.ts:169` *(exists, stub)* | shared | yes |
+| `connections` table + RLS | `migrations/cadence/0031_connections.sql` *(proposed)* | api | yes |
+| Encrypted token store | `apps/cadence-api/src/services/connections/token-store.ts` *(proposed)* | api | yes |
+| Generic OAuth routes | `apps/cadence-api/src/routes/connections.ts` *(proposed)*, mounted in `apps/cadence-api/src/app.ts:44` | api | yes |
+| Provider descriptor | `apps/cadence-api/src/services/connections/providers/strava.ts` *(proposed)* | api | yes |
+| Strava HTTP client | `apps/cadence-api/src/services/strava/strava-http.ts` *(proposed; mirror `services/weather/weatherkit-http.ts`)* | api | yes |
+| **Publish occurrence → Strava** | `apps/cadence-api/src/services/strava/publish.ts` *(proposed)* | api | **yes** |
+| Config block + secrets | `apps/cadence-api/src/config.ts:141` *(exists — add beside `weatherkit`)* | api | yes |
+| Canonical history store + provenance | **A14** *(sibling entry)* | A14 | yes |
+| Retention sweeper (per-provider) | `apps/cadence-api/src/services/connections/retention.ts` *(proposed)* | api | yes |
+| ~~Webhook receiver~~ | ~~`apps/cadence-api/src/routes/strava-webhook.ts`~~ | — | **no — §5.3/§6.2** |
+| ~~Backfill worker~~ | ~~`apps/cadence-api/src/services/strava/backfill.ts`~~ | — | **no — §5.5 bulk-export** |
+| ~~Strava rows in canonical history~~ | ~~A14 store, `source='strava'`~~ | — | **no — §5.4 combine** |
+| ~~Coach reads Strava-derived rows~~ | ~~`services/retrieval/catalog.ts` `renderCatalogDoc`~~ | — | **no — §5.3 context window** |
+
+The last row is the sharpest illustration of why this is not a solvable engineering problem.
+`renderCatalogDoc` in `apps/cadence-api/src/services/retrieval/catalog.ts` exists to assemble
+domain rows into the coach's prompt. §5.3 prohibits *"ingestion into a context window or working
+memory"*. There is no version of Cadence in which imported history reaches the user and does not
+pass through that function.
+
+*Flow 1 — publish (ships).* User logs an occurrence → `POST /me/connections/strava/publish` (or a
+standing opt-in fires it) → `token-store` decrypts + refreshes if needed → Strava upload endpoint →
+returned activity id stored on the occurrence for idempotency → UI shows "View on Strava". No
+inbound data at any step.
+
+*Flow 2 — webhook incremental sync (scaffolded, not built).* Strava allows **one push-subscription
+per application**, created once out-of-band; the callback is a single public URL that must answer
+Strava's `GET` validation handshake by echoing `hub.challenge` when `hub.verify_token` matches, then
+accept `POST` events (`object_type`, `aspect_type` create/update/delete, `object_id`, `owner_id`).
+Two Cadence-specific hazards worth recording even though we are not building it: **(i)** Strava
+expects a fast acknowledgement, and cadence-api runs as an Express service on Vercel
+(`apps/cadence-api/vercel.json`, catch-all rewrite) — a cold start can exceed the window, so the
+handler must be a thin enqueue-and-200 with the real work deferred, and the endpoint wants keeping
+warm. **(ii)** The route must mount **outside** `requireCadenceUser`; every other `/me` route sits
+behind it (`apps/cadence-api/src/app.ts`), so a webhook route added carelessly would either 401
+Strava forever or, worse, be added by disabling the guard. Verification is the shared `verify_token`
+plus an `owner_id`→`connections.provider_user_id` lookup — Strava does not sign payloads, so the
+event body is a **notification, not evidence**: it says "activity N changed", and the object must be
+fetched. Delete events are the one case where the event alone is actionable, and §6.3's 48-hour
+propagation SLA means they cannot be dropped on the floor.
+
+*Flow 3 — rate-limited historical backfill (scaffolded, not built).* This is the migration the
+owner asked for and the one §5.5 names: *"accumulating Strava Data through repeated authorized API
+calls into a corpus, dataset, archive, or database."* Shape, for the record: page
+`GET /athlete/activities` with `after`/`before` epochs and `per_page`, walking backwards from today;
+persist a cursor per connection so a lambda timeout resumes rather than restarts; back off on 429
+using the returned usage headers rather than a fixed sleep; and decide up front whether summaries
+suffice — a per-activity `GET /activities/{id}` for splits and laps multiplies the call count by the
+number of activities and turns a minutes-long job into an hours-long one.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
