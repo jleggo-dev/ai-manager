@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -16,6 +17,12 @@ import { initNativeAuth } from './lib/native-auth.ts';
 initNativeAuth();
 
 const queryClient = createAppQueryClient();
+
+// Stamp the shell so CSS can key the full-bleed layout off "this is an app" rather than off a
+// width breakpoint. A width query put an iPad — and any device whose layout viewport reported wider
+// than 480px — into the fake-phone mockup, a fixed 390px frame that cannot fit inside body padding
+// on a 393px screen, which is one of the ways every screen ended up panning side to side.
+if (Capacitor.isNativePlatform()) document.documentElement.setAttribute('data-native', '');
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
