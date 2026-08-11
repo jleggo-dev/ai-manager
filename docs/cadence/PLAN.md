@@ -950,7 +950,7 @@ Ordered, and the order matters more than any single rule:
    workout, and our bundle is `builders.cadence.app` (`apps/cadence-ios/ios/App/App/
    capacitor.config.json`). The HealthKit read path drops those rows **on the device, before the
    wire**. This is the one dedup rule that is guaranteed correct rather than probably correct, and
-   it is currently impossible: `PluginWorkout` in `native.ts:69` declares only `workoutType`,
+   it is currently impossible: `PluginWorkout` in `native.ts:68` declares only `workoutType`,
    `startDate`, `endDate`, `duration`, `distance`, `avgHeartRate` — it drops `sourceBundleId`, `id`
    and `sourceName`, all of which the plugin actually returns. Adding those three fields to
    `PluginWorkout`, `toSeamWorkout` and the seam's `Workout` is the smallest prerequisite in this
@@ -1083,7 +1083,7 @@ occurrences and for the existing rows. A15's date-guard fix is still separable a
 | Import route + zod bound | `apps/cadence-api/src/routes/workouts.ts`, `validation/workouts.ts` | **new** (own files — size rule) |
 | Native write bridge | `apps/cadence-ios/ios/App/App/CadenceHealthWrite/` | **new**, copy `CadenceCoachIdentity` |
 | Seam entry `saveWorkout` + write auth status | `apps/cadence-web/src/lib/capability/index.ts`, `native.ts`, `web.ts` | extend |
-| `sourceBundleId` / `id` / `sourceName` on reads | `native.ts:69` `PluginWorkout`, `toSeamWorkout` | **fix — prerequisite** |
+| `sourceBundleId` / `id` / `sourceName` on reads | `native.ts:68` `PluginWorkout`, `toSeamWorkout` | **fix — prerequisite** |
 | Session instants | `apps/cadence-web/src/features/walkthrough/state.ts` | **fix — prerequisite** |
 | Backfill pager | `apps/cadence-web/src/features/settings/health-import.ts` | extend |
 | Planner view | `apps/cadence-api/src/services/observed-health.ts` | becomes a view |
