@@ -148,11 +148,12 @@ export async function previewReplan(userId: string, steer?: string): Promise<Pla
   await setPendingPlan(userId, {
     activities: s.activities!,
     note,
+    rationale: s.rationale,
     goal_ids: goalIds,
     created_at: new Date().toISOString(),
   });
 
-  return { status: 'proposed', proposal: { activities: s.activities!, note } };
+  return { status: 'proposed', proposal: { activities: s.activities!, note, rationale: s.rationale } };
 }
 
 /**

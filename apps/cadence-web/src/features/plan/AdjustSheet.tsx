@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PendingPlanActivity } from '@cadence/shared';
-import { previewReplan, replan, dismissReplanPreview } from '../../lib/api.ts';
+import { confirmGoals, previewReplan, replan, dismissReplanPreview } from '../../lib/api.ts';
 import { MicButton } from '../../components/MicButton.tsx';
 import { Orb } from '../../components/Orb.tsx';
 
@@ -19,11 +19,23 @@ export function AdjustSheet({
   onCommitted,
   initialSteer,
   mode = 'adjust',
+  adoptCaptured = false,
 }: {
   onClose: () => void;
   onCommitted: (note: string) => void;
   initialSteer?: string; // pre-filled request (e.g. the nutrition baseline's suggested change)
   mode?: 'adjust' | 'rebalance';
+  /**
+   * Promote anything the Broker captured but the user never confirmed before synthesizing.
+   *
+   * Set by the coach's build card, and only there. Re-planning reads goals at status `confirmed`
+   * or `committed`, but a goal mentioned in the chat two minutes ago is still `captured` — so the
+   * card would list "Write a novel" back to them, they'd tap Rebuild, and the week would come back
+   * without it. Tapping the build button IS the confirmation; that is the same thing onboarding's
+   * build does (useBuildPlan) before it locks. Never set for the automated re-plans, where nobody
+   * has agreed to adopt anything.
+   */
+  adoptCaptured?: boolean;
 }) {
   const [steer, setSteer] = useState(initialSteer ?? '');
   const [busy, setBusy] = useState(false);
@@ -41,6 +53,8 @@ export function AdjustSheet({
     setBusy(true);
     setMsg('');
     try {
+      // Before synthesis, not after: a captured-but-unconfirmed goal is invisible to the re-plan.
+      if (adoptCaptured) await confirmGoals().catch(() => undefined);
       const r = await previewReplan(steer);
       if (r.status === 'proposed' && r.proposal) setPreview(r.proposal);
       else setMsg(r.violations?.join('; ') || "I couldn't put together an adjustment just now — try again in a bit.");

@@ -6,6 +6,7 @@ import { AimError, purgeUserAiData } from '../ai/aim.ts';
 import { clearHomeLocation, getUser, setHomeLocation } from '../repos/users.ts';
 import {
   geocodeCity,
+  reverseGeocode,
   getWeatherForUser,
   needsAppleAttribution,
   APPLE_WEATHER_ATTRIBUTION_URL,
@@ -115,6 +116,10 @@ router.post('/location', async (req: Request, res: Response) => {
       label = geo.label;
     }
     if (lat == null || lon == null) return void res.status(400).json({ error: 'provide lat+lon or a city/label' });
+
+    // The auto-detect path arrives as bare coordinates; name the place so the header can say
+    // "Toronto, CA" instead of "Weather nearby". Best-effort — null keeps the old behaviour.
+    if (!label) label = (await reverseGeocode(lat, lon)) ?? undefined;
 
     const location = { lat, lon, ...(label ? { label } : {}) };
     await setHomeLocation(userId, location, timezone);

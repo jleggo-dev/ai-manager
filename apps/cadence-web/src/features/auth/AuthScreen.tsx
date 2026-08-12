@@ -70,9 +70,19 @@ function isAlreadyTakenMessage(message: string): boolean {
   return /already (been )?(registered|exists|linked|in use)|identity_already_exists|user_already_exists/i.test(message);
 }
 
-export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMode } = {}) {
+export function AuthScreen({
+  mode: screenMode = 'gate',
+  compact = false,
+}: { mode?: AuthScreenMode; compact?: boolean } = {}) {
   const upgrading = screenMode === 'upgrade';
   const [mode, setMode] = useState<Mode>(upgrading ? 'signup' : 'signin');
+  /**
+   * Compact (the plan-card gate): the email path starts folded behind "or continue with email",
+   * so the pinned footer holds two provider buttons and one line — the design's frame, and the
+   * common path (App Review requires Apple; most people tap a provider). Opening it reveals the
+   * exact same form; none of the auth logic forks on this.
+   */
+  const [emailOpen, setEmailOpen] = useState(!compact);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -242,27 +252,35 @@ export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMod
         <AppleLogo />
         Continue with Apple
       </button>
-      <div className="auth-divider">
-        <span>or</span>
-      </div>
+      {emailOpen ? (
+        <div className="auth-divider">
+          <span>or</span>
+        </div>
+      ) : (
+        <button type="button" className="auth-email-link" onClick={() => setEmailOpen(true)}>
+          or continue with email
+        </button>
+      )}
 
       <div className="auth-form">
         {notice && <div className="auth-notice">{notice}</div>}
-        <input
-          className="field"
-          type="email"
-          value={email}
-          onChange={(ev) => setEmail(ev.target.value)}
-          onKeyDown={(ev) => upgrading && ev.key === 'Enter' && submit()}
-          placeholder="Email"
-          aria-label="Email"
-          autoComplete="email"
-          autoCapitalize="none"
-          spellCheck={false}
-        />
+        {emailOpen && (
+          <input
+            className="field"
+            type="email"
+            value={email}
+            onChange={(ev) => setEmail(ev.target.value)}
+            onKeyDown={(ev) => upgrading && ev.key === 'Enter' && submit()}
+            placeholder="Email"
+            aria-label="Email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+          />
+        )}
         {/* No password field at the gate: Supabase refuses to set one on an anonymous user until
             the address is verified, and a field whose value we can't save is worse than no field. */}
-        {!upgrading && (
+        {!upgrading && emailOpen && (
           <input
             className="field"
             type="password"
@@ -274,6 +292,9 @@ export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMod
             autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
           />
         )}
+        {/* Outside the fold on purpose: a PROVIDER can hit the already-taken dead end or fail
+            while the email form is still closed, and an error nobody can see is the old silent
+            Apple freeze all over again. */}
         {existingAccount && (
           <div className="auth-error auth-existing">
             <p>You already have an account with that. Sign in to it instead — this week won&rsquo;t carry over.</p>
@@ -286,13 +307,22 @@ export function AuthScreen({ mode: screenMode = 'gate' }: { mode?: AuthScreenMod
         {!authConfigured && <div className="auth-error">{"Sign-in isn't configured yet (missing Supabase keys)."}</div>}
       </div>
 
-      <button className="cta" onClick={submit} disabled={busy || !authConfigured}>
-        {busy ? 'One moment…' : upgrading ? 'Save my week →' : mode === 'signin' ? 'Sign in →' : 'Create account →'}
-      </button>
+      {emailOpen && (
+        <button className="cta" onClick={submit} disabled={busy || !authConfigured}>
+          {busy
+            ? 'One moment…'
+            : upgrading
+              ? 'Signup and we’ll tailor it →'
+              : mode === 'signin'
+                ? 'Sign in →'
+                : 'Create account →'}
+        </button>
+      )}
       {upgrading ? (
         // Decided 2026-08-06: one account per verified email, providers link into it. Said out
-        // loud here because this is the screen where someone picks which provider to use.
-        <div className="auth-foot">One account per email — providers link into it.</div>
+        // loud here because this is the screen where someone picks which provider to use. Folded
+        // with the email form in compact mode — it answers a question only the form raises.
+        emailOpen && <div className="auth-foot">One account per email — providers link into it.</div>
       ) : (
         <button
           className="auth-toggle"

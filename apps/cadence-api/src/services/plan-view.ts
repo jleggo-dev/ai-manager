@@ -37,6 +37,16 @@ export interface PlanViewActivity {
   recurrence: string;
   time_of_day?: string;
   duration_min?: number;
+  /** The coach's rationale for THIS commitment, 1-3 sentences (0031) — the card renders it. */
+  why?: string;
+  /** Objective link, for grouping the card "Toward <goal>" (absent → Foundations). */
+  goal_id?: string;
+  goal_title?: string;
+  /** The linked goal's area — colours the card's dots. Absent for system/foundational rows. */
+  area?: 'movement' | 'nourishment' | 'mind' | 'practice';
+  /** TRUE when the coach proposed this herself (adjacent support) — badged at the consent
+   *  moment (the pre-signup card) only, never a permanent asterisk on Week/Today. */
+  suggested?: boolean;
 }
 export interface PlanView {
   hasPlan: boolean;
@@ -45,6 +55,8 @@ export interface PlanView {
   stage: 'new' | 'in_progress' | 'committed';
   version?: number;
   committedAt?: string;
+  /** The coach's whole-shape reasoning (0031). Absent on plans committed before it existed. */
+  rationale?: string;
   activities: PlanViewActivity[];
   week: PlanViewDay[];
   consistency: { kept: number; window: number }; // "showed up N of 7 days" — the honest metric
@@ -160,11 +172,15 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
   const { kept, window } = rollingConsistency(past, now, 7);
   const user = await getUser(userId);
 
+  // Resolve goal links so the card can group "Toward <goal>" and colour by area without a second fetch.
+  const goalById = new Map((await listGoals(userId)).map((g) => [g.goal_id, g]));
+
   return {
     hasPlan: true,
     stage: 'committed',
     version: plan.version,
     committedAt: plan.generated_at,
+    ...(plan.rationale ? { rationale: plan.rationale } : {}),
     // Exclude the "Off-plan" bucket + episode-temp activities from the committed-rhythm list — their
     // occurrences still render in the week (via actById above), but they aren't the plan the user set.
     activities: activities
@@ -177,6 +193,15 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
         recurrence: a.schedule?.recurrence ?? '',
         time_of_day: a.schedule?.time_of_day,
         duration_min: a.schedule?.duration_min,
+        ...(a.why ? { why: a.why } : {}),
+        ...(a.goal_id
+          ? {
+              goal_id: a.goal_id,
+              goal_title: goalById.get(a.goal_id)?.title,
+              area: goalById.get(a.goal_id)?.area,
+            }
+          : {}),
+        ...(a.suggested ? { suggested: true } : {}),
       })),
     week: days,
     consistency: { kept, window },

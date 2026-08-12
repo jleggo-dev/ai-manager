@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { CoachFace } from '../../components/CoachFace.tsx';
+import { useEffect, useMemo, useRef } from 'react';
 import { CoachFoodActionSheet } from '../coach/CoachFoodActionSheet.tsx';
 import { HealthOfferCard } from './HealthOfferCard.tsx';
 import { findHealthOfferTurn, healthAlreadyShared } from './health-digest.ts';
@@ -44,6 +43,36 @@ const ONGOING_GREETING =
   "Hey — good to see you 👋 How's your rhythm feeling? If something needs to shift — more, less, a different day — say the word and I'll adjust your plan.";
 
 /**
+ * The walkthrough openers — the app telling Cadence that the discussion the gate promised is now.
+ * TWO notes because there are two honest arrivals: 'card' (the anonymous path — they signed in at
+ * the gate, so they have SEEN the week and her reasoning; re-reciting it would be her reading
+ * their own screen to them) and 'fresh' (signed in before onboarding — no gate, no card, so she
+ * presents conversationally first). Sent as a <note> so it renders in no one's bubble.
+ */
+const WALKTHROUGH_SHARED =
+  'This is a conversation where your coaching register is right: explain your reasoning properly ' +
+  'when they ask, do arithmetic out loud when their goal has numbers, and keep every safety bound ' +
+  'you plan by. If you suggested any activities, ask how those land; swapping one for something ' +
+  'that fits their life better is a win, not a concession. If you agree on any change, that turn ' +
+  'ends with the build card.';
+const WALKTHROUGH_NOTES = {
+  card:
+    'Their first plan was just built, and they arrived here from the card that showed them the ' +
+    'week AND your reasoning — do not re-list the activities or re-explain what the card already ' +
+    'said. Open the conversation the card could not have: in a sentence or two, say what the ' +
+    'whole week is built around for THEIR goal, then invite pushback plainly — which piece feels ' +
+    'off, too much, or not them. ' +
+    WALKTHROUGH_SHARED,
+  fresh:
+    'Their first plan was just built, and this is their first conversation since — they have NOT ' +
+    'yet been shown your reasoning. Walk their rhythm briefly and conversationally: what the week ' +
+    'is built around for their goal and, in a line each, why its main pieces earn their place — ' +
+    'short, in your own voice, never a recited list. Then invite pushback plainly — which piece ' +
+    'feels off, too much, or not them. ' +
+    WALKTHROUGH_SHARED,
+} as const;
+
+/**
  * The coach chat — and, since the v2 redesign, onboarding itself.
  *
  * There is no wizard behind this any more. The steps ARE the chat: Cadence asks one question per
@@ -63,12 +92,21 @@ export function OnboardingChat({
   onBack,
   intent = 'onboarding',
   chrome = 'onboarding',
+  openWalkthrough = false,
 }: {
+  /**
+   * Run the coach's build tool. Onboarding hands over its build screen; the Coach tab hands over
+   * the whole-plan rebuild. Both are the SAME affordance to the coach — she emits one card and the
+   * host decides what building means where she emitted it.
+   */
   onBuild?: () => void;
   onSettings?: () => void;
   onBack?: () => void;
   intent?: 'onboarding' | 'ongoing';
   chrome?: 'onboarding' | 'none';
+  /** Open the walkthrough discussion unprompted: 'card' = they saw the plan card at the gate;
+   *  'fresh' = signed-in path, no card — she presents conversationally first. */
+  openWalkthrough?: false | 'card' | 'fresh';
 }) {
   const {
     turns,
@@ -89,6 +127,23 @@ export function OnboardingChat({
   // has to happen here too, or Cadence speaks the whole conversation wearing the brand mark.
   useEnsureCoachFace(intent === 'onboarding');
 
+  /**
+   * The walkthrough the persona has scripted since v2, finally fired. One nudge, exactly once per
+   * arrival-from-the-card, and only into a FRESH thread: the onboarding conversation goes stale as
+   * 'graduated' at first commit, so `!turns.length` after restore is the normal state here — and
+   * if a transcript DID come back (they talked, killed the app, returned), she has already opened
+   * or been spoken to, and a second unprompted opener would read as her not remembering.
+   */
+  const walkthroughFired = useRef(false);
+  useEffect(() => {
+    if (!openWalkthrough || !restored || walkthroughFired.current) return;
+    if (turns.length || streaming) return;
+    walkthroughFired.current = true;
+    void nudge(WALKTHROUGH_NOTES[openWalkthrough]);
+    // `restored` flipping true is the arm signal; turns/streaming are read as guards, not triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openWalkthrough, restored]);
+
   const views = useMemo(() => viewTurns(turns), [turns]);
   const picks = livePicks(views, streaming);
   // `chatProgress` only sees turns that came from the server, and the opening turn never does —
@@ -96,23 +151,17 @@ export function OnboardingChat({
   // everyone sees. Fall back to what the opening turn itself claims.
   const progress = chatProgress(views) || (intent === 'onboarding' ? (OPENING_PICKS.progress ?? 0) : 0);
   /**
-   * The user asked to correct something on the confirm card, so the composer must come back.
+   * The build card is a card, and the composer never goes away for it.
    *
-   * `confirming` is DERIVED from the coach's last turn, not state, so there was nothing to turn
-   * off — and while it held, the composer was replaced by the Build/Change bar. Both correction
-   * affordances only called `setInput`, which prefilled an input that was not on screen: tapping
-   * "Change something" or "Did I miss something?" did nothing at all. They are the only offered
-   * way to correct a plan at the moment of committing to it, so silence there is the worst
-   * possible answer.
+   * It used to swap the composer for a Build/Change bar, which quietly cost two things. The
+   * corrections offered on the card only call `setInput` — with the composer gone they prefilled
+   * an input nobody could see, so "Change something" did nothing at the one turn where being
+   * ignored costs most. And a bar that owns the bottom of the screen can only be up once, which is
+   * why a coach who had already spent it started sending people to a review screen that no longer
+   * exists. Both are gone: the button rides on the card (ConfirmCard), and you can always type.
    */
-  const [correcting, setCorrecting] = useState(false);
-  const confirming = picks?.layout === 'confirm' && !correcting;
+  const buildLabel = intent === 'onboarding' ? 'Build it' : 'Rebuild my plan';
   const onOpeningTurn = intent === 'onboarding' && restored && !turns.length;
-  // Her next turn answers the correction, so the confirm card is allowed to take over again —
-  // otherwise one correction would hide "Build it" for the rest of the conversation.
-  useEffect(() => {
-    setCorrecting(false);
-  }, [turns.length]);
   const chatRef = useRef<HTMLDivElement | null>(null);
 
   // Goal-gated Apple Health offer (detour pattern): the card renders under the coach turn that
@@ -124,11 +173,15 @@ export function OnboardingChat({
   const canOfferHealth = capabilities.health.isAvailable() && !healthAlreadyShared();
   const healthOfferAt = canOfferHealth && !streaming ? findHealthOfferTurn(turns) : -1;
 
-  // Follow the newest turn, but never steal the viewport from someone reading back — see
-  // useStickToBottom. Scrolls the pane only; scrollIntoView would pan the whole shell on mobile.
-  const { onScroll, onTouchStart, onTouchEnd, stickNow } = useStickToBottom(chatRef, turns);
   // The floating stack's real height, so no turn ever sits underneath it (useFloatingInset).
   const { inset, floatRef } = useFloatingInset();
+  // Follow the newest turn, but never steal the viewport from someone reading back — see
+  // useStickToBottom. Scrolls the pane only; scrollIntoView would pan the whole shell on mobile.
+  //
+  // Declared AFTER the inset on purpose: both are layout effects and they run in declaration
+  // order, so measuring the stack first means the follow scrolls against the padding this render
+  // actually ends up with, rather than chasing it on a second pass.
+  const { onScroll, onTouchStart, onTouchEnd, stickNow } = useStickToBottom(chatRef);
 
   return (
     <div className="chatscreen">
@@ -195,16 +248,16 @@ export function OnboardingChat({
                   pending={t.role === 'coach' && !t.text}
                   after={
                     last && picks ? (
-                      confirming ? (
+                      picks.layout === 'confirm' ? (
                         <ConfirmCard
+                          buildLabel={buildLabel}
+                          onBuild={onBuild}
                           onCorrect={(topic) => {
                             stickNow();
-                            setCorrecting(true);
                             setInput(`About ${topic} — that's not quite right. `);
                           }}
                           onTellMore={() => {
                             stickNow();
-                            setCorrecting(true);
                             setInput("There's something you missed. ");
                           }}
                         />
@@ -225,63 +278,38 @@ export function OnboardingChat({
           })}
       </div>
 
-      {confirming ? (
-        <div className="composer-wrap" ref={floatRef}>
-          <div className="cfm-bar">
-            <button className="cfm-build" onClick={() => onBuild?.()}>
-              Build it
-            </button>
-            <button
-              className="cfm-change"
-              onClick={() => {
-                setCorrecting(true);
-                setInput("Actually, I'd like to change something. ");
+      <ChatComposer
+        value={input}
+        onChange={setInput}
+        onSend={() => {
+          // Their own message is the thing they are waiting on, so re-arm the follow even if
+          // they had scrolled up to check something before sending.
+          stickNow();
+          void send();
+        }}
+        streaming={streaming}
+        showDisclaimer={chrome === 'onboarding'}
+        // Only while the opening question is the live one: after that she is asking real
+        // questions, and an example of a goal would be answering the wrong thing.
+        placeholder={onOpeningTurn ? OPENING_PLACEHOLDER : undefined}
+        rootRef={floatRef}
+        onStop={stop}
+        above={
+          chrome === 'onboarding' ? (
+            <CapturedPills
+              goals={capturedGoals}
+              onFix={(g) => {
+                // A COMPLETE sentence, like a quick pick composes. The first version drafted a
+                // dangling "About "X" — ", which the send arrow happily lit up for: someone sent
+                // the fragment, and the coach — given a turn with no content — simply re-asked
+                // her live question. Trailing space so carrying on types a new sentence.
+                stickNow();
+                setInput(`About "${g.title}" — that's not quite right. `);
               }}
-            >
-              Change something
-            </button>
-          </div>
-          {/* The disclosure holds through the confirmation — this is the turn where someone is
-              deciding whether to trust what they just read back. */}
-          <div className="chat-disclaimer">
-            <CoachFace size={18} ring={false} />
-            <span>{"I'm AI and can make mistakes — please double-check what I say."}</span>
-          </div>
-        </div>
-      ) : (
-        <ChatComposer
-          value={input}
-          onChange={setInput}
-          onSend={() => {
-            // Their own message is the thing they are waiting on, so re-arm the follow even if
-            // they had scrolled up to check something before sending.
-            stickNow();
-            void send();
-          }}
-          streaming={streaming}
-          showDisclaimer={chrome === 'onboarding'}
-          // Only while the opening question is the live one: after that she is asking real
-          // questions, and an example of a goal would be answering the wrong thing.
-          placeholder={onOpeningTurn ? OPENING_PLACEHOLDER : undefined}
-          rootRef={floatRef}
-          onStop={stop}
-          above={
-            chrome === 'onboarding' ? (
-              <CapturedPills
-                goals={capturedGoals}
-                onFix={(g) => {
-                  // A COMPLETE sentence, like a quick pick composes. The first version drafted a
-                  // dangling "About "X" — ", which the send arrow happily lit up for: someone sent
-                  // the fragment, and the coach — given a turn with no content — simply re-asked
-                  // her live question. Trailing space so carrying on types a new sentence.
-                  stickNow();
-                  setInput(`About "${g.title}" — that's not quite right. `);
-                }}
-              />
-            ) : null
-          }
-        />
-      )}
+            />
+          ) : null
+        }
+      />
 
       {foodAction && <CoachFoodActionSheet action={foodAction} onClose={clearFoodAction} onDone={clearFoodAction} />}
     </div>

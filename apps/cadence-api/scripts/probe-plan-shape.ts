@@ -115,6 +115,44 @@ const SCENARIOS: ShapeScenario[] = [
     },
   },
   {
+    // Present-then-discuss (PLAN.md 2026-08-12): a months-long body of work is more than its
+    // sitting. One lone daily "write" node was the reported failure; the LONG-FORM WORK and
+    // ADJACENT SUPPORT rules answer it, and this asserts they keep answering it.
+    name: 'long-form · "write a novel by December, starting from scratch"',
+    goals: [
+      {
+        ...goal('g1', 'Write a novel', 'practice'),
+        type: 'milestone',
+        brief: 'Starting from scratch — blank page, no outline. Wants it written this year.',
+        timeframe: { end: '2026-12-31' },
+      },
+    ],
+    baseline: {
+      constraints: [],
+      availability: { windows: [{ part_of_day: 'morning', earliest: '06:00' }], session_minutes: { min: 45, max: 60 } },
+      starting_point: { doing_now: ['nothing regular yet'] },
+    },
+    preferences: { notes: 'mornings before work' },
+    equipment: ['laptop'],
+    check(_onDay, all) {
+      const user = all.filter((a) => a.kind === 'user');
+      // The reported failure exactly: drafting alone, nothing else in the week.
+      if (user.length < 3) {
+        flag(`long-form goal got ${user.length} user activit${user.length === 1 ? 'y' : 'ies'} — a reminder, not a plan`);
+        return;
+      }
+      const titles = user.map((a) => String(a.title ?? '').toLowerCase());
+      const hasCore = titles.some((t) => /writ|draft/.test(t));
+      const hasOtherOccasion = titles.some((t) => /outline|plan|read|stud|revis|review|edit/.test(t));
+      if (!hasCore) flag(`no drafting/writing core in: ${titles.join(' · ')}`);
+      if (!hasOtherOccasion) {
+        flag(`no planning/input/review occasion beside the core — the week is one button: ${titles.join(' · ')}`);
+      }
+      // A rationale is part of the contract now — the card renders it to an unauthenticated prospect.
+      // (Checked here because this scenario exists for the present-then-discuss work.)
+    },
+  },
+  {
     // The guard on the guard: "aim for 3-5" must never override someone asking for less.
     name: 'minimal · "i can only manage one small thing a day, seriously"',
     goals: [goal('g1', 'Walk every day', 'movement')],
@@ -146,23 +184,35 @@ function goal(id: string, title: string, area: string) {
 async function probeShape(): Promise<void> {
   for (const s of SCENARIOS) {
     console.log(`\n── plan · ${s.name}`);
-    const raw = await runJob('synthesize-plan', {
-      goals: JSON.stringify(s.goals),
-      baseline: JSON.stringify(s.baseline),
-      equipment: JSON.stringify(s.equipment ?? []),
-      preferences: JSON.stringify(s.preferences),
-      current_plan: '',
-      recent_activity: '',
-      user_steer: '',
-      draft_activities: '',
-      weather: '',
-    });
+    let raw: string;
+    try {
+      raw = await runJob('synthesize-plan', {
+        goals: JSON.stringify(s.goals),
+        baseline: JSON.stringify(s.baseline),
+        equipment: JSON.stringify(s.equipment ?? []),
+        preferences: JSON.stringify(s.preferences),
+        current_plan: '',
+        recent_activity: '',
+        user_steer: '',
+        draft_activities: '',
+        weather: '',
+      });
+    } catch (err) {
+      // A dead scenario is a red flag, never a dead RUN — one timeout used to take down every
+      // scenario after it, which converts a weekly smoke report into no report at all.
+      flag(`scenario errored (${String((err as Error)?.message ?? err).slice(0, 120)}) — skipping`);
+      continue;
+    }
     const parsed = parseJson(raw);
     const all = (Array.isArray(parsed?.activities) ? parsed!.activities : []) as PlannedActivity[];
     if (all.length === 0) {
       flag(`no activities came back: ${raw.slice(0, 140)}`);
       continue;
     }
+    // Every plan owes a rationale now (0031) — the pre-signup card renders it to a prospect, so a
+    // plan without one ships a card with nothing behind "See my thinking".
+    const rationale = (parsed as { rationale?: unknown }).rationale;
+    if (typeof rationale !== 'string' || !rationale.trim()) flag('no plan-level rationale came back');
 
     // What the person sees on their fullest day: user-facing nodes only. System tasks (meal logs,
     // the weekly check-in) are real trail items but they aren't the commitment being shaped here.

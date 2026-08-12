@@ -246,11 +246,10 @@
   padding: 6px 4px 4px;
 }
 /* The captures ride above the composer inside the same floating stack, so they make that stack
-   taller — and the chat's fixed bottom padding, which was sized for the composer alone, stops
-   clearing it. Without this the last turn scrolls to rest UNDER the pills. */
-.chatscreen:has(.cappills) .chat {
-  padding-bottom: 182px;
-}
+   taller. That used to be corrected here, with a second hard-coded `padding-bottom: 182px` behind
+   a `:has()` — dead the moment `useFloatingInset` started setting the padding inline (an inline
+   style beats any selector), and misleading to read, because it looked like the thing keeping the
+   last turn clear of the pills. The stack is measured now; there is no number to keep in step. */
 .cappills-k {
   font-size: 10px;
   font-weight: 800;
@@ -361,33 +360,20 @@
   font-weight: 800;
   color: var(--text-dim);
 }
-/* `position: relative` for the same reason as `.cappills` — it replaces the composer inside the
-   floating wrap, and static children lose to the wrap's absolutely-positioned scrim. */
-.cfm-bar {
-  position: relative;
-  pointer-events: auto;
-  display: flex;
-  gap: 9px;
-}
-.cfm-build,
-.cfm-change {
-  flex: 1;
+/* The build action rides on the card itself (ConfirmCard), not in a bar that replaces the
+   composer — so it can be offered as many times as a plan needs building, and typing a correction
+   is always still possible. `margin-top` because it is the card's conclusion, not another row. */
+.cfm-build {
+  width: 100%;
+  margin-top: 3px;
+  border: none;
   border-radius: 14px;
   padding: 13px;
   font-size: 13.5px;
   font-weight: 800;
-}
-.cfm-build {
-  border: none;
   color: #fff;
   background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
   box-shadow: 0 4px 0 oklch(39% 0.08 152);
-}
-.cfm-change {
-  background: var(--surface);
-  border: 2px solid var(--line);
-  box-shadow: 0 3px 0 var(--line-soft);
-  color: var(--forest);
 }
 
 /* ── "Cadence is working" ──────────────────────────────────────────────────────────── */

@@ -39,13 +39,14 @@ export async function synthesizeFanoutAndVet(userId: string, opts: SynthesizeOpt
   const allDrafts = drafts.flatMap((d) => d.activities);
   if (allDrafts.length === 0) return { status: 'vetoed', violations: ['fan-out produced no draft activities'] };
 
-  // 2. Reduce — one coordinating synthesize primed with the drafts.
-  const { normalized, note } = await runSynthesize(userId, opts, allDrafts);
+  // 2. Reduce — one coordinating synthesize primed with the drafts. Its rationale is the one kept:
+  // it is the only call that saw the whole week, so only it can explain the whole shape.
+  const { normalized, note, rationale } = await runSynthesize(userId, opts, allDrafts);
   if (normalized.length === 0) return { status: 'vetoed', violations: ['reduce step returned no activities'] };
 
   // 3. Vet + coverage: recover any goal the reduce dropped from its OWN draft (no extra model call).
   const byGoal = new Map(drafts.map((d) => [d.goal.goal_id, d.activities]));
-  return finalizeCoverage(userId, normalized, note, opts, async (missing) =>
+  return finalizeCoverage(userId, normalized, note, rationale, opts, async (missing) =>
     missing.flatMap((g) => byGoal.get(g.goal_id) ?? []),
   );
 }
@@ -75,6 +76,7 @@ export async function planSynthesizeVetCommit(
   return commitActivities(userId, {
     activities: s.activities!,
     note: s.note ?? '',
+    rationale: s.rationale,
     goalIds: opts.goalIds,
     occurrenceDays: opts.occurrenceDays,
   });

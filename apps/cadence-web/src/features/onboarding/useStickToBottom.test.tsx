@@ -20,10 +20,10 @@ describe('useStickToBottom', () => {
   it('follows the newest turn while the reader is at the bottom', () => {
     const ref = createRef<HTMLElement>();
     (ref as { current: HTMLElement | null }).current = makeEl(1000, 500, 500);
-    const { rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+    const { rerender } = renderHook(() => useStickToBottom(ref));
 
     (ref.current as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
-    rerender({ d: 2 });
+    rerender();
     expect(ref.current!.scrollTop).toBe(1400);
   });
 
@@ -31,14 +31,14 @@ describe('useStickToBottom', () => {
     const ref = createRef<HTMLElement>();
     const el = makeEl(1000, 500, 500);
     (ref as { current: HTMLElement | null }).current = el;
-    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+    const { result, rerender } = renderHook(() => useStickToBottom(ref));
 
     el.scrollTop = 0; // they scrolled to the top
     act(() => result.current.onScroll());
 
     // A streamed delta arrives — this is the moment that used to yank them back down.
     (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
-    rerender({ d: 2 });
+    rerender();
     expect(el.scrollTop).toBe(0);
   });
 
@@ -46,14 +46,14 @@ describe('useStickToBottom', () => {
     const ref = createRef<HTMLElement>();
     const el = makeEl(1000, 500, 0);
     (ref as { current: HTMLElement | null }).current = el;
-    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+    const { result, rerender } = renderHook(() => useStickToBottom(ref));
 
     act(() => result.current.onScroll()); // at top → detached
     el.scrollTop = 500; // back to the bottom
     act(() => result.current.onScroll());
 
     (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
-    rerender({ d: 2 });
+    rerender();
     expect(el.scrollTop).toBe(1400);
   });
 
@@ -61,13 +61,13 @@ describe('useStickToBottom', () => {
     const ref = createRef<HTMLElement>();
     const el = makeEl(1000, 500, 0);
     (ref as { current: HTMLElement | null }).current = el;
-    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+    const { result, rerender } = renderHook(() => useStickToBottom(ref));
 
     act(() => result.current.onScroll()); // detached at the top
     act(() => result.current.stickNow());
 
     (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
-    rerender({ d: 2 });
+    rerender();
     expect(el.scrollTop).toBe(1400);
   });
 
@@ -75,11 +75,11 @@ describe('useStickToBottom', () => {
     const ref = createRef<HTMLElement>();
     const el = makeEl(1000, 500, 460); // 40px from the bottom, inside the 80px threshold
     (ref as { current: HTMLElement | null }).current = el;
-    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+    const { result, rerender } = renderHook(() => useStickToBottom(ref));
 
     act(() => result.current.onScroll());
     (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
-    rerender({ d: 2 });
+    rerender();
     expect(el.scrollTop).toBe(1400);
   });
 
@@ -93,14 +93,14 @@ describe('useStickToBottom', () => {
     const ref = createRef<HTMLElement>();
     const el = makeEl(1000, 500, 500);
     (ref as { current: HTMLElement | null }).current = el;
-    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+    const { result, rerender } = renderHook(() => useStickToBottom(ref));
 
     // Mounting follows to the bottom, which is correct — that is the baseline this test moves from.
     expect(el.scrollTop).toBe(1000);
 
     act(() => result.current.onTouchStart()); // finger down; no scroll event has fired yet
     (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
-    rerender({ d: 2 });
+    rerender();
 
     expect(el.scrollTop).toBe(1000); // held where they grabbed it — this used to jump to 1400
   });
@@ -109,13 +109,13 @@ describe('useStickToBottom', () => {
     const ref = createRef<HTMLElement>();
     const el = makeEl(1000, 500, 500);
     (ref as { current: HTMLElement | null }).current = el;
-    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+    const { result, rerender } = renderHook(() => useStickToBottom(ref));
 
     act(() => result.current.onTouchStart());
     act(() => result.current.onTouchEnd()); // a tap, not a drag — still at the bottom
 
     (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
-    rerender({ d: 2 });
+    rerender();
     expect(el.scrollTop).toBe(1400);
   });
 
@@ -123,14 +123,14 @@ describe('useStickToBottom', () => {
     const ref = createRef<HTMLElement>();
     const el = makeEl(1000, 500, 500);
     (ref as { current: HTMLElement | null }).current = el;
-    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+    const { result, rerender } = renderHook(() => useStickToBottom(ref));
 
     act(() => result.current.onTouchStart());
     el.scrollTop = 0; // dragged to the top
     act(() => result.current.onTouchEnd());
 
     (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
-    rerender({ d: 2 });
+    rerender();
     expect(el.scrollTop).toBe(0);
   });
 
@@ -139,14 +139,14 @@ describe('useStickToBottom', () => {
     const ref = createRef<HTMLElement>();
     const el = makeEl(1000, 500, 0);
     (ref as { current: HTMLElement | null }).current = el;
-    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+    const { result, rerender } = renderHook(() => useStickToBottom(ref));
 
     act(() => result.current.onTouchStart());
     el.scrollTop = 500; // overshoot back to the bottom mid-drag
     act(() => result.current.onScroll());
 
     (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1400;
-    rerender({ d: 2 });
+    rerender();
     expect(el.scrollTop).toBe(500); // still theirs; not snapped to 1400
   });
 
@@ -164,15 +164,42 @@ describe('useStickToBottom', () => {
     const ref = createRef<HTMLElement>();
     const el = makeEl(1000, 500, 500);
     (ref as { current: HTMLElement | null }).current = el;
-    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+    const { result, rerender } = renderHook(() => useStickToBottom(ref));
 
     act(() => result.current.onTouchStart());
     el.scrollTop = 460; // the flick has begun; still inside the at-bottom threshold
     act(() => result.current.onScroll()); // a scroll DID happen — this was a drag, not a tap
     act(() => result.current.onTouchEnd());
 
-    rerender({ d: 2 }); // an SSE delta, while momentum is still carrying them up
+    rerender(); // an SSE delta, while momentum is still carrying them up
     expect(el.scrollTop).toBe(460);
+  });
+
+  /**
+   * The device report, and the half the turn-keyed version could never catch: "the options are
+   * there but I can't get to them all, and they overlap with the goals."
+   *
+   * Nothing about the TURNS changes when the last of the content arrives. Quick picks are withheld
+   * until the stream ends, so they mount on a `streaming` flip; the capture pills land ~900ms after
+   * that on a fetch of their own, and make the floating stack — and so the chat's reserved padding
+   * — taller. An effect keyed on the turn array sits out both, leaving the transcript resting where
+   * the bottom USED to be, with a row of tiles cut off behind the pills.
+   */
+  it('follows content that grows without a new turn — picks mounting, pills arriving', () => {
+    const ref = createRef<HTMLElement>();
+    const el = makeEl(1000, 500, 500);
+    (ref as { current: HTMLElement | null }).current = el;
+    const { rerender } = renderHook(() => useStickToBottom(ref));
+
+    // The stream ends and the quick picks mount under the final turn. Same turns, taller content.
+    (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1200;
+    rerender();
+    expect(el.scrollTop).toBe(1200);
+
+    // ...then the capture pills land and grow the floating stack's reserved padding.
+    (el as HTMLElement & { scrollHeight: number }).scrollHeight = 1330;
+    rerender();
+    expect(el.scrollTop).toBe(1330);
   });
 
   /** A tap that moves nothing is not a flick — where they are is where they meant to be. */
@@ -180,12 +207,12 @@ describe('useStickToBottom', () => {
     const ref = createRef<HTMLElement>();
     const el = makeEl(1000, 500, 500);
     (ref as { current: HTMLElement | null }).current = el;
-    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+    const { result, rerender } = renderHook(() => useStickToBottom(ref));
 
     act(() => result.current.onTouchStart());
     act(() => result.current.onTouchEnd()); // no onScroll between them
 
-    rerender({ d: 2 });
+    rerender();
     expect(el.scrollTop).toBe(1000);
   });
 });

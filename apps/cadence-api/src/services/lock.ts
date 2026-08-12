@@ -67,11 +67,12 @@ export async function previewLock(userId: string): Promise<PlanFlowResult> {
   await setPendingPlan(userId, {
     activities: s.activities!,
     note,
+    rationale: s.rationale,
     goal_ids: goalIds,
     created_at: new Date().toISOString(),
   });
 
-  return { status: 'proposed', proposal: { activities: s.activities!, note } };
+  return { status: 'proposed', proposal: { activities: s.activities!, note, rationale: s.rationale } };
 }
 
 /**

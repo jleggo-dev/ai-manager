@@ -156,6 +156,27 @@ export async function weatherVarsForUser(userId: string): Promise<{ weather: str
   return { weather: formatWeatherLine(w), weather_temp_c: String(Math.round(w.tempC)) };
 }
 
+/**
+ * Coarse lat/lon → a place NAME via OWM reverse geocoding. The auto-detect path saves bare
+ * coordinates, which left the header reading "Weather nearby" — accurate, and exactly the kind
+ * of accurate that reads as the app not knowing where you are. Best-effort by contract: a
+ * failure returns null and the caller keeps the label-less behaviour it always had.
+ */
+export async function reverseGeocode(lat: number, lon: number): Promise<string | null> {
+  if (!isWeatherConfigured()) return null;
+  try {
+    const raw = await owmGeoGet(`/reverse?lat=${lat}&lon=${lon}&limit=1`);
+    const first = Array.isArray(raw) ? (raw[0] as { name?: string; state?: string; country?: string }) : null;
+    const parts = [first?.name, first?.state, first?.country].filter(
+      (p): p is string => typeof p === 'string' && !!p.trim(),
+    );
+    return parts.length ? parts.join(', ') : null;
+  } catch (err) {
+    console.warn('[weather] reverse geocode failed:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 /** City/place name → coarse lat/lon via OWM geocoding (city/timezone fallback path). */
 export async function geocodeCity(city: string): Promise<{ lat: number; lon: number; label: string } | null> {
   const q = city.trim();

@@ -114,3 +114,47 @@ describe('synthesizeAndVet coverage veto (single-call path)', () => {
     expect(res.violations?.join(' ')).toContain('Lose weight');
   });
 });
+
+/**
+ * Present-then-discuss (0031): the pre-signup card renders the coach's whole-shape `rationale`
+ * and badges her `suggested` adjacents at the consent moment. Both ride the same lenient parse as
+ * `note`, so these lock the two ways they could silently vanish: dropped in the fan-out reduce
+ * (the only call that saw the whole week), or scrubbed by shapeActivity's field mapping.
+ */
+describe('rationale + suggested threading (0031)', () => {
+  it('keeps the REDUCE call rationale and the suggested flag through shaping', async () => {
+    runJob.mockImplementation(async (_u: string, _slug: string, v: Vars) => {
+      if (isVet(v)) return vetOk;
+      if (isReduce(v))
+        return {
+          formatted: JSON.stringify({
+            activities: [
+              activityFor('Run a 10k'),
+              { ...activityFor('Lose weight'), why: 'A longer, explanatory why survives shaping.', suggested: true },
+            ],
+            note: 'one warm line',
+            rationale: 'I built this around your mornings — roughly 500 words a sitting gets you there by December.',
+          }),
+        };
+      return synthResp([activityFor((JSON.parse(v.goals ?? '[]') as Goal[])[0]!.title)]);
+    });
+
+    const res = await synthesizeFanoutAndVet(USER, { goals: [A, B], baseline: {}, equipment: [] });
+    expect(res.status).toBe('proposed');
+    expect(res.rationale).toContain('roughly 500 words');
+    expect(res.note).toBe('one warm line');
+    const flags = res.activities?.map((a) => a.suggested === true);
+    expect(flags).toEqual([false, true]); // asked-for row carries no flag; the adjacent does
+    expect(res.activities?.[1]?.why).toBe('A longer, explanatory why survives shaping.');
+  });
+
+  it('degrades to an empty rationale when an older prompt emits none', async () => {
+    runJob.mockImplementation(async (_u: string, _slug: string, v: Vars) => {
+      if (isVet(v)) return vetOk;
+      return synthResp([activityFor('Run a 10k')]); // no rationale key at all
+    });
+    const res = await synthesizeAndVet(USER, { goals: [A], baseline: {}, equipment: [] });
+    expect(res.status).toBe('proposed');
+    expect(res.rationale).toBe('');
+  });
+});

@@ -67,6 +67,15 @@ const Loading = () => (
 function CoachApp({ session }: { session: Session | null }) {
   const [screen, setScreen] = useState<Screen>('loading');
   const [dev, setDev] = useState(DEV_MODE);
+  /**
+   * True only on the session where the first plan was just built — it routes the landing into the
+   * COACH tab so the walkthrough conversation actually happens (PLAN.md, present-then-discuss:
+   * the persona has scripted this walkthrough since v2 and it never once fired, because every
+   * route out of building/gate landed on Today). Deliberately NOT persisted: if the app is killed
+   * before the coach tab opens, the next launch lands on Today as ever and the canned greeting
+   * still invites adjustment — a nudge that fires days later would be worse than none.
+   */
+  const [justBuilt, setJustBuilt] = useState<false | 'card' | 'fresh'>(false);
   const anonymous = isAnonymousSession(session);
 
   useEffect(() => {
@@ -95,6 +104,32 @@ function CoachApp({ session }: { session: Session | null }) {
     // anonymous is fixed for the life of a session object; re-running on it would refetch the plan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * The way OUT of the sign-up gate, and the reason it needs its own effect.
+   *
+   * The gate is chosen once, in the mount effect above, from `stage === plan && anonymous`. Signing
+   * up doesn't re-run that — it updates the session — so nothing ever moved the screen off `gate`.
+   * Continue with Apple (or Google) therefore looked like a freeze: the sheet closed, the identity
+   * linked, the session came back non-anonymous, and the gate just sat there. Force-quitting and
+   * relaunching "fixed" it because that re-ran the mount effect with `anonymous` false. Which is
+   * exactly what was reported, and exactly the moment someone is deciding to trust this app with
+   * an account.
+   *
+   * Keyed on `anonymous` going false, not on any one provider's success path, so every route
+   * through the gate — Apple, Google, a confirmed email — lands the same way.
+   */
+  useEffect(() => {
+    if (!anonymous)
+      setScreen((s) => {
+        // Leaving the gate BY signing in lands in the coach conversation, not on Today — the gate
+        // footer literally promises "Sign in and we'll talk it through", so arriving anywhere else
+        // is the app breaking its own sentence. This covers the resume path too (app killed at
+        // the gate, reopened, signed in): the promise is the same however they got here.
+        if (s === 'gate') setJustBuilt('card');
+        return s === 'gate' ? 'plan' : s;
+      });
+  }, [anonymous]);
 
   /**
    * The way out of onboarding, and the reason it has to be a sign-out rather than a screen change.
@@ -128,13 +163,19 @@ function CoachApp({ session }: { session: Session | null }) {
         <OnboardingChat onBuild={() => setScreen('building')} onBack={() => setScreen('meet')} />
       ) : screen === 'building' ? (
         <BuildingScreen
-          onReady={() => setScreen(anonymous ? 'gate' : 'plan')}
+          onReady={() => {
+            // 'fresh': a signed-in user goes straight to the discussion and has NOT seen the
+            // card (the card is a conversion device; no gate, no card). The anonymous path is
+            // overwritten to 'card' by the gate-exit effect below, which is the only way out.
+            setJustBuilt('fresh');
+            setScreen(anonymous ? 'gate' : 'plan');
+          }}
           onBackToChat={() => setScreen('onboarding')}
         />
       ) : screen === 'gate' ? (
         <SignUpGate />
       ) : (
-        <MainTabs email={session?.user.email ?? null} />
+        <MainTabs email={session?.user.email ?? null} discussPlan={justBuilt} />
       )}
     </PhoneFrame>
   );

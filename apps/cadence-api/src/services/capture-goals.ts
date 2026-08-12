@@ -1,4 +1,5 @@
-import type { Goal, GoalArea, GoalType } from '@cadence/shared';
+import { randomUUID } from 'node:crypto';
+import type { Goal, GoalArea, GoalMilestone, GoalType } from '@cadence/shared';
 import { deleteGoal, insertGoal, listGoalsByStatus, updateGoal } from '../repos/goals.ts';
 import { describeIncoherentMeasure, normalizeBrief, selectCapturedGoals } from './capture-normalize.ts';
 import { planGoalWrites, type GoalDraft } from './capture-goal-merge.ts';
@@ -34,6 +35,30 @@ const LEGACY_AREA: Record<string, GoalArea> = {
   craft: 'practice',
   learning: 'practice',
 };
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Milestones from the Broker (the reframe path: "the novel finished by December, as a milestone
+ * on a daily writing practice"). The model emits {label, target_date}; every OTHER writer of
+ * milestones is the client, which mints an `id` at creation — and consumers key on it — so ids
+ * are minted HERE for extracted ones, or the first captured reframe ships rows half the UI can't
+ * address. Junk shapes drop silently to []: a milestone is an enrichment, never worth failing a
+ * capture over.
+ */
+function normalizeMilestones(raw: unknown): GoalMilestone[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out = raw
+    .filter((m): m is { label: string; target_date?: unknown } => !!m && typeof (m as GoalMilestone).label === 'string')
+    .map((m) => ({
+      id: randomUUID(),
+      label: String(m.label).trim(),
+      ...(typeof m.target_date === 'string' && ISO_DATE.test(m.target_date) ? { target_date: m.target_date } : {}),
+    }))
+    .filter((m) => m.label.length > 0)
+    .slice(0, 6);
+  return out.length ? out : undefined;
+}
 
 function coerceArea(raw: unknown, coerced: string[]): GoalArea {
   const s = String(raw ?? '')
@@ -82,6 +107,7 @@ function shapeDraft(g: Partial<Goal>, weightKg: number | undefined, out: Capture
     type,
     brief: normalizeBrief(g.brief),
     measure: badMeasure ? undefined : g.measure,
+    milestones: normalizeMilestones(g.milestones),
   };
 }
 

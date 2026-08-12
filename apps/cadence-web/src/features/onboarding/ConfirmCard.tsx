@@ -21,6 +21,13 @@ import { cmToFtIn, kgToLbs } from '../review/unitConversion.ts';
  * correction into the composer, the same contract as a quick pick and as the capture pills: read
  * it back, edit it, send it. Cadence can just be told. The wizard still exists for Settings, where
  * editing a committed plan IS the task.
+ *
+ * **The build button lives HERE, on the card, not in a bar that replaces the composer.** That bar
+ * was the whole card's failure mode: it could only exist once, at the end of onboarding, and while
+ * it was up there was no way to type. So a coach who had already spent it had nowhere left to
+ * offer a rebuild, and fell back to naming a review screen that no longer exists. On the card, the
+ * button is just what this tool does — and the tool can be handed over as many times as a plan
+ * needs building.
  */
 
 /** Sections beyond this many rows arrive folded; the summary says what's inside. */
@@ -138,10 +145,16 @@ function constraintNote(c: Constraint): string {
 export function ConfirmCard({
   onCorrect,
   onTellMore,
+  onBuild,
+  buildLabel,
 }: {
   /** Draft a correction about `topic` into the composer — never a wizard. */
   onCorrect: (topic: string) => void;
   onTellMore: () => void;
+  /** Run the build. Omitted only where the host has no build to run — the button then hides. */
+  onBuild?: () => void;
+  /** "Build it" the first time, "Rebuild my plan" once one exists. The host knows which. */
+  buildLabel: string;
 }) {
   const [data, setData] = useState<ReviewData | null>(null);
 
@@ -220,6 +233,11 @@ export function ConfirmCard({
       <button type="button" className="cfm-more" onClick={onTellMore}>
         + Did I miss something? Tell me
       </button>
+      {onBuild && (
+        <button type="button" className="cfm-build" onClick={onBuild}>
+          {buildLabel}
+        </button>
+      )}
     </div>
   );
 }

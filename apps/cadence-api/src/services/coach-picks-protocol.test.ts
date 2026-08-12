@@ -74,4 +74,34 @@ describe('renderPickProtocol', () => {
     expect(out).toContain('A CORRECTION IS A NORMAL TURN');
     expect(out).toContain('NEVER RE-ASK OR RE-ANSWER THE QUESTION YOU JUST ASKED');
   });
+
+  /**
+   * Reported 2026-08-12: someone added a goal after the confirmation, and the coach — with her one
+   * `confirm` turn already spent — told them to "head to the review section", which has not existed
+   * since the v2 redesign. The card is the ONLY route to a plan, so it has to be repeatable and it
+   * has to be the thing she reaches for instead of naming a screen.
+   */
+  it('makes the build card a repeatable tool and forbids sending anyone to a screen', () => {
+    for (const intent of ['onboarding', 'ongoing']) {
+      const out = renderPickProtocol({ intent });
+      expect(out).toContain('BUILD PLAN tool');
+      expect(out).toContain('BUILD IS SOMETHING YOU DO, NOT SOMEWHERE YOU SEND THEM');
+      expect(out).toMatch(/never tell anyone to "head to Review"/i);
+      expect(out).toContain('NEVER LEAVE A CHANGE AGREED AND UNBUILT');
+      // The old cap is what left her with nowhere to go; it must not survive anywhere.
+      expect(out).not.toMatch(/use it exactly once/i);
+    }
+  });
+
+  /**
+   * Reported the same day: asked what they were working around, the coach offered "an injury" to
+   * someone whose goal was writing a novel. Wrists are a real constraint for a writer — an injury
+   * as the OPENING example is a fitness app that did not listen.
+   */
+  it('fits the constraints question to the goal instead of leading with an injury', () => {
+    const out = renderPickProtocol({ intent: 'onboarding' });
+    expect(out).toContain('THE QUESTION IS THE SAME; THE EXAMPLES ARE NOT');
+    expect(out).toMatch(/writing a novel/);
+    expect(out).toMatch(/hands and wrists/);
+  });
 });

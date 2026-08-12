@@ -10,6 +10,9 @@ export interface Plan {
   version: number;
   status: 'active' | 'superseded' | 'draft';
   activities: string[]; // activity ids
+  /** The coach's reasoning for the WHOLE shape (0031) — the arithmetic, the phases, why the
+   *  suggested activities earn their slots. Null on plans committed before it existed. */
+  rationale?: string | null;
 }
 
 export interface ActivitySchedule {
@@ -48,7 +51,9 @@ export interface Activity {
   schedule: ActivitySchedule;
   target?: ActivityTarget;
   completion_source: 'self_report' | 'healthkit' | 'reply' | 'auto';
-  why?: string | null; // the coach's one-line rationale, persisted at commit (0012) — walks the ladder in chat + session sheet
+  why?: string | null; // the coach's rationale (0012; 1-3 sentences since 0031) — walks the ladder in chat + session sheet
   how_to?: string | null; // optional video ref (§6.7)
   disrupted_override?: string | null;
+  /** TRUE when the coach proposed this herself (adjacent support), not the user (0031). */
+  suggested?: boolean;
 }

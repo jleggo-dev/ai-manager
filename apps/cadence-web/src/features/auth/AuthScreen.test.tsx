@@ -71,3 +71,30 @@ describe('AuthScreen', () => {
     expect(signUp).toHaveBeenCalledWith({ email: 'you@example.com', password: 'secret-pass' });
   });
 });
+
+/**
+ * Compact mode (the plan-card gate footer): the email path folds behind "or continue with email"
+ * so the pinned footer stays two provider buttons tall. None of the auth logic forks on it — the
+ * fold only decides what renders, which is exactly what these lock down.
+ */
+describe('AuthScreen compact (plan-card gate)', () => {
+  it('folds the email form and reveals the same form on tap, with the tailor CTA', () => {
+    render(<AuthScreen mode="upgrade" compact />);
+    // Folded: providers present, no email field, no CTA.
+    expect(screen.getByRole('button', { name: /Continue with Apple/ })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /tailor it/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'or continue with email' }));
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Signup and we’ll tailor it →' })).toBeInTheDocument();
+    // The provider-linking disclosure unfolds with the form it explains.
+    expect(screen.getByText('One account per email — providers link into it.')).toBeInTheDocument();
+  });
+
+  it('non-compact upgrade keeps the email form open as before', () => {
+    render(<AuthScreen mode="upgrade" />);
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Signup and we’ll tailor it →' })).toBeInTheDocument();
+  });
+});

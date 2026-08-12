@@ -4432,3 +4432,462 @@ they run and absent where it matters. This is the real cost and the strongest ar
 
 **Recommendation:** do the CI Postgres container first. It converts the flaky-and-skipped suites
 into a real gate, and it is the prerequisite for confidently changing anything else here.
+
+## Build Plan is a coach tool, not a destination (owner report + fixes, 2026-08-12)
+
+Four things reported from a real device run after a fresh install. All four are fixed; the two
+prompt fixes are synced live (`set-coach-persona.ts`, `sync-jobs.ts` — 28 jobs, 0 errors).
+
+**1. The stale review screen — the big one.** Someone added a goal *after* the confirmation turn
+and the coach could not re-offer the build: she said "I've got what I need, head to the review
+section", which has not existed since the v2 redesign. Root cause was a one-shot design, in three
+places at once. The pick protocol said of `layout: "confirm"` — **"use it exactly once"**; the
+persona seed literally instructed her to "tell them they can head to Review to confirm and set
+their rhythm"; and the client swapped the composer for a Build/Change **bar**, which by
+construction can only exist once because it owns the bottom of the screen.
+
+The ruling: **building a plan is something the coach DOES, in the conversation, as many times as a
+plan needs building.** There is no screen to send anyone to and the protocol now says so in those
+words. `confirm` is documented as her BUILD PLAN tool — repeatable, every intent — plus three
+rules: *build is something you do, not somewhere you send them* (bans naming a screen), *reach for
+it whenever building is the next thing* (a new goal, a changed goal, a different week, a lifted
+constraint, "this is too much"), and *never leave a change agreed and unbuilt* — with the
+corollary that a change is never described as done before they have tapped it. Talking it through
+is the agreement; the card is the commit.
+
+Client side the button moved **onto the card** (`ConfirmCard`) and the composer never disappears.
+Two silent bugs died with the bar: "Change something" and "Did I miss something?" only called
+`setInput`, so with the composer gone they prefilled an input that was not on screen and did
+literally nothing — at the one turn where being ignored costs most. And the Coach tab never passed
+`onBuild` at all, so "Build it" there was already dead; it now opens the whole-plan rebuild
+(`AdjustSheet mode="rebalance"`).
+
+**The trap in wiring the rebuild:** re-plan reads goals at `confirmed`/`committed`, but a goal the
+Broker captured two minutes ago in chat is still `captured`. So the card would read "Write a novel"
+back to them, they would tap Rebuild, and the week would return without it. Tapping build IS the
+confirmation — the same thing onboarding's build does before it locks — so the coach's card path
+sets `adoptCaptured` and promotes them first. Deliberately NOT set for the automated re-plans,
+where nobody has agreed to adopt anything.
+
+**2. Sign in with Apple "froze" — a gate with no exit.** The sheet closed, the identity linked,
+and the app sat on the sign-up gate; force-quitting and relaunching landed on the plan. The screen
+is chosen ONCE, in App.tsx's mount effect, from `stage === plan && anonymous` — signing up updates
+the *session*, not the screen, so nothing ever moved off `gate`. Relaunching "fixed" it by re-running
+the mount effect. Fixed with an effect keyed on `anonymous` going false (so Apple, Google and a
+confirmed email all land the same way), and `isAnonymousSession` now lets a **linked provider
+identity outvote a stale `is_anonymous` flag** — whether the token in hand already reflects the
+link depends on when it was minted, and the one place this is read is the gate.
+
+**3. Injury picks for a novelist.** Asked what they were working around, the coach offered "an
+injury" to someone whose goal was writing a novel. The intake script hard-coded *"an injury, a day
+that is always gone, a hard stretch"* regardless of area. The question stays the same; **the
+examples now follow the goal.** Physical-first for movement/nourishment/body; for mind and practice
+goals it leads with what actually blocks *practising* (no room in the week, nothing left by
+evening, nowhere quiet, focus gone). A physical constraint is still real for a practice — wrists
+for a writer or a musician, eyes for long study — so it goes **last, in those words, never as "an
+injury"**. Same change in the persona.
+
+**4. One daily writing task for "write a novel".** Too thin, and the existing shape rules did not
+cover it: `MIND WORK SPLITS BY DEFAULT` handles breath/sit/journal, but nothing said a months-long
+body of work has more than one kind of occasion. New `synthesize-plan` rule, **LONG-FORM WORK IS
+MORE THAN ITS SITTING**: drafting stays the core and the most frequent, but PLANNING (outlining,
+mapping the next chunk), INPUT (reading in the form, study) and REVIEW (revising what has
+accumulated — also where they SEE it getting closer) each get their own activity, own day, own
+`time_of_day`, never steps inside the drafting session. Someone who explicitly asked for one small
+commitment still wins; absent that, one daily task for a novel is a reminder, not a plan.
+
+**Unverified:** 3 and 4 are prompt changes. They are live and asserted by tests, but no live model
+run has yet been watched producing a better novel plan or an area-fitted constraints question —
+`probe-plan-shape.ts` is the natural place to add a long-form scenario.
+
+### The quick picks you couldn't reach (device report, 2026-08-12)
+
+"The options are available to select, but I can't actually get to them all, and they overlap with
+the goals." Screenshot: a four-tile grid with only its first row visible, the second row behind the
+capture pills, and the pills' label painted over the tiles.
+
+Not a CSS problem — a **dependency problem in `useStickToBottom`**. The follow effect was keyed on
+the turn array, and the last two things that grow the transcript both happen on renders where the
+turns are already final. Quick picks are deliberately withheld until the stream ENDS (`livePicks`
+returns null while streaming), so they mount on a `streaming` flip. The Broker's capture pills land
+~900ms later again (`setTimeout(refreshCaptured, 900)`), on a fetch of their own, and they make the
+floating stack taller — which grows the chat's reserved bottom padding underneath them. The effect
+sat out both. The transcript stayed resting where the bottom *used* to be, so the newest content
+was below the fold with nothing to suggest it was there.
+
+**Fixed by following on every render** — a layout effect with no dependency array, the same argument
+`useFloatingInset` already makes for its own measurement: every growth in this stack is caused by a
+render, so a layout effect catches all of them, and catches them before paint. It is one property
+read and one write, and the write is a no-op when already at the bottom. Every guard survives
+untouched — a finger down, a scroll away, or the hands-off window all return before the viewport is
+touched — so this cannot resurrect the can't-scroll-while-she-replies bug the rest of that file
+exists to prevent. `useStickToBottom` no longer takes a `dep`, and is now declared AFTER
+`useFloatingInset` in `OnboardingChat` so the follow scrolls against the padding that render
+actually lands on rather than chasing it on a second pass.
+
+Also deleted: `.chatscreen:has(.cappills) .chat { padding-bottom: 182px }`. A second hard-coded
+allowance for the pills, dead since `useFloatingInset` started setting the padding inline (an inline
+style beats any selector) and actively misleading — it read like the thing keeping the last turn
+clear of the pills.
+
+**Verified in the browser, not just in jsdom** (which has no layout, so geometry is unassertable
+there): with a 4-tile grid and the pills present, the grid's bottom sat **302px behind** the floating
+stack; after one render that changes no turn, `scrollTop` lands at the true bottom and the grid
+clears the stack by exactly the intended 14px, all four tiles visible. The unit test was
+mutation-checked — restoring the dependency array turns it red.
+
+**Not verified:** the live conversation that produces this state. The local Devs.ai key returns 401
+on v2 streaming, so the coach cannot reply on this machine; the reproduction drove the same React
+render path with the picks and pills injected instead.
+
+### Fallout: "start over" was not erasing everything
+
+Purging the five test accounts by hand meant enumerating the schema, which is how this surfaced:
+`DEV_CHILD_TABLES` in `services/dev-reset.ts` listed **15** per-user tables and the cadence schema
+has **22**. Missing: `daily_checkins`, `device_tokens`, `health_digests`, `journal_entries`,
+`notification_prefs`, `notifications`, `session_feedback`. That list backs BOTH `/dev/reset` and the
+real-auth `DELETE /me/data` behind Settings' typed "start over" — whose own code comment promises it
+"erases everything" and which purges Storage meal photos for exactly that reason. So a start-over
+left someone's journal entries and Apple Health digests on the server while telling them they were
+gone. Privacy-shaped, and invisible: nothing fails when a hand-maintained list drifts from the
+`create table` statements it shadows.
+
+**Fixed by reading the schema instead of remembering it.** `dev-reset.test.ts` parses
+`migrations/cadence/*.sql` and fails when a table with a `user_id` column is not in the list (and
+when the list names a table the migrations don't have). Deliberately parsing migrations rather than
+querying Postgres: the DB-backed suites skip in CI for want of `CADENCE_*` secrets (see the Postgres
+backlog below), and a guard that doesn't run where it matters isn't a guard. Verified by deletion —
+dropping `journal_entries` from the list turns it red with the table named in the message.
+
+**And the fix's own fallout, worth recording.** Completing the list took the reset from 17 sequential
+round trips to 24, which pushed the three DB suites' 10s hooks over and turned a correctness fix into
+red tests. The repair was not a bigger timeout: the child deletes now go as ONE simple-protocol query,
+so the whole wipe is faster than the incomplete version it replaced (full API suite 98s → 58s). Two
+details are load-bearing. **Separate statements, not one multi-CTE delete** — several of these tables
+cascade into each other (`occurrences` from `activities`, `session_feedback` from `occurrences`) and
+data-modifying CTEs share one snapshot, so a cascade racing an explicit delete for the same row is a
+production failure that a small fixture would never show. **No explicit `begin`/`commit`** — the
+driver rejects them outside `sql.begin` (`UNSAFE_TRANSACTION`), and they're unnecessary: Postgres runs
+a simple-protocol query's statements in an implicit transaction. The id is interpolated (the simple
+protocol carries no parameters), so `resetUserData` now throws on a non-UUID and the table names are
+re-checked against `/^[a-z_]+$/` at module load.
+
+**Still NOT account deletion, by design.** Start-over keeps the Supabase login and the copy says so.
+Testing the first-install path — anonymous session, then the sign-up gate — still needs the auth user
+deleted, which start-over will never do. The five auth users from this session's testing were removed
+directly (`auth.users`, cascading identities/sessions/refresh tokens); note `cadence.users` has no FK
+to `auth.users`, so the two deletions are genuinely independent. Also unfixed: `purgeMealPhotos` needs
+`CADENCE_SUPABASE_SERVICE_ROLE_KEY`, absent from local `.env`, so a local hand-purge leaves Storage
+objects behind even though the server path handles them.
+
+## Present-then-discuss: the plan becomes something you talk through (owner design session, 2026-08-12)
+
+The novel report distilled to one line: **"I pay a coach for the COACHING"** — and today the
+product's entire contribution is a schedule, which is the one part the user could have written
+themselves. The whys are tautologies (the prompt caps them at 20 words, which only buys a
+restatement), the coach gathers but never reasons out loud, and nothing ever presents the plan's
+rationale or invites pushback. Meanwhile the sign-up gate asks for an account in exchange for
+*storage* ("Save it") when it could offer the far stronger thing: the conversation.
+
+### The settled flow (all owner-ruled this session)
+
+```
+gather      pre-login · short turns · quick picks · unchanged
+synthesize  now includes ADJACENT activities + a real RATIONALE + uncapped whys
+present     a rendered card: the week + her reasoning (tap to reveal) · pre-login
+gate        "sign in and let's talk it through" — the ask is for the dialogue
+discuss     coaching register · the math · reframes · swap adjacents
+rebuild     the build card → plan v2 (shipped earlier today)
+```
+
+Rulings, verbatim intent:
+- **Phases, not per-turn register-switching**: gather info first (short, tappable), THEN coach.
+  "That's actually what most of my coaches have done." One carve-out: a genuine question mid-intake
+  ("why reading in genre?") gets a real answer — that's not a phase, that's not being rude.
+- **Adjacents are proposed by the coach AS PART OF THE PLAN** (activities in synthesis, not goals,
+  not a post-hoc top-up step), then discussed/swapped after login ("I don't really feel comfortable
+  with meditation, but walking my dog is where my creativity really gets flowing"). A real coach
+  always recommends adjacent practices; a plan without them is why the novel week felt thin.
+- **The reframe: practice-as-goal, deliverable-as-milestone.** "The novel is a goal, but
+  intrinsically it's a milestone. The real goal is to become an author. Once you're an author, you
+  just write." This DISSOLVES the parent/child persistence problem — no cascade, no orphaned
+  children; you tick the milestone and the practice carries on, which is "never resets to zero"
+  falling out of the data model for free. The coach OFFERS the reframe (never performs it — their
+  words for their goals), and the schema already supports it: `type: 'recurring'` + `milestones[]`.
+- **Present = a rendered card, reasoning behind a tap** ("I could potentially click something to
+  see the reasoning"). Two levels: plan-level "why this shape" (the arithmetic, the phases — the
+  part that earns the signup) and per-activity "why this?". Design is iterating on the existing
+  surfaces (brief handed over; LockStep.tsx already renders grouped commitments + whys and is
+  orphaned in the Settings wizard — this is iteration, not invention).
+- **Gate stays where it is; commit stays collapsed.** No draft/preview un-collapsing — the gate's
+  week grid reads committed occurrences, "committed ≠ locked" is already the product's language,
+  and a discussion that changes things just produces v2 via the rebuild card. The draft state was
+  ceremony. (`plans.status` already permits `'draft'` if this is ever revisited.)
+- **Post-login = the discussion, and it IS the MQL payoff**: "Coach has built your plan, login to
+  chat through the plan and customize it with them. What makes me want to give you my information?
+  You have something to give me and we already worked on it together."
+- **Coaching register cap**: none once discussing, but phone-shaped — "some LLMs give you a novel
+  to read and you have to write one in return." No bullets/markdown, one question per turn.
+- **"Morning pages" is internal jargon** — never Cadence's own vocabulary. One real leak:
+  `tool-catalog.ts` journal guidance teaches her the phrase as an example.
+
+### Implementation plan
+
+**Phase A — data + synthesis (unblocks design; no UI dependency).**
+1. Migration `0031_plan_rationale.sql`: `plans.rationale text not null default ''`,
+   `activities.suggested boolean not null default false`.
+2. `synthesize-plan` prompt: (a) ADJACENTS — 1–2 supporting activities per goal where a real coach
+   would add them, domain-fitted (research/focus work for a writer; never body-domain work bolted
+   onto a non-body goal — the injury-question lesson), `goal_title` set to the goal they SUPPORT
+   (so grouping and coverage attach them), `"suggested": true`, and an explicit honor-clause for
+   "one small commitment"; (b) `"rationale"` — the coaching reasoning behind the whole shape:
+   the arithmetic when the goal has numbers (hedged as "roughly/about"; NEVER a rate outside the
+   habits-you-won't-build bounds — a spoken/written projection is a new surface for those, cover it
+   explicitly), the phases (draft → revise), why each adjacent earns its slot; (c) `why` uncapped:
+   1–3 sentences that EXPLAIN (what it is, why it's here, how it ladders) — the 20-word cap is
+   what forced "Study novels and craft to fuel your writing".
+3. Code: parse `rationale`/`suggested` in `plan-synthesis.ts` (raise the silent `slice(0, 160)`
+   why-cap in `shapeActivity` — uncapping the prompt without this truncates invisibly); thread
+   `rationale` through `SynthesizeResult`/`PlanFlowResult`/`PendingPlan` (broker-contracts.ts) →
+   `commitActivities` → `insertPlan`; persist `suggested` in `insertActivities`; expose
+   `rationale` + per-activity `why`/`goal_title`/`suggested` in `buildPlanView` / GET /plan
+   (`PlanViewActivity` today carries NONE of these — the card would have nothing to render).
+   Both synthesis paths share `runSynthesize`, so fan-out inherits the parse; the reduce may dedup
+   colliding adjacents (correct) and its rationale is the one kept.
+4. `tool-catalog.ts`: replace the "morning pages" example with non-jargon phrasing (catalog is
+   runtime-injected — no job sync needed).
+5. Sync jobs; verify LIVE with a read-only probe (novel scenario) — jobs run remote against prod
+   AI Admin, so this is testable locally; only coach CHAT isn't.
+
+**Phase B — present + gate (with design; they have the brief and repo access).**
+6. Merge LockStep-style grouped content into `SignUpGate`: goal-grouped commitments with whys,
+   plan rationale behind the reveal, suggested-rows distinguishable, new copy ("sign in and we'll
+   talk it through" — the offer, not the toll). Functional structure ours; visuals design's.
+   Card renders COMMITTED data via GET /plan (commit precedes the gate) — hence Phase A first.
+7. `AuthScreen` upgrade-mode CTA copy to match. Keep honest: the week is saved either way.
+
+**Phase C — the discussion.**
+8. Routing: after gate-upgrade (and after building, for the already-signed-in) land MainTabs on
+   the COACH tab with a one-shot walkthrough nudge (App-level flag → MainTabs prop →
+   `nudge()` — the `HEALTH_SHARED_NOTE` pattern). The persona's ongoing-intent walkthrough has
+   never fired because nothing ever routed there. Verified: the onboarding thread goes stale as
+   'graduated' after commit, so the discussion starts on a fresh `ongoing` thread — no intent
+   mismatch. Fallback when the flag is lost (app killed first): the canned greeting, documented.
+   Already-signed-in users skip the card entirely — it is a conversion device; the coach presents
+   conversationally instead (she has the same data).
+9. Persona: the two registers (gather short; coaching turns fuller, phone-shaped, no lists, one
+   question); goal math out loud with the same safety bounds as planning + simple rounded
+   arithmetic presented as approximation; the reframe move; walkthrough wording adjusted for
+   card-first arrivals (they've SEEN the week — discuss it, don't re-recite it).
+10. Pick protocol: proposals that restructure (the reframe, an adjacent swap) must compose their
+    FULL content into the pick's `say` — the user's send then carries the specifics in a User:
+    line, so the Broker's who-said-it rule captures it without loosening (a bare "yes" to a coach
+    proposal deliberately captures nothing; the pick text is the elegant way around).
+11. `capture-extract`: add optional `milestones: [{label, target_date}]` per goal (mirror the
+    0008 shape). The MERGE side already handles milestones (`capture-goal-merge.ts`) — only the
+    Broker's output schema fails to emit them; without this the affirmed reframe loses its date.
+12. Sync persona + jobs; live-test the conversation on the phone build (chat can't run locally).
+
+**Phase D — verify + close.** Long-form scenario in `probe-plan-shape.ts` (weekly CI, never a
+merge gate); PLAN.md updates; scratch-account cleanup after live tests.
+
+### Data contract for the card (design builds against this, lands in Phase A)
+
+```
+GET /plan additions:
+  rationale: string                    — plan-level "why this shape" (2 sentences … 2 paragraphs)
+  activities[].why: string             — 1–3 explanatory sentences (no longer 20-word stubs)
+  activities[].goal_id?, goal_title?   — grouping ("Toward Write a novel"; null → Foundations)
+  activities[].suggested: boolean      — "she suggested this" vs "you asked for this"
+```
+
+### Gotchas (found while planning, so nobody re-finds them)
+
+- **Commit precedes the gate**, so the card reads persisted data — `note` today is returned in the
+  HTTP response and NEVER stored; anyone bouncing off the gate and returning would get a card with
+  no reasoning. The `rationale` column is mandatory, not nice-to-have.
+- **`shapeActivity` silently truncates `why` at 160 chars** — uncapping the prompt alone would be
+  invisibly undone at the exact moment the text got good.
+- **The rationale is unauthenticated-visible model text.** Render as plain text only, and the
+  safety bounds live in the PROMPT because no human reviews it before a prospect reads it.
+- **WHO-SAID-IT vs the reframe**: the Broker (correctly) refuses to capture a coach proposal
+  affirmed with a bare "yes". Don't loosen the rule — route the content through the pick's `say`.
+- **Walkthrough nudge repetition**: one-shot flag, and the persona's own guard ("committed today
+  or in the last couple of days AND a fresh conversation") bounds the blast radius.
+- **synthesize-plan carries no expectedSchema** (it's not on the native-schema list), so adding
+  `rationale`/`suggested` keys is backward-compatible lenient-parse territory — absent → defaults.
+- **Cost/latency**: richer output roughly doubles synthesis tokens; the building screen already
+  says "a couple of minutes", and the spend lands at the single highest-value moment.
+
+### Open questions (owner)
+
+1. `suggested` badge post-commit too (Week/Today views), or card-only? (Persisting it either way.)
+2. Reframe capture (milestones in capture-extract) rides in Phase C as written — or defer to its
+   own PR if Phase C runs long? The discussion loses data without it, so deferring means shipping
+   the discussion after it, not before.
+3. ~~Gate + CTA copy~~ — RESOLVED (owner, 2026-08-12): headline **"Here's my proposed plan"**,
+   framing **"Sign in and we'll talk it through"**, button **"Signup and we'll tailor it"** (the
+   upgrade-mode auth button — it attaches an identity to the anonymous session that owns the plan,
+   so "signup" is the honest word for the primary path). Ships with Phase B.
+
+### Phase A — SHIPPED and live-verified (2026-08-12)
+
+Migration 0031 applied (`plans.rationale`, `activities.suggested`); rationale + suggested threaded
+through both synthesis paths → pending_plan → commit → GET /plan (contract types updated web-side
+too); the 20-word why cap replaced with EXPLAIN-DON'T-LABEL (code backstop raised 160→600 — the old
+slice would have silently undone it); ADJACENT SUPPORT + PLAN RATIONALE prompt blocks synced; the
+"morning pages" example dropped from the tool catalog ("a first-thing morning brain-dump").
+81 files / 777 tests green; lint clean.
+
+**Live-verified per pillar** (read-only probes against prod AI Admin — the owner's steer: the novel
+was the *novel* case, this has to work regardless of goal):
+
+- **Practice (novel):** rationale does the honest math — "roughly 80,000 words; four mornings a
+  week at around 500 words a sitting puts you near 40,000 by year's end… finishing might extend
+  into early 2027, and that's a real novel timeline, not a failed one." Reading-in-genre now
+  EXPLAINS itself ("tunes your ear for pacing and dialogue… permission to call reading work") and
+  carries [SUGGESTED].
+- **Nourishment (unsafe timeline):** 30 lbs in 7 weeks → "I need to say this plainly… that's twice
+  the safe rate" → right-sized to ~2 lbs/week with the reunion still honored (~14 lbs by the date,
+  "still going strong after it"). The safety extension to SPOKEN/WRITTEN projections works.
+- **Movement (marathon):** no meal logs bolted on (the FOOD-LOG conflict was real — first probe
+  category, patched: food support for training is a conversation to raise, never a silent
+  schedule); [SUGGESTED] runner strength & mobility with a mechanism-naming why; 14-vs-16-week
+  timeline pressure-tested; week one built FROM the stated 20 km floor.
+- **Mind (burnout):** the domain rule needed its second patch — "never body work on non-body
+  goals" overcorrected; now body ADMIN is banned (weigh-ins, logs, measurements) while gentle
+  movement as mood support is allowed. Probe: [SUGGESTED] evening walk framed exactly that way,
+  load light, discovery framing, no admin.
+
+**Found live, fixed live:** the vet↔adjacents collision (flagged in the plan as a dry-run item)
+fired on the first probe — a 60-min core + 10-min support stacked into a single 60-min morning
+window drew a veto. Fix on the synthesize side (FIT THE TIME THEY GAVE YOU: support shares the
+core's budget or moves days), which is the brand-true reading — honor the time they actually gave.
+
+**Watch items:** one probe rationale mentioned weather ("clear and warm this week") — plausibly
+real API weather via the dev account's home_location, but if it recurs on accounts with no
+location, the no-invented-weather rule needs reinforcing. Model coined "Evening pages" as an
+activity title in the mind probe — the catalog no longer teaches the term, but the model knows it
+from the world; watch, don't chase. Dev-account ai_log rows from the probes get cleared by the
+normal post-merge `cleanup:test-data`.
+
+Next: Phase B (the card — design has the brief, the approved copy, and now real data behind
+GET /plan), then Phase C (routing + persona registers + reframe capture).
+
+### Phases B + C — SHIPPED (2026-08-12, autonomous per owner: "continue with the next phases")
+
+**Phase B — the card, from design's file.** Design delivered "Cadence Plan Card Gate" (claude.ai
+/design project) and it was implemented as specced: `SignUpGate` is now the plan card — week strip
+with AREA-coloured dots (server now sends `area` per activity, from its goal), the plan-level
+rationale as HER SPEECH BUBBLE (collapsed = her first words clamped to two lines + "See my
+thinking ▾"; a cut sentence sells continuation, a chevron sells furniture), per-activity whys as
+quoted italic insets (whole row = tap target; rows stay put when one opens), suggested rows with
+the hollow dashed dot + MY ADDITION chip, "Toward <goal>" headers only at ≥2 goals, and the
+sparse rule (≤2 activities → everything arrives open). Auth is a pinned footer: coach line ("Sign
+in and we'll talk it through — push back on any of it"), providers untouched, email folded behind
+"or continue with email" (`AuthScreen compact` — same logic, nothing forks; provider errors render
+OUTSIDE the fold so a closed form can't eat an already-taken dead end). Email CTA = the approved
+"Signup and we'll tailor it →".
+
+New: `features/gate/` (planCard.ts helpers + WeekStrip + RationaleBubble + PlanReasonRows, each
+its own file per the size rule), `styles/gate.css`, and `?preview=plancard` (+`&state=sparse|dense`)
+— the gate sits behind a full onboarding run, so the preview harness is how its states get looked
+at. All three states verified in-browser at phone width: collapsed/open bubble, long+short whys,
+chip, headers, folded email unfolding to the CTA, no horizontal overflow.
+
+Divergences from the design file, both deliberate: the ghost "not yet" row (frame 4) needs data
+synthesis doesn't emit — logged below as an open follow-up, not silently skipped. The draft-expiry
+line ("I'll keep this draft for 7 days") states a behaviour that doesn't exist; shipped copy says
+only what is true ("No account needed yet — this draft lives only on this phone"). Expiry itself
+stays the design's open proposal. Design's headline ("Here's the rhythm I'd build — and why.")
+was kept over the earlier-approved "Here's my proposed plan" — design iterated with full context
+and the owner forwarded the file as the spec; flagged for veto regardless.
+
+**Phase C — the discussion actually happens.** The persona's walkthrough has been scripted since
+v2 and never once fired — nothing ever routed there. Now: leaving the BUILDING screen (signed-in)
+or the GATE (by signing in — including the resume path, app killed at the gate and reopened) lands
+MainTabs on the COACH tab, and OnboardingChat fires a one-shot walkthrough nudge into the fresh
+post-graduation thread. TWO notes, because there are two honest arrivals: 'card' (they SAW the
+week + reasoning at the gate — never re-list, go straight to pushback) and 'fresh' (signed-in
+users skip the gate and the card entirely — she presents conversationally first). Not persisted
+by design: killed before the coach tab opens → next launch lands on Today as ever.
+
+Persona (synced, verified live): the TWO REGISTERS — gathering (short, one question) vs coaching
+(walking a plan, answering why, doing the math, right-sizing, reframing: a paragraph or two,
+phone-shaped, never trading essays) — switched by what the turn is FOR, not by phase; "Coaching
+the math" (arithmetic out loud, rough/rounded/hedged, spoken projections bound by the same limits
+as plans — an unsafe rate is never spoken as an option); the REFRAME move (the goal behind the
+goal: deliverable = milestone on a practice that outlasts it — always OFFERED, never silently
+restructured); the ongoing-intent card-arrival exception.
+
+Pick protocol (synced): A PROPOSAL IS CAPTURED FROM THEIR SEND — restructuring proposals attach a
+pick whose `say` spells out the whole arrangement, because the Broker's who-said-it rule
+(correctly) captures nothing from a bare "yes". capture-extract (synced, schema + prompt): goals
+may carry `milestones [{label, target_date}]`, user-stated only, milestone-inside-the-goal never
+a separate goal; `capture-goals.ts` mints the `id` each milestone needs (every other writer is
+the client, which mints ids at creation — consumers key on them). **Live-verified end to end:**
+the reframe conversation, accepted via a pick-composed user line, captures as `type: recurring`
+practice + milestone "Novel finished" @ 2026-12-31 — exactly the owner's data model ("the novel
+is a goal, but intrinsically it's a milestone").
+
+**Phase D:** long-form scenario added to `probe-plan-shape.ts` (≥3 occasions for a novel goal —
+"a reminder, not a plan" is now a flagged failure) + a rationale-presence check on every scenario
+(the card renders it to a prospect; a plan without one ships an empty "See my thinking"). **Run
+live, all four scenarios behaved** — including the two interactions most at risk from the new
+prompt rules: `minimal` stayed at ONE commitment (the adjacent-support rule's honor-restraint
+clause held against padding), and `strength` gained a hip-mobility adjacent WITHOUT its lift
+session shattering. Probe hardening rode along: `CALL_TIMEOUT_MS` 120s→240s (the richer synthesis
+output blew the old ceiling twice — a ceiling the happy path can hit turns the retry into a
+crash), and a scenario that errors now flags-and-continues instead of killing every scenario
+after it.
+
+**Open follow-ups:** the ghost "not yet" row (needs a `deferred` concept in synthesis output —
+design's best idea, not free); draft expiry (product call + real machinery); design's headline vs
+the earlier-approved one (owner veto pending); walkthrough nudge fires only on the arrival session
+(accepted limitation, documented in App.tsx).
+
+### Device test round 2 → the half-deployed diagnosis, and the guided hand-off (2026-08-12, evening)
+
+The owner ran the full flow and reported five items. The diagnosis reframed four of them: **the
+phone talks to the DEPLOYED cadence-api (ai-manager-cadence-api-2f4j.vercel.app), built from
+origin/main — every API-side line of the present-then-discuss work was uncommitted local code.**
+The web bundle was new (routing worked) and the prompts were live in AI Admin (responses got
+longer — the model even emitted the adjacents: the owner's Spartan plan contained "Prehab &
+mobility – knee and elbow", but the deployed `shapeActivity` DROPS the `suggested` flag it rode
+in on, so nothing was marked as her addition), while GET /plan served no rationale/whys/areas —
+the design card rendered starved, reading as "the old UI". **None of the API work exists for
+users until it ships through main.**
+
+The one genuinely new bug, found from the report's exact symptoms: `recoverFromServer` — the
+SSE-drop healer — ignored `stale`. The post-signup walkthrough nudge's first call died against a
+cold Vercel lambda → recovery resurrected the GRADUATED onboarding thread (confirm card and all)
+and silently re-pointed the session at it: "I felt like nothing happened; I just logged in."
+Verified locally that graduation computes TRUE on the owner's exact rows — the server said fresh,
+the healer overrode it. Fixed: recovery refuses stale threads, and a failed app-initiated note
+(echo=false) now retracts its pending bubble instead of erroring at someone about a message they
+never sent.
+
+**Owner rulings implemented:**
+- **Landing (replaces land-on-Coach after one day):** land on TODAY — "landing on the actual plan
+  was more effective" — with a guided overlay: scrim over the whole shell, her callout ("I built
+  your plan — head to the Coach tab and we'll fine-tune it together"), and ONLY the Coach tab
+  tappable (lifted above the scrim + pulse ring; doubles as the app's one navigation lesson).
+  Tapping it dismisses the guide and fires the walkthrough. Browser-verified.
+- **The plan card is one surface with several hosts:** extracted `PlanCardView` from the gate;
+  new `PlanCardSheet` opens it OVER the coach conversation with a toggle back — shown
+  deterministically when a rebuild commits (the result appears where it was agreed), and always
+  reachable via a "Your week ↗" pill in the coach tab. "Viewable anywhere in the app" beyond
+  these hosts stays open.
+- **Adjacents are the DEFAULT, not an option** ("nobody will come back to this app for a single
+  button a day. Nobody will buy it"): prompt strengthened from "consider" to ADD-by-default, with
+  exactly two skip reasons (explicitly-asked-minimal, week genuinely full) and "zero suggested
+  support should be the rarity". Synced.
+- **Depth over speed in intake:** persona — "staying superficial to stay short is the worse
+  failure"; protocol — the narrowing cap is a SCHEDULING budget, understanding the goal (history,
+  what stopped them, what the thing demands) is a worthier one repetition-bounded, not
+  depth-bounded. Synced.
+- **Backlog:** saved chats with a history toggle (owner item 4, future iteration).
+
+**The blocker for everything server-side: ship main.** Rationale/suggested/area on GET /plan,
+the graduated fix's client half, milestone capture plumbing, the reset completeness — all inert
+for real users until the branch lands and Vercel redeploys.

@@ -98,6 +98,12 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       await wait(RECOVER_DELAY_MS);
       try {
         const c = await getCurrentCoach();
+        // A STALE thread is not a recovery — it is a resurrection. This healer exists for the
+        // turn that just dropped, and the restore path already refuses stale threads; ignoring
+        // the flag here let one failed post-signup nudge adopt the GRADUATED onboarding
+        // transcript (confirm card and all) and silently re-point the session at it — observed
+        // on device 2026-08-12, presenting as "I signed in and nothing happened".
+        if (c.stale) return false;
         const last = c.messages[c.messages.length - 1];
         if (c.sessionId && last?.role === 'coach' && last.content.trim()) {
           sessionId.current = c.sessionId;
@@ -153,6 +159,14 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
         .catch(() => {
           /* soft-fail — chat still works */
         });
+    // A failed APP-initiated turn (echo=false — a nudge, not something they typed) must retract
+    // its pending bubble rather than error at them: "send again to continue" about a message they
+    // never sent reads as the app malfunctioning, which it is — but it should fail quietly.
+    const retractPendingNote = () =>
+      setTurns((t) => {
+        const last = t[t.length - 1];
+        return last?.role === 'coach' && !last.text ? t.slice(0, -1) : t;
+      });
     try {
       if (!sessionId.current)
         sessionId.current = (
@@ -168,7 +182,8 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       stopped.current = false;
       const { completed } = await sendCoachMessage(sessionId.current, text, applyStreamDelta, abort.current.signal);
       if (!completed && !stopped.current && !(await recoverFromServer())) {
-        fillLastCoach('⚠️ Connection dropped — send again to continue.');
+        if (echo) fillLastCoach('⚠️ Connection dropped — send again to continue.');
+        else retractPendingNote();
       }
     } catch (err) {
       // A deliberate stop is not a failure: keep what she had said and hand the composer back.
@@ -181,7 +196,10 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       // a dropped wifi connection produced the identical screen, and the only way to tell them
       // apart was to reproduce the call by hand against production. Log what actually happened.
       console.error('[cadence/coach] turn failed', err);
-      if (!(await recoverFromServer())) fillLastCoach('Something hiccuped on my end — say that again?');
+      if (!(await recoverFromServer())) {
+        if (echo) fillLastCoach('Something hiccuped on my end — say that again?');
+        else retractPendingNote();
+      }
     } finally {
       abort.current = null;
       setStreaming(false);

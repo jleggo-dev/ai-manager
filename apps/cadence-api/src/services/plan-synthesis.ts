@@ -47,6 +47,8 @@ export interface SynthesizeResult {
   status: 'proposed' | 'vetoed';
   activities?: PendingPlanActivity[];
   note?: string;
+  /** The coach's whole-shape reasoning (0031) — travels beside `note`, persisted at commit. */
+  rationale?: string;
   violations?: string[];
 }
 
@@ -69,7 +71,7 @@ export interface SynthesizeOpts {
  */
 export interface PlanFlowResult {
   status: 'proposed' | 'committed' | 'needs_focus' | 'vetoed';
-  proposal?: { activities: PendingPlanActivity[]; note: string };
+  proposal?: { activities: PendingPlanActivity[]; note: string; rationale?: string };
   planId?: string;
   version?: number;
   activities?: number;
@@ -89,7 +91,7 @@ export async function runSynthesize(
   userId: string,
   opts: SynthesizeOpts,
   draftActivities?: unknown,
-): Promise<{ normalized: Partial<Activity>[]; note: string }> {
+): Promise<{ normalized: Partial<Activity>[]; note: string; rationale: string }> {
   const { weather } = await weatherVarsForUser(userId).catch(() => ({ weather: '' }));
   const synthRes = await runJobBySlug(userId, 'synthesize-plan', {
     goals: JSON.stringify(opts.goals),
@@ -108,7 +110,10 @@ export async function runSynthesize(
     normalizeActivity,
   );
   const note = typeof synth?.note === 'string' ? synth.note.trim() : '';
-  return { normalized, note };
+  // Lenient by design (no expectedSchema on this job): an older deployed prompt that emits no
+  // rationale degrades to '', which every consumer treats as "none" — never a parse failure.
+  const rationale = typeof synth?.rationale === 'string' ? synth.rationale.trim() : '';
+  return { normalized, note, rationale };
 }
 
 /** Map one normalized activity to the display/commit shape, resolving its goal link (matchGoal). */
@@ -132,7 +137,12 @@ function shapeActivity(a: Partial<Activity>, goals: Goal[]): PendingPlanActivity
     completion_source: a.completion_source ?? 'self_report',
     goal_id: matched?.goal_id,
     goal_title: matched?.title,
-    why: typeof why === 'string' && why.trim() ? why.trim().slice(0, 160) : undefined,
+    // 600 is a backstop against runaway output, NOT a style cap: the prompt asks for 1-3
+    // explanatory sentences, and the old slice(0, 160) was silently undoing exactly that —
+    // truncating the why at the moment it stopped being a label and started being coaching.
+    why: typeof why === 'string' && why.trim() ? why.trim().slice(0, 600) : undefined,
+    // Coach-proposed adjacent support (0031). Strictly `=== true` so junk shapes stay false-y.
+    suggested: (a as Record<string, unknown>).suggested === true || undefined,
   };
 }
 
@@ -177,6 +187,7 @@ export async function finalizeCoverage(
   userId: string,
   normalized: Partial<Activity>[],
   note: string,
+  rationale: string,
   opts: SynthesizeOpts,
   recoverMissing: (missing: Goal[]) => Promise<Partial<Activity>[]>,
 ): Promise<SynthesizeResult> {
@@ -197,7 +208,7 @@ export async function finalizeCoverage(
       violations: [`plan left goals uncovered: ${res.missing.map((g) => g.title).join('; ')}`],
     };
   }
-  return { status: 'proposed', activities: res.activities, note };
+  return { status: 'proposed', activities: res.activities, note, rationale };
 }
 
 /**
@@ -208,10 +219,10 @@ export async function finalizeCoverage(
  * actually been doing. This is the SINGLE-CALL path; plan-fanout.ts adds the fan-out → reduce path.
  */
 export async function synthesizeAndVet(userId: string, opts: SynthesizeOpts): Promise<SynthesizeResult> {
-  const { normalized, note } = await runSynthesize(userId, opts);
+  const { normalized, note, rationale } = await runSynthesize(userId, opts);
   if (normalized.length === 0) return { status: 'vetoed', violations: ['synthesize_plan returned no activities'] };
   // Coverage repair for the single call: re-synthesize just the goals it dropped and merge them in.
-  return finalizeCoverage(userId, normalized, note, opts, async (missing) => {
+  return finalizeCoverage(userId, normalized, note, rationale, opts, async (missing) => {
     const r = await runSynthesize(userId, { ...opts, goals: missing });
     return r.normalized;
   });
@@ -225,7 +236,13 @@ export async function synthesizeAndVet(userId: string, opts: SynthesizeOpts): Pr
  */
 export async function commitActivities(
   userId: string,
-  opts: { activities: PendingPlanActivity[]; note: string; goalIds: string[]; occurrenceDays?: number },
+  opts: {
+    activities: PendingPlanActivity[];
+    note: string;
+    rationale?: string;
+    goalIds: string[];
+    occurrenceDays?: number;
+  },
 ): Promise<CommitResult> {
   const occurrenceDays = opts.occurrenceDays ?? 14;
   const proposed: Partial<Activity>[] = opts.activities.map((a) => ({
@@ -234,6 +251,7 @@ export async function commitActivities(
     category: a.category,
     goal_id: a.goal_id, // links the committed activity to its objective (insertActivities writes it)
     why: a.why, // rationale persists at commit (0012) — the coach walks the ladder from it later
+    suggested: a.suggested, // coach-proposed adjacent support (0031) — dossier data post-commit
     schedule: { recurrence: a.recurrence, time_of_day: a.time_of_day, duration_min: a.duration_min },
     target: a.target,
     completion_source: a.completion_source,
@@ -248,7 +266,11 @@ export async function commitActivities(
     const old = await getActivePlan(userId, tx);
     const v = (old?.version ?? 0) + 1;
     await supersedeActivePlans(userId, tx);
-    const p = await insertPlan(userId, { goal_ids: opts.goalIds, version: v, status: 'active' }, tx);
+    const p = await insertPlan(
+      userId,
+      { goal_ids: opts.goalIds, version: v, status: 'active', rationale: opts.rationale || null },
+      tx,
+    );
     const acts = await insertActivities(userId, p.plan_id, proposed, tx);
     if (old) await deleteFuturePendingOccurrences(old.plan_id, today, tx);
     return { plan: p, version: v, activityCount: acts.length };

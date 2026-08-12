@@ -1,82 +1,50 @@
 import { useEffect, useState } from 'react';
-import { getPlan, type PlanActivity, type PlanDay } from '../../lib/api.ts';
+import { getPlan, type PlanViewData } from '../../lib/api.ts';
+import { CoachFace } from '../../components/CoachFace.tsx';
+import { PlanCardView } from '../gate/PlanCardView.tsx';
 import { AuthScreen } from './AuthScreen.tsx';
 
 /**
- * "Your first week is ready. Save it."
+ * "Here's the rhythm I'd build — and why." The pre-signup plan card (design: Cadence Plan Card
+ * Gate), replacing the old "Your first week is ready. Save it."
  *
- * The gate moved to the end of onboarding, and this screen is why that works: the week they just
- * built is on the page, slightly faded, with their protected days visibly kept off. "Create an
- * account" asking for a password before anything exists is a toll; the same ask standing in front
- * of a plan someone can see is a save button.
+ * The gate OFFERS, it doesn't charge: her plan, her reasoning (the plan-level rationale as her
+ * speech bubble, per-activity whys as quoted insets), and the sign-in framed as "we'll talk it
+ * through". The plan already exists server-side against the anonymous id — signing up upgrades
+ * that id in place, so nothing is migrated at the moment of saying yes.
  *
- * The plan already exists server-side against their anonymous id. Signing up upgrades that id in
- * place, so nothing here is migrating anything — which is exactly why the copy can say "save it"
- * without qualification.
+ * Layout: the plan scrolls; the auth block is a pinned footer, so the offer and the way to take
+ * it are both always on screen. Sparse plans (≤2 activities) arrive with all reasoning open —
+ * when the plan is one row, the reasoning IS the content.
  */
-function WeekTease({ week, activities }: { week: PlanDay[]; activities: PlanActivity[] }) {
-  if (!week.length) return null;
-  const areaOf = (activityId: string) => activities.find((a) => a.activity_id === activityId)?.kind ?? 'user';
-  return (
-    <div className="gate-week" aria-hidden>
-      {week.slice(0, 7).map((d) => (
-        <div key={d.date} className="gate-day">
-          <span className="gate-dl">{d.weekday.slice(0, 1)}</span>
-          <span className="gate-dbox">
-            {d.occurrences.length ? (
-              d.occurrences
-                .slice(0, 3)
-                .map((o) => <i key={o.occurrence_id} className={`gate-dot is-${areaOf(o.activity_id)}`} />)
-            ) : (
-              <em>off</em>
-            )}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function SignUpGate() {
-  const [plan, setPlan] = useState<{ week: PlanDay[]; activities: PlanActivity[] } | null>(null);
+  const [plan, setPlan] = useState<PlanViewData | null>(null);
 
   useEffect(() => {
     getPlan()
-      .then((p) => setPlan({ week: p.week, activities: p.activities }))
+      .then(setPlan)
       .catch(() => {
-        /* the gate stands on its own; the tease is the bonus */
+        /* the gate stands on its own; the card is the offer, not a precondition */
       });
   }, []);
 
   return (
-    <div className="welcome gate">
-      {/* No progress bar here. A 100%-complete bar says nothing at the one screen that IS the end,
-          and `.chat-prog` is built for the chat header's flex ROW — `flex: 1` in this column
-          container grew it vertically instead, overriding its 12px height into a full-width green
-          slab above the headline. */}
-      <div className="gate-h">
-        Your first week is ready.
-        <br />
-        Save it.
+    <div className="gate2">
+      <div className="gate2-scroll">
+        <div className="gate-h">Here&rsquo;s the rhythm I&rsquo;d build — and why.</div>
+        {plan && <PlanCardView plan={plan} />}
       </div>
-
-      {plan && (
-        <div className="gate-plan">
-          <WeekTease week={plan.week} activities={plan.activities} />
-          <div className="gate-lines">
-            {plan.activities.slice(0, 4).map((a) => (
-              <div key={a.activity_id} className="gate-line">
-                <i className={`gate-dot is-${a.kind}`} />
-                {a.title}
-                {a.cadence && <span> — {a.cadence}</span>}
-              </div>
-            ))}
-          </div>
+      <div className="gate2-foot">
+        <div className="gate2-say">
+          <CoachFace size={20} ring={false} />
+          <span>Sign in and we&rsquo;ll talk it through — push back on any of it.</span>
         </div>
-      )}
-
-      {/* The provider sheet itself is unchanged — same wording, same order, same Apple rules. */}
-      <AuthScreen mode="upgrade" />
+        <AuthScreen mode="upgrade" compact />
+        {/* Honest, and only what is true: the draft is reachable only through this device's
+            anonymous session. No expiry is stated because none is implemented — the design's
+            7-day-expiry line is an open proposal (PLAN.md), not a shipped behaviour. */}
+        <div className="gate2-draft">No account needed yet — this draft lives only on this phone.</div>
+      </div>
     </div>
   );
 }
