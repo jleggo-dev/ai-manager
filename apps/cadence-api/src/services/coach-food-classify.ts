@@ -59,7 +59,20 @@ function hasSaveRecipeIntent(t: string): boolean {
 
 function hasLogFoodIntent(t: string): boolean {
   if (/\b(my )?usual\s+(breakfast|lunch|dinner|snack)\b/i.test(t)) return true;
-  if (/\b(i |just )?(had|ate|drank)\b/i.test(t) && !/\bwant to (eat|have)\b/i.test(t)) return true;
+  // "had" is an auxiliary verb far more often than it is eating, and treating every one of them as
+  // a meal produced the worst false positive we have shipped: "I do at least one beast a year, but
+  // I HAD TO skip it this year" opened a confirm sheet offering to log one Spartan Beast, for
+  // breakfast, at ~2000 kcal. A wrong draft is not a small cost here — the sheet interrupts the
+  // conversation to ask the user to affirm something absurd, which is the opposite of
+  // confirm-before-committing earning trust. So the auxiliary forms are excluded outright: "had to
+  // skip", "had been running", "had a rough week" are never someone telling us what they ate.
+  if (
+    /\b(i |just )?(had|ate|drank)\b/i.test(t) &&
+    !/\bwant to (eat|have)\b/i.test(t) &&
+    !/\bhad\s+(to|been|enough)\b/i.test(t) &&
+    !/\bhad\s+a\s+(rough|hard|tough|long|busy|good|bad|great|quiet|slow)\b/i.test(t)
+  )
+    return true;
   if (/\blog (my |this |that |the )?(breakfast|lunch|dinner|snack|meal|food|it)\b/i.test(t)) return true;
   if (/\b(ate|had) my\b/i.test(t)) return true;
   return false;

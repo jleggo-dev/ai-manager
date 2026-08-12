@@ -70,3 +70,38 @@ describe('renderContextBlock', () => {
     expect(classifyFreshness(block, 'get_health_history', HEALTH)).toBe('unchanged');
   });
 });
+
+/**
+ * Regression, reported twice from the device: Cadence read the user's Apple Health summary back to
+ * them, then read it back AGAIN a couple of turns later, reworded.
+ *
+ * The first fix covered turn-to-turn repetition and missed the route it actually arrives by. The
+ * SESSION-OPEN pack (context-pack.ts) is the very first thing she is told, and it was emitting no
+ * `[ctx:fn:hash]` markers at all — so when a later turn retrieved the same health history, the
+ * lookback found nothing, classified it `new`, and she announced it as news a second time.
+ *
+ * These assert the contract BETWEEN the two producers: whatever the pack puts in front of her must
+ * be recognisable to the turn path as already-seen. A marker is only worth anything if both ends
+ * agree on it.
+ */
+describe('the pack and the turn path must agree', () => {
+  const HEALTH_RENDER = 'Recent activity: 10 runs, longest 6.5 km, 5 in the last 28 days.';
+
+  it('a marker emitted at session open makes the same data unchanged on a later turn', () => {
+    // What context-pack.ts now appends: markers on their own line, computed from f.render(result).
+    const packBlock = `[context built 2026-08-12 · deterministic · fns: get_health_history]\n\nSome Broker-rewritten prose that shares no words with the render.\n\n${ctxMarker('get_health_history', HEALTH_RENDER)}`;
+
+    expect(classifyFreshness(packBlock, 'get_health_history', HEALTH_RENDER)).toBe('unchanged');
+  });
+
+  it('without the pack marker it reads as new — the bug, pinned', () => {
+    const packWithoutMarkers = '[context built 2026-08-12]\n\nRecent activity: 10 runs, longest 6.5 km.';
+    expect(classifyFreshness(packWithoutMarkers, 'get_health_history', HEALTH_RENDER)).toBe('new');
+  });
+
+  it('still notices when the data genuinely moved on', () => {
+    const packBlock = ctxMarker('get_health_history', HEALTH_RENDER);
+    const afterAnotherRun = 'Recent activity: 11 runs, longest 6.5 km, 6 in the last 28 days.';
+    expect(classifyFreshness(packBlock, 'get_health_history', afterAnotherRun)).toBe('changed');
+  });
+});
