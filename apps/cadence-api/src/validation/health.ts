@@ -6,12 +6,40 @@ import { z } from 'zod';
 
 const typeName = z.string().trim().min(1).max(80);
 
+/**
+ * A personal best is one number and one date — never the session behind it. Same abstraction rule
+ * as everything else in this file: the client derives, the server stores the derived shape.
+ */
+const bestSchema = z.object({
+  value: z.number().min(0).max(100_000),
+  dateISO: z.string().max(10),
+});
+
+/**
+ * The trailing-28-day figures that sit beside the period-long ones. `count` may be 0 — a type
+ * someone has not touched this month is a fact the coach needs, not a missing value.
+ *
+ * `totalDistanceKm` is bounded far above any real four weeks (a Grand Tour is ~3,500 km) and far
+ * below anything sample-sized, so one mis-united outlier costs its own accuracy and nothing else.
+ */
+const recentWindowSchema = z.object({
+  count: z.number().int().min(0).max(10_000),
+  avgDurationMin: z.number().min(0).max(1_440).nullable(),
+  avgDistanceKm: z.number().min(0).max(1_000).nullable(),
+  totalDistanceKm: z.number().min(0).max(50_000).nullable(),
+});
+
 const typeSummarySchema = z.object({
   type: typeName,
   count: z.number().int().min(1).max(10_000),
   avgDurationMin: z.number().min(0).max(1_440).nullable(),
   avgDistanceKm: z.number().min(0).max(1_000).nullable(),
   lastISO: z.string().max(40),
+  // All optional: a client that has not shipped the new derivation yet must still be able to
+  // share its workouts, exactly as with dailySteps. Absent means "not derived", never zero.
+  last28: recentWindowSchema.optional(),
+  bestDistanceKm: bestSchema.nullable().optional(),
+  bestDurationMin: bestSchema.nullable().optional(),
 });
 
 const recentSchema = z.object({

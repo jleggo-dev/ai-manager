@@ -19,11 +19,16 @@ export interface NewOccurrence {
 /**
  * Week / consistency / replan list row — matches `listOccurrences` SELECT (no session/log jsonb).
  * Callers that need the prescription or post-session report use `getOccurrenceWithActivity`.
+ *
+ * `kind` rides along from the parent activity because readers repeatedly have to tell an EFFORTFUL
+ * commitment ('user') apart from a system tracking row ('system' — the per-meal food log, weigh-in).
+ * Same line `pauseUserOccurrencesInWindow` draws; without it here, callers either re-join or, worse,
+ * count the two together.
  */
 export type OccurrenceListRow = Pick<
   Occurrence,
   'occurrence_id' | 'activity_id' | 'date' | 'status' | 'value' | 'provenance' | 'weather'
->;
+> & { kind: Activity['kind'] };
 
 /** Bulk insert scheduled occurrences (idempotent on (activity_id, date)). */
 export async function upsertOccurrences(rows: NewOccurrence[]): Promise<void> {
@@ -59,10 +64,13 @@ export async function listOccurrences(userId: string, fromDate: string, toDate: 
   // Explicit columns, deliberately EXCLUDING session/log jsonb — this feeds the week view,
   // consistency, and replan context, none of which need the (potentially large) payloads.
   // The occurrence-detail path (getOccurrenceWithActivity) fetches them.
+  // The activities join is for `a.kind` alone (see OccurrenceListRow) — activity_id is the PK on
+  // the other side, so it can neither drop nor duplicate a row.
   return sql<OccurrenceListRow[]>`
-    select occurrence_id, activity_id, date, status, value, provenance, weather
-    from cadence.occurrences
-    where user_id = ${userId} and date >= ${fromDate} and date <= ${toDate}`;
+    select o.occurrence_id, o.activity_id, o.date, o.status, o.value, o.provenance, o.weather, a.kind
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and o.date >= ${fromDate} and o.date <= ${toDate}`;
 }
 
 /** Step counts (total prescribed items across a cached session's blocks) for occurrences in a range

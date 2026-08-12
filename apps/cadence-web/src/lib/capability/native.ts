@@ -7,6 +7,7 @@ import { Geolocation } from '@capacitor/geolocation';
 import type { Capabilities, Workout } from './index.ts';
 import { grantedFromPermissionResponse } from './health-permissions.ts';
 import { readDailySteps } from './health-steps.ts';
+import { recordedDistanceKm } from './workout-distance.ts';
 import { webCapabilities } from './web.ts';
 
 /**
@@ -75,10 +76,13 @@ interface PluginWorkout {
 }
 
 function toSeamWorkout(w: PluginWorkout): Workout {
+  // A 0 here is the plugin's `?? 0` for "HealthKit had no distance", not a real zero — see
+  // workout-distance.ts. The session is kept either way; only the distance goes missing.
+  const km = recordedDistanceKm(w.distance);
   return {
     type: w.workoutType ?? 'workout',
     start: w.startDate,
-    ...(typeof w.distance === 'number' ? { distanceKm: Math.round((w.distance / 1000) * 100) / 100 } : {}),
+    ...(km != null ? { distanceKm: km } : {}),
     ...(typeof w.duration === 'number' ? { durationMin: Math.round(w.duration / 60) } : {}),
     ...(typeof w.avgHeartRate === 'number' ? { avgHr: Math.round(w.avgHeartRate) } : {}),
   };

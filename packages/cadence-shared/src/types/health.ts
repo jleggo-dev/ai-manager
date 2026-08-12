@@ -7,6 +7,40 @@
  * confirmation (never on its own).
  */
 
+/**
+ * How far back the RECENT half of every workout summary reaches.
+ *
+ * Twenty-eight days rather than seven because one week is one bad week — 28 days is "last month"
+ * and survives a missed one. The field that carries it is named `last28` on purpose: if this
+ * number ever changes the field name must change with it, so a stored digest can never silently
+ * mean a different window than the one it was built with.
+ */
+export const DIGEST_RECENT_DAYS = 28;
+
+/**
+ * One personal best, with the day it was set.
+ *
+ * The date is not decoration. "Your longest run is 12 km" and "your longest run is 12 km, back in
+ * March" are different facts that lead to different sessions. A best is also the anti-streak: it
+ * counts what happened and it never resets to zero.
+ */
+export interface HealthDigestBest {
+  /** Kilometres for a distance best, minutes for a duration best. */
+  value: number;
+  /** YYYY-MM-DD of the session that set it. */
+  dateISO: string;
+}
+
+/** The same figures as the period-long ones, over the trailing DIGEST_RECENT_DAYS. */
+export interface HealthDigestRecentWindow {
+  /** Sessions of this type inside the window. Zero is a real answer, not a missing one. */
+  count: number;
+  avgDurationMin: number | null;
+  avgDistanceKm: number | null;
+  /** Summed over the sessions that actually recorded a distance. */
+  totalDistanceKm: number | null;
+}
+
 export interface HealthDigestTypeSummary {
   /** Humanized activity type, e.g. "running", "strength training". */
   type: string;
@@ -15,6 +49,20 @@ export interface HealthDigestTypeSummary {
   avgDistanceKm: number | null;
   /** ISO date of the most recent workout of this type. */
   lastISO: string;
+  /**
+   * Recency beside the baseline — the shape `dailySteps` has always had (`avgPerDayLast7` next to
+   * the 90-day mean) and workouts never did. Two numbers side by side ARE the direction of travel:
+   * a flat 90-day mean cannot tell a build-up from a taper, which is how someone running 5–6 km
+   * five times in a week was told he averages 4.3 km.
+   *
+   * Optional because every digest stored before this shipped has none. Absent means "this digest
+   * predates the field", never "they did nothing lately" — that case is `count: 0`.
+   */
+  last28?: HealthDigestRecentWindow;
+  /** Longest single session by distance over the whole period. Null when none recorded one. */
+  bestDistanceKm?: HealthDigestBest | null;
+  /** Longest single session by time over the whole period. */
+  bestDurationMin?: HealthDigestBest | null;
 }
 
 export interface HealthDigestRecent {

@@ -134,31 +134,46 @@ describe('retrieval registry — render / rows', () => {
     expect(RETRIEVAL_FUNCTIONS.get_weight!.render({ current: 82.5, start: 90 })).toBe('Weight: 82.5kg (start 90)');
   });
 
+  const dietary = (profile: Record<string, unknown>, eating_window: unknown = null) => ({ profile, eating_window });
+
   it('get_dietary_profile renders allergies and empty state', () => {
     expect(
-      RETRIEVAL_FUNCTIONS.get_dietary_profile!.render({
-        allergies: [],
-        diet: null,
-        dislikes: [],
-        notes: null,
-      }),
+      RETRIEVAL_FUNCTIONS.get_dietary_profile!.render(
+        dietary({ allergies: [], diet: null, dislikes: [], notes: null }),
+      ),
     ).toMatch(/none set yet/);
     expect(
-      RETRIEVAL_FUNCTIONS.get_dietary_profile!.render({
-        allergies: ['peanuts'],
-        diet: 'vegan',
-        dislikes: ['cilantro'],
-        notes: null,
-      }),
+      RETRIEVAL_FUNCTIONS.get_dietary_profile!.render(
+        dietary({ allergies: ['peanuts'], diet: 'vegan', dislikes: ['cilantro'], notes: null }),
+      ),
     ).toMatch(/peanuts/);
     expect(
-      RETRIEVAL_FUNCTIONS.get_dietary_profile!.rows({
-        allergies: ['peanuts'],
-        diet: 'vegan',
-        dislikes: [],
-        notes: null,
-      }),
+      RETRIEVAL_FUNCTIONS.get_dietary_profile!.rows(
+        dietary({ allergies: ['peanuts'], diet: 'vegan', dislikes: [], notes: null }),
+      ),
     ).toBe(2);
+  });
+
+  // The window is stored on the baseline (the planner reads it there) but the COACH only ever sees
+  // what the pack renders — availability is stored faithfully and rendered nowhere, and this is the
+  // hole that reproduces. It rides here because this is the moment she is about to offer breakfast.
+  it('get_dietary_profile carries the eating window, and stays silent without one', () => {
+    const empty = dietary({ allergies: [], diet: null, dislikes: [], notes: null });
+    expect(RETRIEVAL_FUNCTIONS.get_dietary_profile!.render(empty)).not.toMatch(/Eating window/);
+
+    const fasting = dietary(
+      { allergies: ['peanuts'], diet: null, dislikes: [], notes: null },
+      { said_as: '16:8', windows: [{ earliest: '12:00', latest: '20:00' }] },
+    );
+    const text = RETRIEVAL_FUNCTIONS.get_dietary_profile!.render(fasting);
+    expect(text).toMatch(/peanuts/); // the safety half is untouched
+    expect(text).toMatch(/Eating window — their words: "16:8"; eats 12:00–20:00\./);
+    // A window is one more fact the pack is carrying, so provenance counts it.
+    expect(RETRIEVAL_FUNCTIONS.get_dietary_profile!.rows(fasting)).toBe(2);
+  });
+
+  it('get_dietary_profile catalog description mentions meal timing so context_select pulls it', () => {
+    expect(RETRIEVAL_FUNCTIONS.get_dietary_profile!.description).toMatch(/timing/);
   });
 
   it('get_food_log empty vs recent meals', () => {

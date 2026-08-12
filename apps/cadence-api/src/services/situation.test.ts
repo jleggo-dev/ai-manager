@@ -58,6 +58,12 @@ vi.mock('./weather/weather.ts', () => ({
 import { assessIfDue } from './situation.ts';
 import { getWeatherForUser } from './weather/weather.ts';
 
+// The missed-count block below runs against the REAL detector: what matters there is whether the
+// coach decides someone is falling off, and asserting a bare missedCount number would still pass
+// if the comparison against the threshold moved out from under it.
+const { detectTripwires: realDetectTripwires } =
+  await vi.importActual<typeof import('./tripwires.ts')>('./tripwires.ts');
+
 const USER = '00000000-0000-4000-a000-00000000a201';
 const getWeatherForUserMock = getWeatherForUser as unknown as ReturnType<typeof vi.fn>;
 
@@ -224,5 +230,87 @@ describe('assessIfDue', () => {
     detectTripwires.mockReturnValue([]);
     await assessIfDue(USER);
     expect(detectTripwires).toHaveBeenCalledWith(expect.objectContaining({ weatherTempC: 40 }));
+  });
+
+  /**
+   * missedCount — the derived "they're falling off" signal. Nothing writes status 'missed', so it
+   * means past-due-and-still-pending, and it must only count EFFORTFUL work (kind 'user'). The food
+   * log is four per-meal SYSTEM tasks a day; counting those made the tripwire fire for every
+   * nutrition user after one forgetful day, and permanently for anyone who skips a meal on purpose.
+   */
+  describe('missedCount counts effortful work only', () => {
+    const TODAY = '2026-07-20';
+    const MEALS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+
+    /** Every per-meal system task for the 13 past days in the window, all untapped: 52 rows. */
+    const untappedMealTasks = () =>
+      Array.from({ length: 13 }, (_, i) => `2026-07-${String(7 + i).padStart(2, '0')}`).flatMap((date) =>
+        MEALS.map((title) => ({ date, title, kind: 'system' as const, status: 'pending' })),
+      );
+
+    /** `n` past-due effortful sessions the user did not do. */
+    const skippedSessions = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        date: `2026-07-${String(7 + i).padStart(2, '0')}`,
+        kind: 'user' as const,
+        status: 'pending',
+      }));
+
+    const brokerCalled = () => runJobBySlug.mock.calls.length > 0;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(`${TODAY}T12:00:00.000Z`));
+      detectTripwires.mockImplementation(realDetectTripwires);
+      getUser.mockResolvedValue({
+        pending_proposal: null,
+        last_assessed_at: null,
+        steer_back: { missed_threshold: 3 },
+      });
+      runJobBySlug.mockResolvedValue({ formatted: JSON.stringify({ recommend_replan: false }) });
+    });
+
+    it('does not trip for a nutrition user who never taps their meal cards', async () => {
+      listOccurrences.mockResolvedValue([
+        ...untappedMealTasks(),
+        { date: '2026-07-17', kind: 'user', status: 'done' },
+        { date: '2026-07-19', kind: 'user', status: 'done' },
+      ]);
+      await assessIfDue(USER);
+      expect(detectTripwires).toHaveBeenCalledWith(expect.objectContaining({ missedCount: 0 }));
+      expect(brokerCalled()).toBe(false);
+    });
+
+    it('still trips when the user is genuinely skipping sessions', async () => {
+      // The same 52 untapped meal cards ride along: system noise must neither add to the count nor
+      // mask a real slip.
+      listOccurrences.mockResolvedValue([...untappedMealTasks(), ...skippedSessions(4)]);
+      await assessIfDue(USER);
+      expect(detectTripwires).toHaveBeenCalledWith(expect.objectContaining({ missedCount: 4 }));
+      expect(brokerCalled()).toBe(true);
+    });
+
+    it('holds at the threshold boundary — 2 skipped sessions stay quiet, 3 speak up', async () => {
+      listOccurrences.mockResolvedValue(skippedSessions(2));
+      await assessIfDue(USER);
+      expect(detectTripwires).toHaveBeenCalledWith(expect.objectContaining({ missedCount: 2 }));
+      expect(brokerCalled()).toBe(false);
+
+      detectTripwires.mockClear();
+      runJobBySlug.mockClear();
+      listOccurrences.mockResolvedValue(skippedSessions(3));
+      await assessIfDue(USER);
+      expect(detectTripwires).toHaveBeenCalledWith(expect.objectContaining({ missedCount: 3 }));
+      expect(brokerCalled()).toBe(true);
+    });
+
+    it("does not count today's still-open sessions — the day isn't over yet", async () => {
+      listOccurrences.mockResolvedValue(
+        Array.from({ length: 5 }, () => ({ date: TODAY, kind: 'user', status: 'pending' })),
+      );
+      await assessIfDue(USER);
+      expect(detectTripwires).toHaveBeenCalledWith(expect.objectContaining({ missedCount: 0 }));
+      expect(brokerCalled()).toBe(false);
+    });
   });
 });
