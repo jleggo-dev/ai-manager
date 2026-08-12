@@ -15,6 +15,7 @@ import { intentFraming, onboardingReadiness } from './coach-context.ts';
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 import { validateCalls, executeCalls, type FnCall } from './retrieval/select-and-run.ts';
 import { renderCatalogDoc } from './retrieval/catalog.ts';
+import { ctxMarker } from './turn-context-memory.ts';
 import { runJobBySlug } from '../ai/aim.ts';
 import { getFreshContextPack, insertContextPack, type ProvenanceEntry } from '../repos/context-pack.ts';
 import { updateTrace } from './dev-trace.ts';
@@ -177,7 +178,29 @@ export async function buildContextPack(
         ? 'broker-partial'
         : 'deterministic';
   const header = `[context built ${builtAt.slice(0, 10)} · ${mode} · fns: ${provenance.map((p) => p.fn).join(', ') || 'none'}${selectReason ? ` · why: ${selectReason}` : ''}]`;
-  const rendered = [intentFraming(intent, topic), '', header, '', summary].join('\n');
+  /**
+   * Freshness markers for everything this pack already put in front of her.
+   *
+   * `turn-context-memory.ts` lets a later turn tell "she already has this" from "this is news", by
+   * looking back through the session for a `[ctx:fn:hash]` marker. Only the PER-TURN path was
+   * emitting them, so the very first thing she is ever told — this pack — was invisible to that
+   * check: retrieving the same health history two turns later found no marker, classified it
+   * `new`, and she read the user their own numbers a second time. That is the repetition the
+   * markers were introduced to stop, arriving by the one route they did not cover.
+   *
+   * Emitted as their own line rather than woven into the summary because the Broker may have
+   * REWRITTEN the summary (`brokerSummary ?? renderResults`), and a hash taken over rewritten prose
+   * would never match the render a later turn computes. The hash is of `f.render(result)` — the
+   * identical function the turn path calls — so identical data produces an identical marker.
+   */
+  const marks = Object.entries(results)
+    .map(([fn, result]) => {
+      const r = RETRIEVAL_FUNCTIONS[fn]?.render(result);
+      return r ? ctxMarker(fn, r) : null;
+    })
+    .filter(Boolean)
+    .join(' ');
+  const rendered = [intentFraming(intent, topic), '', header, '', summary, ...(marks ? ['', marks] : [])].join('\n');
 
   // Dev X-ray: record what was pulled + how it was curated (no effect on the coaching path).
   updateTrace(userId, {

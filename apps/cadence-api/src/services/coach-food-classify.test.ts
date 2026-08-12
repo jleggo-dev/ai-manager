@@ -94,3 +94,40 @@ describe('dietary merge + recipe window', () => {
     expect(recipeTextFromWindow(w, 'save that as a recipe')).toMatch(/chili/);
   });
 });
+
+/**
+ * Regression: the worst false positive we have shipped. Reported from the device — the user was
+ * talking about Spartan races, and a confirm sheet appeared offering to log "1 beast" for
+ * breakfast at ~2000 kcal.
+ *
+ * `had` is an auxiliary verb far more often than it is eating. These are all sentences a coaching
+ * conversation produces constantly, and none of them is a meal.
+ */
+describe('"had" is usually not eating', () => {
+  const notMeals = [
+    'I do at least one beast a year, but I had to skip it this year',
+    'I had to skip my run yesterday',
+    'I had been running consistently until October',
+    'I had a rough week at work',
+    'I had a long day and did not get out',
+    'I had enough of the treadmill',
+  ];
+  for (const line of notMeals) {
+    it(`does not offer to log: "${line}"`, () => {
+      expect(classifyFoodIntent(line)).toBeNull();
+    });
+  }
+
+  /** The guard must not cost us the real thing. */
+  const meals = [
+    'I had eggs and toast',
+    'I had a chicken salad for lunch',
+    'just ate a banana',
+    'I had my usual breakfast',
+  ];
+  for (const line of meals) {
+    it(`still catches: "${line}"`, () => {
+      expect(classifyFoodIntent(line)?.kind).toBe('log_food');
+    });
+  }
+});

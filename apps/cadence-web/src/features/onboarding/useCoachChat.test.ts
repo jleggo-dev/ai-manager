@@ -220,3 +220,41 @@ describe('stop', () => {
     expect(stopCoachTurn).not.toHaveBeenCalled();
   });
 });
+
+describe('the food surface during onboarding', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCurrentCoach.mockResolvedValue({ sessionId: null, messages: [], stale: false });
+    getReview.mockResolvedValue({ goals: [] });
+    openCoachSession.mockResolvedValue({ sessionId: 'sess-new' });
+    prepareCoachFoodAction.mockResolvedValue({ status: 'ok', action: null });
+    sendCoachMessage.mockImplementation(async (_id: string, _t: string, onDelta: (d: string) => void) => {
+      onDelta('Understood.');
+      return { completed: true, responseId: null };
+    });
+  });
+
+  it('never prepares a food action while onboarding', async () => {
+    const { result } = renderHook(() => useCoachChat({ intent: 'onboarding' }));
+    await waitFor(() => expect(result.current.restored).toBe(true));
+
+    act(() => result.current.setInput('I do at least one beast a year, but I had to skip it this year'));
+    await act(async () => {
+      await result.current.send();
+    });
+
+    expect(prepareCoachFoodAction).not.toHaveBeenCalled();
+  });
+
+  it('still prepares one in the ongoing conversation, where a plan exists', async () => {
+    const { result } = renderHook(() => useCoachChat({ intent: 'ongoing' }));
+    await waitFor(() => expect(result.current.restored).toBe(true));
+
+    act(() => result.current.setInput('I had eggs and toast'));
+    await act(async () => {
+      await result.current.send();
+    });
+
+    expect(prepareCoachFoodAction).toHaveBeenCalled();
+  });
+});
