@@ -138,7 +138,14 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     setStreaming(true);
     // Confirm-first food draft in parallel with the coach stream (never blocks reply). Only for
     // something the user actually said — an app note is not a meal.
-    if (echo)
+    //
+    // And never during ONBOARDING. There is no plan yet and no nutrition module running, so there
+    // is nothing to log a meal against — every draft it could produce during intake is a false
+    // positive by construction. Running it anyway is how "I do at least one beast a year, but I
+    // had to skip it this year" opened a sheet offering to log one Spartan Beast for breakfast at
+    // ~2000 kcal, mid-way through building a training plan. The classifier's own guards matter for
+    // the ongoing conversation; here the whole surface is simply wrong.
+    if (echo && intent !== 'onboarding')
       void prepareCoachFoodAction({ message: text, window })
         .then((r) => {
           if (r.status === 'ok' && r.action) setFoodAction(r.action);
