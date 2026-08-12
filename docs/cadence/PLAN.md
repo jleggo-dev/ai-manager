@@ -868,6 +868,1689 @@ calculation: an offer is only made when it fits, and it is weighed against the g
 
 Not scoped. Needs a design pass before any code.
 
+**A8. Averages are the wrong question — recent performance, previous bests, and analysing a run (owner 2026-08-11)**
+
+Owner: *"Cadence captures AVERAGES from Apple Health but doesn't look at max distance (previous
+achievements) or recent performance. She should consider these as she would in a weekly check-in —
+what did the last month ACTUALLY look like, not averages. During onboarding she said 'you're
+averaging 4.3km a run at 36 mins' — I've done 3-5 runs of 5-6km in the past 7 days and 16K
+steps/day. Where did that number come from?"*
+
+**Where the 4.3 km came from — settled.**
+
+The number is not a bug in anything. It is exactly what the pipeline is built to produce, and every
+step of it is wrong for the question the owner was actually asking.
+
+- `buildDigestFromWorkouts` (`apps/cadence-web/src/features/onboarding/health-digest.ts`) buckets
+  every workout by type and takes a **flat arithmetic mean** of `distanceKm` and `durationMin` per
+  bucket, over a **rolling 90-day window** (`DIGEST_PERIOD_DAYS = 90`). `fmtType` in
+  `apps/cadence-api/src/services/health-context.ts` renders that row verbatim: "avg 36 min, avg
+  4.3 km". The same ten runs are quoted in the header of
+  `apps/cadence-api/src/services/observed-health.ts`.
+- So five 5–6 km runs this week are averaged against everything back to mid-May, and a build-up is
+  indistinguishable from a taper. **Nothing anywhere in the pipeline computes a maximum, a personal
+  best, a last-4-weeks figure, or any recency weighting.** There is no field for one to live in.
+- `HealthPlugin.swift:395` returns `"distance": workout.totalDistance?.doubleValue(for: .meter())
+  ?? 0` — absence becomes **0**. `toSeamWorkout`'s `typeof w.distance === 'number'` is therefore
+  ALWAYS true, and `buildDigestFromWorkouts`'s `.filter((n) => n != null)` never drops a thing. A
+  treadmill run, or a session mistyped as a run, is averaged in as a 0 km run and pulls the mean
+  down. "No distance recorded" and "0 km" are the same value by the time we see them.
+- The digest ALREADY carries the last **five** workouts individually (`MAX_RECENT = 5`; the server
+  schema allows 10) and **nothing renders more than `recent[0]`** — `renderHealthDigest` prints one
+  "most recent" line, `toObservedHealth` builds `most_recent_workout` from the same single row.
+  Four dated sessions we already collect, store and validate never reach a model.
+- Steps are the one part that already does this right: `dailySteps` carries `avgPerDayLast7`
+  alongside the 90-day mean and a `byWeek` series, and `observed-health.ts` passes all of it. The
+  16k-steps-a-day reading is fine. Workouts have no equivalent.
+
+**What the plugin can actually give — audited (`node_modules/capacitor-health`, both the TS
+definitions and the Swift it ships).**
+
+Available today and unused, no native code required:
+
+- `id` = `workout.uuid.uuidString` (`HealthPlugin.swift:392`). A stable per-workout identity —
+  the join key A14's canonical history store needs. `PluginWorkout` in `native.ts` drops it.
+- `sourceName` / `sourceBundleId` (`:390–391`). Which device or app recorded it: the only way to
+  tell a Watch run from the iPhone's duplicate of the same run, or a Strava import from a native one.
+- `calories` (`:394`) and `endDate` (`:388`) — emitted on every row, both discarded at the seam,
+  and we already hold the `READ_ACTIVE_CALORIES` permission for the first.
+- `steps?: number` per workout, behind `includeSteps: true` (`:426–433`) — HealthKit's stepCount
+  aggregated over the workout's own interval. Divided by duration this is the **only** cadence
+  figure obtainable: one average steps/min for the whole run. Not per-split, not Apple's stride data.
+- `heartRate?: HeartRateSample[]` behind `includeHeartRate: true` (`:403–412`, `:456–484`) — the
+  raw `{timestamp, bpm}` series, one entry per HealthKit sample. It is **not** an average: the
+  plugin never emits an `avgHeartRate` key at all, which is why `toSeamWorkout`'s `w.avgHeartRate`
+  read has always been `undefined` and `Workout.avgHr` has never once been populated (verified by
+  A13). HR coaching is blocked on this seam, not on the hardware. Any average is ours to compute.
+- `route?: RouteSample[]` behind `includeRoute: true` (`:415–424`, `:487–543`) —
+  `{timestamp, lat, lng, alt}` per CLLocation. **It also needs the `READ_ROUTE` permission, which
+  `HEALTH_PERMISSIONS` in `native.ts` does not request.** Setting the flag without adding the
+  permission returns an empty array, not an error — a silent nothing.
+
+Genuinely NOT available without writing Swift:
+
+- **Apple's own lap and segment markers** (`HKWorkoutEvent`). Never queried. Any splits are ours
+  to derive; we cannot show the user the same splits the Fitness app shows them.
+- **Running form metrics** — `runningSpeed`, `runningPower`, `runningStrideLength`,
+  `runningVerticalOscillation`, `runningGroundContactTime`. No constant for them exists in the
+  `HealthPermission` union, and no query path reaches them.
+- **A distance time-series.** `queryRecords` hard-rejects everything but steps ("queryRecords
+  currently only supports dataType 'steps'", `:291–292`) and `queryAggregated` knows only
+  `steps | active-calories | mindfulness`. `distanceWalkingRunning` samples are unreachable, so
+  **an indoor or treadmill run has no route, no distance timeline, and cannot be split at all** —
+  its only derivable detail is average cadence from `steps`.
+- Resting HR, HRV, VO₂max, weight, sleep — no permission constants, no queries. (`native.ts`
+  already returns `null` for weight and sleep and says a Swift extension is the future path.)
+- Anything incremental. There is no anchored query; every read re-fetches the whole window.
+
+Hazards in the plugin's own code that a richer read has to handle:
+
+- **Nothing is sorted.** Both `HKSampleQuery` calls pass `sortDescriptors: nil`, and `queryRoute`
+  appends the locations of multiple `HKWorkoutRoute` objects in completion order (`:501–507`).
+  Splits maths must sort by timestamp before it does anything else.
+- **`includeRoute` is all-or-nothing across the whole window.** One `queryWorkouts` call fetches
+  the full route of EVERY workout between `startDate` and `endDate`. Over the 90-day digest window
+  that is potentially hundreds of thousands of CLLocations serialised through WKWebView. Route can
+  only ever be fetched **per run**, with the dates narrowed to that one workout.
+- The response carries an `errors` map (`{'heart-rate', 'route'}`, `:446`) that our TS types do not
+  declare, so a partial failure is currently invisible to us.
+
+And the boundary rule holds over all of it: `apps/cadence-api/src/validation/health.ts` exists to
+stop raw-sample-sized payloads reaching the server, and both series above are exactly that — a
+36-minute run is roughly 430 HR samples and a couple of thousand locations. **Derive on device,
+ship derived shapes.**
+
+**What she should look at instead.**
+
+The test every field below has to pass: *it changes a coaching decision*. A number that only makes
+the payload look thorough is a number that costs context and buys nothing.
+
+1. **The sessions themselves, dated — the cheapest fix in this entry.** Not a statistic: the list.
+   "6.1 km / 34 min on the 9th, 5.4 km / 31 min on the 7th, 5.8 km / 33 min on the 4th…" answers
+   the owner's complaint with no arithmetic at all, because five 5–6 km runs in seven days is
+   *visible* the moment you stop collapsing them. We already collect, validate and store these
+   rows; `MAX_RECENT = 5` on the client, 10 in the schema, and exactly one is ever rendered.
+   Decision it changes: what to schedule next week, and whether the plan we already wrote is
+   remotely near what this person does.
+2. **A recent window beside the baseline one.** Per modality: sessions, total km and mean distance
+   over the last **28 days**, next to the same over the full period. Twenty-eight rather than seven
+   because one week is one bad week — 28 days is the owner's "last month" and survives a missed
+   one. Decision: whether to build on what they are doing now or on what they were doing in May.
+3. **Previous bests, each with its date.** Longest distance, longest duration, and — where both
+   distance and duration exist — the quickest pace over a comparable distance. This is the
+   *anti-streak*: a best is counting what happened, and it never resets to zero, which is exactly
+   what the brand promise asks for. The date is not optional decoration: "your longest is 12 km"
+   and "your longest is 12 km, back in March" are different facts and lead to different sessions.
+   Decision: how to size a milestone, and whether today's 8 km is a stretch or a Tuesday.
+4. **Direction of travel — last 28 days against the 28 before them.** Sessions and total volume,
+   two plain numbers, no slope and no index. Decision: add load, hold, or back off. Naming rule:
+   the field is `prior_28`, never `decline` or `dropoff` — the payload carries numbers and the
+   persona decides how to speak, and a quiet fortnight must be able to read as a taper, a holiday
+   or a hard week rather than decay. Hearth, not scoreboard.
+5. **Pacing consistency.** Over the sessions with both distance and duration: typical pace plus the
+   spread (median and range, not a standard deviation — a coach reasons in "your easy runs and your
+   quick ones", not in variance). Decision: someone whose every run lands between 5:45 and 6:00/km
+   is running the same run over and over and should be offered variation; someone ranging 4:30 to
+   7:30 is already doing genuinely different sessions and needs the opposite advice. Derivable
+   today from data we already hold — no new permission, no new read.
+6. **How much of the average is actually measured.** `distance_recorded_for: 6 of 10 sessions`.
+   Given the `?? 0` above, an average distance can rest on a minority of the runs and nothing says
+   so. Decision: whether to trust the number, and whether to ask about the rest instead of
+   asserting. Paired with the seam fix — treat a `distance` of exactly `0` as *not recorded* rather
+   than as zero kilometres, since HealthKit's `?? 0` makes the two indistinguishable and no real
+   run covers 0.000 m — this is what stops treadmill sessions dragging the mean down.
+7. **The 16k-steps person, read correctly.** Steps are already the one half of this that works:
+   `avgPerDayLast7` sits beside the 90-day mean with a `byWeek` series, and `observed-health.ts`
+   ships all of it under a `what_this_is` that says in words that high steps with few workouts
+   means an active person who does not press start, not a sedentary one. The asymmetry is the bug:
+   **workouts get no last-7 or last-28 figure at all**, so the recent half of the picture exists
+   for steps and not for training. Items 2 and 4 make the two halves symmetric, and that is the
+   whole fix — we should NOT add an `unrecorded_activity_likely` flag. That is an inference dressed
+   as a measurement, and both series in front of the coach are better than one guess.
+
+Deliberately **rejected**, so nobody adds them later without an argument:
+
+- *Average heart rate per workout.* Even once the seam is fixed (A13), an average bpm with no
+  resting HR and no max is uninterpretable — and resting HR, HRV and VO₂max are precisely what the
+  plugin cannot read. HR earns its place inside single-run analysis, not in the standing digest.
+- *Calories.* Emitted on every row and permissioned already, but nothing Cadence decides turns on
+  it, and activity calories invite an in/out conversation the nutrition side deliberately avoids.
+- *Any composite score or fitness index.* Scoreboard.
+- *Deleting `avgDistanceKm`.* It is not wrong; it was only ever wrong as the **only** line.
+
+**Where these are computed, and why it is not the digest.** A14 established the canonical
+per-workout store (`workouts`, a new table — **not** `cadence.occurrences`, which is date-keyed
+with `unique (activity_id, date)` and has no instant, so two runs on one Tuesday collapse into one
+row). Every shape above is a **view over that store, derived server-side**, not a new column on
+`health_digests`. The device's job shrinks to what only the device can do: read HealthKit and ship
+per-workout rows — with the `id`, `endDate`, `sourceName` and `sourceBundleId` the seam currently
+throws away — into the canonical store. A workout row is not a raw sample: ten to a few hundred
+rows over ninety days, against the tens of thousands of HR samples and locations behind them. The
+`validation/health.ts` rule is satisfied by that distinction, not violated by it, and we already
+send ten such rows today. `renderHealthDigest` and `toObservedHealth` become two renderings of the
+canonical store, which is also what stops them drifting into two phrasings of the same facts.
+
+**What she should look at instead.**
+
+The frame is the owner's: what did the last month ACTUALLY look like. Every field below has to
+change a coaching decision or it does not go in.
+
+- **Fix the zero first.** Until `distance ?? 0` is distinguished from a real zero, every figure
+  below inherits the same lie. Absent distance must be `null` at the Swift seam, and the digest's
+  `.filter((n) => n != null)` then does what it already claims to. This is a prerequisite, not a
+  feature — and it is the cheapest fix in this entry.
+- **A recency pair, not one mean.** Steps already model this correctly (`avgPerDayLast7` beside
+  the 90-day figure, plus `byWeek`); workouts get the same shape — last-4-weeks beside the 90-day
+  baseline. Two numbers side by side ARE the direction of travel, and they cost nothing but a
+  second reduce over data we already hold.
+- **Bests, which do not exist anywhere today.** Longest distance and longest duration per type,
+  each with its date. A previous best is the single most useful thing a coach knows about someone
+  training for a distance goal: it is what makes "you've run 21 km before, 50 km is a different
+  animal but not an unknown one" sayable at all.
+- **The last five sessions, individually, with dates.** We already collect, bound and validate
+  them; only `recent[0]` is ever read. Rendering the other four is free signal, already paid for,
+  and it is the difference between "you average 4.3 km" and "your last five runs were 5.2, 5.8,
+  4.9, 6.1 and 5.4 km, all in the past nine days".
+- **The walker case.** High steps with few recorded workouts must read as an active person who
+  does not press start, never as a sedentary one. `dailySteps` already carries this; the coaching
+  language around it does not exist yet.
+
+Deliberately NOT included: anything derived from HR (the seam is broken — see above), and any
+per-sample series crossing the boundary. `validation/health.ts`'s rule holds — derive on device,
+ship the derived shape, and let the bound be part of the schema.
+
+**Analysing a run — feasibility, then shape.**
+
+Split analysis is possible for OUTDOOR runs only, and it is ours to compute: `route` gives
+`{timestamp, lat, lng, alt}` per CLLocation, so per-kilometre splits fall out of consecutive-point
+distance against elapsed time. It requires adding `READ_ROUTE` — a new HealthKit ask, on a
+permission surface that has already bitten us twice, and one the user may reasonably decline for a
+coaching app. Note also the privacy asymmetry: we need the SHAPE of the effort, not where they
+went, so the route must be reduced to splits on device and the coordinates discarded — they must
+never reach our server.
+
+An indoor or treadmill run **cannot be split at all** (no route, no distance timeline,
+`queryRecords` refuses anything but steps). Its only derivable detail is average cadence from
+`steps ÷ duration`. Say so plainly in the UI rather than silently offering less.
+
+Where it lives: on demand, from a completed session, because "how did that run go?" is a question
+asked the same evening — with the weekly check-in citing the same derived summary rather than
+recomputing it. That implies one new job (`analyse-run`) taking a bounded split summary plus the
+goal's `brief`, and never raw samples.
+
+Brand: the splits are evidence, not a verdict. "Your last kilometre was your fastest — you had
+more left than you thought" is coaching. "You faded after 3 km" is a scoreboard, and on a bad day
+it is a wound. Count what happened.
+
+**Architecture scaffold.**
+
+| Component | Owns | Status |
+|---|---|---|
+| `HealthPlugin.swift` (vendored) | `distance ?? 0` → null; already emits `id`, `sourceName`, `sourceBundleId`, `endDate`, `calories`, `steps`, `heartRate`, `route` | EXISTING, under-consumed |
+| `lib/capability/native.ts` | the seam: pass through the dropped fields; add `READ_ROUTE` only when split analysis ships | EXISTING, needs widening |
+| `features/onboarding/health-digest.ts` | derive on device: last-4-week aggregates, bests, the five recent sessions, split summaries | EXISTING, extend |
+| `validation/health.ts` | bounded schema for the above; the abstraction rule stays | EXISTING, extend |
+| A14's `workouts` store | per-workout canonical rows, keyed by the plugin's `uuid` | PROPOSED (A14) |
+| `services/observed-health.ts` | becomes a VIEW over A14's store rather than a parallel pipeline | EXISTING, re-point |
+| `analyse-run` job | one run's derived splits + goal `brief` → coaching read | PROPOSED |
+
+Flow: HealthKit → plugin (all fields) → seam → on-device derivation → bounded POST → A14's store →
+views (digest, `observed_health`, recap) → coach.
+
+**Open questions.**
+- Is `READ_ROUTE` worth the permission cost, given it buys splits for outdoor runs only? A
+  reasonable first slice ships everything above WITHOUT it and adds it if users ask.
+- Four weeks is asserted, not derived — is it the right recency window for someone training across
+  a ten-month build?
+- A "best" needs a per-type comparison rule (fastest 5 km is not the same question as longest run);
+  which bests are worth keeping per area, and does a `mind`-pillar session have one at all?
+- The 0 km fix changes historical digests silently — do we re-derive stored digests, or let the
+  series carry a known discontinuity?
+**A9. Intermittent fasting — a meal skipped on purpose still counts against you (2026-08-11)**
+
+A real generated plan carried the recurring activities "Log breakfast — Every day" and "Log lunch
+— Every day". For a 16:8 eater breakfast is skipped *by design*, so every single day they leave a
+scheduled activity unfulfilled. That is BRAND.md inverted — "count what happened, never what
+broke".
+
+**The defect is real, and it is narrower and nastier than "consistency drops".** Reading the code
+first, because the exact blast radius decides the fix:
+
+- `rollingConsistency` (`apps/cadence-api/src/services/metrics.ts`) is **per-day, not
+  per-activity**: it counts days with ≥1 `done` occurrence. A fasting user who logs lunch and
+  dinner still has a kept day. The headline "5 of 7" is NOT wrong.
+- Nothing in the codebase ever writes `'missed'`. The status exists in the enum
+  (`migrations/cadence/0001_init.sql:96`, widened in `0016_episode_engine.sql:16`) and readers
+  branch on it, but a forgotten occurrence just stays `pending` forever. "Missed" is *derived*:
+  `situation.ts:82` counts `status === 'pending' && date < today`.
+- That derived count is what does the damage. It feeds `missedCount` →
+  `detectTripwires` against `steer_back.missed_threshold` (default 3). **A 16:8 eater trips the
+  "they're falling off" tripwire on day three and never stops tripping it.**
+- `evaluateStreak` (`streak.ts:60`) puts `pending` into `dueDays`, so every fasting day is a day
+  with an unmet obligation. It is rescued only by `engaged` (any `done` that day) — so the streak
+  survives, but only accidentally, and only while they log something else.
+- `replan.ts:31 recentActivity` ships `scheduled: occ.length` alongside `done`, so synthesis sees
+  a person completing ~2/3 of their plan forever and keeps re-planning around a shortfall that
+  does not exist.
+
+So: consistency is fine, the tripwire and the replan signal are not, and the *daily lived
+experience* — a breakfast card sitting there unfulfilled every morning, a coach asking about a
+meal you deliberately did not eat — is the worst part and is not a metric at all.
+
+**Collateral, and worse than the fasting case: the tripwire is already broken for everyone with a
+nutrition goal.** `missedCount` counts every past-due pending occurrence over a 14-day window, and
+the per-meal split (7a9366e) put FOUR daily occurrences in that window — 56 of them. The default
+`missed_threshold` is 3. One forgetful Tuesday trips "they're falling off the plan". Fasting only
+makes permanent what is already firing weekly. Whatever else we do here, a system meal-log task is
+not evidence someone is drifting, and the tripwire should not count it.
+
+The fix has a precedent in the repo, which is the tell that the distinction is already understood:
+`pauseUserOccurrencesInWindow` (`repos/occurrences.ts:336`) shelves an episode's occurrences with
+`and a.kind = 'user'`, and its comment says why — "the effortful ones — system tracking like
+food/weigh-in keeps running". `situation.ts` should read the same predicate. Ticking a food log is
+not the work; it is how we watch the work.
+
+### The thing we got wrong
+
+**`synthesize_plan` already knows exactly what to do.** The prompt has carried a FASTING/OBSERVANCE
+clause since 7a9366e, the same commit that split the food log into per-meal tasks:
+
+> if a goal or constraint involves fasting or a set eating window (16:8, OMAD, etc.), DROP the meal
+> tasks that fall outside the window — 16:8 usually means no breakfast (keep lunch, snack, dinner),
+> OMAD keeps a single meal; if a constraint notes Ramadan, use suhoor (pre-dawn) and iftar
+> (post-sunset) instead of the usual set.
+
+So this is not a coach that doesn't know. **It is a coach nothing can tell.** The clause fires only
+"if a goal or constraint involves fasting", and there is no field anywhere that holds an eating
+window. The Broker's `baseline_updates` contract (`capture-extract`) accepts age, sex, height,
+weight, `availability`, `starting_point`, `constraints` — and nothing else. "I eat between noon and
+eight" has nowhere to land. Today the clause only fires by luck: the user phrases fasting as a
+*goal* ("Do a 16:8 intermittent fasting window"), or the Broker files it as a *constraint* — which
+is wrong, and wrong in a way that matters. `constraints` is "what we work around". Fasting is not
+something you work around; it is how you eat. Filing it there tells the whole planner to treat a
+person's chosen rhythm as an impairment, and `plan_around: true` will start deleting things.
+
+Second thing the clause cannot fix: **the plan is a snapshot.** Someone who starts 16:8 in week
+five keeps "Log breakfast" until the next replan, and someone who mentions it mid-conversation gets
+nothing at all. `ensureHorizon` (`plan-horizon.ts`) has already materialized 14 days of pending
+occurrences from the old recurrence.
+
+### The model
+
+**1. `baseline.eating_window`, modelled on `availability` — not on the dietary profile.**
+
+`availability` is the precedent and it fits almost exactly: it is the shape of someone's day, stated
+in their own words, with optional clock edges, held top-level on `Baseline` (the comment in
+`types/baseline.ts` says why — the baseline persists as a shallow jsonb merge and a nested write
+would clobber its siblings). An eating window is the same kind of fact about the same day.
+
+It does *not* belong on `dietary_profile`. That column is a safety input — hard allergen excludes
+consumed by `dietary-safety.ts` before anything is suggested. An eating window excludes no food.
+Putting a way of eating next to a list of things that could hurt you is a category error the
+allergen pass would then have to defend against.
+
+```ts
+/** One span they can eat in. Clock edges only when they gave them. */
+export interface EatingWindowSpan {
+  earliest?: string;  // "12:00"
+  latest?: string;    // "20:00"
+  /** Days this span applies to, as the RRULE codes `scheduling.ts` already parses
+   *  ('MO'|'TU'|…). Absent = every day. Present is how 5:2 and "weekdays only" are
+   *  expressed — two different days, two different spans. */
+  days?: string[];
+}
+
+export interface EatingWindow {
+  /** Their words, always — "16:8", "OMAD", "I just skip breakfast", "Ramadan". Never our label. */
+  said_as: string;
+  /** Empty means they named a pattern we could not turn into clock times. Still keep it:
+   *  the coach reads `said_as` and can ask. Never a guess. */
+  windows: EatingWindowSpan[];
+  /** YYYY-MM-DD it stops being true, when they said so (Ramadan, a trial month) — same
+   *  semantics as `Constraint.until`. Absent = open-ended. */
+  until?: string;
+}
+```
+
+`baseline.eating_window?: EatingWindow`. No migration — `baseline` is jsonb. `capture-extract`'s
+`baseline_updates` gains the key, and that single change is what makes the existing FASTING clause
+reachable at all.
+
+**Absent means they never said, and nothing may infer it.** This is the load-bearing rule and it is
+not a nicety: we have already run this experiment. `days_per_week` was captured, went 1 → 2.5 → 2
+for a man training for a 50 km ultra because the app kept reading descriptions of the present as
+statements of capacity, and the number then acted as a hard ceiling on his plan. "He hasn't logged
+breakfast in nine days, he must be fasting" is the identical mistake with a worse ending: a person
+who was simply busy in the mornings gets breakfast quietly deleted from their plan and a coach who
+stops mentioning it. The window is written when someone says it, by hand in Settings, or not at all.
+
+**2. Fewer meal tasks, never rescheduled ones.** The clause's DROP is right and should stay. A "Log
+breakfast" card sitting at 13:00 is a lie about what breakfast is, and the entire point of the
+per-meal split was that each task lands at the moment you'd actually do the thing. 16:8 →
+lunch/snack/dinner. OMAD → one meal task. Ramadan → suhoor and iftar. 5:2 → the `days` field on a
+span lets synthesis emit `FREQ=WEEKLY;BYDAY=…` for the fuller days and a lighter set on the two low
+ones, which is the only one of these patterns the current all-or-nothing clause cannot express.
+
+**3. Eating at 11 instead of 12 is not failing at anything, so record nothing.** There is no
+breakfast occurrence to fail, and the meal itself logs normally — `parse-meal` infers `meal` from
+the user's words and an 11am meal comes back `lunch` or `other`. That is the whole mechanism, and it
+is enough.
+
+**Explicitly do NOT add an `off_window` flag to `nutrition_logs`.** A flag exists to be counted, and
+the only thing you can build from a count of off-window meals is a tally of the times someone broke
+their fast. That is a scoreboard, and it is the exact move BRAND.md bans. The coach may notice
+timing out loud and warmly ("you ate earlier today") — she may never keep score of it.
+
+The one thing genuinely missing is the opposite of a flag. **`nutrition_logs` has no clock time at
+all** — `date` (a date), `meal`, and `created_at`, which is an insert timestamp, not an eating time.
+So `nutrition_baseline`'s prompt asks the coach for a read on "timing" from data that contains none,
+and for a fasting user timing is the whole subject. An optional `eaten_at` is the honest addition
+here: know when they ate, describe it, never score it.
+
+**4. What the coach must know, and where it survives compaction.** Storage is durable; that is not
+the same as present in the turn. The retrieval registry (`services/retrieval/registry.ts`) is the
+layer that decides what reaches the coach, and it has `get_constraints`, `get_weight`,
+`get_dietary_profile`, `get_food_log` — and **nothing that renders `availability`**. Copying
+availability's storage pattern and stopping there would faithfully reproduce its hole.
+
+So: store on `baseline`, but render inside **`get_dietary_profile`** rather than minting a
+fifteenth function. Its description already reads "use before suggesting foods/recipes" — precisely
+the moment the coach must not offer breakfast — and its domains are already `['nutrition','safety']`,
+so `context_select` pulls it for any food turn without a catalog change. One line in the render:
+
+> `Eats between 12:00 and 20:00 (their words: "16:8").`
+
+One fact, two readers, each through the door it already uses: the planner reads `<baseline>`, the
+coach reads the dietary block. Write that asymmetry down where the column is defined so nobody
+tidies it up later by moving the field.
+
+**5. Safety: change nothing, and that is a recommendation, not a dodge.** The house already drew
+this line and drew it well. `goal-screen.ts` deliberately omits "fast" from `HARM_TERMS` — its own
+comment says these words are "ordinary and the false positive would be brutal" — and *"Do a 16:8
+intermittent fasting window"* is a committed passing test case (`goal-screen.test.ts:22`). The coach
+persona refuses *"fasting to compensate for eating"*, and `plan-vet` repeats it. That is the correct
+distinction, already implemented: the harmful thing is a compensatory act, not a way of eating.
+
+No pregnancy/ED/medication interstitial. Cadence does not know a user is pregnant, holds no
+medication list, and cannot ask without imputing a category to someone who just told us how they
+eat. Over-warning is its own harm and it lands hardest on exactly the person the warning is for: a
+user with an ED history, being told by an app that their eating is suspect. We have a crisis
+boundary in the persona for real signals; a stated eating window is not one.
+
+The one gap worth closing is the mirror image — Cadence must never *propose* fasting.
+`nutrition_baseline`'s `suggestion` is the only place the app proposes an eating change, and its
+rule is already "additive or a gentle swap". One clause making it explicit that narrowing an eating
+window or dropping a meal is never the suggested change delivers the "never prescribes" half of the
+requirement for the price of a prompt edit.
+
+**6. The observe phase needs one clause.** `OBSERVE_DAYS_NEEDED = 7` (`nutrition.ts:328`) counts
+distinct dates with any meal, so a fasting user reaches it on schedule. But
+`meals_per_logged_day` will read ~2 where the prompt expects ~3.5, and `nutrition_baseline` must not
+read that as a thin log. When a window is on file, fewer meals per day IS the pattern.
+
+### ARCHITECTURE
+
+| Component | File | Status | Role |
+|---|---|---|---|
+| `EatingWindow` / `EatingWindowSpan` types | `packages/cadence-shared/src/types/baseline.ts` | **proposed** | Alongside `Availability`; `baseline.eating_window?` |
+| Baseline storage | `cadence.users.baseline` jsonb | existing | No migration; shallow-merge write, top-level key |
+| Broker capture | `capture-extract` → `baseline_updates` in `config/ai-admin/ai-admin.config.json` | **proposed** (extend) | The missing input. Only writes what was said |
+| Capture normalize/guard | `apps/cadence-api/src/services/capture-normalize.ts` | **proposed** (extend) | Assert model output before commit — same as `isTimeOfDay` |
+| Manual edit | Settings / review wizard (`apps/cadence-web`) | **proposed** | Like `time_of_day` — hand-editable, never inferred |
+| Plan synthesis | `synthesize_plan` prompt (FASTING/OBSERVANCE clause) | existing; **extend** for 5:2 `days` | Drops out-of-window meal tasks at generation |
+| Plan vet | `plan_vet` prompt | existing | Already flags fasting-to-compensate; no change |
+| Occurrence materializer | `apps/cadence-api/src/services/plan-horizon.ts` | existing | 14-day rolling horizon; **the reason a snapshot fix is not enough** |
+| Mid-plan retirement | new service beside `episode-overlay.ts` | **proposed** | On a window write: drop the out-of-window meal activities + clear their FUTURE pending occurrences (replan already does this wipe). Not `skipped` (that is the user's acknowledgement) and not `paused` (that is episode-owned and an episode is a rough patch, which a way of eating is not) |
+| Tripwire | `apps/cadence-api/src/services/situation.ts:82` | **proposed** (fix) | Count only `a.kind = 'user'` occurrences in `missedCount` — the predicate `pauseUserOccurrencesInWindow` already uses. Fixes the collateral bug above for everyone |
+| Replan signal | `apps/cadence-api/src/services/replan.ts:31` | **proposed** (fix) | `scheduled` should not count meal-log tasks a fasting user was never meant to tick |
+| Consistency / streak | `metrics.ts`, `streak.ts` | existing — **no change** | Per-day and already correct |
+| Coach retrieval | `retrieval/registry.ts` → `get_dietary_profile` | **proposed** (extend render) | How the fact reaches a turn and survives compaction |
+| Meal parse | `parse-meal` prompt, `nutrition_logs.meal` | existing | An off-window meal is just a meal; no new field |
+| Meal clock time | `nutrition_logs.eaten_at` | **proposed** (migration) | The only new column; makes "timing" real for a prompt that already asks for it |
+| Baseline read | `nutrition_baseline` prompt | **proposed** (extend) | Never propose narrowing a window; low `meals_per_logged_day` is the pattern, not a gap |
+| Safety screens | `goal-screen.ts`, coach persona | existing — **no change** | Line already correctly drawn |
+
+Data flow: **user says it → `capture_extract` → `baseline.eating_window`** → read by
+`synthesize_plan` (via `<baseline>`, drops the tasks) *and* by `get_dietary_profile` (via the
+context pack, stops the breakfast suggestion). Meal logs flow independently and are never scored
+against the window.
+
+### First slice
+
+Ship the four changes that remove the harm, in one PR each:
+
+1. `EatingWindow` type + `baseline.eating_window` + `capture_extract` writes it. Nothing else
+   changes and the FASTING clause becomes reachable for the first time.
+2. `get_dietary_profile` renders it — the coach stops offering breakfast.
+3. Count only `kind = 'user'` occurrences in `situation.ts` `missedCount`. Independently correct,
+   already precedented, and a live bug for every user with a food goal, not just fasting ones.
+4. Mid-plan retirement of out-of-window meal activities, so week five works like week one.
+
+`eaten_at`, the 5:2 `days` handling, and the `nutrition_baseline` clauses follow. Not scoped yet.
+**A14. One history, many doors — Cadence's canonical workout store (owner 2026-08-11, NOT BUILT)**
+
+Owner requirements 4 and 8: write our own completed sessions to HealthKit so they count for the
+rings, and give people who trained before us a way to bring their history in. Both land on the same
+question — what happens when the same run arrives twice — and the owner answered it: *"I think
+that's why we kind of have to try to compose our own historical, no?"* So **Cadence keeps THE
+canonical per-workout history**, composed from HealthKit reads, our own in-app sessions, Strava
+imports (A16) and later Oura. It is the hub the coach reads; everything else is a door into it.
+
+**Verified: `capacitor-health` cannot write, and the permission constant is a trap.**
+`WRITE_WORKOUTS` is in the `HealthPermission` union (`node_modules/capacitor-health/dist/esm/
+definitions.d.ts`, v8.1.2, unpatched — no `patches/`, no override), and the Swift side really does
+honour it: `permissionToHKObjectWriteType("WRITE_WORKOUTS")` returns `[HKObjectType.workoutType()]`
+and feeds it to `healthStore.requestAuthorization(toShare:read:)`
+(`node_modules/capacitor-health/ios/Sources/HealthPluginPlugin/HealthPlugin.swift:44,72`). But
+`HealthPlugin` exposes **no save method at all** — `isHealthAvailable`, `checkHealthPermissions`,
+`requestHealthPermissions`, two settings openers, `queryAggregated`, `queryWorkouts`, `queryRecords`,
+and nothing else. We can ask the user for permission to write and then have no way to write. Asking
+for a scope we cannot exercise is worse than not asking: it spends the one prompt iOS gives us.
+
+**Recommendation: a small owned native bridge, not a fork.** `apps/cadence-ios/ios/App/App/
+CadenceHealthWrite/CadenceHealthWritePlugin.swift`, modelled exactly on the existing
+`CadenceCoachIdentity/CadenceCoachIdentityPlugin.swift` (lazy `registerPlugin`, every call wrapped,
+silent fallback — see `apps/cadence-web/src/lib/capability/native.ts`). Forking `capacitor-health`
+means owning a fork of the dependency our READ path depends on, for one method; the repo convention
+is small owned code over forks. Two things the bridge gets that the plugin could not give us anyway:
+
+- **`HKWorkoutBuilder` is mandatory, not a preference.** Every `+workoutWithActivityType:…`
+  initializer on `HKWorkout` is `API_DEPRECATED("Use HKWorkoutBuilder", ios(8.0, 17.0))` — checked
+  against the iOS 26.5 SDK header. `HKWorkoutBuilder`'s own header describes it as the way to record
+  "a workout that occurred in the past", which is precisely our case: `initWithHealthStore:
+  configuration:device:` → `beginCollectionWithStartDate:` → `addMetadata:` → `endCollectionWithEndDate:`
+  → `finishWorkoutWithCompletion:`.
+- **Write authorization is knowable; read authorization is not.** `health-permissions.ts` exists
+  because iOS returns no usable answer to a read request. Write is different:
+  `HKHealthStore.authorizationStatusForType:` returns `HKAuthorizationStatus` whose three cases are
+  documented purely in terms of *saving* — `NotDetermined` / `SharingDenied` / `SharingAuthorized`
+  (`HKDefines.h:85`). So our bridge can report the real state and the UI can stop guessing. That is
+  a capability `capacitor-health` never surfaces, and it is a second reason to own this.
+
+**Why the canonical store cannot be `occurrences`.** `cadence.occurrences` is DATE-keyed with
+`create unique index occurrences_activity_date_idx on (activity_id, date)`
+(`migrations/cadence/0001_*.sql:91-102`). One occurrence per activity per day, a `date` column and
+no instant anywhere. Two 30-minute runs on one Tuesday are one row, and A16's dedup heuristic
+(start-time proximity) has nothing to anchor to. `health_digests` (0024) is the other candidate and
+is worse: one jsonb row per *share*, holding an aggregate, deliberately bounded to "≤25 types, ≤10
+recent" by `apps/cadence-api/src/validation/health.ts`. Neither is a per-event record. This needs a
+table.
+
+### The shape — two tables, and the second one is the whole point
+
+**`cadence.workout_sources`** — immutable, one row per *(source, source_id)*, never edited, never
+merged. `ingest_id`, `user_id`, `workout_id` (nullable — the composition it currently belongs to),
+`source` (`healthkit | cadence_app | strava | oura | manual`), `source_bundle_id` (HealthKit's
+originating app, e.g. Strava's own bundle), `source_id` (HKWorkout UUID / Strava activity id /
+occurrence id), `external_uuid` (the id WE put in, see below), `started_at`, `ended_at`, `payload`
+jsonb (that source's own fields, as read), `ingested_at`. Unique on `(user_id, source, source_id)` —
+which makes re-import idempotent for free.
+
+**`cadence.workouts`** — the canonical row, one per real-world event, **composed** from its sources.
+`workout_id`, `user_id`, `started_at` (the instant occurrences lack), `ended_at`, `duration_sec`,
+`local_date` (device calendar day, so day-bucketed reads need no timezone maths), `type`,
+`distance_km`, `avg_hr`, `max_hr`, `energy_kcal` (nullable and often null — see below),
+`occurrence_id` (nullable FK: the join to OUR plan, when there was one), `primary_source`,
+`sources text[]`, `weather` jsonb, `detail` jsonb (splits/laps from whoever had them), `composed_at`.
+RLS owner policy and a `pack_touch` trigger like every other Cadence table (0022 rule).
+
+**Argue the second table, because it costs a table and roughly doubles the rows.** Without it,
+dedup is destructive: the first bad heuristic merges two real Tuesday runs into one and the inputs
+are gone. With it, composition is a pure function of immutable ingests and can be re-run after the
+heuristic is fixed. It is also the only way to satisfy A16's §7.4 obligation — *delete all Strava
+Data within 30 days* — as an executable query rather than a forensic exercise: delete the
+`source='strava'` ingests and recompose. A field-level merge into a single table cannot un-merge.
+
+### Dedup — exact identity first, heuristics only as the last resort
+
+Ordered, and the order matters more than any single rule:
+
+1. **Our own bundle never re-enters.** `queryWorkouts` already returns `sourceBundleId` on every
+   workout, and our bundle is `builders.cadence.app` (`apps/cadence-ios/ios/App/App/
+   capacitor.config.json`). The HealthKit read path drops those rows **on the device, before the
+   wire**. This is the one dedup rule that is guaranteed correct rather than probably correct, and
+   it is currently impossible: `PluginWorkout` in `native.ts:68` declares only `workoutType`,
+   `startDate`, `endDate`, `duration`, `distance`, `avgHeartRate` — it drops `sourceBundleId`, `id`
+   and `sourceName`, all of which the plugin actually returns. Adding those three fields to
+   `PluginWorkout`, `toSeamWorkout` and the seam's `Workout` is the smallest prerequisite in this
+   entry and unblocks the largest part of it.
+2. **Explicit id match.** A13's ruling gives us one for free: `WorkoutPlan.init(_:id:)` lets us
+   choose the UUID and `HKWorkout.workoutPlan` hands it back, with plan id = f(occurrence_id),
+   deterministic. Our own writes carry the same id as `HKMetadataKeyExternalUUID` (verified present
+   since iOS 8.0, `HKMetadata.h:136`). So a watch-completed session matches our occurrence **by id**
+   — no timestamps involved.
+3. **Known self-echo.** A Strava activity carrying an `external_id` we wrote (A16's publish path) is
+   our own round trip. A HealthKit workout whose `source_bundle_id` is Strava's is the same object
+   arriving by a second door.
+4. **Only then, fuzzy.** Same event when **starts are within 120 s AND durations within 5% AND the
+   activity types are compatible**. Adopted verbatim from A16 so the two entries cannot drift.
+   Distance is deliberately excluded — GPS and wrist-derived distance for one run differ by more
+   than people expect, and an indoor session has none. Day-bucketing is excluded for the same reason
+   the occurrence table fails: two runs in one day are normal.
+
+**Merge fields, do not pick a winner — but pick a winner per FIELD.** The owner's question was
+merge-or-winner; the answer is that row-level winner-takes-all throws away real data (Strava has the
+splits, HealthKit has the HR samples, we have which prescribed items they actually did), and
+free-for-all field merging produces a row nobody can explain. So: one canonical row, a
+`primary_source` for the record as a whole, and a fixed precedence **per field** —
+
+| field | precedence | why |
+|---|---|---|
+| `started_at` / `duration_sec` | device-measured (healthkit, oura) → api-imported (strava) → self-reported | the recorder that held the clock wins |
+| `distance_km` | GPS-bearing source → device → self-reported | |
+| `avg_hr` / `max_hr` | whoever actually has samples | usually only one source does |
+| `energy_kcal` | device only; **never** derived, never imported into an empty field | see below |
+| `detail` (splits/laps) | strava → healthkit | only Strava reliably has them |
+| `occurrence_id`, `type` | `cadence_app` wins — it is the only source that knows what we asked for | |
+
+`sources[]` records every contributor regardless. When two device sources disagree on duration by
+more than the fuzzy window we should *not* have merged them — that is the signal the heuristic was
+wrong, and it belongs in a log, not in a silent average.
+
+### Flow A — write-back (our session → HealthKit → the rings)
+
+1. Walkthrough finishes (`apps/cadence-web/src/features/walkthrough/`). **Gap: we do not currently
+   keep the instants.** `state.ts` holds elapsed/round counts and composes a text line; the log goes
+   through `logOccurrence` (`apps/cadence-api/src/services/session-log.ts:52`) onto a *date*. The
+   walkthrough must start carrying real `startedAt` / `endedAt`, or the write has nothing to say.
+2. `POST /me/occurrences/:id/log` as today → occurrence `done`. Unchanged.
+3. Client → `capability.health.saveWorkout(...)` → `CadenceHealthWrite` → `HKWorkoutBuilder`.
+4. Ingest row `source='cadence_app'`, `source_id = occurrence_id`, plus the returned HKWorkout UUID.
+5. Compose → canonical row. **Dedup does not run here.** Its position is step 3 of Flow B, where the
+   bundle filter drops our echo before any comparison happens.
+
+**What we write, exactly.** `HKWorkoutActivityType` mapped from the session's area/tool, falling
+back to `.other` rather than guessing something specific; `startDate`/`endDate` from step 1 (duration
+is derived, never sent separately); `distance` only when the user actually reported it or the
+prescription carried it *and* they completed it. Metadata: `HKMetadataKeyExternalUUID` = the
+occurrence/plan id, `HKMetadataKeyWasUserEntered = YES` (verified, `HKMetadata.h:211`) — honest,
+because no sensor measured this, and it is the flag other apps use to weight our row.
+
+**No calories. Ever.** We have no heart rate (A13: `avgHeartRate` is never emitted and
+`Workout.avgHr` has always been `undefined`), no motion data, and no body mass at that instant.
+`totalEnergyBurned` is what feeds the Move ring, which is the one number the user will check, and a
+fabricated figure there is a lie inside Apple's own UI. Omitting it is not a degraded write: a
+workout with duration and no energy still contributes Exercise minutes, which is the honest share of
+what we know. (`HKWorkout.totalEnergyBurned` is itself deprecated as of iOS 18 in favour of
+`statisticsForType:` — another reason the builder path is the only one worth writing.)
+
+### Flow B — backfill (history import)
+
+1. **Permission moment.** WRITE is a new ask and iOS does not re-prompt for a newly-added type —
+   `native.ts`'s `HEALTH_PERMISSIONS` comment records exactly this happening when `READ_STEPS`
+   joined the set after people had granted the other four. So existing installs need the one-time
+   re-ask, reusing the `STEPS_ASKED_KEY` pattern in `health-steps.ts` verbatim with its own flag.
+   Ask at the moment of value ("want this to count toward your rings?"), never at onboarding, and
+   use `authorizationStatusForType:` rather than the uninformative request response.
+2. Client pages `queryWorkouts` in 90-day windows back to the bound, `includeHeartRate: false`,
+   `includeRoute: false`.
+3. **Filter `sourceBundleId === 'builders.cadence.app'` on the device.** Dedup step 1, here.
+4. `POST /me/workouts/import`, pages of ≤200 workouts → one `workout_sources` row each.
+5. **Compose on the server, per page, in one transaction**: dedup steps 2 → 3 → 4 above, then the
+   per-field merge, then `sources[]`.
+6. Views recompute (below). `pack_touch` fires once per page, not once per workout.
+
+**Bound: default 2 years, hard cap 5, and "further back" is a second explicit ask.** A 4×/week
+athlete is ~208 workouts a year: two years is ~420 rows, five is ~1,000, and ten years of someone
+training twice a day is 5,000+ rows whose 2016 tempo run tells the coach nothing it cannot learn
+from 2025. **Per-WORKOUT rows only.** That does not violate `validation/health.ts`'s abstraction rule
+— a workout row is already an abstraction over thousands of samples — but the HR series is exactly
+what the rule exists to stop: `heartRate?: HeartRateSample[]` is unbounded (700+ samples an hour), so
+backfill must never request it, and the recent-window read that does must reduce to avg/max natively
+before anything crosses into React state. The import route gets its own file
+(`apps/cadence-api/src/routes/workouts.ts`) and its own zod boundary alongside `health.ts`, bounded
+the same way.
+
+### Read side — views, not a second pipeline
+
+`observed-health.ts` is the thing to preserve, not replace: its `ObservedHealth` payload is what the
+planner sees, and its shape is referenced by the `synthesize_plan` template, so changing it is a
+prompt change requiring `sync-jobs.ts`. Migration path from today's `health_digests` series:
+
+1. **Free first step.** `HealthOfferCard.tsx` already calls `getWorkouts(since)` over 90 days and
+   throws the individual rows away after `buildDigestFromWorkouts` aggregates them
+   (`apps/cadence-web/src/features/onboarding/health-digest.ts:130`). Send them instead of dropping
+   them. Both paths run; nothing changes downstream.
+2. `observedHealthFromWorkouts(userId)` computes the identical `ObservedHealth` from the store;
+   `observedHealthForPlanning` prefers it, falls back to digests. No prompt change, no job sync.
+3. `health_digests` stops being written. The `trend` array improves in the process: today
+   `trendFromSeries` samples successive *shares* (`observed-health.ts:133`), so the trend records
+   when the user happened to open the app, not when they trained. From the store it becomes real
+   weeks.
+4. Retire, or keep the table as a frozen audit of what was shared and when.
+
+One rename is unavoidable and is prompt-visible: `ObservedHealth.source: 'apple_health'` becomes
+multi-source. That is the one change in this entry that needs a job sync.
+
+### A15's weather stamp lands here, and A15's assumption needs correcting
+
+A15 puts the conditions stamp on `occurrences.weather` and says the row is "owned by A14". It cannot
+be: A15's own headline field is `observed_at` — *the SESSION's instant, not the fetch time* — and the
+occurrence has no instant, which is exactly why A15's defect 2 (opening a three-week-old run stamps
+it with today's weather) is possible at all. So the stamp belongs on `workouts.weather`, typed with
+A15's field list adopted unchanged (`temp_c`, `feels_like_c`, `conditions`, `wind_kph`, `precip_mm`,
+`observed_at`, `place`, `place_label`, `source`). `occurrences.weather` stays for non-workout
+occurrences and for the existing rows. A15's date-guard fix is still separable and still first.
+
+### Architecture
+
+| Component | Where | Status |
+|---|---|---|
+| Canonical store + ingest table | migration **0032** (see below) | **new, not written** |
+| Repo | `apps/cadence-api/src/repos/workouts.ts` | **new** |
+| Composition + dedup (pure, testable) | `apps/cadence-api/src/services/workouts/compose.ts` | **new** |
+| Import route + zod bound | `apps/cadence-api/src/routes/workouts.ts`, `validation/workouts.ts` | **new** (own files — size rule) |
+| Native write bridge | `apps/cadence-ios/ios/App/App/CadenceHealthWrite/` | **new**, copy `CadenceCoachIdentity` |
+| Seam entry `saveWorkout` + write auth status | `apps/cadence-web/src/lib/capability/index.ts`, `native.ts`, `web.ts` | extend |
+| `sourceBundleId` / `id` / `sourceName` on reads | `native.ts:68` `PluginWorkout`, `toSeamWorkout` | **fix — prerequisite** |
+| Session instants | `apps/cadence-web/src/features/walkthrough/state.ts` | **fix — prerequisite** |
+| Backfill pager | `apps/cadence-web/src/features/settings/health-import.ts` | extend |
+| Planner view | `apps/cadence-api/src/services/observed-health.ts` | becomes a view |
+| Digest series | `migrations/cadence/0024_health_digests.sql` | frozen, then retired |
+| Occurrence join | `cadence.occurrences` (0001) | unchanged — stays the PLAN record |
+| Weather stamp | `workouts.weather` (A15's fields) | A15 |
+| Strava ingests | `source='strava'` rows in this store | A16 — **no `strava_activities` table** |
+| Watch hand-off id | A13's deterministic `WorkoutPlan` UUID | A13 |
+
+**Migration numbering, resolved 2026-08-11.** Three entries wanted a number at once. Settled:
+**0031** = token accounting (`ai_usage`, A11 — it already has code on a branch, so it keeps the
+number it was written against), **0032** = this entry's workouts store, **0033** = A16's
+`connections`. None are written or applied yet; A16's references were renumbered here rather than
+and whichever lands second takes the next free number.
+
+### Open questions
+
+- **The table is called `workouts` and the product is not a fitness app.** Meditation, breathwork
+  and morning pages are sessions too and belong in the same store; `sessions` collides with coach
+  chat sessions and `occurrences` means the scheduled thing. The nomenclature table has no entry
+  for this. Owner's call.
+- **Who composes — the writer or a reader?** Composing on ingest keeps reads cheap and makes the
+  canonical row a cache that can be rebuilt; composing on read is always correct and always slower.
+  Leaning ingest-time, because A16's deletion obligation wants a recompute button anyway.
+- **What does the coach do when it notices a duplicate it did not merge?** Silence is wrong and a
+  "we found 2 possible duplicates" modal is a scoreboard. Probably nothing user-facing in v1.
+- **120 s / 5% are A16's numbers, and neither entry has tested them.** A treadmill run started on
+  the watch and logged in the app can be minutes apart. Needs real data before it ships.
+- **Does an imported historical workout count toward consistency or the streak?** It must not —
+  those count engagement with OUR plan (`PLAN_COUNTS_NOTE`, `observed-health.ts:87`) — but the rule
+  needs writing down before someone imports five years and lights up a streak.
+- **Backfill and anonymous sessions.** A pre-account user importing two years of history, who then
+  abandons the session, is a lot of rows in a scratch account (A0).
+- **Oura.** Named as a future source and not designed. Its sleep and readiness data are not
+  workouts at all, so it is a different table with the same provenance discipline, not a fifth
+  `source` value.
+
+Not scoped. The `sourceBundleId` fix and the walkthrough instants are the two prerequisites, and
+both are small enough to land independently of the rest.
+**A15. Weather on the workout you actually did — we feed the forecast and never keep the record (owner 2026-08-11)**
+
+> *"Store/track weather by workout performed outside (performance in rain, snow, ice, high winds,
+> cold days, hot days) can help the coach better understand performance and how the user will
+> perform in different conditions."*
+
+**Weather is not greenfield — it is one of the most built-out subsystems in the app, and almost all
+of it points at the future.** The requirement is therefore much smaller and much sharper than it
+looks: we already spend provider calls on conditions, we simply throw the answer away the moment the
+session is over. This is about keeping the record, not about adding weather.
+
+**What exists today (all shipped):**
+
+- `apps/cadence-api/src/services/weather/weather.ts` — a two-provider engine. WeatherKit preferred
+  (so an iOS user's Cadence forecast matches their lock screen), OpenWeatherMap as fallback and as
+  the only geocoder. Two cache layers: an in-process `Map`, and `cadence.weather_cache`
+  (migration 0025) shared across instances, keyed `roundedLat,roundedLon:localDate` — a ~11 km cell
+  with **no `user_id`**, because weather is a property of a place, not a person.
+- `apps/cadence-api/src/services/weather/weatherkit-http.ts` — the REST client, ES256 provider JWT
+  minted from the `.p8` in `cadenceConfig.weatherkit` (`apps/cadence-api/src/config.ts:141`).
+  Requests `dataSets=currentWeather,forecastHourly` for one coordinate.
+- **The `weather` VARIABLE on `synthesize-plan` is already populated** — `plan-synthesis.ts:93` calls
+  `weatherVarsForUser`, which is *current conditions at `users.home_location`*. So does
+  `prescribe-session` (`session-generate.ts:97`, outdoor activities only), the Today header
+  (`routes/me.ts:52`), `date-context.ts`, `situation.ts` (tripwires), and `day-recap.ts`.
+- `notify/producers/weather-move.ts` is the only consumer of a real forecast SERIES
+  (`weather/forecast.ts`, OWM-only) — "it's wet at seven tomorrow, here's a drier hour".
+
+**And a per-occurrence stamp already exists — pointed at the wrong moment.** `OccurrenceWeather`
+(`packages/cadence-shared/src/types/occurrence.ts:16` → `occurrences.weather` jsonb) is written by
+`attachOutdoorWeather` (`session-generate.ts:163`) through `setOccurrenceWeatherIfEmpty`
+(`repos/occurrences.ts:148`). Three things are wrong with it, and they are why this entry exists:
+
+1. **It fires on OPEN, not on completion.** `getOccurrenceDetail` stamps the row when the user first
+   taps the card — which for a pending session is usually *before* they go out, and sometimes days
+   before. What we store is a forecast wearing a record's clothes.
+2. **It has no date guard.** `attachOutdoorWeather` runs before the today-or-future gate that
+   protects session generation, so opening a three-week-old outdoor run for the first time stamps it
+   with **today's** weather at home. `logged_at` makes the skew detectable and nothing checks it.
+   This is a live data-integrity bug, not just a design gap — it should be fixed even if the rest of
+   this entry is never built.
+3. **The log path never stamps at all.** The doc comment on `setOccurrenceWeatherIfEmpty` says
+   "outdoor open/log paths race-safe" — but `logOccurrence` (`services/session-log.ts:52`), the one
+   function that knows a session actually happened, does not call it. The intent was written down
+   and never wired.
+
+So the work is: move the stamp to the moment of truth, give it the right place and time, and give
+the coach permission to reason from it.
+
+**Which location — coarse, and only when we have a reason to believe it.** Recommendation: keep
+`users.home_location` as the default, but record on the stamp *which* location it came from and how
+confident we are, and let a workout override it. Rationale:
+
+- Home is free and correct most days. It is wrong exactly when it matters most — the owner was
+  travelling during a recent onboarding run, and a hotel week silently attributes another city's
+  weather to every run.
+- **Never store precise per-workout coordinates.** The cache already proves we do not need them:
+  weather resolves identically anywhere inside an ~11 km cell. Store the rounded cell and a place
+  label, nothing finer. A row that says "Boulder, CO" is a weather fact; a row that says
+  `40.0176,-105.2797` is a movement record we did not ask for and do not want to hold.
+- **Routes stay off the table** (already settled). We do not read HealthKit workout routes, and
+  nothing here reopens that.
+- Practically: the client can offer a coarse fix at log time on the same footing as `LocationOffer`
+  (`apps/cadence-web/src/features/shell/LocationOffer.tsx`) already uses for home — one tap, rounded
+  before it leaves the device, no prompt if home is fine. When the user declines or the read fails,
+  fall back to home and *say so on the stamp*, so the coach can weigh it later.
+
+**Which moment — at completion, live.** `logOccurrence` is the seam: it already knows the session
+happened, already writes `log`/`value`/`provenance`/`status='done'` in one place, and already runs
+on every path (self-report, ad-hoc `adhoc-log.ts`, and the reply path). Stamping there costs at most
+one provider call per outdoor session, and usually zero — the L1/L2 cache almost always has the cell
+for today already, because the Today header fetched it that morning.
+
+This is also the honest ordering. Conditions read at the completion of a 6 a.m. run are not the
+conditions of the run if it is logged at 9 p.m., so the stamp must carry the *session's* time, not
+the fetch time. See the historical read below.
+
+**Backfill — possible, and worth doing narrowly.** WeatherKit serves history back to **1 August
+2021** on the *same* metered quota as a forecast call: no separate historical product, no separate
+price. The existing client already speaks this dialect — it is the same
+`/weather/{lang}/{lat}/{lon}?dataSets=…` call with `hourlyStart`/`hourlyEnd` (or
+`dailyStart`/`dailyEnd`) added; absent those, hourly simply starts at the current hour, which is
+what `weatherkit-http.ts` does today. **One request is capped at a single contiguous ~10-day
+window**, so a backfill is inherently a paged, resumable job and never one call. OWM's history is a
+paid add-on we do not have, so backfill is **WeatherKit-only** and must degrade to "no stamp" rather
+than to a wrong one. (Sources are Apple's developer forums and WWDC24 rather than the REST reference
+page, which would not render for this pass — worth a five-minute confirmation against the live docs
+before building, but the shape is not in doubt.)
+
+That gives a clean rule: **stamp forward always; backfill only where we have a real timestamp and a
+credible location.** For A14's imported history that means the ones with an honest start time and a
+plausible home at that date — and it means accepting that older imported rows will have no
+conditions at all. An unstamped row is fine. A row stamped from the wrong city is worse than nothing,
+because the coach will cite it.
+
+**Where it is stored — in A14's store, not next to it.** A14 is designing the canonical workout
+history; the conditions stamp is a column/blob on *that* record, not a parallel table. This entry
+should not mint a second home for the same fact. Concretely: extend `OccurrenceWeather` rather than
+replacing it (`occurrences.weather` is the row A14 inherits), following the small-blob-with-a-comment
+pattern of `streak_state` (0015) and `macro_targets` (0001):
+
+```
+temp_c, feels_like_c, conditions, wind_kph, precip_mm   -- existing shape, mostly already there
+observed_at        -- the SESSION's instant, not the fetch time (the current field conflates them)
+place: 'home' | 'workout' | 'unknown'   -- provenance of the location, so the coach can discount it
+place_label        -- coarse, human ("Boulder, CO"); never coordinates
+source: 'weather_api' | 'weather_api_historical'   -- forward stamp vs backfill
+```
+
+`source` earns its place: a backfilled hourly reading and a live read at the finish line are not the
+same evidence, and the day we find a systematic bias in one we need to be able to find those rows.
+
+**How the coach uses it — the entire point, and the easiest thing to get wrong.**
+
+Three behaviours worth building:
+
+1. **Explain a number that would otherwise read as a decline.** *"You were about forty seconds a
+   kilometre slower than usual — it was 31°C. That's the heat, not you."* This is the highest-value
+   one by a distance: without conditions, a hot-week slowdown looks like lost fitness, and the plan
+   adapts *downward* against a cause that will pass on its own.
+2. **Set expectations before a session, from their own history.** *"It's going to be near freezing
+   Thursday. Last two cold mornings you ran easier than planned and that worked well — want to do
+   the same?"* Distinct from the existing `weather_move` nudge, which only knows the forecast; this
+   one knows what *they* did last time.
+3. **Offer a detour the user has not had to ask for.** Ice and high wind are safety facts, not
+   excuses. *"Thursday looks icy. I can move the run to Friday, or swap it for something indoors —
+   your call."* This routes into the existing detour vocabulary, which is where "life happened"
+   already lives.
+
+Anti-behaviours, stated as hard rules:
+
+- **Never "you skip rain days".** That is a streak-shame sentence with a weather variable in it, and
+  BRAND.md forbids the shape: *count what happened, never what broke.* If someone consistently does
+  not go out in rain, the coaching move is to offer a rainy-day alternative, not to report their
+  record back to them.
+- **Never let conditions become an excuse the coach supplies unprompted.** "It's cold, want to skip?"
+  is not warmth, it is lowering the bar on someone's behalf.
+- **Never a weather scoreboard.** No "tough conditions" badge, no bad-weather points. Hearth, not
+  scoreboard — and A12 is already unpicking one points system; do not feed it a second.
+- **Never assert a physiological mechanism.** "Heat raises your cardiac drift" is a claim we cannot
+  support. "You ran slower and it was hot" is an observation we can.
+
+**Evidence threshold — she may not generalise from one bad Tuesday.** Before the coach states a
+pattern as fact she needs, for the *same activity type*: **at least three sessions inside the
+condition band and three outside it, within a rolling 12 weeks**, with a comparable metric present
+(pace needs both distance and duration; `occurrences.value` and `log.items` already carry these) —
+and the gap has to be bigger than that person's ordinary session-to-session spread, not merely
+non-zero. Below that bar she may only *ask*: *"That felt harder than usual and it was pretty hot —
+does heat tend to hit you?"* A question invites correction; an assertion the user knows is wrong
+costs more trust than the insight was ever worth. The threshold is deliberately conservative because
+the failure is asymmetric: a missed pattern is invisible, a confidently wrong one is memorable.
+
+Open: whether the threshold is computed in code (a deterministic helper, auditable, testable) or
+left as a rule in the prompt. Strong lean toward code — this is arithmetic, and every other
+deterministic fact in the app is computed and injected rather than trusted to a model.
+
+**Architecture scaffold (existing → proposed):**
+
+| Component | File | Status |
+|---|---|---|
+| Provider client + JWT | `apps/cadence-api/src/services/weather/weatherkit-http.ts` | exists — needs a historical variant |
+| Historical read | `apps/cadence-api/src/services/weather/weather-history.ts` | **proposed** — `getWeatherAtInstant(lat, lon, iso, tz)`; `forecastHourly` + `hourlyStart`/`hourlyEnd`, WeatherKit-only, returns null on OWM-only deployments |
+| Cache | `apps/cadence-api/src/repos/weather-cache.ts` + migration 0025 | exists — reuse as-is; the key is `text`, so a historical key can carry the hour with **no migration** |
+| Snapshot mapping | `weather/weatherkit-map.ts`, `weather/weather-map.ts` | exists — historical hourly needs a small sibling mapper |
+| Stamp writer | `apps/cadence-api/src/services/weather/stamp-conditions.ts` | **proposed** — owns "should this be stamped, from where, for when" |
+| Stamp storage | `occurrences.weather` jsonb / `OccurrenceWeather` | exists — extend (fields above), **owned by A14** |
+| Completion hook | `apps/cadence-api/src/services/session-log.ts` (`logOccurrence`) | exists — **add the stamp call here** |
+| Wrong-moment stamp | `session-generate.ts` (`attachOutdoorWeather`) | exists — **remove or date-guard**; it is the bug above |
+| Outdoor predicate | `isOutdoorActivity` (`weather/weather-map.ts:171`) | exists — a keyword regex; see open questions |
+| Pattern read | `weather-patterns.ts` (deterministic aggregate) | **proposed** — computes the evidence threshold, emits a fact or nothing |
+| Coach injection | `date-context.ts` / `situation.ts` / context pack | exists — the aggregate rides the same rails as every other deterministic fact |
+
+Data flow: *session completed* → `logOccurrence` writes log/value/status → `stamp-conditions`
+resolves place (workout fix if offered, else home, recorded either way) → cache or
+`getWeatherAtInstant` for the session's instant → `setOccurrenceWeatherIfEmpty` → later,
+`weather-patterns` aggregates stamped rows per activity type → threshold met → one deterministic
+sentence injected into coach context → *she can cite conditions.*
+
+**Cost.** WeatherKit's free tier is 500k calls/month, pooled per Team ID across every app and both
+the Swift and REST surfaces; over it you move to the next subscription tier rather than paying
+per call. One stamp per outdoor session is negligible against that, and most stamps are cache hits.
+A one-off historical backfill is the only spiky consumer — it should be rate-limited and
+resumable, not a loop.
+
+**Open questions:**
+
+- `isOutdoorActivity` is a keyword regex over category + title. "Track workout" matches nothing;
+  "treadmill run" matches `run` and gets stamped with outdoor weather it never saw. Does the stamp
+  need a real indoor/outdoor signal — the coach's own tag on the activity, or a confirmation at log
+  time — before any of this is trustworthy?
+- Does the user get to see and correct the stamp? "It was actually pouring" is a correction the
+  brand's confirm-before-committing instinct says we should accept, but per-workout weather editing
+  is a lot of UI for a small fact.
+- Apple Health-observed workouts have **no location at all** — `HealthDigest`
+  (`packages/cadence-shared/src/types/health.ts`) is an aggregate digest with type/start/duration/
+  distance and nothing else, and it is client-built. Stamping those means assuming home. Is that
+  assumption acceptable, or do observed workouts simply go unstamped?
+- Which conditions actually matter? The owner named rain, snow, ice, wind, cold, heat — but ice is
+  not a WeatherKit field (it is inferred from temperature plus precipitation), and humidity, which is
+  arguably the strongest driver of perceived heat effort, is not on the list. Do we band conditions
+  into a small vocabulary the coach can reason over, or hand her the numbers?
+- Does the same stamp belong on interval-tool sessions and other non-occurrence logs, or is
+  the occurrence row the only spine? (A14's answer probably settles this.)
+
+Not scoped. The date-guard bug (defect 2) is separable and should be fixed first.
+**A16. Strava: the terms forbid the product we would build (2026-08-11)**
+
+Owner requirement: *"Integrate to Strava to retrieve/store workout history (bi-directional
+integration)"*, priority below Apple Watch and above Oura — *"I have a Strava."* The HealthKit half
+of history-migration is A14's; this is the Strava half.
+
+**Verdict up front: the current Strava API terms prohibit the architecture the owner described, and
+they prohibit it by name.** Not ambiguously, not by strained reading — the June 1 2026 Strava API
+Policy enumerates the exact steps of our design as prohibited activities. This is not a "get a
+lawyer to bless it" situation. It is a "the clause says the thing we want to do" situation. If we
+integrate Strava's API at all, we integrate it as a **write-only publisher** and get history from
+somewhere else.
+
+**Where the rules actually live — and why the first look missed them.** The API Agreement at
+`strava.com/legal/api` (Effective June 1, 2026) contains **no AI clause at all**; grep it for
+"artificial intelligence", "model", or "AI" and you get nothing. Everything that matters is in the
+separate **API Policy** at `strava.com/legal/api_policy`, which the Agreement pulls in: *"which
+incorporate by reference the Strava Terms of Service, the Strava Privacy Policy…, the Strava API
+Brand Guidelines, and the Strava API Policy (the "Policy"). The Policy is incorporated by reference
+into, and forms part of, this Agreement."* Anyone who reads only the Agreement — as the owner
+reasonably might, and as my first fetch did — concludes Strava has no AI position. They have a very
+detailed one.
+
+The public history is worth knowing: the November 11 2024 change was announced as narrow, and
+Strava's own press note said it would affect *"less than .1% of applications"* with most use cases
+still permitted *"including coaching platforms and performance analysis tools"*. That reassurance
+described the 2024 text. **The 2026 Policy is a different and far harder document**, and the 2024
+press framing should not be cited as cover for it.
+
+**(a) May Strava-sourced data, stored in our DB and merged with other sources, be read by an LLM in
+service of the user who owns it? No.** Policy §5.3, titled *"No AI/ML Training, Fine-Tuning,
+Grounding, Evaluation, Embedding, or Retrieval-Augmented Generation"*:
+
+> "You may not use the Strava API Materials or Strava Data, directly or indirectly, in connection
+> with the development, training, evaluation, or **operation** of any AI Application. This
+> prohibition extends to: Any data **derived from, aggregated from, anonymized from, or generated
+> using Strava Data**, in any form (including original, derivative, aggregated, anonymized,
+> de-identified, or model-output form); and Any of the following activities with respect to an AI
+> Application: training, pre-training, post-training, fine-tuning, reinforcement learning,
+> alignment, grounding, evaluation, benchmarking, embedding generation, retrieval-augmented
+> generation, **ingestion into a context window or working memory**, and any other activity
+> intended or reasonably likely to develop, improve, evaluate, or **operate** an AI Application."
+> *(emphasis mine)*
+
+The owner's clarification was: *"I'm not proposing passing Strava data to an LLM [directly]. I'm
+proposing we use it to populate a history in our app, where it's combined with our data or a
+history from other applications… The LLM reads the data in our app, which is aggregate across all
+data sources."* Read that against the clause. **"Directly or indirectly"** closes the indirection.
+**"Any data derived from, aggregated from… in any form"** closes the aggregation. **"Ingestion into
+a context window or working memory"** is a literal description of what our retrieval layer does
+when it assembles coach context. And **"operation"**, repeated twice, is what distinguishes this
+from a training ban: §5.3 is not a rule about building models, it is a rule about *running* one on
+their data. The distinction the task asked me to draw — training bans (near-certain) vs
+serving-the-user's-own-data-through-an-LLM (the real question) — resolves the wrong way here.
+Strava drafted for exactly this case and forbade both.
+
+Note also what §3.5 gives away: Strava built the **Strava MCP** as *"the sole authorized first-party
+agent-mediated interface"*, on which *"Subscribers to Strava may access the Strava MCP in connection
+with their personal use of their own Strava data… and may bring their own AI Application to interact
+with their own data."* So the personal-use-of-your-own-data-with-an-LLM case is explicitly carved
+out — **and routed through Strava's own surface, not ours.** §5.16 then forbids us from operating
+*"any MCP Server, agent-mediated interface, or analogous mechanism"* ourselves, *"regardless of
+name"*. The gap in the wall exists and it is deliberately not the shape of a third-party app. That
+is the strongest available evidence that our reading is the intended one rather than an
+over-cautious one: they thought about the exact use case and built a different door for it.
+
+**(b) Does aggregation or derivation help? It is specifically what §5.4 forbids.** Titled *"No
+Aggregation, Analytics, or De-Identified Processing"*:
+
+> "You may not process or disclose Strava Data—even publicly viewable Strava Data—including in an
+> aggregated, de-identified, or anonymized manner, for the purposes of analytics, analyses,
+> customer insight generation, or product or service improvements. **You may not combine Strava
+> Data with other customer data for these or any other purposes.** The restrictions in this Section
+> 5.4 apply to data derived from Strava Data and to output that incorporates or was generated using
+> Strava Data."
+
+"You may not combine Strava Data with other customer data … for any other purposes" is the
+one-sentence answer to the migrate-then-merge architecture. Merging with HealthKit history is the
+combination the sentence names. And the trailing sentence — restrictions attach to *"output that
+incorporates or was generated using Strava Data"* — confirms the general principle the task flagged:
+**restrictions follow the data, not the call.** Laundering a Strava run through our own
+`workout_history` table does not produce a non-Strava row; it produces Strava Data in a new
+location, still carrying every restriction, plus a derived-data tail that catches the coach's
+summary of it.
+
+**(c) Retention: seven days, and that alone ends it.** §6.2: *"You may not retain Strava Data in
+your cache for longer than seven (7) days… Except for such limited caching, you may not store
+Strava Data."* §5.5: *"You may not bulk-export Strava Data, including by accumulating Strava Data
+through repeated authorized API calls into a corpus, dataset, archive, or database that exceeds the
+operational scope of your Developer Application"*, and *"You may not store Strava Data, or any data
+derived from Strava Data, in any **Persistent Index**… indefinite storage in vector stores,
+embedding stores, search indexes, knowledge graphs, retrieval-augmented data stores, **archives**,
+and any other storage configured to enable subsequent retrieval, query, or use."* §6.4 caps
+retention at *"only so long as necessary for the purpose for which it was originally obtained."*
+
+**A seven-day cache is not a history.** The owner's requirement is the word "history" — the whole
+point is a durable record of what someone has done, going back years, that the coach can reason
+over. Even with §5.3 and §5.4 struck out, §6.2 would still forbid the thing being asked for. Three
+independent clauses each kill it.
+
+On disconnect, §7.4 requires deletion within **thirty (30) days** of *"all Strava Data and all
+Personal Data derived from Strava Data relating to the requesting or revoking user"* on user
+request, revocation, **or** Strava-account deletion — and *"regardless of user"* if we stop using
+the API or the agreement terminates. §6.3 requires deletions the user makes on Strava to propagate
+to us **within 48 hours**, which on its own implies a live mirror we must poll or webhook, not an
+archive. Agreement §4.4 repeats it: on termination we *"must promptly cease using and permanently
+delete… all Strava Data provided hereunder and so certify in writing to Strava."* Note the shape of
+that risk: an imported-then-merged history means a disconnect obliges us to **surgically unpick
+Strava-derived rows out of a merged store, and arguably any coach memory derived from them, within
+30 days** — which is only possible if provenance is tracked per-row from day one. A16 assumes A14's
+canonical store carries per-row provenance regardless of what we decide here.
+
+**One honest caveat, which does not change the answer.** The Policy uses **"AI Application"** as a
+defined term four times and **never defines it**; the word does not appear in the Agreement at all.
+Same for "Persistent Index" — used, capitalised, undefined. A drafting gap. It is tempting to build
+on it. Don't: §5 opens with *"Strava shall determine in its sole discretion whether your Developer
+Application's use of the Strava API Materials complies with this Section and the Agreement"*, and
+§6.2 of the Agreement plus §3.2/§6.2 of the Policy give them audit rights and unilateral
+termination. An undefined term interpreted at the counterparty's sole discretion is not a loophole,
+it is an unbounded risk. Cadence is a coach whose entire value is an LLM reading your history; there
+is no reading of "AI Application" under which we are not one.
+
+**What this means for the requirement.** The bi-directional integration the owner asked for splits
+cleanly, and only one half survives:
+
+- **Read/import into a durable history the coach reasons over — dead.** §5.3, §5.4, §6.2 each
+  independently. Not "risky", not "needs review". Prohibited in terms.
+- **Write/publish our workouts to Strava — alive**, and genuinely useful. Pushing an activity we
+  own to a user's Strava feed sends no Strava Data anywhere; nothing lands in our store and nothing
+  reaches a model. See the write section below.
+
+**The generic connections pattern (this is the durable deliverable)**
+
+Strava would be our first third-party OAuth integration, and whatever we conclude about Strava
+specifically, **the pattern outlives it** — A17 (Oura) consumes it, Google Fit / Health Connect
+would, Garmin would. `Connection` in
+[`packages/cadence-shared/src/types/baseline.ts:169`](../../packages/cadence-shared/src/types/baseline.ts)
+is currently a stub with nothing behind it:
+
+```ts
+export interface Connection {
+  source: 'apple_health' | string;   // `| string` = "we haven't decided yet"
+  scopes: string[];
+  status: 'connected' | 'disconnected';
+}
+```
+
+It lives on `UserProfile.connections` and no table backs it. Note the shape already leaks a wrong
+assumption: `apple_health` is not a connection in this sense at all — HealthKit is an on-device
+grant with no server-side token, no refresh, and no revocation webhook (see
+`migrations/cadence/0024_health_digests.sql`, where the client builds the digest and POSTs it). Two
+genuinely different things are sharing one type. The generic pattern should model **server-side
+OAuth connections**, and `apple_health` should either move out or be explicitly marked as the
+device-grant variant.
+
+*Generic — belongs to the pattern, not to Strava:*
+
+1. **`cadence.connections` table** (new migration, `0033_connections.sql`): `user_id`, `provider`,
+   `provider_user_id`, `scopes text[]`, `status`, `connected_at`, `last_sync_at`, `expires_at`, and
+   the encrypted token blob. One row per (user, provider). RLS owner policy like every other
+   Cadence table; `pack_touch` trigger if a connection's existence should invalidate the context
+   pack. **The refresh token must never be readable by the client** — no `VITE_*`, no anon-key
+   read path; the row is service-role-only, which means the RLS policy here is *deny-to-user*,
+   unlike the rest of the schema.
+2. **Encrypted-at-rest token store** (`apps/cadence-api/src/services/connections/token-store.ts`):
+   AES-256-GCM via `node:crypto` with a key from `CADENCE_CONNECTIONS_KEY`, added to
+   `apps/cadence-api/src/config.ts` beside the existing `apns` / `weatherkit` blocks. Include a
+   `key_version` column from day one so rotation is possible without a migration.
+   `apps/cadence-api/src/services/weather/weatherkit-http.ts` is the precedent for
+   "third-party credentials, no SDK, config-gated, absent block means feature-off" — follow its
+   `isWeatherKitConfigured()` shape so an unconfigured deploy degrades rather than crashes.
+3. **Generic OAuth routes** (`apps/cadence-api/src/routes/connections.ts`, mounted in
+   `apps/cadence-api/src/app.ts` next to the other `/me` routes): `GET /me/connections` (status
+   list — never tokens), `POST /me/connections/:provider/start` (returns the authorize URL with a
+   signed, single-use, short-TTL `state`), `GET /connections/:provider/callback` (public, exchanges
+   code, stores tokens), `DELETE /me/connections/:provider` (revoke upstream, then delete local).
+   Provider-specific bits (authorize URL, scope strings, token endpoint, revoke endpoint) live in a
+   small per-provider module the generic router looks up.
+4. **Refresh-on-use with a single-flight lock.** Serverless means N concurrent lambdas can each
+   notice an expired token and each burn a refresh; providers that rotate refresh tokens will
+   invalidate all but one and the connection dies. A row-level advisory lock (or a `refreshing_at`
+   claim column) is not optional here.
+5. **Revocation is three-sided:** the user disconnects in Cadence, the user revokes at the provider
+   (we learn via webhook or a 401), or we shut the integration down. All three must converge on the
+   same code path — the same lesson as A5's "sign out and start over should share one path".
+6. **A per-provider retention policy is part of the pattern, not a Strava special case.** Strava's
+   is 7 days plus a 30-day deletion SLA; Oura's will differ. The connection row should carry the
+   provider's policy so a sweeper can enforce it generically rather than each integration
+   remembering its own rules.
+
+*Strava-specific — must NOT leak into the generic layer:* the seven-day cache ceiling and the
+48-hour deletion-propagation SLA; the single-webhook-subscription-per-application constraint (§below);
+the attribution/branding obligations; and the fact that for Strava the store is write-only. If those
+end up hard-coded in `connections.ts` rather than in a `providers/strava.ts` descriptor, Oura will
+inherit rules that were never about it.
+
+**The write half — what actually survives**
+
+Agreement §7.1 expressly contemplates it: *"Your Developer Applications may include the option to
+upload activities or information to the Strava Platform."* And the compliance story is clean, which
+is the point: **an activity the user logged in Cadence is our data, not Strava Data.** It never
+becomes Strava Data by being sent *to* Strava — §2.3(i) defines Strava Data as *"all data you access
+or collect from the Strava API Materials"*, i.e. data flowing outward from Strava to us. Sending
+in the other direction touches none of §5.3, §5.4, §5.5 or §6.2.
+
+What we would push: occurrences the user logged against a movement-area activity, where we hold
+enough to make a real Strava entry — type, start time, elapsed time, distance where we have it,
+and the user's own note. No GPS (we do not record tracks), so these are manual-style entries, not
+routes. Off-plan logs (`ADHOC_CATEGORY` in `apps/cadence-api/src/repos/activities.ts`) qualify
+equally — the user did them.
+
+Design constraints on the write path:
+
+- **Opt-in per push, or one explicit standing consent — never silent.** Publishing to someone's
+  Strava feed is a social act with an audience. It is exactly BRAND.md's *"confirm before
+  committing"*, and getting this wrong posts to a user's followers on our initiative.
+- **Idempotency.** Store the returned Strava activity id on our occurrence so a retry, a webhook
+  echo, or a re-log does not create a second copy. Without it, a serverless retry duplicates a
+  post on a stranger's feed.
+- **API-created activities are visibly attributed.** Strava shows an "uploaded via *App*" line on
+  activities created through the API; there is no hidden write. That is fine — desirable, even —
+  but it means the push is a branding surface, not a silent sync, and it must therefore respect
+  §4.3 (no implied endorsement) and §4.6 (**no press release mentioning Strava without their prior
+  written consent** — a launch-blog trap worth flagging now).
+- **We must not create the round-trip we just banned.** If we push an activity to Strava and the
+  user also has Strava→Apple Health sync on, that activity can come back to us through HealthKit.
+  Harmless in itself (it is our own data returning), but the dedup rules below must recognise our
+  own echo or the coach will see every logged workout twice.
+- **Reading back what we wrote is still reading.** Fetching the activity id we just created is a
+  Strava API call returning Strava Data. Keep the id, do not re-fetch the object.
+
+**Attribution and display obligations (Brand Guidelines, apply the moment we ship anything):**
+
+- Interoperability must be described as exactly *"Powered by Strava"* or *"Compatible with
+  Strava"* — those two phrasings, not a paraphrase. (Note both are stiffer than Cadence's voice;
+  the copy around them has to carry the warmth.)
+- *"Never use any part of a Strava logo as the icon for your application"*; the Strava logo must be
+  *"completely separate and apart from (and should not appear more prominently than) the name/logo
+  of your application"*; never modified, altered or animated.
+- OAuth must go through `https://www.strava.com/oauth/authorize` or `.../oauth/mobile/authorize`,
+  presented as the Connect-with-Strava button.
+- Any link to a source activity must read exactly *"View on Strava"*, styled legibly (bold,
+  underline, or Strava orange `#FC5200`).
+- *"You must not use the Strava name in your application name."*
+
+**And the clause nobody thinks to read: §5.2, "No Competing or Imitating Applications".** *"You may
+not use the Strava API Materials in any manner that is competitive to Strava or the Strava
+Platform."* Strava has since shipped its own AI analytics features. An AI coach that reads your
+training history and tells you what to do next is not obviously non-competitive with that, and
+§5 leaves the judgement to *"Strava… in its sole discretion"*. Even the surviving write-only path
+should be presented to Strava as *feeding* their platform, because that framing is both true and
+the one that keeps the integration alive. §5.8 is the related trap for a paid app: we may not
+charge *"for access to or use of the Strava API Materials"*, though we may charge for
+*"functionality not provided by the Strava Platform… and that is not substantially duplicative of
+functionality offered by Strava"* — so Strava publishing must never sit behind the paywall as a
+named feature.
+
+**Dedup — no Strava store, ever**
+
+There is **no `cadence.strava_activities` table** in any version of this design, and that is a
+deliberate ruling, not an omission. Imported workouts land in **A14's canonical history store** with
+per-row provenance; a Strava row is a row in the same table with `source = 'strava'`. Two reasons,
+and the second is the one that matters: a separate store makes the same run appear twice to the
+coach, and — under the terms above — provenance is the only thing that makes §7.4's *"delete all
+Strava Data and all Personal Data derived from Strava Data relating to the revoking user"* an
+executable query rather than a forensic exercise. **Whatever we decide about Strava, A14's store
+needs per-row provenance for this reason alone.**
+
+Recognising a Strava copy of a run we already know from HealthKit:
+
+- **Match on start time + duration proximity**, not on distance or title. Start times drift between
+  sources (device clock, upload rounding, timezone handling): treat two workouts as the same event
+  when starts are within ~2 minutes *and* durations within ~5%. Distance is the weaker signal —
+  GPS and wrist-derived distance for the same run differ by more than you would expect, and an
+  indoor workout has no distance at all.
+- **The obvious cases first, before fuzzy matching.** If the Strava activity carries an
+  `external_id` we wrote, it is our own echo — drop it. If the HealthKit workout's source is
+  Strava's own bundle, the two records are literally the same object arriving by two doors.
+- **Fidelity wins, provenance is kept.** When the same event arrives twice, keep the richer record
+  and note both sources on the row. Dropping the second copy silently loses the fact that we saw
+  it, which matters when a disconnect requires unpicking one source.
+- **Same-day repeats are real.** Two 30-minute runs in one day is a normal Tuesday for some people.
+  The window must be tight enough not to collapse them, which is why it is start-time-anchored
+  rather than day-anchored.
+
+**Architecture scaffold**
+
+Two columns, because the terms split the design. **Everything in the right-hand column is scaffolded
+for completeness and must not be built** unless the terms change or Strava grants a written
+exception — see the closing note.
+
+| Component | File (existing / proposed) | Owner | Ships? |
+|---|---|---|---|
+| `Connection` type, fleshed out | `packages/cadence-shared/src/types/baseline.ts:169` *(exists, stub)* | shared | yes |
+| `connections` table + RLS | `migrations/cadence/0033_connections.sql` *(proposed)* | api | yes |
+| Encrypted token store | `apps/cadence-api/src/services/connections/token-store.ts` *(proposed)* | api | yes |
+| Generic OAuth routes | `apps/cadence-api/src/routes/connections.ts` *(proposed)*, mounted in `apps/cadence-api/src/app.ts:44` | api | yes |
+| Provider descriptor | `apps/cadence-api/src/services/connections/providers/strava.ts` *(proposed)* | api | yes |
+| Strava HTTP client | `apps/cadence-api/src/services/strava/strava-http.ts` *(proposed; mirror `services/weather/weatherkit-http.ts`)* | api | yes |
+| **Publish occurrence → Strava** | `apps/cadence-api/src/services/strava/publish.ts` *(proposed)* | api | **yes** |
+| Config block + secrets | `apps/cadence-api/src/config.ts:141` *(exists — add beside `weatherkit`)* | api | yes |
+| Canonical history store + provenance | **A14** *(sibling entry)* | A14 | yes |
+| Retention sweeper (per-provider) | `apps/cadence-api/src/services/connections/retention.ts` *(proposed)* | api | yes |
+| ~~Webhook receiver~~ | ~~`apps/cadence-api/src/routes/strava-webhook.ts`~~ | — | **no — §5.3/§6.2** |
+| ~~Backfill worker~~ | ~~`apps/cadence-api/src/services/strava/backfill.ts`~~ | — | **no — §5.5 bulk-export** |
+| ~~Strava rows in canonical history~~ | ~~A14 store, `source='strava'`~~ | — | **no — §5.4 combine** |
+| ~~Coach reads Strava-derived rows~~ | ~~`services/retrieval/catalog.ts` `renderCatalogDoc`~~ | — | **no — §5.3 context window** |
+
+The last row is the sharpest illustration of why this is not a solvable engineering problem.
+`renderCatalogDoc` in `apps/cadence-api/src/services/retrieval/catalog.ts` exists to assemble
+domain rows into the coach's prompt. §5.3 prohibits *"ingestion into a context window or working
+memory"*. There is no version of Cadence in which imported history reaches the user and does not
+pass through that function.
+
+*Flow 1 — publish (ships).* User logs an occurrence → `POST /me/connections/strava/publish` (or a
+standing opt-in fires it) → `token-store` decrypts + refreshes if needed → Strava upload endpoint →
+returned activity id stored on the occurrence for idempotency → UI shows "View on Strava". No
+inbound data at any step.
+
+*Flow 2 — webhook incremental sync (scaffolded, not built).* Strava allows **one push-subscription
+per application**, created once out-of-band; the callback is a single public URL that must answer
+Strava's `GET` validation handshake by echoing `hub.challenge` when `hub.verify_token` matches, then
+accept `POST` events (`object_type`, `aspect_type` create/update/delete, `object_id`, `owner_id`).
+Two Cadence-specific hazards worth recording even though we are not building it: **(i)** Strava
+expects a fast acknowledgement, and cadence-api runs as an Express service on Vercel
+(`apps/cadence-api/vercel.json`, catch-all rewrite) — a cold start can exceed the window, so the
+handler must be a thin enqueue-and-200 with the real work deferred, and the endpoint wants keeping
+warm. **(ii)** The route must mount **outside** `requireCadenceUser`; every other `/me` route sits
+behind it (`apps/cadence-api/src/app.ts`), so a webhook route added carelessly would either 401
+Strava forever or, worse, be added by disabling the guard. Verification is the shared `verify_token`
+plus an `owner_id`→`connections.provider_user_id` lookup — Strava does not sign payloads, so the
+event body is a **notification, not evidence**: it says "activity N changed", and the object must be
+fetched. Delete events are the one case where the event alone is actionable, and §6.3's 48-hour
+propagation SLA means they cannot be dropped on the floor.
+
+*Flow 3 — rate-limited historical backfill (scaffolded, not built).* This is the migration the
+owner asked for and the one §5.5 names: *"accumulating Strava Data through repeated authorized API
+calls into a corpus, dataset, archive, or database."* Shape, for the record: page
+`GET /athlete/activities` with `after`/`before` epochs and `per_page`, walking backwards from today;
+persist a cursor per connection so a lambda timeout resumes rather than restarts; back off on 429
+using the returned usage headers rather than a fixed sleep; and decide up front whether summaries
+suffice — a per-activity `GET /activities/{id}` for splits and laps multiplies the call count by the
+number of activities and turns a minutes-long job into an hours-long one.
+**A11. What does this cost? — token accounting by user, task, day, week and phase (2026-08-11)**
+
+Owner: *"We will want to start tracking token usage: by user, by task, by day, by week, etc
+(including by onboarding) so that we can begin to assess the cost of running this application.
+Eventually we can build an admin view to review the data, but for now we just need to start
+tracking it."* So: capture must be complete and correct now, aggregation must be answerable in SQL,
+and there is no admin UI in this entry.
+
+**What was already captured — verified against production, not assumed.**
+AI Admin writes one `diagnostic_logs` row per model call, and for Cadence it is in far better shape
+than expected. Over the whole corpus (4,780 rows, 2026-02-08 → 2026-08-11), the Cadence slice is
+1,283 rows and every axis the owner named is already on them:
+
+| axis | column | Cadence coverage |
+|---|---|---|
+| by user | `user_id` | **1,283 / 1,283 — zero nulls** |
+| by task | `processing_job_id` → `processing_jobs.slug` | every job row |
+| by day/week | `created_at` (timestamptz) | every row |
+| tokens | `llm_response.usage.{prompt,completion,total}_tokens` | see below |
+| model | `llm_timing.model` | every row that reached a model |
+
+The `user_id` question mattered most and the answer is the good one: `DiagnosticSession`'s
+constructor reads `effectiveUserId(getAuthContext())`, and for `mode: 'api_key'` that returns
+`forwardedUserId` (`backend/src/db/tenant.ts`) — which `aim.ts`'s `aimContext()` sets to the
+**Cadence end-user id**, not the workspace or the sentinel api-key uuid. Confirmed on live rows: 26
+distinct `user_id`s, all real Cadence users. Per-user attribution needed nothing built.
+
+Per-job usage coverage is also near-perfect, because no Cadence job sets `advanced.diagnostics`, so
+`shouldRunDiagnostics` returns `{enabled: true, persist: true}` for all 28 and the verbose branch
+that calls `endLlmTimer` always runs. Verified: `prescribe-session` 189/189, `context-select`
+187/187, `synthesize-plan` 93/93, `pack-select` 80/80, `pack-summarize` 73/73, `capture-detour`
+60/60, `plan-vet` 53/53, `capture-extract` 288/290. **Broker fire-and-forget calls are fully
+attributed** — `void runCaptureExtract(...)` still runs inside `withAim`, so the ALS context is
+live when the diagnostic row is constructed. That was the third suspected gap and it is not one.
+
+Sample query that produced the table above (AI Admin DB, `platform:cadence` slice):
+
+```sql
+select date_trunc('day', d.created_at) as day, coalesce(j.slug, 'coach-chat') as task,
+       count(*) as calls,
+       count(*) filter (where d.llm_response->'usage'->>'prompt_tokens' is not null) as with_usage,
+       sum((d.llm_response->'usage'->>'prompt_tokens')::bigint)     as prompt_tokens,
+       sum((d.llm_response->'usage'->>'completion_tokens')::bigint) as completion_tokens
+from diagnostic_logs d left join processing_jobs j on j.id = d.processing_job_id
+where d.calling_application = 'platform:cadence'
+group by 1, 2 order by 1 desc, 5 desc nulls last;
+```
+
+**Gap 1 — the most expensive call in the app is the one we half-measure.** The coach chat is
+`anthropic-claude-4-5-sonnet` at ~10k prompt tokens a turn, and it is the only Cadence call whose
+usage does not come from AI Admin's own LLM client: Cadence streams in-process and reconstructs
+usage from the SSE frames in `coach-stream.ts`, then hands it to `recordCoachReply`. Of 184 coach
+turns, **141 carry usage — and the trend is the wrong way: July 111/130 (85%), August 25/49 (51%)**.
+The mechanism is exact, not mysterious. Upstream sometimes ends the stream with `inputTokens: 0` /
+no usage frame at all; `relayAndAccumulate` faithfully returns `0`; and then `aim.ts` line 187 —
+`args.metrics.promptTokens || args.metrics.completionTokens` — sees `0 || 0`, decides there is no
+usage, and writes `usage: null`. Live proof, one conversation on 2026-08-11 where the prompt-token
+count climbs turn over turn (9252 → 9616 → 9857 → 9999 → 10085 → 10360 → 10491) with **zero-token
+turns interleaved between them** — turns that plainly consumed ~10k prompt tokens each and are
+recorded as having consumed nothing. Same in `cadence.ai_log`: `promptTokens: "0"` on a 1,523-char
+reply. We are under-reporting coach spend by roughly half, on the dominant cost line.
+
+Two things follow, and they are different. (a) A zero we invented must be distinguishable from a
+zero we measured — `usage: null` is a lie either way, so the row has to say *how* it knows. (b) When
+upstream tells us nothing, we still hold the resolved prompt and the full reply text, so a
+characters/4 estimate is available and is enormously better than zero. Cost math needs a floor, and
+an honest flag on the estimate is what keeps the floor from becoming a fiction.
+
+**Gap 2 — "by onboarding" is not answerable at all today, and cannot be answered by a join.**
+`POST /coach/sessions` receives `intent: 'onboarding' | 'ongoing'`, uses it for `buildContextPack`
+and `renderPickProtocol`, and then **drops it** — it is not passed to `openCoachSession`, not stored
+on `cadence.conversations`, not in any diagnostic row. Worse, the obvious fix does not exist:
+`diagnostic_logs` lives in the **AI Admin Supabase project** (`mkxynwtuqceiblilxkvz`) and every
+`cadence.*` table lives in a **different project** (`qvukqinwmyvewzgcsgzt`). There is no cross-database
+join. Any Cadence-side fact — phase, conversation, plan state — either gets written into the AI
+Admin row at call time, or it is never queryable alongside the tokens. This is the single constraint
+that decides the design.
+
+**Gap 3 — a coach turn that produces no text produces no row.** `recordCoachReply` is called only
+`if (content.trim())`, and it is the *only* caller of `diag.complete()` on the chat path. A turn the
+user Stops, or one that errors after tokens were spent, never completes its `DiagnosticSession` —
+so there is no row at all, not even a zero one. It also always reports `complete('success')`,
+including for a turn the client dropped. (Failed *job* calls do log: `job-execution.ts` calls
+`diag.complete('error', …)` — 579 error rows exist corpus-wide. Those legitimately carry no usage
+because the call threw before a response; the failover case where a primary burned tokens and then
+succeeded on failover does lose the primary's tokens, which is real but rare and out of scope here.)
+
+**Gap 4 — estimated tokens are already silently mixed in.** `v2-stream-events.ts` and
+`coach-stream.ts` both fall back `inputTokens ?? estimatedInputTokens`, and nothing downstream
+records which one arrived. Provider-estimated and provider-metered tokens are being summed as if
+identical.
+
+**The design: one Cadence-side ledger, written at the single seam every Cadence AI call passes
+through.** Given the two-project split, the choice is between stamping Cadence facts into AI Admin
+rows (touches the core engine's job signature, and still leaves the numbers un-joinable to Cadence
+users) or mirroring the usage into Cadence. The second wins on every count and is smaller:
+`apps/cadence-api/src/ai/aim.ts` is a genuine chokepoint — all 28 job slugs reach the model through
+`runJobBySlug`/`runJob`, and the coach reaches it through `recordCoachReply`. Nothing else calls a
+model. One write in three functions covers 100% of Cadence AI traffic, in the same database as the
+users, conversations and plans it needs to be sliced by.
+
+Diagnostics stay exactly as they are — they remain the auditable per-call record, and the ledger is
+deliberately a *derived* mirror, not a replacement. If the two disagree, `diagnostic_logs` is right.
+
+Phase attribution rides an AsyncLocalStorage scope rather than 28 changed signatures. `void
+runCaptureExtract(...)` inherits the store from the request that started it (the same property
+`runWithAuth` already depends on), so a fire-and-forget Broker call started during an onboarding
+turn is attributed to that onboarding session without its call site knowing anything. Phase itself
+is *derived at query time* by joining the recorded `session_id` to `conversations.intent` — one
+column, written once at session open, rather than a phase copied onto every row.
+
+Prices live in `cadence.model_prices` (model, $/1M in, $/1M out, `effective_from`), seeded by the
+migration and joined by the views — one maintainable place, no price literal in any query. A model
+we have not priced shows as `null` cost rather than `0`, so an unpriced model is visible as a hole
+instead of quietly reading as free.
+
+**ARCHITECTURE**
+
+```
+                    ┌──────────────────────── Cadence API (apps/cadence-api) ────────────────────────┐
+                    │                                                                                │
+ POST /coach/       │  routes/coach.ts ──► runWithUsageContext({ sessionId })   [PROPOSED wrapper]   │
+   sessions         │        │              └─ ALS scope; inherited by fire-and-forget Broker calls  │
+   sessions/:id/    │        │                                                                       │
+   messages         │        ├─► services/context-pack.ts ─┐                                         │
+                    │        ├─► services/capture.ts ──────┤                                         │
+                    │        ├─► services/turn-context.ts ─┼─► ai/aim.ts  ◄── THE SEAM (existing)    │
+                    │        └─► …25 more services ────────┘     runJobBySlug / runJob               │
+                    │                                            recordCoachReply                    │
+                    │                                                   │                            │
+                    │                            services/ai-usage.ts ──┘  [PROPOSED]                │
+                    │                              recordUsage() — best-effort, never throws         │
+                    └───────────────────┬────────────────────────────────────┬─────────────────────-─┘
+                                        │ in-process @ai-admin/core          │ postgres (pooler)
+                                        ▼                                    ▼
+        ┌── AI Admin Supabase (mkxyn…) ──────────┐   ┌── Cadence Supabase (qvukq…) ──────────────┐
+        │  diagnostic_logs   [EXISTING, source   │   │  cadence.ai_usage      [PROPOSED 0031]    │
+        │    user_id ✓ job ✓ created_at ✓        │   │  cadence.model_prices  [PROPOSED 0031]    │
+        │    llm_response.usage ~                │   │  cadence.conversations.intent [PROPOSED]  │
+        │    of truth — audit trail, unchanged]  │   │  cadence.v_ai_cost / _daily / _weekly /   │
+        │                                        │   │    _by_user / _by_task / _onboarding      │
+        │  ✗ no cross-DB join possible ──────────┼─X─┤  cadence.users / conversations / plans    │
+        └────────────────────────────────────────┘   └───────────────────────────────────────────┘
+```
+
+| component | file | status |
+|---|---|---|
+| the seam every model call crosses | `apps/cadence-api/src/ai/aim.ts` | existing, +3 write calls |
+| usage writer + token estimator | `apps/cadence-api/src/services/ai-usage.ts` | proposed |
+| phase/session ALS scope | `apps/cadence-api/src/services/ai-usage-context.ts` | proposed |
+| `intent` persisted at session open | `apps/cadence-api/src/repos/conversations.ts`, `routes/coach.ts` | existing, +1 column |
+| ledger, prices, views | `migrations/cadence/0031_ai_usage.sql` | proposed, **not applied** |
+| per-call audit record | `backend/src/services/ai-diagnostics.ts` | existing, unchanged |
+| the aggregation queries | `docs/cadence/TOKEN-ACCOUNTING.md` | proposed |
+
+Ownership: Cadence owns the ledger and the prices; AI Admin owns the diagnostic record and is not
+modified by this entry. Data flow is one-way (call → engine → result → ledger); nothing reads the
+ledger back into a coaching decision, which is what keeps it safe to write best-effort.
+
+**Open questions, unanswered:**
+- Is a Devs.ai-reported token our real cost, or is Devs.ai's own margin on top of it the number the
+  owner actually wants? The ledger prices *model list rates*, which is a lower bound on the invoice.
+- Cache reads and cache writes price differently on every provider and we capture neither. The
+  persona prefix is deliberately cacheable (MEMORY-ARCHITECTURE P0) — so the coach's real bill is
+  probably *below* what list-rate prompt tokens imply, and we cannot yet say by how much.
+- Should the estimate fallback be char/4 or a real tokenizer? char/4 is wrong by 10-20% per model
+  and needs no dependency; a tokenizer is right and is a package per provider family.
+- Retention: `diagnostic_logs` stores full prompts and replies and nothing prunes it. The ledger
+  stores no content, so it can be kept forever — but nobody has decided what happens to the
+  diagnostics it derives from.
+- "Cost of an onboarding" is a distribution, not a number. Do we report median, p90, or mean? An
+  onboarding that ran long because the user was chatty is not the same fact as one that looped.
+**A13. Run tracking, heart rate, and the watch — the WorkoutKit hand-off is v1 (owner 2026-08-11)**
+
+The owner's three requirements, in priority order: **(1)** run tracking in our application, **(2)**
+heart rate for the non-running work — HIIT, resistance, meditation, **(3)** Apple Watch
+notifications.
+
+**The ruling — settled, do not reopen.** Our phone app *composes* the workout (goal / pace /
+interval structure) with **WorkoutKit**, hands it to Apple's own Workout app on the watch — where it
+appears with our icon and name — Apple does all the live tracking (GPS, heart rate,
+battery-optimised), the result lands in HealthKit, and we read it back through the path we already
+have. Accepted trade-off: during the run the user is in Apple's UI, so **no live coach nudges in
+v1**. A native watchOS app is wanted eventually; it is v2.
+
+**Verified against the SDK, not from memory.** Every API claim below was read out of the iOS 26.5
+SDK's own `WorkoutKit.swiftinterface` (under `iPhoneOS.sdk/System/Library/Frameworks/`, in
+`WorkoutKit.framework/Modules/WorkoutKit.swiftmodule/`) and cross-checked against
+[Apple's docs](https://developer.apple.com/documentation/workoutkit). Framework floor is **iOS 17 /
+watchOS 10**. What it actually gives us:
+
+- **Four composition types.** `SingleGoalWorkout` (one goal), `PacerWorkout` (distance *and* time —
+  this is the "run 5 k in 28 min" shape), `CustomWorkout` (warm-up + `[IntervalBlock]` + cool-down),
+  `SwimBikeRunWorkout`. Goals are `WorkoutGoal.open | .distance | .time | .energy` (+
+  `.poolSwimDistanceWithTime`, iOS 18).
+- **Interval structure maps onto ours almost exactly.**
+  `IntervalBlock(steps: [IntervalStep], iterations: Int)`, and
+  `IntervalStep(.work | .recovery, goal:alert:)`. Our own
+  `IntervalSet { workSec, recoverSec, rounds }` (`packages/cadence-shared/src/interval.ts`) **is**
+  one `IntervalBlock`, so `IntervalPlan.sets` → `blocks` and multi-set falls out for free. Two
+  mismatches: `restBetweenSetsSec` has no home in WorkoutKit's model (not a block, not a step), and
+  EMOM (`recoverSec: 0`) must emit a work-only step rather than a zero-length recovery.
+- **Support is a runtime question, not a table.** `CustomWorkout.supportsActivity(_:)`,
+  `.supportsGoal(_:activity:location:)` and `.supportsAlert(_:activity:location:)` are static
+  functions the SDK answers at run time. **Probe them on a device and write down what comes back** —
+  a hardcoded matrix of "which activities WorkoutKit allows" will be wrong and will rot.
+- **Scheduled, not started.** `WorkoutPlan.openInWorkoutApp()` is `@available(watchOS 10.0, *)` and
+  `@available(iOS, unavailable)` — confirmed in the interface file. From an iPhone the *only* route
+  is `WorkoutScheduler.shared.schedule(_:at: DateComponents)`, plus `scheduledWorkouts`,
+  `remove`, `markComplete`, `removeAllWorkouts`, and the cap `maxAllowedScheduledWorkoutCount`. So v1 is
+  "it's on your watch for Thursday", never "tap here and it starts on your wrist". Users see the
+  coming seven days and the previous seven (WWDC23-10016).
+- **No watch, no problem — and we can tell.** `WorkoutScheduler.isSupported`, `authorizationState`
+  / `requestAuthorization()` (`notDetermined | restricted | denied | authorized`), and
+  `StateError.watchNotPaired` / `.workoutApplicationNotInstalled`. The affordance must not render
+  at all when these say no; a dead "send to your watch" button is exactly the class of defect A5/A6
+  keep finding.
+- **The join key we did not know we had.** `WorkoutPlan.init(_:id: UUID = UUID())` lets *us* choose
+  the id, and `HKWorkout.workoutPlan` (async, iOS 17+) hands the plan back off a completed workout.
+  So a HealthKit workout can be **matched to our occurrence by id** instead of guessed at by
+  timestamp and type. This is the most valuable thing in the framework for us and it is the clean
+  hand-off to A14.
+
+**v0 — phone-only Core Location + MapKit tracking. Verdict: don't build it.** Asked honestly, it is
+not a smaller first step than the hand-off; it is a bigger one.
+
+- *What it costs.* A continuous `CLLocationManager` session, the `location` background mode (a new
+  `UIBackgroundModes` entry in `apps/cadence-ios/ios/App/App/Info.plist` plus an App Review
+  justification), `NSLocationAlwaysAndWhenInUseUsageDescription` — we have when-in-use only, and its
+  copy promises *"It never tracks where you go"*, which continuous route tracking makes false — a
+  route store, GPS-noise filtering, pace maths, auto-pause, a live map, screen-wake, battery
+  behaviour, and crash-safe partial-run recovery. `@capacitor/geolocation` is already installed but
+  gives one coarse `getCurrentPosition` for weather (`capability/native.ts`); it is not a run
+  tracker, and streaming location through the webview bridge is the wrong place for one.
+- *What it buys.* A run recorded less accurately than the watch, on a device many runners don't
+  carry, **with no heart rate at all** — requirement 2 gets nothing. And to reach A14's store by the
+  same path as everything else it would have to be written *into* HealthKit, which means
+  `WRITE_WORKOUTS` and rewriting the `NSHealthUpdateUsageDescription` string we currently use to say
+  we don't write.
+- *Against v1:* a pure composer plus a small plugin, **no entitlement, no new background mode, no
+  new permission**, and it returns GPS *and* heart rate.
+- *The one thing it would cover:* someone with no Apple Watch. That is real and worth naming rather
+  than hiding — but the answer for them is the manual log and the Apple Health import we already
+  have, not a second tracking stack. Revisit only if watchless users turn out to be the majority.
+
+**v1 — the committed slice. Architecture.**
+
+| Component | Where | Status |
+|---|---|---|
+| Composer: `SessionItem` → `WorkoutPlanSpec` (pure) | `packages/cadence-shared/src/workout-plan.ts` | **new** |
+| Capability seam entry `WorkoutPlanCapability` | `apps/cadence-web/src/lib/capability/index.ts` | extend |
+| Native impl / web no-op | `…/capability/native.ts`, `…/capability/web.ts` | extend |
+| Native bridge `CadenceWorkoutPlanPlugin` | `apps/cadence-ios/ios/App/App/CadenceWorkoutPlan/` | **new** |
+| Prescription source | `occurrences.session` (migration 0010), built by `session-generate.ts` | existing |
+| Interval vocabulary + bounds | `packages/cadence-shared/src/interval.ts` | existing, reuse |
+| Read-back | `capacitor-health` → `capability.health.getWorkouts` | existing |
+| Where completed workouts land | **A14's cross-source store** | not designed here |
+
+- **The bridge is ours and it has to be native.** A webview cannot run on watchOS and cannot call
+  WorkoutKit, so the calls live in a Capacitor plugin in the **App target** — modelled on
+  `apps/cadence-ios/ios/App/App/CadenceCoachIdentity/CadenceCoachIdentityPlugin.swift`
+  (`@objc(...)`, `CAPPlugin, CAPBridgedPlugin`, `pluginMethods`). Methods: `isSupported()`,
+  `requestAuthorization()`, `schedule({plans})`, `listScheduled()`, `remove({id, dateISO})`,
+  `markComplete({id, dateISO})`, `removeAll()`. Same manual Xcode wiring caveat as
+  CadenceCoachIdentity — Capacitor's SPM layout does not auto-discover loose Swift files, so the
+  folder must be dragged into the App target (that plugin's README documents the step, and is itself
+  still marked UNVERIFIED ON DEVICE; a second hand-wired plugin doubles that debt).
+- **Everything decidable is decided in TypeScript.** The Swift side decodes a spec and calls the
+  framework; it makes no judgements. `tool: 'interval'` + the five `interval_*` fields →
+  `CustomWorkout`; a run with both `distance_km` and `duration_min` → `PacerWorkout`; one or the
+  other → `SingleGoalWorkout(.distance / .time)`; anything else → nothing at all rather than a
+  meaningless `.open` goal. Reuse the existing clamps (`MAX_SETS 4`, `MAX_ROUNDS 20`,
+  `MAX_INTERVAL_SEC 3600`) — do not invent a second set of bounds on the Swift side.
+- **Plan id = f(occurrence_id), deterministic.** Makes scheduling idempotent under replan *and*
+  makes the read-back attributable. This is the contract A14 consumes.
+- **The server needs nothing.** Scheduling is device-local and HealthKit-adjacent; the phone already
+  holds the session. If the API ever needs to know what is on a watch, that is a projection of A14's
+  store, not a second source of truth.
+- **Flow:** coach turn → `occurrences.session` → user opens the session → "Send this to your watch"
+  → composer → seam → plugin → `WorkoutScheduler.schedule` → Apple's Workout app → `HKWorkout`
+  carrying `workoutPlan.id` → `queryWorkouts` → A14 → occurrence done.
+- **Build order.** (1) the pure composer and its tests — all the design risk is here and it needs no
+  Xcode; (2) the plugin with `isSupported` / `requestAuthorization` only, confirmed on a device;
+  (3) `schedule` + `listScheduled` and one real run end-to-end; (4) read-back matching by plan id.
+- **Provisioning.** WorkoutKit needs **no entitlement** — nothing is added to `App.entitlements`,
+  no new usage-description string, so Debug sideload and the free-team story are unchanged. The one
+  real build change is the floor: the project is `IPHONEOS_DEPLOYMENT_TARGET = 15.0` and WorkoutKit
+  is iOS 17. `CapApp-SPM/Package.swift` declares `.iOS(.v15)` and is stamped "DO NOT MODIFY —
+  managed by Capacitor CLI", which is a second reason the bridge belongs in the App target behind
+  `@available(iOS 17, *)` guards rather than in the SPM package.
+
+**v2 — a native watchOS app (scaffolded, not designed).** Only start it once v1's read-back is
+proven against real HealthKit data. What it structurally adds: `HKWorkoutSession` +
+`HKLiveWorkoutBuilder` for **live** heart rate, distance and energy in *our* UI; mid-run coaching,
+the thing v1 knowingly gives up; `openInWorkoutApp()`, so "start this now" becomes possible at all;
+and standalone use with the phone left behind. What it costs: a second app target and a second UI
+codebase in SwiftUI — **this is the point at which "one codebase behind a capability seam" ends** —
+plus complications, watch-side notification layouts, and another review surface.
+
+**Requirement 2 — heart rate, path by path.**
+
+| | v0 phone GPS | v1 hand-off | v2 watch app |
+|---|---|---|---|
+| Running HR | none | after the fact, from HealthKit | live |
+| HIIT / resistance HR | none | after the fact | live |
+| HR *targets during* the work | none | yes — Apple enforces them | yes |
+| Meditation | none | not a WorkoutKit activity | possible, see below |
+
+- **Targets are free in v1.** `HeartRateRangeAlert` (`.heartRate(120...150, unit:)`) and
+  `HeartRateZoneAlert` (`.heartRate(zone: 3)`) attach per step, and the watch does the alerting.
+  Legality per activity is `supportsAlert(_:activity:location:)` — probe, don't assume.
+- **Reading HR back is where the actual bug is, and it has nothing to do with the watch.**
+  `capacitor-health`'s `Workout` payload declares `heartRate?: HeartRateSample[]` and **no
+  `avgHeartRate` field at all** (`node_modules/capacitor-health/dist/esm/definitions.d.ts`; its
+  `HealthPlugin.swift` never emits one). Our seam's `toSeamWorkout` reads `w.avgHeartRate`
+  (`apps/cadence-web/src/lib/capability/native.ts`), so **`Workout.avgHr` has always been
+  `undefined`** — and we pass `includeHeartRate: false` regardless. Requirement 2 is blocked on
+  this, not on hardware. Fixing it means asking for the samples and reducing them, and the series is
+  unbounded (`HKObjectQueryNoLimit` — 700+ samples for an hour), so the reduction happens natively
+  or at the seam, never as a raw array crossing into React state.
+- **Meditation is not a workout and must not be made into one.** HealthKit models it as
+  `mindfulSession`, and the plugin already supports it — `READ_MINDFULNESS` in `HealthPermission`,
+  and `queryAggregated({ dataType: 'mindfulness' })`. We request neither today
+  (`HEALTH_PERMISSIONS` in `native.ts` is five read scopes; mindfulness is not among them), so
+  adding it is small. But heart rate during a sit is a **calm/recovery signal and nothing else**:
+  never a target, never a score, and the coach never says a sit went better because a number went
+  down. Hearth, not scoreboard. Our `meditate` tool already runs in-app with bells; the watch adds a
+  measured minute count and resting-HR context, not a grade.
+
+**Requirement 3 — Apple Watch notifications: free vs. work.**
+
+**Free today, zero code:** an iPhone notification is shown on the paired watch whenever the phone is
+locked — Apple's default forwarding, with "Mirror my iPhone" the default per-app setting ([Apple
+Support HT108369](https://support.apple.com/en-us/108369)). So every push already sent through
+`apps/cadence-api/src/services/notify/dispatch.ts` → `push-apns.ts`, and every local nudge
+scheduled by `apps/cadence-web/src/lib/local-notifications-sync.ts`, **already reaches the wrist**.
+There is no watch-side work required to get a notification onto a watch.
+
+What actually needs work, most valuable first:
+
+- **Nothing consumes a tap.** There is no `pushNotificationActionPerformed` listener, and no
+  `localNotificationActionPerformed` one, anywhere in `apps/cadence-web` or `apps/cadence-ios`, and
+  no `UNUserNotificationCenterDelegate` in `AppDelegate.swift`. The categories and the seven action
+  ids in `packages/cadence-shared/src/notifications/actions.ts` are registered and carried on push
+  as `aps.category` — and the buttons they draw do nothing. **On the wrist that is worse than on the
+  phone**, because an actionable notification *is* the whole interaction; there is no natural "open
+  the app and go find it" fallback. Highest-value item in requirement 3, and it is not watch work at
+  all.
+- **Interruption level and thread id are unset.** `push-apns.ts` builds
+  `{aps: {alert, sound, category}}` — no `interruption-level`, no `thread-id`, no
+  `relevance-score`. `almost_time` for a session starting in ten minutes is the textbook
+  time-sensitive case, and on the watch relevance ordering decides what is seen first. Payload-only,
+  cheap.
+- **A watch app would add** our own notification layout, complications and the Smart Stack. All v2,
+  all optional, none of it needed for a nudge to arrive.
+
+And note that a scheduled WorkoutKit workout is itself watch presence: it sits at the top of the
+Workout app's list on its day, with our icon and name, without any notification at all. Pair that
+with the existing `almost_time` nudge and requirement 3 is largely answered before any
+watch-specific code exists.
+
+**Open questions.**
+- `restBetweenSetsSec` has no WorkoutKit representation. Drop it, or fold it in as a leading
+  recovery step of the next block? (Dropping it silently changes what the user was told they'd do.)
+- Raise the deployment floor to iOS 17, or `@available`-guard indefinitely? Raising it is cleaner
+  and should be an explicit decision, not a side effect of this feature.
+- **When do we schedule?** The whole committed week up front, or a rolling day or two? Users only
+  see ±7 days, and `maxAllowedScheduledWorkoutCount` is a real cap we must read rather than assume.
+  What happens on a detour or a replan — `remove` then re-`schedule`, and does an in-progress
+  workout survive that?
+- **Who marks an occurrence done** — our read-back, or `markComplete`? Both exist and they are
+  different truths: `markComplete` tells Apple's list it happened; a HealthKit read tells us *what*
+  happened. When they disagree, ours wins — but that needs saying out loud.
+- Does "send this to your watch" live on the session screen, or does the coach offer it in
+  conversation? Every other tool in Cadence is offered by the coach.
+- Is SwiftUI's `workoutPreview(_:isPresented:)` (iOS 17+, the `_WorkoutKit_SwiftUI` cross-import
+  overlay) worth presenting over the webview as an Apple-drawn confirmation, or is our own confirm
+  card better? It is the only piece of native UI this feature would otherwise need.
+
+Not scoped beyond v1's first slice. v0 is rejected; v2 waits on v1 proving the read-back.
+**A17. Oura — a recovery signal, parked on purpose (owner 2026-08-11, LOWEST priority)**
+
+Owner: *"Integrate to Oura"* — and explicitly last in line: Apple Watch first, then Strava, then
+Oura (*"I don't even have an Oura ring"*). Logged so the bet is placed, not so anyone builds it.
+
+**What Oura is for: recovery, not workouts.** Sleep staging, overnight HRV, resting HR, temperature
+deviation, and a daily readiness score. The brand fit is exact — "you've slept badly three nights
+running, want today's session to bend?" is plan-bends-not-breaks with a physiological signal behind
+it. Honest overlap check: an Apple Watch worn to bed already writes sleep stages, HRV and resting
+HR into HealthKit, which we integrate first anyway — that covers most of Oura's value for
+watch-wearers. Oura's residual edge is night-time measurement quality (finger PPG, temperature
+trend), the synthesized readiness score itself, and being the ONLY signal for ring-not-watch
+people. That residual is what has to earn the build cost, and today it doesn't.
+
+**API facts (verified 2026-08-11).** v2 REST, OAuth2 authorization-code; scoped tokens (`daily`
+covers the daily_sleep/daily_readiness summaries; `heartrate`, `workout`, `session`, `spo2` are
+separate scopes). Rate limit 5000 req/5 min — irrelevant at our scale. A webhook subscription API
+exists (per data_type + event_type, HMAC-verified callback), but data only lands after the user
+opens the Oura app and the ring syncs — so in practice it is a **morning batch, not a stream**.
+Critical caveat: Gen3+ users **without an active Oura membership get no API data at all** — a
+connected ring can silently go dark when the subscription lapses, so the connection UI must render
+"connected but nothing arriving" as state, never as the user's failure.
+
+**PROPOSED shape: A16's pattern, three deltas.** Oura is the second consumer of the generic
+OAuth-connection pattern A16 (Strava) owns — no framework work here. Deltas only: (1) **cadence** —
+a morning batch keyed off the daily_* webhook events (or a daily poll), not near-live workout
+ingestion; (2) the **membership check** above; (3) **where it lands** — Oura workouts join A14's
+canonical workout store like everyone else's, but daily readiness/sleep is a different shape (one
+scored row per day, not an event) and goes into a small daily-signals table the context engine
+reads, not the workout store.
+
+**Readiness ethics, settled now so it isn't relitigated:** a readiness score is an opinion — a
+vendor's model of your night, not a fact about your day. The coach may OFFER to bend the plan on it
+("your body's asking for an easier day — want to swap?"); she never scolds from it, never withholds
+anything because of it, and never overrides what the user says they feel. Someone who feels great
+on a "poor readiness" morning is right.
+
+**Trigger:** start only when (a) A16's connection pattern has shipped and survived contact with
+Strava, AND (b) the owner owns a ring or real users ask for it. Until both, this entry is the whole
+deliverable.
+
 **A5. A dead session bricks the app — no path back to signed-out (2026-08-11)**
 
 Deleting an auth user while the app held its session left the phone unusable: every turn answered
