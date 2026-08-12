@@ -219,7 +219,6 @@ describe('stop', () => {
     expect(() => result.current.stop()).not.toThrow();
     expect(stopCoachTurn).not.toHaveBeenCalled();
   });
-
 });
 
 describe('the food surface during onboarding', () => {
