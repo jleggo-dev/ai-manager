@@ -27,9 +27,27 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react';
 /** How close to the bottom still counts as "reading the newest turn" (px). */
 const STICK_THRESHOLD_PX = 80;
 
+/**
+ * How long after a finger leaves the transcript we refuse to auto-scroll, whatever else we think.
+ *
+ * The touch handlers alone were not enough, and the reason is momentum. A flick upward is over as a
+ * TOUCH almost immediately — the finger lifts within a few dozen milliseconds, while the content is
+ * still travelling. At that instant the transcript is usually still near the bottom, so re-reading
+ * the position on touchend re-armed the follow, and the next SSE delta (milliseconds later, mid
+ * reply) slammed it back down. The momentum scroll events that would have detached us arrive after
+ * that, far too late. So the finger lifting is not permission to resume: the transcript has to come
+ * to rest first, and this window is how long we wait before believing where it landed.
+ */
+const HANDS_OFF_MS = 900;
+
 export function useStickToBottom<T>(ref: RefObject<HTMLElement | null>, dep: T) {
   const sticking = useRef(true);
   const touching = useRef(false);
+  /** When a MOVING touch last ended. 0 means nothing is holding the follow off — see `stickNow`. */
+  const lastTouchAt = useRef(0);
+  /** Where the transcript sat when the finger went down, and whether it has moved since. */
+  const touchStartTop = useRef(0);
+  const moved = useRef(false);
 
   /** Are they looking at the newest turn, or reading something further up? */
   const atBottom = useCallback(() => {
@@ -38,31 +56,56 @@ export function useStickToBottom<T>(ref: RefObject<HTMLElement | null>, dep: T) 
   }, [ref]);
 
   const onScroll = useCallback(() => {
-    // Ignored while a finger is down: mid-drag the position is theirs to decide, and reading it
-    // here would let a momentary overshoot back to the bottom re-arm the follow under them.
-    if (!touching.current) sticking.current = atBottom();
-  }, [atBottom]);
+    // While a finger is down we only note THAT it moved, never where to: mid-drag the position is
+    // theirs to decide, and reading it here would let a momentary overshoot back to the bottom
+    // re-arm the follow under them.
+    if (touching.current) {
+      if (ref.current && ref.current.scrollTop !== touchStartTop.current) moved.current = true;
+      return;
+    }
+    sticking.current = atBottom();
+  }, [atBottom, ref]);
 
   /** A finger on the transcript means they want to move it — stop following before the next delta. */
   const onTouchStart = useCallback(() => {
     touching.current = true;
-  }, []);
+    moved.current = false;
+    touchStartTop.current = ref.current?.scrollTop ?? 0;
+  }, [ref]);
 
-  /** Momentum may still be running; where they ended up is what decides whether we resume. */
+  /**
+   * What happens on release depends on whether the transcript MOVED, and the distinction is the
+   * whole fix.
+   *
+   * A touch that moved nothing is a tap — dismissing the keyboard, catching a stray press. Where
+   * they are is where they meant to be, so read it and carry on following if they are at the bottom.
+   *
+   * A touch that moved is a drag or a flick, and momentum means it is not finished. A flick upward
+   * is over as a TOUCH within a few dozen milliseconds while the content is still travelling, so at
+   * that instant the transcript is usually STILL near the bottom — reading the position here is
+   * exactly what re-armed the follow and let the next SSE delta slam it back down. So we do not
+   * read it: `onScroll` fires throughout the glide and re-arms only if they come to rest at the
+   * bottom, and until then the hands-off window keeps deltas from touching the viewport.
+   */
   const onTouchEnd = useCallback(() => {
     touching.current = false;
-    sticking.current = atBottom();
+    if (moved.current) lastTouchAt.current = Date.now();
+    else sticking.current = atBottom();
   }, [atBottom]);
 
   /** Force-follow again — for when the user's own action means they want the newest turn. */
   const stickNow = useCallback(() => {
     touching.current = false;
     sticking.current = true;
+    // Clears the hands-off window too: this is the user asking to be taken to the newest turn
+    // (they just sent something), which outranks having touched the transcript a moment ago.
+    lastTouchAt.current = 0;
   }, []);
 
   useEffect(() => {
     const el = ref.current;
     if (!el || touching.current || !sticking.current) return;
+    if (Date.now() - lastTouchAt.current < HANDS_OFF_MS) return;
     el.scrollTop = el.scrollHeight;
   }, [ref, dep]);
 
