@@ -149,4 +149,43 @@ describe('useStickToBottom', () => {
     rerender({ d: 2 });
     expect(el.scrollTop).toBe(500); // still theirs; not snapped to 1400
   });
+
+  /**
+   * The device report, twice over: "I can't scroll while Cadence is replying." The touch handlers
+   * alone did not fix it, and momentum is why.
+   *
+   * A flick upward is over as a TOUCH within a few dozen milliseconds — the finger lifts while the
+   * content is still travelling, so at that instant the transcript is usually still near the
+   * bottom. Reading the position on release therefore re-armed the follow, and the next SSE delta
+   * (mid-reply, milliseconds later) slammed it back down. The momentum scroll events that would
+   * have detached us arrive after that, far too late.
+   */
+  it('does not snap back when a delta lands just after a flick lifts off', () => {
+    const ref = createRef<HTMLElement>();
+    const el = makeEl(1000, 500, 500);
+    (ref as { current: HTMLElement | null }).current = el;
+    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+
+    act(() => result.current.onTouchStart());
+    el.scrollTop = 460; // the flick has begun; still inside the at-bottom threshold
+    act(() => result.current.onScroll()); // a scroll DID happen — this was a drag, not a tap
+    act(() => result.current.onTouchEnd());
+
+    rerender({ d: 2 }); // an SSE delta, while momentum is still carrying them up
+    expect(el.scrollTop).toBe(460);
+  });
+
+  /** A tap that moves nothing is not a flick — where they are is where they meant to be. */
+  it('keeps following after a tap that did not move the transcript', () => {
+    const ref = createRef<HTMLElement>();
+    const el = makeEl(1000, 500, 500);
+    (ref as { current: HTMLElement | null }).current = el;
+    const { result, rerender } = renderHook(({ d }) => useStickToBottom(ref, d), { initialProps: { d: 1 } });
+
+    act(() => result.current.onTouchStart());
+    act(() => result.current.onTouchEnd()); // no onScroll between them
+
+    rerender({ d: 2 });
+    expect(el.scrollTop).toBe(1000);
+  });
 });
