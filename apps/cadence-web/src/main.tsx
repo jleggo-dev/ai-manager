@@ -9,6 +9,8 @@ import './styles/coach.css';
 // Last: the v2 sign-in/onboarding rules lean on both of the above (the chat shell from styles.css,
 // the portrait chip and picker from coach.css).
 import './styles/onboarding.css';
+// The plan-card gate reuses onboarding.css's .gate-week strip and .gate-h, so it loads after.
+import './styles/gate.css';
 import { App } from './App.tsx';
 import { createAppQueryClient } from './lib/query/index.ts';
 import { initNativeAuth } from './lib/native-auth.ts';

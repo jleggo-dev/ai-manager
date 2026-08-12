@@ -180,7 +180,7 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   journal: {
     class: 'capture',
     summary:
-      "real WRITING, kept where they can reread it — the tool for any writing practice, not only reflection: free-writing a scene, morning pages, a studio log, a language learner's paragraph, lectio divina, working a problem out on the page. Name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own prompt in detail — your sentence always wins, and for craft work it usually should. Add duration_min for a TIMED free-write (a quiet clock; writing continuously IS the practice)",
+      "real WRITING, kept where they can reread it — the tool for any writing practice, not only reflection: free-writing a scene, a first-thing morning brain-dump, a studio log, a language learner's paragraph, lectio divina, working a problem out on the page. Name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own prompt in detail — your sentence always wins, and for craft work it usually should. Add duration_min for a TIMED free-write (a quiet clock; writing continuously IS the practice)",
     notWhen:
       'sentences, never a yes/no, a number, or a single mood word — one word about how they are doing is feeling_log. Never promise to analyse what they write. The banks are a floor, not a menu: match the bank FAMILY to the practice (a novelist gets craft, never gratitude), and when you can write a prompt better fitted to this person and this week, write it',
     reads: ['journal_bank', 'detail', 'duration_min'],

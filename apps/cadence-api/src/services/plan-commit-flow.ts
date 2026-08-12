@@ -29,6 +29,7 @@ export async function confirmPendingPlan(
   const r = await commitActivities(userId, {
     activities: pending.activities,
     note: pending.note,
+    rationale: pending.rationale,
     goalIds: pending.goal_ids,
     occurrenceDays,
   });

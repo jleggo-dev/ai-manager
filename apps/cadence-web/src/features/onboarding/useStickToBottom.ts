@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react';
 
 /**
  * Keep a chat pinned to the newest turn — but only while the reader is actually down there.
@@ -40,7 +40,7 @@ const STICK_THRESHOLD_PX = 80;
  */
 const HANDS_OFF_MS = 900;
 
-export function useStickToBottom<T>(ref: RefObject<HTMLElement | null>, dep: T) {
+export function useStickToBottom(ref: RefObject<HTMLElement | null>) {
   const sticking = useRef(true);
   const touching = useRef(false);
   /** When a MOVING touch last ended. 0 means nothing is holding the follow off — see `stickNow`. */
@@ -102,12 +102,31 @@ export function useStickToBottom<T>(ref: RefObject<HTMLElement | null>, dep: T) 
     lastTouchAt.current = 0;
   }, []);
 
-  useEffect(() => {
+  /**
+   * Follow on EVERY render, not on a turns dependency — and that is the fix for the second half of
+   * "I can't get to the options".
+   *
+   * Keyed on the turn array, this only ran when a turn changed. But the two things that grow the
+   * transcript last both happen on renders where the turns are already final. Quick picks are
+   * withheld until the stream ENDS (`livePicks` returns null while streaming), so they mount on a
+   * `streaming` flip. The Broker's capture pills land ~900ms later still, on a state change of
+   * their own, and they make the floating stack taller — which grows the chat's reserved padding
+   * underneath them. Both grew the content below a scroll position that had stopped being the
+   * bottom, so the last thing you were shown was a half-visible row of tiles with the rest of the
+   * grid parked behind the pills, and no reason to think there was more.
+   *
+   * A LAYOUT effect so the correction happens before paint rather than as a visible jump. Cheap
+   * enough to run unconditionally: one property read and one write, and the write is a no-op when
+   * we are already at the bottom. Every guard above still holds — a finger down, a scroll away, or
+   * the hands-off window all return before we touch the viewport, so this cannot resurrect the
+   * can't-scroll-while-she-replies bug the rest of this file exists to prevent.
+   */
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el || touching.current || !sticking.current) return;
     if (Date.now() - lastTouchAt.current < HANDS_OFF_MS) return;
     el.scrollTop = el.scrollHeight;
-  }, [ref, dep]);
+  });
 
   return { onScroll, onTouchStart, onTouchEnd, stickNow };
 }

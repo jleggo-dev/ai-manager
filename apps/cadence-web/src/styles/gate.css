@@ -1,0 +1,369 @@
+/* ── The pre-signup plan card gate (design: "Cadence Plan Card Gate") ─────────────────
+   Layout contract: the plan scrolls, the auth footer is pinned — the offer and the way to
+   take it are both always on screen. App tokens throughout; the design's Nunito/Fraunces
+   are canvas approximations of var(--display) + the body face. */
+
+.gate2 {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink);
+}
+.gate2-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 26px 22px 18px;
+}
+.gate2-foot {
+  flex: none;
+  padding: 12px 22px calc(18px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink);
+  box-shadow: 0 -10px 14px var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.gate2-say {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: oklch(30% 0.03 150);
+}
+.gate2-say .cface {
+  flex: 0 0 auto;
+}
+.gate2-draft {
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-mute);
+}
+/* AuthScreen mounts its own `.welcome.auth` shell; inside the pinned footer that shell must be
+   inert — no flex growth, no scroll, no padding of its own. */
+.gate2-foot .auth {
+  flex: none;
+  min-height: 0;
+  overflow: visible;
+  padding: 0;
+}
+.auth-email-link {
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--forest);
+  padding: 2px;
+}
+
+/* Week-strip dots by AREA — same palette as the quick-pick dots (.qp-dot). */
+.gate-dot.is-movement {
+  background: oklch(62% 0.11 150);
+}
+.gate-dot.is-nourishment {
+  background: oklch(65% 0.12 100);
+}
+.gate-dot.is-mind {
+  background: oklch(63% 0.11 35);
+}
+.gate-dot.is-practice {
+  background: oklch(60% 0.1 300);
+}
+.gate-dot.is-none {
+  background: var(--line);
+}
+
+/* ── Her speech bubble: the plan-level rationale ── */
+.gr-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+}
+.gr-wrap .gr-face {
+  flex: 0 0 auto;
+}
+.gr-bubble {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 11px 14px;
+  box-shadow: 0 3px 0 var(--line-soft);
+  cursor: pointer;
+}
+.gr-tail {
+  position: absolute;
+  top: 14px;
+  left: -5px;
+  width: 11px;
+  height: 11px;
+  background: var(--surface);
+  transform: rotate(45deg);
+}
+.gr-p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: oklch(30% 0.03 150);
+  line-height: 1.5;
+}
+.gr-p + .gr-p {
+  margin-top: 8px;
+}
+.gr-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.gr-pill {
+  display: inline-block;
+  margin-top: 8px;
+  background: oklch(95% 0.03 152);
+  border-radius: 99px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 800;
+  color: oklch(46% 0.08 152);
+}
+
+/* ── The commitments, whys as quoted insets ── */
+.grow-card {
+  margin-top: 12px;
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  padding: 2px 0;
+}
+.grow-h {
+  padding: 13px 14px 2px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: oklch(46% 0.08 152);
+}
+.grow-h.is-movement {
+  color: oklch(46% 0.08 152);
+}
+.grow-h.is-nourishment {
+  color: oklch(50% 0.09 100);
+}
+.grow-h.is-mind {
+  color: oklch(50% 0.08 35);
+}
+.grow-h.is-practice {
+  color: oklch(48% 0.08 300);
+}
+.grow-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 11px 14px;
+  cursor: pointer;
+}
+.grow-row + .grow-row {
+  border-top: 1px solid var(--ink);
+}
+.grow-t {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.grow-t b {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: oklch(30% 0.03 150);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.grow-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--line);
+}
+.grow-dot.is-movement {
+  background: oklch(62% 0.11 150);
+}
+.grow-dot.is-nourishment {
+  background: oklch(65% 0.12 100);
+}
+.grow-dot.is-mind {
+  background: oklch(63% 0.11 35);
+}
+.grow-dot.is-practice {
+  background: oklch(60% 0.1 300);
+}
+/* A suggested row's dot is hollow and dashed — "not yours yet" in the dot itself. */
+.grow-dot.is-suggested {
+  background: transparent !important;
+  border: 2px dashed oklch(55% 0.06 250);
+}
+.grow-chip {
+  flex: none;
+  border: 1.5px dashed oklch(55% 0.06 250);
+  border-radius: 99px;
+  padding: 1.5px 7px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: oklch(45% 0.06 250);
+}
+.grow-meta {
+  margin-left: auto;
+  flex: none;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+/* The teaser: her first words, cut mid-sentence — a cut sentence sells continuation. */
+.grow-why {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 4px;
+  padding-left: 19px;
+}
+.grow-why-cut {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.grow-why i,
+.grow-why-open i {
+  flex: none;
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: oklch(46% 0.08 152);
+}
+.grow-why-open {
+  display: block;
+  margin-top: 7px;
+  margin-left: 19px;
+  background: var(--ink);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-style: italic;
+  color: oklch(36% 0.03 150);
+  line-height: 1.55;
+}
+
+/* ── The guided hand-off (built plan → Coach tab) ──────────────────────────────────────
+   Scrim over the whole shell; the Coach tab is lifted above it (.tab-guided), so the scrim
+   itself is what makes everything else inert — no per-control disabling to maintain. */
+.guide-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 46;
+  background: oklch(20% 0.02 150 / 0.45);
+}
+.tabbar {
+  position: relative; /* lets .tab-guided stack above the guide scrim */
+}
+.tab-guided {
+  position: relative;
+  z-index: 47;
+  background: var(--ink);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 3px oklch(60% 0.1 152),
+    0 0 18px oklch(60% 0.1 152 / 0.6);
+  animation: guide-pulse 1.6s ease-in-out infinite;
+}
+@keyframes guide-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 3px oklch(60% 0.1 152),
+      0 0 18px oklch(60% 0.1 152 / 0.6);
+  }
+  50% {
+    box-shadow:
+      0 0 0 5px oklch(60% 0.1 152),
+      0 0 26px oklch(60% 0.1 152 / 0.85);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-guided {
+    animation: none;
+  }
+}
+.guide-callout {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 84px;
+  z-index: 47;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 13px 15px;
+  box-shadow: 0 8px 28px oklch(0% 0 0 / 0.25);
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: oklch(30% 0.03 150);
+}
+.guide-callout .cface {
+  flex: 0 0 auto;
+}
+.guide-arrow {
+  position: absolute;
+  /* Over the middle (Coach) of five equal tabs — 50% is the centre of the third. */
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -19px;
+  font-style: normal;
+  font-size: 15px;
+  color: var(--surface);
+  text-shadow: 0 3px 8px oklch(0% 0 0 / 0.3);
+}
+
+/* ── "Your week ↗" — the way back to the crafted plan from inside the conversation ── */
+.plan-pill {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  background: var(--surface);
+  border: 2px solid oklch(85% 0.05 152);
+  border-radius: 999px;
+  padding: 7px 13px;
+  font-size: 12px;
+  font-weight: 800;
+  color: oklch(42% 0.07 152);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* ── The plan card as a sheet over the chat ── */
+.plan-sheet {
+  max-height: 86%;
+  display: flex;
+  flex-direction: column;
+}
+.plan-sheet-body {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 2px 2px 18px;
+}

@@ -54,7 +54,19 @@ export async function startAnonymousSession(): Promise<AnonymousStart> {
   }
 }
 
-/** True while the current session belongs to someone who hasn't signed up yet. */
-export function isAnonymousSession(session: { user?: { is_anonymous?: boolean } } | null): boolean {
-  return session?.user?.is_anonymous === true;
+/**
+ * True while the current session belongs to someone who hasn't signed up yet.
+ *
+ * A linked identity outvotes the flag, and that is not belt-and-braces. Linking a provider to an
+ * anonymous user is what makes it permanent, but whether the access token in hand already says so
+ * depends on when it was minted — and the one place this is read is the sign-up gate, where a
+ * stale `true` means someone who just signed in with Apple is shown the sign-up screen again. An
+ * identity can only be there because they completed a provider flow, so it is the stronger signal.
+ */
+export function isAnonymousSession(
+  session: { user?: { is_anonymous?: boolean; identities?: { provider?: string }[] | null } } | null,
+): boolean {
+  if (session?.user?.is_anonymous !== true) return false;
+  const linked = session.user.identities ?? [];
+  return !linked.some((i) => i.provider && i.provider !== 'anonymous');
 }

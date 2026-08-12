@@ -10,6 +10,7 @@ import {
 import { FreeWritePreview } from './FreeWritePreview.tsx';
 import { IntervalPreview } from './IntervalPreview.tsx';
 import { CoachMomentsPreview } from './CoachMomentsPreview.tsx';
+import { PlanCardPreview } from './PlanCardPreview.tsx';
 
 /**
  * `?preview=<tool>` — render ONE component against fixture data, short-circuiting auth and the
@@ -28,6 +29,7 @@ const PREVIEWS: Record<string, () => ReactNode> = {
   interval: () => <IntervalPreview />,
   coach: () => <CoachMomentsPreview />,
   nowmenu: () => <NowMenuPreview />,
+  plancard: () => <PlanCardPreview />,
 };
 
 export function previewScreen(name: string | null): ReactNode | null {

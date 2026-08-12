@@ -100,6 +100,12 @@ async function rawOwmGet(base: string, pathAndQuery: string): Promise<unknown> {
     const res = await fetchImpl(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
+      // A hard ceiling, because this path now sits inside a request handler: POST /me/location
+      // reverse-geocodes on the auto-detect save, and an OWM hang without a timeout would hold
+      // that request (and the header's "Locating…") open for the platform default — minutes on
+      // some stacks. Every caller already treats a throw as "no weather/label"; an abort is just
+      // that, sooner.
+      signal: AbortSignal.timeout(10_000),
     });
     if (res.status === 429) {
       applyCooldown(res);

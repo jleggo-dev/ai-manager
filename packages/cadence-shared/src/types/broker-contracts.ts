@@ -68,7 +68,8 @@ export interface PendingPlanActivity {
   completion_source: 'self_report' | 'healthkit' | 'reply' | 'auto';
   goal_id?: string; // the objective this commitment serves (null for foundational/system items)
   goal_title?: string; // display only — the objective's title, for grouping the preview by goal
-  why?: string; // display only — the coach's one-line rationale for THIS commitment (the coached ladder, explained)
+  why?: string; // display only — the coach's rationale for THIS commitment, 1-3 sentences (the coached ladder, explained)
+  suggested?: boolean; // TRUE when the coach proposed this herself (adjacent support), not the user
 }
 
 /** The FIRST-lock analog of PendingProposal: synthesize_plan + plan_vet already ran, the result
@@ -77,6 +78,8 @@ export interface PendingPlanActivity {
 export interface PendingPlan {
   activities: PendingPlanActivity[];
   note: string;
+  /** The coach's whole-shape reasoning (0031) — persisted at commit so the card can render it. */
+  rationale?: string;
   goal_ids: string[];
   created_at: string;
 }

@@ -6,6 +6,8 @@ import { SettingsSheet } from '../settings/SettingsSheet.tsx';
 import { AdjustSheet } from '../plan/AdjustSheet.tsx';
 import { LogDidSheet } from '../plan/LogDidSheet.tsx';
 import { ReviewScreen } from '../review/ReviewScreen.tsx';
+import { PlanCardSheet } from '../gate/PlanCardSheet.tsx';
+import { CoachFace } from '../../components/CoachFace.tsx';
 
 type Tab = 'today' | 'week' | 'coach' | 'progress';
 
@@ -55,11 +57,38 @@ const GearIcon = () => (
  * recipes / shop moved into that sheet and the coach. Today and Week share one PlanView instance
  * (kept mounted across the toggle) so switching between them never refetches the plan.
  */
-export function MainTabs({ email }: { email: string | null }) {
+export function MainTabs({
+  email,
+  discussPlan = false,
+}: {
+  email: string | null;
+  /**
+   * The first plan was just built (or they just signed in at the gate that presented it). Owner
+   * ruling 2026-08-12, replacing the land-on-Coach approach that shipped for a day: land on
+   * TODAY — the plan itself is the proof that something happened ("landing on the actual plan
+   * was more effective") — with a guided overlay pointing at the Coach tab ("head over and we'll
+   * fine-tune it"). Only the Coach tab is tappable, which doubles as the app's one navigation
+   * lesson; tapping it dismisses the guide and fires the walkthrough.
+   */
+  discussPlan?: false | 'card' | 'fresh';
+}) {
   const [tab, setTab] = useState<Tab>('today');
+  /** The guided hand-off from the built plan to the discussion. Dies on the tap, never returns. */
+  const [guide, setGuide] = useState<boolean>(!!discussPlan);
+  /** The plan card as a sheet over the chat — the "toggle back to the conversation" surface. */
+  const [planCardOpen, setPlanCardOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [manage, setManage] = useState(false);
   const [offerAdjust, setOfferAdjust] = useState(false);
+  /**
+   * The coach's build card, tapped in the Coach tab. Same sheet as "review my whole plan", because
+   * that is exactly what a rebuild is here — the only difference is that whatever she captured in
+   * the conversation that led to the tap gets adopted first (`adoptCaptured`).
+   *
+   * A plan already exists by the time MainTabs renders, so building from the Coach tab always
+   * means rebuilding; onboarding's first build is the other host of the same card (App.tsx).
+   */
+  const [rebuild, setRebuild] = useState(false);
   const [logDidOpen, setLogDidOpen] = useState(false);
   const [planReload, setPlanReload] = useState(0); // bump → PlanView refetches after a ＋ log
 
@@ -82,7 +111,21 @@ export function MainTabs({ email }: { email: string | null }) {
         {(tab === 'today' || tab === 'week') && (
           <PlanView view={tab} onCoach={() => setTab('coach')} reloadSignal={planReload} />
         )}
-        {tab === 'coach' && <OnboardingChat intent="ongoing" chrome="none" onSettings={() => setSettingsOpen(true)} />}
+        {tab === 'coach' && (
+          <>
+            <OnboardingChat
+              intent="ongoing"
+              chrome="none"
+              onSettings={() => setSettingsOpen(true)}
+              onBuild={() => setRebuild(true)}
+              openWalkthrough={discussPlan}
+            />
+            {/* The deterministic way back to the crafted plan UI from inside the conversation. */}
+            <button className="plan-pill" onClick={() => setPlanCardOpen(true)}>
+              Your week ↗
+            </button>
+          </>
+        )}
         {tab === 'progress' && <ProgressView />}
         {tab !== 'coach' && (
           <button className="fab" onClick={() => setLogDidOpen(true)} aria-label="Log something you did">
@@ -98,7 +141,13 @@ export function MainTabs({ email }: { email: string | null }) {
             <WeekIcon />
             <span>Week</span>
           </button>
-          <button className={`tab${tab === 'coach' ? ' tab-on' : ''}`} onClick={() => setTab('coach')}>
+          <button
+            className={`tab${tab === 'coach' ? ' tab-on' : ''}${guide ? ' tab-guided' : ''}`}
+            onClick={() => {
+              setGuide(false);
+              setTab('coach');
+            }}
+          >
             <CoachIcon />
             <span>Coach</span>
           </button>
@@ -111,10 +160,44 @@ export function MainTabs({ email }: { email: string | null }) {
             <span>Settings</span>
           </button>
         </nav>
+        {/* The guided hand-off: scrim over everything, her line pointing at the one tappable
+            thing. The Coach tab rides ABOVE the scrim (`.tab-guided`), so the scrim itself is
+            what makes every other control inert — no per-button disabling to keep honest. */}
+        {guide && (
+          <>
+            <div className="guide-scrim" aria-hidden />
+            <div className="guide-callout" role="status">
+              <CoachFace size={26} ring={false} />
+              <span>
+                I built your plan — this is your week. Now head to the <b>Coach</b> tab and we&rsquo;ll fine-tune it
+                together.
+              </span>
+              <i className="guide-arrow" aria-hidden>
+                ▼
+              </i>
+            </div>
+          </>
+        )}
+        {planCardOpen && <PlanCardSheet onClose={() => setPlanCardOpen(false)} />}
         {settingsOpen && (
           <SettingsSheet email={email} onClose={() => setSettingsOpen(false)} onManage={() => setManage(true)} />
         )}
         {offerAdjust && <AdjustSheet onClose={() => setOfferAdjust(false)} onCommitted={() => setOfferAdjust(false)} />}
+        {rebuild && (
+          <AdjustSheet
+            mode="rebalance"
+            adoptCaptured
+            onClose={() => setRebuild(false)}
+            onCommitted={() => {
+              setRebuild(false);
+              // Stay IN the conversation and show the crafted card over it — the rebuild was
+              // agreed in the chat, so the chat is where its result appears, with the toggle
+              // back one tap away. Today/Week still refetch underneath for when they leave.
+              setPlanCardOpen(true);
+              setPlanReload((k) => k + 1);
+            }}
+          />
+        )}
         {logDidOpen && (
           <LogDidSheet
             onClose={() => setLogDidOpen(false)}

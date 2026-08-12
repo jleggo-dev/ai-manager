@@ -20,7 +20,10 @@ if (!KEY) throw new Error('No AI_ADMIN_API_KEY');
  *  connection, not a slow model — and without this, one stall wedged a 21-scenario gate for 15+
  *  minutes (2026-08-04). Abort → the retry in runJob gets its chance; a second stall fails the
  *  run FAST with a clear error instead of hanging it. */
-const CALL_TIMEOUT_MS = 120_000;
+// 240s, raised from 120s (2026-08-12): synthesize-plan now emits a plan-level rationale and
+// explanatory whys, and the long-form probe scenario blew through 120s twice in a row — the
+// retry exists for network weather, and a ceiling the happy path can hit turns it into a crash.
+const CALL_TIMEOUT_MS = 240_000;
 
 export async function api(method: string, p: string, body?: unknown) {
   const res = await fetch(`${BASE}${p}`, {

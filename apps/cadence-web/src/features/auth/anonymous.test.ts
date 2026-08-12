@@ -61,4 +61,15 @@ describe('isAnonymousSession', () => {
     expect(isAnonymousSession({ user: {} })).toBe(false);
     expect(isAnonymousSession(null)).toBe(false);
   });
+
+  /**
+   * The reported "Apple sign-in froze": the identity linked, but the token in hand still carried
+   * the old flag, so the gate kept showing the sign-up screen to someone who had just signed up.
+   */
+  it('treats a linked provider identity as signed up even while the flag lags', () => {
+    expect(isAnonymousSession({ user: { is_anonymous: true, identities: [{ provider: 'apple' }] } })).toBe(false);
+    expect(isAnonymousSession({ user: { is_anonymous: true, identities: [{ provider: 'google' }] } })).toBe(false);
+    expect(isAnonymousSession({ user: { is_anonymous: true, identities: [] } })).toBe(true);
+    expect(isAnonymousSession({ user: { is_anonymous: true, identities: [{ provider: 'anonymous' }] } })).toBe(true);
+  });
 });

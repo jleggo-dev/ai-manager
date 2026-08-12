@@ -35,6 +35,16 @@ export interface PlanActivity {
   recurrence: string;
   time_of_day?: string;
   duration_min?: number;
+  /** The coach's rationale for THIS commitment, 1-3 sentences — the pre-signup card renders it. */
+  why?: string;
+  /** Objective link for grouping "Toward <goal>"; absent → Foundations. */
+  goal_id?: string;
+  goal_title?: string;
+  /** The linked goal's area — colours the card's dots. Absent for system/foundational rows. */
+  area?: 'movement' | 'nourishment' | 'mind' | 'practice';
+  /** She proposed this herself (adjacent support). Badge it on the card only — the consent
+   *  moment — never as a permanent asterisk on Week/Today (owner ruling 2026-08-12). */
+  suggested?: boolean;
 }
 export interface PendingProposal {
   reason: string;
@@ -48,6 +58,8 @@ export interface PlanViewData {
   stage: 'new' | 'in_progress' | 'committed';
   version?: number;
   committedAt?: string;
+  /** The coach's whole-shape reasoning — the card's "why this shape" reveal. */
+  rationale?: string;
   activities: PlanActivity[];
   week: PlanDay[];
   consistency: { kept: number; window: number };

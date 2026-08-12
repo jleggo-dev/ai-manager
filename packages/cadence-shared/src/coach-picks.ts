@@ -26,9 +26,14 @@
  * `list` = labelled option rows. `tiles` = a grid of short scalars. Those two are the entire
  * answer vocabulary, on purpose.
  *
- * `confirm` is not a third answer widget — it is the coach saying "here's everything I've heard,
- * before I build anything", and the client renders the review the app already owns. It carries no
- * options because the content is the user's own captured data, not a menu.
+ * `confirm` is not a third answer widget — it is the coach's BUILD PLAN tool. She emits it and the
+ * client renders everything it has heard, with the button that builds (or rebuilds) the rhythm from
+ * it. It carries no options because the content is the user's own captured data, not a menu.
+ *
+ * Deliberately repeatable, and deliberately the ONLY route to a plan. It was once "use it exactly
+ * once, at the end of onboarding", which left the coach with nowhere to go the moment someone added
+ * a goal after it — she fell back to naming a review screen that no longer exists. A plan is
+ * rebuilt in the conversation that decided to rebuild it, whenever that conversation happens.
  */
 export type CoachPickLayout = 'list' | 'tiles' | 'confirm';
 

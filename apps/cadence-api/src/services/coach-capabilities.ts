@@ -40,7 +40,7 @@ export const CAPABILITIES: CapabilityGroup[] = [
   {
     heading: 'Your rhythm',
     can: [
-      'build a weekly rhythm from your goals, and adjust it whenever life changes',
+      'build a weekly rhythm from your goals, and rebuild it right here in the conversation whenever something changes — a new goal, a different week, one thing too many; you never have to go to a screen for it',
       'set up a detour for travel, illness, or a rough stretch — your plan pauses, it never resets',
       'prescribe a specific session for today, and log what you actually did when you tell me',
       'give you a weekly check-in on how you showed up, and flag what I am noticing',
