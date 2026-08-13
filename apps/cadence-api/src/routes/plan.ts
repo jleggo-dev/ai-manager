@@ -75,6 +75,28 @@ router.post('/replan/preview', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /plan/replan/pending — the stored pending proposal, if one is on file. The recovery half of
+ * the leave-safe rebuild: previewReplan persists its vetted result as `pending_plan` the moment
+ * synthesis finishes, so a phone whose fetch died mid-preview (backgrounded, signal lost) polls
+ * THIS on return instead of paying for a second synthesis — or worse, reporting a failure for a
+ * proposal that is sitting right there. 200 { proposal } · 200 { proposal: null } when none.
+ */
+router.get('/replan/pending', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const pending = (await getUser(userId))?.pending_plan;
+    res.json(
+      pending
+        ? { proposal: { activities: pending.activities, note: pending.note, rationale: pending.rationale } }
+        : { proposal: null },
+    );
+  } catch (err) {
+    console.error('[GET /plan/replan/pending]', err);
+    res.status(500).json({ error: 'failed to read pending proposal' });
+  }
+});
+
 /** POST /plan/replan/preview/dismiss — discard the previewed adjustment; nothing changes. */
 router.post('/replan/preview/dismiss', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;

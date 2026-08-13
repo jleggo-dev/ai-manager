@@ -46,6 +46,8 @@ export async function getCurrentCoach(): Promise<{
   messages: { role: 'user' | 'coach'; content: string }[];
   stale?: boolean;
   staleReason?: 'idle' | 'graduated' | null;
+  /** A reply is still being written server-side — keep waiting, don't declare a drop. */
+  generating?: boolean;
 }> {
   const res = await fetch(`${BASE}/coach/current`, { headers: headers() });
   if (!res.ok) return { sessionId: null, messages: [] };

@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { capabilities } from '../../../lib/capability/index.ts';
 import { registerPushToken, removePushToken } from '../../../lib/api.ts';
 import { useNotificationPrefs, useSaveNotificationPrefs } from './useNotificationPrefs.ts';
-
-const TOKEN_KEY = 'cadence.pushToken';
+import { PUSH_TOKEN_KEY as TOKEN_KEY } from './enablePush.ts';
 
 function storedToken(): string | null {
   try {

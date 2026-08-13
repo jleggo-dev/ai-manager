@@ -11,6 +11,7 @@ import { observedHealthForPlanning } from './observed-health.ts';
 import { type PlanFlowResult } from './plan-synthesis.ts';
 import { planSynthesize } from './plan-fanout.ts';
 import { confirmPendingPlan } from './plan-commit-flow.ts';
+import { apnsConfigured, sendPushToUser } from './push-apns.ts';
 
 /**
  * First half of capture → confirm → preview → lock (spec §6.1, §6.3, §C8.6): deterministic
@@ -82,7 +83,7 @@ export async function previewLock(userId: string): Promise<PlanFlowResult> {
  * because preview wasn't called; it only ever commits a plan that's actually been vetted.
  */
 export async function confirmLock(userId: string, occurrenceDays = 14): Promise<PlanFlowResult> {
-  return confirmPendingPlan(
+  const result = await confirmPendingPlan(
     userId,
     () => previewLock(userId),
     async (pending) => {
@@ -92,6 +93,19 @@ export async function confirmLock(userId: string, occurrenceDays = 14): Promise<
     },
     occurrenceDays,
   );
+
+  // "Your week is ready" — the doom-scroll contract's second half. The build runs minutes and the
+  // builder said so out loud ("leave the app if you like"), so the finish has to be able to reach
+  // a pocket. FIRST plan only (version 1): a rebuild is agreed in a live conversation with the
+  // person right there, and pinging the phone in their hand is noise. Best-effort by contract —
+  // no registered token (they never said yes on the building screen) or unconfigured APNs is a
+  // silent skip, and no failure here may ever un-commit a committed plan.
+  if (result.status === 'committed' && result.version === 1 && apnsConfigured()) {
+    sendPushToUser(userId, 'Your first week is ready', 'Come take a look — and push back on anything.').catch((e) =>
+      console.warn('[lock] ready-push failed (plan is committed regardless):', e),
+    );
+  }
+  return result;
 }
 
 /** Discard the pending preview without committing — the user goes back to Review to adjust. */

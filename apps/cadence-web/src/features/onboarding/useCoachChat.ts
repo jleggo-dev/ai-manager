@@ -36,6 +36,14 @@ export interface CapturedGoal {
 
 const RECOVER_ATTEMPTS = 6;
 const RECOVER_DELAY_MS = 800;
+/**
+ * How long recovery will wait on a reply the server says it is STILL WRITING. This is the
+ * backgrounded-phone path: iOS killed our stream mid-turn, the relay drained it to completion
+ * server-side, and on return `generating: true` means the only correct move is patience — the
+ * old fixed six polls gave up in ~5s and told someone their connection dropped while the reply
+ * was arriving fine. Bounded so a server that wedged mid-turn can't hold the composer hostage.
+ */
+const RECOVER_GENERATING_MS = 120_000;
 
 export type UseCoachChatArgs = {
   intent?: 'onboarding' | 'ongoing';
@@ -92,10 +100,16 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       });
   }, []);
 
-  // Pull the authoritative conversation back from the server to HEAL a dropped turn.
+  // Pull the authoritative conversation back from the server to HEAL a dropped turn. Patient by
+  // design: a fixed number of quick polls for the ordinary blip, then — as long as the server
+  // says a reply is STILL GENERATING — it keeps waiting up to RECOVER_GENERATING_MS, because the
+  // relay drains dropped streams to completion and a backgrounded phone returning mid-write is
+  // the normal case, not the edge case.
   async function recoverFromServer(): Promise<boolean> {
-    for (let i = 0; i < RECOVER_ATTEMPTS; i++) {
+    const deadline = Date.now() + RECOVER_GENERATING_MS;
+    for (let i = 0; ; i++) {
       await wait(RECOVER_DELAY_MS);
+      let generating = false;
       try {
         const c = await getCurrentCoach();
         // A STALE thread is not a recovery — it is a resurrection. This healer exists for the
@@ -104,8 +118,9 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
         // transcript (confirm card and all) and silently re-point the session at it — observed
         // on device 2026-08-12, presenting as "I signed in and nothing happened".
         if (c.stale) return false;
+        generating = c.generating === true;
         const last = c.messages[c.messages.length - 1];
-        if (c.sessionId && last?.role === 'coach' && last.content.trim()) {
+        if (!generating && c.sessionId && last?.role === 'coach' && last.content.trim()) {
           sessionId.current = c.sessionId;
           setTurns(c.messages.map((m) => ({ role: m.role, text: m.content })));
           return true;
@@ -113,8 +128,9 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       } catch {
         /* retry */
       }
+      // The quick budget covers blips; only an explicit "still writing" earns more patience.
+      if (i >= RECOVER_ATTEMPTS - 1 && !(generating && Date.now() < deadline)) return false;
     }
-    return false;
   }
 
   function fillLastCoach(text: string) {

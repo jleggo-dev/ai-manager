@@ -162,7 +162,17 @@ router.get('/current', async (req: Request, res: Response) => {
     const messages = raw
       .filter(isRealTurn)
       .map((m) => ({ role: m.role === 'assistant' ? 'coach' : 'user', content: m.content ?? '' }));
-    res.json({ sessionId: conv.ai_session_id, messages, stale, staleReason });
+    // `generating`: a reply is STILL being written server-side (the relay drains dropped streams
+    // to completion, and 0029 records which response is in flight). A phone that backgrounded
+    // mid-turn polls this on return, and "still generating" means keep waiting — not "give up
+    // after five seconds and tell them the connection dropped".
+    res.json({
+      sessionId: conv.ai_session_id,
+      messages,
+      stale,
+      staleReason,
+      generating: conv.in_flight_response_id != null,
+    });
   } catch (err) {
     const aim = AimError.fromUnknown(err);
     console.error('[GET /coach/current]', aim.kind, aim.message);
