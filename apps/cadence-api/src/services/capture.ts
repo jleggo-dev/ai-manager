@@ -1,6 +1,7 @@
 import { runJobBySlug } from '../ai/aim.ts';
 import type { CaptureExtractResult, EquipmentCategory } from '@cadence/shared';
 import { insertEquipment, deleteAllEquipment } from '../repos/equipment.ts';
+import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, mergeBaseline, setHomeLocation, setName, setTimezoneIfUnset } from '../repos/users.ts';
 import { geocodeCity } from './weather/weather.ts';
 import { logAi } from './ai-log.ts';
@@ -37,7 +38,19 @@ export async function runCaptureExtract(
   userId: string,
   variables: { conversation_window: string },
 ): Promise<CaptureResult> {
-  const result = await runJobBySlug(userId, 'capture-extract', variables);
+  // The user's CURRENT goal cards, handed to the model so it re-uses their EXACT titles when
+  // re-expressing a goal it already extracted. The lexical matcher downstream is the backstop;
+  // this is the fix at the source — a real run produced "Run an Ultra Beast Spartan Race",
+  // "Run a Spartan Ultra Beast" AND "Spartan Ultra Beast" as three cards, plus "Lose weight"
+  // beside "Drop weight to improve race performance", which no synonym-free matcher can see
+  // through. Best-effort: an empty list just means the model consolidates from conversation alone.
+  const currentTitles = await listGoalsByStatus(userId, ['captured', 'confirmed', 'committed'])
+    .then((gs) => gs.map((g) => g.title).filter(Boolean))
+    .catch(() => [] as string[]);
+  const result = await runJobBySlug(userId, 'capture-extract', {
+    ...variables,
+    current_goal_cards: JSON.stringify(currentTitles),
+  });
   const text = result.formatted ?? result.raw ?? '{}';
 
   let parsed: Record<string, unknown>;

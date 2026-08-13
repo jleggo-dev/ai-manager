@@ -8,7 +8,7 @@ import {
   type EatingWindowSpan,
   type StartingPoint,
 } from '@cadence/shared';
-import { normTitle, sameGoalIdentity, sameGoalTitle } from './goal-identity.ts';
+import { normTitle, sameGoalTitle } from './goal-identity.ts';
 
 /**
  * Pure, dependency-free transforms for the capture pipeline (no DB, no engine imports) so the
@@ -358,18 +358,21 @@ export function normalizeBrief(raw: unknown): string | undefined {
  * never re-captured as a fresh card); and intra-run near-duplicates, keeping the first seen — the
  * deterministic backstop for a model that names one race twice in a single answer.
  *
- * Confirmed matching is IDENTITY-strict (case/punctuation/word-boundary only): "Spartan Ultra
- * Beast" is the confirmed "Spartan Ultrabeast" reworded, but "Run a 10k this spring" alongside a
- * confirmed "Run a 10k" is a more specific goal the user is entitled to state separately.
- * Intra-run matching is looser, because everything here is pre-confirmation and one card is the
- * point. What survives is then matched against existing rows by capture-goal-merge.
+ * Confirmed matching uses the SAME containment rules as everything else (sameGoalTitle). It was
+ * identity-strict, on the theory that "Run a 10k this spring" beside a confirmed "Run a 10k" is a
+ * more specific goal the user is entitled to state separately — and a real device run (2026-08-13)
+ * showed what that strictness costs: minutes after committing "Run an Ultra Beast Spartan Race",
+ * the walkthrough conversation's capture re-extracted it as "Spartan Ultra Beast" and a THIRD copy
+ * of the same race landed as a fresh card. A restatement-with-qualifiers now merges away; adding a
+ * genuinely new dimension to a committed goal is a conversation with the coach (and the rebuild
+ * card), not a silent second card.
  */
 export function selectCapturedGoals<T extends { title?: string }>(goals: T[], confirmedTitles: readonly string[]): T[] {
   const kept: T[] = [];
   for (const g of goals) {
     const title = g.title ?? '';
     if (!normTitle(title)) continue;
-    if (confirmedTitles.some((c) => sameGoalIdentity(c, title))) continue;
+    if (confirmedTitles.some((c) => sameGoalTitle(c, title))) continue;
     if (kept.some((k) => sameGoalTitle(k.title ?? '', title))) continue;
     kept.push(g);
   }

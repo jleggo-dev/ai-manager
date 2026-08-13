@@ -208,18 +208,31 @@ describe('capture selectCapturedGoals (§6.1 — no duplicate goal cards)', () =
     expect(titles(kept)).toEqual(['Run a 10k', 'Run a marathon']);
   });
 
-  it('drops an IDENTITY match of a confirmed/committed goal, but not a mere superstring', () => {
+  it('drops any restatement of a confirmed/committed goal — identity, qualifiers, or fragment', () => {
     const confirmed = ['Run a 10k'];
     // confirmed goal dropped; the distinct new goal kept
     expect(titles(selectCapturedGoals([{ title: 'Run a 10k' }, { title: 'Meditate daily' }], confirmed))).toEqual([
       'Meditate daily',
     ]);
-    // a superstring of a confirmed goal is a NEW, more specific goal — confirmed match is identity-only
-    expect(titles(selectCapturedGoals([{ title: 'Run a 10k this spring' }], confirmed))).toEqual([
-      'Run a 10k this spring',
-    ]);
-    // ...but a pure re-spelling of a confirmed goal is that same goal, not a new one
+    // Ruling change (2026-08-13): a superstring of a confirmed goal used to be kept as "a new,
+    // more specific goal" — and the strictness put a THIRD copy of a committed race on a real
+    // account minutes after commit. A restatement-with-qualifiers now merges away; adding a real
+    // new dimension to a committed goal is a conversation with the coach, not a second card.
+    expect(selectCapturedGoals([{ title: 'Run a 10k this spring' }], confirmed)).toHaveLength(0);
+    // a pure re-spelling of a confirmed goal is that same goal, not a new one
     expect(selectCapturedGoals([{ title: 'run a 10K!' }], confirmed)).toHaveLength(0);
+  });
+
+  // The 2026-08-13 device run, exactly as observed: committed "Run an Ultra Beast Spartan Race",
+  // then the walkthrough conversation's capture re-emitted the race as a bare name.
+  it('drops the committed race however the model rewords it', () => {
+    const confirmed = ['Run an Ultra Beast Spartan Race'];
+    expect(selectCapturedGoals([{ title: 'Spartan Ultra Beast' }], confirmed)).toHaveLength(0);
+    expect(selectCapturedGoals([{ title: 'Run a Spartan Ultra Beast' }], confirmed)).toHaveLength(0);
+    // a genuinely different goal beside it still lands
+    expect(titles(selectCapturedGoals([{ title: 'Spartan Ultra Beast' }, { title: 'Eat better' }], confirmed))).toEqual(
+      ['Eat better'],
+    );
   });
 
   it('drops empty/whitespace titles', () => {
