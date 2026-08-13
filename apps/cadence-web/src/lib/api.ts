@@ -55,6 +55,7 @@ export {
   replan,
   previewReplan,
   dismissReplanPreview,
+  getPendingReplan,
   acceptProposal,
   dismissProposal,
   lockPlan,

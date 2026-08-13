@@ -181,6 +181,14 @@ export async function previewReplan(steer?: string): Promise<ReplanPreview> {
 export async function dismissReplanPreview(): Promise<void> {
   await fetch(`${BASE}/plan/replan/preview/dismiss`, { method: 'POST', headers: headers() });
 }
+/** The stored pending proposal, if the server finished a preview our fetch didn't live to see. */
+export async function getPendingReplan(): Promise<{
+  proposal: { activities: PendingPlanActivity[]; note: string; rationale?: string } | null;
+}> {
+  const res = await fetch(`${BASE}/plan/replan/pending`, { headers: headers() });
+  if (!res.ok) return { proposal: null };
+  return res.json();
+}
 
 /**
  * Accept the coach's proactive weekly proposal — commits directly (no separate preview step):

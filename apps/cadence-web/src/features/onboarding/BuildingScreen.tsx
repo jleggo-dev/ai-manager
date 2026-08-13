@@ -4,7 +4,35 @@ import { CadenceWorking } from '../../components/CadenceWorking.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { CoachFaceGrid } from '../coach/CoachFaceGrid.tsx';
 import { useCoachFace } from '../coach/coachFaceContext.ts';
+import { capabilities } from '../../lib/capability/index.ts';
+import { enablePushOnThisDevice } from '../settings/notifications/enablePush.ts';
 import { useBuildPlan } from './useBuildPlan.ts';
+
+/**
+ * "Want a ping when it's ready?" — asked HERE because the building wait is the one moment the
+ * permission's value is self-evident: a minutes-long build the copy just said you may leave. The
+ * server sends the push at first commit (services/lock.ts) whether or not the app is open; this
+ * button only decides whether iOS will show it. Denied is respected quietly — the OS prompt is
+ * the ask, and re-asking is Settings' job.
+ */
+function NotifyWhenReady() {
+  const [state, setState] = useState<'idle' | 'busy' | 'on' | 'denied'>('idle');
+  if (!capabilities.push.isAvailable()) return null;
+  if (state === 'on') return <div className="build-notify is-on">🔔 I&rsquo;ll ping you when it&rsquo;s ready.</div>;
+  if (state === 'denied') return null;
+  return (
+    <button
+      className="build-notify"
+      disabled={state === 'busy'}
+      onClick={() => {
+        setState('busy');
+        void enablePushOnThisDevice().then((r) => setState(r === 'on' ? 'on' : 'denied'));
+      }}
+    >
+      🔔 Ping me when it&rsquo;s ready
+    </button>
+  );
+}
 
 /**
  * The plan is building. Here is something to do while it does.
@@ -61,6 +89,8 @@ export function BuildingScreen({ onReady, onBackToChat }: { onReady: () => void;
             : "This takes me a few minutes, and you don't have to watch me work — leave the app if you like, and your week will be here when you get back. Meanwhile: happy with the face I'm wearing, or would you rather another?"}
         </p>
       </div>
+
+      {!built && <NotifyWhenReady />}
 
       <CoachFaceGrid selected={faceId} onPick={pick} withMark />
 

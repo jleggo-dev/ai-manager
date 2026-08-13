@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PendingPlanActivity } from '@cadence/shared';
-import { confirmGoals, previewReplan, replan, dismissReplanPreview } from '../../lib/api.ts';
+import { confirmGoals, previewReplan, replan, dismissReplanPreview, getPendingReplan } from '../../lib/api.ts';
 import { MicButton } from '../../components/MicButton.tsx';
 import { Orb } from '../../components/Orb.tsx';
 
@@ -59,6 +59,24 @@ export function AdjustSheet({
       if (r.status === 'proposed' && r.proposal) setPreview(r.proposal);
       else setMsg(r.violations?.join('; ') || "I couldn't put together an adjustment just now — try again in a bit.");
     } catch {
+      // The FETCH died — on a phone, usually the app being backgrounded while the server kept
+      // synthesizing. previewReplan persists its result as pending_plan the moment it finishes,
+      // so poll for THAT before reporting a failure that may not have happened (and before
+      // paying for a second synthesis).
+      const deadline = Date.now() + 3 * 60_000;
+      while (Date.now() < deadline) {
+        try {
+          const { proposal } = await getPendingReplan();
+          if (proposal) {
+            setPreview(proposal);
+            setBusy(false);
+            return;
+          }
+        } catch {
+          /* offline blip — keep polling */
+        }
+        await new Promise((res) => setTimeout(res, 5_000));
+      }
       setMsg('Something hiccuped on my end — try again in a moment.');
     } finally {
       setBusy(false);

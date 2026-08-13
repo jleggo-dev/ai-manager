@@ -4932,3 +4932,27 @@ token registration there, and a post-commit send hook in confirmLock. One increm
 
 Account purged again (5 goals / 29 activities / 206 occurrences; auth back to zero) for a clean
 round 4.
+
+### The push, and leave-safety everywhere (2026-08-13, owner: "that's the bigger problem")
+
+Every long model call driven from the phone had the same disease the build had — iOS suspends the
+webview, the fetch dies, the app calls it a failure while the server finishes the work. Fixed as a
+CONTRACT now, per surface:
+
+- **The build** (previous round): one self-sufficient server call + poll-for-committed.
+- **Coach replies + the walkthrough nudge**: GET /coach/current now reports `generating` (from
+  0029's in_flight_response_id — the relay drains dropped streams to completion, so the server
+  KNOWS). Recovery is patient: quick polls for ordinary blips, then as long as the server says
+  "still writing" it keeps waiting (2 min ceiling) instead of the old fixed ~5s that told someone
+  their connection dropped while the reply was arriving fine. Still refuses stale threads.
+- **The rebuild preview** (AdjustSheet): previewReplan persists pending_plan the moment synthesis
+  finishes; new GET /plan/replan/pending lets a dead fetch poll for the stored proposal (3 min)
+  instead of reporting a failure — or re-paying for synthesis.
+
+**The push — "your week is ready" — SHIPPED.** Server: confirmLock sends APNs on FIRST commit only
+(version 1; a rebuild is agreed in a live conversation, and pinging the phone in their hand is
+noise), best-effort, never able to un-commit anything. Client: the building screen asks — "🔔 Ping
+me when it's ready" — because the wait is the one moment the permission's value is self-evident;
+the enable dance is extracted (enablePush.ts) and shares PushToggle's token key + prefs flag, so
+Settings tells the truth about the answer wherever it was given. Denied is respected quietly.
+Copy: "Your first week is ready / Come take a look — and push back on anything."
