@@ -58,7 +58,7 @@ export function BuildingScreen({ onReady, onBackToChat }: { onReady: () => void;
         <p>
           {built
             ? "Done — it's waiting for you. Change my face whenever you like."
-            : "This can take a couple of minutes. While I work — happy with the face I'm wearing, or would you rather another?"}
+            : "This takes me a few minutes, and you don't have to watch me work — leave the app if you like, and your week will be here when you get back. Meanwhile: happy with the face I'm wearing, or would you rather another?"}
         </p>
       </div>
 

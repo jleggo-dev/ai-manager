@@ -4891,3 +4891,44 @@ never sent.
 **The blocker for everything server-side: ship main.** Rationale/suggested/area on GET /plan,
 the graduated fix's client half, milestone capture plumbing, the reset completeness — all inert
 for real users until the branch lands and Vercel redeploys.
+
+### Device test round 3 — the tripled goal, and the doom-scroll contract (2026-08-13)
+
+The card worked (rationale bubble, MY ADDITION, whys, headers — all live on device). Two problems:
+
+**1. Goals multiplied.** The account ended with THREE Ultra Beast cards ("Run an Ultra Beast
+Spartan Race" / "Run a Spartan Ultra Beast" / "Spartan Ultra Beast" — the third inserted minutes
+AFTER commit, by the walkthrough conversation's capture) and TWO weight cards ("Drop weight to
+improve race performance" / "Lose weight"). Five goals → the fan-out drafted five → 29 activities,
+two weigh-ins, eight meal logs — and a ~4-minute build. Three distinct failures, three fixes:
+- **"a" ≠ "an".** The word-containment test shared every content word of the two Run titles and
+  failed on the article. `normTitle` now folds "an" into "a" — a normalization, not a loosening;
+  every keep-apart guard in goal-identity.test.ts still holds.
+- **The confirmed-goal filter was identity-strict** ("Run a 10k this spring" beside a confirmed
+  "Run a 10k" was 'a more specific goal the user is entitled to state separately') — and that
+  strictness is what let capture mint a third copy of a COMMITTED race. Ruling reversed:
+  `selectCapturedGoals` now uses full `sameGoalTitle` containment against confirmed titles; adding
+  a genuinely new dimension to a committed goal is a coach conversation + rebuild card, never a
+  silent second card.
+- **"Lose" vs "drop" is meaning, not spelling** — no synonym-free matcher can see it, by design.
+  Fixed at the source: capture-extract now receives `<current_goal_cards>` (every captured/
+  confirmed/committed title) with a TITLE ANCHORING rule — re-expressions of an existing goal must
+  reuse its exact title, character for character. The lexical matcher stays the backstop. Synced.
+
+**2. "Building a plan takes forever… normally I'd navigate away and get a notification."**
+Two halves. SHIPPED — leaving is now safe: `useBuildPlan` was a client-orchestrated three-call
+pipeline (confirm → preview → lock), and iOS suspending the app killed it between steps. It is
+now ONE self-sufficient server call (`lockPlan` confirms + synthesizes + commits server-side, and
+the serverless invocation runs to completion whether anyone is listening); a dead fetch POLLS for
+the committed plan for up to 5 minutes instead of declaring failure. The building screen says so:
+"you don't have to watch me work — leave the app if you like." Dedup also directly attacks the
+latency: five goals was ~double the work of the real two.
+
+NEXT (specced, not built) — **the push**: "your week is ready 🎉" via APNs when commit lands. All
+plumbing exists (push-apns.ts, device_tokens, notify/); the missing piece is PERMISSION — the
+first build happens pre-signup, so no push permission has been asked. The natural moment is the
+building screen itself ("Want a ping when it's ready?"), which needs a small permission card +
+token registration there, and a post-commit send hook in confirmLock. One increment, mostly UI.
+
+Account purged again (5 goals / 29 activities / 206 occurrences; auth back to zero) for a clean
+round 4.

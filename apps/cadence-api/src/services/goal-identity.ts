@@ -14,11 +14,20 @@
  * disappear. Every threshold here errs toward leaving two goals apart.
  */
 
-/** Lowercase, punctuation → spaces, collapsed. The comparison form for word-level rules. */
+/**
+ * Lowercase, punctuation → spaces, collapsed — and "an" folded into "a". The comparison form for
+ * word-level rules.
+ *
+ * The article fold is a real-device scar (2026-08-13): "Run an Ultra Beast Spartan Race" and
+ * "Run a Spartan Ultra Beast" shared every content word, and the subset test still failed —
+ * on "a" ≠ "an". Keeping articles in the word set is deliberate (they make containment harder
+ * to pass); treating English's two spellings of the SAME article as different words is not.
+ */
 export const normTitle = (s: string): string =>
   s
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\ban\b/g, 'a')
     .trim();
 
 /**

@@ -2,22 +2,16 @@ import { StrictMode } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useBuildPlan } from './useBuildPlan.ts';
 
-const confirmGoals = vi.fn();
-const previewPlan = vi.fn();
 const lockPlan = vi.fn();
 const getPlan = vi.fn();
 
 vi.mock('../../lib/api.ts', () => ({
-  confirmGoals: (...a: unknown[]) => confirmGoals(...a),
-  previewPlan: (...a: unknown[]) => previewPlan(...a),
   lockPlan: (...a: unknown[]) => lockPlan(...a),
   getPlan: (...a: unknown[]) => getPlan(...a),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  confirmGoals.mockResolvedValue({ confirmed: 2 });
-  previewPlan.mockResolvedValue({ status: 'proposed', proposal: { activities: [], note: '' } });
   lockPlan.mockResolvedValue({ status: 200, body: { activities: 3 } });
   getPlan.mockResolvedValue({ stage: 'in_progress' });
 });
@@ -27,25 +21,27 @@ beforeEach(() => {
  * every effect is invoked, cleaned up, and invoked again — which is exactly the shape that can
  * either commit someone's plan twice or, worse, leave the build screen spinning forever on a
  * sequence that quietly aborted itself.
+ *
+ * The hook is now ONE self-sufficient server call (lockPlan confirms + synthesizes + commits),
+ * so leaving the app mid-build is safe: a dead fetch polls for the committed plan instead of
+ * declaring failure. That poll path is the doom-scroll contract and gets its own test.
  */
 describe('useBuildPlan under StrictMode', () => {
-  it('builds the week exactly once and finishes', async () => {
+  it('builds the week with exactly one lock call and finishes', async () => {
     const onDone = vi.fn();
     const { result } = renderHook(() => useBuildPlan({ onDone }), { wrapper: StrictMode });
 
     await waitFor(() => expect(result.current.phase).toBe('done'));
-    expect(confirmGoals).toHaveBeenCalledTimes(1);
     expect(lockPlan).toHaveBeenCalledTimes(1);
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('surfaces a too-much-at-once preview as something they can act on', async () => {
-    previewPlan.mockResolvedValue({ status: 'needs_focus' });
+  it('surfaces a too-much-at-once verdict as something they can act on', async () => {
+    lockPlan.mockResolvedValue({ status: 422, body: { status: 'needs_focus' } });
     const { result } = renderHook(() => useBuildPlan({ onDone: vi.fn() }), { wrapper: StrictMode });
 
     await waitFor(() => expect(result.current.phase).toBe('failed'));
     expect(result.current.error).toMatch(/lot to carry at once/);
-    expect(lockPlan).not.toHaveBeenCalled();
   });
 
   it('routes to the plan when the lock already landed server-side', async () => {
@@ -58,21 +54,38 @@ describe('useBuildPlan under StrictMode', () => {
     expect(result.current.phase).not.toBe('failed');
   });
 
-  it('retries from the top without double-committing the first attempt', async () => {
-    previewPlan.mockRejectedValueOnce(new Error('offline'));
-    const { result } = renderHook(() => useBuildPlan({ onDone: vi.fn() }), { wrapper: StrictMode });
+  /**
+   * The doom-scroll contract: the user backgrounds the app, iOS kills the fetch, the SERVER
+   * keeps building. Coming back must find the finished week — a dead connection polls for the
+   * committed plan rather than reporting a failure that didn't happen.
+   */
+  it('polls its way to done when the fetch dies but the server finishes the build', async () => {
+    lockPlan.mockRejectedValue(new Error('app backgrounded — connection lost'));
+    getPlan.mockResolvedValueOnce({ stage: 'in_progress' }).mockResolvedValue({ stage: 'committed' });
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useBuildPlan({ onDone, recoverEveryMs: 5 }), { wrapper: StrictMode });
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    expect(result.current.phase).toBe('done');
+    expect(lockPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails, then retries from the top without double-committing the first attempt', async () => {
+    lockPlan.mockRejectedValueOnce(new Error('offline'));
+    const { result } = renderHook(() => useBuildPlan({ onDone: vi.fn(), recoverEveryMs: 5, recoverWindowMs: 20 }), {
+      wrapper: StrictMode,
+    });
 
     await waitFor(() => expect(result.current.phase).toBe('failed'));
     result.current.retry();
 
     await waitFor(() => expect(result.current.phase).toBe('done'));
-    expect(confirmGoals).toHaveBeenCalledTimes(2);
-    expect(lockPlan).toHaveBeenCalledTimes(1);
+    expect(lockPlan).toHaveBeenCalledTimes(2);
   });
 
   it('does nothing at all until told to run', async () => {
     renderHook(() => useBuildPlan({ onDone: vi.fn(), run: false }), { wrapper: StrictMode });
     await new Promise((r) => setTimeout(r, 10));
-    expect(confirmGoals).not.toHaveBeenCalled();
+    expect(lockPlan).not.toHaveBeenCalled();
   });
 });

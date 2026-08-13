@@ -57,3 +57,25 @@ describe('sameGoalTitle (the pre-confirmation merge rule)', () => {
     expect(sameGoalTitle('   !!  ', 'Run a 10k')).toBe(false);
   });
 });
+
+/**
+ * The 2026-08-13 device run: THREE cards for one race and two for one weight goal. Each pair
+ * below coexisted on a real user's account; each must now merge — and the guards above must
+ * still hold, because the fix (folding "an" into "a") is a normalization, not a loosening.
+ */
+describe('the tripled Ultra Beast (device run, 2026-08-13)', () => {
+  it('matches the a/an rewording that split the race into two cards', () => {
+    expect(sameGoalTitle('Run an Ultra Beast Spartan Race', 'Run a Spartan Ultra Beast')).toBe(true);
+  });
+
+  it('matches the bare race name against the full committed title', () => {
+    expect(sameGoalTitle('Run an Ultra Beast Spartan Race', 'Spartan Ultra Beast')).toBe(true);
+  });
+
+  it('still cannot see through a true synonym — that fix lives in the prompt, not here', () => {
+    // "Lose weight" vs "Drop weight to improve race performance" is lose≈drop, a judgment of
+    // MEANING. The matcher stays synonym-free by design; TITLE ANCHORING in capture-extract
+    // (the current_goal_cards variable) is what prevents the model minting the second title.
+    expect(sameGoalTitle('Lose weight', 'Drop weight to improve race performance')).toBe(false);
+  });
+});
