@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CoachFaceId } from '@cadence/shared';
 import { CadenceWorking } from '../../components/CadenceWorking.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
@@ -9,29 +9,24 @@ import { enablePushOnThisDevice } from '../settings/notifications/enablePush.ts'
 import { useBuildPlan } from './useBuildPlan.ts';
 
 /**
- * "Want a ping when it's ready?" — asked HERE because the building wait is the one moment the
- * permission's value is self-evident: a minutes-long build the copy just said you may leave. The
- * server sends the push at first commit (services/lock.ts) whether or not the app is open; this
- * button only decides whether iOS will show it. Denied is respected quietly — the OS prompt is
- * the ask, and re-asking is Settings' job.
+ * The ready-ping is the DEFAULT, not an opt-in (owner ruling 2026-08-13: "Claude doesn't have a
+ * bell — it just assumes you want it"). iOS's own permission dialog is the one ask nothing can
+ * skip, so it fires HERE, uninvited, at the moment its value is self-evident: a minutes-long
+ * build the copy just said you may leave. Granting registers the token (the server sends at
+ * first commit whether or not the app is open); declining Apple's dialog is the answer and is
+ * respected in silence — re-asking is Settings' job. The only chrome is the one reassuring line
+ * once it's on.
  */
 function NotifyWhenReady() {
-  const [state, setState] = useState<'idle' | 'busy' | 'on' | 'denied'>('idle');
-  if (!capabilities.push.isAvailable()) return null;
-  if (state === 'on') return <div className="build-notify is-on">🔔 I&rsquo;ll ping you when it&rsquo;s ready.</div>;
-  if (state === 'denied') return null;
-  return (
-    <button
-      className="build-notify"
-      disabled={state === 'busy'}
-      onClick={() => {
-        setState('busy');
-        void enablePushOnThisDevice().then((r) => setState(r === 'on' ? 'on' : 'denied'));
-      }}
-    >
-      🔔 Ping me when it&rsquo;s ready
-    </button>
-  );
+  const [on, setOn] = useState(false);
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current || !capabilities.push.isAvailable()) return;
+    asked.current = true;
+    void enablePushOnThisDevice().then((r) => setOn(r === 'on'));
+  }, []);
+  if (!on) return null;
+  return <div className="build-notify is-on">🔔 I&rsquo;ll ping you when it&rsquo;s ready — feel free to leave.</div>;
 }
 
 /**
