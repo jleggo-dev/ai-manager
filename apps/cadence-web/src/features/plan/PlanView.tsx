@@ -7,6 +7,7 @@ import { AdjustSheet } from './AdjustSheet.tsx';
 import { taskOpener } from './taskShape.ts';
 import { TodayTrail } from '../today/TodayTrail.tsx';
 import { TrailHeader } from '../today/TrailHeader.tsx';
+import { PlanViewSwitch } from './PlanViewSwitch.tsx';
 import { DailyCheckIn } from '../today/DailyCheckIn.tsx';
 import { TodayFoodSheet } from '../nutrition/TodayFoodSheet.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
@@ -388,24 +389,7 @@ export function PlanView({ onCoach, reloadSignal }: { onCoach: () => void; reloa
         )}
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
-        <div className="pv-switch" role="tablist" aria-label="Plan view">
-          <button
-            role="tab"
-            aria-selected={view === 'today'}
-            className={view === 'today' ? 'is-on' : ''}
-            onClick={() => setView('today')}
-          >
-            Today
-          </button>
-          <button
-            role="tab"
-            aria-selected={view === 'week'}
-            className={view === 'week' ? 'is-on' : ''}
-            onClick={() => setView('week')}
-          >
-            Week
-          </button>
-        </div>
+        <PlanViewSwitch view={view} onChange={setView} />
 
         {view === 'today' ? (
           <TodayTrail
