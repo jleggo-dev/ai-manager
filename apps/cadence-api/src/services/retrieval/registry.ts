@@ -24,7 +24,8 @@ export type { RetrievalFunction } from './types.ts';
 const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_identity: {
     name: 'get_identity',
-    description: "The user's name, or that it hasn't been captured yet.",
+    description:
+      "The user's name, if they have shared one. Use before addressing them by name; if this comes back empty, ask them rather than guessing.",
     domains: ['identity'],
     async run(userId) {
       const u = await getUser(userId);
@@ -43,7 +44,8 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
 
   get_objectives: {
     name: 'get_objectives',
-    description: 'Active high-level objectives (captured/confirmed/committed goals) with measure + status.',
+    description:
+      'What the user is working toward — every active goal — from ones just mentioned in conversation to ones committed into the plan — each with its target. Use when you need to know what their goals ARE; for numbers on how each is GOING, use get_goal_progress.',
     domains: ['goals'],
     async run(userId) {
       return listGoalsByStatus(userId, ['captured', 'confirmed', 'committed']);
@@ -65,7 +67,8 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
 
   get_active_plan: {
     name: 'get_active_plan',
-    description: 'Current active plan and its activities (the weekly/daily commitments).',
+    description:
+      "The user's current plan: the sessions and habits they committed to, with how often each repeats (e.g. run — 3x per week). Use when you need what their week is SUPPOSED to look like; for whether they actually did it, use get_consistency.",
     domains: ['plans', 'activities'],
     async run(userId) {
       const plan = await getActivePlan(userId);
@@ -91,7 +94,8 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
 
   get_consistency: {
     name: 'get_consistency',
-    description: 'How the user showed up over a window: scheduled vs done occurrences. Params: { days }.',
+    description:
+      'How reliably the user has been doing what they planned: of the sessions scheduled in the last N days, how many actually happened — a count and a percentage. Use for "how have I been keeping up?" — the follow-through number, not what the sessions contained. Defaults to the last 7 days; pass {"days": 30} to look further back (up to 90).',
     domains: ['occurrences', 'consistency'],
     async run(userId, params) {
       const days = Math.min(90, Math.max(1, Number(params?.days ?? 7)));
@@ -114,7 +118,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_recent_logs: {
     name: 'get_recent_logs',
     description:
-      "The user's recent session reports in their own words — what they actually did (sets/reps/loads/distance) and how it felt. Use when they ask about a past workout/session or how training is going. Params: { days }.",
+      'What the user wrote down after recent sessions, in their own words — what they actually did (sets, reps, distances) and how it felt. Returns the most recent few reports (up to 6). Use when they ask about a specific past session or how training has FELT lately; for the device-recorded list of every workout, use get_workout_history. Pass {"days": 30} to look further back (default 14, up to 90).',
     domains: ['occurrences', 'logs'],
     async run(userId, params) {
       const days = Math.min(90, Math.max(1, Number(params?.days ?? 14)));
@@ -137,7 +141,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_goal_progress: {
     name: 'get_goal_progress',
     description:
-      "COMPUTED progress toward each committed goal (18/100 books, latest vs target weight, days to a milestone, weekly consistency) plus per-activity trends (pace, top load). Use when they ask how they're doing on a goal or overall.",
+      "Numbers on how each goal is going, worked out from what the user has logged — 18 of 100 books read, current weight vs target, days left to a deadline, sessions kept per week — plus trends over time (pace, top lift). Use when they ask how they're doing on a goal or overall. For whether they showed up at all, use get_consistency; for raw totals of one counted thing, use get_practice_totals.",
     domains: ['goals', 'progress'],
     async run(userId) {
       const p = await buildProgress(userId);
@@ -189,7 +193,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_constraints: {
     name: 'get_constraints',
     description:
-      'Things the user is working around — physical (an injury) or life (burnout, grief, a night shift) — with plan-around flags. Safety-critical for planning.',
+      "Things the user is working around and the plan must respect — physical (a bad knee, a shoulder) or life circumstances (burnout, grief, a night shift). Use before proposing or changing any training, every time; if something here would make a suggestion unsafe, don't make it.",
     domains: ['baseline'],
     async run(userId) {
       const u = await getUser(userId);
@@ -213,7 +217,8 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
 
   get_equipment: {
     name: 'get_equipment',
-    description: 'Owned equipment + wear status.',
+    description:
+      'What training equipment the user owns — and for tracked items like running shoes, how used up they are (distance so far vs the replacement point). Use before suggesting sessions that need gear, or when they ask about their equipment.',
     domains: ['equipment'],
     async run(userId) {
       return listEquipment(userId);
@@ -236,7 +241,8 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
 
   get_weight: {
     name: 'get_weight',
-    description: 'Baseline weight (current + start).',
+    description:
+      "The user's current weight and, when recorded, the weight they started at. Use before any calculation or conversation involving their weight; if it comes back empty, ask them rather than estimating.",
     domains: ['baseline'],
     async run(userId) {
       const u = await getUser(userId);
@@ -265,7 +271,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_practice_totals: {
     name: 'get_practice_totals',
     description:
-      "Totals of what the user has COUNTED in their logged sessions, per activity — words written, minutes meditated, pages read, reps done. Use when they ask how much of something they have done over a stretch ('how much have I written this month?'), or when a practice goal's progress is a number they have been logging rather than a weight or a pace. Params: { days } (default 30).",
+      'Running totals of anything the user has counted in their session logs, per activity — words written, minutes meditated, pages read, reps done. Use for "how much have I written this month?" and for practice goals whose progress is a count they log rather than a weight or a pace. For overall goal numbers, use get_goal_progress. Pass {"days": 90} to set the period (default 30, up to 365).',
     domains: ['occurrences', 'progress', 'mind', 'practice'],
     async run(userId, params) {
       const days = Math.min(365, Math.max(1, Number(params?.days ?? 30)));
