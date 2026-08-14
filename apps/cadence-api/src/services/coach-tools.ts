@@ -17,9 +17,10 @@ import { executeCalls } from './retrieval/select-and-run.ts';
  * suggest-never-auto-apply contract; nothing here mutates anything.
  */
 
-/** Registry functions the coach may call. All called zero-argument in v1 — functions with
- *  params (get_consistency, get_recent_logs) run on their defaults; parameterized retrieval
- *  (date ranges, specific goals) is a later increment. */
+/** Registry functions the coach may call. Owner ruling 2026-08-14: everything she can look up,
+ *  she should be able to look up — the food log, the journal, the recipe book and the practice
+ *  totals joined the list that day, because a coach who can see your training but not your
+ *  eating or your writing is only half a coach. */
 const COACH_TOOL_NAMES = [
   'get_identity',
   'get_objectives',
@@ -33,11 +34,44 @@ const COACH_TOOL_NAMES = [
   'get_workout_history',
   'get_recent_logs',
   'get_goal_progress',
+  'get_practice_totals',
+  'get_food_log',
+  'get_journal',
+  'get_recipes',
+  'lookup_food',
 ] as const;
+
+/**
+ * Parameter schemas, for the functions that take one.
+ *
+ * v1 declared every tool parameterless, which quietly cost most of their value: "what did I do
+ * THIS WEEK" and "how much have I written this month" both ran on a default window, and
+ * `lookup_food` — which is nothing without its query — could not be called usefully at all. A
+ * declared schema is also the only way arguments arrive filled (the tool-jobs probe, #189).
+ */
+const TOOL_PARAMS: Record<string, { properties: Record<string, unknown>; required?: string[] }> = {
+  get_consistency: { properties: { days: { type: 'integer', description: 'Window in days (default 30).' } } },
+  get_recent_logs: { properties: { days: { type: 'integer', description: 'Window in days (default 14).' } } },
+  get_workout_history: { properties: { days: { type: 'integer', description: 'Window in days (default 30).' } } },
+  get_practice_totals: { properties: { days: { type: 'integer', description: 'Window in days (default 30).' } } },
+  get_journal: { properties: { limit: { type: 'integer', description: 'How many entries (default 8, max 20).' } } },
+  get_recipes: {
+    properties: { query: { type: 'string', description: 'Search their book by name; omit for their saved recipes.' } },
+  },
+  lookup_food: {
+    properties: {
+      q: { type: 'string', description: 'The food to look up.' },
+      limit: { type: 'integer', description: 'How many matches (default 5).' },
+    },
+    required: ['q'],
+  },
+};
 
 export interface CoachToolCall {
   toolCallId: string;
   name: string;
+  /** JSON from the model, when the tool declares parameters. */
+  arguments?: string;
 }
 
 export interface CoachToolOutput {
@@ -50,9 +84,8 @@ export const coachToolNames = (): Set<string> => new Set(COACH_TOOL_NAMES.filter
 
 /**
  * Devs.ai-shaped tool definitions, built from the registry's own names and LLM-facing
- * descriptions. Empty parameter schemas: these read "the user's current X", nothing to fill in
- * (the tool-jobs probe taught us an undeclared schema reads as parameterless — here that is the
- * truth, not an accident).
+ * descriptions, plus a parameter schema for the functions that take one. A function absent from
+ * TOOL_PARAMS genuinely reads "the user's current X" and has nothing to fill in.
  */
 export function coachToolDefinitions(): Array<{
   type: 'function';
@@ -63,7 +96,11 @@ export function coachToolDefinitions(): Array<{
     function: {
       name: n,
       description: RETRIEVAL_FUNCTIONS[n]!.description,
-      parameters: { type: 'object', properties: {} },
+      parameters: {
+        type: 'object',
+        properties: TOOL_PARAMS[n]?.properties ?? {},
+        ...(TOOL_PARAMS[n]?.required ? { required: TOOL_PARAMS[n]!.required } : {}),
+      },
     },
   }));
 }
@@ -74,13 +111,25 @@ export function coachToolDefinitions(): Array<{
  * lock). A function that returns nothing renderable answers plainly — an empty string would read
  * upstream as a tool that silently failed, and the model should instead SAY "nothing on file".
  */
+/** The model's arguments, defensively. Malformed JSON runs the function on its defaults rather
+ *  than failing the turn — a slightly-wrong window beats "something went wrong". */
+function parseArgs(raw: string | undefined): Record<string, unknown> {
+  if (!raw?.trim()) return {};
+  try {
+    const p = JSON.parse(raw) as unknown;
+    return p && typeof p === 'object' && !Array.isArray(p) ? (p as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function executeCoachToolCalls(userId: string, calls: CoachToolCall[]): Promise<CoachToolOutput[]> {
   const known = coachToolNames();
   const wanted = calls.filter((c) => known.has(c.name));
   if (!wanted.length) return [];
   const { results } = await executeCalls(
     userId,
-    wanted.map((c) => ({ fn: c.name, params: {} })),
+    wanted.map((c) => ({ fn: c.name, params: parseArgs(c.arguments) })),
     { logLabel: 'coach-tool' },
   );
   return wanted.map((c) => {
