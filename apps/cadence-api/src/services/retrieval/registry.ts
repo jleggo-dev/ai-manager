@@ -271,7 +271,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_practice_totals: {
     name: 'get_practice_totals',
     description:
-      'Running totals of anything the user has counted in their session logs, per activity — words written, minutes meditated, pages read, reps done. Use for "how much have I written this month?" and for practice goals whose progress is a count they log rather than a weight or a pace. For overall goal numbers, use get_goal_progress. Pass {"days": 90} to set the period (default 30, up to 365).',
+      'Running totals of anything the user has counted in their session logs, per activity — words written, minutes meditated, pages read, reps done. Use for "how much have I written this month?" and for practice goals whose progress is a count they log rather than a weight or a pace. Reports up to a dozen totals, most-logged first. For overall goal numbers, use get_goal_progress. Pass {"days": 90} to set the period (default 30, up to 365).',
     domains: ['occurrences', 'progress', 'mind', 'practice'],
     async run(userId, params) {
       const days = Math.min(365, Math.max(1, Number(params?.days ?? 30)));

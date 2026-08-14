@@ -30,7 +30,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_food_log: {
     name: 'get_food_log',
     description:
-      'What the user has actually eaten over the last 7 days — each logged meal, plus a short summary (days logged, meals per day, items that come up often, days with alcohol). Use for "how has my eating been?" or any question about their recent diet. For dishes they could MAKE, use get_recipes.',
+      'What the user has actually eaten over the last 7 days — each logged meal, plus a short summary (days logged, meals per day, items that come up often, days with alcohol); lists the 10 most recent meals. Use for "how has my eating been?" or any question about their recent diet. For dishes they could MAKE, use get_recipes.',
     domains: ['nutrition'],
     async run(userId) {
       const { from, to } = isoRange(7);
@@ -220,7 +220,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_recipes: {
     name: 'get_recipes',
     description:
-      'The user\'s own recipe book — dishes they saved or you cooked up with them before, with servings and per-serving calories. Use when they ask what they can make, refer to a saved dish ("that chilli"), or before inventing a new recipe when something in their book would do. For nutrition facts on a single ingredient, use lookup_food. Pass {"query": "chilli"} to search by name; with no query it returns their saved dishes.',
+      'The user\'s own recipe book — dishes they saved or you cooked up with them before, with servings and per-serving calories. Use when they ask what they can make, refer to a saved dish ("that chilli"), or before inventing a new recipe when something in their book would do. For nutrition facts on a single ingredient, use lookup_food. Pass {"query": "chilli"} to search by name; with no query it returns their saved dishes (up to 15).',
     domains: ['nutrition', 'recipes'],
     async run(userId, params) {
       const q = String(params?.query ?? '').trim();
