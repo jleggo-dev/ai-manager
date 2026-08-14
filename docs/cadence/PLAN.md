@@ -5032,3 +5032,40 @@ plumbing. Verify before building anything on it.
 design card (AdjustSheet still shows the old list; this is the remaining half of round 4's "not
 our new screen"); ② the build card carries the coach's own `steer`; ③ the tool loop, reads
 first; ④ write tools behind it.
+
+### VERIFIED: Devs.ai v2 function-calling — the tool-loop coach is GO (2026-08-14)
+
+Probed LIVE through AI Admin (`probe-tool-loop.ts`, kept as the regression probe; e2e entities
+created and swept). Three findings, in descending certainty:
+
+1. **The upstream half works.** Tool definitions ride the v2 request; the model — the coach's own
+   `anthropic-claude-4-5-sonnet` — emitted a genuine `function_call` (`echo_word`, a `toolu_*`
+   call id) in the response output. Better still, AI Admin already SHIPS the whole feature
+   surface: `ai_profiles.config.toolJobs[]` exposes processing jobs as tools
+   (`tool-jobs.ts`/`tool-fulfillment.ts`), the SSE ingestion accumulates function_call events
+   (`v2-stream-events.ts`), and the HTTP route layer drives fulfillment + continuation
+   (`runInternalToolJobLoop`, MAX_TOOL_ROUNDS). It had simply NEVER RUN — zero profiles have ever
+   declared toolJobs, which is exactly why finding #2 survived to be found.
+
+2. **The continuation half is broken, precisely.** The v2 response arrives `"status":"completed"`
+   WITH the function_call in its output; `submitV2ToolOutputs` then calls
+   `POST /responses/{id}/resume` on a TERMINAL response → `409 "Response … is already terminal"`.
+   The resume endpoint evidently serves paused/interactive tools, not completed-with-function-call
+   responses. Fix candidate: issue a NEW response threaded via `previous_response_id` carrying
+   `function_call_output` input items — the threading metadata plumbing already exists for normal
+   turns. Whether Devs.ai accepts function_call_output inputs is the one remaining unknown, and it
+   is answered by implementing the candidate and re-running the probe.
+
+3. **The Cadence gap is exactly where predicted.** `sendChatMessage` (the in-process entry the
+   coach relay uses) already attaches tool definitions from the profile — but the loop DRIVER
+   lives in the HTTP route layer Cadence bypasses. `relayAndAccumulate` has no tool handling: a
+   coach profile with toolJobs today would stream function_call events through unfulfilled. The
+   port = drive the exported loop pieces from the relay.
+
+Also learned: tool parameter schemas come from `job.config.variables[]` (NOT template scanning) —
+the probe's minimal job declared none, so the model was correctly offered a parameterless tool and
+called with `{}`. Coach tool jobs must declare their variables.
+
+**Sequenced tool-loop increment**: ① fix the continuation (new-response + function_call_output;
+re-run the probe to all-green), ② drive the loop from Cadence's relay, ③ first read tools from
+`retrieval/registry.ts` as tool jobs with declared variables, ④ act tools behind it.
