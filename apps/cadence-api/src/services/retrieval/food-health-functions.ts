@@ -30,7 +30,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_food_log: {
     name: 'get_food_log',
     description:
-      'Recent meals (last 7 days) with the deterministic food-log summary (days logged, meals/day, common items, alcohol days). Use for "how has my eating been?" or any food/nutrition question.',
+      'What the user has actually eaten over the last 7 days — each logged meal, plus a short summary (days logged, meals per day, items that come up often, days with alcohol). Use for "how has my eating been?" or any question about their recent diet. For dishes they could MAKE, use get_recipes.',
     domains: ['nutrition'],
     async run(userId) {
       const { from, to } = isoRange(7);
@@ -60,7 +60,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   lookup_food: {
     name: 'lookup_food',
     description:
-      "Look up foods by name in the user's cache + shared DB (incl. USDA whole foods on cache miss). Use when they ask what something is / macros / micros, or before suggesting a food. Params: { q: string, limit?: number }. Not for barcodes (Food tab handles OFF).",
+      'Nutrition facts for a food, looked up by name — calories, protein and key nutrients per standard amount, from the user\'s saved foods plus a public food database. Use when they ask what is in a food, or before recommending one. Not for barcode scans — the app\'s Food tab handles those. Pass {"q": "lentils"}; add {"limit": 8} for more matches (default 5, up to 10).',
     domains: ['nutrition', 'foods'],
     async run(userId, params) {
       const q = typeof params?.q === 'string' ? params.q.trim() : '';
@@ -109,7 +109,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_journal: {
     name: 'get_journal',
     description:
-      'Recent journal entries the user has written, in their own words (secret entries are never included). Use when they refer to something they wrote, when a pattern across entries would help, or to remember what mattered to them lately.',
+      'Recent journal entries the user has written, in their own words (entries they marked private are never included). Use when they refer to something they wrote, when a pattern across entries would help, or to remember what has mattered to them lately. Pass {"limit": 15} for more entries (default 8, up to 20).',
     domains: ['journal', 'mind'],
     async run(userId, params) {
       const limit = typeof params?.limit === 'number' ? Math.min(20, Math.max(1, params.limit)) : 8;
@@ -142,7 +142,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_dietary_profile: {
     name: 'get_dietary_profile',
     description:
-      'Allergies (hard excludes), diet pattern (vegan/vegetarian/…), soft dislikes, and the hours they eat in (16:8, OMAD, Ramadan) when they have said. Use before suggesting foods/recipes and when the user mentions allergies, diet, or meal timing.',
+      'What the user can and will eat: allergies (never suggest these), diet pattern (vegan, vegetarian, …), foods they dislike, and the hours of the day they eat in (16:8, OMAD, Ramadan) when they have said. Use before suggesting any food, meal or recipe, and whenever they mention allergies, diet, or meal timing.',
     domains: ['nutrition', 'safety'],
     async run(userId) {
       const [raw, user] = await Promise.all([getDietaryProfile(userId), getUser(userId)]);
@@ -175,7 +175,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_health_history: {
     name: 'get_health_history',
     description:
-      'Recent activity the user shared from Apple Health — workouts by type with weekly frequency. Use during onboarding instead of asking them to type their workout history, and whenever what they actually did recently matters.',
+      'A summary of the user\'s recorded exercise from Apple Health — workout types, each with how often per week it happens. Use for the overall picture of what they actually do ("runs about twice a week"), and during onboarding instead of asking them to type their history. For individual sessions on specific days, use get_workout_history.',
     domains: ['movement', 'history'],
     async run(userId) {
       return latestHealthDigest(userId);
@@ -194,7 +194,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_workout_history: {
     name: 'get_workout_history',
     description:
-      "Individual recorded workouts from the user's devices (Apple Health), newest first — date, type, duration, distance. The session-by-session log behind get_health_history's summary. Use when WHICH days or sessions matters: what they did this morning, this week's actual runs, the gap since the last one. Params: { days }.",
+      "Individual recorded workouts from the user's devices (Apple Health), newest first — date, type, duration, distance. Use when specific days or sessions matter: what they did this morning, this week's actual runs, the gap since the last one. This is the session-by-session detail behind get_health_history's summary; for how a session FELT, use get_recent_logs (their own reports). Pass {\"days\": 7} to set the period (default 30, up to 90).",
     domains: ['movement', 'history'],
     async run(userId, params) {
       const days = Math.min(90, Math.max(1, Number(params?.days ?? 30)));
@@ -220,7 +220,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_recipes: {
     name: 'get_recipes',
     description:
-      'The user\'s own recipe book — dishes they saved or you cooked up with them before, with servings and per-serving macros. Use when they ask what they can make, refer to a dish they have saved ("that chilli"), or you are about to suggest food and something already in their book would do. Params: { query } to search by name.',
+      'The user\'s own recipe book — dishes they saved or you cooked up with them before, with servings and per-serving calories. Use when they ask what they can make, refer to a saved dish ("that chilli"), or before inventing a new recipe when something in their book would do. For nutrition facts on a single ingredient, use lookup_food. Pass {"query": "chilli"} to search by name; with no query it returns their saved dishes.',
     domains: ['nutrition', 'recipes'],
     async run(userId, params) {
       const q = String(params?.query ?? '').trim();

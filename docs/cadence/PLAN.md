@@ -5322,3 +5322,41 @@ still composes the one map every caller reads) rather than onto the allowlist.
 **Naming, owner-ruled:** these are `ai_harness_tools` — what the model can call. Distinct from
 `user_action_widgets` — what she can put in front of the user (the build card, quick picks, the
 health offer, the session-step tools in `tool-catalog.ts`). "Act tools" is retired.
+
+### The harness-tool description audit (owner: "run the audit… make sure we aren't using internal jargon", 2026-08-14)
+
+All 17 `ai_harness_tools` descriptions rewritten to the tool-catalog discipline (the 2026-08-04
+four rules), for their real readers — the coach picking a tool mid-reply and the Broker choosing
+pack functions from `renderCatalogDoc`, both reading cold. The owner's instinct was exactly
+right: `get_consistency` said "How the user showed up over a window: scheduled vs done
+occurrences. Params: { days }." — "window" is ambiguous, "occurrences" is our table name, and
+"Params:" was shorthand only we understood.
+
+**What changed, per rule:**
+- **Jargon out, plainly said:** occurrences → "sessions scheduled/happened"; window → "the last
+  N days"; "plan-around flags" → "the plan must respect"; "wear status" → "how used up (distance
+  so far vs replacement point)"; "Baseline weight" → "current weight and the weight they started
+  at"; "deterministic food-log summary" → "a short summary"; "cache + shared DB (incl. USDA on
+  cache miss)" → "their saved foods plus a public food database"; "(Food tab handles OFF)" →
+  "the app's Food tab handles those" (OFF = Open Food Facts read as the word "off");
+  "captured/confirmed/committed" statuses → "from ones just mentioned to ones committed into the
+  plan".
+- **Params as worked examples**, readable by both consumers: `Pass {"days": 30} to look further
+  back (default 7, up to 90).` — the Broker never sees the JSON schema, so the description must
+  teach the param name itself.
+- **Tiebreaks on every confusable cluster:** history trio (summary / device sessions / their own
+  words), progress trio (showed up / how it's going / one counted thing), food quartet (ate /
+  could make / facts about one / can-and-won't-eat), plus objectives↔progress and plan↔consistency.
+- **Accuracy pass caught two live errors:** `get_consistency` defaults to 7 days, not the 30 its
+  parameter description claimed; and the rewrite itself briefly reintroduced "locked" — the
+  pre-rename status word — which `registry.render.test.ts`'s nomenclature guard caught.
+
+**Enforced from now on** (`description-audit.test.ts`, 6 assertions): banned-jargon list over
+every registry description (now including `locked`); a use-cue on every coach-exposed tool; every
+declared param taught in the description as a `{"key": value}` example; param descriptions
+jargon-free with defaults stated (or omission behavior); tiebreak present on at least one side of
+each known confusable pair; 520-char compactness cap. A description drifting back into shorthand
+now fails CI instead of quietly mis-teaching a model for weeks.
+
+No sync needed: the coach's definitions ride each request and the Broker's catalog is rendered at
+runtime — the API deploy carries all of it.

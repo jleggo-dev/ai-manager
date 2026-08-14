@@ -50,18 +50,30 @@ const COACH_TOOL_NAMES = [
  * declared schema is also the only way arguments arrive filled (the tool-jobs probe, #189).
  */
 const TOOL_PARAMS: Record<string, { properties: Record<string, unknown>; required?: string[] }> = {
-  get_consistency: { properties: { days: { type: 'integer', description: 'Window in days (default 30).' } } },
-  get_recent_logs: { properties: { days: { type: 'integer', description: 'Window in days (default 14).' } } },
-  get_workout_history: { properties: { days: { type: 'integer', description: 'Window in days (default 30).' } } },
-  get_practice_totals: { properties: { days: { type: 'integer', description: 'Window in days (default 30).' } } },
-  get_journal: { properties: { limit: { type: 'integer', description: 'How many entries (default 8, max 20).' } } },
+  get_consistency: {
+    properties: { days: { type: 'integer', description: 'How many days back to look (default 7, up to 90).' } },
+  },
+  get_recent_logs: {
+    properties: { days: { type: 'integer', description: 'How many days back to look (default 14, up to 90).' } },
+  },
+  get_workout_history: {
+    properties: { days: { type: 'integer', description: 'How many days back to look (default 30, up to 90).' } },
+  },
+  get_practice_totals: {
+    properties: { days: { type: 'integer', description: 'How many days back to add up (default 30, up to 365).' } },
+  },
+  get_journal: {
+    properties: { limit: { type: 'integer', description: 'How many entries to return (default 8, up to 20).' } },
+  },
   get_recipes: {
-    properties: { query: { type: 'string', description: 'Search their book by name; omit for their saved recipes.' } },
+    properties: {
+      query: { type: 'string', description: 'Search their book by dish name; omit to get their saved recipes.' },
+    },
   },
   lookup_food: {
     properties: {
-      q: { type: 'string', description: 'The food to look up.' },
-      limit: { type: 'integer', description: 'How many matches (default 5).' },
+      q: { type: 'string', description: 'The food to look up, by name.' },
+      limit: { type: 'integer', description: 'How many matches to return (default 5, up to 10).' },
     },
     required: ['q'],
   },
