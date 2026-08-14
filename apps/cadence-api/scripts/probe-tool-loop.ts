@@ -4,20 +4,18 @@
  * a chat session against the DEPLOYED backend (the HTTP layer that drives the tool loop), asks
  * the model to call the tool, and reports what actually streamed back.
  *
- * First run (2026-08-14) VERIFIED the upstream half and FOUND the engine half's bug:
- *   ✓ tool definitions accepted; the model emitted a real function_call (echo_word, toolu_* id)
- *     on the coach's own model (anthropic-claude-4-5-sonnet)
- *   ✗ continuation 409s — the v2 response arrives "completed" WITH the function_call in its
- *     output, and submitV2ToolOutputs then calls POST /responses/{id}/resume on a TERMINAL
- *     response ("Response … is already terminal"). Fix candidate: a NEW response threaded via
- *     previous_response_id carrying function_call_output input items (the metadata plumbing for
- *     that threading already exists). Re-run this probe after the fix; the VERDICT lines below
- *     should flip to all-true.
- *   ○ arguments came back "{}" — not a bug: tool parameter schemas come from job
- *     config.variables[], which the probe job (deliberately minimal) does not declare. Tool jobs
- *     for the coach MUST declare variables or the model has nothing to fill in.
+ * VERDICT (2026-08-14, after #190): ALL GREEN — the full loop works end to end.
+ *   ✓ tool definitions accepted; the model emitted a real function_call on the coach's own model
+ *   ✓ with config.variables declared, arguments arrive filled ({"word":"pineapple"})
+ *   ✓ the continuation (a NEW response threaded on previous_response_id carrying
+ *     function_call_output items — #190's fix; /resume 409s on terminal responses) streams clean
+ *   ✓ the final answer carries the tool's result
+ *   ○ port note: message.complete events carry EMPTY text — the assistant reply rides deltas, so
+ *     any relay accumulating the continuation must read deltas, not the completion envelope.
+ * History: run 1 found the /resume 409 and the empty-arguments schema contract (parameter
+ * schemas come from job config.variables, not template scanning).
  */
-import { createProcessingJob, getProcessingJobBySlug, getAiProfile } from '@ai-admin/core';
+import { createProcessingJob, updateProcessingJob, getProcessingJobBySlug, getAiProfile } from '@ai-admin/core';
 // createAiProfile isn't exported from core (nothing needed it before this probe) — reach the
 // backend model directly, the same module core itself re-exports the others from.
 import { createAiProfile } from '../../../backend/src/models/ai-profiles.ts';
@@ -41,6 +39,12 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
 
 // 1. Provision e2e job + profile in-process (shared prod DB — the sanctioned provisioning path).
 const ids = await withAim(ACTOR, async () => {
+  const JOB_CONFIG = {
+    promptTemplate: 'Reply with exactly this word and nothing else: {{word}}',
+    // Tool parameter schemas come from config.variables — a job without them is offered to the
+    // model as a parameterless tool (run 1's arguments:"{}" lesson).
+    variables: [{ name: 'word', description: 'The exact word to echo back', required: true }],
+  };
   let job = await getProcessingJobBySlug('e2e-toolprobe-echo');
   if (!job) {
     job = await createProcessingJob({
@@ -48,9 +52,11 @@ const ids = await withAim(ACTOR, async () => {
       name: 'e2e toolprobe echo',
       description: 'E2E probe: echoes a word. Swept by cleanup:e2e-ai-admin.',
       ai_profile_id: cadenceConfig.aim.brokerProfileId,
-      config: { promptTemplate: 'Reply with exactly this word and nothing else: {{word}}' },
+      config: JOB_CONFIG,
       is_active: true,
     });
+  } else {
+    await updateProcessingJob(job.id, { config: JOB_CONFIG });
   }
   const coach = (await getAiProfile(cadenceConfig.aim.coachProfileId)) as {
     provider_id?: string;
@@ -110,12 +116,16 @@ for (;;) {
   raw += dec.decode(value, { stream: true });
   if (raw.length > 200_000) break;
 }
+const fs = await import('node:fs');
+const STREAM_COPY = '/private/tmp/claude-501/-Users-jeffreyleggo-cadence-ai-manager/735dc168-293c-4128-9c5b-63ffce1e6c20/scratchpad/probe-tool-loop-stream.txt';
+fs.writeFileSync(STREAM_COPY, raw);
 const sawFunctionCall = /function_call/.test(raw);
 const sawEcho = /pineapple/i.test(raw);
-const sawToolEvent = /tool/i.test(raw);
+const saw409 = /already terminal|resume error/i.test(raw);
+const sawContinuationError = /"type":"error"/.test(raw);
 console.log('\n── VERDICT ──');
 console.log('function_call in stream :', sawFunctionCall);
-console.log('tool-ish events         :', sawToolEvent);
+console.log('continuation errored    :', sawContinuationError, saw409 ? '(the old 409)' : '');
 console.log('final answer says word  :', sawEcho);
-console.log('\nlast 900 chars of stream:\n', raw.slice(-900));
+console.log('stream bytes            :', raw.length, '(full copy: ' + STREAM_COPY + ')');
 process.exit(0);

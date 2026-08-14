@@ -5069,3 +5069,17 @@ called with `{}`. Coach tool jobs must declare their variables.
 **Sequenced tool-loop increment**: ① fix the continuation (new-response + function_call_output;
 re-run the probe to all-green), ② drive the loop from Cadence's relay, ③ first read tools from
 `retrieval/registry.ts` as tool jobs with declared variables, ④ act tools behind it.
+
+### Tool-loop continuation FIXED and probed ALL GREEN (2026-08-14, #190)
+
+`/resume` replaced with the Responses-dialect continuation: a NEW streamed response threaded on
+`previous_response_id` carrying `function_call_output` items keyed by the model's own call_id,
+tools re-attached for chaining (`toolOutputsToV2Request` — shape pinned in tests —,
+`DevsAiV2Client.continueWithToolOutputs`, `submitV2ToolOutputs` switched). Probe re-run against
+the deployment: function_call ✓ · arguments filled once the job declared `config.variables`
+(`{"word":"pineapple"}`) ✓ · continuation streams clean, no 409 ✓ · final answer carries the
+result ✓. Port note for the relay work: `message.complete` events carry EMPTY text — the reply
+rides deltas. E2E entities swept (3 sessions, 3 profiles, 1 job).
+
+**The tool-loop coach's foundation is now fully verified.** Next: drive the loop from Cadence's
+`relayAndAccumulate`, then read tools from the retrieval registry (with declared variables).
