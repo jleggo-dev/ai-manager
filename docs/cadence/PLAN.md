@@ -5290,3 +5290,35 @@ development/sandbox for a `cap run` install), or `sent`.
 
 Also: root-level `npm run probe:backgrounded` added, matching the `cleanup:*` convention — the
 `-w apps/cadence-api` form only resolves from the repo root.
+
+### Everything she can look up, she can now look up (owner ruling 2026-08-14)
+
+Owner: "Cadence needs access to the food log, the journal, as well as the mind-pillar task
+summaries (words/pages written, minutes meditated) … Recipes should be reachable too."
+
+Five additions, and one correction that mattered more than any of them:
+
+- **`get_food_log`, `get_journal`, `lookup_food`** already existed in the registry and were simply
+  never wired into the coach's tool list — she could be asked about your eating and had no way to
+  look at it.
+- **`get_recipes`** (new): their own recipe book, saved dishes and per-serving macros, searchable
+  by name — so "what can I make?" reaches what they already have before inventing something.
+- **`get_practice_totals`** (new): the countable side of a practice, added up. Session logs have
+  always captured whatever numbers someone reports (`occurrences.value`, free-form metric keys
+  from the parser) and nothing ever totalled them — "how much have I written this month" had no
+  answer even though every session knew its own. Metric-agnostic on purpose: words and minutes
+  are why it exists (mind and practice, where progress is not a weight or a pace), but reps and
+  pages ride the same path for free.
+- **Parameters, at last.** v1 declared every tool parameterless and the executor threw the
+  model's `arguments` away — so "what did I do THIS WEEK" ran on a default window and
+  `lookup_food`, which is nothing without its query, could not be called usefully at all. Tools
+  that take params now declare them, and `executeCoachToolCalls` parses what comes back
+  (malformed JSON falls to defaults rather than failing the turn).
+
+`registry.ts` hit its 500-line cap on the way; split at a real seam (`food-health-functions.ts`
+owns the group with its own data sources, `types.ts` holds the shared contract, `registry.ts`
+still composes the one map every caller reads) rather than onto the allowlist.
+
+**Naming, owner-ruled:** these are `ai_harness_tools` — what the model can call. Distinct from
+`user_action_widgets` — what she can put in front of the user (the build card, quick picks, the
+health offer, the session-step tools in `tool-catalog.ts`). "Act tools" is retired.
