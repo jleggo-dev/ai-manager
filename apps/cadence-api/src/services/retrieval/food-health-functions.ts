@@ -220,7 +220,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_recipes: {
     name: 'get_recipes',
     description:
-      "The user's own recipe book — dishes they saved or you cooked up with them before, with servings and per-serving macros. Use when they ask what they can make, refer to a dish they have saved (\"that chilli\"), or you are about to suggest food and something already in their book would do. Params: { query } to search by name.",
+      'The user\'s own recipe book — dishes they saved or you cooked up with them before, with servings and per-serving macros. Use when they ask what they can make, refer to a dish they have saved ("that chilli"), or you are about to suggest food and something already in their book would do. Params: { query } to search by name.',
     domains: ['nutrition', 'recipes'],
     async run(userId, params) {
       const q = String(params?.query ?? '').trim();

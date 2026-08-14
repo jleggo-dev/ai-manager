@@ -252,7 +252,6 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
     },
   },
 
-
   /**
    * The countable side of a practice, added up.
    *
@@ -301,7 +300,6 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
       return (r as { totals: unknown[] }).totals.length;
     },
   },
-
 };
 
 /**
