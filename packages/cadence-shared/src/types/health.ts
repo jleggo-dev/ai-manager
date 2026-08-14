@@ -114,3 +114,27 @@ export interface HealthDigest {
    */
   dailySteps?: HealthDigestSteps;
 }
+
+/** Where a workout-history row came in through — the door, not the original recording app. */
+export type WorkoutSource = 'healthkit' | 'strava' | 'cadence';
+
+/**
+ * One recorded workout, as pushed over the wire to POST /me/workout-history (the dataset the
+ * digest summarizes — migration 0033). The device is the only HealthKit reader, so rows arrive
+ * client-built like the digest; the SERVER stamps the source (a client cannot claim 'strava' or
+ * 'cadence' — those doors have server-side writers).
+ */
+export interface WorkoutHistoryEntry {
+  /** Stable per-workout id from the door (HealthKit's workout UUID). Dedup key with the source. */
+  sourceId: string;
+  type: string;
+  startISO: string;
+  durationMin?: number | null;
+  distanceKm?: number | null;
+  avgHr?: number | null;
+  /**
+   * The app that originally recorded it, when the door knows (HealthKit's sourceName) — kept for
+   * the cross-source dedup a Strava↔Health double-sync will need, never shown to the user.
+   */
+  recordedBy?: string;
+}

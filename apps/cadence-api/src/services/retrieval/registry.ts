@@ -25,6 +25,7 @@ import { listOccurrences, listRecentLogged } from '../../repos/occurrences.ts';
 import { listNutritionLogs } from '../../repos/nutrition.ts';
 import { listForCoach } from '../../repos/journal-entries.ts';
 import { latestHealthDigest } from '../../repos/health-digests.ts';
+import { listWorkoutHistory, type WorkoutHistoryRow } from '../../repos/workout-history.ts';
 import { renderHealthDigest } from '../health-context.ts';
 import { buildProgress } from '../progress.ts';
 import { summarizeNutrition, renderNutritionLine } from '../nutrition-summarize.ts';
@@ -446,6 +447,32 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
     rows(r) {
       const row = r as Awaited<ReturnType<typeof latestHealthDigest>>;
       return row ? row.digest.totalWorkouts : 0;
+    },
+  },
+
+  get_workout_history: {
+    name: 'get_workout_history',
+    description:
+      "Individual recorded workouts from the user's devices (Apple Health), newest first — date, type, duration, distance. The session-by-session log behind get_health_history's summary. Use when WHICH days or sessions matters: what they did this morning, this week's actual runs, the gap since the last one. Params: { days }.",
+    domains: ['movement', 'history'],
+    async run(userId, params) {
+      const days = Math.min(90, Math.max(1, Number(params?.days ?? 30)));
+      return { days, workouts: await listWorkoutHistory(userId, days, 40) };
+    },
+    render(r) {
+      const { days, workouts } = r as { days: number; workouts: WorkoutHistoryRow[] };
+      if (!workouts.length) return '';
+      const lines = workouts.map((w) => {
+        const bits = [w.type];
+        if (w.durationMin != null) bits.push(`${Math.round(w.durationMin)} min`);
+        if (w.distanceKm != null) bits.push(`${w.distanceKm} km`);
+        if (w.avgHr != null) bits.push(`avg ${Math.round(w.avgHr)} bpm`);
+        return `- ${w.startedAt.slice(0, 10)} · ${bits.join(' · ')}`;
+      });
+      return `Recorded workouts (last ${days}d, newest first):\n${lines.join('\n')}`;
+    },
+    rows(r) {
+      return (r as { workouts: WorkoutHistoryRow[] }).workouts.length;
     },
   },
 };
