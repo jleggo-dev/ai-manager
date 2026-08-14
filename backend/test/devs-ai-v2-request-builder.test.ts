@@ -46,7 +46,7 @@ describe('toolOutputsToV2Request', () => {
   });
 
   it('never emits the /resume dialect (camelCase toolOutputs)', () => {
-    const body = toolOutputsToV2Request('m', 'r', [{ toolCallId: 't', output: 'o' }]) as Record<string, unknown>;
+    const body = toolOutputsToV2Request('m', 'r', [{ toolCallId: 't', output: 'o' }]) as unknown as Record<string, unknown>;
     expect(body.toolOutputs).toBeUndefined();
     expect(body.reason).toBeUndefined();
   });
