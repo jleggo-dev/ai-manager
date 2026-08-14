@@ -164,12 +164,9 @@ describe('OnboardingChat', () => {
     expect(screen.queryByText(/double-check what I say/)).not.toBeInTheDocument();
   });
 
-  it('renders a floating settings gear only when onSettings is provided', async () => {
-    const { unmount } = render(<OnboardingChat chrome="none" intent="ongoing" onSettings={() => {}} />);
-    await screen.findByText(/good to see you/);
-    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
-    unmount();
-
+  /** The floating gear is GONE (owner, 2026-08-14): Settings lives in the bottom nav, and a
+   *  second gear hovering over the conversation was chrome nobody asked for. */
+  it('renders no floating settings gear in the chat', async () => {
     render(<OnboardingChat chrome="none" intent="ongoing" />);
     await screen.findByText(/good to see you/);
     expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();

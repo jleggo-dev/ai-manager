@@ -17,6 +17,15 @@ export type TodayHeader = {
  * coach can still ask) — and expose `requestLocation` so the header's "change" affordance can
  * re-trigger it. Precise GPS / a typed city remain available in Settings.
  */
+/** Great-circle km between two points — the travel test's yardstick. */
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLon = (lon2 - lon1) * rad;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export function useTodayHeader(): TodayHeader {
   const [weather, setWeather] = useState<WeatherNow | null>(null);
   const [city, setCity] = useState<string | null>(null);
@@ -27,6 +36,15 @@ export function useTodayHeader(): TodayHeader {
     setWeather(w);
     if (w.available && w.label) setCity(w.label);
   }, []);
+
+  /** After a location change: pick up the NEW stored label (reverse-geocoded server-side) and the
+   *  weather at the new coordinates together, so the header never mixes one city's name with the
+   *  other's sky. */
+  const refreshWeatherAndCity = useCallback(async () => {
+    const loc = await getHomeLocation().catch(() => null);
+    if (loc?.home_location) setCity(loc.home_location.label ?? null);
+    await refreshWeather();
+  }, [refreshWeather]);
 
   const requestLocation = useCallback(() => {
     if (!('geolocation' in navigator)) return;
@@ -57,6 +75,28 @@ export function useTodayHeader(): TodayHeader {
       if (loc.home_location) {
         setCity(loc.home_location.label ?? null);
         await refreshWeather();
+        // Deterministic travel check (owner, 2026-08-14: flew Lisbon → Montreal and the header
+        // kept the old city all day). Permission was granted long ago, so this read is silent;
+        // a real move (> ~50 km — travel, never GPS jitter or a coarse-rounding wobble) updates
+        // the stored location, which reverse-geocodes the new label server-side. Failures of any
+        // kind change nothing — the stored city keeps standing.
+        navigator.geolocation?.getCurrentPosition(
+          async (pos) => {
+            const stored = loc.home_location!;
+            const moved = haversineKm(stored.lat, stored.lon, pos.coords.latitude, pos.coords.longitude);
+            if (moved < 50 || !alive) return;
+            await saveHomeLocation({
+              lat: Number(pos.coords.latitude.toFixed(2)),
+              lon: Number(pos.coords.longitude.toFixed(2)),
+              timezone: browserTimezone(), // travel far enough to change cities changes clocks too
+            }).catch(() => undefined);
+            if (alive) await refreshWeatherAndCity();
+          },
+          () => {
+            /* declined / unavailable — the stored location stands */
+          },
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 600_000 },
+        );
       } else {
         requestLocation(); // one-time silent auto-detect
       }
@@ -64,7 +104,7 @@ export function useTodayHeader(): TodayHeader {
     return () => {
       alive = false;
     };
-  }, [refreshWeather, requestLocation]);
+  }, [refreshWeather, refreshWeatherAndCity, requestLocation]);
 
   return { weather, city, locating, requestLocation };
 }

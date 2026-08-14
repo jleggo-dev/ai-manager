@@ -4956,3 +4956,79 @@ me when it's ready" — because the wait is the one moment the permission's valu
 the enable dance is extracted (enablePush.ts) and shares PushToggle's token key + prefs flag, so
 Settings tells the truth about the answer wherever it was given. Denied is respected quietly.
 Copy: "Your first week is ready / Come take a look — and push back on anything."
+
+## Round 4 + the architecture ruling: the coach gets hands (2026-08-14)
+
+Owner: "Coach should always appear to be aware of the previous conversations... know about the
+workouts a user has had, even before the user has told the coach... They should be like a real
+coach. And obviously they should be able to read, create, modify, or completely change a routine
+at any time when in consultation with the user. **Even if this means changing our architecture...
+or improving it.**"
+
+### The diagnosis: every big-one failure is ONE disease
+
+The coach is a narrator over injected context. The app GUESSES what she'll need (pack-select),
+writes down what she said after the fact (the Broker), and renders her formatting conventions as
+UI (the picks fence). Each round-4 failure is that shape failing somewhere:
+- She asked for a weight captured 15 minutes earlier → the guess was wrong (pack built at 07:41,
+  weight landed 07:56, `users` writes never invalidated the pack, and pack-select had CHOSEN a
+  function list without get_weight).
+- "Coach can't update the plan at all" → she has no read on plan state ("Fix nutrition" sat
+  `confirmed` and unplanned, invisible to every context block).
+- The build "popup" and missing pick buttons → her only ways to act and to render are
+  conventions she may or may not follow, with no affordance the app can rely on.
+
+### Shipped now — retrieval-first hardening (the current architecture, made honest)
+
+- **Migration 0032**: `cadence.users` gets a pack-touch trigger (its own BEFORE-trigger function —
+  0022's reads `new.user_id`, which users doesn't have), conditional on the dossier-real columns
+  (baseline, name, macro_targets, dietary_profile, home_location, timezone) so streak/pending
+  churn can't kill pack reuse. Probed live: a baseline write moves the watermark.
+- **get_weight is MANDATORY** in every pack, beside identity + constraints — body facts cost ~20
+  tokens and their absence costs "never makes you repeat yourself"; that is not a trade a model
+  gets to optimize. `get_health_history` joins the ongoing fallback: a coach who must be TOLD
+  about workouts her own tools recorded is the owner's failure, verbatim.
+- **The plan-gap healer** (`planGapNote`): agreed-but-unplanned goals ride every non-onboarding
+  pack — "Agreed but NOT YET IN THE PLAN: … raise it yourself, end that turn with the build card"
+  — until built or let go. Heals the stranded round-4 state and every future dismissed rebuild.
+- **Persona**: NEVER RE-ASK A FACT THE SYSTEM HOLDS — check the dossier first; if absent, say
+  "let me check your file" (the app retrieves); ask the user only when retrieval comes back empty.
+- **The density hard line, in code**: `plan-density.ts` measures the synthesized week (round 4
+  measured MO-TH 2, FR 1, SA 2, SU 1 — with adjacents working); when most active days hold <3
+  user items, ONE repair synthesis adds anchored 5-10 min routines (post-coverage, re-vetted,
+  never looped; unchanged-on-minimal accepted; found+fixed en route: coverage recovery never
+  reassigned `normalized`, so density would have re-vetted away recovered goals).
+- **Intake asks about other habits to keep on the rhythm** (owner suggestion) — each yes becomes
+  an anchored routine, not a goal. **Picks are for every conversation** (protocol: the ongoing
+  chat asked its questions bare on device). **Tabs**: Today+Week → one **Plan** tab, day/week
+  toggle inside PlanView. **Travel**: on load, a silent location re-check; >50 km of real
+  movement updates home location (+ timezone, + reverse-geocoded label).
+
+### The north star: the coach as a governed tool-user (the architecture change)
+
+The owner's "MCP to our database" instinct is right, and the migration is INCREMENTAL because the
+semantic layer already exists: `retrieval/registry.ts` is a governed function catalog the app
+executes — today only the app calls it, on a guess. The change is to let the COACH call it, in a
+tool loop the AI Admin relay owns:
+
+1. **Read tools** = the existing registry (identity, plan, weight trend, health history,
+   consistency, goal progress, past conversations). She pulls what the turn needs instead of the
+   app pre-guessing — "let me check your file" becomes literal.
+2. **Act tools** = the plan verbs, still suggest-never-auto-apply: `propose_plan_change(steer)`
+   returns a vetted preview the CLIENT renders as the crafted card; committing stays a user tap.
+   Read any time; write only in consultation — the owner's sentence, as an API.
+3. **Show tools** = picks and the plan card stop being formatting conventions and become calls
+   the app renders deterministically — the round-4 "no buttons" class dies structurally.
+4. **Governance unchanged**: every tool call logged in AI Admin beside the jobs (the CLAUDE.md
+   auditability contract), the registry stays the only DB surface, constraint safety stays in
+   the vet.
+
+**Open dependency to verify first**: Devs.ai v2 function-calling through the in-process SSE relay
+(the relay must intercept tool_call events, execute app-side, and continue the stream). If v2
+cannot, the fallback is a relay-side loop over structured pause-turns — same contract, more
+plumbing. Verify before building anything on it.
+
+**Sequenced next** (each useful alone): ① proposal-as-card — the rebuild PREVIEW renders as the
+design card (AdjustSheet still shows the old list; this is the remaining half of round 4's "not
+our new screen"); ② the build card carries the coach's own `steer`; ③ the tool loop, reads
+first; ④ write tools behind it.

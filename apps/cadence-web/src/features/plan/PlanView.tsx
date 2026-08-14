@@ -7,6 +7,7 @@ import { AdjustSheet } from './AdjustSheet.tsx';
 import { taskOpener } from './taskShape.ts';
 import { TodayTrail } from '../today/TodayTrail.tsx';
 import { TrailHeader } from '../today/TrailHeader.tsx';
+import { PlanViewSwitch } from './PlanViewSwitch.tsx';
 import { DailyCheckIn } from '../today/DailyCheckIn.tsx';
 import { TodayFoodSheet } from '../nutrition/TodayFoodSheet.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
@@ -59,15 +60,13 @@ function detourLabel(type: ActiveEpisode['type']): string {
  * that pops the AdjustSheet: steer → preview → confirm) — suggest-never-auto-apply as always.
  * `reloadKey` bumps when a log/meal/adjust lands so the dashboard's aux fetches refresh.
  */
-export function PlanView({
-  onCoach,
-  reloadSignal,
-  view = 'today',
-}: {
-  onCoach: () => void;
-  reloadSignal?: number;
-  view?: 'today' | 'week';
-}) {
+export function PlanView({ onCoach, reloadSignal }: { onCoach: () => void; reloadSignal?: number }) {
+  /**
+   * Day/week is a VIEW of one surface, not two destinations — it lived in the tab bar as Today
+   * and Week until the owner's device verdict (2026-08-14: Week "doesn't have more information
+   * than the today tab"). One Plan tab; this switch is the whole difference.
+   */
+  const [view, setView] = useState<'today' | 'week'>('today');
   const [data, setData] = useState<PlanViewData | null>(null);
   const [note, setNote] = useState('');
   const [proposalBusy, setProposalBusy] = useState(false);
@@ -389,6 +388,8 @@ export function PlanView({
           </div>
         )}
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
+
+        <PlanViewSwitch view={view} onChange={setView} />
 
         {view === 'today' ? (
           <TodayTrail

@@ -9,6 +9,7 @@ import { ensureHorizon } from './plan-horizon.ts';
 import { toRRule, describeRecurrence } from './scheduling.ts';
 import { matchGoal } from './plan-match.ts';
 import { splitCoverage } from './plan-coverage.ts';
+import { readDensity, densityRepairSteer } from './plan-density.ts';
 import type { Activity, Goal, PendingPlanActivity, PlanVetResult } from '@cadence/shared';
 
 const COMPLETION_SOURCES = new Set(['self_report', 'healthkit', 'reply', 'auto']);
@@ -191,13 +192,43 @@ export async function finalizeCoverage(
   opts: SynthesizeOpts,
   recoverMissing: (missing: Goal[]) => Promise<Partial<Activity>[]>,
 ): Promise<SynthesizeResult> {
+  // THE DENSITY HARD LINE (owner ruling 2026-08-14) — enforced in code, because "aim for 3-5" as
+  // prose measured out at 1-2 a day on a real device. Runs AFTER goal-coverage recovery so it
+  // measures the week the user would actually get. One repair pass, never a loop: the drafted
+  // activities go back as-is with a steer to add small anchored routines on the thin days; a
+  // repair that returns unchanged (the explicit-minimal exception, or a model that stands its
+  // ground) is accepted, and a repair-call failure keeps the plan — a thin week beats no week.
+  const repairDensity = async (current: Partial<Activity>[]): Promise<Partial<Activity>[]> => {
+    const density = readDensity(current);
+    if (!density.needsRepair) return current;
+    try {
+      const repaired = await runSynthesize(
+        userId,
+        { ...opts, userSteer: densityRepairSteer(density) },
+        current.map((a) => ({ ...a })),
+      );
+      if (repaired.normalized.length >= current.length) {
+        if (repaired.rationale) rationale = repaired.rationale;
+        if (repaired.note) note = repaired.note;
+        return repaired.normalized;
+      }
+    } catch (e) {
+      console.warn('[plan] density repair failed (keeping the thin plan):', e);
+    }
+    return current;
+  };
+
   let res = await vetAndShape(userId, normalized, opts);
   if (res.status === 'vetoed') return { status: 'vetoed', violations: res.violations };
 
   if (res.missing?.length) {
     const extra = (await recoverMissing(res.missing)).map(normalizeActivity);
     if (extra.length) {
-      res = await vetAndShape(userId, [...normalized, ...extra], opts);
+      // Reassigned, not just re-vetted: the density pass below measures `normalized`, and
+      // measuring the pre-recovery set would repair a week that no longer exists — and worse,
+      // re-vet FROM it, silently dropping the goals recovery just put back.
+      normalized = [...normalized, ...extra];
+      res = await vetAndShape(userId, normalized, opts);
       if (res.status === 'vetoed') return { status: 'vetoed', violations: res.violations };
     }
   }
@@ -207,6 +238,18 @@ export async function finalizeCoverage(
       status: 'vetoed',
       violations: [`plan left goals uncovered: ${res.missing.map((g) => g.title).join('; ')}`],
     };
+  }
+
+  // Coverage is settled — now hold the density floor on the week as it stands. A repair re-vets:
+  // the added routines must clear the same constraint safety as everything else.
+  const densified = await repairDensity(normalized);
+  if (densified !== normalized) {
+    const res2 = await vetAndShape(userId, densified, opts);
+    // A repair that fails the vet, or drops a goal, is discarded — the pre-repair plan already
+    // passed both gates and remains the answer.
+    if (res2.status === 'proposed' && !res2.missing?.length) {
+      return { status: 'proposed', activities: res2.activities, note, rationale };
+    }
   }
   return { status: 'proposed', activities: res.activities, note, rationale };
 }

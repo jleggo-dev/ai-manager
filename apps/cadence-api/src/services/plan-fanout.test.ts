@@ -39,7 +39,10 @@ const activityFor = (goal_title: string) => ({
   title: `Do ${goal_title}`,
   kind: 'user',
   category: 'movement',
-  schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO', time_of_day: '07:00' },
+  // FREQ=DAILY on purpose: the density hard line (plan-density.ts) repairs thin weeks with an
+  // extra synthesis call, and these tests are about COVERAGE call-counts — a dense mock keeps
+  // the floor out of their arithmetic. The floor gets its own test below.
+  schedule: { recurrence: 'FREQ=DAILY', time_of_day: '07:00' },
   goal_title,
 });
 
@@ -156,5 +159,45 @@ describe('rationale + suggested threading (0031)', () => {
     const res = await synthesizeAndVet(USER, { goals: [A], baseline: {}, equipment: [] });
     expect(res.status).toBe('proposed');
     expect(res.rationale).toBe('');
+  });
+});
+
+/**
+ * The density hard line (owner, 2026-08-14): a plan whose active days mostly hold fewer than 3
+ * user items gets ONE repair synthesis; the repaired set is adopted when it grew, and a repair
+ * that shrinks or errors keeps the original — a thin week beats no week.
+ */
+describe('density floor repair (plan-density.ts wiring)', () => {
+  const thin = (title: string) => ({
+    title,
+    kind: 'user',
+    category: 'movement',
+    schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO', time_of_day: '07:00' },
+    goal_title: 'Run a 10k',
+  });
+
+  it('repairs a thin plan with exactly one extra call and adopts the additions', async () => {
+    runJob.mockImplementation(async (_u: string, _slug: string, v: Vars) => {
+      if (isVet(v)) return vetOk;
+      if ((v.user_steer ?? '').includes('DENSITY REPAIR'))
+        return synthResp([thin('Run'), thin('Stretch'), thin('Walk')]);
+      return synthResp([thin('Run')]);
+    });
+    const res = await synthesizeAndVet(USER, { goals: [A], baseline: {}, equipment: [] });
+    expect(res.status).toBe('proposed');
+    expect(res.activities).toHaveLength(3);
+    const repairCalls = runJob.mock.calls.filter((c) => (vars(c).user_steer ?? '').includes('DENSITY REPAIR'));
+    expect(repairCalls).toHaveLength(1);
+  });
+
+  it('keeps the original when the repair returns fewer activities', async () => {
+    runJob.mockImplementation(async (_u: string, _slug: string, v: Vars) => {
+      if (isVet(v)) return vetOk;
+      if ((v.user_steer ?? '').includes('DENSITY REPAIR')) return synthResp([]);
+      return synthResp([thin('Run'), thin('Lift')]);
+    });
+    const res = await synthesizeAndVet(USER, { goals: [A], baseline: {}, equipment: [] });
+    expect(res.status).toBe('proposed');
+    expect(res.activities).toHaveLength(2);
   });
 });
