@@ -37,11 +37,21 @@ const REFRESH_CHECK_KEY = 'cadence.healthRefreshAt';
 /** Local throttle so an app that's opened many times a day doesn't re-check the server each time. */
 export const REFRESH_MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
-/** Pure staleness rule (exported for tests): refresh when there's no digest or it's >24h old. */
-export function digestIsStale(createdAtISO: string | null, nowMs: number): boolean {
+/**
+ * The chat-open tier: much tighter, so when the coach checks their file THIS conversation,
+ * this morning's workout is already on it. Separate throttle key — the app-launch check must
+ * not eat the chat-open one (both throttles are ours; HealthKit reads are local and unmetered,
+ * the throttle only spares our own API round-trips).
+ */
+export const CHAT_REFRESH_STALE_MS = 2 * 60 * 60 * 1000;
+export const CHAT_REFRESH_MIN_INTERVAL_MS = 15 * 60 * 1000;
+export const CHAT_REFRESH_CHECK_KEY = 'cadence.healthRefreshChatAt';
+
+/** Pure staleness rule (exported for tests): refresh when there's no digest or it's too old. */
+export function digestIsStale(createdAtISO: string | null, nowMs: number, staleMs: number = REFRESH_STALE_MS): boolean {
   if (!createdAtISO) return true;
   const t = Date.parse(createdAtISO);
-  return !Number.isFinite(t) || nowMs - t > REFRESH_STALE_MS;
+  return !Number.isFinite(t) || nowMs - t > staleMs;
 }
 
 /** Key-order-insensitive equality — jsonb round-trips reorder object keys. */
@@ -60,9 +70,10 @@ export function digestsEqual(a: unknown, b: unknown): boolean {
 
 /**
  * Silent foreground refresh: once permission was granted (offer answered 'done'), keep the
- * server-side digest current without asking again. Throttled locally (6h), skipped while the
- * stored digest is fresh (<24h), and skipped when nothing changed — an identical POST would
- * only churn the pack_touch watermark and force needless context-pack rebuilds.
+ * server-side digest current without asking again. Two tiers share this function: app-launch
+ * (6h throttle, <24h counts as fresh) and chat-open (15min/2h via the CHAT_* overrides, so the
+ * coach's file tools see today). Skipped when nothing changed — an identical POST would only
+ * churn the pack_touch watermark and force needless context-pack rebuilds.
  */
 export async function maybeRefreshHealthDigest(deps: {
   isAvailable: () => boolean;
@@ -73,14 +84,21 @@ export async function maybeRefreshHealthDigest(deps: {
   getLatest: () => Promise<{ digest: HealthDigest | null; created_at: string | null }>;
   post: (digest: HealthDigest) => Promise<boolean>;
   now?: () => number;
+  /** Tier overrides (chat-open uses the tight set); defaults are the app-launch tier. */
+  staleMs?: number;
+  minIntervalMs?: number;
+  throttleKey?: string;
 }): Promise<'skipped' | 'fresh' | 'unchanged' | 'posted'> {
   const now = deps.now ?? Date.now;
+  const staleMs = deps.staleMs ?? REFRESH_STALE_MS;
+  const minIntervalMs = deps.minIntervalMs ?? REFRESH_MIN_INTERVAL_MS;
+  const throttleKey = deps.throttleKey ?? REFRESH_CHECK_KEY;
   if (!deps.isAvailable() || window.localStorage.getItem(HEALTH_OFFER_FLAG_KEY) !== 'done') return 'skipped';
-  const lastCheck = Number(window.localStorage.getItem(REFRESH_CHECK_KEY) ?? 0);
-  if (now() - lastCheck < REFRESH_MIN_INTERVAL_MS) return 'skipped';
-  window.localStorage.setItem(REFRESH_CHECK_KEY, String(now()));
+  const lastCheck = Number(window.localStorage.getItem(throttleKey) ?? 0);
+  if (now() - lastCheck < minIntervalMs) return 'skipped';
+  window.localStorage.setItem(throttleKey, String(now()));
   const latest = await deps.getLatest();
-  if (!digestIsStale(latest.created_at, now())) return 'fresh';
+  if (!digestIsStale(latest.created_at, now(), staleMs)) return 'fresh';
   const since = new Date(now() - DIGEST_PERIOD_DAYS * 86_400_000).toISOString();
   // Steps must never be able to cost us the workouts. They are the newer, more fragile read (a
   // permission existing users were never asked for), so they degrade to [] on their own.

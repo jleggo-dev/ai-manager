@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { CoachFoodActionSheet } from '../coach/CoachFoodActionSheet.tsx';
 import { HealthOfferCard } from './HealthOfferCard.tsx';
-import { findHealthOfferTurn, healthAlreadyShared } from './health-digest.ts';
+import {
+  CHAT_REFRESH_CHECK_KEY,
+  CHAT_REFRESH_MIN_INTERVAL_MS,
+  CHAT_REFRESH_STALE_MS,
+  findHealthOfferTurn,
+  healthAlreadyShared,
+  maybeRefreshHealthDigest,
+} from './health-digest.ts';
+import { getHealthDigest, postHealthDigest } from '../../lib/api.ts';
 import { capabilities } from '../../lib/capability/index.ts';
 import { OPENING_PICKS, OPENING_PLACEHOLDER, OPENING_QUESTION } from '@cadence/shared';
 import { useEnsureCoachFace } from '../coach/useEnsureCoachFace.ts';
@@ -113,6 +121,27 @@ export function OnboardingChat({
   // Someone resuming mid-onboarding lands here directly, never passing MeetCadence — so the draw
   // has to happen here too, or Cadence speaks the whole conversation wearing the brand mark.
   useEnsureCoachFace(intent === 'onboarding');
+
+  /**
+   * Chat-open Apple Health refresh, tight tier: by the time the coach checks their file this
+   * conversation, this morning's workout is on it. The POST carries the live session id when one
+   * exists (recovered thread → mid-conversation injection); before first send there is no session
+   * yet and storing alone is enough — the watermark makes the opening pack read it fresh.
+   */
+  useEffect(() => {
+    void maybeRefreshHealthDigest({
+      isAvailable: () => capabilities.health.isAvailable(),
+      getWorkouts: (since) => capabilities.health.getWorkouts(since),
+      getDailySteps: (since) => capabilities.health.getDailySteps(since),
+      getLatest: getHealthDigest,
+      post: (d) => postHealthDigest(d, sessionId.current),
+      staleMs: CHAT_REFRESH_STALE_MS,
+      minIntervalMs: CHAT_REFRESH_MIN_INTERVAL_MS,
+      throttleKey: CHAT_REFRESH_CHECK_KEY,
+    }).catch(() => {});
+    // Once per chat mount; sessionId is a ref read at POST time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * The walkthrough the persona has scripted since v2, finally fired. One nudge, exactly once per

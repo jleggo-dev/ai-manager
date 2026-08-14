@@ -27,6 +27,10 @@ vi.mock('../../lib/api.ts', () => ({
   prepareCoachFoodAction: vi.fn().mockResolvedValue({ status: 'ok', action: null }),
   getCoachFace: vi.fn().mockResolvedValue(null),
   setCoachFace: vi.fn().mockResolvedValue(null),
+  // Chat-open health refresh (jsdom health capability is unavailable, so these stay unhit —
+  // defined only so the mount effect can import them).
+  getHealthDigest: vi.fn().mockResolvedValue({ digest: null, created_at: null }),
+  postHealthDigest: vi.fn().mockResolvedValue(true),
 }));
 
 // The Web Speech API isn't in jsdom; stub the mic so its empty-field state is deterministic

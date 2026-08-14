@@ -5130,3 +5130,45 @@ to our database — or coach asks broker to retrieve before asking the user": it
 registry itself). Live verification is the next device conversation — coach chat has no local
 harness. Remaining from the ruling: act tools (propose/modify plan in consultation), the rebuild
 preview as the design card.
+
+### The coach reads YOUR logs too, and health data tightens to chat-open (2026-08-14)
+
+Owner follow-up to the tool loop: "getting health history" has layers — HealthKit only holds
+cardio-shaped workouts (type/duration/distance; it has NO set/rep/load schema), while the sets
+& reps someone logs through Cadence are the differentiated half. And the silent digest refresh
+was too slow for "she knows about this morning's run."
+
+**Shipped now:**
+- `get_recent_logs` joins the coach's tool set (one line — the registry function already
+  existed over `occurrences.log`, which stores `OccurrenceLogItem`s: name/sets/reps/load/
+  duration/distance/felt, plus the user's raw words). The coach can now pull what they
+  ACTUALLY did, in their words, with the numbers. Zero-arg call runs its defaults (14d, 6
+  entries); parameterized `{days}` waits on the parameterized-retrieval increment.
+- Chat-open refresh tier (web): `maybeRefreshHealthDigest` gains per-call
+  staleMs/minIntervalMs/throttleKey; OnboardingChat mounts a tight pass (2h staleness, 15min
+  throttle, OWN localStorage key so the app-launch stamp can't eat it). POST carries the live
+  sessionId when a thread was recovered (mid-conversation injection); before first send,
+  storing alone suffices — the watermark makes the opening pack fresh. Both throttles are OURS
+  (HealthKit foreground reads are local and unmetered; Apple imposes no rate limit — the only
+  freshness bound we don't control is Watch→iPhone sync lag). Reaches the phone on next
+  `cap run`.
+
+**Direction set (owner, this conversation) — the unified workout history:**
+1. **HealthKit as a dataset, not just a digest.** The pipe already fetches full `Workout[]`
+   every refresh and discards detail post-aggregation. Plan: `cadence.workout_history` table
+   (source `healthkit|strava|cadence`, started_at, type, duration, distance, avg_hr, dedup
+   key), capability seam gains the HK workout UUID for clean dedup, device pushes rows
+   alongside the digest, registry gets `get_workout_history` (parameterized) over it. Digest
+   stays as the summary layer.
+2. **Strava lands in the same table** — server-side (OAuth + activities API + webhooks; no
+   device needed, unlike HealthKit). Cross-source dedup is mandatory: Strava↔HealthKit
+   double-sync is common (match start±tolerance/duration/type, prefer richer source, keep
+   provenance).
+3. **Cadence-logged strength sessions are already the third source** (`occurrences.log`) — the
+   market note is the owner's: HealthKit can't represent strength properly, so our structured
+   set/rep/load history alongside coaching is differentiated data. Consider writing our
+   sessions BACK to HealthKit as plain workouts later so rings/summaries reflect them.
+4. **Client-fulfilled `refresh_health_data` tool** (owner: "the approach I was asking for") —
+   the relay forwards the coach's call down the open SSE stream, the phone reads HealthKit and
+   POSTs, the loop awaits the round-trip with a timeout before continuing the reply.
+   Sequenced AFTER the dataset shape so the payload it refreshes is rows, not just the digest.

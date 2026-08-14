@@ -6,6 +6,9 @@ import {
   digestsEqual,
   findHealthOfferTurn,
   maybeRefreshHealthDigest,
+  CHAT_REFRESH_CHECK_KEY,
+  CHAT_REFRESH_MIN_INTERVAL_MS,
+  CHAT_REFRESH_STALE_MS,
   HEALTH_OFFER_FLAG_KEY,
 } from './health-digest.ts';
 
@@ -255,6 +258,29 @@ describe('maybeRefreshHealthDigest', () => {
         }),
       ),
     ).toBe('unchanged');
+  });
+
+  it('chat tier: its own throttle key, and a 3h-old digest is stale at 2h where the launch tier says fresh', async () => {
+    window.localStorage.setItem(HEALTH_OFFER_FLAG_KEY, 'done');
+    const threeHoursOld = { digest, created_at: '2026-08-06T09:00:00Z' };
+    const tight = {
+      staleMs: CHAT_REFRESH_STALE_MS,
+      minIntervalMs: CHAT_REFRESH_MIN_INTERVAL_MS,
+      throttleKey: CHAT_REFRESH_CHECK_KEY,
+    };
+    // Launch tier checks first and finds the digest fresh (<24h) — its throttle stamp must not
+    // eat the chat-open check that follows.
+    expect(await maybeRefreshHealthDigest(deps({ getLatest: async () => threeHoursOld }))).toBe('fresh');
+    const fresherWorkouts = async () => [
+      { type: 'HKWorkoutActivityTypeRunning', distanceKm: 6, durationMin: 33, start: '2026-08-06T07:00:00Z' },
+    ];
+    expect(
+      await maybeRefreshHealthDigest(
+        deps({ ...tight, getLatest: async () => threeHoursOld, getWorkouts: fresherWorkouts }),
+      ),
+    ).toBe('posted');
+    // Second chat-open inside 15min: throttled on the chat key.
+    expect(await maybeRefreshHealthDigest(deps(tight))).toBe('skipped');
   });
 
   it('still posts the workouts when the step read fails', async () => {
