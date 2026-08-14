@@ -12,6 +12,7 @@ import {
   runWithAuth,
   openChatSession,
   sendChatMessage,
+  submitV2ToolOutputs,
   recordAssistantMessage,
   createChatMessage,
   executeJob,
@@ -130,8 +131,21 @@ export function openCoachSession(cadenceUserId: string, opts: { workflowSlug?: s
  * standard fetch Response — its `.body` is a ReadableStream of SSE bytes we
  * relay straight to the client. (This is the in-process win: no double relay.)
  */
-export function sendCoachMessage(cadenceUserId: string, sessionId: string, message: string) {
-  return withAim(cadenceUserId, () => sendChatMessage(sessionId, message, {}));
+export function sendCoachMessage(cadenceUserId: string, sessionId: string, message: string, extraTools?: unknown[]) {
+  return withAim(cadenceUserId, () => sendChatMessage(sessionId, message, extraTools ? { extraTools } : {}));
+}
+
+/**
+ * Submit the coach's fulfilled tool results and get the continuation stream (a NEW response
+ * threaded on the one that made the calls — #190). The in-process half of the tool loop.
+ */
+export function submitCoachToolOutputs(
+  cadenceUserId: string,
+  sessionId: string,
+  responseId: string,
+  outputs: Array<{ toolCallId: string; output: string }>,
+) {
+  return withAim(cadenceUserId, () => submitV2ToolOutputs(sessionId, responseId, outputs));
 }
 
 /**

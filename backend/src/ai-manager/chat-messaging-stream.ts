@@ -41,6 +41,10 @@ export async function openChatSendStream(args: {
   resolvedJob: ProcessingJobRow | null;
   attachments: Attachment[];
   timeoutMs: number;
+  /** Caller-supplied tool definitions merged beside the profile's toolJobs — the in-process
+   *  consumer's door into function calling (Cadence's coach registry tools ride here). The
+   *  caller that supplies them owns their fulfillment; the engine only offers them upstream. */
+  extraTools?: unknown[];
 }): Promise<globalThis.Response> {
   const {
     sessionId,
@@ -70,9 +74,13 @@ export async function openChatSendStream(args: {
       prompt = textContent;
     }
 
+    const v1Tools = [
+      ...((await resolveProfileToolDefinitions(refreshedSession.ai_profile)) ?? []),
+      ...(args.extraTools ?? []),
+    ];
     return (client as DevsAiClient).messageChatSession(session.external_chat_id, prompt, {
       timeoutMs,
-      tools: await resolveProfileToolDefinitions(refreshedSession.ai_profile),
+      ...(v1Tools.length > 0 ? { tools: v1Tools } : {}),
     });
   }
 
@@ -113,6 +121,7 @@ export async function openChatSendStream(args: {
     const mergedTools = [
       ...(Array.isArray(chatOptions.tools) ? (chatOptions.tools as unknown[]) : []),
       ...(Array.isArray(profileTools) ? profileTools : []),
+      ...(args.extraTools ?? []),
     ];
     const modelId = String(profile?.external_ai_id || '').trim();
     return client.chatCompletionStream(modelId, chatMessages, {

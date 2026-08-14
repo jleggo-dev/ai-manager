@@ -5083,3 +5083,50 @@ rides deltas. E2E entities swept (3 sessions, 3 profiles, 1 job).
 
 **The tool-loop coach's foundation is now fully verified.** Next: drive the loop from Cadence's
 `relayAndAccumulate`, then read tools from the retrieval registry (with declared variables).
+
+### The tool loop is IN THE RELAY — the coach can check the file mid-reply (2026-08-14)
+
+Increments ② and ③ of the sequenced plan, shipped together: the coach's turn is now a bounded
+tool loop inside Cadence's own relay, and its first tools are the retrieval registry's read
+functions. "Let me check your file — one sec" is literal.
+
+**The wire (engine → relay):** `sendChatMessage` accepts `extraTools` (merged into the profile's
+tools in both v1 and v2 request paths — `chat-messaging-stream.ts`); core exports
+`extractFunctionCallsFromOutput` + `submitV2ToolOutputs` for the in-process consumer. Cadence's
+`sendCoachMessage` attaches `coachToolDefinitions()`; `submitCoachToolOutputs` wraps the #190
+continuation.
+
+**The tools (`coach-tools.ts`):** ten zero-arg reads over `RETRIEVAL_FUNCTIONS` — identity,
+objectives, active plan, consistency, constraints, weight, equipment, dietary profile, health
+history, goal progress. Governance unchanged BY CONSTRUCTION: same registry (the model still
+never touches the DB), same `executeCalls` path as the pack (same logging/provenance,
+`logLabel: 'coach-tool'`), and the model receives each function's own `render()` — a fact reads
+identically whether it arrived by pack or by call. Empty render → "(nothing on file for this
+yet)" so the model says so instead of re-asking. READ-ONLY on purpose; act tools
+(`propose_plan_change`, suggest-never-auto-apply) are the next increment.
+
+**The loop (`coach-tool-loop.ts` + `coach-stream.ts`):** `relayCoachTurnWithTools` pumps rounds
+of `relayAndAccumulate` over one accumulate state. Each round: collect completed
+`function_call`s off `message.complete.output` (the probe's port note — text rides deltas, calls
+ride output), fulfill the ones whose names are ours, submit as a #190 continuation threaded on
+that round's `currentResponseId` (first-seen `responseId` still names the turn for logging;
+`onResponseId` re-fires per round so Stop always targets the response generating NOW), pump the
+next stream to the same client connection. `MAX_COACH_TOOL_ROUNDS = 3`; a model that keeps
+calling gets its last stream as the answer; execute/submit failures end the turn with what
+streamed. **The terminal contract is the sharp edge:** the web client resolves the whole turn on
+the FIRST `data: [DONE]`, so every round runs `suppressDone` (line-wise forward, upstream
+terminals held back) and only the loop writes the one real terminal — in a `finally`-shaped
+tail, whatever happened above. Hermetic tests fabricate the probe-captured stream shapes and pin
+all of it: single-[DONE], continuation stitching, per-round response-id threading
+(`r1→r2→r3`), unknown-name passthrough, cap, failure tail.
+
+**Persona nudge (synced with the deploy):** the memory paragraph's retrieval promise flipped
+from passive ("the application will inject") to active — check the dossier first, then CALL THE
+FILE TOOL in the same turn; ask the user only when the tool comes back empty; tools are how you
+check, never a thing you name, and never an excuse to recite the file.
+
+Answers the round-4 ruling's read half ("coach should always appear aware… like we need an MCP
+to our database — or coach asks broker to retrieve before asking the user": it now asks the
+registry itself). Live verification is the next device conversation — coach chat has no local
+harness. Remaining from the ruling: act tools (propose/modify plan in consultation), the rebuild
+preview as the design card.

@@ -28,6 +28,8 @@ interface SendChatMessageOptions {
   ruleSetKey?: string;
   variables?: Record<string, unknown>;
   timeoutMs?: number;
+  /** Caller-supplied tool definitions (see openChatSendStream) — the caller fulfills them. */
+  extraTools?: unknown[];
 }
 
 interface SendChatMessageResult {
@@ -144,6 +146,7 @@ export async function sendChatMessage(
     resolvedJob,
     attachments,
     timeoutMs,
+    extraTools: options.extraTools,
   });
 
   const expectedResponseFormat: string | null =
