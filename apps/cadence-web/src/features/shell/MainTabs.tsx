@@ -9,18 +9,17 @@ import { ReviewScreen } from '../review/ReviewScreen.tsx';
 import { PlanCardSheet } from '../gate/PlanCardSheet.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 
-type Tab = 'today' | 'week' | 'coach' | 'progress';
+/**
+ * Today and Week were separate TABS sharing one PlanView, and the owner's device verdict
+ * (2026-08-14) was that Week earned no tab: "it doesn't have more information than the today
+ * tab." One PLAN tab now; the day/week toggle lives inside PlanView where it always really was.
+ */
+type Tab = 'plan' | 'coach' | 'progress';
 
 const TodayIcon = () => (
   <svg width="19" height="19" viewBox="0 0 19 19" aria-hidden>
     <rect className="stroke" x="2.5" y="3.5" width="14" height="12.5" rx="3" />
     <path className="stroke" d="M2.5 7.5h14M6 1.8v3.4M13 1.8v3.4" strokeLinecap="round" />
-  </svg>
-);
-const WeekIcon = () => (
-  <svg width="19" height="19" viewBox="0 0 19 19" aria-hidden>
-    <rect className="stroke" x="2.5" y="3.5" width="14" height="12.5" rx="3" />
-    <path className="stroke" d="M2.5 7.5h14M6.8 7.5v8.5M12.2 7.5v8.5" strokeLinecap="round" />
   </svg>
 );
 const CoachIcon = () => (
@@ -72,7 +71,7 @@ export function MainTabs({
    */
   discussPlan?: false | 'card' | 'fresh';
 }) {
-  const [tab, setTab] = useState<Tab>('today');
+  const [tab, setTab] = useState<Tab>('plan');
   /** The guided hand-off from the built plan to the discussion. Dies on the tap, never returns. */
   const [guide, setGuide] = useState<boolean>(!!discussPlan);
   /** The plan card as a sheet over the chat — the "toggle back to the conversation" surface. */
@@ -108,15 +107,12 @@ export function MainTabs({
   return (
     <>
       <div className="app">
-        {(tab === 'today' || tab === 'week') && (
-          <PlanView view={tab} onCoach={() => setTab('coach')} reloadSignal={planReload} />
-        )}
+        {tab === 'plan' && <PlanView onCoach={() => setTab('coach')} reloadSignal={planReload} />}
         {tab === 'coach' && (
           <>
             <OnboardingChat
               intent="ongoing"
               chrome="none"
-              onSettings={() => setSettingsOpen(true)}
               onBuild={() => setRebuild(true)}
               openWalkthrough={discussPlan}
             />
@@ -133,13 +129,9 @@ export function MainTabs({
           </button>
         )}
         <nav className="tabbar" aria-label="Main">
-          <button className={`tab${tab === 'today' ? ' tab-on' : ''}`} onClick={() => setTab('today')}>
+          <button className={`tab${tab === 'plan' ? ' tab-on' : ''}`} onClick={() => setTab('plan')}>
             <TodayIcon />
-            <span>Today</span>
-          </button>
-          <button className={`tab${tab === 'week' ? ' tab-on' : ''}`} onClick={() => setTab('week')}>
-            <WeekIcon />
-            <span>Week</span>
+            <span>Plan</span>
           </button>
           <button
             className={`tab${tab === 'coach' ? ' tab-on' : ''}${guide ? ' tab-guided' : ''}`}
@@ -202,7 +194,7 @@ export function MainTabs({
           <LogDidSheet
             onClose={() => setLogDidOpen(false)}
             onLogged={() => {
-              setTab('today'); // land back on Today so the just-logged node shows done
+              setTab('plan'); // land back on the plan so the just-logged node shows done
               setPlanReload((k) => k + 1);
             }}
           />

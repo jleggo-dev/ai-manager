@@ -15,17 +15,6 @@ import { QuickPicks } from './QuickPicks.tsx';
 import { CapturedPills } from './CapturedPills.tsx';
 import { ConfirmCard } from './ConfirmCard.tsx';
 
-const GearIcon = () => (
-  <svg width="17" height="17" viewBox="0 0 17 17" aria-hidden>
-    <circle className="stroke" cx="8.5" cy="8.5" r="2.6" />
-    <path
-      className="stroke"
-      d="M8.5 1.6v2M8.5 13.4v2M1.6 8.5h2M13.4 8.5h2M3.6 3.6l1.4 1.4M12 12l1.4 1.4M13.4 3.6L12 5M5 12l-1.4 1.4"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
 /**
  * What the app tells Cadence the moment someone shares their Apple Health history. Without it she
  * holds months of their training and says nothing until they ask — which is the app taking
@@ -88,7 +77,6 @@ const WALKTHROUGH_NOTES = {
  */
 export function OnboardingChat({
   onBuild,
-  onSettings,
   onBack,
   intent = 'onboarding',
   chrome = 'onboarding',
@@ -100,7 +88,6 @@ export function OnboardingChat({
    * host decides what building means where she emitted it.
    */
   onBuild?: () => void;
-  onSettings?: () => void;
   onBack?: () => void;
   intent?: 'onboarding' | 'ongoing';
   chrome?: 'onboarding' | 'none';
@@ -185,11 +172,6 @@ export function OnboardingChat({
 
   return (
     <div className="chatscreen">
-      {onSettings && (
-        <button className="float-gear" onClick={onSettings} aria-label="Settings" title="Settings">
-          <GearIcon />
-        </button>
-      )}
       {chrome === 'onboarding' && (
         <div className="chat-top">
           {onBack && (

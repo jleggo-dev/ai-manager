@@ -11,7 +11,7 @@
  * mode) and injected as the end-of-prefix context turn.
  */
 import type { CoachIntent, CoachTopic } from './coach-context.ts';
-import { intentFraming, onboardingReadiness } from './coach-context.ts';
+import { intentFraming, onboardingReadiness, planGapNote } from './coach-context.ts';
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 import { validateCalls, executeCalls, type FnCall } from './retrieval/select-and-run.ts';
 import { renderCatalogDoc } from './retrieval/catalog.ts';
@@ -33,6 +33,9 @@ const INTENT_SELECTION: Record<CoachIntent, string[]> = {
     'get_constraints',
     'get_weight',
     'get_dietary_profile',
+    // What their devices saw, plan or no plan — a coach who has to be TOLD about workouts her
+    // own tools recorded is the owner's "should know before the user says" failure, verbatim.
+    'get_health_history',
   ],
   disrupted: [
     'get_identity',
@@ -44,8 +47,14 @@ const INTENT_SELECTION: Record<CoachIntent, string[]> = {
   ],
 };
 
-/** Safety-critical functions ALWAYS retrieved, regardless of the Broker's selection. */
-const MANDATORY = ['get_identity', 'get_constraints'];
+/**
+ * Functions ALWAYS retrieved, regardless of the Broker's selection. Identity and constraints are
+ * safety-critical; weight joined them 2026-08-14 after the pack-select pass CHOSE a list without
+ * it and the coach asked someone their weight fifteen minutes after the Broker captured it. Body
+ * facts cost ~20 tokens and their absence costs the product's core promise ("never makes you
+ * repeat yourself") — that is not a trade a model gets to optimize.
+ */
+const MANDATORY = ['get_identity', 'get_constraints', 'get_weight'];
 
 const TTL_DAYS: Partial<Record<CoachIntent, number>> = { onboarding: 1 };
 
@@ -96,6 +105,10 @@ function renderResults(results: Record<string, unknown>): string {
   for (const [fn, result] of Object.entries(results)) {
     if (fn === 'onboarding_readiness') {
       if (result) parts.push(`Onboarding readiness:\n${String(result)}`);
+      continue;
+    }
+    if (fn === 'plan_gap') {
+      if (result) parts.push(String(result));
       continue;
     }
     const f = RETRIEVAL_FUNCTIONS[fn];
@@ -162,6 +175,12 @@ export async function buildContextPack(
     logLabel: 'context-pack',
   });
   if (intent === 'onboarding') results.onboarding_readiness = await onboardingReadiness(userId);
+  // The stranded-goal healer rides every non-onboarding pack: agreed-but-unplanned goals stay in
+  // front of the coach until they are built or let go (see coach-context.planGapNote).
+  if (intent !== 'onboarding') {
+    const gap = await planGapNote(userId).catch(() => '');
+    if (gap) results.plan_gap = gap;
+  }
 
   // 3. SUMMARIZE — Broker, with deterministic fallback.
   const brokerSummary = await brokerSummarize(userId, intent, results);

@@ -87,6 +87,27 @@ export async function onboardingReadiness(userId: string): Promise<string> {
 }
 
 /**
+ * The stranded-state healer (device run 2026-08-14): a goal the user AGREED to mid-conversation
+ * ("Fix nutrition") sat `confirmed` while the plan carried nothing for it — the rebuild was
+ * dismissed, nothing recorded the gap, and the coach lost the thread entirely ("coach can't
+ * update the plan at all"). This note makes the gap impossible to lose: it rides the pack on
+ * every ongoing session until the goal is either built into the plan or let go, and it tells
+ * the coach exactly which tool closes it.
+ */
+export async function planGapNote(userId: string): Promise<string> {
+  const confirmed = await listGoalsByStatus(userId, ['confirmed']);
+  if (!confirmed.length) return '';
+  return [
+    `== PLAN GAP (deterministic — the app checked) ==`,
+    `Agreed but NOT YET IN THE PLAN: ${confirmed.map((g) => `"${g.title}"`).join(', ')}.`,
+    'The user said yes to this and the plan does not cover it yet — a rebuild was started and not',
+    'finished, or never started. Raise it yourself this conversation, plainly ("we said we\'d add',
+    'nutrition — want me to rebuild the week around it now?"), and end that turn with the build',
+    'card. Never claim it is already handled, and never let it stay silently stranded.',
+  ].join('\n');
+}
+
+/**
  * The session-intent LABEL only — data, not prompt. The persona (in AI Admin) reads this
  * line and supplies the actual per-intent behavior; we never restate coaching prose here.
  */

@@ -55,6 +55,7 @@ vi.mock('./retrieval/registry.ts', () => ({ RETRIEVAL_FUNCTIONS: stubs.RETRIEVAL
 vi.mock('./coach-context.ts', () => ({
   intentFraming: (intent: string, topic?: string) => `== SESSION INTENT: ${intent}${topic ? ` / ${topic}` : ''} ==`,
   onboardingReadiness: vi.fn(async () => ''),
+  planGapNote: vi.fn(async () => ''),
 }));
 
 import { buildContextPack } from './context-pack.ts';
