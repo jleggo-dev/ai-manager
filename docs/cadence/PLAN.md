@@ -5257,3 +5257,36 @@ someone the reply they waited for.
 
 `useCoachChat` hit the 150-line function gate on the way; recovery moved to `coach-recovery.ts`
 (`recoverTurnFromServer` + `useResumeHealer`) rather than onto the allowlist.
+
+### Why the ready-ping never arrived (2026-08-14, owner: "I didn't get a notification")
+
+Two independent causes, both now addressed — and the second explains why five rounds of testing
+produced no evidence either way.
+
+1. **There has never been a device token.** `select count(*) from cadence.device_tokens` → 0,
+   for the whole database. `sendPushToUser` with no devices is a silent skip by contract, so the
+   push had nowhere to go. Tokens cascade-delete with the user, and this account has been purged
+   repeatedly, so history can't say whether registration ever succeeded — the next onboarding
+   will, because of (2). (No bell is CORRECT: the owner's 2026-08-13 ruling made the ping the
+   default; `NotifyWhenReady` asks iOS on mount and renders only a reassurance line.)
+2. **The send was fire-and-forget AND unrecorded** — the same defect as #195, in the one place
+   designed to reach someone who left. `lock.ts` called `sendPushToUser` directly, bypassing the
+   dispatcher whose entire purpose is a ledger row for every outcome, and its `.catch()` wrote to
+   a console on an instance about to be reclaimed. So "I never got a notification" had literally
+   nothing to look at.
+
+**Fixed:** `sendReadyPush` awaits, and claims/settles a `cadence.notifications` row for every
+outcome including `not_configured` and `no_devices`. Deliberately NOT routed through `notify()`:
+that dispatcher enforces the nudge policy (opt-in default, quiet hours, daily cap), which is
+right for ambient coaching and wrong for this — the person asked for a plan and the screen told
+them they could leave, so a build finishing at 9:05pm still has to reach them. Claiming the slot
+first also makes it idempotent: a retried commit cannot double-ping.
+
+**Next test is diagnosable:** after a build, `select kind, status, detail from
+cadence.notifications where kind = 'plan_ready'` answers "why didn't I get it?" directly —
+`no_devices` (registration is the bug), `not_configured` (APNs env missing on Vercel), a `400
+BadDeviceToken` (dev-signed build against production APNs — `APNS_ENVIRONMENT` must be
+development/sandbox for a `cap run` install), or `sent`.
+
+Also: root-level `npm run probe:backgrounded` added, matching the `cleanup:*` convention — the
+`-w apps/cadence-api` form only resolves from the repo root.
