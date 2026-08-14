@@ -30,6 +30,7 @@ const COACH_TOOL_NAMES = [
   'get_equipment',
   'get_dietary_profile',
   'get_health_history',
+  'get_workout_history',
   'get_recent_logs',
   'get_goal_progress',
 ] as const;

@@ -6,6 +6,7 @@ import {
   digestsEqual,
   findHealthOfferTurn,
   maybeRefreshHealthDigest,
+  toHistoryEntries,
   CHAT_REFRESH_CHECK_KEY,
   CHAT_REFRESH_MIN_INTERVAL_MS,
   CHAT_REFRESH_STALE_MS,
@@ -207,6 +208,46 @@ describe('digestIsStale / digestsEqual', () => {
   });
 });
 
+describe('toHistoryEntries', () => {
+  it('uses the HealthKit UUID when present, a deterministic composite when not, newest first', () => {
+    const entries = toHistoryEntries([
+      { type: 'HKWorkoutActivityTypeRunning', start: '2026-08-01T08:00:00Z', durationMin: 30, distanceKm: 5 },
+      {
+        type: 'HKWorkoutActivityTypeTraditionalStrengthTraining',
+        start: '2026-08-03T18:00:00Z',
+        durationMin: 45,
+        id: 'ABC-123',
+        recordedBy: 'Apple Watch',
+        avgHr: 132,
+      },
+    ]);
+    expect(entries).toEqual([
+      {
+        sourceId: 'ABC-123',
+        type: 'strength training',
+        startISO: '2026-08-03T18:00:00Z',
+        durationMin: 45,
+        avgHr: 132,
+        recordedBy: 'Apple Watch',
+      },
+      {
+        sourceId: '2026-08-01T08:00:00Z|HKWorkoutActivityTypeRunning|30',
+        type: 'running',
+        startISO: '2026-08-01T08:00:00Z',
+        durationMin: 30,
+        distanceKm: 5,
+      },
+    ]);
+  });
+
+  it('a 0 km distance is "not recorded", never a real zero — same rule as the digest', () => {
+    const [e] = toHistoryEntries([
+      { type: 'HKWorkoutActivityTypeRunning', start: '2026-08-01T08:00:00Z', durationMin: 30, distanceKm: 0 },
+    ]);
+    expect(e).not.toHaveProperty('distanceKm');
+  });
+});
+
 describe('maybeRefreshHealthDigest', () => {
   // This jsdom setup has no Storage — give the window a minimal in-memory one.
   const mem = new Map<string, string>();
@@ -258,6 +299,48 @@ describe('maybeRefreshHealthDigest', () => {
         }),
       ),
     ).toBe('unchanged');
+  });
+
+  it('pushes workout rows whenever HealthKit was read — even when the digest comes back unchanged', async () => {
+    window.localStorage.setItem(HEALTH_OFFER_FLAG_KEY, 'done');
+    const pushed: unknown[][] = [];
+    const postWorkouts = async (entries: unknown[]) => {
+      pushed.push(entries);
+      return true;
+    };
+    // Digest equality would skip the digest POST — the rows must travel anyway, because
+    // "digest unchanged" can't prove the rows ever landed (the table may postdate them).
+    expect(
+      await maybeRefreshHealthDigest(
+        deps({
+          postWorkouts,
+          getLatest: async () => ({ digest: JSON.parse(JSON.stringify(digest)), created_at: '2026-08-01T11:00:00Z' }),
+        }),
+      ),
+    ).toBe('unchanged');
+    expect(pushed).toHaveLength(1);
+    expect(pushed[0]).toEqual([
+      {
+        sourceId: '2026-08-01T08:00:00Z|HKWorkoutActivityTypeRunning|30',
+        type: 'running',
+        startISO: '2026-08-01T08:00:00Z',
+        durationMin: 30,
+        distanceKm: 5,
+      },
+    ]);
+  });
+
+  it('a failed row push never costs the digest', async () => {
+    window.localStorage.setItem(HEALTH_OFFER_FLAG_KEY, 'done');
+    expect(
+      await maybeRefreshHealthDigest(
+        deps({
+          postWorkouts: async () => {
+            throw new Error('endpoint not deployed yet');
+          },
+        }),
+      ),
+    ).toBe('posted');
   });
 
   it('chat tier: its own throttle key, and a 3h-old digest is stale at 2h where the launch tier says fresh', async () => {

@@ -5172,3 +5172,39 @@ was too slow for "she knows about this morning's run."
    the relay forwards the coach's call down the open SSE stream, the phone reads HealthKit and
    POSTs, the loop awaits the round-trip with a timeout before continuing the reply.
    Sequenced AFTER the dataset shape so the payload it refreshes is rows, not just the digest.
+
+### workout_history: the dataset lands — HealthKit as rows, not just a digest (2026-08-14)
+
+Increment 1 of the unified-workout-history direction, green-lit by the owner ("yes!").
+
+**Schema (0033, applied live):** `cadence.workout_history` — one row per recorded workout,
+`source in (healthkit|strava|cadence)` naming the door, unique `(user_id, source, source_id)`
+as the dedup key (HealthKit's per-workout UUID / Strava's activity id / the occurrence id),
+bounded measures (duration/distance/avg_hr), `raw` jsonb for door-specific extras (today: the
+recording app's name — the hook a Strava↔Health double-sync dedup will hang off). RLS + per-row
+pack_touch like 0024; `on conflict do nothing` rows fire no trigger, so steady state is 0–2
+fires per refresh. `dev-reset`'s schema-coverage guard caught the missing table listing — that
+test earns its keep.
+
+**No Swift needed:** capacitor-health's `queryWorkouts` already returns `id` (the HK UUID) and
+`sourceName`; the seam's `Workout` now carries both (`id`, `recordedBy`), so the whole client
+change is web code.
+
+**The doors that write it (all three client paths):** the onboarding offer card seeds the
+dataset at first share (rows first, best-effort — the digest stays the only failure the card
+surfaces); both silent-refresh tiers (app-launch and chat-open) push rows whenever HealthKit was
+actually read — deliberately BEFORE the digest-equality early-out, because "digest unchanged"
+cannot prove the rows ever landed on a table that postdates them. Idempotent server-side, so
+re-pushing the whole 90-day window is a no-op request. `toHistoryEntries` is the one mapper:
+UUID or deterministic composite key, digest-grade bounds, 0-km = "not recorded" (same rule as
+everywhere), newest-first cap at the server's 500.
+
+**The coach reads it:** `get_workout_history` joins the registry AND the coach's tool set —
+session-by-session log (date · type · duration · distance · avg hr), newest first, `{days}`
+param defaulting to 30. The digest (`get_health_history`) stays the summary; this is the log
+behind it, for "which days" questions: what did I do this morning, this week's actual runs, the
+gap since the last one.
+
+**Deploys:** API + registry live on merge; the three client doors ride the next `cap run`.
+Next increments unchanged: cadence bridge (occurrences.log → rows), client-fulfilled
+`refresh_health_data` tool, Strava OAuth import.

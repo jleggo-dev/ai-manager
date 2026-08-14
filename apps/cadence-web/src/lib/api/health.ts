@@ -1,4 +1,4 @@
-import type { HealthDigest } from '@cadence/shared';
+import type { HealthDigest, WorkoutHistoryEntry } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /**
@@ -19,4 +19,18 @@ export async function getHealthDigest(): Promise<{ digest: HealthDigest | null; 
   const res = await fetch(`${BASE}/me/health-digest`, { headers: headers() });
   if (!res.ok) return { digest: null, created_at: null };
   return res.json();
+}
+
+/**
+ * Push workout ROWS alongside the digest (0033 dataset). Idempotent server-side — the whole
+ * window travels every refresh and only new sessions become rows.
+ */
+export async function postWorkoutHistory(workouts: WorkoutHistoryEntry[]): Promise<boolean> {
+  if (!workouts.length) return true;
+  const res = await fetch(`${BASE}/me/workout-history`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ workouts }),
+  });
+  return res.ok;
 }

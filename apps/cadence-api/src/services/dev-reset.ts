@@ -51,6 +51,7 @@ export const DEV_CHILD_TABLES = [
   'plans',
   'recipes',
   'session_feedback',
+  'workout_history',
 ] as const;
 
 // ensureUser lives in repos/users.ts now (the auth middleware needs it too); re-export so the

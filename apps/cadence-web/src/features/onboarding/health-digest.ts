@@ -4,7 +4,7 @@
  * abstraction (workouts by type/week), never raw samples. Server bounds mirror
  * apps/cadence-api/src/validation/health.ts: ≤25 types, ≤10 recent.
  */
-import type { HealthDigest } from '@cadence/shared';
+import type { HealthDigest, WorkoutHistoryEntry } from '@cadence/shared';
 import type { DailySteps, Workout } from '../../lib/capability/index.ts';
 import { isRecordedDistance } from '../../lib/capability/workout-distance.ts';
 import { humanizeWorkoutType } from '../settings/health-import.ts';
@@ -54,6 +54,30 @@ export function digestIsStale(createdAtISO: string | null, nowMs: number, staleM
   return !Number.isFinite(t) || nowMs - t > staleMs;
 }
 
+/** Server batch cap for POST /me/workout-history — mirror of the zod bound. */
+export const MAX_HISTORY_PUSH = 500;
+
+/**
+ * Workout rows for the 0033 dataset (exported for tests). HealthKit's per-workout UUID is the
+ * dedup key; the rare id-less row gets a deterministic composite instead — same workout, same
+ * key, so re-pushes still collapse. Bounded to the server's batch cap, newest first, so a
+ * pathological window drops its OLDEST rows, never today's.
+ */
+export function toHistoryEntries(workouts: Workout[]): WorkoutHistoryEntry[] {
+  return [...workouts]
+    .sort((a, b) => b.start.localeCompare(a.start))
+    .slice(0, MAX_HISTORY_PUSH)
+    .map((w) => ({
+      sourceId: (w.id ?? `${w.start}|${w.type}|${w.durationMin ?? ''}`).slice(0, 120),
+      type: humanizeWorkoutType(w.type).slice(0, MAX_TYPE_CHARS),
+      startISO: w.start,
+      ...(typeof w.durationMin === 'number' ? { durationMin: clamp(w.durationMin, MAX_MINUTES) } : {}),
+      ...(isRecordedDistance(w.distanceKm) ? { distanceKm: clamp(w.distanceKm, MAX_KM) } : {}),
+      ...(typeof w.avgHr === 'number' && w.avgHr >= 20 && w.avgHr <= 260 ? { avgHr: Math.round(w.avgHr) } : {}),
+      ...(w.recordedBy ? { recordedBy: w.recordedBy.slice(0, 120) } : {}),
+    }));
+}
+
 /** Key-order-insensitive equality — jsonb round-trips reorder object keys. */
 export function digestsEqual(a: unknown, b: unknown): boolean {
   const canon = (v: unknown): string => {
@@ -83,6 +107,9 @@ export async function maybeRefreshHealthDigest(deps: {
   getDailySteps?: (sinceISO: string) => Promise<DailySteps[]>;
   getLatest: () => Promise<{ digest: HealthDigest | null; created_at: string | null }>;
   post: (digest: HealthDigest) => Promise<boolean>;
+  /** Optional (0033): push the individual rows behind the digest. Best-effort — idempotent
+   *  server-side, and a failure here must never cost the digest. */
+  postWorkouts?: (entries: WorkoutHistoryEntry[]) => Promise<boolean>;
   now?: () => number;
   /** Tier overrides (chat-open uses the tight set); defaults are the app-launch tier. */
   staleMs?: number;
@@ -106,6 +133,12 @@ export async function maybeRefreshHealthDigest(deps: {
     deps.getWorkouts(since),
     deps.getDailySteps?.(since).catch(() => []) ?? Promise.resolve([]),
   ]);
+  // Rows travel whenever we actually read HealthKit — BEFORE the digest-equality early-out,
+  // because "digest unchanged" cannot prove the rows ever landed (the table may postdate them).
+  // Idempotent server-side, so the worst case of re-pushing is a no-op request.
+  if (deps.postWorkouts && workouts.length) {
+    await deps.postWorkouts(toHistoryEntries(workouts)).catch(() => false);
+  }
   // Same clock the `since` window was cut from, so the recency figures cannot straddle two.
   const digest = buildDigestFromWorkouts(workouts, DIGEST_PERIOD_DAYS, steps, now());
   if (latest.digest && digestsEqual(digest, latest.digest)) return 'unchanged';

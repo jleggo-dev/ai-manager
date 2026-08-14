@@ -73,6 +73,10 @@ interface PluginWorkout {
   duration?: number; // seconds
   distance?: number; // meters
   avgHeartRate?: number;
+  /** HealthKit's per-workout UUID — present on iOS, optional in the plugin's own types. */
+  id?: string;
+  /** The recording app's display name (e.g. "Strava", "Apple Watch"). */
+  sourceName?: string;
 }
 
 function toSeamWorkout(w: PluginWorkout): Workout {
@@ -85,6 +89,8 @@ function toSeamWorkout(w: PluginWorkout): Workout {
     ...(km != null ? { distanceKm: km } : {}),
     ...(typeof w.duration === 'number' ? { durationMin: Math.round(w.duration / 60) } : {}),
     ...(typeof w.avgHeartRate === 'number' ? { avgHr: Math.round(w.avgHeartRate) } : {}),
+    ...(w.id ? { id: w.id } : {}),
+    ...(w.sourceName ? { recordedBy: w.sourceName } : {}),
   };
 }
 

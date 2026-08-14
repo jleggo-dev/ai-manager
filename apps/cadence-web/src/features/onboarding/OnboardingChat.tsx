@@ -9,7 +9,7 @@ import {
   healthAlreadyShared,
   maybeRefreshHealthDigest,
 } from './health-digest.ts';
-import { getHealthDigest, postHealthDigest } from '../../lib/api.ts';
+import { getHealthDigest, postHealthDigest, postWorkoutHistory } from '../../lib/api.ts';
 import { capabilities } from '../../lib/capability/index.ts';
 import { OPENING_PICKS, OPENING_PLACEHOLDER, OPENING_QUESTION } from '@cadence/shared';
 import { useEnsureCoachFace } from '../coach/useEnsureCoachFace.ts';
@@ -135,6 +135,7 @@ export function OnboardingChat({
       getDailySteps: (since) => capabilities.health.getDailySteps(since),
       getLatest: getHealthDigest,
       post: (d) => postHealthDigest(d, sessionId.current),
+      postWorkouts: postWorkoutHistory,
       staleMs: CHAT_REFRESH_STALE_MS,
       minIntervalMs: CHAT_REFRESH_MIN_INTERVAL_MS,
       throttleKey: CHAT_REFRESH_CHECK_KEY,

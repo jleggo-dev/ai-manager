@@ -1,8 +1,13 @@
 import { useState } from 'react';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { capabilities } from '../../lib/capability/index.ts';
-import { postHealthDigest } from '../../lib/api.ts';
-import { buildDigestFromWorkouts, DIGEST_PERIOD_DAYS, HEALTH_OFFER_FLAG_KEY as FLAG_KEY } from './health-digest.ts';
+import { postHealthDigest, postWorkoutHistory } from '../../lib/api.ts';
+import {
+  buildDigestFromWorkouts,
+  DIGEST_PERIOD_DAYS,
+  HEALTH_OFFER_FLAG_KEY as FLAG_KEY,
+  toHistoryEntries,
+} from './health-digest.ts';
 
 /**
  * Confirm-first in-chat offer: read recent Apple Health activity so the user doesn't type
@@ -51,6 +56,9 @@ export function HealthOfferCard({
         setPhase('empty');
         return;
       }
+      // Rows first (0033 dataset), best-effort — the digest is the promise the card makes, so
+      // only ITS failure is allowed to surface as one.
+      await postWorkoutHistory(toHistoryEntries(workouts)).catch(() => false);
       const ok = await postHealthDigest(buildDigestFromWorkouts(workouts, DIGEST_PERIOD_DAYS, steps), sessionId());
       if (!ok) throw new Error('post failed');
       window.localStorage.setItem(FLAG_KEY, 'done');

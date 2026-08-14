@@ -213,6 +213,37 @@ describe('retrieval registry — render / rows', () => {
     expect(text).toContain('2026-07-18 lunch');
   });
 
+  it('get_workout_history lists sessions newest first, omitting absent measures', () => {
+    const r = {
+      days: 30,
+      workouts: [
+        {
+          source: 'healthkit',
+          type: 'running',
+          startedAt: '2026-08-14T07:10:00Z',
+          durationMin: 31,
+          distanceKm: 5.2,
+          avgHr: 148,
+        },
+        {
+          source: 'healthkit',
+          type: 'strength training',
+          startedAt: '2026-08-12T18:00:00Z',
+          durationMin: 45,
+          distanceKm: null,
+          avgHr: null,
+        },
+      ],
+    };
+    expect(RETRIEVAL_FUNCTIONS.get_workout_history!.render(r)).toBe(
+      'Recorded workouts (last 30d, newest first):\n' +
+        '- 2026-08-14 · running · 31 min · 5.2 km · avg 148 bpm\n' +
+        '- 2026-08-12 · strength training · 45 min',
+    );
+    expect(RETRIEVAL_FUNCTIONS.get_workout_history!.render({ days: 30, workouts: [] })).toBe('');
+    expect(RETRIEVAL_FUNCTIONS.get_workout_history!.rows(r)).toBe(2);
+  });
+
   it('get_recent_logs formats felt notes', () => {
     const rows = [
       {

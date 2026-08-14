@@ -16,7 +16,7 @@ import { listDeviceAccounts, rememberDeviceAccount } from './features/auth/devic
 import { syncLocalStateToUser } from './features/auth/localUserState.ts';
 import { PhoneFrame } from './components/PhoneFrame.tsx';
 import { CoachFaceProvider } from './features/coach/CoachFaceProvider.tsx';
-import { getPlan, setAuthToken, isDevMode, getHealthDigest, postHealthDigest } from './lib/api.ts';
+import { getPlan, setAuthToken, isDevMode, getHealthDigest, postHealthDigest, postWorkoutHistory } from './lib/api.ts';
 import { syncPlanLocalNotifications } from './lib/local-notifications-sync.ts';
 import { capabilities } from './lib/capability/index.ts';
 import { maybeRefreshHealthDigest } from './features/onboarding/health-digest.ts';
@@ -100,6 +100,7 @@ function CoachApp({ session }: { session: Session | null }) {
       getDailySteps: (since) => capabilities.health.getDailySteps(since),
       getLatest: getHealthDigest,
       post: (d) => postHealthDigest(d),
+      postWorkouts: postWorkoutHistory,
     }).catch(() => {});
     // anonymous is fixed for the life of a session object; re-running on it would refetch the plan.
     // eslint-disable-next-line react-hooks/exhaustive-deps

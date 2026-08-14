@@ -87,3 +87,22 @@ export const healthDigestBodySchema = z.object({
   /** Active coach session — when present the digest is also injected as a context turn. */
   sessionId: z.string().trim().min(1).max(100).optional(),
 });
+
+/**
+ * One workout ROW (0033 dataset). Individual sessions are allowed here — unlike the digest this
+ * IS the log — but each field stays bounded, and the batch is capped well above a real 90-day
+ * window (~180 workouts for a twice-a-day person) and far below anything sample-shaped.
+ */
+const workoutEntrySchema = z.object({
+  sourceId: z.string().trim().min(1).max(120),
+  type: typeName,
+  startISO: z.string().max(40),
+  durationMin: z.number().min(0).max(1_440).nullish(),
+  distanceKm: z.number().min(0).max(1_000).nullish(),
+  avgHr: z.number().min(20).max(260).nullish(),
+  recordedBy: z.string().trim().max(120).optional(),
+});
+
+export const workoutHistoryBodySchema = z.object({
+  workouts: z.array(workoutEntrySchema).min(1).max(500),
+});

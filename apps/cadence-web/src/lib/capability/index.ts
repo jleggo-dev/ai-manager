@@ -12,6 +12,11 @@ export interface Workout {
   durationMin?: number;
   avgHr?: number;
   start: string; // ISO
+  /** Stable per-workout id from the platform (HealthKit's workout UUID) — the dedup key that
+   *  lets the device re-push its whole window idempotently. */
+  id?: string;
+  /** The app that originally recorded it (HealthKit's sourceName) — future cross-source dedup. */
+  recordedBy?: string;
 }
 
 /** One day's step count, as an aggregated bucket — never the individual samples behind it. */

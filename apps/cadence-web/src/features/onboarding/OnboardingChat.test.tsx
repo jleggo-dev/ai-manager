@@ -31,6 +31,7 @@ vi.mock('../../lib/api.ts', () => ({
   // defined only so the mount effect can import them).
   getHealthDigest: vi.fn().mockResolvedValue({ digest: null, created_at: null }),
   postHealthDigest: vi.fn().mockResolvedValue(true),
+  postWorkoutHistory: vi.fn().mockResolvedValue(true),
 }));
 
 // The Web Speech API isn't in jsdom; stub the mic so its empty-field state is deterministic
