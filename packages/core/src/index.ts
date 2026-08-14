@@ -90,6 +90,10 @@ export type { SseLineBuffer } from './sse-line-reader.ts';
 
 /* ── AI profiles (Coach persona / config managed in AI Admin) ── */
 export { getAiProfile, getAiProfileBySlug, updateAiProfile } from '../../../backend/src/models/ai-profiles.ts';
+// The in-process tool loop (Cadence's coach relay): read function calls off the completed
+// response, submit their results as the continuation (a NEW response — see #190).
+export { extractFunctionCallsFromOutput } from '../../../backend/src/services/v2-stream-events.ts';
+export { submitV2ToolOutputs } from '../../../backend/src/ai-manager/chat-messaging.ts';
 
 /* ── Processing jobs (create/update + id lookup for provisioning) ── */
 export {

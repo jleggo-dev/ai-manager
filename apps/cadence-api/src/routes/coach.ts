@@ -5,6 +5,7 @@ import {
   openCoachSession,
   injectCoachContext,
   sendCoachMessage,
+  submitCoachToolOutputs,
   recordCoachReply,
   getCoachPersona,
   getCoachHistory,
@@ -16,7 +17,8 @@ import { renderPickProtocol } from '../services/coach-picks-protocol.ts';
 import { renderScreenNotes } from '../services/goal-screen.ts';
 import { runDetourCapture } from '../services/detour-capture.ts';
 import { assembleTurn } from '../services/coach-context.ts';
-import { relayAndAccumulate } from '../services/coach-stream.ts';
+import { relayCoachTurnWithTools } from '../services/coach-tool-loop.ts';
+import { coachToolDefinitions, coachToolNames, executeCoachToolCalls } from '../services/coach-tools.ts';
 import { buildContextPack } from '../services/context-pack.ts';
 import { ensureDateStamped } from '../services/date-context.ts';
 import { getTrace, updateTrace } from '../services/dev-trace.ts';
@@ -214,10 +216,14 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     void touchConversation(sessionIdParam).catch(() => {});
     await ensureDateStamped(userId, req.params.id as string).catch((e) => console.error('[ensureDateStamped]', e));
     const turnMessage = await assembleTurn(userId, req.params.id as string, message);
+    // The coach's read tools ride the request; when she calls one, the loop below fulfills it
+    // against the retrieval registry and pumps the continuation — "let me check your file",
+    // literally (PLAN.md, the tool-loop coach).
     const { response, sessionId, diagnosticSession, resolvedMessage } = await sendCoachMessage(
       userId,
       req.params.id as string,
       turnMessage,
+      coachToolDefinitions(),
     );
 
     // Relay upstream SSE bytes verbatim (upstream emits its own `data: [DONE]`) while
@@ -225,22 +231,31 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     // to AI Admin after the stream (the in-process path must do this bookkeeping itself).
     const t0 = Date.now();
     const { content, promptTokens, completionTokens, model, responseId, firstTokenMs, clientDropped } =
-      await relayAndAccumulate(response.body, {
-        isClientAlive: () => clientAlive,
-        // Recorded mid-stream because that is the only moment it is useful: Stop needs the id of
-        // the response generating RIGHT NOW. Fire-and-forget — bookkeeping for a button must never
-        // interrupt the turn the user is waiting on.
-        onResponseId: (id) =>
-          void setInFlightResponse(sessionIdParam, id).catch((e) => console.error('[setInFlightResponse]', e)),
-        writeChunk: (chunk) => {
-          try {
-            res.write(chunk);
-          } catch {
-            clientAlive = false;
-            return false;
-          }
+      await relayCoachTurnWithTools(
+        response.body,
+        {
+          toolNames: coachToolNames(),
+          execute: (calls) => executeCoachToolCalls(userId, calls),
+          submit: async (respId, outputs) =>
+            (await submitCoachToolOutputs(userId, sessionId, respId, outputs)).response.body,
         },
-      });
+        {
+          isClientAlive: () => clientAlive,
+          // Recorded mid-stream because that is the only moment it is useful: Stop needs the id of
+          // the response generating RIGHT NOW. Fire-and-forget — bookkeeping for a button must never
+          // interrupt the turn the user is waiting on.
+          onResponseId: (id) =>
+            void setInFlightResponse(sessionIdParam, id).catch((e) => console.error('[setInFlightResponse]', e)),
+          writeChunk: (chunk) => {
+            try {
+              res.write(chunk);
+            } catch {
+              clientAlive = false;
+              return false;
+            }
+          },
+        },
+      );
     // Nothing is generating any more, however this ended — a leftover id would let a later Stop
     // fire at a finished response. (Harmless upstream, but it would report a cancel that cancelled
     // nothing.)

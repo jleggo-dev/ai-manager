@@ -156,6 +156,8 @@ describe('relayAndAccumulate', () => {
       completionTokens: null,
       model: null,
       responseId: null,
+      currentResponseId: null,
+      functionCalls: [],
       firstTokenMs: null,
       clientDropped: false,
     });
