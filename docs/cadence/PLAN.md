@@ -5360,3 +5360,22 @@ now fails CI instead of quietly mis-teaching a model for weeks.
 
 No sync needed: the coach's definitions ride each request and the Broker's catalog is rendered at
 runtime — the API deploy carries all of it.
+
+### The MCP-best-practice check: the missing layer was the SERVER instructions (2026-08-14)
+
+Owner: "if you consider how MCP instructions are usually written, do these follow best practice?"
+Verdict after the audit: tool-level yes; toolset-level no. A well-written MCP server carries two
+layers — per-tool descriptions AND server-level `instructions` about using the toolset as a
+whole. We had rebuilt the first and simply didn't have the second: nothing told the coach the
+loop is capped at three rounds per reply, that one round can fetch several tools at once (so
+batch, don't dribble), that results are injected context the user never sees (so never read one
+back verbatim or name a tool), that "(nothing on file for this yet)" is a designed sentinel and
+IS the answer, or that re-fetching what the session-open context already handed her wastes a
+round. And three descriptions hid their truncation (food log lists 10, recipes 15, practice
+totals a dozen) — an unstated cap invites "you only have 15 recipes."
+
+**Fix:** a "Using your file tools, mechanically" paragraph in the persona (batch under the
+three-round budget · results are for your eyes only · the empty sentinel is the answer · don't
+re-fetch the fresh context), plus truncation notes in the three descriptions. Persona synced to
+prod; descriptions ride the deploy. With this, the harness matches both halves of the MCP
+pattern, and the change tools start from a toolset whose usage contract is actually written down.
