@@ -115,6 +115,7 @@ export function MainTabs({
               chrome="none"
               onBuild={() => setRebuild(true)}
               openWalkthrough={discussPlan}
+              onPlanChanged={() => setPlanReload((k) => k + 1)}
             />
             {/* The deterministic way back to the crafted plan UI from inside the conversation. */}
             <button className="plan-pill" onClick={() => setPlanCardOpen(true)}>

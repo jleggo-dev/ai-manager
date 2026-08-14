@@ -34,8 +34,15 @@
  * once, at the end of onboarding", which left the coach with nowhere to go the moment someone added
  * a goal after it — she fell back to naming a review screen that no longer exists. A plan is
  * rebuilt in the conversation that decided to rebuild it, whenever that conversation happens.
+ *
+ * `change` is the narrow sibling of `confirm`, and the difference is who computed the content.
+ * `confirm` rebuilds a week from everything known; `change` shows a SPECIFIC edit the
+ * `propose_plan_change` tool already worked out and stored — move this to Friday, cut that to 20
+ * minutes — with an Apply button. It carries no options for the same reason `confirm` doesn't:
+ * the client reads the proposal back from the server, so what the user sees is what the tool
+ * computed rather than what the turn's prose claims. Nothing commits until the tap.
  */
-export type CoachPickLayout = 'list' | 'tiles' | 'confirm';
+export type CoachPickLayout = 'list' | 'tiles' | 'confirm' | 'change';
 
 /**
  * Canonical `area` (never goal "category" — see CLAUDE.md nomenclature). Used only to colour the
@@ -107,12 +114,12 @@ export function coercePicks(raw: unknown): CoachPicks | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
   const layout: CoachPickLayout | null =
-    o.layout === 'tiles' || o.layout === 'list' || o.layout === 'confirm' ? o.layout : null;
+    o.layout === 'tiles' || o.layout === 'list' || o.layout === 'confirm' || o.layout === 'change' ? o.layout : null;
   if (!layout) return null;
   const raws = Array.isArray(o.options) ? o.options : [];
   const options = raws.map(asOption).filter((x): x is CoachPickOption => x !== null);
-  // An answer widget with no answers is a dead end; the confirmation has no options by design.
-  if (layout !== 'confirm' && !options.length) return null;
+  // An answer widget with no answers is a dead end; the two card layouts have none by design.
+  if (layout !== 'confirm' && layout !== 'change' && !options.length) return null;
   const picks: CoachPicks = {
     layout,
     multi: o.multi === true,

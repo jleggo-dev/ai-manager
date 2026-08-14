@@ -11,7 +11,7 @@ import { enterEpisode, endEpisode, reviseEpisodeEquipment, postponeEpisodeStart 
 import { equipmentFromGymPhotos } from '../services/gym-photo.ts';
 import { recordWeighIn } from '../services/weigh-in.ts';
 import { getSessionInsight } from '../services/session-insight.ts';
-import { setPendingProposal, getUser } from '../repos/users.ts';
+import { setPendingProposal, setPendingPlan, getUser } from '../repos/users.ts';
 import { setOccurrenceStatus, getOccurrenceWithActivity } from '../repos/occurrences.ts';
 import { recordCheckIn } from '../repos/check-ins.ts';
 import {
@@ -434,6 +434,43 @@ router.post('/lock', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[POST /plan/lock]', err);
     res.status(500).json({ error: 'lock failed' });
+  }
+});
+
+/**
+ * GET /plan/pending-change — the change the coach has PROPOSED but nobody has applied.
+ *
+ * The card reads its content from here rather than from the turn that announced it, so what the
+ * user is asked to agree to is what `propose_plan_change` actually computed. A turn describing
+ * the change loosely (or wrongly) cannot alter what commits.
+ */
+router.get('/pending-change', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const pending = (await getUser(userId))?.pending_plan;
+    if (!pending?.rationale) return void res.json({ change: null });
+    res.json({
+      change: {
+        changes: pending.rationale.split('\n').filter(Boolean),
+        activities: pending.activities.length,
+        created_at: pending.created_at,
+      },
+    });
+  } catch (err) {
+    console.error('[GET /plan/pending-change]', err);
+    res.json({ change: null });
+  }
+});
+
+/** POST /plan/pending-change/dismiss — "not now". Drops the proposal; the plan is untouched. */
+router.post('/pending-change/dismiss', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    await setPendingPlan(userId, null);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[POST /plan/pending-change/dismiss]', err);
+    res.status(500).json({ error: 'dismiss failed' });
   }
 });
 

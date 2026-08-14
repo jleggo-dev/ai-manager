@@ -5379,3 +5379,40 @@ three-round budget · results are for your eyes only · the empty sentinel is th
 re-fetch the fresh context), plus truncation notes in the three descriptions. Persona synced to
 prod; descriptions ride the deploy. With this, the harness matches both halves of the MCP
 pattern, and the change tools start from a toolset whose usage contract is actually written down.
+
+### She can change the plan now — propose_plan_change, and the card that applies it (2026-08-14)
+
+The other half of the round-4 ruling. She could read everything and change nothing: the ONLY
+route to a different plan was the build card, and on device the owner dismissed it and she was
+left articulate and powerless.
+
+**The first action tool.** `propose_plan_change` takes structured edits — move / retime / resize
+/ remove / add — and applies them **in code** (`plan-edit.ts`), not by re-synthesis. That
+distinction is the feature: a rebuild can quietly restructure six things nobody asked about and
+takes minutes, so it stays the right tool for "my life changed" and the wrong one for "move
+Thursday's run to Friday". The model picks WHICH and WHAT; the engine does the doing, so the diff
+shown is exactly what commits and an unasked-for change is impossible rather than unlikely.
+
+**Suggest-never-auto-apply is structural, not remembered.** The tool writes `pending_plan` — by
+definition uncommitted — and returns a summary. The plan moves only when the person taps Apply,
+which runs the same `POST /plan/lock` path a first build runs (`confirmPendingPlan` commits an
+existing pending plan without re-synthesizing, so a precise edit rides the tested commit path and
+lands as a normal new version with its occurrences). **There is no code path from a tool call to
+a committed plan.**
+
+**The card shows what the TOOL computed, not what the turn claimed.** New `change` pick layout
+(no options, like `confirm`); `ChangeCard` reads the diff back from `GET /plan/pending-change`.
+So a reply that describes the change loosely — or wrongly — cannot alter what the user is
+agreeing to. "Not now" drops the proposal and she can offer again in the same conversation.
+
+**Ambiguity is a rejection, never a coin flip:** "run" matching both Easy run and Long run is
+refused with its reason rather than guessed, because changing the wrong session is worse than
+asking. Same for an edit that would empty the week.
+
+Protocol rule added (`coach-picks-protocol.ts`, rides the deploy — no sync): two sizes of change,
+and which to reach for. The description audit caught the new tool immediately — it declared
+`edits` without teaching it in prose — and it now carries a worked example, which is the audit
+gate doing its job on the very next tool added.
+
+Next in this seam: goals (retarget, re-date, complete, drop), constraints (add/lift), and fixing
+a log the user says is wrong — same propose-then-tap shape, same engine pattern.
