@@ -17,8 +17,9 @@ import { executeCalls } from './retrieval/select-and-run.ts';
  * suggest-never-auto-apply contract; nothing here mutates anything.
  */
 
-/** Registry functions the coach may call. All zero-argument in v1 — each returns the user's
- *  current state; parameterized retrieval (date ranges, specific goals) is a later increment. */
+/** Registry functions the coach may call. All called zero-argument in v1 — functions with
+ *  params (get_consistency, get_recent_logs) run on their defaults; parameterized retrieval
+ *  (date ranges, specific goals) is a later increment. */
 const COACH_TOOL_NAMES = [
   'get_identity',
   'get_objectives',
@@ -29,6 +30,7 @@ const COACH_TOOL_NAMES = [
   'get_equipment',
   'get_dietary_profile',
   'get_health_history',
+  'get_recent_logs',
   'get_goal_progress',
 ] as const;
 
