@@ -20,6 +20,7 @@ import {
 import type { Attachment, FormattingRule } from '../types.ts';
 import { resolveChatInvocation } from './chat-messaging-resolve.ts';
 import { openChatSendStream } from './chat-messaging-stream.ts';
+import { resolveProfileToolDefinitions } from './tool-fulfillment.ts';
 
 interface SendChatMessageOptions {
   attachments?: Attachment[];
@@ -225,14 +226,18 @@ export async function submitV2ToolOutputs(
 
   const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
   const timeoutMs = await resolveTimeoutMs({}, provider);
-  // Devs.ai /resume expects camelCase toolOutputs (toolCallId/status/output), not tool_outputs.
-  const v2Outputs = outputs.map((o) => ({
-    toolCallId: o.toolCallId,
-    output: o.output,
-    status: 'success' as const,
-  }));
-  const sseResponse = await client.resumeResponseStream(responseId, v2Outputs, {
+  // NOT /resume. A v2 response arrives `completed` WITH its function_call in the output, so by
+  // the time the tool job has run, resume targets a terminal response and 409s ("Response … is
+  // already terminal" — live-probed 2026-08-14, probe-tool-loop.ts; /resume serves Devs.ai's own
+  // paused interactive tools). The Responses-dialect continuation is a NEW streamed response:
+  // previous_response_id threads it, the input items are the function results, and the tool
+  // definitions ride again so the model can chain — the caller's loop bounds the rounds.
+  const modelId = String(profile?.external_ai_id || '').trim();
+  if (!modelId) throw new Error('submitV2ToolOutputs: session profile has no external_ai_id');
+  const tools = await resolveProfileToolDefinitions(profile);
+  const sseResponse = await client.continueWithToolOutputs(modelId, responseId, outputs, {
     timeoutMs,
+    ...(tools ? { tools } : {}),
   });
 
   return { response: sseResponse, sessionId };
