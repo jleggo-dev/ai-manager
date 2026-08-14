@@ -1029,3 +1029,47 @@
   color: var(--surface);
   background: oklch(54% 0.1 152);
 }
+
+/* The change card — ConfirmCard's narrow sibling. One specific edit, and the tap that applies it.
+   Shares .cfm's column and both its buttons; all this adds is the framed list of what would
+   change, because the whole point of this card is that the diff is legible before you agree. */
+.chg {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 13px 15px 12px;
+}
+.chg-t {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+.chg-list {
+  list-style: none;
+  margin: 0 0 11px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.chg-list li {
+  position: relative;
+  padding-left: 15px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.chg-list li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: oklch(60% 0.1 152);
+}
+.chg-err {
+  font-size: 12.5px;
+  color: oklch(52% 0.16 25);
+  margin-bottom: 6px;
+}

@@ -211,6 +211,32 @@ export async function dismissProposal(): Promise<void> {
   await fetch(`${BASE}/plan/proposal/dismiss`, { method: 'POST', headers: headers() });
 }
 
+export interface PendingChange {
+  changes: string[];
+  activities: number;
+  created_at: string;
+}
+
+/**
+ * The change the coach has proposed but nobody has applied yet.
+ *
+ * Read from the server on purpose: the ChangeCard shows what `propose_plan_change` actually
+ * computed, not what the turn announcing it claimed, so the thing the user agrees to is the thing
+ * that commits.
+ */
+export async function getPendingChange(): Promise<PendingChange | null> {
+  const res = await fetch(`${BASE}/plan/pending-change`, { headers: headers() });
+  if (!res.ok) return null;
+  const body = (await res.json()) as { change: PendingChange | null };
+  return body.change;
+}
+
+/** "Not now" — drop the proposal. The plan is untouched and she can offer again. */
+export async function dismissPendingChange(): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/pending-change/dismiss`, { method: 'POST', headers: headers() });
+  return res.ok;
+}
+
 export async function lockPlan(): Promise<{ status: number; body: Record<string, unknown> }> {
   const res = await fetch(`${BASE}/plan/lock`, { method: 'POST', headers: headers() });
   return { status: res.status, body: await res.json() };

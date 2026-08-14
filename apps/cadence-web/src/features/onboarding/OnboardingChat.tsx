@@ -22,6 +22,7 @@ import { ChatComposer } from './ChatComposer.tsx';
 import { QuickPicks } from './QuickPicks.tsx';
 import { CapturedPills } from './CapturedPills.tsx';
 import { ConfirmCard } from './ConfirmCard.tsx';
+import { ChangeCard } from './ChangeCard.tsx';
 
 /**
  * What the app tells Cadence the moment someone shares their Apple Health history. Without it she
@@ -89,6 +90,7 @@ export function OnboardingChat({
   intent = 'onboarding',
   chrome = 'onboarding',
   openWalkthrough = false,
+  onPlanChanged,
 }: {
   /**
    * Run the coach's build tool. Onboarding hands over its build screen; the Coach tab hands over
@@ -97,6 +99,9 @@ export function OnboardingChat({
    */
   onBuild?: () => void;
   onBack?: () => void;
+  /** A proposed change was applied in the conversation — the host refreshes whatever shows the
+   *  plan, so the week on screen and the week she just changed are the same week. */
+  onPlanChanged?: () => void;
   intent?: 'onboarding' | 'ongoing';
   chrome?: 'onboarding' | 'none';
   /** Open the walkthrough discussion unprompted: 'card' = they saw the plan card at the gate;
@@ -260,7 +265,9 @@ export function OnboardingChat({
                   pending={t.role === 'coach' && !t.text}
                   after={
                     last && picks ? (
-                      picks.layout === 'confirm' ? (
+                      picks.layout === 'change' ? (
+                        <ChangeCard key={`chg${i}`} onApplied={onPlanChanged} />
+                      ) : picks.layout === 'confirm' ? (
                         <ConfirmCard
                           buildLabel={buildLabel}
                           onBuild={onBuild}

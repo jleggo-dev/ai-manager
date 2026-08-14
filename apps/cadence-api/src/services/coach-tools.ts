@@ -1,5 +1,6 @@
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 import { executeCalls } from './retrieval/select-and-run.ts';
+import { COACH_ACTION_TOOLS, coachActionDefinitions, coachActionNames } from './coach-actions.ts';
 
 /**
  * The coach's READ TOOLS — the retrieval registry, offered to the model as callable functions
@@ -91,8 +92,10 @@ export interface CoachToolOutput {
   output: string;
 }
 
-/** The names the relay treats as ours — anything else in a function_call is not our problem. */
-export const coachToolNames = (): Set<string> => new Set(COACH_TOOL_NAMES.filter((n) => RETRIEVAL_FUNCTIONS[n]));
+/** The names the relay treats as ours — anything else in a function_call is not our problem.
+ *  Both halves of the harness: what she can look up, and what she can propose changing. */
+export const coachToolNames = (): Set<string> =>
+  new Set([...COACH_TOOL_NAMES.filter((n) => RETRIEVAL_FUNCTIONS[n]), ...coachActionNames()]);
 
 /**
  * Devs.ai-shaped tool definitions, built from the registry's own names and LLM-facing
@@ -103,8 +106,8 @@ export function coachToolDefinitions(): Array<{
   type: 'function';
   function: { name: string; description: string; parameters: Record<string, unknown> };
 }> {
-  return COACH_TOOL_NAMES.filter((n) => RETRIEVAL_FUNCTIONS[n]).map((n) => ({
-    type: 'function',
+  const reads = COACH_TOOL_NAMES.filter((n) => RETRIEVAL_FUNCTIONS[n]).map((n) => ({
+    type: 'function' as const,
     function: {
       name: n,
       description: RETRIEVAL_FUNCTIONS[n]!.description,
@@ -115,6 +118,7 @@ export function coachToolDefinitions(): Array<{
       },
     },
   }));
+  return [...reads, ...coachActionDefinitions()];
 }
 
 /**
@@ -139,19 +143,40 @@ export async function executeCoachToolCalls(userId: string, calls: CoachToolCall
   const known = coachToolNames();
   const wanted = calls.filter((c) => known.has(c.name));
   if (!wanted.length) return [];
+
+  // Action tools run one at a time and own their own output — they write a PROPOSAL, never a
+  // change, so they don't go through the retrieval executor's read path.
+  const actions = wanted.filter((c) => COACH_ACTION_TOOLS[c.name]);
+  const actionOutputs: CoachToolOutput[] = [];
+  for (const c of actions) {
+    let output: string;
+    try {
+      output = await COACH_ACTION_TOOLS[c.name]!.run(userId, parseArgs(c.arguments));
+    } catch (e) {
+      console.error('[coach-action]', c.name, e);
+      output = 'That could not be done just now — tell the user plainly and offer to try again.';
+    }
+    actionOutputs.push({ toolCallId: c.toolCallId, output });
+  }
+
+  const reads = wanted.filter((c) => !COACH_ACTION_TOOLS[c.name]);
+  if (!reads.length) return actionOutputs;
   const { results } = await executeCalls(
     userId,
-    wanted.map((c) => ({ fn: c.name, params: parseArgs(c.arguments) })),
+    reads.map((c) => ({ fn: c.name, params: parseArgs(c.arguments) })),
     { logLabel: 'coach-tool' },
   );
-  return wanted.map((c) => {
-    const fn = RETRIEVAL_FUNCTIONS[c.name]!;
-    let output = '';
-    try {
-      output = fn.render(results[c.name]);
-    } catch {
-      /* a render that throws is a tool that found nothing usable */
-    }
-    return { toolCallId: c.toolCallId, output: output || '(nothing on file for this yet)' };
-  });
+  return [
+    ...actionOutputs,
+    ...reads.map((c) => {
+      const fn = RETRIEVAL_FUNCTIONS[c.name]!;
+      let output = '';
+      try {
+        output = fn.render(results[c.name]);
+      } catch {
+        /* a render that throws is a tool that found nothing usable */
+      }
+      return { toolCallId: c.toolCallId, output: output || '(nothing on file for this yet)' };
+    }),
+  ];
 }

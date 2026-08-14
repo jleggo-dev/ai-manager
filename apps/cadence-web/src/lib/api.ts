@@ -59,6 +59,8 @@ export {
   acceptProposal,
   dismissProposal,
   lockPlan,
+  getPendingChange,
+  dismissPendingChange,
   previewPlan,
   dismissPlanPreview,
   getProgress,
@@ -71,6 +73,7 @@ export {
   type ActiveEpisode,
   type ReplanPreview,
   type LockPreview,
+  type PendingChange,
 } from './api/plan.ts';
 
 export { getOccurrenceDetail, logOccurrence, recordWeighIn, type OccurrenceDetail } from './api/occurrence.ts';
