@@ -5208,3 +5208,52 @@ gap since the last one.
 **Deploys:** API + registry live on merge; the three client doors ride the next `cap run`.
 Next increments unchanged: cadence bridge (occurrences.log → rows), client-fulfilled
 `refresh_health_data` tool, Strava OAuth import.
+
+### The backgrounded phone, finally diagnosed: fire-and-forget lost the reply (2026-08-14)
+
+Owner, fifth report: "I ask Cadence to build my plan, switch apps because it's taking a while,
+and get the error asking me to try again. It's like the app has to be in focus for the prompts
+to complete... we put in a notification for this, but the application itself is failing."
+
+**Reproduced from a terminal, not a phone.** New scratch harness (real Supabase JWT, prod
+cadence-api, SSE read killed at 2.5s = iOS suspending the webview), which is the thing four
+rounds of device testing never had:
+
+| | client stays | client vanishes at 2.5s |
+|---|---|---|
+| reply generated | ✅ 1485 chars | ✅ 1452 chars (`ai_log` has it) |
+| relay drained to completion | ✅ | ✅ (`clientDropped` never even flipped) |
+| **assistant turn in chat history** | ✅ in 5s | ❌ **never** |
+
+So the reply was written, paid for, and logged — and then thrown away. The app came back to a
+conversation missing her answer and said "connection dropped, send again". `capture` completed
+2 minutes later in the same invocation, proving the platform had not killed anything.
+
+**Root cause: `recordCoachReply` was fire-and-forget.** Everything started after the handler
+returns is racing the platform reclaiming the instance, and with nobody left on the socket that
+race is lost reliably. The comment in `useBuildPlan.ts` stated the opposite as fact — "the
+serverless invocation runs to completion whether or not the client is still listening" — an
+assumption nobody had tested. It is now corrected in place.
+
+**The fix, four parts:**
+1. **Await the persistence** (`routes/coach.ts`). The reply is written down BEFORE the handler
+   returns. Costs the user nothing — the client resolved on the `[DONE]` the relay already
+   wrote. Capture is awaited for the same reason: it is where what you said becomes what she
+   remembers, and the brand promise depends on it.
+2. **Clear `in_flight_response_id` AFTER persisting**, not before. Clearing first opened the
+   exact window the bug lived in: a returning client sees `generating: false` with no new
+   message and concludes the turn died — while it was being written down.
+3. **`useAppResume`** (new): Capacitor `appStateChange` + `visibilitychange`. The missing half of
+   leave-safety — recovery only ever ran when a dead fetch got around to rejecting, and a fetch
+   killed by iOS suspension may never settle at all. Now coming back is itself the signal, in
+   both the chat (`useResumeHealer` collects the finished reply, silences the corpse fetch,
+   returns the composer) and the build (checks for the committed plan directly).
+4. **Bound `generating` by age** (5 min). The flag is only cleared by the handler that set it,
+   so an invocation that dies mid-turn poisoned every future recovery in that conversation.
+
+Persist failures now log durably to `ai_log` with `persistFailed: true` — a console line on a
+reclaimed serverless instance is not evidence, and this is the failure that silently costs
+someone the reply they waited for.
+
+`useCoachChat` hit the 150-line function gate on the way; recovery moved to `coach-recovery.ts`
+(`recoverTurnFromServer` + `useResumeHealer`) rather than onto the allowlist.
