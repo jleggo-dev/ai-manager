@@ -23,6 +23,34 @@ export interface V2CreateResponseBody {
 }
 
 /**
+ * The tool-call CONTINUATION request. Live-probed 2026-08-14 (probe-tool-loop.ts): a v2 response
+ * arrives `completed` WITH its function_call in the output array, and POST /responses/{id}/resume
+ * on that terminal response 409s ("Response … is already terminal") — /resume serves Devs.ai's
+ * own paused interactive tools, not function calling. The Responses-dialect continuation is a NEW
+ * response: `previous_response_id` threads the conversation, and the input items are the
+ * function results (`function_call_output`, keyed by the model's own call_id). Tools ride again
+ * so the model can chain a further call; the route loop bounds the rounds.
+ */
+export function toolOutputsToV2Request(
+  model: string,
+  previousResponseId: string,
+  outputs: Array<{ toolCallId: string; output: string }>,
+  options: Record<string, unknown> = {},
+): V2CreateResponseBody {
+  const body: V2CreateResponseBody = {
+    model,
+    stream: Boolean(options.stream ?? true),
+    previous_response_id: previousResponseId,
+    input: outputs.map((o) => ({ type: 'function_call_output', call_id: o.toolCallId, output: o.output })),
+    store: options.store !== false,
+  };
+  if (options.tools) body.tools = normalizeToolsForV2(options.tools as unknown[]);
+  if (options.chat_mode) body.chat_mode = String(options.chat_mode);
+  if (options.thread_mode) body.thread_mode = String(options.thread_mode);
+  return body;
+}
+
+/**
  * Split chat messages into v2 instructions (system) + user/assistant input items.
  */
 export function messagesToV2Request(

@@ -9,7 +9,7 @@
 
 import type { ChatMessage, ChatCompletionResponse, PatchedResponse } from '../../types.ts';
 import type { V2ResponseObject, V2ResumeRequestBody, V2ResumeToolOutput } from './types.ts';
-import { messagesToV2Request, extractV2ResponseText, mapV2Usage } from './request-builder.ts';
+import { messagesToV2Request, toolOutputsToV2Request, extractV2ResponseText, mapV2Usage } from './request-builder.ts';
 import { createSseTransformState, transformV2SseChunk } from './sse-transform.ts';
 import { createSseLineBuffer } from '../../services/sse-line-reader.ts';
 
@@ -270,6 +270,53 @@ export class DevsAiV2Client {
     options: { timeoutMs?: number; reason?: string } = {},
   ): Promise<globalThis.Response> {
     return this.resumeResponse(responseId, toolOutputs, options);
+  }
+
+  /**
+   * Function-call continuation as a NEW streamed response threaded on `previous_response_id`,
+   * carrying `function_call_output` items. This — not /resume — is how a completed-with-
+   * function_call response continues; the live probe (probe-tool-loop.ts, 2026-08-14) showed
+   * /resume 409s because the response is already terminal by the time its calls are fulfillable.
+   */
+  async continueWithToolOutputs(
+    model: string,
+    previousResponseId: string,
+    outputs: Array<{ toolCallId: string; output: string }>,
+    options: Record<string, unknown> = {},
+  ): Promise<globalThis.Response> {
+    const { timeoutMs, ...rest } = options;
+    const body = toolOutputsToV2Request(model, previousResponseId, outputs, { ...rest, stream: true });
+
+    let controller: AbortController | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (timeoutMs && (timeoutMs as number) > 0) {
+      controller = new AbortController();
+      timer = setTimeout(() => controller?.abort(), timeoutMs as number);
+    }
+
+    let upstream: globalThis.Response;
+    try {
+      upstream = await fetch(`${this.baseUrl}/api/v2/responses`, {
+        method: 'POST',
+        headers: this._headers({ Accept: 'text/event-stream' }),
+        body: JSON.stringify(body),
+        signal: controller?.signal,
+      });
+    } catch (err: unknown) {
+      if (timer) clearTimeout(timer);
+      if ((err as Error).name === 'AbortError') {
+        throw new Error(`Devs.ai v2 tool continuation timed out after ${timeoutMs}ms`, { cause: err });
+      }
+      throw err;
+    }
+
+    if (!upstream.ok) {
+      if (timer) clearTimeout(timer);
+      const errorText = await upstream.text();
+      throw new Error(`Devs.ai v2 tool continuation error (${upstream.status}): ${errorText}`);
+    }
+
+    return this._wrapUpstreamSse(upstream, { timer, controller });
   }
 
   private _wrapUpstreamSse(
