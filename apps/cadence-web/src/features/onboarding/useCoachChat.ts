@@ -16,6 +16,7 @@ import {
   type CoachFoodAction,
 } from '../../lib/api.ts';
 import { capabilities } from '../../lib/capability/index.ts';
+import { recoverTurnFromServer, useResumeHealer } from './coach-recovery.ts';
 import { healthOfferAnswered } from './health-digest.ts';
 
 export interface CoachTurn {
@@ -33,17 +34,6 @@ export interface CapturedGoal {
   title: string;
   area: string;
 }
-
-const RECOVER_ATTEMPTS = 6;
-const RECOVER_DELAY_MS = 800;
-/**
- * How long recovery will wait on a reply the server says it is STILL WRITING. This is the
- * backgrounded-phone path: iOS killed our stream mid-turn, the relay drained it to completion
- * server-side, and on return `generating: true` means the only correct move is patience — the
- * old fixed six polls gave up in ~5s and told someone their connection dropped while the reply
- * was arriving fine. Bounded so a server that wedged mid-turn can't hold the composer hostage.
- */
-const RECOVER_GENERATING_MS = 120_000;
 
 export type UseCoachChatArgs = {
   intent?: 'onboarding' | 'ongoing';
@@ -71,6 +61,14 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
   // Live only while a turn is streaming — the Stop button's handle on it.
   const abort = useRef<AbortController | null>(null);
   const stopped = useRef(false);
+  const healer = useResumeHealer({
+    recover: () => recoverFromServer(),
+    onHealed: () => {
+      abort.current?.abort();
+      abort.current = null;
+      setStreaming(false);
+    },
+  });
 
   async function refreshCaptured() {
     try {
@@ -100,37 +98,16 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       });
   }, []);
 
-  // Pull the authoritative conversation back from the server to HEAL a dropped turn. Patient by
-  // design: a fixed number of quick polls for the ordinary blip, then — as long as the server
-  // says a reply is STILL GENERATING — it keeps waiting up to RECOVER_GENERATING_MS, because the
-  // relay drains dropped streams to completion and a backgrounded phone returning mid-write is
-  // the normal case, not the edge case.
+  /** Thin wrapper so callers (and this hook's tests) keep one entry point; the polling
+   *  conversation itself lives in coach-recovery.ts. */
   async function recoverFromServer(): Promise<boolean> {
-    const deadline = Date.now() + RECOVER_GENERATING_MS;
-    for (let i = 0; ; i++) {
-      await wait(RECOVER_DELAY_MS);
-      let generating = false;
-      try {
-        const c = await getCurrentCoach();
-        // A STALE thread is not a recovery — it is a resurrection. This healer exists for the
-        // turn that just dropped, and the restore path already refuses stale threads; ignoring
-        // the flag here let one failed post-signup nudge adopt the GRADUATED onboarding
-        // transcript (confirm card and all) and silently re-point the session at it — observed
-        // on device 2026-08-12, presenting as "I signed in and nothing happened".
-        if (c.stale) return false;
-        generating = c.generating === true;
-        const last = c.messages[c.messages.length - 1];
-        if (!generating && c.sessionId && last?.role === 'coach' && last.content.trim()) {
-          sessionId.current = c.sessionId;
-          setTurns(c.messages.map((m) => ({ role: m.role, text: m.content })));
-          return true;
-        }
-      } catch {
-        /* retry */
-      }
-      // The quick budget covers blips; only an explicit "still writing" earns more patience.
-      if (i >= RECOVER_ATTEMPTS - 1 && !(generating && Date.now() < deadline)) return false;
-    }
+    return recoverTurnFromServer({
+      wait,
+      onRecovered: (sid, next) => {
+        sessionId.current = sid;
+        setTurns(next);
+      },
+    });
   }
 
   function fillLastCoach(text: string) {
@@ -158,6 +135,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     const window = turnsWindow(turns, text);
     setTurns((t) => [...t, ...(echo ? [{ role: 'user' as const, text }] : []), { role: 'coach' as const, text: '' }]);
     setStreaming(true);
+    healer.begin();
     // Confirm-first food draft in parallel with the coach stream (never blocks reply). Only for
     // something the user actually said — an app note is not a meal.
     //
@@ -197,11 +175,14 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       abort.current = new AbortController();
       stopped.current = false;
       const { completed } = await sendCoachMessage(sessionId.current, text, applyStreamDelta, abort.current.signal);
-      if (!completed && !stopped.current && !(await recoverFromServer())) {
+      if (!completed && !stopped.current && !healer.recovered.current && !(await recoverFromServer())) {
         if (echo) fillLastCoach('⚠️ Connection dropped — send again to continue.');
         else retractPendingNote();
       }
     } catch (err) {
+      // The resume healer already collected this reply — the fetch we were holding is just a
+      // corpse from being backgrounded, and it has nothing to report.
+      if (healer.recovered.current) return;
       // A deliberate stop is not a failure: keep what she had said and hand the composer back.
       if (stopped.current) {
         fillLastCoach('…');
@@ -219,6 +200,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     } finally {
       abort.current = null;
       setStreaming(false);
+      healer.end();
       setTimeout(refreshCaptured, 900);
     }
   }

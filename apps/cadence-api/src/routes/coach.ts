@@ -139,6 +139,8 @@ router.post('/sessions', async (req: Request, res: Response) => {
  * a live session, and killing the thread on every adjust would break continuity.
  */
 const STALE_IDLE_MS = 7 * 86_400_000;
+/** Past this, an in-flight marker is a leftover from a turn that died, not a live reply. */
+const IN_FLIGHT_MAX_MS = 5 * 60_000;
 router.get('/current', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
@@ -168,12 +170,20 @@ router.get('/current', async (req: Request, res: Response) => {
     // to completion, and 0029 records which response is in flight). A phone that backgrounded
     // mid-turn polls this on return, and "still generating" means keep waiting — not "give up
     // after five seconds and tell them the connection dropped".
+    //
+    // Bounded by age, because the flag is only cleared by the handler that set it: an invocation
+    // that dies mid-turn leaves it set FOREVER, and an unbounded read would then tell every
+    // future recovery in this conversation to keep waiting on a turn that ended days ago. A real
+    // turn takes ~30s, so anything older than this is a corpse, not a reply. (`updated_at` is
+    // stamped by `touchConversation` when the turn is sent, which makes it the turn's start.)
+    const startedMs = new Date(conv.updated_at ?? conv.created_at).getTime();
+    const inFlightFresh = Number.isFinite(startedMs) && Date.now() - startedMs < IN_FLIGHT_MAX_MS;
     res.json({
       sessionId: conv.ai_session_id,
       messages,
       stale,
       staleReason,
-      generating: conv.in_flight_response_id != null,
+      generating: conv.in_flight_response_id != null && inFlightFresh,
     });
   } catch (err) {
     const aim = AimError.fromUnknown(err);
@@ -256,10 +266,51 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
           },
         },
       );
-    // Nothing is generating any more, however this ended — a leftover id would let a later Stop
-    // fire at a finished response. (Harmless upstream, but it would report a cancel that cancelled
-    // nothing.)
-    void setInFlightResponse(sessionIdParam, null).catch(() => {});
+    /**
+     * AWAITED, and that is the whole fix for the backgrounded phone.
+     *
+     * This used to be fire-and-forget "so the client isn't kept waiting", which sounds free and
+     * is not: work started after the handler returns is racing the platform reclaiming the
+     * instance, and with nobody left on the socket that race is lost — reliably. Probed against
+     * the deployment 2026-08-14 (scratch harness, real JWT, stream killed at 2.5s): the reply
+     * generated perfectly (1452 chars, `logAi` recorded it), the relay drained to completion —
+     * and the assistant turn never reached AI Admin's history. The app came back to a
+     * conversation missing her answer and said "connection dropped, send again". Same probe with
+     * the client left connected persisted the reply in 5 seconds. That is the bug the user has
+     * hit every time they switch apps mid-turn.
+     *
+     * Awaiting costs the person nothing: the client resolved this turn on the `data: [DONE]` the
+     * relay already wrote, so every line below runs after her reply is on screen.
+     */
+    if (content.trim()) {
+      try {
+        await recordCoachReply(userId, {
+          sessionId,
+          content,
+          diag: diagnosticSession,
+          metrics: { promptTokens, completionTokens, durationMs: Date.now() - t0, firstTokenMs },
+          model,
+          promptContent: resolvedMessage ?? message,
+        });
+      } catch (e) {
+        // Durably, because a console line on a reclaimed serverless instance is not evidence —
+        // and this is the one failure that silently costs someone the reply they waited for.
+        console.error('[recordCoachReply]', e);
+        await logAi(userId, {
+          kind: 'coach',
+          sessionId: req.params.id as string,
+          input: { user: message },
+          output: { reply: content },
+          meta: { persistFailed: true, error: String(e), responseId, clientDropped },
+        }).catch(() => {});
+      }
+    }
+
+    // Cleared only NOW, after the reply is safely on file. Clearing it first opened the exact
+    // window this bug lived in: a returning client polls, sees `generating: false` with no new
+    // message, and concludes the turn died — while it was still being written down.
+    await setInFlightResponse(sessionIdParam, null).catch(() => {});
+
     // writeChunk may have flipped clientAlive on a failed write; also honor stream result.
     if (clientDropped) clientAlive = false;
     if (clientAlive) {
@@ -270,24 +321,10 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       }
     }
 
-    // Persist the assistant turn + finalize diagnostics in AI Admin (fire-and-forget) —
-    // ALWAYS, even if the client dropped, so a lost connection never loses the reply.
-    // Skip only if the upstream produced nothing (avoids logging an empty turn).
-    if (content.trim()) {
-      recordCoachReply(userId, {
-        sessionId,
-        content,
-        diag: diagnosticSession,
-        metrics: { promptTokens, completionTokens, durationMs: Date.now() - t0, firstTokenMs },
-        model,
-        promptContent: resolvedMessage ?? message,
-      }).catch((e) => console.error('[recordCoachReply]', e));
-    }
-
     // Dev X-ray + durable log of the coach turn (responseId + drop flag aid diagnostics
     // and a future live re-attach via the v2 Responses API stream-reconnect).
     updateTrace(userId, { coach: { user: message, reply: content, model, promptTokens, completionTokens } });
-    logAi(userId, {
+    await logAi(userId, {
       kind: 'coach',
       sessionId: req.params.id as string,
       input: { user: message },
@@ -299,30 +336,37 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     // aren't fragmented per-turn. Result recorded for the X-ray. The detour capture rides the
     // SAME window: the conversational door into disrupted mode (REQ4 path #2) — a deterministic
     // keyword gate inside decides whether its job runs at all, and it enters an episode only on
-    // the user's explicit yes to the coach's offer. Both fire-and-forget: a detour landing one
-    // turn late is fine; a chat turn blocking on either is not.
-    captureWindow(userId, req.params.id as string, message)
-      .then((window) => {
-        runCaptureExtract(userId, { conversation_window: window })
-          .then(async (r) => {
-            updateTrace(userId, { capture: r });
-            // Deterministic scope/safety screen fired on something they just said. Hand the coach
-            // the note so the pushback happens in the conversation — a card quietly missing from
-            // Review is exactly the "start over" feeling the brand promises never to cause.
-            const notes = renderScreenNotes(r.screened);
-            if (notes) {
-              await injectCoachContext(userId, req.params.id as string, notes, {
-                source: 'goal-screen',
-                version: 1,
-              }).catch((e) => console.error('[goal-screen inject]', e));
-            }
-          })
-          .catch((e) => console.error('[capture_extract]', e));
-        runDetourCapture(userId, window)
-          .then((o) => {
-            if (o.ran) console.log('[capture_detour]', o.reason);
-          })
-          .catch((e) => console.error('[capture_detour]', e));
+    // the user's explicit yes to the coach's offer.
+    //
+    // Awaited for the same reason the reply is (above): this is where what someone told you
+    // becomes something you remember, and a promise left running past the handler is a promise
+    // the platform may never finish. It costs nobody any wait — the response is already ended —
+    // only invocation time, which is the correct thing to spend to keep "never make you repeat
+    // yourself" true.
+    await captureWindow(userId, req.params.id as string, message)
+      .then(async (window) => {
+        await Promise.allSettled([
+          runCaptureExtract(userId, { conversation_window: window })
+            .then(async (r) => {
+              updateTrace(userId, { capture: r });
+              // Deterministic scope/safety screen fired on something they just said. Hand the coach
+              // the note so the pushback happens in the conversation — a card quietly missing from
+              // Review is exactly the "start over" feeling the brand promises never to cause.
+              const notes = renderScreenNotes(r.screened);
+              if (notes) {
+                await injectCoachContext(userId, req.params.id as string, notes, {
+                  source: 'goal-screen',
+                  version: 1,
+                }).catch((e) => console.error('[goal-screen inject]', e));
+              }
+            })
+            .catch((e) => console.error('[capture_extract]', e)),
+          runDetourCapture(userId, window)
+            .then((o) => {
+              if (o.ran) console.log('[capture_detour]', o.reason);
+            })
+            .catch((e) => console.error('[capture_detour]', e)),
+        ]);
       })
       .catch((e) => console.error('[capture_window]', e));
   } catch (err) {

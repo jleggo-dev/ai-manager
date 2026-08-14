@@ -83,6 +83,51 @@ describe('useBuildPlan under StrictMode', () => {
     expect(lockPlan).toHaveBeenCalledTimes(2);
   });
 
+  /**
+   * The real phone failure, and the one the poll test above cannot reach: iOS suspends the
+   * webview and the in-flight fetch NEVER settles — no resolve, no reject — so the catch that
+   * owns the poll is never entered and the build screen spins over a week that finished minutes
+   * ago. Coming back is the signal.
+   */
+  it('collects a plan that finished while the app was away, on a fetch that never settles', async () => {
+    lockPlan.mockImplementation(() => new Promise(() => {}));
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useBuildPlan({ onDone }), { wrapper: StrictMode });
+    await waitFor(() => expect(lockPlan).toHaveBeenCalled());
+    expect(result.current.phase).toBe('building');
+
+    getPlan.mockResolvedValue({ stage: 'committed' }); // it landed while they were elsewhere
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    await waitFor(() => expect(result.current.phase).toBe('done'));
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('a resume that finds nothing yet leaves the build alone', async () => {
+    lockPlan.mockImplementation(() => new Promise(() => {}));
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useBuildPlan({ onDone }), { wrapper: StrictMode });
+    await waitFor(() => expect(lockPlan).toHaveBeenCalled());
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(result.current.phase).toBe('building');
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('onDone fires once when the fetch and the resume check finish together', async () => {
+    // Both paths racing to the same committed plan must not double-advance the app.
+    getPlan.mockResolvedValue({ stage: 'committed' });
+    const onDone = vi.fn();
+    renderHook(() => useBuildPlan({ onDone }), { wrapper: StrictMode });
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
   it('does nothing at all until told to run', async () => {
     renderHook(() => useBuildPlan({ onDone: vi.fn(), run: false }), { wrapper: StrictMode });
     await new Promise((r) => setTimeout(r, 10));

@@ -121,6 +121,67 @@ describe('useCoachChat', () => {
     expect(result.current.turns.at(-1)?.text).toBe('I heard you');
     expect(result.current.turns.some((t) => t.text.includes('Connection dropped'))).toBe(false);
   });
+
+  /**
+   * The phone case the test above cannot reach. iOS suspends the webview mid-turn and the fetch
+   * NEVER settles — it neither resolves nor rejects — so every recovery path that hangs off the
+   * send promise is unreachable and the composer stays locked over a reply already on file.
+   * Coming back to the app is the only signal left, and it has to be enough.
+   */
+  it('heals a turn abandoned mid-stream when the app comes back', async () => {
+    getCurrentCoach.mockResolvedValueOnce({ sessionId: null, messages: [], stale: false }).mockResolvedValue({
+      sessionId: 'sess-new',
+      messages: [
+        { role: 'user', content: 'Hello' },
+        { role: 'coach', content: 'Here is what I think' },
+      ],
+      stale: false,
+      generating: false,
+    });
+    // The suspended fetch: no resolve, no reject, ever.
+    sendCoachMessage.mockImplementation(() => new Promise(() => {}));
+
+    const delay = vi.fn(async () => undefined);
+    const { result } = renderHook(() => useCoachChat({ delay }));
+    await waitFor(() => expect(result.current.restored).toBe(true));
+
+    act(() => result.current.setInput('Hello'));
+    act(() => void result.current.send());
+    await waitFor(() => expect(result.current.streaming).toBe(true));
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    await waitFor(() => expect(result.current.turns.at(-1)?.text).toBe('Here is what I think'));
+    // The composer comes back — otherwise they are locked out of a conversation that is fine.
+    await waitFor(() => expect(result.current.streaming).toBe(false));
+    expect(result.current.turns.some((t) => t.text.includes('hiccuped') || t.text.includes('dropped'))).toBe(false);
+  });
+
+  it('a resume with nothing new on the server leaves the turn streaming', async () => {
+    // Server has the question but no answer yet, and is not claiming to be writing one — the
+    // healer must give up quietly and leave the turn alone rather than declaring anything.
+    getCurrentCoach.mockResolvedValue({
+      sessionId: 'sess-new',
+      messages: [{ role: 'user', content: 'Hello' }],
+      stale: false,
+      generating: false,
+    });
+    sendCoachMessage.mockImplementation(() => new Promise(() => {}));
+
+    const delay = vi.fn(async () => undefined);
+    const { result } = renderHook(() => useCoachChat({ delay }));
+    await waitFor(() => expect(result.current.restored).toBe(true));
+    act(() => result.current.setInput('Hello'));
+    act(() => void result.current.send());
+    await waitFor(() => expect(result.current.streaming).toBe(true));
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(result.current.streaming).toBe(true);
+  });
 });
 
 /**
