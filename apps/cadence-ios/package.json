@@ -6,10 +6,11 @@
   "description": "Cadence iOS shell (Capacitor). Wraps the cadence-web bundle (built with --mode ios); native calls flow through cadence-web's capability seam. Own workspace so the Xcode/Pods tree stays out of cadence-web's Vercel build root.",
   "scripts": {
     "build:web": "npm run build -w @cadence/web -- --mode ios",
-    "sync": "npm run build:web && cap sync ios",
+    "sync": "npm run build:web && cap sync ios && npm run verify:bundle",
     "open": "cap open ios",
     "run:ios": "npm run sync && cap run ios",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:bundle": "node scripts/verify-bundle.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",
