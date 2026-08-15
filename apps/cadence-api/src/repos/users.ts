@@ -1,6 +1,8 @@
 import { sql, json } from '../db/sql.ts';
+import { mergeConstraints } from '../services/constraint-merge.ts';
 import type {
   Baseline,
+  Constraint,
   DietaryProfile,
   MacroTargets,
   PendingProposal,
@@ -63,6 +65,30 @@ export async function mergeBaseline(userId: string, patch: Partial<Baseline>): P
   await sql`
     update cadence.users set baseline = baseline || ${json(patch)}, updated_at = now()
     where id = ${userId}`;
+}
+
+/**
+ * Merge captured constraints into the stored list — the AMBIENT path, distinct from the wholesale
+ * `mergeBaseline` that Settings uses.
+ *
+ * Read-modify-write inside a transaction with `for update`, because two turns finishing close
+ * together would otherwise both read the old list and the second would erase the first's addition
+ * — the same class of loss this function exists to fix, just narrower. Writes only the
+ * `constraints` key so a concurrent weigh-in or profile edit is untouched.
+ */
+export async function mergeCapturedConstraints(userId: string, incoming: Constraint[]): Promise<void> {
+  if (!incoming.length) return;
+  await sql.begin(async (tx) => {
+    const rows = await tx<{ baseline: Baseline | null }[]>`
+      select baseline from cadence.users where id = ${userId} for update`;
+    const existing = (rows[0]?.baseline?.constraints ?? []) as Constraint[];
+    const merged = mergeConstraints(existing, incoming);
+    await tx`
+      update cadence.users
+         set baseline = jsonb_set(coalesce(baseline, '{}'::jsonb), '{constraints}', ${json(merged)}),
+             updated_at = now()
+       where id = ${userId}`;
+  });
 }
 
 export async function setMacroTargets(userId: string, targets: MacroTargets): Promise<void> {
