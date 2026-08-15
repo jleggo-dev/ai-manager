@@ -1,10 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import { listGoals, listGoalsByStatus, updateGoal, setGoalStatus } from '../repos/goals.ts';
 import { insertGoalEvent } from '../repos/goal-events.ts';
-import { correctOccurrenceLog, listLoggedForCorrection } from '../repos/occurrences.ts';
-import { setPendingPlan } from '../repos/users.ts';
+import { correctOccurrenceLog, deleteOccurrence, listLoggedForCorrection } from '../repos/occurrences.ts';
+import { getUser, mergeCapturedConstraints, removeCapturedConstraint, setPendingPlan } from '../repos/users.ts';
+import { expandRecurrence } from './scheduling.ts';
 import { applyPlanEdits, matchActivity, type PlanEdit } from './plan-edit.ts';
+import { sameConstraint } from './constraint-merge.ts';
 
 /**
  * The coach's ACTION tools — the half of the harness that changes something.
@@ -263,8 +266,18 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       }
 
       if (params.not_done === true) {
-        await correctOccurrenceLog(userId, found.occurrence_id, { status: 'skipped' });
-        return `Corrected: ${found.title} on ${found.date} is no longer counted as done. Say so plainly — a session that did not happen is information, never a failure, and it needs no commiseration.`;
+        // Was this day ever actually asked of them? A scheduled slot stays and becomes not-done;
+        // an occurrence that only exists because something logged it is erased. Marking the
+        // latter 'skipped' would invent a missed session on a day nothing was scheduled, and then
+        // count it against their consistency — punishing them for correcting our mistake.
+        const wasScheduled =
+          !!found.recurrence && expandRecurrence(found.recurrence, found.date, found.date).length > 0;
+        if (wasScheduled) {
+          await correctOccurrenceLog(userId, found.occurrence_id, { status: 'skipped' });
+          return `Corrected: ${found.title} on ${found.date} is no longer counted as done — it was on the plan that day, so it now reads as not done. Say so plainly; a session that did not happen is information, never a failure, and it needs no commiseration.`;
+        }
+        await deleteOccurrence(userId, found.occurrence_id);
+        return `Removed: ${found.title} on ${found.date} is gone entirely — nothing was scheduled that day, so that entry only existed because it was logged. Confirm it in one line without apologising at length.`;
       }
 
       const raw = (params.metrics ?? {}) as Record<string, unknown>;
@@ -284,6 +297,79 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         ...(found.log ? { log: { ...found.log, summary } } : {}),
       });
       return `Corrected: ${found.title} on ${found.date} now reads ${summary}. Confirm it back in one short line.`;
+    },
+  },
+
+  update_constraint: {
+    name: 'update_constraint',
+    description:
+      'Record a change to something the user works around — a knee, a night shift, a hard stretch. Takes effect immediately. Use when one has EASED ("my knee is fine now" → lift, which keeps it on file as quiet so you still know it happened), FLARED again (flare), or is genuinely NEW (add). Use remove ONLY when they say it was recorded wrongly and was never true ("I have never had a knee injury") — an error to erase, not history to keep; recovering from something is never a reason to remove it. Read get_constraints first and name it as listed. Pass {"constraint": "left knee", "action": "lift"}, or {"constraint": "night shifts", "action": "add", "kind": "life", "plan_around": true, "until": "2026-09-30"}.',
+    parameters: {
+      properties: {
+        constraint: { type: 'string', description: 'Which one, by its label as get_constraints lists it.' },
+        action: {
+          type: 'string',
+          enum: ['add', 'lift', 'flare', 'remove'],
+          description:
+            'add = something new they work around; lift = it has eased, keep it on file as quiet; flare = it is back; remove = it was recorded wrongly and was never true.',
+        },
+        kind: {
+          type: 'string',
+          enum: ['physical', 'life', 'other'],
+          description: 'For add: a body thing, a life thing, or neither. Defaults to other.',
+        },
+        plan_around: {
+          type: 'boolean',
+          description: 'Whether the plan must work around it. Defaults to true for add and flare.',
+        },
+        until: {
+          type: 'string',
+          description: 'YYYY-MM-DD it stops applying, when they said so. Omit for open-ended.',
+        },
+      },
+      required: ['constraint', 'action'],
+    },
+    async run(userId, params) {
+      const label = String(params.constraint ?? '').trim();
+      const action = String(params.action ?? '');
+      if (!label) return 'No constraint was named, so nothing changed. Ask which one they mean.';
+
+      if (action === 'remove') {
+        const removed = await removeCapturedConstraint(userId, label);
+        return removed
+          ? `Removed "${label}" — it is off their file entirely, as something recorded in error. Say so briefly and move on; do not dwell on the mistake.`
+          : `Nothing on file matches "${label}", so nothing was removed. Tell them plainly it was not there.`;
+      }
+
+      const known = ((await getUser(userId))?.baseline?.constraints ?? []) as Array<{ label: string }>;
+      const existing = known.find((c) => sameConstraint(c.label ?? '', label));
+      if (action !== 'add' && !existing) {
+        const names = known.map((c) => c.label).join(', ') || 'none on file';
+        return `Nothing on file matches "${label}", so nothing changed. What they work around: ${names}. Ask which they mean, or add it if it is new.`;
+      }
+
+      const planAround = typeof params.plan_around === 'boolean' ? params.plan_around : action !== 'lift';
+      const kind = ['physical', 'life', 'other'].includes(String(params.kind)) ? String(params.kind) : undefined;
+      const until = /^\d{4}-\d{2}-\d{2}$/.test(String(params.until ?? '')) ? String(params.until) : undefined;
+
+      await mergeCapturedConstraints(userId, [
+        {
+          id: randomUUID(),
+          label: existing?.label ?? label,
+          plan_around: planAround,
+          status: action === 'lift' ? 'quiet' : 'active',
+          ...(kind ? { kind: kind as 'physical' | 'life' | 'other' } : {}),
+          ...(until ? { until } : {}),
+        },
+      ]);
+
+      if (action === 'lift') {
+        return `"${existing?.label ?? label}" is marked eased — still on file, so you keep knowing about it, but the plan no longer has to work around it. Say that back plainly, and if their week was built around it, offer to rebuild.`;
+      }
+      if (action === 'flare') {
+        return `"${existing?.label ?? label}" is active again and the plan should work around it. Say so, and offer to change the week if it currently ignores it.`;
+      }
+      return `Noted: they work around "${label}". Say it back in one line so they can correct you if you have it wrong.`;
     },
   },
 };

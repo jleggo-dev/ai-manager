@@ -1,5 +1,5 @@
 import { sql, json } from '../db/sql.ts';
-import { mergeConstraints } from '../services/constraint-merge.ts';
+import { mergeConstraints, sameConstraint } from '../services/constraint-merge.ts';
 import type {
   Baseline,
   Constraint,
@@ -89,6 +89,32 @@ export async function mergeCapturedConstraints(userId: string, incoming: Constra
              updated_at = now()
        where id = ${userId}`;
   });
+}
+
+/**
+ * Delete a constraint outright. Reserved for "you recorded that wrong — I never had a knee
+ * injury": a mis-capture is not history, it is an error, and leaving it on file would keep
+ * shaping plans around something that never existed.
+ *
+ * Recovery is NOT this. "My knee is fine now" keeps the row and marks it quiet — it happened, it
+ * may come back, and a coach who forgets it entirely is a coach you have to re-teach.
+ */
+export async function removeCapturedConstraint(userId: string, label: string): Promise<boolean> {
+  let removed = false;
+  await sql.begin(async (tx) => {
+    const rows = await tx<{ baseline: Baseline | null }[]>`
+      select baseline from cadence.users where id = ${userId} for update`;
+    const existing = (rows[0]?.baseline?.constraints ?? []) as Constraint[];
+    const kept = existing.filter((c) => !sameConstraint(c.label ?? '', label));
+    if (kept.length === existing.length) return;
+    removed = true;
+    await tx`
+      update cadence.users
+         set baseline = jsonb_set(coalesce(baseline, '{}'::jsonb), '{constraints}', ${json(kept)}),
+             updated_at = now()
+       where id = ${userId}`;
+  });
+  return removed;
 }
 
 export async function setMacroTargets(userId: string, targets: MacroTargets): Promise<void> {

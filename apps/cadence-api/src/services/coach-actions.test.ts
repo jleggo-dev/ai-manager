@@ -11,6 +11,10 @@ const setGoalStatus = vi.fn();
 const insertGoalEvent = vi.fn();
 const listLoggedForCorrection = vi.fn();
 const correctOccurrenceLog = vi.fn();
+const deleteOccurrence = vi.fn();
+const getUser = vi.fn();
+const mergeCapturedConstraints = vi.fn();
+const removeCapturedConstraint = vi.fn();
 
 vi.mock('../repos/plans.ts', () => ({ getActivePlan: (...a: unknown[]) => getActivePlan(...a) }));
 vi.mock('../repos/activities.ts', () => ({ listActivities: (...a: unknown[]) => listActivities(...a) }));
@@ -24,8 +28,14 @@ vi.mock('../repos/goal-events.ts', () => ({ insertGoalEvent: (...a: unknown[]) =
 vi.mock('../repos/occurrences.ts', () => ({
   listLoggedForCorrection: (...a: unknown[]) => listLoggedForCorrection(...a),
   correctOccurrenceLog: (...a: unknown[]) => correctOccurrenceLog(...a),
+  deleteOccurrence: (...a: unknown[]) => deleteOccurrence(...a),
 }));
-vi.mock('../repos/users.ts', () => ({ setPendingPlan: (...a: unknown[]) => setPendingPlan(...a) }));
+vi.mock('../repos/users.ts', () => ({
+  setPendingPlan: (...a: unknown[]) => setPendingPlan(...a),
+  getUser: (...a: unknown[]) => getUser(...a),
+  mergeCapturedConstraints: (...a: unknown[]) => mergeCapturedConstraints(...a),
+  removeCapturedConstraint: (...a: unknown[]) => removeCapturedConstraint(...a),
+}));
 // Imported by nothing here on purpose — the assertion is that it is NEVER reached.
 vi.mock('./plan-commit-flow.ts', () => ({ confirmPendingPlan: (...a: unknown[]) => commitActivities(...a) }));
 
@@ -178,9 +188,11 @@ describe('correct_log', () => {
         title: 'Easy run',
         status: 'done',
         value: { distance_km: 3 },
+        recurrence: 'FREQ=WEEKLY;BYDAY=WE',
         log: { items: [], summary: '3 km', raw_text: 'ran 3k', logged_at: '2026-08-12T07:00:00Z' },
       },
-      { occurrence_id: 'o2', date: '2026-08-10', title: 'Sit', status: 'done', value: {}, log: null },
+      // The off-plan bucket: empty recurrence, so this row exists only because it was logged.
+      { occurrence_id: 'o2', date: '2026-08-10', title: 'Sit', status: 'done', value: {}, log: null, recurrence: '' },
     ]);
   });
 
@@ -195,10 +207,24 @@ describe('correct_log', () => {
     expect(out).toMatch(/now reads/);
   });
 
-  it('un-counts a session that never happened', async () => {
-    const out = await correct.run('u1', { activity: 'Sit', not_done: true });
-    expect(correctOccurrenceLog).toHaveBeenCalledWith('u1', 'o2', { status: 'skipped' });
+  it('un-counts a SCHEDULED session that did not happen, keeping the slot', async () => {
+    const out = await correct.run('u1', { activity: 'Easy run', not_done: true });
+    expect(correctOccurrenceLog).toHaveBeenCalledWith('u1', 'o1', { status: 'skipped' });
+    expect(deleteOccurrence).not.toHaveBeenCalled();
     expect(out).toMatch(/never a failure/);
+  });
+
+  /**
+   * The owner's own example: "I think you logged that run on Sunday by accident — I didn't
+   * actually run Sunday." Nothing was scheduled, so the row only exists because it was logged.
+   * Marking it skipped would invent a missed session and count it against their consistency,
+   * which is punishing someone for correcting our mistake.
+   */
+  it('erases a session that was never scheduled and never happened', async () => {
+    const out = await correct.run('u1', { activity: 'Sit', not_done: true });
+    expect(deleteOccurrence).toHaveBeenCalledWith('u1', 'o2');
+    expect(correctOccurrenceLog).not.toHaveBeenCalled();
+    expect(out).toMatch(/gone entirely/);
   });
 
   it('asks rather than guessing when the session is not found', async () => {
@@ -211,5 +237,80 @@ describe('correct_log', () => {
     const out = await correct.run('u1', { activity: 'Easy run' });
     expect(correctOccurrenceLog).not.toHaveBeenCalled();
     expect(out).toMatch(/No corrected numbers/);
+  });
+});
+
+/**
+ * The owner's distinction, and the reason this tool has four verbs instead of two:
+ * "an injury can be latent or recovered from, and this is different from 'you captured that
+ * injury wrong, I don't have a knee injury and I never did'." Recovery is history and is kept.
+ * A mis-capture is an error and is erased. Only the second deletes anything.
+ */
+describe('update_constraint', () => {
+  const constraint = COACH_ACTION_TOOLS.update_constraint!;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getUser.mockResolvedValue({
+      baseline: {
+        constraints: [
+          { id: 'c1', label: 'left knee — patellar tendinopathy', kind: 'physical', plan_around: true },
+          { id: 'c2', label: 'night shifts', kind: 'life', plan_around: true },
+        ],
+      },
+    });
+    removeCapturedConstraint.mockResolvedValue(true);
+  });
+
+  it('LIFTS a recovered injury without forgetting it', async () => {
+    const out = await constraint.run('u1', { constraint: 'left knee', action: 'lift' });
+    expect(removeCapturedConstraint).not.toHaveBeenCalled();
+    const [, written] = mergeCapturedConstraints.mock.calls[0]!;
+    expect(written[0].status).toBe('quiet');
+    expect(written[0].plan_around).toBe(false);
+    // Matched against what is on file, so the fuller stored label survives.
+    expect(written[0].label).toBe('left knee — patellar tendinopathy');
+    expect(out).toMatch(/still on file/);
+  });
+
+  it('brings one back when it flares', async () => {
+    await constraint.run('u1', { constraint: 'left knee', action: 'flare' });
+    const [, written] = mergeCapturedConstraints.mock.calls[0]!;
+    expect(written[0].status).toBe('active');
+    expect(written[0].plan_around).toBe(true);
+    expect(removeCapturedConstraint).not.toHaveBeenCalled();
+  });
+
+  it('DELETES only what was never true', async () => {
+    const out = await constraint.run('u1', { constraint: 'left knee', action: 'remove' });
+    expect(removeCapturedConstraint).toHaveBeenCalledWith('u1', 'left knee');
+    expect(mergeCapturedConstraints).not.toHaveBeenCalled();
+    expect(out).toMatch(/recorded in error/);
+  });
+
+  it('says so plainly when there was nothing to remove', async () => {
+    removeCapturedConstraint.mockResolvedValue(false);
+    const out = await constraint.run('u1', { constraint: 'a bad back', action: 'remove' });
+    expect(out).toMatch(/Nothing on file matches/);
+  });
+
+  it('adds a new one, defaulting to planning around it', async () => {
+    const out = await constraint.run('u1', { constraint: 'wrist pain', action: 'add', kind: 'physical' });
+    const [, written] = mergeCapturedConstraints.mock.calls[0]!;
+    expect(written[0].label).toBe('wrist pain');
+    expect(written[0].plan_around).toBe(true);
+    expect(written[0].kind).toBe('physical');
+    expect(out).toMatch(/so they can correct you/);
+  });
+
+  it('will not lift something it cannot find, and lists what it has', async () => {
+    const out = await constraint.run('u1', { constraint: 'shoulder', action: 'lift' });
+    expect(mergeCapturedConstraints).not.toHaveBeenCalled();
+    expect(out).toMatch(/night shifts/);
+  });
+
+  it('carries an end date when they gave one', async () => {
+    await constraint.run('u1', { constraint: 'away in Lisbon', action: 'add', until: '2026-09-30' });
+    const [, written] = mergeCapturedConstraints.mock.calls[0]!;
+    expect(written[0].until).toBe('2026-09-30');
   });
 });

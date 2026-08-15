@@ -44,7 +44,7 @@ import { normTitle, sameGoalTitle } from './goal-identity.ts';
  * of two closely-worded complaints. Multi-word labels still need every word present, so "knee
  * pain" and "back pain" stay two things.
  */
-function sameConstraint(a: string, b: string): boolean {
+export function sameConstraint(a: string, b: string): boolean {
   if (sameGoalTitle(a, b)) return true;
   const na = normTitle(a);
   const nb = normTitle(b);
