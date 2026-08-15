@@ -30,7 +30,7 @@ import { estimateBurnKcal } from './burn.ts';
 import { actualWeeklyRate, safeWeeklyKg, classifyLossPace } from './weight-trend.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
-import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW } from './nutrition-parse.ts';
+import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW, type ParsedMealResult } from './nutrition-parse.ts';
 import { logAi } from './ai-log.ts';
 import { logMealFromFood, logMealFromItems, logMealFromRecipe } from './nutrition-log-saved.ts';
 import type { PlateItemInput } from './plate-compose.ts';
@@ -65,6 +65,49 @@ async function tickFoodLogOccurrence(userId: string, date: string, meal?: string
  * private Storage FIRST. Side effect: the first meal of the day ticks today's pending
  * "Food log" occurrence done.
  */
+/**
+ * Run the parse-meal job over the user's words and shape the result — persisting NOTHING.
+ *
+ * The read half of confirm-first food logging: the Food surfaces call this to show an itemized
+ * preview (each ingredient with its quantity and estimate), and only the user's confirm writes a
+ * row — via `logMeal({ parsed })`, which stores exactly what was previewed. Before this existed
+ * the only itemizing path logged immediately, so the Food tab funnelled multi-ingredient meals
+ * into the single-food resolver instead — and someone who typed five exact quantities was asked
+ * to "select the serving size" (owner, 2026-08-15).
+ */
+export async function previewMealParse(
+  userId: string,
+  text: string,
+  mealHint?: MealKind,
+): Promise<ParsedMealResult & { raw_text: string }> {
+  const trimmed = text.trim().slice(0, 500);
+  if (!trimmed) throw new Error('a meal needs words');
+  const res = await runJobBySlug(userId, 'parse-meal', {
+    meal_text: trimmed,
+    meal_hint: mealHint ?? '',
+  });
+  const rawOut = res.formatted ?? res.raw ?? '';
+  const shaped = parseMealResult(rawOut, mealHint && isMeal(mealHint) ? mealHint : undefined);
+  void logAi(userId, {
+    kind: 'parse_meal',
+    input: { text: trimmed, meal_hint: mealHint ?? null, preview: true },
+    output: { raw: rawOut.slice(0, 2000) },
+    meta: { meal: shaped.meal, items: shaped.items.length, confidence: shaped.confidence, preview: true },
+  });
+  return { ...shaped, raw_text: trimmed };
+}
+
+/** A previewed parse, confirmed by the user — logged verbatim, no second AI pass. */
+export interface ParsedMealInput {
+  meal: MealKind;
+  items: NutritionLog['items'];
+  macros: Macros | null;
+  confidence: number | null;
+  flags: NutritionLog['flags'];
+  raw_text: string;
+  date?: string;
+}
+
 export async function logMeal(
   userId: string,
   input: {
@@ -77,8 +120,37 @@ export async function logMeal(
     serving_index?: number;
     quantity?: number;
     items?: PlateItemInput[];
+    parsed?: ParsedMealInput;
   },
 ): Promise<NutritionLog> {
+  // Confirm of a previewed parse: deterministic insert of what the user saw. The card is the
+  // truth and the tap is the consent — same contract as every confirm-first surface here.
+  if (input.parsed) {
+    const p = input.parsed;
+    const date = p.date ?? input.date ?? today();
+    // The wire shape is client-supplied, so every number passes the same sanitizer the AI path
+    // uses — a confirm must not be a door around the caps.
+    const macros = sanitizeMacros(p.macros);
+    const items = p.items.map((i) => {
+      const est = sanitizeMacros(i.est);
+      return { ...i, ...(est ? { est } : { est: undefined }) };
+    });
+    const provisional = !!macros && p.confidence !== null && p.confidence < PROVISIONAL_BELOW;
+    const row = await insertNutritionLog(userId, {
+      date,
+      meal: p.meal,
+      items,
+      input_method: 'text',
+      ai_confidence: p.confidence,
+      raw_text: p.raw_text || null,
+      flags: p.flags,
+      photo_ref: null,
+      macros,
+      provisional,
+    });
+    await tickFoodLogOccurrence(userId, date, p.meal);
+    return row;
+  }
   if (input.items?.length) {
     return logMealFromItems(userId, { items: input.items, meal: input.meal, date: input.date });
   }

@@ -18,7 +18,7 @@ describe('parseBody / nutrition schemas', () => {
   it('rejects empty meal bodies', () => {
     expect(() => parseBody(logMealBodySchema, {})).toThrow(BodyValidationError);
     expect(() => parseBody(logMealBodySchema, { text: '  ' })).toThrow(
-      /words, a photo, a food_id, a recipe_id, or items/,
+      /words, a photo, a food_id, a recipe_id, items, or a parsed preview/,
     );
   });
 

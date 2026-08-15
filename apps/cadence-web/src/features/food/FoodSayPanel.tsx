@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { MicButton } from '../../components/MicButton.tsx';
 import {
   estimateFood,
+  previewMeal,
+  type MealPreview,
   foodSummaryFromResolve,
   portionHintFromResolve,
   resolveFoods,
@@ -14,6 +16,8 @@ import {
   type ResolvePortionHint,
 } from '../../lib/api.ts';
 import { FoodRecentsList } from './FoodRecentsList.tsx';
+import { MealParseCard } from './MealParseCard.tsx';
+import { looksLikeMultiItemMeal } from './mealShape.ts';
 import type { FoodDraft } from './foodDraft.ts';
 
 export function FoodSayPanel({
@@ -31,6 +35,7 @@ export function FoodSayPanel({
   const [hits, setHits] = useState<FoodSummary[]>([]);
   const [portionById, setPortionById] = useState<Record<string, ResolvePortionHint>>({});
   const [newHint, setNewHint] = useState<ResolveCandidate | null>(null);
+  const [mealPreview, setMealPreview] = useState<MealPreview | null>(null);
 
   async function draftNewFromWords(q: string, captureText?: string) {
     const est = await estimateFood(captureText?.trim() || q);
@@ -41,7 +46,7 @@ export function FoodSayPanel({
     onDraft({ kind: 'candidate', candidate: est.candidate });
   }
 
-  async function draftFromWords() {
+  async function draftFromWords(opts?: { forceSingle?: boolean }) {
     const q = text.trim();
     if (!q || busy) return;
     setBusy(true);
@@ -50,6 +55,19 @@ export function FoodSayPanel({
     setPortionById({});
     setNewHint(null);
     try {
+      // A multi-ingredient description goes to the meal parser — the quantities in the text ARE
+      // the servings, so the single-food portion question would ask what was already answered.
+      if (!opts?.forceSingle && looksLikeMultiItemMeal(q)) {
+        try {
+          const p = await previewMeal(q);
+          if (p.items.length >= 2) {
+            setMealPreview(p);
+            return;
+          }
+        } catch {
+          /* preview unavailable — the resolver still works */
+        }
+      }
       const resolved = await resolveFoods({ text: q });
 
       // Deploy lag / hard fail — fall back to estimate so say still works.
@@ -96,6 +114,24 @@ export function FoodSayPanel({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (mealPreview) {
+    return (
+      <MealParseCard
+        preview={mealPreview}
+        onLogged={() => {
+          setMealPreview(null);
+          setText('');
+          onCancel();
+        }}
+        onNotAMeal={() => {
+          setMealPreview(null);
+          void draftFromWords({ forceSingle: true });
+        }}
+        onCancel={() => setMealPreview(null)}
+      />
+    );
   }
 
   return (

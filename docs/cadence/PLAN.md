@@ -5622,3 +5622,41 @@ missing.
 **4. The weekly check-in — working as designed.** It IS deterministic and it IS in the plan:
 system activity, `category: reflection`, `FREQ=WEEKLY;BYDAY=SU` at 20:00, materialized. The owner
 just hadn't reached it — day one was Saturday, and it lands Sunday evening. No change.
+
+### The nutrition module's device round — four fixes (owner report 2026-08-15)
+
+**1. Camera crashed the app.** Missing `NSCameraUsageDescription` — iOS kills the process outright
+when the camera opens without one, and every food camera path (`<input capture>`) hit it. Same
+class as the mic keys before it. Key added; the string says what the camera is for and that a
+photo is shown before anything counts.
+
+**2. "Say" and "Type" were two tiles opening the identical field** — a mode switch that changed
+nothing. The meal capture now has ONE omnipresent composer (typing is the default, the mic lives
+inside the box — Say IS Type with the mic pressed), and the tiles that remain are the ones that
+actually differ: Snap and Scan.
+
+**3. "Scan" was a digit field on every iPhone.** WebKit has no `BarcodeDetector`, so the one
+platform this app lives on always fell through to typed digits. zxing-wasm now decodes there —
+same detect-a-frame interface, so `useBarcodeScan` can't tell which engine it got; ~1MB of WASM
+lazy-loads on first frame and ships IN the bundle (capacitor://localhost + CDN = CSP hole +
+offline failure). Frames are downscaled to 800px for decode speed, one decode in flight at a
+time. The panel is scanner-FIRST now: camera starts on open, digits demoted to the fallback row.
+
+**4. The five-ingredient smoothie asked for a serving size.** The Food surfaces funnelled ALL
+text into the single-food resolver, which treats the whole string as one food name — so someone
+who typed exact quantities for five ingredients was asked a question their message had already
+answered. The itemizing path (parse-meal) existed but only in log-immediately form. Now:
+- `POST /nutrition/meals/preview` — parse WITHOUT logging (`previewMealParse`); confirm posts the
+  same payload back as `parsed`, inserted verbatim with no second AI pass, client numbers passing
+  the same `sanitizeMacros` caps as the AI path (a confirm is not a door around the caps).
+- `looksLikeMultiItemMeal` — deterministic split: ≥2 quantified segments (digits, unicode
+  fractions, or measure words) → the meal parser; a single food with a portion or a bare dish
+  name → the resolver, unchanged. The owner's smoothie is the first test case, verbatim.
+- `MealParseCard` — every ingredient a row with the quantity THE USER GAVE; no serving picker
+  anywhere on it; the only question left is which meal, prefilled from the clock. Escape hatch
+  both ways ("just one food? match it instead"), because the split is a heuristic and the user is
+  the tiebreak.
+
+Noted for later (owner, same report): recipe selection from the say flow — "there is no recipe
+selection ability here". The resolver does surface saved recipes as candidates; making them
+prominent in the say panel is a follow-up.

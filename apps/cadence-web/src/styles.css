@@ -6497,3 +6497,37 @@ textarea.wiz-title {
   color: var(--text-dim);
   cursor: pointer;
 }
+
+/* The meal-parse card's ingredient rows — the quantities the user gave, read back verbatim.
+   No serving picker here on purpose: the amounts ARE the servings. */
+.mealparse-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 4px;
+}
+.mealparse-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 8px 11px;
+  font-size: 13.5px;
+}
+.mealparse-qty {
+  flex: 0 0 auto;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+}
+.mealparse-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.mealparse-kcal {
+  flex: 0 0 auto;
+  color: var(--text-mute);
+  font-size: 12px;
+}
