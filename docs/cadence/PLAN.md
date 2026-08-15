@@ -5416,3 +5416,40 @@ gate doing its job on the very next tool added.
 
 Next in this seam: goals (retarget, re-date, complete, drop), constraints (add/lift), and fixing
 a log the user says is wrong — same propose-then-tap shape, same engine pattern.
+
+### update_goal and correct_log — and the rule for which changes wait for a tap (2026-08-14)
+
+Two more action tools, plus the distinction that decides the shape of every future one.
+
+**`update_goal`** — retarget, move the date, mark finished, stop working on it. **`correct_log`** —
+fix a session recorded with the wrong numbers, or one that never happened. Both write immediately.
+
+**The rule: a change waits for a tap when a person cannot CHECK it in a sentence.** A plan change
+is many rows and materializes a week of occurrences, so it gets rendered and tapped. A goal target
+or a mis-logged distance is one legible fact the coach says out loud ("100 books down to 50 —
+done"), and the persona already settled this shape for detours: *"their plain yes is enough…
+never ask them to confirm again elsewhere."* A card that asks someone to re-confirm the sentence
+they just said is friction pretending to be safety. What holds instead is the gate in each
+description — act only on what the user has plainly decided, never your own read that a goal looks
+too hard — plus a `goal_events` row on every change, so it is visible and attributable after.
+
+The protocol rule was reconciled to match: "never say a change is done before they tap" is now
+scoped to the PLAN, with an explicit counterpart saying goals and log fixes ARE done on the spot
+and she must not invent a confirmation step that does not exist.
+
+**Constraints deliberately NOT built, and the reason is a bug worth fixing first.** Constraints
+are already captured ambiently (`capture-extract` → `baseline_updates.constraints`), and
+`mergeBaseline` is a shallow jsonb merge — so the array is REPLACED wholesale by each capture. A
+constraint tool would be silently clobbered by the next turn's Broker run. Worse, the same
+mechanism means a session that mentions one constraint replaces the whole stored list with just
+that one, so constraints from earlier sessions can be dropped. That is a data-loss path against
+the core promise; fix the merge before adding a writer.
+
+**The audit gates earned their keep immediately.** They caught all three new tools on the way in:
+no "Use when" cue on two, `unit`/`date` never taught in prose, and five parameters that never said
+what happens if omitted. The last surfaced a category the rule had not anticipated —
+CONDITIONALLY required params ("Required for retarget"), where the honest answer is "it depends
+which action you chose" — so the gate learned it rather than being waived. Also extended: the
+jargon ban now covers action tools too (it only read the registry before), and action tools get
+their own bounded cap (800 chars, more room than a read because each carries a safety gate) plus
+a new assertion that every one states whether it takes effect immediately or waits for a tap.

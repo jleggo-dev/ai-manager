@@ -419,3 +419,60 @@ export async function deleteTempOccurrencesOn(userId: string, episodeId: string,
     where user_id = ${userId} and episode_id = ${episodeId} and date = ${date} and status = 'pending'`;
   return res.count;
 }
+
+/**
+ * Recently logged sessions WITH their ids — what a correction needs and `listRecentLogged`
+ * deliberately omits (that one feeds the coach's context, where an id is noise).
+ */
+export async function listLoggedForCorrection(
+  userId: string,
+  days = 30,
+  limit = 40,
+): Promise<
+  Array<{
+    occurrence_id: string;
+    date: string;
+    title: string;
+    log: OccurrenceLog | null;
+    value: Record<string, number> | null;
+    status: string;
+  }>
+> {
+  const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  return sql<
+    Array<{
+      occurrence_id: string;
+      date: string;
+      title: string;
+      log: OccurrenceLog | null;
+      value: Record<string, number> | null;
+      status: string;
+    }>
+  >`
+    select o.occurrence_id, to_char(o.date, 'YYYY-MM-DD') as date, a.title, o.log, o.value, o.status
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and o.date >= ${from} and o.status in ('done', 'skipped', 'missed')
+    order by o.date desc
+    limit ${limit}`;
+}
+
+/** Replace a logged session's numbers and summary — a correction, not a new log. */
+export async function correctOccurrenceLog(
+  userId: string,
+  occurrenceId: string,
+  fields: { log?: OccurrenceLog; value?: Record<string, number>; status?: OccurrenceStatus },
+): Promise<void> {
+  await sql`
+    update cadence.occurrences
+       set ${sql(
+         Object.fromEntries(
+           Object.entries({
+             ...(fields.log ? { log: json(fields.log) } : {}),
+             ...(fields.value ? { value: json(fields.value) } : {}),
+             ...(fields.status ? { status: fields.status } : {}),
+           }),
+         ),
+       )}
+     where user_id = ${userId} and occurrence_id = ${occurrenceId}`;
+}
