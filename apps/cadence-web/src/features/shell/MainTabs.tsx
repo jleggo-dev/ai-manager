@@ -90,6 +90,8 @@ export function MainTabs({
   const [rebuild, setRebuild] = useState(false);
   const [logDidOpen, setLogDidOpen] = useState(false);
   const [planReload, setPlanReload] = useState(0); // bump → PlanView refetches after a ＋ log
+  /** App-authored context for the next coach turn (e.g. the session they just finished). */
+  const [coachNote, setCoachNote] = useState<string | null>(null);
 
   if (manage) {
     return (
@@ -107,7 +109,15 @@ export function MainTabs({
   return (
     <>
       <div className="app">
-        {tab === 'plan' && <PlanView onCoach={() => setTab('coach')} reloadSignal={planReload} />}
+        {tab === 'plan' && (
+          <PlanView
+            onCoach={(note) => {
+              if (note) setCoachNote(note);
+              setTab('coach');
+            }}
+            reloadSignal={planReload}
+          />
+        )}
         {tab === 'coach' && (
           <>
             <OnboardingChat
@@ -115,6 +125,8 @@ export function MainTabs({
               chrome="none"
               onBuild={() => setRebuild(true)}
               openWalkthrough={discussPlan}
+              sessionNote={coachNote}
+              onSessionNoteUsed={() => setCoachNote(null)}
               onPlanChanged={() => setPlanReload((k) => k + 1)}
             />
             {/* The deterministic way back to the crafted plan UI from inside the conversation. */}

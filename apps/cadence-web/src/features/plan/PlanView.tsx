@@ -60,7 +60,14 @@ function detourLabel(type: ActiveEpisode['type']): string {
  * that pops the AdjustSheet: steer → preview → confirm) — suggest-never-auto-apply as always.
  * `reloadKey` bumps when a log/meal/adjust lands so the dashboard's aux fetches refresh.
  */
-export function PlanView({ onCoach, reloadSignal }: { onCoach: () => void; reloadSignal?: number }) {
+export function PlanView({
+  onCoach,
+  reloadSignal,
+}: {
+  /** Switch to the coach. `note` is app-authored context she reads and the user never sees. */
+  onCoach: (note?: string) => void;
+  reloadSignal?: number;
+}) {
   /**
    * Day/week is a VIEW of one surface, not two destinations — it lived in the tab bar as Today
    * and Week until the owner's device verdict (2026-08-14: Week "doesn't have more information
@@ -461,8 +468,18 @@ export function PlanView({ onCoach, reloadSignal }: { onCoach: () => void; reloa
             setAdjustOpen(true);
           }}
           onTalk={() => {
+            const title = startOcc.title;
             setStartOcc(null);
-            onCoach();
+            // Carry the session across. "Talk to me" used to switch tabs and pass NOTHING, so the
+            // coach opened blank about the thing they had just done and were standing there
+            // wanting to discuss (owner, 2026-08-15). She can read the log herself, but she has
+            // to be told WHICH moment this is.
+            onCoach(
+              `They just finished "${title}" and tapped Talk to me from the end of it. Open on THAT: ` +
+                'ask how it went in your own words. Their own report is on file — read it with ' +
+                'get_recent_logs (and get_workout_history if a device recorded it) rather than ' +
+                'asking them to repeat what they already logged.',
+            );
           }}
         />
       )}

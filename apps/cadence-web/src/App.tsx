@@ -98,6 +98,7 @@ function CoachApp({ session }: { session: Session | null }) {
       isAvailable: () => capabilities.health.isAvailable(),
       getWorkouts: (since) => capabilities.health.getWorkouts(since),
       getDailySteps: (since) => capabilities.health.getDailySteps(since),
+      ensureAccess: () => capabilities.health.requestPermissions(['workouts']),
       getLatest: getHealthDigest,
       post: (d) => postHealthDigest(d),
       postWorkouts: postWorkoutHistory,

@@ -115,12 +115,29 @@ export async function maybeRefreshHealthDigest(deps: {
   staleMs?: number;
   minIntervalMs?: number;
   throttleKey?: string;
+  /** Ask iOS for health permission — idempotent, and silent once answered. */
+  ensureAccess?: () => Promise<unknown>;
 }): Promise<'skipped' | 'fresh' | 'unchanged' | 'posted'> {
   const now = deps.now ?? Date.now;
   const staleMs = deps.staleMs ?? REFRESH_STALE_MS;
   const minIntervalMs = deps.minIntervalMs ?? REFRESH_MIN_INTERVAL_MS;
   const throttleKey = deps.throttleKey ?? REFRESH_CHECK_KEY;
-  if (!deps.isAvailable() || window.localStorage.getItem(HEALTH_OFFER_FLAG_KEY) !== 'done') return 'skipped';
+  if (!deps.isAvailable()) return 'skipped';
+  /**
+   * NO app-level permission gate. This used to require the in-chat offer to have been accepted
+   * ('done'), which made reading someone's own health data conditional on the coach having
+   * said the words "Apple Health" in conversation — a magic phrase. Miss it and the permission
+   * was never requested, so `get_workout_history` returned nothing forever and the coach told
+   * the user "a prompt will show up for you to confirm" about a prompt that could not appear
+   * (owner, 2026-08-15).
+   *
+   * iOS already implements exactly the conditional we want: `requestPermissions` shows its sheet
+   * the FIRST time and resolves silently from the stored answer every time after. So asking
+   * before each read is the honest version of "only pop that up if we don't have permission" —
+   * and there is nothing else to check, because iOS deliberately refuses to report whether READ
+   * access was granted (see native.ts). The only real signal is whether a read returns anything.
+   */
+  await deps.ensureAccess?.().catch(() => undefined);
   const lastCheck = Number(window.localStorage.getItem(throttleKey) ?? 0);
   if (now() - lastCheck < minIntervalMs) return 'skipped';
   window.localStorage.setItem(throttleKey, String(now()));

@@ -5810,3 +5810,36 @@ loader — a top-level WASM asset import made the whole module graph unloadable 
 **Found, not yet fixed:** `onTalk` in `PlanView.tsx:463` is `setStartOcc(null); onCoach();` — the
 post-session "Talk to me" switches tabs and passes NOTHING about the session just finished, so the
 coach opens with no idea what you did. Owner hit this exact path.
+
+### Reading health is a deterministic check, not a conversation (owner ruling 2026-08-15)
+
+Owner: "coach told me that 'a prompt will show up for you to confirm' — the prompt didn't show up.
+The prompt also didn't need to show up. But coach thinks they need the popup to access the health…
+we only need to pop that up if we don't have the permissions. So there's a multiple step process
+here, with deterministic steps interwoven."
+
+Exactly the diagnosis. Three things all said the same wrong thing:
+- **The refresh was gated on the in-chat offer** (`HEALTH_OFFER_FLAG_KEY !== 'done'`), so reading
+  someone's own health data was conditional on the coach having said the words "Apple Health" in
+  conversation. Miss the magic phrase → permission never requested → `get_workout_history` returns
+  nothing forever.
+- **The capability block told her a card would appear** ("it will appear for them to confirm").
+- **The persona made the offer a required ritual**, magic phrase and all.
+
+**The conditional already exists and belongs to iOS.** `requestPermissions` shows its sheet the
+FIRST time and resolves silently from the stored answer every time after — and iOS deliberately
+refuses to report whether READ access was granted, so there is nothing else to check. Asking
+before each read IS "only pop it up if we don't have permission". The only honest signal about
+data is whether the read returned anything.
+
+So: the app ensures access inline (`ensureAccess` on both refresh call sites), and the coach is
+told plainly that she READS IT HERSELF — never ask, never offer to connect, never say a prompt is
+coming, and an empty read means nothing recorded yet rather than a missing permission.
+
+**Also: "Talk to me" carried no context.** `PlanView`'s `onTalk` was `setStartOcc(null); onCoach();`
+— it switched tabs and passed nothing, so someone who finished a session and tapped the button
+standing right there met a coach with no idea what they had just done. It now hands over an
+app-authored note naming the session and telling her to read their own report with
+`get_recent_logs` / `get_workout_history` rather than asking them to repeat it. Reuses the same
+invisible-note channel as the plan walkthrough; `MainTabs` holds it, the chat fires it once on a
+quiet moment (not an empty thread, since this arrives mid-history).

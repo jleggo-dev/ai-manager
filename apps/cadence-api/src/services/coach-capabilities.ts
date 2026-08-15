@@ -59,7 +59,7 @@ export const CAPABILITIES: CapabilityGroup[] = [
     can: [
       'read a photo of the gym you are standing in, so a detour plan fits the actual equipment',
       'use your local weather and time zone when it changes what today should look like',
-      'read your recent activity from Apple Health, if you share it — on iPhone only, and only if you say yes',
+      'read your recent activity and workouts from Apple Health — on iPhone, no setup',
       'nudge you with a notification, if you have turned those on',
     ],
   },
@@ -96,11 +96,18 @@ export function renderCapabilities(opts: { healthAvailable?: boolean; healthAnsw
   // "Apple Health only works on iPhone" — to a user holding an iPhone with access already granted.
   if (opts.healthAvailable !== true) {
     lines.push('Not on this device: Apple Health — do not offer to read their activity here.');
-  } else if (opts.healthAnswered === true) {
+  } else {
+    // What she used to be told — "it will appear for them to confirm" — made her promise a card
+    // and then wait for it. On device 2026-08-15 she said "a prompt will show up for you to
+    // confirm"; no prompt could appear, and she sat waiting for a confirmation that was never
+    // coming while their workouts were one tool call away. The app now asks iOS for permission
+    // on its own (iOS shows its sheet once and answers silently forever after), so there is no
+    // card in this loop and nothing for her to announce.
     lines.push(
-      'Apple Health IS available here and they have already been offered it once — do not offer ' +
-        'again unprompted. If they ASK for it, say yes plainly and it will appear for them to ' +
-        'confirm. Never tell them it is unavailable or that it only works on iPhone; they are on one.',
+      'Apple Health: you READ IT YOURSELF (get_workout_history, get_health_history). Just look — ' +
+        'never ask permission, never offer to connect it, and NEVER say a prompt or confirmation ' +
+        'will appear; the app handles device access and no card is coming. An empty read means ' +
+        'nothing recorded yet, not a missing permission.',
     );
   }
   lines.push(`Cannot do yet: ${NOT_YET.join('; ')}.`);

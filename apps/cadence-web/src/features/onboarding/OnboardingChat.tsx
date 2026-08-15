@@ -90,6 +90,8 @@ export function OnboardingChat({
   intent = 'onboarding',
   chrome = 'onboarding',
   openWalkthrough = false,
+  sessionNote = null,
+  onSessionNoteUsed,
   onPlanChanged,
 }: {
   /**
@@ -107,6 +109,10 @@ export function OnboardingChat({
   /** Open the walkthrough discussion unprompted: 'card' = they saw the plan card at the gate;
    *  'fresh' = signed-in path, no card — she presents conversationally first. */
   openWalkthrough?: false | 'card' | 'fresh';
+  /** App-authored context to open on — today, the session they just finished and tapped
+   *  "Talk to me" from. Spoken as a note the coach reads and the user never sees. */
+  sessionNote?: string | null;
+  onSessionNoteUsed?: () => void;
 }) {
   const {
     turns,
@@ -138,6 +144,7 @@ export function OnboardingChat({
       isAvailable: () => capabilities.health.isAvailable(),
       getWorkouts: (since) => capabilities.health.getWorkouts(since),
       getDailySteps: (since) => capabilities.health.getDailySteps(since),
+      ensureAccess: () => capabilities.health.requestPermissions(['workouts']),
       getLatest: getHealthDigest,
       post: (d) => postHealthDigest(d, sessionId.current),
       postWorkouts: postWorkoutHistory,
@@ -157,6 +164,20 @@ export function OnboardingChat({
    * or been spoken to, and a second unprompted opener would read as her not remembering.
    */
   const walkthroughFired = useRef(false);
+  /**
+   * The session they just finished, handed to her as she opens. Unlike the walkthrough this fires
+   * on a thread that ALREADY has turns — someone taps "Talk to me" mid-conversation-history — so
+   * it waits only for a quiet moment, not an empty one.
+   */
+  const sessionNoteFired = useRef(false);
+  useEffect(() => {
+    if (!sessionNote || !restored || streaming || sessionNoteFired.current) return;
+    sessionNoteFired.current = true;
+    void nudge(sessionNote).finally(() => onSessionNoteUsed?.());
+    // `restored` is the arm signal; streaming is a guard, not a trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionNote, restored]);
+
   useEffect(() => {
     if (!openWalkthrough || !restored || walkthroughFired.current) return;
     if (turns.length || streaming) return;

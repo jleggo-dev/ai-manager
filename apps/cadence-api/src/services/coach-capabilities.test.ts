@@ -41,16 +41,22 @@ describe('renderCapabilities — availability vs already-asked', () => {
     expect(renderCapabilities({ healthAvailable: false })).toContain('Not on this device: Apple Health');
   });
 
-  it('never claims Apple Health is unavailable just because we already asked', () => {
+  /**
+   * She used to be told a confirmation card would appear, so she promised one and waited. On
+   * device 2026-08-15: "a prompt will show up for you to confirm" — no prompt could appear, and
+   * she sat waiting while the workouts were one tool call away. Reading is hers to do now.
+   */
+  it('tells her to read Apple Health herself, and never to promise a prompt', () => {
     const out = renderCapabilities({ healthAvailable: true, healthAnswered: true });
     expect(out).not.toContain('Not on this device');
-    expect(out).toContain('do not offer');
-    expect(out).toMatch(/if they ASK for it/i);
-    expect(out).toMatch(/only works on iPhone; they are on one/i);
+    expect(out).toMatch(/get_workout_history/);
+    expect(out).toMatch(/never say a prompt or confirmation/i);
+    expect(out).toMatch(/empty read means nothing recorded yet/i);
   });
 
-  it('leaves a fresh, capable device free to be offered', () => {
+  it('says the same thing whether or not she has asked before — reading needs no offer', () => {
     const out = renderCapabilities({ healthAvailable: true, healthAnswered: false });
+    expect(out).toBe(renderCapabilities({ healthAvailable: true, healthAnswered: true }));
     expect(out).not.toContain('Not on this device');
     expect(out).not.toContain('do not offer');
   });

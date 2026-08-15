@@ -278,10 +278,38 @@ describe('maybeRefreshHealthDigest', () => {
 
   beforeEach(() => window.localStorage.clear());
 
-  it('skips without granted permission, posts when stale and changed', async () => {
-    expect(await maybeRefreshHealthDigest(deps({}))).toBe('skipped');
-    window.localStorage.setItem(HEALTH_OFFER_FLAG_KEY, 'done');
+  /**
+   * The in-chat offer is no longer a gate. Requiring it made reading someone's own health data
+   * conditional on the coach having said the words "Apple Health" in conversation — miss the
+   * phrase and permission was never requested, so the coach promised a prompt that could not
+   * appear and read nothing forever (owner, 2026-08-15). iOS already implements the conditional
+   * we want: its sheet shows once and answers silently after.
+   */
+  it('reads without waiting for any in-app offer to have been accepted', async () => {
     expect(await maybeRefreshHealthDigest(deps({}))).toBe('posted');
+  });
+
+  it('asks the device for access before reading, every time (idempotent on iOS)', async () => {
+    let asked = 0;
+    await maybeRefreshHealthDigest(
+      deps({
+        ensureAccess: async () => {
+          asked += 1;
+        },
+      }),
+    );
+    expect(asked).toBe(1);
+  });
+
+  it('still reads when the access request fails — the read is the real signal', async () => {
+    const r = await maybeRefreshHealthDigest(
+      deps({
+        ensureAccess: async () => {
+          throw new Error('denied');
+        },
+      }),
+    );
+    expect(r).toBe('posted');
   });
 
   it('throttles repeat checks and respects freshness + content equality', async () => {
