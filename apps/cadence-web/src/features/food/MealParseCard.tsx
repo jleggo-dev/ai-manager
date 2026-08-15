@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { logPreviewedMeal, type MealKind, type MealPreview } from '../../lib/api.ts';
+import { logPreviewedMeal, type MealKind, type MealPreview, type PlateAdvice } from '../../lib/api.ts';
 import { useInvalidateNutritionDay } from '../../lib/query/index.ts';
 import { mealForNow } from '../plan/occurrence/format.ts';
 
@@ -24,6 +24,9 @@ export function MealParseCard({
   onLogged,
   onNotAMeal,
   onCancel,
+  onAskRead,
+  advice,
+  advising,
 }: {
   preview: MealPreview;
   /** Prefill (the meal task's kind); defaults from the time of day. */
@@ -32,6 +35,10 @@ export function MealParseCard({
   /** "Just one food?" — re-run the same words through the single-food resolver. */
   onNotAMeal?: () => void;
   onCancel: () => void;
+  /** Ask for a read BEFORE eating. Absent = the host doesn't offer it here. */
+  onAskRead?: () => void;
+  advice?: PlateAdvice | null;
+  advising?: boolean;
 }) {
   const [meal, setMeal] = useState<MealKind>(() => initialMeal ?? preview.meal ?? mealForNow());
   const [busy, setBusy] = useState(false);
@@ -95,6 +102,22 @@ export function MealParseCard({
           ))}
         </select>
       </label>
+
+      {/* The same read the camera path has always offered, on the typed path at last: it lived
+          only inside the photo branch, so describing your meal instead of photographing it meant
+          the advice simply did not exist for you (owner, 2026-08-15). */}
+      {advice ? (
+        <div className={`mc-plate pa-${advice.verdict}`}>
+          <div className="mc-plate-k">A READ, NOT A RULING</div>
+          <div className="mc-plate-a">{advice.advice}</div>
+        </div>
+      ) : (
+        onAskRead && (
+          <button type="button" className="mc-plate-ask" disabled={advising || busy} onClick={onAskRead}>
+            {advising ? 'Looking at it…' : 'Want a read before you eat? ›'}
+          </button>
+        )
+      )}
 
       {err && <div className="food-empty">{err}</div>}
 

@@ -281,13 +281,15 @@ export function useMealCapture(
     setPlateAdvice(null);
   }
 
-  /** Pre-eat read on the picked plate — advice only, writes nothing. */
-  async function checkPlate() {
-    if (!photo || advising) return;
+  /** Pre-eat read — from the picked plate, or from a meal they described. Advice only, writes
+   *  nothing. `meal` is how the TYPED path asks: the read used to live behind the camera alone,
+   *  so anyone who wrote their meal out had no way to get one (owner, 2026-08-15). */
+  async function checkPlate(meal?: string) {
+    if ((!photo && !meal?.trim()) || advising) return;
     setAdvising(true);
     setLogErr('');
     try {
-      const a = await getPlateAdvice(photo);
+      const a = await getPlateAdvice(photo ? { photo } : { meal: meal!.trim() });
       if (a) setPlateAdvice(a);
       else setLogErr("Couldn't get a read on that plate — try again.");
     } finally {

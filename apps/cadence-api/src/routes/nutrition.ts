@@ -184,13 +184,15 @@ router.delete('/targets', async (req: Request, res: Response) => {
   }
 });
 
-/** POST /nutrition/plate-advice — pre-eat read on a plate photo (advice only, no log). */
+/** POST /nutrition/plate-advice — pre-eat read on a plate PHOTO or a described meal (no log). */
 router.post('/plate-advice', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const photo = (req.body as { photo?: unknown })?.photo;
-  if (typeof photo !== 'string' || !photo) return void res.status(400).json({ error: 'photo required' });
+  const body = (req.body ?? {}) as { photo?: unknown; meal?: unknown };
+  const photo = typeof body.photo === 'string' && body.photo ? body.photo : undefined;
+  const meal = typeof body.meal === 'string' && body.meal.trim() ? body.meal : undefined;
+  if (!photo && !meal) return void res.status(400).json({ error: 'photo or meal required' });
   try {
-    res.json(await getPlateAdvice(userId, photo));
+    res.json(await getPlateAdvice(userId, { photo, meal }));
   } catch (err) {
     console.error('[POST /nutrition/plate-advice]', err);
     res.status(502).json({ error: 'could not read the plate' });

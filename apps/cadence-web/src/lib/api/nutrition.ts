@@ -86,11 +86,12 @@ export interface PlateAdvice {
 }
 
 /** Pre-eat advice on a plate photo (data URL) — one kind, actionable read; creates no meal log. */
-export async function getPlateAdvice(photo: string): Promise<PlateAdvice | null> {
+/** A read before you eat — from a photo of the plate, or from the meal in their own words. */
+export async function getPlateAdvice(input: { photo?: string; meal?: string }): Promise<PlateAdvice | null> {
   const res = await fetch(`${BASE}/nutrition/plate-advice`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ photo }),
+    body: JSON.stringify(input),
   });
   if (!res.ok) return null;
   return res.json();

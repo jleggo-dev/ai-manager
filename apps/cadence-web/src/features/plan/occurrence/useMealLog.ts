@@ -41,7 +41,7 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     setAdvising(true);
     setLogErr('');
     try {
-      const a = await getPlateAdvice(mealPhoto);
+      const a = await getPlateAdvice({ photo: mealPhoto });
       if (a) setPlateAdvice(a);
       else setLogErr("Couldn't get a read on that plate — try again.");
     } catch {

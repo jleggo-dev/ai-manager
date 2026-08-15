@@ -5660,3 +5660,34 @@ answered. The itemizing path (parse-meal) existed but only in log-immediately fo
 Noted for later (owner, same report): recipe selection from the say flow — "there is no recipe
 selection ability here". The resolver does surface saved recipes as candidates; making them
 prominent in the say panel is a follow-up.
+
+### The food module had no front door (2026-08-15)
+
+Owner device report on nutrition, and one line explained most of it. `TrailFoodStrip` returned
+`null` unless a kcal target existed — and that strip is the ONLY door to `TodayFoodSheet`, which
+is where Recipes / This week's meals / The shop moved when the Food tab was dropped (`7004aad`).
+Targets are `null` for every new user (the coach proposes them later, and never had). So:
+
+```
+no targets → no strip → no sheet → no recipes, no week planning, no shop, no targets shown
+```
+
+The entrance was gated on the thing the entrance leads to. That commit's own note predicted it —
+"FoodView kept dormant… the honest fallback if the strip goes untapped" — and it went untapped
+because it was never rendered. **The strip now always renders**, with honest copy for the unset
+case ("Recipes, your week, and what to aim for" / what they've eaten so far). The ring already
+drew track-only without a target, so nothing has to be decoded.
+
+**Plate advice reached the typed path.** "A READ, NOT A RULING" was wired only inside the photo
+branch, so describing a meal instead of photographing it meant the advice did not exist for you.
+`plate-advice` now takes a photo OR a description (`meal` variable added to the job; the template
+reads whichever it was given and never asks for the other), and `MealParseCard` carries the same
+"want a read before you eat?" affordance on both the meal-task sheet and the Food-tab say panel.
+**Needs a prompt sync after merge** (`sync-jobs.ts`).
+
+**Deliberately NOT fixed here — with design** (`docs/cadence/DESIGN-BRIEF-nutrition.md`): the IA
+across the owner's three surfaces — quick log (the meal sheet), manage nutrition (the ex-tab), and
+the coach actually holding a food-habits/weight-loss conversation. Plus: where targets come from
+(owner wants coach-proposed, not a settings form), where allergies are ever ASKED rather than
+inferred, "matching" as leaked vocabulary, "log it" → "assess, then confirm", and adding a
+forgotten item to a multi-ingredient meal.

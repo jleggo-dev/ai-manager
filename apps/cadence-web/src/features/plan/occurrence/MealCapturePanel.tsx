@@ -234,6 +234,9 @@ export function MealCapturePanel({
             void cap.resolveText(words, { forceSingle: true });
           }}
           onCancel={() => cap.setMealPreview(null)}
+          onAskRead={() => void cap.checkPlate(cap.mealPreview?.raw_text)}
+          advice={cap.plateAdvice}
+          advising={cap.advising}
         />
       ) : cap.draft ? (
         <MealDraftCard
@@ -270,7 +273,7 @@ export function MealCapturePanel({
               )}
             </div>
           ) : (
-            <button className="mc-plate-ask" onClick={cap.checkPlate} disabled={cap.advising}>
+            <button className="mc-plate-ask" onClick={() => void cap.checkPlate()} disabled={cap.advising}>
               {cap.advising ? 'Looking at your plate…' : 'Want a read before you eat? ›'}
             </button>
           )}
