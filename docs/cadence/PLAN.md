@@ -5524,3 +5524,36 @@ been clobbered by the next turn's ambient capture.
 The audit caught this tool too: `kind`/`plan_around`/`until` were described in prose but the rule
 wants them taught by QUOTED worked example (`{"kind": "life"}`), which is the better convention —
 so the example now carries every parameter.
+
+### Why CI could not catch the "hiccuped" bug — and where the guard actually belongs (2026-08-15)
+
+The device round that looked like a broken coach was a broken BUILD: the bundle was made with a
+plain `vite build` instead of `--mode ios`, so `VITE_CADENCE_API_BASE` came from `.env` (`/api`)
+instead of `.env.ios` (the deployed host). The Capacitor shell has no Vercel rewrite, so every
+call hit the webview's own localhost origin, returned a 65-byte non-JSON body, and `res.json()`
+threw `SyntaxError: The string did not match the expected pattern` — surfacing as "Something
+hiccuped on my end" on every turn. It survived an uninstall and three reinstalls because nothing
+was wrong with the device.
+
+**Owner asked the right question: how did testing and CI miss it?** Four reasons, and the honest
+answer is that CI structurally could not:
+
+1. **CI never builds the iOS bundle.** No workflow touches `cadence-ios`, `--mode ios`, or
+   `build:web`. It builds `cadence-web` in default mode — correct for the Vercel web deploy — and
+   the artifact that reaches the phone is never produced in CI at all.
+2. **Nothing in code was wrong.** `/api` is right for web (Vercel rewrites it); absolute is right
+   for native. Both env files were correct. A human picked the wrong mode on a local machine,
+   which no CI job can observe.
+3. **Every unit test mocks `lib/api.ts`**, so `BASE` is never read. Correct for those tests, but
+   it means the one value that mattered is invisible to the whole suite.
+4. **The build had no guard** — `npm run sync` built and synced without checking the output could
+   reach anything.
+
+**So the guard went where the mistake happens: the build.** `apps/cadence-ios/scripts/verify-bundle.mjs`
+runs as the last step of `sync` and asserts (a) `.env.ios` declares an ABSOLUTE base — a relative
+one cannot work in the shell — and (b) that host actually appears in the built JS, proving
+ios-mode env reached the artifact. Verified both ways: passes the good bundle, and fails the
+exact wrong build with a message naming the correct command.
+
+The lesson generalizes: for anything built on a developer's machine and carried to a device by
+hand, CI is the wrong place for the check — it never sees that artifact. The build script is.
