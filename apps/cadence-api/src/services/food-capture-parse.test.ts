@@ -59,10 +59,27 @@ describe('buildCaptureServings', () => {
 });
 
 describe('sanitizeCaptureNutrients', () => {
-  it('keeps printed micros only when allowMicros', () => {
-    const raw = { kcal: 90, protein_g: 18, carbs_g: 5, fat_g: 0, fiber_g: 0, sodium_mg: 65 };
+  /**
+   * Micros used to be gated to label reads — "those come from labels/databases, not estimates".
+   * That rule sounded rigorous and cost the user the whole column: a model can place a cup of
+   * strawberries at roughly 90mg of vitamin C, and the number printed on the bag is an
+   * approximation too. Provenance keeps it honest (`source: 'ai'`), not silence.
+   */
+  it('keeps micros from an estimate, not only from a label', () => {
+    const raw = { kcal: 90, protein_g: 18, carbs_g: 5, fat_g: 0, sodium_mg: 65, iron_mg: 0.2 };
     expect(sanitizeCaptureNutrients(raw, true)?.sodium_mg).toBe(65);
-    expect(sanitizeCaptureNutrients(raw, false)?.sodium_mg).toBeUndefined();
+    expect(sanitizeCaptureNutrients(raw, false)?.sodium_mg).toBe(65);
+    expect(sanitizeCaptureNutrients(raw, false)?.iron_mg).toBe(0.2);
+  });
+
+  it('keeps micrograms at a precision that does not erase them', () => {
+    // B12's entire daily reference is 2.4µg — one decimal place would round a real value to zero.
+    const m = sanitizeCaptureNutrients({ kcal: 90, vitamin_b12_ug: 1.26 }, false);
+    expect(m?.vitamin_b12_ug).toBe(1.26);
+  });
+
+  it('drops a negative micro rather than storing it', () => {
+    expect(sanitizeCaptureNutrients({ kcal: 90, iron_mg: -3 }, false)?.iron_mg).toBeUndefined();
   });
 
   it('returns null when no macros present', () => {
@@ -114,7 +131,7 @@ describe('parseLabelResult', () => {
 });
 
 describe('parseEstimateResult / parseIdentifyResult', () => {
-  it('shapes estimate-food without micros', () => {
+  it('shapes estimate-food, micros included', () => {
     const candidate = parseEstimateResult(
       JSON.stringify({
         name: 'Nonfat Greek Yogurt',
@@ -122,12 +139,13 @@ describe('parseEstimateResult / parseIdentifyResult', () => {
         serving_size: 170,
         serving_unit: 'g',
         serving_label: '1 container (170g)',
-        macros_per_serving: { kcal: 90, protein_g: 18, carbs_g: 6, fat_g: 0, fiber_g: 99 },
+        macros_per_serving: { kcal: 90, protein_g: 18, carbs_g: 6, fat_g: 0, calcium_mg: 190 },
         confidence: 0.85,
       }),
     );
     expect(candidate.source).toBe('llm');
-    expect(candidate.macros_per_base.fiber_g).toBeUndefined();
+    // Scaled to the base like every other nutrient: 190mg in a 170g container → per 100g.
+    expect(candidate.macros_per_base.calcium_mg).toBeCloseTo((190 / 170) * 100, 1);
     expect(candidate.confidence).toBe(0.85);
   });
 
