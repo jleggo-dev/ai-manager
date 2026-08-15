@@ -3,7 +3,13 @@ import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import { listGoals, listGoalsByStatus, updateGoal, setGoalStatus } from '../repos/goals.ts';
 import { insertGoalEvent } from '../repos/goal-events.ts';
-import { correctOccurrenceLog, deleteOccurrence, listLoggedForCorrection } from '../repos/occurrences.ts';
+import {
+  correctOccurrenceLog,
+  deleteOccurrence,
+  listLoggedForCorrection,
+  listRecentForLogging,
+} from '../repos/occurrences.ts';
+import { logOccurrence } from './session-log.ts';
 import { getUser, mergeCapturedConstraints, removeCapturedConstraint, setPendingPlan } from '../repos/users.ts';
 import { expandRecurrence } from './scheduling.ts';
 import { applyPlanEdits, matchActivity, type PlanEdit } from './plan-edit.ts';
@@ -370,6 +376,49 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         return `"${existing?.label ?? label}" is active again and the plan should work around it. Say so, and offer to change the week if it currently ignores it.`;
       }
       return `Noted: they work around "${label}". Say it back in one line so they can correct you if you have it wrong.`;
+    },
+  },
+
+  log_session: {
+    name: 'log_session',
+    description:
+      'Write down how a session went, in their own words, and mark it done. Takes effect immediately. Use when they tell you about one — "that run was good but my HR was all over the place" — because that IS how a session gets logged: they finish it, they come to talk, and talking about it is the record. Use it again to REVISE something already logged when they add or correct it later. Their report is parsed and kept on that session, so it outlives the conversation and the weekly check-in can read it back. Read get_active_plan or get_recent_logs to name the session as the plan lists it. Pass {"session": "Long run", "report": "77 minutes, felt strong for the first hour, HR high on the hills", "date": "2026-08-15"}.',
+    parameters: {
+      properties: {
+        session: { type: 'string', description: 'Which session, by the title the plan lists.' },
+        report: {
+          type: 'string',
+          description:
+            'What they said about it, in THEIR words — numbers, how it felt, what went wrong. Never your summary of it.',
+        },
+        date: { type: 'string', description: 'The day it happened, YYYY-MM-DD. Omit for the most recent one.' },
+      },
+      required: ['session', 'report'],
+    },
+    async run(userId, params) {
+      const query = String(params.session ?? '').trim();
+      const report = String(params.report ?? '').trim();
+      if (!query) return 'No session was named, so nothing was written down. Ask which one they mean.';
+      if (!report) return 'There was nothing to write down. Ask how it actually went, then log that.';
+      const date = String(params.date ?? '').trim();
+
+      const rows = await listRecentForLogging(userId);
+      const scoped = date ? rows.filter((r) => r.date === date) : rows;
+      const found = matchActivity(scoped, query);
+      if (!found) {
+        const recent = rows
+          .slice(0, 5)
+          .map((r) => `${r.date} ${r.title}`)
+          .join('; ');
+        return `No session clearly matches "${query}"${date ? ` on ${date}` : ''}, so nothing was written down. Recent ones: ${recent || 'none'}. Ask which they mean.`;
+      }
+
+      const logged = await logOccurrence(userId, found.occurrence_id, report);
+      if (!logged) return 'That could not be written down just now — tell them plainly and offer to try again.';
+      return [
+        `Logged against ${found.title} (${found.date})${found.logged ? ', replacing what was there' : ' and marked done'}: ${logged.summary}`,
+        'Say it back in one short line so they know it is on their file, then carry on with the conversation — do not turn it into a report.',
+      ].join('\n');
     },
   },
 };

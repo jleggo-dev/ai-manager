@@ -493,3 +493,72 @@ export async function correctOccurrenceLog(
        )}
      where user_id = ${userId} and occurrence_id = ${occurrenceId}`;
 }
+
+/**
+ * Recent occurrences in any state, for the coach to log against. Distinct from
+ * `listLoggedForCorrection`, which is deliberately limited to sessions already recorded — this
+ * one must see PENDING ones, because the whole point is completing something by talking about it.
+ */
+export async function listRecentForLogging(
+  userId: string,
+  days = 14,
+  limit = 40,
+): Promise<
+  Array<{
+    occurrence_id: string;
+    date: string;
+    title: string;
+    status: string;
+    category: string | null;
+    completion_source: string | null;
+    logged: boolean;
+  }>
+> {
+  const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  return sql<
+    Array<{
+      occurrence_id: string;
+      date: string;
+      title: string;
+      status: string;
+      category: string | null;
+      completion_source: string | null;
+      logged: boolean;
+    }>
+  >`
+    select o.occurrence_id, to_char(o.date, 'YYYY-MM-DD') as date, a.title, o.status,
+           a.category, a.completion_source, (o.log is not null) as logged
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and o.date >= ${from} and a.kind = 'user'
+    order by o.date desc
+    limit ${limit}`;
+}
+
+/** Pending device-completed occurrences on a date — what a recorded workout might tick. */
+export async function listPendingForDate(
+  userId: string,
+  date: string,
+): Promise<
+  Array<{
+    occurrence_id: string;
+    activity_id: string;
+    title: string;
+    category: string | null;
+    completion_source: string | null;
+  }>
+> {
+  return sql<
+    Array<{
+      occurrence_id: string;
+      activity_id: string;
+      title: string;
+      category: string | null;
+      completion_source: string | null;
+    }>
+  >`
+    select o.occurrence_id, a.activity_id, a.title, a.category, a.completion_source
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and o.date = ${date} and o.status = 'pending'`;
+}
