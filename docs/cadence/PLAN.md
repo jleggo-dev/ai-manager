@@ -5586,3 +5586,39 @@ Tests: mounted was never the same as reachable, and the old test only asserted m
 finds `display:none` nodes happily). Added — the slot carries no `is-hidden` with text present,
 a second dictation creates a second recognizer after a stop, a stopped session is detached, and
 dictation APPENDS to existing text rather than replacing it.
+
+### Device round: four findings, three bugs, one working-as-designed (2026-08-15)
+
+**Leave-safety WORKS.** The owner navigated away mid-build, came back, the plan was done. That is
+#195 doing its job on a real phone.
+
+**1. No ready-notification — and the #197 ledger answered it instantly.**
+`plan_ready / failed / no_devices`. Zero device tokens have ever been registered. The cause is
+self-inflicted and rather neat: `NotifyWhenReady` asks for permission on the BuildingScreen, whose
+own copy invites you to leave the app — and **iOS cannot show a permission dialog to a backgrounded
+app**. Take the screen at its word and the ask silently never happens. The feature defeated itself
+on precisely the behaviour it exists to support. Fixed: the ask now also fires on app resume, which
+is when a returning user CAN answer it. Retrying is safe rather than naggy — iOS surfaces its
+dialog once per install and every later request resolves from the stored answer without showing
+anything, so a decline stays declined and a MISSED prompt gets its second chance. (This is also
+the first time the ledger paid for itself: before #197 there was nothing to look at.)
+
+**2. "Allow localhost to use your location" — and it re-prompted after a restart.** Two symptoms,
+one cause: `useTodayHeader` called `navigator.geolocation` directly, bypassing the
+`capabilities.location` seam that exists for exactly this and says so in its own comment. The
+webview prompt asks on behalf of its ORIGIN (`capacitor://localhost`), and WKWebView web-geolocation
+grants do not survive an app launch — whereas the native plugin raises a real CoreLocation prompt
+carrying the app's name and Info.plist reason, and iOS remembers it like any other app permission.
+Both call sites now go through the seam.
+
+**3. Tasks scheduled in the past on day one.** Onboarding finished at 9am; the plan arrived with a
+6:30 meditation and a 6:30 long run already on it, which the app would shortly count as missed. A
+first morning with a coach that opens with two failures it invented itself. `ensureHorizon` now
+skips a TODAY slot whose clock time has passed. It only affects rows being written LATE, so a day
+already materialized keeps everything it had; and an unknown timezone (or a worded time like
+"morning") skips nothing, because a task you can still do is a far smaller harm than one quietly
+missing.
+
+**4. The weekly check-in — working as designed.** It IS deterministic and it IS in the plan:
+system activity, `category: reflection`, `FREQ=WEEKLY;BYDAY=SU` at 20:00, materialized. The owner
+just hadn't reached it — day one was Saturday, and it lands Sunday evening. No change.
