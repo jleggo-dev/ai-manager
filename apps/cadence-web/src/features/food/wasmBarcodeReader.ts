@@ -11,19 +11,28 @@
  * capacitor://localhost where a CDN fetch is both a CSP hole and an offline failure.
  */
 import type { BarcodeDetectorLike, DetectedBarcodeLike } from './barcodeDetectorSupport.ts';
-import wasmUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
 
 /** Same retail formats the native detector asks for (barcodeDetectorSupport.PREFERRED_FORMATS). */
 const FORMATS = ['EAN-13', 'EAN-8', 'UPCA', 'UPCE', 'Code128'] as const;
 
 let readerPromise: Promise<typeof import('zxing-wasm/reader')> | null = null;
 
+/**
+ * The WASM binary's URL is resolved INSIDE this lazy path, not at module load. A top-level
+ * `?url` import makes the whole module graph depend on a .wasm asset, which the test runner
+ * refuses to serve — so importing this file at all failed a suite that never scans a barcode.
+ * Deferring it keeps the binary out of everything except an actual scan.
+ */
 function loadReader() {
   if (!readerPromise) {
-    readerPromise = import('zxing-wasm/reader').then((mod) => {
-      mod.prepareZXingModule({ overrides: { locateFile: () => wasmUrl } });
+    readerPromise = (async () => {
+      const [mod, wasm] = await Promise.all([
+        import('zxing-wasm/reader'),
+        import('zxing-wasm/reader/zxing_reader.wasm?url'),
+      ]);
+      mod.prepareZXingModule({ overrides: { locateFile: () => wasm.default } });
       return mod;
-    });
+    })();
   }
   return readerPromise;
 }

@@ -131,3 +131,63 @@ describe('"had" is usually not eating', () => {
     });
   }
 });
+
+/**
+ * The turns that must NOT open a food sheet — each one a real message that did.
+ *
+ * A wrong draft here is expensive in a way a missed one is not: the sheet interrupts a
+ * conversation to ask someone to affirm something absurd, which is how confirm-first loses trust
+ * instead of earning it. So the bias is silence when the only evidence is the word "had".
+ */
+describe('classifyFoodIntent — what is not a meal', () => {
+  const notFood = (msg: string) => expect(classifyFoodIntent(msg)?.kind).not.toBe('log_food');
+
+  it('does not price a training report as a food', () => {
+    // Observed on device 2026-08-15: this reached estimate-food, which returned
+    // {"name":"That last run","serving_label":"1 run"}. The old guard listed adjectives right
+    // after "had a", so the adverb in "a really hard time" walked straight past it.
+    notFood('That last run was good but I had a really hard time keeping my Hr in zone 2 (except for walking).');
+  });
+
+  it('survives the modifier that broke the last version', () => {
+    notFood('I had a really hard time today');
+    notFood('I had an absolutely brutal week');
+    notFood('I had a pretty rough night');
+  });
+
+  it('still refuses the Spartan Beast', () => {
+    notFood('I do at least one beast a year, but I had to skip it this year');
+  });
+
+  it('ignores auxiliary "had" in ordinary talk', () => {
+    notFood('I had been running before the knee went');
+    notFood('I had enough of the treadmill');
+    notFood("I've had a look at the plan");
+    notFood('I had a chat with my physio about the elbow');
+  });
+
+  it('does not fire on sleep, mood or injury talk', () => {
+    notFood('I had a terrible sleep and my shoulder is sore');
+    notFood('Had a stressful day, skipped my session');
+  });
+});
+
+describe('classifyFoodIntent — what IS a meal', () => {
+  const isFood = (msg: string) => expect(classifyFoodIntent(msg)?.kind).toBe('log_food');
+
+  it('reads the specific verbs without help', () => {
+    isFood('I ate a burrito');
+    isFood('just drank a protein shake');
+  });
+
+  it('reads a meal word even inside a busy sentence', () => {
+    // The activity veto must not swallow a real log that happens to mention training.
+    isFood('after my run I had breakfast');
+    isFood('I had a coffee before the session');
+  });
+
+  it('reads a plain "had" when nothing contradicts it', () => {
+    isFood('I had a burrito');
+    isFood('I had two eggs and toast');
+  });
+});

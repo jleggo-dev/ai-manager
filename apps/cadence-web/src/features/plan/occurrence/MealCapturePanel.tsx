@@ -7,6 +7,7 @@ import { NutritionRing } from '../../nutrition/NutritionRing.tsx';
 import { MealParseCard } from '../../food/MealParseCard.tsx';
 import { MealDraftCard } from './MealDraftCard.tsx';
 import { useMealCapture, type PlateEntry } from './useMealCapture.ts';
+import type { MealPreview } from '../../../lib/api.ts';
 import { usePlannedMeal } from './usePlannedMeal.ts';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
@@ -137,6 +138,8 @@ export function MealCapturePanel({
   const { planned, alsoThisWeek } = usePlannedMeal(cap.mealKind, detail.date);
   const [text, setText] = useState('');
   const [route, setRoute] = useState<'idle' | 'scan'>('idle');
+  /** Set while the composer is collecting ANOTHER thing for a meal already on the card. */
+  const [addingTo, setAddingTo] = useState<MealPreview | null>(null);
   const [pending, setPending] = useState<MealMacros | null>(null);
 
   const day = cap.day;
@@ -145,6 +148,7 @@ export function MealCapturePanel({
   const eatenKcal = eaten.kcal ?? 0;
   const targetKcal = target?.kcal ?? null;
   const plateMacros = sumPlate(cap.plate);
+  const alreadyLogged = (day?.meals ?? []).filter((m) => m.meal === cap.mealKind);
   const pendingKcal = (plateMacros.kcal ?? 0) + (pending?.kcal ?? 0);
   const leftAfter = targetKcal != null ? targetKcal - eatenKcal - pendingKcal : null;
 
@@ -235,6 +239,11 @@ export function MealCapturePanel({
           }}
           onCancel={() => cap.setMealPreview(null)}
           onAskRead={() => void cap.checkPlate(cap.mealPreview?.raw_text)}
+          onAddAnother={() => {
+            setAddingTo(cap.mealPreview);
+            cap.setMealPreview(null);
+            setText('');
+          }}
           advice={cap.plateAdvice}
           advising={cap.advising}
         />
@@ -291,6 +300,23 @@ export function MealCapturePanel({
         </div>
       ) : (
         <>
+          {/* Already on this meal today. Someone who comes back to add a latte should SEE that
+              breakfast is already there and that they are adding to it, not wonder whether the
+              second tap did anything (owner, 2026-08-15 — "I added it by tapping the breakfast
+              button a second time… it's not showing"). */}
+          {alreadyLogged.length > 0 && (
+            <div className="mc-already">
+              <div className="mc-already-k">ALREADY ON THIS {cap.mealKind.toUpperCase()}</div>
+              {alreadyLogged.map((m) => (
+                <div className="mc-already-row" key={m.log_id}>
+                  <span>{m.items.map((i) => i.name).join(', ') || m.raw_text || 'logged'}</span>
+                  {m.macros?.kcal != null && <b>~{Math.round(m.macros.kcal)} kcal</b>}
+                </div>
+              ))}
+              <div className="mc-already-s">Anything you add now joins it.</div>
+            </div>
+          )}
+
           {cap.plate.length === 0 && (planned || alsoThisWeek.length > 0) && (
             <div className="mc-planned">
               {planned && (
@@ -331,6 +357,12 @@ export function MealCapturePanel({
               that opened the identical field, which read as a mode switch that changed nothing
               (owner, 2026-08-15). Say IS type with the mic pressed. */}
           <div className="mc-say">
+            {addingTo && (
+              <div className="mc-adding">
+                Adding to this {cap.mealKind} — {addingTo.items.length} thing
+                {addingTo.items.length === 1 ? '' : 's'} so far
+              </div>
+            )}
             <div className="mc-say-row">
               <textarea
                 className="mc-cap-in"

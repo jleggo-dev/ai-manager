@@ -185,6 +185,50 @@ async function previewIfMealShaped(q: string, mealKind: MealKind): Promise<MealP
   }
 }
 
+/**
+ * Two reads of the same meal, joined. Items concatenate (capped at the parser's own limit),
+ * macro totals add up, and the raw text keeps both halves so the log still holds the user's own
+ * words for everything on it. Confidence takes the LOWER of the two — a meal is only as certain
+ * as its least certain part.
+ */
+export function mergePreviews(base: MealPreview, more: MealPreview): MealPreview {
+  const addMacros = (a: MealPreview['macros'], b: MealPreview['macros']): MealPreview['macros'] => {
+    if (!a) return b;
+    if (!b) return a;
+    const out: Record<string, number> = {};
+    for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      const av = (a as Record<string, unknown>)[k];
+      const bv = (b as Record<string, unknown>)[k];
+      if (typeof av === 'number' || typeof bv === 'number') {
+        out[k] = (typeof av === 'number' ? av : 0) + (typeof bv === 'number' ? bv : 0);
+      }
+    }
+    return out as MealPreview['macros'];
+  };
+  return {
+    ...base,
+    items: [...base.items, ...more.items].slice(0, 12),
+    macros: addMacros(base.macros, more.macros),
+    confidence:
+      base.confidence != null && more.confidence != null
+        ? Math.min(base.confidence, more.confidence)
+        : (base.confidence ?? more.confidence),
+    flags: { ...base.flags, ...more.flags },
+    raw_text: `${base.raw_text}; ${more.raw_text}`.slice(0, 500),
+  };
+}
+
+/**
+ * One more thing for a meal already on the card: parse the new words alone, then merge. A meal is
+ * almost always several things (owner, 2026-08-15), so the card grows rather than making someone
+ * log twice and hope the day adds up. Null when the words were unreadable — the caller says so
+ * and the existing meal is left exactly as it was.
+ */
+async function growMealPreview(base: MealPreview, q: string, mealKind: MealKind): Promise<MealPreview | null> {
+  const more = await previewMeal(q, mealKind).catch(() => null);
+  return more?.items.length ? mergePreviews(base, more) : null;
+}
+
 export function useMealCapture(
   detail: OccurrenceDetail,
   setDetail: (d: OccurrenceDetail) => void,
@@ -239,13 +283,18 @@ export function useMealCapture(
    * resolver as ever. `forceSingle` is the card's "just one food?" escape hatch, because the
    * split is a heuristic and the user is the tiebreak.
    */
-  async function resolveText(text: string, opts2?: { forceSingle?: boolean }) {
+  async function resolveText(text: string, opts2?: { forceSingle?: boolean; addTo?: MealPreview }) {
     const q = text.trim();
     if (!q || resolving) return;
     setResolving(true);
     setNote('');
     setLogErr('');
     try {
+      if (opts2?.addTo) {
+        const grown = await growMealPreview(opts2.addTo, q, mealKind);
+        if (!grown) return setNote("Couldn't read that one — try saying it a different way.");
+        return setMealPreview(grown);
+      }
       const preview = opts2?.forceSingle ? null : await previewIfMealShaped(q, mealKind);
       if (preview) return setMealPreview(preview);
       const { draft: d, note: n } = await resolveToDraft(q);
