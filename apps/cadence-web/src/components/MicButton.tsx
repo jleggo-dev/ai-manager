@@ -67,7 +67,19 @@ export function MicButton({
 
   function stop() {
     wantOnRef.current = false;
-    recRef.current?.stop();
+    const rec = recRef.current;
+    recRef.current = null;
+    if (rec) {
+      // DETACH before stopping. WebKit can deliver one last final result after `stop()`, and that
+      // handler's closure still holds `baseRef` as it was when dictation STARTED. Left attached,
+      // the late event recomposes from that stale base and overwrites anything typed since — the
+      // user watches their own edit vanish under a transcript, which is indistinguishable from
+      // the app eating their words.
+      rec.onresult = null;
+      rec.onend = null;
+      rec.onerror = null;
+      rec.stop();
+    }
     setListening(false);
   }
 

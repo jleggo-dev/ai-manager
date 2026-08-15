@@ -53,10 +53,67 @@ describe('ChatComposer', () => {
     // The first dictated word lands: the field is now non-empty.
     rerender(<ChatComposer value="hello" onChange={noop} onSend={noop} streaming={false} showDisclaimer={false} />);
 
-    // Still in the DOM — hidden, not torn down. An unmount here is what aborted recognition.
+    // Still in the DOM — an unmount here is what aborted recognition.
     expect(screen.getByRole('button', { name: 'Dictate' })).toBeInTheDocument();
     created.slice(recognizersBefore).forEach((r) => expect(r.abort).not.toHaveBeenCalled());
     expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
+  });
+
+  /**
+   * The second bug, found on device: mounted is not the same as reachable. The mic used to be
+   * CSS-hidden whenever the field had text, so you could dictate exactly once — stop talking and
+   * your own words hid the button, fix a misheard word by hand and it hid, type first and it was
+   * never there. In an app whose promise is that you can just talk to it, that is the worst
+   * possible moment for the mic to leave.
+   */
+  it('keeps the mic REACHABLE once there is text, not just mounted', () => {
+    const { container } = render(
+      <ChatComposer
+        value="a sentence I typed"
+        onChange={noop}
+        onSend={noop}
+        streaming={false}
+        showDisclaimer={false}
+      />,
+    );
+    const slot = container.querySelector('.mic-slot');
+    expect(slot).toBeInTheDocument();
+    expect(slot?.className).not.toMatch(/is-hidden/);
+    // Both affordances coexist: say more, or send what is there.
+    expect(screen.getByRole('button', { name: 'Dictate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
+  });
+
+  it('can start a SECOND dictation after the first was stopped', () => {
+    render(<ChatComposer value="" onChange={noop} onSend={noop} streaming={false} showDisclaimer={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Dictate' }));
+    expect(created).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Stop dictation' }));
+    expect(created[0]!.stop).toHaveBeenCalled();
+    // A stopped session is detached, so a late final cannot rewrite the field behind the user.
+    expect(created[0]!.onresult).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dictate' }));
+    expect(created).toHaveLength(2);
+    expect(created[1]!.start).toHaveBeenCalled();
+  });
+
+  it('appends a second dictation to what is already there rather than replacing it', () => {
+    let text = 'already typed';
+    const onChange = vi.fn((v: string) => {
+      text = v;
+    });
+    const { rerender } = render(
+      <ChatComposer value={text} onChange={onChange} onSend={noop} streaming={false} showDisclaimer={false} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Dictate' }));
+    created[0]!.onresult?.({
+      resultIndex: 0,
+      results: [{ isFinal: true, 0: { transcript: 'and this too' } }],
+    });
+    expect(onChange).toHaveBeenCalledWith('already typed and this too');
+    rerender(<ChatComposer value={text} onChange={onChange} onSend={noop} streaming={false} showDisclaimer={false} />);
+    expect(text).toBe('already typed and this too');
   });
 
   it('offers the mic and no send button on an empty field', () => {

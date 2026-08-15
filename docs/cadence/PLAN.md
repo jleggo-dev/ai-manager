@@ -5557,3 +5557,32 @@ exact wrong build with a message naming the correct command.
 
 The lesson generalizes: for anything built on a developer's machine and carried to a device by
 hand, CI is the wrong place for the check — it never sees that artifact. The build script is.
+
+### The mic you could only use once (owner report 2026-08-15)
+
+Owner: "you can only use it once. if you press stop and modify what it wrote, it basically
+disappears and you can't use it again. or, if you start typing, you can't use it either."
+
+Two bugs, one visible and one waiting.
+
+**1. The mic was CSS-hidden whenever the field had text** (`mic-slot is-hidden`, applied when
+`value.trim() && !dictating`). That rule was added for a good reason — the mic used to be the
+`else` branch of the send button, so the first dictated word unmounted it and its cleanup
+`abort()`ed the pending final, killing dictation after one word. Mounting it permanently fixed
+that, but hiding it whenever there is text just moved the trap: stop talking and your own words
+hide the button; fix a misheard word by hand and it hides; type a sentence first and it was never
+there. In an app whose tagline is that you can just talk to it, that is the worst possible moment
+for the mic to leave. It is now always visible; mic and send coexist in the flex row, which costs
+34px and is what every dictation-first app does.
+
+**2. A stopped recognizer could rewrite the field behind you.** `stop()` left `onresult` attached,
+and WebKit can deliver one last final AFTER stop. That handler's closure still holds `baseRef` as
+it was when dictation STARTED, so a late event recomposed from the stale base and overwrote
+anything typed since — the user watches their own edit vanish under a transcript, which is
+indistinguishable from the app eating their words. `stop()` now detaches `onresult`/`onend`/
+`onerror` and clears the ref before stopping.
+
+Tests: mounted was never the same as reachable, and the old test only asserted mounted (jsdom
+finds `display:none` nodes happily). Added — the slot carries no `is-hidden` with text present,
+a second dictation creates a second recognizer after a stop, a stopped session is detached, and
+dictation APPENDS to existing text rather than replacing it.

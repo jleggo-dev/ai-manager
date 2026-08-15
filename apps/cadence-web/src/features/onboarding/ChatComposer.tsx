@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { MicButton } from '../../components/MicButton.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 
@@ -59,7 +59,6 @@ export function ChatComposer({
   above?: ReactNode;
 }) {
   const taRef = useRef<HTMLTextAreaElement | null>(null);
-  const [dictating, setDictating] = useState(false);
 
   // Auto-grow to fit what's typed, up to ~5 rows (the CSS max-height). Picks compose into the
   // same field, so a multi-select answer grows it exactly as typing would.
@@ -109,14 +108,18 @@ export function ChatComposer({
           </button>
         ) : (
           <>
-            {/* The mic stays MOUNTED whether or not there is text. It used to be the `else` branch
-                of the send button, so the first dictated word made the field non-empty, React
-                unmounted MicButton, and its cleanup called abort() — which also discards the
-                pending final result. Dictation killed itself after one word. It is hidden with
-                CSS when there is text and nothing is being said, and stays visible while
-                dictating so there is always something to tap to stop. */}
-            <span className={`mic-slot${value.trim() && !dictating ? ' is-hidden' : ''}`}>
-              <MicButton value={value} onChange={onChange} disabled={false} onListeningChange={setDictating} />
+            {/* The mic is ALWAYS here — mounted and visible — and both of those are bugs paid for.
+                It was once the `else` branch of the send button, so the first dictated word made
+                the field non-empty, React unmounted MicButton, and its cleanup called abort(),
+                discarding the pending final: dictation killed itself after one word. Mounting it
+                permanently fixed that but left it hidden whenever the field had text, which is
+                its own trap — you could dictate exactly once. Stop talking and your words are in
+                the field, so the mic vanishes; fix a misheard word by hand and it vanishes; type
+                a sentence first and it was never there. In an app whose whole promise is that you
+                can just talk to it, the mic disappearing the moment you have said anything is
+                close to the worst possible moment for it to go. It costs 34px to keep. */}
+            <span className="mic-slot">
+              <MicButton value={value} onChange={onChange} disabled={false} />
             </span>
             {value.trim() && (
               <button className="send" onClick={onSend} aria-label="Send">
