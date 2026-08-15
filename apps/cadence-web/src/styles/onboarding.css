@@ -993,9 +993,6 @@
 .mic-slot {
   display: flex;
 }
-.mic-slot.is-hidden {
-  display: none;
-}
 
 /* Stop, while she is talking. Deliberately not the danger colour: interrupting your coach is a
    normal thing to do, not a mistake to be warned about. */
