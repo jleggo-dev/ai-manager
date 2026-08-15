@@ -87,7 +87,7 @@ describe('renderPickProtocol', () => {
       expect(out).toContain('BUILD PLAN tool');
       expect(out).toContain('BUILD IS SOMETHING YOU DO, NOT SOMEWHERE YOU SEND THEM');
       expect(out).toMatch(/never tell anyone to "head to Review"/i);
-      expect(out).toContain('NEVER LEAVE A CHANGE AGREED AND UNBUILT');
+      expect(out).toContain('NEVER LEAVE A CHANGE TO THE PLAN AGREED AND UNBUILT');
       // The old cap is what left her with nowhere to go; it must not survive anywhere.
       expect(out).not.toMatch(/use it exactly once/i);
     }

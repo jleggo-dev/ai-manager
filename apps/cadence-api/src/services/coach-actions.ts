@@ -1,25 +1,40 @@
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
-import { listGoalsByStatus } from '../repos/goals.ts';
+import { listGoals, listGoalsByStatus, updateGoal, setGoalStatus } from '../repos/goals.ts';
+import { insertGoalEvent } from '../repos/goal-events.ts';
+import { correctOccurrenceLog, listLoggedForCorrection } from '../repos/occurrences.ts';
 import { setPendingPlan } from '../repos/users.ts';
-import { applyPlanEdits, type PlanEdit } from './plan-edit.ts';
+import { applyPlanEdits, matchActivity, type PlanEdit } from './plan-edit.ts';
 
 /**
  * The coach's ACTION tools — the half of the harness that changes something.
  *
- * One rule holds the whole design up: **nothing here commits anything.** An action tool writes a
- * PROPOSAL (the user's `pending_plan`, which is by definition uncommitted) and returns a summary
- * for the coach to speak. The plan only changes when the person taps Apply, which runs the same
- * `POST /plan/lock` path a first build runs. Suggest-never-auto-apply is therefore structural
- * rather than a rule the model is asked to remember: there is no code path from a tool call to a
- * committed plan.
+ * Two shapes, and which one a tool takes is decided by whether a person can CHECK the change in a
+ * sentence.
  *
- * Two more properties worth keeping:
+ * **The plan is proposed, never applied.** `propose_plan_change` writes to `pending_plan` — by
+ * definition uncommitted — and the week moves only when the user taps Apply, which runs the same
+ * `POST /plan/lock` path a first build runs. Suggest-never-auto-apply is structural here rather
+ * than a rule the model is asked to remember: there is no code path from that tool call to a
+ * committed plan. Two properties fall out of it and are worth keeping:
  * - The card renders what the TOOL computed, not what the coach said it computed. The diff is
  *   read back from the stored proposal, so a turn that describes the change wrongly still shows
  *   the person the truth before they agree to it.
  * - The edits are applied in code (plan-edit.ts), so the change that lands is exactly the change
  *   that was asked for — no re-synthesis quietly rewriting the rest of the week.
+ *
+ * **A goal or a mis-logged session is applied on the spot.** These write immediately, and the
+ * gate is in the instruction rather than in a tap: act only on what the user has plainly decided.
+ *
+ * **Why the plan gets a card and a goal does not.** A plan change is many rows and materializes a
+ * week of occurrences — you cannot check it in a sentence, so it gets rendered and tapped. A goal
+ * target, a deadline, or a mis-logged distance is ONE legible fact the coach says out loud
+ * ("100 books down to 50 — done"), and the persona already settles this shape for detours:
+ * "their plain yes is enough… never ask them to confirm again elsewhere." Making someone tap a
+ * card to re-confirm the sentence they just said is friction pretending to be safety. What holds
+ * instead is the gate in each description — apply only what the user has plainly decided, never
+ * your own read — plus an event on the goal's own history, so every change is visible and
+ * attributable after the fact.
  */
 
 export interface CoachActionTool {
@@ -125,6 +140,150 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         ...(rejected.length ? ['Could not do:', ...rejected.map((r) => `- ${r}`)] : []),
         'Say in one line what you have put up and that it is theirs to apply. Do NOT claim it is done or scheduled — it is not, until they tap it.',
       ].join('\n');
+    },
+  },
+
+  update_goal: {
+    name: 'update_goal',
+    description:
+      'Change one of the user\'s goals: lower or raise the number they are aiming at, move the date, mark it finished, or stop working on it. Use when they have plainly decided one of those in words — never on your own read that a goal looks too hard, and never to tidy up. This DOES take effect immediately: a goal is one fact you can say out loud, so your sentence confirming it is the confirmation, and every change is written to the goal\'s own history. Read get_objectives first and name the goal exactly as listed. Pass {"goal": "Read 100 books", "action": "retarget", "target": 50, "unit": "books"}, or {"goal": "Run a 10k", "action": "redate", "date": "2026-11-01"}.',
+    parameters: {
+      properties: {
+        goal: { type: 'string', description: 'Which goal, by its title exactly as get_objectives lists it.' },
+        action: {
+          type: 'string',
+          enum: ['retarget', 'redate', 'complete', 'stop'],
+          description:
+            'retarget = change the number they are aiming at; redate = change the date they are aiming for; complete = they finished it; stop = they are no longer working on it.',
+        },
+        target: { type: 'number', description: 'The new number. Required for retarget.' },
+        unit: {
+          type: 'string',
+          description: 'The unit (books, km, kg). Optional for retarget; omit to keep the current one.',
+        },
+        date: { type: 'string', description: 'The new date to aim for, as YYYY-MM-DD. Required for redate.' },
+      },
+      required: ['goal', 'action'],
+    },
+    async run(userId, params) {
+      const query = String(params.goal ?? '').trim();
+      const action = String(params.action ?? '');
+      if (!query) return 'No goal was named, so nothing changed. Ask which goal they mean.';
+
+      const goals = await listGoals(userId);
+      const live = goals.filter((g) => !['completed', 'abandoned'].includes(g.status));
+      const goal = matchActivity(live, query);
+      if (!goal) {
+        const names = live.map((g) => g.title).join(', ') || 'none';
+        return `Nothing clearly matches "${query}", so nothing changed. Their goals are: ${names}. Ask which one they mean.`;
+      }
+
+      if (action === 'complete' || action === 'stop') {
+        const status = action === 'complete' ? 'completed' : 'abandoned';
+        await setGoalStatus(userId, goal.goal_id, status);
+        await insertGoalEvent(userId, {
+          goal_id: goal.goal_id,
+          kind: action === 'complete' ? 'completion' : 'note',
+          label: action === 'complete' ? `Finished: ${goal.title}` : `Stopped working on: ${goal.title}`,
+        }).catch(() => null);
+        return action === 'complete'
+          ? `Marked "${goal.title}" finished. Say so warmly — this is a thing they did, and it is worth a sentence, not a checkbox.`
+          : `Stopped "${goal.title}". Say it plainly and without any suggestion they failed; the sessions that served it stay in their plan until the plan is rebuilt, so offer that if it now looks empty.`;
+      }
+
+      if (action === 'retarget') {
+        const target = Number(params.target);
+        if (!Number.isFinite(target))
+          return 'No new target number was given, so nothing changed. Ask what it should be.';
+        const unit = typeof params.unit === 'string' && params.unit.trim() ? params.unit.trim() : goal.measure?.unit;
+        const was = goal.measure?.target;
+        await updateGoal(userId, goal.goal_id, {
+          measure: { ...goal.measure, target, ...(unit ? { unit } : {}) },
+        });
+        await insertGoalEvent(userId, {
+          goal_id: goal.goal_id,
+          kind: 'note',
+          label: `Target changed: ${String(was ?? '?')} → ${target}${unit ? ` ${unit}` : ''}`,
+        }).catch(() => null);
+        return `"${goal.title}" now aims at ${target}${unit ? ` ${unit}` : ''} (was ${String(was ?? 'unset')}). Say what changed in one line. Their plan still holds the old sessions — if the new target needs a different week, offer to rebuild.`;
+      }
+
+      const date = String(params.date ?? '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return 'No usable date was given, so nothing changed. Ask what date they are aiming for.';
+      }
+      const wasDate = goal.timeframe?.end;
+      await updateGoal(userId, goal.goal_id, { timeframe: { ...goal.timeframe, end: date } });
+      await insertGoalEvent(userId, {
+        goal_id: goal.goal_id,
+        kind: 'note',
+        label: `Date moved: ${wasDate ?? 'unset'} → ${date}`,
+      }).catch(() => null);
+      return `"${goal.title}" now aims at ${date} (was ${wasDate ?? 'no date'}). Say what changed. A later date usually means the week can ease off, and an earlier one usually cannot be met by wishing — if the pace no longer fits, say so and offer to rebuild.`;
+    },
+  },
+
+  correct_log: {
+    name: 'correct_log',
+    description:
+      'Fix a session that was recorded wrong — the distance or duration was off, or it never happened. Use when the user corrects something already on file; to record something new they just did, let them log it normally instead. Takes effect immediately, because it is their own correction of their own record and asking twice is absurd. Read get_recent_logs or get_workout_history first so you name the right session. Pass {"activity": "Easy run", "date": "2026-08-12", "metrics": {"distance_km": 5}}, or add {"not_done": true} when it did not happen.',
+    parameters: {
+      properties: {
+        activity: { type: 'string', description: 'Which session, by the title the plan lists.' },
+        date: {
+          type: 'string',
+          description: 'The day it was recorded, as YYYY-MM-DD. Omit to take the most recent one.',
+        },
+        metrics: {
+          type: 'object',
+          description:
+            'The corrected numbers, e.g. {"distance_km": 5, "duration_min": 28} — these replace the old ones. Required unless not_done is true.',
+        },
+        not_done: {
+          type: 'boolean',
+          description: 'True when the session did not actually happen. Omit to correct the numbers instead.',
+        },
+      },
+      required: ['activity'],
+    },
+    async run(userId, params) {
+      const query = String(params.activity ?? '').trim();
+      if (!query) return 'No session was named, so nothing changed. Ask which one they mean.';
+      const date = String(params.date ?? '').trim();
+
+      const rows = await listLoggedForCorrection(userId);
+      const scoped = date ? rows.filter((r) => r.date === date) : rows;
+      const found = matchActivity(scoped, query);
+      if (!found) {
+        const recent = rows
+          .slice(0, 5)
+          .map((r) => `${r.date} ${r.title}`)
+          .join('; ');
+        return `No recorded session clearly matches "${query}"${date ? ` on ${date}` : ''}, so nothing changed. Recent ones: ${recent || 'none'}. Ask which they mean.`;
+      }
+
+      if (params.not_done === true) {
+        await correctOccurrenceLog(userId, found.occurrence_id, { status: 'skipped' });
+        return `Corrected: ${found.title} on ${found.date} is no longer counted as done. Say so plainly — a session that did not happen is information, never a failure, and it needs no commiseration.`;
+      }
+
+      const raw = (params.metrics ?? {}) as Record<string, unknown>;
+      const value: Record<string, number> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        const n = Number(v);
+        if (Number.isFinite(n) && Object.keys(value).length < 12) value[k.slice(0, 40)] = n;
+      }
+      if (!Object.keys(value).length) {
+        return 'No corrected numbers were given and it was not marked as missed, so nothing changed. Ask what the right numbers were.';
+      }
+      const summary = Object.entries(value)
+        .map(([k, v]) => `${v} ${k.replace(/_/g, ' ')}`)
+        .join(', ');
+      await correctOccurrenceLog(userId, found.occurrence_id, {
+        value,
+        ...(found.log ? { log: { ...found.log, summary } } : {}),
+      });
+      return `Corrected: ${found.title} on ${found.date} now reads ${summary}. Confirm it back in one short line.`;
     },
   },
 };

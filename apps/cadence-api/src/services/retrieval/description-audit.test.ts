@@ -55,7 +55,11 @@ const byName = new Map(defs.map((d) => [d.function.name, d.function]));
 describe('harness tool descriptions', () => {
   it('every retrieval function description is free of internal jargon (the Broker reads them all)', () => {
     const hits: string[] = [];
-    for (const f of Object.values(RETRIEVAL_FUNCTIONS)) {
+    const all = [
+      ...Object.values(RETRIEVAL_FUNCTIONS).map((f) => ({ name: f.name, description: f.description })),
+      ...defs.map((d) => ({ name: d.function.name, description: d.function.description })),
+    ];
+    for (const f of all) {
       for (const b of BANNED) {
         if (b.re.test(f.description)) hits.push(`${f.name}: ${b.re} (${b.why})`);
       }
@@ -89,10 +93,12 @@ describe('harness tool descriptions', () => {
         const desc = String(spec.description ?? '');
         for (const b of BANNED) if (b.re.test(desc)) bad.push(`${d.function.name}.${key}: ${b.why}`);
         const required = (d.function.parameters as { required?: string[] }).required ?? [];
-        // An optional param must say what happens without it — a stated default, or the
-        // omission behavior in words ("omit to get their saved recipes").
-        if (!required.includes(key) && !/default|omit/i.test(desc))
-          bad.push(`${d.function.name}.${key}: no default stated`);
+        // A param the caller may leave out must say what happens if they do. Three honest
+        // shapes: a stated default, the omission behavior in words ("omit to get their saved
+        // recipes"), or — the case action tools introduced — CONDITIONALLY required, where the
+        // answer is "it depends which action you chose" ("Required for retarget").
+        if (!required.includes(key) && !/default|omit|required for|unless/i.test(desc))
+          bad.push(`${d.function.name}.${key}: does not say what happens without it`);
       }
     }
     expect(bad).toEqual([]);
@@ -113,5 +119,25 @@ describe('harness tool descriptions', () => {
       .filter((f) => f.description.length > 520)
       .map((f) => `${f.name} (${f.description.length})`);
     expect(tooLong).toEqual([]);
+  });
+
+  /** Action tools get more room than a read — each carries a safety gate ("only when they have
+   *  plainly decided") and says what calling it does to the user's data — but not unlimited. */
+  it('action tools are bounded too, and every one states its safety gate', () => {
+    const actions = defs.filter((d) => !RETRIEVAL_FUNCTIONS[d.function.name]);
+    expect(actions.length).toBeGreaterThan(0);
+    const tooLong = actions
+      .filter((d) => d.function.description.length > 800)
+      .map((d) => `${d.function.name} (${d.function.description.length})`);
+    expect(tooLong).toEqual([]);
+    // Whether it commits on call or waits for a tap is the single most important thing a model
+    // can know about an action tool, so saying it is not optional.
+    const silent = actions
+      .filter(
+        (d) =>
+          !/take effect immediately|does NOT change anything|Takes effect immediately/i.test(d.function.description),
+      )
+      .map((d) => d.function.name);
+    expect(silent).toEqual([]);
   });
 });
