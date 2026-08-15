@@ -39,6 +39,7 @@ const COACH_TOOL_NAMES = [
   'get_food_log',
   'get_journal',
   'get_recipes',
+  'get_macro_targets',
   'lookup_food',
 ] as const;
 
