@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { upsertWorkoutHistory } from '../repos/workout-history.ts';
+import { autoTickFromWorkouts } from '../services/workout-autotick.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
 import { workoutHistoryBodySchema } from '../validation/health.ts';
 
@@ -18,7 +19,13 @@ router.post('/workout-history', async (req: Request, res: Response) => {
   try {
     const body = parseBody(workoutHistoryBodySchema, req.body);
     const inserted = await upsertWorkoutHistory(userId, 'healthkit', body.workouts);
-    res.json({ ok: true, inserted });
+    // A recorded workout completes the session it was planned for. Awaited, not fire-and-forget
+    // (#195): the tick must land before the handler returns or the platform may never finish it.
+    const ticked = await autoTickFromWorkouts(userId, body.workouts).catch((e) => {
+      console.error('[workout-history] auto-tick failed (rows are saved regardless)', e);
+      return 0;
+    });
+    res.json({ ok: true, inserted, ticked });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /me/workout-history]', err);

@@ -5843,3 +5843,36 @@ app-authored note naming the session and telling her to read their own report wi
 `get_recent_logs` / `get_workout_history` rather than asking them to repeat it. Reuses the same
 invisible-note channel as the plan walkthrough; `MainTabs` holds it, the chat fires it once on a
 quiet moment (not an empty thread, since this arrives mid-history).
+
+### Finished is finished, however you finished it (owner 2026-08-15)
+
+Owner ran 77 minutes; the watch recorded it; the plan still showed the run as pending. Then: "the
+thing is I never clicked done because I clicked talk to me — because I wanted to give coach my
+feedback (that feedback needs to get logged against the workout, so we can track it persistently
+and review it during the weekly checkin)", and "talk to me should be a completion path that logs
+what you actually said you did", and "the coach can review and update when you speak with them".
+
+Two completion paths were declared and neither was implemented.
+
+**1. `completion_source: 'healthkit'` was written and never read.** Every synthesis validated it,
+`plan-synthesis` has it in `COMPLETION_SOURCES`, the owner's long run carried it — and no code
+anywhere turned a recorded workout into a done session. All the data was already correlated: the
+run was in `workout_history` (10:57–12:14 local, 77 min, 8.78 km) and the occurrence sat pending.
+`workout-match.ts` (pure, 11 tests) + `autoTickFromWorkouts`, run when rows arrive. Conservative
+by design, because a wrongly-ticked session writes a false record of someone's week they may never
+notice: the activity must SAY it completes from a device, the kind must match, and **ambiguity
+ticks nothing** — two runs planned the same day means the person is asked rather than guessed at.
+Grouped by LOCAL day so a 22:30 run belongs to that evening. Never un-ticks, never overwrites a
+log someone wrote themselves.
+
+**2. Talking about a session is now logging it.** New `log_session` action tool: their report is
+parsed onto that session and it is marked done — which is what "Talk to me" actually means. It
+also REVISES a session already logged, so the coach can review and correct one later. This is what
+gives the weekly check-in something to read: feedback that used to live only in a chat transcript
+now sits on the session itself.
+
+Note the ordering that makes both worth having: the watch ticks the box, and the conversation
+supplies the words. Neither replaces the other.
+
+The audit caught the new tool three ways (the word "occurrence" is banned schema jargon, `date`
+untaught, no immediacy statement) — fixed, not waived.
