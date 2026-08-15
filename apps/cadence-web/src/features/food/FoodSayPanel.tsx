@@ -6,8 +6,10 @@ import { useState } from 'react';
 import { MicButton } from '../../components/MicButton.tsx';
 import {
   estimateFood,
+  getPlateAdvice,
   previewMeal,
   type MealPreview,
+  type PlateAdvice,
   foodSummaryFromResolve,
   portionHintFromResolve,
   resolveFoods,
@@ -36,6 +38,8 @@ export function FoodSayPanel({
   const [portionById, setPortionById] = useState<Record<string, ResolvePortionHint>>({});
   const [newHint, setNewHint] = useState<ResolveCandidate | null>(null);
   const [mealPreview, setMealPreview] = useState<MealPreview | null>(null);
+  const [advice, setAdvice] = useState<PlateAdvice | null>(null);
+  const [advising, setAdvising] = useState(false);
 
   async function draftNewFromWords(q: string, captureText?: string) {
     const est = await estimateFood(captureText?.trim() || q);
@@ -120,6 +124,14 @@ export function FoodSayPanel({
     return (
       <MealParseCard
         preview={mealPreview}
+        onAskRead={() => {
+          setAdvising(true);
+          void getPlateAdvice({ meal: mealPreview.raw_text })
+            .then((a) => setAdvice(a))
+            .finally(() => setAdvising(false));
+        }}
+        advice={advice}
+        advising={advising}
         onLogged={() => {
           setMealPreview(null);
           setText('');

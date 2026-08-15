@@ -525,11 +525,17 @@ export interface PlateAdvice {
  * suggestion, grounded in what they have LEFT today and their goal. Advice only — creates NO nutrition
  * log (this is a "should I?" check, not a record). Reuses the meal-photo upload + vision path.
  */
-export async function getPlateAdvice(userId: string, photoDataUrl: string): Promise<PlateAdvice> {
+export async function getPlateAdvice(userId: string, input: { photo?: string; meal?: string }): Promise<PlateAdvice> {
   const date = today();
-  const photoRef = await putMealPhoto(userId, date, photoDataUrl);
+  const mealText = (input.meal ?? '').trim().slice(0, 500);
+  if (!input.photo && !mealText) throw new Error('plate advice needs a photo or a description');
+
+  // A photo uploads and rides as a signed URL; a description rides as a variable. Same job, same
+  // audit trail — the read is available whichever way they told us, which is the point: it used
+  // to exist ONLY behind the camera, so anyone who typed their meal had no way to ask.
+  const photoRef = input.photo ? await putMealPhoto(userId, date, input.photo) : null;
   const [signedUrl, day, goals] = await Promise.all([
-    signMealPhotoUrl(photoRef),
+    photoRef ? signMealPhotoUrl(photoRef) : Promise.resolve(null),
     getNutritionDay(userId, date),
     listGoalsByStatus(userId, ['confirmed', 'committed']),
   ]);
@@ -539,8 +545,9 @@ export async function getPlateAdvice(userId: string, photoDataUrl: string): Prom
     {
       remaining: JSON.stringify(day.left ?? {}),
       goal: JSON.stringify(goals.filter((g) => g.area === 'nourishment').map((g) => g.title)),
+      meal: mealText,
     },
-    { images: [signedUrl] },
+    signedUrl ? { images: [signedUrl] } : {},
   );
 
   let parsed: Record<string, unknown> = {};
