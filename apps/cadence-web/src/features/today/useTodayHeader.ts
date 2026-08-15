@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { capabilities } from '../../lib/capability/index.ts';
 import { getWeather, getHomeLocation, saveHomeLocation, browserTimezone, type WeatherNow } from '../../lib/api.ts';
 
 export type TodayHeader = {
@@ -46,25 +47,29 @@ export function useTodayHeader(): TodayHeader {
     await refreshWeather();
   }, [refreshWeather]);
 
-  const requestLocation = useCallback(() => {
-    if (!('geolocation' in navigator)) return;
+  /**
+   * Through the capability seam, NEVER `navigator.geolocation`. Two reasons, and the second is
+   * the one a user sees: inside the shell the page is served from capacitor://localhost, which
+   * iOS does not treat as a secure origin (so the web API is unreliable there) — and the webview
+   * prompt asks on behalf of its ORIGIN, so it read "Allow localhost to use your location".
+   * Nobody has agreed to give their location to localhost. The plugin raises the native
+   * CoreLocation prompt instead, which carries the app's name and our Info.plist reason.
+   */
+  const requestLocation = useCallback(async () => {
+    if (!capabilities.location.isAvailable()) return;
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          await saveHomeLocation({
-            lat: Number(pos.coords.latitude.toFixed(2)), // coarse — ~1 km, not a precise fix
-            lon: Number(pos.coords.longitude.toFixed(2)),
-            timezone: browserTimezone(),
-          });
-          await refreshWeather();
-        } finally {
-          setLocating(false);
-        }
-      },
-      () => setLocating(false),
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 3_600_000 },
-    );
+    try {
+      const pos = await capabilities.location.getCoarseLocation();
+      if (!pos) return;
+      await saveHomeLocation({
+        lat: Number(pos.lat.toFixed(2)), // coarse — ~1 km, not a precise fix
+        lon: Number(pos.lon.toFixed(2)),
+        timezone: browserTimezone(),
+      });
+      await refreshWeather();
+    } finally {
+      setLocating(false);
+    }
   }, [refreshWeather]);
 
   useEffect(() => {
@@ -80,23 +85,21 @@ export function useTodayHeader(): TodayHeader {
         // a real move (> ~50 km — travel, never GPS jitter or a coarse-rounding wobble) updates
         // the stored location, which reverse-geocodes the new label server-side. Failures of any
         // kind change nothing — the stored city keeps standing.
-        navigator.geolocation?.getCurrentPosition(
-          async (pos) => {
+        void capabilities.location
+          .getCoarseLocation()
+          .then(async (pos) => {
+            if (!pos || !alive) return;
             const stored = loc.home_location!;
-            const moved = haversineKm(stored.lat, stored.lon, pos.coords.latitude, pos.coords.longitude);
+            const moved = haversineKm(stored.lat, stored.lon, pos.lat, pos.lon);
             if (moved < 50 || !alive) return;
             await saveHomeLocation({
-              lat: Number(pos.coords.latitude.toFixed(2)),
-              lon: Number(pos.coords.longitude.toFixed(2)),
+              lat: Number(pos.lat.toFixed(2)),
+              lon: Number(pos.lon.toFixed(2)),
               timezone: browserTimezone(), // travel far enough to change cities changes clocks too
             }).catch(() => undefined);
             if (alive) await refreshWeatherAndCity();
-          },
-          () => {
-            /* declined / unavailable — the stored location stands */
-          },
-          { enableHighAccuracy: false, timeout: 8000, maximumAge: 600_000 },
-        );
+          })
+          .catch(() => undefined); // declined / unavailable — the stored location stands
       } else {
         requestLocation(); // one-time silent auto-detect
       }

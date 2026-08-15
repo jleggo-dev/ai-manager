@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CoachFaceId } from '@cadence/shared';
 import { CadenceWorking } from '../../components/CadenceWorking.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
@@ -6,6 +6,7 @@ import { CoachFaceGrid } from '../coach/CoachFaceGrid.tsx';
 import { useCoachFace } from '../coach/coachFaceContext.ts';
 import { capabilities } from '../../lib/capability/index.ts';
 import { enablePushOnThisDevice } from '../settings/notifications/enablePush.ts';
+import { useAppResume } from '../../lib/useAppResume.ts';
 import { useBuildPlan } from './useBuildPlan.ts';
 
 /**
@@ -19,12 +20,32 @@ import { useBuildPlan } from './useBuildPlan.ts';
  */
 function NotifyWhenReady() {
   const [on, setOn] = useState(false);
-  const asked = useRef(false);
-  useEffect(() => {
-    if (asked.current || !capabilities.push.isAvailable()) return;
-    asked.current = true;
-    void enablePushOnThisDevice().then((r) => setOn(r === 'on'));
-  }, []);
+  const busy = useRef(false);
+  /**
+   * Asked on mount AND again whenever they come back, because the first ask can land at the one
+   * moment iOS cannot answer it.
+   *
+   * This screen's own copy says "leave the app if you like", and someone who takes it up on that
+   * during the very seconds the permission dialog would appear never sees it — a backgrounded app
+   * cannot show one. Observed on device 2026-08-15: the build ran to completion while they were
+   * away, and the ledger recorded the ping as `failed / no_devices`, because no token had ever
+   * been registered. The feature defeated itself on exactly the behaviour it exists to support.
+   *
+   * Retrying is safe rather than naggy: iOS shows its permission dialog once per install, and
+   * every later request resolves straight from the stored answer without surfacing anything. So
+   * a decline stays declined and silent, while a MISSED prompt gets the second chance it needs.
+   */
+  const attempt = useCallback(() => {
+    if (on || busy.current || !capabilities.push.isAvailable()) return;
+    busy.current = true;
+    void enablePushOnThisDevice()
+      .then((r) => setOn(r === 'on'))
+      .finally(() => {
+        busy.current = false;
+      });
+  }, [on]);
+  useEffect(() => attempt(), [attempt]);
+  useAppResume(attempt);
   if (!on) return null;
   return <div className="build-notify is-on">🔔 I&rsquo;ll ping you when it&rsquo;s ready — feel free to leave.</div>;
 }
