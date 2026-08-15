@@ -436,6 +436,7 @@ export async function listLoggedForCorrection(
     log: OccurrenceLog | null;
     value: Record<string, number> | null;
     status: string;
+    recurrence: string;
   }>
 > {
   const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
@@ -447,14 +448,30 @@ export async function listLoggedForCorrection(
       log: OccurrenceLog | null;
       value: Record<string, number> | null;
       status: string;
+      recurrence: string;
     }>
   >`
-    select o.occurrence_id, to_char(o.date, 'YYYY-MM-DD') as date, a.title, o.log, o.value, o.status
+    select o.occurrence_id, to_char(o.date, 'YYYY-MM-DD') as date, a.title, o.log, o.value, o.status,
+           coalesce(a.schedule->>'recurrence', '') as recurrence
     from cadence.occurrences o
     join cadence.activities a on a.activity_id = o.activity_id
     where o.user_id = ${userId} and o.date >= ${from} and o.status in ('done', 'skipped', 'missed')
     order by o.date desc
     limit ${limit}`;
+}
+
+/**
+ * Erase an occurrence outright — for the ONE case that earns it: a session that never happened
+ * and was never scheduled, so the row exists only because something logged it into being.
+ *
+ * A scheduled slot is never deleted here. Marking it not-done is the honest correction, because
+ * the plan really did ask for it that day. And the inverse matters just as much: setting a
+ * NEVER-scheduled occurrence to 'skipped' would invent a missed session on a day nothing was
+ * asked of them, which then counts against their consistency — punishing someone for correcting
+ * our mistake.
+ */
+export async function deleteOccurrence(userId: string, occurrenceId: string): Promise<void> {
+  await sql`delete from cadence.occurrences where user_id = ${userId} and occurrence_id = ${occurrenceId}`;
 }
 
 /** Replace a logged session's numbers and summary — a correction, not a new log. */

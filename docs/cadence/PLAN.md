@@ -5489,3 +5489,38 @@ split accumulates duplicates forever (the bug being fixed), a false merge keeps 
 things. Caught by the test that expected "burnout" to absorb "burnout — signed off work".
 
 With this, a constraint writer (the tool deferred in #202) is safe to add later.
+
+### update_constraint, and the line between history and a mis-capture (owner ruling 2026-08-14)
+
+Owner: *"an injury can be latent or recovered from, and this is different from 'you captured that
+injury wrong, I don't have a knee injury and I never did'. Only that explicit correction should
+actually delete a thing."*
+
+That distinction is now the shape of the tool. Four verbs, and only one of them erases:
+
+- **lift** — it has eased. Status goes `quiet`, the row STAYS. It happened, it may come back, and
+  a coach who forgets it entirely is a coach you have to re-teach.
+- **flare** — it is back. Status `active`, plan works around it again.
+- **add** — genuinely new.
+- **remove** — *the only delete*, reserved for "that was never true". A mis-capture is not
+  history, it is an error, and leaving it on file keeps shaping plans around something that never
+  existed.
+
+**The same line runs through `correct_log`, and it needed a real fix.** "I didn't actually run
+Sunday" means different things depending on whether Sunday was ever asked of them:
+- the day WAS scheduled → mark it not-done; the slot is real and the plan did ask for it
+- the day was NEVER scheduled → **delete the occurrence**; it existed only because something
+  logged it into being
+
+Getting this wrong is not cosmetic: marking a never-scheduled occurrence `skipped` invents a
+missed session on a day nothing was asked of them, which then counts against their consistency —
+punishing someone for correcting our mistake. The test for it uses the owner's own example.
+Detection is `expandRecurrence` over the occurrence's own date, so the off-plan bucket (empty
+recurrence) and a log dated onto an unscheduled day are both handled by one rule.
+
+Safe to build now only because #203 fixed the merge — before it, any constraint writer would have
+been clobbered by the next turn's ambient capture.
+
+The audit caught this tool too: `kind`/`plan_around`/`until` were described in prose but the rule
+wants them taught by QUOTED worked example (`{"kind": "life"}`), which is the better convention —
+so the example now carries every parameter.
