@@ -25,6 +25,7 @@ export function MealParseCard({
   onNotAMeal,
   onCancel,
   onAskRead,
+  onAddAnother,
   advice,
   advising,
 }: {
@@ -37,6 +38,8 @@ export function MealParseCard({
   onCancel: () => void;
   /** Ask for a read BEFORE eating. Absent = the host doesn't offer it here. */
   onAskRead?: () => void;
+  /** "I also had…" — back to the composer, keeping this meal open to grow. */
+  onAddAnother?: () => void;
   advice?: PlateAdvice | null;
   advising?: boolean;
 }) {
@@ -130,6 +133,11 @@ export function MealParseCard({
             ? 'Writing it down…'
             : `Log it — ${preview.items.length} ingredient${preview.items.length === 1 ? '' : 's'}`}
         </button>
+        {onAddAnother && (
+          <button type="button" className="mc-addanother" disabled={busy} onClick={onAddAnother}>
+            ＋ Add another thing
+          </button>
+        )}
         {onNotAMeal && (
           <button type="button" className="lockbtn ghost" disabled={busy} onClick={onNotAMeal}>
             Just one food? Match it instead

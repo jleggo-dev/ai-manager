@@ -5773,3 +5773,40 @@ estimate — close enough to coach from, and I'll adjust as I learn how you eat.
    dutifully returned `{"name":"That last run","serving_label":"1 run"}`. This is the exact failure
    `useCoachChat`'s comment already warns about (the Spartan Beast logged for breakfast); the
    guards in `classifyFoodIntent` are not catching training talk.
+
+### The classifier that priced a run as food, and meals that are more than one thing (2026-08-15)
+
+**1. `classifyFoodIntent` fired on a workout message.** "That last run was good but I had a really
+hard time keeping my Hr in zone 2" reached `estimate-food`, which returned
+`{"name":"That last run","serving_label":"1 run"}`. The guard was a list of adjectives immediately
+after "had a" — one adverb ("a **really** hard time") walked straight past it. That is the second
+shipped failure of the same shape (the first: "I HAD TO skip it" → a Spartan Beast logged for
+breakfast, ~2000 kcal).
+
+A blocklist of phrasings cannot win against English, so the rule changed shape: "had" must now be
+UNCONTRADICTED — the turn must not carry training/sleep/mood vocabulary (`NOT_FOOD_CONTEXT`), and
+the thing had must not be a noun nobody eats (`NOT_FOOD_NOUN`, matched however it is modified).
+`ate`/`drank` need no help; they are specific verbs. An explicit meal word ("after my run I had
+breakfast") still wins over the activity veto. When the only evidence is "had", silence is correct
+— a wrong draft interrupts a conversation to ask someone to affirm something absurd, which is how
+confirm-first loses trust rather than earning it. 30 cases, every real failure verbatim.
+
+**2. A meal is almost always several things, and the UI didn't believe it.** Owner: "people will
+eat multiple things for a meal (almost always) and currently it feels like we don't really support
+that." The single-food draft card had "＋ Add another thing"; the multi-ingredient card had
+nothing, and a meal already logged gave no sign it existed. So the latte died: `estimate_food` ran
+cleanly at 14:15 and no row was ever written.
+- `MealParseCard` gains "＋ Add another thing" — back to the composer, meal held open.
+- `mergePreviews` joins two reads: items concatenate (parser cap respected), totals add across
+  nutrients only one side had, raw text keeps BOTH halves so the log still holds their own words,
+  and confidence takes the LOWER — a meal is only as sure as its least sure part.
+- The sheet now shows what is ALREADY on this meal today ("Anything you add now joins it"), so a
+  second tap on breakfast reads as adding rather than as nothing happening.
+
+**Also fixed:** the client's own `MealMacros` still stopped at fat, so widened `Macros` values
+would not typecheck through the web layer; and the zxing `?url` import moved inside the lazy
+loader — a top-level WASM asset import made the whole module graph unloadable in the test runner.
+
+**Found, not yet fixed:** `onTalk` in `PlanView.tsx:463` is `setStartOcc(null); onCoach();` — the
+post-session "Talk to me" switches tabs and passes NOTHING about the session just finished, so the
+coach opens with no idea what you did. Owner hit this exact path.

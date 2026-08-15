@@ -2,11 +2,20 @@ import { BASE, headers } from './http.ts';
 
 /* ── Nutrition (Observe phase) ─────────────────────────────────── */
 export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | 'other';
+/** Mirrors `Macros` in @cadence/shared — macros plus the micronutrients a day can now total. */
 export interface MealMacros {
   kcal?: number;
   protein_g?: number;
   carbs_g?: number;
   fat_g?: number;
+  fiber_g?: number;
+  sodium_mg?: number;
+  iron_mg?: number;
+  zinc_mg?: number;
+  vitamin_c_mg?: number;
+  calcium_mg?: number;
+  potassium_mg?: number;
+  vitamin_b12_ug?: number;
   source?: 'ai' | 'user';
 }
 export interface Meal {

@@ -57,25 +57,53 @@ function hasSaveRecipeIntent(t: string): boolean {
   );
 }
 
+/**
+ * Words that mean this turn is about TRAINING, sleep or mood — not eating. Their presence vetoes a
+ * "had"-based guess outright, because someone describing a session is not describing a meal.
+ */
+const NOT_FOOD_CONTEXT =
+  /\b(run|runs|running|ran|walk|walked|jog|ride|rode|cycl\w*|swim|swam|lift\w*|workout|training|session|reps?|sets?|pace|tempo|zone \d|heart ?rate|hr\b|bpm|km|kms|kilometers?|miles?|mins? of|stretch\w*|mobility|yoga|meditat\w*|breathwork|journal\w*|sleep|slept|nap|mood|stress|anxious|physio|injur\w*|knee|shoulder|elbow|ankle|back pain)\b/i;
+
+/** Nouns that follow "had a/an" and are never food, however they are modified. */
+const NOT_FOOD_NOUN =
+  /\b(time|day|week|weekend|month|year|morning|afternoon|evening|night|go|chat|talk|think|rest|break|nap|shower|call|meeting|look|feeling|sense|moment|problem|issue|setback|flare|episode)\b/i;
+
+/**
+ * Does this turn say what they ATE?
+ *
+ * "had" is an auxiliary verb far more often than it is eating, and every version of this function
+ * that tried to enumerate the non-eating phrasings has eventually lost to English. Two shipped
+ * failures paid for the rules below:
+ *  - "I do at least one beast a year, but I HAD TO skip it this year" → a confirm sheet offering
+ *    to log one Spartan Beast, for breakfast, at ~2000 kcal.
+ *  - "That last run was good but I HAD A REALLY HARD TIME keeping my HR in zone 2" → the food
+ *    estimator was handed a run and dutifully priced it as `{"name":"That last run"}`. The old
+ *    guard listed adjectives immediately after "had a", so a single adverb walked straight past it.
+ *
+ * So the shape changed. A blocklist of phrasings cannot win; what these rules do instead is demand
+ * that "had" be UNCONTRADICTED — the turn must not be about training, sleep or mood, and the thing
+ * had must not be one of the nouns nobody eats. `ate`/`drank` need no such help: they are specific
+ * verbs that mean one thing. A wrong draft is expensive here — the sheet interrupts a conversation
+ * to ask someone to affirm something absurd, which is exactly how confirm-first loses trust rather
+ * than earning it — so when the signal is only "had", silence is the correct answer.
+ */
 function hasLogFoodIntent(t: string): boolean {
   if (/\b(my )?usual\s+(breakfast|lunch|dinner|snack)\b/i.test(t)) return true;
-  // "had" is an auxiliary verb far more often than it is eating, and treating every one of them as
-  // a meal produced the worst false positive we have shipped: "I do at least one beast a year, but
-  // I HAD TO skip it this year" opened a confirm sheet offering to log one Spartan Beast, for
-  // breakfast, at ~2000 kcal. A wrong draft is not a small cost here — the sheet interrupts the
-  // conversation to ask the user to affirm something absurd, which is the opposite of
-  // confirm-before-committing earning trust. So the auxiliary forms are excluded outright: "had to
-  // skip", "had been running", "had a rough week" are never someone telling us what they ate.
-  if (
-    /\b(i |just )?(had|ate|drank)\b/i.test(t) &&
-    !/\bwant to (eat|have)\b/i.test(t) &&
-    !/\bhad\s+(to|been|enough)\b/i.test(t) &&
-    !/\bhad\s+a\s+(rough|hard|tough|long|busy|good|bad|great|quiet|slow)\b/i.test(t)
-  )
-    return true;
   if (/\blog (my |this |that |the )?(breakfast|lunch|dinner|snack|meal|food|it)\b/i.test(t)) return true;
-  if (/\b(ate|had) my\b/i.test(t)) return true;
-  return false;
+
+  // Specific verbs: eating is the only thing they mean.
+  if (/\b(ate|drank)\b/i.test(t) && !/\bwant to (eat|drink|have)\b/i.test(t)) return true;
+
+  // "had": only when nothing in the turn contradicts it.
+  if (!/\bhad\b/i.test(t)) return false;
+  if (/\bwant to (eat|have)\b/i.test(t)) return false;
+  if (/\bhad\s+(to|been|enough)\b/i.test(t)) return false;
+  // "had a really hard time", "had an absolutely brutal week" — any modifiers, then a non-food noun.
+  if (/\bhad\s+(a|an|the)\s+(?:\w+\s+){0,3}?(?=\w)/i.test(t) && NOT_FOOD_NOUN.test(t)) return false;
+  // A meal word makes it unambiguous even in a busy sentence ("after my run I had breakfast").
+  if (/\bhad\s+(my\s+|a\s+|an\s+|the\s+)?(breakfast|lunch|dinner|snack|meal|coffee|tea)\b/i.test(t)) return true;
+  if (NOT_FOOD_CONTEXT.test(t)) return false;
+  return true;
 }
 
 /** Extract "usual breakfast" → breakfast. */
