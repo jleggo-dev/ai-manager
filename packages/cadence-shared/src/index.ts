@@ -43,3 +43,4 @@ export * from './freewrite.ts';
 export * from './journal-export.ts';
 export * from './local-notifications.ts';
 export * from './notifications/index.ts';
+export * from './micronutrient-targets.ts';

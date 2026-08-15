@@ -41,13 +41,10 @@ export async function logMealFromFood(
     typeof input.serving_index === 'number' && Number.isInteger(input.serving_index)
       ? input.serving_index
       : food.default_serving;
-  const nutrients = macrosForLog(food, { servingIndex, quantity });
-  const macros: Macros = {
-    ...(typeof nutrients.kcal === 'number' ? { kcal: nutrients.kcal } : {}),
-    ...(typeof nutrients.protein_g === 'number' ? { protein_g: nutrients.protein_g } : {}),
-    ...(typeof nutrients.carbs_g === 'number' ? { carbs_g: nutrients.carbs_g } : {}),
-    ...(typeof nutrients.fat_g === 'number' ? { fat_g: nutrients.fat_g } : {}),
-  };
+  // Every nutrient the food carries, not just the four. This used to copy out kcal/protein/carbs/
+  // fat by hand and drop the rest on the floor — iron, B12 and the others were computed correctly
+  // by macrosForLog and discarded one line later, which is why a day could never show them.
+  const macros: Macros = macrosForLog(food, { servingIndex, quantity });
   const serving =
     Number.isInteger(servingIndex) && servingIndex >= 0 && servingIndex < food.servings.length
       ? food.servings[servingIndex]
