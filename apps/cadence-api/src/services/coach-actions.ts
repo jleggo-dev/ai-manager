@@ -10,7 +10,17 @@ import {
   listRecentForLogging,
 } from '../repos/occurrences.ts';
 import { logOccurrence } from './session-log.ts';
-import { getUser, mergeCapturedConstraints, removeCapturedConstraint, setPendingPlan } from '../repos/users.ts';
+import {
+  getUser,
+  mergeCapturedConstraints,
+  removeCapturedConstraint,
+  setMacroTargets,
+  setPendingPlan,
+} from '../repos/users.ts';
+import { sanitizeTargets } from './nutrition-day.ts';
+
+/** Today, YYYY-MM-DD — stamped on a target change so the weekly review throttle can see it. */
+const today = (): string => new Date().toISOString().slice(0, 10);
 import { expandRecurrence } from './scheduling.ts';
 import { applyPlanEdits, matchActivity, type PlanEdit } from './plan-edit.ts';
 import { sameConstraint } from './constraint-merge.ts';
@@ -418,6 +428,61 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       return [
         `Logged against ${found.title} (${found.date})${found.logged ? ', replacing what was there' : ' and marked done'}: ${logged.summary}`,
         'Say it back in one short line so they know it is on their file, then carry on with the conversation — do not turn it into a report.',
+      ].join('\n');
+    },
+  },
+
+  set_macro_targets: {
+    name: 'set_macro_targets',
+    description:
+      'Set or adjust the daily calorie and macro targets their eating is coached against. Takes effect immediately. Use to establish targets once you have worked them out together, and — the part that matters most — to ADJUST them when the evidence says they are not doing their job: get_macro_targets reports the actual weekly weight change against a safe rate, and if they are following the numbers and not moving, or moving too fast to be healthy, changing the numbers is the coaching. Say what you changed and why. Never set a calorie target you would not defend out loud; the safety bounds you plan by apply here too. Pass {"kcal": 2100, "protein_g": 150, "carbs_g": 220, "fat_g": 70, "why": "losing 1.1kg/wk is faster than is safe for you — adding 200 back"}.',
+    parameters: {
+      properties: {
+        kcal: { type: 'integer', description: 'Daily calories. Required — the others hang off it.' },
+        protein_g: { type: 'integer', description: 'Daily protein in grams. Omit to leave unchanged.' },
+        carbs_g: { type: 'integer', description: 'Daily carbohydrate in grams. Omit to leave unchanged.' },
+        fat_g: { type: 'integer', description: 'Daily fat in grams. Omit to leave unchanged.' },
+        why: {
+          type: 'string',
+          description:
+            'One line on why these numbers, in their terms. Required — a target with no reason cannot be revisited.',
+        },
+      },
+      required: ['kcal', 'why'],
+    },
+    async run(userId, params) {
+      const why = String(params.why ?? '').trim();
+      if (!why)
+        return 'No reason was given. A target nobody can explain later is a number they will not keep — say why, then set it.';
+
+      const user = await getUser(userId);
+      const current = user?.macro_targets ?? {};
+      // Through the SAME sanitizer the proposal path uses: range-checked field by field, and an
+      // absurd number is dropped rather than clamped into looking deliberate.
+      const clean = sanitizeTargets({
+        kcal: params.kcal,
+        protein_g: params.protein_g ?? current.protein_g,
+        carbs_g: params.carbs_g ?? current.carbs_g,
+        fat_g: params.fat_g ?? current.fat_g,
+      });
+      if (!clean?.kcal) {
+        return 'Those numbers did not survive the safety check (calories must be a realistic daily figure). Nothing changed — work out something you would defend, then set it.';
+      }
+
+      const wasKcal = current.kcal;
+      await setMacroTargets(userId, { ...current, ...clean, last_reviewed: today() });
+      await insertGoalEvent(userId, {
+        kind: 'note',
+        label: `Targets ${wasKcal ? `${String(wasKcal)} → ` : 'set to '}${clean.kcal} kcal: ${why}`.slice(0, 200),
+      }).catch(() => null);
+
+      const said = ['kcal', 'protein_g', 'carbs_g', 'fat_g']
+        .filter((k) => typeof (clean as Record<string, unknown>)[k] === 'number')
+        .map((k) => `${k.replace('_g', '')} ${String((clean as Record<string, unknown>)[k])}`)
+        .join(', ');
+      return [
+        `Targets are now ${said}${wasKcal ? ` (was ${String(wasKcal)} kcal)` : ''}, and today's numbers already count against them.`,
+        'Tell them what changed and why in one line — this is the adjustment they are paying you for, so it should sound like a decision you made, not a setting that moved.',
       ].join('\n');
     },
   },

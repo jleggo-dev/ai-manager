@@ -5876,3 +5876,28 @@ supplies the words. Neither replaces the other.
 
 The audit caught the new tool three ways (the word "occurrence" is banned schema jargon, `date`
 untaught, no immediacy statement) — fixed, not waived.
+
+### The coach can finally set and adjust macro targets (2026-08-15)
+
+The gap named earlier: the adaptive engine existed (`nutrition-baseline` computes actual weekly
+rate vs a safe rate, classifies pace, proposes adjusted targets on a weekly throttle) and the
+coach could not reach any of it — no read, no action. "If coach isn't supplying macro targets,
+then we have no baseline… this is the whole point of the coaching."
+
+- **`get_macro_targets`** (read): current targets, today's intake and what is left, when they were
+  last reviewed, and — the part that makes it a LOOP — the weight trend rendered as a verdict
+  ("losing 1.1 kg/wk, FASTER than the safe 0.6 — the targets are too aggressive"). No targets set
+  renders as exactly that, which is her cue to work some out rather than guess at portions.
+- **`set_macro_targets`** (action, immediate): sets or adjusts, through the SAME `sanitizeTargets`
+  range check the proposal path uses, so an absurd number is dropped rather than clamped into
+  looking deliberate. `why` is REQUIRED — a target nobody can explain later is one they will not
+  keep, and it is what makes the next review possible. Merges rather than replaces, so
+  `eatback_pct` and other settings survive a target change; stamps `last_reviewed`; leaves a
+  goal-event trail naming the before, the after and the reason.
+
+The tool's own output tells her to speak it as a decision she made rather than a setting that
+moved — this adjustment IS the coaching, and it should not sound like a form.
+
+Deferred by the owner: the weekly check-in ("we can build it when we get closer — next Saturday is
+our check-in"). Everything it needs now exists: ticked sessions, their words on those sessions
+(`log_session`), the weigh-in trend, and a coach who can act on all three.

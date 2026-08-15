@@ -9,6 +9,9 @@
 import type { DietaryProfile, EatingWindow, Food, NutritionLog, NutritionSummary, Recipe } from '@cadence/shared';
 import { EMPTY_DIETARY_PROFILE, sanitizeDietaryProfile } from '@cadence/shared';
 import { getDietaryProfile, getUser } from '../../repos/users.ts';
+import { listWeighInSeries } from '../../repos/occurrences.ts';
+import { getNutritionDay } from '../nutrition.ts';
+import { actualWeeklyRate, classifyLossPace, safeWeeklyKg } from '../weight-trend.ts';
 import { listNutritionLogs } from '../../repos/nutrition.ts';
 import { listRecipes, searchRecipes } from '../../repos/recipes.ts';
 import { listForCoach } from '../../repos/journal-entries.ts';
@@ -238,6 +241,81 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
     },
     rows(r) {
       return (r as Recipe[]).length;
+    },
+  },
+
+  get_macro_targets: {
+    name: 'get_macro_targets',
+    description:
+      "The user's daily nutrition targets, how today is tracking against them, and — when they weigh in — whether the scale says those targets are working. Use before any conversation about what they should be eating, before proposing a change to their targets, and whenever they ask how they are doing on food. If they have no targets yet, this says so, which is your cue to work some out with them rather than guessing at portions.",
+    domains: ['nutrition', 'progress'],
+    async run(userId) {
+      const [user, day, series] = await Promise.all([
+        getUser(userId),
+        getNutritionDay(userId),
+        listWeighInSeries(userId),
+      ]);
+      const targets = user?.macro_targets ?? null;
+      const currentKg = user?.baseline?.weight_kg?.current;
+      const actual = actualWeeklyRate(series);
+      const safe = typeof currentKg === 'number' ? safeWeeklyKg(currentKg) : null;
+      return {
+        targets: targets && Object.keys(targets).length ? targets : null,
+        eaten: day.totals,
+        left: day.left,
+        last_reviewed: targets?.last_reviewed ?? null,
+        trend:
+          actual != null && safe != null
+            ? {
+                actual_kg_per_week: Math.round(actual * 100) / 100,
+                safe_kg_per_week: safe,
+                pace: classifyLossPace(actual, safe),
+              }
+            : null,
+      };
+    },
+    render(r) {
+      const { targets, eaten, left, last_reviewed, trend } = r as {
+        targets: Record<string, number | string | null> | null;
+        eaten: Record<string, number>;
+        left: Record<string, number> | null;
+        last_reviewed: string | null;
+        trend: { actual_kg_per_week: number; safe_kg_per_week: number; pace: string } | null;
+      };
+      const lines: string[] = [];
+      if (!targets) {
+        lines.push('Daily targets: none set yet — nothing to eat toward, so any portion advice is a guess.');
+      } else {
+        const t = ['kcal', 'protein_g', 'carbs_g', 'fat_g']
+          .filter((k) => typeof targets[k] === 'number')
+          .map((k) => `${k.replace('_g', '')} ${String(targets[k])}`)
+          .join(', ');
+        lines.push(
+          `Daily targets: ${t || 'set, but empty'}${last_reviewed ? ` (last reviewed ${last_reviewed})` : ''}`,
+        );
+        if (left && Object.keys(left).length) {
+          lines.push(
+            `Left today: ${Object.entries(left)
+              .map(([k, v]) => `${k.replace('_g', '')} ${Math.round(v)}`)
+              .join(', ')}`,
+          );
+        }
+      }
+      if (eaten?.kcal != null) lines.push(`Eaten today: ${Math.round(eaten.kcal)} kcal`);
+      if (trend) {
+        // The whole point of the loop: are the targets actually doing what they were set to do?
+        const verdict =
+          trend.pace === 'too_fast'
+            ? `losing ${trend.actual_kg_per_week} kg/wk, FASTER than the safe ${trend.safe_kg_per_week} — the targets are too aggressive`
+            : trend.pace === 'too_slow'
+              ? `changing ${trend.actual_kg_per_week} kg/wk, slower than expected — the targets may not be doing the work`
+              : `${trend.actual_kg_per_week} kg/wk, within the safe ${trend.safe_kg_per_week} — on track`;
+        lines.push(`Weight trend: ${verdict}.`);
+      }
+      return lines.join('\n');
+    },
+    rows(r) {
+      return (r as { targets: unknown }).targets ? 1 : 0;
     },
   },
 };

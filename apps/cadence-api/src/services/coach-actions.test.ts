@@ -15,6 +15,7 @@ const deleteOccurrence = vi.fn();
 const getUser = vi.fn();
 const mergeCapturedConstraints = vi.fn();
 const removeCapturedConstraint = vi.fn();
+const setMacroTargets = vi.fn();
 
 vi.mock('../repos/plans.ts', () => ({ getActivePlan: (...a: unknown[]) => getActivePlan(...a) }));
 vi.mock('../repos/activities.ts', () => ({ listActivities: (...a: unknown[]) => listActivities(...a) }));
@@ -35,6 +36,7 @@ vi.mock('../repos/users.ts', () => ({
   getUser: (...a: unknown[]) => getUser(...a),
   mergeCapturedConstraints: (...a: unknown[]) => mergeCapturedConstraints(...a),
   removeCapturedConstraint: (...a: unknown[]) => removeCapturedConstraint(...a),
+  setMacroTargets: (...a: unknown[]) => setMacroTargets(...a),
 }));
 // Imported by nothing here on purpose — the assertion is that it is NEVER reached.
 vi.mock('./plan-commit-flow.ts', () => ({ confirmPendingPlan: (...a: unknown[]) => commitActivities(...a) }));
@@ -312,5 +314,58 @@ describe('update_constraint', () => {
     await constraint.run('u1', { constraint: 'away in Lisbon', action: 'add', until: '2026-09-30' });
     const [, written] = mergeCapturedConstraints.mock.calls[0]!;
     expect(written[0].until).toBe('2026-09-30');
+  });
+});
+
+/**
+ * The loop the owner called "the whole point of the coaching": if they follow the targets and the
+ * scale does not move — or moves too fast to be healthy — the coach changes the numbers. The
+ * engine for deciding that already existed; until now she had no way to act on it.
+ */
+describe('set_macro_targets', () => {
+  const setTargets = COACH_ACTION_TOOLS.set_macro_targets!;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    insertGoalEvent.mockResolvedValue({});
+    getUser.mockResolvedValue({ macro_targets: { kcal: 1900, protein_g: 150, eatback_pct: 50 } });
+  });
+
+  it('adjusts the numbers and keeps settings that are not targets', async () => {
+    const out = await setTargets.run('u1', { kcal: 2100, why: 'losing faster than is safe — adding 200 back' });
+    const [, written] = setMacroTargets.mock.calls[0]!;
+    expect(written.kcal).toBe(2100);
+    expect(written.protein_g).toBe(150); // untouched, not wiped
+    expect(written.eatback_pct).toBe(50); // a setting, not a target — must survive
+    expect(written.last_reviewed).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(out).toMatch(/was 1900 kcal/);
+  });
+
+  it('leaves a trail naming the change and the reason', async () => {
+    await setTargets.run('u1', { kcal: 2100, why: 'losing faster than is safe' });
+    expect(insertGoalEvent.mock.calls[0]![1].label).toMatch(/1900 → 2100 kcal: losing faster/);
+  });
+
+  it('refuses a target with no reason — one nobody can explain will not be kept', async () => {
+    const out = await setTargets.run('u1', { kcal: 2100 });
+    expect(setMacroTargets).not.toHaveBeenCalled();
+    expect(out).toMatch(/No reason was given/);
+  });
+
+  it('refuses numbers that do not survive the safety check', async () => {
+    const out = await setTargets.run('u1', { kcal: 600, why: 'they asked for it' });
+    expect(setMacroTargets).not.toHaveBeenCalled();
+    expect(out).toMatch(/did not survive the safety check/);
+  });
+
+  it('sets a first target when there were none', async () => {
+    getUser.mockResolvedValue({ macro_targets: null });
+    const out = await setTargets.run('u1', { kcal: 2200, protein_g: 160, why: 'a starting point we can adjust' });
+    expect(setMacroTargets.mock.calls[0]![1]).toMatchObject({ kcal: 2200, protein_g: 160 });
+    expect(out).not.toMatch(/was /);
+  });
+
+  it('tells her to speak the change as a decision, not a settings update', async () => {
+    const out = await setTargets.run('u1', { kcal: 2100, why: 'x' });
+    expect(out).toMatch(/sound like a decision you made/);
   });
 });
