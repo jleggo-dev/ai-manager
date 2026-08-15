@@ -18,14 +18,15 @@ export type PlateFood = Pick<
   'food_id' | 'name' | 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'
 >;
 
-const MACRO_KEYS = ['kcal', 'protein_g', 'carbs_g', 'fat_g'] as const;
+// Mirrors nutrition-day's key list — a plate sums every nutrient its foods carry, micros too.
+import { MACRO_KEYS } from './nutrition-day.ts';
 
 export function composePlate(
   foods: PlateFood[],
   portions: Array<{ serving_index?: number; quantity?: number }>,
 ): { items: NutritionLog['items']; macros: Macros | null } {
   const items: NutritionLog['items'] = [];
-  const total: Record<(typeof MACRO_KEYS)[number], number> = { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+  const total = Object.fromEntries(MACRO_KEYS.map((k) => [k, 0])) as Record<(typeof MACRO_KEYS)[number], number>;
 
   foods.forEach((food, i) => {
     const p = portions[i] ?? {};

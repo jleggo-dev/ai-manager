@@ -2,11 +2,33 @@
    §5.6 Nutrition  (+ §B2 macro targets)
    ════════════════════════════════════════════════════════════════ */
 
+/**
+ * What one meal — or one day, or one target — is made of.
+ *
+ * The four macros, and the micronutrients that decide whether a diet is actually nourishing.
+ * Those micros used to exist only on `FoodNutrients` (per food, from USDA/labels/OFF) and were
+ * dropped the instant anything was logged, because this type stopped at fat. So a day could never
+ * show iron and a target could never contain B12 — which makes "help me move to a vegetarian
+ * diet" a goal the app could not coach even though it held every number needed (owner,
+ * 2026-08-15).
+ *
+ * Micros stay OPTIONAL and are never invented: they come from real food data, and an AI-estimated
+ * meal simply has none rather than a guess (see FoodNutrients' own note). A day's micro totals are
+ * therefore a floor — what we can prove they ate — which is the honest direction to be wrong in.
+ */
 export interface Macros {
   kcal?: number;
   protein_g?: number;
   carbs_g?: number;
   fat_g?: number;
+  fiber_g?: number;
+  sodium_mg?: number;
+  iron_mg?: number;
+  zinc_mg?: number;
+  vitamin_c_mg?: number;
+  calcium_mg?: number;
+  potassium_mg?: number;
+  vitamin_b12_ug?: number;
   /** Who produced these numbers: AI estimate ('ai') or the user's own correction ('user'). */
   source?: 'ai' | 'user';
 }

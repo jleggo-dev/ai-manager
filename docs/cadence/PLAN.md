@@ -5691,3 +5691,51 @@ the coach actually holding a food-habits/weight-loss conversation. Plus: where t
 (owner wants coach-proposed, not a settings form), where allergies are ever ASKED rather than
 inferred, "matching" as leaked vocabulary, "log it" → "assess, then confirm", and adding a
 forgotten item to a multi-ingredient meal.
+
+### The coach's food plan: what exists, what shipped, what's left (owner 2026-08-15)
+
+Owner: "Coach needs to build a food plan… macro targets. If I follow them to a tee and don't
+lose/gain — or do it too quickly to be healthy — coach needs to start adjusting the macros. This
+is the whole point of the coaching. We should track micronutrients as well (maybe I'm just trying
+to find a healthy transition to a vegetarian diet)."
+
+**Finding: the adaptive loop was already built and had nowhere to happen.** `nutrition-baseline`
+proposes initial targets when a goal warrants them, and — once targets exist and a weigh-in trend
+is trustworthy — computes `actualWeeklyRate` vs `safeWeeklyKg`, classifies the pace, and asks for
+ADJUSTED targets, throttled weekly by `last_reviewed`. Exactly the loop described. It surfaces in
+one place: a card inside a meal task. The coach's harness has no target read and no target action,
+so the party that should own the food plan is the only one that cannot touch it.
+
+**Answering the owner's question — is the weigh-in part of the weekly check-in? NO.** Two
+unconnected Sunday system activities (weigh-in 08:00 `body`, check-in 20:00 `reflection`). The
+weigh-in writes `value.weight_kg`, which feeds the nutrition trend math. The check-in is a
+checkbox: `weekly-readout` exists in the job config with **no caller anywhere in the codebase**.
+That is almost certainly where the adaptive review belongs — one weekly moment that reads the
+weigh-in and the week's food and proposes the change.
+
+**Shipped now (the unblocked data layer):**
+- `Macros` widened past the four macros to carry fibre, sodium, iron, zinc, vitamin C, calcium,
+  potassium and **B12** (new — the nutrient a plant-based transition actually turns on). Micros
+  were computed per food by `macrosForLog` and then **explicitly copied out and discarded** in
+  `nutrition-log-saved.ts`, and `MACRO_KEYS` stopped at fat — so a day could never show iron and a
+  target could never contain B12, with every number already in hand.
+- Rollup keys + per-meal caps widened; micro rounding to 2dp, because B12's entire daily reference
+  is 2.4µg and rounding it like a gram erases the nutrient.
+- `micronutrientTargets(sex, age)` in `@cadence/shared` — published DRI figures as a LOOKUP, with
+  age bands (iron drops for women 51+, calcium rises), and a `floor`/`ceiling` distinction so
+  sodium is never drawn as a goal to reach. Unknown sex/age takes the cautious figure.
+- `sanitizeTargets` explicitly REFUSES a proposed micronutrient target: those are a fact about
+  human biology, not a judgement about this person, and a model emitting one is exceeding its brief.
+
+**Left to build:**
+1. **Coach tools** — `get_macro_targets` (read) + `propose_macro_targets` (action, confirm-first,
+   same propose-then-tap contract as `propose_plan_change`). This is what makes "the coach builds
+   your food plan" literally true.
+2. **A non-weight target mode** — adequacy-based (protein/iron/B12 held) rather than scale-based,
+   for the vegetarian-transition case that has no weight goal at all.
+3. **The weekly check-in as the home for the adaptive review**, wiring the orphaned
+   `weekly-readout` and folding the weigh-in into it.
+4. **Rendering micros** — floors vs the sodium ceiling, and honestly showing that micro totals are
+   a floor (only foods with real data contribute).
+
+Design prompt for 2–4: `docs/cadence/DESIGN-PROMPT-food-plan.md`.

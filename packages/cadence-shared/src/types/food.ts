@@ -25,6 +25,10 @@ export interface FoodNutrients {
   vitamin_c_mg?: number;
   calcium_mg?: number;
   potassium_mg?: number;
+  /** B12 is here because of who Cadence is for: someone moving to a vegetarian or vegan diet can
+   *  hit every macro perfectly and still run themselves down, and this is the nutrient that tells
+   *  them. Micrograms, like every source reports it. */
+  vitamin_b12_ug?: number;
 }
 
 /** Named serving option mapping to a base amount (MFP Select Unit list). */
@@ -82,6 +86,7 @@ export const FOOD_NUTRIENT_KEYS = [
   'vitamin_c_mg',
   'calcium_mg',
   'potassium_mg',
+  'vitamin_b12_ug',
 ] as const satisfies ReadonlyArray<keyof FoodNutrients>;
 
 export type FoodNutrientKey = (typeof FOOD_NUTRIENT_KEYS)[number];

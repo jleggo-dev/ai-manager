@@ -635,6 +635,32 @@ describe('photo-validate (meal photos — capture-first)', () => {
 });
 
 describe('nutrition-day (S1/S5 — estimates honestly, totals deterministically)', () => {
+  /**
+   * Micronutrients survive the rollup. They were computed per food and dropped at this exact
+   * boundary — MACRO_KEYS stopped at fat — so a day could never show iron and a target could
+   * never contain B12, which made "help me move to a vegetarian diet" uncoachable with every
+   * number already in hand (owner, 2026-08-15).
+   */
+  it('keeps micronutrients through sanitizeMacros, at a precision that does not erase them', () => {
+    const m = sanitizeMacros({ kcal: 250, protein_g: 12, iron_mg: 3.4, vitamin_b12_ug: 1.2, calcium_mg: 180 });
+    expect(m).toMatchObject({ kcal: 250, protein_g: 12, iron_mg: 3.4, calcium_mg: 180 });
+    // B12's whole daily reference is 2.4µg — rounding it like a gram would erase the nutrient.
+    expect(m?.vitamin_b12_ug).toBe(1.2);
+  });
+
+  it('caps a unit-confusion outlier without policing a real meal', () => {
+    // A fortified cereal really can carry several times the daily reference; 99999µg cannot.
+    expect(sanitizeMacros({ vitamin_b12_ug: 6 })?.vitamin_b12_ug).toBe(6);
+    expect(sanitizeMacros({ vitamin_b12_ug: 99_999 })?.vitamin_b12_ug).toBe(500);
+  });
+
+  it('refuses a PROPOSED micronutrient target — those are a reference lookup, not a judgement', () => {
+    const t = sanitizeTargets({ kcal: 2100, protein_g: 150, iron_mg: 18, vitamin_b12_ug: 2.4 });
+    expect(t).toMatchObject({ kcal: 2100, protein_g: 150 });
+    expect(t?.iron_mg).toBeUndefined();
+    expect(t?.vitamin_b12_ug).toBeUndefined();
+  });
+
   it('sanitizeMacros rounds (kcal→10s, grams→1), caps, drops junk, and never returns zeros', () => {
     expect(sanitizeMacros({ kcal: 324, protein_g: 17.6, carbs_g: -5, fat_g: 'x' })).toEqual({
       kcal: 320,
