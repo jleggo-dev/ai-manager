@@ -12,8 +12,15 @@ import {
   clearTargets,
   setEatbackPct,
   getPlateAdvice,
+  previewMealParse,
 } from '../services/nutrition.ts';
-import { BodyValidationError, parseBody, logMealBodySchema, macroTargetsBodySchema } from '../validation/body.ts';
+import {
+  BodyValidationError,
+  parseBody,
+  logMealBodySchema,
+  macroTargetsBodySchema,
+  previewMealBodySchema,
+} from '../validation/body.ts';
 
 const router = Router();
 router.use(requireCadenceUser);
@@ -33,6 +40,7 @@ router.post('/meals', async (req: Request, res: Response) => {
         serving_index: body.serving_index,
         quantity: body.quantity,
         items: body.items,
+        parsed: body.parsed as Parameters<typeof logMeal>[1]['parsed'],
         date: body.date,
       }),
     );
@@ -43,6 +51,23 @@ router.post('/meals', async (req: Request, res: Response) => {
     if (/food not found|recipe not found/.test(msg)) return void res.status(404).json({ error: msg });
     console.error('[POST /nutrition/meals]', err);
     res.status(500).json({ error: 'failed to log meal' });
+  }
+});
+
+/**
+ * POST /nutrition/meals/preview — parse the words into an itemized meal WITHOUT logging it.
+ * The confirm-first read: the client renders items + estimates, and the user's confirm posts the
+ * same payload back to /meals as `parsed`, which inserts it verbatim.
+ */
+router.post('/meals/preview', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(previewMealBodySchema, req.body);
+    res.json(await previewMealParse(userId, body.text, body.meal));
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /nutrition/meals/preview]', err);
+    res.status(500).json({ error: 'failed to read that meal' });
   }
 });
 

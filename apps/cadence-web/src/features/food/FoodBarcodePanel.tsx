@@ -1,9 +1,13 @@
 /**
  * Barcode scan / entry (Req 5 Phase 3).
- * Camera + BarcodeDetector when available; digit entry always works.
+ *
+ * SCANNER-FIRST: the camera starts the moment the panel opens, because "Scan" that opens onto a
+ * digit field is not a scanner (owner, 2026-08-15 — WebKit has no BarcodeDetector, so on every
+ * iPhone this panel used to fall through to typing; zxing-wasm now decodes there). The digits
+ * stay as the fallback underneath — a torn label or a dead camera should never block a log.
  * Browser → OFF product-by-barcode → cadence-api import/cache. Prefer DB hits.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { lookupBarcodeFood } from '../../lib/off/lookup.ts';
 import type { FoodDraft } from './foodDraft.ts';
 import { useBarcodeScan } from './useBarcodeScan.ts';
@@ -43,12 +47,20 @@ export function FoodBarcodePanel({ onDraft, onCancel }: { onDraft: (draft: FoodD
     void lookup(code);
   });
 
+  // Open scanning. One shot on mount — if the camera can't start (denied, no device), the
+  // panel quietly becomes the typed-digits fallback rather than asking again.
+  const { supported, start } = scan;
+  useEffect(() => {
+    if (supported) void start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design
+  }, []);
+
   return (
     <div className="food-panel">
       <div className="food-panel-t">Barcode</div>
       <p className="food-empty" style={{ marginTop: 0 }}>
         {scan.supported
-          ? 'Point the camera at a barcode, or type the digits. I check your saved foods first, then Open Food Facts.'
+          ? 'Point the camera at the barcode — I check your saved foods first, then Open Food Facts.'
           : 'Type the digits under the barcode. I check your saved foods first, then Open Food Facts.'}
       </p>
 
@@ -61,11 +73,7 @@ export function FoodBarcodePanel({ onDraft, onCancel }: { onDraft: (draft: FoodD
             playsInline
             autoPlay
           />
-          {scan.status === 'scanning' ? (
-            <button type="button" className="lockbtn ghost" disabled={busy} onClick={scan.stop}>
-              Stop camera
-            </button>
-          ) : (
+          {scan.status !== 'scanning' && (
             <button
               type="button"
               className="lockbtn"
@@ -86,7 +94,8 @@ export function FoodBarcodePanel({ onDraft, onCancel }: { onDraft: (draft: FoodD
         inputMode="numeric"
         autoComplete="off"
         autoFocus={!scan.supported}
-        placeholder="e.g. 3017620422003"
+        aria-label="Or type the digits under the barcode"
+        placeholder="or type the digits — e.g. 3017620422003"
         value={barcode}
         disabled={busy}
         onChange={(e) => setBarcode(e.target.value)}

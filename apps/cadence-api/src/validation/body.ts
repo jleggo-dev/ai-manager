@@ -49,6 +49,31 @@ export function withParsedBody<T>(
 
 export const mealKindSchema = z.enum(['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other']);
 
+/** A previewed meal parse, confirmed verbatim. Bounded exactly like the parser's own output. */
+const parsedMealSchema = z.object({
+  meal: mealKindSchema,
+  items: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(80),
+        qty: z.number().positive().max(10_000).optional(),
+        unit: z.string().trim().min(1).max(24).optional(),
+        est: z.record(z.string(), z.unknown()).optional(),
+      }),
+    )
+    .max(12),
+  macros: z.record(z.string(), z.unknown()).nullable(),
+  confidence: z.number().min(0).max(1).nullable(),
+  flags: z.object({ alcohol: z.boolean().optional(), caffeine: z.boolean().optional() }),
+  raw_text: z.string().max(500),
+  date: z.string().optional(),
+});
+
+export const previewMealBodySchema = z.object({
+  text: z.string().trim().min(1).max(500),
+  meal: mealKindSchema.optional(),
+});
+
 export const logMealBodySchema = z
   .object({
     text: z.string().optional(),
@@ -66,6 +91,8 @@ export const logMealBodySchema = z
     quantity: z.number().positive().optional(),
     /** Alias for recipe quantity (accepted by Food-tab clients). */
     servings: z.number().positive().optional(),
+    /** A previewed parse the user confirmed — logged verbatim, no second AI pass. */
+    parsed: parsedMealSchema.optional(),
     /** A plate — N saved-food items composed into one meal (design 2D). */
     items: z
       .array(
@@ -91,10 +118,10 @@ export const logMealBodySchema = z
       });
     }
     const text = typeof val.text === 'string' ? val.text.trim() : '';
-    if (!text && !val.photo && !val.food_id && !val.recipe_id && !val.items?.length) {
+    if (!text && !val.photo && !val.food_id && !val.recipe_id && !val.items?.length && !val.parsed) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'a meal needs words, a photo, a food_id, a recipe_id, or items',
+        message: 'a meal needs words, a photo, a food_id, a recipe_id, items, or a parsed preview',
       });
     }
   })
@@ -107,6 +134,7 @@ export const logMealBodySchema = z
     serving_index: val.serving_index,
     quantity: val.quantity ?? val.servings,
     items: val.items,
+    parsed: val.parsed,
     date: val.date,
   }));
 

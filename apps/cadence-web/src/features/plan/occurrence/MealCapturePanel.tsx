@@ -4,6 +4,7 @@ import { MicButton } from '../../../components/MicButton.tsx';
 import { FoodBarcodePanel } from '../../food/FoodBarcodePanel.tsx';
 import type { MealMacros, OccurrenceDetail } from '../../../lib/api.ts';
 import { NutritionRing } from '../../nutrition/NutritionRing.tsx';
+import { MealParseCard } from '../../food/MealParseCard.tsx';
 import { MealDraftCard } from './MealDraftCard.tsx';
 import { useMealCapture, type PlateEntry } from './useMealCapture.ts';
 import { usePlannedMeal } from './usePlannedMeal.ts';
@@ -102,29 +103,6 @@ const CameraIcon = () => (
     <circle cx="11" cy="13" r="2.7" fill="none" stroke="currentColor" strokeWidth="1.6" />
   </svg>
 );
-const MicIcon = () => (
-  <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden>
-    <rect x="9" y="3.5" width="6" height="10" rx="3" fill="none" stroke="currentColor" strokeWidth="1.6" />
-    <path
-      d="M6 11a6 6 0 0 0 12 0M12 17v3.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-const PenIcon = () => (
-  <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden>
-    <path
-      d="M4 20l1-4L15.5 5.5a1.8 1.8 0 0 1 2.5 0l.5.5a1.8 1.8 0 0 1 0 2.5L8 19l-4 1z"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
 const ScanIcon = () => (
   <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden>
     <path
@@ -158,7 +136,7 @@ export function MealCapturePanel({
   const cap = useMealCapture(detail, setDetail, { onLogged, onClose });
   const { planned, alsoThisWeek } = usePlannedMeal(cap.mealKind, detail.date);
   const [text, setText] = useState('');
-  const [route, setRoute] = useState<'idle' | 'text' | 'scan'>('idle');
+  const [route, setRoute] = useState<'idle' | 'scan'>('idle');
   const [pending, setPending] = useState<MealMacros | null>(null);
 
   const day = cap.day;
@@ -241,7 +219,23 @@ export function MealCapturePanel({
         <PlateList plate={cap.plate} busy={cap.busy} onQty={cap.setPlateQty} onRemove={cap.removePlateItem} />
       )}
 
-      {cap.draft ? (
+      {cap.mealPreview ? (
+        <MealParseCard
+          preview={cap.mealPreview}
+          initialMeal={cap.mealKind}
+          onLogged={() => {
+            cap.setMealPreview(null);
+            setText('');
+            cap.markLogged();
+          }}
+          onNotAMeal={() => {
+            const words = cap.mealPreview?.raw_text ?? text;
+            cap.setMealPreview(null);
+            void cap.resolveText(words, { forceSingle: true });
+          }}
+          onCancel={() => cap.setMealPreview(null)}
+        />
+      ) : cap.draft ? (
         <MealDraftCard
           draft={cap.draft}
           meal={cap.mealKind}
@@ -329,6 +323,29 @@ export function MealCapturePanel({
               ))}
             </div>
           )}
+          {/* The composer is ALWAYS here — typing is the default, the mic lives inside the box,
+              and nothing toggles between them. There used to be separate "Say" and "Type" tiles
+              that opened the identical field, which read as a mode switch that changed nothing
+              (owner, 2026-08-15). Say IS type with the mic pressed. */}
+          <div className="mc-say">
+            <div className="mc-say-row">
+              <textarea
+                className="mc-cap-in"
+                value={text}
+                rows={2}
+                disabled={cap.resolving}
+                placeholder='What did you have? — "1 cup strawberries, 2/3 cup skyr, 1 scoop protein"'
+                onChange={(e) => setText(e.target.value)}
+              />
+              <MicButton value={text} onChange={setText} disabled={cap.resolving} />
+            </div>
+            {text.trim() && (
+              <button className="mc-log" disabled={cap.resolving} onClick={() => void cap.resolveText(text)}>
+                {cap.resolving ? 'Reading it…' : 'Log it — I confirm next'}
+              </button>
+            )}
+          </div>
+
           <div className="mc-routes">
             <label className="mc-route mc-route-tone">
               <span className="mc-route-i">
@@ -346,19 +363,7 @@ export function MealCapturePanel({
                 }}
               />
             </label>
-            <button className="mc-route" onClick={() => setRoute('text')}>
-              <span className="mc-route-i">
-                <MicIcon />
-              </span>
-              <span className="mc-route-l">Say</span>
-            </button>
-            <button className="mc-route" onClick={() => setRoute('text')}>
-              <span className="mc-route-i">
-                <PenIcon />
-              </span>
-              <span className="mc-route-l">Type</span>
-            </button>
-            <button className="mc-route" onClick={() => setRoute('scan')}>
+            <button className="mc-route" onClick={() => setRoute(route === 'scan' ? 'idle' : 'scan')}>
               <span className="mc-route-i">
                 <ScanIcon />
               </span>
@@ -375,30 +380,6 @@ export function MealCapturePanel({
                 }}
                 onCancel={() => setRoute('idle')}
               />
-            </div>
-          )}
-
-          {route === 'text' && (
-            <div className="mc-say">
-              <div className="mc-say-row">
-                <textarea
-                  className="mc-cap-in"
-                  value={text}
-                  rows={2}
-                  autoFocus
-                  disabled={cap.resolving}
-                  placeholder='e.g. "nonfat greek yogurt, 170g" or "turkey chili bowl"'
-                  onChange={(e) => setText(e.target.value)}
-                />
-                <MicButton value={text} onChange={setText} disabled={cap.resolving} />
-              </div>
-              <button
-                className="mc-log"
-                disabled={cap.resolving || !text.trim()}
-                onClick={() => void cap.resolveText(text)}
-              >
-                {cap.resolving ? 'Matching…' : 'Match it — I confirm next'}
-              </button>
             </div>
           )}
 

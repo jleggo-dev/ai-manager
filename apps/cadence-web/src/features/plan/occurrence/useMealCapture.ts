@@ -12,6 +12,8 @@ import {
   logMealFromRecipe,
   portionHintFromResolve,
   resolveFoods,
+  previewMeal,
+  type MealPreview,
   type FoodSummary,
   type MealKind,
   type OccurrenceDetail,
@@ -19,6 +21,7 @@ import {
 } from '../../../lib/api.ts';
 import { useInvalidateNutritionDay, useNutritionDay } from '../../../lib/query/index.ts';
 import type { FoodDraft, FoodDraftPortion } from '../../food/foodDraft.ts';
+import { looksLikeMultiItemMeal } from '../../food/mealShape.ts';
 import { downscalePhoto, mealForNow, mealFromTitle } from './format.ts';
 
 export interface DraftPortion {
@@ -166,6 +169,22 @@ function usePlate(deps: {
  * the model's confidence). The day rollup drives the two-tone rings; recents feed the two-tap pills.
  * A meal ticks its occurrence server-side, so a log just refreshes the trail and closes the sheet.
  */
+/**
+ * A meal-shaped description → its itemized preview, or null to stay on the single-food resolver.
+ * Null on ANY failure too: the resolver is the path that always works, so the parser being down
+ * costs the nicer card, never the log. A one-item parse also falls through — the resolver's
+ * portion confirm is the better surface for a single food.
+ */
+async function previewIfMealShaped(q: string, mealKind: MealKind): Promise<MealPreview | null> {
+  if (!looksLikeMultiItemMeal(q)) return null;
+  try {
+    const p = await previewMeal(q, mealKind);
+    return p.items.length >= 2 ? p : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useMealCapture(
   detail: OccurrenceDetail,
   setDetail: (d: OccurrenceDetail) => void,
@@ -204,6 +223,8 @@ export function useMealCapture(
     };
   }, [detail.occurrence_id]);
 
+  const [mealPreview, setMealPreview] = useState<MealPreview | null>(null);
+
   function markLogged() {
     if (detail.status === 'pending') setDetail({ ...detail, status: 'done' });
     opts.onLogged?.();
@@ -212,13 +233,21 @@ export function useMealCapture(
 
   const plateApi = usePlate({ draft, setDraft, busy, setBusy, setLogErr, mealKind, refreshDay, markLogged });
 
-  async function resolveText(text: string) {
+  /**
+   * Words → the right pipeline. A multi-ingredient description goes to the meal parser (the
+   * quantities in the text ARE the servings — no portion question); a single food goes to the
+   * resolver as ever. `forceSingle` is the card's "just one food?" escape hatch, because the
+   * split is a heuristic and the user is the tiebreak.
+   */
+  async function resolveText(text: string, opts2?: { forceSingle?: boolean }) {
     const q = text.trim();
     if (!q || resolving) return;
     setResolving(true);
     setNote('');
     setLogErr('');
     try {
+      const preview = opts2?.forceSingle ? null : await previewIfMealShaped(q, mealKind);
+      if (preview) return setMealPreview(preview);
       const { draft: d, note: n } = await resolveToDraft(q);
       if (d) setDraft(d);
       else if (n) setNote(n);
@@ -299,6 +328,9 @@ export function useMealCapture(
   return {
     ...plateApi,
     mealKind,
+    mealPreview,
+    setMealPreview,
+    markLogged,
     setMealKind,
     day,
     recents,

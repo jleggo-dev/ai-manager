@@ -37,6 +37,8 @@
 	</array>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Cadence reads your workouts from Apple Health so what you did can count — you pick each one before it's logged, and nothing is shared without you.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Cadence uses the camera when you snap a meal, a nutrition label, or a barcode — only when you tap to open it, and you see the photo before anything counts.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Cadence doesn't write to Apple Health today. If that ever changes, it will only save what you asked it to.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

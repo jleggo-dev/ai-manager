@@ -102,6 +102,41 @@ export async function clearMacroTargets(): Promise<boolean> {
   return res.ok;
 }
 
+/** An itemized read of a described meal — previewed, not logged. Confirm posts it verbatim. */
+export interface MealPreview {
+  meal: MealKind;
+  items: { name: string; qty?: number; unit?: string; est?: MealMacros }[];
+  macros: MealMacros | null;
+  confidence: number | null;
+  flags: { alcohol?: boolean; caffeine?: boolean };
+  raw_text: string;
+}
+
+/**
+ * Parse the words into an itemized meal WITHOUT logging it — the confirm-first read for a
+ * multi-ingredient description, where the quantities in the text ARE the serving sizes.
+ */
+export async function previewMeal(text: string, meal?: MealKind): Promise<MealPreview> {
+  const res = await fetch(`${BASE}/nutrition/meals/preview`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ text, ...(meal ? { meal } : {}) }),
+  });
+  if (!res.ok) throw Object.assign(new Error(`meal preview failed: ${res.status}`), { status: res.status });
+  return res.json();
+}
+
+/** Log a previewed meal exactly as shown — no second AI pass; the card is what lands. */
+export async function logPreviewedMeal(parsed: MealPreview, meal?: MealKind): Promise<Meal> {
+  const res = await fetch(`${BASE}/nutrition/meals`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ parsed: { ...parsed, ...(meal ? { meal } : {}) } }),
+  });
+  if (!res.ok) throw Object.assign(new Error(`meal log failed: ${res.status}`), { status: res.status });
+  return res.json();
+}
+
 /** Record one meal — their words, a photo, or both. Nothing is ever judged. */
 export async function logMeal(text: string, meal?: MealKind, photo?: string): Promise<Meal> {
   const res = await fetch(`${BASE}/nutrition/meals`, {
