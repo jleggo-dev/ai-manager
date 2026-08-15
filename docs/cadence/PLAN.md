@@ -5453,3 +5453,39 @@ which action you chose" — so the gate learned it rather than being waived. Als
 jargon ban now covers action tools too (it only read the registry before), and action tools get
 their own bounded cap (800 chars, more room than a read because each carries a safety gate) plus
 a new assertion that every one states whether it takes effect immediately or waits for a tap.
+
+### The constraint merge bug — the app was forgetting what it must never forget (2026-08-14)
+
+Found while scoping a constraint tool; fixed instead of built around. Ambient capture wrote
+constraints through `mergeBaseline`, a shallow jsonb merge (`baseline || patch`), so the WHOLE
+constraints array was replaced by whatever the current conversation happened to mention. The
+capture window is ONE session's history — so a chat in week three about a shoulder silently
+deleted the knee, the night shifts and the grief recorded in week one, and the next plan was
+built confidently around a knee the app no longer knew about. Constraints are the safety input to
+planning and sit in the MANDATORY context pack, so this was the worst-placed data loss in the
+system.
+
+A second, quieter half: `normalizeBaseline` mints `randomUUID()` on every capture, so even the
+SAME constraint changed identity every turn — anything holding a reference watched it churn.
+
+**Fixed** with `constraint-merge.ts` + `mergeCapturedConstraints`:
+- **Nothing is dropped by silence.** A constraint not mentioned today is still true today.
+- **A returning constraint keeps its id**, matched on the label rather than replaced.
+- **The newest telling wins the details** — `plan_around`, `status`, `until` — which is how "my
+  knee's fine now" (`status: 'quiet'`) actually lifts, and how a trip gets its end date.
+- Atomic: read-modify-write inside a transaction with `for update`, because two turns landing
+  together would otherwise reproduce the same loss in miniature.
+
+**Settings still replaces wholesale, on purpose** (`PATCH /review/baseline`): a delete there is
+deliberate, and a merge that resurrected the row would be its own bug.
+
+**Matching needed one deliberate divergence from goals.** `sameGoalTitle` requires two words
+before it calls containment a match — right for goal names ("Row" must not swallow "Grow
+strong"), wrong for constraints, where the commonest shape is exactly what it rejects: "knee" on
+Monday becoming "left knee — patellar tendinopathy" on Friday. Constraints additionally accept
+single-word containment floored at four characters. The cost asymmetry justifies it — a false
+split accumulates duplicates forever (the bug being fixed), a false merge keeps the fuller label
+— and multi-word labels still need every word present, so "knee pain" and "back pain" stay two
+things. Caught by the test that expected "burnout" to absorb "burnout — signed off work".
+
+With this, a constraint writer (the tool deferred in #202) is safe to add later.

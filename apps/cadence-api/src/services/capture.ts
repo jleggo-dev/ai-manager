@@ -1,8 +1,15 @@
 import { runJobBySlug } from '../ai/aim.ts';
-import type { CaptureExtractResult, EquipmentCategory } from '@cadence/shared';
+import type { CaptureExtractResult, Constraint, EquipmentCategory } from '@cadence/shared';
 import { insertEquipment, deleteAllEquipment } from '../repos/equipment.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
-import { getUser, mergeBaseline, setHomeLocation, setName, setTimezoneIfUnset } from '../repos/users.ts';
+import {
+  getUser,
+  mergeBaseline,
+  mergeCapturedConstraints,
+  setHomeLocation,
+  setName,
+  setTimezoneIfUnset,
+} from '../repos/users.ts';
 import { geocodeCity } from './weather/weather.ts';
 import { logAi } from './ai-log.ts';
 import { normalizeBaseline, normalizeTimezone } from './capture-normalize.ts';
@@ -106,8 +113,19 @@ export async function runCaptureExtract(
 
   let baseline = false;
   const normBaseline = normalizeBaseline((out.baseline_updates ?? {}) as Record<string, unknown>);
-  if (Object.keys(normBaseline).length > 0) {
-    await mergeBaseline(userId, normBaseline as unknown as Parameters<typeof mergeBaseline>[1]);
+  // Constraints leave the wholesale patch and go through their own MERGE. `mergeBaseline` is a
+  // shallow jsonb merge, so including them here replaced the entire stored list with whatever
+  // this one conversation happened to mention — silently deleting a knee recorded weeks ago. See
+  // constraint-merge.ts; Settings still replaces wholesale, because a delete there is deliberate.
+  const { constraints: capturedConstraints, ...restBaseline } = normBaseline as Record<string, unknown> & {
+    constraints?: Constraint[];
+  };
+  if (Object.keys(restBaseline).length > 0) {
+    await mergeBaseline(userId, restBaseline as unknown as Parameters<typeof mergeBaseline>[1]);
+    baseline = true;
+  }
+  if (capturedConstraints?.length) {
+    await mergeCapturedConstraints(userId, capturedConstraints);
     baseline = true;
   }
 
