@@ -5739,3 +5739,37 @@ weigh-in and the week's food and proposes the change.
    a floor (only foods with real data contribute).
 
 Design prompt for 2–4: `docs/cadence/DESIGN-PROMPT-food-plan.md`.
+
+### Micros ARE estimable — the "labels only" rule was wrong (owner ruling 2026-08-15)
+
+Owner: "why would a typed meal not contribute micros? surely an llm can approximate vitamin c in
+1 cup of strawberries… it doesn't have to be perfect (and we need to specify that things are
+approximate, really), this is why the coach monitors and tweaks and makes adjustments over time.
+I'm sure the bag of strawberries I have in the fridge, with a barcode, has approximated the total
+vitamin c per cup as well."
+
+Right on every count, and the rule that said otherwise was inherited and repeated as if it were a
+law. `estimate-food`'s prompt carried it explicitly — "MACROS ONLY — never fiber, sodium, vitamins,
+or other micros (those come from labels/databases, not estimates)" — and
+`sanitizeCaptureNutrients` gated micros behind an `allowMicros` flag only the label reader passed.
+So a typed meal contributed a blank column, which is not more honest than an approximation; it is
+just less useful. The number printed on a package is an approximation too.
+
+**Changed:** both `parse-meal` and `estimate-food` now estimate the eight micronutrients alongside
+the macros, with the reasoning in the prompt (a cup of strawberries ≈ 90mg vitamin C, a cup of
+milk ≈ 300mg calcium), rounded like a person would and OMITTED where there is no real basis rather
+than reported as 0. `sanitizeCaptureNutrients` keeps them from any source; micrograms hold 2dp
+because B12's whole daily reference is 2.4µg. What keeps this honest is provenance (`source: 'ai'`
+already rides on the macros) and saying so out loud — the meal card now reads "The nutrition is an
+estimate — close enough to coach from, and I'll adjust as I learn how you eat."
+
+**Two findings from the same device round, NOT yet fixed:**
+1. **The latte never logged.** `estimate_food` ran at 14:15 on "One small latte" and returned a
+   clean candidate (240ml, "1 small cup") — and no `nutrition_logs` row exists. The parse worked;
+   the flow died at the portion-confirm step. The single-food path still demands a confirm the
+   multi-ingredient path no longer does.
+2. **The food classifier fired on a coach chat turn about a RUN.** At 17:01 `estimate_food` was
+   called with "That last run was good but I had a really hard time keeping my Hr in zone 2…" and
+   dutifully returned `{"name":"That last run","serving_label":"1 run"}`. This is the exact failure
+   `useCoachChat`'s comment already warns about (the Spartan Beast logged for breakfast); the
+   guards in `classifyFoodIntent` are not catching training talk.

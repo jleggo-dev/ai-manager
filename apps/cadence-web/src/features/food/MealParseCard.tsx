@@ -66,7 +66,10 @@ export function MealParseCard({
   return (
     <div className="food-confirm" role="region" aria-label="Confirm meal log">
       <div className="food-panel-t">Here&apos;s how I read that — log it?</div>
-      <p className="food-panel-p">Your amounts are the serving sizes. Nothing counts until you confirm.</p>
+      <p className="food-panel-p">
+        Your amounts are the serving sizes. The nutrition is an estimate — close enough to coach from, and I&apos;ll
+        adjust as I learn how you eat. Nothing counts until you confirm.
+      </p>
 
       <div className="mealparse-items">
         {preview.items.map((it, i) => (

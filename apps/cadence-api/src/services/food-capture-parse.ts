@@ -49,8 +49,17 @@ function asTrimmedString(v: unknown): string | null {
   return t ? t : null;
 }
 
-/** Pull macro (+ optional printed micro) numbers from a job macros_per_serving object. */
-export function sanitizeCaptureNutrients(raw: unknown, allowMicros: boolean): FoodNutrients | null {
+/**
+ * Pull nutrient numbers out of a job's `macros_per_serving`.
+ *
+ * `allowMicros` no longer gates whether micros are ALLOWED — an estimate carries them now — only
+ * how precisely they are kept. The old rule ("micros come from labels/databases, not estimates")
+ * sounded rigorous and cost the user the thing they wanted: a model can say a cup of strawberries
+ * is roughly 90mg of vitamin C, the number printed on the bag is an approximation too, and a
+ * rough figure the coach can watch and adjust beats a blank column (owner, 2026-08-15). What
+ * keeps it honest is provenance — `source: 'ai'` on the macros — not silence.
+ */
+export function sanitizeCaptureNutrients(raw: unknown, fromLabel: boolean): FoodNutrients | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
   const out: FoodNutrients = {};
@@ -59,17 +68,30 @@ export function sanitizeCaptureNutrients(raw: unknown, allowMicros: boolean): Fo
     const n = asFiniteNumber(o[key]);
     if (n !== null) out[key] = key === 'kcal' ? Math.round(n) : Math.round(n * 10) / 10;
   }
-  if (allowMicros) {
-    for (const key of ['fiber_g', 'sodium_mg'] as const) {
-      const n = asFiniteNumber(o[key]);
-      if (n !== null) out[key] = Math.round(n * 10) / 10;
-    }
+  // Micrograms need two decimals to survive at all: B12's whole daily reference is 2.4µg.
+  for (const key of MICRO_CAPTURE_KEYS) {
+    const n = asFiniteNumber(o[key]);
+    if (n === null || n < 0) continue;
+    out[key] = key.endsWith('_ug') ? Math.round(n * 100) / 100 : Math.round(n * 10) / 10;
   }
+  void fromLabel;
   // Need at least one macro to be useful as a food candidate.
   if (out.kcal === undefined && out.protein_g === undefined && out.carbs_g === undefined && out.fat_g === undefined)
     return null;
   return out;
 }
+
+/** The micronutrients a capture may carry — mirrors what the jobs are asked for. */
+const MICRO_CAPTURE_KEYS = [
+  'fiber_g',
+  'sodium_mg',
+  'iron_mg',
+  'zinc_mg',
+  'vitamin_c_mg',
+  'calcium_mg',
+  'potassium_mg',
+  'vitamin_b12_ug',
+] as const satisfies ReadonlyArray<keyof FoodNutrients>;
 
 /** Map job serving_unit words onto FoodBaseUnit (g/ml/item). */
 export function normalizeBaseUnit(unit: string | null | undefined): FoodBaseUnit {
