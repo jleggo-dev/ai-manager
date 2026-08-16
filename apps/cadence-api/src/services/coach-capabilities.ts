@@ -16,6 +16,7 @@
  * pull my Strava runs?" — a question that is really a feature request worth hearing.
  */
 import { renderToolCatalogBrief } from '@cadence/shared';
+import { categoryLines } from './coach-tool-tiers.ts';
 
 export interface CapabilityGroup {
   /** Short heading — plain words, the way the coach would say it out loud. */
@@ -127,6 +128,26 @@ export function renderCapabilities(opts: { healthAvailable?: boolean; healthAnsw
       'a no. Never make them repeat a change they already named — propose it, and let the card be ' +
       'what they correct. Say at most ONE short line before a tool call; your real answer comes ' +
       'after the result, and a full answer written first gets repeated.',
+  );
+  /**
+   * The hierarchy that makes the demotion safe.
+   *
+   * Only the two daily actions and one read are declared each turn; everything else is one
+   * `find_tools` call away and costs nothing until asked for. That trade only works if she KNOWS
+   * to go looking — owner: *"she'll find update_goal if she knows that she should look for it…
+   * The real risk is her not looking."* So this names the categories rather than the tools: enough
+   * to know a thing of that kind exists, which is all it takes to drill down.
+   *
+   * And the honesty clause, which matters as much as the looking — owner: *"it would be better for
+   * her to look and tell the user 'I don't actually have a tool for that today' than to not look;
+   * to not report; to pretend she's doing something she's not."*
+   */
+  lines.push(
+    `MORE THAN YOU ARE HOLDING: only a few tools are loaded right now. Call find_tools for the rest — ${categoryLines().join('; ')}. ` +
+      'If a request needs anything of those kinds, LOOK before answering; it is one call and costs ' +
+      'nothing. Then say what you actually found: if there is no tool for what they asked, tell ' +
+      'them plainly you cannot do that today. Never skip the look, and never imply you did ' +
+      'something you did not.',
   );
   lines.push(`Cannot do yet: ${NOT_YET.join('; ')}.`);
   lines.push(

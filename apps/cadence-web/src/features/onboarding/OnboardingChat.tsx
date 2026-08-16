@@ -305,8 +305,15 @@ export function OnboardingChat({
                        * refetches; gated on `!streaming` so it reads AFTER the tool has run.
                        */}
                       {last && !streaming && <ChangeCard key={`chg${i}`} onApplied={onPlanChanged} />}
-                      {last && picks && picks.layout !== 'change' ? (
-                        picks.layout === 'confirm' ? (
+                      {/**
+                       * Her block says WHAT, never how. The only thing left for it to declare is
+                       * `build` — the build card is an act, not a shape, and nothing durable is
+                       * stored for the client to follow instead. Rows versus grid is derived from
+                       * the options inside QuickPicks; a block that still carries the old
+                       * `layout` word parses as content and draws the same either way.
+                       */}
+                      {last && picks ? (
+                        picks.build ? (
                           <ConfirmCard
                             buildLabel={buildLabel}
                             onBuild={onBuild}

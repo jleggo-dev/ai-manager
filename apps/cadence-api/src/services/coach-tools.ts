@@ -1,6 +1,9 @@
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 import { executeCalls } from './retrieval/select-and-run.ts';
-import { COACH_ACTION_TOOLS, coachActionDefinitions, coachActionNames } from './coach-actions.ts';
+import { COACH_ACTION_TOOLS, coachActionDefinitions } from './coach-actions.ts';
+import { alwaysOnToolNames, allHarnessToolNames } from './coach-tool-tiers.ts';
+import { COACH_META_TOOLS, metaToolDefinitions } from './coach-meta-tools.ts';
+import { boundToolResponse, toolEmptyText, toolFaultText } from './tool-response.ts';
 
 /**
  * The coach's READ TOOLS — the retrieval registry, offered to the model as callable functions
@@ -22,26 +25,16 @@ import { COACH_ACTION_TOOLS, coachActionDefinitions, coachActionNames } from './
  *  she should be able to look up — the food log, the journal, the recipe book and the practice
  *  totals joined the list that day, because a coach who can see your training but not your
  *  eating or your writing is only half a coach. */
-const COACH_TOOL_NAMES = [
-  'get_identity',
-  'get_objectives',
-  'get_active_plan',
-  'get_consistency',
-  'get_constraints',
-  'get_weight',
-  'get_equipment',
-  'get_dietary_profile',
-  'get_health_history',
-  'get_workout_history',
-  'get_recent_logs',
-  'get_goal_progress',
-  'get_practice_totals',
-  'get_food_log',
-  'get_journal',
-  'get_recipes',
-  'get_macro_targets',
-  'lookup_food',
-] as const;
+/**
+ * The reads offered on EVERY turn. Everything else she can reach lives behind `find_tools`
+ * (coach-tool-tiers.ts) and costs nothing until she asks.
+ *
+ * This list used to be all eighteen, which is how 24 definitions and ~5,000 tokens rode every
+ * message — and eight of them described how to fetch facts the context pack had already injected
+ * as text. `get_active_plan` is the one read that earns its slot: it is the only dossier fact that
+ * changes DURING a conversation, because she is the one who changes it.
+ */
+const COACH_TOOL_NAMES = alwaysOnToolNames().filter((n) => RETRIEVAL_FUNCTIONS[n]);
 
 /**
  * Parameter schemas, for the functions that take one.
@@ -95,8 +88,7 @@ export interface CoachToolOutput {
 
 /** The names the relay treats as ours — anything else in a function_call is not our problem.
  *  Both halves of the harness: what she can look up, and what she can propose changing. */
-export const coachToolNames = (): Set<string> =>
-  new Set([...COACH_TOOL_NAMES.filter((n) => RETRIEVAL_FUNCTIONS[n]), ...coachActionNames()]);
+export const coachToolNames = (): Set<string> => new Set(allHarnessToolNames());
 
 /**
  * Devs.ai-shaped tool definitions, built from the registry's own names and LLM-facing
@@ -107,7 +99,7 @@ export function coachToolDefinitions(): Array<{
   type: 'function';
   function: { name: string; description: string; parameters: Record<string, unknown> };
 }> {
-  const reads = COACH_TOOL_NAMES.filter((n) => RETRIEVAL_FUNCTIONS[n]).map((n) => ({
+  const reads = COACH_TOOL_NAMES.map((n) => ({
     type: 'function' as const,
     function: {
       name: n,
@@ -119,7 +111,11 @@ export function coachToolDefinitions(): Array<{
       },
     },
   }));
-  return [...reads, ...coachActionDefinitions()];
+  // Only the DAILY actions ride every turn. The rest are declared nowhere and reached through
+  // find_tools — they were 5,300 characters between them, and they happen weekly at most.
+  const always = new Set(alwaysOnToolNames());
+  const actions = coachActionDefinitions().filter((d) => always.has(d.function.name));
+  return [...reads, ...actions, ...metaToolDefinitions()];
 }
 
 /**
@@ -145,22 +141,23 @@ export async function executeCoachToolCalls(userId: string, calls: CoachToolCall
   const wanted = calls.filter((c) => known.has(c.name));
   if (!wanted.length) return [];
 
-  // Action tools run one at a time and own their own output — they write a PROPOSAL, never a
-  // change, so they don't go through the retrieval executor's read path.
-  const actions = wanted.filter((c) => COACH_ACTION_TOOLS[c.name]);
+  // Action and meta tools run one at a time and own their own output — actions write a PROPOSAL,
+  // never a change; meta tools search or delegate. Neither goes through the read path below.
+  const single = wanted.filter((c) => COACH_ACTION_TOOLS[c.name] || COACH_META_TOOLS[c.name]);
   const actionOutputs: CoachToolOutput[] = [];
-  for (const c of actions) {
+  for (const c of single) {
+    const tool = COACH_ACTION_TOOLS[c.name] ?? COACH_META_TOOLS[c.name]!;
     let output: string;
     try {
-      output = await COACH_ACTION_TOOLS[c.name]!.run(userId, parseArgs(c.arguments));
+      output = await tool.run(userId, parseArgs(c.arguments));
     } catch (e) {
-      console.error('[coach-action]', c.name, e);
+      console.error('[coach-tool]', c.name, e);
       output = 'That could not be done just now — tell the user plainly and offer to try again.';
     }
     actionOutputs.push({ toolCallId: c.toolCallId, output });
   }
 
-  const reads = wanted.filter((c) => !COACH_ACTION_TOOLS[c.name]);
+  const reads = wanted.filter((c) => !COACH_ACTION_TOOLS[c.name] && !COACH_META_TOOLS[c.name]);
   if (!reads.length) return actionOutputs;
   const { results } = await executeCalls(
     userId,
@@ -186,15 +183,10 @@ export async function executeCoachToolCalls(userId: string, calls: CoachToolCall
        */
       try {
         const output = fn.render(results[c.name]);
-        return { toolCallId: c.toolCallId, output: output || '(nothing on file for this yet)' };
+        return { toolCallId: c.toolCallId, output: boundToolResponse(output || toolEmptyText()) };
       } catch (e) {
         console.error('[coach-tool] render failed:', c.name, e);
-        return {
-          toolCallId: c.toolCallId,
-          output:
-            'That could not be read just now — this is a fault on our side, NOT an empty record. ' +
-            'Do not tell the user they have nothing here; say you could not check it right now.',
-        };
+        return { toolCallId: c.toolCallId, output: toolFaultText('That') };
       }
     }),
   ];

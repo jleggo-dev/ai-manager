@@ -6273,3 +6273,194 @@ the chat: composer gone, tab bar pushed off, the app apparently frozen.
 
 `display: contents` when showing (and `none` when hidden) removes the wrapper from layout entirely,
 so the chat is a direct flex child exactly as it was before it was wrapped.
+
+### Harness v2, part one: 24 tools every turn became 9 (2026-08-16)
+
+The spec is [HARNESS-V2.md](HARNESS-V2.md); this is what landed.
+
+**Before:** 24 definitions on every coach turn, 18,380 chars ≈ **5,000 tokens**, growing linearly
+with a toolset the owner intends to expand — *"if we scale to 100 tools, we eat our context window
+just finding the tool."*
+
+**After:** 9 definitions, 11,477 chars ≈ **3,102 tokens**, and **flat as reads are added.**
+
+Honest about the number: the spec projected ~1,100 and it is 3,102. The six actions are 4,190 chars
+between them and now dominate the total — which is the arithmetic making the design's own point out
+loud. Reads are free; actions are not, deliberately, and if we ever have twenty of them the cost
+will be impossible to ignore rather than easy to.
+
+**Three layers.**
+
+- **Layer 0 — the dossier, injected as text, not tools.** Seven reads deleted from the tool list
+  outright: identity, objectives, constraints, consistency, weight, dietary profile, health history.
+  The pack already injects every one of them, so a tool for them was a second path to a fact she was
+  holding and one more decision on a turn that needed none. The owner's framing is why the grouping
+  question dissolved: the plan is built *out of* the objectives and *around* the constraints, so
+  they are one thing — and the answer is not to group them as tools but to stop making them tools.
+- **Layer 1 — always on.** All six actions (owner ruling: they are core capabilities and she should
+  never be caught not knowing she can do them), `get_active_plan` — the one dossier fact that
+  changes *during* a conversation, because she is the one who changes it — and the two meta tools.
+- **Layer 2 — on demand.** Ten reads at zero cost until asked for.
+
+**`find_tools` + `use_tool`, not one tool.** A function call can only name a tool that was DECLARED
+for that request, so a `find_tools` that merely *described* something would leave her able to read
+about a tool she still could not call. Re-declaring mid-turn needs the continuation to accept a
+changed tool list, which is provider behaviour we do not control. Sentry's shipped server splits it
+the same way.
+
+**A bug this build produced and the tests now forbid.** `use_tool` was declared to the model and
+missing from the executable set — the model could emit a call the harness would drop on the floor,
+ending the turn mid-thought with nobody told. Declared and executable must be the same set, and two
+tests now assert it in both directions. It is precisely the negative-assertion habit the harness
+research recommended, and it caught a live defect within an hour of being written.
+
+Verified end to end against real data: `find_tools("workouts")` returns `get_workout_history` with
+its instructions, and `use_tool` then returns the 8.78 km run. 928 cadence-api tests green, and the
+description audit accepted both new tools only after catching a missing "Use" and a parameter that
+never said what omitting it does.
+
+### Harness v2, part two: 5 tools a turn, and a hierarchy she can drill into (2026-08-16)
+
+| | tools/turn | chars | tokens |
+|---|---|---|---|
+| Before | 24 | 18,380 | ~4,968 |
+| After part one | 9 | 11,400 | ~3,081 |
+| **After part two** | **5** | **5,682** | **~1,536** |
+
+**A — four actions demoted.** The first cut kept all six on the owner's ruling that they are core
+capabilities she should never be caught not knowing about. Measuring revised it: the six were 4,190
+characters of description and ~4,600 of schema — the entire remaining cost. What the ruling and the
+implementation had conflated is **knowing** and **carrying**. The manifest already tells her what
+she can do at ~15 characters a line; a 750-character definition is only needed at the moment of
+calling.
+
+`propose_plan_change` and `log_session` stay (daily, hourly). `update_goal`, `update_constraint`,
+`correct_log` and `set_macro_targets` are one `find_tools` call away — weekly-or-rarer acts paying
+about a second.
+
+**Categories, because a search box is not a hierarchy.** Owner: *"it's about giving the coach the
+categories — this is about hierarchy and her having the context to drill down."* Five named groups —
+training, body, food, writing, changes — named in the manifest so she knows what KINDS of thing
+exist, and usable directly as a `find_tools` query. Knowing there is a category for their food is
+enough to go looking, and going looking is the whole bet.
+
+**Looking and saying no beats not looking.** Owner: *"it would be better for her to look and tell
+the user 'I don't actually have a tool for that today' than to not look; to not report; to pretend
+she's doing something she's not."* A miss used to fall back silently to the whole list, which invites
+exactly that pretence — she asked for sleep tracking, got ten unrelated tools, reaches for the
+nearest. `find_tools` now flags a miss and says: if none of this is what they asked for, say so
+plainly. The manifest carries the same rule.
+
+Demoted ACTIONS keep their contract: `use_tool` runs the tool's own `run()`, `find_tools` returns
+the tool's own description including its safety sentence, and the catalog marks them
+`[changes their data]`. Reaching a thing through a door does not soften what it does.
+
+**The manifest budget went 4600 → 5300**, and the arithmetic is in the test because it is the point:
+definitions ride every TURN, the manifest rides once per SESSION. A ten-turn conversation pays ~576
+characters to save ~127,000. It is only a good trade because what it buys is exactly what makes the
+demotion safe — she cannot drill into a hierarchy nobody told her exists.
+
+**The risk, stated plainly and left measurable.** Under-triggering is our commonest failure and
+"she never went looking" is how this would fail. That is what `npm run eval:tools` exists for; run it
+after any change to the always-on list. 933 cadence-api tests green.
+
+### The tiering made an instruction lie, within the hour (2026-08-16)
+
+The pick protocol told her: *"Changing a goal (update_goal) and fixing a mis-recorded session
+(correct_log) take effect the moment you call them… DO say it is done — 'changed it to 50, and it is
+on your file'."*
+
+Both were demoted an hour earlier and are no longer declared. Following that instruction she would
+have said the change was on file having changed nothing — **exactly the pretending the owner had
+just ruled against.** A rule in one file quietly falsified by an edit in another, which is how a
+protocol that names tools decays.
+
+Fixed: those three are named as *not loaded by default* — call `find_tools`, run what it gives you,
+and only THEN say it is done. Two tests now assert that no demoted tool is named as if directly
+callable, so the next demotion fails the build instead of shipping a lie.
+
+Owner's read on the cost, and it is the right one: *"as long as she knows she CAN do it and just has
+to find it… it turns into latency, no?"* Yes — one round-trip on a weekly act. Latency only becomes
+a lie if she does not know to look first, which is what the instruction now prevents and what
+`eval:tools` exists to verify.
+
+### A checklist for adding tools, because there is a queue of them (owner, 2026-08-16)
+
+> "we kind of need a spec or set of rules that we have to follow when we add new tools (I have a
+> whole set of new tools to add in the wings)"
+
+[TOOL-HARNESS.md](TOOL-HARNESS.md) now opens with **"Adding a tool: the checklist"** — eight steps in
+order, marked for which are machine-enforced and which are judgement:
+
+1. Should it be a tool at all, or does the dossier already carry it?
+2. Which layer, and which category — the one question is *does calling it change the user's data*.
+3. The description rules (CI).
+4. What it hands back — the gap that cost us most.
+5. Complete in one call: a return text may never claim an effect the tool did not produce.
+6. Declared and executable are the same set (CI).
+7. At least two eval cases: one should-fire, one must-not.
+8. The commands to run.
+
+The checklist claimed a CI gate on categories that did not exist, so it now does — three tests: no
+tool in the tail is uncategorised, no category names a tool that has left the tail, and every
+category has a plain-words label, because the manifest says them out loud. A doc asserting a gate it
+does not have is the same class of untruth as a tool claiming an effect it did not produce.
+
+### Tool responses get a gate, for the first time (2026-08-16)
+
+Descriptions had seven CI checks. What a tool **hands back** had none — and responses are the half
+the model actually reasons over. That asymmetry is the whole story of the week's worst bug: both
+Apple Health reads threw on a Date the row type called a string, the throw was swallowed as
+"(nothing on file for this yet)", and the coach told a user with thirty recorded workouts that he
+had none. Four device rounds to find, because nothing anywhere said a tool had failed.
+
+`tool-response.ts` now owns two rules in one place instead of six, and `tool-response.test.ts`
+enforces them:
+
+- **An error never looks like an empty result.** "Nothing on file" is a fact about *them*; "I could
+  not read it" is a fact about *us*. The two texts are asserted to share no wording, so a model
+  skimming cannot collapse them. One test reproduces the exact regression — a render that throws
+  must arrive as a fault, never as no-data.
+- **A response is bounded, and says when it was cut.** ~2,000 tokens, generous next to a turn and
+  mean next to a year of food logs; the largest render measured against real data was under 1,000
+  characters, so nothing legitimate is near it. The cut lands on a line boundary so a row is never
+  half-shown and misread as data, and the notice tells her to narrow the window and **not to
+  describe a partial answer as everything on file**. A silent truncation is a quiet lie about
+  completeness.
+
+Both the direct read path and `use_tool` route through it, so a future tool gets the gate by using
+the helpers rather than by remembering the rule. TOOL-HARNESS.md step 4 moves from "not yet
+CI-enforced, and the gap that cost us most" to enforced; the scoreboard line goes 0 → 4.
+
+### Consolidation: the tiebreak list went from eight to two (2026-08-16)
+
+`TIEBREAK_PAIRS` in the description audit is a **backlog, not a fixture** — every entry documents an
+ambiguity we chose to explain instead of remove. It should only ever shrink. Today it went from
+eight to two, and **not one description was reworded**:
+
+- **Four dissolved on their own** when the tiering made one side of each a dossier fact rather than
+  a tool: health-history ↔ workout-history, consistency ↔ goal-progress, objectives ↔ goal-progress,
+  plan ↔ consistency. You cannot confuse two tools when only one of them is a tool. That is an
+  accuracy win the token arithmetic never showed.
+- **Two more went to `get_nutrition`.** `get_food_log`, `get_macro_targets`, `get_recipes` and
+  `lookup_food` were four sibling choices standing between her and any food question, and two
+  tiebreaks existed purely to help her make them. Now one door with a `view` — the choice is "is
+  this about food" (easy) and then a named view in the parameter, where a menu belongs. GitHub's
+  `issue_read` is the same shape, and Anthropic's test is the one that decided it: *"If a human
+  engineer can't definitively say which tool should be used in a given situation, an AI agent can't
+  be expected to do better."*
+
+The four stay in the registry so the **Broker can still prefetch them by name** — the eval agent
+observed exactly that happening, correctly, on a halloumi question. They are hidden from
+`find_tools`, not removed. Nothing she can read changed; only how many decisions stand in front of
+it.
+
+What remains is genuinely two different things each time: device records vs their own words, and one
+counted practice vs overall goal numbers.
+
+**Verified against real data** through the door she would use: `use_tool get_nutrition view=targets`
+→ *"Daily targets: none set yet"*; `view=lookup q=halloumi` → the lookup path. 952 tests green.
+
+**State of the harness:** 5 tools declared per turn (~1,536 tokens, from ~4,968), 11 in the tail at
+zero cost, 2 tiebreaks left, and every rule in TOOL-HARNESS.md now enforced except step 5 (one call
+completeness), which stays judgement.

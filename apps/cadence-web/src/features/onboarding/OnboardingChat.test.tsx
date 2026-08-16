@@ -7,6 +7,9 @@ const openCoachSession = vi.fn();
 const getReview = vi.fn();
 const getPendingChange = vi.fn();
 
+// Written the way a session that opened before the protocol changed still writes it — `layout` and
+// all. Those sessions keep the instructions they were born with, so the field has to parse as
+// content and the shape has to be derived anyway.
 const PICKS = {
   layout: 'list',
   multi: true,
@@ -234,6 +237,30 @@ describe('OnboardingChat', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     expect(await screen.findByText(/Dead hangs, not farmers carries/)).toBeInTheDocument();
+  });
+
+  /**
+   * The build card is the one thing her block still declares, because it is an act rather than a
+   * shape and nothing durable is stored for the client to follow instead: no declaration, no route
+   * to a plan. So both spellings have to reach it — the one she is taught now, and the `confirm`
+   * that every conversation open when the protocol changed is still sending.
+   */
+  it.each([
+    ['the block she is taught now', '{"build":true,"progress":0.9}'],
+    ["a live session's older confirm", '{"layout":"confirm","progress":0.9}'],
+  ])('hands over the build card from %s', async (_case, json) => {
+    getReview.mockResolvedValue({ name: 'Sam', goals: [], equipment: [], baseline: {} });
+    sendCoachMessage.mockImplementation(async (_s: string, _m: string, onDelta: (d: string) => void) => {
+      onDelta(`That is enough to build on.\n\`\`\`${COACH_PICKS_FENCE}\n${json}\n\`\`\``);
+      return { completed: true };
+    });
+
+    render(<OnboardingChat onBuild={vi.fn()} />);
+    await screen.findByText(OPENING_QUESTION);
+    fireEvent.change(screen.getByPlaceholderText(OPENING_PLACEHOLDER), { target: { value: 'ready' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByRole('button', { name: 'Build it' })).toBeInTheDocument();
   });
 
   it('shows no card when nothing is pending, rather than an empty frame', async () => {

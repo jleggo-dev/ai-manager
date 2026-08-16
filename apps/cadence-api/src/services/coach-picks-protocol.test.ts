@@ -12,7 +12,6 @@ describe('renderPickProtocol', () => {
     // is a coach emitting blocks the client silently drops.
     const example = renderPickProtocol().split('Example turn:')[1] ?? '';
     const parsed = parseCoachTurn(example);
-    expect(parsed.picks?.layout).toBe('list');
     expect(parsed.picks?.multi).toBe(true);
     expect(parsed.picks?.lead).toBe("I'd like to");
     expect(parsed.picks?.options).toHaveLength(4);
@@ -28,7 +27,27 @@ describe('renderPickProtocol', () => {
   it('tells the coach to default to picks rather than treating them as optional', () => {
     const out = renderPickProtocol({ intent: 'onboarding' });
     expect(out).toContain('DEFAULT TO PICKS');
-    expect(out).toMatch(/TILES question/i);
+    expect(out).toContain('A NARROWING FOLLOW-UP ALWAYS GETS PICKS');
+  });
+
+  /**
+   * Presentation stopped being hers on 2026-08-16, the day a layout she had to remember — and
+   * forgot — cost the owner four turns of asking for a plan change she had already made. She is
+   * asked for content; the client derives the shape from it (`derivePickLayout`, cadence-web). A
+   * protocol that still named a shape would be teaching live sessions the failure back.
+   */
+  it('asks for content and never for a shape', () => {
+    for (const intent of ['onboarding', 'ongoing']) {
+      const out = renderPickProtocol({ intent });
+      expect(out).toContain('NEVER SEND A "layout"');
+      // The old vocabulary, in every place it used to be spelled out.
+      expect(out).not.toMatch(/layout "(list|tiles|confirm|change)"/i);
+      expect(out).not.toMatch(/\btiles\b/i);
+      expect(out).not.toMatch(/\(list, (single|multi)\)/i);
+      // The one thing she still declares, because it is an act and not a shape: nothing durable is
+      // stored for the client to follow, so the build card can only come from her saying so.
+      expect(out).toContain('"build": true');
+    }
   });
 
   /**
@@ -103,5 +122,29 @@ describe('renderPickProtocol', () => {
     expect(out).toContain('THE QUESTION IS THE SAME; THE EXAMPLES ARE NOT');
     expect(out).toMatch(/writing a novel/);
     expect(out).toMatch(/hands and wrists/);
+  });
+});
+
+/**
+ * The pick protocol names tools, so demoting one silently makes it a liar.
+ *
+ * Within an hour of the tiering landing, this block still told her that changing a goal "takes
+ * effect the moment you call them" — for tools that were no longer declared. Following it, she
+ * would say "changed it to 50, and it is on your file" having changed nothing: the exact failure
+ * the owner named, pretending to have done something she had not.
+ */
+describe('the protocol stays honest about what she is holding', () => {
+  it('sends her to find_tools for the demoted actions rather than implying a direct call', () => {
+    const out = renderPickProtocol({ intent: 'ongoing' });
+    expect(out).toMatch(/NOT loaded by default/);
+    expect(out).toMatch(/find_tools first/);
+    expect(out).toMatch(/Never say it is done before the call has actually run/i);
+  });
+
+  it('names no demoted tool as if it were directly callable', () => {
+    const out = renderPickProtocol({ intent: 'ongoing' });
+    for (const demoted of ['update_goal', 'correct_log', 'update_constraint', 'set_macro_targets']) {
+      expect(out).not.toContain(demoted);
+    }
   });
 });

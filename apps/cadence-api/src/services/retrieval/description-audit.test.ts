@@ -38,16 +38,27 @@ const BANNED: Array<{ re: RegExp; why: string }> = [
 
 /** Confusable pairs: at least ONE side must name the other, so a model choosing between them has
  *  the tiebreak in front of it (tool-catalog audit rule 2). */
+/**
+ * Confusable pairs — and this list is a BACKLOG, not a fixture. Every entry documents an ambiguity
+ * we chose to explain instead of remove, so it should only ever shrink. It went from eight to two
+ * on 2026-08-16 without a single description being reworded:
+ *
+ *  - Four dissolved on their own when the tiering made one side of each a dossier fact rather than
+ *    a tool (health history, consistency, objectives). You cannot confuse two tools when only one
+ *    of them is a tool.
+ *  - Two more went when `get_nutrition` replaced four food reads with one door and a `view`
+ *    parameter — the pairs they needed disambiguating no longer face each other.
+ *
+ * What remains is genuinely two different things each time, and the description says which.
+ */
 const TIEBREAK_PAIRS: Array<[string, string]> = [
-  ['get_health_history', 'get_workout_history'], // summary vs individual sessions
   ['get_workout_history', 'get_recent_logs'], // device records vs their own words
-  ['get_consistency', 'get_goal_progress'], // showed up vs how it is going
   ['get_practice_totals', 'get_goal_progress'], // one counted thing vs overall numbers
-  ['get_objectives', 'get_goal_progress'], // what the goals are vs how they are going
-  ['get_active_plan', 'get_consistency'], // what is supposed to happen vs what happened
-  ['get_recipes', 'lookup_food'], // their dishes vs facts about one food
-  ['get_food_log', 'get_recipes'], // what they ate vs what they could make
 ];
+
+/** Every failure here points at the checklist, because the rule broken is written down there and
+ *  a bare array of names does not tell a newcomer what to do about it. */
+const HOW = 'see docs/cadence/TOOL-HARNESS.md → "Adding a tool: the checklist"';
 
 const defs = coachToolDefinitions();
 const byName = new Map(defs.map((d) => [d.function.name, d.function]));
@@ -64,12 +75,12 @@ describe('harness tool descriptions', () => {
         if (b.re.test(f.description)) hits.push(`${f.name}: ${b.re} (${b.why})`);
       }
     }
-    expect(hits).toEqual([]);
+    expect(hits, HOW).toEqual([]);
   });
 
   it('every coach-exposed tool says WHEN to use it', () => {
     const missing = defs.filter((d) => !/\bUse\b/.test(d.function.description)).map((d) => d.function.name);
-    expect(missing).toEqual([]);
+    expect(missing, HOW).toEqual([]);
   });
 
   it('every declared parameter is taught in the description too (the Broker never sees the JSON schema)', () => {
@@ -81,7 +92,7 @@ describe('harness tool descriptions', () => {
         if (!d.function.description.includes(`"${key}"`)) missing.push(`${d.function.name}.${key}`);
       }
     }
-    expect(missing).toEqual([]);
+    expect(missing, HOW).toEqual([]);
   });
 
   it('parameter descriptions are jargon-free and say their default', () => {
@@ -101,7 +112,7 @@ describe('harness tool descriptions', () => {
           bad.push(`${d.function.name}.${key}: does not say what happens without it`);
       }
     }
-    expect(bad).toEqual([]);
+    expect(bad, HOW).toEqual([]);
   });
 
   it('every confusable pair carries its tiebreak on at least one side', () => {
@@ -111,14 +122,14 @@ describe('harness tool descriptions', () => {
       const db = byName.get(b)?.description ?? RETRIEVAL_FUNCTIONS[b]?.description ?? '';
       if (!da.includes(b) && !db.includes(a)) uncovered.push(`${a} ↔ ${b}`);
     }
-    expect(uncovered).toEqual([]);
+    expect(uncovered, HOW).toEqual([]);
   });
 
   it('descriptions stay compact enough to be read, not skimmed', () => {
     const tooLong = Object.values(RETRIEVAL_FUNCTIONS)
       .filter((f) => f.description.length > 520)
       .map((f) => `${f.name} (${f.description.length})`);
-    expect(tooLong).toEqual([]);
+    expect(tooLong, HOW).toEqual([]);
   });
 
   /** Action tools get more room than a read — each carries a safety gate ("only when they have
@@ -129,7 +140,7 @@ describe('harness tool descriptions', () => {
     const tooLong = actions
       .filter((d) => d.function.description.length > 800)
       .map((d) => `${d.function.name} (${d.function.description.length})`);
-    expect(tooLong).toEqual([]);
+    expect(tooLong, HOW).toEqual([]);
     // Whether it commits on call or waits for a tap is the single most important thing a model
     // can know about an action tool, so saying it is not optional.
     const silent = actions
@@ -138,6 +149,6 @@ describe('harness tool descriptions', () => {
           !/take effect immediately|does NOT change anything|Takes effect immediately/i.test(d.function.description),
       )
       .map((d) => d.function.name);
-    expect(silent).toEqual([]);
+    expect(silent, HOW).toEqual([]);
   });
 });
