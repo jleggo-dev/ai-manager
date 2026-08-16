@@ -6641,3 +6641,17 @@ textarea.wiz-title {
 .cons-drop:disabled {
   opacity: 0.5;
 }
+
+/* "checking your recorded workouts…" beside the typing dots. Second-voice, because it is her
+   working rather than her speaking — and it must never be mistaken for the reply itself. */
+.ct-doing {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ct-doing em {
+  font-style: normal;
+  font-size: 13px;
+  color: var(--text-dim);
+}

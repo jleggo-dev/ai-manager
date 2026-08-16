@@ -44,6 +44,7 @@ describe('relayCoachTurnWithTools', () => {
   it('plain turn: relays deltas, suppresses upstream terminals, writes exactly one [DONE]', async () => {
     const { writes, writeChunk } = collectWrites();
     const result = await relayCoachTurnWithTools(
+      'u1',
       stream([delta('Hello'), delta(' there'), DONE, complete('r1'), DONE]),
       { toolNames: new Set(['get_weight']), execute: vi.fn(), submit: vi.fn() },
       { writeChunk },
@@ -62,6 +63,7 @@ describe('relayCoachTurnWithTools', () => {
     );
     const submit = vi.fn(async () => stream([delta('You are at 88.5 kg.'), complete('r2'), DONE]));
     const result = await relayCoachTurnWithTools(
+      'u1',
       stream([delta('Let me check your file… '), complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
       { toolNames: new Set(['get_weight']), execute, submit },
       { writeChunk },
@@ -78,6 +80,7 @@ describe('relayCoachTurnWithTools', () => {
     const execute = vi.fn();
     const submit = vi.fn();
     const result = await relayCoachTurnWithTools(
+      'u1',
       stream([delta('Hi'), complete('r1', [{ id: 't9', name: 'some_profile_tool_job' }]), DONE]),
       { toolNames: new Set(['get_weight']), execute, submit },
       {},
@@ -101,6 +104,7 @@ describe('relayCoachTurnWithTools', () => {
       ]);
     });
     const result = await relayCoachTurnWithTools(
+      'u1',
       stream([complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
       { toolNames: new Set(['get_weight']), execute, submit },
       {},
@@ -118,6 +122,7 @@ describe('relayCoachTurnWithTools', () => {
     });
     const submit = vi.fn();
     const result = await relayCoachTurnWithTools(
+      'u1',
       stream([delta('One sec… '), complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
       { toolNames: new Set(['get_weight']), execute, submit },
       { writeChunk },
@@ -134,10 +139,104 @@ describe('relayCoachTurnWithTools', () => {
     );
     const submit = vi.fn(async () => stream([delta('done'), complete('r2'), DONE]));
     await relayCoachTurnWithTools(
+      'u1',
       stream([complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
       { toolNames: new Set(['get_weight']), execute, submit },
       { onResponseId: (id) => void ids.push(id) },
     );
     expect(ids).toEqual(['r1', 'r2']);
+  });
+});
+
+/**
+ * The dangling lookup: she calls `find_tools`, gets the instructions, and then answers as if she
+ * had used them. It happened on 2026-08-16 — she told the owner a constraint was removed and
+ * nothing had been. `find_tools` already ends with "call use_tool now" and she ignored it, which
+ * makes sense if the cause is structural: a continuation is a fresh generation, so the round that
+ * ignores the instruction is not the round that read it.
+ *
+ * Owner: "we can tell Cadence programmatically that she never called the tool and get her to call
+ * it… We don't need to tell the user it's dangling."
+ */
+describe('a lookup that never became a call', () => {
+  const deps = (nudgeBody: ReadableStream<Uint8Array> | null, execute = vi.fn()) => ({
+    toolNames: new Set(['find_tools', 'use_tool']),
+    execute,
+    submit: vi.fn(),
+    nudge: vi.fn().mockResolvedValue(nudgeBody),
+  });
+
+  it('nudges her when find_tools is called and use_tool never follows', async () => {
+    const d = deps(stream([delta('Removed it.'), complete('r2'), DONE]));
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([delta('Let me look.'), complete('r1', [{ id: 't1', name: 'find_tools' }]), DONE]),
+      { ...d, execute: vi.fn().mockResolvedValue([{ toolCallId: 't1', output: 'update_constraint: …' }]) },
+      {},
+    );
+    expect(d.nudge).toHaveBeenCalledTimes(1);
+    expect(String(d.nudge.mock.calls[0]![0])).toMatch(/NOTHING was actually done/);
+  });
+
+  /** The user must never see it — a `<note>` is a word in her ear, not a message in the chat. */
+  it('sends the nudge as an app-authored note', async () => {
+    const d = deps(stream([delta('ok'), complete('r2'), DONE]));
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([delta('x'), complete('r1', [{ id: 't1', name: 'find_tools' }]), DONE]),
+      { ...d, execute: vi.fn().mockResolvedValue([{ toolCallId: 't1', output: 'x' }]) },
+      {},
+    );
+    expect(String(d.nudge.mock.calls[0]![0])).toMatch(/^<note>/);
+    expect(String(d.nudge.mock.calls[0]![0])).toMatch(/Do not mention this note/);
+  });
+
+  it('does not nudge when she used the tool she looked up', async () => {
+    const d = deps(null);
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([
+        delta('x'),
+        complete('r1', [
+          { id: 't1', name: 'find_tools' },
+          { id: 't2', name: 'use_tool' },
+        ]),
+        DONE,
+      ]),
+      {
+        ...d,
+        execute: vi.fn().mockResolvedValue([
+          { toolCallId: 't1', output: 'a' },
+          { toolCallId: 't2', output: 'b' },
+        ]),
+        submit: vi.fn().mockResolvedValue(null),
+      },
+      {},
+    );
+    expect(d.nudge).not.toHaveBeenCalled();
+  });
+
+  it('does not nudge a turn that never looked anything up', async () => {
+    const d = deps(null);
+    await relayCoachTurnWithTools('u1', stream([delta('just talking'), complete('r1'), DONE]), d, {});
+    expect(d.nudge).not.toHaveBeenCalled();
+  });
+
+  /** The turn already has an answer; a failed nudge must never cost her that. */
+  it('keeps the reply when the nudge itself fails', async () => {
+    const d = deps(null);
+    d.nudge = vi.fn().mockRejectedValue(new Error('provider down'));
+    const quiet = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const r = await relayCoachTurnWithTools(
+        'u1',
+        stream([delta('Removed it.'), complete('r1', [{ id: 't1', name: 'find_tools' }]), DONE]),
+        { ...d, execute: vi.fn().mockResolvedValue([{ toolCallId: 't1', output: 'x' }]) },
+        {},
+      );
+      expect(r.content).toContain('Removed it.');
+    } finally {
+      quiet.mockRestore();
+    }
   });
 });

@@ -263,7 +263,29 @@ describe('update_constraint', () => {
     removeCapturedConstraint.mockResolvedValue(true);
   });
 
+  /**
+   * The tool re-READS after writing and reports what it can see, so a test has to model the read
+   * as well as the write — mocking a fixed `getUser` is mocking a database that ignores writes.
+   * That is the point of the change: on 2026-08-16 the coach said a constraint was removed and it
+   * was still there, so "it worked" is now something the tool observes rather than assumes.
+   */
+  const afterWrite = (constraints: Array<Record<string, unknown>>) => {
+    getUser.mockResolvedValueOnce({
+      baseline: {
+        constraints: [
+          { id: 'c1', label: 'left knee — patellar tendinopathy', kind: 'physical', plan_around: true },
+          { id: 'c2', label: 'night shifts', kind: 'life', plan_around: true },
+        ],
+      },
+    });
+    getUser.mockResolvedValue({ baseline: { constraints } });
+  };
+
   it('LIFTS a recovered injury without forgetting it', async () => {
+    afterWrite([
+      { id: 'c1', label: 'left knee — patellar tendinopathy', plan_around: false, status: 'quiet' },
+      { id: 'c2', label: 'night shifts', plan_around: true },
+    ]);
     const out = await constraint.run('u1', { constraint: 'left knee', action: 'lift' });
     expect(removeCapturedConstraint).not.toHaveBeenCalled();
     const [, written] = mergeCapturedConstraints.mock.calls[0]!;
@@ -283,10 +305,12 @@ describe('update_constraint', () => {
   });
 
   it('DELETES only what was never true', async () => {
+    // `remove` reads exactly once — the verify — so this is the post-write state, nothing queued.
+    getUser.mockResolvedValue({ baseline: { constraints: [{ id: 'c2', label: 'night shifts', plan_around: true }] } });
     const out = await constraint.run('u1', { constraint: 'left knee', action: 'remove' });
     expect(removeCapturedConstraint).toHaveBeenCalledWith('u1', 'left knee');
     expect(mergeCapturedConstraints).not.toHaveBeenCalled();
-    expect(out).toMatch(/recorded in error/);
+    expect(out).toMatch(/verified gone/);
   });
 
   it('says so plainly when there was nothing to remove', async () => {
@@ -296,12 +320,35 @@ describe('update_constraint', () => {
   });
 
   it('adds a new one, defaulting to planning around it', async () => {
+    afterWrite([
+      { id: 'c1', label: 'left knee — patellar tendinopathy', plan_around: true },
+      { id: 'c3', label: 'wrist pain', plan_around: true },
+    ]);
     const out = await constraint.run('u1', { constraint: 'wrist pain', action: 'add', kind: 'physical' });
     const [, written] = mergeCapturedConstraints.mock.calls[0]!;
     expect(written[0].label).toBe('wrist pain');
     expect(written[0].plan_around).toBe(true);
     expect(written[0].kind).toBe('physical');
     expect(out).toMatch(/so they can correct you/);
+  });
+
+  /**
+   * The exact failure of 2026-08-16, inverted into a guard: the write does not land, and the tool
+   * must say so rather than let her tell the user it is done.
+   */
+  it('refuses to report success when the removal did not actually take', async () => {
+    // The read after the write still shows it — a silent no-op, which is what really happened.
+    const out = await constraint.run('u1', { constraint: 'left knee', action: 'remove' });
+    expect(out).toMatch(/STILL on their file/);
+    expect(out).toMatch(/Do NOT tell them it is gone/);
+    expect(out).toMatch(/Settings/);
+  });
+
+  it('refuses to report an ease that did not save', async () => {
+    // plan_around stays true after the write — the change did not take.
+    const out = await constraint.run('u1', { constraint: 'left knee', action: 'lift' });
+    expect(out).toMatch(/still being planned around/);
+    expect(out).toMatch(/Do NOT say it is eased/);
   });
 
   it('will not lift something it cannot find, and lists what it has', async () => {

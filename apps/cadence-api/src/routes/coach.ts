@@ -257,12 +257,17 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     const t0 = Date.now();
     const { content, promptTokens, completionTokens, model, responseId, firstTokenMs, clientDropped } =
       await relayCoachTurnWithTools(
+        userId,
         response.body,
         {
           toolNames: coachToolNames(),
           execute: (calls) => executeCoachToolCalls(userId, calls),
           submit: async (respId, outputs) =>
             (await submitCoachToolOutputs(userId, sessionId, respId, outputs)).response.body,
+          // A word in her ear when she looked a tool up and never ran it. <note> turns are
+          // app-authored, so this never reaches the transcript or the capture window.
+          nudge: async (text) =>
+            (await sendCoachMessage(userId, sessionId, text, coachToolDefinitions())).response.body,
         },
         {
           isClientAlive: () => clientAlive,

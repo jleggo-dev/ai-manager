@@ -17,6 +17,7 @@ import {
   type CoachFoodAction,
 } from '../../lib/api.ts';
 import { capabilities } from '../../lib/capability/index.ts';
+import { useCoachActivity } from './useCoachActivity.ts';
 import { recoverTurnFromServer, useResumeHealer } from './coach-recovery.ts';
 import { healthOfferAnswered } from './health-digest.ts';
 
@@ -67,11 +68,33 @@ async function loadCapturedGoals(set: (g: CapturedGoal[]) => void): Promise<void
   }
 }
 
+/**
+ * The two ways a streaming turn changes the transcript, as pure functions.
+ *
+ * Lifted out of `useCoachChat` when it hit the 150-line ceiling — and the split is the right one
+ * regardless: these are transformations OF a transcript, not behaviour of a hook. Neither mutates
+ * the existing turn, which is what keeps them safe under StrictMode's double-invoke.
+ */
+function withLastCoachFilled(turns: CoachTurn[], text: string): CoachTurn[] {
+  const last = turns[turns.length - 1];
+  if (last?.role === 'coach' && !last.text) return [...turns.slice(0, -1), { ...last, text }];
+  return [...turns, { role: 'coach', text }];
+}
+
+/** Append a streamed delta to the coach turn in progress; a no-op if there is not one. */
+function withDelta(turns: CoachTurn[], delta: string): CoachTurn[] {
+  const last = turns[turns.length - 1];
+  if (!last || last.role !== 'coach') return turns;
+  return [...turns.slice(0, -1), { ...last, text: last.text + delta }];
+}
+
 export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs = {}) {
   const wait = delay ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const [turns, setTurns] = useState<CoachTurn[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  // What she is doing right now, in words (useCoachActivity) — shown beside the typing dots.
+  const { activity, noteActivity, clearActivity } = useCoachActivity();
   const [capturedGoals, setCapturedGoals] = useState<CapturedGoal[]>([]);
   const [restored, setRestored] = useState(false);
   const [foodAction, setFoodAction] = useState<CoachFoodAction | null>(null);
@@ -87,6 +110,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       abort.current?.abort();
       abort.current = null;
       setStreaming(false);
+      clearActivity();
     },
   });
 
@@ -121,22 +145,8 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     });
   }
 
-  function fillLastCoach(text: string) {
-    setTurns((t) => {
-      const last = t[t.length - 1];
-      if (last?.role === 'coach' && !last.text) return [...t.slice(0, -1), { ...last, text }];
-      return [...t, { role: 'coach', text }];
-    });
-  }
-
-  /** Pure delta reducer — never mutates the existing turn (StrictMode double-invoke safe). */
-  function applyStreamDelta(delta: string) {
-    setTurns((t) => {
-      const last = t[t.length - 1];
-      if (!last || last.role !== 'coach') return t;
-      return [...t.slice(0, -1), { ...last, text: last.text + delta }];
-    });
-  }
+  const fillLastCoach = (text: string) => setTurns((t) => withLastCoachFilled(t, text));
+  const applyStreamDelta = (delta: string) => setTurns((t) => withDelta(t, delta));
 
   /**
    * One turn, streamed. `echo: false` is the app speaking on the user's behalf — her reply is
@@ -185,7 +195,13 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
         ).sessionId;
       abort.current = new AbortController();
       stopped.current = false;
-      const { completed } = await sendCoachMessage(sessionId.current, text, applyStreamDelta, abort.current.signal);
+      const { completed } = await sendCoachMessage(
+        sessionId.current,
+        text,
+        applyStreamDelta,
+        abort.current.signal,
+        noteActivity,
+      );
       if (!completed && !stopped.current && !healer.recovered.current && !(await recoverFromServer())) {
         if (echo) fillLastCoach('⚠️ Connection dropped — send again to continue.');
         else retractPendingNote();
@@ -211,6 +227,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     } finally {
       abort.current = null;
       setStreaming(false);
+      clearActivity();
       healer.end();
       setTimeout(() => void loadCapturedGoals(setCapturedGoals), 900);
     }
@@ -260,6 +277,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     input,
     setInput,
     streaming,
+    activity,
     capturedGoals,
     restored,
     send,

@@ -44,3 +44,4 @@ export * from './journal-export.ts';
 export * from './local-notifications.ts';
 export * from './notifications/index.ts';
 export * from './micronutrient-targets.ts';
+export { coachActivityLine, type CoachActivityFrame } from './coach-activity.ts';

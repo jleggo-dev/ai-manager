@@ -26,12 +26,15 @@ export function ChatTurn({
   role,
   text,
   pending = false,
+  activity = '',
   after,
 }: {
   role: 'user' | 'coach';
   text: string;
   /** Coach turn with nothing streamed yet — show the dots instead of an empty bubble. */
   pending?: boolean;
+  /** What she is doing right now, in plain words — shown instead of bare dots while a tool runs. */
+  activity?: string;
   after?: ReactNode;
 }) {
   if (role === 'user') return <div className="ct-me">{text}</div>;
@@ -39,7 +42,18 @@ export function ChatTurn({
     <div className="ct-coach">
       <div className="ct-row">
         <CoachFace size={44} className="ct-face" />
-        <div className="ct-bubble">{pending ? <TypingDots /> : text}</div>
+        <div className="ct-bubble">
+          {pending ? (
+            /* Dots say "something is happening"; the line says WHAT. Every failure this week was
+               invisible work, so when we know what she is doing we say it. */
+            <span className="ct-doing">
+              <TypingDots />
+              {activity && <em>{activity}…</em>}
+            </span>
+          ) : (
+            text
+          )}
+        </div>
       </div>
       {after && <div className="ct-after">{after}</div>}
     </div>

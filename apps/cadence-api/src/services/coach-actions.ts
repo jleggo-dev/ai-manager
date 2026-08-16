@@ -122,6 +122,26 @@ function asEdits(raw: unknown): PlanEdit[] {
     .filter((e) => ['move', 'retime', 'resize', 'remove', 'add', 'rework'].includes(e.action));
 }
 
+/**
+ * Read the constraints back after writing them, so the answer describes the OBSERVED state.
+ *
+ * Owner, 2026-08-16: *"Cadence should actually invoke the tool and then double-check to see if
+ * their action worked or not."* Right — and better as a rule about the TOOL than about her, because
+ * a model can be wrong about whether it checked and a query cannot.
+ *
+ * The day earned this twice. She told him a session was logged (the tool had said it found nothing)
+ * and that a constraint was removed (it was still there, `plan_around: true`, and she went on
+ * repeating the claim for turns afterwards). In both cases the tool's own answer was correct and
+ * the *claim* was not, so no amount of describing the tool better would have helped.
+ *
+ * Generalises TOOL-HARNESS.md §5: a tool's return must never claim an effect the tool did not
+ * produce — which means the safest return is one that says what a fresh read can see.
+ */
+async function verifyConstraints(userId: string): Promise<Array<{ label: string; plan_around?: boolean }>> {
+  const u = await getUser(userId);
+  return (u?.baseline?.constraints ?? []) as Array<{ label: string; plan_around?: boolean }>;
+}
+
 export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   propose_plan_change: {
     name: 'propose_plan_change',
@@ -362,8 +382,14 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
 
       if (action === 'remove') {
         const removed = await removeCapturedConstraint(userId, label);
+        // Re-READ, do not trust the write. See verifyConstraints below.
+        const after = await verifyConstraints(userId);
+        const stillThere = after.some((c) => sameConstraint(c.label ?? '', label));
+        if (stillThere) {
+          return `"${label}" is STILL on their file — the removal did not take. Do NOT tell them it is gone. Say you could not remove it just now, and that they can take it off themselves in Settings under "What we work around".`;
+        }
         return removed
-          ? `Removed "${label}" — it is off their file entirely, as something recorded in error. Say so briefly and move on; do not dwell on the mistake.`
+          ? `Removed "${label}" — verified gone from their file. Say so briefly and move on; do not dwell on the mistake.`
           : `Nothing on file matches "${label}", so nothing was removed. Tell them plainly it was not there.`;
       }
 
@@ -389,13 +415,23 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         },
       ]);
 
+      // What the file ACTUALLY says now, not what we asked it to say.
+      const after = await verifyConstraints(userId);
+      const row = after.find((c) => sameConstraint(c.label ?? '', existing?.label ?? label));
+      if (!row) {
+        return `"${label}" is not on their file after that write — it did not take. Do NOT say it is done; say you could not save it just now.`;
+      }
       if (action === 'lift') {
-        return `"${existing?.label ?? label}" is marked eased — still on file, so you keep knowing about it, but the plan no longer has to work around it. Say that back plainly, and if their week was built around it, offer to rebuild.`;
+        return row.plan_around === false
+          ? `"${row.label}" is marked eased and verified: still on file, so you keep knowing about it, but the plan no longer works around it. Say that back plainly, and if their week was built around it, offer to rebuild.`
+          : `"${row.label}" is still being planned around — the change did not take. Do NOT say it is eased; say you could not save it just now.`;
       }
       if (action === 'flare') {
-        return `"${existing?.label ?? label}" is active again and the plan should work around it. Say so, and offer to change the week if it currently ignores it.`;
+        return row.plan_around
+          ? `"${row.label}" is active again and verified: the plan should work around it. Say so, and offer to change the week if it currently ignores it.`
+          : `"${row.label}" did not save as active. Do NOT say it is done; say you could not save it just now.`;
       }
-      return `Noted: they work around "${label}". Say it back in one line so they can correct you if you have it wrong.`;
+      return `Noted and verified: they work around "${row.label}". Say it back in one line so they can correct you if you have it wrong.`;
     },
   },
 
