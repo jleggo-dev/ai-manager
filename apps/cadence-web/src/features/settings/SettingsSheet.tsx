@@ -5,6 +5,7 @@ import { NutritionTargets } from './NutritionTargets.tsx';
 import { DietaryProfileEditor } from './DietaryProfileEditor.tsx';
 import { LocationSettings } from './LocationSettings.tsx';
 import { AppleHealthSettings } from './AppleHealthSettings.tsx';
+import { ConstraintsSettings } from './ConstraintsSettings.tsx';
 import { NotificationSettings } from './NotificationSettings.tsx';
 import { CoachFaceSettings } from './CoachFaceSettings.tsx';
 
@@ -102,6 +103,7 @@ export function SettingsSheet({
           <LocationSettings />
 
           {/* Native-shell only: both render null on web (capability seam). */}
+          <ConstraintsSettings />
           <AppleHealthSettings />
           <NotificationSettings />
 

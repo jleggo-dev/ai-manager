@@ -7,6 +7,7 @@ export type AiLogKind =
   | 'pack_reuse'
   | 'pack_summarize'
   | 'context_select'
+  | 'coach_tool'
   | 'assess_goal'
   | 'prescribe_session'
   | 'parse_session_log'

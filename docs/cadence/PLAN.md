@@ -6536,3 +6536,35 @@ the earlier test push arrived.
 
 **Also raised:** pull sleep hours from Apple Health (we read workouts and steps, not sleep), and the
 chat composer's caret renders oddly — small, bottom-left, in a box taller than its content.
+
+### Two things the "she said she did it" bugs needed (2026-08-16)
+
+**1. We were debugging blind.** Nothing recorded WHICH tool she called or what came back, so all
+evening the only evidence was inferring tool use from token counts — a continuation reports
+`promptTokens: 0`, so a zero meant "a tool probably ran". Archaeology, not evidence. It left one of
+the two failures answerable and one not: the run was provably never logged (no tool loop at all),
+but the constraint turn *did* run a tool and there is no record of which, or what it said.
+
+`coach_tool` is a new `ai_log` kind: every call's name, arguments, and the first 400 characters of
+what it returned. Unrecognised names are logged too — a near-miss name is otherwise invisible, and
+it silently ends her turn. Fire-and-forget, because a diagnostic that can delay a turn is worse
+than no diagnostic.
+
+**2. The user could not check.** Constraints have always shaped every plan and have never been
+visible outside the coach's own account of them. That stopped being theoretical: told to drop the
+elbow she said *"Done — I've removed the elbow tendinitis"*, it was still there with
+`plan_around: true`, and she kept repeating the claim across later turns **even though the turn
+floor hands her the real list on every message**. She is trusting her own earlier sentence over the
+fact in front of her, which is a finding in itself.
+
+> "I feel like we should surface the known constraints in the settings (alongside equipment) that
+> way I can validate them myself."
+
+`GET /me/constraints`, `DELETE /me/constraints/:id`, and a **What we work around** panel in
+Settings. It shows `plan_around` first, because that is the field that actually changes the plan;
+status second. Removing here is a plain delete, deliberately unlike the coach's `update_constraint`
+which only deletes on an explicit "that was never true" — that care is right when a model is
+inferring intent from prose and condescending when the person whose elbow it is taps a button.
+
+The general form, and the lesson of the whole day: **a fact that shapes every plan should be
+visible to the person it is about, not only to the model.**
