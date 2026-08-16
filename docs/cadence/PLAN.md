@@ -6037,3 +6037,42 @@ change he had named two turns earlier. The capability was real; the reach for it
 **Not fixed by this, and worth being clear about:** `plans.steer` (0034) records the ask only once
 a change *commits*. It does nothing for a change still being discussed. The fix for the
 "forgetting" is the instruction above, not the column.
+
+### The coach's Apple Health reads returned "nothing on file" for 30 recorded workouts (2026-08-16)
+
+Found while auditing the harness, not from a report — though the owner *had* reported it, one layer
+up: *"Coach wasn't able to actually read from healthkit."* That was answered by fixing the
+permission story. The read itself was broken the whole time.
+
+Run through the real coach tool path for the owner's account:
+
+```
+[get_workout_history] "(nothing on file for this yet)"
+[get_health_history]  "(nothing on file for this yet)"
+```
+
+He has thirty recorded workouts, including the 8.78 km run he and Cadence discussed that morning.
+
+**Cause.** `postgres.js` returns `timestamptz` as a JavaScript **Date**. Our row types are
+hand-written generics on the query, so `WorkoutHistoryRow.startedAt` is declared `string`, is a
+Date at runtime, and TypeScript never objects. `w.startedAt.slice(0, 10)` threw on every row.
+
+**What turned a crash into a lie.** `executeCoachToolCalls` swallowed a throwing render as
+`'(nothing on file for this yet)'` — reasoning that a render which crashes found nothing usable.
+It does not follow. The coach asked for his runs, was told there were none, and said so: a false
+statement in her voice, from a bug, with no trace anywhere that a tool had failed.
+
+**And why the tests were green.** `registry.render.test.ts` fed `startedAt` a *string* — the type
+the row declares. A test that only ever feeds the declared type can only prove the declaration is
+self-consistent with itself. The new fixture is a Date, because that is what the database sends.
+
+Fixed:
+- `isoDay()` (new) takes `string | Date | null` and returns a day or ''. Used at all four
+  `.slice(0, 10)` sites on database timestamps. A bare `"2026-08-15"` is sliced, not re-parsed —
+  re-parsing as UTC midnight and re-formatting can roll it back a day west of Greenwich.
+- Tool errors no longer masquerade as empty results. A throwing render now returns *"this is a
+  fault on our side, NOT an empty record — do not tell the user they have nothing here"*, and logs.
+- Regression tests on Date-shaped rows for `get_workout_history` and `get_journal`, plus `isoDay`.
+
+Verified after: `Recorded workouts (last 30d, newest first): - 2026-08-15 · running · 77 min ·
+8.78 km …` and `30 workouts, ~2.3/week overall`.

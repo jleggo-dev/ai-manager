@@ -244,6 +244,42 @@ describe('retrieval registry — render / rows', () => {
     expect(RETRIEVAL_FUNCTIONS.get_workout_history!.rows(r)).toBe(2);
   });
 
+  /**
+   * The shape the DATABASE really returns, which is not the shape the row type claims.
+   *
+   * `postgres.js` hands back `timestamptz` as a Date; `WorkoutHistoryRow.startedAt` is typed
+   * `string` on a hand-written query generic, so nothing ever objected — and the test above fed
+   * it a string, so the suite agreed. In production `.slice()` threw on every row, the coach tool
+   * path turned the throw into "(nothing on file for this yet)", and she told a user with thirty
+   * recorded workouts that there was nothing there (2026-08-16).
+   *
+   * So the fixture here is deliberately a Date. A test that only ever feeds the declared type can
+   * only ever prove the declaration is self-consistent.
+   */
+  it('renders rows exactly as postgres returns them — Date timestamps, not strings', () => {
+    const r = {
+      days: 30,
+      workouts: [
+        {
+          source: 'healthkit',
+          type: 'running',
+          startedAt: new Date('2026-08-15T10:57:00Z') as unknown as string,
+          durationMin: 77,
+          distanceKm: 8.78,
+          avgHr: null,
+        },
+      ],
+    };
+    expect(RETRIEVAL_FUNCTIONS.get_workout_history!.render(r)).toBe(
+      'Recorded workouts (last 30d, newest first):\n- 2026-08-15 · running · 77 min · 8.78 km',
+    );
+  });
+
+  it('get_journal survives the same Date-shaped created_at', () => {
+    const entries = [{ created_at: new Date('2026-08-14T20:00:00Z'), prompt: null, body: 'A quiet one.' }];
+    expect(RETRIEVAL_FUNCTIONS.get_journal!.render(entries)).toContain('2026-08-14');
+  });
+
   it('get_recent_logs formats felt notes', () => {
     const rows = [
       {

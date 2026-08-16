@@ -16,6 +16,7 @@ import { listNutritionLogs } from '../../repos/nutrition.ts';
 import { listRecipes, searchRecipes } from '../../repos/recipes.ts';
 import { listForCoach } from '../../repos/journal-entries.ts';
 import { latestHealthDigest } from '../../repos/health-digests.ts';
+import { isoDay } from '../iso-day.ts';
 import { listWorkoutHistory, type WorkoutHistoryRow } from '../../repos/workout-history.ts';
 import { renderHealthDigest } from '../health-context.ts';
 import { summarizeNutrition, renderNutritionLine } from '../nutrition-summarize.ts';
@@ -119,10 +120,11 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
       return listForCoach(userId, limit);
     },
     render(r) {
-      const entries = r as Array<{ created_at: string; prompt: string | null; body: string }>;
+      // created_at is typed string and arrives as a Date (see iso-day.ts) — isoDay takes either.
+      const entries = r as Array<{ created_at: string | Date; prompt: string | null; body: string }>;
       if (!entries.length) return '';
       const lines = entries.map((e) => {
-        const date = e.created_at.slice(0, 10);
+        const date = isoDay(e.created_at);
         const q = e.prompt ? ` (asked: ${e.prompt})` : '';
         return `  - ${date}${q}: ${e.body.replace(/\s+/g, ' ').slice(0, 300)}`;
       });
@@ -211,7 +213,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
         if (w.durationMin != null) bits.push(`${Math.round(w.durationMin)} min`);
         if (w.distanceKm != null) bits.push(`${w.distanceKm} km`);
         if (w.avgHr != null) bits.push(`avg ${Math.round(w.avgHr)} bpm`);
-        return `- ${w.startedAt.slice(0, 10)} · ${bits.join(' · ')}`;
+        return `- ${isoDay(w.startedAt)} · ${bits.join(' · ')}`;
       });
       return `Recorded workouts (last ${days}d, newest first):\n${lines.join('\n')}`;
     },

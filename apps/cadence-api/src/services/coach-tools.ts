@@ -171,13 +171,31 @@ export async function executeCoachToolCalls(userId: string, calls: CoachToolCall
     ...actionOutputs,
     ...reads.map((c) => {
       const fn = RETRIEVAL_FUNCTIONS[c.name]!;
-      let output = '';
+      /**
+       * "Found nothing" and "broke" are different answers and must never share a sentence.
+       *
+       * This used to swallow a throwing render as "(nothing on file for this yet)" — reasoning
+       * that a render which crashes found nothing usable. It does not follow, and the cost was
+       * exact: on 2026-08-16 both Apple Health reads threw on a Date the row type called a string
+       * (iso-day.ts), and the coach told a user with a full workout log that nothing was recorded.
+       * A lie in her voice, from a bug, with no trace anywhere that a tool had failed.
+       *
+       * So an error now says it is an error, tells her what to do about it, and gets logged where
+       * someone can find it. She can say "I couldn't read that just now" — which is true, and
+       * which the user can push back on.
+       */
       try {
-        output = fn.render(results[c.name]);
-      } catch {
-        /* a render that throws is a tool that found nothing usable */
+        const output = fn.render(results[c.name]);
+        return { toolCallId: c.toolCallId, output: output || '(nothing on file for this yet)' };
+      } catch (e) {
+        console.error('[coach-tool] render failed:', c.name, e);
+        return {
+          toolCallId: c.toolCallId,
+          output:
+            'That could not be read just now — this is a fault on our side, NOT an empty record. ' +
+            'Do not tell the user they have nothing here; say you could not check it right now.',
+        };
       }
-      return { toolCallId: c.toolCallId, output: output || '(nothing on file for this yet)' };
     }),
   ];
 }

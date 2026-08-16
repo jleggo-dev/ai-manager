@@ -10,6 +10,7 @@
  * false of him. Everything derived on the device gets said here, or it may as well not exist.
  */
 import { DIGEST_RECENT_DAYS, type HealthDigest } from '@cadence/shared';
+import { isoDay } from './iso-day.ts';
 
 type TypeSummary = HealthDigest['byType'][number];
 
@@ -68,7 +69,7 @@ function fmtSessions(digest: HealthDigest): string[] {
     const bits = [r.type];
     if (r.distanceKm != null) bits.push(`${km1(r.distanceKm)} km`);
     if (r.durationMin != null) bits.push(`${Math.round(r.durationMin)} min`);
-    lines.push(`    - ${r.start.slice(0, 10)}: ${bits.join(', ')}`);
+    lines.push(`    - ${isoDay(r.start)}: ${bits.join(', ')}`);
   }
   return lines;
 }
@@ -110,7 +111,7 @@ export function renderHealthDigest(digest: HealthDigest, createdAtISO?: string):
   }
   const lines: (string | null)[] = [
     `Recent activity (Apple Health, last ${digest.periodDays} days${
-      createdAtISO ? `, shared ${createdAtISO.slice(0, 10)}` : ''
+      createdAtISO ? `, shared ${isoDay(createdAtISO)}` : ''
     }): ${digest.totalWorkouts} workouts, ~${digest.weeklyFrequency}/week overall.`,
   ];
   for (const t of digest.byType) {
