@@ -6600,3 +6600,53 @@ visible *was* the fix — the Apple Health reads were the other. It is the stron
 TOOL-HARNESS.md's rule that a tool's answer is as much a product surface as its description.
 
 Verified against real data: the owner's incline session is logged and marked done.
+
+### She tells you what she's doing now — and the log proved the two-hop drops (2026-08-16)
+
+> "when I use products in a harness like Claude, they usually tell me when they're calling a tool.
+> This would help us diagnose and it would also tell the user something is happening (or happened)."
+
+Both halves are right, and today made the case twice: she said a session was logged and none was,
+said a constraint was removed and it was not. **A screen that says "writing that down…" and then
+goes quiet is a question the user can ask. No line at all is not.**
+
+The server writes a `cadence` SSE frame after each round of tool calls; the parser routes it away
+from her prose; the pending bubble shows it beside the dots.
+
+**Behaviour, never the entity.** BRAND.md keeps the machinery hidden — to the user there is only the
+coach — so this never prints a tool name. Claude Code says `get_workout_history` because its user is
+a developer whose job is the tool; Cadence's user has a sore elbow, and *"checking your recorded
+workouts"* is the same information and truer to them. The tool name is in `coach_tool` for whoever
+is debugging. `find_tools`/`use_tool` both render as *"looking something up"* — naming them would be
+naming the harness.
+
+### The finding underneath it: `find_tools` without `use_tool`
+
+The owner asked her again to remove the elbow constraint. `coach_tool` caught it exactly:
+
+```
+find_tools {"query":"update constraints remove injury"}
+  → update_constraint [changes their data]: … Takes effect immediately …
+(no second call)
+```
+
+**She looked it up, read the instructions, and never called `use_tool`** — then told him it was
+done. So this is not a discovery failure: the hierarchy worked, she found the right tool on the
+first query. It is a **drop between hop one and hop two**, and it is a cost of the two-hop design
+that the single-hop actions do not pay.
+
+`find_tools` already ends with *"Call use_tool now if one of these answers the question — do not
+describe them to the user instead of using them."* She ignored it, so more prose is not the answer.
+Two candidates, neither built:
+
+1. **Deterministic nudge** — the tool loop knows when a turn called `find_tools` and ended without
+   `use_tool`. That is a machine-checkable dangling intent, and a guard beats an instruction.
+2. **Verify after acting**, the owner's own suggestion: *"Cadence should actually invoke the tool and
+   then double-check to see if their action worked or not."* Better as a rule about the TOOL than
+   about her — a tool's return should state the **observed post-state**, not the intended one. That
+   generalises TOOL-HARNESS §5 and would have caught both of today's false claims.
+
+Also open from the same round: today's session is marked done but the plan's completion rings stay
+grey, and the composer caret renders wrong on the first visit to Coach after launch and corrects
+itself after the first message — which smells like measuring `scrollHeight` before the custom font
+has loaded.

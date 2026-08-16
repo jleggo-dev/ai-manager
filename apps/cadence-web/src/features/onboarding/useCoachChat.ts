@@ -16,6 +16,7 @@ import {
   notifyOnCoachReply,
   type CoachFoodAction,
 } from '../../lib/api.ts';
+import { coachActivityLine } from '@cadence/shared';
 import { capabilities } from '../../lib/capability/index.ts';
 import { recoverTurnFromServer, useResumeHealer } from './coach-recovery.ts';
 import { healthOfferAnswered } from './health-digest.ts';
@@ -72,6 +73,14 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
   const [turns, setTurns] = useState<CoachTurn[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  /**
+   * What she is doing right now, in words — set when a tool runs, cleared when the turn ends.
+   *
+   * Owner: *"they usually tell me when they're calling a tool… it would also tell the user
+   * something is happening (or happened)."* Every failure this week was invisible work, and a
+   * screen that says "writing that down…" and then goes quiet is a question the user can ask.
+   */
+  const [activity, setActivity] = useState('');
   const [capturedGoals, setCapturedGoals] = useState<CapturedGoal[]>([]);
   const [restored, setRestored] = useState(false);
   const [foodAction, setFoodAction] = useState<CoachFoodAction | null>(null);
@@ -87,6 +96,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       abort.current?.abort();
       abort.current = null;
       setStreaming(false);
+      setActivity('');
     },
   });
 
@@ -185,7 +195,13 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
         ).sessionId;
       abort.current = new AbortController();
       stopped.current = false;
-      const { completed } = await sendCoachMessage(sessionId.current, text, applyStreamDelta, abort.current.signal);
+      const { completed } = await sendCoachMessage(
+        sessionId.current,
+        text,
+        applyStreamDelta,
+        abort.current.signal,
+        (names) => setActivity(coachActivityLine(names)),
+      );
       if (!completed && !stopped.current && !healer.recovered.current && !(await recoverFromServer())) {
         if (echo) fillLastCoach('⚠️ Connection dropped — send again to continue.');
         else retractPendingNote();
@@ -211,6 +227,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     } finally {
       abort.current = null;
       setStreaming(false);
+      setActivity('');
       healer.end();
       setTimeout(() => void loadCapturedGoals(setCapturedGoals), 900);
     }
@@ -260,6 +277,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     input,
     setInput,
     streaming,
+    activity,
     capturedGoals,
     restored,
     send,

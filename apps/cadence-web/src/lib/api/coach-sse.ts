@@ -26,7 +26,12 @@ export function createCoachSseParseState(): CoachSseParseState {
  * Apply one complete SSE `data:` payload (already stripped of the `data: ` prefix and trimmed).
  * Invokes `onDelta` for incremental content only. Returns true when `[DONE]` was seen.
  */
-export function applyCoachSseData(state: CoachSseParseState, data: string, onDelta: (text: string) => void): boolean {
+export function applyCoachSseData(
+  state: CoachSseParseState,
+  data: string,
+  onDelta: (text: string) => void,
+  onActivity?: (names: string[]) => void,
+): boolean {
   if (data === '[DONE]') {
     state.completed = true;
     return true;
@@ -39,6 +44,15 @@ export function applyCoachSseData(state: CoachSseParseState, data: string, onDel
     // their payload here would duplicate the whole message in the UI — skip them. Only
     // incremental `choices[].delta.content` frames carry streaming text.
     if (p.type === 'message.complete' || p.type === 'v2.response.created') return false;
+    /**
+     * A `cadence` frame is ours, not the provider's — the server writes one when it has just run a
+     * tool, so the screen can say what is happening. Handled before the delta check and returned
+     * on, because it is never content and must not reach her prose.
+     */
+    if (p.cadence === 'tool' && Array.isArray(p.names)) {
+      onActivity?.(p.names.filter((n): n is string => typeof n === 'string'));
+      return false;
+    }
     const choices = p.choices as Array<{ delta?: { content?: unknown } }> | undefined;
     const delta = choices?.[0]?.delta?.content;
     if (typeof delta === 'string' && delta) onDelta(delta);
@@ -49,21 +63,31 @@ export function applyCoachSseData(state: CoachSseParseState, data: string, onDel
 }
 
 /** Process one complete SSE line (may be empty frame separator or `data: …`). */
-export function applyCoachSseLine(state: CoachSseParseState, line: string, onDelta: (text: string) => void): boolean {
+export function applyCoachSseLine(
+  state: CoachSseParseState,
+  line: string,
+  onDelta: (text: string) => void,
+  onActivity?: (names: string[]) => void,
+): boolean {
   if (!line.startsWith('data: ')) return false;
-  return applyCoachSseData(state, line.slice(6).trim(), onDelta);
+  return applyCoachSseData(state, line.slice(6).trim(), onDelta, onActivity);
 }
 
 /**
  * Append a decoded text chunk and process every complete line. Incomplete trailing fragments
  * stay in `state.buffer`. Returns true once `[DONE]` has been seen (caller may stop reading).
  */
-export function pushCoachSseChunk(state: CoachSseParseState, chunk: string, onDelta: (text: string) => void): boolean {
+export function pushCoachSseChunk(
+  state: CoachSseParseState,
+  chunk: string,
+  onDelta: (text: string) => void,
+  onActivity?: (names: string[]) => void,
+): boolean {
   state.buffer += chunk;
   const lines = state.buffer.split('\n');
   state.buffer = lines.pop() ?? '';
   for (const line of lines) {
-    if (applyCoachSseLine(state, line, onDelta)) return true;
+    if (applyCoachSseLine(state, line, onDelta, onActivity)) return true;
   }
   return state.completed;
 }

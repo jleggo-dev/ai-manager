@@ -1,3 +1,4 @@
+import type { CoachActivityFrame } from '@cadence/shared';
 import {
   createCoachStreamAccumulateState,
   relayAndAccumulate,
@@ -61,6 +62,25 @@ export async function relayCoachTurnWithTools(
     }
     for (const c of pending) fulfilled.add(c.toolCallId);
     if (!outputs.length) break;
+
+    /**
+     * Tell the user something is happening, while it happens.
+     *
+     * Owner: *"they usually tell me when they're calling a tool. This would help us diagnose and it
+     * would also tell the user something is happening (or happened)."* Every failure this week was
+     * invisible work — she said a session was logged and none was, said a constraint was removed
+     * and it was not. "Writing that down…" followed by silence is a question the user can ask.
+     *
+     * A `cadence` frame, not a content delta, so the parser can tell it from her prose and it can
+     * never end up inside the reply. Written AFTER execution rather than before, because a call
+     * that fails instantly should not leave a claim on screen that it happened.
+     */
+    try {
+      const frame: CoachActivityFrame = { cadence: 'tool', names: pending.map((c) => c.name) };
+      options.writeChunk?.(`data: ${JSON.stringify(frame)}\n\n`);
+    } catch {
+      /* client gone; the turn continues server-side regardless */
+    }
 
     try {
       body = await deps.submit(state.currentResponseId, outputs);

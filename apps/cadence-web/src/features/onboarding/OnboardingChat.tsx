@@ -119,6 +119,7 @@ export function OnboardingChat({
     input,
     setInput,
     streaming,
+    activity,
     capturedGoals,
     restored,
     send,
@@ -284,6 +285,7 @@ export function OnboardingChat({
                   role={t.role}
                   text={t.text}
                   pending={t.role === 'coach' && !t.text}
+                  activity={last ? activity : ''}
                   after={
                     <>
                       {/**
