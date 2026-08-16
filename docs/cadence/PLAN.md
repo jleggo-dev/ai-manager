@@ -6464,3 +6464,33 @@ counted practice vs overall goal numbers.
 **State of the harness:** 5 tools declared per turn (~1,536 tokens, from ~4,968), 11 in the tail at
 zero cost, 2 tiebreaks left, and every rule in TOOL-HARNESS.md now enforced except step 5 (one call
 completeness), which stays judgement.
+
+### An expired session deleted the account off the screen (owner, 2026-08-16)
+
+> "I clicked my account on the signin screen and it says 'that sign-in has expired — sign in again'
+> and it removed my name and account. That shouldn't happen (even if the sign-in expired that
+> shouldn't happen)."
+
+He is right, and the old code said so out loud in its own comment: *"the row is cleared so the
+picker stops offering a dead tap."* The reasoning was wrong twice. The tap is **not dead** — it
+needs a password — and clearing the row takes the name, the face and the email with it.
+
+Nothing server-side was touched; the roster is local. But that is not what it looked like. On a
+screen headed **"Welcome back"**, your own face vanishing reads as *the account is gone* — and for
+an app whose promise is **never makes you start over**, that is the cruellest possible false alarm.
+It is also the worst moment for it: someone coming back after a while is exactly who a stale token
+happens to.
+
+- `expireDeviceAccount` (new) drops the tokens and keeps the person.
+- The row stays on the picker, marked **"tap to sign in"** rather than "signed in".
+- The message names them and says what is true: *"Jeffrey — your session has timed out. Sign in
+  again and everything is exactly where you left it."*
+- Expiry hands the email straight to the sign-in screen, so getting back is a password, not a memory
+  test about which address this account used.
+- A second tap on a token-less row reports `unavailable` without a pointless round-trip, and still
+  does not forget them.
+
+**The test asserted the bug.** It was named *"clears the row when the stored session has expired, so
+the picker stops offering a dead tap"* and it passed for as long as the bug existed. Rewritten to
+assert the person survives and only the credentials go — plus one that the explicit minus button
+still removes a row, because this fix must not disarm the thing that is supposed to delete.

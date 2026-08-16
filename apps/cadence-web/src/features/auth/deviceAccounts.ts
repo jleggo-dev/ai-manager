@@ -108,11 +108,31 @@ export function forgetDeviceAccount(userId: string): void {
   write(read().filter((a) => a.userId !== userId));
 }
 
+/**
+ * Drop the dead tokens and KEEP the person.
+ *
+ * Expiry used to call `forgetDeviceAccount`, on the reasoning that the picker should stop offering
+ * a dead tap. The reasoning was wrong twice over. The tap is not dead — it just needs a password —
+ * and deleting the row takes the name, the face and the email with it. The owner hit it on his own
+ * phone (2026-08-16): *"it says 'that sign-in has expired' and it removed my name and account.
+ * That shouldn't happen (even if the sign-in expired that shouldn't happen)."*
+ *
+ * He is right, and the cost is worse than an extra tap: a returning user sees their own face
+ * vanish from a screen titled "Welcome back", which reads as the account being gone rather than the
+ * session being stale. For an app whose promise is *never makes you start over*, that is the
+ * cruellest possible false alarm.
+ *
+ * So the row stays, minus the tokens, and the picker offers to sign that person back in by name.
+ */
+export function expireDeviceAccount(userId: string): void {
+  write(read().map((a) => (a.userId === userId ? { ...a, refreshToken: null, accessToken: null } : a)));
+}
+
 export type ResumeResult = 'ok' | 'expired' | 'unavailable';
 
 /**
- * Come back to a rostered account. `expired` means the stored session no longer works and the
- * user needs to sign in again — the row is cleared so the picker stops offering a dead tap.
+ * Come back to a rostered account. `expired` and `unavailable` both mean the same thing to the
+ * caller — this person is known, and needs a password before they are back in. Neither forgets them.
  */
 export async function resumeDeviceAccount(userId: string): Promise<ResumeResult> {
   const row = read().find((a) => a.userId === userId);
@@ -122,7 +142,7 @@ export async function resumeDeviceAccount(userId: string): Promise<ResumeResult>
     refresh_token: row.refreshToken,
   });
   if (error || !data.session) {
-    forgetDeviceAccount(userId);
+    expireDeviceAccount(userId);
     return 'expired';
   }
   rememberDeviceAccount(data.session);

@@ -228,7 +228,9 @@ function PreAuth() {
   if (view === 'picker')
     return (
       <AccountPicker
-        onAddAccount={() => setView('fork')}
+        // An expired row hands its email over, so signing back in is a password and not a
+        // memory test about which address this account used.
+        onAddAccount={() => setView('signin')}
         // The session change is what actually swaps the screen (App's auth listener); this only
         // matters if a resume lands without one.
         onResumed={() => setView('fork')}
