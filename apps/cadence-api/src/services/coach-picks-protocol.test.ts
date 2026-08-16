@@ -12,7 +12,6 @@ describe('renderPickProtocol', () => {
     // is a coach emitting blocks the client silently drops.
     const example = renderPickProtocol().split('Example turn:')[1] ?? '';
     const parsed = parseCoachTurn(example);
-    expect(parsed.picks?.layout).toBe('list');
     expect(parsed.picks?.multi).toBe(true);
     expect(parsed.picks?.lead).toBe("I'd like to");
     expect(parsed.picks?.options).toHaveLength(4);
@@ -28,7 +27,27 @@ describe('renderPickProtocol', () => {
   it('tells the coach to default to picks rather than treating them as optional', () => {
     const out = renderPickProtocol({ intent: 'onboarding' });
     expect(out).toContain('DEFAULT TO PICKS');
-    expect(out).toMatch(/TILES question/i);
+    expect(out).toContain('A NARROWING FOLLOW-UP ALWAYS GETS PICKS');
+  });
+
+  /**
+   * Presentation stopped being hers on 2026-08-16, the day a layout she had to remember — and
+   * forgot — cost the owner four turns of asking for a plan change she had already made. She is
+   * asked for content; the client derives the shape from it (`derivePickLayout`, cadence-web). A
+   * protocol that still named a shape would be teaching live sessions the failure back.
+   */
+  it('asks for content and never for a shape', () => {
+    for (const intent of ['onboarding', 'ongoing']) {
+      const out = renderPickProtocol({ intent });
+      expect(out).toContain('NEVER SEND A "layout"');
+      // The old vocabulary, in every place it used to be spelled out.
+      expect(out).not.toMatch(/layout "(list|tiles|confirm|change)"/i);
+      expect(out).not.toMatch(/\btiles\b/i);
+      expect(out).not.toMatch(/\(list, (single|multi)\)/i);
+      // The one thing she still declares, because it is an act and not a shape: nothing durable is
+      // stored for the client to follow, so the build card can only come from her saying so.
+      expect(out).toContain('"build": true');
+    }
   });
 
   /**
