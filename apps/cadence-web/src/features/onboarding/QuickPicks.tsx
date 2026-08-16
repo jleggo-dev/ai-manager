@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { composePickMessage, type CoachPicks } from '@cadence/shared';
+import { derivePickLayout } from './pickLayout.ts';
 
 /**
  * The coach's quick picks, rendered under the turn that asked for them.
@@ -10,9 +11,10 @@ import { composePickMessage, type CoachPicks } from '@cadence/shared';
  * send that instead. It also means there is no CONTINUE button and no "something else" row —
  * the composer already is the something-else row, and says so.
  *
- * **Two layouts, no more.** `list` for labelled options, `tiles` for short scalars. The vocabulary
- * is small so the same two shapes can carry weekly check-ins and plan adjustments later without
- * anyone having to learn a third thing.
+ * **Two shapes, and the coach picks neither of them.** `list` for labelled options, `tiles` for
+ * short scalars — worked out here from the options she sent (`derivePickLayout`) rather than
+ * declared in her block. A layout she had to remember was a layout she could forget, and one she
+ * forgot cost a day; a rule in a pure function cannot.
  *
  * Selection is local and resets with the question (the caller keys this by turn), because the
  * answer belongs to the message being composed, not to the conversation.
@@ -50,7 +52,7 @@ export function QuickPicks({
     </span>
   );
 
-  if (picks.layout === 'tiles') {
+  if (derivePickLayout(picks) === 'tiles') {
     return (
       <div className="qp qp-tiles" role="group" aria-label="Quick answers">
         {picks.options.map((o, i) => (

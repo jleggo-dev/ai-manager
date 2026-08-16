@@ -9,8 +9,13 @@
  * state machine — so Cadence can skip, reorder, or follow up, and the same protocol carries into
  * weekly check-ins and plan adjustments without a second UI vocabulary.
  *
- * **Two layouts, deliberately only two.** `list` for labelled options (goals, times of day),
- * `tiles` for short scalars (counts, days, ratings). A third layout is a third thing to learn.
+ * **The block carries content; the client works out the shape.** It used to name its own layout —
+ * rows, a grid, a card — and each of those was a second thing the coach had to get right on top of
+ * the question she was actually asking. On 2026-08-16 she got the second thing wrong: she called
+ * `propose_plan_change`, the proposal landed in the database with exactly the right content, and
+ * nothing appeared on screen, because the card was gated on a tag she had not emitted. Rows versus
+ * grid is now derived from the options themselves (`derivePickLayout`, in the web app), which
+ * cannot forget, and the change card follows the stored proposal rather than any tag at all.
  *
  * **A pick composes a message; it never sends one.** Tapping writes plain words into the composer
  * and the user still presses send — so a tap and a typed sentence are the same act, and someone
@@ -23,46 +28,35 @@
  */
 
 /**
- * `list` = labelled option rows. `tiles` = a grid of short scalars. Those two are the entire
- * answer vocabulary, on purpose.
- *
- * `confirm` is not a third answer widget — it is the coach's BUILD PLAN tool. She emits it and the
- * client renders everything it has heard, with the button that builds (or rebuilds) the rhythm from
- * it. It carries no options because the content is the user's own captured data, not a menu.
- *
- * Deliberately repeatable, and deliberately the ONLY route to a plan. It was once "use it exactly
- * once, at the end of onboarding", which left the coach with nowhere to go the moment someone added
- * a goal after it — she fell back to naming a review screen that no longer exists. A plan is
- * rebuilt in the conversation that decided to rebuild it, whenever that conversation happens.
- *
- * `change` is the narrow sibling of `confirm`, and the difference is who computed the content.
- * `confirm` rebuilds a week from everything known; `change` shows a SPECIFIC edit the
- * `propose_plan_change` tool already worked out and stored — move this to Friday, cut that to 20
- * minutes — with an Apply button. It carries no options for the same reason `confirm` doesn't:
- * the client reads the proposal back from the server, so what the user sees is what the tool
- * computed rather than what the turn's prose claims. Nothing commits until the tap.
- */
-export type CoachPickLayout = 'list' | 'tiles' | 'confirm' | 'change';
-
-/**
  * Canonical `area` (never goal "category" — see CLAUDE.md nomenclature). Used only to colour the
  * dot beside a row; nothing branches on it.
  */
 export type CoachPickArea = 'movement' | 'nourishment' | 'mind' | 'practice';
 
 export interface CoachPickOption {
-  /** What the tile/row shows. For `tiles` keep it to a couple of characters ("3", "5+"). */
+  /** What the tile/row shows. A bare value ("3", "45+") is what earns the grid; see the deriver. */
   label: string;
   /** The user's words for this option, dropped into the composer. Defaults to `label`. */
   say?: string;
-  /** `tiles` only: the small line under the number ("most people keep this"). */
+  /** The small line under a scalar ("most people keep this"). Only the grid draws it. */
   hint?: string;
-  /** `list` only: which area the row belongs to, for the dot's colour. */
+  /** Which area the option belongs to, for the dot's colour. Only rows draw it. */
   area?: CoachPickArea;
 }
 
 export interface CoachPicks {
-  layout: CoachPickLayout;
+  /**
+   * The one thing the coach still declares, because it is not presentation: this block is her
+   * BUILD PLAN tool, not an answer widget. The client renders everything it has heard, with the
+   * button that builds (or rebuilds) the rhythm from it, so it carries no options — the content is
+   * the user's own data, read from the store rather than retold by the turn.
+   *
+   * Deliberately repeatable, and deliberately the ONLY route to a plan. It was once "use it
+   * exactly once, at the end of onboarding", which left the coach with nowhere to go the moment
+   * someone added a goal after it — she fell back to naming a review screen that no longer exists.
+   * A plan is rebuilt in the conversation that decided to rebuild it, whenever that happens.
+   */
+  build?: boolean;
   /** Whether more than one option can be selected. */
   multi: boolean;
   /**
@@ -113,18 +107,30 @@ function asOption(raw: unknown): CoachPickOption | null {
 export function coercePicks(raw: unknown): CoachPicks | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
-  const layout: CoachPickLayout | null =
-    o.layout === 'tiles' || o.layout === 'list' || o.layout === 'confirm' || o.layout === 'change' ? o.layout : null;
-  if (!layout) return null;
+  /**
+   * A `layout` on the wire is ignored now — with one exception that has to survive.
+   *
+   * Sessions keep the instructions they were born with, so every conversation that was open when
+   * this shipped is still emitting the old vocabulary: `"list"`, `"tiles"`, `"change"`. Those three
+   * are pure presentation and dropping them costs nothing — the shape comes from the options, and
+   * the change card follows the stored proposal. `"confirm"` is different in kind. It was never a
+   * shape; it is the coach handing over the build card, and that card is the only route to a plan.
+   * Ignoring it would leave a live conversation agreeing to build a week that then never gets
+   * built — precisely the silence that cost a day on 2026-08-16. So it is translated, not dropped.
+   *
+   * Delete the second half of this line one release on, when no session can still be carrying the
+   * old block.
+   */
+  const build = o.build === true || o.layout === 'confirm';
   const raws = Array.isArray(o.options) ? o.options : [];
   const options = raws.map(asOption).filter((x): x is CoachPickOption => x !== null);
-  // An answer widget with no answers is a dead end; the two card layouts have none by design.
-  if (layout !== 'confirm' && layout !== 'change' && !options.length) return null;
+  // An answer widget with no answers is a dead end; the build card has none by design.
+  if (!build && !options.length) return null;
   const picks: CoachPicks = {
-    layout,
     multi: o.multi === true,
     options: options.slice(0, MAX_OPTIONS),
   };
+  if (build) picks.build = true;
   const lead = asString(o.lead);
   if (lead) picks.lead = lead;
   if (typeof o.progress === 'number' && Number.isFinite(o.progress)) {

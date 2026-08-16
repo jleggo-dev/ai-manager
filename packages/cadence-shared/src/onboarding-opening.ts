@@ -44,7 +44,6 @@ export const OPENING_QUESTION = 'So — what would you like to work on? Pick as 
 export const OPENING_PLACEHOLDER = 'e.g. “I have a half-marathon in July”';
 
 export const OPENING_PICKS: CoachPicks = {
-  layout: 'list',
   multi: true,
   lead: "I'd like to",
   progress: 0.1,

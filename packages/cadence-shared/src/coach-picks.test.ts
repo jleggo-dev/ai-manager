@@ -4,7 +4,6 @@ import { COACH_PICKS_FENCE, coercePicks, composePickMessage, parseCoachTurn, typ
 const block = (json: string) => '```' + COACH_PICKS_FENCE + '\n' + json + '\n```';
 
 const GOALS: CoachPicks = {
-  layout: 'list',
   multi: true,
   lead: "I'd like to",
   options: [
@@ -36,7 +35,7 @@ describe('parseCoachTurn', () => {
   });
 
   it('withholds a half-streamed block instead of painting raw JSON', () => {
-    const raw = 'How many days?\n\n```' + COACH_PICKS_FENCE + '\n{"layout":"tiles","opt';
+    const raw = 'How many days?\n\n```' + COACH_PICKS_FENCE + '\n{"multi":false,"opt';
     expect(parseCoachTurn(raw)).toEqual({ text: 'How many days?', picks: null });
   });
 
@@ -47,47 +46,67 @@ describe('parseCoachTurn', () => {
 
   it('tolerates a fence written with a leading space', () => {
     const raw = '``` ' + COACH_PICKS_FENCE + '\n' + JSON.stringify(GOALS) + '\n```';
-    expect(parseCoachTurn(raw).picks?.layout).toBe('list');
+    expect(parseCoachTurn(raw).picks?.options).toHaveLength(3);
   });
 });
 
 describe('coercePicks', () => {
-  it("accepts a confirm block with no options — its content is the user's own data", () => {
-    const picks = coercePicks({ layout: 'confirm', progress: 0.9 });
-    expect(picks?.layout).toBe('confirm');
+  it("accepts a build block with no options — its content is the user's own data", () => {
+    const picks = coercePicks({ build: true, progress: 0.9 });
+    expect(picks?.build).toBe(true);
     expect(picks?.options).toEqual([]);
   });
 
+  /**
+   * A session keeps the instructions it was born with, so every conversation that was open when
+   * the layout left the protocol is still emitting the old words. The presentation ones cost
+   * nothing to drop. `confirm` is not one of them: it is the build card, and the build card is the
+   * only route to a plan, so dropping it would leave a live conversation agreeing to build a week
+   * that then never got built.
+   */
+  it('still reads a live session\'s "confirm" as the build card, and ignores the shapes', () => {
+    expect(coercePicks({ layout: 'confirm', progress: 0.9 })?.build).toBe(true);
+    expect(coercePicks({ layout: 'tiles', options: [{ label: '3' }] })?.build).toBeUndefined();
+    expect(coercePicks({ layout: 'grid', options: [{ label: 'a' }] })?.options).toHaveLength(1);
+  });
+
+  /**
+   * The 2026-08-16 bug from the other side. `ChangeCard` reads the stored proposal now, so an old
+   * session's `change` tag has to draw nothing at all rather than an empty widget under the turn.
+   */
+  it('drops a bare change block, because that card follows the stored proposal', () => {
+    expect(coercePicks({ layout: 'change' })).toBeNull();
+  });
+
   it('rejects a block with no usable options', () => {
-    expect(coercePicks({ layout: 'list', options: [] })).toBeNull();
-    expect(coercePicks({ layout: 'list', options: [{ hint: 'no label' }] })).toBeNull();
-    expect(coercePicks({ layout: 'grid', options: [{ label: 'a' }] })).toBeNull();
+    expect(coercePicks({ options: [] })).toBeNull();
+    expect(coercePicks({ options: [{ hint: 'no label' }] })).toBeNull();
+    expect(coercePicks({ multi: true })).toBeNull();
     expect(coercePicks('nope')).toBeNull();
   });
 
   it('drops unusable options but keeps the rest', () => {
-    const picks = coercePicks({ layout: 'list', options: [{ label: 'a' }, null, { label: '' }, { label: 'b' }] });
+    const picks = coercePicks({ options: [{ label: 'a' }, null, { label: '' }, { label: 'b' }] });
     expect(picks?.options.map((o) => o.label)).toEqual(['a', 'b']);
   });
 
   it('caps the option count so a turn can never become a form', () => {
     const options = Array.from({ length: 20 }, (_, i) => ({ label: `${i}` }));
-    expect(coercePicks({ layout: 'tiles', options })?.options).toHaveLength(8);
+    expect(coercePicks({ options })?.options).toHaveLength(8);
   });
 
   it('clamps progress into 0–1 and ignores a non-numeric one', () => {
-    expect(coercePicks({ layout: 'list', options: [{ label: 'a' }], progress: 4 })?.progress).toBe(1);
-    expect(coercePicks({ layout: 'list', options: [{ label: 'a' }], progress: -1 })?.progress).toBe(0);
-    expect(coercePicks({ layout: 'list', options: [{ label: 'a' }], progress: 'half' })?.progress).toBeUndefined();
+    expect(coercePicks({ options: [{ label: 'a' }], progress: 4 })?.progress).toBe(1);
+    expect(coercePicks({ options: [{ label: 'a' }], progress: -1 })?.progress).toBe(0);
+    expect(coercePicks({ options: [{ label: 'a' }], progress: 'half' })?.progress).toBeUndefined();
   });
 
   it('defaults multi to false — one answer unless the coach says otherwise', () => {
-    expect(coercePicks({ layout: 'tiles', options: [{ label: '3' }] })?.multi).toBe(false);
+    expect(coercePicks({ options: [{ label: '3' }] })?.multi).toBe(false);
   });
 
   it('keeps only recognised areas', () => {
     const picks = coercePicks({
-      layout: 'list',
       options: [
         { label: 'a', area: 'weight' },
         { label: 'b', area: 'mind' },
@@ -112,7 +131,6 @@ describe('composePickMessage', () => {
 
   it('uses a scalar say verbatim when there is no lead', () => {
     const days: CoachPicks = {
-      layout: 'tiles',
       multi: false,
       options: [{ label: '3', say: '3 days a week feels right.', hint: 'most people keep this' }],
     };
@@ -120,9 +138,7 @@ describe('composePickMessage', () => {
   });
 
   it('falls back to the label when an option has no say', () => {
-    expect(composePickMessage({ layout: 'list', multi: false, options: [{ label: 'Mornings' }] }, [0])).toBe(
-      'Mornings',
-    );
+    expect(composePickMessage({ multi: false, options: [{ label: 'Mornings' }] }, [0])).toBe('Mornings');
   });
 
   it('is empty for an empty selection, which is what keeps send inert', () => {
