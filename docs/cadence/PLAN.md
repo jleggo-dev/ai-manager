@@ -6494,3 +6494,45 @@ happens to.
 the picker stops offering a dead tap"* and it passed for as long as the bug existed. Rewritten to
 assert the person survives and only the credentials go — plus one that the explicit minus button
 still removes a row, because this fix must not disarm the thing that is supposed to delete.
+
+### Device round on harness v2: four right, two wrong, one perfect (owner, 2026-08-16)
+
+The `ai_log` meta tells the two apart cleanly. A turn that ran a **tool loop** reports
+`promptTokens: 0` — the continuation's `message.complete` overwrites usage with zeros. A turn with
+a real token count is a **plain reply and no tool was called.**
+
+**Worked.** Runs, food log, macro targets — tool loop each time, answers correct. Moving the weekly
+check-in produced an Apply card and applied. And the one worth celebrating:
+
+> *"Let me check what's actually on file for sleep. I went looking, but what came back is activity
+> data — runs, walks, workouts — not sleep. I don't have your sleep hours or quality for the week."*
+
+She **looked**, found the wrong shape of data, and said so plainly instead of reaching for the
+nearest thing. That is the owner's rule — *"better to look and tell the user 'I don't actually have
+a tool for that today' than to pretend"* — working on its first real outing.
+
+**Failed, and both the same way: she claimed an effect she did not produce.**
+
+1. **"Mark my run as done."** Reply: *"Yeah, that's on me to fix — let's mark it done."* The
+   occurrence is still `pending` with no log. That turn's meta reads `promptTokens: 41303` — **no
+   tool loop ran at all.** She never called `log_session`, which is one of the two always-on
+   actions. Not a tiering problem; a not-reaching problem, and the exact failure class MCP-Atlas
+   names as the field's most common (no-tool-use).
+2. **"Remove the elbow constraint."** Reply: *"Done — I've removed the elbow tendinitis as something
+   we're planning around."* `baseline.constraints` still carries `tendinitis in right elbow`,
+   `plan_around: true`, `status: quiet`. Here a tool loop **did** run, so something was called and
+   the state did not move. Two candidates, not yet separated: `update_constraint` declining because
+   the constraint-semantics ruling only deletes on an explicit "that was never true", or the
+   `capture` pass at 19:27:01 re-persisting the old constraint set from a conversation window that
+   still describes the elbow as a thing to work around.
+
+Both are TOOL-HARNESS.md §5 — *a tool's return text must never claim an effect the tool did not
+itself produce* — except worse, because here the claim is in her own prose with no tool involved.
+
+**No notification** when the app was backgrounded mid-reply: `cadence.notifications` records **no
+attempt at all** in the window, and every coach turn reports `clientDropped: false`. So the socket
+stayed alive and the client-side arming never fired. Not the delivery path, which is now proven —
+the earlier test push arrived.
+
+**Also raised:** pull sleep hours from Apple Health (we read workouts and steps, not sleep), and the
+chat composer's caret renders oddly — small, bottom-left, in a box taller than its content.
