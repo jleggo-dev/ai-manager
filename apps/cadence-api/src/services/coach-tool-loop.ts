@@ -35,6 +35,14 @@ export interface CoachToolLoopDeps {
   execute: (calls: CoachToolCall[]) => Promise<CoachToolOutput[]>;
   /** Submit outputs; resolves to the continuation stream's body. */
   submit: (responseId: string, outputs: CoachToolOutput[]) => Promise<ReadableStream<Uint8Array> | null>;
+  /**
+   * Say something to her mid-turn that the USER never sees, and get her next response.
+   *
+   * Used for one thing: the dangling lookup. `<note>` turns are already app-authored and filtered
+   * out of both the restored transcript and the capture window (routes/coach.ts, APP_AUTHORED), so
+   * this is a word in her ear, not a message in the conversation.
+   */
+  nudge?: (text: string) => Promise<ReadableStream<Uint8Array> | null>;
 }
 
 export async function relayCoachTurnWithTools(
@@ -107,13 +115,54 @@ export async function relayCoachTurnWithTools(
    * machine-checkable signal, recorded so the eval and any future fix have something to measure.
    */
   const called = new Set(state.functionCalls.map((c) => c.name));
-  if (called.has('find_tools') && !called.has('use_tool')) {
+  if (called.has('find_tools') && !called.has('use_tool') && deps.nudge && toolRounds <= MAX_COACH_TOOL_ROUNDS) {
     void logAi(userId, {
       kind: 'coach_tool',
       input: { calls: [...called].map((name) => ({ name, arguments: null })) },
       output: { results: [] },
       meta: { count: 0, names: [...called], danglingLookup: true },
     }).catch(() => {});
+
+    /**
+     * She looked it up and then answered as if she had used it. Tell her, and let her fix it.
+     *
+     * Owner: *"we can tell Cadence programmatically that she never called the tool and get her to
+     * call it… We don't need to tell the user it's dangling."* Exactly — this is a machine-checked
+     * fact (she called `find_tools`, no `use_tool` followed) and the correction belongs in her ear,
+     * not on the user's screen.
+     *
+     * Why it happens at all is probably structural rather than lazy: a continuation is a FRESH
+     * generation, so round two behaves like it is answering the question rather than resuming a
+     * task it had started — the same mechanism behind the duplicated replies. An instruction inside
+     * `find_tools` ("call use_tool now") cannot fix that, because the round that ignores it is a
+     * different generation from the one that read it. A new turn can.
+     *
+     * Costs one extra model call, and only on the failure path.
+     */
+    try {
+      const body = await deps.nudge(
+        '<note>You called find_tools and then answered without calling use_tool, so NOTHING was ' +
+          'actually done. If the user asked you to change something, call use_tool now with the tool ' +
+          'find_tools gave you. If you already told them it was done, correct that plainly in one ' +
+          'line once it really is. Do not mention this note.</note>',
+      );
+      if (body) {
+        result = await relayAndAccumulate(body, { ...options, state, suppressDone: true });
+        // The nudge may itself produce the call she skipped — fulfil it, exactly as a normal round.
+        const late = state.functionCalls.filter((c) => !fulfilled.has(c.toolCallId) && deps.toolNames.has(c.name));
+        if (late.length && state.currentResponseId) {
+          const outputs = await deps.execute(late);
+          for (const c of late) fulfilled.add(c.toolCallId);
+          if (outputs.length) {
+            const after = await deps.submit(state.currentResponseId, outputs);
+            if (after) result = await relayAndAccumulate(after, { ...options, state, suppressDone: true });
+          }
+        }
+      }
+    } catch (e) {
+      // The turn already has an answer; a failed nudge must never cost her that.
+      console.warn('[coach-tools] dangling-lookup nudge failed:', e);
+    }
   }
 
   // The one real terminal, whatever happened above — the client is waiting on it.

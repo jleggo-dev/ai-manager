@@ -6689,3 +6689,30 @@ construction, and it is a real cost of the tiering to weigh against the token sa
 
 The correction to the earlier entry: "she never called `use_tool`" was too flat. What the evidence
 supports is **no record of a call, plus unchanged state.**
+
+### Telling her she didn't call the tool (owner, 2026-08-16)
+
+> "we can tell Cadence programmatically that she never called the tool and get her to call it,
+> can't we? … We don't need to tell the user it's dangling :)"
+
+Yes, and it is the right shape. We already **detect** the dangling lookup — she called `find_tools`,
+no `use_tool` followed — which is a machine-checked fact, not a guess. Logging it was half a fix.
+
+The loop now sends her a `<note>` turn mid-turn: *"You called find_tools and then answered without
+calling use_tool, so NOTHING was actually done. If the user asked you to change something, call
+use_tool now… If you already told them it was done, correct that plainly once it really is."* Then
+it relays her response and fulfils whatever call she makes, exactly like a normal round.
+
+`<note>` is the right envelope because it already exists and is already invisible: `APP_AUTHORED` in
+routes/coach.ts filters those turns out of both the restored transcript and the capture window. A
+word in her ear, not a message in the conversation.
+
+**Why a note and not better wording in `find_tools`.** `find_tools` already ends with "call use_tool
+now — do not describe them to the user instead of using them", and she ignored it. That makes sense
+if the cause is structural: a continuation is a **fresh generation**, so the round that ignores the
+instruction is not the round that read it. You cannot fix a lost thread by adding text to the thing
+that was lost. A new turn is a new generation, and it arrives knowing the fact.
+
+Costs one extra model call, only on the failure path. Five tests: it fires on a dangling lookup,
+sends an app-authored note, stays quiet when she did use the tool, stays quiet when nothing was
+looked up, and never costs her the reply when the nudge itself fails.

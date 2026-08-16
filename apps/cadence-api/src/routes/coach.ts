@@ -264,6 +264,10 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
           execute: (calls) => executeCoachToolCalls(userId, calls),
           submit: async (respId, outputs) =>
             (await submitCoachToolOutputs(userId, sessionId, respId, outputs)).response.body,
+          // A word in her ear when she looked a tool up and never ran it. <note> turns are
+          // app-authored, so this never reaches the transcript or the capture window.
+          nudge: async (text) =>
+            (await sendCoachMessage(userId, sessionId, text, coachToolDefinitions())).response.body,
         },
         {
           isClientAlive: () => clientAlive,
