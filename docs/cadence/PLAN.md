@@ -6568,3 +6568,35 @@ inferring intent from prose and condescending when the person whose elbow it is 
 
 The general form, and the lesson of the whole day: **a fact that shapes every plan should be
 visible to the person it is about, not only to the model.**
+
+### "Recent" sessions were two weeks in the future (2026-08-16)
+
+> "I did ask Cadence to fix that incline workout and she said she did but… it didn't take even
+> though she thought she fixed it."
+
+Four attempts. She called `log_session` correctly every single time, with the right title, the right
+date and a good report. Every call came back:
+
+> *"No session clearly matches "Hill intervals + grip finisher (incline treadmill)" on 2026-08-16 …
+> Recent ones: **2026-08-30** Evening reflection journal; **2026-08-30** Morning meditation sit;
+> **2026-08-30** Hill intervals + grip finisher…"*
+
+A list two weeks in the future, for a workout done that morning.
+
+`listRecentForLogging` is a *recent* query ordered newest-first with a limit — **and no upper
+bound.** The rolling horizon materializes about two weeks ahead, which on a fifteen-commitment plan
+is ~200 future rows, so the "newest 40" were all future and today never appeared. `log_session`
+scopes by date, found nothing, and said so. **She then reported success anyway** — still wrong of
+her, and a separate problem, but the cause was ours.
+
+One line: `and o.date <= today`. You cannot log a session that has not happened.
+`listLoggedForCorrection` was checked and is safe — it filters to `done/skipped/missed`, and a
+future occurrence is `pending`.
+
+**The part worth keeping.** This was unprovable for a day: nothing recorded which tool she called or
+what it returned, so the only evidence was inferring tool use from token counts. The `coach_tool`
+log shipped an hour earlier found it in **one query**, first try. Twice today, making a failure
+visible *was* the fix — the Apple Health reads were the other. It is the strongest argument yet for
+TOOL-HARNESS.md's rule that a tool's answer is as much a product surface as its description.
+
+Verified against real data: the owner's incline session is logged and marked done.

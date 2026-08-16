@@ -515,6 +515,23 @@ export async function listRecentForLogging(
   }>
 > {
   const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  /**
+   * The upper bound is the whole point, and its absence broke logging entirely.
+   *
+   * This is a "recent" query ordered newest-first with a limit — and it had no ceiling, while the
+   * rolling horizon materializes commitments about two weeks AHEAD. On a fifteen-commitment plan
+   * that is ~200 future rows, so the "newest 40" were all in the future and today's session never
+   * appeared. `log_session` scopes by date and found nothing to match.
+   *
+   * Owner, 2026-08-16, four times in a row: *"I did ask Cadence to fix that incline workout and she
+   * said she did but it didn't take."* She called the tool correctly every single time and got back
+   * *"No session clearly matches … Recent ones: 2026-08-30 …"* — a list two weeks in the future,
+   * for a workout done that morning. (Found in one query the moment `coach_tool` logging existed;
+   * before that it had been unprovable for a day.)
+   *
+   * You cannot log a session that has not happened, so today is the ceiling.
+   */
+  const to = new Date().toISOString().slice(0, 10);
   return sql<
     Array<{
       occurrence_id: string;
@@ -530,7 +547,7 @@ export async function listRecentForLogging(
            a.category, a.completion_source, (o.log is not null) as logged
     from cadence.occurrences o
     join cadence.activities a on a.activity_id = o.activity_id
-    where o.user_id = ${userId} and o.date >= ${from} and a.kind = 'user'
+    where o.user_id = ${userId} and o.date >= ${from} and o.date <= ${to} and a.kind = 'user'
     order by o.date desc
     limit ${limit}`;
 }
