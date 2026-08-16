@@ -6795,3 +6795,41 @@ actions because round one is where they get called.
 **The lesson, and it is the day's lesson twice over:** the failure was invisible, and I explained it
 with a model-behaviour story instead of measuring the plumbing. `resolveProfileToolDefinitions`
 returning `undefined` took one script to establish.
+
+### Fixed: the continuation now carries the caller's tools (2026-08-16)
+
+Three lines, and they close the bug that cost a day.
+
+`sendChatMessage` has always taken `extraTools`. `submitV2ToolOutputs` did not — it resolved tools
+from the **profile** only. A caller whose tools come from code rather than from profile tool-jobs
+therefore got them on round one and **nothing on round two**. Measured against the live
+cadence-coach profile: `resolveProfileToolDefinitions` → `undefined`.
+
+So `submitV2ToolOutputs` now takes `extraTools`, `submitCoachToolOutputs` threads it, and the coach
+route passes `coachToolDefinitions()` — the same nine the turn opened with. Verified: `use_tool` is
+now declared on round two.
+
+The client never needed changing. `continueWithToolOutputs` already spreads `...rest` into the
+request, and the comment above the call already said *"the tool definitions ride again so the model
+can chain."* The intent was right; the definitions were read from the wrong place.
+
+Backend's two failing tests were confirmed **pre-existing on main** by stashing and re-running —
+not caused by this.
+
+**What this should fix, to be checked on device rather than assumed:** `use_tool` becoming callable
+at all (Layer 2 has been unreachable except via Broker prefetch); actions behind any lookup; and
+plausibly the duplicated replies, since a continuation with an empty toolbox has prose as its only
+available move.
+
+**And the lesson, stated plainly because it is the day's most expensive one.** The proxy design
+(`find_tools` returning prose + a generic `use_tool`) exists entirely because of an assumption I
+never tested — that the provider could not accept a changed tool list mid-turn. One script would
+have settled it. Instead it became a model-behaviour story ("a continuation is a fresh generation
+that behaves like it is answering"), which fit every observation and was wrong. The owner refused
+it — *"it surely is working for Anthropic's Claude… I can't believe it's even the LLM on its own
+that is failing"* — and that instinct, when something works everywhere else, suspect your own
+wiring, is worth more than the fix.
+
+With the continuation fixed, `find_tools` could now return a **real definition** and let her call
+the real tool by name — ToolSearch's actual shape — retiring `use_tool` entirely. Not built; the
+revert to always-on actions stands until the device says the continuation fix holds.
