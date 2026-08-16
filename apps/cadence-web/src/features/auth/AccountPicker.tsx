@@ -23,7 +23,14 @@ function Avatar({ account }: { account: DeviceAccount }) {
   );
 }
 
-export function AccountPicker({ onAddAccount, onResumed }: { onAddAccount: () => void; onResumed: () => void }) {
+export function AccountPicker({
+  onAddAccount,
+  onResumed,
+}: {
+  /** Opens the sign-in doors. Given an email when we know who is signing back in. */
+  onAddAccount: (email?: string) => void;
+  onResumed: () => void;
+}) {
   const [accounts, setAccounts] = useState<DeviceAccount[]>(() => listDeviceAccounts());
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -36,8 +43,12 @@ export function AccountPicker({ onAddAccount, onResumed }: { onAddAccount: () =>
     const result = await resumeDeviceAccount(a.userId);
     setBusy(null);
     if (result === 'ok') return onResumed();
+    // The row survives, minus its tokens — she is still on the screen, just needing a password.
     setAccounts(listDeviceAccounts());
-    setMsg("That sign-in has expired — sign in again and I'll pick up right where we left off.");
+    setMsg(
+      `${a.name ?? 'That sign-in'} — your session has timed out. Sign in again and everything is exactly where you left it.`,
+    );
+    onAddAccount(a.email ?? undefined);
   }
 
   function forget(a: DeviceAccount) {
@@ -75,7 +86,9 @@ export function AccountPicker({ onAddAccount, onResumed }: { onAddAccount: () =>
                 <b>{a.name ?? a.email ?? 'Your account'}</b>
                 <span>
                   {a.email ?? 'signed in on this device'}
-                  {!editing && a.refreshToken ? ' · signed in' : ''}
+                  {/* Say which state the row is in. "Tap to sign in" is a live invitation; the
+                      alternative — deleting the row — told a returning user their account was gone. */}
+                  {!editing && (a.refreshToken ? ' · signed in' : ' · tap to sign in')}
                 </span>
               </span>
               {!editing && (
@@ -87,7 +100,7 @@ export function AccountPicker({ onAddAccount, onResumed }: { onAddAccount: () =>
           </div>
         ))}
         {!editing && (
-          <button className="acct-row acct-add" onClick={onAddAccount}>
+          <button className="acct-row acct-add" onClick={() => onAddAccount()}>
             <span className="acct-plus" aria-hidden>
               +
             </span>

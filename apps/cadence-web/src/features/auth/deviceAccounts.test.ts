@@ -73,10 +73,47 @@ describe('resuming an account', () => {
     expect(setSession).toHaveBeenCalledWith({ access_token: 'at-alice', refresh_token: 'rt-alice' });
   });
 
-  it('clears the row when the stored session has expired, so the picker stops offering a dead tap', async () => {
+  /**
+   * This test used to assert the opposite, and the assertion was the bug: expiry deleted the row
+   * "so the picker stops offering a dead tap". The tap is not dead — it needs a password — and
+   * deleting the row takes the name, face and email with it. The owner hit it on his own phone
+   * (2026-08-16): *"it removed my name and account. That shouldn't happen (even if the sign-in
+   * expired that shouldn't happen)."* On a screen headed "Welcome back", your own face vanishing
+   * reads as the account being gone, which for an app promising never to make you start over is
+   * the cruellest possible false alarm.
+   */
+  it('keeps the person and drops only the dead tokens when a session expires', async () => {
     rememberDeviceAccount(session('alice'));
     setSession.mockResolvedValue({ data: { session: null }, error: { message: 'invalid refresh token' } });
+
     await expect(resumeDeviceAccount('alice')).resolves.toBe('expired');
+
+    const [row] = listDeviceAccounts();
+    expect(row).toBeDefined();
+    expect(row!.userId).toBe('alice');
+    expect(row!.name).toBe(session('alice').user.user_metadata?.full_name ?? row!.name);
+    expect(row!.email).toBe('alice@example.com');
+    // Only the credentials are gone.
+    expect(row!.refreshToken).toBeNull();
+    expect(row!.accessToken).toBeNull();
+  });
+
+  /** A row with no tokens is known-but-locked: it must not silently retry a session it lacks. */
+  it('reports an expired row as unavailable on a second tap, without forgetting it', async () => {
+    rememberDeviceAccount(session('alice'));
+    setSession.mockResolvedValue({ data: { session: null }, error: { message: 'invalid refresh token' } });
+    await resumeDeviceAccount('alice');
+    setSession.mockClear();
+
+    await expect(resumeDeviceAccount('alice')).resolves.toBe('unavailable');
+    expect(setSession).not.toHaveBeenCalled();
+    expect(listDeviceAccounts()).toHaveLength(1);
+  });
+
+  /** Removing is still a deliberate act, and still works — this fix must not disarm the minus. */
+  it('still forgets a row the user explicitly removes', async () => {
+    rememberDeviceAccount(session('alice'));
+    forgetDeviceAccount('alice');
     expect(listDeviceAccounts()).toEqual([]);
   });
 
