@@ -133,7 +133,12 @@ export function MainTabs({
          * scroll position, so coming back is instant rather than a re-restore. Plan and Progress
          * stay conditional — they hold no in-flight work and remounting them is how they refresh.
          */}
-        <div style={tab === 'coach' ? undefined : { display: 'none' }}>
+        {/* `contents` when showing, not `block`: `.app` is a flex column and a plain wrapper becomes
+            a flex child with no sizing of its own, which collapsed the whole chat — composer gone,
+            tab bar pushed off, the app apparently frozen (owner, 2026-08-16). `display: contents`
+            removes the wrapper from layout entirely, so the chat stays a direct flex child exactly
+            as it was before it was wrapped. */}
+        <div style={{ display: tab === 'coach' ? 'contents' : 'none' }}>
           <>
             <OnboardingChat
               intent="ongoing"
