@@ -6716,3 +6716,38 @@ that was lost. A new turn is a new generation, and it arrives knowing the fact.
 Costs one extra model call, only on the failure path. Five tests: it fires on a dangling lookup,
 sends an app-authored note, stays quiet when she did use the tool, stays quiet when nothing was
 looked up, and never costs her the reply when the nudge itself fails.
+
+### The demotion is reverted — she calls always-on actions 4/4 and demoted ones 0/3 (2026-08-16)
+
+Four actions were moved behind `find_tools` earlier today for ~1,400 tokens a turn, reasoning that
+a weekly act can afford a round-trip. **What a weekly act cannot afford is not happening.**
+
+Same evening, same user, same model (Sonnet 5):
+
+| tool | reached how | called |
+|---|---|---|
+| `log_session` | always-on | **4 of 4** |
+| `update_constraint` | behind `find_tools` | **0 of 3** |
+
+She found `update_constraint` every single time — the hierarchy worked, first query, every attempt
+— and never called it, telling the owner it was done instead. **Not a discovery problem. A
+follow-through one.** The likely mechanism is structural and therefore unfixable by wording: a
+continuation is a FRESH generation, so the round that ignores "call use_tool now" is not the round
+that read it.
+
+`coach-tool-tiers.ts` already said, in its own comment, *actions cannot be prefetched — being chosen
+IS what an action is.* That was right, and then four were demoted anyway for tokens. Reverted.
+
+**What survives, and it was always the bigger prize: reads stay in the tail.** A new read still
+costs nothing per turn forever, the Broker prefetches the common ones before she has to ask, and
+`get_nutrition` still collapses four food reads into one door. The harness is 9 tools and ~3,093
+tokens a turn against the original 24 and ~4,968 — the tail is now 7 reads, all free.
+
+The `changes` category is retired with the demotion, and `catalogLine`'s `[changes their data]`
+marking stays: a future demotion would need it, and the honesty of that marker should not depend on
+nobody ever demoting an action again.
+
+**What this says about the tiering as a design.** Progressive disclosure is right for reads and
+wrong for actions, and the difference is not frequency — it is that a read is something she *needs*
+and an action is something she *decides*. A decision she has to go and find is a decision that does
+not get made. The eval will still measure it, but the device already answered.
