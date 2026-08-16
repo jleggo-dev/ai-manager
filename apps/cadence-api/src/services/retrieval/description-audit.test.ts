@@ -38,15 +38,22 @@ const BANNED: Array<{ re: RegExp; why: string }> = [
 
 /** Confusable pairs: at least ONE side must name the other, so a model choosing between them has
  *  the tiebreak in front of it (tool-catalog audit rule 2). */
+/**
+ * Confusable pairs — and this list is a BACKLOG, not a fixture. Every entry documents an ambiguity
+ * we chose to explain instead of remove, so it should only ever shrink. It went from eight to two
+ * on 2026-08-16 without a single description being reworded:
+ *
+ *  - Four dissolved on their own when the tiering made one side of each a dossier fact rather than
+ *    a tool (health history, consistency, objectives). You cannot confuse two tools when only one
+ *    of them is a tool.
+ *  - Two more went when `get_nutrition` replaced four food reads with one door and a `view`
+ *    parameter — the pairs they needed disambiguating no longer face each other.
+ *
+ * What remains is genuinely two different things each time, and the description says which.
+ */
 const TIEBREAK_PAIRS: Array<[string, string]> = [
-  ['get_health_history', 'get_workout_history'], // summary vs individual sessions
   ['get_workout_history', 'get_recent_logs'], // device records vs their own words
-  ['get_consistency', 'get_goal_progress'], // showed up vs how it is going
   ['get_practice_totals', 'get_goal_progress'], // one counted thing vs overall numbers
-  ['get_objectives', 'get_goal_progress'], // what the goals are vs how they are going
-  ['get_active_plan', 'get_consistency'], // what is supposed to happen vs what happened
-  ['get_recipes', 'lookup_food'], // their dishes vs facts about one food
-  ['get_food_log', 'get_recipes'], // what they ate vs what they could make
 ];
 
 /** Every failure here points at the checklist, because the rule broken is written down there and

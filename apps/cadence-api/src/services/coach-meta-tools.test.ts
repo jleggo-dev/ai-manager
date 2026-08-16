@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 /** Failures cite the checklist — the rule is written down and a bare name list does not say so. */
 const HOW = 'see docs/cadence/TOOL-HARNESS.md → "Adding a tool: the checklist"';
@@ -93,7 +93,7 @@ describe('find_tools', () => {
   it('finds a tool by a word the user would actually say', () => {
     expect(searchTools('workouts').names).toContain('get_workout_history');
     expect(searchTools('journal').names).toContain('get_journal');
-    expect(searchTools('recipes').names).toContain('get_recipes');
+    expect(searchTools('recipes').names).toContain('get_nutrition');
   });
 
   it('lists everything when asked for nothing in particular', () => {
@@ -123,7 +123,7 @@ describe('find_tools', () => {
   it('drills down by category, which is what the manifest teaches her to do', () => {
     const r = searchTools('food');
     expect(r.noMatch).toBe(false);
-    expect(r.names).toContain('get_food_log');
+    expect(r.names).toContain('get_nutrition');
     expect(r.names).not.toContain('get_journal');
   });
 
@@ -148,6 +148,54 @@ describe('find_tools', () => {
     const out = await COACH_META_TOOLS.find_tools!.run('u1', { query: 'workouts' });
     expect(out).toContain('get_workout_history');
     expect(out).toContain(RETRIEVAL_FUNCTIONS.get_workout_history!.description.slice(0, 40));
+  });
+});
+
+/**
+ * The consolidation. Four food reads became one door with a `view`, so the choice is now two easy
+ * ones ("is this about food", then a named view) instead of one hard one between four siblings.
+ * Two of the audit's eight tiebreak pairs existed only to help her make that hard choice.
+ */
+describe('the nutrition facade', () => {
+  it('offers one food tool, not four', () => {
+    const tail = new Set(onDemandToolNames());
+    expect(tail.has('get_nutrition')).toBe(true);
+    for (const covered of ['get_food_log', 'get_macro_targets', 'get_recipes', 'lookup_food']) {
+      expect(tail.has(covered), `${covered} is covered by get_nutrition — ${HOW}`).toBe(false);
+    }
+  });
+
+  /** Hidden from HER is not removed from the registry: the Broker still prefetches them by name. */
+  it('keeps the four it covers callable, so the Broker can still prefetch them', () => {
+    for (const covered of ['get_food_log', 'get_macro_targets', 'get_recipes', 'lookup_food']) {
+      expect(RETRIEVAL_FUNCTIONS[covered]).toBeDefined();
+    }
+  });
+
+  it('teaches every view in the description, since the Broker never sees the schema', () => {
+    const d = RETRIEVAL_FUNCTIONS.get_nutrition!.description;
+    for (const view of ['log', 'targets', 'recipes', 'lookup']) expect(d).toContain(`"${view}"`);
+  });
+
+  it('renders through to the view it was asked for', () => {
+    const inner = { days: 7, meals: [] };
+    const spy = vi.spyOn(RETRIEVAL_FUNCTIONS.get_food_log!, 'render').mockReturnValue('FOOD LOG TEXT');
+    try {
+      expect(RETRIEVAL_FUNCTIONS.get_nutrition!.render({ view: 'log', inner })).toBe('FOOD LOG TEXT');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  /** An unknown view must not throw the turn away — the commonest view is the safe default. */
+  it('falls back to the log rather than failing on a view it does not know', async () => {
+    const spy = vi.spyOn(RETRIEVAL_FUNCTIONS.get_food_log!, 'run').mockResolvedValue({ marker: true });
+    try {
+      const out = (await RETRIEVAL_FUNCTIONS.get_nutrition!.run('u1', { view: 'nonsense' })) as { view: string };
+      expect(out.view).toBe('log');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

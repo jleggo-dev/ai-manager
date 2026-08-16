@@ -6431,3 +6431,36 @@ enforces them:
 Both the direct read path and `use_tool` route through it, so a future tool gets the gate by using
 the helpers rather than by remembering the rule. TOOL-HARNESS.md step 4 moves from "not yet
 CI-enforced, and the gap that cost us most" to enforced; the scoreboard line goes 0 → 4.
+
+### Consolidation: the tiebreak list went from eight to two (2026-08-16)
+
+`TIEBREAK_PAIRS` in the description audit is a **backlog, not a fixture** — every entry documents an
+ambiguity we chose to explain instead of remove. It should only ever shrink. Today it went from
+eight to two, and **not one description was reworded**:
+
+- **Four dissolved on their own** when the tiering made one side of each a dossier fact rather than
+  a tool: health-history ↔ workout-history, consistency ↔ goal-progress, objectives ↔ goal-progress,
+  plan ↔ consistency. You cannot confuse two tools when only one of them is a tool. That is an
+  accuracy win the token arithmetic never showed.
+- **Two more went to `get_nutrition`.** `get_food_log`, `get_macro_targets`, `get_recipes` and
+  `lookup_food` were four sibling choices standing between her and any food question, and two
+  tiebreaks existed purely to help her make them. Now one door with a `view` — the choice is "is
+  this about food" (easy) and then a named view in the parameter, where a menu belongs. GitHub's
+  `issue_read` is the same shape, and Anthropic's test is the one that decided it: *"If a human
+  engineer can't definitively say which tool should be used in a given situation, an AI agent can't
+  be expected to do better."*
+
+The four stay in the registry so the **Broker can still prefetch them by name** — the eval agent
+observed exactly that happening, correctly, on a halloumi question. They are hidden from
+`find_tools`, not removed. Nothing she can read changed; only how many decisions stand in front of
+it.
+
+What remains is genuinely two different things each time: device records vs their own words, and one
+counted practice vs overall goal numbers.
+
+**Verified against real data** through the door she would use: `use_tool get_nutrition view=targets`
+→ *"Daily targets: none set yet"*; `view=lookup q=halloumi` → the lookup path. 952 tests green.
+
+**State of the harness:** 5 tools declared per turn (~1,536 tokens, from ~4,968), 11 in the tail at
+zero cost, 2 tiebreaks left, and every rule in TOOL-HARNESS.md now enforced except step 5 (one call
+completeness), which stays judgement.

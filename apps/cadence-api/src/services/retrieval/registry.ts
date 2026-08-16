@@ -15,6 +15,7 @@ import { listActivities } from '../../repos/activities.ts';
 import { listLoggedForProgress, listOccurrences, listRecentLogged } from '../../repos/occurrences.ts';
 import { buildProgress } from '../progress.ts';
 import { FOOD_HEALTH_FUNCTIONS } from './food-health-functions.ts';
+import { GET_NUTRITION } from './nutrition-facade.ts';
 import { isoRange, type RetrievalFunction } from './types.ts';
 
 // Re-exported so the many existing importers of this module keep working unchanged.
@@ -334,4 +335,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
 export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
   ...CORE_FUNCTIONS,
   ...FOOD_HEALTH_FUNCTIONS,
+  // One door for every food question (nutrition-facade.ts). The four it dispatches to stay in the
+  // registry — the Broker may still prefetch any of them — but `find_tools` lists only this.
+  [GET_NUTRITION.name]: GET_NUTRITION,
 };

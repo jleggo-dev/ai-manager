@@ -1,4 +1,5 @@
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
+import { NUTRITION_FACADE_COVERS } from './retrieval/nutrition-facade.ts';
 import { COACH_ACTION_TOOLS, coachActionNames } from './coach-actions.ts';
 
 /**
@@ -109,7 +110,10 @@ export function alwaysOnToolNames(): string[] {
 export function onDemandToolNames(): string[] {
   const always = new Set<string>(alwaysOnToolNames());
   const dossier = new Set<string>(DOSSIER_FUNCTIONS);
-  const reads = Object.keys(RETRIEVAL_FUNCTIONS).filter((n) => !always.has(n) && !dossier.has(n));
+  // Covered by a facade: still in the registry so the Broker can prefetch them, never listed to
+  // her, because choosing between them WAS the problem (nutrition-facade.ts).
+  const covered = new Set<string>(NUTRITION_FACADE_COVERS);
+  const reads = Object.keys(RETRIEVAL_FUNCTIONS).filter((n) => !always.has(n) && !dossier.has(n) && !covered.has(n));
   const actions = [...coachActionNames()].filter((n) => !always.has(n));
   return [...reads, ...actions];
 }
@@ -139,8 +143,8 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
   { key: 'body', label: 'what their body and devices recorded', members: ['get_workout_history', 'get_equipment'] },
   {
     key: 'food',
-    label: 'what they eat and their nutrition targets',
-    members: ['get_food_log', 'get_macro_targets', 'get_recipes', 'lookup_food', 'set_macro_targets'],
+    label: 'what they eat, their targets, their recipes, and nutrition facts',
+    members: ['get_nutrition', 'set_macro_targets'],
   },
   { key: 'writing', label: 'what they have written', members: ['get_journal'] },
   {
