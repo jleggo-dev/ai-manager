@@ -6273,3 +6273,48 @@ the chat: composer gone, tab bar pushed off, the app apparently frozen.
 
 `display: contents` when showing (and `none` when hidden) removes the wrapper from layout entirely,
 so the chat is a direct flex child exactly as it was before it was wrapped.
+
+### Harness v2, part one: 24 tools every turn became 9 (2026-08-16)
+
+The spec is [HARNESS-V2.md](HARNESS-V2.md); this is what landed.
+
+**Before:** 24 definitions on every coach turn, 18,380 chars ≈ **5,000 tokens**, growing linearly
+with a toolset the owner intends to expand — *"if we scale to 100 tools, we eat our context window
+just finding the tool."*
+
+**After:** 9 definitions, 11,477 chars ≈ **3,102 tokens**, and **flat as reads are added.**
+
+Honest about the number: the spec projected ~1,100 and it is 3,102. The six actions are 4,190 chars
+between them and now dominate the total — which is the arithmetic making the design's own point out
+loud. Reads are free; actions are not, deliberately, and if we ever have twenty of them the cost
+will be impossible to ignore rather than easy to.
+
+**Three layers.**
+
+- **Layer 0 — the dossier, injected as text, not tools.** Seven reads deleted from the tool list
+  outright: identity, objectives, constraints, consistency, weight, dietary profile, health history.
+  The pack already injects every one of them, so a tool for them was a second path to a fact she was
+  holding and one more decision on a turn that needed none. The owner's framing is why the grouping
+  question dissolved: the plan is built *out of* the objectives and *around* the constraints, so
+  they are one thing — and the answer is not to group them as tools but to stop making them tools.
+- **Layer 1 — always on.** All six actions (owner ruling: they are core capabilities and she should
+  never be caught not knowing she can do them), `get_active_plan` — the one dossier fact that
+  changes *during* a conversation, because she is the one who changes it — and the two meta tools.
+- **Layer 2 — on demand.** Ten reads at zero cost until asked for.
+
+**`find_tools` + `use_tool`, not one tool.** A function call can only name a tool that was DECLARED
+for that request, so a `find_tools` that merely *described* something would leave her able to read
+about a tool she still could not call. Re-declaring mid-turn needs the continuation to accept a
+changed tool list, which is provider behaviour we do not control. Sentry's shipped server splits it
+the same way.
+
+**A bug this build produced and the tests now forbid.** `use_tool` was declared to the model and
+missing from the executable set — the model could emit a call the harness would drop on the floor,
+ending the turn mid-thought with nobody told. Declared and executable must be the same set, and two
+tests now assert it in both directions. It is precisely the negative-assertion habit the harness
+research recommended, and it caught a live defect within an hour of being written.
+
+Verified end to end against real data: `find_tools("workouts")` returns `get_workout_history` with
+its instructions, and `use_tool` then returns the 8.78 km run. 928 cadence-api tests green, and the
+description audit accepted both new tools only after catching a missing "Use" and a parameter that
+never said what omitting it does.
