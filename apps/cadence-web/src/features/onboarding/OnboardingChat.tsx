@@ -285,26 +285,45 @@ export function OnboardingChat({
                   text={t.text}
                   pending={t.role === 'coach' && !t.text}
                   after={
-                    last && picks ? (
-                      picks.layout === 'change' ? (
-                        <ChangeCard key={`chg${i}`} onApplied={onPlanChanged} />
-                      ) : picks.layout === 'confirm' ? (
-                        <ConfirmCard
-                          buildLabel={buildLabel}
-                          onBuild={onBuild}
-                          onCorrect={(topic) => {
-                            stickNow();
-                            setInput(`About ${topic} — that's not quite right. `);
-                          }}
-                          onTellMore={() => {
-                            stickNow();
-                            setInput("There's something you missed. ");
-                          }}
-                        />
-                      ) : (
-                        <QuickPicks key={i} picks={picks} onCompose={setInput} />
-                      )
-                    ) : null
+                    <>
+                      {/**
+                       * The change card follows the STORED PROPOSAL, not a marker in her prose.
+                       *
+                       * It used to render only when she also emitted `cadence-picks
+                       * {"layout":"change"}` — so the card was two independent things the model had
+                       * to get right, and only one of them was ever checked. On 2026-08-16 she
+                       * called propose_plan_change, the proposal landed in the database with
+                       * exactly the right content, she said "let me swap it now" — and nothing
+                       * appeared, because the tag was missing. Four turns of the owner asking her
+                       * to change his plan while she kept agreeing to. The tool's own output had
+                       * already told her "the user now has a card", which became a lie the moment
+                       * she skipped the tag.
+                       *
+                       * ChangeCard asks the server what is pending and renders nothing when the
+                       * answer is nothing, so showing it on a finished last turn is safe and
+                       * self-correcting. Keyed on the turn so a fresh proposal remounts and
+                       * refetches; gated on `!streaming` so it reads AFTER the tool has run.
+                       */}
+                      {last && !streaming && <ChangeCard key={`chg${i}`} onApplied={onPlanChanged} />}
+                      {last && picks && picks.layout !== 'change' ? (
+                        picks.layout === 'confirm' ? (
+                          <ConfirmCard
+                            buildLabel={buildLabel}
+                            onBuild={onBuild}
+                            onCorrect={(topic) => {
+                              stickNow();
+                              setInput(`About ${topic} — that's not quite right. `);
+                            }}
+                            onTellMore={() => {
+                              stickNow();
+                              setInput("There's something you missed. ");
+                            }}
+                          />
+                        ) : (
+                          <QuickPicks key={i} picks={picks} onCompose={setInput} />
+                        )
+                      ) : null}
+                    </>
                   }
                 />
                 {i === healthOfferAt && (

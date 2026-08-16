@@ -6076,3 +6076,43 @@ Fixed:
 
 Verified after: `Recorded workouts (last 30d, newest first): - 2026-08-15 · running · 77 min ·
 8.78 km …` and `30 workouts, ~2.3/week overall`.
+
+### She *did* change the plan. The card never rendered. (owner, 2026-08-16)
+
+> "If you check my latest conversation with Cadence, she's still not adjusting my plan. It's very
+> frustrating."
+
+She adjusted it. The proposal was sitting in `users.pending_plan`, written at 13:26:10, with
+exactly the right content:
+
+> "Hill intervals + grip finisher: Dead hangs for the grip finisher, not farmers carries — 3–4 sets
+> of 20–30 seconds to start, see how the elbow responds"
+
+All fifteen commitments preserved, the slot untouched. `propose_plan_change`'s new `rework` action
+worked on its first real use. **The card was gated on something else entirely.**
+
+`OnboardingChat` rendered `<ChangeCard>` only when the coach ALSO emitted a
+`cadence-picks {"layout":"change"}` tag in her prose. So applying a change was two independent
+things the model had to get right, and only one of them was ever checked. She did the hard one and
+skipped the tag, so four turns of "can you change the plan?" → "yes, let me swap it now" produced
+nothing on screen. The tool's own output had already told her *"the user now has a card showing
+exactly this"* — a sentence that became false the moment she omitted a formatting marker.
+
+The owner named the fix before I finished writing it: *"There don't need to be 2 tools for this —
+one tool changes the plan and also presents the results back to the user."*
+
+- `ChangeCard` now mounts on every finished last turn. It asks the server what is pending and
+  renders nothing when the answer is nothing, so it is self-correcting; keyed on the turn so a new
+  proposal remounts and refetches, and gated on `!streaming` so it reads after the tool has run.
+- The `change` pick layout is now ignored — the stored proposal is the only trigger.
+- Two tests: the card appears from stored state with **no tag anywhere in her reply**, and no empty
+  frame appears when nothing is pending.
+- The general rule is now §6 of [TOOL-HARNESS.md](TOOL-HARNESS.md): a tool whose effect depends on
+  the model doing a second thing is two tools wearing one name, and a tool's return text must never
+  claim an effect the tool did not itself produce.
+
+Still open from the same conversation, logged not fixed: her reply arrived **duplicated** — two
+complete drafts concatenated — which points at the tool-loop accumulator carrying round-one content
+into the continuation. And `renderCapabilities` is injected at SESSION OPEN, so the
+"do these, do not describe them" instruction shipped that morning never reached this thread; a
+long-running conversation keeps the instructions it was born with.
