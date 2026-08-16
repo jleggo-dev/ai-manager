@@ -29,7 +29,9 @@ import {
   createConversation,
   getConversationByAiSession,
   getLatestConversation,
+  getNotifyOnReply,
   setInFlightResponse,
+  setNotifyOnReply,
   touchConversation,
 } from '../repos/conversations.ts';
 import { getActivePlan, getFirstPlanCommitAt } from '../repos/plans.ts';
@@ -319,10 +321,15 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       }
     }
 
+    // Read BEFORE the turn's state is torn down: the client may have armed this at any point
+    // while the reply was being written, and clearing it below is what keeps it from firing again.
+    const armed = await getNotifyOnReply(sessionIdParam).catch(() => false);
+
     // Cleared only NOW, after the reply is safely on file. Clearing it first opened the exact
     // window this bug lived in: a returning client polls, sees `generating: false` with no new
     // message, and concludes the turn died — while it was still being written down.
     await setInFlightResponse(sessionIdParam, null).catch(() => {});
+    if (armed) await setNotifyOnReply(sessionIdParam, false).catch(() => {});
 
     // writeChunk may have flipped clientAlive on a failed write; also honor stream result.
     if (clientDropped) clientAlive = false;
@@ -344,14 +351,21 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
      * so leaving a slow turn meant coming back to check by hand — the exact behaviour the app is
      * supposed to make unnecessary.
      *
-     * `clientAlive` is the honest signal and we already track it: false means the socket went away
-     * mid-turn, which on a phone means the app was backgrounded. Someone still watching gets
-     * nothing, because they can already see it.
+     * TWO signals, because one of them is not enough:
+     *  - `clientAlive === false` — the socket went away mid-turn. True, but LATE: iOS does not
+     *    kill a connection the instant it suspends a webview, so a reply finishing inside that
+     *    grace period is written to a socket nobody is reading and this stays true.
+     *  - `armed` — the client said "I'm going to background" while it still could (0035). This is
+     *    the only signal that is correct at the moment it matters, because leaving is a fact only
+     *    the client can observe.
+     * Someone still watching triggers neither, and gets nothing — they can already see it.
+     * Capacitor shows foreground banners by default, so "notify always" would banner over an
+     * active chat; these two gates are what make "always" mean "always when you actually left".
      *
      * Awaited, like everything else after the stream: a promise left running past the handler is
      * a promise this platform may never finish (#195).
      */
-    if (!clientAlive && content.trim()) {
+    if ((armed || !clientAlive) && content.trim()) {
       await sendPlanReadyPush(
         userId,
         'coach_reply',
@@ -418,6 +432,38 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       res.write(`data: ${JSON.stringify({ error: 'stream failed', kind: aim.kind })}\n\n`);
       res.end();
     }
+  }
+});
+
+/**
+ * POST /coach/sessions/:id/notify-on-reply — "I'm leaving; tell me when she's done."
+ *
+ * Sent by the client the instant iOS backgrounds it with a turn in flight, inside the short window
+ * where JavaScript still runs. It exists because the server cannot see this for itself: a
+ * suspended webview's socket can stay open, so the reply lands on a connection nobody is reading
+ * and the turn looks watched. Leaving is a fact only the client has, so the client states it.
+ *
+ * Ownership checked against `cadence.conversations`, like Stop — a session id is the only thing
+ * standing between one user and another's turn, and here it would aim a notification.
+ *
+ * Only arms while something is actually generating. A thread armed with no turn in flight is a
+ * ping with nothing to announce, and the clearing path (which runs when a reply lands) would never
+ * come to disarm it.
+ */
+router.post('/sessions/:id/notify-on-reply', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const sessionId = req.params.id as string;
+  try {
+    const conv = await getConversationByAiSession(sessionId);
+    if (!conv || conv.user_id !== userId) return void res.status(404).json({ error: 'No such session' });
+    if (!conv.in_flight_response_id) return void res.json({ armed: false, reason: 'nothing-in-flight' });
+    await setNotifyOnReply(sessionId, true);
+    res.json({ armed: true });
+  } catch (err) {
+    // Soft-fail: this is the notification, never the reply. The dead-socket path still covers the
+    // common case, and the client has already backgrounded — there is nobody to show an error to.
+    console.error('[POST /coach/sessions/:id/notify-on-reply]', err);
+    res.status(200).json({ armed: false });
   }
 });
 

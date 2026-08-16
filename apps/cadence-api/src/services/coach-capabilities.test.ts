@@ -25,8 +25,27 @@ describe('coach capability manifest', () => {
     expect(renderCapabilities({ healthAvailable: true })).not.toContain('Not on this device');
   });
 
+  /**
+   * A budget, not a limit — this block is injected ONCE at session open, not per turn, so the cost
+   * is ~1.1k tokens per conversation. Raised 4000 → 4600 on 2026-08-16 because the manifest was
+   * already sitting at 3988 and the thing it needed was the "do these, do not describe them"
+   * instruction: the coach had just answered "can you change the plan?" by reciting this list back
+   * near-verbatim instead of calling the tool. Text that stops her narrating the manifest earns its
+   * place in the manifest. Keep the ceiling — when the next thing wants in, cut something first.
+   */
   it('stays small enough to ride every session open', () => {
-    expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(4000);
+    expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(4600);
+  });
+
+  /** The fix for a real device failure, so it is pinned rather than left to survive by luck. */
+  it('tells her to call the tool rather than explain what the tool would do', () => {
+    const out = renderCapabilities({ healthAvailable: true });
+    expect(out).toContain('DO THESE, DO NOT DESCRIBE THEM');
+    expect(out).toMatch(/never make them repeat a change they already named/i);
+  });
+
+  it('offers the one-thing plan edit, so she knows a swap is possible without a rebuild', () => {
+    expect(renderCapabilities({ healthAvailable: true })).toMatch(/change ONE thing in the plan without rebuilding/);
   });
 });
 

@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { getCurrentCoach } from '../../lib/api.ts';
 import { useAppResume } from '../../lib/useAppResume.ts';
+import { useAppLeave } from '../../lib/useAppLeave.ts';
 // Type-only, so this is erased at runtime and no cycle exists (coachTurns.ts does the same).
 import type { CoachTurn } from './useCoachChat.ts';
 
@@ -82,10 +83,28 @@ export async function recoverTurnFromServer(deps: RecoverDeps): Promise<boolean>
  * that iOS will never settle. When that corpse finally rejects, its error branches must stay
  * quiet — an apology printed under a reply that arrived fine is its own kind of broken.
  */
-export function useResumeHealer(deps: { recover: () => Promise<boolean>; onHealed: () => void }) {
+export function useResumeHealer(deps: {
+  recover: () => Promise<boolean>;
+  onHealed: () => void;
+  /**
+   * Fired as the app goes to BACKGROUND with a turn still in the air — the other half of the same
+   * story this module tells, and it lives here for the same reason: `streaming` is the ref that
+   * knows, and a listener callback would close over stale state anywhere else.
+   *
+   * It exists because the server cannot see someone leave. A suspended webview's socket does not
+   * die on cue, so a reply landing inside iOS's grace period looks exactly like a reply someone is
+   * reading, and nobody gets told. iOS keeps JavaScript alive briefly after backgrounding; this is
+   * the moment to say "notify me".
+   */
+  onLeave?: () => void;
+}) {
   const streaming = useRef(false);
   const recovered = useRef(false);
   const healing = useRef(false);
+
+  useAppLeave(() => {
+    if (streaming.current) deps.onLeave?.();
+  });
 
   useAppResume(() => {
     if (!streaming.current || healing.current) return;

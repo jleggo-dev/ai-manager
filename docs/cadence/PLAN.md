@@ -5988,3 +5988,52 @@ was already true (the work surviving, #195) was invisible, because nothing could
 
 Remaining surfaces to hold to this rule as they land: food estimate/parse (fast today, so no
 ping), and the weekly check-in when it is built.
+
+### She described the tool instead of using it — and there was no tool for what he asked (2026-08-16)
+
+From the owner's chat, in order:
+
+> **User:** "Let's start by changing the farmer carries to dead hangs"
+> **Cadence:** *(coaching advice; no tool call)* "Do you want this as a permanent swap in the plan?"
+> **User:** "Just trying it today, we can decide after"
+> **User:** "Can you change the plan? Like in the app?"
+> **Cadence:** "Yes — right here. We talk through what should change, I put up a card showing the
+> edit, and you tap to apply it… **What do you want to adjust?**"
+
+Owner: *"She can't (or doesn't know she can) — I thought she had tools to do this? And then it
+almost feels like she forgets what adjustments I'm asking about."* Both halves are real, and they
+are two different bugs.
+
+**1. There was genuinely no tool for that edit.** `propose_plan_change` only did move / retime /
+resize / remove / add — all *structural*. "Swap farmer carries for dead hangs" changes what a
+session CONTAINS, and nothing could express it. She was right that she couldn't; she was wrong not
+to say so.
+
+The home for it already existed and was empty: `activities.how_to` is read by `prescribe-session`
+on every session it writes, and **nothing has ever written it**. A dormant column with a live
+reader — which is exactly what "make it permanent" needs, since writing it changes every future
+session of that commitment.
+
+- New edit action **`rework`**: sets `how_to` (and optionally the title), leaving the slot alone.
+- `how_to` now rides `PendingPlanActivity` through preview and commit. Latent bug found on the way:
+  `commitActivities` never mapped it, so *any* commit or re-plan would have erased an instruction
+  the user gave. Invisible only because nothing wrote the column yet.
+
+**2. She recited the capability manifest instead of acting on it.** Her answer to "can you change
+the plan?" is `coach-capabilities.ts` read back near-verbatim — and then she asked him to name the
+change he had named two turns earlier. The capability was real; the reach for it was not.
+
+- The manifest now ends with **"DO THESE, DO NOT DESCRIBE THEM"**: call the tool in the same reply;
+  explaining the mechanism is not doing it and reads as a no; never make them repeat a change they
+  already named — propose it and let the card be what they correct.
+- `propose_plan_change`'s description says the same at the point of use, and carries a worked
+  `rework` example. Still ≤800 chars and still passes the description audit, which caught two real
+  slips while writing it (a missing "Use", and the dropped "does NOT change anything" safety gate).
+- The manifest's size budget went 4000 → **4600**. It was already sitting at 3988, so it was a
+  saturated guardrail, not a lax one; raised deliberately, with the reason in the test, because it
+  is injected once per session (~1.1k tokens per conversation) and the text buying the increase is
+  the text that stops her narrating it. Ceiling kept — the next addition has to cut something.
+
+**Not fixed by this, and worth being clear about:** `plans.steer` (0034) records the ask only once
+a change *commits*. It does nothing for a change still being discussed. The fix for the
+"forgetting" is the instruction above, not the column.

@@ -72,9 +72,9 @@ const EDIT_SCHEMA = {
     properties: {
       action: {
         type: 'string',
-        enum: ['move', 'retime', 'resize', 'remove', 'add'],
+        enum: ['move', 'retime', 'resize', 'remove', 'add', 'rework'],
         description:
-          'move = which days it happens on; retime = what time of day; resize = how many minutes; remove = drop it; add = a new commitment.',
+          'move = which days it happens on; retime = what time of day; resize = how many minutes; remove = drop it; add = a new commitment; rework = change what the session CONTAINS, keeping its slot (swap an exercise, change the focus).',
       },
       activity: {
         type: 'string',
@@ -87,7 +87,16 @@ const EDIT_SCHEMA = {
       },
       time_of_day: { type: 'string', description: 'For retime and add, e.g. "07:00" or "evening".' },
       duration_min: { type: 'integer', description: 'For resize and add: minutes per session.' },
-      title: { type: 'string', description: 'For add: what the new commitment is called.' },
+      title: {
+        type: 'string',
+        description:
+          'For add: what the new commitment is called. For rework: a new name, only if the change earns one.',
+      },
+      how_to: {
+        type: 'string',
+        description:
+          'For rework: what this session should contain from now on, in plain words — "dead hangs instead of farmers carries for the grip work". Applies to every future session of it, not just the next one.',
+      },
       goal_title: { type: 'string', description: 'For add: which goal it serves, by title.' },
       why: { type: 'string', description: 'For add: one sentence on why it is worth doing.' },
     },
@@ -106,17 +115,18 @@ function asEdits(raw: unknown): PlanEdit[] {
       ...(typeof e.time_of_day === 'string' ? { time_of_day: e.time_of_day } : {}),
       ...(e.duration_min != null ? { duration_min: Number(e.duration_min) } : {}),
       ...(typeof e.title === 'string' ? { title: e.title } : {}),
+      ...(typeof e.how_to === 'string' ? { how_to: e.how_to } : {}),
       ...(typeof e.goal_title === 'string' ? { goal_title: e.goal_title } : {}),
       ...(typeof e.why === 'string' ? { why: e.why } : {}),
     }))
-    .filter((e) => ['move', 'retime', 'resize', 'remove', 'add'].includes(e.action));
+    .filter((e) => ['move', 'retime', 'resize', 'remove', 'add', 'rework'].includes(e.action));
 }
 
 export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   propose_plan_change: {
     name: 'propose_plan_change',
     description:
-      'Propose a specific change to the plan the user already has — move a session to other days, change its time, make it longer or shorter, drop it, or add one. This does NOT change anything: it works out what the week would become and shows them a card with an Apply button, so the plan moves only when they tap. Use once you have settled on a concrete adjustment, and never say it is done before they apply it. Read get_active_plan first and name commitments exactly as it lists them. For a wholesale rebuild around something new in their life, use the build card instead. Pass {"edits": [{"action": "move", "activity": "Easy run", "days": ["friday"]}]}.',
+      'Propose a specific change to the plan they already have — move a session to other days, retime it, resize it, drop it, add one, or rework what one CONTAINS (swap an exercise). This does NOT change anything: it works out the resulting week and shows a card with an Apply button, so the plan moves only when they tap. Use it the moment they name a change, in the same reply — never describe what you could do instead of doing it, never make them say it twice, never claim it is done before the tap. Read get_active_plan first and name commitments exactly as it lists them; a whole rebuild is the build card. Pass {"edits": [{"action": "move", "activity": "Easy run", "days": ["friday"]}]}, or {"edits": [{"action": "rework", "activity": "Grip finisher", "how_to": "Dead hangs, not farmers carries"}]}.',
     parameters: { properties: { edits: EDIT_SCHEMA }, required: ['edits'] },
     async run(userId, params) {
       const edits = asEdits(params.edits);

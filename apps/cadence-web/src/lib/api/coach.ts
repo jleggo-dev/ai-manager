@@ -38,6 +38,32 @@ export async function stopCoachTurn(sessionId: string): Promise<boolean> {
   }
 }
 
+/**
+ * "I'm going to background — notify me when she's done."
+ *
+ * Sent as the app leaves with a turn still streaming, inside the short window iOS keeps
+ * JavaScript alive for. It exists because the server cannot tell: a suspended webview's socket
+ * can stay open, so the reply lands on a connection nobody is reading and the turn looks watched.
+ * Leaving is a fact only the client has.
+ *
+ * `keepalive` is what makes it work at all — a normal fetch is abandoned when the page is
+ * hidden/torn down, which is precisely the moment this is sent. Soft-fails: the cost is a missing
+ * notification, never the reply, and there is nobody on screen to tell.
+ */
+export async function notifyOnCoachReply(sessionId: string | null): Promise<boolean> {
+  if (!sessionId) return false; // nothing open to be notified about
+  try {
+    const res = await fetch(`${BASE}/coach/sessions/${sessionId}/notify-on-reply`, {
+      method: 'POST',
+      headers: headers(),
+      keepalive: true,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** The user's current coach session + history (to restore the chat on refresh). `stale` = the
  *  server's freshness verdict (idle >7d, or an onboarding-era thread after the plan committed):
  *  the client should start a fresh thread and not render the old transcript. */

@@ -111,6 +111,73 @@ describe('applyPlanEdits', () => {
   });
 });
 
+/**
+ * `rework` — changing what a session CONTAINS without touching its slot.
+ *
+ * The gap it closes, from the chat of 2026-08-16: "let's start by changing the farmer carries to
+ * dead hangs". Every other action here is structural, so the one edit the user actually asked for
+ * was the one thing the coach could not do — she discussed it, offered to make it permanent, and
+ * had nowhere to put the answer. `how_to` is the right home because prescribe-session already
+ * reads it, which is what makes "permanent" mean permanent.
+ */
+describe('applyPlanEdits — rework', () => {
+  const GRIP: Activity[] = [
+    act({ title: 'Grip finisher', how_to: 'Farmers carries, 3 x 40m', goal_id: 'g1' }),
+    act({ title: 'Easy run', goal_id: 'g1' }),
+  ];
+
+  it('swaps what the session contains and leaves its slot untouched', () => {
+    const r = applyPlanEdits(
+      GRIP,
+      [{ action: 'rework', activity: 'Grip finisher', how_to: 'Dead hangs, 3-4 x 20-30s' }],
+      GOALS,
+    );
+    expect(r.rejected).toEqual([]);
+    const grip = r.activities.find((a) => a.title === 'Grip finisher')!;
+    expect(grip.how_to).toBe('Dead hangs, 3-4 x 20-30s');
+    // The slot is the part that must NOT move — this is the difference from a rebuild.
+    expect(grip.recurrence).toBe('FREQ=WEEKLY;BYDAY=TH');
+    expect(grip.duration_min).toBe(40);
+    expect(r.activities).toHaveLength(2);
+  });
+
+  it('says what changed in the words the card will show', () => {
+    const r = applyPlanEdits(GRIP, [{ action: 'rework', activity: 'Grip finisher', how_to: 'Dead hangs' }], GOALS);
+    expect(r.changes).toEqual(['Grip finisher: Dead hangs']);
+  });
+
+  it('renames when the change earns a new name, and says both halves', () => {
+    const r = applyPlanEdits(
+      GRIP,
+      [{ action: 'rework', activity: 'Grip finisher', title: 'Hang work', how_to: 'Dead hangs' }],
+      GOALS,
+    );
+    expect(r.changes).toEqual(['Grip finisher → Hang work: Dead hangs']);
+    expect(r.activities.find((a) => a.title === 'Hang work')).toBeTruthy();
+  });
+
+  it('rejects an empty rework rather than quietly doing nothing', () => {
+    const r = applyPlanEdits(GRIP, [{ action: 'rework', activity: 'Grip finisher' }], GOALS);
+    expect(r.changes).toEqual([]);
+    expect(r.rejected).toEqual(["Couldn't tell what Grip finisher should become."]);
+  });
+
+  it('will not guess which session was meant', () => {
+    const r = applyPlanEdits(GRIP, [{ action: 'rework', activity: 'the finisher thing', how_to: 'Dead hangs' }], GOALS);
+    expect(r.changes).toEqual([]);
+    expect(r.rejected[0]).toMatch(/Nothing in the plan clearly matches/);
+  });
+
+  /**
+   * An instruction the person gave has to survive the NEXT edit, or "permanent" was a lie: a later
+   * retime would otherwise rebuild the activity from scratch and drop how_to on the floor.
+   */
+  it('carries an existing how_to through an unrelated structural edit', () => {
+    const r = applyPlanEdits(GRIP, [{ action: 'retime', activity: 'Grip finisher', time_of_day: '18:00' }], GOALS);
+    expect(r.activities.find((a) => a.title === 'Grip finisher')!.how_to).toBe('Farmers carries, 3 x 40m');
+  });
+});
+
 describe('matchActivity', () => {
   it('prefers an exact title over a containing one', () => {
     const items = [{ title: 'Run' }, { title: 'Run club' }];

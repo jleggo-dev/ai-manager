@@ -69,6 +69,13 @@ export interface PendingPlanActivity {
   goal_id?: string; // the objective this commitment serves (null for foundational/system items)
   goal_title?: string; // display only — the objective's title, for grouping the preview by goal
   why?: string; // display only — the coach's rationale for THIS commitment, 1-3 sentences (the coached ladder, explained)
+  /**
+   * What this commitment should actually CONTAIN, when the user has said. Not display copy — it
+   * is fed to prescribe-session, so "dead hangs, not farmers carries" changes the session she
+   * writes from here on. Carried through preview and commit so an edit or a re-plan cannot
+   * silently drop an instruction the person gave (activities.how_to, read by session-generate).
+   */
+  how_to?: string;
   suggested?: boolean; // TRUE when the coach proposed this herself (adjacent support), not the user
 }
 
