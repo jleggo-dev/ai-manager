@@ -215,6 +215,23 @@ export async function submitV2ToolOutputs(
   sessionId: string,
   responseId: string,
   outputs: Array<{ toolCallId: string; output: string }>,
+  /**
+   * Tools the CALLER declared for this turn, carried onto the continuation.
+   *
+   * `sendChatMessage` has always taken `extraTools`, and this did not — so a caller whose tools
+   * come from code rather than from the profile got them on round one and **nothing on round two.**
+   * Measured on the cadence-coach profile: `resolveProfileToolDefinitions` returns `undefined`, so
+   * every continuation was declared with an empty toolbox.
+   *
+   * The cost was a full day of misdiagnosis (2026-08-16). The coach called `find_tools` and then
+   * "ignored" the instruction to call `use_tool` — she could not call it; it was not declared. Same
+   * shape for every action behind a lookup, and it is the likeliest reason a continuation writes a
+   * whole fresh answer rather than resuming: with no tools available, prose is the only move left.
+   *
+   * The comment below already said the definitions ride again so the model can chain. They now
+   * ride for callers who supply their own, not only for profiles with tool-jobs.
+   */
+  extraTools?: unknown[],
 ): Promise<{ response: globalThis.Response; sessionId: string }> {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
@@ -237,7 +254,8 @@ export async function submitV2ToolOutputs(
   // definitions ride again so the model can chain — the caller's loop bounds the rounds.
   const modelId = String(profile?.external_ai_id || '').trim();
   if (!modelId) throw new Error('submitV2ToolOutputs: session profile has no external_ai_id');
-  const tools = await resolveProfileToolDefinitions(profile);
+  // Caller-supplied tools win; the profile's tool-jobs remain the default for everyone else.
+  const tools = extraTools?.length ? extraTools : await resolveProfileToolDefinitions(profile);
   const sseResponse = await client.continueWithToolOutputs(modelId, responseId, outputs, {
     timeoutMs,
     ...(tools ? { tools } : {}),

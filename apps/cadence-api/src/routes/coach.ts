@@ -262,8 +262,11 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
         {
           toolNames: coachToolNames(),
           execute: (calls) => executeCoachToolCalls(userId, calls),
+          // The SAME tools the turn opened with. Without them the continuation is declared with an
+          // empty toolbox, which is why she called find_tools and then "ignored" use_tool for a day
+          // — she could not call it (chat-messaging.ts, submitV2ToolOutputs).
           submit: async (respId, outputs) =>
-            (await submitCoachToolOutputs(userId, sessionId, respId, outputs)).response.body,
+            (await submitCoachToolOutputs(userId, sessionId, respId, outputs, coachToolDefinitions())).response.body,
           // A word in her ear when she looked a tool up and never ran it. <note> turns are
           // app-authored, so this never reaches the transcript or the capture window.
           nudge: async (text) =>

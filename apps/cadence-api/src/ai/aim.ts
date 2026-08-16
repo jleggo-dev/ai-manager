@@ -144,8 +144,10 @@ export function submitCoachToolOutputs(
   sessionId: string,
   responseId: string,
   outputs: Array<{ toolCallId: string; output: string }>,
+  /** The same tools the turn opened with — without these the continuation has an empty toolbox. */
+  extraTools?: unknown[],
 ) {
-  return withAim(cadenceUserId, () => submitV2ToolOutputs(sessionId, responseId, outputs));
+  return withAim(cadenceUserId, () => submitV2ToolOutputs(sessionId, responseId, outputs, extraTools));
 }
 
 /**
