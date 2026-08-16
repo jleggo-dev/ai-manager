@@ -6751,3 +6751,47 @@ nobody ever demoting an action again.
 wrong for actions, and the difference is not frequency — it is that a read is something she *needs*
 and an action is something she *decides*. A decision she has to go and find is a decision that does
 not get made. The eval will still measure it, but the device already answered.
+
+### The real cause: the continuation carries NO tools (2026-08-16)
+
+The owner refused the easy answer:
+
+> "I think you're wrong. progressive disclosure isn't working for us, but it surely is working for
+> Anthropic's Claude for actions. The problem is something in our design. I can't believe at this
+> point that it's even the LLM on its own that is failing."
+
+Correct on every count.
+
+**`submitV2ToolOutputs` resolves tool definitions from the PROFILE. Our coach tools are passed as
+`extraTools` on the initial send. The cadence-coach profile has no tool-jobs, so
+`resolveProfileToolDefinitions` returns `undefined` — measured, not guessed.**
+
+So the continuation is declared with **zero tools**:
+
+- **Round 1** — tools present → she calls `find_tools` ✓
+- **Round 2** — no tools at all → she *cannot* call `use_tool`, so she answers in prose ✗
+
+She was not ignoring the instruction. **She physically could not make the call.** It explains
+everything at once: `log_session` 4/4 (round one), `update_constraint` 0/3 (needs round two), the
+duplicated replies (a fresh generation with an empty toolbox writes a whole answer), and every "she
+said she did it".
+
+The earlier theory — *"a continuation is a fresh generation that behaves like it is answering
+rather than resuming"* — was describing the symptom and calling it the cause. Worse, the whole
+`use_tool` proxy exists because of an **assumption I never tested**: that our provider could not
+accept a changed tool list mid-turn. The comment directly above the call says the opposite —
+*"the tool definitions ride again so the model can chain"* — and `continueWithToolOutputs` already
+takes a `tools` argument. It just reads them from the wrong place.
+
+**The fix, not yet built** (it lands in `backend/`, a different workspace with its own CI, and
+deserves a fresh session): `submitV2ToolOutputs` should accept the caller's tools the way
+`sendChatMessage` already accepts `extraTools`, so every round carries the same toolbox as the
+first. Once it does, `find_tools` can return a **real definition** and she calls the real tool by
+name — Claude Code's ToolSearch shape — and the `use_tool` proxy stops being necessary at all.
+
+Until then the revert stands and all six actions are always-on, which sidesteps the problem for
+actions because round one is where they get called.
+
+**The lesson, and it is the day's lesson twice over:** the failure was invisible, and I explained it
+with a model-behaviour story instead of measuring the plumbing. `resolveProfileToolDefinitions`
+returning `undefined` took one script to establish.
