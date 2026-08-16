@@ -65,34 +65,70 @@ async function priorInjectedContext(userId: string, sessionId: string): Promise<
   }
 }
 
+/**
+ * The FLOOR — retrieved every turn, whatever the Broker decides.
+ *
+ * `context-select` is the cheapest model in the stack making an unreviewable judgment about what
+ * the strongest one needs, and until now it had a veto: return `calls: []` and the turn ran on
+ * whatever the session-open pack happened to hold. Worse, a select that FAILED outright took the
+ * identical code path as a considered "nothing needed" — a silent breakage and a confident
+ * decision were indistinguishable in the logs and in the outcome.
+ *
+ * It fired on 2026-08-16. The owner said "let's start by changing the farmer carries to dead
+ * hangs"; the selector returned nothing ("a straightforward exercise substitution"), on the exact
+ * turn where naming the commitment correctly is the whole job — `propose_plan_change` matches
+ * activities by their title as the plan lists them. It worked because the session-open snapshot
+ * was still good. That is luck, not design.
+ *
+ * So the Broker can now only ever ADD. These three are the ones whose absence is a product
+ * failure rather than an inconvenience:
+ *  - `get_identity` — she must not have to ask a returning user their name.
+ *  - `get_constraints` — safety. Nothing about training is safe to say without it.
+ *  - `get_active_plan` — every plan edit names commitments exactly as the plan lists them, and the
+ *    plan is the one dossier fact that changes DURING a conversation (she changes it herself).
+ *
+ * Cheap, and cheaper than it looks: re-injecting identical content is marked `unchanged` by the
+ * freshness classifier, so it reads as a reminder she already has rather than as news — the fix
+ * that stopped her re-reading the same numbers back three times (turn-context-memory.ts). We do
+ * not skip re-sending it: surviving AI Admin's session compaction is the entire reason this
+ * mechanism exists.
+ */
+const TURN_FLOOR = ['get_identity', 'get_constraints', 'get_active_plan'] as const;
+
+/** Floor first, then whatever the Broker chose, minus duplicates. Order matters only for reading. */
+function withFloor(chosen: FnCall[]): FnCall[] {
+  const seen = new Set<string>();
+  const out: FnCall[] = [];
+  for (const fn of TURN_FLOOR) {
+    if (RETRIEVAL_FUNCTIONS[fn] && !seen.has(fn)) {
+      seen.add(fn);
+      out.push({ fn, params: {} });
+    }
+  }
+  for (const c of chosen) {
+    if (!seen.has(c.fn)) {
+      seen.add(c.fn);
+      out.push(c);
+    }
+  }
+  return out;
+}
+
 export async function injectTurnContext(userId: string, sessionId: string, message: string): Promise<void> {
   const sel = await turnSelect(userId, message);
-
-  // Nothing to do — but STILL record it, so the X-ray shows the turn was assessed (empty or failed).
-  if (!sel || sel.calls.length === 0) {
-    updateTrace(userId, {
-      turnSelect: {
-        calls: sel?.calls ?? [],
-        reason:
-          sel?.reason || (sel === null ? '(select failed — skipped)' : '(standing pack already covers this turn)'),
-        injected: false,
-        provenance: [],
-        fallback: sel === null,
-      },
-    });
-    void logAi(userId, {
-      kind: 'context_select',
-      sessionId,
-      input: { turn: message },
-      output: sel ?? { fallback: true },
-      meta: { fns: [], injected: false },
-    });
-    return;
-  }
+  /**
+   * A failed select and a considered "nothing needed" are DIFFERENT and no longer share a path.
+   * Both still get the floor; only one of them is a fault worth seeing in the trace.
+   */
+  const selectFailed = sel === null;
+  const calls = withFloor(sel?.calls ?? []);
+  const reason = selectFailed
+    ? '(select failed — floor only)'
+    : sel!.reason || '(standing pack covers this turn — floor only)';
 
   // Step 2 — EXECUTE the chosen functions app-side (the semantic layer; model never runs queries).
   const at = new Date().toISOString();
-  const { results, provenance } = await executeCalls(userId, sel.calls, {
+  const { results, provenance } = await executeCalls(userId, calls, {
     at,
     logLabel: 'turn-context',
   });
@@ -111,18 +147,18 @@ export async function injectTurnContext(userId: string, sessionId: string, messa
   const injected = parts.length > 0;
 
   // Record BY NAME (trace + durable log) whether or not anything rendered.
-  updateTrace(userId, { turnSelect: { calls: sel.calls, reason: sel.reason, injected, provenance } });
+  updateTrace(userId, { turnSelect: { calls, reason, injected, provenance, fallback: selectFailed } });
   void logAi(userId, {
     kind: 'context_select',
     sessionId,
     input: { turn: message },
-    output: { calls: sel.calls, reason: sel.reason },
-    meta: { fns, injected },
+    output: { calls, reason, chose: sel?.calls ?? [] },
+    meta: { fns, injected, floor: [...TURN_FLOOR], selectFailed },
   });
 
   // Step 3 — inject as a non-triggering context turn right before the user's message.
   if (!injected) return;
-  const block = renderContextBlock(parts, sel.reason);
+  const block = renderContextBlock(parts, reason);
   await injectCoachContext(userId, sessionId, block, { source: 'turn-context', version: 1 }).catch((e) =>
     console.error('[turn-context inject]', e),
   );
