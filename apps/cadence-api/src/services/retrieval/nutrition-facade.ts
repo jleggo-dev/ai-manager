@@ -1,4 +1,4 @@
-import { RETRIEVAL_FUNCTIONS } from './registry.ts';
+import { FOOD_HEALTH_FUNCTIONS } from './food-health-functions.ts';
 import type { RetrievalFunction } from './types.ts';
 
 /**
@@ -22,6 +22,14 @@ import type { RetrievalFunction } from './types.ts';
  * The four originals stay implemented and keep their descriptions — this dispatches to them, and
  * `find_tools` never lists them. Nothing about what she can read changes; only how many decisions
  * stand between her and reading it.
+ *
+ * Dispatches through FOOD_HEALTH_FUNCTIONS, not RETRIEVAL_FUNCTIONS, and that is not a style
+ * choice: the registry imports THIS module, so reaching back for the registry is a cycle. It cost
+ * a production outage on 2026-08-16 — `registry.ts` evaluated `GET_NUTRITION.name` while this file
+ * was still initializing, `GET_NUTRITION` was undefined, and the whole API failed to boot with
+ * FUNCTION_INVOCATION_FAILED. Every test passed, because vitest happened to resolve the graph in
+ * the lucky order. The four views all live in FOOD_HEALTH_FUNCTIONS, which imports nothing from
+ * here, so this direction has no cycle to fall into.
  */
 
 const VIEWS = {
@@ -45,19 +53,19 @@ export const GET_NUTRITION: RetrievalFunction = {
   domains: ['nutrition', 'foods', 'recipes', 'progress'],
   async run(userId, params) {
     const view = isView(params?.view) ? params.view : 'log';
-    const target = RETRIEVAL_FUNCTIONS[VIEWS[view]];
+    const target = FOOD_HEALTH_FUNCTIONS[VIEWS[view]];
     if (!target) return { view, inner: null };
     return { view, inner: await target.run(userId, params ?? {}) };
   },
   render(r) {
     const { view, inner } = r as { view: NutritionView; inner: unknown };
-    const target = RETRIEVAL_FUNCTIONS[VIEWS[view]];
+    const target = FOOD_HEALTH_FUNCTIONS[VIEWS[view]];
     if (!target || inner === null) return '';
     return target.render(inner);
   },
   rows(r) {
     const { view, inner } = r as { view: NutritionView; inner: unknown };
-    const target = RETRIEVAL_FUNCTIONS[VIEWS[view]];
+    const target = FOOD_HEALTH_FUNCTIONS[VIEWS[view]];
     if (!target || inner === null) return 0;
     return target.rows(inner);
   },
