@@ -1,4 +1,5 @@
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
+import { boundToolResponse, toolEmptyText, toolFaultText } from './tool-response.ts';
 import { COACH_ACTION_TOOLS } from './coach-actions.ts';
 import { executeCalls } from './retrieval/select-and-run.ts';
 import {
@@ -102,15 +103,14 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
       if (!lines.length) {
         return 'There is nothing else available. Tell the user plainly that you cannot do that today.';
       }
-      return [
-        noMatch
-          ? 'NOTHING matches that. Here is everything there is — if none of it is what they asked for, say so ' +
-            'plainly ("I do not have a way to do that today") rather than using the nearest thing and calling it ' +
-            'an answer:'
-          : 'Available now, with how to call each. Use use_tool with the name and its arguments:',
-        ...lines,
-        'Call use_tool now if one of these answers the question — do not describe them to the user instead of using them.',
-      ].join('\n');
+      const head = noMatch
+        ? 'NOTHING matches that. Here is everything there is — if none of it is what they asked for, say so ' +
+          'plainly ("I do not have a way to do that today") rather than using the nearest thing and calling it ' +
+          'an answer:'
+        : 'Available now, with how to call each. Use use_tool with the name and its arguments:';
+      const tail =
+        'Call use_tool now if one of these answers the question — do not describe them to the user instead of using them.';
+      return boundToolResponse([head, ...lines, tail].join('\n'));
     },
   },
 
@@ -155,11 +155,11 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
       const { results } = await executeCalls(userId, [{ fn: name, params: args }], { logLabel: 'use-tool' });
       try {
         const out = fn.render(results[name]);
-        return out || `(${name}: nothing on file for this yet)`;
+        return boundToolResponse(out || toolEmptyText(name));
       } catch (e) {
         // Same rule as the direct read path: a fault must never read as an empty record.
         console.error('[use_tool] render failed:', name, e);
-        return `${name} could not be read just now — a fault on our side, NOT an empty record. Say you could not check it.`;
+        return toolFaultText(name);
       }
     },
   },

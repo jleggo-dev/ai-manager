@@ -55,12 +55,16 @@ capability manifest names it automatically.
   every time a real one slips through.
 - ≤ **520** characters for a read, ≤ **800** for an action.
 
-### 4. Write what it hands back
+### 4. Write what it hands back (CI-enforced)
 
-Not yet CI-enforced, and the gap that cost us most. See §5 for the rules; the two that matter:
+Use the helpers in `tool-response.ts` — `toolFaultText`, `toolEmptyText`, `boundToolResponse` — and
+the gate comes for free. `tool-response.test.ts` holds them:
 
 - **An error must never look like an empty result.** "Nothing on file" when a query threw is a lie
-  in her voice, and it took four device rounds to find the last one.
+  in her voice, and it took four device rounds to find the last one. The two texts are asserted to
+  share no wording, so a model skimming cannot confuse them.
+- **Bounded, and it SAYS when it was cut.** A silent truncation is a quiet lie about completeness.
+  The cut lands on a line boundary so a row is never half-shown and misread as data.
 - **Tell her what to do next**, scoped to this result — not durable routing rules, which belong in
   the description.
 
@@ -105,7 +109,7 @@ npm run eval:tools
 | Read descriptions | 134–438 chars |
 | Action descriptions | 546–799 chars |
 | CI checks on descriptions | **7** |
-| CI checks on tool *responses* | **0** |
+| CI checks on tool *responses* | **4** (was 0 — added 2026-08-16) |
 | Tool-selection eval | **none** |
 
 Published thresholds worth holding against those numbers:
@@ -251,9 +255,6 @@ written convention; the `claw-code` harness asserts only that a description is n
    63.3% of failures are cognitive rather than tool-call errors, dominated by **no-tool-use**: our
    bug is the field's most common failure, and the only thing that measures it is this eval.
    Source the cases from real failures — PLAN.md is already a catalogue of them.
-2. **A response contract with CI teeth.** Length budget, jargon ban, and a required error shape.
-   Descriptions have seven checks; responses have none, which is how a render could throw for weeks
-   and read as "nothing on file".
 3. **The mutation contract as a typed field, not a regex on prose.** Today the audit greps for a
    phrase. A `mutates: 'none' | 'proposes' | 'immediate'` on the tool spec, with the sentence
    *generated* from it, cannot drift and cannot be forgotten. Sentry requires the equivalent MCP

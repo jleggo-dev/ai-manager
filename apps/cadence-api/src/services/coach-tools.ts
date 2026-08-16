@@ -3,6 +3,7 @@ import { executeCalls } from './retrieval/select-and-run.ts';
 import { COACH_ACTION_TOOLS, coachActionDefinitions } from './coach-actions.ts';
 import { alwaysOnToolNames, allHarnessToolNames } from './coach-tool-tiers.ts';
 import { COACH_META_TOOLS, metaToolDefinitions } from './coach-meta-tools.ts';
+import { boundToolResponse, toolEmptyText, toolFaultText } from './tool-response.ts';
 
 /**
  * The coach's READ TOOLS — the retrieval registry, offered to the model as callable functions
@@ -182,15 +183,10 @@ export async function executeCoachToolCalls(userId: string, calls: CoachToolCall
        */
       try {
         const output = fn.render(results[c.name]);
-        return { toolCallId: c.toolCallId, output: output || '(nothing on file for this yet)' };
+        return { toolCallId: c.toolCallId, output: boundToolResponse(output || toolEmptyText()) };
       } catch (e) {
         console.error('[coach-tool] render failed:', c.name, e);
-        return {
-          toolCallId: c.toolCallId,
-          output:
-            'That could not be read just now — this is a fault on our side, NOT an empty record. ' +
-            'Do not tell the user they have nothing here; say you could not check it right now.',
-        };
+        return { toolCallId: c.toolCallId, output: toolFaultText('That') };
       }
     }),
   ];

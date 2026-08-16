@@ -6405,3 +6405,29 @@ The checklist claimed a CI gate on categories that did not exist, so it now does
 tool in the tail is uncategorised, no category names a tool that has left the tail, and every
 category has a plain-words label, because the manifest says them out loud. A doc asserting a gate it
 does not have is the same class of untruth as a tool claiming an effect it did not produce.
+
+### Tool responses get a gate, for the first time (2026-08-16)
+
+Descriptions had seven CI checks. What a tool **hands back** had none — and responses are the half
+the model actually reasons over. That asymmetry is the whole story of the week's worst bug: both
+Apple Health reads threw on a Date the row type called a string, the throw was swallowed as
+"(nothing on file for this yet)", and the coach told a user with thirty recorded workouts that he
+had none. Four device rounds to find, because nothing anywhere said a tool had failed.
+
+`tool-response.ts` now owns two rules in one place instead of six, and `tool-response.test.ts`
+enforces them:
+
+- **An error never looks like an empty result.** "Nothing on file" is a fact about *them*; "I could
+  not read it" is a fact about *us*. The two texts are asserted to share no wording, so a model
+  skimming cannot collapse them. One test reproduces the exact regression — a render that throws
+  must arrive as a fault, never as no-data.
+- **A response is bounded, and says when it was cut.** ~2,000 tokens, generous next to a turn and
+  mean next to a year of food logs; the largest render measured against real data was under 1,000
+  characters, so nothing legitimate is near it. The cut lands on a line boundary so a row is never
+  half-shown and misread as data, and the notice tells her to narrow the window and **not to
+  describe a partial answer as everything on file**. A silent truncation is a quiet lie about
+  completeness.
+
+Both the direct read path and `use_tool` route through it, so a future tool gets the gate by using
+the helpers rather than by remembering the rule. TOOL-HARNESS.md step 4 moves from "not yet
+CI-enforced, and the gap that cost us most" to enforced; the scoreboard line goes 0 → 4.
