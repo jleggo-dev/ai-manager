@@ -24,10 +24,16 @@ async function main() {
     if (!v2 || !v1) throw new Error('need both a devs-ai and devs-ai-v2 provider');
 
     // Both models must be in the CURRENT v2 catalog — Devs.ai silently removed gemini-2.0-flash
-    // (and opus is not on v2), so a stale failover id would 400/hang. claude-sonnet-5 is a
-    // catalog-verified strong failover on the same provider.
-    const COACH_MODEL = 'anthropic-claude-4-5-sonnet';
-    const FAILOVER_MODEL = 'claude-sonnet-5';
+    // (and opus is not on v2), so a stale failover id would 400/hang.
+    //
+    // Sonnet 5 leads (owner, 2026-08-16: "kind of weird Sonnet 5 is the failover — you'd think it'd
+    // be the other way around"). It was: 4.5 primary, 5 as the fallback, so the better model only
+    // ever ran when the worse one failed. It matters beyond version numbers here — newer models
+    // reach for tools more conservatively, and the coach's whole job this week has been reaching
+    // for tools. 4.5 stays as the failover: same provider, catalog-verified, and a known-good
+    // fallback rather than an untested one.
+    const COACH_MODEL = 'claude-sonnet-5';
+    const FAILOVER_MODEL = 'anthropic-claude-4-5-sonnet';
     const primary = toV1 ? v1 : v2;
     await updateAiProfile(coach.id, {
       provider_id: primary.id,
