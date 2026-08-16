@@ -103,12 +103,38 @@ The most under-governed surface we have, and the one that cost us a live bug (be
   result text *"should not act like a system prompt"* — which is also the injection-safe split.
 - Budget the size. Paginate, truncate, or take a `response_format` enum.
 
-### 6. Errors
+### 6. A tool must be complete in one call
+
+**If a tool's effect depends on the model *also* doing something else, it is two tools wearing one
+name — and the second one will be forgotten.**
+
+`propose_plan_change` stored a proposal and returned *"the user now has a card showing exactly
+this"*. That was only true if she ALSO emitted a `cadence-picks {"layout":"change"}` tag in her
+prose, because the card was gated on the tag. On 2026-08-16 she called the tool, the proposal
+landed with exactly the right content, she said "let me swap it now" — and no card appeared. Four
+turns of the owner asking her to change his plan while she agreed and nothing happened. Owner:
+*"There don't need to be 2 tools for this — one tool changes the plan and also presents the results
+back to the user."* Correct.
+
+The rule that falls out:
+
+- **State-backed UI follows the state, never a tag.** If a tool wrote something durable, the client
+  reads that store and renders from it. `ChangeCard` asks the server what is pending and draws
+  nothing when the answer is nothing, so it is safe to mount unconditionally.
+- **A tag is only ever acceptable for a pure offer** — quick picks, a confirm prompt — where
+  nothing was stored and the model genuinely is choosing to present a choice.
+- **A tool's return text must not claim an effect the tool did not itself produce.** If the output
+  says "the user now has a card", calling the tool must be sufficient to make that sentence true.
+
+Audit every new tool against the last line. It is the cheapest of these rules to check and it was
+the one that cost the most.
+
+### 7. Errors
 
 Actionable and specific, naming the recovery. Sentry's pattern: *"Organization slug is required.
 Use find_organizations() to list."* Not an opaque code, not a traceback.
 
-### 7. Never let a model's near-miss kill the turn
+### 8. Never let a model's near-miss kill the turn
 
 Models guess plausible-but-wrong tool names. Normalize before matching (case, punctuation), and if a
 call still cannot be resolved, **answer it with an error the model can act on** — never drop it

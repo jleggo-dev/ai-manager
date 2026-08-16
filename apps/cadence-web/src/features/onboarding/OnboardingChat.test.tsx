@@ -5,6 +5,7 @@ import { OnboardingChat } from './OnboardingChat.tsx';
 const sendCoachMessage = vi.fn();
 const openCoachSession = vi.fn();
 const getReview = vi.fn();
+const getPendingChange = vi.fn();
 
 const PICKS = {
   layout: 'list',
@@ -32,6 +33,15 @@ vi.mock('../../lib/api.ts', () => ({
   getHealthDigest: vi.fn().mockResolvedValue({ digest: null, created_at: null }),
   postHealthDigest: vi.fn().mockResolvedValue(true),
   postWorkoutHistory: vi.fn().mockResolvedValue(true),
+  // The change card now mounts on every finished last turn and asks the server what is pending
+  // (it renders nothing when the answer is nothing) — so these must exist even in a chat test
+  // that never proposes a change. That is the point of the redesign: the card follows the stored
+  // proposal, not a tag in her prose.
+  getPendingChange: (...args: unknown[]) => getPendingChange(...args),
+  dismissPendingChange: vi.fn().mockResolvedValue(true),
+  lockPlan: vi.fn().mockResolvedValue({ status: 200, body: {} }),
+  notifyOnCoachReply: vi.fn().mockResolvedValue(true),
+  stopCoachTurn: vi.fn().mockResolvedValue(true),
 }));
 
 // The Web Speech API isn't in jsdom; stub the mic so its empty-field state is deterministic
@@ -42,6 +52,7 @@ vi.mock('../../components/MicButton.tsx', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getPendingChange.mockResolvedValue(null);
   getReview.mockResolvedValue({ goals: [] });
   openCoachSession.mockResolvedValue({ sessionId: 'test-session' });
   sendCoachMessage.mockImplementation(async (_id: string, _text: string, onDelta: (d: string) => void) => {
@@ -195,5 +206,48 @@ describe('OnboardingChat', () => {
       ),
     );
     expect(sendCoachMessage).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The bug this exists to prevent (2026-08-16, owner): she called propose_plan_change, the
+   * proposal landed in the database with exactly the right content, she said "let me swap it
+   * now" — and no card appeared, because the card was gated on her ALSO emitting a
+   * `cadence-picks {"layout":"change"}` tag she had not emitted. Four turns of him asking her to
+   * change his plan while she agreed and nothing happened.
+   *
+   * The card follows the stored proposal now. Her prose here contains no tag at all.
+   */
+  it('shows the change card from the stored proposal, with no tag in her reply', async () => {
+    getPendingChange.mockResolvedValue({
+      changes: ['Grip finisher: Dead hangs, not farmers carries'],
+      activities: 15,
+      created_at: '2026-08-16T13:26:10.389Z',
+    });
+    sendCoachMessage.mockImplementation(async (_s: string, _m: string, onDelta: (d: string) => void) => {
+      onDelta('Let me swap it now.');
+      return { completed: true };
+    });
+
+    render(<OnboardingChat />);
+    await screen.findByText(OPENING_QUESTION);
+    fireEvent.change(screen.getByPlaceholderText(OPENING_PLACEHOLDER), { target: { value: 'swap them' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByText(/Dead hangs, not farmers carries/)).toBeInTheDocument();
+  });
+
+  it('shows no card when nothing is pending, rather than an empty frame', async () => {
+    sendCoachMessage.mockImplementation(async (_s: string, _m: string, onDelta: (d: string) => void) => {
+      onDelta('Sounds good.');
+      return { completed: true };
+    });
+
+    render(<OnboardingChat />);
+    await screen.findByText(OPENING_QUESTION);
+    fireEvent.change(screen.getByPlaceholderText(OPENING_PLACEHOLDER), { target: { value: 'hi' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByText('Sounds good.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /apply/i })).not.toBeInTheDocument();
   });
 });
