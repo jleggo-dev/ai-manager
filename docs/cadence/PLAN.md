@@ -6116,3 +6116,43 @@ complete drafts concatenated — which points at the tool-loop accumulator carry
 into the continuation. And `renderCapabilities` is injected at SESSION OPEN, so the
 "do these, do not describe them" instruction shipped that morning never reached this thread; a
 long-running conversation keeps the instructions it was born with.
+
+### The Broker had a veto. Now it has a floor. (2026-08-16)
+
+`context-select` runs before every coach turn, decides which registry functions matter, and injects
+the rendered results as a `<context>` turn. It could also decide **nothing** — and then the turn ran
+on whatever the session-open pack happened to hold. Worse: a select that **failed outright** took
+the identical code path as a considered "nothing needed". A silent breakage and a deliberate
+decision were indistinguishable, in the logs and in the outcome.
+
+It fired the same day. On *"let's start by changing the farmer carries to dead hangs"* the selector
+returned `calls: []` — *"a straightforward exercise substitution"* — on the exact turn where naming
+the commitment as the plan lists it **is** the job (`propose_plan_change` matches activities by
+title). It worked because the session-open snapshot was still good. That is luck, not design.
+
+So the cheapest model in the stack was making an unreviewable judgment about what the strongest one
+needs, with no minimum. Now it can only ever **add**:
+
+**`TURN_FLOOR = get_identity · get_constraints · get_active_plan`** — 1,057 chars ≈ **286 tokens**
+per turn against the owner's real dossier. The three whose absence is a product failure rather than
+an inconvenience: she must not ask a returning user their name; nothing about training is safe to
+say without the constraints; and the plan is the one dossier fact that changes *during* a
+conversation, because she changes it herself.
+
+Cheaper than it looks, because re-injecting identical content is marked `unchanged` by the freshness
+classifier — a reminder she already has, not news (the fix that stopped her reading the same numbers
+back three times). We do not skip re-sending: surviving AI Admin's session compaction is the whole
+reason the mechanism exists.
+
+Failure and decision are now different: a failed select falls back to the floor and *says so* in the
+injected block and the trace (`selectFailed`), instead of reading as a clean call.
+
+Eight tests, all on the invisible failure — nothing errors, nothing logs a fault, the coach simply
+knows less than she should and answers anyway.
+
+**Why the Broker stays at all** (owner asked, 2026-08-16 — could structured files replace it?):
+the argument is **push, not price**. The saving from a cheap selector is real but thin — the content
+tokens land in the strong model either way and they dominate. What files cannot do is deliver a fact
+she did not think to ask for, and "never makes you repeat yourself" is a push requirement. A pull
+model is right for the long tail, which is exactly what Layer 2 of [HARNESS-V2.md](HARNESS-V2.md)
+is. Also: she streams to a phone, and every pull is a visible pause before she says anything.
