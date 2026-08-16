@@ -64,37 +64,95 @@ Only the first is in scope. The jobs family is already correct and is not touche
 
 ### Part 1 — Tiered disclosure
 
-Three tiers. Every turn sends **tier 1 + whatever tier 2 the selector chose**, and nothing else.
+#### First, a correction to this spec's own first draft
 
-**Tier 1 — always on (~6 tools, ~1,200 tokens).** The ones whose absence is a product failure, not
-an inconvenience: `get_identity`, `get_constraints`, `get_active_plan`, `get_objectives`,
-`propose_plan_change`, `find_tools`. These already have precedent — `MANDATORY` in
-`context-pack.ts` exists for exactly this reason ("body facts cost ~20 tokens and their absence
-costs the product's core promise").
+The draft said: extend the `context-select` Broker pass to also choose which TOOLS to expose.
+**That is not what any of the best harnesses do, and it is the wrong shape.**
 
-**Tier 2 — selected per turn (~3–6 tools).** Chosen by the existing `context-select` Broker pass,
-extended to answer one more question. It already reads the turn and returns retrieval calls; it
-will also return the tool GROUPS to expose.
+- **Anthropic's tool search is model-driven** — Claude writes the regex or BM25 query itself.
+- **Sentry's is model-driven** — the model calls `search_sentry_tools`.
+- **GitHub's is static config** — the operator picks toolsets; no model involved.
+- **Cloudflare's is code** — the model writes code against tools-as-a-filesystem.
 
-**Groups, not individual tools.** `RetrievalFunction.domains` already exists on every entry — we
-group on it rather than inventing a taxonomy. Fewer decisions for the selector, better recall, and
-the same shape as GitHub's toolsets:
+Nobody puts a second, cheaper model in front of tool selection. The reason is sound: the model
+asking for what it needs is **self-correcting**, because it knows what it is about to do. A
+preselector guesses from the same words with less context and no recovery inside the turn. It is a
+second point of failure in a chain that already has one, and its failure mode is the expensive one
+— a capability silently missing.
 
-| Group | Contains |
-|---|---|
-| `plan` | active plan, consistency, recent logs, goal progress, `propose_plan_change` |
-| `body` | health history, workout history, weight, constraints |
-| `food` | food log, macro targets, dietary profile, recipes, lookup, `set_macro_targets` |
-| `practice` | journal, practice totals |
-| `record` | `log_session`, `correct_log`, `update_goal`, `update_constraint` |
+**But our Broker is not doing tool selection. It is doing PREFETCH, and that is a different,
+legitimate thing.** `turn-context.ts` runs `context-select` every turn, executes the chosen
+retrieval functions app-side, and injects the rendered results as a `<context>` turn before the
+user's message. Wrong prefetch costs a few tokens and she calls a tool. Wrong preselection costs a
+capability. Keep the Broker exactly where it is; do not give it a gate.
 
-**Tier 3 — the escape hatch.** `find_tools(query)` is a tier-1 tool that returns full definitions
-for anything the selector missed. This is the piece that makes preselection safe: a wrong guess
-costs one extra round-trip, never a capability. GitHub's stated reason for deleting dynamic
-toolsets was complexity, not failure; one meta-tool is the cheap end of that trade.
+#### The finding that reframes everything
 
-**Projected: ~1,200 (tier 1) + ~1,000 (tier 2) ≈ 2,200 tokens/turn, from 5,000 — and flat as the
-toolset grows**, because tier 2 is a fixed budget of groups, not a fraction of the catalog.
+**Eight of our eighteen read tools describe how to fetch facts that are already in her context as
+text.**
+
+`buildContextPack` injects the dossier at session open — identity, objectives, active plan,
+consistency, constraints, weight, dietary profile, health history — and `turn-context` re-injects
+whatever this turn needs. Then we spend ~2,200 characters of tool definitions, every single turn,
+teaching her to go and get them again.
+
+So this is a context-engineering problem before it is a tool-selection problem. The first and
+largest win is not smarter tiering. It is **deleting the second path to a fact she already has.**
+
+#### The three layers
+
+**Layer 0 — The dossier. Injected text. Not tools at all. (0 definition tokens.)**
+
+Who they are, what they are working toward, what we work around, what the plan says, how the week
+has gone, what they weigh, what they eat, what their devices saw.
+
+The owner's read is exactly right: *"constraints, active plan, objectives are all related to the
+same thing. The active plan is built out of the objectives and built around the constraints."*
+They are one thing — the dossier — and the answer is not to group them as tools. It is to stop
+making them tools. This layer is **already built**; the only change is removing the duplicate
+tool-shaped path to it.
+
+`get_constraints` returns `baseline.constraints[]` — each `{ label, kind: physical | life, status,
+plan_around }`. The owner's own row today: knee, physical, quiet, plan-around false.
+
+**Layer 1 — Always on: the ACTIONS, plus one way to find everything else. (7 tools, ~1,100 tokens.)**
+
+`propose_plan_change`, `update_goal`, `update_constraint`, `log_session`, `correct_log`,
+`set_macro_targets`, `find_tools`.
+
+Actions cannot be prefetched — being chosen IS what an action is. And every failure this week has
+been **under-triggering an action**: she described `propose_plan_change` instead of calling it. Of
+all the things to put a token budget behind, "she can always act" is the one. It also matches the
+field's most common failure class: Scale AI's MCP-Atlas finds 63.3% of failures are cognitive
+rather than tool-call errors, dominated by **no-tool-use**.
+
+**Layer 2 — Searchable reads. Loaded on demand. (~12 tools, 0 tokens until asked for.)**
+
+Everything else — workouts, journal, recipes, food lookup, equipment, practice totals, and the
+richer views of the dossier when she wants one fresher than the injection. `find_tools(query)`
+returns full definitions; she then calls what she got. Model-driven, one round-trip, and a
+preselection can never cost a capability because there is no preselection.
+
+#### What that costs
+
+| | Now | After |
+|---|---|---|
+| Definition tokens per turn | ~5,000 | **~1,100** |
+| Growth per new READ tool | +~110 tokens/turn, forever | **0** |
+| Growth per new ACTION tool | +~190 tokens/turn | +~190 tokens/turn |
+| Decisions she must make to reach a dossier fact | 1 (which tool) | **0** (it is already there) |
+
+Reads become free to add, which is the property we actually want — the owner's 100-tool worry is
+mostly a 100-*read* worry. Actions stay expensive on purpose: they are the ones that need her full
+attention, and if we ever have twenty of them, that is a consolidation problem worth being forced
+to confront.
+
+#### The one rule for deciding where a new tool goes
+
+**Does calling it change the user's data?**
+- Yes → Layer 1. It is an action; she must always be able to reach it.
+- No, and the dossier already carries the fact → Layer 0. Not a tool. Inject it.
+- No, and it is a long-tail read → Layer 2. Searchable.
 
 ### Part 2 — Presentation stops being the model's job
 
