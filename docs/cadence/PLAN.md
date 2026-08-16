@@ -6236,3 +6236,40 @@ see it on the device that failed. The likeliest cause is an App ID without the P
 capability — signing succeeds against the local entitlement (`aps-environment: development` is
 present and wired) and APNs refuses at runtime. That is the second invisible failure this week; the
 coach's health reads were the first.
+
+### Why no notification has EVER arrived: the app delegate never forwarded Apple's answer (2026-08-16)
+
+The device finally said it out loud, once the registration path stopped swallowing its own failures:
+
+```
+[push] no APNs token after 10000ms — neither event fired
+```
+
+Neither. Not a refusal, not a denial — *nothing came back at all.* That signature has one cause.
+
+`AppDelegate.swift` had no `didRegisterForRemoteNotificationsWithDeviceToken` and no
+`didFailToRegisterForRemoteNotificationsWithError`. Capacitor's PushNotifications plugin learns
+about Apple's answer **only** through the two `NotificationCenter` posts those methods make. So
+`register()` asked iOS for a token, iOS came back with one, the app delegate ignored it, and the
+JavaScript `registration` event never fired.
+
+**This is why `cadence.device_tokens` has been empty since the app existed** — every push settling
+as `no_devices`, every round of device testing producing another "I never got a notification". It
+was never the entitlement (`aps-environment: development` is present and correctly wired), never the
+App ID, never the permission. The app was simply never told it had been given a token.
+
+Two methods, and they are app-level callbacks, so they stay on the app delegate even under the
+scene-based lifecycle this project uses.
+
+Worth naming the pattern: this took four rounds to find because the failure was *silent at every
+layer* — no token, no error, no log, and a caller that reported all of it as "denied". Making the
+three paths speak (that morning's change) turned a four-round mystery into one line of console.
+
+### The wrapper that froze the app (same round, my regression)
+
+Keeping the coach mounted meant wrapping it in a `<div>` — and `.app` is `display: flex;
+flex-direction: column`, so that wrapper became a flex child with no sizing of its own and collapsed
+the chat: composer gone, tab bar pushed off, the app apparently frozen.
+
+`display: contents` when showing (and `none` when hidden) removes the wrapper from layout entirely,
+so the chat is a direct flex child exactly as it was before it was wrapped.

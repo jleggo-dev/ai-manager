@@ -33,6 +33,31 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
     }
 
+    /**
+     Apple's answer to `registerForRemoteNotifications()` arrives HERE, at the app delegate, and
+     Capacitor's PushNotifications plugin learns about it only through these two NotificationCenter
+     posts. Without them iOS calls back, nothing is listening, and the JavaScript `registration`
+     and `registrationError` events never fire — which is precisely what the device reported on
+     2026-08-16: "[push] no APNs token after 10000ms — neither event fired".
+
+     So `cadence.device_tokens` has been empty since the app existed, every push has settled as
+     `no_devices`, and the owner has reported a missing notification in round after round. Not the
+     entitlement (`aps-environment` is present and wired), not the App ID, not permission — the app
+     was never told it had been given a token.
+
+     These are scene-based-lifecycle safe: remote-notification registration is an APP-level
+     callback and stays on the app delegate even with a SceneDelegate.
+     */
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+    }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
     func application(_ application: UIApplication,
                      configurationForConnecting connectingSceneSession: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
