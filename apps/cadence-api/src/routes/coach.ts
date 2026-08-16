@@ -18,6 +18,7 @@ import { renderScreenNotes } from '../services/goal-screen.ts';
 import { runDetourCapture } from '../services/detour-capture.ts';
 import { assembleTurn } from '../services/coach-context.ts';
 import { relayCoachTurnWithTools } from '../services/coach-tool-loop.ts';
+import { sendPlanReadyPush } from '../services/plan-ready-push.ts';
 import { coachToolDefinitions, coachToolNames, executeCoachToolCalls } from '../services/coach-tools.ts';
 import { buildContextPack } from '../services/context-pack.ts';
 import { ensureDateStamped } from '../services/date-context.ts';
@@ -141,6 +142,18 @@ router.post('/sessions', async (req: Request, res: Response) => {
 const STALE_IDLE_MS = 7 * 86_400_000;
 /** Past this, an in-flight marker is a leftover from a turn that died, not a live reply. */
 const IN_FLIGHT_MAX_MS = 5 * 60_000;
+
+/**
+ * The notification body: her opening sentence, so the lock screen carries the answer and not just
+ * the fact that one exists. Trimmed at a sentence boundary where there is one within reason —
+ * iOS truncates anyway, and a clean stop reads better than an ellipsis mid-word.
+ */
+export function firstLine(content: string): string {
+  const flat = content.replace(/\s+/g, ' ').trim();
+  const stop = flat.search(/[.!?](\s|$)/);
+  const cut = stop > 0 && stop < 140 ? flat.slice(0, stop + 1) : flat.slice(0, 140);
+  return cut.length < flat.length && !/[.!?]$/.test(cut) ? `${cut.trimEnd()}…` : cut;
+}
 router.get('/current', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
@@ -319,6 +332,33 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       } catch {
         /* client already gone */
       }
+    }
+
+    /**
+     * They left, and her answer is on file. Tell them.
+     *
+     * The rule (owner, 2026-08-16): *"If I send a chat message to Cadence and I leave the screen:
+     * Cadence always keeps running / working on the prompt. Cadence always sends a notification
+     * when done. This is true regardless of phase or where I'm chatting."* The first half has been
+     * true since #195. The second half has never been true anywhere except the first-plan build,
+     * so leaving a slow turn meant coming back to check by hand — the exact behaviour the app is
+     * supposed to make unnecessary.
+     *
+     * `clientAlive` is the honest signal and we already track it: false means the socket went away
+     * mid-turn, which on a phone means the app was backgrounded. Someone still watching gets
+     * nothing, because they can already see it.
+     *
+     * Awaited, like everything else after the stream: a promise left running past the handler is
+     * a promise this platform may never finish (#195).
+     */
+    if (!clientAlive && content.trim()) {
+      await sendPlanReadyPush(
+        userId,
+        'coach_reply',
+        `${sessionIdParam}:${responseId ?? Date.now()}`,
+        'Cadence replied',
+        firstLine(content),
+      );
     }
 
     // Dev X-ray + durable log of the coach turn (responseId + drop flag aid diagnostics

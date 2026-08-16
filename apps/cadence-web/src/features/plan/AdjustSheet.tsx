@@ -177,15 +177,13 @@ export function AdjustSheet({
  *  that leaving is fine. The elapsed clock is the part that proves the screen isn't frozen. */
 function Waiting({ note, elapsedMs }: { note: string; elapsedMs: number }) {
   const s = Math.floor(elapsedMs / 1000);
+  const clock = s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
   return (
     <div className="sess-note adjust-wait">
       <Orb />
       <span>
         {note}
-        <em className="adjust-elapsed">
-          {s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`} · I’ll send a notification
-          when it’s ready
-        </em>
+        <em className="adjust-elapsed">{clock} · I’ll send a notification when it’s ready</em>
       </span>
     </div>
   );

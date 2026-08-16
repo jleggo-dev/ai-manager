@@ -5949,3 +5949,42 @@ stop pretending it is short.
   the caret, and the caret starts at the END of Cadence's prefilled prompt rather than in front of
   it. The sheet gets `sheet-compose` (92% max / 58% min) for the whole adjust flow — no resize
   jump mid-wait — because the ask is the point of that screen and it had two fixed lines.
+
+### The leave-the-screen contract (owner rule, 2026-08-16)
+
+> "If I send a chat message to Cadence and I leave the screen:
+> * Cadence always keeps running / working on the prompt
+> * Cadence always sends a notification when done (just like Claude)
+> * This is true regardless of phase or where I'm chatting"
+
+Stated as an absolute, and correctly so — this has been re-reported across many device rounds
+under different symptoms ("it asks me to try again", "it never replies", "I never got a
+notification"), and each time it was fixed as its own bug on its own surface. It is one contract.
+
+**The finding that explains all of it: `cadence.device_tokens` was EMPTY in production.** Not
+stale — empty. Every push Cadence has ever sent settled as `failed / no_devices`. The cause was
+scope: the *only* place that ever asked for permission was the onboarding build screen, so the ask
+happened once in a person's life, at the busiest moment of it, and anyone past their first week
+could never be reached again short of finding the Settings toggle. The half of the contract that
+was already true (the work surviving, #195) was invisible, because nothing could tell anyone.
+
+- **`usePushRegistered`** (new, mounted in `App`) — registration is core setup now, not a feature
+  any screen opts into: from launch, on every screen, retried on resume. Safe by iOS's own rules
+  (the system dialog appears once per install; later requests resolve silently from the stored
+  answer, so a decline stays declined). `unavailable` is the only permanently-final outcome — a
+  denial can be reversed in Settings and a `failed` can just be an offline launch, so both get
+  another try. The resume retry is what catches the case the build screen proved is real: a
+  prompt cannot appear to a backgrounded app, which is exactly where someone is when they take up
+  "leave the app if you like".
+- **Coach chat now pings.** `POST /coach/sessions/:id/messages` already tracked `clientAlive` for
+  the relay; when the socket went away mid-turn and her reply is on file, it sends "Cadence
+  replied" with her opening sentence as the body — a notification that says only "you have a
+  reply" makes someone open the app to learn nothing. Someone still watching gets nothing, because
+  they can already see it. Awaited, like all post-stream work (#195).
+- **No conditional copy.** An earlier pass gated the "I'll ping you" line on whether the device
+  could actually receive one. Owner: *"I don't know what you mean by making a promise… this is
+  just core functionality."* Right — the answer is to make registration work, not to write copy
+  that degrades around it.
+
+Remaining surfaces to hold to this rule as they land: food estimate/parse (fast today, so no
+ping), and the weekly check-in when it is built.
