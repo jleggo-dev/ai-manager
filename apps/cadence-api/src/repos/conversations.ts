@@ -45,6 +45,28 @@ export async function setInFlightResponse(aiSessionId: string, responseId: strin
     where ai_session_id = ${aiSessionId}`;
 }
 
+/**
+ * "I'm leaving — tell me when she's done." Armed by the client the moment iOS backgrounds it
+ * mid-turn (0035), because the server's own signal for an absent reader (a dead socket) is not
+ * true yet at that point and may never be. Scoped to a live turn: armed only while one is in
+ * flight, and cleared by the same path that clears `in_flight_response_id`, so it cannot survive
+ * into the next turn as a stray ping.
+ *
+ * Best-effort like its neighbour: a failed write costs a notification, never the reply.
+ */
+export async function setNotifyOnReply(aiSessionId: string, on: boolean): Promise<void> {
+  await sql`
+    update cadence.conversations set notify_on_reply = ${on}
+    where ai_session_id = ${aiSessionId}`;
+}
+
+/** Whether this thread is waiting to be told — read once, as the reply lands. */
+export async function getNotifyOnReply(aiSessionId: string): Promise<boolean> {
+  const [row] = await sql<{ notify_on_reply: boolean }[]>`
+    select notify_on_reply from cadence.conversations where ai_session_id = ${aiSessionId}`;
+  return row?.notify_on_reply === true;
+}
+
 /** Bump updated_at on message activity — feeds the coach-session idle-staleness rule. */
 export async function touchConversation(aiSessionId: string): Promise<void> {
   await sql`update cadence.conversations set updated_at = now() where ai_session_id = ${aiSessionId}`;

@@ -5901,3 +5901,139 @@ moved — this adjustment IS the coaching, and it should not sound like a form.
 Deferred by the owner: the weekly check-in ("we can build it when we get closer — next Saturday is
 our check-in"). Everything it needs now exists: ticked sessions, their words on those sessions
 (`log_session`), the weigh-in trend, and a coach who can act on all three.
+
+### "It never replies" — it was replying, at 271 seconds (owner report 2026-08-15)
+
+> "I clicked 'Custom — let's talk' and I told Cadence that they're overly protecting my elbow…
+> It says it's working on options … it never replies — I can't tell if it's working or not."
+
+**Measured, not guessed.** A new live probe (`scripts/probe-replan-preview.ts`, `npm run
+probe:replan`) mints a throwaway user with four committed goals — the owner's shape — and times
+the real request against the deployed API: **HTTP 200 after 271.5 seconds.** The gateway does not
+cut it off, the proposal is real, and the work always landed. Every part of the failure was on our
+side of the wire:
+
+- The sheet showed **one unchanging line** — "Looking at your options…" — for four and a half
+  minutes, with no elapsed cue. Indistinguishable from a hang, and the owner read it correctly as
+  one. Nobody watches a phone for four minutes on faith.
+- Its recovery poll gave up at **180s — ninety seconds before the pipeline could possibly
+  finish**. So a backgrounded phone could not be rescued *even in principle*; the window was
+  shorter than the job.
+- **No `useAppResume`.** A fetch killed by iOS suspension may never reject, and a suspended
+  webview's poll timer isn't running either. Nothing looked for the finished proposal on return —
+  the same gap `useBuildPlan` closed for the first-lock build and this path never got.
+- **No push**, so leaving was pure loss.
+- And the whole reason for the change — the user's own sentence — was fed to synthesis and
+  **thrown away**, so the week changed and nothing anywhere recorded why.
+
+Why it is slow at all is not a bug: with N goals the server fans out one `synthesize_plan` draft
+per goal, reduces them into a coherent week, then vets it. It is the most expensive thing Cadence
+does, and it grows with every goal added. So the fix is not to make the wait shorter — it is to
+stop pretending it is short.
+
+**What shipped**
+
+- `useReplanPreview` (new) owns the whole wait: honest phase copy that moves with the clock, a
+  live elapsed counter (the part that proves the screen is alive), an **8-minute** recovery
+  window, and `useAppResume`. By a minute in the copy stops implying "any second now" and starts
+  giving permission to leave — which is only honest because of the next bullet.
+- **The ping.** `previewReplan` sends "Your adjusted week is ready" the instant it persists. The
+  first-lock ready-push was extracted to `plan-ready-push.ts` and both flows now share it —
+  ledger, idempotency slot and all.
+- **`plans.steer` (migration 0034)** — the ask, in the user's words, stored on the plan VERSION it
+  produced. `get_active_plan` now renders it with a relative "when", so general chat knows the
+  person asked for this week and does not re-litigate the elbow next Tuesday. (A trigger on
+  `cadence.plans` already moves `pack_touched_at`, so the pack invalidates on commit and she sees
+  it.) NOT a substitute for a constraint change — the ask and the fact are different things.
+- **The box you can type in.** `SteerBox` (new) grows with the text to nine rows then scrolls to
+  the caret, and the caret starts at the END of Cadence's prefilled prompt rather than in front of
+  it. The sheet gets `sheet-compose` (92% max / 58% min) for the whole adjust flow — no resize
+  jump mid-wait — because the ask is the point of that screen and it had two fixed lines.
+
+### The leave-the-screen contract (owner rule, 2026-08-16)
+
+> "If I send a chat message to Cadence and I leave the screen:
+> * Cadence always keeps running / working on the prompt
+> * Cadence always sends a notification when done (just like Claude)
+> * This is true regardless of phase or where I'm chatting"
+
+Stated as an absolute, and correctly so — this has been re-reported across many device rounds
+under different symptoms ("it asks me to try again", "it never replies", "I never got a
+notification"), and each time it was fixed as its own bug on its own surface. It is one contract.
+
+**The finding that explains all of it: `cadence.device_tokens` was EMPTY in production.** Not
+stale — empty. Every push Cadence has ever sent settled as `failed / no_devices`. The cause was
+scope: the *only* place that ever asked for permission was the onboarding build screen, so the ask
+happened once in a person's life, at the busiest moment of it, and anyone past their first week
+could never be reached again short of finding the Settings toggle. The half of the contract that
+was already true (the work surviving, #195) was invisible, because nothing could tell anyone.
+
+- **`usePushRegistered`** (new, mounted in `App`) — registration is core setup now, not a feature
+  any screen opts into: from launch, on every screen, retried on resume. Safe by iOS's own rules
+  (the system dialog appears once per install; later requests resolve silently from the stored
+  answer, so a decline stays declined). `unavailable` is the only permanently-final outcome — a
+  denial can be reversed in Settings and a `failed` can just be an offline launch, so both get
+  another try. The resume retry is what catches the case the build screen proved is real: a
+  prompt cannot appear to a backgrounded app, which is exactly where someone is when they take up
+  "leave the app if you like".
+- **Coach chat now pings.** `POST /coach/sessions/:id/messages` already tracked `clientAlive` for
+  the relay; when the socket went away mid-turn and her reply is on file, it sends "Cadence
+  replied" with her opening sentence as the body — a notification that says only "you have a
+  reply" makes someone open the app to learn nothing. Someone still watching gets nothing, because
+  they can already see it. Awaited, like all post-stream work (#195).
+- **No conditional copy.** An earlier pass gated the "I'll ping you" line on whether the device
+  could actually receive one. Owner: *"I don't know what you mean by making a promise… this is
+  just core functionality."* Right — the answer is to make registration work, not to write copy
+  that degrades around it.
+
+Remaining surfaces to hold to this rule as they land: food estimate/parse (fast today, so no
+ping), and the weekly check-in when it is built.
+
+### She described the tool instead of using it — and there was no tool for what he asked (2026-08-16)
+
+From the owner's chat, in order:
+
+> **User:** "Let's start by changing the farmer carries to dead hangs"
+> **Cadence:** *(coaching advice; no tool call)* "Do you want this as a permanent swap in the plan?"
+> **User:** "Just trying it today, we can decide after"
+> **User:** "Can you change the plan? Like in the app?"
+> **Cadence:** "Yes — right here. We talk through what should change, I put up a card showing the
+> edit, and you tap to apply it… **What do you want to adjust?**"
+
+Owner: *"She can't (or doesn't know she can) — I thought she had tools to do this? And then it
+almost feels like she forgets what adjustments I'm asking about."* Both halves are real, and they
+are two different bugs.
+
+**1. There was genuinely no tool for that edit.** `propose_plan_change` only did move / retime /
+resize / remove / add — all *structural*. "Swap farmer carries for dead hangs" changes what a
+session CONTAINS, and nothing could express it. She was right that she couldn't; she was wrong not
+to say so.
+
+The home for it already existed and was empty: `activities.how_to` is read by `prescribe-session`
+on every session it writes, and **nothing has ever written it**. A dormant column with a live
+reader — which is exactly what "make it permanent" needs, since writing it changes every future
+session of that commitment.
+
+- New edit action **`rework`**: sets `how_to` (and optionally the title), leaving the slot alone.
+- `how_to` now rides `PendingPlanActivity` through preview and commit. Latent bug found on the way:
+  `commitActivities` never mapped it, so *any* commit or re-plan would have erased an instruction
+  the user gave. Invisible only because nothing wrote the column yet.
+
+**2. She recited the capability manifest instead of acting on it.** Her answer to "can you change
+the plan?" is `coach-capabilities.ts` read back near-verbatim — and then she asked him to name the
+change he had named two turns earlier. The capability was real; the reach for it was not.
+
+- The manifest now ends with **"DO THESE, DO NOT DESCRIBE THEM"**: call the tool in the same reply;
+  explaining the mechanism is not doing it and reads as a no; never make them repeat a change they
+  already named — propose it and let the card be what they correct.
+- `propose_plan_change`'s description says the same at the point of use, and carries a worked
+  `rework` example. Still ≤800 chars and still passes the description audit, which caught two real
+  slips while writing it (a missing "Use", and the dropped "does NOT change anything" safety gate).
+- The manifest's size budget went 4000 → **4600**. It was already sitting at 3988, so it was a
+  saturated guardrail, not a lax one; raised deliberately, with the reason in the test, because it
+  is injected once per session (~1.1k tokens per conversation) and the text buying the increase is
+  the text that stops her narrating it. Ceiling kept — the next addition has to cut something.
+
+**Not fixed by this, and worth being clear about:** `plans.steer` (0034) records the ask only once
+a change *commits*. It does nothing for a change still being discussed. The fix for the
+"forgetting" is the instruction above, not the column.

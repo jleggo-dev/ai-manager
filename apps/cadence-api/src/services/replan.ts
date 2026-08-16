@@ -12,6 +12,7 @@ import { observedHealthForPlanning, PLAN_COUNTS_NOTE } from './observed-health.t
 import { type CommitResult, type PlanFlowResult } from './plan-synthesis.ts';
 import { planSynthesize, planSynthesizeVetCommit } from './plan-fanout.ts';
 import { confirmPendingPlan } from './plan-commit-flow.ts';
+import { sendPlanReadyPush } from './plan-ready-push.ts';
 import type { Goal } from '@cadence/shared';
 
 const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10);
@@ -145,13 +146,29 @@ export async function previewReplan(userId: string, steer?: string): Promise<Pla
 
   const goalIds = inputs.goals.map((g) => g.goal_id);
   const note = s.note ?? '';
+  const createdAt = new Date().toISOString();
   await setPendingPlan(userId, {
     activities: s.activities!,
     note,
     rationale: s.rationale,
+    // Carried so the COMMIT can write it onto the plan version (0034). The ask outlives the
+    // prompt it was typed into: without this the week changes and nothing records why.
+    ...(steer?.trim() ? { steer: steer.trim() } : {}),
     goal_ids: goalIds,
-    created_at: new Date().toISOString(),
+    created_at: createdAt,
   });
+
+  // Measured at 271s for four goals (scripts/probe-replan-preview.ts), and it grows with every
+  // goal added — nobody watches a phone for four and a half minutes. The sheet now says so and
+  // invites them to leave, which makes the ping the other half of that promise rather than noise.
+  // Keyed on createdAt so re-running a preview pings again, but a retry of the same one does not.
+  await sendPlanReadyPush(
+    userId,
+    'replan_ready',
+    createdAt,
+    'Your adjusted week is ready',
+    'Come have a look — nothing changes until you say so.',
+  );
 
   return { status: 'proposed', proposal: { activities: s.activities!, note, rationale: s.rationale } };
 }

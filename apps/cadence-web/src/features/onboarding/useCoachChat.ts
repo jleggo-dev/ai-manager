@@ -13,6 +13,7 @@ import {
   getCurrentCoach,
   prepareCoachFoodAction,
   stopCoachTurn,
+  notifyOnCoachReply,
   type CoachFoodAction,
 } from '../../lib/api.ts';
 import { capabilities } from '../../lib/capability/index.ts';
@@ -49,6 +50,23 @@ function turnsWindow(turns: CoachTurn[], nextUser: string): string {
   return prior ? `${prior}\nUser: ${nextUser}` : `User: ${nextUser}`;
 }
 
+/**
+ * The goals the Broker has quietly picked up out of the conversation, for the chips above the
+ * composer. Outside the hook because it needs nothing from it but a setter, and a hook body that
+ * keeps inlining one-off async fetches is how a 150-line ceiling gets hit (CLAUDE.md).
+ *
+ * Silent on failure by design: these chips are a bonus on top of the conversation, and an error
+ * banner over a chat because a decoration could not load is worse than no chips.
+ */
+async function loadCapturedGoals(set: (g: CapturedGoal[]) => void): Promise<void> {
+  try {
+    const r = await getReview();
+    set(r.goals.map((g) => ({ id: g.goal_id, title: g.title, area: g.area })));
+  } catch {
+    /* the chips are a bonus; never let them surface as a failure */
+  }
+}
+
 export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs = {}) {
   const wait = delay ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const [turns, setTurns] = useState<CoachTurn[]>([]);
@@ -63,21 +81,14 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
   const stopped = useRef(false);
   const healer = useResumeHealer({
     recover: () => recoverFromServer(),
+    // Leaving mid-turn arms the "Cadence replied" ping — the server cannot see it happen.
+    onLeave: () => void notifyOnCoachReply(sessionId.current),
     onHealed: () => {
       abort.current?.abort();
       abort.current = null;
       setStreaming(false);
     },
   });
-
-  async function refreshCaptured() {
-    try {
-      const r = await getReview();
-      setCapturedGoals(r.goals.map((g) => ({ id: g.goal_id, title: g.title, area: g.area })));
-    } catch {
-      /* ignore */
-    }
-  }
 
   // Restore the conversation from the server (source of truth) before painting.
   useEffect(() => {
@@ -93,7 +104,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
         /* fresh start */
       })
       .finally(() => {
-        refreshCaptured();
+        void loadCapturedGoals(setCapturedGoals);
         setRestored(true);
       });
   }, []);
@@ -201,7 +212,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       abort.current = null;
       setStreaming(false);
       healer.end();
-      setTimeout(refreshCaptured, 900);
+      setTimeout(() => void loadCapturedGoals(setCapturedGoals), 900);
     }
   }
 

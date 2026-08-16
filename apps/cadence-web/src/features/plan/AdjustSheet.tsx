@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react';
-import type { PendingPlanActivity } from '@cadence/shared';
-import { confirmGoals, previewReplan, replan, dismissReplanPreview, getPendingReplan } from '../../lib/api.ts';
-import { MicButton } from '../../components/MicButton.tsx';
+import { replan, dismissReplanPreview } from '../../lib/api.ts';
 import { Orb } from '../../components/Orb.tsx';
+import { SteerBox } from './SteerBox.tsx';
+import { useReplanPreview } from './useReplanPreview.ts';
 
 /**
  * "Adjust my plan" as a pop-up sheet (was a persistent bottom bar). Same suggest-never-
  * auto-apply flow: steer (optional, in the user's own words) → preview the coach's proposed
  * week → confirm or "Not now". The sheet owns the whole lifecycle; the parent just refreshes
- * on commit. Voice input on the steer box (MicButton).
+ * on commit. Voice input on the steer box (SteerBox).
+ *
+ * The synthesis behind "See the adjustment" runs about four and a half minutes — see
+ * useReplanPreview, which owns the waiting, the recovery and the honest copy. This file is the
+ * surface only. It gets the taller `sheet-compose` treatment while composing, because the ask is
+ * the whole point of the screen and it was being typed into two fixed lines at the bottom of a
+ * 78%-height sheet (owner, 2026-08-15: "There's more real-estate here that we can use").
  *
  * `mode='rebalance'` is the "review my whole plan" action: no steer box — it opens straight into a
  * no-steer preview (which, with fan-out enabled, runs the holistic reduce over every goal) so the
@@ -38,54 +44,21 @@ export function AdjustSheet({
   adoptCaptured?: boolean;
 }) {
   const [steer, setSteer] = useState(initialSteer ?? '');
-  const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState<{ activities: PendingPlanActivity[]; note: string } | null>(null);
+  const [committing, setCommitting] = useState(false);
   const [msg, setMsg] = useState('');
+  const preview = useReplanPreview({ steer: () => steer, adoptCaptured });
+  const busy = preview.busy || committing;
 
   // Rebalance opens straight into a whole-plan preview — the review IS the action, no steer needed.
   useEffect(() => {
-    if (mode === 'rebalance') void doPreview();
+    if (mode === 'rebalance') void preview.start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function doPreview() {
-    if (busy) return;
-    setBusy(true);
-    setMsg('');
-    try {
-      // Before synthesis, not after: a captured-but-unconfirmed goal is invisible to the re-plan.
-      if (adoptCaptured) await confirmGoals().catch(() => undefined);
-      const r = await previewReplan(steer);
-      if (r.status === 'proposed' && r.proposal) setPreview(r.proposal);
-      else setMsg(r.violations?.join('; ') || "I couldn't put together an adjustment just now — try again in a bit.");
-    } catch {
-      // The FETCH died — on a phone, usually the app being backgrounded while the server kept
-      // synthesizing. previewReplan persists its result as pending_plan the moment it finishes,
-      // so poll for THAT before reporting a failure that may not have happened (and before
-      // paying for a second synthesis).
-      const deadline = Date.now() + 3 * 60_000;
-      while (Date.now() < deadline) {
-        try {
-          const { proposal } = await getPendingReplan();
-          if (proposal) {
-            setPreview(proposal);
-            setBusy(false);
-            return;
-          }
-        } catch {
-          /* offline blip — keep polling */
-        }
-        await new Promise((res) => setTimeout(res, 5_000));
-      }
-      setMsg('Something hiccuped on my end — try again in a moment.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function doConfirm() {
     if (busy) return;
-    setBusy(true);
+    setCommitting(true);
+    setMsg('');
     try {
       const r = await replan();
       if (r.status === 'committed') {
@@ -94,11 +67,11 @@ export function AdjustSheet({
         return;
       }
       setMsg("I couldn't adjust it just now — give it another try in a bit.");
-      setPreview(null);
+      preview.clearProposal();
     } catch {
       setMsg('Something hiccuped on my end — try again in a moment.');
     } finally {
-      setBusy(false);
+      setCommitting(false);
     }
   }
 
@@ -107,15 +80,20 @@ export function AdjustSheet({
     onClose();
   }
 
+  const p = preview.proposal;
+  // Tall for the WHOLE adjust flow, not just while the box has focus: shrinking the sheet the
+  // instant they tap 'See the adjustment' is a jump on a screen that then sits still for minutes.
+  const composing = !p && mode === 'adjust';
+
   return (
     <>
       <div className="sheet-scrim" onClick={busy ? undefined : onClose} aria-hidden />
-      <div className="sheet" role="dialog" aria-label="Adjust my plan">
+      <div className={`sheet${composing ? ' sheet-compose' : ''}`} role="dialog" aria-label="Adjust my plan">
         <div className="sheet-grab" aria-hidden />
         <div className="sheet-head">
           <div className="sheet-title">
             <b>
-              {preview
+              {p
                 ? mode === 'rebalance'
                   ? "Here's your rebalanced plan"
                   : "Here's the adjustment I'd make"
@@ -124,7 +102,7 @@ export function AdjustSheet({
                   : 'Adjust my plan'}
             </b>
             <span>
-              {preview
+              {p
                 ? ''
                 : mode === 'rebalance'
                   ? 'Reviewing every goal so your whole week stays balanced.'
@@ -136,53 +114,44 @@ export function AdjustSheet({
           </button>
         </div>
 
-        {!preview ? (
-          mode === 'rebalance' ? (
-            <div className="sheet-body">
+        {!p ? (
+          <div className="sheet-body">
+            {preview.busy ? (
+              <Waiting note={preview.note} elapsedMs={preview.elapsedMs} />
+            ) : mode === 'rebalance' ? (
               <div className="sess-note">
                 <Orb />
-                <span>
-                  {busy
-                    ? 'Looking across all your goals and rebalancing your week…'
-                    : msg || 'Reviewing your whole plan so nothing is over- or under-loaded.'}
-                </span>
+                <span>{preview.error || 'Reviewing your whole plan so nothing is over- or under-loaded.'}</span>
               </div>
-              {msg && !busy && (
-                <button className="lockbtn" onClick={doPreview}>
-                  Try again
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="sheet-body">
-              <div className="logbox-label">Anything specific you want changed?</div>
-              <div className="steer-row">
-                <textarea
-                  className="steer-in"
+            ) : (
+              <>
+                <div className="logbox-label">Anything specific you want changed?</div>
+                <SteerBox
                   value={steer}
-                  onChange={(e) => setSteer(e.target.value)}
-                  placeholder="e.g. one run day isn't enough — I want three"
-                  rows={2}
+                  onChange={setSteer}
                   disabled={busy}
+                  placeholder="e.g. one run day isn't enough — I want three"
+                  autoFocus
                 />
-                <MicButton value={steer} onChange={setSteer} disabled={busy} />
-              </div>
-              {msg && <div className="auth-error">{msg}</div>}
-              <button className="lockbtn" onClick={doPreview} disabled={busy}>
-                {busy ? 'Looking at your options…' : 'See the adjustment →'}
+                {preview.error && <div className="auth-error">{preview.error}</div>}
+              </>
+            )}
+            {!preview.busy && (
+              <button className="lockbtn" onClick={() => void preview.start()}>
+                {preview.error ? 'Try again' : 'See the adjustment →'}
               </button>
-            </div>
-          )
+            )}
+          </div>
         ) : (
           <div className="sheet-body">
-            {preview.note && (
+            {p.note && (
               <div className="sess-note">
                 <Orb />
-                <span>{preview.note}</span>
+                <span>{p.note}</span>
               </div>
             )}
             <div className="proposal-levers" style={{ marginTop: 10 }}>
-              {preview.activities.map((a, i) => (
+              {p.activities.map((a, i) => (
                 <span className="lever-chip" key={i}>
                   {a.title} · {a.cadence}
                 </span>
@@ -191,7 +160,7 @@ export function AdjustSheet({
             {msg && <div className="auth-error">{msg}</div>}
             <div className="proposal-actions">
               <button className="proposal-accept" onClick={doConfirm} disabled={busy}>
-                {busy ? 'Setting it…' : 'Yes, adjust it'}
+                {committing ? 'Setting it…' : 'Yes, adjust it'}
               </button>
               <button className="proposal-dismiss" onClick={doDismiss} disabled={busy}>
                 Not now
@@ -201,5 +170,21 @@ export function AdjustSheet({
         )}
       </div>
     </>
+  );
+}
+
+/** The four-minute wait, told the truth about itself: what she's doing, how long it's been, and
+ *  that leaving is fine. The elapsed clock is the part that proves the screen isn't frozen. */
+function Waiting({ note, elapsedMs }: { note: string; elapsedMs: number }) {
+  const s = Math.floor(elapsedMs / 1000);
+  const clock = s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+  return (
+    <div className="sess-note adjust-wait">
+      <Orb />
+      <span>
+        {note}
+        <em className="adjust-elapsed">{clock} · I’ll send a notification when it’s ready</em>
+      </span>
+    </div>
   );
 }

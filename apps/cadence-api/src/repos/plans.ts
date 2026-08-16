@@ -14,10 +14,10 @@ export async function getActivePlan(userId: string, db: SqlExecutor = sql): Prom
 
 export async function insertPlan(userId: string, plan: Partial<Plan>, db: SqlExecutor = sql): Promise<Plan> {
   const [row] = await db<Plan[]>`
-    insert into cadence.plans (user_id, goal_ids, generated_by, version, status, rationale)
+    insert into cadence.plans (user_id, goal_ids, generated_by, version, status, rationale, steer)
     values (
       ${userId}, ${plan.goal_ids ?? []}::uuid[], ${plan.generated_by ?? 'coach'},
-      ${plan.version ?? 1}, ${plan.status ?? 'active'}, ${plan.rationale ?? null}
+      ${plan.version ?? 1}, ${plan.status ?? 'active'}, ${plan.rationale ?? null}, ${plan.steer ?? null}
     )
     returning *`;
   if (!row) throw new Error('insertPlan: no row returned');

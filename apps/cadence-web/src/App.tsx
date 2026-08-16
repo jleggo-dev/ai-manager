@@ -18,6 +18,7 @@ import { PhoneFrame } from './components/PhoneFrame.tsx';
 import { CoachFaceProvider } from './features/coach/CoachFaceProvider.tsx';
 import { getPlan, setAuthToken, isDevMode, getHealthDigest, postHealthDigest, postWorkoutHistory } from './lib/api.ts';
 import { syncPlanLocalNotifications } from './lib/local-notifications-sync.ts';
+import { usePushRegistered } from './lib/usePushRegistered.ts';
 import { capabilities } from './lib/capability/index.ts';
 import { maybeRefreshHealthDigest } from './features/onboarding/health-digest.ts';
 import { supabase } from './lib/supabase.ts';
@@ -77,6 +78,11 @@ function CoachApp({ session }: { session: Session | null }) {
    */
   const [justBuilt, setJustBuilt] = useState<false | 'card' | 'fresh'>(false);
   const anonymous = isAnonymousSession(session);
+
+  // Notifications are core functionality, so registration is core setup: from launch, on every
+  // screen, retried on resume. The one place that used to ask was the onboarding build screen,
+  // which is why device_tokens was empty and no push Cadence ever sent could be delivered.
+  usePushRegistered(screen !== 'loading');
 
   useEffect(() => {
     getPlan()

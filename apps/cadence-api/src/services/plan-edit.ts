@@ -47,7 +47,7 @@ const DAY_CODES: Record<string, string> = {
   su: 'SU',
 };
 
-export type PlanEditAction = 'move' | 'retime' | 'resize' | 'remove' | 'add';
+export type PlanEditAction = 'move' | 'retime' | 'resize' | 'remove' | 'add' | 'rework';
 
 export interface PlanEdit {
   action: PlanEditAction;
@@ -59,8 +59,14 @@ export interface PlanEdit {
   time_of_day?: string;
   /** `resize`: minutes per session. */
   duration_min?: number;
-  /** `add` only. */
+  /** `add`: what the new commitment is called. `rework`: a new name for it, if the change earns one. */
   title?: string;
+  /**
+   * `rework`: what the session should CONTAIN from now on, in plain words — "dead hangs instead
+   * of farmers carries for the grip work". Fed to prescribe-session, so it changes every future
+   * session of this commitment, not just the next one.
+   */
+  how_to?: string;
   /** `add`: how often, in the same day vocabulary as `move`. Defaults to weekly on one day. */
   goal_title?: string;
   why?: string;
@@ -123,6 +129,7 @@ function toPending(a: Activity, goalTitle?: string): PendingPlanActivity {
     ...(a.goal_id ? { goal_id: a.goal_id } : {}),
     ...(goalTitle ? { goal_title: goalTitle } : {}),
     ...(a.why ? { why: a.why } : {}),
+    ...(a.how_to ? { how_to: a.how_to } : {}),
     ...(a.suggested ? { suggested: a.suggested } : {}),
   };
 }
@@ -196,6 +203,34 @@ export function applyPlanEdits(
       found.recurrence = withDays(found.recurrence, byday);
       found.cadence = describeRecurrence(found.recurrence);
       changes.push(`Move ${found.title}: ${was} → ${found.cadence}`);
+      continue;
+    }
+    /**
+     * Change what a commitment CONTAINS, without touching when or how often it happens.
+     *
+     * The gap this closes, from the chat of 2026-08-16: "let's start by changing the farmer
+     * carries to dead hangs". Every other action here is structural — days, times, minutes,
+     * add, drop — so the one edit the user actually asked for was the one thing the coach could
+     * not do. She talked about it, offered to make it permanent, and had nowhere to put the
+     * answer; the swap survived exactly as long as the conversation did.
+     *
+     * `how_to` is the right home because prescribe-session already reads it: writing here changes
+     * every future session of this commitment, which is what "make it permanent" means. The title
+     * is optional and only for when the change earns a new name ("Grip finisher — dead hangs").
+     */
+    if (edit.action === 'rework') {
+      const how = edit.how_to?.trim();
+      const newTitle = edit.title?.trim();
+      if (!how && !newTitle) {
+        rejected.push(`Couldn't tell what ${found.title} should become.`);
+        continue;
+      }
+      const was = found.title;
+      if (how) found.how_to = how;
+      if (newTitle) found.title = newTitle;
+      changes.push(
+        newTitle && newTitle !== was ? `${was} → ${newTitle}${how ? `: ${how}` : ''}` : `${was}: ${how ?? 'renamed'}`,
+      );
       continue;
     }
     if (edit.action === 'retime') {

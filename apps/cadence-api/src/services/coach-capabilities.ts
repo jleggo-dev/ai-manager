@@ -40,9 +40,10 @@ export const CAPABILITIES: CapabilityGroup[] = [
   {
     heading: 'Your rhythm',
     can: [
-      'build a weekly rhythm from your goals, and rebuild it right here in the conversation whenever something changes — a new goal, a different week, one thing too many; you never have to go to a screen for it',
+      'build a weekly rhythm from your goals, and rebuild it right here in the conversation when something changes — you never have to go to a screen for it',
       'set up a detour for travel, illness, or a rough stretch — your plan pauses, it never resets',
       'prescribe a specific session for today, and log what you actually did when you tell me',
+      'change ONE thing in the plan without rebuilding it — move, retime, resize, drop or add a session, or swap what one contains (dead hangs instead of farmers carries)',
       'give you a weekly check-in on how you showed up, and flag what I am noticing',
     ],
   },
@@ -110,6 +111,22 @@ export function renderCapabilities(opts: { healthAvailable?: boolean; healthAnsw
         'nothing recorded yet, not a missing permission.',
     );
   }
+  /**
+   * This list describes abilities; it must never become a script for describing them.
+   *
+   * Observed 2026-08-16. The user said "let's change the farmer carries to dead hangs", then "can
+   * you change the plan? like in the app?" — and she answered with this manifest, near verbatim:
+   * *"Yes — right here. We talk through what should change, I put up a card showing the edit, and
+   * you tap to apply it… What do you want to adjust?"* She never called the tool, and she asked
+   * them to name the change they had just named. From the user's side that is a coach who cannot
+   * do it and cannot remember being asked. The capability was real; the reach for it was not.
+   */
+  lines.push(
+    'DO THESE, DO NOT DESCRIBE THEM: when they ask for something above, call the tool in that same ' +
+      'reply. Explaining the mechanism ("I put up a card, you tap it") is not doing it and reads as ' +
+      'a no. Never make them repeat a change they already named — propose it, and let the card be ' +
+      'what they correct.',
+  );
   lines.push(`Cannot do yet: ${NOT_YET.join('; ')}.`);
   lines.push(
     'If they ask for something on the "cannot do yet" list, or for anything not above: say plainly that ' +

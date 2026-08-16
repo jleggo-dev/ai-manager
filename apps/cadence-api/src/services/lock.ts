@@ -11,8 +11,7 @@ import { observedHealthForPlanning } from './observed-health.ts';
 import { type PlanFlowResult } from './plan-synthesis.ts';
 import { planSynthesize } from './plan-fanout.ts';
 import { confirmPendingPlan } from './plan-commit-flow.ts';
-import { apnsConfigured, sendPushToUser } from './push-apns.ts';
-import { claimNotificationSlot, settleNotification } from '../repos/notifications.ts';
+import { sendPlanReadyPush } from './plan-ready-push.ts';
 
 /**
  * First half of capture → confirm → preview → lock (spec §6.1, §6.3, §C8.6): deterministic
@@ -100,49 +99,15 @@ export async function confirmLock(userId: string, occurrenceDays = 14): Promise<
   // a pocket. FIRST plan only (version 1): a rebuild is agreed in a live conversation with the
   // person right there, and pinging the phone in their hand is noise.
   if (result.status === 'committed' && result.version === 1) {
-    await sendReadyPush(userId, result.planId ?? `v${result.version}`);
+    await sendPlanReadyPush(
+      userId,
+      'plan_ready',
+      result.planId ?? `v${result.version}`,
+      'Your first week is ready',
+      'Come take a look — and push back on anything.',
+    );
   }
   return result;
-}
-
-/**
- * The ready-ping, sent and WRITTEN DOWN.
- *
- * Deliberately not routed through `notify()`: that dispatcher enforces the nudge policy — opt-in
- * default, quiet hours, daily cap — which is right for ambient coaching and wrong here. This is
- * transactional. The person asked for a plan, the screen told them they could leave, and a build
- * that finishes at 9:05pm still has to reach them.
- *
- * What it DOES borrow is the ledger. This push failed silently for weeks in the only way that
- * matters — the owner kept reporting "I never got a notification" and there was nothing to look
- * at, because a direct `sendPushToUser` records nothing and its `.catch()` went to a console on a
- * reclaimed serverless instance. Now every outcome lands in `cadence.notifications`, including
- * "no devices ever registered", which is what the data says has actually been happening.
- *
- * Awaited for the same reason as the coach reply (#195): a promise left running past the handler
- * is a promise this platform may never finish.
- */
-async function sendReadyPush(userId: string, target: string): Promise<void> {
-  const title = 'Your first week is ready';
-  const body = 'Come take a look — and push back on anything.';
-  // Claiming the slot first also makes this idempotent: a retried commit cannot double-ping.
-  const id = await claimNotificationSlot(userId, 'plan_ready', target, title, body).catch(() => null);
-  try {
-    if (!apnsConfigured()) {
-      if (id) await settleNotification(id, 'skipped', 'not_configured');
-      return;
-    }
-    const results = await sendPushToUser(userId, title, body);
-    const delivered = results.filter((r) => r.status === 200).length;
-    if (!id) return;
-    if (delivered > 0) return void (await settleNotification(id, 'sent', `${delivered}/${results.length} device(s)`));
-    const why = results.map((r) => `${r.status}${r.reason ? ` ${r.reason}` : ''}`).join('; ') || 'no_devices';
-    await settleNotification(id, 'failed', why.slice(0, 400));
-  } catch (e) {
-    // A plan is committed. Nothing about telling them may ever undo that.
-    console.warn('[lock] ready-push failed (plan is committed regardless):', e);
-    if (id) await settleNotification(id, 'failed', String(e).slice(0, 400)).catch(() => {});
-  }
 }
 
 /** Discard the pending preview without committing — the user goes back to Review to adjust. */

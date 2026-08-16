@@ -18,6 +18,7 @@ import { renderScreenNotes } from '../services/goal-screen.ts';
 import { runDetourCapture } from '../services/detour-capture.ts';
 import { assembleTurn } from '../services/coach-context.ts';
 import { relayCoachTurnWithTools } from '../services/coach-tool-loop.ts';
+import { sendPlanReadyPush } from '../services/plan-ready-push.ts';
 import { coachToolDefinitions, coachToolNames, executeCoachToolCalls } from '../services/coach-tools.ts';
 import { buildContextPack } from '../services/context-pack.ts';
 import { ensureDateStamped } from '../services/date-context.ts';
@@ -28,7 +29,9 @@ import {
   createConversation,
   getConversationByAiSession,
   getLatestConversation,
+  getNotifyOnReply,
   setInFlightResponse,
+  setNotifyOnReply,
   touchConversation,
 } from '../repos/conversations.ts';
 import { getActivePlan, getFirstPlanCommitAt } from '../repos/plans.ts';
@@ -141,6 +144,18 @@ router.post('/sessions', async (req: Request, res: Response) => {
 const STALE_IDLE_MS = 7 * 86_400_000;
 /** Past this, an in-flight marker is a leftover from a turn that died, not a live reply. */
 const IN_FLIGHT_MAX_MS = 5 * 60_000;
+
+/**
+ * The notification body: her opening sentence, so the lock screen carries the answer and not just
+ * the fact that one exists. Trimmed at a sentence boundary where there is one within reason —
+ * iOS truncates anyway, and a clean stop reads better than an ellipsis mid-word.
+ */
+export function firstLine(content: string): string {
+  const flat = content.replace(/\s+/g, ' ').trim();
+  const stop = flat.search(/[.!?](\s|$)/);
+  const cut = stop > 0 && stop < 140 ? flat.slice(0, stop + 1) : flat.slice(0, 140);
+  return cut.length < flat.length && !/[.!?]$/.test(cut) ? `${cut.trimEnd()}…` : cut;
+}
 router.get('/current', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
@@ -306,10 +321,15 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       }
     }
 
+    // Read BEFORE the turn's state is torn down: the client may have armed this at any point
+    // while the reply was being written, and clearing it below is what keeps it from firing again.
+    const armed = await getNotifyOnReply(sessionIdParam).catch(() => false);
+
     // Cleared only NOW, after the reply is safely on file. Clearing it first opened the exact
     // window this bug lived in: a returning client polls, sees `generating: false` with no new
     // message, and concludes the turn died — while it was still being written down.
     await setInFlightResponse(sessionIdParam, null).catch(() => {});
+    if (armed) await setNotifyOnReply(sessionIdParam, false).catch(() => {});
 
     // writeChunk may have flipped clientAlive on a failed write; also honor stream result.
     if (clientDropped) clientAlive = false;
@@ -319,6 +339,40 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       } catch {
         /* client already gone */
       }
+    }
+
+    /**
+     * They left, and her answer is on file. Tell them.
+     *
+     * The rule (owner, 2026-08-16): *"If I send a chat message to Cadence and I leave the screen:
+     * Cadence always keeps running / working on the prompt. Cadence always sends a notification
+     * when done. This is true regardless of phase or where I'm chatting."* The first half has been
+     * true since #195. The second half has never been true anywhere except the first-plan build,
+     * so leaving a slow turn meant coming back to check by hand — the exact behaviour the app is
+     * supposed to make unnecessary.
+     *
+     * TWO signals, because one of them is not enough:
+     *  - `clientAlive === false` — the socket went away mid-turn. True, but LATE: iOS does not
+     *    kill a connection the instant it suspends a webview, so a reply finishing inside that
+     *    grace period is written to a socket nobody is reading and this stays true.
+     *  - `armed` — the client said "I'm going to background" while it still could (0035). This is
+     *    the only signal that is correct at the moment it matters, because leaving is a fact only
+     *    the client can observe.
+     * Someone still watching triggers neither, and gets nothing — they can already see it.
+     * Capacitor shows foreground banners by default, so "notify always" would banner over an
+     * active chat; these two gates are what make "always" mean "always when you actually left".
+     *
+     * Awaited, like everything else after the stream: a promise left running past the handler is
+     * a promise this platform may never finish (#195).
+     */
+    if ((armed || !clientAlive) && content.trim()) {
+      await sendPlanReadyPush(
+        userId,
+        'coach_reply',
+        `${sessionIdParam}:${responseId ?? Date.now()}`,
+        'Cadence replied',
+        firstLine(content),
+      );
     }
 
     // Dev X-ray + durable log of the coach turn (responseId + drop flag aid diagnostics
@@ -378,6 +432,38 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       res.write(`data: ${JSON.stringify({ error: 'stream failed', kind: aim.kind })}\n\n`);
       res.end();
     }
+  }
+});
+
+/**
+ * POST /coach/sessions/:id/notify-on-reply — "I'm leaving; tell me when she's done."
+ *
+ * Sent by the client the instant iOS backgrounds it with a turn in flight, inside the short window
+ * where JavaScript still runs. It exists because the server cannot see this for itself: a
+ * suspended webview's socket can stay open, so the reply lands on a connection nobody is reading
+ * and the turn looks watched. Leaving is a fact only the client has, so the client states it.
+ *
+ * Ownership checked against `cadence.conversations`, like Stop — a session id is the only thing
+ * standing between one user and another's turn, and here it would aim a notification.
+ *
+ * Only arms while something is actually generating. A thread armed with no turn in flight is a
+ * ping with nothing to announce, and the clearing path (which runs when a reply lands) would never
+ * come to disarm it.
+ */
+router.post('/sessions/:id/notify-on-reply', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const sessionId = req.params.id as string;
+  try {
+    const conv = await getConversationByAiSession(sessionId);
+    if (!conv || conv.user_id !== userId) return void res.status(404).json({ error: 'No such session' });
+    if (!conv.in_flight_response_id) return void res.json({ armed: false, reason: 'nothing-in-flight' });
+    await setNotifyOnReply(sessionId, true);
+    res.json({ armed: true });
+  } catch (err) {
+    // Soft-fail: this is the notification, never the reply. The dead-socket path still covers the
+    // common case, and the client has already backgrounded — there is nobody to show an error to.
+    console.error('[POST /coach/sessions/:id/notify-on-reply]', err);
+    res.status(200).json({ armed: false });
   }
 });
 

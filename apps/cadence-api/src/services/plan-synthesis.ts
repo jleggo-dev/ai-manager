@@ -142,6 +142,9 @@ function shapeActivity(a: Partial<Activity>, goals: Goal[]): PendingPlanActivity
     // explanatory sentences, and the old slice(0, 160) was silently undoing exactly that —
     // truncating the why at the moment it stopped being a label and started being coaching.
     why: typeof why === 'string' && why.trim() ? why.trim().slice(0, 600) : undefined,
+    ...(typeof (a as Record<string, unknown>).how_to === 'string' && (a as Record<string, unknown>).how_to
+      ? { how_to: String((a as Record<string, unknown>).how_to) }
+      : {}),
     // Coach-proposed adjacent support (0031). Strictly `=== true` so junk shapes stay false-y.
     suggested: (a as Record<string, unknown>).suggested === true || undefined,
   };
@@ -283,6 +286,8 @@ export async function commitActivities(
     activities: PendingPlanActivity[];
     note: string;
     rationale?: string;
+    /** The user's own words that produced this version, if they steered it (0034). */
+    steer?: string;
     goalIds: string[];
     occurrenceDays?: number;
   },
@@ -294,6 +299,12 @@ export async function commitActivities(
     category: a.category,
     goal_id: a.goal_id, // links the committed activity to its objective (insertActivities writes it)
     why: a.why, // rationale persists at commit (0012) — the coach walks the ladder from it later
+    // What the session should CONTAIN, when the user has said ("dead hangs, not farmers carries").
+    // Omitted here until now, which meant every commit and every re-plan silently erased an
+    // instruction the person had given — and prescribe-session, which reads it, went back to
+    // guessing. Nothing wrote the column yet, so the loss was invisible; propose_plan_change's
+    // `rework` writes it, and this is what keeps it alive across the next version.
+    how_to: a.how_to,
     suggested: a.suggested, // coach-proposed adjacent support (0031) — dossier data post-commit
     schedule: { recurrence: a.recurrence, time_of_day: a.time_of_day, duration_min: a.duration_min },
     target: a.target,
@@ -311,7 +322,13 @@ export async function commitActivities(
     await supersedeActivePlans(userId, tx);
     const p = await insertPlan(
       userId,
-      { goal_ids: opts.goalIds, version: v, status: 'active', rationale: opts.rationale || null },
+      {
+        goal_ids: opts.goalIds,
+        version: v,
+        status: 'active',
+        rationale: opts.rationale || null,
+        steer: opts.steer || null,
+      },
       tx,
     );
     const acts = await insertActivities(userId, p.plan_id, proposed, tx);
