@@ -257,6 +257,7 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     const t0 = Date.now();
     const { content, promptTokens, completionTokens, model, responseId, firstTokenMs, clientDropped } =
       await relayCoachTurnWithTools(
+        userId,
         response.body,
         {
           toolNames: coachToolNames(),

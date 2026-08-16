@@ -1,4 +1,5 @@
 import type { CoachActivityFrame } from '@cadence/shared';
+import { logAi } from './ai-log.ts';
 import {
   createCoachStreamAccumulateState,
   relayAndAccumulate,
@@ -37,6 +38,7 @@ export interface CoachToolLoopDeps {
 }
 
 export async function relayCoachTurnWithTools(
+  userId: string,
   firstBody: ReadableStream<Uint8Array> | null | undefined,
   deps: CoachToolLoopDeps,
   options: Omit<RelayAndAccumulateOptions, 'state' | 'suppressDone'> = {},
@@ -89,6 +91,29 @@ export async function relayCoachTurnWithTools(
       break;
     }
     toolRounds++;
+  }
+
+  /**
+   * A turn that looked a tool up and never ran it.
+   *
+   * The two-hop tail (`find_tools` → `use_tool`) buys reads that cost nothing until asked for, and
+   * it costs this: she can complete hop one and stop. On 2026-08-16 that is exactly what happened —
+   * `find_tools {"query":"update constraints remove injury"}` returned `update_constraint` with
+   * full instructions, no `use_tool` followed, and she told the owner the constraint was removed.
+   * The hierarchy worked; the follow-through did not.
+   *
+   * `find_tools` already ends with "call use_tool now", so more prose is not the answer. What was
+   * missing is that the drop was INVISIBLE — a dangling intent nobody could count. This is a
+   * machine-checkable signal, recorded so the eval and any future fix have something to measure.
+   */
+  const called = new Set(state.functionCalls.map((c) => c.name));
+  if (called.has('find_tools') && !called.has('use_tool')) {
+    void logAi(userId, {
+      kind: 'coach_tool',
+      input: { calls: [...called].map((name) => ({ name, arguments: null })) },
+      output: { results: [] },
+      meta: { count: 0, names: [...called], danglingLookup: true },
+    }).catch(() => {});
   }
 
   // The one real terminal, whatever happened above — the client is waiting on it.

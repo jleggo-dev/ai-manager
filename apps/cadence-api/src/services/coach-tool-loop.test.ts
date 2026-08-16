@@ -44,6 +44,7 @@ describe('relayCoachTurnWithTools', () => {
   it('plain turn: relays deltas, suppresses upstream terminals, writes exactly one [DONE]', async () => {
     const { writes, writeChunk } = collectWrites();
     const result = await relayCoachTurnWithTools(
+      'u1',
       stream([delta('Hello'), delta(' there'), DONE, complete('r1'), DONE]),
       { toolNames: new Set(['get_weight']), execute: vi.fn(), submit: vi.fn() },
       { writeChunk },
@@ -62,6 +63,7 @@ describe('relayCoachTurnWithTools', () => {
     );
     const submit = vi.fn(async () => stream([delta('You are at 88.5 kg.'), complete('r2'), DONE]));
     const result = await relayCoachTurnWithTools(
+      'u1',
       stream([delta('Let me check your file… '), complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
       { toolNames: new Set(['get_weight']), execute, submit },
       { writeChunk },
@@ -78,6 +80,7 @@ describe('relayCoachTurnWithTools', () => {
     const execute = vi.fn();
     const submit = vi.fn();
     const result = await relayCoachTurnWithTools(
+      'u1',
       stream([delta('Hi'), complete('r1', [{ id: 't9', name: 'some_profile_tool_job' }]), DONE]),
       { toolNames: new Set(['get_weight']), execute, submit },
       {},
@@ -101,6 +104,7 @@ describe('relayCoachTurnWithTools', () => {
       ]);
     });
     const result = await relayCoachTurnWithTools(
+      'u1',
       stream([complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
       { toolNames: new Set(['get_weight']), execute, submit },
       {},
@@ -118,6 +122,7 @@ describe('relayCoachTurnWithTools', () => {
     });
     const submit = vi.fn();
     const result = await relayCoachTurnWithTools(
+      'u1',
       stream([delta('One sec… '), complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
       { toolNames: new Set(['get_weight']), execute, submit },
       { writeChunk },
@@ -134,6 +139,7 @@ describe('relayCoachTurnWithTools', () => {
     );
     const submit = vi.fn(async () => stream([delta('done'), complete('r2'), DONE]));
     await relayCoachTurnWithTools(
+      'u1',
       stream([complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
       { toolNames: new Set(['get_weight']), execute, submit },
       { onResponseId: (id) => void ids.push(id) },
