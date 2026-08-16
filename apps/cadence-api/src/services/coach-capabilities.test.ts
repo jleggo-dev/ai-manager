@@ -37,6 +37,17 @@ describe('coach capability manifest', () => {
     expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(4600);
   });
 
+  /**
+   * The duplicated-reply failure, 2026-08-16: on both turns that ran the tool loop — and neither
+   * that did not — her answer came back as two complete drafts concatenated. She writes a whole
+   * reply, calls the tool, and the continuation writes the whole reply again from scratch, because
+   * a Responses-API continuation is a fresh generation that does not know what already streamed.
+   * The lever we own is telling her to keep the pre-call line short.
+   */
+  it('tells her to keep the line before a tool call short, so the continuation cannot repeat it', () => {
+    expect(renderCapabilities({ healthAvailable: true })).toMatch(/ONE short line before a tool call/);
+  });
+
   /** The fix for a real device failure, so it is pinned rather than left to survive by luck. */
   it('tells her to call the tool rather than explain what the tool would do', () => {
     const out = renderCapabilities({ healthAvailable: true });

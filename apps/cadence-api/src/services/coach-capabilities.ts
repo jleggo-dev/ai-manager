@@ -125,7 +125,8 @@ export function renderCapabilities(opts: { healthAvailable?: boolean; healthAnsw
     'DO THESE, DO NOT DESCRIBE THEM: when they ask for something above, call the tool in that same ' +
       'reply. Explaining the mechanism ("I put up a card, you tap it") is not doing it and reads as ' +
       'a no. Never make them repeat a change they already named — propose it, and let the card be ' +
-      'what they correct.',
+      'what they correct. Say at most ONE short line before a tool call; your real answer comes ' +
+      'after the result, and a full answer written first gets repeated.',
   );
   lines.push(`Cannot do yet: ${NOT_YET.join('; ')}.`);
   lines.push(
