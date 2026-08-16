@@ -49,6 +49,10 @@ const TIEBREAK_PAIRS: Array<[string, string]> = [
   ['get_food_log', 'get_recipes'], // what they ate vs what they could make
 ];
 
+/** Every failure here points at the checklist, because the rule broken is written down there and
+ *  a bare array of names does not tell a newcomer what to do about it. */
+const HOW = 'see docs/cadence/TOOL-HARNESS.md → "Adding a tool: the checklist"';
+
 const defs = coachToolDefinitions();
 const byName = new Map(defs.map((d) => [d.function.name, d.function]));
 
@@ -64,12 +68,12 @@ describe('harness tool descriptions', () => {
         if (b.re.test(f.description)) hits.push(`${f.name}: ${b.re} (${b.why})`);
       }
     }
-    expect(hits).toEqual([]);
+    expect(hits, HOW).toEqual([]);
   });
 
   it('every coach-exposed tool says WHEN to use it', () => {
     const missing = defs.filter((d) => !/\bUse\b/.test(d.function.description)).map((d) => d.function.name);
-    expect(missing).toEqual([]);
+    expect(missing, HOW).toEqual([]);
   });
 
   it('every declared parameter is taught in the description too (the Broker never sees the JSON schema)', () => {
@@ -81,7 +85,7 @@ describe('harness tool descriptions', () => {
         if (!d.function.description.includes(`"${key}"`)) missing.push(`${d.function.name}.${key}`);
       }
     }
-    expect(missing).toEqual([]);
+    expect(missing, HOW).toEqual([]);
   });
 
   it('parameter descriptions are jargon-free and say their default', () => {
@@ -101,7 +105,7 @@ describe('harness tool descriptions', () => {
           bad.push(`${d.function.name}.${key}: does not say what happens without it`);
       }
     }
-    expect(bad).toEqual([]);
+    expect(bad, HOW).toEqual([]);
   });
 
   it('every confusable pair carries its tiebreak on at least one side', () => {
@@ -111,14 +115,14 @@ describe('harness tool descriptions', () => {
       const db = byName.get(b)?.description ?? RETRIEVAL_FUNCTIONS[b]?.description ?? '';
       if (!da.includes(b) && !db.includes(a)) uncovered.push(`${a} ↔ ${b}`);
     }
-    expect(uncovered).toEqual([]);
+    expect(uncovered, HOW).toEqual([]);
   });
 
   it('descriptions stay compact enough to be read, not skimmed', () => {
     const tooLong = Object.values(RETRIEVAL_FUNCTIONS)
       .filter((f) => f.description.length > 520)
       .map((f) => `${f.name} (${f.description.length})`);
-    expect(tooLong).toEqual([]);
+    expect(tooLong, HOW).toEqual([]);
   });
 
   /** Action tools get more room than a read — each carries a safety gate ("only when they have
@@ -129,7 +133,7 @@ describe('harness tool descriptions', () => {
     const tooLong = actions
       .filter((d) => d.function.description.length > 800)
       .map((d) => `${d.function.name} (${d.function.description.length})`);
-    expect(tooLong).toEqual([]);
+    expect(tooLong, HOW).toEqual([]);
     // Whether it commits on call or waits for a tap is the single most important thing a model
     // can know about an action tool, so saying it is not optional.
     const silent = actions
@@ -138,6 +142,6 @@ describe('harness tool descriptions', () => {
           !/take effect immediately|does NOT change anything|Takes effect immediately/i.test(d.function.description),
       )
       .map((d) => d.function.name);
-    expect(silent).toEqual([]);
+    expect(silent, HOW).toEqual([]);
   });
 });

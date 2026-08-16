@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+
+/** Failures cite the checklist — the rule is written down and a bare name list does not say so. */
+const HOW = 'see docs/cadence/TOOL-HARNESS.md → "Adding a tool: the checklist"';
 import { searchTools, COACH_META_TOOLS } from './coach-meta-tools.ts';
 import {
   alwaysOnToolNames,
@@ -178,13 +181,13 @@ describe('every tool in the tail is filed where she can find it', () => {
   it('leaves nothing uncategorised', () => {
     const filed = new Set(TOOL_CATEGORIES.flatMap((c) => c.members));
     const orphans = onDemandToolNames().filter((n) => !filed.has(n));
-    expect(orphans).toEqual([]);
+    expect(orphans, HOW).toEqual([]);
   });
 
   it('files nothing that is not actually in the tail — a stale entry is a dead end', () => {
     const tail = new Set(onDemandToolNames());
     const stale = TOOL_CATEGORIES.flatMap((c) => c.members).filter((m) => !tail.has(m));
-    expect(stale).toEqual([]);
+    expect(stale, HOW).toEqual([]);
   });
 
   it('gives every category a plain-words label, since the manifest says them out loud', () => {

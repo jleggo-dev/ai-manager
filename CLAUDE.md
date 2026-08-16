@@ -58,6 +58,16 @@ field name; `resources`/`limits` for constraints; streaks that reset to zero; we
   split PR deletes an entry, the target is zero, and you must **never add a new file to it to pass
   CI — split the file instead.** (`ProcessingJobManager.tsx` proved a one-time size fix without a
   guardrail doesn't hold: it grew back 1,420 lines larger.)
+- **Adding a coach tool — read the checklist first, every time.**
+  [`docs/cadence/TOOL-HARNESS.md`](docs/cadence/TOOL-HARNESS.md) opens with *"Adding a tool: the
+  checklist"* — eight steps, marked for which are CI-enforced and which are judgement. The two
+  nobody else will catch: **does the dossier already carry this fact** (then it is not a tool, it
+  belongs in the context pack), and **which layer** — `ALWAYS_ACTIONS` costs ~190 tokens on every
+  message forever, everything else is free until she asks for it. Tool descriptions, categories,
+  and declared-equals-executable are gated by `coach-meta-tools.test.ts` and
+  `retrieval/description-audit.test.ts`; **what a tool hands BACK is not gated yet**, and that gap
+  is what let a crash read as "nothing on file" for weeks. Touching the always-on list means
+  running `npm run eval:tools`.
 - **Ship / agent workflow:** follow
   [`.cursor/skills/development-workflow/SKILL.md`](.cursor/skills/development-workflow/SKILL.md)
   (CI must be green — or intentionally skipped with a documented reason — before merge and before
