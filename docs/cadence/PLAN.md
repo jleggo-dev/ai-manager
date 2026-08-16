@@ -5901,3 +5901,51 @@ moved — this adjustment IS the coaching, and it should not sound like a form.
 Deferred by the owner: the weekly check-in ("we can build it when we get closer — next Saturday is
 our check-in"). Everything it needs now exists: ticked sessions, their words on those sessions
 (`log_session`), the weigh-in trend, and a coach who can act on all three.
+
+### "It never replies" — it was replying, at 271 seconds (owner report 2026-08-15)
+
+> "I clicked 'Custom — let's talk' and I told Cadence that they're overly protecting my elbow…
+> It says it's working on options … it never replies — I can't tell if it's working or not."
+
+**Measured, not guessed.** A new live probe (`scripts/probe-replan-preview.ts`, `npm run
+probe:replan`) mints a throwaway user with four committed goals — the owner's shape — and times
+the real request against the deployed API: **HTTP 200 after 271.5 seconds.** The gateway does not
+cut it off, the proposal is real, and the work always landed. Every part of the failure was on our
+side of the wire:
+
+- The sheet showed **one unchanging line** — "Looking at your options…" — for four and a half
+  minutes, with no elapsed cue. Indistinguishable from a hang, and the owner read it correctly as
+  one. Nobody watches a phone for four minutes on faith.
+- Its recovery poll gave up at **180s — ninety seconds before the pipeline could possibly
+  finish**. So a backgrounded phone could not be rescued *even in principle*; the window was
+  shorter than the job.
+- **No `useAppResume`.** A fetch killed by iOS suspension may never reject, and a suspended
+  webview's poll timer isn't running either. Nothing looked for the finished proposal on return —
+  the same gap `useBuildPlan` closed for the first-lock build and this path never got.
+- **No push**, so leaving was pure loss.
+- And the whole reason for the change — the user's own sentence — was fed to synthesis and
+  **thrown away**, so the week changed and nothing anywhere recorded why.
+
+Why it is slow at all is not a bug: with N goals the server fans out one `synthesize_plan` draft
+per goal, reduces them into a coherent week, then vets it. It is the most expensive thing Cadence
+does, and it grows with every goal added. So the fix is not to make the wait shorter — it is to
+stop pretending it is short.
+
+**What shipped**
+
+- `useReplanPreview` (new) owns the whole wait: honest phase copy that moves with the clock, a
+  live elapsed counter (the part that proves the screen is alive), an **8-minute** recovery
+  window, and `useAppResume`. By a minute in the copy stops implying "any second now" and starts
+  giving permission to leave — which is only honest because of the next bullet.
+- **The ping.** `previewReplan` sends "Your adjusted week is ready" the instant it persists. The
+  first-lock ready-push was extracted to `plan-ready-push.ts` and both flows now share it —
+  ledger, idempotency slot and all.
+- **`plans.steer` (migration 0034)** — the ask, in the user's words, stored on the plan VERSION it
+  produced. `get_active_plan` now renders it with a relative "when", so general chat knows the
+  person asked for this week and does not re-litigate the elbow next Tuesday. (A trigger on
+  `cadence.plans` already moves `pack_touched_at`, so the pack invalidates on commit and she sees
+  it.) NOT a substitute for a constraint change — the ask and the fact are different things.
+- **The box you can type in.** `SteerBox` (new) grows with the text to nine rows then scrolls to
+  the caret, and the caret starts at the END of Cadence's prefilled prompt rather than in front of
+  it. The sheet gets `sheet-compose` (92% max / 58% min) for the whole adjust flow — no resize
+  jump mid-wait — because the ask is the point of that screen and it had two fixed lines.

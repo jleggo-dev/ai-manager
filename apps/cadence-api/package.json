@@ -13,7 +13,8 @@
     "lint:fix": "eslint . --fix --max-warnings 0",
     "account": "node --import tsx scripts/account.ts",
     "cleanup:dev-accounts": "node --import tsx scripts/account.ts reset-all",
-    "probe:backgrounded": "node --import tsx scripts/probe-backgrounded-phone.ts"
+    "probe:backgrounded": "node --import tsx scripts/probe-backgrounded-phone.ts",
+    "probe:replan": "node --import tsx scripts/probe-replan-preview.ts"
   },
   "dependencies": {
     "@ai-admin/core": "*",

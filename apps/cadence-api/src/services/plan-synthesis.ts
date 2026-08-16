@@ -283,6 +283,8 @@ export async function commitActivities(
     activities: PendingPlanActivity[];
     note: string;
     rationale?: string;
+    /** The user's own words that produced this version, if they steered it (0034). */
+    steer?: string;
     goalIds: string[];
     occurrenceDays?: number;
   },
@@ -311,7 +313,13 @@ export async function commitActivities(
     await supersedeActivePlans(userId, tx);
     const p = await insertPlan(
       userId,
-      { goal_ids: opts.goalIds, version: v, status: 'active', rationale: opts.rationale || null },
+      {
+        goal_ids: opts.goalIds,
+        version: v,
+        status: 'active',
+        rationale: opts.rationale || null,
+        steer: opts.steer || null,
+      },
       tx,
     );
     const acts = await insertActivities(userId, p.plan_id, proposed, tx);

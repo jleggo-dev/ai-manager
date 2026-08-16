@@ -30,6 +30,7 @@ export async function confirmPendingPlan(
     activities: pending.activities,
     note: pending.note,
     rationale: pending.rationale,
+    steer: pending.steer,
     goalIds: pending.goal_ids,
     occurrenceDays,
   });

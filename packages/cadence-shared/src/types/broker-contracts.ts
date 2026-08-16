@@ -80,6 +80,9 @@ export interface PendingPlan {
   note: string;
   /** The coach's whole-shape reasoning (0031) — persisted at commit so the card can render it. */
   rationale?: string;
+  /** What the USER asked for in their own words, if they asked for anything (0034). Rides the
+   *  pending plan so the commit can persist it onto the version this ask produced. */
+  steer?: string;
   goal_ids: string[];
   created_at: string;
 }

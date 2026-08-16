@@ -13,6 +13,10 @@ export interface Plan {
   /** The coach's reasoning for the WHOLE shape (0031) — the arithmetic, the phases, why the
    *  suggested activities earn their slots. Null on plans committed before it existed. */
   rationale?: string | null;
+  /** What the user asked for in their own words, when this version exists BECAUSE they asked
+   *  (0034) — "you're being overly protective of my elbow". Null for the first lock and for the
+   *  automated weekly re-plan, which nobody steered. */
+  steer?: string | null;
 }
 
 export interface ActivitySchedule {

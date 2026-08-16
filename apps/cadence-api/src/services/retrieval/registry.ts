@@ -20,6 +20,20 @@ import { isoRange, type RetrievalFunction } from './types.ts';
 // Re-exported so the many existing importers of this module keep working unchanged.
 export type { RetrievalFunction } from './types.ts';
 
+/** " two days ago" / " today" — how long the current plan version has stood. Relative, because an
+ *  absolute date makes the coach do arithmetic she gets wrong; empty when the row predates
+ *  `generated_at` being populated, since a wrong "today" is worse than no date at all. */
+function changedWhen(plan: Record<string, unknown>): string {
+  const at = plan.generated_at;
+  const t = at instanceof Date ? at.getTime() : typeof at === 'string' ? Date.parse(at) : NaN;
+  if (!Number.isFinite(t)) return '';
+  const days = Math.floor((Date.now() - t) / 86_400_000);
+  if (days <= 0) return ' today';
+  if (days === 1) return ' yesterday';
+  if (days < 14) return ` ${days} days ago`;
+  return ` ${Math.floor(days / 7)} weeks ago`;
+}
+
 /** The dossier core: who they are, what they're for, what the plan says, how it's going. */
 const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_identity: {
@@ -68,7 +82,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_active_plan: {
     name: 'get_active_plan',
     description:
-      "The user's current plan: the sessions and habits they committed to, with how often each repeats (e.g. run — 3x per week). Use when you need what their week is SUPPOSED to look like; for whether they actually did it, use get_consistency.",
+      'The user\'s current plan: the sessions and habits they committed to, with how often each repeats (e.g. run — 3x per week), plus what they last asked to change about it and when. Use when you need what their week is SUPPOSED to look like, or when they refer to a change they already made ("I told you I\'m fine for dead hangs"); for whether they actually did it, use get_consistency.',
     domains: ['plans', 'activities'],
     async run(userId) {
       const plan = await getActivePlan(userId);
@@ -85,7 +99,12 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
         const sched = a.schedule as { recurrence?: unknown } | undefined;
         return `  - [${String(a.kind)}] ${String(a.title)} — ${sched?.recurrence ? String(sched.recurrence) : ''}`;
       });
-      return `Current plan v${String(plan.version)} (${activities.length} commitments):\n${lines.join('\n')}`;
+      // The steer is why this version exists, in the user's own words (0034). Without it a plan
+      // adjusted through the "Custom — let's talk" sheet reaches chat as an unexplained different
+      // week, and she re-litigates a decision they already made with her.
+      const steer = typeof plan.steer === 'string' ? plan.steer.trim() : '';
+      const changed = steer ? `\nThey asked for this version themselves${changedWhen(plan)}: "${steer}"` : '';
+      return `Current plan v${String(plan.version)} (${activities.length} commitments):\n${lines.join('\n')}${changed}`;
     },
     rows(r) {
       return (r as { activities: unknown[] }).activities.length;
