@@ -1,6 +1,13 @@
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
+import { COACH_ACTION_TOOLS } from './coach-actions.ts';
 import { executeCalls } from './retrieval/select-and-run.ts';
-import { onDemandToolNames, FIND_TOOLS_NAME, USE_TOOL_NAME } from './coach-tool-tiers.ts';
+import {
+  onDemandToolNames,
+  categoryMembers,
+  isActionName,
+  FIND_TOOLS_NAME,
+  USE_TOOL_NAME,
+} from './coach-tool-tiers.ts';
 
 /**
  * The two tools that make the long tail reachable without carrying it.
@@ -18,11 +25,12 @@ import { onDemandToolNames, FIND_TOOLS_NAME, USE_TOOL_NAME } from './coach-tool-
  * which is the property the owner actually asked for.
  */
 
-/** One line per tool, cheap enough that she can scan the whole tail. */
+/** One line per tool, cheap enough that she can scan the whole tail. Actions are marked, because
+ *  the difference between reading something and changing it is the one she must never blur. */
 function catalogLine(name: string): string {
-  const f = RETRIEVAL_FUNCTIONS[name];
+  const f = RETRIEVAL_FUNCTIONS[name] ?? COACH_ACTION_TOOLS[name];
   if (!f) return '';
-  return `- ${name}: ${f.description}`;
+  return `- ${name}${isActionName(name) ? ' [changes their data]' : ''}: ${f.description}`;
 }
 
 /**
@@ -30,23 +38,42 @@ function catalogLine(name: string): string {
  * function already carries. Deliberately generous: an empty query returns everything, because a
  * coach who cannot remember what to search for should get the list rather than a shrug.
  */
-export function searchTools(query: string): string[] {
+export interface ToolSearchResult {
+  names: string[];
+  /** True when nothing actually matched and `names` is the whole list shown as a fallback. */
+  noMatch: boolean;
+}
+
+export function searchTools(query: string): ToolSearchResult {
   const names = onDemandToolNames();
   const q = query.trim().toLowerCase();
-  if (!q) return names;
+  if (!q) return { names, noMatch: false };
+
+  // A category name is the fast path — the manifest teaches those, so she will use them.
+  const byCategory = categoryMembers(q);
+  if (byCategory.length) return { names: byCategory, noMatch: false };
+
   const terms = q.split(/[^a-z0-9]+/).filter((t) => t.length > 2);
-  if (!terms.length) return names;
+  if (!terms.length) return { names, noMatch: false };
   const scored = names
     .map((name) => {
-      const f = RETRIEVAL_FUNCTIONS[name]!;
-      const hay = `${name} ${f.description} ${(f.domains ?? []).join(' ')}`.toLowerCase();
+      const f = RETRIEVAL_FUNCTIONS[name] ?? COACH_ACTION_TOOLS[name];
+      const domains = RETRIEVAL_FUNCTIONS[name]?.domains ?? [];
+      const hay = `${name} ${f?.description ?? ''} ${domains.join(' ')}`.toLowerCase();
       return { name, score: terms.filter((t) => hay.includes(t)).length };
     })
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score);
-  // Nothing matched is a real answer and a useful one — but the full list beats a dead end when
-  // she has simply reached for an unfamiliar word.
-  return scored.length ? scored.map((s) => s.name) : names;
+
+  /**
+   * Nothing matched still shows the list, but SAYS it did not match — and the difference matters.
+   *
+   * Owner: *"it would be better for her to look and tell the user 'I don't actually have a tool for
+   * that today' than to not look; to not report; to pretend she's doing something she's not."* A
+   * silent fallback to the full list invites exactly that pretence: she asked for sleep tracking,
+   * got ten unrelated tools, and picks the nearest one. The flag is what lets the answer be honest.
+   */
+  return scored.length ? { names: scored.map((s) => s.name), noMatch: false } : { names, noMatch: true };
 }
 
 export interface MetaTool {
@@ -70,13 +97,19 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
       },
     },
     async run(_userId, params) {
-      const found = searchTools(String(params.query ?? ''));
-      const lines = found.map(catalogLine).filter(Boolean);
-      if (!lines.length) return 'Nothing else is available to read. Answer from what you already have.';
+      const { names, noMatch } = searchTools(String(params.query ?? ''));
+      const lines = names.map(catalogLine).filter(Boolean);
+      if (!lines.length) {
+        return 'There is nothing else available. Tell the user plainly that you cannot do that today.';
+      }
       return [
-        'Available to read, with how to call each. Use use_tool with the name and its arguments:',
+        noMatch
+          ? 'NOTHING matches that. Here is everything there is — if none of it is what they asked for, say so ' +
+            'plainly ("I do not have a way to do that today") rather than using the nearest thing and calling it ' +
+            'an answer:'
+          : 'Available now, with how to call each. Use use_tool with the name and its arguments:',
         ...lines,
-        'Call use_tool now if one of these answers the question — do not describe them to the user.',
+        'Call use_tool now if one of these answers the question — do not describe them to the user instead of using them.',
       ].join('\n');
     },
   },
@@ -84,7 +117,7 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
   [USE_TOOL_NAME]: {
     name: USE_TOOL_NAME,
     description:
-      'Run one of the things find_tools listed, and get its answer back. Use immediately after find_tools rather than telling the user what you could look up. This does NOT change anything — everything reachable here only reads. Name the tool exactly as find_tools spelled it and pass its arguments as an object: {"name": "get_workout_history", "arguments": {"days": 7}}. Omit "arguments" when the tool takes none.',
+      'Run one of the things find_tools listed, and get its answer back. Use immediately after find_tools rather than telling the user what you could look up. Most only read; the ones marked [changes their data] take effect immediately and each says so in its own description — read it and honour it before calling. Name the tool exactly as find_tools spelled it: {"name": "get_workout_history", "arguments": {"days": 7}}. Omit "arguments" when it takes none.',
     parameters: {
       properties: {
         name: { type: 'string', description: 'The tool to run, spelled exactly as find_tools listed it.' },
@@ -97,13 +130,28 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
     },
     async run(userId, params) {
       const name = String(params.name ?? '').trim();
-      const fn = RETRIEVAL_FUNCTIONS[name];
-      // Only the on-demand tail is reachable here. Anything else is either already in front of her
-      // (the dossier) or an action, which must be called directly so its own contract applies.
-      if (!fn || !onDemandToolNames().includes(name)) {
+      // Only the on-demand TAIL is reachable here. A dossier fact is already in front of her, and
+      // an always-on action is declared directly so its own contract sits in her context — routing
+      // either through this door would be a second path to something she already has.
+      if (!onDemandToolNames().includes(name)) {
         return `There is no readable tool called "${name}". Call ${FIND_TOOLS_NAME} to see the real names.`;
       }
       const args = (params.arguments ?? {}) as Record<string, unknown>;
+
+      // A demoted ACTION runs its own `run()`, so its contract — propose-then-tap, or immediate —
+      // is enforced by the tool itself exactly as it would be if it had been called directly.
+      // Being reached through a door does not soften what it does.
+      const action = COACH_ACTION_TOOLS[name];
+      if (action) {
+        try {
+          return await action.run(userId, args);
+        } catch (e) {
+          console.error('[use_tool] action failed:', name, e);
+          return 'That could not be done just now — tell the user plainly and offer to try again.';
+        }
+      }
+
+      const fn = RETRIEVAL_FUNCTIONS[name]!;
       const { results } = await executeCalls(userId, [{ fn: name, params: args }], { logLabel: 'use-tool' });
       try {
         const out = fn.render(results[name]);

@@ -1,5 +1,5 @@
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
-import { coachActionNames } from './coach-actions.ts';
+import { COACH_ACTION_TOOLS, coachActionNames } from './coach-actions.ts';
 
 /**
  * WHICH tools she is holding when she reads a message, and which she has to go and find.
@@ -69,16 +69,96 @@ export const DOSSIER_FUNCTIONS = [
  */
 export const ALWAYS_READS = ['get_active_plan'] as const;
 
-/** Tools offered on every turn: every action, the one always-read, and the way to find the rest. */
+/**
+ * The actions she carries. Not all of them — the two she needs most days.
+ *
+ * The first cut kept all six, on the owner's ruling that they are core capabilities she should
+ * never be caught not knowing about. Measuring the result is what revised it: the six were 4,190
+ * characters of the 5,405 spent on descriptions, and the schemas behind them another ~4,600. They
+ * were the whole remaining cost.
+ *
+ * What the first cut conflated is knowing and carrying. The capability manifest already tells her
+ * what she can do, one line each, at session open — that is the knowing, and it costs ~15
+ * characters per capability instead of 750. A tool definition is only needed at the moment of
+ * calling. Owner, once the distinction was on the table: *"she'll find update_goal if she knows
+ * that she should look for it… The real risk is her not looking."* So the manifest's job is to make
+ * her look, and that is where the fix went (coach-capabilities.ts).
+ *
+ * Which two stay is the owner's own frequency read: changing the plan is a daily act and recording
+ * a session can be hourly. Changing a goal, changing what they work around, fixing a mis-logged
+ * session and setting nutrition targets are weekly-or-rarer, and a round-trip to fetch the
+ * instructions costs about a second on an act that happens once a week.
+ *
+ * This is the one demotion the eval exists to check: under-triggering is our commonest failure, and
+ * "she never went looking" is exactly how it would show up. Run `npm run eval:tools` after changing
+ * this list.
+ */
+export const ALWAYS_ACTIONS = ['propose_plan_change', 'log_session'] as const;
+
+/** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
 export function alwaysOnToolNames(): string[] {
-  return [...ALWAYS_READS, ...coachActionNames(), ...META_TOOL_NAMES];
+  return [...ALWAYS_READS, ...ALWAYS_ACTIONS, ...META_TOOL_NAMES];
 }
 
-/** Layer 2 — everything else she CAN call, once she has asked for it. */
+/**
+ * Layer 2 — everything else she CAN call once she has asked for it: the long-tail reads AND the
+ * actions that did not earn a permanent slot. Actions reached this way keep their own contract
+ * intact, because `use_tool` runs the tool's own `run()` and `find_tools` hands her the tool's own
+ * description — including the sentence saying whether it applies immediately or waits for a tap.
+ */
 export function onDemandToolNames(): string[] {
   const always = new Set<string>(alwaysOnToolNames());
   const dossier = new Set<string>(DOSSIER_FUNCTIONS);
-  return Object.keys(RETRIEVAL_FUNCTIONS).filter((n) => !always.has(n) && !dossier.has(n));
+  const reads = Object.keys(RETRIEVAL_FUNCTIONS).filter((n) => !always.has(n) && !dossier.has(n));
+  const actions = [...coachActionNames()].filter((n) => !always.has(n));
+  return [...reads, ...actions];
+}
+
+/** Whether a name in the tail changes the user's data — `use_tool` must say so honestly. */
+export const isActionName = (name: string): boolean => !!COACH_ACTION_TOOLS[name];
+
+/**
+ * The tail, grouped — because what she needs is a hierarchy to drill down, not a search box.
+ *
+ * Owner: *"it's about giving the coach the categories — this is about hierarchy and her having the
+ * context to drill down."* That is the whole mechanism. A flat list makes her guess a search term
+ * for something she may not know exists; five named categories mean the manifest can say what KINDS
+ * of thing are reachable, and she narrows from there. Knowing "there is a category for their food"
+ * is enough to go looking, which is the behaviour the demotion depends on.
+ *
+ * Labels are hers to say out loud if she ever needs to, so they are plain words rather than domain
+ * tags. Anything in the tail but in no category still surfaces — `find_tools` falls back to the
+ * whole list, and a tool nobody filed is worse hidden than shown.
+ */
+export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: string[] }> = [
+  {
+    key: 'training',
+    label: 'their training and how it has gone',
+    members: ['get_recent_logs', 'get_goal_progress', 'get_practice_totals'],
+  },
+  { key: 'body', label: 'what their body and devices recorded', members: ['get_workout_history', 'get_equipment'] },
+  {
+    key: 'food',
+    label: 'what they eat and their nutrition targets',
+    members: ['get_food_log', 'get_macro_targets', 'get_recipes', 'lookup_food', 'set_macro_targets'],
+  },
+  { key: 'writing', label: 'what they have written', members: ['get_journal'] },
+  {
+    key: 'changes',
+    label: 'changing their goals, what they work around, or a session recorded wrong',
+    members: ['update_goal', 'update_constraint', 'correct_log'],
+  },
+];
+
+/** The categories, one line each — what the manifest names so she knows a drill-down exists. */
+export const categoryLines = (): string[] => TOOL_CATEGORIES.map((c) => `${c.key} (${c.label})`);
+
+/** Members of a named category that are actually in the tail; empty for an unknown key. */
+export function categoryMembers(key: string): string[] {
+  const cat = TOOL_CATEGORIES.find((c) => c.key === key.trim().toLowerCase());
+  if (!cat) return [];
+  const tail = new Set(onDemandToolNames());
+  return cat.members.filter((m) => tail.has(m));
 }
 
 /** Every name the harness will honour, whichever layer it came from. */

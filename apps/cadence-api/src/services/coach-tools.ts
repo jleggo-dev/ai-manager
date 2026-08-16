@@ -110,7 +110,11 @@ export function coachToolDefinitions(): Array<{
       },
     },
   }));
-  return [...reads, ...coachActionDefinitions(), ...metaToolDefinitions()];
+  // Only the DAILY actions ride every turn. The rest are declared nowhere and reached through
+  // find_tools — they were 5,300 characters between them, and they happen weekly at most.
+  const always = new Set(alwaysOnToolNames());
+  const actions = coachActionDefinitions().filter((d) => always.has(d.function.name));
+  return [...reads, ...actions, ...metaToolDefinitions()];
 }
 
 /**

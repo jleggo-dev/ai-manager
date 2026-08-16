@@ -6318,3 +6318,48 @@ Verified end to end against real data: `find_tools("workouts")` returns `get_wor
 its instructions, and `use_tool` then returns the 8.78 km run. 928 cadence-api tests green, and the
 description audit accepted both new tools only after catching a missing "Use" and a parameter that
 never said what omitting it does.
+
+### Harness v2, part two: 5 tools a turn, and a hierarchy she can drill into (2026-08-16)
+
+| | tools/turn | chars | tokens |
+|---|---|---|---|
+| Before | 24 | 18,380 | ~4,968 |
+| After part one | 9 | 11,400 | ~3,081 |
+| **After part two** | **5** | **5,682** | **~1,536** |
+
+**A — four actions demoted.** The first cut kept all six on the owner's ruling that they are core
+capabilities she should never be caught not knowing about. Measuring revised it: the six were 4,190
+characters of description and ~4,600 of schema — the entire remaining cost. What the ruling and the
+implementation had conflated is **knowing** and **carrying**. The manifest already tells her what
+she can do at ~15 characters a line; a 750-character definition is only needed at the moment of
+calling.
+
+`propose_plan_change` and `log_session` stay (daily, hourly). `update_goal`, `update_constraint`,
+`correct_log` and `set_macro_targets` are one `find_tools` call away — weekly-or-rarer acts paying
+about a second.
+
+**Categories, because a search box is not a hierarchy.** Owner: *"it's about giving the coach the
+categories — this is about hierarchy and her having the context to drill down."* Five named groups —
+training, body, food, writing, changes — named in the manifest so she knows what KINDS of thing
+exist, and usable directly as a `find_tools` query. Knowing there is a category for their food is
+enough to go looking, and going looking is the whole bet.
+
+**Looking and saying no beats not looking.** Owner: *"it would be better for her to look and tell
+the user 'I don't actually have a tool for that today' than to not look; to not report; to pretend
+she's doing something she's not."* A miss used to fall back silently to the whole list, which invites
+exactly that pretence — she asked for sleep tracking, got ten unrelated tools, reaches for the
+nearest. `find_tools` now flags a miss and says: if none of this is what they asked for, say so
+plainly. The manifest carries the same rule.
+
+Demoted ACTIONS keep their contract: `use_tool` runs the tool's own `run()`, `find_tools` returns
+the tool's own description including its safety sentence, and the catalog marks them
+`[changes their data]`. Reaching a thing through a door does not soften what it does.
+
+**The manifest budget went 4600 → 5300**, and the arithmetic is in the test because it is the point:
+definitions ride every TURN, the manifest rides once per SESSION. A ten-turn conversation pays ~576
+characters to save ~127,000. It is only a good trade because what it buys is exactly what makes the
+demotion safe — she cannot drill into a hierarchy nobody told her exists.
+
+**The risk, stated plainly and left measurable.** Under-triggering is our commonest failure and
+"she never went looking" is how this would fail. That is what `npm run eval:tools` exists for; run it
+after any change to the always-on list. 933 cadence-api tests green.

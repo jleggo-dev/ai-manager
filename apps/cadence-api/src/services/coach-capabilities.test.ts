@@ -26,15 +26,45 @@ describe('coach capability manifest', () => {
   });
 
   /**
-   * A budget, not a limit — this block is injected ONCE at session open, not per turn, so the cost
-   * is ~1.1k tokens per conversation. Raised 4000 → 4600 on 2026-08-16 because the manifest was
-   * already sitting at 3988 and the thing it needed was the "do these, do not describe them"
-   * instruction: the coach had just answered "can you change the plan?" by reciting this list back
-   * near-verbatim instead of calling the tool. Text that stops her narrating the manifest earns its
-   * place in the manifest. Keep the ceiling — when the next thing wants in, cut something first.
+   * A budget, not a limit — this block is injected ONCE at session open, not per turn.
+   *
+   * 4000 → 4600 (2026-08-16): the manifest was already at 3988 and needed the "do these, do not
+   * describe them" instruction, after the coach answered "can you change the plan?" by reciting
+   * this list back near-verbatim instead of calling the tool.
+   *
+   * 4600 → 5300 (2026-08-16, same day): the categories block. This is the trade that pays for
+   * itself many times over and the arithmetic is worth writing down — tool definitions ride EVERY
+   * turn, this rides once:
+   *
+   *   tool definitions   18,380 → 5,682 chars   per TURN     (24 tools → 5)
+   *   this manifest       4,600 → 5,176 chars   per SESSION
+   *
+   * A ten-turn conversation pays ~576 characters once to save ~127,000. It is only allowed to be
+   * a good trade because the text bought is precisely what makes the demotion safe: she cannot
+   * drill down into a hierarchy she has not been told exists.
+   *
+   * Keep the ceiling. The next thing that wants in has to cut something or show its own arithmetic.
    */
   it('stays small enough to ride every session open', () => {
-    expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(4600);
+    expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(5300);
+  });
+
+  /**
+   * The demotion depends entirely on this: only five tools are declared per turn, so a request
+   * needing anything else requires her to LOOK. Owner: *"the real risk is her not looking."*
+   */
+  it('names the categories and tells her to look before answering', () => {
+    const out = renderCapabilities({ healthAvailable: true });
+    expect(out).toContain('find_tools');
+    expect(out).toMatch(/LOOK before answering/);
+    for (const key of ['training', 'body', 'food', 'writing', 'changes']) expect(out).toContain(key);
+  });
+
+  /** Looking and saying "no" beats not looking, and beats implying you did something you did not. */
+  it('tells her to say plainly when there is no tool, rather than pretend', () => {
+    const out = renderCapabilities({ healthAvailable: true });
+    expect(out).toMatch(/cannot do that today/);
+    expect(out).toMatch(/never imply you did something you did not/i);
   });
 
   /**
