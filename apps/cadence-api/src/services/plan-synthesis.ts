@@ -338,7 +338,10 @@ export async function commitActivities(
 
   // ensureHorizon is a separate, idempotent top-up (safe to re-run) — deliberately OUTSIDE the
   // transaction so materializing the rolling horizon can't hold the commit's write locks open.
-  const occurrences = await ensureHorizon(userId, occurrenceDays);
+  // `keepElapsedToday`: the step above deleted today's pending rows, so today has to be rebuilt in
+  // FULL — including slots whose hour has passed. Without it, committing in the afternoon deletes
+  // the morning off the day the user is looking at (see plan-horizon.ts).
+  const occurrences = await ensureHorizon(userId, occurrenceDays, { keepElapsedToday: true });
 
   return {
     status: 'committed',
