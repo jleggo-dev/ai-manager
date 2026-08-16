@@ -4,6 +4,7 @@ import { COACH_ACTION_TOOLS, coachActionDefinitions } from './coach-actions.ts';
 import { alwaysOnToolNames, allHarnessToolNames } from './coach-tool-tiers.ts';
 import { COACH_META_TOOLS, metaToolDefinitions } from './coach-meta-tools.ts';
 import { boundToolResponse, toolEmptyText, toolFaultText } from './tool-response.ts';
+import { logAi } from './ai-log.ts';
 
 /**
  * The coach's READ TOOLS — the retrieval registry, offered to the model as callable functions
@@ -136,9 +137,51 @@ function parseArgs(raw: string | undefined): Record<string, unknown> {
   }
 }
 
+/**
+ * Every tool call she makes, written down.
+ *
+ * Until now nothing recorded WHICH tool ran or what it said back, so diagnosing a bad turn meant
+ * inferring tool use from token counts — a continuation reports `promptTokens: 0`, so a zero meant
+ * "a tool probably ran". That is archaeology, not evidence, and it left two real failures
+ * unresolved on 2026-08-16: she said a run was marked done (no tool ran at all) and said a
+ * constraint was removed (a tool ran; the constraint did not move). One of those two questions was
+ * answerable and one was not, purely because of what we happened to log.
+ *
+ * Fire-and-forget: a diagnostic that can delay or fail a turn is worse than no diagnostic.
+ */
+function recordToolCalls(userId: string, outputs: CoachToolOutput[], calls: CoachToolCall[]): void {
+  if (!outputs.length) return;
+  const byId = new Map(calls.map((c) => [c.toolCallId, c]));
+  void logAi(userId, {
+    kind: 'coach_tool',
+    input: { calls: calls.map((c) => ({ name: c.name, arguments: c.arguments ?? null })) },
+    output: {
+      results: outputs.map((o) => ({
+        name: byId.get(o.toolCallId)?.name ?? 'unknown',
+        // Enough to tell "it worked", "nothing on file" and "it broke" apart at a glance.
+        output: o.output.slice(0, 400),
+      })),
+    },
+    meta: { count: outputs.length, names: outputs.map((o) => byId.get(o.toolCallId)?.name ?? 'unknown') },
+  }).catch(() => {});
+}
+
 export async function executeCoachToolCalls(userId: string, calls: CoachToolCall[]): Promise<CoachToolOutput[]> {
   const known = coachToolNames();
   const wanted = calls.filter((c) => known.has(c.name));
+  /**
+   * A call we do not recognise is still worth recording — a near-miss name is invisible otherwise,
+   * and it ends her turn mid-thought (coach-tool-loop drops unfulfilled calls).
+   */
+  const unknown = calls.filter((c) => !known.has(c.name));
+  if (unknown.length) {
+    void logAi(userId, {
+      kind: 'coach_tool',
+      input: { calls: unknown.map((c) => ({ name: c.name, arguments: c.arguments ?? null })) },
+      output: { results: [] },
+      meta: { count: 0, names: unknown.map((c) => c.name), unknownName: true },
+    }).catch(() => {});
+  }
   if (!wanted.length) return [];
 
   // Action and meta tools run one at a time and own their own output — actions write a PROPOSAL,
@@ -158,13 +201,16 @@ export async function executeCoachToolCalls(userId: string, calls: CoachToolCall
   }
 
   const reads = wanted.filter((c) => !COACH_ACTION_TOOLS[c.name] && !COACH_META_TOOLS[c.name]);
-  if (!reads.length) return actionOutputs;
+  if (!reads.length) {
+    recordToolCalls(userId, actionOutputs, wanted);
+    return actionOutputs;
+  }
   const { results } = await executeCalls(
     userId,
     reads.map((c) => ({ fn: c.name, params: parseArgs(c.arguments) })),
     { logLabel: 'coach-tool' },
   );
-  return [
+  const all = [
     ...actionOutputs,
     ...reads.map((c) => {
       const fn = RETRIEVAL_FUNCTIONS[c.name]!;
@@ -190,4 +236,6 @@ export async function executeCoachToolCalls(userId: string, calls: CoachToolCall
       }
     }),
   ];
+  recordToolCalls(userId, all, wanted);
+  return all;
 }

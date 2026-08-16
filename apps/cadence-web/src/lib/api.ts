@@ -234,3 +234,5 @@ export {
   type LocationResult,
   type WeatherNow,
 } from './api/location.ts';
+
+export { getConstraints, removeConstraint, type UserConstraint } from './api/me.ts';

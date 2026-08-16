@@ -21,6 +21,10 @@ vi.mock('../../lib/api.ts', () => ({
   getHomeLocation: vi.fn().mockResolvedValue({ home_location: null, timezone: null, available: true }),
   saveHomeLocation: vi.fn(),
   clearHomeLocation: vi.fn(),
+  // The constraints panel mounts with the sheet and reads the real list on open — it exists so
+  // the user can check what shapes their plan without asking the coach and being told wrong.
+  getConstraints: vi.fn().mockResolvedValue([]),
+  removeConstraint: vi.fn().mockResolvedValue([]),
   browserTimezone: () => 'UTC',
   logAdhoc: vi.fn(),
   registerPushToken: vi.fn(),

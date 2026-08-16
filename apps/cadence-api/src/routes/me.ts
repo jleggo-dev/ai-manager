@@ -3,7 +3,7 @@ import { requireCadenceUser } from '../auth/middleware.ts';
 import { resetUserData } from '../services/dev-reset.ts';
 import { clearTrace } from '../services/dev-trace.ts';
 import { AimError, purgeUserAiData } from '../ai/aim.ts';
-import { clearHomeLocation, getUser, setHomeLocation } from '../repos/users.ts';
+import { clearHomeLocation, getUser, mergeBaseline, setHomeLocation } from '../repos/users.ts';
 import {
   geocodeCity,
   reverseGeocode,
@@ -172,3 +172,50 @@ router.delete('/data', async (req: Request, res: Response) => {
 });
 
 export default router;
+
+/**
+ * GET /me/constraints — what the plan is being built around, as the DATABASE holds it.
+ *
+ * Added because the coach was confidently wrong about it. Asked to drop the elbow, she said
+ * "Done — I've removed the elbow tendinitis"; it was still there, `plan_around: true`, and she went
+ * on repeating the claim in later turns even though the turn floor hands her the real list every
+ * single message. Owner: *"I feel like we should surface the known constraints in the settings
+ * (alongside equipment) that way I can validate them myself."*
+ *
+ * Which is the right instinct and a bigger point than one bug: **a fact that shapes every plan
+ * should be visible to the person it is about, not only to the model.** Equipment already is.
+ */
+router.get('/constraints', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const u = await getUser(userId);
+    res.json({ constraints: u?.baseline?.constraints ?? [] });
+  } catch (err) {
+    console.error('[GET /me/constraints]', err);
+    res.status(500).json({ error: 'failed to read constraints' });
+  }
+});
+
+/**
+ * DELETE /me/constraints/:id — the user removing their own.
+ *
+ * Deliberately a plain delete with no judgement attached, unlike the coach's `update_constraint`,
+ * which only deletes on an explicit "that was never true" (recovered ≠ mis-captured, owner ruling).
+ * That care is right when a MODEL is inferring intent from prose. It is condescending when the
+ * person whose elbow it is taps a button.
+ */
+router.delete('/constraints/:id', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const id = String(req.params.id ?? '');
+  try {
+    const u = await getUser(userId);
+    const before = u?.baseline?.constraints ?? [];
+    const after = before.filter((c) => c.id !== id);
+    if (after.length === before.length) return void res.status(404).json({ error: 'no such constraint' });
+    await mergeBaseline(userId, { constraints: after });
+    res.json({ constraints: after });
+  } catch (err) {
+    console.error('[DELETE /me/constraints/:id]', err);
+    res.status(500).json({ error: 'failed to remove constraint' });
+  }
+});

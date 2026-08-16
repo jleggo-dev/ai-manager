@@ -6594,3 +6594,50 @@ textarea.wiz-title {
   color: var(--text-mute);
   margin-bottom: 6px;
 }
+
+/* What we work around — settings. Plain rows: this panel exists to be checked against reality,
+   so it looks like a list of facts rather than a feature. */
+.cons-list {
+  list-style: none;
+  margin: 8px 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cons-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 9px 12px;
+}
+.cons-what {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cons-what b {
+  font-size: 14px;
+  font-weight: 600;
+}
+.cons-what span {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.cons-drop {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text-dim);
+}
+.cons-drop:disabled {
+  opacity: 0.5;
+}
