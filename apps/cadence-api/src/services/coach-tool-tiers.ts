@@ -85,16 +85,38 @@ export const ALWAYS_READS = ['get_active_plan'] as const;
  * that she should look for it… The real risk is her not looking."* So the manifest's job is to make
  * her look, and that is where the fix went (coach-capabilities.ts).
  *
- * Which two stay is the owner's own frequency read: changing the plan is a daily act and recording
- * a session can be hourly. Changing a goal, changing what they work around, fixing a mis-logged
- * session and setting nutrition targets are weekly-or-rarer, and a round-trip to fetch the
- * instructions costs about a second on an act that happens once a week.
+ * **All six are back, and the demotion is reverted — measured, not felt.** Four of them were moved
+ * behind `find_tools` for ~1,400 tokens a turn, on the reasoning that a weekly act can afford a
+ * round-trip. What a weekly act cannot afford is not happening. Same evening, same user, same
+ * model (Sonnet 5):
  *
- * This is the one demotion the eval exists to check: under-triggering is our commonest failure, and
- * "she never went looking" is exactly how it would show up. Run `npm run eval:tools` after changing
- * this list.
+ * | tool | reached how | called |
+ * |---|---|---|
+ * | `log_session` | always-on | **4 of 4** |
+ * | `update_constraint` | behind `find_tools` | **0 of 3** |
+ *
+ * She found `update_constraint` every single time — the hierarchy worked, first query — and never
+ * called it, telling the owner it was done instead. Not a discovery problem: a follow-through one.
+ * The likely mechanism is structural, so no wording fixes it: a continuation is a FRESH generation,
+ * so the round that ignores "call use_tool now" is not the round that read it.
+ *
+ * The comment two paragraphs up already said *actions cannot be prefetched — being chosen IS what
+ * an action is*. That was right, and then four were demoted anyway for tokens. This restores it.
+ *
+ * READS stay in the tail, which was always the bigger win: a new read still costs nothing per turn
+ * forever, and the Broker prefetches the common ones before she has to ask. The cost of this revert
+ * is ~1,500 tokens a turn, which buys actions that actually fire.
+ *
+ * Run `npm run eval:tools` after changing this list.
  */
-export const ALWAYS_ACTIONS = ['propose_plan_change', 'log_session'] as const;
+export const ALWAYS_ACTIONS = [
+  'propose_plan_change',
+  'log_session',
+  'update_goal',
+  'update_constraint',
+  'correct_log',
+  'set_macro_targets',
+] as const;
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
 export function alwaysOnToolNames(): string[] {
@@ -144,14 +166,9 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
   {
     key: 'food',
     label: 'what they eat, their targets, their recipes, and nutrition facts',
-    members: ['get_nutrition', 'set_macro_targets'],
+    members: ['get_nutrition'],
   },
   { key: 'writing', label: 'what they have written', members: ['get_journal'] },
-  {
-    key: 'changes',
-    label: 'changing their goals, what they work around, or a session recorded wrong',
-    members: ['update_goal', 'update_constraint', 'correct_log'],
-  },
 ];
 
 /** The categories, one line each — what the manifest names so she knows a drill-down exists. */

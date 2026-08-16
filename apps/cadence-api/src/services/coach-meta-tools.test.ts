@@ -127,21 +127,26 @@ describe('find_tools', () => {
     expect(r.names).not.toContain('get_journal');
   });
 
-  it('marks an action in the tail as something that changes their data', async () => {
-    const out = await COACH_META_TOOLS.find_tools!.run('u1', { query: 'changes' });
-    expect(out).toContain('update_goal');
-    expect(out).toContain('[changes their data]');
-  });
-
-  /** The tail carries the DEMOTED actions (that is the point) but never a dossier fact, and never
-   *  an always-on action — those are already in her context and a second door would be a second
-   *  path to the same thing. */
-  it('carries the demoted actions and nothing she already holds', () => {
+  /**
+   * The tail is READS only now. Four actions were demoted into it for ~1,400 tokens a turn and the
+   * measurement went against it: `log_session` (always-on) was called 4 of 4 times, while
+   * `update_constraint` (behind find_tools) was found 3 of 3 and called 0. Being chosen is what an
+   * action is, so an action she has to go and find is an action that does not happen.
+   *
+   * The marking stays in `catalogLine` — a future demotion would need it, and the honesty of
+   * "[changes their data]" should not depend on nobody ever demoting an action again.
+   */
+  it('keeps every action out of the tail — an action she has to find is one she does not call', () => {
     const tail = new Set(onDemandToolNames());
     for (const d of DOSSIER_FUNCTIONS) expect(tail.has(d)).toBe(false);
-    for (const a of ALWAYS_ACTIONS) expect(tail.has(a)).toBe(false);
-    expect(tail.has('update_goal')).toBe(true);
-    expect(tail.has('set_macro_targets')).toBe(true);
+    for (const a of coachActionNames()) expect(tail.has(a), `${a} must be always-on — ${HOW}`).toBe(false);
+  });
+
+  it('still fills the tail with the long-tail reads, which stay free', () => {
+    const tail = new Set(onDemandToolNames());
+    expect(tail.has('get_workout_history')).toBe(true);
+    expect(tail.has('get_journal')).toBe(true);
+    expect(tail.size).toBeGreaterThan(4);
   });
 
   it('returns real names with their instructions, so the next call can be right', async () => {
