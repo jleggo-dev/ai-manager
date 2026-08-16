@@ -6183,3 +6183,56 @@ than another round of reasoning:
 If it survives both, the code-side answer is to stop treating pre-call prose and post-result prose
 as one stream. Deliberately not built yet: a de-duplication heuristic against behaviour that may
 have already changed is a fragile thing to own.
+
+### Applying a plan change deleted the day he was standing in (owner, 2026-08-16)
+
+> "I applied it — clicked on plan to validate the plan was updated, but the activity for today
+> disappeared…?"
+
+It did. After the commit, 2026-08-16 held the evening journal, the three later meal logs and the
+weekly check-in — and **no hill intervals, no grip finisher, no breakfast log.** Every commitment
+scheduled EARLIER than the moment he tapped Apply was gone. Only the evening survived, which is what
+made it look like a partial glitch rather than a rule doing exactly what it said.
+
+`commitActivities` deletes the old plan's pending occurrences from today forward, then calls
+`ensureHorizon` to re-materialize. `ensureHorizon` carries this line:
+
+```ts
+if (date === today && startsAt < nowMinutes) continue;
+```
+
+Correct for the **rolling top-up** — nobody wants a 6am session materialized at 3pm. Exactly wrong
+after a **commit**, where today's rows have just been deleted and the day has to be rebuilt whole.
+He applied the change in the afternoon, so the afternoon is where his morning went.
+
+Fixed with `ensureHorizon(userId, days, { keepElapsedToday: true })`, set by the commit path and
+nowhere else. Four tests pin both halves: the top-up still skips an elapsed slot, the commit still
+rebuilds it. His day was re-materialized by hand afterwards — the grip finisher is back, carrying
+the dead-hangs `how_to` from the change that deleted it.
+
+### Switching tabs threw away the reply that switching apps survives (owner, 2026-08-16)
+
+> "I can switch applications, the replies keep coming, but if I switch tabs in Cadence all is lost."
+
+`MainTabs` rendered the coach as `{tab === 'coach' && <OnboardingChat …/>}`. Tapping Plan
+**unmounted** it — killing the in-flight fetch, the poll behind a dropped one, the resume listener
+and the transcript. Every piece of leave-safety built this week defends against iOS suspending the
+app; none of it survived React removing the component. Tapping "Plan" was more destructive than
+locking the phone.
+
+The coach now stays mounted and is hidden with `display: none`. The fetch stays alive, the listeners
+stay subscribed, the scroll position holds, and coming back is instant instead of a re-restore. Plan
+and Progress stay conditional — they hold no in-flight work and remounting is how they refresh.
+
+### Notifications: allowed on the phone, still no device registered
+
+`cadence.device_tokens` is **still empty** with notifications switched on and previews enabled. The
+registration path resolved every failure to a bare `null` that the caller reported as "denied", so
+three quite different faults — iOS refusing, APNs refusing, or us giving up after ten seconds —
+were indistinguishable and none of them was written down anywhere.
+
+Not fixed, made **visible**: each path now logs which one it was, where Safari's Web Inspector can
+see it on the device that failed. The likeliest cause is an App ID without the Push Notifications
+capability — signing succeeds against the local entitlement (`aps-environment: development` is
+present and wired) and APNs refuses at runtime. That is the second invisible failure this week; the
+coach's health reads were the first.

@@ -1,34 +1,75 @@
-import { describe, expect, it } from 'vitest';
-import { minutesOfDay } from './plan-horizon.ts';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * The rule this guards: never write down a task that already went by.
+ * A plan change must never delete the day you are standing in.
  *
- * Observed 2026-08-15 — someone finished onboarding at 9am and their brand-new plan opened with a
- * 6:30 meditation and a 6:30 long run, both of which the app would shortly count as missed. Their
- * first morning with a coach began with two failures it had invented for them.
+ * The rolling top-up deliberately skips a slot whose hour has already gone — nobody wants a 6am
+ * session materialized at 3pm. After a COMMIT that rule is exactly wrong, and on 2026-08-16 it ate
+ * a day of the owner's plan: he applied a change to today's grip finisher in the afternoon, the
+ * commit deleted today's pending rows, and re-materialization refused to recreate anything
+ * scheduled earlier than that moment. The session he had just edited, and his breakfast log,
+ * vanished. Only the evening items came back — which is what made it look like a partial glitch
+ * rather than a rule doing precisely what it said.
  */
-describe('minutesOfDay', () => {
-  it('reads a clock time', () => {
-    expect(minutesOfDay('06:30')).toBe(390);
-    expect(minutesOfDay('00:00')).toBe(0);
-    expect(minutesOfDay('23:59')).toBe(1439);
-    expect(minutesOfDay('7:05')).toBe(425);
+
+const getActivePlan = vi.fn();
+const listActivities = vi.fn();
+const getUser = vi.fn();
+const upsertOccurrences = vi.fn();
+
+vi.mock('../repos/plans.ts', () => ({ getActivePlan: (...a: unknown[]) => getActivePlan(...a) }));
+vi.mock('../repos/activities.ts', () => ({ listActivities: (...a: unknown[]) => listActivities(...a) }));
+vi.mock('../repos/users.ts', () => ({ getUser: (...a: unknown[]) => getUser(...a) }));
+vi.mock('../repos/occurrences.ts', () => ({ upsertOccurrences: (...a: unknown[]) => upsertOccurrences(...a) }));
+
+const { ensureHorizon } = await import('./plan-horizon.ts');
+
+const today = new Date().toISOString().slice(0, 10);
+/** Every day, so `today` is always in the expansion whatever day the suite runs. */
+const DAILY = 'FREQ=DAILY';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  getActivePlan.mockResolvedValue({ plan_id: 'p2', generated_at: `${today}T00:00:00Z` });
+  // No timezone → localMinutes falls back to UTC, so "now" is comparable in the assertions below.
+  getUser.mockResolvedValue({ timezone: 'UTC' });
+  upsertOccurrences.mockResolvedValue(undefined);
+});
+
+/** The dates this run would have created for a given activity. */
+const datesFor = (): string[] =>
+  ((upsertOccurrences.mock.calls[0]?.[0] ?? []) as Array<{ date: string }>).map((o) => o.date);
+
+describe('ensureHorizon and today', () => {
+  it('skips a slot whose hour has passed on the routine top-up', async () => {
+    listActivities.mockResolvedValue([{ activity_id: 'a1', schedule: { recurrence: DAILY, time_of_day: '00:01' } }]);
+
+    await ensureHorizon('u1', 2);
+
+    expect(datesFor()).not.toContain(today);
   });
 
-  it('returns null for anything it cannot place, so nothing is skipped on a guess', () => {
-    // Words are a real value here ("morning" comes out of synthesis), and a word is not a moment:
-    // guessing an hour for it would drop tasks the user could still do.
-    expect(minutesOfDay('morning')).toBeNull();
-    expect(minutesOfDay('evening')).toBeNull();
-    expect(minutesOfDay(undefined)).toBeNull();
-    expect(minutesOfDay(null)).toBeNull();
-    expect(minutesOfDay('')).toBeNull();
-    expect(minutesOfDay('25:00')).toBeNull();
-    expect(minutesOfDay('06:75')).toBeNull();
+  it('rebuilds today in full after a commit, including the hours already gone', async () => {
+    listActivities.mockResolvedValue([{ activity_id: 'a1', schedule: { recurrence: DAILY, time_of_day: '00:01' } }]);
+
+    await ensureHorizon('u1', 2, { keepElapsedToday: true });
+
+    expect(datesFor()).toContain(today);
   });
 
-  it('tolerates the whitespace a synthesized plan can carry', () => {
-    expect(minutesOfDay(' 18:00 ')).toBe(1080);
+  it('still materializes a later slot today on the routine top-up', async () => {
+    listActivities.mockResolvedValue([{ activity_id: 'a1', schedule: { recurrence: DAILY, time_of_day: '23:59' } }]);
+
+    await ensureHorizon('u1', 2);
+
+    expect(datesFor()).toContain(today);
+  });
+
+  it('leaves an activity with no time of day alone either way — nothing has elapsed', async () => {
+    listActivities.mockResolvedValue([{ activity_id: 'a1', schedule: { recurrence: DAILY } }]);
+
+    await ensureHorizon('u1', 2);
+
+    expect(datesFor()).toContain(today);
   });
 });

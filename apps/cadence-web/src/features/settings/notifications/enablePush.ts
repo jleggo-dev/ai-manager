@@ -17,7 +17,12 @@ export async function enablePushOnThisDevice(): Promise<EnablePushOutcome> {
   if (!capabilities.push.isAvailable()) return 'unavailable';
   const token = await capabilities.push.register();
   if (!token) return 'denied';
-  if (!(await registerPushToken(token))) return 'failed';
+  if (!(await registerPushToken(token))) {
+    // The token exists and the SERVER refused it — a different fault from iOS saying no, and one
+    // that leaves push permanently dead while the phone believes it is switched on.
+    console.error('[push] server rejected the device token');
+    return 'failed';
+  }
   try {
     window.localStorage.setItem(PUSH_TOKEN_KEY, token);
   } catch {

@@ -186,17 +186,38 @@ export const nativeCapabilities: Capabilities = {
   },
   push: {
     isAvailable: () => true,
+    /**
+     * Every failure here used to resolve to a bare `null`, which the caller reported as "denied".
+     * So on 2026-08-16, with notifications switched ON in iOS and previews enabled, the owner got
+     * no notification and `cadence.device_tokens` stayed empty — with nothing anywhere saying
+     * which of three quite different things had happened: iOS refused, APNs refused, or we simply
+     * gave up waiting. An invisible failure is the one you cannot fix, and this is the second one
+     * this week (the coach's health reads were the first).
+     *
+     * The outcome is unchanged — null still means "no token" — but each path now says so out loud,
+     * where Safari's Web Inspector can see it on the device that failed.
+     */
     register: async () => {
       const perm = await PushNotifications.requestPermissions();
-      if (perm.receive !== 'granted') return null;
+      if (perm.receive !== 'granted') {
+        console.warn('[push] iOS did not grant notifications:', perm.receive);
+        return null;
+      }
       return new Promise<string | null>((resolve) => {
-        const timer = setTimeout(() => resolve(null), PUSH_REGISTER_TIMEOUT_MS);
+        const timer = setTimeout(() => {
+          console.warn(`[push] no APNs token after ${PUSH_REGISTER_TIMEOUT_MS}ms — neither event fired`);
+          resolve(null);
+        }, PUSH_REGISTER_TIMEOUT_MS);
         void PushNotifications.addListener('registration', (token) => {
           clearTimeout(timer);
+          console.info('[push] APNs token received');
           resolve(token.value);
         });
-        void PushNotifications.addListener('registrationError', () => {
+        void PushNotifications.addListener('registrationError', (err) => {
           clearTimeout(timer);
+          // The likeliest cause is an App ID without the Push Notifications capability: signing
+          // succeeds against the local entitlement, and APNs refuses at runtime.
+          console.error('[push] APNs registration refused:', JSON.stringify(err));
           resolve(null);
         });
         void PushNotifications.register();

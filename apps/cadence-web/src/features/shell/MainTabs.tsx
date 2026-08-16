@@ -118,7 +118,22 @@ export function MainTabs({
             reloadSignal={planReload}
           />
         )}
-        {tab === 'coach' && (
+        {/**
+         * The coach stays MOUNTED and is hidden with CSS when another tab is showing. It is the one
+         * tab holding work that outlives a glance: an in-flight reply, the poll behind a dropped
+         * fetch, the resume listener, and the transcript itself.
+         *
+         * Unmounting it threw all of that away. Owner, 2026-08-16: *"I can switch applications, the
+         * replies keep coming, but if I switch tabs in Cadence all is lost."* Exactly so — every
+         * piece of leave-safety built this week protects against iOS suspending the app, and none
+         * of it survived React removing the component. Tapping "Plan" was more destructive than
+         * closing the phone.
+         *
+         * `display: none` keeps the fetch alive, keeps the listeners subscribed, and keeps the
+         * scroll position, so coming back is instant rather than a re-restore. Plan and Progress
+         * stay conditional — they hold no in-flight work and remounting them is how they refresh.
+         */}
+        <div style={tab === 'coach' ? undefined : { display: 'none' }}>
           <>
             <OnboardingChat
               intent="ongoing"
@@ -134,7 +149,7 @@ export function MainTabs({
               Your week ↗
             </button>
           </>
-        )}
+        </div>
         {tab === 'progress' && <ProgressView />}
         {tab !== 'coach' && (
           <button className="fab" onClick={() => setLogDidOpen(true)} aria-label="Log something you did">

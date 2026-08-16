@@ -41,7 +41,11 @@ export function minutesOfDay(timeOfDay: string | undefined | null): number | nul
  * An unknown timezone means we cannot say what time it is for them, so nothing is skipped: a task
  * they can still do is a much smaller harm than a task quietly missing from their day.
  */
-export async function ensureHorizon(userId: string, days = DEFAULT_HORIZON_DAYS): Promise<number> {
+export async function ensureHorizon(
+  userId: string,
+  days = DEFAULT_HORIZON_DAYS,
+  opts: { keepElapsedToday?: boolean } = {},
+): Promise<number> {
   const plan = await getActivePlan(userId);
   if (!plan) return 0;
 
@@ -57,7 +61,19 @@ export async function ensureHorizon(userId: string, days = DEFAULT_HORIZON_DAYS)
     if (!recurrence) continue;
     const startsAt = minutesOfDay(a.schedule?.time_of_day);
     for (const date of expandRecurrence(recurrence, today, to, anchor)) {
-      if (date === today && nowMinutes != null && startsAt != null && startsAt < nowMinutes) continue;
+      /**
+       * Skipping a slot whose hour has already gone is right for the ROLLING TOP-UP — nobody wants
+       * a 6am session materialized at 3pm. It is exactly wrong after a COMMIT, and it silently ate
+       * a day of the owner's plan (2026-08-16): he applied a change to today's grip finisher in the
+       * afternoon, the commit deleted today's pending rows and re-materialized from here, and every
+       * commitment scheduled EARLIER than that moment — the session he had just edited, and his
+       * breakfast log — was deleted and refused re-creation. Only the evening items came back.
+       *
+       * A plan change must never delete the day you are standing in. `keepElapsedToday` is set by
+       * the commit path and nowhere else.
+       */
+      const elapsedToday = date === today && nowMinutes != null && startsAt != null && startsAt < nowMinutes;
+      if (elapsedToday && !opts.keepElapsedToday) continue;
       occ.push({ activity_id: a.activity_id, user_id: userId, date });
     }
   }
