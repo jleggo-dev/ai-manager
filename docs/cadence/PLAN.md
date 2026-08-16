@@ -6363,3 +6363,45 @@ demotion safe — she cannot drill into a hierarchy nobody told her exists.
 **The risk, stated plainly and left measurable.** Under-triggering is our commonest failure and
 "she never went looking" is how this would fail. That is what `npm run eval:tools` exists for; run it
 after any change to the always-on list. 933 cadence-api tests green.
+
+### The tiering made an instruction lie, within the hour (2026-08-16)
+
+The pick protocol told her: *"Changing a goal (update_goal) and fixing a mis-recorded session
+(correct_log) take effect the moment you call them… DO say it is done — 'changed it to 50, and it is
+on your file'."*
+
+Both were demoted an hour earlier and are no longer declared. Following that instruction she would
+have said the change was on file having changed nothing — **exactly the pretending the owner had
+just ruled against.** A rule in one file quietly falsified by an edit in another, which is how a
+protocol that names tools decays.
+
+Fixed: those three are named as *not loaded by default* — call `find_tools`, run what it gives you,
+and only THEN say it is done. Two tests now assert that no demoted tool is named as if directly
+callable, so the next demotion fails the build instead of shipping a lie.
+
+Owner's read on the cost, and it is the right one: *"as long as she knows she CAN do it and just has
+to find it… it turns into latency, no?"* Yes — one round-trip on a weekly act. Latency only becomes
+a lie if she does not know to look first, which is what the instruction now prevents and what
+`eval:tools` exists to verify.
+
+### A checklist for adding tools, because there is a queue of them (owner, 2026-08-16)
+
+> "we kind of need a spec or set of rules that we have to follow when we add new tools (I have a
+> whole set of new tools to add in the wings)"
+
+[TOOL-HARNESS.md](TOOL-HARNESS.md) now opens with **"Adding a tool: the checklist"** — eight steps in
+order, marked for which are machine-enforced and which are judgement:
+
+1. Should it be a tool at all, or does the dossier already carry it?
+2. Which layer, and which category — the one question is *does calling it change the user's data*.
+3. The description rules (CI).
+4. What it hands back — the gap that cost us most.
+5. Complete in one call: a return text may never claim an effect the tool did not produce.
+6. Declared and executable are the same set (CI).
+7. At least two eval cases: one should-fire, one must-not.
+8. The commands to run.
+
+The checklist claimed a CI gate on categories that did not exist, so it now does — three tests: no
+tool in the tail is uncategorised, no category names a tool that has left the tail, and every
+category has a plain-words label, because the manifest says them out loud. A doc asserting a gate it
+does not have is the same class of untruth as a tool claiming an effect it did not produce.

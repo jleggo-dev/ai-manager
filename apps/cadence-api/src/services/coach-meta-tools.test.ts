@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { searchTools, COACH_META_TOOLS } from './coach-meta-tools.ts';
-import { alwaysOnToolNames, onDemandToolNames, DOSSIER_FUNCTIONS, ALWAYS_ACTIONS } from './coach-tool-tiers.ts';
+import {
+  alwaysOnToolNames,
+  onDemandToolNames,
+  DOSSIER_FUNCTIONS,
+  ALWAYS_ACTIONS,
+  TOOL_CATEGORIES,
+} from './coach-tool-tiers.ts';
 import { coachToolDefinitions, coachToolNames } from './coach-tools.ts';
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 import { coachActionNames } from './coach-actions.ts';
@@ -158,5 +164,33 @@ describe('use_tool', () => {
   it('will not run a dossier fact through the read door either', async () => {
     const out = await COACH_META_TOOLS.use_tool!.run('u1', { name: 'get_identity' });
     expect(out).toMatch(/no readable tool/i);
+  });
+});
+
+/**
+ * The gate the checklist promises (TOOL-HARNESS.md, "Adding a tool", step 2).
+ *
+ * She reaches the tail by drilling into a named category, so a tool filed in none is a tool she has
+ * to guess the name of — and the whole demotion rests on her being able to find things without
+ * guessing. Doc rules nobody enforces decay; this is the enforcement.
+ */
+describe('every tool in the tail is filed where she can find it', () => {
+  it('leaves nothing uncategorised', () => {
+    const filed = new Set(TOOL_CATEGORIES.flatMap((c) => c.members));
+    const orphans = onDemandToolNames().filter((n) => !filed.has(n));
+    expect(orphans).toEqual([]);
+  });
+
+  it('files nothing that is not actually in the tail — a stale entry is a dead end', () => {
+    const tail = new Set(onDemandToolNames());
+    const stale = TOOL_CATEGORIES.flatMap((c) => c.members).filter((m) => !tail.has(m));
+    expect(stale).toEqual([]);
+  });
+
+  it('gives every category a plain-words label, since the manifest says them out loud', () => {
+    for (const c of TOOL_CATEGORIES) {
+      expect(c.label.length).toBeGreaterThan(8);
+      expect(c.key).toMatch(/^[a-z]+$/);
+    }
   });
 });

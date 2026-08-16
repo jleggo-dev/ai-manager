@@ -105,3 +105,27 @@ describe('renderPickProtocol', () => {
     expect(out).toMatch(/hands and wrists/);
   });
 });
+
+/**
+ * The pick protocol names tools, so demoting one silently makes it a liar.
+ *
+ * Within an hour of the tiering landing, this block still told her that changing a goal "takes
+ * effect the moment you call them" — for tools that were no longer declared. Following it, she
+ * would say "changed it to 50, and it is on your file" having changed nothing: the exact failure
+ * the owner named, pretending to have done something she had not.
+ */
+describe('the protocol stays honest about what she is holding', () => {
+  it('sends her to find_tools for the demoted actions rather than implying a direct call', () => {
+    const out = renderPickProtocol({ intent: 'ongoing' });
+    expect(out).toMatch(/NOT loaded by default/);
+    expect(out).toMatch(/find_tools first/);
+    expect(out).toMatch(/Never say it is done before the call has actually run/i);
+  });
+
+  it('names no demoted tool as if it were directly callable', () => {
+    const out = renderPickProtocol({ intent: 'ongoing' });
+    for (const demoted of ['update_goal', 'correct_log', 'update_constraint', 'set_macro_targets']) {
+      expect(out).not.toContain(demoted);
+    }
+  });
+});

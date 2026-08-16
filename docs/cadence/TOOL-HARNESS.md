@@ -10,6 +10,92 @@ tool.** Every rule below is either enforced in CI (`description-audit.test.ts`) 
 
 ---
 
+## Adding a tool: the checklist
+
+Work through this in order. Steps 3–6 are enforced in CI, so a mistake there fails the build rather
+than reaching a user; steps 1, 2 and 7 are judgement and nobody but you will catch them.
+
+### 1. Decide whether it should be a tool at all
+
+**Does the dossier already carry this fact?** Identity, goals, the plan, constraints, consistency,
+weight, dietary profile, recent activity are all injected as text on every turn by the context pack
+(`context-pack.ts`) and the turn floor (`turn-context.ts`). If your fact is one of those, or belongs
+beside them, **add it to the pack, not to the tool list.** A tool for something she is already
+holding is a second path to the same answer and one more decision on a turn that needed none.
+
+### 2. Decide the layer, and file it
+
+One question decides it: **does calling it change the user's data?**
+
+| | | |
+|---|---|---|
+| **Changes data, and they'd do it most days** | Always-on action | `ALWAYS_ACTIONS` in `coach-tool-tiers.ts` |
+| **Changes data, weekly or rarer** | On-demand action | goes in a category below |
+| **Only reads, and it's long-tail** | On-demand read | goes in a category below |
+| **Only reads, and it's dossier** | Not a tool — see step 1 | |
+
+Adding to **`ALWAYS_ACTIONS` costs ~190 tokens on every message, forever.** That is the expensive
+choice and it needs a reason in the comment. Everything else costs nothing until she asks for it, so
+**reads and rare actions are free to add** — that is the whole point of the tiering.
+
+**Then file it in a category** (`TOOL_CATEGORIES`): training, body, food, writing, changes. She
+reaches the tail by drilling into a category, so a tool in none is a tool she has to guess the name
+of. A CI test fails if you skip this. If it genuinely fits nowhere, add a category — and the
+capability manifest names it automatically.
+
+### 3. Write the description (CI-enforced)
+
+- **3–4 sentences.** Anthropic: *"by far the most important factor in tool performance."*
+- Say **when to Use it** — the literal word, and say when to use something else instead.
+- **Teach every parameter in the prose**, with a quoted worked example: `{"days": 30}`. The Broker
+  never sees your JSON schema.
+- Every optional parameter says its **default**, or what omitting it does.
+- An action states its **gate**: "takes effect immediately", or "does NOT change anything".
+- **No internal words.** `occurrences` is a table. `baseline` is a column. The banned list grows
+  every time a real one slips through.
+- ≤ **520** characters for a read, ≤ **800** for an action.
+
+### 4. Write what it hands back
+
+Not yet CI-enforced, and the gap that cost us most. See §5 for the rules; the two that matter:
+
+- **An error must never look like an empty result.** "Nothing on file" when a query threw is a lie
+  in her voice, and it took four device rounds to find the last one.
+- **Tell her what to do next**, scoped to this result — not durable routing rules, which belong in
+  the description.
+
+### 5. Make it complete in one call
+
+**A tool's return text must never claim an effect the tool did not itself produce.** If it says
+"the user now has a card", calling it must be enough to make that true. This is the cheapest rule
+here to check and the one that has cost the most.
+
+### 6. Check it is reachable (CI-enforced)
+
+Declared and executable must be the same set. A tool the model can name but the harness drops ends
+her turn mid-thought with nobody told.
+
+### 7. Add eval cases, at least two
+
+One where it **should** fire and one where it **must not** — a set of only positive cases measures
+recall and silently ignores false triggering. Cases live in `eval-tool-selection-cases.ts` and each
+cites the real incident it came from.
+
+### 8. Run the gates
+
+```bash
+npm run typecheck && npm run format:check && npx vitest run --root apps/cadence-api
+```
+
+And if you touched the always-on list, run the eval — it is the only thing that can tell you whether
+tool choice actually got better or worse:
+
+```bash
+npm run eval:tools
+```
+
+---
+
 ## Where we stand, measured
 
 | | Ours today |
