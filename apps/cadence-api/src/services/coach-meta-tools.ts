@@ -107,9 +107,10 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
         ? 'NOTHING matches that. Here is everything there is — if none of it is what they asked for, say so ' +
           'plainly ("I do not have a way to do that today") rather than using the nearest thing and calling it ' +
           'an answer:'
-        : 'Available now, with how to call each. Use use_tool with the name and its arguments:';
+        : 'These are now LOADED and callable by name, right now, in your next step:';
       const tail =
-        'Call use_tool now if one of these answers the question — do not describe them to the user instead of using them.';
+        'Call the one you need directly, by its own name, now — they are real tools this turn, not a menu. ' +
+        'Do not describe them to the user instead of using them.';
       return boundToolResponse([head, ...lines, tail].join('\n'));
     },
   },

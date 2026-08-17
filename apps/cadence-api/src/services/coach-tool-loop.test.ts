@@ -70,7 +70,8 @@ describe('relayCoachTurnWithTools', () => {
     );
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute.mock.calls[0]![0]).toEqual([{ toolCallId: 't1', name: 'get_weight', arguments: '{}' }]);
-    expect(submit).toHaveBeenCalledWith('r1', [{ toolCallId: 't1', output: 'Weight: 88.5 kg' }]);
+    // Third argument: the definitions find_tools revealed. Empty here — nothing was looked up.
+    expect(submit).toHaveBeenCalledWith('r1', [{ toolCallId: 't1', output: 'Weight: 88.5 kg' }], []);
     expect(result.content).toBe('Let me check your file… You are at 88.5 kg.');
     expect(result.toolRounds).toBe(1);
     expect(writes.filter((w) => w.includes('[DONE]'))).toHaveLength(1);
@@ -238,5 +239,77 @@ describe('a lookup that never became a call', () => {
     } finally {
       quiet.mockRestore();
     }
+  });
+});
+
+/**
+ * Revealing the REAL definition, which is what ToolSearch does and what we were not doing.
+ *
+ * Measured 2026-08-17, once the continuation finally carried tools: she called `find_tools` on
+ * round after round and never once called `use_tool`. Not "she cannot" any more — "she will not
+ * use a stringly-typed proxy", which is exactly what a generic `use_tool(name, arguments)` is.
+ * Owner, the day before: *"progressive disclosure … surely is working for Anthropic's Claude for
+ * actions. The problem is something in our design."*
+ */
+describe('what find_tools reveals becomes callable by name', () => {
+  it('carries the revealed definitions onto the continuation', async () => {
+    const submit = vi.fn(async () => stream([delta('ok'), complete('r2'), DONE]));
+    const revealedDef = { type: 'function', function: { name: 'get_journal', description: 'x', parameters: {} } };
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([delta('Looking.'), complete('r1', [{ id: 't1', name: 'find_tools' }]), DONE]),
+      {
+        toolNames: new Set(['find_tools']),
+        execute: vi.fn().mockResolvedValue([{ toolCallId: 't1', output: 'get_journal: …' }]),
+        submit,
+        revealedBy: () => [revealedDef],
+      },
+      {},
+    );
+    expect(submit).toHaveBeenCalledWith('r1', expect.anything(), [revealedDef]);
+  });
+
+  /** A tool found on round one must still be callable on round three. */
+  it('keeps revealed definitions for the rest of the turn, without duplicating them', async () => {
+    let n = 0;
+    const submit = vi.fn(async () => {
+      n++;
+      return n < 2
+        ? stream([complete(`r${n + 1}`, [{ id: `t${n + 1}`, name: 'find_tools' }]), DONE])
+        : stream([delta('done'), complete('rX'), DONE]);
+    });
+    const def = { type: 'function', function: { name: 'get_journal', description: 'x', parameters: {} } };
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([complete('r1', [{ id: 't1', name: 'find_tools' }]), DONE]),
+      {
+        toolNames: new Set(['find_tools']),
+        execute: vi.fn(async (calls: Array<{ toolCallId: string }>) =>
+          calls.map((c) => ({ toolCallId: c.toolCallId, output: 'x' })),
+        ),
+        submit,
+        revealedBy: () => [def],
+      },
+      {},
+    );
+    // Same definition revealed twice, declared once.
+    const lastCall = submit.mock.calls[submit.mock.calls.length - 1] as unknown as unknown[];
+    expect(lastCall[2]).toEqual([def]);
+  });
+
+  it('declares nothing extra on a turn that looked nothing up', async () => {
+    const submit = vi.fn(async () => stream([delta('ok'), complete('r2'), DONE]));
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
+      {
+        toolNames: new Set(['get_weight']),
+        execute: vi.fn().mockResolvedValue([{ toolCallId: 't1', output: '88kg' }]),
+        submit,
+        revealedBy: () => [],
+      },
+      {},
+    );
+    expect(submit).toHaveBeenCalledWith('r1', expect.anything(), []);
   });
 });

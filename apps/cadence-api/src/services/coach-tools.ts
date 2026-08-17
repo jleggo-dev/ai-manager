@@ -1,8 +1,8 @@
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 import { executeCalls } from './retrieval/select-and-run.ts';
 import { COACH_ACTION_TOOLS, coachActionDefinitions } from './coach-actions.ts';
-import { alwaysOnToolNames, allHarnessToolNames } from './coach-tool-tiers.ts';
-import { COACH_META_TOOLS, metaToolDefinitions } from './coach-meta-tools.ts';
+import { alwaysOnToolNames, allHarnessToolNames, FIND_TOOLS_NAME } from './coach-tool-tiers.ts';
+import { COACH_META_TOOLS, metaToolDefinitions, searchTools } from './coach-meta-tools.ts';
 import { boundToolResponse, toolEmptyText, toolFaultText } from './tool-response.ts';
 import { logAi } from './ai-log.ts';
 
@@ -96,22 +96,63 @@ export const coachToolNames = (): Set<string> => new Set(allHarnessToolNames());
  * descriptions, plus a parameter schema for the functions that take one. A function absent from
  * TOOL_PARAMS genuinely reads "the user's current X" and has nothing to fill in.
  */
-export function coachToolDefinitions(): Array<{
+export interface ToolDefinition {
   type: 'function';
   function: { name: string; description: string; parameters: Record<string, unknown> };
-}> {
-  const reads = COACH_TOOL_NAMES.map((n) => ({
+}
+
+/** A real, callable definition for any registry read — the same shape the always-on ones get. */
+function readDefinition(n: string): ToolDefinition | null {
+  const fn = RETRIEVAL_FUNCTIONS[n];
+  if (!fn) return null;
+  return {
     type: 'function' as const,
     function: {
       name: n,
-      description: RETRIEVAL_FUNCTIONS[n]!.description,
+      description: fn.description,
       parameters: {
         type: 'object',
         properties: TOOL_PARAMS[n]?.properties ?? {},
         ...(TOOL_PARAMS[n]?.required ? { required: TOOL_PARAMS[n]!.required } : {}),
       },
     },
-  }));
+  };
+}
+
+/**
+ * The definitions `find_tools` just revealed, so the NEXT round can declare them and she can call
+ * the real tool BY NAME.
+ *
+ * This is what ToolSearch actually does, and what we were failing to do. We returned prose about a
+ * tool and asked her to call a generic `use_tool(name, arguments)` proxy — stringly-typed
+ * indirection that bypasses everything a model's tool-calling is trained on. Measured 2026-08-17,
+ * with the continuation carrying tools at last: she called `find_tools` on round after round and
+ * never once called `use_tool`. Owner, a day earlier: *"progressive disclosure … surely is working
+ * for Anthropic's Claude for actions. The problem is something in our design."*
+ *
+ * Only possible now that `submitV2ToolOutputs` accepts the caller's tools; before that a revealed
+ * definition had nowhere to live.
+ */
+export function revealedDefinitions(calls: CoachToolCall[]): ToolDefinition[] {
+  const out: ToolDefinition[] = [];
+  for (const c of calls) {
+    if (c.name !== FIND_TOOLS_NAME) continue;
+    let query = '';
+    try {
+      query = String((JSON.parse(c.arguments ?? '{}') as { query?: unknown }).query ?? '');
+    } catch {
+      /* malformed args → an empty query, which reveals everything rather than nothing */
+    }
+    for (const name of searchTools(query).names) {
+      const def = readDefinition(name) ?? coachActionDefinitions().find((d) => d.function.name === name) ?? null;
+      if (def && !out.some((d) => d.function.name === def.function.name)) out.push(def);
+    }
+  }
+  return out;
+}
+
+export function coachToolDefinitions(): ToolDefinition[] {
+  const reads = COACH_TOOL_NAMES.map((n) => readDefinition(n)!).filter(Boolean);
   // Only the DAILY actions ride every turn. The rest are declared nowhere and reached through
   // find_tools — they were 5,300 characters between them, and they happen weekly at most.
   const always = new Set(alwaysOnToolNames());

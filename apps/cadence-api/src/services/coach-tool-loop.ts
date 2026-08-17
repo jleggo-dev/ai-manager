@@ -34,7 +34,14 @@ export interface CoachToolLoopDeps {
   /** Run the calls (the retrieval registry executor). */
   execute: (calls: CoachToolCall[]) => Promise<CoachToolOutput[]>;
   /** Submit outputs; resolves to the continuation stream's body. */
-  submit: (responseId: string, outputs: CoachToolOutput[]) => Promise<ReadableStream<Uint8Array> | null>;
+  submit: (
+    responseId: string,
+    outputs: CoachToolOutput[],
+    /** Definitions `find_tools` revealed, declared on the continuation so she can call them BY NAME. */
+    revealed?: unknown[],
+  ) => Promise<ReadableStream<Uint8Array> | null>;
+  /** Which real definitions a round's calls revealed. */
+  revealedBy?: (calls: CoachToolCall[]) => unknown[];
   /**
    * Say something to her mid-turn that the USER never sees, and get her next response.
    *
@@ -56,6 +63,8 @@ export async function relayCoachTurnWithTools(
   let body = firstBody;
   let result: CoachStreamResult = { ...state, firstTokenMs: null, clientDropped: false };
   let toolRounds = 0;
+  // Revealed definitions accumulate: a tool found on round one stays callable on round three.
+  const revealed: unknown[] = [];
 
   for (let round = 0; round <= MAX_COACH_TOOL_ROUNDS; round++) {
     result = await relayAndAccumulate(body, { ...options, state, suppressDone: true });
@@ -92,8 +101,15 @@ export async function relayCoachTurnWithTools(
       /* client gone; the turn continues server-side regardless */
     }
 
+    for (const def of deps.revealedBy?.(pending) ?? []) {
+      const name = (def as { function?: { name?: string } }).function?.name;
+      if (name && !revealed.some((d) => (d as { function?: { name?: string } }).function?.name === name)) {
+        revealed.push(def);
+      }
+    }
+
     try {
-      body = await deps.submit(state.currentResponseId, outputs);
+      body = await deps.submit(state.currentResponseId, outputs, revealed);
     } catch (e) {
       console.warn('[coach-tools] continuation failed — ending the turn with what streamed:', e);
       break;
@@ -154,7 +170,7 @@ export async function relayCoachTurnWithTools(
           const outputs = await deps.execute(late);
           for (const c of late) fulfilled.add(c.toolCallId);
           if (outputs.length) {
-            const after = await deps.submit(state.currentResponseId, outputs);
+            const after = await deps.submit(state.currentResponseId, outputs, revealed);
             if (after) result = await relayAndAccumulate(after, { ...options, state, suppressDone: true });
           }
         }

@@ -6833,3 +6833,36 @@ wiring, is worth more than the fix.
 With the continuation fixed, `find_tools` could now return a **real definition** and let her call
 the real tool by name — ToolSearch's actual shape — retiring `use_tool` entirely. Not built; the
 revert to always-on actions stands until the device says the continuation fix holds.
+
+### She will not use a proxy — so `find_tools` now reveals the real thing (2026-08-17)
+
+The continuation fix (#220) deployed overnight, and a fresh probe against production proved two
+things at once. Asked *"what have I written in my journal lately? go and look it up properly"*:
+
+```
+["find_tools"] → ["find_tools"] → ["find_tools"] → ["find_tools"] → ["find_tools","find_tools"]
+```
+
+**Six lookups, zero `use_tool`.** That she could call `find_tools` on rounds two through four is
+itself the proof the continuation now carries tools — yesterday that was impossible. So the "she
+can't" era is over, and what remains is "she won't": a generic `use_tool(name, arguments)` is
+stringly-typed indirection that bypasses everything a model's tool-calling is trained on.
+
+The owner had it a day before the measurement: *"progressive disclosure … surely is working for
+Anthropic's Claude for actions. The problem is something in our design."*
+
+**So we do what ToolSearch does.** `find_tools` now reveals **real definitions**, the loop carries
+them onto every subsequent round via the `submit` tools argument (only possible since #220), and she
+calls `get_journal` or `update_constraint` **by its own name**, with its own schema. Revealed
+definitions accumulate, so a tool found on round one is still callable on round three, and they are
+declared once however often they are revealed.
+
+`find_tools`' output changed to match the truth: *"These are now LOADED and callable by name, right
+now, in your next step"* rather than instructions for a proxy.
+
+`use_tool` stays declared for one release as a fallback rather than being ripped out mid-investigation
+— but if the reveal works, it is dead weight and should go.
+
+**Honest about the evidence.** One probe, one phrasing, one empty account. It proves the continuation
+carries tools and that she looped rather than proxied; it does not prove every query behaves that
+way. The same probe re-run after this change is the test that matters.

@@ -19,7 +19,12 @@ import { runDetourCapture } from '../services/detour-capture.ts';
 import { assembleTurn } from '../services/coach-context.ts';
 import { relayCoachTurnWithTools } from '../services/coach-tool-loop.ts';
 import { sendPlanReadyPush } from '../services/plan-ready-push.ts';
-import { coachToolDefinitions, coachToolNames, executeCoachToolCalls } from '../services/coach-tools.ts';
+import {
+  coachToolDefinitions,
+  coachToolNames,
+  executeCoachToolCalls,
+  revealedDefinitions,
+} from '../services/coach-tools.ts';
 import { buildContextPack } from '../services/context-pack.ts';
 import { ensureDateStamped } from '../services/date-context.ts';
 import { getTrace, updateTrace } from '../services/dev-trace.ts';
@@ -265,8 +270,16 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
           // The SAME tools the turn opened with. Without them the continuation is declared with an
           // empty toolbox, which is why she called find_tools and then "ignored" use_tool for a day
           // — she could not call it (chat-messaging.ts, submitV2ToolOutputs).
-          submit: async (respId, outputs) =>
-            (await submitCoachToolOutputs(userId, sessionId, respId, outputs, coachToolDefinitions())).response.body,
+          submit: async (respId, outputs, revealed) =>
+            (
+              await submitCoachToolOutputs(userId, sessionId, respId, outputs, [
+                ...coachToolDefinitions(),
+                ...((revealed ?? []) as unknown[]),
+              ])
+            ).response.body,
+          // What find_tools just revealed becomes REAL, callable-by-name definitions on the next
+          // round — ToolSearch's shape, and the thing the use_tool proxy was a poor substitute for.
+          revealedBy: (calls) => revealedDefinitions(calls),
           // A word in her ear when she looked a tool up and never ran it. <note> turns are
           // app-authored, so this never reaches the transcript or the capture window.
           nudge: async (text) =>
