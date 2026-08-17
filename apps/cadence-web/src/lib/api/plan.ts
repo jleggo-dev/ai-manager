@@ -34,6 +34,8 @@ export interface PlanActivity {
   cadence: string;
   recurrence: string;
   time_of_day?: string;
+  /** Minutes of the effort itself, not the whole session — see `ActivitySchedule.duration_min`.
+   *  Pair it with `sessionBudget(duration_min, area)` to show the time to actually set aside. */
   duration_min?: number;
   /** The coach's rationale for THIS commitment, 1-3 sentences — the pre-signup card renders it. */
   why?: string;

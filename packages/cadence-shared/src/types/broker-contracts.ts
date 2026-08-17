@@ -69,6 +69,8 @@ export interface PendingPlanActivity {
   cadence: string; // humanized, e.g. "Every other day" — display only
   recurrence: string; // raw RRULE — what actually gets committed
   time_of_day?: string;
+  /** Minutes of the effort itself, not the whole session — see `ActivitySchedule.duration_min`.
+   *  The card renders it beside the time to set aside, which `sessionBudget()` derives. */
   duration_min?: number;
   target?: ActivityTarget;
   completion_source: 'self_report' | 'healthkit' | 'reply' | 'auto';

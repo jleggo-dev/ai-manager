@@ -1,4 +1,5 @@
-import type { Baseline, Equipment, Goal } from '@cadence/shared';
+import type { Baseline, Equipment, Goal, GoalArea } from '@cadence/shared';
+import { budgetNote, sessionBudget } from '@cadence/shared';
 import { groupByGoal } from './groupByGoal.ts';
 import type { PlanPreview } from './useReviewWizard.ts';
 import { formatWeightDisplay, resolveWeightKg } from './unitConversion.ts';
@@ -11,7 +12,25 @@ type Props = {
   name?: string | null;
 };
 
+/**
+ * "5 mornings · 07:00 · 45 min (allow 55)" — the consent line for one commitment.
+ *
+ * The minutes are the effort the coach wrote down (owner ruling 2026-08-17); the parenthetical is
+ * what to actually keep free, and it appears only when warm-up and cool-down add something. This is
+ * the screen where the person agrees to a rhythm, so it must show the real time ask, not just the
+ * part that gets counted as training.
+ */
+function rhythmLine(a: { cadence: string; time_of_day?: string; duration_min?: number }, area?: GoalArea): string {
+  const budget = sessionBudget(a.duration_min, area);
+  const note = budgetNote(budget);
+  const mins = budget ? `${budget.effort_min} min${note ? ` ${note}` : ''}` : null;
+  return [a.cadence, a.time_of_day, mins].filter(Boolean).join(' · ') || '—';
+}
+
 export function LockStep({ preview, goals, equipment, baseline, name }: Props) {
+  // The preview carries goal_id but not the goal's area; the goals are right here, so resolve it
+  // rather than widening the broker contract for a display detail.
+  const areaOf = new Map(goals.map((g) => [g.goal_id, g.area]));
   const wUnit = baseline.weight_unit ?? 'kg';
   const wKg = resolveWeightKg(baseline.weight_kg);
   const wShown = formatWeightDisplay(wKg, wUnit);
@@ -28,11 +47,7 @@ export function LockStep({ preview, goals, equipment, baseline, name }: Props) {
               <div className="confirm-sec" key={i}>
                 <div className="cs-t">
                   <b>{a.title}</b>
-                  <span>
-                    {[a.cadence, a.time_of_day, a.duration_min ? `${a.duration_min} min` : null]
-                      .filter(Boolean)
-                      .join(' · ') || '—'}
-                  </span>
+                  <span>{rhythmLine(a, a.goal_id ? areaOf.get(a.goal_id) : undefined)}</span>
                   {a.why && <div className="cs-why">{a.why}</div>}
                 </div>
               </div>

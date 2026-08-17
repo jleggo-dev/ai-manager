@@ -209,3 +209,49 @@ describe('normalizeSession', () => {
     expect(session!.blocks[0]!.items[0]).toMatchObject({ interval_work_sec: 45, interval_rounds: 8 });
   });
 });
+
+/**
+ * The two numbers, end to end through the real normalize path (owner ruling 2026-08-17).
+ *
+ * These pin the SHAPE the reworked prescribe-session prompt is asked to produce: the named effort
+ * survives at full length, and the total is whatever the blocks add up to around it. The prompt
+ * itself can't be unit-tested, but the moment its output stops meaning this, these fail.
+ */
+describe('effort keeps its full length through normalize', () => {
+  it('a 20-minute meditation stays 20 minutes of meditating', () => {
+    const s = normalizeSession({
+      blocks: [{ label: 'Sitting', items: [{ name: 'Silent sit', duration_min: 20, tool: 'meditate' }] }],
+      note: 'Twenty minutes, unbroken.',
+    });
+    const items = s!.blocks.flatMap((b) => b.items);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.duration_min).toBe(20);
+    // Nothing was carved off the front to "settle in".
+    expect(items.reduce((n, i) => n + (i.duration_min ?? 0), 0)).toBe(20);
+  });
+
+  it('a 40-minute run is 40 minutes of running, with warm-up and cool-down ADDED around it', () => {
+    const s = normalizeSession({
+      blocks: [
+        { label: 'Warm-up', items: [{ name: 'Easy walk', duration_min: 5 }] },
+        { label: 'Main', items: [{ name: 'Easy run', duration_min: 40, distance_km: 6 }] },
+        { label: 'Cool-down', items: [{ name: 'Walk + stretch', duration_min: 5 }] },
+      ],
+      note: 'Conversational the whole way.',
+    });
+    const byLabel = Object.fromEntries(s!.blocks.map((b) => [b.label, b.items]));
+    // The effort is intact — not the 25 the old 5/25/5 split left behind.
+    expect(byLabel['Main']![0]!.duration_min).toBe(40);
+    // ...and the budget is the sum, which is what the walkthrough shows.
+    const total = s!.blocks.flatMap((b) => b.items).reduce((n, i) => n + (i.duration_min ?? 0), 0);
+    expect(total).toBe(50);
+    expect(total).toBeGreaterThan(byLabel['Main']![0]!.duration_min!);
+  });
+
+  it('does not clamp a long sit down — 20 is well inside the 60-minute ceiling', () => {
+    const s = normalizeSession({
+      blocks: [{ label: 'Sitting', items: [{ name: 'Sit', duration_min: 45, tool: 'meditate' }] }],
+    });
+    expect(s!.blocks[0]!.items[0]!.duration_min).toBe(45);
+  });
+});

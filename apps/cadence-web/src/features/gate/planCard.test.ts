@@ -48,4 +48,20 @@ describe('rowMeta', () => {
     expect(rowMeta(act({ duration_min: 45 }))).toBe('Mon, Wed, Fri · 45 min');
     expect(rowMeta(act({}))).toBe('Mon, Wed, Fri');
   });
+
+  /**
+   * The consent row carries both numbers (owner ruling 2026-08-17): the effort he named, and what
+   * to keep free for it. Deciding whether you can afford a rhythm needs the second one.
+   */
+  it('shows the effort AND the time to set aside, when there is warm-up to allow for', () => {
+    expect(rowMeta(act({ duration_min: 45, area: 'movement' }))).toBe('Mon, Wed, Fri · 45 min (allow 55)');
+  });
+
+  it('keeps a meditation at its full length and budgets the settling time separately', () => {
+    expect(rowMeta(act({ duration_min: 20, area: 'mind' }))).toBe('Mon, Wed, Fri · 20 min (allow 25)');
+  });
+
+  it('stays a single number when the effort is the whole session', () => {
+    expect(rowMeta(act({ duration_min: 15, area: 'nourishment' }))).toBe('Mon, Wed, Fri · 15 min');
+  });
 });

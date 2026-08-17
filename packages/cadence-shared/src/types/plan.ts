@@ -22,6 +22,17 @@ export interface Plan {
 export interface ActivitySchedule {
   recurrence: string; // RRULE, e.g. "FREQ=WEEKLY;BYDAY=MO,WE,FR"
   time_of_day?: string;
+  /**
+   * Minutes of the ACTIVITY ITSELF — the effort the person named, not the whole session
+   * (owner ruling 2026-08-17). A 40-minute run is 40 here and gets its warm-up added AROUND it;
+   * a 20-minute meditation is 20 minutes of meditating. Warm-up, cool-down and settling in are
+   * NOT subtracted from this number and never were meant to be carved out of it.
+   *
+   * The time to block out in a calendar is derived, not stored: `sessionBudget()` in
+   * `session-budget.ts` turns this plus the goal's area into `{ effort_min, prep_min, total_min }`.
+   * Once a session has actually been prescribed, the real total is the sum of its blocks
+   * (`deriveWalkthrough().total_min`).
+   */
   duration_min?: number;
 }
 
