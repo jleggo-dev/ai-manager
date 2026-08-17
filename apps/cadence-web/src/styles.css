@@ -6655,3 +6655,7 @@ textarea.wiz-title {
   font-size: 13px;
   color: var(--text-dim);
 }
+/* When she has already spoken, the activity line sits under her words rather than replacing them. */
+.ct-bubble .ct-doing {
+  margin-top: 6px;
+}

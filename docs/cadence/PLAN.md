@@ -6866,3 +6866,24 @@ now, in your next step"* rather than instructions for a proxy.
 **Honest about the evidence.** One probe, one phrasing, one empty account. It proves the continuation
 carries tools and that she looped rather than proxied; it does not prove every query behaves that
 way. The same probe re-run after this change is the test that matters.
+
+### The "she's using a tool" line shipped dead (owner, 2026-08-17)
+
+> "the feature we put in to show in the UI that Cadence is calling/using a tool - that doesn't seem
+> to be working"
+
+It never could. `ChatTurn` rendered the activity line **inside the `pending` branch**, and `pending`
+is `role === 'coach' && !text` — so the line could only appear while she had said nothing at all.
+She streams a preamble ("Let me look…") *before* calling anything, so by the time a tool actually
+ran there was text, `pending` was false, and the line was unreachable **in exactly the moment it
+exists for**.
+
+Moved outside the branch: dots while she is silent, her words once she speaks, and the activity line
+underneath whenever there is one. `activity` is cleared on every path that ends a turn and the
+parent passes it only for the newest turn, so an empty string is the resting state.
+
+Four tests, including the one that was broken — she has already spoken, and then reaches for a tool.
+
+Worth noting what this cost: the feature was **built, reviewed, tested and shipped**, and every test
+asserted the phrasing (`coachActivityLine`) rather than whether the line reaches the screen. A unit
+test on the words is not a test that the words are visible.
