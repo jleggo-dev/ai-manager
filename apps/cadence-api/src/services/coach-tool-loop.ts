@@ -33,10 +33,13 @@ export interface CoachToolLoopDeps {
   toolNames: Set<string>;
   /** Run the calls (the retrieval registry executor). */
   execute: (calls: CoachToolCall[]) => Promise<CoachToolOutput[]>;
-  /** Submit outputs; resolves to the continuation stream's body. */
+  /** Submit the turn's tool exchange; resolves to the continuation stream's body. */
   submit: (
     responseId: string,
+    /** EVERY round's outputs so far, not just this round's — the continuation is self-contained. */
     outputs: CoachToolOutput[],
+    /** The calls those outputs answer, so each result travels beside its question (#232). */
+    calls: CoachToolCall[],
     /** Definitions `find_tools` revealed, declared on the continuation so she can call them BY NAME. */
     revealed?: unknown[],
   ) => Promise<ReadableStream<Uint8Array> | null>;
@@ -65,6 +68,13 @@ export async function relayCoachTurnWithTools(
   let toolRounds = 0;
   // Revealed definitions accumulate: a tool found on round one stays callable on round three.
   const revealed: unknown[] = [];
+  /**
+   * So does the exchange itself. The continuation carries no provider-side thread (#232), so every
+   * round has to re-send the whole turn — history, then each call beside the result it got. Drop
+   * round one from round two's request and she is answering with an amnesia we built for her.
+   */
+  const exchangeCalls: CoachToolCall[] = [];
+  const exchangeOutputs: CoachToolOutput[] = [];
 
   for (let round = 0; round <= MAX_COACH_TOOL_ROUNDS; round++) {
     result = await relayAndAccumulate(body, { ...options, state, suppressDone: true });
@@ -108,8 +118,11 @@ export async function relayCoachTurnWithTools(
       }
     }
 
+    exchangeCalls.push(...pending);
+    exchangeOutputs.push(...outputs);
+
     try {
-      body = await deps.submit(state.currentResponseId, outputs, revealed);
+      body = await deps.submit(state.currentResponseId, [...exchangeOutputs], [...exchangeCalls], revealed);
     } catch (e) {
       console.warn('[coach-tools] continuation failed — ending the turn with what streamed:', e);
       break;
@@ -170,7 +183,14 @@ export async function relayCoachTurnWithTools(
           const outputs = await deps.execute(late);
           for (const c of late) fulfilled.add(c.toolCallId);
           if (outputs.length) {
-            const after = await deps.submit(state.currentResponseId, outputs, revealed);
+            exchangeCalls.push(...late);
+            exchangeOutputs.push(...outputs);
+            const after = await deps.submit(
+              state.currentResponseId,
+              [...exchangeOutputs],
+              [...exchangeCalls],
+              revealed,
+            );
             if (after) result = await relayAndAccumulate(after, { ...options, state, suppressDone: true });
           }
         }

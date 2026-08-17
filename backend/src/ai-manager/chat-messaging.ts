@@ -21,6 +21,7 @@ import type { Attachment, FormattingRule } from '../types.ts';
 import { resolveChatInvocation } from './chat-messaging-resolve.ts';
 import { openChatSendStream } from './chat-messaging-stream.ts';
 import { resolveProfileToolDefinitions } from './tool-fulfillment.ts';
+import { buildSessionChatMessages } from './chat-history.ts';
 
 interface SendChatMessageOptions {
   attachments?: Attachment[];
@@ -208,30 +209,52 @@ export async function submitChatToolOutputs(
   return { response: sseResponse, sessionId };
 }
 
-/**
- * Submit tool outputs to a Devs.ai v2 response via POST /responses/{id}/resume.
- */
-export async function submitV2ToolOutputs(
-  sessionId: string,
-  responseId: string,
-  outputs: Array<{ toolCallId: string; output: string }>,
+export interface SubmitV2ToolOutputsOptions {
   /**
    * Tools the CALLER declared for this turn, carried onto the continuation.
    *
    * `sendChatMessage` has always taken `extraTools`, and this did not — so a caller whose tools
    * come from code rather than from the profile got them on round one and **nothing on round two.**
    * Measured on the cadence-coach profile: `resolveProfileToolDefinitions` returns `undefined`, so
-   * every continuation was declared with an empty toolbox.
-   *
-   * The cost was a full day of misdiagnosis (2026-08-16). The coach called `find_tools` and then
-   * "ignored" the instruction to call `use_tool` — she could not call it; it was not declared. Same
-   * shape for every action behind a lookup, and it is the likeliest reason a continuation writes a
-   * whole fresh answer rather than resuming: with no tools available, prose is the only move left.
-   *
-   * The comment below already said the definitions ride again so the model can chain. They now
-   * ride for callers who supply their own, not only for profiles with tool-jobs.
+   * every continuation was declared with an empty toolbox (#230).
    */
-  extraTools?: unknown[],
+  extraTools?: unknown[];
+  /**
+   * What the model ASKED, for each output. Required to build a self-contained continuation: an
+   * unthreaded `function_call_output` needs its `function_call` beside it or it is an answer to a
+   * question the request never contains.
+   *
+   * Callers should pass the whole turn's exchange, not just the newest round — round three has to
+   * be able to see what round one asked and learned.
+   */
+  calls?: Array<{ toolCallId: string; name: string; arguments?: string | Record<string, unknown> }>;
+}
+
+/** The dialect wants the model's own JSON string; AI Admin's own tool-call rows carry it parsed. */
+function argumentsAsJson(args: string | Record<string, unknown> | undefined): string {
+  if (args == null) return '{}';
+  return typeof args === 'string' ? args : JSON.stringify(args);
+}
+
+/**
+ * Submit fulfilled tool results and open the continuation stream.
+ *
+ * NOT /resume: a v2 response arrives `completed` with its function_call already in the output, so
+ * resume targets a terminal response and 409s (live-probed 2026-08-14). The continuation is a NEW
+ * streamed response.
+ *
+ * It is also no longer THREADED. Sending only the results under a `previous_response_id` returned
+ * 200 and silently discarded them — rounds 2-4 of a measured turn each billed exactly 12,772
+ * input tokens against round 1's 18,979, meaning the provider rebuilt the model input from its own
+ * stored thread every time and our results never joined it (#232). So the continuation now carries
+ * the conversation from OUR database plus the tool exchange, the same self-contained shape
+ * `sendChatMessage` uses and the only one measurably proven to arrive.
+ */
+export async function submitV2ToolOutputs(
+  sessionId: string,
+  responseId: string,
+  outputs: Array<{ toolCallId: string; output: string }>,
+  options: SubmitV2ToolOutputsOptions = {},
 ): Promise<{ response: globalThis.Response; sessionId: string }> {
   const session = await dbGetSession(sessionId);
   if (!session) throw new Error(`Chat session ${sessionId} not found`);
@@ -246,21 +269,42 @@ export async function submitV2ToolOutputs(
 
   const client = (await resolveSessionClient(session, provider)) as DevsAiV2Client;
   const timeoutMs = await resolveTimeoutMs({}, provider);
-  // NOT /resume. A v2 response arrives `completed` WITH its function_call in the output, so by
-  // the time the tool job has run, resume targets a terminal response and 409s ("Response … is
-  // already terminal" — live-probed 2026-08-14, probe-tool-loop.ts; /resume serves Devs.ai's own
-  // paused interactive tools). The Responses-dialect continuation is a NEW streamed response:
-  // previous_response_id threads it, the input items are the function results, and the tool
-  // definitions ride again so the model can chain — the caller's loop bounds the rounds.
   const modelId = String(profile?.external_ai_id || '').trim();
   if (!modelId) throw new Error('submitV2ToolOutputs: session profile has no external_ai_id');
   // Caller-supplied tools win; the profile's tool-jobs remain the default for everyone else.
-  const tools = extraTools?.length ? extraTools : await resolveProfileToolDefinitions(profile);
-  const sseResponse = await client.continueWithToolOutputs(modelId, responseId, outputs, {
-    timeoutMs,
-    ...(tools ? { tools } : {}),
-  });
+  const tools = options.extraTools?.length ? options.extraTools : await resolveProfileToolDefinitions(profile);
+  const toolOpts = { timeoutMs, ...(tools ? { tools } : {}) };
 
+  const byId = new Map((options.calls ?? []).map((c) => [c.toolCallId, c]));
+  const exchange = outputs.map((o) => ({ ...o, name: byId.get(o.toolCallId)?.name ?? '' }));
+
+  if (exchange.every((e) => e.name)) {
+    try {
+      const messages = await buildSessionChatMessages(sessionId, session);
+      const sseResponse = await client.continueWithToolResults(
+        modelId,
+        messages,
+        exchange.map((e) => ({ ...e, arguments: argumentsAsJson(byId.get(e.toolCallId)?.arguments) })),
+        toolOpts,
+      );
+      return { response: sseResponse, sessionId };
+    } catch (err) {
+      /**
+       * The self-contained shape cannot be rehearsed before it ships: coach chat is in-process
+       * streaming and the encryption key is deliberately absent from dev machines, so the first
+       * time this payload meets Devs.ai is in production. If the provider rejects it — an unknown
+       * item type, a synthetic `fc_replay_N` id it will not take — the turn must not die. The
+       * threaded call below is what shipped for weeks: it loses the tool result, which is bad, but
+       * it answers, which is the floor. Loud on purpose; a quiet fallback here would look exactly
+       * like the bug it is standing in for.
+       */
+      console.error('[chat-messaging] self-contained continuation REJECTED, falling back to threading (#232):', err);
+    }
+  } else {
+    console.warn('[chat-messaging] tool continuation without call names — falling back to threading (#232)');
+  }
+
+  const sseResponse = await client.continueWithToolOutputs(modelId, responseId, outputs, toolOpts);
   return { response: sseResponse, sessionId };
 }
 

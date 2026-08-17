@@ -70,8 +70,14 @@ describe('relayCoachTurnWithTools', () => {
     );
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute.mock.calls[0]![0]).toEqual([{ toolCallId: 't1', name: 'get_weight', arguments: '{}' }]);
-    // Third argument: the definitions find_tools revealed. Empty here — nothing was looked up.
-    expect(submit).toHaveBeenCalledWith('r1', [{ toolCallId: 't1', output: 'Weight: 88.5 kg' }], []);
+    // The call rides beside its result (#232); fourth argument is what find_tools revealed —
+    // empty here, nothing was looked up.
+    expect(submit).toHaveBeenCalledWith(
+      'r1',
+      [{ toolCallId: 't1', output: 'Weight: 88.5 kg' }],
+      [{ toolCallId: 't1', name: 'get_weight', arguments: '{}' }],
+      [],
+    );
     expect(result.content).toBe('Let me check your file… You are at 88.5 kg.');
     expect(result.toolRounds).toBe(1);
     expect(writes.filter((w) => w.includes('[DONE]'))).toHaveLength(1);
@@ -112,8 +118,42 @@ describe('relayCoachTurnWithTools', () => {
     );
     expect(result.toolRounds).toBe(MAX_COACH_TOOL_ROUNDS);
     expect(submit).toHaveBeenCalledTimes(MAX_COACH_TOOL_ROUNDS);
-    // Each continuation was threaded on ITS round's response id, not the first one.
+    // Each continuation names ITS round's response id, not the first one.
     expect(submit.mock.calls.map((c) => c[0])).toEqual(['r1', 'r2', 'r3']);
+  });
+
+  /**
+   * The continuation is self-contained (#232) — there is no provider-side thread carrying the
+   * earlier rounds, so the loop must re-send the whole exchange every time. Sending only the
+   * newest round would hand round three an amnesia we built for it.
+   */
+  it('re-sends every earlier round of the exchange, not just the newest', async () => {
+    let round = 0;
+    const seen: Array<{ outputs: string[]; calls: string[] }> = [];
+    const submit = vi.fn(
+      async (_r: string, outputs: Array<{ toolCallId: string }>, calls: Array<{ toolCallId: string }>) => {
+        seen.push({ outputs: outputs.map((o) => o.toolCallId), calls: calls.map((c) => c.toolCallId) });
+        round++;
+        return round < 3
+          ? stream([complete(`r${round + 1}`, [{ id: `t${round + 1}`, name: 'get_weight' }]), DONE])
+          : stream([delta('done'), complete('rX'), DONE]);
+      },
+    );
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
+      {
+        toolNames: new Set(['get_weight']),
+        execute: vi.fn(async (calls: Array<{ toolCallId: string }>) =>
+          calls.map((c) => ({ toolCallId: c.toolCallId, output: `out-${c.toolCallId}` })),
+        ),
+        submit,
+      },
+      {},
+    );
+
+    expect(seen.map((s) => s.outputs)).toEqual([['t1'], ['t1', 't2'], ['t1', 't2', 't3']]);
+    expect(seen.map((s) => s.calls)).toEqual([['t1'], ['t1', 't2'], ['t1', 't2', 't3']]);
   });
 
   it('a failed fulfillment ends the turn with what streamed — and still says done', async () => {
@@ -266,7 +306,7 @@ describe('what find_tools reveals becomes callable by name', () => {
       },
       {},
     );
-    expect(submit).toHaveBeenCalledWith('r1', expect.anything(), [revealedDef]);
+    expect(submit).toHaveBeenCalledWith('r1', expect.anything(), expect.anything(), [revealedDef]);
   });
 
   /** A tool found on round one must still be callable on round three. */
@@ -294,7 +334,7 @@ describe('what find_tools reveals becomes callable by name', () => {
     );
     // Same definition revealed twice, declared once.
     const lastCall = submit.mock.calls[submit.mock.calls.length - 1] as unknown as unknown[];
-    expect(lastCall[2]).toEqual([def]);
+    expect(lastCall[3]).toEqual([def]);
   });
 
   it('declares nothing extra on a turn that looked nothing up', async () => {
@@ -310,6 +350,6 @@ describe('what find_tools reveals becomes callable by name', () => {
       },
       {},
     );
-    expect(submit).toHaveBeenCalledWith('r1', expect.anything(), []);
+    expect(submit).toHaveBeenCalledWith('r1', expect.anything(), expect.anything(), []);
   });
 });

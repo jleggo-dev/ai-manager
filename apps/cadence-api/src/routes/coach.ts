@@ -270,12 +270,12 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
           // The SAME tools the turn opened with. Without them the continuation is declared with an
           // empty toolbox, which is why she called find_tools and then "ignored" use_tool for a day
           // — she could not call it (chat-messaging.ts, submitV2ToolOutputs).
-          submit: async (respId, outputs, revealed) =>
+          submit: async (respId, outputs, calls, revealed) =>
             (
-              await submitCoachToolOutputs(userId, sessionId, respId, outputs, [
-                ...coachToolDefinitions(),
-                ...((revealed ?? []) as unknown[]),
-              ])
+              await submitCoachToolOutputs(userId, sessionId, respId, outputs, {
+                extraTools: [...coachToolDefinitions(), ...((revealed ?? []) as unknown[])],
+                calls,
+              })
             ).response.body,
           // What find_tools just revealed becomes REAL, callable-by-name definitions on the next
           // round — ToolSearch's shape, and the thing the use_tool proxy was a poor substitute for.
