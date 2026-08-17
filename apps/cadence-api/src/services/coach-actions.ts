@@ -95,7 +95,7 @@ const EDIT_SCHEMA = {
       duration_min: {
         type: 'integer',
         description:
-          'For resize and add: minutes for the WHOLE session door to door, warm-up and cool-down included — not the main effort alone. A 40-minute RUN is roughly 50 here; say the effort itself in how_to.',
+          'For resize and add: minutes of the ACTIVITY ITSELF — exactly the number they said. "A 40 minute run" is 40; "a 20 minute meditation" is 20. Do NOT pad it for warm-up, cool-down or getting there: the app adds that around the effort and shows them the total to set aside. Never quietly shrink it either — 20 minutes of meditation means 20 minutes meditating.',
       },
       title: {
         type: 'string',
@@ -105,7 +105,7 @@ const EDIT_SCHEMA = {
       how_to: {
         type: 'string',
         description:
-          'For rework AND add: what this session should contain from now on, in plain words — "dead hangs instead of farmers carries", "40 minutes of running at conversational pace, ~5km". This is what constrains the main effort, so put the distance or the running time HERE. Applies to every future session of it.',
+          'For rework AND add: what this session should CONTAIN from now on, in plain words — "dead hangs instead of farmers carries", "conversational pace, ~5km". Its character and any distance go here; how many minutes the effort runs for is duration_min, not this. Applies to every future session of it.',
       },
       goal_title: { type: 'string', description: 'For add: which goal it serves, by title.' },
       why: { type: 'string', description: 'For add: one sentence on why it is worth doing.' },

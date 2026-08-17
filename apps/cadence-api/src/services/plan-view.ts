@@ -36,6 +36,9 @@ export interface PlanViewActivity {
   cadence: string; // humanized, e.g. "Every other day"
   recurrence: string;
   time_of_day?: string;
+  /** Minutes of the EFFORT, not the whole session (owner ruling 2026-08-17) — a 40-minute run is
+   *  40 here. The client pairs it with `sessionBudget(duration_min, area)` to show the time to set
+   *  aside; nothing on this side sums or pads it. */
   duration_min?: number;
   /** The coach's rationale for THIS commitment, 1-3 sentences (0031) — the card renders it. */
   why?: string;

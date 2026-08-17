@@ -211,6 +211,38 @@ describe('propose_plan_change', () => {
     expect(d).toMatch(/build card/);
     expect(d).toMatch(/get_active_plan/);
   });
+
+  /**
+   * Owner ruling 2026-08-17: "If I'm going to do a 40 min run the run should be 40mins, regardless
+   * of if I have to warm-up before or stretch after."
+   *
+   * The description told the model the opposite for a while — "minutes for the WHOLE session door
+   * to door… A 40-minute RUN is roughly 50 here" — so asking for a 40 minute run wrote 50 into the
+   * plan and prescribe-session then carved a warm-up back out of it. This is the only place the
+   * coach is told what the number means, so it is worth pinning.
+   */
+  it('tells the coach duration_min is the effort the person named, not the padded session', () => {
+    const def = coachActionDefinitions().find((d) => d.function.name === 'propose_plan_change')!;
+    const props = (
+      def.function.parameters as {
+        properties: { edits: { items: { properties: Record<string, { description: string }> } } };
+      }
+    ).properties.edits.items.properties;
+
+    const dur = props.duration_min!.description;
+    expect(dur).toMatch(/ACTIVITY ITSELF/);
+    expect(dur).toMatch(/40 minute run" is 40/);
+    expect(dur).toMatch(/20 minute meditation" is 20/);
+    expect(dur).toMatch(/do NOT pad it/i);
+    // The reverted instruction, in every form it took.
+    expect(dur).not.toMatch(/WHOLE session/i);
+    expect(dur).not.toMatch(/door to door/i);
+    expect(dur).not.toMatch(/roughly 50/);
+
+    // ...and how_to must no longer claim the running TIME belongs to it instead.
+    expect(props.how_to!.description).not.toMatch(/running time HERE/i);
+    expect(props.how_to!.description).toMatch(/duration_min/);
+  });
 });
 
 describe('update_goal', () => {

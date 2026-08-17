@@ -73,7 +73,8 @@ export interface PlanEdit {
   days?: string[];
   /** `retime`: "07:00", or a word the plan already uses ("morning"). */
   time_of_day?: string;
-  /** `resize`: minutes per session. */
+  /** `resize`/`add`/`rework`: minutes of the EFFORT itself, exactly as the person said it — a
+   *  40-minute run is 40, never padded to 50 for its warm-up (owner ruling 2026-08-17). */
   duration_min?: number;
   /** `add`: what the new commitment is called. `rework`: a new name for it, if the change earns one. */
   title?: string;
