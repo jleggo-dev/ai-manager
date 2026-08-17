@@ -90,6 +90,12 @@ export interface PlanEdit {
 
 export interface PlanEditResult {
   activities: PendingPlanActivity[];
+  /**
+   * Edits that asked for the state the plan is ALREADY in. Not changes and not failures — they
+   * must never reach the card, and she must be told so she can say "that's already how it is"
+   * instead of announcing a fix that fixes nothing.
+   */
+  noops: string[];
   /** One plain line per change, in the user's terms — what the card renders and the coach says. */
   changes: string[];
   /** Edits that could not be applied, each explaining itself. */
@@ -282,10 +288,18 @@ function applyAdd(
     completion_source: 'self_report',
     ...(goalId ? { goal_id: goalId } : {}),
     ...(edit.goal_title ? { goal_title: edit.goal_title } : {}),
+    ...(edit.how_to ? { how_to: edit.how_to } : {}),
     ...(edit.why ? { why: edit.why } : {}),
     suggested: true,
   };
-  return { added, change: `Add ${title} — ${describeRecurrence(recurrence)}` };
+  /**
+   * An untimed commitment sorts to the bottom of its day (plan-view.ts) and anchors no reminder,
+   * so silence here is a real gap the user only discovers later. She omitted it on one add and
+   * supplied it on another a minute earlier, so the model is inconsistent rather than wrong —
+   * naming it on the card is what lets either of them notice.
+   */
+  const untimed = edit.time_of_day ? '' : ' (no time set)';
+  return { added, change: `Add ${title} — ${describeRecurrence(recurrence)}${untimed}` };
 }
 
 /** Everything that changes an existing commitment, one target at a time. */
@@ -293,7 +307,7 @@ function applyToOne(
   edit: PlanEdit,
   found: PendingPlanActivity,
   working: PendingPlanActivity[],
-): { change?: string; reject?: string } {
+): { change?: string; reject?: string; noop?: string } {
   if (edit.action === 'remove') {
     working.splice(working.indexOf(found), 1);
     return { change: `Drop ${found.title}` };
@@ -303,7 +317,9 @@ function applyToOne(
     const byday = toByDay(edit.days);
     if (!byday) return { reject: `Couldn't tell which days to move ${found.title} to.` };
     const was = found.cadence;
-    found.recurrence = withDays(found.recurrence, byday);
+    const next = withDays(found.recurrence, byday);
+    if (next === found.recurrence) return { noop: `${found.title} is already on ${was}.` };
+    found.recurrence = next;
     found.cadence = describeRecurrence(found.recurrence);
     return { change: `Move ${found.title}: ${was} → ${found.cadence}` };
   }
@@ -352,6 +368,7 @@ function applyToOne(
     const t = edit.time_of_day?.trim();
     if (!t) return { reject: `Couldn't tell what time to give ${found.title}.` };
     const was = found.time_of_day;
+    if (was === t) return { noop: `${found.title} is already at ${t}.` };
     found.time_of_day = t;
     return { change: `${found.title}: ${was ? `${was} → ${t}` : `now at ${t}`}` };
   }
@@ -361,9 +378,18 @@ function applyToOne(
     return { reject: `Couldn't tell how long ${found.title} should be.` };
   }
   const wasMin = found.duration_min;
-  found.duration_min = Math.round(mins);
+  const next = Math.round(mins);
+  /**
+   * "40 min → 40 min" is not a change, and rendering it as one is how the owner came to tap Apply
+   * on a card that did nothing (2026-08-17). Plan v10 committed byte-identical to v9 across all 16
+   * activities, its stored rationale literally "Easy run: 40 min → 40 min" twice, and the apply
+   * still wiped and regenerated ten prescribed sessions. From where he sat she had promised a fix,
+   * shown a card, and delivered nothing — which is indistinguishable from the tool being broken.
+   */
+  if (wasMin === next) return { noop: `${found.title} is already ${next} min.` };
+  found.duration_min = next;
   return {
-    change: `${found.title}: ${wasMin ? `${wasMin} min → ${found.duration_min} min` : `${found.duration_min} min`}`,
+    change: `${found.title}: ${wasMin ? `${wasMin} min → ${next} min` : `${next} min`}`,
   };
 }
 
@@ -391,6 +417,7 @@ export function applyPlanEdits(
   });
   const changes: string[] = [];
   const rejected: string[] = [];
+  const noops: string[] = [];
   let addedSeq = 0;
 
   for (const edit of edits) {
@@ -414,9 +441,10 @@ export function applyPlanEdits(
     for (const found of targets) {
       const r = applyToOne(edit, found, working);
       if (r.reject) rejected.push(r.reject);
+      if (r.noop) noops.push(r.noop);
       if (r.change) changes.push(r.change);
     }
   }
 
-  return { activities: working, changes, rejected };
+  return { activities: working, changes, rejected, noops };
 }

@@ -98,7 +98,9 @@ describe('applyPlanEdits', () => {
     expect(walk.recurrence).toBe('FREQ=WEEKLY;BYDAY=SA');
     expect(walk.goal_id).toBe('g2');
     expect(walk.suggested).toBe(true);
-    expect(r.changes[0]).toBe('Add Easy walk — Sat');
+    // No time_of_day was given, and an untimed commitment sorts last in its day with no reminder
+    // anchor — so the card says so rather than leaving the gap to be discovered later.
+    expect(r.changes[0]).toBe('Add Easy walk — Sat (no time set)');
   });
 
   it('rejects an edit whose numbers make no sense instead of writing them', () => {
@@ -252,6 +254,104 @@ describe('applyPlanEdits — addressing by handle', () => {
     ]);
     expect(r.rejected).toEqual([]);
     expect(r.activities.find((a) => a.title === 'Recovery jog')!.duration_min).toBe(25);
+  });
+});
+
+/**
+ * A card must mean something is different.
+ *
+ * 2026-08-17: the owner asked her to fix two run lengths, she resized both to the value they
+ * ALREADY held, and the tool reported "Easy run: 40 min → 40 min" twice as changes. That wrote a
+ * pending plan and raised an Apply button; he tapped it and committed plan v10 byte-identical to
+ * v9 across all sixteen activities — stored rationale literally those two lines — while wiping and
+ * regenerating ten prescribed sessions. She had promised a fix, shown a card, and delivered
+ * nothing, which from his side is indistinguishable from the tool being broken.
+ */
+describe('applyPlanEdits — an edit that changes nothing is not a change', () => {
+  const PLAN2: Activity[] = [
+    act({
+      title: 'Easy run',
+      schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU', duration_min: 40, time_of_day: '19:00' },
+    }),
+  ];
+
+  it('reports a resize to the value it already holds as a no-op, not a change', () => {
+    const r = applyPlanEdits(PLAN2, [{ action: 'resize', activity: 'Easy run', duration_min: 40 }]);
+    expect(r.changes).toEqual([]);
+    expect(r.rejected).toEqual([]);
+    expect(r.noops).toEqual(['Easy run is already 40 min.']);
+  });
+
+  it('still reports a real resize', () => {
+    const r = applyPlanEdits(PLAN2, [{ action: 'resize', activity: 'Easy run', duration_min: 50 }]);
+    expect(r.changes).toEqual(['Easy run: 40 min → 50 min']);
+    expect(r.noops).toEqual([]);
+  });
+
+  it('treats a retime to the same time as a no-op', () => {
+    const r = applyPlanEdits(PLAN2, [{ action: 'retime', activity: 'Easy run', time_of_day: '19:00' }]);
+    expect(r.changes).toEqual([]);
+    expect(r.noops).toEqual(['Easy run is already at 19:00.']);
+  });
+
+  it('treats a move to the days it already runs on as a no-op', () => {
+    const r = applyPlanEdits(PLAN2, [{ action: 'move', activity: 'Easy run', days: ['tuesday'] }]);
+    expect(r.changes).toEqual([]);
+    expect(r.noops).toEqual(['Easy run is already on Tue.']);
+  });
+
+  /** A mixed batch keeps the real change and quietly drops the redundant one. */
+  it('separates the real change from the redundant one in the same batch', () => {
+    const two: Activity[] = [
+      ...PLAN2,
+      act({ title: 'Long run', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=SA', duration_min: 90 } }),
+    ];
+    const r = applyPlanEdits(two, [
+      { action: 'resize', activity: 'Easy run', duration_min: 40 },
+      { action: 'resize', activity: 'Long run', duration_min: 75 },
+    ]);
+    expect(r.changes).toEqual(['Long run: 90 min → 75 min']);
+    expect(r.noops).toEqual(['Easy run is already 40 min.']);
+  });
+});
+
+/**
+ * `add` dropped `how_to` on the floor — the same class as the rework/duration_min bug, and it bit
+ * for the same reason: the field is accepted by the schema and never carried. She passed
+ * "Easy conversational pace, roughly 4-5km" on a new run and it vanished, so prescribe-session —
+ * which reads how_to directly — went back to guessing and wrote a 25-minute run inside a
+ * 40-minute session.
+ */
+describe('applyPlanEdits — add carries what it was given', () => {
+  it('keeps how_to on a newly added commitment', () => {
+    const r = applyPlanEdits(
+      [],
+      [
+        {
+          action: 'add',
+          title: 'Easy run',
+          days: ['tuesday'],
+          duration_min: 50,
+          how_to: 'Easy conversational pace, roughly 4-5km',
+          time_of_day: '07:00',
+        },
+      ],
+    );
+    const added = r.activities.find((a) => a.title === 'Easy run')!;
+    expect(added.how_to).toBe('Easy conversational pace, roughly 4-5km');
+    expect(added.duration_min).toBe(50);
+    expect(added.time_of_day).toBe('07:00');
+  });
+
+  /** An untimed commitment sorts last in its day and anchors no reminder, so it must not be silent. */
+  it('says so on the card when an add leaves the commitment untimed', () => {
+    const r = applyPlanEdits([], [{ action: 'add', title: 'Easy run', days: ['tuesday'] }]);
+    expect(r.changes[0]).toContain('(no time set)');
+  });
+
+  it('says nothing extra when a time was given', () => {
+    const r = applyPlanEdits([], [{ action: 'add', title: 'Easy run', days: ['tuesday'], time_of_day: '07:00' }]);
+    expect(r.changes[0]).not.toContain('no time set');
   });
 });
 
