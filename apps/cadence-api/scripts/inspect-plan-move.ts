@@ -23,9 +23,9 @@ for (const r of logs) {
   console.log('meta  :', JSON.stringify(r.meta)?.slice(0, 400));
 }
 
-const plans = await sql<{ plan_id: string; status: string; version: number; created_at: string }[]>`
-  select plan_id, status, version, created_at from cadence.plans
-   where user_id = ${userId} order by created_at desc limit 3`;
+const plans = await sql<{ plan_id: string; status: string; version: number; generated_at: string }[]>`
+  select plan_id, status, version, generated_at from cadence.plans
+   where user_id = ${userId} order by generated_at desc limit 3`;
 console.log('\n── plans ──');
 console.log(plans);
 
@@ -38,7 +38,7 @@ if (active) {
 }
 
 const pending = await sql<{ pending_plan: unknown }[]>`
-  select baseline -> 'x' as ignore, pending_plan from cadence.users where id = ${userId}`;
+  select pending_plan from cadence.users where id = ${userId}`;
 console.log('\n── pending_plan ──');
 console.log(JSON.stringify(pending[0]?.pending_plan, null, 2)?.slice(0, 3000));
 
