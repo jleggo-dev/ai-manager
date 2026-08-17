@@ -1,8 +1,8 @@
 import { sql, json, type SqlExecutor } from '../db/sql.ts';
 import type { Activity } from '@cadence/shared';
 
-export async function listActivities(planId: string): Promise<Activity[]> {
-  return sql<Activity[]>`select * from cadence.activities where plan_id = ${planId}`;
+export async function listActivities(planId: string, db: SqlExecutor = sql): Promise<Activity[]> {
+  return db<Activity[]>`select * from cadence.activities where plan_id = ${planId}`;
 }
 
 /** Marks the per-plan "Off-plan" bucket activity that ad-hoc logs attach to. The plan view keeps
@@ -77,11 +77,14 @@ export async function insertActivities(
 ): Promise<Activity[]> {
   const out: Activity[] = [];
   for (const a of activities) {
+    // commitment_id null → the column's default mints a fresh lineage, which is exactly right for
+    // a genuinely new commitment. Anything continuing an existing one passes its id (0036).
     const [row] = await db<Activity[]>`
       insert into cadence.activities
-        (user_id, plan_id, goal_id, title, kind, category, schedule, target, completion_source, why, how_to, suggested)
+        (user_id, plan_id, commitment_id, goal_id, title, kind, category, schedule, target, completion_source, why, how_to, suggested)
       values (
-        ${userId}, ${planId}, ${a.goal_id ?? null}, ${a.title ?? ''}, ${a.kind ?? 'user'}, ${a.category ?? null},
+        ${userId}, ${planId}, coalesce(${a.commitment_id ?? null}::uuid, gen_random_uuid()),
+        ${a.goal_id ?? null}, ${a.title ?? ''}, ${a.kind ?? 'user'}, ${a.category ?? null},
         ${json(a.schedule ?? {})}, ${a.target ? json(a.target) : null},
         ${a.completion_source ?? 'self_report'}, ${a.why ?? null}, ${a.how_to ?? null}, ${a.suggested === true}
       )

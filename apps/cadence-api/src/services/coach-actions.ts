@@ -137,7 +137,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         plan_version: {
           type: 'integer',
           description:
-            'The version get_active_plan reported. Omit only if you did not read it — passing it is what catches handles that went stale when the plan moved.',
+            'The version get_active_plan reported. Handles keep working across versions; this only stops a TITLE-addressed edit landing on a plan that moved. Omit if you did not read it.',
         },
       },
       required: ['edits'],
@@ -151,15 +151,18 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         return 'They have no active plan yet, so there is nothing to change — offer to build one (the build card) instead.';
       }
       /**
-       * Handles die at the next Apply — `commitActivities` inserts fresh activity rows for every
-       * version. So a proposal built from a plan that has since moved is reasoning about a week
-       * that no longer exists, and the dangerous case is the title fallback, which WOULD happily
-       * resolve against the new plan and act on intent formed against the old one. Refuse the whole
-       * call: one honest "read it again" beats a partially-correct edit to someone's week.
+       * The plan moved after she read it.
+       *
+       * Since 0036 a handle names a COMMITMENT, not a row, so it survives an Apply — a handle that
+       * resolves is proof she is editing the thing she meant, whatever version it is on now, and
+       * the card recomputes the before→after from current state either way. What does NOT survive
+       * is the title fallback: it would happily match against the new plan and carry out intent
+       * formed against the old one. So the version gate now guards exactly that path.
        */
       const declared = Number(params.plan_version);
-      if (Number.isFinite(declared) && declared !== plan.version) {
-        return `Their plan is v${plan.version} now, not v${declared} — it changed after you read it, so every handle you have is stale. NOTHING was changed. Call get_active_plan again and re-propose from what it says now.`;
+      const moved = Number.isFinite(declared) && declared !== plan.version;
+      if (moved && edits.some((e) => !e.activities?.length)) {
+        return `Their plan is v${plan.version} now, not v${declared}, and at least one of those edits names a commitment by title rather than by handle — against a plan that has moved, that could change the wrong thing. NOTHING was changed. Call get_active_plan again and re-propose using the handles it prints.`;
       }
       const [activities, goals] = await Promise.all([
         listActivities(plan.plan_id),
@@ -191,6 +194,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       return [
         'Proposed — the user now has a card showing exactly this, with an Apply button:',
         ...changes.map((c) => `- ${c}`),
+        // Say it moved, so she describes the week that exists rather than the one she read.
+        ...(moved
+          ? [`Note: their plan is v${plan.version} now, not v${declared} — this was applied to the current one.`]
+          : []),
         ...(rejected.length ? ['Could not do:', ...rejected.map((r) => `- ${r}`)] : []),
         'Say in one line what you have put up and that it is theirs to apply. Do NOT claim it is done or scheduled — it is not, until they tap it.',
       ].join('\n');

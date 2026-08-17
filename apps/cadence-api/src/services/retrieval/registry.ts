@@ -105,7 +105,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
        */
       const lines = activities.map((a) => {
         const sched = a.schedule as { recurrence?: unknown } | undefined;
-        const handle = activityHandle(String(a.activity_id ?? ''));
+        const handle = activityHandle(String(a.commitment_id ?? ''));
         return `  - ${handle} [${String(a.kind)}] ${String(a.title)} — ${sched?.recurrence ? String(sched.recurrence) : ''}`;
       });
       // The steer is why this version exists, in the user's own words (0034). Without it a plan

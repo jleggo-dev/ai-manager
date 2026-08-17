@@ -15,6 +15,8 @@ const uuid = () => `${(++seq).toString(16).padStart(8, '0')}-1111-4111-8111-1111
 
 const act = (over: Partial<Activity> & { title: string }): Activity => ({
   activity_id: uuid(),
+  // The handle is derived from THIS, not activity_id (0036) — a commitment outlives its rows.
+  commitment_id: uuid(),
   plan_id: 'p1',
   kind: 'user',
   schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TH', duration_min: 40 },
@@ -196,7 +198,7 @@ describe('applyPlanEdits — addressing by handle', () => {
     act({ title: 'Easy run', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=WE', duration_min: 40 } }),
     act({ title: 'Long run', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=SA', duration_min: 90 } }),
   ];
-  const h = (i: number) => activityHandle(RUNS[i]!.activity_id);
+  const h = (i: number) => activityHandle(RUNS[i]!.commitment_id);
 
   it('hits exactly the commitment named, even when its twin is right beside it', () => {
     const r = applyPlanEdits(RUNS, [{ action: 'move', activities: [h(1)], days: ['friday'] }]);

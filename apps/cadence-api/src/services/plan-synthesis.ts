@@ -3,7 +3,7 @@ import { logAi } from './ai-log.ts';
 import { sql } from '../db/sql.ts';
 import { weatherVarsForUser } from './weather/weather.ts';
 import { getActivePlan, supersedeActivePlans, insertPlan } from '../repos/plans.ts';
-import { insertActivities } from '../repos/activities.ts';
+import { insertActivities, listActivities } from '../repos/activities.ts';
 import { deleteFuturePendingOccurrences } from '../repos/occurrences.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
 import { ensureHorizon } from './plan-horizon.ts';
@@ -329,6 +329,35 @@ export async function synthesizeAndVet(userId: string, opts: SynthesizeOpts): Pr
  * rolling horizon. Does no synthesis of its own — call planSynthesize first (directly, or via
  * planSynthesizeVetCommit in plan-fanout.ts for a flow with no preview step).
  */
+/**
+ * Give a rebuilt plan its predecessors' lineages, by title (0036).
+ *
+ * A rebuild is written from scratch by synthesis, so nothing in it carries a `commitment_id` — and
+ * without this, "build my week again" would orphan the history of every commitment it KEPT: same
+ * name, same slot, same person, no past. That is the failure this column exists to stop, arriving
+ * through a different door.
+ *
+ * So the title gets one last job, and it is a narrow one: deciding whether two things are the SAME
+ * across versions, never which of them an edit should hit. Ids are handed out from a per-title
+ * queue, so a plan that legitimately holds two same-titled rows keeps two distinct lineages and no
+ * id is ever used twice in one plan. Anything already carrying an id — every propose_plan_change
+ * edit — is left alone. Mutates `proposed` in place.
+ */
+export function inheritCommitmentIds(proposed: Partial<Activity>[], previous: Activity[]): void {
+  const available = new Map<string, string[]>();
+  for (const p of previous) {
+    const key = p.title.trim().toLowerCase();
+    const queue = available.get(key);
+    if (queue) queue.push(p.commitment_id);
+    else available.set(key, [p.commitment_id]);
+  }
+  for (const a of proposed) {
+    if (a.commitment_id) continue;
+    const inherited = available.get((a.title ?? '').trim().toLowerCase())?.shift();
+    if (inherited) a.commitment_id = inherited;
+  }
+}
+
 export async function commitActivities(
   userId: string,
   opts: {
@@ -343,6 +372,9 @@ export async function commitActivities(
 ): Promise<CommitResult> {
   const occurrenceDays = opts.occurrenceDays ?? 14;
   const proposed: Partial<Activity>[] = opts.activities.map((a) => ({
+    // Which commitment this is a new version OF (0036). Edits carry it through the proposal; a
+    // full rebuild does not, and inheritCommitmentIds below supplies it from the outgoing plan.
+    commitment_id: a.commitment_id,
     title: a.title,
     kind: a.kind,
     category: a.category,
@@ -368,6 +400,7 @@ export async function commitActivities(
   const { plan, version, activityCount } = await sql.begin(async (tx) => {
     const old = await getActivePlan(userId, tx);
     const v = (old?.version ?? 0) + 1;
+    if (old) inheritCommitmentIds(proposed, await listActivities(old.plan_id, tx));
     await supersedeActivePlans(userId, tx);
     const p = await insertPlan(
       userId,

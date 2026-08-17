@@ -171,6 +171,68 @@ d('API-01 — plan commit pipeline', () => {
     expect(active?.plan_id).not.toBe(v1?.plan_id);
   });
 
+  /**
+   * A19 / 0036 — the claim the whole feature rests on, against a real commit.
+   *
+   * `activity_id` dies at every Apply, so a handle built from one was worthless the moment the
+   * user tapped. These prove `commitment_id` is not: same commitment, new row, same identity.
+   */
+  it('carries a commitment through Apply — new activity row, same lineage', async () => {
+    const goalId = await seedGoal();
+    await commitActivities(USER, { activities: acts(goalId, 2), note: 'v1', goalIds: [goalId] });
+    const v1 = await getActivePlan(USER);
+    const before = await listActivities(v1!.plan_id);
+
+    // Exactly what propose_plan_change produces: the same commitments, one of them changed.
+    const edited = before.map((a) => ({
+      commitment_id: a.commitment_id,
+      title: a.title,
+      kind: a.kind,
+      cadence: 'weekly',
+      recurrence: a.title.endsWith('1') ? 'FREQ=WEEKLY;BYDAY=FR' : a.schedule.recurrence,
+      completion_source: a.completion_source,
+      goal_id: goalId,
+    }));
+    await commitActivities(USER, { activities: edited, note: 'v2', goalIds: [goalId] });
+
+    const after = await listActivities((await getActivePlan(USER))!.plan_id);
+    // The rows are genuinely new — this is a supersede, not an update.
+    expect(after.map((a) => a.activity_id).sort()).not.toEqual(before.map((a) => a.activity_id).sort());
+    // The commitments are the same ones, so a handle read before the tap still names them after.
+    expect(after.map((a) => a.commitment_id).sort()).toEqual(before.map((a) => a.commitment_id).sort());
+    const moved = after.find((a) => a.title.endsWith('1'))!;
+    expect(moved.commitment_id).toBe(before.find((a) => a.title.endsWith('1'))!.commitment_id);
+    expect(moved.schedule.recurrence).toBe('FREQ=WEEKLY;BYDAY=FR');
+  });
+
+  /** A rebuild carries no lineage of its own — inheritCommitmentIds supplies it, or six weeks of
+   *  history detaches from the commitment that earned it. */
+  it('a REBUILD inherits lineage by title rather than orphaning what it kept', async () => {
+    const goalId = await seedGoal();
+    await commitActivities(USER, { activities: acts(goalId, 2), note: 'v1', goalIds: [goalId] });
+    const before = await listActivities((await getActivePlan(USER))!.plan_id);
+
+    // Synthesis output: same titles, no commitment_id anywhere.
+    await commitActivities(USER, { activities: acts(goalId, 2), note: 'rebuild', goalIds: [goalId] });
+    const after = await listActivities((await getActivePlan(USER))!.plan_id);
+
+    expect(after.map((a) => a.commitment_id).sort()).toEqual(before.map((a) => a.commitment_id).sort());
+  });
+
+  it('a commitment the rebuild did not have gets a lineage of its own', async () => {
+    const goalId = await seedGoal();
+    await commitActivities(USER, { activities: acts(goalId, 1), note: 'v1', goalIds: [goalId] });
+    const before = await listActivities((await getActivePlan(USER))!.plan_id);
+
+    await commitActivities(USER, { activities: acts(goalId, 2), note: 'v2', goalIds: [goalId] });
+    const after = await listActivities((await getActivePlan(USER))!.plan_id);
+
+    expect(after).toHaveLength(2);
+    expect(after.map((a) => a.commitment_id)).toContain(before[0]!.commitment_id);
+    // Two commitments, two identities — never one id on two rows of the same plan.
+    expect(new Set(after.map((a) => a.commitment_id)).size).toBe(2);
+  });
+
   it('rolls back a mid-flight failure — the prior active plan survives (THE API-01 fix)', async () => {
     const goalId = await seedGoal();
     await commitActivities(USER, { activities: acts(goalId, 2), note: 'v1', goalIds: [goalId] });

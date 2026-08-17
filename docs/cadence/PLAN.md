@@ -2635,7 +2635,24 @@ The general lesson, same family as the constraints panel: **every silently-absor
 lie waiting to be told.** A schema that accepts what it does not honour teaches the model that
 saying it was enough.
 
-**A19. A commitment identity that survives Apply — the second half of plan addressing (owner 2026-08-17; layer 1 shipped, this is layer 2)**
+**A19. A commitment identity that survives Apply — SHIPPED 2026-08-17 (migration 0036)**
+
+> Built the same day it was written up, at the owner's call ("we need it and let's do it before
+> deploying"). `commitment_id` is on `cadence.activities`, backfilled, and carried forward by
+> `commitActivities`; handles are derived from it, so a handle read three versions ago still names
+> the right commitment today. The `plan_version` gate narrowed accordingly: it now refuses only a
+> TITLE-addressed edit against a moved plan, and a handle-addressed one proceeds with a note.
+> **Deploy order matters — the migration must be applied before the code that reads the column
+> (already applied to the shared DB; it is backward-compatible, so old code kept working).**
+> Verified against real data: 122 activity rows collapsed to 17 lineages, "Long run" threading
+> cleanly through all eight of its plan versions, and no lineage appearing twice in one plan.
+> One accepted imperfection is recorded in the migration: for same-titled TWINS, which one
+> continued which across versions is unrecoverable, so their two histories may be crossed at the
+> version where they appeared.
+>
+> The original write-up follows, kept for the reasoning.
+
+**A19 (as written). A commitment identity that survives Apply — the second half of plan addressing (owner 2026-08-17)**
 
 Owner, after A18: *"It still feels here a bit like we're guessing… Cadence should be able to look
 up an assigned activity and find its unique ID and then deliberately change that unique one."*

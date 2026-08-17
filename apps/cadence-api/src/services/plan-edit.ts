@@ -163,6 +163,9 @@ export function matchActivityOnDays<T extends { title: string; recurrence: strin
 
 function toPending(a: Activity, goalTitle?: string): PendingPlanActivity {
   return {
+    // The lineage rides through the proposal so committing it CHANGES this commitment rather than
+    // replacing it with a look-alike that has no history (0036).
+    commitment_id: a.commitment_id,
     title: a.title,
     kind: a.kind,
     ...(a.category ? { category: a.category } : {}),
@@ -188,12 +191,12 @@ function toPending(a: Activity, goalTitle?: string): PendingPlanActivity {
  * hundred tokens on every turn that reads the plan, and models drop hex digits from long strings.
  * Eight is collision-free at plan scale and short enough to copy exactly.
  *
- * STABLE WITHIN A PLAN VERSION ONLY. `commitActivities` inserts fresh activity rows on every
- * Apply, so a handle read from v7 is meaningless against v8 — `propose_plan_change` carries the
- * version it read and refuses stale handles rather than resolving them against a moved plan. A
- * commitment identity that survives a version bump is the next layer of this (PLAN.md A19).
+ * Derived from `commitment_id`, NOT `activity_id` (0036). Activity rows are replaced wholesale on
+ * every Apply, so a handle built from one was dead the moment the user tapped; the commitment is
+ * the thing they actually have, and it survives. A handle read three versions ago still names the
+ * right commitment today.
  */
-export const activityHandle = (activityId: string): string => activityId.replace(/-/g, '').slice(0, 8);
+export const activityHandle = (commitmentId: string): string => commitmentId.replace(/-/g, '').slice(0, 8);
 
 /** How a rejected edit shows the coach what she COULD have addressed. */
 function handleList(working: PendingPlanActivity[], handles: Map<PendingPlanActivity, string>): string {
@@ -383,7 +386,7 @@ export function applyPlanEdits(
   const handles = new Map<PendingPlanActivity, string>();
   const working = current.map((a) => {
     const pending = toPending(a, a.goal_id ? goalTitleById[a.goal_id] : undefined);
-    handles.set(pending, activityHandle(a.activity_id));
+    handles.set(pending, activityHandle(a.commitment_id));
     return pending;
   });
   const changes: string[] = [];

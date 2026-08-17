@@ -58,6 +58,8 @@ describe('propose_plan_change', () => {
     listActivities.mockResolvedValue([
       {
         activity_id: 'a1',
+        // The handle is the first 8 hex of THIS (0036), so tests address it as "aaaaaaaa".
+        commitment_id: 'aaaaaaaa-1111-4111-8111-111111111111',
         plan_id: 'p1',
         title: 'Easy run',
         kind: 'user',
@@ -108,12 +110,12 @@ describe('propose_plan_change', () => {
   });
 
   /**
-   * Handles die at the next Apply — commitActivities inserts fresh activity rows for every
-   * version — so a proposal built against a plan that has since moved is reasoning about a week
-   * that no longer exists. The title fallback is the dangerous part: it WOULD resolve happily
-   * against the new plan and act on intent formed against the old one.
+   * Since 0036 a handle names a COMMITMENT, which survives Apply — so a stale version is no
+   * longer fatal to a handle-addressed edit. The TITLE fallback is the part that is still
+   * dangerous on a moved plan: it resolves happily against the new one and carries out intent
+   * formed against the old.
    */
-  it('refuses the whole call when the plan moved after she read it', async () => {
+  it('refuses a title-addressed edit when the plan moved after she read it', async () => {
     getActivePlan.mockResolvedValue({ plan_id: 'p1', version: 9 });
     const out = await propose.run('u1', {
       plan_version: 7,
@@ -123,6 +125,19 @@ describe('propose_plan_change', () => {
     expect(out).toMatch(/v9 now, not v7/);
     expect(out).toMatch(/NOTHING was changed/);
     expect(out).toMatch(/get_active_plan again/);
+  });
+
+  /** The friction A19 removes: a handle read three versions ago still names the right commitment,
+   *  so a moved plan is a note in her ear, not a refusal and a re-read. */
+  it('proceeds on a moved plan when the edit is addressed by handle, and says it moved', async () => {
+    getActivePlan.mockResolvedValue({ plan_id: 'p1', version: 9 });
+    const out = await propose.run('u1', {
+      plan_version: 7,
+      edits: [{ action: 'move', activities: ['aaaaaaaa'], days: ['friday'] }],
+    });
+    expect(setPendingPlan).toHaveBeenCalledTimes(1);
+    expect(out).toMatch(/Apply button/);
+    expect(out).toMatch(/v9 now, not v7 — this was applied to the current one/);
   });
 
   it('proceeds when the version she read is still the live one', async () => {
