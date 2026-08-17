@@ -193,4 +193,103 @@ describe('matchActivity', () => {
     expect(matchActivity(PLAN, '  ')).toBeNull();
     expect(matchActivity(PLAN, 'swimming')).toBeNull();
   });
+
+  /**
+   * The exact branch used to be `.find()` — first of N twins wins, silently. On 2026-08-17 that
+   * chose Tuesday's "Easy run" over Wednesday's and moved the wrong one to Friday, five times,
+   * while the model's arguments never said Tuesday at all. Two of a name is a question, not a pick.
+   */
+  it('refuses to choose between two commitments with the identical title', () => {
+    const twins = [{ title: 'Easy run' }, { title: 'Easy run' }];
+    expect(matchActivity(twins, 'Easy run')).toBeNull();
+  });
+});
+
+/**
+ * The 2026-08-17 incident, end to end.
+ *
+ * One applied card renamed Tuesday's run to "Easy run" AND added a Wednesday "Easy run" beside it.
+ * The user then asked to move the WEDNESDAY one to Friday; the coach called
+ * `move "Easy run" ["friday"]` and the engine's first-match-wins pick moved TUESDAY's. She retried
+ * five times, pushing "the Wednesday one" into `why` and `how_to` — fields the move path never
+ * reads — because the schema had no way to say it. These tests are that way.
+ */
+describe('applyPlanEdits — twins and on_days', () => {
+  const TWINS: Activity[] = [
+    act({
+      title: 'Easy run',
+      schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU', time_of_day: '19:00', duration_min: 60 },
+    }),
+    act({ title: 'Easy run', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=WE', duration_min: 40 } }),
+    act({ title: 'Long run', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=SA', duration_min: 90 } }),
+  ];
+
+  it('moves the one its current days name, and only that one', () => {
+    const r = applyPlanEdits(TWINS, [
+      { action: 'move', activity: 'Easy run', on_days: ['wednesday'], days: ['friday'] },
+    ]);
+    expect(r.rejected).toEqual([]);
+    expect(r.changes).toEqual(['Move Easy run: Wed → Fri']);
+    const recurrences = r.activities.filter((a) => a.title === 'Easy run').map((a) => a.recurrence);
+    // Tuesday's run has NOT moved. That is the entire incident.
+    expect(recurrences).toContain('FREQ=WEEKLY;BYDAY=TU');
+    expect(recurrences).toContain('FREQ=WEEKLY;BYDAY=FR');
+  });
+
+  it('refuses a bare title that names twins, and says how to disambiguate', () => {
+    const r = applyPlanEdits(TWINS, [{ action: 'move', activity: 'Easy run', days: ['friday'] }]);
+    expect(r.changes).toEqual([]);
+    expect(r.rejected[0]).toMatch(/2 commitments are called "Easy run"/);
+    expect(r.rejected[0]).toMatch(/on_days/);
+    // Nothing moved — refusing is the fix; guessing was the bug.
+    expect(r.activities.map((a) => a.recurrence)).toEqual(TWINS.map((a) => a.schedule.recurrence));
+  });
+
+  it('rejects on_days that match nothing rather than falling back to a guess', () => {
+    const r = applyPlanEdits(TWINS, [{ action: 'move', activity: 'Easy run', on_days: ['monday'], days: ['friday'] }]);
+    expect(r.changes).toEqual([]);
+    expect(r.rejected[0]).toMatch(/on monday/);
+  });
+
+  it('on_days works for a singleton too — "the Saturday run" is just precise', () => {
+    const r = applyPlanEdits(TWINS, [
+      { action: 'resize', activity: 'Long run', on_days: ['saturday'], duration_min: 75 },
+    ]);
+    expect(r.changes).toEqual(['Long run: 90 min → 75 min']);
+  });
+
+  it('will not ADD a twin — the pair above should never have been creatable', () => {
+    const r = applyPlanEdits(PLAN, [{ action: 'add', title: 'Easy run', days: ['wednesday'] }], GOALS);
+    expect(r.changes).toEqual([]);
+    expect(r.rejected[0]).toMatch(/already names a commitment/);
+    expect(r.activities.filter((a) => a.title === 'Easy run')).toHaveLength(1);
+  });
+
+  it('will not RENAME into a twin either — how this pair was actually born', () => {
+    const plan = [act({ title: 'Easy base run - post-recovery assessment' }), act({ title: 'Easy run' })];
+    const r = applyPlanEdits(plan, [
+      { action: 'rework', activity: 'Easy base run - post-recovery assessment', title: 'Easy run' },
+    ]);
+    expect(r.changes).toEqual([]);
+    expect(r.rejected[0]).toMatch(/impossible to tell apart/);
+  });
+
+  /** She passed duration_min on a rework twice and both were silently dropped — the "35-40 minute
+   *  easy run" she described stayed 60 minutes in the plan. A field the schema accepts must act. */
+  it('rework honours duration_min instead of silently dropping it', () => {
+    const r = applyPlanEdits(TWINS, [
+      {
+        action: 'rework',
+        activity: 'Easy run',
+        on_days: ['tuesday'],
+        how_to: 'Easy conversational pace, 4-5km',
+        duration_min: 40,
+      },
+    ]);
+    expect(r.rejected).toEqual([]);
+    const tue = r.activities.find((a) => a.recurrence === 'FREQ=WEEKLY;BYDAY=TU')!;
+    expect(tue.duration_min).toBe(40);
+    expect(tue.how_to).toBe('Easy conversational pace, 4-5km');
+    expect(r.changes[0]).toMatch(/60 → 40 min/);
+  });
 });

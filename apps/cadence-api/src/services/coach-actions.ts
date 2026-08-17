@@ -81,10 +81,17 @@ const EDIT_SCHEMA = {
         type: 'string',
         description: 'Which commitment to change, by its title exactly as the plan lists it. Not used for add.',
       },
+      on_days: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Which one, when two commitments share a title: the days it happens on NOW. "The Wednesday easy run" is activity "Easy run" + on_days ["wednesday"]. Omit when the title alone is unambiguous.',
+      },
       days: {
         type: 'array',
         items: { type: 'string' },
-        description: 'For move and add: the days, e.g. ["friday"] or ["monday","thursday"].',
+        description:
+          'For move and add: ALL the days it should happen on afterwards — this replaces its whole weekly pattern, so a twice-a-week session keeps both days only if you name both, e.g. ["tuesday","friday"].',
       },
       time_of_day: { type: 'string', description: 'For retime and add, e.g. "07:00" or "evening".' },
       duration_min: { type: 'integer', description: 'For resize and add: minutes per session.' },
@@ -112,6 +119,7 @@ function asEdits(raw: unknown): PlanEdit[] {
     .map((e) => ({
       action: String(e.action ?? '') as PlanEdit['action'],
       ...(typeof e.activity === 'string' ? { activity: e.activity } : {}),
+      ...(Array.isArray(e.on_days) ? { on_days: e.on_days.map(String) } : {}),
       ...(Array.isArray(e.days) ? { days: e.days.map(String) } : {}),
       ...(typeof e.time_of_day === 'string' ? { time_of_day: e.time_of_day } : {}),
       ...(e.duration_min != null ? { duration_min: Number(e.duration_min) } : {}),
@@ -147,7 +155,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   propose_plan_change: {
     name: 'propose_plan_change',
     description:
-      'Propose a specific change to the plan they already have — move a session to other days, retime it, resize it, drop it, add one, or rework what one CONTAINS (swap an exercise). This does NOT change anything: it works out the resulting week and shows a card with an Apply button, so the plan moves only when they tap. Use it the moment they name a change, in the same reply — never describe what you could do instead of doing it, never make them say it twice, never claim it is done before the tap. Read get_active_plan first and name commitments exactly as it lists them; a whole rebuild is the build card. Pass {"edits": [{"action": "move", "activity": "Easy run", "days": ["friday"]}]}, or {"edits": [{"action": "rework", "activity": "Grip finisher", "how_to": "Dead hangs, not farmers carries"}]}.',
+      'Propose a specific change to the plan they already have — move a session to other days, retime it, resize it, drop it, add one, or rework what one CONTAINS (swap an exercise). This does NOT change anything: it works out the resulting week and shows a card with an Apply button, so the plan moves only when they tap. Use it the moment they name a change, in the same reply — never describe instead of doing, never claim it is done before the tap. Read get_active_plan first and name commitments exactly as listed; if two share a title, add on_days with the days the one you mean happens on NOW. A whole rebuild is the build card. Pass {"edits": [{"action": "move", "activity": "Easy run", "on_days": ["wednesday"], "days": ["friday"]}]} — or "rework" with how_to ("Dead hangs, not farmers carries").',
     parameters: { properties: { edits: EDIT_SCHEMA }, required: ['edits'] },
     async run(userId, params) {
       const edits = asEdits(params.edits);
@@ -350,7 +358,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   update_constraint: {
     name: 'update_constraint',
     description:
-      'Record a change to something the user works around — a knee, a night shift, a hard stretch. Takes effect immediately. Use when one has EASED ("my knee is fine now" → lift, which keeps it on file as quiet so you still know it happened), FLARED again (flare), is genuinely NEW (add), or is on file under WORDING THEY DISLIKE ("don\'t say ramp gently, say left ankle tendinitis" → reword, with new_label). Use remove ONLY when they say it was recorded wrongly and was never true ("I have never had a knee injury") — an error to erase, not history to keep; recovering from something is never a reason to remove it. Read get_constraints first and name it as listed. Pass {"constraint": "left knee", "action": "lift"}, or {"constraint": "night shifts", "action": "add", "kind": "life", "plan_around": true, "until": "2026-09-30"}, or {"constraint": "ramp gently because of tendinitis", "action": "reword", "new_label": "left ankle tendinitis"}.',
+      'Record a change to something they work around — a knee, a night shift, a hard stretch. Takes effect immediately. Use when one has EASED ("my knee is fine now" → lift, kept on file as quiet so you still know it happened), FLARED again (flare), is genuinely NEW (add), or is worded badly (reword, with new_label). Use remove ONLY when it was recorded wrongly and never true ("I have never had a knee injury") — an error to erase, not history; recovering is never a reason to remove. Read get_constraints first and name it as listed. Pass {"constraint": "left knee", "action": "lift"}; {"constraint": "night shifts", "action": "add", "kind": "life", "plan_around": true, "until": "2026-09-30"}; or {"constraint": "ramp gently", "action": "reword", "new_label": "left ankle tendinitis"}.',
     parameters: {
       properties: {
         constraint: { type: 'string', description: 'Which one, by its label as get_constraints lists it.' },
@@ -363,7 +371,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         new_label: {
           type: 'string',
           description:
-            'For reword: what it should say instead. Their words, not yours. Name the thing itself, not what to do about it.',
+            'Required for reword: what it should say instead — their words, naming the thing itself, not what to do about it.',
         },
         kind: {
           type: 'string',

@@ -53,6 +53,12 @@ export interface PlanEdit {
   action: PlanEditAction;
   /** Which commitment to change — matched loosely against its title. Not needed for `add`. */
   activity?: string;
+  /**
+   * Which one, when the title alone is ambiguous: the days it happens on NOW. "The Wednesday
+   * easy run" is `activity: "Easy run", on_days: ["wednesday"]`. Without this there was no way
+   * to name one of two same-titled commitments at all (2026-08-17).
+   */
+  on_days?: string[];
   /** `move`: the days it should happen on, e.g. ["friday"] or ["mon","wed"]. */
   days?: string[];
   /** `retime`: "07:00", or a word the plan already uses ("morning"). */
@@ -105,14 +111,44 @@ function withDays(recurrence: string, byday: string): string {
 export function matchActivity<T extends { title: string }>(items: T[], query: string): T | null {
   const q = query.trim().toLowerCase();
   if (!q) return null;
-  const exact = items.find((a) => a.title.trim().toLowerCase() === q);
-  if (exact) return exact;
+  /**
+   * Ambiguity is a rejection, not a coin flip — on the EXACT branch too. This used to be
+   * `items.find(...)`, first match wins, and on 2026-08-17 that silently chose between two
+   * commitments both titled "Easy run" (Tuesday's, renamed by one edit; Wednesday's, added by the
+   * next) and moved the wrong one. The model's arguments never said Tuesday — the pick happened
+   * here, invisibly. Five identical retries, each trying to say "the Wednesday one" through
+   * fields the move path never reads, could not steer it: there was nothing to steer.
+   */
+  const exact = items.filter((a) => a.title.trim().toLowerCase() === q);
+  if (exact.length) return exact.length === 1 ? (exact[0] ?? null) : null;
   const contains = items.filter((a) => {
     const t = a.title.trim().toLowerCase();
     return t.includes(q) || q.includes(t);
   });
-  // Ambiguity is a rejection, not a coin flip: changing the wrong session is worse than asking.
   return contains.length === 1 ? (contains[0] ?? null) : null;
+}
+
+/**
+ * The disambiguator `matchActivity` refuses to guess at: "the Wednesday one", said in schema.
+ * Filters to commitments whose CURRENT days include every day named, then matches by title within
+ * that. Falls back to the plain title match when no days are given.
+ */
+export function matchActivityOnDays<T extends { title: string; recurrence: string }>(
+  items: T[],
+  query: string,
+  onDays: string[] | undefined,
+): T | null {
+  const byday = toByDay(onDays);
+  if (!byday) return matchActivity(items, query);
+  const wanted = byday.split(',');
+  const scoped = items.filter((a) => {
+    const r = (a.recurrence || '').toUpperCase();
+    // A daily commitment happens on every day named; a weekly one on its BYDAY list.
+    if (r.includes('FREQ=DAILY')) return true;
+    const has = new Set(r.match(/BYDAY=([A-Z,]+)/)?.[1]?.split(',') ?? []);
+    return wanted.every((d) => has.has(d));
+  });
+  return matchActivity(scoped, query);
 }
 
 function toPending(a: Activity, goalTitle?: string): PendingPlanActivity {
@@ -157,6 +193,18 @@ export function applyPlanEdits(
         rejected.push('Tried to add a commitment with no name.');
         continue;
       }
+      /**
+       * Two commitments must never share a name. Titles are the ONLY handle every later edit has
+       * — one card on 2026-08-17 renamed Tuesday's run "Easy run" and added a Wednesday "Easy
+       * run" beside it, and from that moment "move the Wednesday one" was inexpressible: every
+       * attempt matched the twin, and the wrong run moved to Friday.
+       */
+      if (working.some((a) => a.title.trim().toLowerCase() === title.toLowerCase())) {
+        rejected.push(
+          `"${title}" already names a commitment — a second one by the same name could never be told apart again. Pick a distinct name ("${title} (Wednesday)", "${title} — hills").`,
+        );
+        continue;
+      }
       const byday = toByDay(edit.days) ?? 'MO,WE,FR';
       const recurrence = `FREQ=WEEKLY;BYDAY=${byday}`;
       const goalId = Object.keys(goalTitleById).find((id) => goalTitleById[id] === edit.goal_title);
@@ -182,9 +230,14 @@ export function applyPlanEdits(
       rejected.push(`A "${edit.action}" change didn't say which commitment it meant.`);
       continue;
     }
-    const found = matchActivity(working, query);
+    const found = matchActivityOnDays(working, query, edit.on_days);
     if (!found) {
-      rejected.push(`Nothing in the plan clearly matches "${query}".`);
+      const twins = working.filter((a) => a.title.trim().toLowerCase() === query.toLowerCase());
+      rejected.push(
+        twins.length > 1 && !edit.on_days?.length
+          ? `${twins.length} commitments are called "${query}" (${twins.map((a) => describeRecurrence(a.recurrence)).join(' / ')}) — say which by its current days, e.g. on_days: ["wednesday"].`
+          : `Nothing in the plan clearly matches "${query}"${edit.on_days?.length ? ` on ${edit.on_days.join(', ')}` : ''}.`,
+      );
       continue;
     }
 
@@ -225,11 +278,32 @@ export function applyPlanEdits(
         rejected.push(`Couldn't tell what ${found.title} should become.`);
         continue;
       }
+      // The same twin guard as add: a rename that collides is how the 2026-08-17 pair was born.
+      if (newTitle && working.some((a) => a !== found && a.title.trim().toLowerCase() === newTitle.toLowerCase())) {
+        rejected.push(
+          `"${newTitle}" already names a commitment — renaming ${found.title} to match it would make the two impossible to tell apart. Pick a distinct name.`,
+        );
+        continue;
+      }
       const was = found.title;
       if (how) found.how_to = how;
       if (newTitle) found.title = newTitle;
+      /**
+       * A rework that says how long it should now take gets that too. The schema always accepted
+       * `duration_min` and this branch silently dropped it — the coach passed 35, then 40, in two
+       * successive proposals on 2026-08-17, both were discarded without a word, and the "35-40
+       * minute easy run" she described to the user stayed 60 minutes in the plan.
+       */
+      const reworkMins = Number(edit.duration_min);
+      const resized = Number.isFinite(reworkMins) && reworkMins > 0 && reworkMins <= 600;
+      const wasMins = found.duration_min;
+      if (resized) found.duration_min = Math.round(reworkMins);
+      const minsNote =
+        resized && wasMins !== found.duration_min ? ` (${wasMins ?? '?'} → ${found.duration_min} min)` : '';
       changes.push(
-        newTitle && newTitle !== was ? `${was} → ${newTitle}${how ? `: ${how}` : ''}` : `${was}: ${how ?? 'renamed'}`,
+        newTitle && newTitle !== was
+          ? `${was} → ${newTitle}${how ? `: ${how}` : ''}${minsNote}`
+          : `${was}: ${how ?? 'renamed'}${minsNote}`,
       );
       continue;
     }

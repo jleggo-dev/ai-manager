@@ -2596,6 +2596,45 @@ mechanical faults it surfaced.
    picks, which never reaches 1. Either the last turn must carry 1, or the confirm stage should pin
    it — a bar that never completes undercuts the one screen that says "done".
 
+**A18. "Move the Wednesday run" moved the Tuesday run — anatomy of a mis-invocation (owner 2026-08-17; engine fixed same day, on the harness branch)**
+
+Owner, mid device test: *"She repeats herself, she moves the Tuesday run to Friday (even though
+she was trying to move the Wednesday run)… It's like she isn't able to correctly invoke the tool.
+I feel like it can't be pure hallucination."* Correct on every count. Reconstructed from
+`cadence.ai_log` (kind `coach_tool`), the exact chain:
+
+1. **04:37 — one applied card created twins.** A `rework` retitled Tuesday's "Easy base run -
+   post-recovery assessment" to "Easy run", and the `add` beside it created a second "Easy run"
+   on Wednesday. Nothing guarded against two commitments sharing a name. Titles are the ONLY
+   handle later edits have.
+2. **04:41 — the engine, not the model, picked Tuesday.** Asked to move the *Wednesday* one, she
+   called `move "Easy run" → ["friday"]`; her arguments never said Tuesday. `matchActivity`'s
+   exact branch was `.find()` — first of N twins wins, silently (the containment branch had an
+   ambiguity guard; the exact branch didn't). Tool output, honestly: *"Move Easy run: Tue → Fri"*.
+3. **She could not have said it correctly.** The edit schema had no way to name one of two
+   same-titled commitments. Watch her flail, retry by retry: the intent migrates into `why`
+   ("Wednesday's new easy run moves to Friday… Tuesday's easy run is untouched") and then into
+   `how_to` ("Move only the Wednesday-scheduled easy run") — fields the move path never read.
+4. **Five identical proposals in twelve minutes** (04:41–04:53) — that is #232: the tool's answer
+   never reaches her, so each round is a fresh generation that cannot see "Tue → Fri" and correct
+   course. The repetition the owner heard is the same bug that ate the tool results.
+5. **Two silent drops for garnish:** `rework` accepted `duration_min` (she sent 35, then 40) and
+   discarded it — the "35-40 minute easy run" she promised stayed 60 minutes in the plan. And
+   `move` replaces the whole weekly BYDAY set, which the description's own example
+   (`days: ["friday"]`) actively taught.
+
+Fixed in the engine the same day (with the incident as tests, `plan-edit.test.ts`): exact-match
+ambiguity now rejects instead of guessing; `on_days` lets an edit say "the Wednesday one" in
+schema; `add`/`rework`-rename refuse to create a twin; `rework` honours `duration_min`; the
+`days` description says it replaces the whole pattern. NOT yet done: the residue in the owner's
+live plan (two "Easy run" rows, v8) needs hand-tidying or a reworded card once deployed; and a
+`done` occurrence dated 2026-08-30 (a pre-#227 log that landed on a future row) still sits in
+`cadence.occurrences`.
+
+The general lesson, same family as the constraints panel: **every silently-absorbed field is a
+lie waiting to be told.** A schema that accepts what it does not honour teaches the model that
+saying it was enough.
+
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 
 Hit on device: at the end of onboarding every way of saving the plan answered "you already have an
