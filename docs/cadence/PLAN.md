@@ -2721,6 +2721,59 @@ showing 2/3 filled is counting what happened. A ring that renders the missing th
 absence — a gap, a dimmed slot — is counting what broke, and is the streak-shame shape under a new
 name. The design has to land on the first reading.
 
+**A21. Where you live vs where you are — the location that never moved (owner 2026-08-17, DESIGNED, not built)**
+
+Owner: *"I live in Notre-Dame-de-l'Île-Perrot. I'm currently downtown Montreal (and have been since
+7:30 am) — the location never updated."*
+
+**Why.** [`useTodayHeader.ts`](../../apps/cadence-web/src/features/today/useTodayHeader.ts) only
+moves the stored point past **50 km**. NDIP → downtown Montreal is **30.4 km**, so the check ran,
+measured, and correctly did nothing. The 50 km was tuned on the owner's Lisbon → Montreal flight
+(5,225 km, 2026-08-14); coarse rounding is 2 d.p., so real jitter is ~1.1 km. A factor of ~45
+between the noise it must reject and the bar it sets.
+
+**The design problem underneath.** `home_location` is doing two jobs: where you LIVE (notification
+anchoring reads it — `notify-candidates.ts`) and where you ARE (the header's weather and city).
+Lowering the threshold fixes the header and quietly breaks the other: commute daily and "home"
+becomes downtown, then Île-Perrot, then downtown, with notification timing riding along.
+
+**Agreed shape (owner ruled):**
+- `home_location` stays HOME. Deliberate changes, or a genuine relocation. Notifications keep it.
+- A TRANSIENT current position feeds the header's weather + city and nothing else. Threshold **5 km**
+  — clear of the ~1.1 km jitter, tight enough to catch a new town name.
+- Disrupted mode stays CONVERSATIONAL. Verified 2026-08-17: nothing triggers it from location today
+  — `detour-signal.ts` is a keyword gate on the chat window and `insertEpisode` has one caller
+  reached from there. No distance constant exists to fix, and none should be added.
+
+**Refresh cadence — the constraint is NOT the weather API.** `getWeather` is already two-tier cached
+(in-process Map + `cadence.weather_cache`, 1 h soft TTL, keyed by day + coarse bucket), so reading
+repeatedly at one place is nearly free. The per-call cost is on the SAVE: `POST /me/location` runs
+`reverseGeocode` to name the place. So throttle updating, not reading. The check fires only on
+Today-tab mount (no timers, no polling), but at 5 km a 30 km commute would cross it repeatedly —
+Île-Perrot → Dorval → Lachine → downtown, renaming the header each leg.
+
+Two client-side gates, both cheap:
+1. **Dwell.** Never move on the first reading at a new place. Hold it as a candidate and commit only
+   when a later mount still finds you within ~2 km of it, ≥ ~20 min on. A train is never in the same
+   2 km twenty minutes later; an office always is.
+2. **A floor** of ~30 min between saves regardless.
+
+Net: three app opens on the train change nothing; an hour at the office says Montreal. One geocode
+per real relocation. Falls out for free that a long bike ride never settles, so it never fires.
+
+**If location is ever wired to disruption, the signal is PERSISTENCE, not distance.** Owner:
+*"disrupted mode should probably be asked on 100+ kms (as long as I'm not out for a 75km bike
+ride?)… def. going to work isn't travelling."* Distance cannot separate those — you are home by
+dinner from the ride and in Lisbon when you wake up. Travel is about where you WAKE UP. A 100 km
+bar fires on the ride and misses a week in Toronto at 500 km: wrong at both ends. Use displaced-
+overnight, or still-displaced-N-hours.
+
+**UI:** drop the `· CHANGE` affordance from the header (owner: "taking up too much real estate") —
+keep the city as plain text, since that label is how this bug was noticed; the manual override
+already lives in Settings. Keep the "Set location for weather" button, which only shows when
+nothing is stored at all. Open: should the header signal you are away from home, or just say
+Montreal?
+
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 
 Hit on device: at the end of onboarding every way of saving the plan answered "you already have an
