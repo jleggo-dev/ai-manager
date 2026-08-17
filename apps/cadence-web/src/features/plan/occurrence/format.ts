@@ -13,6 +13,25 @@ export function qty(i: SessionItem): string {
   return parts.join(' · ');
 }
 
+/**
+ * "40 min (allow 50)" for the sheet header — the effort, then the time to actually keep free.
+ *
+ * `schedule.duration_min` is the effort alone (owner ruling 2026-08-17), and the honest total here
+ * is not an estimate: the session has already been written, so the sum of its prescribed blocks —
+ * warm-up and cool-down included — is exactly what `deriveWalkthrough` puts on the Start button.
+ * Reading the total from the same place the button does is what stops this header contradicting
+ * the button twenty lines below it, which it did whenever a session ran longer than its schedule.
+ *
+ * Falls back to the bare effort when no session has been prescribed yet, rather than guessing:
+ * the rows without one are check-ins and food logs, which have no warm-up to allow for anyway.
+ */
+export function sheetMinutes(detail: OccurrenceDetail, wt: { total_min: number } | null): string | null {
+  const effort = detail.schedule?.duration_min;
+  if (!effort) return null;
+  const total = wt?.total_min;
+  return total && total > effort ? `${effort} min (allow ${total})` : `${effort} min`;
+}
+
 /** YouTube SEARCH result page from a model-supplied query — never a model-supplied URL. */
 export const ytSearch = (q: string) =>
   `https://www.youtube.com/results?search_query=${encodeURIComponent(q.replace(/\s+/g, ' ').trim())}`;

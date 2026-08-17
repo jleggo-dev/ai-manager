@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { deriveWalkthrough, condense, type Walkthrough as WalkthroughData } from '@cadence/shared';
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
-import { isFoodRow, isWeighInPending } from './occurrence/format.ts';
+import { isFoodRow, isWeighInPending, sheetMinutes } from './occurrence/format.ts';
 import { SessionLogPanel } from './occurrence/SessionLogPanel.tsx';
 import { MealLogPanel } from './occurrence/MealLogPanel.tsx';
 import { WeighInPanel } from './occurrence/WeighInPanel.tsx';
@@ -74,13 +74,7 @@ export function OccurrenceSheet({
               <div className="sheet-title">
                 <b>{detail.title}</b>
                 <span>
-                  {[
-                    detail.date,
-                    detail.schedule?.time_of_day,
-                    detail.schedule?.duration_min ? `${detail.schedule.duration_min} min` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
+                  {[detail.date, detail.schedule?.time_of_day, sheetMinutes(detail, wt)].filter(Boolean).join(' · ')}
                 </span>
               </div>
               <button className="sheet-x" onClick={onClose} aria-label="Close">

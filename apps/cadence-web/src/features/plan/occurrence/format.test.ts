@@ -8,6 +8,7 @@ import {
   macroLine,
   mealForNow,
   qty,
+  sheetMinutes,
   ytSearch,
 } from './format.ts';
 
@@ -75,5 +76,35 @@ describe('occurrence formatters', () => {
     expect(isWeighInPending(detail({ kind: 'system', title: 'Weigh in', status: 'done' }))).toBe(false);
     expect(isWeighInPending(detail({ kind: 'user', title: 'Weigh in', status: 'pending' }))).toBe(false);
     expect(isWeighInPending(detail({ kind: 'system', title: 'Log food', status: 'pending' }))).toBe(false);
+  });
+});
+
+/**
+ * The sheet used to show `schedule.duration_min` in its header and the walkthrough's block sum on
+ * the Start button twenty lines below, with nothing saying they measured different things. Now the
+ * header names both, and the total it names is the one the button uses.
+ */
+describe('sheetMinutes', () => {
+  const run = detail({ schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU', duration_min: 40 } });
+
+  it('shows the effort and the prescribed total, agreeing with the Start button', () => {
+    expect(sheetMinutes(run, { total_min: 50 })).toBe('40 min (allow 50)');
+  });
+
+  it('shows the effort alone when no session has been prescribed to measure', () => {
+    expect(sheetMinutes(run, null)).toBe('40 min');
+  });
+
+  it('shows the effort alone when the session adds nothing around it', () => {
+    const sit = detail({ schedule: { recurrence: 'FREQ=DAILY', duration_min: 20 } });
+    expect(sheetMinutes(sit, { total_min: 20 })).toBe('20 min');
+  });
+
+  it('never advertises a total shorter than the effort', () => {
+    expect(sheetMinutes(run, { total_min: 25 })).toBe('40 min');
+  });
+
+  it('renders nothing when the commitment carries no duration', () => {
+    expect(sheetMinutes(detail({}), { total_min: 30 })).toBeNull();
   });
 });

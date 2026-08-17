@@ -16,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import type { PendingPlanActivity } from '@cadence/shared';
+import { testUserId } from './test-user.ts';
 
 // Load apps/cadence-api/.env by absolute path (independent of cwd) so the DB check below is
 // correct locally; in CI with no .env file this is a no-op and the check reads the job's env.
@@ -25,7 +26,7 @@ const HAS_DB = !!(process.env.CADENCE_DATABASE_URL || process.env.CADENCE_DB_PAS
 const d = HAS_DB ? describe : describe.skip;
 
 // A dedicated, obviously-synthetic test user — isolated from the dev demo accounts.
-const USER = '00000000-0000-4000-a000-00000000a101';
+const USER = testUserId('a101');
 
 // Fully replace the AI seam: no live LLM, no @ai-admin/core load. Flow tests drive `runJob`'s
 // return value per-test; the direct commitActivities tests never call it.

@@ -73,7 +73,8 @@ export interface PlanEdit {
   days?: string[];
   /** `retime`: "07:00", or a word the plan already uses ("morning"). */
   time_of_day?: string;
-  /** `resize`: minutes per session. */
+  /** `resize`/`add`/`rework`: minutes of the EFFORT itself, exactly as the person said it — a
+   *  40-minute run is 40, never padded to 50 for its warm-up (owner ruling 2026-08-17). */
   duration_min?: number;
   /** `add`: what the new commitment is called. `rework`: a new name for it, if the change earns one. */
   title?: string;
@@ -90,6 +91,12 @@ export interface PlanEdit {
 
 export interface PlanEditResult {
   activities: PendingPlanActivity[];
+  /**
+   * Edits that asked for the state the plan is ALREADY in. Not changes and not failures — they
+   * must never reach the card, and she must be told so she can say "that's already how it is"
+   * instead of announcing a fix that fixes nothing.
+   */
+  noops: string[];
   /** One plain line per change, in the user's terms — what the card renders and the coach says. */
   changes: string[];
   /** Edits that could not be applied, each explaining itself. */
@@ -251,6 +258,32 @@ function resolveTargets(
   };
 }
 
+/**
+ * "No particular time" as a CHOICE rather than an omission.
+ *
+ * Owner: *"we could make time_of_day not optional — she can then specifically provide a value of
+ * 'any time'… but she could deliberately pick to have no time specified, and that it is a
+ * deliberate decision."* Exactly the distinction that was missing: a blank meant both "this
+ * floats" and "she forgot", and on 2026-08-17 it meant the second — she supplied a time on one
+ * add and dropped it on a redo 29 seconds later, and nothing anywhere could tell which had
+ * happened.
+ *
+ * Stored as the literal `anytime`, which sorts after every clock time in plan-view's ordering, so
+ * a floating commitment still settles to the bottom of its day exactly as an untimed one did.
+ */
+export const ANYTIME = 'anytime';
+const ANYTIME_WORDS = new Set(['anytime', 'any time', 'any', 'whenever', 'flexible', 'no time', 'none']);
+
+/** Read a time the model wrote, collapsing every way it might say "no particular time". */
+function normalizeTimeOfDay(raw: string | undefined): string | undefined {
+  const t = raw?.trim();
+  if (!t) return undefined;
+  return ANYTIME_WORDS.has(t.toLowerCase()) ? ANYTIME : t;
+}
+
+/** How a time reads on the card. */
+const showTime = (t: string) => (t === ANYTIME ? 'any time' : t);
+
 /** `add` — the one action with no existing target. */
 function applyAdd(
   edit: PlanEdit,
@@ -269,6 +302,16 @@ function applyAdd(
       reject: `"${title}" already names a commitment — two by the same name are indistinguishable to the user reading their own week. Pick a distinct name ("${title} (Wednesday)", "${title} — hills").`,
     };
   }
+  /**
+   * A new commitment must say WHEN, even if the answer is "no particular time". Not a default —
+   * a default is the omission wearing a nicer name, and the owner asked for a decision.
+   */
+  const when = normalizeTimeOfDay(edit.time_of_day);
+  if (!when) {
+    return {
+      reject: `"${title}" was not added: it needs a time of day. Set one — the time their other sessions of that kind run at, or ask them — or pass time_of_day "anytime" if it genuinely floats.`,
+    };
+  }
   const byday = toByDay(edit.days) ?? 'MO,WE,FR';
   const recurrence = `FREQ=WEEKLY;BYDAY=${byday}`;
   const goalId = Object.keys(goalTitleById).find((id) => goalTitleById[id] === edit.goal_title);
@@ -277,15 +320,22 @@ function applyAdd(
     kind: 'user',
     cadence: describeRecurrence(recurrence),
     recurrence,
-    ...(edit.time_of_day ? { time_of_day: edit.time_of_day } : {}),
+    time_of_day: when,
     ...(edit.duration_min ? { duration_min: edit.duration_min } : {}),
     completion_source: 'self_report',
     ...(goalId ? { goal_id: goalId } : {}),
     ...(edit.goal_title ? { goal_title: edit.goal_title } : {}),
+    ...(edit.how_to ? { how_to: edit.how_to } : {}),
     ...(edit.why ? { why: edit.why } : {}),
     suggested: true,
   };
-  return { added, change: `Add ${title} — ${describeRecurrence(recurrence)}` };
+  /**
+   * An untimed commitment sorts to the bottom of its day (plan-view.ts) and anchors no reminder,
+   * so silence here is a real gap the user only discovers later. She omitted it on one add and
+   * supplied it on another a minute earlier, so the model is inconsistent rather than wrong —
+   * naming it on the card is what lets either of them notice.
+   */
+  return { added, change: `Add ${title} — ${describeRecurrence(recurrence)}, ${showTime(when)}` };
 }
 
 /** Everything that changes an existing commitment, one target at a time. */
@@ -293,7 +343,7 @@ function applyToOne(
   edit: PlanEdit,
   found: PendingPlanActivity,
   working: PendingPlanActivity[],
-): { change?: string; reject?: string } {
+): { change?: string; reject?: string; noop?: string } {
   if (edit.action === 'remove') {
     working.splice(working.indexOf(found), 1);
     return { change: `Drop ${found.title}` };
@@ -303,7 +353,9 @@ function applyToOne(
     const byday = toByDay(edit.days);
     if (!byday) return { reject: `Couldn't tell which days to move ${found.title} to.` };
     const was = found.cadence;
-    found.recurrence = withDays(found.recurrence, byday);
+    const next = withDays(found.recurrence, byday);
+    if (next === found.recurrence) return { noop: `${found.title} is already on ${was}.` };
+    found.recurrence = next;
     found.cadence = describeRecurrence(found.recurrence);
     return { change: `Move ${found.title}: ${was} → ${found.cadence}` };
   }
@@ -349,11 +401,14 @@ function applyToOne(
   }
 
   if (edit.action === 'retime') {
-    const t = edit.time_of_day?.trim();
+    const t = normalizeTimeOfDay(edit.time_of_day);
     if (!t) return { reject: `Couldn't tell what time to give ${found.title}.` };
     const was = found.time_of_day;
+    if (was === t) return { noop: `${found.title} is already at ${showTime(t)}.` };
     found.time_of_day = t;
-    return { change: `${found.title}: ${was ? `${was} → ${t}` : `now at ${t}`}` };
+    return {
+      change: `${found.title}: ${was ? `${showTime(was)} → ${showTime(t)}` : `now at ${showTime(t)}`}`,
+    };
   }
 
   const mins = Number(edit.duration_min);
@@ -361,9 +416,18 @@ function applyToOne(
     return { reject: `Couldn't tell how long ${found.title} should be.` };
   }
   const wasMin = found.duration_min;
-  found.duration_min = Math.round(mins);
+  const next = Math.round(mins);
+  /**
+   * "40 min → 40 min" is not a change, and rendering it as one is how the owner came to tap Apply
+   * on a card that did nothing (2026-08-17). Plan v10 committed byte-identical to v9 across all 16
+   * activities, its stored rationale literally "Easy run: 40 min → 40 min" twice, and the apply
+   * still wiped and regenerated ten prescribed sessions. From where he sat she had promised a fix,
+   * shown a card, and delivered nothing — which is indistinguishable from the tool being broken.
+   */
+  if (wasMin === next) return { noop: `${found.title} is already ${next} min.` };
+  found.duration_min = next;
   return {
-    change: `${found.title}: ${wasMin ? `${wasMin} min → ${found.duration_min} min` : `${found.duration_min} min`}`,
+    change: `${found.title}: ${wasMin ? `${wasMin} min → ${next} min` : `${next} min`}`,
   };
 }
 
@@ -391,6 +455,7 @@ export function applyPlanEdits(
   });
   const changes: string[] = [];
   const rejected: string[] = [];
+  const noops: string[] = [];
   let addedSeq = 0;
 
   for (const edit of edits) {
@@ -414,9 +479,10 @@ export function applyPlanEdits(
     for (const found of targets) {
       const r = applyToOne(edit, found, working);
       if (r.reject) rejected.push(r.reject);
+      if (r.noop) noops.push(r.noop);
       if (r.change) changes.push(r.change);
     }
   }
 
-  return { activities: working, changes, rejected };
+  return { activities: working, changes, rejected, noops };
 }

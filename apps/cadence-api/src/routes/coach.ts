@@ -12,8 +12,7 @@ import {
   cancelCoachTurn,
 } from '../ai/aim.ts';
 import { runCaptureExtract } from '../services/capture.ts';
-import { renderCapabilities } from '../services/coach-capabilities.ts';
-import { renderPickProtocol } from '../services/coach-picks-protocol.ts';
+import { injectCoachBlocks, refreshChangedBlocks } from '../services/coach-block-refresh.ts';
 import { renderScreenNotes } from '../services/goal-screen.ts';
 import { runDetourCapture } from '../services/detour-capture.ts';
 import { assembleTurn } from '../services/coach-context.ts';
@@ -105,21 +104,21 @@ router.post('/sessions', async (req: Request, res: Response) => {
         ? `${pack.rendered}\nDevice: Apple Health is available on this device and the user has not shared activity yet.`
         : pack.rendered;
     await injectCoachContext(userId, session.sessionId, rendered, { source: 'registry-pack', version: 1 });
-    // What this build can actually do (coach-capabilities.ts) + the session-tool catalog. Injected
-    // rather than written into the persona because features ship in code and the persona is edited
-    // in AI Admin — a hard-coded list drifts, and a coach that offers a feature the build lacks is
-    // worse than one that says "not yet". Cheap and static, so it rides the same session-open turn.
-    await injectCoachContext(userId, session.sessionId, renderCapabilities({ healthAvailable, healthAnswered }), {
-      source: 'capabilities',
-      version: 1,
-    });
-    // The quick-pick protocol (coach-picks-protocol.ts) — the format the client parses out of a
-    // turn to render tappable answers, plus the suggested first-conversation running order. Same
-    // reasoning as the capability manifest: the parser ships in code, so the format does too.
-    await injectCoachContext(userId, session.sessionId, renderPickProtocol({ intent }), {
-      source: 'pick-protocol',
-      version: 1,
-    });
+    /**
+     * The two blocks that ship in CODE rather than in the persona: what this build can actually do
+     * (coach-capabilities.ts) + the quick-pick protocol the client's parser expects
+     * (coach-picks-protocol.ts). Both live here because features and parsers ship in code while the
+     * persona is edited in AI Admin — a hard-coded list drifts, and a coach that offers a feature
+     * the build lacks is worse than one that says "not yet". Cheap and static, so they ride the
+     * session-open turn.
+     *
+     * Composed by `coach-block-refresh` rather than injected straight, because "static" was only
+     * ever true within one session: a session lives a week, so the copy handed out today is the
+     * copy that session argues from for a week. The refresh on the message path below hands it the
+     * current text when a deploy changes one — and it can only match what it handed out if both
+     * paths compose the block the same way.
+     */
+    await injectCoachBlocks(userId, session.sessionId, { healthAvailable, healthAnswered, intent });
     // Persist conversation_id <-> ai_session_id mapping (§C6).
     await createConversation(userId, session.sessionId, session.externalChatId).catch((e) =>
       console.error('[createConversation]', e),
@@ -251,6 +250,18 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     // The teardown below still clears it too — this is the backstop for the arm it never saw.
     void setNotifyOnReply(sessionIdParam, false).catch(() => {});
     await ensureDateStamped(userId, req.params.id as string).catch((e) => console.error('[ensureDateStamped]', e));
+    /**
+     * The capability manifest and the pick protocol were handed to this session ONCE, the day it
+     * opened — and `STALE_IDLE_MS` is seven days, so a fix written on Sunday reached nobody who was
+     * mid-conversation on Saturday. That is not hypothetical: it is why the two 2026-08-16 fixes for
+     * "promises a plan change, never calls the tool" never reached the owner's own session.
+     * Re-hands the current text only when a deploy has actually changed it (hash-gated in
+     * coach-block-refresh.ts; an unchanged session adds nothing and reads nothing).
+     *
+     * Awaited so the block lands ahead of this turn, `.catch`ed because it must never be the reason
+     * somebody does not get a reply — the refresh swallows its own faults too.
+     */
+    await refreshChangedBlocks(userId, req.params.id as string).catch((e) => console.error('[blockRefresh]', e));
     const turnMessage = await assembleTurn(userId, req.params.id as string, message);
     // The coach's read tools ride the request; when she calls one, the loop below fulfills it
     // against the retrieval registry and pumps the continuation — "let me check your file",

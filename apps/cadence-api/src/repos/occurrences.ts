@@ -285,8 +285,9 @@ export async function listLoggedForProgress(
     order by o.date asc`;
 }
 
-/** One day's DONE user (movement) occurrences with their activity category + scheduled duration —
- *  the input to the deterministic exercise-burn estimate (net-calorie eat-back). */
+/** One day's DONE user (movement) occurrences with their activity category + scheduled EFFORT
+ *  minutes (not the whole session — owner ruling 2026-08-17) — the input to the deterministic
+ *  exercise-burn estimate (net-calorie eat-back), whose MET constants assume effort intensity. */
 export async function listDoneUserOccurrencesForDay(
   userId: string,
   date: string,

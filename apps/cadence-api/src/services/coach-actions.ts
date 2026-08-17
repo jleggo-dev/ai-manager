@@ -79,7 +79,7 @@ const EDIT_SCHEMA = {
         type: 'array',
         items: { type: 'string' },
         description:
-          'Which one, when two commitments share a title: the days it happens on NOW. "The Wednesday easy run" is activity "Easy run" + on_days ["wednesday"]. Omit when the title alone is unambiguous.',
+          'ONLY for narrowing the `activity` title fallback when two share a name — the days it happens on NOW. Meaningless beside `activities` handles, and it is NOT where you say the new days: that is `days`. Omit whenever you passed a handle.',
       },
       days: {
         type: 'array',
@@ -87,8 +87,16 @@ const EDIT_SCHEMA = {
         description:
           'For move and add: ALL the days it should happen on afterwards — this replaces its whole weekly pattern, so a twice-a-week session keeps both days only if you name both, e.g. ["tuesday","friday"].',
       },
-      time_of_day: { type: 'string', description: 'For retime and add, e.g. "07:00" or "evening".' },
-      duration_min: { type: 'integer', description: 'For resize and add: minutes per session.' },
+      time_of_day: {
+        type: 'string',
+        description:
+          'REQUIRED on add, and for retime. A clock time ("07:00") or a part of day ("morning"). If it genuinely has no fixed slot, pass "anytime" — but that is a DECISION to make with them, not a field to leave out: an add without this is refused. When they have not said, use the time their other sessions of that kind run at, or ask.',
+      },
+      duration_min: {
+        type: 'integer',
+        description:
+          'For resize and add: minutes of the ACTIVITY ITSELF — exactly the number they said. "A 40 minute run" is 40; "a 20 minute meditation" is 20. Do NOT pad it for warm-up, cool-down or getting there: the app adds that around the effort and shows them the total to set aside. Never quietly shrink it either — 20 minutes of meditation means 20 minutes meditating.',
+      },
       title: {
         type: 'string',
         description:
@@ -97,7 +105,7 @@ const EDIT_SCHEMA = {
       how_to: {
         type: 'string',
         description:
-          'For rework: what this session should contain from now on, in plain words — "dead hangs instead of farmers carries for the grip work". Applies to every future session of it, not just the next one.',
+          'For rework AND add: what this session should CONTAIN from now on, in plain words — "dead hangs instead of farmers carries", "conversational pace, ~5km". Its character and any distance go here; how many minutes the effort runs for is duration_min, not this. Applies to every future session of it.',
       },
       goal_title: { type: 'string', description: 'For add: which goal it serves, by title.' },
       why: { type: 'string', description: 'For add: one sentence on why it is worth doing.' },
@@ -171,11 +179,26 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       const goalTitleById: Record<string, string> = {};
       for (const g of goals) goalTitleById[g.goal_id] = g.title;
 
-      const { activities: next, changes, rejected } = applyPlanEdits(activities, edits, goalTitleById);
+      const { activities: next, changes, rejected, noops } = applyPlanEdits(activities, edits, goalTitleById);
+      /**
+       * No changes means NO CARD — including when every edit asked for the state the plan is
+       * already in. On 2026-08-17 a resize to the value already stored produced "Easy run: 40 min
+       * → 40 min" twice, wrote a pending plan, and put up an Apply button; the owner tapped it and
+       * committed a version byte-identical to its predecessor, regenerating ten prescribed sessions
+       * to change nothing. A card must mean something is different, or it is a lie with a button.
+       */
       if (!changes.length) {
+        if (noops.length && !rejected.length) {
+          return [
+            'Nothing was proposed, because the plan already says all of this:',
+            ...noops.map((n) => `- ${n}`),
+            'Tell them plainly it is already set that way. Do NOT put up a card and do NOT claim you changed anything.',
+          ].join('\n');
+        }
         return [
           'Nothing could be changed:',
           ...rejected.map((r) => `- ${r}`),
+          ...noops.map((n) => `- ${n}`),
           'Tell the user plainly what you could not find, and ask them which commitment they meant.',
         ].join('\n');
       }
@@ -199,6 +222,9 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           ? [`Note: their plan is v${plan.version} now, not v${declared} — this was applied to the current one.`]
           : []),
         ...(rejected.length ? ['Could not do:', ...rejected.map((r) => `- ${r}`)] : []),
+        // Partly-already-true edits: on the card they would read as changes, so they are told to
+        // her here instead and left off it.
+        ...(noops.length ? ['Already the case, so not on the card:', ...noops.map((n) => `- ${n}`)] : []),
         'Say in one line what you have put up and that it is theirs to apply. Do NOT claim it is done or scheduled — it is not, until they tap it.',
       ].join('\n');
     },

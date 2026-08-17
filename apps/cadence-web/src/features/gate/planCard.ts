@@ -1,3 +1,4 @@
+import { budgetNote, sessionBudget } from '@cadence/shared';
 import type { PlanActivity } from '../../lib/api.ts';
 
 /**
@@ -56,7 +57,18 @@ export function sparsePlan(activities: PlanActivity[]): boolean {
   return activities.length <= 2;
 }
 
-/** "Mon, Wed, Fri · 45 min" — the row's right-hand meta. Cadence arrives humanized. */
+/**
+ * "Mon, Wed, Fri · 45 min (allow 55)" — the row's right-hand meta. Cadence arrives humanized.
+ *
+ * Two numbers, because the person is deciding whether they can afford this rhythm and needs both:
+ * the 45 is the run itself (owner ruling 2026-08-17 — a 40 minute run is 40 minutes of running),
+ * and the "allow 55" is what to keep free for it once warm-up and cool-down are counted. The
+ * parenthetical disappears when there is nothing extra to allow for, which is most commitments —
+ * a twenty-minute sit is its own whole session and "(allow 20)" would be noise.
+ */
 export function rowMeta(a: PlanActivity): string {
-  return [a.cadence, a.duration_min ? `${a.duration_min} min` : null].filter(Boolean).join(' · ');
+  const budget = sessionBudget(a.duration_min, a.area);
+  const note = budgetNote(budget);
+  const mins = budget ? `${budget.effort_min} min${note ? ` ${note}` : ''}` : null;
+  return [a.cadence, mins].filter(Boolean).join(' · ');
 }

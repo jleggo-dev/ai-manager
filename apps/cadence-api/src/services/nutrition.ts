@@ -263,6 +263,13 @@ export async function getNutritionDay(userId: string, date?: string): Promise<Nu
   const targets = user?.macro_targets ?? null;
 
   // Net calories: estimate today's exercise burn, add eatback_pct% of it to the kcal allowance.
+  //
+  // `o.duration_min` is the scheduled EFFORT, not the whole session (owner ruling 2026-08-17), and
+  // that is the RIGHT input here — deliberately, not by accident. The MET constants in burn.ts
+  // (run 9.8, strength 5.0) describe the intensity of the work itself, so the old whole-session
+  // number was charging a five-minute warm-up walk at running rate and over-estimating the burn.
+  // Do not "restore" the lost minutes by padding this: that re-introduces the over-count. If the
+  // warm-up should ever be counted, it belongs in a lower-MET term of its own.
   const weightKg = user?.baseline?.weight_kg?.current;
   const burn_kcal = done.reduce((s, o) => s + estimateBurnKcal(o.category, o.duration_min, weightKg), 0);
   const eatback_pct = typeof targets?.eatback_pct === 'number' ? targets.eatback_pct : 50;

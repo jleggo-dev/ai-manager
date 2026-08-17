@@ -15,6 +15,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+import { testUserId } from './test-user.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 dotenv.config({ path: path.join(repoRoot, 'apps/cadence-api/.env') });
@@ -22,7 +23,7 @@ dotenv.config({ path: path.join(repoRoot, 'apps/cadence-api/.env') });
 const HAS_DB = !!(process.env.CADENCE_DATABASE_URL || process.env.CADENCE_DB_PASSWORD);
 const d = HAS_DB ? describe : describe.skip;
 
-const USER = '00000000-0000-4000-a000-00000000a107';
+const USER = testUserId('a107');
 
 let sql: (typeof import('../db/sql.ts'))['sql'];
 let insertContextPack: (typeof import('../repos/context-pack.ts'))['insertContextPack'];

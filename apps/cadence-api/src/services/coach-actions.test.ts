@@ -149,6 +149,59 @@ describe('propose_plan_change', () => {
     expect(out).toMatch(/Apply button/);
   });
 
+  /**
+   * The empty card. 2026-08-17: she resized two runs to the length they already were, the tool
+   * called that two changes, and the owner tapped Apply on a proposal whose entire content was
+   * "Easy run: 40 min → 40 min" twice. Plan v10 committed identical to v9 across all sixteen
+   * activities and regenerated ten prescribed sessions to change nothing.
+   */
+  it('raises NO card when every edit asks for what the plan already says', async () => {
+    const out = await propose.run('u1', {
+      edits: [{ action: 'resize', activities: ['aaaaaaaa'], duration_min: 40 }],
+    });
+    expect(setPendingPlan).not.toHaveBeenCalled();
+    expect(out).toMatch(/already says all of this/);
+    expect(out).toMatch(/already 40 min/);
+    expect(out).toMatch(/Do NOT put up a card/);
+  });
+
+  it('still proposes the real half of a batch, and keeps the redundant half off the card', async () => {
+    listActivities.mockResolvedValue([
+      {
+        activity_id: 'a1',
+        commitment_id: 'aaaaaaaa-1111-4111-8111-111111111111',
+        plan_id: 'p1',
+        title: 'Easy run',
+        kind: 'user',
+        schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TH', duration_min: 40 },
+        completion_source: 'self_report',
+        goal_id: 'g1',
+      },
+      {
+        activity_id: 'a2',
+        commitment_id: 'bbbbbbbb-1111-4111-8111-111111111111',
+        plan_id: 'p1',
+        title: 'Long run',
+        kind: 'user',
+        schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=SA', duration_min: 90 },
+        completion_source: 'self_report',
+        goal_id: 'g1',
+      },
+    ]);
+    const out = await propose.run('u1', {
+      edits: [
+        { action: 'resize', activities: ['aaaaaaaa'], duration_min: 40 },
+        { action: 'resize', activities: ['bbbbbbbb'], duration_min: 75 },
+      ],
+    });
+    expect(setPendingPlan).toHaveBeenCalledTimes(1);
+    const [, pending] = setPendingPlan.mock.calls[0]!;
+    // The card carries only what actually differs.
+    expect(pending.rationale).toBe('Long run: 90 min → 75 min');
+    expect(out).toMatch(/Already the case, so not on the card:/);
+    expect(out).toMatch(/Easy run is already 40 min/);
+  });
+
   it('declares a schema the model can actually fill in', () => {
     const def = coachActionDefinitions().find((d) => d.function.name === 'propose_plan_change')!;
     expect((def.function.parameters as { required?: string[] }).required).toEqual(['edits']);
@@ -157,6 +210,38 @@ describe('propose_plan_change', () => {
     expect(d).toMatch(/does NOT change anything/i);
     expect(d).toMatch(/build card/);
     expect(d).toMatch(/get_active_plan/);
+  });
+
+  /**
+   * Owner ruling 2026-08-17: "If I'm going to do a 40 min run the run should be 40mins, regardless
+   * of if I have to warm-up before or stretch after."
+   *
+   * The description told the model the opposite for a while — "minutes for the WHOLE session door
+   * to door… A 40-minute RUN is roughly 50 here" — so asking for a 40 minute run wrote 50 into the
+   * plan and prescribe-session then carved a warm-up back out of it. This is the only place the
+   * coach is told what the number means, so it is worth pinning.
+   */
+  it('tells the coach duration_min is the effort the person named, not the padded session', () => {
+    const def = coachActionDefinitions().find((d) => d.function.name === 'propose_plan_change')!;
+    const props = (
+      def.function.parameters as {
+        properties: { edits: { items: { properties: Record<string, { description: string }> } } };
+      }
+    ).properties.edits.items.properties;
+
+    const dur = props.duration_min!.description;
+    expect(dur).toMatch(/ACTIVITY ITSELF/);
+    expect(dur).toMatch(/40 minute run" is 40/);
+    expect(dur).toMatch(/20 minute meditation" is 20/);
+    expect(dur).toMatch(/do NOT pad it/i);
+    // The reverted instruction, in every form it took.
+    expect(dur).not.toMatch(/WHOLE session/i);
+    expect(dur).not.toMatch(/door to door/i);
+    expect(dur).not.toMatch(/roughly 50/);
+
+    // ...and how_to must no longer claim the running TIME belongs to it instead.
+    expect(props.how_to!.description).not.toMatch(/running time HERE/i);
+    expect(props.how_to!.description).toMatch(/duration_min/);
   });
 });
 

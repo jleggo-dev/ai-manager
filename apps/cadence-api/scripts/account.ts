@@ -19,6 +19,29 @@ function resolve(slugOrId: string | undefined): string {
   throw new Error(`unknown account "${slugOrId}" (known: ${Object.keys(cadenceConfig.devAccounts).join(', ')})`);
 }
 
+/**
+ * Delete the per-process users the DB-backed suites create (`services/test-user.ts`).
+ *
+ * Those ids carry the pid so two concurrent runs cannot wipe each other's rows, which means each
+ * run leaves one user behind and `afterAll` cannot be relied on — a crashed or killed run never
+ * gets there. The four scratch accounts above are RESET (kept, emptied) because a person signs in
+ * as them; these are created per run and nobody owns them, so they are removed outright.
+ *
+ * Matched on the synthetic prefix plus the four-hex suite marker, which is narrower than the
+ * scratch namespace and cannot touch a real auth user.
+ */
+async function sweepSuiteUsers(): Promise<void> {
+  const rows = await sql<{ id: string }[]>`
+    select id::text from cadence.users
+     where id::text ~ '^00000000-0000-4000-a000-[0-9a-f]{4}[0-9a-f]{8}$'
+       and id::text !~ '^00000000-0000-4000-a000-0000000'`;
+  for (const { id } of rows) {
+    await reset(id);
+    await sql`delete from cadence.users where id = ${id}`;
+  }
+  console.log(`✓ swept ${rows.length} per-process suite user(s)`);
+}
+
 async function rowCounts(id: string): Promise<{ total: number; per: Record<string, number> }> {
   const per: Record<string, number> = {};
   let total = 0;
@@ -51,6 +74,7 @@ async function main() {
       await reset(id);
       console.log(`✓ reset ${slug} → ${id}`);
     }
+    await sweepSuiteUsers();
     console.log('✓ reset-all complete (scratch accounts only — not real auth users)');
   } else {
     console.log('usage: account.ts <list|seed|reset|reset-all> [slug|uuid]');

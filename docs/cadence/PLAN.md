@@ -2688,6 +2688,39 @@ key a lie. General principle for the harness: **let the model select, not constr
 picking handles from a list it just read is reliable; writing predicates it cannot execute or
 preview is where it silently overreaches, and overreach here is someone's week.
 
+**A20. The step ring counts steps but not the ones you did — NEEDS DESIGN (owner 2026-08-17)**
+
+Owner, device-testing the ring fix: *"I only completed 2 rings of the morning meditation sit (I
+skipped that actual meditation) — it should show 2/3 rings closed. I feel like this is an
+enhancement that touches multiple areas though."* Correct on both counts.
+
+What the ring does today ([`TodayTrail.tsx`](../../apps/cadence-web/src/features/today/TodayTrail.tsx)):
+`strokeDasharray` splits the circle into `occ.steps` segments, and **every segment takes one
+colour** from `ringStroke(done, …)` where `done` is `occ.status === 'done'`. So the ring is
+honest about how many steps a session HAS and silent about how many you finished — it is
+all-or-nothing, drawn as if it were granular. That is arguably worse than a plain disc, because
+the segments imply a per-step reading the data cannot support. (This is a *different* bug from the
+one fixed on 2026-08-17, which was the ring having no wire to `status` at all.)
+
+**Why it is not a one-liner.** Nothing anywhere stores per-step completion:
+- `cadence.occurrences` has `occurrence_id, activity_id, user_id, date, status, value,
+  provenance, weather, session, log, episode_id` — a single `status` enum, no step count.
+- `PlanOccurrence.steps` ([`lib/api/plan.ts`](../../apps/cadence-web/src/lib/api/plan.ts)) is
+  derived from the *prescribed* session's step count, i.e. the plan's intent, not the record.
+- So partial completion is unrepresentable end to end: DB → API shape → render.
+
+**What it needs, roughly in order:** a per-step record on the occurrence (a `steps_done` int is the
+cheap version; a jsonb of per-step state is the honest one if steps can be completed out of order);
+a way for that to be *set* — the session sheet is the natural place, and the coach's `log_session`
+would need to carry it; the API shape; then the ring reads it. Consider whether `status` stays
+derived (all steps done → `done`) or independent, since "2 of 3 and stopped" is neither `done` nor
+`missed`.
+
+**Brand check before building:** BRAND.md says count what happened, never what broke. A ring
+showing 2/3 filled is counting what happened. A ring that renders the missing third as a visible
+absence — a gap, a dimmed slot — is counting what broke, and is the streak-shame shape under a new
+name. The design has to land on the first reading.
+
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 
 Hit on device: at the end of onboarding every way of saving the plan answered "you already have an
