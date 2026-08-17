@@ -148,4 +148,20 @@ describe('ChatComposer', () => {
     render(<ChatComposer value="hi" onChange={noop} onSend={noop} streaming showDisclaimer={false} />);
     expect(screen.getByRole('button', { name: 'Stop' })).toBeDisabled();
   });
+
+  /**
+   * The third bug found on device, and the one that proves the composer must never trust a
+   * measurement it took while it had no box. MainTabs keeps the coach MOUNTED behind
+   * `display: none` so an in-flight reply survives a tab switch, and the app lands on Plan — so
+   * the composer's first measurement is always taken hidden. jsdom reports `scrollHeight` as 0 for
+   * everything, which is that condition exactly. Stamping the 0 collapsed the field to its padding
+   * and put a clipped caret in the corner (owner, 2026-08-16). The hook's own suite covers the
+   * measuring; this pins that ChatComposer is actually wired to it.
+   */
+  it('never stamps a zero height on the field when it is measured while hidden', () => {
+    const { container } = render(
+      <ChatComposer value="" onChange={noop} onSend={noop} streaming={false} showDisclaimer={false} />,
+    );
+    expect(container.querySelector('textarea')!.style.height).not.toBe('0px');
+  });
 });
