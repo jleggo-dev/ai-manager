@@ -9,7 +9,14 @@
 
 import type { ChatMessage, ChatCompletionResponse, PatchedResponse } from '../../types.ts';
 import type { V2ResponseObject, V2ResumeRequestBody, V2ResumeToolOutput } from './types.ts';
-import { messagesToV2Request, toolOutputsToV2Request, extractV2ResponseText, mapV2Usage } from './request-builder.ts';
+import {
+  messagesToV2Request,
+  toolOutputsToV2Request,
+  toolResultsToV2Request,
+  extractV2ResponseText,
+  mapV2Usage,
+  type V2ToolExchange,
+} from './request-builder.ts';
 import { createSseTransformState, transformV2SseChunk } from './sse-transform.ts';
 import { createSseLineBuffer } from '../../services/sse-line-reader.ts';
 
@@ -286,12 +293,33 @@ export class DevsAiV2Client {
   ): Promise<globalThis.Response> {
     const { timeoutMs, ...rest } = options;
     const body = toolOutputsToV2Request(model, previousResponseId, outputs, { ...rest, stream: true });
+    return this._streamToolContinuation(body, timeoutMs as number | undefined);
+  }
 
+  /**
+   * Function-call continuation, SELF-CONTAINED (#232) — the conversation we hold, then the tool
+   * exchange, nothing threaded. `continueWithToolOutputs` above sent only the results and relied
+   * on `previous_response_id` to supply the rest; measurement showed the provider silently
+   * dropped them and re-ran the turn from its own stored thread, so no result ever landed.
+   */
+  async continueWithToolResults(
+    model: string,
+    messages: ChatMessage[],
+    exchange: V2ToolExchange[],
+    options: Record<string, unknown> = {},
+  ): Promise<globalThis.Response> {
+    const { timeoutMs, ...rest } = options;
+    const body = toolResultsToV2Request(model, messages, exchange, { ...rest, stream: true });
+    return this._streamToolContinuation(body, timeoutMs as number | undefined);
+  }
+
+  /** POST a continuation body to /responses and hand back the wrapped SSE stream. */
+  private async _streamToolContinuation(body: unknown, timeoutMs?: number): Promise<globalThis.Response> {
     let controller: AbortController | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    if (timeoutMs && (timeoutMs as number) > 0) {
+    if (timeoutMs && timeoutMs > 0) {
       controller = new AbortController();
-      timer = setTimeout(() => controller?.abort(), timeoutMs as number);
+      timer = setTimeout(() => controller?.abort(), timeoutMs);
     }
 
     let upstream: globalThis.Response;

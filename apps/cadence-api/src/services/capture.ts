@@ -1,6 +1,6 @@
 import { runJobBySlug } from '../ai/aim.ts';
 import type { CaptureExtractResult, Constraint, EquipmentCategory } from '@cadence/shared';
-import { insertEquipment, deleteAllEquipment } from '../repos/equipment.ts';
+import { insertEquipment, listEquipment, updateEquipment } from '../repos/equipment.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import {
   getUser,
@@ -93,20 +93,46 @@ export async function runCaptureExtract(
   const screened: CaptureResult['screened'] = goalOutcome.screened;
   const goals = goalOutcome.persisted;
 
-  // Equipment has no confirm status pre-lock; replace the set when capture returned any (an
-  // empty capture leaves existing equipment untouched so we don't wipe on a sparse turn).
-  // Unknown categories are coerced to 'other', never dropped.
+  /**
+   * Equipment MERGES. It used to replace, and it silently ate nineteen items down to one.
+   *
+   * The old rule was "replace the set when capture returned any", guarded only against an EMPTY
+   * capture. One extraction was enough: on 2026-08-17 a conversation about dead hangs mentioned a
+   * pull-up bar, capture returned that single item, and the delete took the treadmill, the rowing
+   * machine, both bikes, the kettlebell set, the TRX and everything else with it. Owner: *"I had a
+   * ton of equipment listed in Cadence, but it looks like it disappeared somehow."*
+   *
+   * This is the SAME bug, in the same function, as the constraints one described immediately below
+   * — capture runs over the whole conversation every turn, so anything it "replaces" is replaced by
+   * whatever today happened to mention. Constraints were moved to a merge and equipment was left
+   * behind. Rule 1 of constraint-merge.ts applies here word for word: **nothing is ever dropped by
+   * silence.** A rowing machine you did not mention today is still in your garage.
+   *
+   * Removal stays an explicit act and belongs to the review wizard, which still deletes wholesale
+   * on purpose — when someone rejects a row there, they mean it.
+   *
+   * Matched case-insensitively on name, which is how the same item restated ("Treadmill" after
+   * "treadmill") updates in place instead of arriving as a twin. Unknown categories are coerced to
+   * 'other', never dropped.
+   */
   const namedEquip = out.equipment.filter((e) => e.name);
   let equipment = 0;
   if (namedEquip.length) {
-    await deleteAllEquipment(userId);
+    const existing = await listEquipment(userId);
+    const known = new Map(existing.map((e) => [e.name.trim().toLowerCase(), e]));
     for (const e of namedEquip) {
       let category = e.category;
       if (!category || !EQUIP_CATEGORIES.includes(category)) {
         coerced.push(`equipment category "${String(e.category ?? '(empty)')}" → other`);
         category = 'other';
       }
-      await insertEquipment(userId, { ...e, category });
+      const match = known.get(String(e.name).trim().toLowerCase());
+      if (match) {
+        // The newest telling wins the details, as with constraints — but the row survives.
+        await updateEquipment(userId, match.equipment_id, { ...e, category });
+      } else {
+        await insertEquipment(userId, { ...e, category });
+      }
       equipment++;
     }
   }

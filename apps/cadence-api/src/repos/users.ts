@@ -117,6 +117,52 @@ export async function removeCapturedConstraint(userId: string, label: string): P
   return removed;
 }
 
+/**
+ * Change what a constraint is CALLED, and nothing else.
+ *
+ * Not a merge, on purpose. `mergeConstraints` keeps the longer telling — right for ambient capture,
+ * where a fuller restatement should win — but it makes a correction impossible in the one direction
+ * corrections usually run. The Broker wrote "ramp gently because of tendinitis", which reads as an
+ * instruction rather than a fact about a body, and every attempt to shorten it was silently
+ * discarded by that rule. The owner asked several times and Cadence agreed several times; nothing
+ * changed, because nothing could.
+ *
+ * So a reword goes straight at the label and leaves id, status, kind, plan_around and until exactly
+ * where they were: the thing is the same thing, it was just described badly.
+ *
+ * Matched by `sameConstraint`, and the new label is written verbatim — including a shorter one,
+ * which is the whole point.
+ */
+export async function renameCapturedConstraint(
+  userId: string,
+  fromLabel: string,
+  toLabel: string,
+): Promise<{ from: string; to: string } | null> {
+  const next = toLabel.trim();
+  if (!next) return null;
+  let renamed: { from: string; to: string } | null = null;
+  await sql.begin(async (tx) => {
+    const rows = await tx<{ baseline: Baseline | null }[]>`
+      select baseline from cadence.users where id = ${userId} for update`;
+    const existing = (rows[0]?.baseline?.constraints ?? []) as Constraint[];
+    const at = existing.findIndex((c) => sameConstraint(c.label ?? '', fromLabel));
+    if (at === -1) return;
+    const prev = existing[at]!;
+    if ((prev.label ?? '').trim() === next) {
+      renamed = { from: prev.label ?? '', to: next };
+      return;
+    }
+    const updated = existing.map((c, i) => (i === at ? { ...c, label: next } : c));
+    await tx`
+      update cadence.users
+         set baseline = jsonb_set(coalesce(baseline, '{}'::jsonb), '{constraints}', ${json(updated)}),
+             updated_at = now()
+       where id = ${userId}`;
+    renamed = { from: prev.label ?? '', to: next };
+  });
+  return renamed;
+}
+
 export async function setMacroTargets(userId: string, targets: MacroTargets): Promise<void> {
   await sql`
     update cadence.users set macro_targets = ${json(targets)}, updated_at = now()

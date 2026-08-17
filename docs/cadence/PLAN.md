@@ -2596,6 +2596,98 @@ mechanical faults it surfaced.
    picks, which never reaches 1. Either the last turn must carry 1, or the confirm stage should pin
    it — a bar that never completes undercuts the one screen that says "done".
 
+**A18. "Move the Wednesday run" moved the Tuesday run — anatomy of a mis-invocation (owner 2026-08-17; engine fixed same day, on the harness branch)**
+
+Owner, mid device test: *"She repeats herself, she moves the Tuesday run to Friday (even though
+she was trying to move the Wednesday run)… It's like she isn't able to correctly invoke the tool.
+I feel like it can't be pure hallucination."* Correct on every count. Reconstructed from
+`cadence.ai_log` (kind `coach_tool`), the exact chain:
+
+1. **04:37 — one applied card created twins.** A `rework` retitled Tuesday's "Easy base run -
+   post-recovery assessment" to "Easy run", and the `add` beside it created a second "Easy run"
+   on Wednesday. Nothing guarded against two commitments sharing a name. Titles are the ONLY
+   handle later edits have.
+2. **04:41 — the engine, not the model, picked Tuesday.** Asked to move the *Wednesday* one, she
+   called `move "Easy run" → ["friday"]`; her arguments never said Tuesday. `matchActivity`'s
+   exact branch was `.find()` — first of N twins wins, silently (the containment branch had an
+   ambiguity guard; the exact branch didn't). Tool output, honestly: *"Move Easy run: Tue → Fri"*.
+3. **She could not have said it correctly.** The edit schema had no way to name one of two
+   same-titled commitments. Watch her flail, retry by retry: the intent migrates into `why`
+   ("Wednesday's new easy run moves to Friday… Tuesday's easy run is untouched") and then into
+   `how_to` ("Move only the Wednesday-scheduled easy run") — fields the move path never read.
+4. **Five identical proposals in twelve minutes** (04:41–04:53) — that is #232: the tool's answer
+   never reaches her, so each round is a fresh generation that cannot see "Tue → Fri" and correct
+   course. The repetition the owner heard is the same bug that ate the tool results.
+5. **Two silent drops for garnish:** `rework` accepted `duration_min` (she sent 35, then 40) and
+   discarded it — the "35-40 minute easy run" she promised stayed 60 minutes in the plan. And
+   `move` replaces the whole weekly BYDAY set, which the description's own example
+   (`days: ["friday"]`) actively taught.
+
+Fixed in the engine the same day (with the incident as tests, `plan-edit.test.ts`): exact-match
+ambiguity now rejects instead of guessing; `on_days` lets an edit say "the Wednesday one" in
+schema; `add`/`rework`-rename refuse to create a twin; `rework` honours `duration_min`; the
+`days` description says it replaces the whole pattern. NOT yet done: the residue in the owner's
+live plan (two "Easy run" rows, v8) needs hand-tidying or a reworded card once deployed; and a
+`done` occurrence dated 2026-08-30 (a pre-#227 log that landed on a future row) still sits in
+`cadence.occurrences`.
+
+The general lesson, same family as the constraints panel: **every silently-absorbed field is a
+lie waiting to be told.** A schema that accepts what it does not honour teaches the model that
+saying it was enough.
+
+**A19. A commitment identity that survives Apply — SHIPPED 2026-08-17 (migration 0036)**
+
+> Built the same day it was written up, at the owner's call ("we need it and let's do it before
+> deploying"). `commitment_id` is on `cadence.activities`, backfilled, and carried forward by
+> `commitActivities`; handles are derived from it, so a handle read three versions ago still names
+> the right commitment today. The `plan_version` gate narrowed accordingly: it now refuses only a
+> TITLE-addressed edit against a moved plan, and a handle-addressed one proceeds with a note.
+> **Deploy order matters — the migration must be applied before the code that reads the column
+> (already applied to the shared DB; it is backward-compatible, so old code kept working).**
+> Verified against real data: 122 activity rows collapsed to 17 lineages, "Long run" threading
+> cleanly through all eight of its plan versions, and no lineage appearing twice in one plan.
+> One accepted imperfection is recorded in the migration: for same-titled TWINS, which one
+> continued which across versions is unrecoverable, so their two histories may be crossed at the
+> version where they appeared.
+>
+> The original write-up follows, kept for the reasoning.
+
+**A19 (as written). A commitment identity that survives Apply — the second half of plan addressing (owner 2026-08-17)**
+
+Owner, after A18: *"It still feels here a bit like we're guessing… Cadence should be able to look
+up an assigned activity and find its unique ID and then deliberately change that unique one."*
+Right. Layer 1 shipped the same day — `get_active_plan` prints an 8-hex handle beside every
+commitment, `propose_plan_change` addresses **by handle**, plural (one edit changes every run in
+the week), and an unknown handle is a rejection listing the real ones rather than a fallback to
+title matching.
+
+**What layer 1 does not fix.** `commitActivities` supersedes the plan and INSERTS FRESH ACTIVITY
+ROWS on every Apply, so `activity_id` — and therefore the handle — is stable only *within* a plan
+version. Mitigated for now by `plan_version`: the coach passes the version she read, and a
+mismatch refuses the whole call ("call get_active_plan again") rather than resolving stale intent
+against a moved week. That is a guard, not a cure.
+
+**The actual foundation problem.** There is no durable identity for "my Tuesday easy run" across
+plan versions. Occurrences FK to version-scoped activity rows and most history queries scope by
+`user_id` + date, so six weeks of one commitment spans ~five `activity_id`s — and the only thing
+tying them together is **the title string**. A mutable, model-generated, freely-duplicable string
+is carrying identity for addressing, history continuity, and dedup at once. A18's twins bug was
+that fact becoming visible; it will keep surfacing in new costumes until it is fixed.
+
+**The fix:** a `commitment_id` on `activities` that `commitActivities` copies forward instead of
+minting fresh. Handles then survive Apply (retiring the `plan_version` guard), history becomes a
+real join instead of a string match, and title stops being load-bearing. Needs a migration plus a
+backfill that groups existing rows by title within a user — ironic, and the last time that
+heuristic gets to matter. Its own PR; deliberately not bundled with layer 1.
+
+**Rejected alternatives** (owner offered three; 2 was chosen): a separate lookup-the-ID tool call
+is *less* accurate than layer 1, not more — the ID crosses an extra model turn, doubling
+transcription risk and opening a window where the plan moves. Deterministic composite keys
+(`17082026.morning.run`) encode mutable facts into the identifier, so the first retime makes the
+key a lie. General principle for the harness: **let the model select, not construct queries** —
+picking handles from a list it just read is reliable; writing predicates it cannot execute or
+preview is where it silently overreaches, and overreach here is someone's week.
+
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 
 Hit on device: at the end of onboarding every way of saving the plan answered "you already have an
@@ -6866,3 +6958,24 @@ now, in your next step"* rather than instructions for a proxy.
 **Honest about the evidence.** One probe, one phrasing, one empty account. It proves the continuation
 carries tools and that she looped rather than proxied; it does not prove every query behaves that
 way. The same probe re-run after this change is the test that matters.
+
+### The "she's using a tool" line shipped dead (owner, 2026-08-17)
+
+> "the feature we put in to show in the UI that Cadence is calling/using a tool - that doesn't seem
+> to be working"
+
+It never could. `ChatTurn` rendered the activity line **inside the `pending` branch**, and `pending`
+is `role === 'coach' && !text` — so the line could only appear while she had said nothing at all.
+She streams a preamble ("Let me look…") *before* calling anything, so by the time a tool actually
+ran there was text, `pending` was false, and the line was unreachable **in exactly the moment it
+exists for**.
+
+Moved outside the branch: dots while she is silent, her words once she speaks, and the activity line
+underneath whenever there is one. `activity` is cleared on every path that ends a turn and the
+parent passes it only for the newest turn, so an empty string is the resting state.
+
+Four tests, including the one that was broken — she has already spoken, and then reaches for a tool.
+
+Worth noting what this cost: the feature was **built, reviewed, tested and shipped**, and every test
+asserted the phrasing (`coachActivityLine`) rather than whether the line reaches the screen. A unit
+test on the words is not a test that the words are visible.

@@ -43,15 +43,26 @@ export function ChatTurn({
       <div className="ct-row">
         <CoachFace size={44} className="ct-face" />
         <div className="ct-bubble">
-          {pending ? (
-            /* Dots say "something is happening"; the line says WHAT. Every failure this week was
-               invisible work, so when we know what she is doing we say it. */
+          {pending ? <TypingDots /> : text}
+          {/**
+           * The activity line sits OUTSIDE the pending branch, and that placement is the whole fix.
+           *
+           * It was rendered only when `pending` — which is `!text` — so it could only ever show
+           * while she had said nothing at all. But she streams a preamble ("Let me look…") BEFORE
+           * calling anything, so by the time a tool actually runs there is text, `pending` is
+           * false, and the line was unreachable in exactly the moment it exists for. Shipped and
+           * silently dead until the owner said so: *"the feature we put in to show in the UI that
+           * Cadence is calling/using a tool - that doesn't seem to be working."*
+           *
+           * `activity` is cleared on every path that ends a turn (useCoachActivity), and the parent
+           * only passes it for the newest turn, so an empty string is the resting state and this
+           * renders nothing at all the rest of the time.
+           */}
+          {activity && (
             <span className="ct-doing">
               <TypingDots />
-              {activity && <em>{activity}…</em>}
+              <em>{activity}…</em>
             </span>
-          ) : (
-            text
           )}
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getConstraints, removeConstraint, type UserConstraint } from '../../lib/api.ts';
+import { getConstraints, removeConstraint, renameConstraint, type UserConstraint } from '../../lib/api.ts';
+import { ConstraintRow } from './ConstraintRow.tsx';
 
 /**
  * What Cadence is working around, shown to the person it is about.
@@ -48,6 +49,16 @@ export function ConstraintsSettings() {
     else setMsg("That didn't save just now — try again in a moment.");
   }
 
+  async function rename(c: UserConstraint, label: string) {
+    if (busy) return;
+    setBusy(c.id);
+    setMsg('');
+    const next = await renameConstraint(c.id, label);
+    setBusy(null);
+    if (next) setItems(next);
+    else setMsg("That didn't save just now — try again in a moment.");
+  }
+
   if (items === null) return null;
 
   return (
@@ -58,32 +69,21 @@ export function ConstraintsSettings() {
       ) : (
         <ul className="cons-list">
           {items.map((c) => (
-            <li key={c.id} className="cons-row">
-              <span className="cons-what">
-                <b>{c.label}</b>
-                <span>
-                  {/* `plan_around` is the one that actually changes the plan, so it leads. Status is
-                      how it is doing; a quiet constraint is still planned around until it is not. */}
-                  {c.plan_around === false ? 'not planned around' : 'planned around'}
-                  {c.status ? ` · ${c.status}` : ''}
-                </span>
-              </span>
-              <button
-                className="cons-drop"
-                onClick={() => void drop(c)}
-                disabled={!!busy}
-                aria-label={`Remove ${c.label}`}
-              >
-                {busy === c.id ? '…' : 'Remove'}
-              </button>
-            </li>
+            <ConstraintRow
+              key={c.id}
+              constraint={c}
+              busy={busy === c.id}
+              onRename={(label) => rename(c, label)}
+              onRemove={() => void drop(c)}
+            />
           ))}
         </ul>
       )}
       {msg && <div className="auth-error">{msg}</div>}
       <div className="set-note">
-        Removing one here takes it off your file for good. Telling Cadence it has eased off is the gentler move — she
-        keeps it in mind without planning around it.
+        Reword one if it doesn&apos;t sound like you — the wording is yours. Removing one takes it off your file for
+        good; telling Cadence it has eased off is the gentler move, since she keeps it in mind without planning around
+        it.
       </div>
     </div>
   );

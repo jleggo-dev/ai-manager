@@ -57,6 +57,12 @@ export interface PendingProposal {
  *  needed to actually commit it (recurrence, target, ...) and `cadence`, the humanized string
  *  for display — computed once at preview time so nothing needs re-deriving either side. */
 export interface PendingPlanActivity {
+  /**
+   * Which existing commitment this is a new version OF (0036). Absent means genuinely new — the
+   * column defaults to a fresh lineage. Carried through preview and commit so tapping Apply
+   * changes a commitment rather than replacing it with a look-alike that has no past.
+   */
+  commitment_id?: string;
   title: string;
   kind: 'user' | 'system';
   category?: string;

@@ -47,6 +47,16 @@ export interface ActivityTarget {
 
 export interface Activity {
   activity_id: string;
+  /**
+   * The COMMITMENT this row is one version of (0036).
+   *
+   * `activity_id` dies at every Apply — commitActivities supersedes the plan and inserts fresh
+   * rows — so it identifies a row, not a thing the user has. `commitment_id` is copied forward
+   * instead, which is what makes "my Tuesday easy run" one continuous thing across plan versions:
+   * the handle the coach edits by, and the join that keeps six weeks of its history together.
+   * Before this, the only thread between versions was the title string.
+   */
+  commitment_id: string;
   plan_id: string;
   goal_id?: string;
   title: string;

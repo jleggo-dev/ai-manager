@@ -285,6 +285,7 @@ export function OnboardingChat({
                   role={t.role}
                   text={t.text}
                   pending={t.role === 'coach' && !t.text}
+                  // Only the newest turn; a line under an older reply would describe the past.
                   activity={last ? activity : ''}
                   after={
                     <>

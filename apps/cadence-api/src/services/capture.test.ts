@@ -9,7 +9,8 @@ const listGoalsByStatus = vi.fn();
 const updateGoal = vi.fn();
 const deleteGoal = vi.fn();
 const insertEquipment = vi.fn();
-const deleteAllEquipment = vi.fn();
+const listEquipment = vi.fn();
+const updateEquipment = vi.fn();
 const mergeBaseline = vi.fn();
 const setName = vi.fn();
 const setTimezoneIfUnset = vi.fn();
@@ -35,7 +36,8 @@ vi.mock('../repos/goals.ts', () => ({
 }));
 vi.mock('../repos/equipment.ts', () => ({
   insertEquipment: (...a: unknown[]) => insertEquipment(...a),
-  deleteAllEquipment: (...a: unknown[]) => deleteAllEquipment(...a),
+  listEquipment: (...a: unknown[]) => listEquipment(...a),
+  updateEquipment: (...a: unknown[]) => updateEquipment(...a),
 }));
 vi.mock('../repos/users.ts', () => ({
   mergeBaseline: (...a: unknown[]) => mergeBaseline(...a),
@@ -62,7 +64,8 @@ describe('runCaptureExtract', () => {
     deleteGoal.mockResolvedValue(undefined);
     insertGoal.mockResolvedValue({ goal_id: 'g1' });
     insertEquipment.mockResolvedValue({ equipment_id: 'e1' });
-    deleteAllEquipment.mockResolvedValue(undefined);
+    listEquipment.mockResolvedValue([]);
+    updateEquipment.mockResolvedValue(undefined);
     mergeBaseline.mockResolvedValue(undefined);
     setName.mockResolvedValue(undefined);
     setTimezoneIfUnset.mockResolvedValue(undefined);
@@ -194,11 +197,75 @@ describe('runCaptureExtract', () => {
 
     const out = await runCaptureExtract(USER, { conversation_window: 'I have a foam roller' });
     expect(out.persisted.equipment).toBe(1);
-    expect(deleteAllEquipment).toHaveBeenCalledWith(USER);
+    expect(listEquipment).toHaveBeenCalledWith(USER);
     expect(insertEquipment).toHaveBeenCalledWith(
       USER,
       expect.objectContaining({ name: 'Foam roller', category: 'other' }),
     );
     warn.mockRestore();
+  });
+});
+
+/**
+ * The bug that ate nineteen items down to one.
+ *
+ * Capture used to REPLACE the equipment set whenever it returned anything, guarded only against an
+ * empty extraction. One item was enough: on 2026-08-17 a conversation about dead hangs mentioned a
+ * pull-up bar, and the delete took the treadmill, the rowing machine, both bikes, the kettlebells
+ * and the TRX with it. Owner: *"I had a ton of equipment listed in Cadence, but it looks like it
+ * disappeared somehow."*
+ *
+ * Identical in shape to the constraints bug fixed in the same function weeks earlier — capture runs
+ * over the whole conversation every turn, so anything it "replaces" is replaced by whatever today
+ * happened to mention. Rule 1 of constraint-merge.ts, word for word: nothing is dropped by silence.
+ */
+describe('equipment survives a conversation that only mentions one thing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // This block sits outside `runCaptureExtract`'s describe, so it owns its own setup.
+    listGoalsByStatus.mockResolvedValue([]);
+    insertGoal.mockResolvedValue({ goal_id: 'g1' });
+    insertEquipment.mockResolvedValue({ equipment_id: 'eNew' });
+    updateEquipment.mockResolvedValue(undefined);
+    mergeBaseline.mockResolvedValue(undefined);
+    setName.mockResolvedValue(undefined);
+    setTimezoneIfUnset.mockResolvedValue(undefined);
+    logAi.mockResolvedValue(undefined);
+    listEquipment.mockResolvedValue([
+      { equipment_id: 'e1', name: 'treadmill with incline', category: 'cardio' },
+      { equipment_id: 'e2', name: 'rowing machine', category: 'cardio' },
+      { equipment_id: 'e3', name: 'pull-up bar', category: 'strength' },
+    ]);
+  });
+
+  it('never deletes what today did not happen to mention', async () => {
+    runJobBySlug.mockResolvedValue({
+      formatted: JSON.stringify({ goals: [], equipment: [{ name: 'pull-up bar', category: 'strength' }] }),
+    });
+    await runCaptureExtract(USER, { conversation_window: 'we did dead hangs on the pull-up bar' });
+    // The rowing machine is still in the garage.
+    expect(insertEquipment).not.toHaveBeenCalled();
+    expect(updateEquipment).toHaveBeenCalledTimes(1);
+    expect(updateEquipment.mock.calls[0]![1]).toBe('e3');
+  });
+
+  it('adds something genuinely new without disturbing the rest', async () => {
+    runJobBySlug.mockResolvedValue({
+      formatted: JSON.stringify({ goals: [], equipment: [{ name: 'ski erg', category: 'cardio' }] }),
+    });
+    await runCaptureExtract(USER, { conversation_window: 'I picked up a ski erg' });
+    expect(insertEquipment).toHaveBeenCalledTimes(1);
+    expect(updateEquipment).not.toHaveBeenCalled();
+  });
+
+  /** The same item restated must update in place, not arrive as a twin — the goal-duplication
+   *  failure, which once tripled someone's goals, applies here too. */
+  it('matches case-insensitively so a restated item does not become a duplicate', async () => {
+    runJobBySlug.mockResolvedValue({
+      formatted: JSON.stringify({ goals: [], equipment: [{ name: 'Rowing Machine', category: 'cardio' }] }),
+    });
+    await runCaptureExtract(USER, { conversation_window: 'the Rowing Machine is by the window' });
+    expect(insertEquipment).not.toHaveBeenCalled();
+    expect(updateEquipment.mock.calls[0]![1]).toBe('e2');
   });
 });

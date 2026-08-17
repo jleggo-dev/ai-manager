@@ -6,8 +6,7 @@ import type { ExpectedSchemaInput } from '../services/expected-schema-to-json-sc
 import { buildProviderChatOptions } from '../services/ai-profile-runtime-options.ts';
 import { resolveAttachments, resolveAttachmentsAsText } from '../services/attachment-resolver.ts';
 import { resolveProfileToolDefinitions } from './tool-fulfillment.ts';
-import { buildCompactedHistory, getSummarizerConfig } from '../services/session-compaction.ts';
-import { listChatMessages } from '../models/chat-sessions.ts';
+import { buildSessionChatMessages } from './chat-history.ts';
 import type {
   Attachment,
   ChatMessage,
@@ -93,12 +92,7 @@ export async function openChatSendStream(args: {
         enrichedContent = `${fileBlock}\n\n---\n\n${enrichedContent}`;
       }
     }
-    const historyRaw = await listChatMessages(sessionId);
-    const historyMessages = buildCompactedHistory(refreshedSession, historyRaw, getSummarizerConfig(refreshedSession));
-    const chatMessages: ChatMessage[] = historyMessages.map((m) => ({
-      role: m.role as 'system' | 'user' | 'assistant',
-      content: m.content,
-    }));
+    const chatMessages: ChatMessage[] = await buildSessionChatMessages(sessionId, refreshedSession);
     if (enrichedContent !== resolvedMessage && chatMessages.length > 0) {
       const lastMsg = chatMessages[chatMessages.length - 1];
       if (lastMsg) lastMsg.content = enrichedContent;

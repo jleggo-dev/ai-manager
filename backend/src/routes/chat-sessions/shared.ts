@@ -66,7 +66,9 @@ export async function runInternalToolJobLoop(options: {
         '';
       const toolStream =
         options.isV2Session && v2ResponseId
-          ? await submitV2ToolOutputs(options.sessionId, v2ResponseId, outputs)
+          ? // `registeredCalls` names each output so the continuation can carry the call beside
+            // its result — without that pairing the provider drops the results (#232).
+            await submitV2ToolOutputs(options.sessionId, v2ResponseId, outputs, { calls: registeredCalls })
           : await submitChatToolOutputs(options.sessionId, pendingSystemMessageId || '', outputs);
 
       const toolBody = toolStream.response.body as ReadableStream<Uint8Array> | null;

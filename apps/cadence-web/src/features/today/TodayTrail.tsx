@@ -129,6 +129,26 @@ function prettyDate(dateStr: string): string {
 }
 const COACH_TEXTS = ['Not feeling it? Talk to me.', 'Want to shuffle tomorrow?', "Planning ahead? Let's talk."];
 
+/**
+ * The step ring's colour — and the one thing it never said: whether the session happened.
+ *
+ * It shipped as pure decoration (eb4572c): a segment per prescribed item, stroked by sky darkness
+ * alone, faithfully copying a prototype whose own `ringColor` had no done branch either. So a
+ * finished session left the ring exactly as grey as one nobody had started, and on device that
+ * reads as the finish not registering — owner, 2026-08-16, with the occurrence sitting at
+ * `status: 'done'` in the database the whole time. Nothing was stale and no refetch was missing:
+ * the ring had no wire to status at all, so no amount of refetching could ever have coloured it.
+ * The disc gradient and the ✓ badge had been carrying that whole signal by themselves.
+ *
+ * Green only for `done`. `skipped` stays grey on purpose — the ring counts what happened, and
+ * nothing happened.
+ */
+function ringStroke(done: boolean, darkSky: boolean): string {
+  // The brand's vitality greens, picked by sky: forest disappears into a night sky, sage into noon.
+  if (done) return darkSky ? 'var(--sage)' : 'var(--forest)';
+  return darkSky ? 'oklch(52% 0.03 262)' : 'oklch(78% 0.02 250)';
+}
+
 function TrailNode({
   occ,
   i,
@@ -171,7 +191,7 @@ function TrailNode({
             r="47"
             fill="none"
             pathLength={100}
-            stroke={ramp.dark ? 'oklch(52% 0.03 262)' : 'oklch(78% 0.02 250)'}
+            stroke={ringStroke(done, ramp.dark)}
             strokeWidth={4}
             strokeLinecap="round"
             strokeDasharray={`${100 / occ.steps - 4} 4`}
