@@ -1,4 +1,5 @@
 import { runJobBySlug } from '../ai/aim.ts';
+import { logAi } from './ai-log.ts';
 import { sql } from '../db/sql.ts';
 import { weatherVarsForUser } from './weather/weather.ts';
 import { getActivePlan, supersedeActivePlans, insertPlan } from '../repos/plans.ts';
@@ -94,18 +95,56 @@ export async function runSynthesize(
   draftActivities?: unknown,
 ): Promise<{ normalized: Partial<Activity>[]; note: string; rationale: string }> {
   const { weather } = await weatherVarsForUser(userId).catch(() => ({ weather: '' }));
-  const synthRes = await runJobBySlug(userId, 'synthesize-plan', {
-    goals: JSON.stringify(opts.goals),
-    baseline: JSON.stringify(opts.baseline),
-    equipment: JSON.stringify(opts.equipment),
-    preferences: JSON.stringify((opts.baseline as { preferences?: unknown } | null)?.preferences ?? {}),
-    current_plan: JSON.stringify(opts.currentPlan ?? ''),
-    recent_activity: JSON.stringify(opts.recentActivity ?? ''),
-    user_steer: (opts.userSteer ?? '').trim().slice(0, 500),
-    draft_activities: JSON.stringify(draftActivities ?? ''),
-    // Deterministic API weather when home_location is set; empty otherwise (template ignores '').
-    weather,
-  });
+  /**
+   * The most expensive thing this app does, and until now the only AI call that left no trace.
+   *
+   * Owner, 2026-08-17, watching a rebalance spin: *"it's been rebuilding it for 7mins… do you think
+   * it's still working?"* Nobody could answer. Every other job writes an `ai_log` row — capture,
+   * context_select, prescribe_session, the coach turn — but plan synthesis wrote nothing, so a
+   * four-minute pipeline was indistinguishable from a dead one, from the inside and the outside.
+   * The screen waited out its eight-minute window and said "something hiccuped on my end", which
+   * was the only information anyone had.
+   *
+   * So: a row on the way in, a row on the way out, and a row when it throws — with the elapsed
+   * time, because "is it slow or is it gone" is the actual question. `phase` distinguishes a
+   * per-goal draft from the reduce that coordinates them (plan-fanout.ts), since a fan-out over
+   * four goals means five calls and only the shape tells you which one stalled.
+   */
+  const phase = draftActivities ? 'reduce' : opts.goals.length === 1 ? 'draft' : 'single';
+  const startedAt = Date.now();
+  void logAi(userId, {
+    kind: 'synthesize_plan',
+    input: { phase, goals: opts.goals.length, evolving: !!opts.currentPlan },
+    output: { started: true },
+    meta: { phase, goals: opts.goals.length },
+  }).catch(() => {});
+
+  let synthRes;
+  try {
+    synthRes = await runJobBySlug(userId, 'synthesize-plan', {
+      goals: JSON.stringify(opts.goals),
+      baseline: JSON.stringify(opts.baseline),
+      equipment: JSON.stringify(opts.equipment),
+      preferences: JSON.stringify((opts.baseline as { preferences?: unknown } | null)?.preferences ?? {}),
+      current_plan: JSON.stringify(opts.currentPlan ?? ''),
+      recent_activity: JSON.stringify(opts.recentActivity ?? ''),
+      user_steer: (opts.userSteer ?? '').trim().slice(0, 500),
+      draft_activities: JSON.stringify(draftActivities ?? ''),
+      // Deterministic API weather when home_location is set; empty otherwise (template ignores '').
+      weather,
+    });
+  } catch (e) {
+    // The failure that had no trace at all. Logged BEFORE rethrowing, because the caller's
+    // handling varies and the record must not depend on which one caught it.
+    void logAi(userId, {
+      kind: 'synthesize_plan',
+      input: { phase, goals: opts.goals.length },
+      output: { failed: true, error: String(e).slice(0, 300) },
+      meta: { phase, ms: Date.now() - startedAt, ok: false },
+    }).catch(() => {});
+    throw e;
+  }
+
   const synth = parseJson(synthRes.formatted ?? synthRes.raw ?? '');
   const normalized = (Array.isArray(synth?.activities) ? (synth!.activities as Partial<Activity>[]) : []).map(
     normalizeActivity,
@@ -114,6 +153,16 @@ export async function runSynthesize(
   // Lenient by design (no expectedSchema on this job): an older deployed prompt that emits no
   // rationale degrades to '', which every consumer treats as "none" — never a parse failure.
   const rationale = typeof synth?.rationale === 'string' ? synth.rationale.trim() : '';
+
+  // Zero activities is not an error and not a success — it is the shape that makes a whole
+  // rebalance come back empty, so it is recorded as plainly as the other two.
+  void logAi(userId, {
+    kind: 'synthesize_plan',
+    input: { phase, goals: opts.goals.length },
+    output: { activities: normalized.length, note: note.slice(0, 200) },
+    meta: { phase, ms: Date.now() - startedAt, ok: normalized.length > 0 },
+  }).catch(() => {});
+
   return { normalized, note, rationale };
 }
 

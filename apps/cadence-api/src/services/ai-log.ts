@@ -8,6 +8,7 @@ export type AiLogKind =
   | 'pack_summarize'
   | 'context_select'
   | 'coach_tool'
+  | 'synthesize_plan'
   | 'assess_goal'
   | 'prescribe_session'
   | 'parse_session_log'
