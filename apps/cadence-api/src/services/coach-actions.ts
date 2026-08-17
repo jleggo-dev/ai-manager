@@ -90,7 +90,7 @@ const EDIT_SCHEMA = {
       time_of_day: {
         type: 'string',
         description:
-          'For retime and add, e.g. "07:00" or "evening". ALWAYS set it on add — a plan is a rhythm, and an untimed commitment sorts to the bottom of its day and can anchor no reminder. If they have not said when, use the time their other sessions of that kind run at, or ask.',
+          'REQUIRED on add, and for retime. A clock time ("07:00") or a part of day ("morning"). If it genuinely has no fixed slot, pass "anytime" — but that is a DECISION to make with them, not a field to leave out: an add without this is refused. When they have not said, use the time their other sessions of that kind run at, or ask.',
       },
       duration_min: {
         type: 'integer',

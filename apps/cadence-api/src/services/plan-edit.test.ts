@@ -91,16 +91,23 @@ describe('applyPlanEdits', () => {
   it('adds a commitment, attributed to the goal it serves', () => {
     const r = applyPlanEdits(
       PLAN,
-      [{ action: 'add', title: 'Easy walk', days: ['saturday'], duration_min: 30, goal_title: 'A steadier mind' }],
+      [
+        {
+          action: 'add',
+          title: 'Easy walk',
+          days: ['saturday'],
+          duration_min: 30,
+          time_of_day: '09:00',
+          goal_title: 'A steadier mind',
+        },
+      ],
       GOALS,
     );
     const walk = r.activities.find((a) => a.title === 'Easy walk')!;
     expect(walk.recurrence).toBe('FREQ=WEEKLY;BYDAY=SA');
     expect(walk.goal_id).toBe('g2');
     expect(walk.suggested).toBe(true);
-    // No time_of_day was given, and an untimed commitment sorts last in its day with no reminder
-    // anchor — so the card says so rather than leaving the gap to be discovered later.
-    expect(r.changes[0]).toBe('Add Easy walk — Sat (no time set)');
+    expect(r.changes[0]).toBe('Add Easy walk — Sat, 09:00');
   });
 
   it('rejects an edit whose numbers make no sense instead of writing them', () => {
@@ -249,7 +256,7 @@ describe('applyPlanEdits — addressing by handle', () => {
 
   it('gives a freshly added commitment a handle, so the next edit can reach it', () => {
     const r = applyPlanEdits(RUNS, [
-      { action: 'add', title: 'Recovery jog', days: ['sunday'] },
+      { action: 'add', title: 'Recovery jog', days: ['sunday'], time_of_day: '10:00' },
       { action: 'resize', activities: ['new1'], duration_min: 25 },
     ]);
     expect(r.rejected).toEqual([]);
@@ -343,21 +350,42 @@ describe('applyPlanEdits — add carries what it was given', () => {
     expect(added.time_of_day).toBe('07:00');
   });
 
-  /** An untimed commitment sorts last in its day and anchors no reminder, so it must not be silent. */
-  it('says so on the card when an add leaves the commitment untimed', () => {
-    const r = applyPlanEdits([], [{ action: 'add', title: 'Easy run', days: ['tuesday'] }]);
-    expect(r.changes[0]).toContain('(no time set)');
-  });
-
   /**
    * The card never showed the time even when she set one — both of the owner's adds rendered as
    * "Add Easy run — Fri" though one carried time_of_day "morning". He read that as the UI not
    * specifying when, which is exactly what it was doing.
    */
-  it('shows the time on the card when one was given', () => {
+  it('shows the time on the card', () => {
     const r = applyPlanEdits([], [{ action: 'add', title: 'Easy run', days: ['tuesday'], time_of_day: '07:00' }]);
     expect(r.changes[0]).toBe('Add Easy run — Tue, 07:00');
-    expect(r.changes[0]).not.toContain('no time set');
+  });
+
+  /**
+   * "No particular time" must be a CHOICE, not an omission. On 2026-08-17 she supplied a time on
+   * one add and dropped it on a redo 29 seconds later, and nothing could tell the two apart.
+   */
+  it('refuses an add that never says when', () => {
+    const r = applyPlanEdits([], [{ action: 'add', title: 'Easy run', days: ['tuesday'] }]);
+    expect(r.changes).toEqual([]);
+    expect(r.activities).toHaveLength(0);
+    expect(r.rejected[0]).toMatch(/needs a time of day/);
+    expect(r.rejected[0]).toMatch(/"anytime"/);
+  });
+
+  it('accepts a deliberate "anytime", and says so in words on the card', () => {
+    const r = applyPlanEdits([], [{ action: 'add', title: 'Easy run', days: ['tuesday'], time_of_day: 'anytime' }]);
+    expect(r.rejected).toEqual([]);
+    expect(r.changes[0]).toBe('Add Easy run — Tue, any time');
+    // Stored as the sentinel, which sorts after every clock time so it still settles to the
+    // bottom of its day.
+    expect(r.activities[0]!.time_of_day).toBe('anytime');
+  });
+
+  it('collapses the ways she might phrase "no particular time"', () => {
+    for (const said of ['any time', 'Whenever', 'flexible', 'ANY']) {
+      const r = applyPlanEdits([], [{ action: 'add', title: 'Sit', days: ['monday'], time_of_day: said }]);
+      expect(r.activities[0]!.time_of_day).toBe('anytime');
+    }
   });
 });
 

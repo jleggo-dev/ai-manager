@@ -257,6 +257,32 @@ function resolveTargets(
   };
 }
 
+/**
+ * "No particular time" as a CHOICE rather than an omission.
+ *
+ * Owner: *"we could make time_of_day not optional — she can then specifically provide a value of
+ * 'any time'… but she could deliberately pick to have no time specified, and that it is a
+ * deliberate decision."* Exactly the distinction that was missing: a blank meant both "this
+ * floats" and "she forgot", and on 2026-08-17 it meant the second — she supplied a time on one
+ * add and dropped it on a redo 29 seconds later, and nothing anywhere could tell which had
+ * happened.
+ *
+ * Stored as the literal `anytime`, which sorts after every clock time in plan-view's ordering, so
+ * a floating commitment still settles to the bottom of its day exactly as an untimed one did.
+ */
+export const ANYTIME = 'anytime';
+const ANYTIME_WORDS = new Set(['anytime', 'any time', 'any', 'whenever', 'flexible', 'no time', 'none']);
+
+/** Read a time the model wrote, collapsing every way it might say "no particular time". */
+function normalizeTimeOfDay(raw: string | undefined): string | undefined {
+  const t = raw?.trim();
+  if (!t) return undefined;
+  return ANYTIME_WORDS.has(t.toLowerCase()) ? ANYTIME : t;
+}
+
+/** How a time reads on the card. */
+const showTime = (t: string) => (t === ANYTIME ? 'any time' : t);
+
 /** `add` — the one action with no existing target. */
 function applyAdd(
   edit: PlanEdit,
@@ -275,6 +301,16 @@ function applyAdd(
       reject: `"${title}" already names a commitment — two by the same name are indistinguishable to the user reading their own week. Pick a distinct name ("${title} (Wednesday)", "${title} — hills").`,
     };
   }
+  /**
+   * A new commitment must say WHEN, even if the answer is "no particular time". Not a default —
+   * a default is the omission wearing a nicer name, and the owner asked for a decision.
+   */
+  const when = normalizeTimeOfDay(edit.time_of_day);
+  if (!when) {
+    return {
+      reject: `"${title}" was not added: it needs a time of day. Set one — the time their other sessions of that kind run at, or ask them — or pass time_of_day "anytime" if it genuinely floats.`,
+    };
+  }
   const byday = toByDay(edit.days) ?? 'MO,WE,FR';
   const recurrence = `FREQ=WEEKLY;BYDAY=${byday}`;
   const goalId = Object.keys(goalTitleById).find((id) => goalTitleById[id] === edit.goal_title);
@@ -283,7 +319,7 @@ function applyAdd(
     kind: 'user',
     cadence: describeRecurrence(recurrence),
     recurrence,
-    ...(edit.time_of_day ? { time_of_day: edit.time_of_day } : {}),
+    time_of_day: when,
     ...(edit.duration_min ? { duration_min: edit.duration_min } : {}),
     completion_source: 'self_report',
     ...(goalId ? { goal_id: goalId } : {}),
@@ -298,8 +334,7 @@ function applyAdd(
    * supplied it on another a minute earlier, so the model is inconsistent rather than wrong —
    * naming it on the card is what lets either of them notice.
    */
-  const when = edit.time_of_day ? `, ${edit.time_of_day}` : ' (no time set)';
-  return { added, change: `Add ${title} — ${describeRecurrence(recurrence)}${when}` };
+  return { added, change: `Add ${title} — ${describeRecurrence(recurrence)}, ${showTime(when)}` };
 }
 
 /** Everything that changes an existing commitment, one target at a time. */
@@ -365,12 +400,14 @@ function applyToOne(
   }
 
   if (edit.action === 'retime') {
-    const t = edit.time_of_day?.trim();
+    const t = normalizeTimeOfDay(edit.time_of_day);
     if (!t) return { reject: `Couldn't tell what time to give ${found.title}.` };
     const was = found.time_of_day;
-    if (was === t) return { noop: `${found.title} is already at ${t}.` };
+    if (was === t) return { noop: `${found.title} is already at ${showTime(t)}.` };
     found.time_of_day = t;
-    return { change: `${found.title}: ${was ? `${was} → ${t}` : `now at ${t}`}` };
+    return {
+      change: `${found.title}: ${was ? `${showTime(was)} → ${showTime(t)}` : `now at ${showTime(t)}`}`,
+    };
   }
 
   const mins = Number(edit.duration_min);
