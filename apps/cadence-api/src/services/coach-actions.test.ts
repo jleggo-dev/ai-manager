@@ -107,6 +107,33 @@ describe('propose_plan_change', () => {
     expect(out).toMatch(/No usable changes/);
   });
 
+  /**
+   * Handles die at the next Apply — commitActivities inserts fresh activity rows for every
+   * version — so a proposal built against a plan that has since moved is reasoning about a week
+   * that no longer exists. The title fallback is the dangerous part: it WOULD resolve happily
+   * against the new plan and act on intent formed against the old one.
+   */
+  it('refuses the whole call when the plan moved after she read it', async () => {
+    getActivePlan.mockResolvedValue({ plan_id: 'p1', version: 9 });
+    const out = await propose.run('u1', {
+      plan_version: 7,
+      edits: [{ action: 'move', activity: 'Easy run', days: ['friday'] }],
+    });
+    expect(setPendingPlan).not.toHaveBeenCalled();
+    expect(out).toMatch(/v9 now, not v7/);
+    expect(out).toMatch(/NOTHING was changed/);
+    expect(out).toMatch(/get_active_plan again/);
+  });
+
+  it('proceeds when the version she read is still the live one', async () => {
+    const out = await propose.run('u1', {
+      plan_version: 2,
+      edits: [{ action: 'move', activity: 'Easy run', days: ['friday'] }],
+    });
+    expect(setPendingPlan).toHaveBeenCalledTimes(1);
+    expect(out).toMatch(/Apply button/);
+  });
+
   it('declares a schema the model can actually fill in', () => {
     const def = coachActionDefinitions().find((d) => d.function.name === 'propose_plan_change')!;
     expect((def.function.parameters as { required?: string[] }).required).toEqual(['edits']);

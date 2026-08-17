@@ -14,6 +14,7 @@ import { getActivePlan } from '../../repos/plans.ts';
 import { listActivities } from '../../repos/activities.ts';
 import { listLoggedForProgress, listOccurrences, listRecentLogged } from '../../repos/occurrences.ts';
 import { buildProgress } from '../progress.ts';
+import { activityHandle } from '../plan-edit.ts';
 import { FOOD_HEALTH_FUNCTIONS } from './food-health-functions.ts';
 import { GET_NUTRITION } from './nutrition-facade.ts';
 import { isoRange, type RetrievalFunction } from './types.ts';
@@ -96,9 +97,16 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
         activities: Array<Record<string, unknown>>;
       };
       if (!plan) return '';
+      /**
+       * The HANDLE leads every line. It is what `propose_plan_change` addresses commitments by,
+       * and until 2026-08-17 it did not exist: the plan rendered as titles alone, so a plan
+       * holding two "Easy run" rows gave the coach no way to say which one she meant, and the
+       * edit engine picked for her. A read that names a thing must hand back the way to name it.
+       */
       const lines = activities.map((a) => {
         const sched = a.schedule as { recurrence?: unknown } | undefined;
-        return `  - [${String(a.kind)}] ${String(a.title)} — ${sched?.recurrence ? String(sched.recurrence) : ''}`;
+        const handle = activityHandle(String(a.activity_id ?? ''));
+        return `  - ${handle} [${String(a.kind)}] ${String(a.title)} — ${sched?.recurrence ? String(sched.recurrence) : ''}`;
       });
       // The steer is why this version exists, in the user's own words (0034). Without it a plan
       // adjusted through the "Custom — let's talk" sheet reaches chat as an unexplained different

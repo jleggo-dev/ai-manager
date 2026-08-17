@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Activity } from '@cadence/shared';
-import { applyPlanEdits, matchActivity } from './plan-edit.ts';
+import { activityHandle, applyPlanEdits, matchActivity } from './plan-edit.ts';
 
 /**
  * The edit engine decides what a person's week becomes, with no model in the loop and no human
@@ -9,8 +9,12 @@ import { applyPlanEdits, matchActivity } from './plan-edit.ts';
  * change that drags the rest of the plan along with it.
  */
 
+/** Real-shaped uuids, because the handle is the first 8 hex of one. */
+let seq = 0;
+const uuid = () => `${(++seq).toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`;
+
 const act = (over: Partial<Activity> & { title: string }): Activity => ({
-  activity_id: `a-${over.title}`,
+  activity_id: uuid(),
   plan_id: 'p1',
   kind: 'user',
   schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TH', duration_min: 40 },
@@ -178,6 +182,77 @@ describe('applyPlanEdits — rework', () => {
   });
 });
 
+/**
+ * Addressing by HANDLE — the fix for the whole class, not just the 2026-08-17 instance.
+ *
+ * Titles were the only handle an edit had, and titles are mutable, model-generated, and freely
+ * duplicable, so "which one" was decided by a string match nobody could see. `get_active_plan` now
+ * prints a handle beside every commitment and edits name it directly: exact, order-independent,
+ * and plural, so "make all my runs 45 minutes" is one edit instead of three guesses.
+ */
+describe('applyPlanEdits — addressing by handle', () => {
+  const RUNS: Activity[] = [
+    act({ title: 'Easy run', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU', duration_min: 60 } }),
+    act({ title: 'Easy run', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=WE', duration_min: 40 } }),
+    act({ title: 'Long run', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=SA', duration_min: 90 } }),
+  ];
+  const h = (i: number) => activityHandle(RUNS[i]!.activity_id);
+
+  it('hits exactly the commitment named, even when its twin is right beside it', () => {
+    const r = applyPlanEdits(RUNS, [{ action: 'move', activities: [h(1)], days: ['friday'] }]);
+    expect(r.rejected).toEqual([]);
+    expect(r.changes).toEqual(['Move Easy run: Wed → Fri']);
+    // Tuesday's is untouched. No on_days, no prose, no guessing.
+    expect(r.activities[0]!.recurrence).toBe('FREQ=WEEKLY;BYDAY=TU');
+    expect(r.activities[1]!.recurrence).toBe('FREQ=WEEKLY;BYDAY=FR');
+  });
+
+  /** The one-shot case: every run in the week, one edit, one card. */
+  it('changes several commitments in a single edit, one card line each', () => {
+    const r = applyPlanEdits(RUNS, [{ action: 'resize', activities: [h(0), h(1), h(2)], duration_min: 45 }]);
+    expect(r.rejected).toEqual([]);
+    expect(r.changes).toEqual(['Easy run: 60 min → 45 min', 'Easy run: 40 min → 45 min', 'Long run: 90 min → 45 min']);
+    expect(r.activities.every((a) => a.duration_min === 45)).toBe(true);
+  });
+
+  it('rejects an unknown handle outright and hands back the real ones', () => {
+    const r = applyPlanEdits(RUNS, [{ action: 'remove', activities: ['deadbeef'] }]);
+    expect(r.changes).toEqual([]);
+    expect(r.rejected[0]).toMatch(/No commitment has the handle "deadbeef"/);
+    expect(r.rejected[0]).toContain(h(0));
+    expect(r.rejected[0]).toMatch(/get_active_plan again/);
+    expect(r.activities).toHaveLength(3);
+  });
+
+  /** All-or-nothing per edit: a partly-resolvable batch must not half-apply to someone's week. */
+  it('does not apply the known half of an edit whose other half is unknown', () => {
+    const r = applyPlanEdits(RUNS, [{ action: 'resize', activities: [h(0), 'deadbeef'], duration_min: 30 }]);
+    expect(r.changes).toEqual([]);
+    expect(r.activities[0]!.duration_min).toBe(60);
+  });
+
+  it('never falls back to the title when a handle was given', () => {
+    // "Easy run" would have matched something under the old rules; a bad handle must not.
+    const r = applyPlanEdits(RUNS, [{ action: 'move', activities: ['00000000'], activity: 'Easy run', days: ['fri'] }]);
+    expect(r.changes).toEqual([]);
+    expect(r.rejected[0]).toMatch(/No commitment has the handle/);
+  });
+
+  it('ignores a handle repeated in one edit rather than applying twice', () => {
+    const r = applyPlanEdits(RUNS, [{ action: 'resize', activities: [h(2), h(2)], duration_min: 50 }]);
+    expect(r.changes).toEqual(['Long run: 90 min → 50 min']);
+  });
+
+  it('gives a freshly added commitment a handle, so the next edit can reach it', () => {
+    const r = applyPlanEdits(RUNS, [
+      { action: 'add', title: 'Recovery jog', days: ['sunday'] },
+      { action: 'resize', activities: ['new1'], duration_min: 25 },
+    ]);
+    expect(r.rejected).toEqual([]);
+    expect(r.activities.find((a) => a.title === 'Recovery jog')!.duration_min).toBe(25);
+  });
+});
+
 describe('matchActivity', () => {
   it('prefers an exact title over a containing one', () => {
     const items = [{ title: 'Run' }, { title: 'Run club' }];
@@ -240,7 +315,8 @@ describe('applyPlanEdits — twins and on_days', () => {
     const r = applyPlanEdits(TWINS, [{ action: 'move', activity: 'Easy run', days: ['friday'] }]);
     expect(r.changes).toEqual([]);
     expect(r.rejected[0]).toMatch(/2 commitments are called "Easy run"/);
-    expect(r.rejected[0]).toMatch(/on_days/);
+    // The guidance now points at the exact handle, not at another way to describe the thing.
+    expect(r.rejected[0]).toMatch(/address the one you mean by its handle/);
     // Nothing moved — refusing is the fix; guessing was the bug.
     expect(r.activities.map((a) => a.recurrence)).toEqual(TWINS.map((a) => a.schedule.recurrence));
   });
@@ -271,7 +347,7 @@ describe('applyPlanEdits — twins and on_days', () => {
       { action: 'rework', activity: 'Easy base run - post-recovery assessment', title: 'Easy run' },
     ]);
     expect(r.changes).toEqual([]);
-    expect(r.rejected[0]).toMatch(/impossible to tell apart/);
+    expect(r.rejected[0]).toMatch(/two identical rows/);
   });
 
   /** She passed duration_min on a rework twice and both were silently dropped — the "35-40 minute

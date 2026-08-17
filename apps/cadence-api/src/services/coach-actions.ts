@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import { listGoals, listGoalsByStatus, updateGoal, setGoalStatus } from '../repos/goals.ts';
@@ -10,21 +9,15 @@ import {
   listRecentForLogging,
 } from '../repos/occurrences.ts';
 import { logOccurrence } from './session-log.ts';
-import {
-  getUser,
-  mergeCapturedConstraints,
-  removeCapturedConstraint,
-  renameCapturedConstraint,
-  setMacroTargets,
-  setPendingPlan,
-} from '../repos/users.ts';
+import { getUser, setMacroTargets, setPendingPlan } from '../repos/users.ts';
 import { sanitizeTargets } from './nutrition-day.ts';
+import type { CoachActionTool } from './coach-action-types.ts';
+import { UPDATE_CONSTRAINT } from './coach-action-constraint.ts';
 
 /** Today, YYYY-MM-DD — stamped on a target change so the weekly review throttle can see it. */
 const today = (): string => new Date().toISOString().slice(0, 10);
 import { expandRecurrence } from './scheduling.ts';
 import { applyPlanEdits, matchActivity, type PlanEdit } from './plan-edit.ts';
-import { sameConstraint } from './constraint-merge.ts';
 
 /**
  * The coach's ACTION tools — the half of the harness that changes something.
@@ -57,13 +50,7 @@ import { sameConstraint } from './constraint-merge.ts';
  * attributable after the fact.
  */
 
-export interface CoachActionTool {
-  name: string;
-  description: string;
-  parameters: { properties: Record<string, unknown>; required?: string[] };
-  /** Returns the text the model sees. Never throws for user-facing failure — it explains instead. */
-  run(userId: string, params: Record<string, unknown>): Promise<string>;
-}
+export type { CoachActionTool } from './coach-action-types.ts';
 
 const EDIT_SCHEMA = {
   type: 'array',
@@ -77,9 +64,16 @@ const EDIT_SCHEMA = {
         description:
           'move = which days it happens on; retime = what time of day; resize = how many minutes; remove = drop it; add = a new commitment; rework = change what the session CONTAINS, keeping its slot (swap an exercise, change the focus).',
       },
+      activities: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'WHICH commitments, by the handles get_active_plan prints (e.g. ["a3f19c2b","5d01f807"]). Several in one edit is how you change every run at once. Not used for add.',
+      },
       activity: {
         type: 'string',
-        description: 'Which commitment to change, by its title exactly as the plan lists it. Not used for add.',
+        description:
+          'Fallback when you have no handle: the title, exactly as the plan lists it. Refused if two share it — use activities instead. Not used for add.',
       },
       on_days: {
         type: 'array',
@@ -119,6 +113,7 @@ function asEdits(raw: unknown): PlanEdit[] {
     .map((e) => ({
       action: String(e.action ?? '') as PlanEdit['action'],
       ...(typeof e.activity === 'string' ? { activity: e.activity } : {}),
+      ...(Array.isArray(e.activities) ? { activities: e.activities.map(String) } : {}),
       ...(Array.isArray(e.on_days) ? { on_days: e.on_days.map(String) } : {}),
       ...(Array.isArray(e.days) ? { days: e.days.map(String) } : {}),
       ...(typeof e.time_of_day === 'string' ? { time_of_day: e.time_of_day } : {}),
@@ -131,32 +126,22 @@ function asEdits(raw: unknown): PlanEdit[] {
     .filter((e) => ['move', 'retime', 'resize', 'remove', 'add', 'rework'].includes(e.action));
 }
 
-/**
- * Read the constraints back after writing them, so the answer describes the OBSERVED state.
- *
- * Owner, 2026-08-16: *"Cadence should actually invoke the tool and then double-check to see if
- * their action worked or not."* Right — and better as a rule about the TOOL than about her, because
- * a model can be wrong about whether it checked and a query cannot.
- *
- * The day earned this twice. She told him a session was logged (the tool had said it found nothing)
- * and that a constraint was removed (it was still there, `plan_around: true`, and she went on
- * repeating the claim for turns afterwards). In both cases the tool's own answer was correct and
- * the *claim* was not, so no amount of describing the tool better would have helped.
- *
- * Generalises TOOL-HARNESS.md §5: a tool's return must never claim an effect the tool did not
- * produce — which means the safest return is one that says what a fresh read can see.
- */
-async function verifyConstraints(userId: string): Promise<Array<{ label: string; plan_around?: boolean }>> {
-  const u = await getUser(userId);
-  return (u?.baseline?.constraints ?? []) as Array<{ label: string; plan_around?: boolean }>;
-}
-
 export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   propose_plan_change: {
     name: 'propose_plan_change',
     description:
-      'Propose a specific change to the plan they already have — move a session to other days, retime it, resize it, drop it, add one, or rework what one CONTAINS (swap an exercise). This does NOT change anything: it works out the resulting week and shows a card with an Apply button, so the plan moves only when they tap. Use it the moment they name a change, in the same reply — never describe instead of doing, never claim it is done before the tap. Read get_active_plan first and name commitments exactly as listed; if two share a title, add on_days with the days the one you mean happens on NOW. A whole rebuild is the build card. Pass {"edits": [{"action": "move", "activity": "Easy run", "on_days": ["wednesday"], "days": ["friday"]}]} — or "rework" with how_to ("Dead hangs, not farmers carries").',
-    parameters: { properties: { edits: EDIT_SCHEMA }, required: ['edits'] },
+      'Propose a change to the plan they already have — move a session to other days, retime, resize, drop, add one, or rework what one CONTAINS. This does NOT change anything: it works out the resulting week and shows a card with an Apply button, so the plan moves only when they tap. Use it the moment they name a change, in the same reply; never claim it is done before the tap. Read get_active_plan first — it prints a handle beside every commitment, and edits address them BY handle. One edit can carry several, so "make all my runs 45 minutes" is ONE edit. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b", "5d01f807"], "duration_min": 45}]}. A whole rebuild is the build card instead.',
+    parameters: {
+      properties: {
+        edits: EDIT_SCHEMA,
+        plan_version: {
+          type: 'integer',
+          description:
+            'The version get_active_plan reported. Omit only if you did not read it — passing it is what catches handles that went stale when the plan moved.',
+        },
+      },
+      required: ['edits'],
+    },
     async run(userId, params) {
       const edits = asEdits(params.edits);
       if (!edits.length) return 'No usable changes were given, so nothing was proposed. Ask what they want changed.';
@@ -164,6 +149,17 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       const plan = await getActivePlan(userId);
       if (!plan) {
         return 'They have no active plan yet, so there is nothing to change — offer to build one (the build card) instead.';
+      }
+      /**
+       * Handles die at the next Apply — `commitActivities` inserts fresh activity rows for every
+       * version. So a proposal built from a plan that has since moved is reasoning about a week
+       * that no longer exists, and the dangerous case is the title fallback, which WOULD happily
+       * resolve against the new plan and act on intent formed against the old one. Refuse the whole
+       * call: one honest "read it again" beats a partially-correct edit to someone's week.
+       */
+      const declared = Number(params.plan_version);
+      if (Number.isFinite(declared) && declared !== plan.version) {
+        return `Their plan is v${plan.version} now, not v${declared} — it changed after you read it, so every handle you have is stale. NOTHING was changed. Call get_active_plan again and re-propose from what it says now.`;
       }
       const [activities, goals] = await Promise.all([
         listActivities(plan.plan_id),
@@ -355,121 +351,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
     },
   },
 
-  update_constraint: {
-    name: 'update_constraint',
-    description:
-      'Record a change to something they work around — a knee, a night shift, a hard stretch. Takes effect immediately. Use when one has EASED ("my knee is fine now" → lift, kept on file as quiet so you still know it happened), FLARED again (flare), is genuinely NEW (add), or is worded badly (reword, with new_label). Use remove ONLY when it was recorded wrongly and never true ("I have never had a knee injury") — an error to erase, not history; recovering is never a reason to remove. Read get_constraints first and name it as listed. Pass {"constraint": "left knee", "action": "lift"}; {"constraint": "night shifts", "action": "add", "kind": "life", "plan_around": true, "until": "2026-09-30"}; or {"constraint": "ramp gently", "action": "reword", "new_label": "left ankle tendinitis"}.',
-    parameters: {
-      properties: {
-        constraint: { type: 'string', description: 'Which one, by its label as get_constraints lists it.' },
-        action: {
-          type: 'string',
-          enum: ['add', 'lift', 'flare', 'reword', 'remove'],
-          description:
-            'add = something new they work around; lift = it has eased, keep it on file as quiet; flare = it is back; reword = same thing, badly described — give new_label; remove = it was recorded wrongly and was never true.',
-        },
-        new_label: {
-          type: 'string',
-          description:
-            'Required for reword: what it should say instead — their words, naming the thing itself, not what to do about it.',
-        },
-        kind: {
-          type: 'string',
-          enum: ['physical', 'life', 'other'],
-          description: 'For add: a body thing, a life thing, or neither. Defaults to other.',
-        },
-        plan_around: {
-          type: 'boolean',
-          description: 'Whether the plan must work around it. Defaults to true for add and flare.',
-        },
-        until: {
-          type: 'string',
-          description: 'YYYY-MM-DD it stops applying, when they said so. Omit for open-ended.',
-        },
-      },
-      required: ['constraint', 'action'],
-    },
-    async run(userId, params) {
-      const label = String(params.constraint ?? '').trim();
-      const action = String(params.action ?? '');
-      if (!label) return 'No constraint was named, so nothing changed. Ask which one they mean.';
-
-      if (action === 'remove') {
-        const removed = await removeCapturedConstraint(userId, label);
-        // Re-READ, do not trust the write. See verifyConstraints below.
-        const after = await verifyConstraints(userId);
-        const stillThere = after.some((c) => sameConstraint(c.label ?? '', label));
-        if (stillThere) {
-          return `"${label}" is STILL on their file — the removal did not take. Do NOT tell them it is gone. Say you could not remove it just now, and that they can take it off themselves in Settings under "What we work around".`;
-        }
-        return removed
-          ? `Removed "${label}" — verified gone from their file. Say so briefly and move on; do not dwell on the mistake.`
-          : `Nothing on file matches "${label}", so nothing was removed. Tell them plainly it was not there.`;
-      }
-
-      /**
-       * A reword cannot go through the merge path: `mergeConstraints` keeps the LONGER telling, so
-       * every attempt to shorten a badly-worded label is discarded without a word. That is why the
-       * owner asked repeatedly to fix "ramp gently because of tendinitis" and Cadence agreed
-       * repeatedly and nothing ever changed. Same row, same history — only the wording moves.
-       */
-      if (action === 'reword') {
-        const next = String(params.new_label ?? '').trim();
-        if (!next) return `No new wording was given, so "${label}" is unchanged. Ask what it should say instead.`;
-        const done = await renameCapturedConstraint(userId, label, next);
-        if (!done) {
-          const names = ((await verifyConstraints(userId)).map((c) => c.label).join(', ') || 'none on file') as string;
-          return `Nothing on file matches "${label}", so nothing was reworded. What they work around: ${names}. Ask which they mean.`;
-        }
-        // Re-READ, do not trust the write.
-        const after = await verifyConstraints(userId);
-        const landed = after.some((c) => (c.label ?? '').trim() === next);
-        return landed
-          ? `Reworded: "${done.from}" now reads "${next}" on their file — verified. Say it back in one line so they can tell you if it is still not right.`
-          : `"${label}" did NOT get reworded — the change did not take. Do not say it is fixed; say you could not save it just now, and that they can edit the wording themselves in Settings under "What we work around".`;
-      }
-
-      const known = ((await getUser(userId))?.baseline?.constraints ?? []) as Array<{ label: string }>;
-      const existing = known.find((c) => sameConstraint(c.label ?? '', label));
-      if (action !== 'add' && !existing) {
-        const names = known.map((c) => c.label).join(', ') || 'none on file';
-        return `Nothing on file matches "${label}", so nothing changed. What they work around: ${names}. Ask which they mean, or add it if it is new.`;
-      }
-
-      const planAround = typeof params.plan_around === 'boolean' ? params.plan_around : action !== 'lift';
-      const kind = ['physical', 'life', 'other'].includes(String(params.kind)) ? String(params.kind) : undefined;
-      const until = /^\d{4}-\d{2}-\d{2}$/.test(String(params.until ?? '')) ? String(params.until) : undefined;
-
-      await mergeCapturedConstraints(userId, [
-        {
-          id: randomUUID(),
-          label: existing?.label ?? label,
-          plan_around: planAround,
-          status: action === 'lift' ? 'quiet' : 'active',
-          ...(kind ? { kind: kind as 'physical' | 'life' | 'other' } : {}),
-          ...(until ? { until } : {}),
-        },
-      ]);
-
-      // What the file ACTUALLY says now, not what we asked it to say.
-      const after = await verifyConstraints(userId);
-      const row = after.find((c) => sameConstraint(c.label ?? '', existing?.label ?? label));
-      if (!row) {
-        return `"${label}" is not on their file after that write — it did not take. Do NOT say it is done; say you could not save it just now.`;
-      }
-      if (action === 'lift') {
-        return row.plan_around === false
-          ? `"${row.label}" is marked eased and verified: still on file, so you keep knowing about it, but the plan no longer works around it. Say that back plainly, and if their week was built around it, offer to rebuild.`
-          : `"${row.label}" is still being planned around — the change did not take. Do NOT say it is eased; say you could not save it just now.`;
-      }
-      if (action === 'flare') {
-        return row.plan_around
-          ? `"${row.label}" is active again and verified: the plan should work around it. Say so, and offer to change the week if it currently ignores it.`
-          : `"${row.label}" did not save as active. Do NOT say it is done; say you could not save it just now.`;
-      }
-      return `Noted and verified: they work around "${row.label}". Say it back in one line so they can correct you if you have it wrong.`;
-    },
-  },
+  update_constraint: UPDATE_CONSTRAINT,
 
   log_session: {
     name: 'log_session',

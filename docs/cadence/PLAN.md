@@ -2635,6 +2635,42 @@ The general lesson, same family as the constraints panel: **every silently-absor
 lie waiting to be told.** A schema that accepts what it does not honour teaches the model that
 saying it was enough.
 
+**A19. A commitment identity that survives Apply — the second half of plan addressing (owner 2026-08-17; layer 1 shipped, this is layer 2)**
+
+Owner, after A18: *"It still feels here a bit like we're guessing… Cadence should be able to look
+up an assigned activity and find its unique ID and then deliberately change that unique one."*
+Right. Layer 1 shipped the same day — `get_active_plan` prints an 8-hex handle beside every
+commitment, `propose_plan_change` addresses **by handle**, plural (one edit changes every run in
+the week), and an unknown handle is a rejection listing the real ones rather than a fallback to
+title matching.
+
+**What layer 1 does not fix.** `commitActivities` supersedes the plan and INSERTS FRESH ACTIVITY
+ROWS on every Apply, so `activity_id` — and therefore the handle — is stable only *within* a plan
+version. Mitigated for now by `plan_version`: the coach passes the version she read, and a
+mismatch refuses the whole call ("call get_active_plan again") rather than resolving stale intent
+against a moved week. That is a guard, not a cure.
+
+**The actual foundation problem.** There is no durable identity for "my Tuesday easy run" across
+plan versions. Occurrences FK to version-scoped activity rows and most history queries scope by
+`user_id` + date, so six weeks of one commitment spans ~five `activity_id`s — and the only thing
+tying them together is **the title string**. A mutable, model-generated, freely-duplicable string
+is carrying identity for addressing, history continuity, and dedup at once. A18's twins bug was
+that fact becoming visible; it will keep surfacing in new costumes until it is fixed.
+
+**The fix:** a `commitment_id` on `activities` that `commitActivities` copies forward instead of
+minting fresh. Handles then survive Apply (retiring the `plan_version` guard), history becomes a
+real join instead of a string match, and title stops being load-bearing. Needs a migration plus a
+backfill that groups existing rows by title within a user — ironic, and the last time that
+heuristic gets to matter. Its own PR; deliberately not bundled with layer 1.
+
+**Rejected alternatives** (owner offered three; 2 was chosen): a separate lookup-the-ID tool call
+is *less* accurate than layer 1, not more — the ID crosses an extra model turn, doubling
+transcription risk and opening a window where the plan moves. Deterministic composite keys
+(`17082026.morning.run`) encode mutable facts into the identifier, so the first retime makes the
+key a lie. General principle for the harness: **let the model select, not construct queries** —
+picking handles from a list it just read is reliable; writing predicates it cannot execute or
+preview is where it silently overreaches, and overreach here is someone's week.
+
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 
 Hit on device: at the end of onboarding every way of saving the plan answered "you already have an
