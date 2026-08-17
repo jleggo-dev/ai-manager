@@ -129,9 +129,12 @@ for (;;) {
   if (raw.length > 500_000) break;
 }
 
-/* 3 ─ Accumulate HER PROSE only, and the per-round token counts. */
+/* 3 ─ Accumulate HER PROSE, the calls she made per round, and whatever usage the relay reports. */
 const replyParts: string[] = [];
 const inputTokens: number[] = [];
+/** `name(arguments)` for every call, in order — repeats across rounds are the bug's fingerprint. */
+const callFingerprints: string[] = [];
+
 for (const line of raw.split('\n')) {
   if (!line.startsWith('data: ')) continue;
   const payload = line.slice(6).trim();
@@ -142,11 +145,26 @@ for (const line of raw.split('\n')) {
   } catch {
     continue;
   }
+
   const delta = (evt.choices as Array<{ delta?: { content?: string } }> | undefined)?.[0]?.delta?.content;
   if (typeof delta === 'string') replyParts.push(delta);
-  const usage = evt.usage as { prompt_tokens?: number; input_tokens?: number } | undefined;
-  const n = usage?.prompt_tokens ?? usage?.input_tokens;
-  if (typeof n === 'number') inputTokens.push(n);
+
+  /**
+   * Usage arrives as its own frame — `{type:"usage", prompt_tokens, …}` — with the counts at the
+   * TOP level, not nested under a `usage` key. Reading `evt.usage` found nothing and printed an
+   * empty line, which is the failure mode this whole script exists to avoid: no data rendering as
+   * a result. Both shapes are accepted now, and "none collected" is stated as such.
+   */
+  const nested = evt.usage as { prompt_tokens?: number; input_tokens?: number } | undefined;
+  const n = typeof nested === 'object' && nested ? (nested.prompt_tokens ?? nested.input_tokens) : undefined;
+  const flat = evt.type === 'usage' ? ((evt.prompt_tokens ?? evt.input_tokens) as number | undefined) : undefined;
+  if (typeof (n ?? flat) === 'number') inputTokens.push((n ?? flat) as number);
+
+  if (evt.type === 'message.complete') {
+    for (const item of (evt.output as Array<Record<string, unknown>>) ?? []) {
+      if (item.type === 'function_call') callFingerprints.push(`${String(item.name)}(${String(item.arguments)})`);
+    }
+  }
 }
 const reply = replyParts.join('');
 
@@ -154,21 +172,47 @@ const fs = await import('node:fs');
 const COPY = `/private/tmp/claude-501/-Users-jeffreyleggo-cadence-ai-manager/735dc168-293c-4128-9c5b-63ffce1e6c20/scratchpad/probe-tool-result-lands.txt`;
 fs.writeFileSync(COPY, raw);
 
-/* 4 ─ Verdict. Both checks, or it is red. */
+/* 4 ─ Verdict.
+ *
+ * Two checks, and neither may pass on absent data. The original version printed
+ * `frozen across rounds: false` when it had collected NO token counts at all, which reads exactly
+ * like a pass — the same "silence looks like success" shape as the 2026-08-14 false positive it
+ * was written to prevent. Every check below is three-valued: pass, fail, or "not measurable here",
+ * and only a real pass counts toward GREEN.
+ */
 const nonceInReply = reply.includes(NONCE);
-const nonceAnywhere = raw.includes(NONCE);
-const frozen = inputTokens.length > 1 && new Set(inputTokens).size === 1;
-const grew = inputTokens.length > 1 && inputTokens[1]! > inputTokens[0]!;
+
+/**
+ * The bug's fingerprint, and the discriminator that actually works against this relay.
+ *
+ * Per-round token counts are NOT available: the relay emits one aggregate `usage` frame for the
+ * whole turn, so the "18,979 then 12,772 three times" signature cannot be reconstructed from the
+ * client side. What IS visible per round is the calls themselves — and a model that never receives
+ * a result re-issues the same call with byte-identical arguments, which is precisely what the
+ * production capture showed. So: a repeat is the failure, and the check needs no usage data.
+ */
+const repeated = callFingerprints.filter((f, i) => callFingerprints.indexOf(f) !== i);
+const madeACall = callFingerprints.length > 0;
+
+const verdict = (ok: boolean, measurable = true) => (!measurable ? '— not measurable here' : ok ? '✓' : '✗');
 
 console.log('\n── VERDICT ──');
 console.log('nonce                    :', NONCE);
-console.log('function_call in stream  :', /function_call/.test(raw));
-console.log('nonce anywhere in stream :', nonceAnywhere, '(necessary, NOT sufficient — this is the 08-14 trap)');
-console.log('nonce in HER REPLY       :', nonceInReply, nonceInReply ? '✓ the result reached the model' : '✗');
-console.log('input tokens per round   :', inputTokens.join(' → '));
-console.log('  frozen across rounds   :', frozen, frozen ? '✗ the provider rebuilt from its own thread' : '');
-console.log('  round 2 > round 1      :', grew, grew ? '✓ the continuation carried the conversation' : '');
+console.log('made a tool call         :', madeACall, verdict(madeACall));
+console.log('nonce anywhere in stream :', raw.includes(NONCE), '(necessary, NOT sufficient — the 08-14 trap)');
+console.log('nonce in HER REPLY       :', nonceInReply, verdict(nonceInReply), nonceInReply ? 'the result reached the model' : '');
+console.log('calls made               :', callFingerprints.length ? callFingerprints.join(' | ') : '(none)');
+console.log('  no byte-identical repeat:', !repeated.length, verdict(!repeated.length, madeACall));
+if (repeated.length) console.log('  REPEATED               :', [...new Set(repeated)].join(' | '));
+console.log(
+  'usage frames             :',
+  inputTokens.length ? `${inputTokens.join(' → ')} (aggregate per turn, not per round)` : '(none reported)',
+);
+
 console.log('reply                    :', JSON.stringify(reply.slice(0, 400)));
 console.log('full stream              :', COPY);
-console.log('\nRESULT:', nonceInReply && !frozen ? 'GREEN' : 'RED');
-process.exit(nonceInReply && !frozen ? 0 : 1);
+
+// GREEN needs a call to have happened, its result to have reached her, and no re-issued call.
+const green = madeACall && nonceInReply && !repeated.length;
+console.log('\nRESULT:', green ? 'GREEN' : 'RED');
+process.exit(green ? 0 : 1);
