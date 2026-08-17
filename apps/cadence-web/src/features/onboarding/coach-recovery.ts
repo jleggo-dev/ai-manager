@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { getCurrentCoach } from '../../lib/api.ts';
+import { useRef, type MutableRefObject } from 'react';
+import { getCurrentCoach, notifyOnCoachReply } from '../../lib/api.ts';
 import { useAppResume } from '../../lib/useAppResume.ts';
 import { useAppLeave } from '../../lib/useAppLeave.ts';
 // Type-only, so this is erased at runtime and no cycle exists (coachTurns.ts does the same).
@@ -83,6 +83,48 @@ export async function recoverTurnFromServer(deps: RecoverDeps): Promise<boolean>
  * that iOS will never settle. When that corpse finally rejects, its error branches must stay
  * quiet — an apology printed under a reply that arrived fine is its own kind of broken.
  */
+/**
+ * "Notify me when she's done" — and the window at the start of a fresh thread where there is
+ * nothing to say it about.
+ *
+ * The arming request names the thread in its URL, so it needs `sessionId`. On the FIRST turn of a
+ * fresh thread that id does not exist yet: `useResumeHealer.begin()` has already run, but
+ * `openCoachSession()` has not come back. Someone who sends a message and immediately switches apps
+ * leaves inside that window, and the old code called `notifyOnCoachReply(null)`, which returns at
+ * its first line without sending anything. No request, no attempt recorded, no notification, and
+ * nothing anywhere saying why. So the intent is remembered and posted the moment the thread has a
+ * name — still the same turn, so still the right one to ask about.
+ *
+ * Lives beside the healer because it is the same story: what the client owes the server about
+ * leaving, which the server cannot see for itself.
+ */
+export function useReplyNotifyArm(sessionId: MutableRefObject<string | null>) {
+  /** A leave that could not be sent yet, waiting on the thread to be named. */
+  const deferred = useRef(false);
+
+  const arm = () => {
+    if (!sessionId.current) {
+      deferred.current = true;
+      return;
+    }
+    deferred.current = false;
+    void notifyOnCoachReply(sessionId.current);
+  };
+
+  return {
+    /** They left. Say so now, or as soon as we can. */
+    arm,
+    /** A turn is going out: an intent left unspent by an earlier one must not arm this one. */
+    startTurn() {
+      deferred.current = false;
+    },
+    /** The thread has a name at last — spend an intent that was waiting on it. */
+    sessionOpened() {
+      if (deferred.current) arm();
+    },
+  };
+}
+
 export function useResumeHealer(deps: {
   recover: () => Promise<boolean>;
   onHealed: () => void;

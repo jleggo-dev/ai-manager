@@ -13,12 +13,11 @@ import {
   getCurrentCoach,
   prepareCoachFoodAction,
   stopCoachTurn,
-  notifyOnCoachReply,
   type CoachFoodAction,
 } from '../../lib/api.ts';
 import { capabilities } from '../../lib/capability/index.ts';
 import { useCoachActivity } from './useCoachActivity.ts';
-import { recoverTurnFromServer, useResumeHealer } from './coach-recovery.ts';
+import { recoverTurnFromServer, useReplyNotifyArm, useResumeHealer } from './coach-recovery.ts';
 import { healthOfferAnswered } from './health-digest.ts';
 
 export interface CoachTurn {
@@ -102,10 +101,11 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
   // Live only while a turn is streaming — the Stop button's handle on it.
   const abort = useRef<AbortController | null>(null);
   const stopped = useRef(false);
+  const notifyArm = useReplyNotifyArm(sessionId);
   const healer = useResumeHealer({
     recover: () => recoverFromServer(),
     // Leaving mid-turn arms the "Cadence replied" ping — the server cannot see it happen.
-    onLeave: () => void notifyOnCoachReply(sessionId.current),
+    onLeave: notifyArm.arm,
     onHealed: () => {
       abort.current?.abort();
       abort.current = null;
@@ -156,6 +156,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     const window = turnsWindow(turns, text);
     setTurns((t) => [...t, ...(echo ? [{ role: 'user' as const, text }] : []), { role: 'coach' as const, text: '' }]);
     setStreaming(true);
+    notifyArm.startTurn();
     healer.begin();
     // Confirm-first food draft in parallel with the coach stream (never blocks reply). Only for
     // something the user actually said — an app note is not a meal.
@@ -183,7 +184,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
         return last?.role === 'coach' && !last.text ? t.slice(0, -1) : t;
       });
     try {
-      if (!sessionId.current)
+      if (!sessionId.current) {
         sessionId.current = (
           await openCoachSession({
             intent,
@@ -193,6 +194,10 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
             healthAnswered: healthOfferAnswered(),
           })
         ).sessionId;
+        // They backgrounded while this round-trip was in the air, and the arm had no thread to
+        // name. It does now — and this is still the same turn, so it is still the right one to ask.
+        notifyArm.sessionOpened();
+      }
       abort.current = new AbortController();
       stopped.current = false;
       const { completed } = await sendCoachMessage(
