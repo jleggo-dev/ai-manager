@@ -15,6 +15,7 @@ const deleteOccurrence = vi.fn();
 const getUser = vi.fn();
 const mergeCapturedConstraints = vi.fn();
 const removeCapturedConstraint = vi.fn();
+const renameCapturedConstraint = vi.fn();
 const setMacroTargets = vi.fn();
 
 vi.mock('../repos/plans.ts', () => ({ getActivePlan: (...a: unknown[]) => getActivePlan(...a) }));
@@ -36,6 +37,7 @@ vi.mock('../repos/users.ts', () => ({
   getUser: (...a: unknown[]) => getUser(...a),
   mergeCapturedConstraints: (...a: unknown[]) => mergeCapturedConstraints(...a),
   removeCapturedConstraint: (...a: unknown[]) => removeCapturedConstraint(...a),
+  renameCapturedConstraint: (...a: unknown[]) => renameCapturedConstraint(...a),
   setMacroTargets: (...a: unknown[]) => setMacroTargets(...a),
 }));
 // Imported by nothing here on purpose — the assertion is that it is NEVER reached.
@@ -261,6 +263,7 @@ describe('update_constraint', () => {
       },
     });
     removeCapturedConstraint.mockResolvedValue(true);
+    renameCapturedConstraint.mockResolvedValue(null);
   });
 
   /**
@@ -355,6 +358,69 @@ describe('update_constraint', () => {
     const out = await constraint.run('u1', { constraint: 'shoulder', action: 'lift' });
     expect(mergeCapturedConstraints).not.toHaveBeenCalled();
     expect(out).toMatch(/night shifts/);
+  });
+
+  /**
+   * The promise we kept missing.
+   *
+   * The Broker recorded "ramp gently because of tendinitis" — an instruction where a fact belongs,
+   * and it shaped every plan that read it. Asked several times to fix the wording, Cadence agreed
+   * several times and nothing changed: there was no reword action, so she reached for a plan change
+   * on an activity instead. Owner: *"we miss the promise on 'fix the wording'."*
+   *
+   * It cannot go through the merge path either — `mergeConstraints` keeps the LONGER telling, so a
+   * shortening is discarded in silence, and shortening is exactly what a correction usually is.
+   */
+  it('REWORDS a badly-worded constraint, shorter, without touching its history', async () => {
+    renameCapturedConstraint.mockResolvedValue({
+      from: 'ramp gently because of tendinitis',
+      to: 'left ankle tendinitis',
+    });
+    getUser.mockResolvedValue({
+      baseline: { constraints: [{ id: 'c1', label: 'left ankle tendinitis', plan_around: true, status: 'active' }] },
+    });
+
+    const out = await constraint.run('u1', {
+      constraint: 'ramp gently because of tendinitis',
+      action: 'reword',
+      new_label: 'left ankle tendinitis',
+    });
+
+    expect(renameCapturedConstraint).toHaveBeenCalledWith(
+      'u1',
+      'ramp gently because of tendinitis',
+      'left ankle tendinitis',
+    );
+    // Not a merge and not a delete — the row is the same row.
+    expect(mergeCapturedConstraints).not.toHaveBeenCalled();
+    expect(removeCapturedConstraint).not.toHaveBeenCalled();
+    expect(out).toMatch(/now reads "left ankle tendinitis"/);
+    expect(out).toMatch(/verified/);
+  });
+
+  it('will not reword without new wording, and asks for it', async () => {
+    const out = await constraint.run('u1', { constraint: 'left knee', action: 'reword' });
+    expect(renameCapturedConstraint).not.toHaveBeenCalled();
+    expect(out).toMatch(/No new wording/);
+  });
+
+  it('refuses to report a reword that did not take', async () => {
+    renameCapturedConstraint.mockResolvedValue({ from: 'left knee', to: 'left knee tendinopathy' });
+    // The read after the write still shows the old wording — a silent no-op.
+    getUser.mockResolvedValue({ baseline: { constraints: [{ id: 'c1', label: 'left knee', plan_around: true }] } });
+    const out = await constraint.run('u1', {
+      constraint: 'left knee',
+      action: 'reword',
+      new_label: 'left knee tendinopathy',
+    });
+    expect(out).toMatch(/did NOT get reworded/);
+    expect(out).toMatch(/Settings/);
+  });
+
+  it('says plainly when there is nothing by that name to reword', async () => {
+    renameCapturedConstraint.mockResolvedValue(null);
+    const out = await constraint.run('u1', { constraint: 'a bad back', action: 'reword', new_label: 'lower back' });
+    expect(out).toMatch(/Nothing on file matches/);
   });
 
   it('carries an end date when they gave one', async () => {

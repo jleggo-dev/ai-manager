@@ -14,6 +14,7 @@ import {
   getUser,
   mergeCapturedConstraints,
   removeCapturedConstraint,
+  renameCapturedConstraint,
   setMacroTargets,
   setPendingPlan,
 } from '../repos/users.ts';
@@ -349,15 +350,20 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   update_constraint: {
     name: 'update_constraint',
     description:
-      'Record a change to something the user works around — a knee, a night shift, a hard stretch. Takes effect immediately. Use when one has EASED ("my knee is fine now" → lift, which keeps it on file as quiet so you still know it happened), FLARED again (flare), or is genuinely NEW (add). Use remove ONLY when they say it was recorded wrongly and was never true ("I have never had a knee injury") — an error to erase, not history to keep; recovering from something is never a reason to remove it. Read get_constraints first and name it as listed. Pass {"constraint": "left knee", "action": "lift"}, or {"constraint": "night shifts", "action": "add", "kind": "life", "plan_around": true, "until": "2026-09-30"}.',
+      'Record a change to something the user works around — a knee, a night shift, a hard stretch. Takes effect immediately. Use when one has EASED ("my knee is fine now" → lift, which keeps it on file as quiet so you still know it happened), FLARED again (flare), is genuinely NEW (add), or is on file under WORDING THEY DISLIKE ("don\'t say ramp gently, say left ankle tendinitis" → reword, with new_label). Use remove ONLY when they say it was recorded wrongly and was never true ("I have never had a knee injury") — an error to erase, not history to keep; recovering from something is never a reason to remove it. Read get_constraints first and name it as listed. Pass {"constraint": "left knee", "action": "lift"}, or {"constraint": "night shifts", "action": "add", "kind": "life", "plan_around": true, "until": "2026-09-30"}, or {"constraint": "ramp gently because of tendinitis", "action": "reword", "new_label": "left ankle tendinitis"}.',
     parameters: {
       properties: {
         constraint: { type: 'string', description: 'Which one, by its label as get_constraints lists it.' },
         action: {
           type: 'string',
-          enum: ['add', 'lift', 'flare', 'remove'],
+          enum: ['add', 'lift', 'flare', 'reword', 'remove'],
           description:
-            'add = something new they work around; lift = it has eased, keep it on file as quiet; flare = it is back; remove = it was recorded wrongly and was never true.',
+            'add = something new they work around; lift = it has eased, keep it on file as quiet; flare = it is back; reword = same thing, badly described — give new_label; remove = it was recorded wrongly and was never true.',
+        },
+        new_label: {
+          type: 'string',
+          description:
+            'For reword: what it should say instead. Their words, not yours. Name the thing itself, not what to do about it.',
         },
         kind: {
           type: 'string',
@@ -391,6 +397,28 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         return removed
           ? `Removed "${label}" — verified gone from their file. Say so briefly and move on; do not dwell on the mistake.`
           : `Nothing on file matches "${label}", so nothing was removed. Tell them plainly it was not there.`;
+      }
+
+      /**
+       * A reword cannot go through the merge path: `mergeConstraints` keeps the LONGER telling, so
+       * every attempt to shorten a badly-worded label is discarded without a word. That is why the
+       * owner asked repeatedly to fix "ramp gently because of tendinitis" and Cadence agreed
+       * repeatedly and nothing ever changed. Same row, same history — only the wording moves.
+       */
+      if (action === 'reword') {
+        const next = String(params.new_label ?? '').trim();
+        if (!next) return `No new wording was given, so "${label}" is unchanged. Ask what it should say instead.`;
+        const done = await renameCapturedConstraint(userId, label, next);
+        if (!done) {
+          const names = ((await verifyConstraints(userId)).map((c) => c.label).join(', ') || 'none on file') as string;
+          return `Nothing on file matches "${label}", so nothing was reworded. What they work around: ${names}. Ask which they mean.`;
+        }
+        // Re-READ, do not trust the write.
+        const after = await verifyConstraints(userId);
+        const landed = after.some((c) => (c.label ?? '').trim() === next);
+        return landed
+          ? `Reworded: "${done.from}" now reads "${next}" on their file — verified. Say it back in one line so they can tell you if it is still not right.`
+          : `"${label}" did NOT get reworded — the change did not take. Do not say it is fixed; say you could not save it just now, and that they can edit the wording themselves in Settings under "What we work around".`;
       }
 
       const known = ((await getUser(userId))?.baseline?.constraints ?? []) as Array<{ label: string }>;

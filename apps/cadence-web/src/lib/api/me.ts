@@ -14,6 +14,20 @@ export async function getConstraints(): Promise<UserConstraint[]> {
   return ((await res.json()) as { constraints: UserConstraint[] }).constraints ?? [];
 }
 
+/**
+ * Fix the wording on one. Only the label changes — same row, same history.
+ * Returns the full list, as with removal: the panel shows what is stored, never what it hoped for.
+ */
+export async function renameConstraint(id: string, label: string): Promise<UserConstraint[] | null> {
+  const res = await fetch(`${BASE}/me/constraints/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { ...headers(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label }),
+  });
+  if (!res.ok) return null;
+  return ((await res.json()) as { constraints: UserConstraint[] }).constraints ?? [];
+}
+
 /** Remove one. Returns the surviving list so the screen never guesses at the new state. */
 export async function removeConstraint(id: string): Promise<UserConstraint[] | null> {
   const res = await fetch(`${BASE}/me/constraints/${encodeURIComponent(id)}`, {

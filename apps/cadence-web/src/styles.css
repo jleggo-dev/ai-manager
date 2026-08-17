@@ -6641,6 +6641,39 @@ textarea.wiz-title {
 .cons-drop:disabled {
   opacity: 0.5;
 }
+/* Rewording in place: the row becomes the field, so it never feels like leaving the list to go
+   somewhere else and fill in a form about yourself. */
+.cons-row-edit {
+  gap: 8px;
+}
+.cons-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 7px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+}
+.cons-input:focus {
+  outline: none;
+  border-color: var(--forest);
+}
+.cons-save {
+  flex: 0 0 auto;
+  background: var(--forest);
+  border: 1px solid var(--forest);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: #fff;
+}
+.cons-save:disabled {
+  opacity: 0.5;
+}
 
 /* "checking your recorded workouts…" beside the typing dots. Second-voice, because it is her
    working rather than her speaking — and it must never be mistaken for the reply itself. */

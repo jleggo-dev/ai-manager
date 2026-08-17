@@ -197,6 +197,40 @@ router.get('/constraints', async (req: Request, res: Response) => {
 });
 
 /**
+ * PATCH /me/constraints/:id — the user fixing the wording on their own.
+ *
+ * The Broker writes these labels from prose, and it sometimes writes an instruction where a fact
+ * belongs: "ramp gently because of tendinitis" is a coaching note wearing a constraint's clothes,
+ * and it then shapes every plan. Owner, after asking the coach to fix it several times and being
+ * told several times that it was fixed: *"we miss the promise on 'fix the wording'."*
+ *
+ * The coach can now do it too (`update_constraint` action `reword`), but this is the one that
+ * cannot fail quietly — the wording of a sentence about someone's body belongs to them, and the
+ * shortest path to changing it should not run through persuading a model.
+ *
+ * Only the label moves. Status, kind, plan_around and until are untouched: it is the same thing,
+ * described better.
+ */
+router.patch('/constraints/:id', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const id = String(req.params.id ?? '');
+  const label = String((req.body as { label?: unknown })?.label ?? '').trim();
+  if (!label) return void res.status(400).json({ error: 'label is required' });
+  if (label.length > 120) return void res.status(400).json({ error: 'label is too long' });
+  try {
+    const u = await getUser(userId);
+    const before = u?.baseline?.constraints ?? [];
+    if (!before.some((c) => c.id === id)) return void res.status(404).json({ error: 'no such constraint' });
+    const after = before.map((c) => (c.id === id ? { ...c, label } : c));
+    await mergeBaseline(userId, { constraints: after });
+    res.json({ constraints: after });
+  } catch (err) {
+    console.error('[PATCH /me/constraints/:id]', err);
+    res.status(500).json({ error: 'failed to rename constraint' });
+  }
+});
+
+/**
  * DELETE /me/constraints/:id — the user removing their own.
  *
  * Deliberately a plain delete with no judgement attached, unlike the coach's `update_constraint`,
