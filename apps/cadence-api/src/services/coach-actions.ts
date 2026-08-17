@@ -87,7 +87,11 @@ const EDIT_SCHEMA = {
         description:
           'For move and add: ALL the days it should happen on afterwards — this replaces its whole weekly pattern, so a twice-a-week session keeps both days only if you name both, e.g. ["tuesday","friday"].',
       },
-      time_of_day: { type: 'string', description: 'For retime and add, e.g. "07:00" or "evening".' },
+      time_of_day: {
+        type: 'string',
+        description:
+          'For retime and add, e.g. "07:00" or "evening". ALWAYS set it on add — a plan is a rhythm, and an untimed commitment sorts to the bottom of its day and can anchor no reminder. If they have not said when, use the time their other sessions of that kind run at, or ask.',
+      },
       duration_min: {
         type: 'integer',
         description:

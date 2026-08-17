@@ -298,8 +298,8 @@ function applyAdd(
    * supplied it on another a minute earlier, so the model is inconsistent rather than wrong —
    * naming it on the card is what lets either of them notice.
    */
-  const untimed = edit.time_of_day ? '' : ' (no time set)';
-  return { added, change: `Add ${title} — ${describeRecurrence(recurrence)}${untimed}` };
+  const when = edit.time_of_day ? `, ${edit.time_of_day}` : ' (no time set)';
+  return { added, change: `Add ${title} — ${describeRecurrence(recurrence)}${when}` };
 }
 
 /** Everything that changes an existing commitment, one target at a time. */

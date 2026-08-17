@@ -349,8 +349,14 @@ describe('applyPlanEdits — add carries what it was given', () => {
     expect(r.changes[0]).toContain('(no time set)');
   });
 
-  it('says nothing extra when a time was given', () => {
+  /**
+   * The card never showed the time even when she set one — both of the owner's adds rendered as
+   * "Add Easy run — Fri" though one carried time_of_day "morning". He read that as the UI not
+   * specifying when, which is exactly what it was doing.
+   */
+  it('shows the time on the card when one was given', () => {
     const r = applyPlanEdits([], [{ action: 'add', title: 'Easy run', days: ['tuesday'], time_of_day: '07:00' }]);
+    expect(r.changes[0]).toBe('Add Easy run — Tue, 07:00');
     expect(r.changes[0]).not.toContain('no time set');
   });
 });
