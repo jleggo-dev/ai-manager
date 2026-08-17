@@ -244,6 +244,12 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
   try {
     // Message activity bumps the conversation's updated_at (idle-staleness signal). Fire-and-forget.
     void touchConversation(sessionIdParam).catch(() => {});
+    // An arm belongs to ONE turn. Clearing here is what lets the arming route stop guessing whether
+    // a turn is running: the client says "notify me" while it can, and a request that arrives with
+    // nothing to announce (its turn already torn down behind a socket the client never saw die)
+    // dies at the next turn's start instead of firing a ping at someone who is sitting and reading.
+    // The teardown below still clears it too — this is the backstop for the arm it never saw.
+    void setNotifyOnReply(sessionIdParam, false).catch(() => {});
     await ensureDateStamped(userId, req.params.id as string).catch((e) => console.error('[ensureDateStamped]', e));
     const turnMessage = await assembleTurn(userId, req.params.id as string, message);
     // The coach's read tools ride the request; when she calls one, the loop below fulfills it
@@ -467,9 +473,21 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
  * Ownership checked against `cadence.conversations`, like Stop — a session id is the only thing
  * standing between one user and another's turn, and here it would aim a notification.
  *
- * Only arms while something is actually generating. A thread armed with no turn in flight is a
- * ping with nothing to announce, and the clearing path (which runs when a reply lands) would never
- * come to disarm it.
+ * **It used to refuse unless `in_flight_response_id` was already set, and that refusal is why no
+ * notification ever arrived** (owner, device round 2026-08-16: backgrounded mid-reply, nothing came,
+ * and `cadence.notifications` held no attempt at all — not even a skipped row). That column is
+ * written from the relay's `onResponseId`, which fires only once upstream announces an id, in a
+ * write that is deliberately fire-and-forget. So it is null for the whole opening stretch of every
+ * turn — send, context pack, upstream request, first token — which is precisely when somebody
+ * backgrounds the app. The refusal returned 200, the client discards the body, and iOS had not yet
+ * killed the socket, so `clientAlive` was still true and the `(armed || !clientAlive)` gate below
+ * failed both ways. The one moment the feature exists for was the one moment it could not arm.
+ *
+ * The guard's real concern was a stale arm — a thread left armed with no turn to announce would
+ * fire on somebody's next message while they sat watching. That is now handled where it belongs, at
+ * the START of a turn (`setNotifyOnReply(false)` beside `touchConversation`), so an arm can only
+ * ever be honoured by the turn it was sent during. Arming is the client's fact to state; the server
+ * only has to make sure it cannot outlive the turn.
  */
 router.post('/sessions/:id/notify-on-reply', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
@@ -477,7 +495,6 @@ router.post('/sessions/:id/notify-on-reply', async (req: Request, res: Response)
   try {
     const conv = await getConversationByAiSession(sessionId);
     if (!conv || conv.user_id !== userId) return void res.status(404).json({ error: 'No such session' });
-    if (!conv.in_flight_response_id) return void res.json({ armed: false, reason: 'nothing-in-flight' });
     await setNotifyOnReply(sessionId, true);
     res.json({ armed: true });
   } catch (err) {
