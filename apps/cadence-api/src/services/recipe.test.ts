@@ -6,13 +6,14 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+import { testUserId } from './test-user.ts';
 
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.env') });
 
 const HAS_DB = !!(process.env.CADENCE_DATABASE_URL || process.env.CADENCE_DB_PASSWORD);
 const d = HAS_DB ? describe : describe.skip;
 
-const USER = '00000000-0000-4000-a000-00000000a105';
+const USER = testUserId('a105');
 
 vi.mock('../ai/aim.ts', () => ({ runJob: vi.fn(), runJobBySlug: vi.fn() }));
 

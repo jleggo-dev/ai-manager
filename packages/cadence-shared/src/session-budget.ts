@@ -77,7 +77,15 @@ const PREP_BY_AREA: Record<GoalArea, number> = {
 export function sessionBudget(effortMin: number | undefined | null, area?: GoalArea | null): SessionBudget | null {
   if (typeof effortMin !== 'number' || !Number.isFinite(effortMin) || effortMin <= 0) return null;
   const effort = Math.round(effortMin);
-  const base = area ? PREP_BY_AREA[area] : 0;
+  /**
+   * `?? 0` covers an area this build does not know, not just a missing one. `area` is typed, but
+   * it arrives from the database and from three flattened type copies, and the neighbouring field
+   * on an activity is `category` ("cardio", "strength") — so a caller passing the wrong one is a
+   * live possibility rather than a hypothetical. Indexing on an unknown key yields `undefined`,
+   * and `Math.min(undefined, …)` is NaN, which would render as "allow NaN" on the card. Unknown
+   * gets the same zero that absent gets, for the reason above: a guess is worse than nothing.
+   */
+  const base = (area ? PREP_BY_AREA[area] : 0) ?? 0;
   const prep = Math.min(base, Math.floor(effort / 2));
   return { effort_min: effort, prep_min: prep, total_min: effort + prep };
 }

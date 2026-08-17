@@ -75,3 +75,33 @@ describe('budgetNote', () => {
     expect(budgetNote(null)).toBe('');
   });
 });
+
+/**
+ * An area this build does not recognise must behave exactly like no area at all.
+ *
+ * Not hypothetical: an activity's neighbouring column is `category` ("cardio", "strength"), the
+ * area arrives from the database through three flattened type copies, and indexing the prep table
+ * on an unknown key yields `undefined` — which `Math.min` turns into NaN and the card would have
+ * rendered as "allow NaN". Caught by running the real plan through it with `category` in the
+ * area's place, which is precisely the mistake a caller makes.
+ */
+describe('sessionBudget — an area it has never heard of', () => {
+  it('treats an unknown area as no area rather than producing NaN', () => {
+    const b = sessionBudget(40, 'cardio' as never);
+    expect(b).toEqual({ effort_min: 40, prep_min: 0, total_min: 40 });
+  });
+
+  it('never returns a non-finite number for any area value', () => {
+    for (const area of ['movement', 'mind', 'practice', 'nourishment', 'cardio', '', 'MOVEMENT']) {
+      const b = sessionBudget(30, area as never);
+      expect(b, area).not.toBeNull();
+      expect(Number.isFinite(b?.total_min)).toBe(true);
+      expect(Number.isFinite(b?.prep_min)).toBe(true);
+    }
+  });
+
+  it('still pads a known area', () => {
+    expect(sessionBudget(40, 'movement')).toEqual({ effort_min: 40, prep_min: 10, total_min: 50 });
+    expect(sessionBudget(20, 'mind')).toEqual({ effort_min: 20, prep_min: 5, total_min: 25 });
+  });
+});
