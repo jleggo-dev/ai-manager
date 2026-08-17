@@ -20,7 +20,8 @@ const stream = (lines: string[]): ReadableStream<Uint8Array> =>
   });
 
 const delta = (text: string) => `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}`;
-const complete = (responseId: string, calls: Array<{ id: string; name: string }> = []) =>
+/** `args` matters: a round that repeats a call byte for byte is treated as no progress made. */
+const complete = (responseId: string, calls: Array<{ id: string; name: string; args?: string }> = []) =>
   `data: ${JSON.stringify({
     type: 'message.complete',
     text: '',
@@ -29,7 +30,7 @@ const complete = (responseId: string, calls: Array<{ id: string; name: string }>
       type: 'function_call',
       call_id: c.id,
       name: c.name,
-      arguments: '{}',
+      arguments: c.args ?? '{}',
       status: 'completed',
     })),
   })}`;
@@ -102,11 +103,13 @@ describe('relayCoachTurnWithTools', () => {
     const execute = vi.fn(async (calls: Array<{ toolCallId: string }>) =>
       calls.map((c) => ({ toolCallId: c.toolCallId, output: 'x' })),
     );
+    // Each round asks something NEW, so the no-progress guard stays out of the way and the cap is
+    // the only thing that ends this turn.
     const submit = vi.fn(async (_responseId: string) => {
       round++;
       return stream([
         delta(`round${round} `),
-        complete(`r${round + 1}`, [{ id: `t${round + 1}`, name: 'get_weight' }]),
+        complete(`r${round + 1}`, [{ id: `t${round + 1}`, name: 'get_weight', args: `{"days":${round}}` }]),
         DONE,
       ]);
     });
@@ -134,8 +137,13 @@ describe('relayCoachTurnWithTools', () => {
       async (_r: string, outputs: Array<{ toolCallId: string }>, calls: Array<{ toolCallId: string }>) => {
         seen.push({ outputs: outputs.map((o) => o.toolCallId), calls: calls.map((c) => c.toolCallId) });
         round++;
+        // Each round asks something NEW: an identical repeat is now treated as no progress and
+        // ends the turn (the dedupe guard), which would cut this test short at one round.
         return round < 3
-          ? stream([complete(`r${round + 1}`, [{ id: `t${round + 1}`, name: 'get_weight' }]), DONE])
+          ? stream([
+              complete(`r${round + 1}`, [{ id: `t${round + 1}`, name: 'get_weight', args: `{"days":${round}}` }]),
+              DONE,
+            ])
           : stream([delta('done'), complete('rX'), DONE]);
       },
     );
@@ -171,6 +179,93 @@ describe('relayCoachTurnWithTools', () => {
     expect(result.content).toBe('One sec… ');
     expect(submit).not.toHaveBeenCalled();
     expect(writes.filter((w) => w.includes('[DONE]'))).toHaveLength(1);
+  });
+
+  /**
+   * The over-calling turn, in miniature. On 2026-08-17 the coach called `update_constraint` with
+   * byte-identical arguments on three consecutive rounds: the removal happened for real on round
+   * one and ran twice more against a file already clear. Measured cause — the continuation does
+   * not carry the tool result (same input-token count every round), so she asks again.
+   */
+  it('runs a repeated call ONCE and answers the repeat with the first result', async () => {
+    const args = '{"constraint":"medical procedure","action":"remove"}';
+    const execute = vi.fn(async (calls: Array<{ toolCallId: string }>) =>
+      calls.map((c) => ({ toolCallId: c.toolCallId, output: 'Removed "medical procedure" — verified gone.' })),
+    );
+    const submit = vi.fn(async () => stream([complete('r2', [{ id: 't2', name: 'update_constraint', args }]), DONE]));
+    const result = await relayCoachTurnWithTools(
+      'u1',
+      stream([complete('r1', [{ id: 't1', name: 'update_constraint', args }]), DONE]),
+      { toolNames: new Set(['update_constraint']), execute, submit },
+      {},
+    );
+    // The mutation ran once; the second round never reached the tool and never reached the model.
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0]![0]).toHaveLength(1);
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(result.toolRounds).toBe(1);
+  });
+
+  /** `parallel_tool_calls` is on for the coach profile, so the same write can arrive twice at once. */
+  it('runs a call once when the SAME batch asks for it twice', async () => {
+    const args = '{"constraint":"left ankle","action":"add"}';
+    const execute = vi.fn(async (calls: Array<{ toolCallId: string }>) =>
+      calls.map((c) => ({ toolCallId: c.toolCallId, output: 'Added "left ankle".' })),
+    );
+    const submit = vi.fn(async (_id: string, _outputs: Array<{ toolCallId: string; output: string }>) =>
+      stream([delta('Done.'), complete('r2'), DONE]),
+    );
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([
+        complete('r1', [
+          { id: 't1', name: 'update_constraint', args },
+          { id: 't2', name: 'update_constraint', args },
+        ]),
+        DONE,
+      ]),
+      { toolNames: new Set(['update_constraint']), execute, submit },
+      {},
+    );
+    expect(execute.mock.calls[0]![0]).toHaveLength(1);
+    // Both call ids are still answered — the continuation may not leave one hanging.
+    expect(submit.mock.calls[0]![1]).toEqual([
+      { toolCallId: 't1', output: 'Added "left ankle".' },
+      { toolCallId: 't2', output: 'Added "left ankle".' },
+    ]);
+  });
+
+  /** A round that mixes something new with a repeat still answers EVERY call id it was given. */
+  it('pairs a repeat with its own call id rather than dropping it', async () => {
+    const same = '{"days":7}';
+    const execute = vi.fn(async (calls: Array<{ toolCallId: string; name: string }>) =>
+      calls.map((c) => ({ toolCallId: c.toolCallId, output: `${c.name} says hi` })),
+    );
+    const submit = vi.fn(async (_id: string, _outputs: Array<{ toolCallId: string; output: string }>) =>
+      submit.mock.calls.length === 1
+        ? stream([
+            complete('r2', [
+              { id: 't2', name: 'get_recent_logs', args: same },
+              { id: 't3', name: 'get_journal', args: '{"limit":5}' },
+            ]),
+            DONE,
+          ])
+        : stream([delta('ok'), complete('r3'), DONE]),
+    );
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([complete('r1', [{ id: 't1', name: 'get_recent_logs', args: same }]), DONE]),
+      { toolNames: new Set(['get_recent_logs', 'get_journal']), execute, submit },
+      {},
+    );
+    // Round two ran only the journal read, and still submitted an output for BOTH of its calls —
+    // on top of round one's, because the continuation carries the whole turn (#232).
+    expect(execute.mock.calls[1]![0].map((c) => c.name)).toEqual(['get_journal']);
+    expect(submit.mock.calls[1]![1]).toEqual([
+      { toolCallId: 't1', output: 'get_recent_logs says hi' },
+      { toolCallId: 't3', output: 'get_journal says hi' },
+      { toolCallId: 't2', output: 'get_recent_logs says hi' },
+    ]);
   });
 
   it('reports the CURRENT response id per round to the stop hook', async () => {
@@ -257,6 +352,33 @@ describe('a lookup that never became a call', () => {
     expect(d.nudge).not.toHaveBeenCalled();
   });
 
+  /**
+   * The success path since #231: `find_tools` declares the real definitions and she calls one BY
+   * NAME. A check that only looked for `use_tool` fired here — telling her, wrongly, that nothing
+   * had been done and to call it again. That is an over-call we caused.
+   */
+  it('does not nudge when she called a revealed tool by its own name', async () => {
+    const d = deps(null);
+    const def = { type: 'function', function: { name: 'get_journal', description: 'x', parameters: {} } };
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([complete('r1', [{ id: 't1', name: 'find_tools', args: '{"query":"writing"}' }]), DONE]),
+      {
+        ...d,
+        toolNames: new Set(['find_tools', 'use_tool', 'get_journal']),
+        execute: vi.fn(async (calls: Array<{ toolCallId: string }>) =>
+          calls.map((c) => ({ toolCallId: c.toolCallId, output: 'x' })),
+        ),
+        submit: vi.fn(async () =>
+          stream([delta('Here it is.'), complete('r2', [{ id: 't2', name: 'get_journal' }]), DONE]),
+        ),
+        revealedBy: () => [def],
+      },
+      {},
+    );
+    expect(d.nudge).not.toHaveBeenCalled();
+  });
+
   it('does not nudge a turn that never looked anything up', async () => {
     const d = deps(null);
     await relayCoachTurnWithTools('u1', stream([delta('just talking'), complete('r1'), DONE]), d, {});
@@ -315,7 +437,7 @@ describe('what find_tools reveals becomes callable by name', () => {
     const submit = vi.fn(async () => {
       n++;
       return n < 2
-        ? stream([complete(`r${n + 1}`, [{ id: `t${n + 1}`, name: 'find_tools' }]), DONE])
+        ? stream([complete(`r${n + 1}`, [{ id: `t${n + 1}`, name: 'find_tools', args: `{"query":"q${n}"}` }]), DONE])
         : stream([delta('done'), complete('rX'), DONE]);
     });
     const def = { type: 'function', function: { name: 'get_journal', description: 'x', parameters: {} } };
