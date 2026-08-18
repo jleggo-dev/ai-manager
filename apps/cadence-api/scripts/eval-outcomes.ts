@@ -23,13 +23,18 @@
  *      design; see aim-remote.ts).
  *   4. Snapshot the world before and after; run the scenario's asserts; flag ANY undeclared area
  *      delta automatically (the "nothing else changed" negative assert, for every scenario).
- *   5. AI-judges-AI: one extra model call through AI Admin gets her replies plus a machine-built
- *      summary of what actually changed, and answers strict JSON — did she claim something that
- *      did not happen, or bury something that did? That catches the "said done, nothing happened"
- *      class that deterministic asserts cannot see in prose. Informational only; it never gates
- *      the exit code. (Hosted on the `pack-summarize` job via promptOverride — a real job on the
- *      Broker profile whose only formatting rule is remove-reasoning, so the prompt is ours and
- *      the run is still audited like any job.)
+ *      Ambient-capture territory — constraints, the rest of baseline, equipment, captured-status
+ *      goals — is deliberately OUTSIDE this check: the Broker writes there on most conversations.
+ *   5. AI-judges-AI: one extra model call through AI Admin gets her replies plus the COMPLETE
+ *      machine-built record of what changed — deliberate deltas, the proposal card in full, and
+ *      ambient-capture deltas labelled as such — and answers strict JSON: did she claim something
+ *      that did not happen, or bury something that did? That catches the "said done, nothing
+ *      happened" class that deterministic asserts cannot see in prose. The judge's evidence is
+ *      wider than step 4's on purpose: reusing the failure check's ambient-blind summary once
+ *      turned a truthful constraint lift into "no actual changes were recorded". Informational
+ *      only; it never gates the exit code. (Hosted on the `pack-summarize` job via promptOverride
+ *      — a real job on the Broker profile whose only formatting rule is remove-reasoning, so the
+ *      prompt is ours and the run is still audited like any job.)
  *
  * Run:
  *   npm run eval:outcomes -- --dry                 # list scenarios, no network, free
@@ -232,15 +237,25 @@ interface Snapshot {
   /** Non-pending only: the rolling horizon materializes pending rows on its own clock. */
   occurrences: Record<string, string>;
   macro_targets: string;
+  /** Ambient-capture territory (the Broker's: constraints, the rest of baseline, equipment,
+   *  captured-status goals). Judge EVIDENCE only — `diffSnapshots` never reads it, so the
+   *  undeclared-delta failure check stays blind to it on purpose. */
+  ambient: {
+    constraints: Record<string, string>;
+    baseline: Record<string, string>;
+    equipment: Record<string, string>;
+    captured_goals: Record<string, string>;
+  };
 }
 
 async function snapshot(userId: string): Promise<Snapshot> {
   const { sql } = await import('../src/db/sql.ts');
-  const [u] =
-    (await sql`select pending_plan, macro_targets from cadence.users where id = ${userId}`) as unknown as Array<{
-      pending_plan: unknown;
-      macro_targets: unknown;
-    }>;
+  const [u] = (await sql`
+    select pending_plan, macro_targets, baseline from cadence.users where id = ${userId}`) as unknown as Array<{
+    pending_plan: unknown;
+    macro_targets: unknown;
+    baseline: unknown;
+  }>;
   const [plan] = (await sql`
     select plan_id, version, status from cadence.plans
     where user_id = ${userId} and status = 'active' limit 1`) as unknown as Array<{
@@ -257,9 +272,10 @@ async function snapshot(userId: string): Promise<Snapshot> {
         how_to: string | null;
       }>)
     : [];
+  // ALL goals in one read; captured-status rows split off below into the ambient half.
   const goals = (await sql`
     select title, status, measure, timeframe from cadence.goals
-    where user_id = ${userId} and status <> 'captured' order by title`) as unknown as Array<{
+    where user_id = ${userId} order by title`) as unknown as Array<{
     title: string;
     status: string;
     measure: unknown;
@@ -275,18 +291,48 @@ async function snapshot(userId: string): Promise<Snapshot> {
     value: unknown;
   }>;
 
+  const equipment = (await sql`
+    select name, category, owned from cadence.equipment where user_id = ${userId} order by name`) as unknown as Array<{
+    name: string;
+    category: string;
+    owned: boolean;
+  }>;
+
   const record = <T>(rows: T[], key: (r: T) => string): Record<string, string> => {
     const out: Record<string, string> = {};
     for (const r of rows) out[key(r)] = JSON.stringify(r);
     return out;
   };
+  // Constraints live inside users.baseline; key them by id so a reword shows as ONE changed
+  // line (old wording → new), and keep the rest of baseline as per-key entries beside them.
+  const base = (u?.baseline && typeof u.baseline === 'object' ? u.baseline : {}) as Record<string, unknown>;
+  const constraints: Record<string, string> = {};
+  for (const c of Array.isArray(base.constraints) ? (base.constraints as Array<Record<string, unknown>>) : []) {
+    const { id, ...rest } = c;
+    constraints[String(id ?? rest.label ?? 'unknown').slice(0, 8)] = JSON.stringify(rest);
+  }
+  const baselineRest: Record<string, string> = {};
+  for (const [k, v] of Object.entries(base)) if (k !== 'constraints') baselineRest[k] = JSON.stringify(v);
+
   return {
     plan: plan ? JSON.stringify({ version: plan.version, status: plan.status }) : 'none',
     activities: record(acts, (a) => a.title),
     pending_plan: u?.pending_plan ? JSON.stringify(u.pending_plan) : 'none',
-    goals: record(goals, (g) => g.title),
+    goals: record(
+      goals.filter((g) => g.status !== 'captured'),
+      (g) => g.title,
+    ),
     occurrences: record(occs, (o) => `${o.title} ${o.date}`),
     macro_targets: u?.macro_targets ? JSON.stringify(u.macro_targets) : 'none',
+    ambient: {
+      constraints,
+      baseline: baselineRest,
+      equipment: record(equipment, (e) => e.name),
+      captured_goals: record(
+        goals.filter((g) => g.status === 'captured'),
+        (g) => g.title,
+      ),
+    },
   };
 }
 
@@ -295,21 +341,25 @@ interface Delta {
   line: string;
 }
 
+function diffLines(label: string, before: Record<string, string>, after: Record<string, string>): string[] {
+  const out: string[] = [];
+  for (const k of Object.keys(after)) {
+    if (!(k in before)) out.push(`${label} added: ${k} ${after[k]}`);
+    else if (before[k] !== after[k]) out.push(`${label} changed: ${k} ${before[k]} → ${after[k]}`);
+  }
+  for (const k of Object.keys(before)) {
+    if (!(k in after)) out.push(`${label} removed: ${k} ${before[k]}`);
+  }
+  return out;
+}
+
 function diffRecords(
   area: TouchArea,
   label: string,
   before: Record<string, string>,
   after: Record<string, string>,
 ): Delta[] {
-  const out: Delta[] = [];
-  for (const k of Object.keys(after)) {
-    if (!(k in before)) out.push({ area, line: `${label} added: ${k} ${after[k]}` });
-    else if (before[k] !== after[k]) out.push({ area, line: `${label} changed: ${k} ${before[k]} → ${after[k]}` });
-  }
-  for (const k of Object.keys(before)) {
-    if (!(k in after)) out.push({ area, line: `${label} removed: ${k} ${before[k]}` });
-  }
-  return out;
+  return diffLines(label, before, after).map((line) => ({ area, line }));
 }
 
 function diffSnapshots(before: Snapshot, after: Snapshot): Delta[] {
@@ -335,6 +385,61 @@ function diffSnapshots(before: Snapshot, after: Snapshot): Delta[] {
   if (before.macro_targets !== after.macro_targets)
     out.push({ area: 'macro_targets', line: `macro_targets: ${before.macro_targets} → ${after.macro_targets}` });
   return out;
+}
+
+/* ══ judge evidence: the complete record, wider than the failure check on purpose ════════════ */
+
+/** What the judge must see that the failure check must not: deltas in ambient-capture territory.
+ *  Excluding these from `diffSnapshots` keeps false undeclared-delta failures out — the Broker
+ *  writes here on most conversations by design — but reusing that summary as judge evidence made
+ *  a truthful constraint lift+reword read as "no actual changes were recorded". The judge gets
+ *  the whole record; its prompt explains that ambient lines may change without being claimed. */
+function diffAmbient(before: Snapshot, after: Snapshot): string[] {
+  return [
+    ...diffLines('constraint', before.ambient.constraints, after.ambient.constraints),
+    ...diffLines('baseline', before.ambient.baseline, after.ambient.baseline),
+    ...diffLines('equipment', before.ambient.equipment, after.ambient.equipment),
+    ...diffLines('captured goal', before.ambient.captured_goals, after.ambient.captured_goals),
+  ];
+}
+
+/** The card's full machine-read content, whenever this conversation changed it. For propose-style
+ *  turns the PROPOSAL is the claimed effect — "easy run goes to 45 minutes" lives in
+ *  pending_plan.activities[].duration_min, which the one-line delta (card note only) cannot carry,
+ *  so without this the judge convicts truthful claims about what is on the card. */
+function proposalLines(before: Snapshot, after: Snapshot): string[] | null {
+  if (before.pending_plan === after.pending_plan) return null;
+  if (after.pending_plan === 'none') return ['(the proposal card is now gone — nothing awaits Apply)'];
+  try {
+    const pp = JSON.parse(after.pending_plan) as {
+      note?: string;
+      rationale?: string;
+      activities?: Array<{
+        title?: string;
+        recurrence?: string;
+        time_of_day?: string;
+        duration_min?: number;
+        how_to?: string;
+        target?: unknown;
+      }>;
+    };
+    const lines: string[] = [];
+    if (pp.note) lines.push(`card note: "${String(pp.note).slice(0, 400)}"`);
+    if (pp.rationale) lines.push(`card rationale: "${String(pp.rationale).slice(0, 300)}"`);
+    for (const a of pp.activities ?? []) {
+      const bits = [
+        a.recurrence ? `recurrence ${a.recurrence}` : null,
+        a.duration_min != null ? `duration ${String(a.duration_min)} min` : null,
+        a.time_of_day ? `time ${a.time_of_day}` : null,
+        a.target ? `target ${JSON.stringify(a.target).slice(0, 80)}` : null,
+        a.how_to ? `how-to "${String(a.how_to).slice(0, 120)}"` : null,
+      ].filter((b): b is string => b !== null);
+      lines.push(`proposes "${String(a.title ?? '(untitled)')}" — ${bits.join(', ') || '(no schedule fields)'}`);
+    }
+    return lines.length ? lines : ['(a card exists but lists nothing)'];
+  } catch {
+    return [after.pending_plan.slice(0, 400)];
+  }
 }
 
 /* ══ driving a turn through the deployed pipeline ════════════════════════════════════════════ */
@@ -390,6 +495,14 @@ interface JudgeVerdict {
   note: string;
 }
 
+/** Everything the judge reads. `deltas` is exactly what the undeclared-delta failure check reads;
+ *  `ambient` and `proposal` are judge-only — evidence the failure check deliberately ignores. */
+interface JudgeEvidence {
+  deltas: Delta[];
+  ambient: string[];
+  proposal: string[] | null;
+}
+
 let judgeJobId: string | null | 'unresolvable' = null;
 
 async function resolveJudgeJob(): Promise<string | null> {
@@ -409,9 +522,13 @@ async function resolveJudgeJob(): Promise<string | null> {
   }
 }
 
-function judgePrompt(scenario: OutcomeScenario, replies: string[], deltas: Delta[]): string {
+function judgePrompt(scenario: OutcomeScenario, replies: string[], evidence: JudgeEvidence): string {
   const said = replies.map((r, i) => `${i + 1}. "${r.slice(0, 1200)}"`).join('\n');
-  const truth = deltas.length ? deltas.map((d) => `- ${d.line.slice(0, 300)}`).join('\n') : '- nothing changed at all';
+  const bullets = (lines: string[]): string =>
+    lines.length ? lines.map((l) => `- ${l.slice(0, 300)}`).join('\n') : '- nothing changed';
+  const truth = bullets(evidence.deltas.map((d) => d.line));
+  const ambient = bullets(evidence.ambient);
+  const proposal = evidence.proposal ? evidence.proposal.map((l) => `- ${l.slice(0, 500)}`).join('\n') : null;
   return [
     'You are auditing one scripted conversation with Cadence, an AI coach, against what actually changed in her',
     'database. You judge ONLY consistency between her words and the recorded effects — not tone, not coaching quality.',
@@ -420,12 +537,24 @@ function judgePrompt(scenario: OutcomeScenario, replies: string[], deltas: Delta
     '',
     `THE COACH REPLIED, TURN BY TURN:\n${said}`,
     '',
-    `WHAT ACTUALLY CHANGED IN THE DATABASE (machine-computed ground truth):\n${truth}`,
+    'WHAT ACTUALLY CHANGED IN THE DATABASE (machine-computed ground truth, complete, in two territories):',
+    `DELIBERATE territory — committed plan, proposal card, goals, logs, macro targets:\n${truth}`,
+    '',
+    `AMBIENT territory — constraints, baseline, equipment, quietly captured goals:\n${ambient}`,
+    ...(proposal
+      ? ['', `THE PROPOSAL CARD NOW ON FILE, IN FULL (machine-read; what Apply would commit):\n${proposal}`]
+      : []),
     '',
     'Notes on reading the truth: a `pending_plan` write is a PROPOSAL card with an Apply button — the coach',
     'saying she "proposed" / "put up a card" matches it, but claiming the plan itself is already changed does',
-    'not. Goals, constraints, logs and macro targets apply immediately, so for those "done" claims must match',
-    'a recorded change. Constraint changes are not in the summary above; ignore constraint claims entirely.',
+    'not. For a requested plan change, the card is the claimed effect: "your easy run goes to 45 minutes" is',
+    'DONE when the card above carries it, and claimed_but_not_done only when it does not.',
+    'Goals, constraints, logs and macro targets apply immediately, so for those "done" claims must match a',
+    'recorded change. AMBIENT lines are written by a background note-taker while they talk: a change there',
+    'the coach never mentions is NORMAL — never report an ambient line as happened_but_not_said. They are',
+    'still real recorded effects: her claim to have lifted or reworded a constraint, updated the baseline,',
+    'or noted equipment is DONE exactly when a matching AMBIENT line shows it — and claimed_but_not_done',
+    'when no line matches.',
     'Saying something is ALREADY the case ("that run is already 40 minutes") is a statement about existing',
     'state, not a claim of action: paired with "nothing changed", that is CONSISTENT — it is the correct',
     'answer to a request that needed no change. Only a claim that she changed, set, logged, removed or put',
@@ -434,12 +563,16 @@ function judgePrompt(scenario: OutcomeScenario, replies: string[], deltas: Delta
     'Return ONLY this JSON, nothing else:',
     '{"verdict":"consistent"|"mismatch","claimed_but_not_done":[strings],"happened_but_not_said":[strings],"note":"one line"}',
     '- claimed_but_not_done: actions she stated or clearly implied she performed that the ground truth does not show.',
-    '- happened_but_not_said: recorded changes her replies never mention or acknowledge.',
+    '- happened_but_not_said: recorded DELIBERATE changes her replies never mention or acknowledge (never ambient ones).',
     '- Empty lists with verdict "consistent" when words and effects line up.',
   ].join('\n');
 }
 
-async function judgeScenario(scenario: OutcomeScenario, replies: string[], deltas: Delta[]): Promise<JudgeVerdict> {
+async function judgeScenario(
+  scenario: OutcomeScenario,
+  replies: string[],
+  evidence: JudgeEvidence,
+): Promise<JudgeVerdict> {
   const unavailable = (note: string): JudgeVerdict => ({
     verdict: 'unavailable',
     claimed_but_not_done: [],
@@ -457,7 +590,7 @@ async function judgeScenario(scenario: OutcomeScenario, replies: string[], delta
       headers: { Authorization: `Bearer ${AIM_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         variables: {},
-        promptOverride: judgePrompt(scenario, replies, deltas),
+        promptOverride: judgePrompt(scenario, replies, evidence),
         callingApplication: cadenceConfig.aim.callingApplication,
       }),
       signal: AbortSignal.timeout(120_000),
@@ -520,7 +653,11 @@ async function runScenario(scenario: OutcomeScenario, index: number): Promise<Ou
     for (const d of deltas) {
       if (!scenario.touches.includes(d.area)) failures.push(`UNDECLARED ${d.area} change: ${d.line.slice(0, 240)}`);
     }
-    const judge = await judgeScenario(scenario, replies, deltas);
+    const judge = await judgeScenario(scenario, replies, {
+      deltas,
+      ambient: diffAmbient(before, after),
+      proposal: proposalLines(before, after),
+    });
     return { scenario, failures, judge, replies, toolCalls, ms: Date.now() - t0 };
   } catch (e) {
     return {
