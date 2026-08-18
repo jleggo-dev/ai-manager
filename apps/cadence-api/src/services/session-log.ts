@@ -60,12 +60,36 @@ export async function logOccurrence(
   const occ = await getOccurrenceWithActivity(userId, occurrenceId);
   if (!occ) return null;
 
+  /**
+   * What is ALREADY on this occurrence, handed to the parse so a second report reconciles with
+   * the first instead of erasing it.
+   *
+   * `log_session`'s own description invites revision — "use it again to REVISE something already
+   * logged when they add or correct it later" — but the write below replaces log/value/provenance
+   * wholesale and the numbers come only from parsing the NEW sentence. So "oh, and it was pouring
+   * the whole way", said two minutes after "8k in 44 minutes, HR 152", parsed to no numbers at all
+   * and stored `{}`: adding a detail erased the record. The same shape as the correction that
+   * clobbered unnamed metrics (2026-08-18) and the capture that ate nineteen pieces of equipment.
+   *
+   * Reconciling in CODE was the wrong fix. A blind merge keeps the run's 8k on "actually, scratch
+   * that — I biked instead", which turns the record into a confident lie; and nothing in the text
+   * tells a `{...prior, ...next}` which of the two it is. The parse is already a model call, so
+   * the prior report rides along and the model returns the reconciled whole — it can read
+   * "and it was pouring" as an addition and "I biked instead" as a replacement, which is precisely
+   * the judgement the spread operator does not have.
+   */
+  const prior =
+    occ.log || (occ.value && Object.keys(occ.value).length)
+      ? JSON.stringify({ summary: occ.log?.summary, items: occ.log?.items, metrics: occ.value ?? {} })
+      : '';
+
   let parsed: Record<string, unknown> | null = null;
   try {
     const res = await runJobBySlug(userId, 'parse-session-log', {
       user_text: raw_text,
       session: JSON.stringify(occ.session ?? {}),
       activity: JSON.stringify({ title: occ.title, category: occ.category ?? undefined }),
+      prior_log: prior,
     });
     parsed = parseJson(res.formatted ?? res.raw ?? '');
   } catch (e) {
@@ -80,7 +104,19 @@ export async function logOccurrence(
     if (typeof v === 'number' && Number.isFinite(v) && Object.keys(value).length < 12) value[k.slice(0, 40)] = v;
   }
 
-  const log: OccurrenceLog = { items, summary, raw_text, logged_at: new Date().toISOString() };
+  /**
+   * Their OWN words accumulate even though the structured fields are reconciled by the model:
+   * `raw_text` is the one field that is pure record rather than interpretation, and a revision is
+   * something they said too. Keeps the audit trail honest if a reconciliation ever gets it wrong.
+   */
+  const priorText = occ.log?.raw_text?.trim();
+  const keptText = priorText && priorText !== raw_text ? `${priorText}\n— then: ${raw_text}` : raw_text;
+  const log: OccurrenceLog = {
+    items,
+    summary,
+    raw_text: keptText.slice(-MAX_LOG_TEXT),
+    logged_at: new Date().toISOString(),
+  };
   const ok = await recordOccurrenceLog(userId, occurrenceId, {
     log,
     value,
