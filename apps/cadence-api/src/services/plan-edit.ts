@@ -282,7 +282,20 @@ function normalizeTimeOfDay(raw: string | undefined): string | undefined {
 }
 
 /** How a time reads on the card. */
-const showTime = (t: string) => (t === ANYTIME ? 'any time' : t);
+const showTime = (t: string | undefined) => (!t ? 'no time set' : t === ANYTIME ? 'any time' : t);
+
+/**
+ * WHICH commitment a line is about — "Easy run (Tue, 19:00)".
+ *
+ * A card carrying two lines that both begin "Easy run" is unreadable, and that is what the owner
+ * got on 2026-08-17 with a Tuesday and a Friday run of the same name. The day and the time are the
+ * two things that tell them apart to a person, and neither was on any line except `add`. An
+ * unset time says so out loud, because a commitment nobody has given a time is a real gap
+ * (it sorts last in its day and anchors no reminder) and silence is how it survived this long.
+ */
+function where(a: PendingPlanActivity): string {
+  return `(${describeRecurrence(a.recurrence)}, ${showTime(a.time_of_day)})`;
+}
 
 /** `add` — the one action with no existing target. */
 function applyAdd(
@@ -346,7 +359,7 @@ function applyToOne(
 ): { change?: string; reject?: string; noop?: string } {
   if (edit.action === 'remove') {
     working.splice(working.indexOf(found), 1);
-    return { change: `Drop ${found.title}` };
+    return { change: `Drop ${found.title} ${where(found)}` };
   }
 
   if (edit.action === 'move') {
@@ -354,10 +367,11 @@ function applyToOne(
     if (!byday) return { reject: `Couldn't tell which days to move ${found.title} to.` };
     const was = found.cadence;
     const next = withDays(found.recurrence, byday);
-    if (next === found.recurrence) return { noop: `${found.title} is already on ${was}.` };
+    if (next === found.recurrence)
+      return { noop: `${found.title} is already on ${was}, ${showTime(found.time_of_day)}.` };
     found.recurrence = next;
     found.cadence = describeRecurrence(found.recurrence);
-    return { change: `Move ${found.title}: ${was} → ${found.cadence}` };
+    return { change: `Move ${found.title}: ${was} → ${found.cadence}, ${showTime(found.time_of_day)}` };
   }
 
   /**
@@ -395,8 +409,8 @@ function applyToOne(
     return {
       change:
         newTitle && newTitle !== was
-          ? `${was} → ${newTitle}${how ? `: ${how}` : ''}${note}`
-          : `${was}: ${how ?? 'renamed'}${note}`,
+          ? `${was} ${where(found)} → ${newTitle}${how ? `: ${how}` : ''}${note}`
+          : `${was} ${where(found)}: ${how ?? 'renamed'}${note}`,
     };
   }
 
@@ -404,10 +418,11 @@ function applyToOne(
     const t = normalizeTimeOfDay(edit.time_of_day);
     if (!t) return { reject: `Couldn't tell what time to give ${found.title}.` };
     const was = found.time_of_day;
-    if (was === t) return { noop: `${found.title} is already at ${showTime(t)}.` };
+    if (was === t)
+      return { noop: `${found.title} (${describeRecurrence(found.recurrence)}) is already at ${showTime(t)}.` };
     found.time_of_day = t;
     return {
-      change: `${found.title}: ${was ? `${showTime(was)} → ${showTime(t)}` : `now at ${showTime(t)}`}`,
+      change: `${found.title} (${describeRecurrence(found.recurrence)}): ${showTime(was)} → ${showTime(t)}`,
     };
   }
 
@@ -424,10 +439,10 @@ function applyToOne(
    * still wiped and regenerated ten prescribed sessions. From where he sat she had promised a fix,
    * shown a card, and delivered nothing — which is indistinguishable from the tool being broken.
    */
-  if (wasMin === next) return { noop: `${found.title} is already ${next} min.` };
+  if (wasMin === next) return { noop: `${found.title} ${where(found)} is already ${next} min.` };
   found.duration_min = next;
   return {
-    change: `${found.title}: ${wasMin ? `${wasMin} min → ${next} min` : `${next} min`}`,
+    change: `${found.title} ${where(found)}: ${wasMin ? `${wasMin} min → ${next} min` : `${next} min`}`,
   };
 }
 
@@ -446,13 +461,32 @@ export function applyPlanEdits(
   current: Activity[],
   edits: PlanEdit[],
   goalTitleById: Record<string, string> = {},
+  /**
+   * A proposal ALREADY on screen, to build on instead of the committed plan.
+   *
+   * Without this, every call started from what is committed and `setPendingPlan` overwrote the
+   * previous proposal wholesale — so on 2026-08-17 the coach put up a card moving Box breathing to
+   * Sunday, then a minute later proposed two resizes, and the second call silently destroyed the
+   * first. The owner saw a card with only the runs on it and reported that she had said she would
+   * move the breathing and had not. She had; she then deleted it herself.
+   *
+   * Handles come off `commitment_id`, which pending activities have carried since 0036, so a
+   * proposal is addressable exactly like the committed plan it came from.
+   */
+  base?: PendingPlanActivity[],
 ): PlanEditResult {
   const handles = new Map<PendingPlanActivity, string>();
-  const working = current.map((a) => {
-    const pending = toPending(a, a.goal_id ? goalTitleById[a.goal_id] : undefined);
-    handles.set(pending, activityHandle(a.commitment_id));
-    return pending;
-  });
+  const working = base?.length
+    ? base.map((a) => {
+        const copy = { ...a };
+        if (copy.commitment_id) handles.set(copy, activityHandle(copy.commitment_id));
+        return copy;
+      })
+    : current.map((a) => {
+        const pending = toPending(a, a.goal_id ? goalTitleById[a.goal_id] : undefined);
+        handles.set(pending, activityHandle(a.commitment_id));
+        return pending;
+      });
   const changes: string[] = [];
   const rejected: string[] = [];
   const noops: string[] = [];
