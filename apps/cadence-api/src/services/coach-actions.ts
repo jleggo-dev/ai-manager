@@ -234,8 +234,18 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         changes: fresh,
         rejected,
         noops,
+        ignored,
       } = applyPlanEdits(activities, edits, goalTitleById, carried);
       const changes = [...priorChanges, ...fresh];
+      /**
+       * A field its action never reads is SAID, never swallowed — and never blocking: the valid
+       * rest of the edit still proposes and the card still goes up. She is just told which words
+       * did nothing and where they would have worked, so the next call says it right instead of
+       * retrying the same drop five times (2026-08-17, "the Wednesday one" pushed through `why`).
+       */
+      const ignoredLines = ignored.length
+        ? ['Parts of those edits were not used:', ...ignored.map((i) => `- ${i}`)]
+        : [];
       /**
        * No changes means NO CARD — including when every edit asked for the state the plan is
        * already in. On 2026-08-17 a resize to the value already stored produced "Easy run: 40 min
@@ -257,6 +267,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
             'Nothing was proposed, because the plan already says all of this:',
             ...noops.map((n) => `- ${n}`),
             ...standing,
+            ...ignoredLines,
             'Tell them plainly it is already set that way. Do NOT put up a card and do NOT claim you changed anything.',
             unknownNote,
           ]
@@ -268,6 +279,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           ...rejected.map((r) => `- ${r}`),
           ...noops.map((n) => `- ${n}`),
           ...standing,
+          ...ignoredLines,
           'Tell the user plainly what you could not find, and ask them which commitment they meant.',
           unknownNote,
         ]
@@ -299,6 +311,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         // Partly-already-true edits: on the card they would read as changes, so they are told to
         // her here instead and left off it.
         ...(noops.length ? ['Already the case, so not on the card:', ...noops.map((n) => `- ${n}`)] : []),
+        ...ignoredLines,
         'Say in one line what you have put up and that it is theirs to apply. Do NOT claim it is done or scheduled — it is not, until they tap it.',
         unknownNote,
       ]

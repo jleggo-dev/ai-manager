@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Activity } from '@cadence/shared';
 import { COACH_ACTION_TOOLS } from './coach-actions.ts';
-import { activityHandle, applyPlanEdits, type PlanEdit } from './plan-edit.ts';
+import { activityHandle, applyPlanEdits, EDIT_FIELDS_READ, type PlanEdit, type PlanEditAction } from './plan-edit.ts';
 
 /**
  * The contract between what the plan-edit surface ACCEPTS and what it actually does.
@@ -151,7 +151,13 @@ function editFor(action: string, field: string, withField: boolean): PlanEdit {
   return edit as unknown as PlanEdit;
 }
 
-const outcome = (edit: PlanEdit) => JSON.stringify(applyPlanEdits(PLAN, [edit], GOAL_TITLES));
+/** The applied result MINUS `ignored`: `READ` must mean the value reached the plan, a change
+ *  line, a no-op or a rejection. An ignored-note is the opposite claim — counting it as "read"
+ *  would let a note satisfy the tests that check a promised field actually LANDS. */
+const outcome = (edit: PlanEdit) => {
+  const { ignored: _ignored, ...applied } = applyPlanEdits(PLAN, [edit], GOAL_TITLES);
+  return JSON.stringify(applied);
+};
 
 const isRead = (action: string, field: string): boolean =>
   outcome(editFor(action, field, false)) !== outcome(editFor(action, field, true));
@@ -289,28 +295,40 @@ describe('the plan-edit schema and the code that serves it', () => {
   });
 
   /**
-   * DEFECT, not a passing property — skipped deliberately, and the assertion is the contract we
-   * want rather than the behaviour we have.
+   * The five-bugs class, closed in the general case. `applyToOne` reads only the fields its own
+   * branch needs, so a `resize` carrying `how_to`, or a `move` carrying `time_of_day`, used to
+   * apply half of what was asked and report all of it as done. That is how "two of four edits in
+   * one call did nothing" happened: the coach put the new days in `on_days`, the harness read
+   * `days`, found none, and the person was told their week had moved.
    *
-   * `applyToOne` reads only the fields its own branch needs and never looks at the rest, so a
-   * `resize` carrying `how_to`, or a `move` carrying `time_of_day`, applies half of what was
-   * asked and reports all of it as done. That is how "two of four edits in one call did nothing"
-   * happened: the coach put the new days in `on_days`, the harness read `days`, found none, and
-   * the person was told their week had moved.
-   *
-   * `PlanEditResult` already has the place to say so — `rejected` for a field that cannot apply,
-   * `noops` for one that need not — and nothing populates either for a field that was simply not
-   * looked at. Un-skip this when applyPlanEdits accounts for every field it is handed.
+   * Now `applyPlanEdits` names every stray field in `ignored`, decided by EDIT_FIELDS_READ — the
+   * one map of what each action reads, exported precisely so this test can hold it to the probe's
+   * observed truth. Three ways to fail, each its own lie:
+   * - a field neither read nor mentioned is the original bug — accepted and thrown away;
+   * - a map row disagreeing with the probe is the map rotting into a second hand-written list;
+   * - a field both read AND reported ignored means the note itself lies.
+   * The addressing trio (`activities`/`activity`/`on_days`) never shows up in the notes except on
+   * `add`, which targets nothing — everywhere else targeting consumes it, and the probe sees that
+   * as read.
    */
-  it.skip('says something about every field it was handed and did not use', () => {
-    const silent: string[] = [];
+  it('says something about every field it was handed and did not use', () => {
+    const wrong: string[] = [];
     for (const action of ACTIONS) {
+      const mapped = EDIT_FIELDS_READ[action as PlanEditAction] as readonly string[];
       for (const field of FIELD_NAMES) {
-        if (!READ.has(`${action}/${field}`))
-          silent.push(`"${action}" was given "${field}" and never mentioned it again`);
+        const read = READ.has(`${action}/${field}`);
+        const mentioned = applyPlanEdits(PLAN, [editFor(action, field, true)], GOAL_TITLES).ignored.some((n) =>
+          n.includes(`"${field}"`),
+        );
+        if (!read && !mentioned) wrong.push(`"${action}" was given "${field}" and never mentioned it again`);
+        if (read !== mapped.includes(field))
+          wrong.push(
+            `EDIT_FIELDS_READ says "${action}" ${mapped.includes(field) ? 'reads' : 'does not read'} "${field}" — the probe shows the opposite`,
+          );
+        if (read && mentioned) wrong.push(`"${action}" read "${field}" and still reported it as ignored`);
       }
     }
-    expect(silent).toEqual([]);
+    expect(wrong).toEqual([]);
   });
 
   /**
