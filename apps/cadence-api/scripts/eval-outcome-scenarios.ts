@@ -14,6 +14,11 @@
  * noise deliberately: captured-status goals, equipment, and baseline belong to the Broker's
  * ambient capture and are excluded from the automatic diff (they change on most conversations by
  * design); constraints are asserted explicitly where a scenario is about them.
+ *
+ * That exclusion belongs to the FAILURE check alone. The judge receives the complete record —
+ * ambient deltas labelled as such, and the proposal card in full — because evidence hidden from
+ * the judge reads as "nothing happened" and convicts truthful replies (the constraint-lift-reword
+ * false mismatch of the first full run).
  */
 import type { Constraint, MacroTargets, PendingPlan, PendingPlanActivity } from '@cadence/shared';
 
@@ -460,6 +465,10 @@ export const SCENARIOS: OutcomeScenario[] = [
       if (run.status !== 'done') return [`the run's status became "${run.status}" — a metric fix must keep it done`];
       const km = Number(run.value?.distance_km);
       if (km !== 8) return [`stored distance_km is ${String(run.value?.distance_km)}, expected 8`];
+      // The judge caught this once; now the assert holds it: a distance-only correction must not
+      // erase the metrics it did not name (constraint-merge rule 1 — nothing dropped by silence).
+      if (Number(run.value?.duration_min) !== 31)
+        return [`stored duration_min is ${String(run.value?.duration_min)} — the correction named only distance`];
       return [];
     },
   },

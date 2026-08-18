@@ -509,3 +509,70 @@ describe('applyPlanEdits — twins and on_days', () => {
     expect(r.changes[0]).toMatch(/60 → 40 min/);
   });
 });
+
+/**
+ * Editing the standing proposal — the `base` parameter's own bugs.
+ *
+ * Accumulation (2026-08-17's fix) made a second call build on the card instead of destroying it,
+ * and thereby created the inverse trap, live on 2026-08-18: asked for Wednesday-only stretching
+ * the coach added "Stretching — Mon, Wed, Fri", noticed, said "let me redo it properly" — and the
+ * redo ADDED beside the mistake. Two holes made that inescapable: a proposal-only add lost its
+ * `new1` handle the moment the call that created it returned (the next call rejected the handle
+ * and listed the add as "? (title)"), and the name-collision rejection steered her to a renamed
+ * twin rather than out. These tests are the two doors.
+ */
+describe('applyPlanEdits — a proposal-only add stays addressable', () => {
+  const COMMITTED: Activity[] = [act({ title: 'Easy run' })];
+  /** The stored pending card after "add Stretching": the add carries no commitment_id yet. */
+  const standingCard = () =>
+    applyPlanEdits(COMMITTED, [
+      { action: 'add', title: 'Stretching', days: ['mon', 'wed', 'fri'], time_of_day: '07:00' },
+    ]).activities;
+
+  it('removes a same-call add by its new1 handle', () => {
+    const r = applyPlanEdits(COMMITTED, [
+      { action: 'add', title: 'Stretching', days: ['wed'], time_of_day: '07:00' },
+      { action: 'remove', activities: ['new1'] },
+    ]);
+    expect(r.rejected).toEqual([]);
+    expect(r.activities.map((a) => a.title)).toEqual(['Easy run']);
+  });
+
+  it('still answers to new1 on the NEXT call, once the card is the base', () => {
+    const r = applyPlanEdits(COMMITTED, [{ action: 'remove', activities: ['new1'] }], {}, standingCard());
+    expect(r.rejected).toEqual([]);
+    expect(r.changes).toEqual(['Drop Stretching (Mon, Wed, Fri, 07:00)']);
+    expect(r.activities.map((a) => a.title)).toEqual(['Easy run']);
+  });
+
+  it('answers to its title across calls too', () => {
+    const r = applyPlanEdits(COMMITTED, [{ action: 'remove', activity: 'Stretching' }], {}, standingCard());
+    expect(r.rejected).toEqual([]);
+    expect(r.activities.map((a) => a.title)).toEqual(['Easy run']);
+  });
+
+  it('names new1 among the real handles when an unknown handle is refused', () => {
+    const r = applyPlanEdits(COMMITTED, [{ action: 'remove', activities: ['deadbeef'] }], {}, standingCard());
+    // Used to print "? (Stretching)" — a handle list offering a handle nobody could use.
+    expect(r.rejected[0]).toMatch(/new1 \(Stretching\)/);
+    expect(r.activities).toHaveLength(2);
+  });
+
+  it('steers a proposal name-collision to start_over, not to a renamed twin', () => {
+    const r = applyPlanEdits(
+      COMMITTED,
+      [{ action: 'add', title: 'Stretching', days: ['wed'], time_of_day: '07:00' }],
+      {},
+      standingCard(),
+    );
+    expect(r.changes).toEqual([]);
+    expect(r.rejected[0]).toMatch(/already names a commitment/);
+    expect(r.rejected[0]).toMatch(/start_over/);
+  });
+
+  it('keeps the plain collision message when there is no proposal to start over from', () => {
+    const r = applyPlanEdits(COMMITTED, [{ action: 'add', title: 'Easy run', days: ['wed'], time_of_day: '07:00' }]);
+    expect(r.rejected[0]).toMatch(/already names a commitment/);
+    expect(r.rejected[0]).not.toMatch(/start_over/);
+  });
+});

@@ -371,6 +371,7 @@ function applyAdd(
   edit: PlanEdit,
   working: PendingPlanActivity[],
   goalTitleById: Record<string, string>,
+  onProposal: boolean,
 ): { change?: string; reject?: string; added?: PendingPlanActivity } {
   const title = edit.title?.trim();
   if (!title) return { reject: 'Tried to add a commitment with no name.' };
@@ -378,10 +379,19 @@ function applyAdd(
    * Two commitments must never share a name. Even with handles carrying the addressing, a plan
    * showing the same title twice is unreadable to the PERSON — and it is how the 2026-08-17 pair
    * was born: one card renamed Tuesday's run "Easy run" and added a Wednesday "Easy run" beside it.
+   *
+   * On a card already up, the collision is usually the coach re-adding her own earlier mistake.
+   * Live on 2026-08-18: asked for Wednesday-only stretching she added "Stretching — Mon, Wed,
+   * Fri", said "let me redo it properly" — and the only exit this message offered was a second
+   * name, so the redo landed BESIDE the wrong add. The way out of a wrong card is start_over,
+   * and a rejection that does not say so steers straight back into the trap.
    */
   if (working.some((a) => a.title.trim().toLowerCase() === title.toLowerCase())) {
+    const redo = onProposal
+      ? ` If the existing "${title}" is this card's own earlier add and it is the mistake you are fixing, do not add a renamed twin beside it — call propose_plan_change again with start_over true and ONLY the corrected edits.`
+      : '';
     return {
-      reject: `"${title}" already names a commitment — two by the same name are indistinguishable to the user reading their own week. Pick a distinct name ("${title} (Wednesday)", "${title} — hills").`,
+      reject: `"${title}" already names a commitment — two by the same name are indistinguishable to the user reading their own week. Pick a distinct name ("${title} (Wednesday)", "${title} — hills").${redo}`,
     };
   }
   /**
@@ -556,10 +566,20 @@ export function applyPlanEdits(
   base?: PendingPlanActivity[],
 ): PlanEditResult {
   const handles = new Map<PendingPlanActivity, string>();
+  /**
+   * Adds are numbered new1, new2… in card order — and the numbering covers adds carried IN from
+   * the standing proposal, which have no commitment_id until Apply. Before this, a proposal-only
+   * add lost its handle the moment the call that created it returned: the next call rejected
+   * "new1" as unknown and listed the add as "? (title)", so a wrong add could not be taken off
+   * its own card by handle at all. Renumbered from the stored card order each call, the handle
+   * only shifts if an earlier add is removed first.
+   */
+  let addedSeq = 0;
+  const onProposal = !!base?.length;
   const working = base?.length
     ? base.map((a) => {
         const copy = { ...a };
-        if (copy.commitment_id) handles.set(copy, activityHandle(copy.commitment_id));
+        handles.set(copy, copy.commitment_id ? activityHandle(copy.commitment_id) : `new${++addedSeq}`);
         return copy;
       })
     : current.map((a) => {
@@ -571,7 +591,6 @@ export function applyPlanEdits(
   const rejected: string[] = [];
   const noops: string[] = [];
   const ignored: string[] = [];
-  let addedSeq = 0;
 
   for (const edit of edits) {
     /**
@@ -582,7 +601,7 @@ export function applyPlanEdits(
      */
     ignored.push(...ignoredFieldNotes(edit));
     if (edit.action === 'add') {
-      const { change, reject, added } = applyAdd(edit, working, goalTitleById);
+      const { change, reject, added } = applyAdd(edit, working, goalTitleById, onProposal);
       if (reject) rejected.push(reject);
       if (added) {
         working.push(added);
