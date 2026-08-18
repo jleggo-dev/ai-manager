@@ -2721,6 +2721,39 @@ showing 2/3 filled is counting what happened. A ring that renders the missing th
 absence — a gap, a dimmed slot — is counting what broke, and is the streak-shame shape under a new
 name. The design has to land on the first reading.
 
+**A22. Take a detour has no door, and weather-aware optional workouts have no home — WITH DESIGN (owner 2026-08-18)**
+
+The Plan screen's week view was deleted with the 2a redesign (owner: *"the week view is redundant
+and kind of a shitty UI"*; in 2a the week IS the scroll — tomorrow is the next stretch of the same
+trail past a sunrise divider). Correct call, with one consequence: `PlanWeekPanel` was the only
+mount point for **take a detour**, so `DetourSetup.tsx` is now unreachable from the UI. Off-plan
+quick log survived — the ＋ FAB already opens `LogDidSheet`, which is the same thing.
+
+Owner's steer: *"these are secondary banners probably that can show up as needed — just as the
+calorie counter should only show up if the user is tracking nutrition-related tasks."* That
+instinct is already half-built: the Plan screen carries two CONDITIONAL detour banners
+(`Detour ahead` before it starts, `Detour day` once it has, gated on `activeEpisode`). What is
+missing is the ENTRY when no detour is active. Going back to Design along with weather-aware
+optional workouts, which want the same conditional-banner treatment.
+
+`DetourSetup.tsx` and its test are deliberately kept, unmounted. The removed wiring, verbatim, so
+re-landing it is a paste rather than a rebuild:
+
+```ts
+// was in PlanView.tsx, passed as PlanWeekPanel's onEnterDetour
+// (guarded: data.activeEpisode ? undefined : enterDetour)
+async function enterDetour(choice: DetourChoice) {
+  await enterEpisode(choice.type, {
+    days: choice.days,
+    available_equipment: choice.available_equipment,
+  }).catch(() => {});
+  refresh(); // base plan pauses; the detour banner + what survives of the week appear
+  bump();
+}
+```
+
+Needs back: the `DetourChoice` type import and `enterEpisode` from `lib/api.ts`.
+
 **A21. Where you live vs where you are — the location that never moved (owner 2026-08-17, DESIGNED, not built)**
 
 Owner: *"I live in Notre-Dame-de-l'Île-Perrot. I'm currently downtown Montreal (and have been since

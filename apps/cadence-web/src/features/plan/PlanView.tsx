@@ -7,18 +7,15 @@ import { AdjustSheet } from './AdjustSheet.tsx';
 import { taskOpener } from './taskShape.ts';
 import { TodayTrail } from '../today/TodayTrail.tsx';
 import { TrailHeader } from '../today/TrailHeader.tsx';
-import { PlanViewSwitch } from './PlanViewSwitch.tsx';
 import { DailyCheckIn } from '../today/DailyCheckIn.tsx';
 import { TodayFoodSheet } from '../nutrition/TodayFoodSheet.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
-import type { DetourChoice } from './DetourSetup.tsx';
+import { DetourBar } from './DetourBar.tsx';
+import { DetourStateSheet } from './DetourStateSheet.tsx';
+import { DetourSetup, type DetourChoice } from './DetourSetup.tsx';
 import { downscalePhoto } from './occurrence/format.ts';
-import { PlanWeekPanel } from './PlanWeekPanel.tsx';
 import {
   getPlan,
-  setOccurrence,
-  logAdhoc,
-  enterEpisode,
   endEpisode,
   checkin,
   acceptProposal,
@@ -28,6 +25,7 @@ import {
   type ActiveEpisode,
   sendGymPhotos,
   sendDetourEquipment,
+  enterEpisode,
   postponeDetour,
 } from '../../lib/api.ts';
 
@@ -68,12 +66,6 @@ export function PlanView({
   onCoach: (note?: string) => void;
   reloadSignal?: number;
 }) {
-  /**
-   * Day/week is a VIEW of one surface, not two destinations — it lived in the tab bar as Today
-   * and Week until the owner's device verdict (2026-08-14: Week "doesn't have more information
-   * than the today tab"). One Plan tab; this switch is the whole difference.
-   */
-  const [view, setView] = useState<'today' | 'week'>('today');
   const [data, setData] = useState<PlanViewData | null>(null);
   const [note, setNote] = useState('');
   const [proposalBusy, setProposalBusy] = useState(false);
@@ -83,6 +75,8 @@ export function PlanView({
   const [foodOpen, setFoodOpen] = useState(false); // "Today's food" sheet (2F), opened from the trail strip
   const [foodSub, setFoodSub] = useState<'home' | 'shop'>('home'); // which sub-view the food sheet opens to
   const [cookOcc, setCookOcc] = useState<string | null>(null); // cook walkthrough (menu-derived cook task)
+  const [detourSheet, setDetourSheet] = useState(false); // the live detour's state sheet
+  const [detourEntry, setDetourEntry] = useState(false); // "Life happened?" — the self-declare door
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSteer, setAdjustSteer] = useState(''); // pre-filled request (nutrition baseline → Adjust)
   const [adjustMode, setAdjustMode] = useState<'adjust' | 'rebalance'>('adjust');
@@ -131,41 +125,6 @@ export function PlanView({
   function dismissProp() {
     setData((d) => (d ? { ...d, pendingProposal: null } : d));
     dismissProposal().catch(() => {});
-  }
-
-  async function set(o: PlanOccurrence, next: 'done' | 'skipped' | 'pending') {
-    setData((d) =>
-      d
-        ? {
-            ...d,
-            week: d.week.map((day) => ({
-              ...day,
-              occurrences: day.occurrences.map((x) =>
-                x.occurrence_id === o.occurrence_id ? { ...x, status: next } : x,
-              ),
-            })),
-          }
-        : d,
-    );
-    await setOccurrence(o.occurrence_id, next).catch(() => {});
-    refresh(); // reconcile + refresh consistency
-  }
-
-  async function adhocLog(text: string) {
-    await logAdhoc(text).catch(() => {});
-    refresh(); // the off-plan entry shows in the week + moves consistency/streak
-    bump();
-  }
-
-  // The window and the gear travel with it — the coach cannot draft a detour without both, and
-  // before this it received neither (empty equipment, default window).
-  async function enterDetour(choice: DetourChoice) {
-    await enterEpisode(choice.type, {
-      days: choice.days,
-      available_equipment: choice.available_equipment,
-    }).catch(() => {});
-    refresh(); // base plan pauses; the detour banner + what survives of the week appear
-    bump();
   }
 
   // The gym photos → equipment revision (PLAN §424). Several angles are ONE answer: files
@@ -224,6 +183,22 @@ export function PlanView({
     bump();
   }
 
+  /**
+   * Starting a detour, restored. This wiring left with the week panel when the 2a redesign deleted
+   * it, which took the only door with it (A22); the design's answer is a self-declare line at the
+   * end of the day plus the bar for what follows. The window and the gear travel with it — the
+   * coach cannot draft a detour without both.
+   */
+  async function enterDetour(choice: DetourChoice) {
+    await enterEpisode(choice.type, {
+      days: choice.days,
+      available_equipment: choice.available_equipment,
+    }).catch(() => {});
+    setDetourEntry(false);
+    refresh();
+    bump();
+  }
+
   async function endDetour() {
     await endEpisode().catch(() => {});
     refresh(); // base plan resumes; the banner clears
@@ -259,9 +234,6 @@ export function PlanView({
     );
   }
 
-  const today = data.week.find((d) => d.isToday);
-  const rest = data.week.filter((d) => !d.isToday);
-  const { kept, window } = data.consistency;
   const doneCount = data.week.reduce((n, d) => n + d.occurrences.filter((o) => o.status === 'done').length, 0);
   const xp = doneCount * 10; // stopgap XP until the REQ8 points finalize is wired to the plan response
 
@@ -293,21 +265,9 @@ export function PlanView({
             onDismiss={dismissProp}
           />
         )}
-        {data.activeEpisode && todayIso() < data.activeEpisode.start && (
-          <div className="detour">
-            <div className="detour-t">
-              <b>Detour ahead — {detourLabel(data.activeEpisode.type)}</b>
-              <span>
-                Starts {data.activeEpisode.start}. Your plan runs as normal until then; I&apos;ll check in when it
-                begins.
-              </span>
-            </div>
-            <div className="detour-actions">
-              <button className="detour-end" onClick={endDetour}>
-                Cancel it
-              </button>
-            </div>
-          </div>
+        {/* One line of glass, never a card (2a): it announces, the sheet does the work. */}
+        {data.activeEpisode && (
+          <DetourBar episode={data.activeEpisode} dark={false} onOpen={() => setDetourSheet(true)} />
         )}
         {data.activeEpisode && todayIso() >= data.activeEpisode.start && !data.activeEpisode.gearKnown && (
           <div className="detour">
@@ -396,40 +356,20 @@ export function PlanView({
         )}
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
-        <PlanViewSwitch view={view} onChange={setView} />
+        <TodayTrail
+          plan={data}
+          onOpen={openTask}
+          onOpenFood={() => {
+            setFoodSub('home');
+            setFoodOpen(true);
+          }}
+          onCoach={onCoach}
+        />
 
-        {view === 'today' ? (
-          <TodayTrail
-            plan={data}
-            onOpen={openTask}
-            onOpenFood={() => {
-              setFoodSub('home');
-              setFoodOpen(true);
-            }}
-            onCoach={onCoach}
-          />
-        ) : (
-          <PlanWeekPanel
-            today={today}
-            rest={rest}
-            kept={kept}
-            windowDays={window}
-            streak={data.streak}
-            onCheck={set}
-            onAdhocLog={adhocLog}
-            onEnterDetour={data.activeEpisode ? undefined : enterDetour}
-            onOpen={setSheetOcc}
-            onAdjust={() => {
-              setAdjustSteer('');
-              setAdjustMode('adjust');
-              setAdjustOpen(true);
-            }}
-            onRebalance={() => {
-              setAdjustSteer('');
-              setAdjustMode('rebalance');
-              setAdjustOpen(true);
-            }}
-          />
+        {!data.activeEpisode && (
+          <button className="detour-trigger" onClick={() => setDetourEntry(true)}>
+            Life happened? Take a detour
+          </button>
         )}
       </div>
       {sheetOcc && (
@@ -518,28 +458,37 @@ export function PlanView({
           Pre- and post-activity are user-initiated and mutually exclusive by construction; the
           check-in is the only one that arrives uninvited, so it is the one that yields — it
           mounts (and only then asks the server whether it's due) once nothing else is open. */}
-      {view === 'today' &&
-        !checkinSettled &&
-        !sheetOcc &&
-        !startOcc &&
-        !captureOcc &&
-        !cookOcc &&
-        !foodOpen &&
-        !adjustOpen && (
-          <DailyCheckIn
-            onAdjust={(steer) => {
-              setCheckinSettled(true);
-              setAdjustSteer(steer);
-              setAdjustMode('adjust');
-              setAdjustOpen(true);
-            }}
-            onCoach={() => {
-              setCheckinSettled(true);
-              onCoach();
-            }}
-            onClose={() => setCheckinSettled(true)}
-          />
-        )}
+      {!checkinSettled && !sheetOcc && !startOcc && !captureOcc && !cookOcc && !foodOpen && !adjustOpen && (
+        <DailyCheckIn
+          onAdjust={(steer) => {
+            setCheckinSettled(true);
+            setAdjustSteer(steer);
+            setAdjustMode('adjust');
+            setAdjustOpen(true);
+          }}
+          onCoach={() => {
+            setCheckinSettled(true);
+            onCoach();
+          }}
+          onClose={() => setCheckinSettled(true)}
+        />
+      )}
+      {detourEntry && <DetourSetup onEnter={enterDetour} onCancel={() => setDetourEntry(false)} />}
+      {detourSheet && data.activeEpisode && (
+        <DetourStateSheet
+          episode={data.activeEpisode}
+          busy={gymBusy}
+          onCheckIn={() => {
+            setDetourSheet(false);
+            onCoach('<note>They opened their detour and tapped Check in. Ask how it is going where they are.</note>');
+          }}
+          onResume={() => {
+            setDetourSheet(false);
+            void endDetour();
+          }}
+          onClose={() => setDetourSheet(false)}
+        />
+      )}
       {adjustOpen && (
         <AdjustSheet
           initialSteer={adjustSteer}
