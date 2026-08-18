@@ -36,7 +36,7 @@ describe('applyPlanEdits', () => {
     const r = applyPlanEdits(PLAN, [{ action: 'move', activity: 'Easy run', days: ['friday'] }], GOALS);
     expect(r.rejected).toEqual([]);
     // Day names match the rest of the plan UI (describeRecurrence's vocabulary), not prose.
-    expect(r.changes).toEqual(['Move Easy run: Thu → Fri']);
+    expect(r.changes).toEqual(['Move Easy run: Thu → Fri, no time set']);
     const run = r.activities.find((a) => a.title === 'Easy run')!;
     expect(run.recurrence).toBe('FREQ=WEEKLY;BYDAY=FR');
     // The blast radius is the whole point: nothing else may drift.
@@ -83,7 +83,7 @@ describe('applyPlanEdits', () => {
       ],
       GOALS,
     );
-    expect(r.changes).toEqual(['Drop Long run']);
+    expect(r.changes).toEqual(['Drop Long run (Sun, no time set)']);
     expect(r.rejected).toHaveLength(1);
     expect(r.activities.map((a) => a.title)).toEqual(['Easy run', 'Sit']);
   });
@@ -158,7 +158,7 @@ describe('applyPlanEdits — rework', () => {
 
   it('says what changed in the words the card will show', () => {
     const r = applyPlanEdits(GRIP, [{ action: 'rework', activity: 'Grip finisher', how_to: 'Dead hangs' }], GOALS);
-    expect(r.changes).toEqual(['Grip finisher: Dead hangs']);
+    expect(r.changes).toEqual(['Grip finisher (Thu, no time set): Dead hangs']);
   });
 
   it('renames when the change earns a new name, and says both halves', () => {
@@ -167,7 +167,7 @@ describe('applyPlanEdits — rework', () => {
       [{ action: 'rework', activity: 'Grip finisher', title: 'Hang work', how_to: 'Dead hangs' }],
       GOALS,
     );
-    expect(r.changes).toEqual(['Grip finisher → Hang work: Dead hangs']);
+    expect(r.changes).toEqual(['Grip finisher (Thu, no time set) → Hang work: Dead hangs']);
     expect(r.activities.find((a) => a.title === 'Hang work')).toBeTruthy();
   });
 
@@ -212,7 +212,7 @@ describe('applyPlanEdits — addressing by handle', () => {
   it('hits exactly the commitment named, even when its twin is right beside it', () => {
     const r = applyPlanEdits(RUNS, [{ action: 'move', activities: [h(1)], days: ['friday'] }]);
     expect(r.rejected).toEqual([]);
-    expect(r.changes).toEqual(['Move Easy run: Wed → Fri']);
+    expect(r.changes).toEqual(['Move Easy run: Wed → Fri, no time set']);
     // Tuesday's is untouched. No on_days, no prose, no guessing.
     expect(r.activities[0]!.recurrence).toBe('FREQ=WEEKLY;BYDAY=TU');
     expect(r.activities[1]!.recurrence).toBe('FREQ=WEEKLY;BYDAY=FR');
@@ -222,7 +222,11 @@ describe('applyPlanEdits — addressing by handle', () => {
   it('changes several commitments in a single edit, one card line each', () => {
     const r = applyPlanEdits(RUNS, [{ action: 'resize', activities: [h(0), h(1), h(2)], duration_min: 45 }]);
     expect(r.rejected).toEqual([]);
-    expect(r.changes).toEqual(['Easy run: 60 min → 45 min', 'Easy run: 40 min → 45 min', 'Long run: 90 min → 45 min']);
+    expect(r.changes).toEqual([
+      'Easy run (Tue, no time set): 60 min → 45 min',
+      'Easy run (Wed, no time set): 40 min → 45 min',
+      'Long run (Sat, no time set): 90 min → 45 min',
+    ]);
     expect(r.activities.every((a) => a.duration_min === 45)).toBe(true);
   });
 
@@ -251,7 +255,7 @@ describe('applyPlanEdits — addressing by handle', () => {
 
   it('ignores a handle repeated in one edit rather than applying twice', () => {
     const r = applyPlanEdits(RUNS, [{ action: 'resize', activities: [h(2), h(2)], duration_min: 50 }]);
-    expect(r.changes).toEqual(['Long run: 90 min → 50 min']);
+    expect(r.changes).toEqual(['Long run (Sat, no time set): 90 min → 50 min']);
   });
 
   it('gives a freshly added commitment a handle, so the next edit can reach it', () => {
@@ -286,25 +290,25 @@ describe('applyPlanEdits — an edit that changes nothing is not a change', () =
     const r = applyPlanEdits(PLAN2, [{ action: 'resize', activity: 'Easy run', duration_min: 40 }]);
     expect(r.changes).toEqual([]);
     expect(r.rejected).toEqual([]);
-    expect(r.noops).toEqual(['Easy run is already 40 min.']);
+    expect(r.noops).toEqual(['Easy run (Tue, 19:00) is already 40 min.']);
   });
 
   it('still reports a real resize', () => {
     const r = applyPlanEdits(PLAN2, [{ action: 'resize', activity: 'Easy run', duration_min: 50 }]);
-    expect(r.changes).toEqual(['Easy run: 40 min → 50 min']);
+    expect(r.changes).toEqual(['Easy run (Tue, 19:00): 40 min → 50 min']);
     expect(r.noops).toEqual([]);
   });
 
   it('treats a retime to the same time as a no-op', () => {
     const r = applyPlanEdits(PLAN2, [{ action: 'retime', activity: 'Easy run', time_of_day: '19:00' }]);
     expect(r.changes).toEqual([]);
-    expect(r.noops).toEqual(['Easy run is already at 19:00.']);
+    expect(r.noops).toEqual(['Easy run (Tue) is already at 19:00.']);
   });
 
   it('treats a move to the days it already runs on as a no-op', () => {
     const r = applyPlanEdits(PLAN2, [{ action: 'move', activity: 'Easy run', days: ['tuesday'] }]);
     expect(r.changes).toEqual([]);
-    expect(r.noops).toEqual(['Easy run is already on Tue.']);
+    expect(r.noops).toEqual(['Easy run is already on Tue, 19:00.']);
   });
 
   /** A mixed batch keeps the real change and quietly drops the redundant one. */
@@ -317,8 +321,8 @@ describe('applyPlanEdits — an edit that changes nothing is not a change', () =
       { action: 'resize', activity: 'Easy run', duration_min: 40 },
       { action: 'resize', activity: 'Long run', duration_min: 75 },
     ]);
-    expect(r.changes).toEqual(['Long run: 90 min → 75 min']);
-    expect(r.noops).toEqual(['Easy run is already 40 min.']);
+    expect(r.changes).toEqual(['Long run (Sat, no time set): 90 min → 75 min']);
+    expect(r.noops).toEqual(['Easy run (Tue, 19:00) is already 40 min.']);
   });
 });
 
@@ -440,7 +444,7 @@ describe('applyPlanEdits — twins and on_days', () => {
       { action: 'move', activity: 'Easy run', on_days: ['wednesday'], days: ['friday'] },
     ]);
     expect(r.rejected).toEqual([]);
-    expect(r.changes).toEqual(['Move Easy run: Wed → Fri']);
+    expect(r.changes).toEqual(['Move Easy run: Wed → Fri, no time set']);
     const recurrences = r.activities.filter((a) => a.title === 'Easy run').map((a) => a.recurrence);
     // Tuesday's run has NOT moved. That is the entire incident.
     expect(recurrences).toContain('FREQ=WEEKLY;BYDAY=TU');
@@ -467,7 +471,7 @@ describe('applyPlanEdits — twins and on_days', () => {
     const r = applyPlanEdits(TWINS, [
       { action: 'resize', activity: 'Long run', on_days: ['saturday'], duration_min: 75 },
     ]);
-    expect(r.changes).toEqual(['Long run: 90 min → 75 min']);
+    expect(r.changes).toEqual(['Long run (Sat, no time set): 90 min → 75 min']);
   });
 
   it('will not ADD a twin — the pair above should never have been creatable', () => {

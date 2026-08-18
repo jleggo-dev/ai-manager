@@ -52,6 +52,9 @@ import { applyPlanEdits, matchActivity, type PlanEdit } from './plan-edit.ts';
 
 export type { CoachActionTool } from './coach-action-types.ts';
 
+/** The actions the engine can carry out. One list, shared with the schema so they cannot drift. */
+export const PLAN_EDIT_ACTIONS = ['move', 'retime', 'resize', 'remove', 'add', 'rework'] as const;
+
 const EDIT_SCHEMA = {
   type: 'array',
   description: 'The changes to make, applied in order.',
@@ -60,7 +63,7 @@ const EDIT_SCHEMA = {
     properties: {
       action: {
         type: 'string',
-        enum: ['move', 'retime', 'resize', 'remove', 'add', 'rework'],
+        enum: [...PLAN_EDIT_ACTIONS],
         description:
           'move = which days it happens on; retime = what time of day; resize = how many minutes; remove = drop it; add = a new commitment; rework = change what the session CONTAINS, keeping its slot (swap an exercise, change the focus).',
       },
@@ -95,7 +98,7 @@ const EDIT_SCHEMA = {
       duration_min: {
         type: 'integer',
         description:
-          'For resize and add: minutes of the ACTIVITY ITSELF — exactly the number they said. "A 40 minute run" is 40; "a 20 minute meditation" is 20. Do NOT pad it for warm-up, cool-down or getting there: the app adds that around the effort and shows them the total to set aside. Never quietly shrink it either — 20 minutes of meditation means 20 minutes meditating.',
+          'For resize, add and rework: minutes of the ACTIVITY ITSELF — exactly the number they said. "A 40 minute run" is 40; "a 20 minute meditation" is 20. Do NOT pad it for warm-up, cool-down or getting there: the app adds that around the effort and shows them the total to set aside. Never quietly shrink it either — 20 minutes of meditation means 20 minutes meditating.',
       },
       title: {
         type: 'string',
@@ -114,12 +117,24 @@ const EDIT_SCHEMA = {
   },
 };
 
-function asEdits(raw: unknown): PlanEdit[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
+/**
+ * Words the model reaches for that mean an action by another name.
+ *
+ * `rename` is the obvious verb for what `rework` does with a title, and on 2026-08-17 she used it
+ * twice in one call. Both were dropped on the floor by the filter below and nothing said so. An
+ * alias is kinder than a rejection here because the intent is unambiguous — she named a title and
+ * a commitment, which is exactly a rework.
+ */
+const ACTION_ALIASES: Record<string, PlanEdit['action']> = { rename: 'rework', retitle: 'rework', reschedule: 'move' };
+
+function asEdits(raw: unknown): { edits: PlanEdit[]; unknown: string[] } {
+  if (!Array.isArray(raw)) return { edits: [], unknown: [] };
+  const unknown: string[] = [];
+  const edits = raw
     .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object')
     .map((e) => ({
-      action: String(e.action ?? '') as PlanEdit['action'],
+      action: (ACTION_ALIASES[String(e.action ?? '').toLowerCase()] ??
+        String(e.action ?? '').toLowerCase()) as PlanEdit['action'],
       ...(typeof e.activity === 'string' ? { activity: e.activity } : {}),
       ...(Array.isArray(e.activities) ? { activities: e.activities.map(String) } : {}),
       ...(Array.isArray(e.on_days) ? { on_days: e.on_days.map(String) } : {}),
@@ -131,7 +146,19 @@ function asEdits(raw: unknown): PlanEdit[] {
       ...(typeof e.goal_title === 'string' ? { goal_title: e.goal_title } : {}),
       ...(typeof e.why === 'string' ? { why: e.why } : {}),
     }))
-    .filter((e) => ['move', 'retime', 'resize', 'remove', 'add', 'rework'].includes(e.action));
+    /**
+     * An action this engine cannot perform is REPORTED, never quietly removed.
+     *
+     * The old line filtered silently, so `rename` — a word the schema does not list and the model
+     * naturally reaches for — vanished twice in one call while the coach told the user she was
+     * renaming two commitments. Nothing anywhere recorded that two thirds of the call did nothing.
+     */
+    .filter((e) => {
+      if ((PLAN_EDIT_ACTIONS as readonly string[]).includes(e.action)) return true;
+      unknown.push(String(e.action || '(none)'));
+      return false;
+    });
+  return { edits, unknown };
 }
 
 export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
@@ -151,8 +178,13 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       required: ['edits'],
     },
     async run(userId, params) {
-      const edits = asEdits(params.edits);
-      if (!edits.length) return 'No usable changes were given, so nothing was proposed. Ask what they want changed.';
+      const { edits, unknown } = asEdits(params.edits);
+      const unknownNote = unknown.length
+        ? `\nNOT DONE — this build has no "${unknown.join('", "')}" action. The actions are: ${PLAN_EDIT_ACTIONS.join(', ')}. To rename a commitment use rework with a title. Do NOT tell them those parts happened.`
+        : '';
+      if (!edits.length) {
+        return `No usable changes were given, so nothing was proposed. Ask what they want changed.${unknownNote}`;
+      }
 
       const plan = await getActivePlan(userId);
       if (!plan) {
@@ -172,14 +204,48 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       if (moved && edits.some((e) => !e.activities?.length)) {
         return `Their plan is v${plan.version} now, not v${declared}, and at least one of those edits names a commitment by title rather than by handle — against a plan that has moved, that could change the wrong thing. NOTHING was changed. Call get_active_plan again and re-propose using the handles it prints.`;
       }
-      const [activities, goals] = await Promise.all([
+      const [activities, goals, me] = await Promise.all([
         listActivities(plan.plan_id),
         listGoalsByStatus(userId, ['committed', 'confirmed']),
+        getUser(userId),
       ]);
       const goalTitleById: Record<string, string> = {};
       for (const g of goals) goalTitleById[g.goal_id] = g.title;
 
-      const { activities: next, changes, rejected, noops } = applyPlanEdits(activities, edits, goalTitleById);
+      /**
+       * Build on the card already on screen, rather than replacing it.
+       *
+       * `setPendingPlan` stores ONE proposal, and every call used to recompute from the committed
+       * plan — so a second call wiped the first without a word. On 2026-08-17 the coach proposed
+       * moving Box breathing to Sunday, then a minute later proposed two resizes, and the owner got
+       * a card with only the runs on it and reported that she had promised the move and not made
+       * it. She had. The next call deleted it.
+       *
+       * Accumulating is what she plainly meant: two things she said she would change, both on one
+       * card. A proposal only disappears when the user applies it or taps Not now, both of which
+       * clear `pending_plan` — so there is no stale-proposal case to age out here.
+       */
+      const pending = me?.pending_plan;
+      const carried = pending?.activities?.length ? pending.activities : undefined;
+      const priorChanges = carried ? (pending?.rationale ?? '').split('\n').filter(Boolean) : [];
+
+      const {
+        activities: next,
+        changes: fresh,
+        rejected,
+        noops,
+        ignored,
+      } = applyPlanEdits(activities, edits, goalTitleById, carried);
+      const changes = [...priorChanges, ...fresh];
+      /**
+       * A field its action never reads is SAID, never swallowed — and never blocking: the valid
+       * rest of the edit still proposes and the card still goes up. She is just told which words
+       * did nothing and where they would have worked, so the next call says it right instead of
+       * retrying the same drop five times (2026-08-17, "the Wednesday one" pushed through `why`).
+       */
+      const ignoredLines = ignored.length
+        ? ['Parts of those edits were not used:', ...ignored.map((i) => `- ${i}`)]
+        : [];
       /**
        * No changes means NO CARD — including when every edit asked for the state the plan is
        * already in. On 2026-08-17 a resize to the value already stored produced "Easy run: 40 min
@@ -187,20 +253,38 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
        * committed a version byte-identical to its predecessor, regenerating ten prescribed sessions
        * to change nothing. A card must mean something is different, or it is a lie with a button.
        */
-      if (!changes.length) {
+      /**
+       * `fresh`, not `changes` — the gate asks whether THIS call did anything. Keying it off the
+       * accumulated list would let a call that achieved nothing re-announce the card already on
+       * screen as though it were new work.
+       */
+      if (!fresh.length) {
+        const standing = priorChanges.length
+          ? [`The card already up is unchanged and still shows: ${priorChanges.join('; ')}.`]
+          : [];
         if (noops.length && !rejected.length) {
           return [
             'Nothing was proposed, because the plan already says all of this:',
             ...noops.map((n) => `- ${n}`),
+            ...standing,
+            ...ignoredLines,
             'Tell them plainly it is already set that way. Do NOT put up a card and do NOT claim you changed anything.',
-          ].join('\n');
+            unknownNote,
+          ]
+            .filter(Boolean)
+            .join('\n');
         }
         return [
           'Nothing could be changed:',
           ...rejected.map((r) => `- ${r}`),
           ...noops.map((n) => `- ${n}`),
+          ...standing,
+          ...ignoredLines,
           'Tell the user plainly what you could not find, and ask them which commitment they meant.',
-        ].join('\n');
+          unknownNote,
+        ]
+          .filter(Boolean)
+          .join('\n');
       }
       if (!next.length) {
         return 'That would empty their plan entirely, so it was not proposed. An empty week is not a rhythm — suggest keeping at least one thing.';
@@ -215,7 +299,9 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       });
 
       return [
-        'Proposed — the user now has a card showing exactly this, with an Apply button:',
+        priorChanges.length
+          ? 'Added to the card already up — it now shows ALL of this, with one Apply button:'
+          : 'Proposed — the user now has a card showing exactly this, with an Apply button:',
         ...changes.map((c) => `- ${c}`),
         // Say it moved, so she describes the week that exists rather than the one she read.
         ...(moved
@@ -225,8 +311,12 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         // Partly-already-true edits: on the card they would read as changes, so they are told to
         // her here instead and left off it.
         ...(noops.length ? ['Already the case, so not on the card:', ...noops.map((n) => `- ${n}`)] : []),
+        ...ignoredLines,
         'Say in one line what you have put up and that it is theirs to apply. Do NOT claim it is done or scheduled — it is not, until they tap it.',
-      ].join('\n');
+        unknownNote,
+      ]
+        .filter(Boolean)
+        .join('\n');
     },
   },
 

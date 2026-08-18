@@ -196,10 +196,11 @@ describe('propose_plan_change', () => {
     });
     expect(setPendingPlan).toHaveBeenCalledTimes(1);
     const [, pending] = setPendingPlan.mock.calls[0]!;
-    // The card carries only what actually differs.
-    expect(pending.rationale).toBe('Long run: 90 min → 75 min');
+    // The card carries only what actually differs — and says WHICH commitment, since two can
+    // share a title. This fixture has no time, so the line says so rather than staying quiet.
+    expect(pending.rationale).toBe('Long run (Sat, no time set): 90 min → 75 min');
     expect(out).toMatch(/Already the case, so not on the card:/);
-    expect(out).toMatch(/Easy run is already 40 min/);
+    expect(out).toMatch(/Easy run \(Thu, no time set\) is already 40 min/);
   });
 
   it('declares a schema the model can actually fill in', () => {
@@ -607,5 +608,135 @@ describe('set_macro_targets', () => {
   it('tells her to speak the change as a decision, not a settings update', async () => {
     const out = await setTargets.run('u1', { kcal: 2100, why: 'x' });
     expect(out).toMatch(/sound like a decision you made/);
+  });
+});
+
+/**
+ * The card that ate the other card.
+ *
+ * 2026-08-17, one turn apart: she proposed moving Box breathing to Sunday — a real card, correctly
+ * computed — and then proposed two resizes. The second call recomputed from the COMMITTED plan and
+ * `setPendingPlan` overwrote the first wholesale, so the owner got a card with only the runs and
+ * reported that she had said she would move the breathing and hadn't. She had; the next call
+ * deleted it. Nothing anywhere recorded the loss.
+ */
+describe('propose_plan_change — a second proposal builds on the first', () => {
+  const TUE = 'aaaaaaaa-1111-4111-8111-111111111111';
+  const SIT = 'bbbbbbbb-1111-4111-8111-111111111111';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getActivePlan.mockResolvedValue({ plan_id: 'p1', version: 2 });
+    listGoalsByStatus.mockResolvedValue([{ goal_id: 'g1', title: 'Run a 10k' }]);
+    listActivities.mockResolvedValue([
+      {
+        activity_id: 'a1',
+        commitment_id: TUE,
+        plan_id: 'p1',
+        title: 'Easy run',
+        kind: 'user',
+        schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU', duration_min: 40, time_of_day: '07:00' },
+        completion_source: 'self_report',
+        goal_id: 'g1',
+      },
+      {
+        activity_id: 'a2',
+        commitment_id: SIT,
+        plan_id: 'p1',
+        title: 'Box breathing practice',
+        kind: 'user',
+        schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO,FR', duration_min: 10, time_of_day: '20:00' },
+        completion_source: 'self_report',
+      },
+    ]);
+    getUser.mockResolvedValue({ pending_plan: null });
+  });
+
+  it('keeps the earlier change when a second call lands, and says both are on one card', async () => {
+    // Call one: move the breathing. This is the card the owner was promised.
+    await propose.run('u1', { edits: [{ action: 'move', activities: ['bbbbbbbb'], days: ['sunday'] }] });
+    const [, first] = setPendingPlan.mock.calls[0]!;
+    expect(first.rationale).toMatch(/Move Box breathing practice/);
+
+    // The card is now live — exactly what the second call used to destroy.
+    getUser.mockResolvedValue({ pending_plan: first });
+
+    const out = await propose.run('u1', { edits: [{ action: 'resize', activities: ['aaaaaaaa'], duration_min: 45 }] });
+    const [, second] = setPendingPlan.mock.calls[1]!;
+
+    expect(second.rationale).toMatch(/Move Box breathing practice/); // survived
+    expect(second.rationale).toMatch(/45 min/); // and the new one landed
+    expect(out).toMatch(/Added to the card already up/);
+
+    // The breathing move is still IN the activities, not just in the prose.
+    const sit = second.activities.find((a: { title: string }) => a.title === 'Box breathing practice');
+    expect(sit.recurrence).toBe('FREQ=WEEKLY;BYDAY=SU');
+  });
+
+  it('does not re-announce a standing card as new work when the second call achieves nothing', async () => {
+    await propose.run('u1', { edits: [{ action: 'move', activities: ['bbbbbbbb'], days: ['sunday'] }] });
+    const [, first] = setPendingPlan.mock.calls[0]!;
+    getUser.mockResolvedValue({ pending_plan: first });
+    setPendingPlan.mockClear();
+
+    // Already 40 min — a no-op against the standing proposal.
+    const out = await propose.run('u1', { edits: [{ action: 'resize', activities: ['aaaaaaaa'], duration_min: 40 }] });
+    expect(setPendingPlan).not.toHaveBeenCalled();
+    expect(out).toMatch(/already says all of this/);
+    expect(out).toMatch(/card already up is unchanged/);
+  });
+});
+
+/**
+ * An action this build cannot perform is REPORTED. `rename` was filtered out silently, twice in
+ * one call, while the coach told the owner she was renaming two commitments.
+ */
+describe('propose_plan_change — an action it has never heard of', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getActivePlan.mockResolvedValue({ plan_id: 'p1', version: 2 });
+    listGoalsByStatus.mockResolvedValue([{ goal_id: 'g1', title: 'Run a 10k' }]);
+    listActivities.mockResolvedValue([
+      {
+        activity_id: 'a1',
+        commitment_id: 'aaaaaaaa-1111-4111-8111-111111111111',
+        plan_id: 'p1',
+        title: 'Easy run',
+        kind: 'user',
+        schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU', duration_min: 40, time_of_day: '07:00' },
+        completion_source: 'self_report',
+        goal_id: 'g1',
+      },
+    ]);
+    getUser.mockResolvedValue({ pending_plan: null });
+  });
+
+  it('names an unknown action instead of dropping it in silence', async () => {
+    const out = await propose.run('u1', { edits: [{ action: 'explode', activities: ['aaaaaaaa'] }] });
+    expect(setPendingPlan).not.toHaveBeenCalled();
+    expect(out).toMatch(/no "explode" action/);
+    expect(out).toMatch(/Do NOT tell them those parts happened/);
+  });
+
+  it('still reports the unknown half when the rest of the call succeeds', async () => {
+    const out = await propose.run('u1', {
+      edits: [
+        { action: 'resize', activities: ['aaaaaaaa'], duration_min: 45 },
+        { action: 'teleport', activities: ['aaaaaaaa'] },
+      ],
+    });
+    expect(setPendingPlan).toHaveBeenCalledTimes(1);
+    expect(out).toMatch(/Apply button/);
+    expect(out).toMatch(/no "teleport" action/);
+  });
+
+  /** `rename` is the obvious word for a rework-with-a-title, so it is aliased rather than refused. */
+  it('understands rename as a rework', async () => {
+    const out = await propose.run('u1', {
+      edits: [{ action: 'rename', activities: ['aaaaaaaa'], title: 'Tuesday shakeout' }],
+    });
+    expect(out).not.toMatch(/no "rename" action/);
+    const [, pending] = setPendingPlan.mock.calls[0]!;
+    expect(pending.activities.find((a: { title: string }) => a.title === 'Tuesday shakeout')).toBeTruthy();
   });
 });
