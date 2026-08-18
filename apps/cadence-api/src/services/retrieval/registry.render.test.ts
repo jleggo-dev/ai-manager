@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { ProgressCard } from '@cadence/shared';
 
 vi.mock('../../repos/users.ts', () => ({ getUser: vi.fn() }));
-vi.mock('../../repos/goals.ts', () => ({ listGoalsByStatus: vi.fn() }));
+vi.mock('../../repos/goals.ts', () => ({ listGoalsByStatus: vi.fn(), listGoals: vi.fn() }));
 vi.mock('../../repos/equipment.ts', () => ({ listEquipment: vi.fn() }));
 vi.mock('../../repos/plans.ts', () => ({ getActivePlan: vi.fn() }));
 vi.mock('../../repos/activities.ts', () => ({ listActivities: vi.fn() }));
@@ -27,6 +27,9 @@ vi.mock('../nutrition-summarize.ts', async (orig) => {
 
 import { RETRIEVAL_FUNCTIONS } from './registry.ts';
 import { searchFoodsWithUsda } from '../food-sources/usda-enrich.ts';
+import { getActivePlan } from '../../repos/plans.ts';
+import { listActivities } from '../../repos/activities.ts';
+import { listGoals } from '../../repos/goals.ts';
 
 describe('retrieval registry — render / rows', () => {
   it('get_identity asks for a name when missing', () => {
@@ -60,15 +63,149 @@ describe('retrieval registry — render / rows', () => {
     expect(RETRIEVAL_FUNCTIONS.get_objectives!.description).not.toMatch(/locked/);
   });
 
-  it('get_active_plan omits when no plan', () => {
+  /**
+   * The plan read has to say WHEN — and has to say so when nobody has said when.
+   *
+   * Until 2026-08-17 the line was handle + kind + title + the raw recurrence rule, so a commitment
+   * whose `time_of_day` was NULL rendered identically to one at 07:00. The owner asked three times
+   * why his Tuesday run had no time on it; the coach could not see that anything was missing, so
+   * she never offered to fix it. Everything below is that read, one state at a time.
+   */
+  const commitment = (over: Record<string, unknown>) => ({
+    commitment_id: '8b8a10d0-1111-2222-3333-444455556666',
+    kind: 'user',
+    title: 'Easy run',
+    goal_id: 'g-move',
+    ...over,
+  });
+  const planRender = (activities: Array<Record<string, unknown>>, areaByGoal: Record<string, string> = {}) =>
+    RETRIEVAL_FUNCTIONS.get_active_plan!.render({ plan: { version: 2 }, activities, areaByGoal });
+
+  it('get_active_plan omits when there is no plan', () => {
     expect(RETRIEVAL_FUNCTIONS.get_active_plan!.render({ plan: null, activities: [] })).toBe('');
-    const text = RETRIEVAL_FUNCTIONS.get_active_plan!.render({
-      plan: { version: 2 },
-      activities: [{ kind: 'run', title: 'Easy run', schedule: { recurrence: '3x/week' } }],
-    });
+  });
+
+  it('a timed commitment reads day, clock time, the effort, and the time to set aside', () => {
+    const text = planRender(
+      [commitment({ schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU', time_of_day: '07:00', duration_min: 40 } })],
+      { 'g-move': 'movement' },
+    );
     expect(text).toContain('Current plan v2');
-    expect(text).toContain('Easy run');
-    expect(text).toContain('3x/week');
+    // `duration_min` is the EFFORT since the owner's ruling, so the number is named rather than
+    // left to be read as the whole slot, and the derived total says what to actually block out.
+    expect(text).toContain('  - 8b8a10d0 [user] Easy run — Tue · 07:00 · 40 min effort (allow 50)');
+  });
+
+  /** A choice someone made. It must not read like the hole below it. */
+  it('an "anytime" commitment reads as any time', () => {
+    const text = planRender(
+      [
+        commitment({
+          title: 'Evening sit',
+          goal_id: 'g-mind',
+          schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO,WE,FR', time_of_day: 'anytime', duration_min: 20 },
+        }),
+      ],
+      { 'g-mind': 'mind' },
+    );
+    expect(text).toContain('Evening sit — Mon, Wed, Fri · any time · 20 min effort (allow 25)');
+    expect(text).not.toContain('no time set');
+  });
+
+  /** The bug itself: a NULL time was invisible. It is now the loudest thing on the line. */
+  it('a commitment with no time at all says so, and stays distinct from "any time"', () => {
+    const text = planRender([commitment({ schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU', duration_min: 40 } })], {
+      'g-move': 'movement',
+    });
+    expect(text).toContain('Easy run — Tue · no time set · 40 min effort (allow 50)');
+    expect(text).not.toContain('any time');
+  });
+
+  it('an empty string is a hole too — a blank time is not a time', () => {
+    expect(
+      planRender([commitment({ schedule: { recurrence: 'FREQ=DAILY;INTERVAL=2', time_of_day: '  ' } })]),
+    ).toContain('Easy run — Every other day · no time set');
+  });
+
+  /**
+   * The recurrence rule is developer noise the coach can neither read reliably nor write back:
+   * `propose_plan_change` addresses days as words. `describeRecurrence` is the app's one humaniser
+   * and runs on the same parser that materializes the calendar, so nothing actionable is lost.
+   */
+  it('the raw recurrence rule never reaches the coach', () => {
+    const text = planRender([
+      commitment({ schedule: { recurrence: 'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO', time_of_day: '18:30' } }),
+    ]);
+    expect(text).not.toContain('FREQ=');
+    expect(text).not.toContain('BYDAY');
+    expect(text).toContain('Easy run — Every other week · Mon · 18:30');
+  });
+
+  it('two same-titled commitments are told apart by handle, day and time', () => {
+    const text = planRender([
+      commitment({ schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU' } }),
+      commitment({
+        commitment_id: 'c1d2e3f4-9999-8888-7777-666655554444',
+        schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=WE', time_of_day: '06:15' },
+      }),
+    ]);
+    expect(text).toContain('  - 8b8a10d0 [user] Easy run — Tue · no time set');
+    expect(text).toContain('  - c1d2e3f4 [user] Easy run — Wed · 06:15');
+  });
+
+  it('says nothing extra when there is nothing extra to say — no duration, no goal, no repeat', () => {
+    const text = planRender([
+      commitment({
+        title: 'Weigh in',
+        goal_id: undefined,
+        schedule: { recurrence: 'FREQ=DAILY', time_of_day: '07:30' },
+      }),
+      commitment({
+        commitment_id: 'ffffffff-0000-0000-0000-000000000000',
+        title: 'Off-plan',
+        kind: 'system',
+        schedule: { recurrence: '' },
+      }),
+    ]);
+    expect(text).toContain('Weigh in — Every day · 07:30');
+    expect(text).not.toContain('min effort');
+    // A blank rule never fires, so "One-time" would be a lie about the week.
+    expect(text).toContain('Off-plan — no repeat set · no time set');
+  });
+
+  /** The area lives on the GOAL, not the commitment, so the read has to resolve it or the derived
+   *  total is silently wrong — 20 minutes of sitting would be budgeted at 20, not 25. */
+  it('get_active_plan.run resolves each commitment area so the total is right', async () => {
+    vi.mocked(getActivePlan).mockResolvedValue({ plan_id: 'p1', version: 3 } as never);
+    vi.mocked(listActivities).mockResolvedValue([
+      commitment({
+        title: 'Evening sit',
+        goal_id: 'g-mind',
+        schedule: { recurrence: 'FREQ=DAILY', time_of_day: '21:00', duration_min: 20 },
+      }),
+    ] as never);
+    vi.mocked(listGoals).mockResolvedValue([{ goal_id: 'g-mind', area: 'mind' }] as never);
+
+    const result = await RETRIEVAL_FUNCTIONS.get_active_plan!.run('u1');
+    expect(RETRIEVAL_FUNCTIONS.get_active_plan!.render(result)).toContain(
+      'Evening sit — Every day · 21:00 · 20 min effort (allow 25)',
+    );
+    expect(RETRIEVAL_FUNCTIONS.get_active_plan!.rows(result)).toBe(1);
+  });
+
+  /** This runs on every turn. With no plan there is nothing for an area to belong to, so the
+   *  goals read must not happen at all. */
+  it('get_active_plan.run reads nothing else when there is no plan', async () => {
+    vi.mocked(getActivePlan).mockResolvedValue(null as never);
+    vi.mocked(listActivities).mockClear();
+    vi.mocked(listGoals).mockClear();
+    expect(await RETRIEVAL_FUNCTIONS.get_active_plan!.run('u1')).toEqual({
+      plan: null,
+      activities: [],
+      areaByGoal: {},
+    });
+    expect(listActivities).not.toHaveBeenCalled();
+    expect(listGoals).not.toHaveBeenCalled();
   });
 
   it('get_consistency omits when nothing scheduled', () => {
