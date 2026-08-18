@@ -8,15 +8,34 @@
  * refetch could never have changed that. Only the disc gradient and the ✓ badge were reading
  * status, so "done" was being reported by two visuals out of three.
  */
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { TodayTrail } from './TodayTrail.tsx';
-import type { PlanOccurrence, PlanViewData } from '../../lib/api.ts';
+import type { MealMacros, NutritionDayData, PlanOccurrence, PlanViewData } from '../../lib/api.ts';
 
-vi.mock('../../lib/api.ts', () => ({
-  getTodayBrief: () => Promise.resolve({ recap: null }),
-}));
-vi.mock('../nutrition/TrailFoodStrip.tsx', () => ({ TrailFoodStrip: () => <div /> }));
+/** Today's nutrition, as the trail's calorie card sees it. Reset to "nothing loaded" per test. */
+const nut = vi.hoisted(() => ({ day: null as NutritionDayData | null }));
+vi.mock('../../lib/query/index.ts', () => ({ useNutritionDay: () => ({ data: nut.day }) }));
 vi.mock('../../components/CoachFace.tsx', () => ({ CoachFace: () => <span /> }));
+
+beforeEach(() => {
+  nut.day = null;
+});
+
+function nutritionDay(targets: MealMacros | null, kcal: number): NutritionDayData {
+  return {
+    date: '2026-08-16',
+    meals: [],
+    totals: { kcal },
+    provisional_totals: {},
+    confirmed_count: 0,
+    provisional_count: 0,
+    targets,
+    left: null,
+    burn_kcal: 0,
+    eatback_kcal: 0,
+    eatback_pct: 0,
+  };
+}
 
 const occ = (over: Partial<PlanOccurrence> = {}): PlanOccurrence => ({
   occurrence_id: 'o1',
@@ -41,8 +60,8 @@ function plan(o: PlanOccurrence): PlanViewData {
 
 const ring = (c: HTMLElement) => c.querySelector('.trail-ring circle');
 
-function draw(o: PlanOccurrence) {
-  return render(<TodayTrail plan={plan(o)} onOpen={() => {}} onOpenFood={() => {}} onCoach={() => {}} />);
+function draw(o: PlanOccurrence, onOpenFood: () => void = () => {}) {
+  return render(<TodayTrail plan={plan(o)} onOpen={() => {}} onOpenFood={onOpenFood} onCoach={() => {}} />);
 }
 
 describe('TodayTrail step ring', () => {
@@ -82,5 +101,49 @@ describe('TodayTrail step ring', () => {
   it('keeps the ✓ badge it always had', () => {
     expect(draw(occ({ status: 'done' })).container.querySelector('.trail-check')).not.toBeNull();
     expect(draw(occ({ status: 'pending' })).container.querySelector('.trail-check')).toBeNull();
+  });
+});
+
+/**
+ * Calories moved into the day, under Cadence's face (Plan redesign 2a) — and the trail food strip
+ * that used to carry them is gone. The bay reads her line, her face, your number, and the card is
+ * the door to the Today's-food sheet.
+ */
+describe('TodayTrail calorie card', () => {
+  const card = (c: HTMLElement) => c.querySelector('.trail-cal');
+
+  it('shows the count against the target, under her face', () => {
+    nut.day = nutritionDay({ kcal: 1500 }, 1150);
+    const { container } = draw(occ());
+
+    expect(card(container)?.textContent).toContain('1,150 / 1,500');
+    expect(card(container)?.textContent).toContain('CALORIES');
+    // Last in the bay: her line, her face, then your number — never above the face.
+    expect(container.querySelector('.trail-bay')?.lastElementChild).toBe(card(container));
+  });
+
+  /**
+   * The gate is a real kcal target, not the truthiness of `targets` — the API hands back `{}` for
+   * someone who has never set any, and `{}` is truthy. No target, no card: the bay ends at the
+   * face rather than offering a ring with nothing to decode.
+   */
+  it('is absent for anyone not tracking calories', () => {
+    nut.day = nutritionDay({}, 420);
+    expect(card(draw(occ()).container)).toBeNull();
+
+    nut.day = nutritionDay(null, 420);
+    expect(card(draw(occ()).container)).toBeNull();
+
+    nut.day = null; // nothing loaded yet — still no empty state
+    expect(card(draw(occ()).container)).toBeNull();
+  });
+
+  it("opens the Today's-food sheet when tapped", () => {
+    nut.day = nutritionDay({ kcal: 1500 }, 1150);
+    const onOpenFood = vi.fn();
+    const { container } = draw(occ(), onOpenFood);
+
+    fireEvent.click(card(container)!);
+    expect(onOpenFood).toHaveBeenCalledTimes(1);
   });
 });
