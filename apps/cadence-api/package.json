@@ -15,7 +15,8 @@
     "cleanup:dev-accounts": "node --import tsx scripts/account.ts reset-all",
     "probe:backgrounded": "node --import tsx scripts/probe-backgrounded-phone.ts",
     "probe:replan": "node --import tsx scripts/probe-replan-preview.ts",
-    "eval:tools": "node --import tsx scripts/eval-tool-selection.ts"
+    "eval:tools": "node --import tsx scripts/eval-tool-selection.ts",
+    "eval:outcomes": "node --import tsx scripts/eval-outcomes.ts"
   },
   "dependencies": {
     "@ai-admin/core": "*",
