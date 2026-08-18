@@ -6692,3 +6692,120 @@ textarea.wiz-title {
 .ct-bubble .ct-doing {
   margin-top: 6px;
 }
+
+/* ── Detour bar + sheet (Plan Screen 2a, turn 2) ─────────────────────────────
+   One line of glass under the header replaces two full-width cards. The design's
+   whole point: "it announces, and the sheet behind the tap does the work" — the
+   cards pushed the first node of the plan off the screen to say what a sentence
+   says. Values are the mock's, verbatim. */
+.detour-bar {
+  margin-top: 9px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  background: oklch(100% 0 0 / 0.62);
+  border: 1px solid oklch(100% 0 0 / 0.85);
+  box-shadow: 0 2px 8px oklch(25% 0.05 265 / 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 11px;
+  padding: 7px 10px;
+  font: inherit;
+}
+/* Over a night stretch of the sky the same glass has to invert, or the bar is a
+   cream slab on navy — the seam the redesign exists to remove. */
+.detour-bar-dark {
+  background: oklch(100% 0 0 / 0.1);
+  border-color: oklch(100% 0 0 / 0.16);
+}
+.detour-bar-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--forest);
+}
+.detour-bar-line {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #3f4348;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.detour-bar-dark .detour-bar-line {
+  color: oklch(94% 0.02 250);
+}
+.detour-bar-chev {
+  flex: none;
+  font-size: 14px;
+  font-weight: 800;
+  color: #8b8d91;
+}
+.detour-bar-dark .detour-bar-chev {
+  color: oklch(78% 0.02 250);
+}
+.detour-sheet-h {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+.detour-sheet-h b {
+  font-size: 15.5px;
+  color: var(--text);
+}
+.detour-sheet-h span,
+.detour-sheet-kept span {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.detour-sheet-kept {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.detour-sheet-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+.detour-sheet-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.detour-sheet-check,
+.detour-sheet-resume {
+  flex: 1;
+  border-radius: 999px;
+  padding: 11px 14px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.detour-sheet-check {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+}
+.detour-sheet-resume {
+  background: var(--forest);
+  border: 1px solid var(--forest);
+  color: #fff;
+}
+.detour-sheet-check:disabled,
+.detour-sheet-resume:disabled {
+  opacity: 0.55;
+}
