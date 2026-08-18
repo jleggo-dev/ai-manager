@@ -426,6 +426,17 @@ function applyToOne(
     };
   }
 
+  /**
+   * EXPLICIT resize check, never a fallthrough. This used to be the bare tail of the function, so
+   * any action string the branches above did not name WAS a resize: a caller passing
+   * {"action":"rename", "duration_min":30} shrank the run to 30 minutes and reported it as a
+   * change. asEdits filters unknown actions before they get here, but this function is exported
+   * and that guard lives in a different file — a landmine behind someone else's fence is still a
+   * landmine (found by the plan-edit contract test, 2026-08-18).
+   */
+  if (edit.action !== 'resize') {
+    return { reject: `"${edit.action}" is not a change this engine knows how to make to ${found.title}.` };
+  }
   const mins = Number(edit.duration_min);
   if (!Number.isFinite(mins) || mins <= 0 || mins > 600) {
     return { reject: `Couldn't tell how long ${found.title} should be.` };

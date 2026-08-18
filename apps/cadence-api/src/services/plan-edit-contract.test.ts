@@ -209,7 +209,7 @@ const NAMES_NO_ACTION = new Set(['on_days']);
  * has to spend a second edit on it. Listing it here keeps that fix pinned; the real repair is one
  * sentence in the schema, after which this entry is redundant rather than wrong.
  */
-const READ_BUT_UNDECLARED = [{ action: 'rework', field: 'duration_min' }];
+const READ_BUT_UNDECLARED: Array<{ action: string; field: string }> = [];
 
 // ---------------------------------------------------------------------------------------------
 
@@ -323,7 +323,7 @@ describe('the plan-edit schema and the code that serves it', () => {
    * drift, `{"action": "rename", "duration_min": 30}` does not get refused; it silently changes
    * how long the session is.
    */
-  it.skip('refuses an action it does not recognise instead of treating it as a resize', () => {
+  it('refuses an action it does not recognise instead of treating it as a resize', () => {
     const r = applyPlanEdits(
       PLAN,
       [{ action: 'rename' as PlanEdit['action'], activities: [RUN_HANDLE], duration_min: 30 }],
