@@ -6,15 +6,16 @@
  * Each function knows how to run, render a compact section, and report a row count for
  * provenance.
  */
-import type { OccurrenceLog, ProgressCard } from '@cadence/shared';
+import { budgetNote, sessionBudget, type GoalArea, type OccurrenceLog, type ProgressCard } from '@cadence/shared';
 import { getUser } from '../../repos/users.ts';
-import { listGoalsByStatus } from '../../repos/goals.ts';
+import { listGoals, listGoalsByStatus } from '../../repos/goals.ts';
 import { listEquipment } from '../../repos/equipment.ts';
 import { getActivePlan } from '../../repos/plans.ts';
 import { listActivities } from '../../repos/activities.ts';
 import { listLoggedForProgress, listOccurrences, listRecentLogged } from '../../repos/occurrences.ts';
 import { buildProgress } from '../progress.ts';
-import { activityHandle } from '../plan-edit.ts';
+import { activityHandle, ANYTIME } from '../plan-edit.ts';
+import { describeRecurrence } from '../scheduling.ts';
 import { FOOD_HEALTH_FUNCTIONS } from './food-health-functions.ts';
 import { GET_NUTRITION } from './nutrition-facade.ts';
 import { isoRange, type RetrievalFunction } from './types.ts';
@@ -34,6 +35,46 @@ function changedWhen(plan: Record<string, unknown>): string {
   if (days === 1) return ' yesterday';
   if (days < 14) return ` ${days} days ago`;
   return ` ${Math.floor(days / 7)} weeks ago`;
+}
+
+/**
+ * WHEN a commitment happens, as one clause: the days, the time of day, and how long.
+ *
+ * Until 2026-08-17 this line carried the raw recurrence rule and nothing else — no time, and no
+ * sign when a commitment had none. Both cost a real conversation the same day: an "Easy run" whose
+ * `time_of_day` was NULL rendered exactly like one at 07:00, so when the owner asked three times
+ * why the time was not set, the coach could not see that anything was missing to offer to fix. And
+ * with two commitments both called "Easy run", the rule string was all that told them apart.
+ *
+ * THE RAW RRULE IS GONE, deliberately. `describeRecurrence` runs on the same `parseRecurrence` that
+ * `expandRecurrence` uses to materialize the calendar, so the humanized string is lossless about
+ * what the app actually honours — anything the description drops, the scheduler drops too, and
+ * printing the rest would tell her something untrue about the week. Nor is it an input she can use:
+ * `propose_plan_change` takes days as WORDS (`days: ["friday"]`), which is exactly this vocabulary.
+ * It was ~10 tokens of developer noise per commitment, on every turn, buying nothing.
+ */
+function commitmentWhen(schedule: unknown, area: GoalArea | undefined): string {
+  const s = (schedule ?? {}) as { recurrence?: unknown; time_of_day?: unknown; duration_min?: unknown };
+  const rrule = typeof s.recurrence === 'string' ? s.recurrence.trim() : '';
+  // A blank recurrence never fires (the per-plan off-plan bucket), so "One-time" would be a lie.
+  const days = rrule ? describeRecurrence(rrule) : 'no repeat set';
+  /**
+   * "No time set" and "any time" are DIFFERENT FACTS and must never render alike (plan-edit.ts):
+   * `anytime` is a decision someone made — this one floats — and a blank is a hole in the plan.
+   * Collapsing them IS the bug, because a hole that reads as a choice is a hole nobody offers to
+   * fill.
+   */
+  const t = typeof s.time_of_day === 'string' ? s.time_of_day.trim() : '';
+  const time = !t ? 'no time set' : t === ANYTIME ? 'any time' : t;
+  /**
+   * `duration_min` is the EFFORT since the owner's 2026-08-17 ruling, not the whole session, so a
+   * bare number is now ambiguous and gets named. `budgetNote` adds the time to actually set aside
+   * — the thing the owner said he wanted to know — and stays silent when the work needs no warm-up,
+   * so a meal log, or a commitment with no goal to take an area from, costs nothing extra.
+   */
+  const budget = sessionBudget(typeof s.duration_min === 'number' ? s.duration_min : null, area);
+  const effort = budget ? ` · ${budget.effort_min} min effort ${budgetNote(budget)}`.trimEnd() : '';
+  return `${days} · ${time}${effort}`;
 }
 
 /** The dossier core: who they are, what they're for, what the plan says, how it's going. */
@@ -84,17 +125,27 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_active_plan: {
     name: 'get_active_plan',
     description:
-      'The user\'s current plan: the sessions and habits they committed to, with how often each repeats (e.g. run — 3x per week), plus what they last asked to change about it and when. Use when you need what their week is SUPPOSED to look like, or when they refer to a change they already made ("I told you I\'m fine for dead hangs"); for whether they actually did it, use get_consistency.',
+      'The user\'s current plan: the sessions and habits they committed to, each with the days it repeats on, its time of day, and its length — "Easy run — Tue · 07:00 · 40 min effort (allow 50)" is a 40-min run at 7am Tuesdays, needing 50 minutes of their morning. "no time set" means none has been picked yet; say so and offer to. Also gives what they last asked to change and when. Use for what their week is SUPPOSED to look like; for whether they actually did it, use get_consistency.',
     domains: ['plans', 'activities'],
     async run(userId) {
       const plan = await getActivePlan(userId);
-      const activities = plan ? await listActivities(plan.plan_id) : [];
-      return { plan, activities };
+      if (!plan) return { plan: null, activities: [], areaByGoal: {} };
+      /**
+       * Two independent reads, issued together rather than one after the other, because this
+       * function runs on EVERY turn (coach-tool-tiers.ts `ALWAYS_READS`) and the goals are here
+       * only to resolve each commitment's AREA — the thing that turns the stored effort into the
+       * time to set aside. plan-view.ts resolves it the same way, for the same reason.
+       */
+      const [activities, goals] = await Promise.all([listActivities(plan.plan_id), listGoals(userId)]);
+      const areaByGoal: Record<string, GoalArea> = {};
+      for (const g of goals) if (g.area) areaByGoal[g.goal_id] = g.area;
+      return { plan, activities, areaByGoal };
     },
     render(r) {
-      const { plan, activities } = r as {
+      const { plan, activities, areaByGoal } = r as {
         plan: Record<string, unknown> | null;
         activities: Array<Record<string, unknown>>;
+        areaByGoal?: Record<string, GoalArea>;
       };
       if (!plan) return '';
       /**
@@ -104,9 +155,9 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
        * edit engine picked for her. A read that names a thing must hand back the way to name it.
        */
       const lines = activities.map((a) => {
-        const sched = a.schedule as { recurrence?: unknown } | undefined;
         const handle = activityHandle(String(a.commitment_id ?? ''));
-        return `  - ${handle} [${String(a.kind)}] ${String(a.title)} — ${sched?.recurrence ? String(sched.recurrence) : ''}`;
+        const area = typeof a.goal_id === 'string' ? areaByGoal?.[a.goal_id] : undefined;
+        return `  - ${handle} [${String(a.kind)}] ${String(a.title)} — ${commitmentWhen(a.schedule, area)}`;
       });
       // The steer is why this version exists, in the user's own words (0034). Without it a plan
       // adjusted through the "Custom — let's talk" sheet reaches chat as an unexplained different
