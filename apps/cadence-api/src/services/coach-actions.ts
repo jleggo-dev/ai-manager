@@ -414,7 +414,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         metrics: {
           type: 'object',
           description:
-            'The corrected numbers, e.g. {"distance_km": 5, "duration_min": 28} — these replace the old ones. Required unless not_done is true.',
+            'The corrected numbers, e.g. {"distance_km": 5} — name only the fields that were wrong; the rest keep their stored values. Required unless not_done is true.',
         },
         not_done: {
           type: 'boolean',
@@ -455,14 +455,24 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       }
 
       const raw = (params.metrics ?? {}) as Record<string, unknown>;
-      const value: Record<string, number> = {};
+      const named: Record<string, number> = {};
       for (const [k, v] of Object.entries(raw)) {
         const n = Number(v);
-        if (Number.isFinite(n) && Object.keys(value).length < 12) value[k.slice(0, 40)] = n;
+        if (Number.isFinite(n) && Object.keys(named).length < 12) named[k.slice(0, 40)] = n;
       }
-      if (!Object.keys(value).length) {
+      if (!Object.keys(named).length) {
         return 'No corrected numbers were given and it was not marked as missed, so nothing changed. Ask what the right numbers were.';
       }
+      /**
+       * A correction NAMES fields, and the fields it does not name survive — constraint-merge
+       * rule 1: nothing is dropped by silence. This used to hand `named` straight down, and
+       * `correctOccurrenceLog` sets the whole value column, so correcting a run's distance to
+       * 8 km erased its duration (the eval catch, correct-logged-distance — the same shape as
+       * the capture merge that once ate a whole equipment list). Merge here, corrections winning
+       * field by field, and rebuild the summary from the MERGED record, so both the stored
+       * summary and the reply below say what the row now says — all of it.
+       */
+      const value = { ...(found.value ?? {}), ...named };
       const summary = Object.entries(value)
         .map(([k, v]) => `${v} ${k.replace(/_/g, ' ')}`)
         .join(', ');

@@ -475,7 +475,12 @@ export async function deleteOccurrence(userId: string, occurrenceId: string): Pr
   await sql`delete from cadence.occurrences where user_id = ${userId} and occurrence_id = ${occurrenceId}`;
 }
 
-/** Replace a logged session's numbers and summary — a correction, not a new log. */
+/**
+ * Overwrite a logged session's columns — a correction, not a new log. Each field given is a
+ * whole-column jsonb SET, so callers pass the COMPLETE corrected value/log, merged with the
+ * stored row first: a correction that names one metric must not erase the others (see
+ * correct_log in coach-actions.ts, which owns that merge).
+ */
 export async function correctOccurrenceLog(
   userId: string,
   occurrenceId: string,

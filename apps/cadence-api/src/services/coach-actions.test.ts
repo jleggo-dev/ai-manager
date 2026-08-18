@@ -328,7 +328,7 @@ describe('correct_log', () => {
     ]);
   });
 
-  it('replaces the numbers and rewrites the summary to match', async () => {
+  it('corrects the named numbers and rewrites the summary to match', async () => {
     const out = await correct.run('u1', { activity: 'Easy run', date: '2026-08-12', metrics: { distance_km: 5 } });
     const [, id, fields] = correctOccurrenceLog.mock.calls[0]!;
     expect(id).toBe('o1');
@@ -337,6 +337,47 @@ describe('correct_log', () => {
     // The user's exact words are never overwritten by a correction.
     expect(fields.log.raw_text).toBe('ran 3k');
     expect(out).toMatch(/now reads/);
+  });
+
+  /**
+   * The eval finding (correct-logged-distance): the coach corrected a run's distance to 8 km and
+   * the stored log LOST its duration, because the correction's metrics replaced the whole value
+   * column. A correction NAMES fields; the fields it does not name survive — constraint-merge
+   * rule 1, nothing is dropped by silence. And what the tool reports back is the whole record as
+   * it now stands, not just the fields that moved.
+   */
+  it('keeps the metrics the correction did not name', async () => {
+    listLoggedForCorrection.mockResolvedValue([
+      {
+        occurrence_id: 'o3',
+        date: '2026-08-14',
+        title: 'Long run',
+        status: 'done',
+        value: { distance_km: 5, duration_min: 28, avg_hr: 152 },
+        recurrence: 'FREQ=WEEKLY;BYDAY=FR',
+        log: { items: [], summary: '5 km in 28 min', raw_text: 'ran 5k in 28', logged_at: '2026-08-14T07:00:00Z' },
+      },
+    ]);
+    const out = await correct.run('u1', { activity: 'Long run', metrics: { distance_km: 8 } });
+    const [, id, fields] = correctOccurrenceLog.mock.calls[0]!;
+    expect(id).toBe('o3');
+    expect(fields.value).toEqual({ distance_km: 8, duration_min: 28, avg_hr: 152 });
+    // The stored summary and the reply both say what the record NOW says — all of it.
+    expect(fields.log.summary).toContain('8 distance km');
+    expect(fields.log.summary).toContain('28 duration min');
+    expect(out).toContain('28 duration min');
+  });
+
+  it('still writes only the named fields when the record had no stored numbers', async () => {
+    listLoggedForCorrection.mockResolvedValue([
+      { occurrence_id: 'o4', date: '2026-08-13', title: 'Sit', status: 'done', value: null, log: null, recurrence: '' },
+    ]);
+    await correct.run('u1', { activity: 'Sit', metrics: { duration_min: 10 } });
+    const [, id, fields] = correctOccurrenceLog.mock.calls[0]!;
+    expect(id).toBe('o4');
+    expect(fields.value).toEqual({ duration_min: 10 });
+    // No log existed, so none is invented — the value column carries the correction alone.
+    expect(fields.log).toBeUndefined();
   });
 
   it('un-counts a SCHEDULED session that did not happen, keeping the slot', async () => {

@@ -460,6 +460,10 @@ export const SCENARIOS: OutcomeScenario[] = [
       if (run.status !== 'done') return [`the run's status became "${run.status}" — a metric fix must keep it done`];
       const km = Number(run.value?.distance_km);
       if (km !== 8) return [`stored distance_km is ${String(run.value?.distance_km)}, expected 8`];
+      // The judge caught this once; now the assert holds it: a distance-only correction must not
+      // erase the metrics it did not name (constraint-merge rule 1 — nothing dropped by silence).
+      if (Number(run.value?.duration_min) !== 31)
+        return [`stored duration_min is ${String(run.value?.duration_min)} — the correction named only distance`];
       return [];
     },
   },
