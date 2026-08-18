@@ -1,86 +1,93 @@
+import { useRef, useState } from 'react';
 import { useTodayHeader } from './useTodayHeader.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { QuietHoursChip } from './QuietHoursChip.tsx';
+import { WeatherSheet } from './WeatherSheet.tsx';
+import { isNightHour, useSkyTint } from './skyTint.ts';
+import { useQuietChipUp } from './useQuietChipUp.ts';
+import { wxEmoji, wxLine } from './weatherCopy.ts';
 
 /**
- * The top header for the Today/Week surface (redesign) — pinned ABOVE the Today/Week switch.
- * Left: the coach mark. Middle: current weather (conditions · temp) with the detected city + a
- * CHANGE affordance beneath it; when there's no location yet it collapses to a plain "Set location"
- * prompt (never a fabricated place). Right: the streak and XP pills. Weather/location come from
- * `useTodayHeader` (auto-detect on first load); `streak`/`xp` are passed from the loaded plan.
+ * The Plan header (frame 2a) — a band that FLOATS on the trail and takes the sky's own colour.
  *
- * The identity chip is the coach's face once one has been picked, and the Metronome Split mark
- * until then (`CoachFace` handles both, so there is no branch here). It was a bespoke leaf glyph
- * that appears in no brand document — a third mark competing with the sunrise arch it sat beside,
- * and then with Metronome Split.
+ * It used to sit above the scroller, which is how a cream header came to meet a navy trail at nine
+ * at night: the sky belonged to the day and the chrome belonged to the app. Now it overlays the
+ * trail and samples the sky's lightness at its own scroll position (`useSkyTint`), so it is cream
+ * over a cream stretch and deep indigo over a night one, with a 14px fade underneath instead of a
+ * hard edge. Opaque, deliberately — a translucent band let trail labels and the coach bubble ghost
+ * through the chrome, which is worse than the seam it was meant to solve.
+ *
+ * What it carries is now four things: the coach mark, one line of weather, the quiet-hours chip
+ * from early evening, and streak + XP. Location, city and CHANGE moved into the weather sheet the
+ * chip opens — they were four lines of text to say one thing.
+ *
+ * The Apple Weather trademark stays HERE, under the temperature, even though the link to Apple's
+ * data-source page moved into the sheet: Apple asks for the mark wherever WeatherKit data is
+ * shown, and one screen away has been enough to fail review.
+ *
+ * With no location at all there is no chip and so no door — the header keeps the plain
+ * "Set location" prompt in that case, never a fabricated place.
  */
-
-const cap = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-
-function wxEmoji(conditions: string): string {
-  const c = conditions.toLowerCase();
-  if (/snow|sleet/.test(c)) return '❄️';
-  if (/thunder|storm/.test(c)) return '⛈️';
-  if (/rain|drizzle|shower/.test(c)) return '🌧️';
-  if (/cloud|overcast/.test(c)) return '☁️';
-  if (/clear|sun/.test(c)) return '☀️';
-  if (/fog|mist|haze|smoke/.test(c)) return '🌫️';
-  return '🌤️';
-}
-
-export function TrailHeader({ streak, xp }: { streak: number; xp: number }) {
+export function TrailHeader({ streak, xp, now = new Date() }: { streak: number; xp: number; now?: Date }) {
   const { weather, city, locating, requestLocation } = useTodayHeader();
+  const head = useRef<HTMLDivElement>(null);
+  const night = isNightHour(now.getHours());
+  const dark = useSkyTint(head, night);
+  const quietUp = useQuietChipUp(now);
+  const [forecast, setForecast] = useState(false);
   const wx = weather?.available ? weather : null;
 
   return (
-    <div className="thead">
-      <CoachFace size={36} className="thead-avatar" />
+    <>
+      <div ref={head} className={`thead${dark ? ' is-night' : ''}`}>
+        <CoachFace size={36} className="thead-avatar" />
 
-      <div className="thead-main">
-        {wx ? (
-          <>
-            <b className="thead-wx">
-              <span aria-hidden>{wxEmoji(wx.conditions ?? '')}</span> {cap(wx.conditions ?? '')} · {wx.temp_c}°
-            </b>
-            <button className="thead-loc" type="button" onClick={requestLocation}>
-              <span aria-hidden>📍</span> {city ?? 'Weather nearby'} <i>· CHANGE</i>
+        <div className="thead-main">
+          {wx ? (
+            <button className="thead-wxbtn" type="button" onClick={() => setForecast(true)}>
+              <b className="thead-wx">
+                <span aria-hidden>{wxEmoji(wx.conditions ?? '', night)}</span>{' '}
+                {wxLine(wx.conditions, wx.temp_c, quietUp)}
+              </b>
+              {wx.attribution && <span className="thead-attr">{wx.attribution.name} ›</span>}
             </button>
-            {/* Licence obligation, not a credit line: Apple requires the Apple Weather mark plus a
-                link to their data-source page wherever WeatherKit data is shown. Driven by the
-                snapshot's own `attribution`, so an OWM fallback response renders nothing. */}
-            {wx.attribution && (
-              <a
-                className="thead-attr"
-                href={wx.attribution.url}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {wx.attribution.name}
-              </a>
-            )}
-          </>
-        ) : (
-          <button className="thead-set" type="button" onClick={requestLocation}>
-            <span aria-hidden>📍</span> {locating ? 'Locating…' : 'Set location for weather'}
-          </button>
-        )}
+          ) : (
+            <button className="thead-set" type="button" onClick={requestLocation}>
+              <span aria-hidden>📍</span> {locating ? 'Locating…' : 'Set location for weather'}
+            </button>
+          )}
+        </div>
+
+        <div className="thead-pills">
+          {/* From early evening: when the coach stops talking tonight, and one tap to move it. */}
+          <QuietHoursChip now={now} />
+          {streak > 0 && (
+            <div className="thead-pill thead-streak" aria-label={`${streak} day streak`}>
+              <span aria-hidden>🔥</span>
+              {streak}
+            </div>
+          )}
+          <div className="thead-pill thead-xp" aria-label={`${xp} points`}>
+            <span aria-hidden>⭐</span>
+            {xp}
+          </div>
+        </div>
+
+        {/* The band's bottom edge, softened into the sky rather than ruled against it. */}
+        <span className="thead-fade" aria-hidden />
       </div>
 
-      <div className="thead-pills">
-        {/* From early evening: when the coach stops talking tonight, and one tap to move it. */}
-        <QuietHoursChip />
-        {streak > 0 && (
-          <div className="thead-pill thead-streak" aria-label={`${streak} day streak`}>
-            <span aria-hidden>🔥</span>
-            {streak}
-          </div>
-        )}
-        <div className="thead-pill thead-xp" aria-label={`${xp} points`}>
-          <span aria-hidden>⭐</span>
-          {xp}
-        </div>
-      </div>
-    </div>
+      {/* Outside the band on purpose: `.thead` is positioned now, and a sheet inside it would rise
+          from the header's own bottom edge instead of the bottom of the screen. */}
+      {forecast && wx && (
+        <WeatherSheet
+          weather={wx}
+          city={city}
+          night={night}
+          onChangeLocation={requestLocation}
+          onClose={() => setForecast(false)}
+        />
+      )}
+    </>
   );
 }
