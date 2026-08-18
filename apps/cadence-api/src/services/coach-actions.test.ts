@@ -740,3 +740,144 @@ describe('propose_plan_change — an action it has never heard of', () => {
     expect(pending.activities.find((a: { title: string }) => a.title === 'Tuesday shakeout')).toBeTruthy();
   });
 });
+
+/**
+ * The inverse of the card that ate the other card: the card that could not be UN-eaten.
+ *
+ * Accumulation fixed "second call destroys the first" and created this, live on 2026-08-18: asked
+ * for Wednesday-only stretching the coach added "Stretching — Mon, Wed, Fri", noticed, said "let
+ * me redo it properly" — and the redo added BESIDE the mistake, so the card ended holding both
+ * adds and no call could make it hold less. `start_over` is the third door: drop the standing
+ * card first, then compute ONLY this call's edits against the committed plan.
+ */
+describe('propose_plan_change — start_over redoes the card instead of adding beside it', () => {
+  const WRONG_ADD = { action: 'add', title: 'Stretching', days: ['mon', 'wed', 'fri'], time_of_day: '07:00' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getActivePlan.mockResolvedValue({ plan_id: 'p1', version: 2 });
+    listGoalsByStatus.mockResolvedValue([{ goal_id: 'g1', title: 'Run a 10k' }]);
+    listActivities.mockResolvedValue([
+      {
+        activity_id: 'a1',
+        commitment_id: 'aaaaaaaa-1111-4111-8111-111111111111',
+        plan_id: 'p1',
+        title: 'Easy run',
+        kind: 'user',
+        schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU', duration_min: 40, time_of_day: '07:00' },
+        completion_source: 'self_report',
+        goal_id: 'g1',
+      },
+    ]);
+    getUser.mockResolvedValue({ pending_plan: null });
+  });
+
+  /** The live incident, replayed with the fix: one call, and the card holds ONLY the correction. */
+  it('replaces the wrong card with one holding only the corrected edits', async () => {
+    await propose.run('u1', { edits: [WRONG_ADD] });
+    const [, wrong] = setPendingPlan.mock.calls[0]!;
+    expect(wrong.rationale).toBe('Add Stretching — Mon, Wed, Fri, 07:00');
+    getUser.mockResolvedValue({ pending_plan: wrong });
+    setPendingPlan.mockClear();
+
+    const out = await propose.run('u1', {
+      start_over: true,
+      edits: [{ action: 'add', title: 'Stretching', days: ['wednesday'], time_of_day: '07:00' }],
+    });
+
+    // Cleared BEFORE applying — the same null the dismiss route writes — then the fresh card.
+    expect(setPendingPlan.mock.calls[0]).toEqual(['u1', null]);
+    const [, redone] = setPendingPlan.mock.calls[1]!;
+    expect(redone.rationale).toBe('Add Stretching — Wed, 07:00');
+    const stretches = redone.activities.filter((a: { title: string }) => a.title === 'Stretching');
+    expect(stretches).toHaveLength(1);
+    expect(stretches[0].recurrence).toBe('FREQ=WEEKLY;BYDAY=WE');
+    expect(out).toMatch(/Redone — the old card is gone/);
+    expect(out).toMatch(/ONLY this/);
+    expect(out).not.toMatch(/Mon, Wed, Fri/);
+  });
+
+  it('clears the card and says so when start_over comes with no edits', async () => {
+    getUser.mockResolvedValue({
+      pending_plan: {
+        activities: [{ title: 'Stretching' }],
+        note: '',
+        rationale: 'Add Stretching — Mon, Wed, Fri, 07:00',
+        goal_ids: [],
+        created_at: 'x',
+      },
+    });
+    const out = await propose.run('u1', { start_over: true, edits: [] });
+    expect(setPendingPlan).toHaveBeenCalledWith('u1', null);
+    expect(out).toMatch(/Cleared — the proposal card is gone/);
+    expect(out).toMatch(/plan itself is untouched/);
+  });
+
+  it('says there was nothing to clear when no card is up', async () => {
+    const out = await propose.run('u1', { start_over: true, edits: [] });
+    expect(out).toMatch(/no proposal card up/);
+  });
+
+  /** The user asked for the wrong card to GO; a failed redo must not quietly resurrect it. */
+  it('does not leave the wrong card standing when the redo itself fails', async () => {
+    await propose.run('u1', { edits: [WRONG_ADD] });
+    const [, wrong] = setPendingPlan.mock.calls[0]!;
+    getUser.mockResolvedValue({ pending_plan: wrong });
+    setPendingPlan.mockClear();
+
+    // The corrected add forgets its time — rejected, so nothing fresh lands.
+    const out = await propose.run('u1', {
+      start_over: true,
+      edits: [{ action: 'add', title: 'Stretching', days: ['wednesday'] }],
+    });
+    expect(setPendingPlan).toHaveBeenCalledTimes(1);
+    expect(setPendingPlan).toHaveBeenCalledWith('u1', null);
+    expect(out).toMatch(/old card WAS cleared/);
+    expect(out).toMatch(/no card is up at all now/);
+  });
+
+  /** Surgery on the card without a reset: a wrong add comes OFF by handle, the rest stays. */
+  it('can take a wrong add off the standing card by its new1 handle', async () => {
+    await propose.run('u1', {
+      edits: [{ action: 'move', activities: ['aaaaaaaa'], days: ['friday'] }, WRONG_ADD],
+    });
+    const [, first] = setPendingPlan.mock.calls[0]!;
+    getUser.mockResolvedValue({ pending_plan: first });
+    setPendingPlan.mockClear();
+
+    const out = await propose.run('u1', { edits: [{ action: 'remove', activities: ['new1'] }] });
+    const [, second] = setPendingPlan.mock.calls[0]!;
+    expect(second.activities.map((a: { title: string }) => a.title)).toEqual(['Easy run']);
+    expect(second.rationale).toMatch(/Drop Stretching/);
+    // The earlier real change survives — this is one edit off the card, not a reset.
+    expect(second.rationale).toMatch(/Move Easy run/);
+    expect(out).toMatch(/Added to the card already up/);
+  });
+
+  it('still accumulates when start_over is false or absent', async () => {
+    await propose.run('u1', {
+      edits: [{ action: 'add', title: 'Stretching', days: ['wednesday'], time_of_day: '07:00' }],
+    });
+    const [, first] = setPendingPlan.mock.calls[0]!;
+    getUser.mockResolvedValue({ pending_plan: first });
+
+    const out = await propose.run('u1', {
+      start_over: false,
+      edits: [{ action: 'resize', activities: ['aaaaaaaa'], duration_min: 45 }],
+    });
+    const [, second] = setPendingPlan.mock.calls[1]!;
+    expect(second.rationale).toMatch(/Add Stretching — Wed, 07:00/);
+    expect(second.rationale).toMatch(/45 min/);
+    expect(out).toMatch(/Added to the card already up/);
+  });
+
+  it('teaches the redo in the schema, not just in code', () => {
+    const def = coachActionDefinitions().find((d) => d.function.name === 'propose_plan_change')!;
+    expect(def.function.description).toMatch(/"start_over"/);
+    expect(def.function.description).toMatch(/never add a fix beside it/);
+    const props = (def.function.parameters as { properties: Record<string, { type?: string; description?: string }> })
+      .properties;
+    expect(props.start_over!.type).toBe('boolean');
+    expect(props.start_over!.description).toMatch(/ONLY this call/);
+  });
+});

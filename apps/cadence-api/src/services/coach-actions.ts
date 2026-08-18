@@ -71,7 +71,7 @@ const EDIT_SCHEMA = {
         type: 'array',
         items: { type: 'string' },
         description:
-          'WHICH commitments, by the handles get_active_plan prints (e.g. ["a3f19c2b","5d01f807"]). Several in one edit is how you change every run at once. Not used for add.',
+          'WHICH commitments, by the handles get_active_plan prints (e.g. ["a3f19c2b","5d01f807"]). Several in one edit is how you change every run at once. Not used for add. A commitment this call or the standing card created is "new1", "new2"… in card order — address it by that until the card is applied.',
       },
       activity: {
         type: 'string',
@@ -165,7 +165,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   propose_plan_change: {
     name: 'propose_plan_change',
     description:
-      'Propose a change to the plan they already have — move a session to other days, retime, resize, drop, add one, or rework what one CONTAINS. This does NOT change anything: it works out the resulting week and shows a card with an Apply button, so the plan moves only when they tap. Use it the moment they name a change, in the same reply; never claim it is done before the tap. Read get_active_plan first — it prints a handle beside every commitment, and edits address them BY handle. One edit can carry several, so "make all my runs 45 minutes" is ONE edit. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b", "5d01f807"], "duration_min": 45}]}. A whole rebuild is the build card instead.',
+      'Propose a change to the plan they already have — move a session to other days, retime, resize, drop, add one, or rework what one CONTAINS. This does NOT change anything: it shows the resulting week on a card with an Apply button, so the plan moves only when they tap. Use it the moment they name a change, in the same reply; never claim it is done before the tap. Read get_active_plan first — edits address commitments BY the handles it prints, and one edit can carry several. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45}]}. Calling again ADDS to the card already up; if that card holds a mistake, never add a fix beside it — redo with "start_over": true and ONLY the corrected edits. A whole rebuild is the build card instead.',
     parameters: {
       properties: {
         edits: EDIT_SCHEMA,
@@ -174,15 +174,33 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           description:
             'The version get_active_plan reported. Handles keep working across versions; this only stops a TITLE-addressed edit landing on a plan that moved. Omit if you did not read it.',
         },
+        start_over: {
+          type: 'boolean',
+          description:
+            'True = the standing card is wrong: discard it first, then build a fresh card from the committed plan out of ONLY this call\'s edits. With an empty "edits" it just clears the card and proposes nothing. Omit or pass false to keep adding to the card already up.',
+        },
       },
       required: ['edits'],
     },
     async run(userId, params) {
+      const startOver = params.start_over === true;
       const { edits, unknown } = asEdits(params.edits);
       const unknownNote = unknown.length
         ? `\nNOT DONE — this build has no "${unknown.join('", "')}" action. The actions are: ${PLAN_EDIT_ACTIONS.join(', ')}. To rename a commitment use rework with a title. Do NOT tell them those parts happened.`
         : '';
       if (!edits.length) {
+        /**
+         * start_over with nothing else IS a complete request: scrap the card. The same clear the
+         * user's own "Not now" tap runs (routes/plan.ts pending-change/dismiss) — the plan itself
+         * is never touched by it.
+         */
+        if (startOver) {
+          const hadCard = !!(await getUser(userId))?.pending_plan;
+          await setPendingPlan(userId, null);
+          return hadCard
+            ? `Cleared — the proposal card is gone and no card is up now; their plan itself is untouched. Tell them it is scrapped, and propose the corrected change whenever they name it.${unknownNote}`
+            : `There was no proposal card up, so there was nothing to clear. Their plan is untouched.${unknownNote}`;
+        }
         return `No usable changes were given, so nothing was proposed. Ask what they want changed.${unknownNote}`;
       }
 
@@ -224,8 +242,18 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
        * Accumulating is what she plainly meant: two things she said she would change, both on one
        * card. A proposal only disappears when the user applies it or taps Not now, both of which
        * clear `pending_plan` — so there is no stale-proposal case to age out here.
+       *
+       * …unless the card itself is the mistake. Accumulate-only created the inverse trap (live,
+       * 2026-08-18): asked for Wednesday-only stretching she added "Stretching — Mon, Wed, Fri",
+       * noticed, said "let me redo it properly" — and the redo ADDED beside the wrong add, so the
+       * card ended holding both. `start_over` is the third door: drop the standing card BEFORE
+       * applying, so this call's edits are computed against the committed plan alone. Dropped
+       * even if every corrected edit then fails — the user asked for the wrong card to go, and a
+       * failed redo must not quietly resurrect it.
        */
-      const pending = me?.pending_plan;
+      const hadCard = !!me?.pending_plan;
+      if (startOver && hadCard) await setPendingPlan(userId, null);
+      const pending = startOver ? undefined : me?.pending_plan;
       const carried = pending?.activities?.length ? pending.activities : undefined;
       const priorChanges = carried ? (pending?.rationale ?? '').split('\n').filter(Boolean) : [];
 
@@ -261,7 +289,11 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       if (!fresh.length) {
         const standing = priorChanges.length
           ? [`The card already up is unchanged and still shows: ${priorChanges.join('; ')}.`]
-          : [];
+          : startOver && hadCard
+            ? [
+                'The old card WAS cleared (start_over), so no card is up at all now — say so, and re-propose once you have the right change.',
+              ]
+            : [];
         if (noops.length && !rejected.length) {
           return [
             'Nothing was proposed, because the plan already says all of this:',
@@ -301,7 +333,9 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       return [
         priorChanges.length
           ? 'Added to the card already up — it now shows ALL of this, with one Apply button:'
-          : 'Proposed — the user now has a card showing exactly this, with an Apply button:',
+          : startOver && hadCard
+            ? 'Redone — the old card is gone; the user now has a card showing ONLY this, with an Apply button:'
+            : 'Proposed — the user now has a card showing exactly this, with an Apply button:',
         ...changes.map((c) => `- ${c}`),
         // Say it moved, so she describes the week that exists rather than the one she read.
         ...(moved
