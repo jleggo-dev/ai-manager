@@ -64,6 +64,15 @@ export async function updateNutritionLog(
   return out ?? null;
 }
 
+/** How many distinct days in [fromDate, toDate] have at least one meal logged. One count, no rows —
+ *  this runs on every Plan render for a user with no targets yet (the 7-day countdown). */
+export async function countNutritionDays(userId: string, fromDate: string, toDate: string): Promise<number> {
+  const [r] = await sql<{ n: number }[]>`
+    select count(distinct date)::int as n from cadence.nutrition_logs
+    where user_id = ${userId} and date >= ${fromDate} and date <= ${toDate}`;
+  return r?.n ?? 0;
+}
+
 /** Meals in [fromDate, toDate], newest first (date, then entry time). Dual-keyed on user_id. */
 export async function listNutritionLogs(userId: string, fromDate: string, toDate: string): Promise<NutritionLog[]> {
   return sql<NutritionLog[]>`

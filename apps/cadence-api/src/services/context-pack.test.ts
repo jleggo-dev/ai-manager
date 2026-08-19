@@ -56,6 +56,7 @@ vi.mock('./coach-context.ts', () => ({
   intentFraming: (intent: string, topic?: string) => `== SESSION INTENT: ${intent}${topic ? ` / ${topic}` : ''} ==`,
   onboardingReadiness: vi.fn(async () => ''),
   planGapNote: vi.fn(async () => ''),
+  targetlessGoalNote: vi.fn(async () => ''),
 }));
 
 import { buildContextPack } from './context-pack.ts';

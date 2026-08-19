@@ -43,14 +43,31 @@ export function isDevMode(): boolean {
   return new URLSearchParams(window.location.search).get('dev') === '1';
 }
 
+/**
+ * The browser's IANA zone, on every request.
+ *
+ * The server decides "today" for the whole Plan screen, and it used UTC — so at 20:41 on a
+ * Tuesday in Montreal it served Wednesday, label and occurrences both. The stored timezone fixes
+ * that for anyone who has one; 94 of 96 rows do not, and this is how they get one without asking.
+ */
+function tzHeader(): Record<string, string> {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz ? { 'X-Cadence-Timezone': tz } : {};
+  } catch {
+    return {};
+  }
+}
+
 export function headers(): HeadersInit {
   // Dev mode → identify as a named dev account (no real auth). Otherwise → the Supabase JWT.
   // Sending only one keeps the backend's two paths unambiguous.
   if (isDevMode()) {
-    return { 'Content-Type': 'application/json', 'X-Cadence-Dev-User': getDevAccount() };
+    return { 'Content-Type': 'application/json', 'X-Cadence-Dev-User': getDevAccount(), ...tzHeader() };
   }
   return {
     'Content-Type': 'application/json',
+    ...tzHeader(),
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
   };
 }

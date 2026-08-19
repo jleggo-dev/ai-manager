@@ -11,7 +11,7 @@
  * mode) and injected as the end-of-prefix context turn.
  */
 import type { CoachIntent, CoachTopic } from './coach-context.ts';
-import { intentFraming, onboardingReadiness, planGapNote } from './coach-context.ts';
+import { intentFraming, onboardingReadiness, planGapNote, targetlessGoalNote } from './coach-context.ts';
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 import { validateCalls, executeCalls, type FnCall } from './retrieval/select-and-run.ts';
 import { renderCatalogDoc } from './retrieval/catalog.ts';
@@ -180,6 +180,10 @@ export async function buildContextPack(
   if (intent !== 'onboarding') {
     const gap = await planGapNote(userId).catch(() => '');
     if (gap) results.plan_gap = gap;
+    // Same standing as the plan gap: a weight goal with no number, and a calorie target still
+    // being earned, stay in front of the coach until they are resolved (owner 2026-08-18).
+    const numbers = await targetlessGoalNote(userId).catch(() => '');
+    if (numbers) results.nutrition_numbers_gap = numbers;
   }
 
   // 3. SUMMARIZE — Broker, with deterministic fallback.

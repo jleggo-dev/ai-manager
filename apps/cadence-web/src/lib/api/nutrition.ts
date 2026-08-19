@@ -43,6 +43,8 @@ export interface NutritionDayData {
   burn_kcal: number; // estimated exercise burn from today's done workouts
   eatback_kcal: number; // the eaten-back share added to the kcal allowance
   eatback_pct: number; // 0–100 setting
+  /** Set while a goal WANTS a calorie target and none exists yet: the 7-day countdown. */
+  targets_wait?: { days_logged: number; days_needed: number } | null;
 }
 
 /** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. */

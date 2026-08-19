@@ -10,6 +10,7 @@ import { ensureHorizon } from './plan-horizon.ts';
 import { describeRecurrence } from './scheduling.ts';
 import { rollingConsistency } from './metrics.ts';
 import { evaluateStreak } from './streak.ts';
+import { planDayBase } from './plan-day.ts';
 
 const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -88,7 +89,12 @@ const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10)
  * first so the week is always materialized, then groups this week's occurrences by day and reports
  * rolling-window consistency (days you showed up, never a streak that resets).
  */
-export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanView> {
+export async function buildPlanView(
+  userId: string,
+  weekDays = 7,
+  /** The caller's own zone, used only when the user has none stored — 94 of 96 rows today. */
+  tzHint?: string | null,
+): Promise<PlanView> {
   await ensureHorizon(userId).catch(() => {
     /* best-effort top-up; view still renders from what's materialized */
   });
@@ -132,8 +138,24 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
   const activities = await listActivities(plan.plan_id);
   const actById = new Map(activities.map((a) => [a.activity_id, a]));
 
+  /**
+   * Which day is "today" — in the USER's zone, not the server's.
+   *
+   * This was `Date.UTC(now.getUTC*)`, so the whole screen rolled over at UTC midnight. In Montreal
+   * (UTC-4) that is 20:00 local: on 2026-08-18 the owner's demo showed TODAY · WED 19 AUG at
+   * 20:41 on a Tuesday. The label was the visible half; the costly half is right here — `base`
+   * also sets the from/to that fetch occurrences, so after 8pm every evening the trail quietly
+   * showed TOMORROW'S plan and called it today. Anything logged against "today" from that screen
+   * landed on the wrong date.
+   *
+   * The zone is the stored one, else what the client told us this request (`tzHint`), else UTC.
+   * UTC last and only as a floor: it is right for nobody in particular, but it is deterministic
+   * and it is what the rest of the horizon machinery already assumes.
+   */
+  const user = await getUser(userId);
+  const timezone = user?.timezone ?? null;
   const now = new Date();
-  const base = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const base = planDayBase(now, timezone, tzHint);
   const days: PlanViewDay[] = [];
   for (let i = 0; i < weekDays; i++) {
     const d = new Date(base + i * 86_400_000);
@@ -173,7 +195,6 @@ export async function buildPlanView(userId: string, weekDays = 7): Promise<PlanV
   // Rolling-window consistency over the LAST 7 days (days with ≥1 completion).
   const past = await listOccurrences(userId, iso(new Date(base - 6 * 86_400_000)), iso(new Date(base)));
   const { kept, window } = rollingConsistency(past, now, 7);
-  const user = await getUser(userId);
 
   // Resolve goal links so the card can group "Toward <goal>" and colour by area without a second fetch.
   const goalById = new Map((await listGoals(userId)).map((g) => [g.goal_id, g]));
