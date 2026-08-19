@@ -98,3 +98,43 @@ describe('AuthScreen compact (plan-card gate)', () => {
     expect(screen.getByRole('button', { name: 'Signup and we’ll tailor it →' })).toBeInTheDocument();
   });
 });
+
+/**
+ * The aimed sign-in (expired session, known account). The generic sheet is what let the owner tap
+ * Apple on a Google+email account and mint a fresh user — "restarts onboarding" (2026-08-19).
+ * Aimed, the screen leads with their name and their way in; the other doors exist behind one line
+ * that says plainly they may open a different account.
+ */
+describe('AuthScreen aimed at a known account', () => {
+  it('leads with the name and the way they signed in before', () => {
+    render(<AuthScreen resume={{ email: 'j@x.com', name: 'Jeff', providers: ['google'] }} />);
+    expect(screen.getByText('Welcome back, Jeff.')).toBeTruthy();
+    expect(screen.getByText(/Last time you signed in with Google/)).toBeTruthy();
+  });
+
+  it('shows only their provider until they ask for a different way', () => {
+    render(<AuthScreen resume={{ email: 'j@x.com', name: 'Jeff', providers: ['google'] }} />);
+    expect(screen.getByText('Continue with Google')).toBeTruthy();
+    expect(screen.queryByText('Continue with Apple')).toBeNull();
+
+    fireEvent.click(screen.getByText('sign in a different way'));
+    expect(screen.getByText('Continue with Apple')).toBeTruthy();
+    // The fold opens WITH the warning — an informed mistap, never a silent one.
+    expect(screen.getByText(/may open a different account/)).toBeTruthy();
+  });
+
+  it('prefills the email and opens the form when email was their way in', () => {
+    render(<AuthScreen resume={{ email: 'j@x.com', name: null, providers: ['email'] }} />);
+    expect((screen.getByLabelText('Email') as HTMLInputElement).value).toBe('j@x.com');
+    expect(screen.getByLabelText('Password')).toBeTruthy();
+    // No provider buttons above the form, so no dangling "or" divider either.
+    expect(screen.queryByText('Continue with Google')).toBeNull();
+    expect(screen.queryByText('or')).toBeNull();
+  });
+
+  it('keeps every door open when the roster does not know the way', () => {
+    render(<AuthScreen resume={{ email: 'j@x.com', name: 'Jeff', providers: [] }} />);
+    expect(screen.getByText('Continue with Google')).toBeTruthy();
+    expect(screen.getByText('Continue with Apple')).toBeTruthy();
+  });
+});

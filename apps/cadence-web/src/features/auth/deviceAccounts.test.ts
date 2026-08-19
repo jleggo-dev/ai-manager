@@ -122,3 +122,28 @@ describe('resuming an account', () => {
     expect(setSession).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The roster remembers HOW each account signed in, because the 2026-08-19 report started with it
+ * not knowing: an expired session went to a generic provider sheet, Apple was tapped on a
+ * Google+email account, and Supabase minted a fresh user — onboarding restarted on top of a plan
+ * that was sitting right there.
+ */
+describe('the roster remembers the way in', () => {
+  it('stores the providers from app_metadata', () => {
+    rememberDeviceAccount(session('carol', { app_metadata: { provider: 'google', providers: ['google', 'email'] } }));
+    expect(listDeviceAccounts()[0]!.providers).toEqual(['google', 'email']);
+  });
+
+  it('falls back to the single provider field', () => {
+    rememberDeviceAccount(session('dave', { app_metadata: { provider: 'apple' } }));
+    expect(listDeviceAccounts()[0]!.providers).toEqual(['apple']);
+  });
+
+  /** A refresh that arrives without metadata must not erase what a fuller session recorded. */
+  it('keeps the known providers when a later session carries none', () => {
+    rememberDeviceAccount(session('erin', { app_metadata: { providers: ['google'] } }));
+    rememberDeviceAccount(session('erin'));
+    expect(listDeviceAccounts()[0]!.providers).toEqual(['google']);
+  });
+});

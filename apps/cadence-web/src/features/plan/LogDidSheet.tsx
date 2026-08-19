@@ -22,7 +22,7 @@ export function LogDidSheet({ onClose, onLogged }: { onClose: () => void; onLogg
       .then((p) => {
         // Only the committed-rhythm activities (user-kind) — system weigh-ins + the off-plan bucket
         // aren't things you "did." The plan view already excludes off-plan/episode from `activities`.
-        if (alive) setActivities(p.activities.filter((a) => a.kind === 'user'));
+        if (alive) setActivities((p?.activities ?? []).filter((a) => a.kind === 'user'));
       })
       .catch(() => {
         if (alive) setActivities([]);

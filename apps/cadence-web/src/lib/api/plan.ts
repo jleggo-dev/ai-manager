@@ -72,9 +72,16 @@ export interface PlanViewData {
   pendingProposal?: PendingProposal | null;
 }
 
-export async function getPlan(): Promise<PlanViewData> {
-  const res = await fetch(`${BASE}/plan`, { headers: headers() });
-  if (!res.ok) return { hasPlan: false, stage: 'new', activities: [], week: [], consistency: { kept: 0, window: 7 } };
+/**
+ * The plan, or `null` when it could not be loaded. The distinction is the whole point: this used
+ * to answer any non-OK response with `stage: 'new'` — the exact shape of a brand-new user — so a
+ * cold serverless start or a 401 blip right after sign-in dressed a signed-in person with a full
+ * plan as someone who had never been here, and the app "restarted onboarding" at them (owner,
+ * 2026-08-19). "I could not load your plan" and "you have no plan" must never share a value.
+ */
+export async function getPlan(): Promise<PlanViewData | null> {
+  const res = await fetch(`${BASE}/plan`, { headers: headers() }).catch(() => null);
+  if (!res?.ok) return null;
   return res.json();
 }
 

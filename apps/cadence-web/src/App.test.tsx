@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App } from './App.tsx';
 import { screenFromPlanStage } from './screenFromPlanStage.ts';
 
@@ -82,9 +82,27 @@ describe('App (dev mode)', () => {
     await waitFor(() => expect(screen.getByText('Main tabs')).toBeInTheDocument());
   });
 
-  it('falls back to meeting the coach when getPlan fails', async () => {
-    getPlan.mockRejectedValueOnce(new Error('offline'));
+  /**
+   * The old assertion here — "falls back to meeting the coach when getPlan fails" — WAS the bug.
+   * A cold start or a 401 blip right after sign-in dressed a signed-in owner with a full plan as
+   * a brand-new user and restarted onboarding at him (2026-08-19). Failure is now a named state
+   * with a retry, and "meet" is reserved for people who are genuinely new.
+   */
+  it('shows a retry — never the meet screen — when the plan cannot load', async () => {
+    getPlan.mockResolvedValue(null); // both the load and its one silent retry fail
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Meet Cadence')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/safe on the server/)).toBeInTheDocument());
+    expect(screen.queryByText('Meet Cadence')).not.toBeInTheDocument();
+
+    // The retry is live: the plan comes back, and so does the app.
+    getPlan.mockResolvedValue({ stage: 'committed' });
+    fireEvent.click(screen.getByText('Try again'));
+    await waitFor(() => expect(screen.getByText('Main tabs')).toBeInTheDocument());
+  });
+
+  it('absorbs a single blip with the silent retry', async () => {
+    getPlan.mockResolvedValueOnce(null).mockResolvedValueOnce({ stage: 'committed' });
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('Main tabs')).toBeInTheDocument());
   });
 });

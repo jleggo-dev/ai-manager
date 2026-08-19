@@ -70,20 +70,43 @@ function isAlreadyTakenMessage(message: string): boolean {
   return /already (been )?(registered|exists|linked|in use)|identity_already_exists|user_already_exists/i.test(message);
 }
 
+/** The human words for a provider id, for "last time you signed in with …". */
+const PROVIDER_WORD: Record<string, string> = { google: 'Google', apple: 'Apple', email: 'email and password' };
+
 export function AuthScreen({
   mode: screenMode = 'gate',
   compact = false,
-}: { mode?: AuthScreenMode; compact?: boolean } = {}) {
+  resume = null,
+}: {
+  mode?: AuthScreenMode;
+  compact?: boolean;
+  /**
+   * Who this sign-in is FOR, when it is for someone in particular (an expired picker row).
+   *
+   * Without it this screen is a generic set of doors, and the wrong door mints a new account:
+   * the owner's session expired, the row still said who he was, and Continue with Apple on a
+   * Google+email account created a fresh user — onboarding restarted on top of a plan that was
+   * sitting right there (2026-08-19). Supabase cannot merge users after the fact, so the honest
+   * fix is BEFORE the tap: lead with the way they signed in last time, and put the other doors
+   * behind a fold that says plainly they may open a different account.
+   */
+  resume?: { email: string | null; name: string | null; providers: string[] } | null;
+} = {}) {
   const upgrading = screenMode === 'upgrade';
   const [mode, setMode] = useState<Mode>(upgrading ? 'signup' : 'signin');
+  const known = resume?.providers ?? [];
+  const knowsWay = known.length > 0;
+  /** The other doors stay available — folded, never hidden — because the roster can be wrong. */
+  const [otherWays, setOtherWays] = useState(false);
+  const showProvider = (prov: 'google' | 'apple') => !knowsWay || known.includes(prov) || otherWays;
   /**
    * Compact (the plan-card gate): the email path starts folded behind "or continue with email",
    * so the pinned footer holds two provider buttons and one line — the design's frame, and the
    * common path (App Review requires Apple; most people tap a provider). Opening it reveals the
    * exact same form; none of the auth logic forks on this.
    */
-  const [emailOpen, setEmailOpen] = useState(!compact);
-  const [email, setEmail] = useState('');
+  const [emailOpen, setEmailOpen] = useState(!compact || (resume?.providers.includes('email') ?? false));
+  const [email, setEmail] = useState(resume?.email ?? '');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -237,25 +260,56 @@ export function AuthScreen({
         <div className="hero">
           <Orb hero />
           <div className="w-word">Cadence</div>
-          <p className="w-tag">{mode === 'signin' ? 'Welcome back.' : 'A rhythm you can keep.'}</p>
+          <p className="w-tag">
+            {resume
+              ? `Welcome back${resume.name ? `, ${resume.name}` : ''}.`
+              : mode === 'signin'
+                ? 'Welcome back.'
+                : 'A rhythm you can keep.'}
+          </p>
+          {resume && (
+            <p className="auth-resume-way">
+              {knowsWay
+                ? `Last time you signed in with ${known.map((k) => PROVIDER_WORD[k] ?? k).join(' and ')} — use the same way and everything is where you left it.`
+                : 'Sign back in and everything is where you left it.'}
+            </p>
+          )}
         </div>
       )}
 
-      <button className="auth-google" onClick={() => continueWith('google')} disabled={busy || !authConfigured}>
-        <GoogleG />
-        Continue with Google
-      </button>
+      {showProvider('google') && (
+        <button className="auth-google" onClick={() => continueWith('google')} disabled={busy || !authConfigured}>
+          <GoogleG />
+          Continue with Google
+        </button>
+      )}
       {/* Apple is listed second but is NOT optional: App Review guideline 4.8 requires Sign in
           with Apple in any app offering third-party login. Apple's own guidelines require the
-          exact wording "Continue with Apple" and the filled logo on a solid button. */}
-      <button className="auth-apple" onClick={() => continueWith('apple')} disabled={busy || !authConfigured}>
-        <AppleLogo />
-        Continue with Apple
-      </button>
-      {emailOpen ? (
-        <div className="auth-divider">
-          <span>or</span>
+          exact wording "Continue with Apple" and the filled logo on a solid button. (Folding it
+          behind "a different way" on an AIMED sign-in keeps 4.8 satisfied — the door exists on
+          every path — while stopping the mistap that minted a new account.) */}
+      {showProvider('apple') && (
+        <button className="auth-apple" onClick={() => continueWith('apple')} disabled={busy || !authConfigured}>
+          <AppleLogo />
+          Continue with Apple
+        </button>
+      )}
+      {knowsWay && !otherWays && (
+        <button type="button" className="auth-email-link" onClick={() => setOtherWays(true)}>
+          sign in a different way
+        </button>
+      )}
+      {knowsWay && otherWays && (
+        <div className="auth-resume-warn">
+          A different way may open a different account — your plan lives with the one above.
         </div>
+      )}
+      {emailOpen ? (
+        (showProvider('google') || showProvider('apple')) && (
+          <div className="auth-divider">
+            <span>or</span>
+          </div>
+        )
       ) : (
         <button type="button" className="auth-email-link" onClick={() => setEmailOpen(true)}>
           or continue with email

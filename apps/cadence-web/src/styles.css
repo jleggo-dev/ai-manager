@@ -6950,3 +6950,22 @@ textarea.wiz-title {
   color: oklch(45% 0.09 250);
   text-decoration: none;
 }
+
+/* ── Aimed sign-in (expired session, known account) ──────────────────────────
+   The screen leads with who this is for and the way they signed in before; the
+   other doors fold behind one line, with the different-account warning beside
+   them — the mistap that minted a fresh user gets an informed choice instead. */
+.auth-resume-way {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin: 6px 18px 0;
+  text-align: center;
+}
+.auth-resume-warn {
+  font-size: 12.5px;
+  color: var(--text-mute);
+  line-height: 1.45;
+  margin: 2px 18px 6px;
+  text-align: center;
+}

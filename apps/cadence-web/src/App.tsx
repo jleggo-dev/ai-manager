@@ -8,7 +8,7 @@ import { DevPanel } from './features/dev/DevPanel.tsx';
 import { AccountSwitcher } from './features/dev/AccountSwitcher.tsx';
 import { previewScreen } from './features/dev/previewRoutes.tsx';
 import { AuthScreen } from './features/auth/AuthScreen.tsx';
-import { AccountPicker } from './features/auth/AccountPicker.tsx';
+import { AccountPicker, type ResumeTarget } from './features/auth/AccountPicker.tsx';
 import { SignInFork } from './features/auth/SignInFork.tsx';
 import { SignUpGate } from './features/auth/SignUpGate.tsx';
 import { isAnonymousSession } from './features/auth/anonymous.ts';
@@ -30,7 +30,7 @@ import { screenFromPlanStage } from './screenFromPlanStage.ts';
  * both draft a message rather than opening the pre-v2 curate wizard. That wizard still exists and
  * is still reachable from Settings (MainTabs), where editing a committed plan really is the task.
  */
-type Screen = 'loading' | 'meet' | 'onboarding' | 'building' | 'gate' | 'plan';
+type Screen = 'loading' | 'meet' | 'onboarding' | 'building' | 'gate' | 'plan' | 'error';
 
 // Resolved once at load (the URL doesn't change without a reload). Dev mode uses the header-based
 // test accounts and skips real auth; everything else requires a Supabase session.
@@ -84,9 +84,26 @@ function CoachApp({ session }: { session: Session | null }) {
   // which is why device_tokens was empty and no push Cadence ever sent could be delivered.
   usePushRegistered(screen !== 'loading');
 
-  useEffect(() => {
+  const loadPlan = () => {
+    setScreen('loading');
     getPlan()
       .then((p) => {
+        /**
+         * `null` is "could not load", and it must never route anywhere a plan-stage routes.
+         * It used to: the API dressed any failure as `stage: 'new'`, so a cold start or a 401
+         * blip right after sign-in landed a fully signed-in owner on "meet Cadence" — onboarding,
+         * restarted, on top of a plan sitting on the server (2026-08-19). One silent retry
+         * absorbs the transient case; a screen that says so absorbs the rest.
+         */
+        if (!p) {
+          getPlan().then((again) => {
+            if (!again) return setScreen('error');
+            const next = screenFromPlanStage(again.stage);
+            setScreen(next === 'plan' && anonymous ? 'gate' : next);
+            void syncPlanLocalNotifications();
+          });
+          return;
+        }
         const next = screenFromPlanStage(p.stage);
         // A finished plan on an account that never signed up: the gate is what stands between
         // them and it, so land there rather than on a plan that could evaporate with the browser.
@@ -97,7 +114,11 @@ function CoachApp({ session }: { session: Session | null }) {
         // not having listened.
         void syncPlanLocalNotifications();
       })
-      .catch(() => setScreen('meet'));
+      .catch(() => setScreen('error'));
+  };
+
+  useEffect(() => {
+    loadPlan();
     // Silent Apple Health refresh (iOS shell, permission already granted): keeps the coach's
     // view of recent activity current without re-asking. Throttled + content-diffed inside.
     void maybeRefreshHealthDigest({
@@ -182,6 +203,17 @@ function CoachApp({ session }: { session: Session | null }) {
         />
       ) : screen === 'gate' ? (
         <SignUpGate />
+      ) : screen === 'error' ? (
+        <div className="app">
+          <div className="scrollbody">
+            <div className="wiz-empty" style={{ marginTop: 48 }}>
+              {"Couldn't reach your plan just now — it's safe on the server."}
+            </div>
+            <button className="cta" style={{ margin: '16px 20px' }} onClick={loadPlan}>
+              Try again
+            </button>
+          </div>
+        </div>
       ) : (
         <MainTabs email={session?.user.email ?? null} discussPlan={justBuilt} />
       )}
@@ -225,19 +257,42 @@ function PreAuth() {
   const [view, setView] = useState<'picker' | 'fork' | 'signin'>(() =>
     listDeviceAccounts().length ? 'picker' : 'fork',
   );
+  /**
+   * Who the sign-in screen is FOR, when it is for someone in particular. An expired picker row
+   * sets it, so the screen can lead with their name and the way they signed in before — the fix
+   * for the 2026-08-19 report: the generic sheet let the owner tap Apple on a Google+email
+   * account, which minted a fresh user and "restarted onboarding".
+   */
+  const [resumeTarget, setResumeTarget] = useState<ResumeTarget | null>(null);
   if (view === 'picker')
     return (
       <AccountPicker
-        // An expired row hands its email over, so signing back in is a password and not a
-        // memory test about which address this account used.
-        onAddAccount={() => setView('signin')}
+        // A NEW person: the fork (get started → onboarding, account at the end — or sign in).
+        // This used to open the sign-in sheet, which demanded an account before onboarding.
+        onAddAccount={() => {
+          setResumeTarget(null);
+          setView('fork');
+        }}
+        // A KNOWN person whose session expired: aim the sign-in screen at them.
+        onSignInAs={(t) => {
+          setResumeTarget(t);
+          setView('signin');
+        }}
         // The session change is what actually swaps the screen (App's auth listener); this only
         // matters if a resume lands without one.
         onResumed={() => setView('fork')}
       />
     );
-  if (view === 'signin') return <AuthScreen />;
-  return <SignInFork onSignIn={() => setView('signin')} onStarted={() => setView('fork')} />;
+  if (view === 'signin') return <AuthScreen resume={resumeTarget} />;
+  return (
+    <SignInFork
+      onSignIn={() => {
+        setResumeTarget(null);
+        setView('signin');
+      }}
+      onStarted={() => setView('fork')}
+    />
+  );
 }
 
 /**

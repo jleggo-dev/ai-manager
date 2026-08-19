@@ -85,16 +85,17 @@ export function PlanView({
 
   // Refetch on mount AND whenever the parent bumps reloadSignal (a ＋ FAB log just landed).
   useEffect(() => {
+    // `null` = could not load. Keep whatever is showing rather than replacing a real week with a
+    // fabricated empty one — the old fallback here was the same "failure dressed as new user"
+    // shape that restarted onboarding at the App level (2026-08-19).
     getPlan()
-      .then(setData)
-      .catch(() =>
-        setData({ hasPlan: false, stage: 'new', activities: [], week: [], consistency: { kept: 0, window: 7 } }),
-      );
+      .then((p) => p && setData(p))
+      .catch(() => {});
   }, [reloadSignal]);
 
   const refresh = () =>
     getPlan()
-      .then(setData)
+      .then((p) => p && setData(p))
       .catch(() => {});
   const bump = () => setReloadKey((k) => k + 1);
 
