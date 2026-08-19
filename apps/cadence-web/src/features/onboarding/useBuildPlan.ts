@@ -79,7 +79,7 @@ export function useBuildPlan({
     if (finished.current || !run) return;
     void getPlan()
       .then((p) => {
-        if (p.stage === 'committed') settle();
+        if (p?.stage === 'committed') settle();
       })
       .catch(() => {
         /* offline on resume — the poll loop and the next resume both still cover this */
@@ -114,7 +114,7 @@ export function useBuildPlan({
         const deadline = Date.now() + recoverWindowMs;
         while (Date.now() < deadline && !finished.current) {
           try {
-            if ((await getPlan()).stage === 'committed') {
+            if ((await getPlan())?.stage === 'committed') {
               settle();
               return;
             }

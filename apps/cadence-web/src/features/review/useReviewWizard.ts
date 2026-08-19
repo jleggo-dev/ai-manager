@@ -21,7 +21,7 @@ export type PlanPreview = { activities: PendingPlanActivity[]; note: string };
  */
 export async function recoverIfAlreadyCommitted(onLocked: () => void): Promise<boolean> {
   try {
-    if ((await getPlan()).stage === 'committed') {
+    if ((await getPlan())?.stage === 'committed') {
       onLocked();
       return true;
     }
