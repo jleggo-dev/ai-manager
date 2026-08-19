@@ -42,10 +42,18 @@ router.use(requireCadenceUser);
  * background (best-effort, fire-and-forget) — deterministic tripwires decide whether it even
  * calls the Broker; a proposal it stores shows up on the NEXT load, same pattern as ensureHorizon.
  */
+/** The caller's IANA zone, when the client sent one. Never trusted over the stored value. */
+function tzHint(req: Request): string | null {
+  const h = req.header('X-Cadence-Timezone');
+  return h && h.length < 64 ? h : null;
+}
+
 router.get('/', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
-    const view = await buildPlanView(userId);
+    // The client's own zone, used only when the user has none stored. The screen's idea of
+    // "today" must be the person's, not the server's (see buildPlanView).
+    const view = await buildPlanView(userId, 7, tzHint(req));
     void assessIfDue(userId).catch((err) => console.error('[assessIfDue]', err));
     void prefetchImminentSessions(userId).catch((err) => console.error('[prefetch]', err));
     res.json(view);
