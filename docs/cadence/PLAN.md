@@ -7173,10 +7173,19 @@ persona or the tool said she may not — the brand's *don't punish a hard stretc
 *don't edit when someone has a hard day*. Both now say it: `propose_plan_change` carries "use it
 the moment they name a change — even when you think it unnecessary: say so, and still show the
 card", and the persona's building section gets the rule in full ("answering a request to change the
-plan with reassurance that it needs no changing is a refusal wearing kindness"). Eval case **A16**
-is his turn verbatim. **The tool-description half is measured and NOT sufficient on its own — A16
-still failed with it. The persona is the untested lever, and it is not live until
-`set-coach-persona.ts` runs.**
+plan with reassurance that it needs no changing is a refusal wearing kindness"). Eval case **A16** is his turn,
+adapted (see below).
+
+**Measured, in three steps, because the first two were wrong in instructive ways.** With the tool
+description alone, A16 failed. With the persona pushed live (`set-coach-persona.ts`, 2026-08-19
+13:00), it *still* failed — and the reason was the case, not the coach: pasted verbatim, his turn
+named piano and an overloaded day, and the seeded world has neither, so she quite correctly asked
+what he meant ("today's actually a pretty light day already"). A case that does not fit the world
+tests nothing, which is the rule the file's own header states and this case broke. Rewritten to the
+same SHAPE in the world's own vocabulary — a rough stretch named as the reason, specific
+commitments named for removal — **A16 passes: she calls `propose_plan_change`.** The lesson is
+cheap and worth keeping: a verbatim turn from a real transcript is evidence, not a test case, until
+it has been translated into the seeded world.
 
 **2. Why that turn was the one that failed: the food classifier ate it.** *"My son is okay he just
 had a bead stuck in his ear. I can still log my meals."* → classified as `log_food`, so
