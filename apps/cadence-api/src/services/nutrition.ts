@@ -15,7 +15,7 @@ import {
   type NutritionSummary,
 } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
-import { insertNutritionLog, listNutritionLogs, updateNutritionLog } from '../repos/nutrition.ts';
+import { insertNutritionLog, listNutritionLogs, updateNutritionLog, countNutritionDays } from '../repos/nutrition.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, setMacroTargets } from '../repos/users.ts';
 import {
@@ -242,6 +242,16 @@ export interface NutritionDay extends DayTotals {
   burn_kcal: number; // estimated exercise burn from today's DONE workouts (net calories)
   eatback_kcal: number; // burn_kcal × eatback_pct, added to the kcal allowance (already reflected in `left`)
   eatback_pct: number; // the eat-back setting in effect (0–100; default 50)
+  /**
+   * How far they are from EARNING a calorie target, when they have none yet (owner 2026-08-18).
+   *
+   * The baseline flow refuses to propose targets until 7 distinct days are logged — defensible,
+   * a number from one meal is a guess dressed as a plan — but the wait was invisible: "Lose
+   * weight" sat committed with no target, no explanation and no path, which breaks the promise
+   * harder than the missing ring did. Present only while a goal WANTS targets and none are set,
+   * so the card can show a countdown instead of nothing.
+   */
+  targets_wait: { days_logged: number; days_needed: number } | null;
 }
 
 /** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. `left`
@@ -261,6 +271,20 @@ export async function getNutritionDay(userId: string, date?: string): Promise<Nu
   }
   const sums = sumDay(rows);
   const targets = user?.macro_targets ?? null;
+
+  // No targets yet: is that "not tracking", or "tracking, and the target is still being earned"?
+  // Only the second gets a countdown, and only a goal that warrants targets makes it the second.
+  let targets_wait: NutritionDay['targets_wait'] = null;
+  if (!targets || typeof targets.kcal !== 'number') {
+    const goals = await listGoalsByStatus(userId, ['confirmed', 'committed']);
+    if (wantsTargets(goals)) {
+      const from = new Date(Date.parse(`${d}T00:00:00Z`) - 13 * 86_400_000).toISOString().slice(0, 10);
+      targets_wait = {
+        days_logged: Math.min(await countNutritionDays(userId, from, d), OBSERVE_DAYS_NEEDED),
+        days_needed: OBSERVE_DAYS_NEEDED,
+      };
+    }
+  }
 
   // Net calories: estimate today's exercise burn, add eatback_pct% of it to the kcal allowance.
   //
@@ -286,6 +310,7 @@ export async function getNutritionDay(userId: string, date?: string): Promise<Nu
     burn_kcal,
     eatback_kcal,
     eatback_pct,
+    targets_wait,
   };
 }
 

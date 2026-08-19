@@ -1,6 +1,8 @@
 import { injectCoachContext } from '../ai/aim.ts';
 import { getUser } from '../repos/users.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
+import { countNutritionDays } from '../repos/nutrition.ts';
+import { wantsTargets } from './nutrition-parse.ts';
 import { listEquipment } from '../repos/equipment.ts';
 import { classifyFoodIntent, FOOD_CONFIRM_CONTEXT } from './coach-food-classify.ts';
 import { injectTurnContext } from './turn-context.ts';
@@ -105,6 +107,47 @@ export async function planGapNote(userId: string): Promise<string> {
     'nutrition — want me to rebuild the week around it now?"), and end that turn with the build',
     'card. Never claim it is already handled, and never let it stay silently stranded.',
   ].join('\n');
+}
+
+/**
+ * A committed goal that has no number, and a target that is still being earned (owner 2026-08-18).
+ *
+ * Found live: "Lose weight" sat committed with measure `{}` and macro_targets null — no amount, no
+ * date, no calorie target, and no one had said why. Two different silences, and this note breaks
+ * both. A goal with no number cannot be coached, only agreed with — so she asks for the number.
+ * And the calorie target is EARNED (7 distinct logged days before the baseline flow will propose
+ * one), which is fine as policy and unforgivable as a secret — so she says where they are on the
+ * way to it instead of promising a number now.
+ *
+ * Rides the session pack like planGapNote, until the goal carries a target or targets exist.
+ */
+export async function targetlessGoalNote(userId: string): Promise<string> {
+  const [goals, user] = await Promise.all([listGoalsByStatus(userId, ['confirmed', 'committed']), getUser(userId)]);
+  const hasTargets = !!user?.macro_targets && typeof user.macro_targets.kcal === 'number';
+  const numberless = goals.filter(
+    (g) => g.area === 'nourishment' && (g.measure?.target == null || !Number.isFinite(Number(g.measure.target))),
+  );
+  if (hasTargets || !wantsTargets(goals)) return '';
+
+  const today = new Date().toISOString().slice(0, 10);
+  const from = new Date(Date.now() - 13 * 86_400_000).toISOString().slice(0, 10);
+  const logged = await countNutritionDays(userId, from, today);
+
+  const lines = ['== NUTRITION NUMBERS GAP (deterministic — the app checked) =='];
+  if (numberless.length) {
+    lines.push(
+      `${numberless.map((g) => `"${g.title}"`).join(', ')} is committed with NO number — no amount, no date.`,
+      'A weight goal without a number can only be agreed with, never coached. Ask plainly — how much,',
+      'by when — and when they answer, call update_goal with action retarget. If they would rather not',
+      'chase a number, keep the goal and say so back; do not invent one for them.',
+    );
+  }
+  lines.push(
+    `Their calorie target is not set yet, and it is EARNED: ${logged} of 7 distinct days of food logged so far.`,
+    'If food or targets come up, say exactly where they are on that path — never promise a number now,',
+    'and never imply the target is missing by accident. Logging meals is what moves it.',
+  );
+  return lines.join('\n');
 }
 
 /**

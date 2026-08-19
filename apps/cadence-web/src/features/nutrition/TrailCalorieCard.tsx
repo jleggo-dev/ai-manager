@@ -29,6 +29,26 @@ const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
 export function TrailCalorieCard({ date, onOpen }: { date: string; onOpen: () => void }) {
   const { data: day } = useNutritionDay(date);
   const target = day?.targets?.kcal ?? null;
+
+  /**
+   * Tracking, but the target is still being earned: the baseline flow will not propose a calorie
+   * number until 7 distinct days are logged, and that wait used to be invisible — a committed
+   * "Lose weight" with no target, no explanation, no path (owner, 2026-08-18). The countdown makes
+   * the absence finite and the ring's arrival earned. Same slot, same door to the food sheet.
+   */
+  if (day && (target == null || target <= 0) && day.targets_wait) {
+    const w = day.targets_wait;
+    return (
+      <button className="trail-cal" onClick={onOpen} aria-label="Open today's food">
+        <span className="trail-cal-body">
+          <span className="trail-cal-n">
+            {w.days_logged} / {w.days_needed}
+          </span>
+          <span className="trail-cal-k">DAYS TO YOUR CALORIE TARGET</span>
+        </span>
+      </button>
+    );
+  }
   if (!day || target == null || target <= 0) return null;
 
   const eaten = day.totals.kcal ?? 0;
