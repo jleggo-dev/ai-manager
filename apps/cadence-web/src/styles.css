@@ -6789,6 +6789,8 @@ textarea.wiz-title {
   font-weight: 900;
   letter-spacing: 0.1em;
   color: oklch(56% 0.02 120);
+}
+
 /* ══ Plan header 2a: a band that floats on the trail, and the sheet behind its weather chip ══
    (frame 2a, "Bare sky, production parts" — one appended block so the redesign is reviewable
    and reversible in one place.)
