@@ -14,12 +14,14 @@ import {
   getPlateAdvice,
   previewMealParse,
 } from '../services/nutrition.ts';
+import { logWater } from '../services/water.ts';
 import {
   BodyValidationError,
   parseBody,
   logMealBodySchema,
   macroTargetsBodySchema,
   previewMealBodySchema,
+  waterBodySchema,
 } from '../validation/body.ts';
 
 const router = Router();
@@ -51,6 +53,19 @@ router.post('/meals', async (req: Request, res: Response) => {
     if (/food not found|recipe not found/.test(msg)) return void res.status(404).json({ error: msg });
     console.error('[POST /nutrition/meals]', err);
     res.status(500).json({ error: 'failed to log meal' });
+  }
+});
+
+/** POST /nutrition/water — one pour, ml. No confirm step: the stated amount IS the data. */
+router.post('/water', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(waterBodySchema, req.body);
+    res.json(await logWater(userId, body.ml, body.date));
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /nutrition/water]', err);
+    res.status(500).json({ error: 'failed to log water' });
   }
 });
 

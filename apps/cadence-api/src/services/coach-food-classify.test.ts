@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   classifyFoodIntent,
   extractLogQuery,
+  FOOD_CONFIRM_CONTEXT,
   mergeDietaryProposal,
   parseUsualMeal,
   proposeDietaryPatch,
@@ -189,5 +190,67 @@ describe('classifyFoodIntent — what IS a meal', () => {
   it('reads a plain "had" when nothing contradicts it', () => {
     isFood('I had a burrito');
     isFood('I had two eggs and toast');
+  });
+});
+
+/**
+ * The bead in the ear (owner, 2026-08-19) — the failure that proved a not-food NOUN list can
+ * never be finished, and the one that cost more than a silly sheet.
+ *
+ * > "Thank you. Can we clean the plan up though? My son is okay he just had a bead stuck in his
+ * > ear. I can still log my meals."
+ *
+ * The classifier read that as a meal, so `estimate-food` was handed a child's ER trip and priced
+ * it as "Unknown Food" (confidence 0.3) behind a confirm sheet — AND the match injected
+ * `FOOD_CONFIRM_CONTEXT`, which told the coach a sheet was up. She acknowledged it and never
+ * called `propose_plan_change`, on the very turn he asked her to clean up his plan.
+ *
+ * Neither "bead" nor "ear" belongs on a not-food list; no list would have held. What holds is that
+ * a food log is FIRST PERSON.
+ */
+describe('someone else had it — never the user’s meal', () => {
+  const notMine = [
+    'Thank you. Can we clean the plan up though? My son is okay he just had a bead stuck in his ear. I can still log my meals.',
+    'he just had a bead stuck in his ear',
+    'my daughter had a rough night',
+    'she had surgery on Tuesday so I am on kid duty',
+    'they had a long drive up',
+  ];
+  for (const line of notMine) {
+    it(`does not offer to log: "${line.slice(0, 52)}…"`, () => {
+      expect(classifyFoodIntent(line)).toBeNull();
+    });
+  }
+
+  /** First person still logs — including "we", which is the user eating too. */
+  const mine = ['I had a burrito', 'we had dinner at my parents', 'I had eggs and toast'];
+  for (const line of mine) {
+    it(`still catches: "${line}"`, () => {
+      expect(classifyFoodIntent(line)?.kind).toBe('log_food');
+    });
+  }
+});
+
+/**
+ * The injected stand-down must be about the FOOD and nothing else. It used to open "Acknowledge
+ * what you heard and wait", which reads as an instruction about the whole turn — the mechanism
+ * behind a coach who agreed to change a plan and then did not call the tool.
+ */
+describe('FOOD_CONFIRM_CONTEXT points at the module and frees the rest of the turn', () => {
+  it('sends them to the Food home rather than promising a card', () => {
+    expect(FOOD_CONFIRM_CONTEXT).toMatch(/Food home/i);
+    expect(FOOD_CONFIRM_CONTEXT).toMatch(/no card is coming/i);
+    expect(FOOD_CONFIRM_CONTEXT).toMatch(/never say it is logged/i);
+  });
+
+  it('offers to start tracking when it is not in their plan, rather than assuming', () => {
+    expect(FOOD_CONFIRM_CONTEXT).toMatch(/not part of their plan/i);
+    expect(FOOD_CONFIRM_CONTEXT).toMatch(/ask plainly/i);
+  });
+
+  /** The clause that unblocks the plan: mentioning a meal must not freeze everything else. */
+  it('tells her to act on the rest of the turn as normal', () => {
+    expect(FOOD_CONFIRM_CONTEXT).toMatch(/plan change/i);
+    expect(FOOD_CONFIRM_CONTEXT).toMatch(/exactly as you normally would/i);
   });
 });

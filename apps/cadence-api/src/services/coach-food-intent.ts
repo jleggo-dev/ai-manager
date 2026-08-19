@@ -5,14 +5,13 @@
 import type { DietaryProfile, MealKind } from '@cadence/shared';
 import { getDietaryProfile } from '../repos/users.ts';
 import { recipeFromChat, type RecipeDraft } from './recipe.ts';
-import { resolveFoods, type ResolveResult } from './food-resolver.ts';
+import type { ResolveResult } from './food-resolver.ts';
 import {
   classifyFoodIntent,
   mergeDietaryProposal,
   recipeTextFromWindow,
   type ClassifiedFoodIntent,
 } from './coach-food-classify.ts';
-import { resolveUsualMeal } from './coach-food-usual.ts';
 
 export {
   classifyFoodIntent,
@@ -75,18 +74,19 @@ async function materializeAction(
   window: string | undefined,
 ): Promise<CoachFoodAction | null> {
   switch (classified.kind) {
-    case 'log_food': {
-      const resolve = classified.usualMeal
-        ? await resolveUsualMeal(userId, classified.usualMeal)
-        : await resolveFoods(userId, { text: classified.query });
-      return {
-        kind: 'log_food',
-        query: classified.query,
-        resolve,
-        ...(classified.mealHint ? { mealHint: classified.mealHint } : {}),
-        ...(classified.usualMeal ? { usualMeal: classified.usualMeal } : {}),
-      };
-    }
+    /**
+     * **No sheet for a meal any more** (owner ruling 2026-08-19): *"logging food should probably
+     * just have the AI tell the user to go into the nutrition module… I don't care to have a log
+     * nutrition popup like that, it breaks our new nutrition UI."*
+     *
+     * The Food home is now a real screen with a diary, slot rows and one-tap confirm, so a sheet
+     * arriving over the conversation competes with it — and when the classifier is wrong, it
+     * interrupts to ask someone to affirm something absurd. The intent is still DETECTED, because
+     * the coach is told to point at the module (`FOOD_CONFIRM_CONTEXT`); it just no longer draws
+     * anything. Recipes and dietary updates keep their sheets: neither has a screen of its own.
+     */
+    case 'log_food':
+      return null;
     case 'save_recipe': {
       const recipeText = classified.needsWindow
         ? recipeTextFromWindow(window ?? '', message)

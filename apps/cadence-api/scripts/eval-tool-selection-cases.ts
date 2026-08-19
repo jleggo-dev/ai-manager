@@ -1,5 +1,5 @@
 /**
- * The golden set for the tool-selection eval — 33 turns, every one of them sourced from something
+ * The golden set for the tool-selection eval — 36 turns, every one of them sourced from something
  * that actually happened. See `eval-tool-selection.ts` for how they are run and scored.
  *
  * THE VOICE IS THE POINT. Every turn here is lowercase, hedged, half-punctuated and often about
@@ -197,6 +197,53 @@ const ACTIONS: EvalCase[] = [
     },
     from: 'PLAN.md:5495 (2026-08-14, #204) — a life constraint, which the description names alongside the physical ones.',
   },
+  {
+    /**
+     * The refusal-by-reassurance (owner, 2026-08-19) — the failure this whole eval exists for, and
+     * the one a "did she pick the right tool?" score cannot see, because she picked NO tool and
+     * sounded lovely doing it.
+     *
+     * He asked twice. "Okay but I need you to adjust the plan" got "sure, what would you like
+     * changed?"; naming it got *"That's an easy one, and actually nothing needs editing — today's
+     * sessions just don't happen... No penalty, no plan change needed for a single rough day."*
+     * Every word of that is on-brand (a missed day is information, not failure) and it is still a
+     * wall: he asked her to move something, and she decided on his behalf that the answer was no.
+     */
+    id: 'A16',
+    kind: 'action',
+    turn: 'today is overloaded… so like cut out everything expcept piano and meal tracking',
+    expect: ['propose_plan_change'],
+    allow: [...DOSSIER_READS, 'get_recent_logs'],
+    from: 'Owner transcript 2026-08-19 12:12 — verbatim. She explained why no change was needed instead of showing the card.',
+  },
+  {
+    id: 'A14',
+    kind: 'action',
+    turn: 'just got back from the ride, downed a big bottle of water, maybe 750ml. felt good out there',
+    expect: ['log_nutrition'],
+    allow: [...DOSSIER_READS, 'log_session', 'get_recent_logs'],
+    args: {
+      tool: 'log_nutrition',
+      check: (a) => {
+        const ml = Number(a.water_ml);
+        if (!Number.isFinite(ml) || ml <= 0) return `water_ml was "${String(a.water_ml)}", expected a positive number`;
+        return ml >= 500 && ml <= 1000 ? null : `water_ml was ${ml}, expected ~750 (they said the amount)`;
+      },
+    },
+    from: 'Owner directive 2026-08-19 — nutrition as a callable tool; water is the case the confirm sheet never catches.',
+  },
+  {
+    id: 'A15',
+    kind: 'action',
+    turn: 'oh and i never logged lunch — had leftover chili around noon, decent bowl of it',
+    expect: ['log_nutrition'],
+    allow: [...DOSSIER_READS, 'get_food_log'],
+    args: {
+      tool: 'log_nutrition',
+      check: (a) => (String(a.text ?? '').trim() ? null : 'text was empty — the meal goes down in their words'),
+    },
+    from: 'Owner directive 2026-08-19 — the remembered-meal case: food arriving sideways, hours after the fact.',
+  },
 ];
 
 /* ══ B · LONG-TAIL READS — the ones nothing injects, so a miss is genuinely a miss ═══════════ */
@@ -292,7 +339,7 @@ const SILENCE: EvalCase[] = [
     turn: 'i had to skip it',
     expect: [],
     allow: [...DOSSIER_READS, 'get_recent_logs', 'correct_log'],
-    forbid: ['lookup_food', 'get_food_log'],
+    forbid: ['lookup_food', 'get_food_log', 'log_nutrition'],
     from: 'PLAN.md:5783 (2026-08-15) — verbatim. This logged a ~2000 kcal Spartan Beast for breakfast.',
   },
   {
@@ -309,7 +356,7 @@ const SILENCE: EvalCase[] = [
     turn: "i'm just tired today honestly. not sure i want to talk about training",
     expect: [],
     allow: [...DOSSIER_READS],
-    forbid: ['propose_plan_change', 'update_goal', 'update_constraint', 'log_session'],
+    forbid: ['propose_plan_change', 'update_goal', 'update_constraint', 'log_session', 'log_nutrition'],
     from: 'PLAN.md:658 (2026-08-10) — the voice failure. A hard day is not a data-entry event.',
   },
   {

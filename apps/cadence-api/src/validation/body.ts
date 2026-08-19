@@ -74,6 +74,15 @@ export const previewMealBodySchema = z.object({
   meal: mealKindSchema.optional(),
 });
 
+/** One pour of water, ml canonical (0037). The cap matches the table's own check constraint. */
+export const waterBodySchema = z.object({
+  ml: z.number().int().min(1).max(5000),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+});
+
 export const logMealBodySchema = z
   .object({
     text: z.string().optional(),

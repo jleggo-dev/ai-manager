@@ -308,4 +308,15 @@ d('API-04 — nutrition service (DB)', () => {
     const day = await getNutritionDay(USER, today());
     expect(day.has_recent_food).toBe(true);
   });
+
+  /** Water (0037): pours sum into the day, and zero rows read as an honest 0 — never an absence. */
+  it('logWater sums pours into the day, and the day carries water_ml', async () => {
+    const { logWater } = await import('./water.ts');
+    expect((await getNutritionDay(USER, today())).water_ml).toBe(0);
+
+    await logWater(USER, 250);
+    const r = await logWater(USER, 500);
+    expect(r.water_ml).toBe(750);
+    expect((await getNutritionDay(USER, today())).water_ml).toBe(750);
+  });
 });

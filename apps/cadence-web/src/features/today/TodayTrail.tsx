@@ -60,7 +60,16 @@ const RAMP = [
     mL: '64% 0.03 266',
     mM: '56% 0.03 268',
     mD: '45% 0.03 268',
-    dark: true,
+    /**
+     * Light type again under Linen, and derived rather than eyeballed: a node's ramp index is its
+     * order in the day (`i / (n - 1) * 5`), so this stop sits ~80% down the sky — which the old
+     * ramp made 0.58 lightness (dark, white type) and Linen makes **0.74** (light). It is the same
+     * rule the header obeys at the same height: `skyTint`'s 0.62 seam leaves the band cream there,
+     * so white labels beside it would have been the one thing that did not get the memo — pale text
+     * on a pale sky. Quieting the sky costs one row of light type; that is the trade, and this is
+     * where it lands.
+     */
+    dark: false,
   },
   {
     main: '57% 0.15 266',
@@ -73,10 +82,23 @@ const RAMP = [
   },
 ];
 
+/**
+ * **Linen** (Plan Screen turn 3, option 3b — owner's pick 2026-08-19): the same eleven stops at the
+ * same positions, so no trail geometry moves; only the sky quiets down.
+ *
+ * The shipped ramp peaked at chroma 0.14 twice a day — a hot sunrise band and a violet dusk — which
+ * is why it read loud and why the floating header had to flip to dark chrome for about a third of
+ * every scroll. Linen peaks at **0.055** and lets brand do the pulling: the sun (`--sun` #D85A30)
+ * chalked back rather than blazing, and **`--dusk` #3E5C76 as the night floor instead of an
+ * invented indigo**. Night is now dim, not black, so the discs never sit in a hole — and the discs
+ * themselves are untouched (RAMP above), because the content is what should carry the colour.
+ *
+ * `skyTint.ts` transcribes the L of every stop below. Move one here, move it there.
+ */
 const FIRST_SKY =
-  'linear-gradient(to bottom, oklch(95% 0.04 68) 0%, oklch(96% 0.035 88) 16%, oklch(95% 0.03 210) 36%, oklch(84% 0.06 245) 56%, oklch(58% 0.11 285) 74%, oklch(33% 0.08 272) 88%, oklch(23% 0.06 268) 100%)';
+  'linear-gradient(to bottom, oklch(95% 0.022 74) 0%, oklch(97% 0.018 88) 16%, oklch(96% 0.016 200) 36%, oklch(91% 0.028 235) 56%, oklch(76% 0.045 248) 74%, oklch(56% 0.045 246) 88%, oklch(46% 0.042 245) 100%)';
 const LATER_SKY =
-  'linear-gradient(to bottom, oklch(23% 0.06 266) 0%, oklch(30% 0.09 292) 4%, oklch(48% 0.13 20) 8%, oklch(74% 0.14 46) 13%, oklch(92% 0.07 66) 19%, oklch(96% 0.035 88) 30%, oklch(95% 0.03 210) 46%, oklch(84% 0.06 245) 62%, oklch(58% 0.11 285) 78%, oklch(33% 0.08 272) 91%, oklch(23% 0.06 268) 100%)';
+  'linear-gradient(to bottom, oklch(46% 0.042 245) 0%, oklch(52% 0.05 262) 4%, oklch(63% 0.055 28) 8%, oklch(80% 0.055 52) 13%, oklch(93% 0.032 72) 19%, oklch(97% 0.018 88) 30%, oklch(96% 0.016 200) 46%, oklch(91% 0.028 235) 62%, oklch(76% 0.045 248) 78%, oklch(56% 0.045 246) 91%, oklch(46% 0.042 245) 100%)';
 
 /** Twinkling night stars (bottom 34% of each day), authored per the handoff. */
 const STARS = [

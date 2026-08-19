@@ -13,6 +13,7 @@ import { listWeighInSeries } from '../../repos/occurrences.ts';
 import { getNutritionDay } from '../nutrition.ts';
 import { actualWeeklyRate, classifyLossPace, safeWeeklyKg } from '../weight-trend.ts';
 import { listNutritionLogs } from '../../repos/nutrition.ts';
+import { sumWaterMl } from '../../repos/water.ts';
 import { listRecipes, searchRecipes } from '../../repos/recipes.ts';
 import { listForCoach } from '../../repos/journal-entries.ts';
 import { latestHealthDigest } from '../../repos/health-digests.ts';
@@ -38,19 +39,27 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
     domains: ['nutrition'],
     async run(userId) {
       const { from, to } = isoRange(7);
-      const meals = await listNutritionLogs(userId, from, to);
-      return { meals, summary: summarizeNutrition(meals, 7) };
+      const [meals, waterMl] = await Promise.all([
+        listNutritionLogs(userId, from, to),
+        sumWaterMl(userId, to), // today's water rides along — the log's write half has no other read
+      ]);
+      return { meals, summary: summarizeNutrition(meals, 7), water_ml_today: waterMl };
     },
     render(r) {
-      const { meals, summary } = r as { meals: NutritionLog[]; summary: NutritionSummary };
-      if (!meals.length) return 'Food log: nothing logged in the last 7 days.';
+      const { meals, summary, water_ml_today } = r as {
+        meals: NutritionLog[];
+        summary: NutritionSummary;
+        water_ml_today?: number;
+      };
+      const water = water_ml_today ? `Water today: ${(water_ml_today / 1000).toFixed(1)} L.` : '';
+      if (!meals.length) return ['Food log: nothing logged in the last 7 days.', water].filter(Boolean).join(' ');
       const recent = meals
         .slice(0, 10)
         .map(
           (m) => `- ${m.date} ${m.meal}: ${m.items.map((i) => i.name).join(', ') || (m.raw_text ?? '').slice(0, 60)}`,
         )
         .join('\n');
-      return [renderNutritionLine(summary), recent].filter(Boolean).join('\n');
+      return [renderNutritionLine(summary), water, recent].filter(Boolean).join('\n');
     },
     rows(r) {
       return (r as { meals: unknown[] }).meals.length;

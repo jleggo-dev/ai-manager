@@ -16,6 +16,7 @@ import {
 } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { insertNutritionLog, listNutritionLogs, updateNutritionLog, countNutritionDays } from '../repos/nutrition.ts';
+import { sumWaterMl } from '../repos/water.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, setMacroTargets } from '../repos/users.ts';
 import {
@@ -260,16 +261,19 @@ export interface NutritionDay extends DayTotals {
    * targets. False only when food is truly idle, so a mind-only user never grows a calorie strip.
    */
   has_recent_food: boolean;
+  /** The day's water, ml (0037). Zero is an honest number — water has no provisional state. */
+  water_ml: number;
 }
 
 /** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. `left`
  *  reflects NET calories: base kcal target + the eaten-back share of today's estimated exercise burn. */
 export async function getNutritionDay(userId: string, date?: string): Promise<NutritionDay> {
   const d = date ?? today();
-  const [rows, user, done] = await Promise.all([
+  const [rows, user, done, water_ml] = await Promise.all([
     listNutritionLogs(userId, d, d),
     getUser(userId),
     listDoneUserOccurrencesForDay(userId, d),
+    sumWaterMl(userId, d),
   ]);
   let meals = rows;
   try {
@@ -332,6 +336,7 @@ export async function getNutritionDay(userId: string, date?: string): Promise<Nu
     eatback_pct,
     targets_wait,
     has_recent_food,
+    water_ml,
   };
 }
 

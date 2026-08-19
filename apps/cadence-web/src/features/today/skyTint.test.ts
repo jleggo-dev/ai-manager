@@ -19,14 +19,15 @@ const day = (top: number, first: boolean): SkyBand => ({ top, height: 1000, firs
 describe('skyLightnessAt', () => {
   it('reads the stops it was given, and interpolates between them', () => {
     expect(skyLightnessAt(FIRST_SKY_L, 0)).toBeCloseTo(0.95);
-    expect(skyLightnessAt(FIRST_SKY_L, 1)).toBeCloseTo(0.23);
-    // Halfway between the 0.74 dusk stop (0.58) and the 0.88 one (0.33).
-    expect(skyLightnessAt(FIRST_SKY_L, 0.81)).toBeCloseTo(0.455, 2);
+    // Linen's night floor is brand dusk (#3E5C76), not an invented indigo — dim, never black.
+    expect(skyLightnessAt(FIRST_SKY_L, 1)).toBeCloseTo(0.46);
+    // Halfway between the 0.74 dusk stop (0.76) and the 0.88 one (0.56).
+    expect(skyLightnessAt(FIRST_SKY_L, 0.81)).toBeCloseTo(0.66, 2);
   });
 
   it('clamps rather than extrapolating off either end', () => {
     expect(skyLightnessAt(FIRST_SKY_L, -3)).toBeCloseTo(0.95);
-    expect(skyLightnessAt(LATER_SKY_L, 4)).toBeCloseTo(0.23);
+    expect(skyLightnessAt(LATER_SKY_L, 4)).toBeCloseTo(0.46);
   });
 });
 
@@ -42,9 +43,14 @@ describe('the sky under the header', () => {
     // Morning stretch of today: cream. Evening stretch: night.
     expect(skyLightnessUnder(200, bands)! > DARK_SKY_L).toBe(true);
     expect(skyLightnessUnder(900, bands)! > DARK_SKY_L).toBe(false);
-    // The crossing itself lands at 71% down the day — between the 0.56 stop (0.84) and the 0.74 one (0.58).
-    expect(skyLightnessUnder(700, bands)! > DARK_SKY_L).toBe(true);
-    expect(skyLightnessUnder(720, bands)! > DARK_SKY_L).toBe(false);
+    /**
+     * The crossing moved DOWN the day under Linen — ~84% instead of ~71% — and that is the change
+     * the study was picked for: the same 0.62 seam now leaves the band cream for most of a scroll
+     * (~21% dark instead of ~34%), because the sky no longer dives into a violet dusk. Pinned at
+     * both sides of the new line so a drift in the ramp shows up here rather than on a device.
+     */
+    expect(skyLightnessUnder(800, bands)! > DARK_SKY_L).toBe(true);
+    expect(skyLightnessUnder(860, bands)! > DARK_SKY_L).toBe(false);
   });
 
   it('reads tomorrow with tomorrow’s ramp — the sunrise band makes its top bright', () => {
@@ -53,7 +59,7 @@ describe('the sky under the header', () => {
     expect(skyLightnessUnder(1040, bands)!).toBeLessThan(DARK_SKY_L);
     expect(skyLightnessUnder(40, bands)!).toBeGreaterThan(DARK_SKY_L);
     // ...and by 30% down, the later day is at its brightest.
-    expect(skyLightnessUnder(1300, bands)!).toBeCloseTo(0.96, 2);
+    expect(skyLightnessUnder(1300, bands)!).toBeCloseTo(0.97, 2);
   });
 
   it('ignores a day that has not been laid out yet', () => {

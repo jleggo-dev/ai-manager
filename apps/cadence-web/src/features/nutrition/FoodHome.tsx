@@ -8,6 +8,7 @@ import { MacroBars } from './MacroBars.tsx';
 import { NutritionInsightCard } from './NutritionInsightCard.tsx';
 import { NutritionRing } from './NutritionRing.tsx';
 import { ShopSheet } from './ShopSheet.tsx';
+import { WaterRow } from './WaterRow.tsx';
 import { WeekMenuSheet } from './WeekMenuSheet.tsx';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
@@ -77,6 +78,8 @@ export function FoodHome({
   const [loggedDates, setLoggedDates] = useState<Set<string>>(new Set());
   const [hasWeek, setHasWeek] = useState(false);
   const [recipeCount, setRecipeCount] = useState<number | null>(null);
+  /** Mirrors the day's water so a tap moves the row now; the day's own number seeds it. */
+  const [waterMl, setWaterMl] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -179,6 +182,7 @@ export function FoodHome({
               <MacroBars eaten={day?.totals ?? {}} targets={scored ? (day?.targets ?? null) : null} />
             </div>
           </div>
+          <WaterRow ml={waterMl ?? day?.water_ml ?? 0} onLogged={setWaterMl} />
         </div>
 
         <NutritionInsightCard compact />

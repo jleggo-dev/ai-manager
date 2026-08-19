@@ -32,11 +32,26 @@ export type ClassifiedFoodIntent = ClassifiedLogFood | ClassifiedSaveRecipe | Cl
 
 const MEAL_WORDS: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
-/** Context injected so the coach never claims a log/save before the user confirms. */
+/**
+ * What the coach is told when a turn mentions eating.
+ *
+ * **It used to describe a confirm sheet and tell her to wait for it. Both halves were wrong.**
+ * The sheet is gone (owner ruling 2026-08-19 — logging belongs in the nutrition module, not in a
+ * popup over the conversation), and "acknowledge what you heard and wait" read as an instruction
+ * about the WHOLE turn: on a message that mentioned a meal AND asked for a plan change, she
+ * acknowledged and waited, and the plan never moved.
+ *
+ * So it now says the two true things: point them at the screen that does this properly, and let
+ * the rest of the turn proceed exactly as it would have. Keeping the name means every call site
+ * and test that referenced it still resolves.
+ */
 export const FOOD_CONFIRM_CONTEXT = [
-  'FOOD SURFACE (app confirm sheet): the user may be logging food, saving a recipe, or updating dietary prefs.',
-  'Acknowledge what you heard and wait — the app shows a confirm sheet. Nothing is logged or saved until they confirm.',
-  'Never claim you already logged a meal, saved a recipe, or updated allergies/diet.',
+  'FOOD MENTIONED: they said something about what they ate or drank.',
+  'You do NOT log food yourself and no card is coming, so never say it is logged, saved or counted.',
+  'Point them at their Food home instead — it is one tap from the food strip on their plan, and it holds the day, every meal slot, water and their targets.',
+  'Say it in one short line, in your own words, and only once — it is a signpost, not a lecture.',
+  'If food tracking is not part of their plan at all, do not assume they want it: ask plainly whether they would like to start tracking what they eat, and if they say yes, put up the card that adds it.',
+  'None of this changes the rest of the turn: if they also asked for a plan change, a goal edit or anything else, do that now with the right tool exactly as you normally would.',
 ].join(' ');
 
 function hasDietaryIntent(t: string): boolean {
@@ -64,6 +79,16 @@ function hasSaveRecipeIntent(t: string): boolean {
 const NOT_FOOD_CONTEXT =
   /\b(run|runs|running|ran|walk|walked|jog|ride|rode|cycl\w*|swim|swam|lift\w*|workout|training|session|reps?|sets?|pace|tempo|zone \d|heart ?rate|hr\b|bpm|km|kms|kilometers?|miles?|mins? of|stretch\w*|mobility|yoga|meditat\w*|breathwork|journal\w*|sleep|slept|nap|mood|stress|anxious|physio|injur\w*|knee|shoulder|elbow|ankle|back pain)\b/i;
 
+/**
+ * Somebody other than the user did the having — so it is not a meal to log, whatever followed.
+ *
+ * "we" and "I" are deliberately absent: "we had dinner" is a log. Everyone else is not, and this
+ * is the one guard that does not need to guess at the object, which is why it catches the sentence
+ * that broke the noun list ("My son is okay he just had a bead stuck in his ear").
+ */
+const SOMEONE_ELSE_HAD =
+  /\b(he|she|they|his|her|their|my (son|daughter|kid|kids|child|wife|husband|partner|mum|mom|dad|father|mother|friend|boss|colleague|sister|brother))\b[^.!?]{0,40}?\bhad\b/i;
+
 /** Nouns that follow "had a/an" and are never food, however they are modified. */
 const NOT_FOOD_NOUN =
   /\b(time|day|week|weekend|month|year|morning|afternoon|evening|night|go|chat|talk|think|rest|break|nap|shower|call|meeting|look|feeling|sense|moment|problem|issue|setback|flare|episode)\b/i;
@@ -80,12 +105,23 @@ const NOT_FOOD_NOUN =
  *    estimator was handed a run and dutifully priced it as `{"name":"That last run"}`. The old
  *    guard listed adjectives immediately after "had a", so a single adverb walked straight past it.
  *
- * So the shape changed. A blocklist of phrasings cannot win; what these rules do instead is demand
- * that "had" be UNCONTRADICTED — the turn must not be about training, sleep or mood, and the thing
- * had must not be one of the nouns nobody eats. `ate`/`drank` need no such help: they are specific
- * verbs that mean one thing. A wrong draft is expensive here — the sheet interrupts a conversation
- * to ask someone to affirm something absurd, which is exactly how confirm-first loses trust rather
- * than earning it — so when the signal is only "had", silence is the correct answer.
+ * So the shape changed. A blocklist of phrasings cannot win — and the third failure is what finally
+ * proved it, because no list would have held:
+ *  - "My son is okay he just HAD A BEAD STUCK IN HIS EAR. I can still log my meals." → a confirm
+ *    sheet offering to log a child's ER trip as a meal ("Unknown Food", confidence 0.3). "bead"
+ *    and "ear" are not on any not-food list, and never could be: the list would have to contain
+ *    every noun in English that is not a food.
+ *
+ * **The rule that catches it is not another noun list: a food log is FIRST PERSON.** Whatever the
+ * object turns out to be, "he had", "she had", "my son had" is somebody else's sentence and never
+ * this user's meal — which holds for beads, surgery, meetings and every other noun we will never
+ * think of. `NOT_FOOD_NOUN` stays for the first-person cases it already covers ("I had a rough
+ * week"); this is the guard for the ones it structurally cannot.
+ *
+ * A wrong draft is the expensive mistake here, and not only because it looks silly: the same match
+ * tells the coach a sheet is up, and on 2026-08-19 that landed on the turn where the owner asked
+ * her to clean up his plan — she acknowledged the sheet and never touched the plan. Confirm-first
+ * is only trustworthy when what it offers to confirm is plausible.
  */
 function hasLogFoodIntent(t: string): boolean {
   if (/\b(my )?usual\s+(breakfast|lunch|dinner|snack)\b/i.test(t)) return true;
@@ -98,6 +134,8 @@ function hasLogFoodIntent(t: string): boolean {
   if (!/\bhad\b/i.test(t)) return false;
   if (/\bwant to (eat|have)\b/i.test(t)) return false;
   if (/\bhad\s+(to|been|enough)\b/i.test(t)) return false;
+  // Somebody ELSE had it — not a meal of theirs to log, whatever the object turns out to be.
+  if (SOMEONE_ELSE_HAD.test(t)) return false;
   // "had a really hard time", "had an absolutely brutal week" — any modifiers, then a non-food noun.
   if (/\bhad\s+(a|an|the)\s+(?:\w+\s+){0,3}?(?=\w)/i.test(t) && NOT_FOOD_NOUN.test(t)) return false;
   // A meal word makes it unambiguous even in a busy sentence ("after my run I had breakfast").

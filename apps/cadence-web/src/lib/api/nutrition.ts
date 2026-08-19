@@ -47,6 +47,8 @@ export interface NutritionDayData {
   targets_wait?: { days_logged: number; days_needed: number } | null;
   /** Any food signal in the trailing 14 days (or targets set) — the trail strip's door gate. */
   has_recent_food?: boolean;
+  /** The day's water in ml (0037). Zero is an honest number — water has no provisional state. */
+  water_ml?: number;
 }
 
 /** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. */
@@ -54,6 +56,21 @@ export async function getNutritionDay(date?: string): Promise<NutritionDayData |
   const res = await fetch(`${BASE}/nutrition/day${date ? `?date=${date}` : ''}`, { headers: headers() });
   if (!res.ok) return null;
   return res.json();
+}
+
+/**
+ * One pour of water, ml. No confirm step and no estimate: the amount the user tapped IS the data,
+ * so the day's new total comes straight back. Returns null if it could not be written.
+ */
+export async function logWater(ml: number, date?: string): Promise<number | null> {
+  const res = await fetch(`${BASE}/nutrition/water`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ ml, ...(date ? { date } : {}) }),
+  });
+  if (!res.ok) return null;
+  const out = (await res.json()) as { water_ml?: number };
+  return typeof out.water_ml === 'number' ? out.water_ml : null;
 }
 
 /** Tap-to-confirm/correct a meal — a bare confirm graduates the AI's numbers into the totals. */
