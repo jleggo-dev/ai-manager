@@ -211,10 +211,10 @@ const ACTIONS: EvalCase[] = [
      */
     id: 'A16',
     kind: 'action',
-    turn: 'today is overloaded… so like cut out everything expcept piano and meal tracking',
+    turn: "this week's been a write-off honestly. cut the grip finisher and the long run — keep the morning sit",
     expect: ['propose_plan_change'],
     allow: [...DOSSIER_READS, 'get_recent_logs'],
-    from: 'Owner transcript 2026-08-19 12:12 — verbatim. She explained why no change was needed instead of showing the card.',
+    from: 'Owner transcript 2026-08-19 12:12, adapted to the seeded world. His words were "cut out everything expcept piano and meal tracking"; pasted verbatim the case tested nothing, because this world has no piano and no overloaded day, and she correctly asked what he meant ("today\'s actually a pretty light day already"). What survives is the shape that produced the failure: a rough stretch named as the reason, specific commitments named for removal, and a coach whose brand voice tempts her to reassure instead of act.',
   },
   {
     id: 'A14',
