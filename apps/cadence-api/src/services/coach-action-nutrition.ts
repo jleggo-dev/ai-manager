@@ -27,7 +27,7 @@ import type { MealKind } from '@cadence/shared';
 export const LOG_NUTRITION: CoachActionTool = {
   name: 'log_nutrition',
   description:
-    'Write down something the user ate or drank, from the conversation. Use it when food or water comes up sideways — a meal they remember eating earlier, water after a session — and NOT for a meal in the message they just sent when the app is already showing them a confirm sheet for it (the turn context tells you when it is). Water counts immediately: pass the amount they stated, {"water_ml": 500} — a glass is about 250, 8 oz about 240. A meal goes down PENDING: pass their words, {"text": "two eggs and sourdough toast", "meal": "breakfast"} — it lists on their day with estimated numbers and does NOT count until they tap it on their Food home, so say the numbers back and point them there. Pass words or "water_ml", never both in one call.',
+    'Write down something the user ate or drank, from the conversation. Use it when food or water comes up sideways — a meal they remember eating earlier, water after a session — and NOT for a meal in the message they just sent when the app is already showing them a confirm sheet for it (the turn context tells you when it is). Water takes effect immediately: pass the amount they stated, {"water_ml": 500} — a glass is about 250, 8 oz about 240. A meal does NOT: pass their words, {"text": "two eggs and sourdough toast", "meal": "breakfast"} and it lists on their day with estimated numbers, counting only once they tap it on their Food home — so say the numbers back and point them there. Words or "water_ml", never both in one call.',
   parameters: {
     properties: {
       text: {

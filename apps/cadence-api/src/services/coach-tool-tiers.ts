@@ -172,7 +172,9 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
   {
     key: 'food',
     label: 'what they eat, their targets, their recipes, and nutrition facts',
-    members: ['get_nutrition', 'log_nutrition'],
+    // Only get_nutrition: categories are the map of the TAIL, and log_nutrition is always-on,
+    // so filing it here would point at something she is already holding (coach-meta-tools.test).
+    members: ['get_nutrition'],
   },
   { key: 'writing', label: 'what they have written', members: ['get_journal'] },
 ];

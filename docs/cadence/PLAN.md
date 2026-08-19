@@ -7142,8 +7142,58 @@ is added when they do; the same shapes fill in.
 | 4 — kitchen | 10, 10a–c | Kitchen tab: paste-a-recipe door, recipes with per-serving numbers, meal-prep composer (meal = recipes + foods → day + slot), planning week/day, shopping list generated never kept. Ruling: the Kitchen is prep, not one-tap logging. |
 | 5 — coach flows | 03, 04, 04b | "Talk food with me" menu as coach quick picks; allergies ask → HARD STOP / SOFT confirm card; day-7 week read-back ("what did we miss") ; weigh-in INSIDE the weekly check-in (units: two Settings controls, lb for body + grams for food, never one metric switch); targets proposal card ("your average minus 300, snacking included"). Wires `weekly-readout` (job exists, no caller). |
 
-**The design asks for things the repo cannot honour yet** (report, don't fake): **water tracking**
-(frames 02/08 carry a Water row + "counts as two glasses"; no water column/API exists — needs an
-owner call on the data model); meal-slot open/close times ("closes 10:30", "still open");
+**Water tracking — GREENLIT and built (owner, 2026-08-19).** `cadence.water_logs` (0037): one row
+per pour, `ml` canonical (glasses and ounces are display arithmetic, never storage), summed onto
+`GET /nutrition/day` as `water_ml` and rendered as the Food home's eight-glass row — optimistic,
+no confirm card, and never a target: eight is the row's LENGTH, not a quota. `POST /nutrition/water`
+is the write. Still open from the frames: "counts as two glasses of water" on a logged drink
+(07) needs the drink composer, which is slice 2.
+
+**The design asks for things the repo cannot honour yet** (report, don't fake):
+meal-slot open/close times ("closes 10:30", "still open");
 XP/streak chrome in the frames is the OLD shell (pre-#237 Today/Week pill — the strip/home ignore
 it); acts 05–07 frames don't exist yet. Frame 01's phone chrome ≠ shipped header, deliberately.
+
+
+## Nutrition becomes a hand, not just an eye — `log_nutrition` (owner directive, 2026-08-19)
+
+> "I think nutrition is a tool that can be called with a few different kinds of variables that
+> needs to be added to the harness."
+
+The read side was already consolidated — `get_nutrition` is one facade over four views (log /
+targets / recipes / lookup). The WRITE side had exactly one food action, `set_macro_targets`, so
+the coach could set what someone should eat and never write down what they did. Everything else
+went through the chat's deterministic classifier → confirm sheet, which only fires on the message
+the user just typed.
+
+**One tool, a small menu of variables** (`coach-action-nutrition.ts`, its own file per the
+`update_constraint` precedent — `coach-actions.ts` is against the 500-line gate):
+
+| variable | what happens |
+|---|---|
+| `water_ml` | applies immediately — the user stated the amount, there is no estimate to vet, and a confirm card for a glass of water is friction pretending to be safety |
+| `text` (+ optional `meal`) | lands **provisional** — the words are theirs, the NUMBERS are a parse, and nothing the user has not tapped may count |
+
+`alwaysProvisional` on `logMeal` is what makes the second one structural rather than instructed:
+the meal lists on their day, outside the totals, one ✓ from the Food home away. A call carrying
+both is refused and writes nothing.
+
+**Layer 1 (always-on), deliberately.** Eating is the highest-frequency data change in the app and
+the tiers file's own measured lesson is that a demoted action is an action that never fires
+(`update_constraint`: found 3/3, called 0/3). Cost is ~190 tokens a turn.
+
+**The seam with the confirm sheet is closed from both sides:** `FOOD_CONFIRM_CONTEXT` now tells her
+not to call the tool for the meal the sheet already covers, and the description says the same. The
+sheet keeps first claim on a just-typed meal; the tool takes the sideways cases the classifier
+never catches.
+
+`get_food_log` carries today's water so the write half has a matching read. Eval cases A14 (water,
+with an argument check that the stated amount survives) and A15 (the remembered meal) are the
+must-fire pair; `log_nutrition` was added to the forbid list of C2 ("i had to skip it" — the turn
+that once logged a Spartan Beast for breakfast) and C4 ("i'm just tired today" — a hard day is not
+a data-entry event).
+
+**Two CI gates caught real mistakes here, exactly as TOOL-HARNESS.md promises:** the tool was filed
+in the `food` category (categories map the TAIL — an always-on tool filed there points at something
+she is already holding), and the description missed the canonical safety-gate phrasing. Both are in
+the checklist; neither would have been caught by reading the diff.

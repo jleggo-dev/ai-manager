@@ -106,6 +106,7 @@ export {
   type NutritionInsightItem,
   type NutritionInsightKind,
   type NutritionInsightStatus,
+  logWater,
 } from './api/nutrition.ts';
 
 export {
