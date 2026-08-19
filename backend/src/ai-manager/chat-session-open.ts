@@ -5,6 +5,7 @@
  * re-exports everything here, so every existing import path still works.
  */
 import { getProcessingJobBySlug, getProcessingJob, updateProcessingJob } from '../models/processing-jobs.ts';
+import { hashPrompt } from '../services/session-persona-refresh.ts';
 import { getWorkflow, getWorkflowBySlug } from '../models/workflows.ts';
 import { upsertCallingApplication } from '../models/calling-applications.ts';
 import { getAiProfileWithKeys, hydrateAiProfileProviderKeys } from '../models/ai-profiles.ts';
@@ -162,6 +163,21 @@ export async function openChatSession(
    */
   const summarizer = (jobConfig as { summarizer?: unknown } | null)?.summarizer;
 
+  /**
+   * What the system prompt was BUILT FROM, so a later job edit can rebuild it (see
+   * `session-persona-refresh.ts`). The stored prompt is a snapshot, and until now nothing recorded
+   * which job text produced it — so nothing could tell an outdated snapshot from a session whose
+   * caller supplied its own prompt, and refreshing either would have risked discarding the other.
+   *
+   * `jobHash` identifies the job text used; `caller` keeps the per-call half verbatim, because it
+   * is the only part that cannot be re-derived. Recorded only for job-bound sessions with no
+   * workflow, which are the only ones a refresh will touch.
+   */
+  const promptProvenance =
+    !workflow && jobSystemPrompt
+      ? { prompt: { jobHash: hashPrompt(jobSystemPrompt), caller: systemPrompt ?? null } }
+      : null;
+
   const session = await dbCreateSession({
     ai_profile_id: profile.id,
     processing_job_id: jobId,
@@ -173,7 +189,9 @@ export async function openChatSession(
     status: 'active',
     system_prompt: effectiveSystemPrompt,
     uses_user_credentials: usesUserCreds,
-    ...(summarizer ? { config: { summarizer } } : {}),
+    ...(summarizer || promptProvenance
+      ? { config: { ...(summarizer ? { summarizer } : {}), ...(promptProvenance ?? {}) } }
+      : {}),
   });
 
   /* ── Auto-register calling application + tag linked job ── */
