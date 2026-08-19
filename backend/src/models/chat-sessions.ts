@@ -223,6 +223,13 @@ export async function listChatMessages(sessionId: string): Promise<ChatMessageRo
   return data || [];
 }
 
+/** Rewrite one stored message. The system row is the only caller today (see session-persona-refresh). */
+export async function updateChatMessage(id: string, updates: Partial<ChatMessageRow>): Promise<ChatMessageRow> {
+  const { data: row, error } = await tenantFrom(MESSAGE_TABLE).update(updates).eq('id', id).select().single();
+  if (error) throw new Error(`Chat message update error: ${error.message}`);
+  return row;
+}
+
 export async function deleteChatMessages(sessionId: string): Promise<void> {
   const { error } = await tenantFrom(MESSAGE_TABLE).delete().eq('chat_session_id', sessionId);
   if (error) throw new Error(`Chat messages delete error: ${error.message}`);

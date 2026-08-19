@@ -12,6 +12,7 @@ import { getAuthContext, effectiveUserId } from '../db/tenant.ts';
 import { resolveTimeoutMs } from './job-execution-utils.ts';
 import { getSessionProviderWithKey, resolveSessionClient } from './chat-session-lifecycle.ts';
 import { maybeCompactSession } from '../services/session-compaction.ts';
+import { refreshSessionSystemPrompt } from '../services/session-persona-refresh.ts';
 import {
   getChatSession as dbGetSession,
   updateChatSession as dbUpdateSession,
@@ -128,6 +129,11 @@ export async function sendChatMessage(
     workflow_step_id: workflowStepId,
     rule_set_key: ruleSetKey,
   });
+
+  /* The job may have been re-prompted since this session opened; catch it up before anything
+     reads the history. Ordered BEFORE compaction so the summarizer sees the current instructions
+     and the token estimate reflects them. `resolvedJob` was already fetched above. */
+  await refreshSessionSystemPrompt(session, resolvedJob);
 
   /* Session compaction: summarize older turns when over token threshold */
   await maybeCompactSession(session, session.calling_application || 'unknown');
