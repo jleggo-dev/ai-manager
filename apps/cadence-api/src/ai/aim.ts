@@ -112,8 +112,18 @@ export function runJobBySlug(
  * Binding the job (not just the profile) is what (a) makes AI Admin own the persona —
  * the job's `config.systemPrompt`, editable in build rules — and (b) turns on
  * conversation diagnostics/analytics (they key off `processing_job_id`). The
- * per-user dossier is passed as `systemPrompt`; the engine appends it to the job's
- * persona. Returns AI Admin sessionId.
+ * per-user dossier CAN be passed as `systemPrompt` (the engine appends it to the job's persona),
+ * but the coach does not: `routes/coach.ts` opens with no caller prompt and injects the dossier as
+ * a separate `<context>` turn instead, so the persona prefix stays cacheable. Worth knowing because
+ * it means `chat_sessions.system_prompt` holds the job persona and nothing else.
+ *
+ * **That column is a SNAPSHOT taken here, once.** Editing the job's persona afterwards
+ * (`set-coach-persona.ts`) reaches only sessions opened later — a live thread keeps what it was
+ * born with, and `resetChatSession` replays the same stale copy. Measured 2026-08-19: 205 active
+ * Cadence sessions, 6 carrying a persona pushed that afternoon. See PLAN.md, "A persona edit
+ * reaches nobody who is already talking to her".
+ *
+ * Returns AI Admin sessionId.
  */
 export function openCoachSession(cadenceUserId: string, opts: { workflowSlug?: string; systemPrompt?: string } = {}) {
   return withAim(cadenceUserId, () =>

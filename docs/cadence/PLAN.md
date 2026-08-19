@@ -7264,3 +7264,67 @@ a data-entry event).
 in the `food` category (categories map the TAIL — an always-on tool filed there points at something
 she is already holding), and the description missed the canonical safety-gate phrasing. Both are in
 the checklist; neither would have been caught by reading the diff.
+
+
+## A persona edit reaches nobody who is already talking to her (measured, 2026-08-19)
+
+The day's most useful finding, and it was invisible until two numbers sat side by side.
+
+`set-coach-persona.ts` updates the coach processing job's `config.systemPrompt`. **AI Admin
+snapshots that prompt onto the chat session at open** (`chat_sessions.system_prompt`), so a live
+thread keeps the persona it was born with, for as long as it lives. Measured on production the
+minute after the owner ran the script:
+
+| | |
+|---|---|
+| coach job `config.systemPrompt` | 20,647 chars, contains the new rule |
+| owner's live session (opened 2026-08-15, 82 messages, `status: active`) | **19,832 chars, does NOT contain it** |
+| Cadence sessions `status: active` | **205** |
+| …of those, carrying the new rule | **6** — every one opened after the push |
+
+And threads barely rotate: `/coach/current` marks one stale only after **`STALE_IDLE_MS` = 7 days
+idle** (or when it predates the first plan commit). A daily user's thread therefore never rotates,
+which is exactly the owner's case — one conversation open since 15 August.
+
+**This is why a prompt fix can look like it did nothing.** The eval passes because it seeds a fresh
+user and a fresh session every run, so it always tests the newest persona; the person who reported
+the bug keeps talking to the old one. Every persona edit in this project's history has had that
+property, and nothing said so anywhere. It also compounds the un-compacted thread above: the
+sessions least likely to have the fix are the longest ones, which are also the ones where tool
+calling is most degraded.
+
+**The mechanism, traced.** `backend/src/ai-manager/chat-session-open.ts:150` is the ONLY place the
+chat path ever reads `config.systemPrompt`; it freezes the result into `chat_sessions.system_prompt`
+AND writes it as a `role:'system'` message row (`:190`). Every later send rebuilds the request from
+stored history (`chat-history.ts:20`, lifted into v2 `instructions` by
+`devs-ai-v2/request-builder.ts:108`). The near-miss that makes this easy to misdiagnose: the send
+path DOES refetch the job (`chat-messaging-resolve.ts:120`) — for diagnostics and response format,
+never for the prompt.
+
+**Two consequences worth knowing before choosing a fix:**
+- **`resetChatSession` does not help.** It re-writes `content: session.system_prompt`
+  (`chat-session-lifecycle.ts:154-167`) — the stale snapshot, replayed. A "reset conversation"
+  button built on it would look like a fix and change nothing.
+- **The snapshot is the raw persona, unmixed.** The comment at `aim.ts:114` says the per-user
+  dossier is passed as `systemPrompt` and appended to the persona, but the only production caller
+  passes nothing (`routes/coach.ts:94`) and the dossier rides as a separate `<context>` turn to keep
+  the persona prefix cacheable. So `chat_sessions.system_prompt` holds the job persona and nothing
+  else — replacing it in place cannot clobber per-user text, which makes option 2 far cheaper than
+  it looks.
+
+**Not fixed here — it is a product call, and there are three shapes:**
+1. **A new staleness reason.** Add `'persona'` beside `'idle'` and `'graduated'`: a session whose
+   snapshot differs from the job's current prompt is stale, so the next message opens fresh. Small,
+   matches the existing pattern — but it ends everyone's conversation on every prompt deploy, which
+   is a real cost mid-thought.
+2. **Refresh in place.** `coach-block-refresh.ts` is the working template (hash-gated, with a
+   `supersedeHeader` for the version it replaces) but the persona sits outside its `BLOCKS` by
+   design, and two things differ: the persona is a `role:'system'` row rather than a `<context>`
+   turn, and it has no closed set of locally-renderable variants to compare against — it would
+   compare to the job's current `config.systemPrompt` instead. Since the snapshot is unmixed,
+   rewriting that row (and the session column) on a hash mismatch is a genuinely small change.
+3. **A "start fresh" affordance.** There is no way for a user to begin a new conversation today;
+   the only lever is seven days of silence. Worth having regardless of the other two.
+
+Whichever ships, the honest interim is to say it out loud: **after `set-coach-persona.ts`, verify
+against a NEW session, and expect existing conversations to keep the old behaviour.**
