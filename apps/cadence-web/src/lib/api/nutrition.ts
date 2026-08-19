@@ -98,17 +98,6 @@ export async function setMacroTargets(targets: MealMacros): Promise<MealMacros |
   return (await res.json()).targets;
 }
 
-/** Set the net-calorie eat-back % (0–100) — how much of exercise burn to add to the day's allowance. */
-export async function setEatbackPct(pct: number): Promise<number | null> {
-  const res = await fetch(`${BASE}/nutrition/eatback`, {
-    method: 'PATCH',
-    headers: headers(),
-    body: JSON.stringify({ pct }),
-  });
-  if (!res.ok) return null;
-  return (await res.json()).eatback_pct;
-}
-
 export interface PlateAdvice {
   estimate_kcal: number | null;
   advice: string;

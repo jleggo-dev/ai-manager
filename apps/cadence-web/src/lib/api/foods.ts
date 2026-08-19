@@ -184,12 +184,7 @@ export interface FoodCandidate {
 }
 
 export type FoodCaptureResult =
-  | { status: 'ok'; candidate: FoodCandidate; label_readable?: boolean }
-  | { status: 'unavailable' | 'error'; message: string };
-
-export type FoodIdentifyResult =
-  | { status: 'ok'; name: string | null; brand: string | null; confidence: number }
-  | { status: 'unavailable' | 'error'; message: string };
+  { status: 'ok'; candidate: FoodCandidate } | { status: 'unavailable' | 'error'; message: string };
 
 export type FoodDetailResult =
   { status: 'ok'; food: Food } | { status: 'unavailable' | 'error' | 'not_found'; food: null };
@@ -307,83 +302,6 @@ export async function estimateFood(text: string): Promise<FoodCaptureResult> {
     return { status: 'ok', candidate };
   } catch {
     return { status: 'error', message: "Couldn't reach food capture — try again in a moment." };
-  }
-}
-
-/** POST /nutrition/foods/parse-label — Nutrition Facts photo → unsaved candidate. */
-export async function parseNutritionLabel(input: {
-  photo: string;
-  hint?: string;
-  name?: string;
-  brand?: string | null;
-}): Promise<FoodCaptureResult> {
-  try {
-    const res = await fetch(`${BASE}/nutrition/foods/parse-label`, {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({
-        photo: input.photo,
-        ...(input.hint ? { hint: input.hint } : {}),
-        ...(input.name ? { name: input.name } : {}),
-        ...(input.brand !== undefined ? { brand: input.brand } : {}),
-      }),
-    });
-    if (res.status === 404) {
-      return {
-        status: 'unavailable',
-        message: "Label capture isn't reachable just now — the meal photo path on Today still works.",
-      };
-    }
-    if (!res.ok) {
-      return {
-        status: 'error',
-        message: "Couldn't read that label — try a clearer shot of the Nutrition Facts panel.",
-      };
-    }
-    const body = await readJson(res);
-    if (!isRecord(body)) return { status: 'error', message: "Couldn't read that label — try another photo." };
-    const candidate = parseCandidate(body.candidate ?? body);
-    if (!candidate) return { status: 'error', message: "Couldn't shape that label into a food — try again." };
-    return {
-      status: 'ok',
-      candidate,
-      label_readable: body.label_readable !== false,
-    };
-  } catch {
-    return { status: 'error', message: "Couldn't reach label capture — try again in a moment." };
-  }
-}
-
-/** POST /nutrition/foods/identify — front-of-pack photo → name + brand. */
-export async function identifyFood(photo: string, hint?: string): Promise<FoodIdentifyResult> {
-  try {
-    const res = await fetch(`${BASE}/nutrition/foods/identify`, {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({ photo, ...(hint ? { hint } : {}) }),
-    });
-    if (res.status === 404) {
-      return {
-        status: 'unavailable',
-        message: "Name-from-photo isn't reachable just now — type the name and snap the Nutrition Facts panel.",
-      };
-    }
-    if (!res.ok) {
-      return {
-        status: 'error',
-        message: "Couldn't read the front of that pack — type the name, or try another photo.",
-      };
-    }
-    const body = await readJson(res);
-    if (!isRecord(body)) return { status: 'error', message: "Couldn't identify that pack — type the name instead." };
-    return {
-      status: 'ok',
-      name: typeof body.name === 'string' ? body.name : null,
-      brand: typeof body.brand === 'string' ? body.brand : null,
-      confidence: typeof body.confidence === 'number' ? body.confidence : 0.5,
-    };
-  } catch {
-    return { status: 'error', message: "Couldn't reach identify — type the name and snap the label instead." };
   }
 }
 

@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import type { SeriesPoint } from '@cadence/shared';
-import type { MealMacros } from '../lib/api.ts';
 
 /**
  * Shared inline-SVG viz primitives for the dashboards (Today + Progress). No chart library,
@@ -102,56 +101,6 @@ export function DotRow({ dots, color = 'var(--forest)' }: { dots: boolean[]; col
       {dots.map((on, i) => (
         <span key={i} className="dot" style={{ background: on ? color : 'var(--surface-3)' }} />
       ))}
-    </div>
-  );
-}
-
-const MACRO_RINGS = [
-  { k: 'protein_g', label: 'Protein', color: 'var(--forest)' },
-  { k: 'carbs_g', label: 'Carbs', color: 'var(--dawn-3)' },
-  { k: 'fat_g', label: 'Fat', color: 'var(--sage)' },
-] as const;
-
-/** MyFitnessPal-style macro rings — one ring per macro, filling as you eat toward the target;
- *  the caption counts DOWN what's left (never what you're over). kcal sits quietly beneath. */
-export function MacroRings({
-  totals,
-  targets,
-  left,
-}: {
-  totals: MealMacros;
-  targets: MealMacros;
-  left: MealMacros | null;
-}) {
-  return (
-    <div className="macro-rings">
-      <div className="macro-rings-row">
-        {MACRO_RINGS.map(({ k, label, color }) => {
-          const target = targets[k] ?? 0;
-          const eaten = totals[k] ?? 0;
-          const rem = left?.[k] ?? Math.max(0, target - eaten);
-          const reached = target > 0 && eaten >= target;
-          return (
-            <div className="macro-ring" key={k}>
-              <Ring fraction={target > 0 ? eaten / target : 0} color={color} size={62} thickness={6}>
-                <span className="macro-ring-n">{reached ? '✓' : Math.round(rem)}</span>
-              </Ring>
-              <div className="macro-ring-l">{label}</div>
-              <div className="macro-ring-c">{reached ? 'reached' : 'g left'}</div>
-            </div>
-          );
-        })}
-      </div>
-      {targets.kcal != null && (
-        <div className="macro-kcal">
-          <span>
-            {Math.round(totals.kcal ?? 0)} / {Math.round(targets.kcal)} kcal
-          </span>
-          <span className="macro-kcal-left">
-            {Math.round(left?.kcal ?? Math.max(0, targets.kcal - (totals.kcal ?? 0)))} left
-          </span>
-        </div>
-      )}
     </div>
   );
 }
