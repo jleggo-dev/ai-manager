@@ -1,8 +1,8 @@
-import { useEffect, useState, type CSSProperties } from 'react';
-import { getTodayBrief, type PlanViewData, type PlanDay, type PlanOccurrence } from '../../lib/api.ts';
-import { TrailFoodStrip } from '../nutrition/TrailFoodStrip.tsx';
+import { type CSSProperties, type RefObject } from 'react';
+import { type PlanViewData, type PlanDay, type PlanOccurrence } from '../../lib/api.ts';
+import { TrailCalorieCard } from '../nutrition/TrailCalorieCard.tsx';
 import { categoryOf, ICON } from './category.ts';
-import { useFitText } from './useFitText.ts';
+import { currentNodeIndex, useLandOnNow } from './useLandOnNow.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
 
 /**
@@ -104,29 +104,6 @@ function dayLabel(day: PlanDay, index: number): string {
   return stamp;
 }
 
-const MONTHS_FULL = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-function ordinal(n: number): string {
-  const v = n % 100;
-  const suffix = v >= 11 && v <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
-  return `${n}${suffix}`;
-}
-function prettyDate(dateStr: string): string {
-  const [, m, d] = dateStr.split('-').map(Number);
-  return `${MONTHS_FULL[(m ?? 1) - 1]} ${ordinal(d ?? 1)}`;
-}
 const COACH_TEXTS = ['Not feeling it? Talk to me.', 'Want to shuffle tomorrow?', "Planning ahead? Let's talk."];
 
 /**
@@ -155,12 +132,15 @@ function TrailNode({
   n,
   d,
   onOpen,
+  nodeRef,
 }: {
   occ: PlanOccurrence;
   i: number;
   n: number;
   d: number;
   onOpen: (occ: PlanOccurrence) => void;
+  /** Set on the one node the trail opens scrolled to — see `useLandOnNow`. */
+  nodeRef?: RefObject<HTMLButtonElement>;
 }) {
   const cat = categoryOf(occ.title);
   const ramp = RAMP[Math.round((n < 2 ? 0 : i / (n - 1)) * 5)]!;
@@ -178,6 +158,7 @@ function TrailNode({
 
   return (
     <button
+      ref={nodeRef}
       className="trail-node"
       style={{ transform: `translateX(${crescentX(i, n, d)}px)` }}
       onClick={() => onOpen(occ)}
@@ -233,36 +214,13 @@ export function TodayTrail({
   onCoach: () => void;
 }) {
   const days = plan.week;
-  const todayDate = days.find((d) => d.isToday)?.date ?? new Date().toISOString().slice(0, 10);
-  const todayPretty = prettyDate(todayDate);
-  const [recap, setRecap] = useState<string | null>(null);
-  // Deterministic 2-line guarantee: shrink the whole line to fit even if the recap runs long.
-  const fit = useFitText(`${todayPretty}|${recap ?? ''}`);
-  useEffect(() => {
-    let alive = true;
-    void getTodayBrief().then((b) => {
-      if (alive) setRecap(b.recap);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // The one node the trail opens on, and the day it belongs to. Only today has a "now".
+  const nowDay = days.findIndex((d) => d.isToday);
+  const nowNode = nowDay === -1 ? -1 : currentNodeIndex(days[nowDay]!.occurrences);
+  const nowRef = useLandOnNow();
 
   return (
     <div className="trail">
-      <TrailFoodStrip date={todayDate} onOpen={onOpenFood} />
-      {/* The recap is Cadence talking about your day in the first person, so it carries that face
-          rather than a generic speech bubble (and the mark, until a face is picked). */}
-      <div className="trail-coach">
-        <CoachFace size={34} />
-        <span ref={fit.ref} style={{ fontSize: `${fit.size}px` }}>
-          <b>It&apos;s {todayPretty} —</b>{' '}
-          <span style={{ opacity: recap ? 1 : 0.9, transition: 'opacity 0.4s ease' }}>
-            {recap ?? 'everything here is a suggestion; start wherever feels right.'}
-          </span>
-        </span>
-      </div>
-
       {days.map((day, di) => (
         <section
           key={day.date}
@@ -297,16 +255,28 @@ export function TodayTrail({
               <div className="trail-empty">A clear day — rest counts too.</div>
             ) : (
               day.occurrences.map((o, i) => (
-                <TrailNode key={o.occurrence_id} occ={o} i={i} n={day.occurrences.length} d={di} onOpen={onOpen} />
+                <TrailNode
+                  key={o.occurrence_id}
+                  occ={o}
+                  i={i}
+                  n={day.occurrences.length}
+                  d={di}
+                  onOpen={onOpen}
+                  nodeRef={di === nowDay && i === nowNode ? nowRef : undefined}
+                />
               ))
             )}
           </div>
           {day.occurrences.length > 0 && (
+            /* Top to bottom: her line, her face, your number. The calorie card is today's only —
+               it reads one day's food — and it is absent entirely for anyone not tracking, so
+               the bay simply ends at the face (TrailCalorieCard). */
             <div className={`trail-bay ${di % 2 === 0 ? 'is-left' : 'is-right'}`}>
-              <CoachFace size={58} className="trail-bay-mark" />
               <button className="trail-bay-bubble" onClick={onCoach}>
                 {COACH_TEXTS[di % COACH_TEXTS.length]}
               </button>
+              <CoachFace size={58} className="trail-bay-mark" />
+              {day.isToday && <TrailCalorieCard date={day.date} onOpen={onOpenFood} />}
             </div>
           )}
         </section>
