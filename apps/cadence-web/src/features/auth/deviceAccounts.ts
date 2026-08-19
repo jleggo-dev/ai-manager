@@ -31,6 +31,14 @@ export interface DeviceAccount {
   name: string | null;
   /** The portrait id they picked, for the row's avatar. Null → the mark. */
   faceId: string | null;
+  /**
+   * Which doors this account came through — 'google', 'apple', 'email'. What makes "sign back in
+   * using the way you signed up" possible: without it an expired session dumped the owner at a
+   * generic provider sheet, he tapped Apple, his account was Google+email, and Supabase minted a
+   * fresh empty user — which then "restarted onboarding" (2026-08-19). Older rows lack the field;
+   * readers treat that as unknown, never as none.
+   */
+  providers?: string[];
   /** Snapshot of the Supabase session, or null once it has been used up / removed. */
   refreshToken: string | null;
   accessToken: string | null;
@@ -81,11 +89,19 @@ export function rememberDeviceAccount(
   if (user.is_anonymous) return;
   const list = read().filter((a) => a.userId !== user.id);
   const prev = read().find((a) => a.userId === user.id);
+  const meta = (user.app_metadata ?? {}) as { provider?: string; providers?: string[] };
+  const providers =
+    Array.isArray(meta.providers) && meta.providers.length
+      ? meta.providers
+      : meta.provider
+        ? [meta.provider]
+        : (prev?.providers ?? []);
   list.push({
     userId: user.id,
     email: user.email ?? null,
     name: extra.name ?? prev?.name ?? null,
     faceId: extra.faceId ?? prev?.faceId ?? null,
+    providers,
     refreshToken: session.refresh_token ?? null,
     accessToken: session.access_token ?? null,
     savedAt: Date.now(),

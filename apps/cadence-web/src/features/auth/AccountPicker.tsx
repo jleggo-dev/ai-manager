@@ -23,12 +23,26 @@ function Avatar({ account }: { account: DeviceAccount }) {
   );
 }
 
+/** Who is signing back in, and the way they signed in before — the sign-in screen aims at this. */
+export interface ResumeTarget {
+  email: string | null;
+  name: string | null;
+  providers: string[];
+}
+
 export function AccountPicker({
   onAddAccount,
+  onSignInAs,
   onResumed,
 }: {
-  /** Opens the sign-in doors. Given an email when we know who is signing back in. */
-  onAddAccount: (email?: string) => void;
+  /**
+   * The "+" row. A new person on this phone, so it opens the FORK — get started (onboarding,
+   * account at the end) or sign in — never the sign-in sheet directly: demanding an account
+   * before onboarding is backwards for someone who does not have one yet (owner, 2026-08-19).
+   */
+  onAddAccount: () => void;
+  /** A KNOWN account whose session has expired: aim the sign-in screen at this person. */
+  onSignInAs: (target: ResumeTarget) => void;
   onResumed: () => void;
 }) {
   const [accounts, setAccounts] = useState<DeviceAccount[]>(() => listDeviceAccounts());
@@ -48,7 +62,7 @@ export function AccountPicker({
     setMsg(
       `${a.name ?? 'That sign-in'} — your session has timed out. Sign in again and everything is exactly where you left it.`,
     );
-    onAddAccount(a.email ?? undefined);
+    onSignInAs({ email: a.email, name: a.name, providers: a.providers ?? [] });
   }
 
   function forget(a: DeviceAccount) {

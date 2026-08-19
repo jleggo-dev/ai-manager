@@ -8,7 +8,7 @@ import { DevPanel } from './features/dev/DevPanel.tsx';
 import { AccountSwitcher } from './features/dev/AccountSwitcher.tsx';
 import { previewScreen } from './features/dev/previewRoutes.tsx';
 import { AuthScreen } from './features/auth/AuthScreen.tsx';
-import { AccountPicker } from './features/auth/AccountPicker.tsx';
+import { AccountPicker, type ResumeTarget } from './features/auth/AccountPicker.tsx';
 import { SignInFork } from './features/auth/SignInFork.tsx';
 import { SignUpGate } from './features/auth/SignUpGate.tsx';
 import { isAnonymousSession } from './features/auth/anonymous.ts';
@@ -225,19 +225,42 @@ function PreAuth() {
   const [view, setView] = useState<'picker' | 'fork' | 'signin'>(() =>
     listDeviceAccounts().length ? 'picker' : 'fork',
   );
+  /**
+   * Who the sign-in screen is FOR, when it is for someone in particular. An expired picker row
+   * sets it, so the screen can lead with their name and the way they signed in before — the fix
+   * for the 2026-08-19 report: the generic sheet let the owner tap Apple on a Google+email
+   * account, which minted a fresh user and "restarted onboarding".
+   */
+  const [resumeTarget, setResumeTarget] = useState<ResumeTarget | null>(null);
   if (view === 'picker')
     return (
       <AccountPicker
-        // An expired row hands its email over, so signing back in is a password and not a
-        // memory test about which address this account used.
-        onAddAccount={() => setView('signin')}
+        // A NEW person: the fork (get started → onboarding, account at the end — or sign in).
+        // This used to open the sign-in sheet, which demanded an account before onboarding.
+        onAddAccount={() => {
+          setResumeTarget(null);
+          setView('fork');
+        }}
+        // A KNOWN person whose session expired: aim the sign-in screen at them.
+        onSignInAs={(t) => {
+          setResumeTarget(t);
+          setView('signin');
+        }}
         // The session change is what actually swaps the screen (App's auth listener); this only
         // matters if a resume lands without one.
         onResumed={() => setView('fork')}
       />
     );
-  if (view === 'signin') return <AuthScreen />;
-  return <SignInFork onSignIn={() => setView('signin')} onStarted={() => setView('fork')} />;
+  if (view === 'signin') return <AuthScreen resume={resumeTarget} />;
+  return (
+    <SignInFork
+      onSignIn={() => {
+        setResumeTarget(null);
+        setView('signin');
+      }}
+      onStarted={() => setView('fork')}
+    />
+  );
 }
 
 /**
