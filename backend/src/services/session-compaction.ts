@@ -30,12 +30,35 @@ export function getSummarizerConfig(session: ChatSessionRow): SummarizerConfig |
   };
 }
 
-/** Estimate total tokens for a session from stored usage + message content. */
-export function estimateSessionTokens(session: ChatSessionRow, messages: ChatMessageRow[]): number {
-  const fromCounters = (session.total_prompt_tokens || 0) + (session.total_completion_tokens || 0);
-  if (fromCounters > 0) return fromCounters;
+/**
+ * How big the NEXT request will be — which is the stored history, and nothing else.
+ *
+ * This used to prefer `total_prompt_tokens + total_completion_tokens`, and those are **cumulative
+ * across every turn the session has ever taken**, not the size of the context. A real coach session
+ * measured 2026-08-19 carried ~119k of actual history and reported **3,015,788** on those counters,
+ * because each of its 82 turns added its own prompt again. Against the 8k default trigger that is
+ * not a slight over-estimate: it means a session compacts on its second or third turn, forever, and
+ * the summarizer bill arrives with it.
+ *
+ * The message contents ARE the request (see `buildSessionChatMessages`), so estimating from them is
+ * both simpler and the only version that can be right. Cost of the change: char/4 is rough. Cost of
+ * the old version: unbounded and silent.
+ */
+export function estimateSessionTokens(_session: ChatSessionRow, messages: ChatMessageRow[]): number {
   return messages.reduce((sum, m) => sum + estimateTokenCount(m.content || ''), 0);
 }
+
+/**
+ * The session's INSTRUCTIONS, which are not part of its conversation.
+ *
+ * A job-bound session stores its system prompt as a `role:'system'` row at open
+ * (`chat-session-open.ts`), so for Cadence's coach that row IS her persona — ~20k characters of it.
+ * Both halves of compaction have to know that: summarizing it would feed her own instructions to a
+ * summarizer as if they were dialogue, and dropping it would delete her personality mid-conversation
+ * and leave a coach who has forgotten she is one. Neither had ever happened only because no session
+ * has ever had a summarizer configured.
+ */
+const isInstruction = (m: ChatMessageRow): boolean => m.role === 'system';
 
 /**
  * If over threshold, run summarizer job over older turns and store session_summary.
@@ -58,7 +81,10 @@ export async function maybeCompactSession(
   }
 
   const keepN = summarizer.keepLastNTurns ?? 6;
-  const toSummarize = messages.slice(0, Math.max(0, messages.length - keepN));
+  // Instructions are held out: they are not dialogue, and they are re-attached by
+  // buildCompactedHistory on every read.
+  const conversation = messages.filter((m) => !isInstruction(m));
+  const toSummarize = conversation.slice(0, Math.max(0, conversation.length - keepN));
   if (toSummarize.length === 0) {
     return { summary: session.session_summary ?? null, estimatedTokens, compacted: false };
   }
@@ -104,7 +130,11 @@ export function buildCompactedHistory(
   if (!session.session_summary) return messages;
 
   const keepN = summarizer?.keepLastNTurns ?? 6;
-  const recent = messages.slice(-keepN);
+  // System rows first and always — a compacted session keeps its instructions verbatim and loses
+  // only old dialogue. `id: 'summary'` is excluded so re-compaction never nests a summary of a
+  // summary of a summary.
+  const instructions = messages.filter((m) => isInstruction(m) && m.id !== 'summary');
+  const recent = messages.filter((m) => !isInstruction(m)).slice(-keepN);
   const summaryMessage = {
     id: 'summary',
     chat_session_id: session.id,
@@ -113,5 +143,5 @@ export function buildCompactedHistory(
     created_at: new Date().toISOString(),
     workspace_id: session.workspace_id,
   } as ChatMessageRow;
-  return [summaryMessage, ...recent];
+  return [...instructions, summaryMessage, ...recent];
 }
