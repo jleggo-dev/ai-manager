@@ -153,6 +153,15 @@ export async function openChatSession(
     [jobSystemPrompt, systemPrompt].filter(Boolean).join('\n\n') ||
     null;
 
+  /**
+   * Compaction policy travels from the JOB, the same way the system prompt and rule sets do
+   * (`config.systemPrompt` above, `config.ruleSets` below) — so how long a conversation may grow is
+   * a build-rules decision beside the persona rather than a caller's flag, and the engine keeps
+   * owning the mechanism. Absent from the job config, `getSummarizerConfig` returns null and
+   * nothing compacts, which is every session's behaviour today.
+   */
+  const summarizer = (jobConfig as { summarizer?: unknown } | null)?.summarizer;
+
   const session = await dbCreateSession({
     ai_profile_id: profile.id,
     processing_job_id: jobId,
@@ -164,6 +173,7 @@ export async function openChatSession(
     status: 'active',
     system_prompt: effectiveSystemPrompt,
     uses_user_credentials: usesUserCreds,
+    ...(summarizer ? { config: { summarizer } } : {}),
   });
 
   /* ── Auto-register calling application + tag linked job ── */
