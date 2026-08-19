@@ -7155,7 +7155,65 @@ XP/streak chrome in the frames is the OLD shell (pre-#237 Today/Week pill — th
 it); acts 05–07 frames don't exist yet. Frame 01's phone chrome ≠ shipped header, deliberately.
 
 
-## Nutrition becomes a hand, not just an eye — `log_nutrition` (owner directive, 2026-08-19)
+## The coach agreed to change the plan, and then didn't (owner, 2026-08-19)
+
+> "she's just not invoking the tools… I nudged, I pushed, I directly asked. She agrees, but doesn't
+> call the tools." — and, on what actually mattered: *"The point I raised wasn't even about
+> nutrition, it was that we never adjusted the plan when pushed to do so."*
+
+Three findings from the transcript, in order of how much they cost.
+
+**1. Refusal by reassurance — the real one.** He asked twice. *"Okay but I need you to adjust the
+plan"* → "Sure, what would you like changed?". Then he named it: *"today is overloaded… cut out
+everything except piano and meal tracking"* → *"That's an easy one, and actually nothing needs
+editing — today's sessions just don't happen… No penalty, no plan change needed for a single rough
+day."* Every word on-brand (a missed day is information, not failure) and it is still a wall: he
+asked her to move something and she decided, on his behalf, that the answer was no. Nothing in the
+persona or the tool said she may not — the brand's *don't punish a hard stretch* had quietly become
+*don't edit when someone has a hard day*. Both now say it: `propose_plan_change` carries "use it
+the moment they name a change — even when you think it unnecessary: say so, and still show the
+card", and the persona's building section gets the rule in full ("answering a request to change the
+plan with reassurance that it needs no changing is a refusal wearing kindness"). Eval case **A16**
+is his turn verbatim. **The tool-description half is measured and NOT sufficient on its own — A16
+still failed with it. The persona is the untested lever, and it is not live until
+`set-coach-persona.ts` runs.**
+
+**2. Why that turn was the one that failed: the food classifier ate it.** *"My son is okay he just
+had a bead stuck in his ear. I can still log my meals."* → classified as `log_food`, so
+`estimate-food` was handed a child's ER trip and priced it "Unknown Food" (confidence 0.3) behind a
+confirm sheet — the popup he called weird. Worse, the same match injected `FOOD_CONFIRM_CONTEXT`,
+which opened *"Acknowledge what you heard and wait"* — a stand-down that reads as being about the
+whole turn, arriving on the turn he asked for the plan to be cleaned up. Two fixes: a food log is
+**first person** (`SOMEONE_ELSE_HAD` — "he had", "my son had" is never the user's meal, which holds
+for beads, surgery and every noun a not-food list will never contain), and the injected context is
+now scoped, ending with "none of this changes the rest of the turn".
+
+**3. The thread is four days long and never compacts.** One conversation opened 2026-08-15, still
+running on the 19th at **119,605 prompt tokens**, +~1k a turn. `conversations.rolling_summary` is
+empty and `token_estimate` is 0 because **`updateConversation` — the only writer of either — has no
+callers**. She has called tools 31 times on this thread (`propose_plan_change` 15×, most recently
+00:29 that same morning at 116k), so it is not a wiring fault; but tool-calling at that depth is
+degraded and unmeasured, and nothing bounds the growth. **Not fixed here** — it needs the
+summarize-and-rotate the memory doc always described, and it is the next thing to build.
+
+### Food logging moves into the module (owner ruling, same day)
+
+> "logging food should probably just have the AI tell the user to go into the nutrition module (or
+> if it's not present in their plan, ask the user if they want to use it). I don't care to have a
+> log nutrition popup like that, it breaks our new nutrition UI."
+
+So the chat stops trying to log meals at all. `prepareCoachFoodAction` returns null for `log_food`
+(no sheet — recipes and dietary updates keep theirs, neither has a screen of its own), and
+`FOOD_CONFIRM_CONTEXT` now points at the Food home and says to ask, not assume, when food tracking
+is not in their plan yet. **`log_nutrition` is withdrawn** — written, gated, evalled and removed
+the same day, because a tool that writes meals is the same product decision as the popup. Water's
+data layer and its eight-glass row stay; the ＋ in the module is how water gets logged. Bringing
+back a water-only tool is a small change if it is ever wanted.
+
+## Nutrition becomes a hand, not just an eye — `log_nutrition` (built and WITHDRAWN, 2026-08-19)
+
+> **Withdrawn the same day by the ruling above — the coach points at the module instead of writing
+> meals. Kept here because the harness lessons outlived the tool.**
 
 > "I think nutrition is a tool that can be called with a few different kinds of variables that
 > needs to be added to the harness."

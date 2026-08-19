@@ -22,36 +22,41 @@ import { useEffect, useState, type RefObject } from 'react';
 /** `[position down the day 0..1, oklch lightness 0..1]`. */
 export type SkyStop = readonly [at: number, lightness: number];
 
-/** Today's sky: dawn at the top, night at the bottom. */
+/** Today's sky: dawn at the top, night at the bottom. Transcribed from Linen (option 3b). */
 export const FIRST_SKY_L: readonly SkyStop[] = [
   [0, 0.95],
-  [0.16, 0.96],
-  [0.36, 0.95],
-  [0.56, 0.84],
-  [0.74, 0.58],
-  [0.88, 0.33],
-  [1, 0.23],
+  [0.16, 0.97],
+  [0.36, 0.96],
+  [0.56, 0.91],
+  [0.74, 0.76],
+  [0.88, 0.56],
+  [1, 0.46],
 ];
 
 /** Every later day: the same sky with the sunrise band at the top, where the divider sits. */
 export const LATER_SKY_L: readonly SkyStop[] = [
-  [0, 0.23],
-  [0.04, 0.3],
-  [0.08, 0.48],
-  [0.13, 0.74],
-  [0.19, 0.92],
-  [0.3, 0.96],
-  [0.46, 0.95],
-  [0.62, 0.84],
-  [0.78, 0.58],
-  [0.91, 0.33],
-  [1, 0.23],
+  [0, 0.46],
+  [0.04, 0.52],
+  [0.08, 0.63],
+  [0.13, 0.8],
+  [0.19, 0.93],
+  [0.3, 0.97],
+  [0.46, 0.96],
+  [0.62, 0.91],
+  [0.78, 0.76],
+  [0.91, 0.56],
+  [1, 0.46],
 ];
 
 /**
- * Where the header stops being a light band and becomes a dark one. Set between the ramp's dusk
- * (0.58) and its late afternoon (0.84) so the flip lands with the eye's own reading of the sky
- * rather than halfway up a blue stretch.
+ * Where the header stops being a light band and becomes a dark one.
+ *
+ * **Unchanged by Linen, and that is a result rather than an oversight.** The old ramp put this
+ * between dusk (0.58) and late afternoon (0.84); Linen's night floor is 0.46 and its dusk 0.56,
+ * so the same 0.62 still lands in the gap — and it is what produces the study's own headline
+ * number: the band is dark for ~21% of a scroll instead of ~34%, because the sky spends far less
+ * of the day below the line. The design was measured against this threshold; moving it would
+ * quietly redraw the thing that was picked.
  */
 export const DARK_SKY_L = 0.62;
 

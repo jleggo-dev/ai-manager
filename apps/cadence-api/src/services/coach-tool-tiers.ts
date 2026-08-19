@@ -116,12 +116,6 @@ export const ALWAYS_ACTIONS = [
   'update_constraint',
   'correct_log',
   'set_macro_targets',
-  // Eating is the highest-frequency data change in the app (3–5 logs a day), and the measured
-  // lesson above says a demoted action is an action that never fires. The chat's confirm sheet
-  // still owns a meal the user just typed; this is her hand for the sideways cases — water,
-  // meals remembered mid-conversation — which the sheet's classifier never catches
-  // (owner directive 2026-08-19: nutrition as a callable tool with a few kinds of variables).
-  'log_nutrition',
 ] as const;
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
@@ -172,8 +166,6 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
   {
     key: 'food',
     label: 'what they eat, their targets, their recipes, and nutrition facts',
-    // Only get_nutrition: categories are the map of the TAIL, and log_nutrition is always-on,
-    // so filing it here would point at something she is already holding (coach-meta-tools.test).
     members: ['get_nutrition'],
   },
   { key: 'writing', label: 'what they have written', members: ['get_journal'] },

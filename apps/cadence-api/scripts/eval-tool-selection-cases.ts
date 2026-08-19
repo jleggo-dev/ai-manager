@@ -1,5 +1,5 @@
 /**
- * The golden set for the tool-selection eval — 35 turns, every one of them sourced from something
+ * The golden set for the tool-selection eval — 36 turns, every one of them sourced from something
  * that actually happened. See `eval-tool-selection.ts` for how they are run and scored.
  *
  * THE VOICE IS THE POINT. Every turn here is lowercase, hedged, half-punctuated and often about
@@ -196,6 +196,25 @@ const ACTIONS: EvalCase[] = [
       check: (a) => (str(a.action) === 'add' ? null : `action was "${String(a.action)}", expected add`),
     },
     from: 'PLAN.md:5495 (2026-08-14, #204) — a life constraint, which the description names alongside the physical ones.',
+  },
+  {
+    /**
+     * The refusal-by-reassurance (owner, 2026-08-19) — the failure this whole eval exists for, and
+     * the one a "did she pick the right tool?" score cannot see, because she picked NO tool and
+     * sounded lovely doing it.
+     *
+     * He asked twice. "Okay but I need you to adjust the plan" got "sure, what would you like
+     * changed?"; naming it got *"That's an easy one, and actually nothing needs editing — today's
+     * sessions just don't happen... No penalty, no plan change needed for a single rough day."*
+     * Every word of that is on-brand (a missed day is information, not failure) and it is still a
+     * wall: he asked her to move something, and she decided on his behalf that the answer was no.
+     */
+    id: 'A16',
+    kind: 'action',
+    turn: 'today is overloaded… so like cut out everything expcept piano and meal tracking',
+    expect: ['propose_plan_change'],
+    allow: [...DOSSIER_READS, 'get_recent_logs'],
+    from: 'Owner transcript 2026-08-19 12:12 — verbatim. She explained why no change was needed instead of showing the card.',
   },
   {
     id: 'A14',

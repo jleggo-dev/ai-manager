@@ -13,7 +13,6 @@ import { getUser, setMacroTargets, setPendingPlan } from '../repos/users.ts';
 import { sanitizeTargets } from './nutrition-day.ts';
 import type { CoachActionTool } from './coach-action-types.ts';
 import { UPDATE_CONSTRAINT } from './coach-action-constraint.ts';
-import { LOG_NUTRITION } from './coach-action-nutrition.ts';
 
 /** Today, YYYY-MM-DD — stamped on a target change so the weekly review throttle can see it. */
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -166,7 +165,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   propose_plan_change: {
     name: 'propose_plan_change',
     description:
-      'Propose a change to the plan they already have — move a session to other days, retime, resize, drop, add one, or rework what one CONTAINS. This does NOT change anything: it shows the resulting week on a card with an Apply button, so the plan moves only when they tap. Use it the moment they name a change, in the same reply; never claim it is done before the tap. Read get_active_plan first — edits address commitments BY the handles it prints, and one edit can carry several. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45}]}. Calling again ADDS to the card already up; if that card holds a mistake, never add a fix beside it — redo with "start_over": true and ONLY the corrected edits. A whole rebuild is the build card instead.',
+      'Propose a change to the plan they have — move, retime, resize, drop, add one, or rework what one CONTAINS. This does NOT change anything: it shows the week on a card with an Apply button, so the plan moves only when they tap. Use it the moment they name a change, in the same reply even when you think it unnecessary: say so, and still show the card. Never claim it is done before the tap. Read get_active_plan first — edits address commitments BY the handles it prints; one edit can carry several. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45}]}. Calling again ADDS to the card up; if it holds a mistake, never add a fix beside it — redo with "start_over": true and ONLY the corrected edits. A whole rebuild is the build card.',
     parameters: {
       properties: {
         edits: EDIT_SCHEMA,
@@ -520,7 +519,6 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   },
 
   update_constraint: UPDATE_CONSTRAINT,
-  log_nutrition: LOG_NUTRITION,
 
   log_session: {
     name: 'log_session',

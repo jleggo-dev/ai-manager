@@ -104,7 +104,7 @@ npm run eval:tools
 
 | | Ours today |
 |---|---|
-| Tools exposed every turn | **25** (18 reads + 7 actions — `log_nutrition` added 2026-08-19) |
+| Tools exposed every turn | **24** (18 reads + 6 actions) |
 | Tool definitions per request | **~5,000 tokens**, serialized 18,380 chars |
 | Read descriptions | 134–438 chars |
 | Action descriptions | 546–799 chars |

@@ -122,12 +122,6 @@ export async function logMeal(
     quantity?: number;
     items?: PlateItemInput[];
     parsed?: ParsedMealInput;
-    /**
-     * Force the parse's numbers to land provisional regardless of confidence. The coach's
-     * log_nutrition tool sets this: nobody TAPPED these numbers, so they are listed but stay
-     * outside the totals until the one-tap ✓ on the Food home — confirm-first, structurally.
-     */
-    alwaysProvisional?: boolean;
   },
 ): Promise<NutritionLog> {
   // Confirm of a previewed parse: deterministic insert of what the user saw. The card is the
@@ -215,7 +209,7 @@ export async function logMeal(
   }
 
   // Low-confidence estimates are provisional: listed, but excluded from totals until confirmed.
-  const provisional = !!macros && (input.alwaysProvisional || (confidence !== null && confidence < PROVISIONAL_BELOW));
+  const provisional = !!macros && confidence !== null && confidence < PROVISIONAL_BELOW;
 
   const row = await insertNutritionLog(userId, {
     date,
