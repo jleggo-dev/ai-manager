@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { QuietHoursEditor } from '../settings/notifications/QuietHoursEditor.tsx';
 import { minutesToLabel, useNotificationPrefs } from '../settings/notifications/useNotificationPrefs.ts';
-import { shouldShowQuietChip } from './quietChipWindow.ts';
+import { useQuietChipUp } from './useQuietChipUp.ts';
 
 /**
  * `🌙 quiet at 9:30` on the Today header, from early evening.
@@ -17,11 +18,9 @@ import { shouldShowQuietChip } from './quietChipWindow.ts';
 
 export function QuietHoursChip({ now = new Date() }: { now?: Date }) {
   const { data: prefs } = useNotificationPrefs();
+  const up = useQuietChipUp(now);
   const [open, setOpen] = useState(false);
-  if (!prefs) return null;
-
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  if (!shouldShowQuietChip(nowMinutes, prefs.quietStartMin, prefs.quietEndMin)) return null;
+  if (!prefs || !up) return null;
 
   // Rendered without the am/pm suffix: at 6pm, "quiet at 9:30" can only mean tonight, and the
   // suffix is two characters of noise in a chip that has to stay small.
@@ -37,26 +36,33 @@ export function QuietHoursChip({ now = new Date() }: { now?: Date }) {
       >
         <span aria-hidden>🌙</span> quiet at {label}
       </button>
-      {open && (
-        <>
-          <div className="sheet-scrim" onClick={() => setOpen(false)} aria-hidden />
-          <div className="sheet quiet-sheet" role="dialog" aria-label="Quiet hours">
-            <div className="sheet-grab" aria-hidden />
-            <div className="sheet-head">
-              <div className="sheet-title">
-                <b>Quiet hours</b>
-                <span>{'I treat the start as your wind-down'}</span>
+      {/* Portalled out of the header, which now FLOATS over the trail: a positioned header is the
+          containing block for anything absolute inside it, and `.sheet` is absolute — left here it
+          would rise from the bottom edge of a 62px band instead of the bottom of the screen. The
+          host is the app frame rather than the body so the desktop mockup keeps it inside the
+          phone. */}
+      {open &&
+        createPortal(
+          <>
+            <div className="sheet-scrim" onClick={() => setOpen(false)} aria-hidden />
+            <div className="sheet quiet-sheet" role="dialog" aria-label="Quiet hours">
+              <div className="sheet-grab" aria-hidden />
+              <div className="sheet-head">
+                <div className="sheet-title">
+                  <b>Quiet hours</b>
+                  <span>{'I treat the start as your wind-down'}</span>
+                </div>
+                <button className="sheet-x" onClick={() => setOpen(false)} aria-label="Close">
+                  ×
+                </button>
               </div>
-              <button className="sheet-x" onClick={() => setOpen(false)} aria-label="Close">
-                ×
-              </button>
+              <div className="sheet-body">
+                <QuietHoursEditor />
+              </div>
             </div>
-            <div className="sheet-body">
-              <QuietHoursEditor />
-            </div>
-          </div>
-        </>
-      )}
+          </>,
+          document.querySelector('.app') ?? document.body,
+        )}
     </>
   );
 }
