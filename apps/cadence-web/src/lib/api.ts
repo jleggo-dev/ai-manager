@@ -36,7 +36,6 @@ export {
   prepareCoachFoodAction,
   type CoachFoodAction,
   type CoachFoodActionResult,
-  type CoachFoodLogAction,
   type CoachFoodRecipeAction,
   type CoachFoodDietaryAction,
 } from './api/coach-food.ts';
@@ -82,7 +81,6 @@ export {
   getNutritionDay,
   patchMeal,
   setMacroTargets,
-  setEatbackPct,
   getPlateAdvice,
   type PlateAdvice,
   clearMacroTargets,
@@ -116,15 +114,12 @@ export {
   searchFoods,
   getFoodById,
   estimateFood,
-  parseNutritionLabel,
-  identifyFood,
   createFood,
   type DietaryProfileResult,
   type FoodSummary,
   type FoodListResult,
   type FoodCandidate,
   type FoodCaptureResult,
-  type FoodIdentifyResult,
   type FoodDetailResult,
   type CreateFoodInput,
   type ApiAvailability,
@@ -132,14 +127,11 @@ export {
 
 export {
   resolveFoods,
-  foodSummaryFromResolve,
   portionHintFromResolve,
-  type ResolveCandidate,
   type ResolveCandidateKind,
   type ResolveCaptureHint,
   type ResolveCapturePath,
   type ResolveFoodsResult,
-  type ResolvePortionHint,
 } from './api/foods-resolve.ts';
 
 export {

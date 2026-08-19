@@ -4,7 +4,7 @@
  */
 
 import { BASE, headers } from './http.ts';
-import type { ApiAvailability, FoodSummary } from './foods.ts';
+import type { ApiAvailability } from './foods.ts';
 
 export type ResolveCandidateKind = 'food' | 'recipe' | 'new';
 export type ResolveCapturePath = 'estimate' | 'parse-label';
@@ -79,25 +79,6 @@ function parseCandidate(raw: unknown): ResolveCandidate | null {
       ? { inferred_quantity: raw.inferred_quantity }
       : {}),
     ...(raw.capture ? { capture: parseCapture(raw.capture) } : {}),
-  };
-}
-
-/** Map a resolve food candidate to the list-row shape (name/brand for display). */
-export function foodSummaryFromResolve(c: ResolveCandidate): FoodSummary | null {
-  if (c.kind !== 'food' || !c.food_id) return null;
-  let name = c.label;
-  const brand = typeof c.brand === 'string' ? c.brand : null;
-  if (brand && name.endsWith(` (${brand})`)) name = name.slice(0, -(brand.length + 3)).trim();
-  return {
-    food_id: c.food_id,
-    name: name || c.label,
-    brand,
-    serving_label:
-      typeof c.preselected_serving === 'number'
-        ? c.inferred_quantity != null && c.inferred_quantity !== 1
-          ? `×${c.inferred_quantity}`
-          : null
-        : null,
   };
 }
 

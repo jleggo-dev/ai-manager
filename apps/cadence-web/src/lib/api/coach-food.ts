@@ -2,21 +2,9 @@
  * Coach food surface (Req 5) — POST /coach/food-actions.
  * Confirm drafts only; commit uses existing nutrition routes.
  */
-import type { DietaryProfile, MealKind } from '@cadence/shared';
+import type { DietaryProfile } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
-import type { ResolveCandidate } from './foods-resolve.ts';
 import { parseRecipeDraft, type RecipeDraft } from './recipes.ts';
-
-export type CoachFoodLogAction = {
-  kind: 'log_food';
-  query: string;
-  mealHint?: MealKind;
-  usualMeal?: MealKind;
-  resolve: {
-    candidates: ResolveCandidate[];
-    preselected: ResolveCandidate | null;
-  };
-};
 
 export type CoachFoodRecipeAction = {
   kind: 'save_recipe';
@@ -30,7 +18,7 @@ export type CoachFoodDietaryAction = {
   proposed: DietaryProfile;
 };
 
-export type CoachFoodAction = CoachFoodLogAction | CoachFoodRecipeAction | CoachFoodDietaryAction;
+export type CoachFoodAction = CoachFoodRecipeAction | CoachFoodDietaryAction;
 
 export type CoachFoodActionResult =
   | { status: 'ok'; action: CoachFoodAction | null }
@@ -38,22 +26,6 @@ export type CoachFoodActionResult =
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === 'object';
-}
-
-function parseCandidate(raw: unknown): ResolveCandidate | null {
-  if (!isRecord(raw)) return null;
-  if (raw.kind !== 'food' && raw.kind !== 'recipe' && raw.kind !== 'new') return null;
-  if (typeof raw.label !== 'string' || !raw.label.trim()) return null;
-  return {
-    kind: raw.kind,
-    score: typeof raw.score === 'number' ? raw.score : 0,
-    label: raw.label.trim(),
-    ...(typeof raw.food_id === 'string' ? { food_id: raw.food_id } : {}),
-    ...(typeof raw.recipe_id === 'string' ? { recipe_id: raw.recipe_id } : {}),
-    brand: typeof raw.brand === 'string' ? raw.brand : raw.brand === null ? null : undefined,
-    ...(typeof raw.preselected_serving === 'number' ? { preselected_serving: raw.preselected_serving } : {}),
-    ...(typeof raw.inferred_quantity === 'number' ? { inferred_quantity: raw.inferred_quantity } : {}),
-  };
 }
 
 function parseDietary(raw: unknown): DietaryProfile | null {
@@ -68,32 +40,6 @@ function parseDietary(raw: unknown): DietaryProfile | null {
 
 function parseAction(raw: unknown): CoachFoodAction | null {
   if (!isRecord(raw) || typeof raw.kind !== 'string') return null;
-  if (raw.kind === 'log_food') {
-    const resolveRaw = isRecord(raw.resolve) ? raw.resolve : null;
-    const candidates = Array.isArray(resolveRaw?.candidates)
-      ? resolveRaw.candidates.map(parseCandidate).filter((c): c is ResolveCandidate => !!c)
-      : [];
-    const preselected = resolveRaw?.preselected ? parseCandidate(resolveRaw.preselected) : null;
-    return {
-      kind: 'log_food',
-      query: typeof raw.query === 'string' ? raw.query : '',
-      resolve: { candidates, preselected },
-      ...(raw.mealHint === 'breakfast' ||
-      raw.mealHint === 'lunch' ||
-      raw.mealHint === 'dinner' ||
-      raw.mealHint === 'snack' ||
-      raw.mealHint === 'drink' ||
-      raw.mealHint === 'other'
-        ? { mealHint: raw.mealHint }
-        : {}),
-      ...(raw.usualMeal === 'breakfast' ||
-      raw.usualMeal === 'lunch' ||
-      raw.usualMeal === 'dinner' ||
-      raw.usualMeal === 'snack'
-        ? { usualMeal: raw.usualMeal }
-        : {}),
-    };
-  }
   if (raw.kind === 'save_recipe') {
     const draft = parseRecipeDraft(raw.draft);
     if (!draft) return null;

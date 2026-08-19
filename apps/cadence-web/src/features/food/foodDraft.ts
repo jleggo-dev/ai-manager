@@ -13,7 +13,7 @@ export interface FoodDraftPortion {
 
 /** Unsaved capture → createFood on confirm; saved food → log only. */
 export type FoodDraft =
-  | ({ kind: 'candidate'; candidate: FoodCandidate; labelReadable?: boolean } & FoodDraftPortion)
+  | ({ kind: 'candidate'; candidate: FoodCandidate } & FoodDraftPortion)
   | ({ kind: 'saved'; food: Food } & FoodDraftPortion);
 
 export function draftName(d: FoodDraft): string {
