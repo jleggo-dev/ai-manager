@@ -51,6 +51,7 @@ export const DEV_CHILD_TABLES = [
   'plans',
   'recipes',
   'session_feedback',
+  'water_logs',
   'workout_history',
 ] as const;
 

@@ -308,4 +308,75 @@ d('API-04 — nutrition service (DB)', () => {
     const day = await getNutritionDay(USER, today());
     expect(day.has_recent_food).toBe(true);
   });
+
+  /** Water (0037): pours sum into the day, and zero rows read as an honest 0 — never an absence. */
+  it('logWater sums pours into the day, and the day carries water_ml', async () => {
+    const { logWater } = await import('./water.ts');
+    expect((await getNutritionDay(USER, today())).water_ml).toBe(0);
+
+    await logWater(USER, 250);
+    const r = await logWater(USER, 500);
+    expect(r.water_ml).toBe(750);
+    expect((await getNutritionDay(USER, today())).water_ml).toBe(750);
+  });
+
+  /**
+   * The coach's log_nutrition tool: numbers nobody tapped must never count. A parse the confirm
+   * sheet would have logged as counted (high confidence) lands PROVISIONAL from the tool.
+   */
+  it('logMeal alwaysProvisional forces even a confident parse to stay outside the totals', async () => {
+    runJobBySlug.mockResolvedValueOnce({
+      formatted: JSON.stringify({
+        meal: 'lunch',
+        items: [{ name: 'leftover chili' }],
+        confidence: 0.9,
+        est_macros: { kcal: 520, protein_g: 30, carbs_g: 45, fat_g: 20 },
+      }),
+    });
+
+    const row = await logMeal(USER, { text: 'leftover chili', date: today(), alwaysProvisional: true });
+    expect(row.provisional).toBe(true);
+
+    const day = await getNutritionDay(USER, today());
+    expect(day.totals.kcal ?? 0).toBe(0); // listed, not counted
+    expect(day.provisional_totals.kcal).toBe(520);
+  });
+
+  it('log_nutrition tool: water applies on the spot and says the day total back', async () => {
+    const { LOG_NUTRITION } = await import('./coach-action-nutrition.ts');
+    const out = await LOG_NUTRITION.run(USER, { water_ml: 750 });
+    expect(out).toContain('750 ml');
+    expect(out).toContain('0.8 L');
+    expect((await getNutritionDay(USER, today())).water_ml).toBe(750);
+  });
+
+  it('log_nutrition tool: a meal lands pending and the answer says it does not count yet', async () => {
+    const { LOG_NUTRITION } = await import('./coach-action-nutrition.ts');
+    runJobBySlug.mockResolvedValueOnce({
+      formatted: JSON.stringify({
+        meal: 'lunch',
+        items: [{ name: 'leftover chili' }],
+        confidence: 0.9,
+        est_macros: { kcal: 520, protein_g: 30 },
+      }),
+    });
+
+    const out = await LOG_NUTRITION.run(USER, { text: 'had leftover chili around noon', meal: 'lunch' });
+    expect(out).toContain('does NOT count');
+    expect(out).toContain('520 kcal');
+
+    const day = await getNutritionDay(USER, today());
+    expect(day.provisional_count).toBe(1);
+    expect(day.totals.kcal ?? 0).toBe(0);
+  });
+
+  it('log_nutrition tool: refuses food and water in one call, logging nothing', async () => {
+    const { LOG_NUTRITION } = await import('./coach-action-nutrition.ts');
+    const out = await LOG_NUTRITION.run(USER, { text: 'a coke', water_ml: 300 });
+    expect(out).toContain('Nothing was written down');
+
+    const day = await getNutritionDay(USER, today());
+    expect(day.meals).toHaveLength(0);
+    expect(day.water_ml).toBe(0);
+  });
 });

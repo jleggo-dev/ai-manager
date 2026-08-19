@@ -37,6 +37,7 @@ export const FOOD_CONFIRM_CONTEXT = [
   'FOOD SURFACE (app confirm sheet): the user may be logging food, saving a recipe, or updating dietary prefs.',
   'Acknowledge what you heard and wait — the app shows a confirm sheet. Nothing is logged or saved until they confirm.',
   'Never claim you already logged a meal, saved a recipe, or updated allergies/diet.',
+  'Do NOT also call log_nutrition for the meal this sheet covers — use it only for what the sheet misses (water, or a different meal they mention).',
 ].join(' ');
 
 function hasDietaryIntent(t: string): boolean {
