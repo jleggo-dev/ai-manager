@@ -24,6 +24,7 @@ vi.mock('../ai/aim.ts', () => ({ runJob: vi.fn(), runJobBySlug: vi.fn() }));
 let sql: (typeof import('../db/sql.ts'))['sql'];
 let logMeal: (typeof import('./nutrition.ts'))['logMeal'];
 let getBaselineRead: (typeof import('./nutrition.ts'))['getBaselineRead'];
+let getNutritionDay: (typeof import('./nutrition.ts'))['getNutritionDay'];
 let insertNutritionLog: (typeof import('../repos/nutrition.ts'))['insertNutritionLog'];
 let listNutritionLogs: (typeof import('../repos/nutrition.ts'))['listNutritionLogs'];
 let insertFood: (typeof import('../repos/foods.ts'))['insertFood'];
@@ -58,7 +59,7 @@ async function seedLoggedDays(count: number): Promise<void> {
 d('API-04 — nutrition service (DB)', () => {
   beforeAll(async () => {
     ({ sql } = await import('../db/sql.ts'));
-    ({ logMeal, getBaselineRead } = await import('./nutrition.ts'));
+    ({ logMeal, getBaselineRead, getNutritionDay } = await import('./nutrition.ts'));
     ({ insertNutritionLog, listNutritionLogs } = await import('../repos/nutrition.ts'));
     ({ insertFood } = await import('../repos/foods.ts'));
     ({ insertGoal } = await import('../repos/goals.ts'));
@@ -272,5 +273,39 @@ d('API-04 — nutrition service (DB)', () => {
 
     const vars = runJobBySlug.mock.calls[0]?.[2] as { propose_targets?: string };
     expect(vars.propose_targets).toBe('no');
+  });
+
+  /**
+   * `has_recent_food` is the strip's gate: the trail door must survive a target-less logger
+   * (device report 2026-08-15 — the door was gated on the thing the door leads to), and must
+   * stay closed for someone whose food is truly idle, so a mind-only user never grows a strip.
+   */
+  it('getNutritionDay reports has_recent_food=false for a user with no food at all', async () => {
+    const day = await getNutritionDay(USER, today());
+    expect(day.has_recent_food).toBe(false);
+    expect(day.targets_wait).toBeNull();
+  });
+
+  it('getNutritionDay reports has_recent_food=true from an old log, with nothing today', async () => {
+    await insertNutritionLog(USER, {
+      date: daysAgo(3),
+      meal: 'dinner',
+      items: [{ name: 'stew' }],
+      input_method: 'text',
+      raw_text: 'stew',
+      macros: { kcal: 480, source: 'user' },
+      provisional: false,
+    });
+
+    const day = await getNutritionDay(USER, today());
+    expect(day.meals).toHaveLength(0); // nothing today — the 14-day window is what says "active"
+    expect(day.has_recent_food).toBe(true);
+  });
+
+  it('getNutritionDay reports has_recent_food=true when targets are set, even with no logs', async () => {
+    await setMacroTargets(USER, { kcal: 2100, protein_g: 140 });
+
+    const day = await getNutritionDay(USER, today());
+    expect(day.has_recent_food).toBe(true);
   });
 });

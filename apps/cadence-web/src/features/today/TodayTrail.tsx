@@ -1,6 +1,6 @@
 import { type CSSProperties, type RefObject } from 'react';
 import { type PlanViewData, type PlanDay, type PlanOccurrence } from '../../lib/api.ts';
-import { TrailCalorieCard } from '../nutrition/TrailCalorieCard.tsx';
+import { TrailFoodStrip } from '../nutrition/TrailFoodStrip.tsx';
 import { categoryOf, ICON } from './category.ts';
 import { currentNodeIndex, useLandOnNow } from './useLandOnNow.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
@@ -250,6 +250,10 @@ export function TodayTrail({
             <span>{dayLabel(day, di)}</span>
             <i />
           </div>
+          {/* Food on the trail (Food Journey 01/3B): one ring, three bars, the day's meal count —
+              full width at the top of today, IN the day (2a: a per-day number belongs to the day),
+              and absent entirely when food is idle. The bay stays her line and her face. */}
+          {day.isToday && <TrailFoodStrip date={day.date} onOpen={onOpenFood} />}
           <div className="trail-nodes">
             {day.occurrences.length === 0 ? (
               <div className="trail-empty">A clear day — rest counts too.</div>
@@ -268,15 +272,13 @@ export function TodayTrail({
             )}
           </div>
           {day.occurrences.length > 0 && (
-            /* Top to bottom: her line, her face, your number. The calorie card is today's only —
-               it reads one day's food — and it is absent entirely for anyone not tracking, so
-               the bay simply ends at the face (TrailCalorieCard). */
+            /* Top to bottom: her line, then her face. The day's food reads full-width at the
+               top of today (TrailFoodStrip) — the 134px bay could never hold three bars. */
             <div className={`trail-bay ${di % 2 === 0 ? 'is-left' : 'is-right'}`}>
               <button className="trail-bay-bubble" onClick={onCoach}>
                 {COACH_TEXTS[di % COACH_TEXTS.length]}
               </button>
               <CoachFace size={58} className="trail-bay-mark" />
-              {day.isToday && <TrailCalorieCard date={day.date} onOpen={onOpenFood} />}
             </div>
           )}
         </section>

@@ -8,6 +8,7 @@ import { LogDidSheet } from '../plan/LogDidSheet.tsx';
 import { ReviewScreen } from '../review/ReviewScreen.tsx';
 import { PlanCardSheet } from '../gate/PlanCardSheet.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
+import { FoodHome } from '../nutrition/FoodHome.tsx';
 
 /**
  * Today and Week were separate TABS sharing one PlanView, and the owner's device verdict
@@ -92,6 +93,13 @@ export function MainTabs({
   const [planReload, setPlanReload] = useState(0); // bump → PlanView refetches after a ＋ log
   /** App-authored context for the next coach turn (e.g. the session they just finished). */
   const [coachNote, setCoachNote] = useState<string | null>(null);
+  /**
+   * The Food home (Food Journey 02) — a full screen that replaces the Plan tab's content while
+   * the tab bar stays, the same escape ReviewScreen uses minus the bar. It lives HERE rather
+   * than inside PlanView so the ＋ FAB knows to stand down and the coach hand-off is one hop.
+   * 'shop' opens straight to the shopping list (a shop trail task is a door to that sub-view).
+   */
+  const [food, setFood] = useState<null | 'home' | 'shop'>(null);
 
   if (manage) {
     return (
@@ -109,13 +117,26 @@ export function MainTabs({
   return (
     <>
       <div className="app">
-        {tab === 'plan' && (
+        {tab === 'plan' && !food && (
           <PlanView
             onCoach={(note) => {
               if (note) setCoachNote(note);
               setTab('coach');
             }}
+            onOpenFood={(sub) => setFood(sub ?? 'home')}
             reloadSignal={planReload}
+          />
+        )}
+        {tab === 'plan' && food && (
+          <FoodHome
+            initialSub={food === 'shop' ? 'shop' : null}
+            onBack={() => setFood(null)}
+            onCoach={(note) => {
+              setCoachNote(note);
+              setFood(null);
+              setTab('coach');
+            }}
+            onLogged={() => setPlanReload((k) => k + 1)}
           />
         )}
         {/**
@@ -156,13 +177,19 @@ export function MainTabs({
           </>
         </div>
         {tab === 'progress' && <ProgressView />}
-        {tab !== 'coach' && (
+        {tab !== 'coach' && !food && (
           <button className="fab" onClick={() => setLogDidOpen(true)} aria-label="Log something you did">
             ＋
           </button>
         )}
         <nav className="tabbar" aria-label="Main">
-          <button className={`tab${tab === 'plan' ? ' tab-on' : ''}`} onClick={() => setTab('plan')}>
+          <button
+            className={`tab${tab === 'plan' ? ' tab-on' : ''}`}
+            onClick={() => {
+              if (tab === 'plan') setFood(null); // tapping Plan while on Food is the way back to the trail
+              setTab('plan');
+            }}
+          >
             <TodayIcon />
             <span>Plan</span>
           </button>

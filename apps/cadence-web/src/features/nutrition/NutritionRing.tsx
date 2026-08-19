@@ -13,12 +13,15 @@ const PENDING_OVER = 'oklch(84% 0.10 40)';
  * a hard tick = "what this meal adds"), then the **logged** arc (round caps) on top. Used at five sizes
  * across the module (52 trail strip → 118 hero); `stroke` scales 11–16 so it stays legible small.
  * `children` is the centre readout ("530 / KCAL LEFT AFTER THIS"), absolutely centred in the hole.
- * With no target the ring shows the track only (days with no goal draw nothing to decode).
+ * With no target the ring shows the track only (days with no goal draw nothing to decode) —
+ * and `counting` renders that track DASHED: the Food Journey's mark for "counting, not scoring",
+ * so a target-less day reads as observation rather than an empty score.
  */
 export function NutritionRing({
   logged,
   pending = 0,
   target,
+  counting = false,
   size = 74,
   stroke = 13,
   className,
@@ -27,6 +30,8 @@ export function NutritionRing({
   logged: number;
   pending?: number;
   target: number | null | undefined;
+  /** No target by design (observe phase): draw the track dashed — counting, not scoring. */
+  counting?: boolean;
   size?: number;
   stroke?: number;
   className?: string;
@@ -36,11 +41,22 @@ export function NutritionRing({
   const r = (size - stroke) / 2;
   const hasTarget = typeof target === 'number' && target > 0;
   const arcs = hasTarget ? ringArcs(logged, pending, target) : null;
+  const dashed = counting && !hasTarget;
 
   return (
     <div className={`nring${className ? ` ${className}` : ''}`} style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
-        <circle cx={c} cy={c} r={r} fill="none" stroke={TRACK} strokeWidth={stroke} />
+        <circle
+          cx={c}
+          cy={c}
+          r={r}
+          fill="none"
+          // Counting is a STATE, not an absence — the dashed track reads a shade darker than the
+          // scored track so it stays legible at strip size (52px) instead of washing out.
+          stroke={dashed ? 'oklch(91% 0.025 80)' : TRACK}
+          strokeWidth={stroke}
+          {...(dashed ? { pathLength: 100, strokeDasharray: '2 2.7', strokeLinecap: 'round' as const } : {})}
+        />
         {arcs && arcs.pendingLen > 0 && (
           <circle
             cx={c}
