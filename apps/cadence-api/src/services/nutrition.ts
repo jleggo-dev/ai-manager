@@ -252,6 +252,14 @@ export interface NutritionDay extends DayTotals {
    * so the card can show a countdown instead of nothing.
    */
   targets_wait: { days_logged: number; days_needed: number } | null;
+  /**
+   * Any food signal in the trailing 14 days (or targets set, which proves the module is in use).
+   * The trail's food strip is the DOOR to the food module, and a door must not be gated on the
+   * things behind it (device report 2026-08-15): with no target and no countdown, this is what
+   * keeps the strip — dashed, counting — for someone who logs food without a goal that wants
+   * targets. False only when food is truly idle, so a mind-only user never grows a calorie strip.
+   */
+  has_recent_food: boolean;
 }
 
 /** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. `left`
@@ -301,6 +309,18 @@ export async function getNutritionDay(userId: string, date?: string): Promise<Nu
   const effective =
     targets && typeof targets.kcal === 'number' ? { ...targets, kcal: targets.kcal + eatback_kcal } : targets;
 
+  // The strip is the module's door, so "is food active at all?" must not cost a query when the
+  // answer is already on the table: today's rows, a kcal target, or the countdown's own count.
+  let has_recent_food = rows.length > 0 || typeof targets?.kcal === 'number';
+  if (!has_recent_food) {
+    if (targets_wait) {
+      has_recent_food = targets_wait.days_logged > 0;
+    } else {
+      const from = new Date(Date.parse(`${d}T00:00:00Z`) - 13 * 86_400_000).toISOString().slice(0, 10);
+      has_recent_food = (await countNutritionDays(userId, from, d)) > 0;
+    }
+  }
+
   return {
     date: d,
     meals,
@@ -311,6 +331,7 @@ export async function getNutritionDay(userId: string, date?: string): Promise<Nu
     eatback_kcal,
     eatback_pct,
     targets_wait,
+    has_recent_food,
   };
 }
 

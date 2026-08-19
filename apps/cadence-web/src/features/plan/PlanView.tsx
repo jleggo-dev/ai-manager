@@ -8,7 +8,6 @@ import { taskOpener } from './taskShape.ts';
 import { TodayTrail } from '../today/TodayTrail.tsx';
 import { TrailHeader } from '../today/TrailHeader.tsx';
 import { DailyCheckIn } from '../today/DailyCheckIn.tsx';
-import { TodayFoodSheet } from '../nutrition/TodayFoodSheet.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
 import { DetourBar } from './DetourBar.tsx';
 import { DetourStateSheet } from './DetourStateSheet.tsx';
@@ -52,7 +51,7 @@ function detourLabel(type: ActiveEpisode['type']): string {
 /**
  * The Today / Week surface — rendered inside MainTabs' .app shell (no header of its own). `view`
  * is controlled by the bottom nav (Today and Week are now sibling tabs, not a top segment):
- *   • Today → the Visual Today sky-trail (nodes, coach note, and the food strip → Today's food).
+ *   • Today → the Visual Today sky-trail (nodes, coach note, and the food strip → the Food home).
  *   • Week  → the rolling week list with per-day check-off.
  * Both share the coach proposal banner, the session sheets, and "Adjust my plan" (a slim pill
  * that pops the AdjustSheet: steer → preview → confirm) — suggest-never-auto-apply as always.
@@ -60,10 +59,13 @@ function detourLabel(type: ActiveEpisode['type']): string {
  */
 export function PlanView({
   onCoach,
+  onOpenFood,
   reloadSignal,
 }: {
   /** Switch to the coach. `note` is app-authored context she reads and the user never sees. */
   onCoach: (note?: string) => void;
+  /** Open the Food home (MainTabs swaps this view for it); 'shop' lands on the shopping list. */
+  onOpenFood: (sub?: 'shop') => void;
   reloadSignal?: number;
 }) {
   const [data, setData] = useState<PlanViewData | null>(null);
@@ -72,8 +74,6 @@ export function PlanView({
   const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)
   const [startOcc, setStartOcc] = useState<{ id: string; title: string } | null>(null); // redesign start sheet (stepped task)
   const [captureOcc, setCaptureOcc] = useState<string | null>(null); // capture sheet (weigh-in / meal)
-  const [foodOpen, setFoodOpen] = useState(false); // "Today's food" sheet (2F), opened from the trail strip
-  const [foodSub, setFoodSub] = useState<'home' | 'shop'>('home'); // which sub-view the food sheet opens to
   const [cookOcc, setCookOcc] = useState<string | null>(null); // cook walkthrough (menu-derived cook task)
   const [detourSheet, setDetourSheet] = useState(false); // the live detour's state sheet
   const [detourEntry, setDetourEntry] = useState(false); // "Life happened?" — the self-declare door
@@ -247,8 +247,7 @@ export function PlanView({
       case 'cook':
         return setCookOcc(occ.occurrence_id);
       case 'shop':
-        setFoodSub('shop');
-        return setFoodOpen(true);
+        return onOpenFood('shop');
       default: // weigh + meal
         return setCaptureOcc(occ.occurrence_id);
     }
@@ -357,15 +356,7 @@ export function PlanView({
         )}
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
-        <TodayTrail
-          plan={data}
-          onOpen={openTask}
-          onOpenFood={() => {
-            setFoodSub('home');
-            setFoodOpen(true);
-          }}
-          onCoach={onCoach}
-        />
+        <TodayTrail plan={data} onOpen={openTask} onOpenFood={() => onOpenFood()} onCoach={onCoach} />
 
         {!data.activeEpisode && (
           <button className="detour-trigger" onClick={() => setDetourEntry(true)}>
@@ -434,17 +425,6 @@ export function PlanView({
           }}
         />
       )}
-      {foodOpen && (
-        <TodayFoodSheet
-          date={data.week.find((d) => d.isToday)?.date ?? new Date().toISOString().slice(0, 10)}
-          initialSub={foodSub}
-          onClose={() => setFoodOpen(false)}
-          onLogged={() => {
-            refresh();
-            bump();
-          }}
-        />
-      )}
       {cookOcc && (
         <CookSheet
           occurrenceId={cookOcc}
@@ -459,7 +439,7 @@ export function PlanView({
           Pre- and post-activity are user-initiated and mutually exclusive by construction; the
           check-in is the only one that arrives uninvited, so it is the one that yields — it
           mounts (and only then asks the server whether it's due) once nothing else is open. */}
-      {!checkinSettled && !sheetOcc && !startOcc && !captureOcc && !cookOcc && !foodOpen && !adjustOpen && (
+      {!checkinSettled && !sheetOcc && !startOcc && !captureOcc && !cookOcc && !adjustOpen && (
         <DailyCheckIn
           onAdjust={(steer) => {
             setCheckinSettled(true);

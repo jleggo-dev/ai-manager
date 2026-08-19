@@ -105,45 +105,49 @@ describe('TodayTrail step ring', () => {
 });
 
 /**
- * Calories moved into the day, under Cadence's face (Plan redesign 2a) — and the trail food strip
- * that used to carry them is gone. The bay reads her line, her face, your number, and the card is
- * the door to the Today's-food sheet.
+ * Food on the trail (Food Journey 01/3B): the strip sits full-width at the top of today — under
+ * the day label, above the nodes — because the 134px coach bay could never hold three macro bars.
+ * Still IN the day per the 2a ruling, still the one door to the Food home, and still absent
+ * entirely when food is idle (the deeper states live in TrailFoodStrip.test.tsx).
  */
-describe('TodayTrail calorie card', () => {
-  const card = (c: HTMLElement) => c.querySelector('.trail-cal');
+describe('TodayTrail food strip', () => {
+  const strip = (c: HTMLElement) => c.querySelector('.trail-food');
 
-  it('shows the count against the target, under her face', () => {
+  it("shows what's left against the target, at the top of today", () => {
     nut.day = nutritionDay({ kcal: 1500 }, 1150);
     const { container } = draw(occ());
 
-    expect(card(container)?.textContent).toContain('1,150 / 1,500');
-    expect(card(container)?.textContent).toContain('CALORIES');
-    // Last in the bay: her line, her face, then your number — never above the face.
-    expect(container.querySelector('.trail-bay')?.lastElementChild).toBe(card(container));
+    expect(strip(container)?.textContent).toContain('350');
+    expect(strip(container)?.textContent).toContain('LEFT');
+    // Under the day label, above the nodes — the day opens with its food.
+    expect(strip(container)?.previousElementSibling?.className).toContain('trail-daylabel');
+    expect(strip(container)?.nextElementSibling?.className).toContain('trail-nodes');
+    // And out of the bay: her line and her face keep it to themselves.
+    expect(container.querySelector('.trail-bay .trail-food')).toBeNull();
   });
 
   /**
-   * The gate is a real kcal target, not the truthiness of `targets` — the API hands back `{}` for
-   * someone who has never set any, and `{}` is truthy. No target, no card: the bay ends at the
-   * face rather than offering a ring with nothing to decode.
+   * The gate is a food SIGNAL, never the truthiness of `targets` — the API hands back `{}` for
+   * someone who has never set any, and `{}` is truthy. No target, no meals, no recent food and
+   * no countdown: no strip. The day simply starts at its first node.
    */
-  it('is absent for anyone not tracking calories', () => {
+  it('is absent when food is idle', () => {
     nut.day = nutritionDay({}, 420);
-    expect(card(draw(occ()).container)).toBeNull();
+    expect(strip(draw(occ()).container)).toBeNull();
 
     nut.day = nutritionDay(null, 420);
-    expect(card(draw(occ()).container)).toBeNull();
+    expect(strip(draw(occ()).container)).toBeNull();
 
     nut.day = null; // nothing loaded yet — still no empty state
-    expect(card(draw(occ()).container)).toBeNull();
+    expect(strip(draw(occ()).container)).toBeNull();
   });
 
-  it("opens the Today's-food sheet when tapped", () => {
+  it('opens the Food home when tapped', () => {
     nut.day = nutritionDay({ kcal: 1500 }, 1150);
     const onOpenFood = vi.fn();
     const { container } = draw(occ(), onOpenFood);
 
-    fireEvent.click(card(container)!);
+    fireEvent.click(strip(container)!);
     expect(onOpenFood).toHaveBeenCalledTimes(1);
   });
 });

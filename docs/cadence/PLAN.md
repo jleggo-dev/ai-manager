@@ -7098,3 +7098,52 @@ Four tests, including the one that was broken — she has already spoken, and th
 Worth noting what this cost: the feature was **built, reviewed, tested and shipped**, and every test
 asserted the phrasing (`coachActivityLine`) rather than whether the line reaches the screen. A unit
 test on the words is not a test that the words are visible.
+
+## Food Journey — the nutrition IA, implemented in slices (design import 2026-08-19)
+
+The answer to `DESIGN-BRIEF-nutrition.md` + `DESIGN-PROMPT-food-plan.md` arrived as a Claude
+Design flow doc — **`Cadence Food Journey.dc.html`** (project `d5603a04`, 20 frames across acts
+01–04; the module doc `Cadence Food Module.dc.html` holds rulings/redlines). Read left to right it
+is one user's story: a first week with no plan, the daily capture loop, the two reading screens,
+then dinner. Three surfaces, three verbs: **the strip glances, the sheet captures, the full screen
+reads and manages** — and the coach is the only place long text is allowed. The doc's acts 05–07
+(Sunday scale/adjustment · adequacy-not-weight plans · the planning door) are named but have no
+frames yet — they are the DESIGN-PROMPT's three questions, still to be drawn.
+
+One chart language everywhere: **a ring for calories, bars for macros** — DASHED while counting
+(no target — observe, don't score), gaining a fill and a denominator when targets arrive. Nothing
+is added when they do; the same shapes fill in.
+
+### Slice 1 — SHIPPED with this section (act 01: the door and the home)
+
+- **`TrailFoodStrip`** (replaces `TrailCalorieCard`): ring + three macro bars + meal count, full
+  width at the top of TODAY's trail section (the 134px coach bay could never hold bars; still IN
+  the day per the 2a ruling — the bay keeps her line and her face). Scored / counting / nothing:
+  the #240 countdown survives as the counting strip's footer. Gate: `has_recent_food` (new on
+  `GET /nutrition/day` — any 14-day food signal, or targets set), so **the door outlives the
+  score** — the 2026-08-15 "front door" bug can't come back, and a mind-only user still never
+  grows a calorie strip (owner ruling, §"calorie counter").
+- **`FoodHome`** (a real full screen replacing the Plan tab's content, tab bar stays; replaces the
+  `TodayFoodSheet` bottom sheet, deleted): week dots · ring card + `MacroBars` · insight ·
+  **Log a meal** · earned doors (This week + Shopping appear once a week is planned; Cookbook
+  stays, honestly labeled) · Plan your meals · Talk food with me · TODAY diary (slot rows, dashed
+  Log chips, inline provisional confirm). Sub-tools reuse `WeekMenuSheet` / `ShopSheet` /
+  `RecipesPanel` / `MealPlansPanel` in one hosted sheet.
+- Coach hand-offs (`Log a meal`, slot `Log`, `Talk food with me`) ride app-authored notes into the
+  existing chat + deterministic food classifier → confirm cards. The capture surfaces themselves
+  are slice 2.
+
+### The slices still to build (from the 20 frames)
+
+| Slice | Frames | What it is |
+|---|---|---|
+| 2 — capture | 05a–d, 05, 06, 07 | Slot-aware quick add sheet; occurrence-FREE full Log screen (today every capture needs a trail task); chat/voice parse-confirm with the amounts-kept rule (05c's card is also a coach TOOL candidate); serving/unit food detail; "where should it sit" post-log; drink composer. `MealCapturePanel` (~436 eff) must split first. |
+| 3 — reading | 08, 08b, 09 | Food full screen: Day/Week tabs + date nav; **Nutrients drill-down** — the 8 micros flow end-to-end with DRI floors/ceiling (`micronutrient-targets.ts`) and NOTHING renders them; floors ≠ ceilings visually; "counted from N of M items" honesty line. |
+| 4 — kitchen | 10, 10a–c | Kitchen tab: paste-a-recipe door, recipes with per-serving numbers, meal-prep composer (meal = recipes + foods → day + slot), planning week/day, shopping list generated never kept. Ruling: the Kitchen is prep, not one-tap logging. |
+| 5 — coach flows | 03, 04, 04b | "Talk food with me" menu as coach quick picks; allergies ask → HARD STOP / SOFT confirm card; day-7 week read-back ("what did we miss") ; weigh-in INSIDE the weekly check-in (units: two Settings controls, lb for body + grams for food, never one metric switch); targets proposal card ("your average minus 300, snacking included"). Wires `weekly-readout` (job exists, no caller). |
+
+**The design asks for things the repo cannot honour yet** (report, don't fake): **water tracking**
+(frames 02/08 carry a Water row + "counts as two glasses"; no water column/API exists — needs an
+owner call on the data model); meal-slot open/close times ("closes 10:30", "still open");
+XP/streak chrome in the frames is the OLD shell (pre-#237 Today/Week pill — the strip/home ignore
+it); acts 05–07 frames don't exist yet. Frame 01's phone chrome ≠ shipped header, deliberately.

@@ -45,6 +45,8 @@ export interface NutritionDayData {
   eatback_pct: number; // 0–100 setting
   /** Set while a goal WANTS a calorie target and none exists yet: the 7-day countdown. */
   targets_wait?: { days_logged: number; days_needed: number } | null;
+  /** Any food signal in the trailing 14 days (or targets set) — the trail strip's door gate. */
+  has_recent_food?: boolean;
 }
 
 /** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. */
