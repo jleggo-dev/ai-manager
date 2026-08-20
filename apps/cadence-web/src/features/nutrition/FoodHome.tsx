@@ -42,6 +42,11 @@ function dayLabel(isoDate: string): string {
  * Day and Week are one surface with two tabs and no new navigation, per 08b. Nutrients is a
  * drill-down off the macro block rather than a third tab, per 09: it answers a question you only
  * ask once the day's read has raised it.
+ *
+ * One chart language: a ring for calories, bars for macros — unfilled while counting (no target),
+ * denominators once targets exist. Nothing is added when they arrive; the same shapes fill in.
+ * The ring's track is always smooth: "no target yet" is said by the line under it, never by
+ * breaking the ring into a crenulated one (owner, 2026-08-20).
  */
 export function FoodHome({
   initialSub = null,
@@ -126,8 +131,103 @@ export function FoodHome({
           ‹
         </button>
         <b className="fh-title">Food</b>
+<<<<<<< HEAD
         {isToday ? (
           <span className="fh-daypill">Today</span>
+=======
+        <span className="fh-daypill">Today</span>
+      </div>
+      <div className="fh-body">
+        <div className="fh-dots">
+          {week.map((date, i) => {
+            const isToday = date === today;
+            const logged = loggedDates.has(date) || (isToday && (day?.meals.length ?? 0) > 0);
+            return (
+              <span className="fh-dot-col" key={date}>
+                <span className="fh-dot-l">{DOW[i]}</span>
+                {isToday ? (
+                  <span className="fh-dot is-today">{Number(date.slice(8))}</span>
+                ) : logged ? (
+                  <span className="fh-dot is-logged" aria-label={`${date} — logged`}>
+                    ✓
+                  </span>
+                ) : (
+                  <span className="fh-dot" />
+                )}
+              </span>
+            );
+          })}
+        </div>
+
+        <div className="fh-card">
+          <div className="fh-card-row">
+            <div className="fh-ringcol">
+              <NutritionRing logged={eaten} target={scored ? targetKcal : null} size={112} stroke={12}>
+                {scored && !over ? (
+                  <>
+                    <b>{fmt(left)}</b>
+                    <span>KCAL LEFT</span>
+                  </>
+                ) : (
+                  <>
+                    <b>{fmt(eaten)}</b>
+                    <span>KCAL EATEN</span>
+                  </>
+                )}
+              </NutritionRing>
+              <span className="fh-ring-sub">
+                {scored ? (
+                  `${fmt(eaten)} of ${fmt(targetKcal)} kcal`
+                ) : wait ? (
+                  <>
+                    {wait.days_logged} / {wait.days_needed} · days to your calorie target
+                  </>
+                ) : (
+                  'no target yet'
+                )}
+              </span>
+            </div>
+            <div className="fh-barscol">
+              <MacroBars eaten={day?.totals ?? {}} targets={scored ? (day?.targets ?? null) : null} />
+            </div>
+          </div>
+          <WaterRow ml={waterMl ?? day?.water_ml ?? 0} onLogged={setWaterMl} />
+        </div>
+
+        <NutritionInsightCard compact />
+
+        <button className="fh-log" onClick={() => onCoach(logNote())}>
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            strokeWidth="2.1"
+            strokeLinecap="round"
+            aria-hidden
+          >
+            <rect x="2.8" y="6.5" width="18.4" height="13" rx="3" />
+            <circle cx="12" cy="13" r="3.6" />
+            <path d="M8.5 6.5 9.8 4.2h4.4l1.3 2.3" />
+          </svg>
+          <span>Log a meal</span>
+          <i aria-hidden>›</i>
+        </button>
+
+        {hasWeek ? (
+          <div className="fh-standing">
+            <button className="fh-pill" onClick={() => setSub('week')}>
+              This week
+            </button>
+            <button className="fh-pill" onClick={() => setSub('shop')}>
+              Shopping
+            </button>
+            <button className="fh-pill" onClick={() => setSub('cookbook')}>
+              Cookbook
+            </button>
+          </div>
+>>>>>>> origin/fix/nutrition-ring-always-smooth
         ) : (
           <button className="fh-daypill is-btn" onClick={() => setDate(today)}>
             {dayLabel(date)} <i aria-hidden>×</i>
