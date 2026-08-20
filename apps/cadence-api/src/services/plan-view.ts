@@ -98,14 +98,35 @@ export async function buildPlanView(
   await ensureHorizon(userId).catch(() => {
     /* best-effort top-up; view still renders from what's materialized */
   });
-  // Finalize + read the streak after the horizon top-up so today's occurrences are visible.
-  // Independent of having a committed plan (it reads occurrences, not the plan), so both the
-  // no-plan and committed branches report it.
-  const streak = await evaluateStreak(userId).catch((e) => {
-    console.error('[buildPlanView:streak]', e);
-    return EMPTY_STREAK;
-  });
-  const episode = await getActiveEpisode(userId).catch(() => null);
+
+  /**
+   * Everything the horizon top-up unblocks, at once (PERF-05).
+   *
+   * These four reads are independent of each other and were awaited one after another, which on a
+   * cross-country hop is four full round trips for no reason: measured 2026-08-20, a bare query
+   * costs ~181ms through the pooler, and GET /plan spent 2.0-3.8s running ~11 of them in series.
+   * The dependency graph is much shallower than the old sequence implied — only `activities`
+   * genuinely needs `plan`, and only the day window needs `user` (for the timezone).
+   *
+   * Each keeps its OWN catch, deliberately: `Promise.all` rejects on the first failure, so a
+   * shared one would turn a missing episode into a failed screen. The per-call fallbacks below
+   * are the same ones these calls always had.
+   *
+   * Streak still runs after `ensureHorizon` (it reads occurrences, so today's must be
+   * materialized first) and is still reported by both the no-plan and committed branches.
+   */
+  const [streak, episode, plan, goalsList] = await Promise.all([
+    evaluateStreak(userId).catch((e) => {
+      console.error('[buildPlanView:streak]', e);
+      return EMPTY_STREAK;
+    }),
+    getActiveEpisode(userId).catch(() => null),
+    getActivePlan(userId),
+    listGoals(userId).catch((e) => {
+      console.error('[buildPlanView:goals]', e);
+      return [];
+    }),
+  ]);
   const activeEpisode: ActiveEpisodeView | null = episode
     ? {
         type: episode.type,
@@ -116,13 +137,13 @@ export async function buildPlanView(
           (episode.constraints as { gear_confirmed?: unknown } | null)?.gear_confirmed === true,
       }
     : null;
-  const plan = await getActivePlan(userId);
   if (!plan) {
     // Started but hasn't locked yet (an open conversation, or goals captured some other way)
     // vs. never touched the app — the ONLY signal that distinguishes "bounce to Welcome" from
     // "resume the coach chat" for a user with no committed plan.
-    const [conversation, goals] = await Promise.all([getLatestConversation(userId), listGoals(userId)]);
-    const stage = conversation || goals.length > 0 ? 'in_progress' : 'new';
+    // `goalsList` is already in hand from the batch above — only the conversation is still needed.
+    const conversation = await getLatestConversation(userId).catch(() => null);
+    const stage = conversation || goalsList.length > 0 ? 'in_progress' : 'new';
     return {
       hasPlan: false,
       stage,
@@ -171,8 +192,19 @@ export async function buildPlanView(
 
   const from = days[0]!.date;
   const to = days[days.length - 1]!.date;
-  const occ = await listOccurrences(userId, from, to);
-  const stepCounts = new Map((await listSessionStepCounts(userId, from, to)).map((r) => [r.occurrence_id, r.steps]));
+  /**
+   * The week, its step counts, and the trailing week for consistency — one round trip, not three
+   * (PERF-05). All three depend only on the day window just computed, and on nothing from each
+   * other; awaiting them in series was three cross-country hops to build one screen.
+   */
+  const pastFrom = iso(new Date(base - 6 * 86_400_000));
+  const pastTo = iso(new Date(base));
+  const [occ, stepRows, past] = await Promise.all([
+    listOccurrences(userId, from, to),
+    listSessionStepCounts(userId, from, to),
+    listOccurrences(userId, pastFrom, pastTo),
+  ]);
+  const stepCounts = new Map(stepRows.map((r) => [r.occurrence_id, r.steps]));
   for (const o of occ) {
     const day = dayByDate.get(iso(o.date));
     const a = actById.get(o.activity_id);
@@ -192,12 +224,12 @@ export async function buildPlanView(
     day.occurrences.sort((x, y) => (x.time_of_day ?? '99').localeCompare(y.time_of_day ?? '99'));
   }
 
-  // Rolling-window consistency over the LAST 7 days (days with ≥1 completion).
-  const past = await listOccurrences(userId, iso(new Date(base - 6 * 86_400_000)), iso(new Date(base)));
+  // Rolling-window consistency over the LAST 7 days (days with ≥1 completion) — `past` was
+  // fetched in the batch above.
   const { kept, window } = rollingConsistency(past, now, 7);
 
   // Resolve goal links so the card can group "Toward <goal>" and colour by area without a second fetch.
-  const goalById = new Map((await listGoals(userId)).map((g) => [g.goal_id, g]));
+  const goalById = new Map(goalsList.map((g) => [g.goal_id, g]));
 
   return {
     hasPlan: true,
