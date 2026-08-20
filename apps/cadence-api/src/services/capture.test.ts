@@ -12,7 +12,9 @@ const insertEquipment = vi.fn();
 const listEquipment = vi.fn();
 const updateEquipment = vi.fn();
 const mergeBaseline = vi.fn();
-const getUser = vi.fn(async () => ({ baseline: { weight_kg: 80 }, home_location: null, timezone: null }) as unknown);
+const getUser = vi.fn(
+  async (_id: string) => ({ baseline: { weight_kg: 80 }, home_location: null, timezone: null }) as unknown,
+);
 const setName = vi.fn();
 const setTimezoneIfUnset = vi.fn();
 const logAi = vi.fn();
@@ -46,7 +48,7 @@ vi.mock('../repos/users.ts', () => ({
   setTimezoneIfUnset: (...a: unknown[]) => setTimezoneIfUnset(...a),
   // The goal screen reads baseline weight to price a loss rate; no home_location, so the
   // geocode branch stays off. Mockable because the weight-start guard reads the STORED record.
-  getUser: (...a: unknown[]) => getUser(...a),
+  getUser: (id: string) => getUser(id),
   setHomeLocation: async () => {},
 }));
 vi.mock('./ai-log.ts', () => ({
