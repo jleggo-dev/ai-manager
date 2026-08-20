@@ -107,9 +107,13 @@ export function MainTabs({
         mode="manage"
         onBack={() => {
           setManage(false);
+          setPlanReload((k) => k + 1); // the wizard may have changed the plan; the cached week must revalidate
           setOfferAdjust(true); // changed or not, offer the refit; "Not now" is one tap
         }}
-        onLocked={() => setManage(false)}
+        onLocked={() => {
+          setManage(false);
+          setPlanReload((k) => k + 1);
+        }}
       />
     );
   }
@@ -152,7 +156,9 @@ export function MainTabs({
          *
          * `display: none` keeps the fetch alive, keeps the listeners subscribed, and keeps the
          * scroll position, so coming back is instant rather than a re-restore. Plan and Progress
-         * stay conditional — they hold no in-flight work and remounting them is how they refresh.
+         * stay conditional — they hold no in-flight work — and since PERF-01 a remount paints the
+         * cached week/dashboard instantly and revalidates in the background, so the switch itself
+         * costs nothing either way.
          */}
         {/* `contents` when showing, not `block`: `.app` is a flex column and a plain wrapper becomes
             a flex child with no sizing of its own, which collapsed the whole chat — composer gone,
@@ -234,7 +240,18 @@ export function MainTabs({
         {settingsOpen && (
           <SettingsSheet email={email} onClose={() => setSettingsOpen(false)} onManage={() => setManage(true)} />
         )}
-        {offerAdjust && <AdjustSheet onClose={() => setOfferAdjust(false)} onCommitted={() => setOfferAdjust(false)} />}
+        {offerAdjust && (
+          <AdjustSheet
+            onClose={() => setOfferAdjust(false)}
+            onCommitted={() => {
+              setOfferAdjust(false);
+              // The refit landed from MainTabs' own sheet, so PlanView underneath never heard —
+              // same signal the rebuild path already sends (before the query cache this relied on
+              // the next tab flip's remount to notice).
+              setPlanReload((k) => k + 1);
+            }}
+          />
+        )}
         {rebuild && (
           <AdjustSheet
             mode="rebalance"

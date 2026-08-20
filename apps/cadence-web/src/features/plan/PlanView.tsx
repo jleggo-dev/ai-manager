@@ -14,12 +14,10 @@ import { DetourStateSheet } from './DetourStateSheet.tsx';
 import { DetourSetup, type DetourChoice } from './DetourSetup.tsx';
 import { downscalePhoto } from './occurrence/format.ts';
 import {
-  getPlan,
   endEpisode,
   checkin,
   acceptProposal,
   dismissProposal,
-  type PlanViewData,
   type PlanOccurrence,
   type ActiveEpisode,
   sendGymPhotos,
@@ -27,6 +25,8 @@ import {
   enterEpisode,
   postponeDetour,
 } from '../../lib/api.ts';
+import { useQueryClient } from '@tanstack/react-query';
+import { setPlanData, usePlan } from '../../lib/query/index.ts';
 
 /** Warm label for a detour type — the coach names the disruption plainly (BRAND.md). */
 /** Local calendar day — the detour card's clock is the user's day, not UTC. */
@@ -68,7 +68,15 @@ export function PlanView({
   onOpenFood: (sub?: 'shop') => void;
   reloadSignal?: number;
 }) {
-  const [data, setData] = useState<PlanViewData | null>(null);
+  /**
+   * The plan comes from the shared query cache (PERF-01), not per-mount state. Tab switches
+   * unmount this view, and the old `useState` + mount-fetch meant every return started from
+   * nothing — the typing dots over a deterministic DB read, every single time (owner, 2026-08-20:
+   * "I press a button, I immediately see a screen" — everywhere but here). Now a return paints
+   * the cached week instantly; the query revalidates in the background once stale.
+   */
+  const queryClient = useQueryClient();
+  const { data, refetch } = usePlan();
   const [note, setNote] = useState('');
   const [proposalBusy, setProposalBusy] = useState(false);
   const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)
@@ -83,20 +91,16 @@ export function PlanView({
   const [, setReloadKey] = useState(0); // bumps → aux refetch after a log/adjust (kept for callbacks)
   const [checkinSettled, setCheckinSettled] = useState(false); // answered/dismissed this mount
 
-  // Refetch on mount AND whenever the parent bumps reloadSignal (a ＋ FAB log just landed).
+  // A change landed elsewhere (＋ FAB log, coach commit, manage wizard) and the parent bumped
+  // reloadSignal → revalidate now. Plain mounts are the query's own affair: fresh cache paints
+  // with no network, stale cache paints then revalidates. A failed refetch keeps the last good
+  // week on screen — never a fabricated empty one (the 2026-08-19 rule, now enforced by the
+  // cache: the queryFn throws on "could not load" instead of storing it).
   useEffect(() => {
-    // `null` = could not load. Keep whatever is showing rather than replacing a real week with a
-    // fabricated empty one — the old fallback here was the same "failure dressed as new user"
-    // shape that restarted onboarding at the App level (2026-08-19).
-    getPlan()
-      .then((p) => p && setData(p))
-      .catch(() => {});
-  }, [reloadSignal]);
+    if (reloadSignal) void refetch();
+  }, [reloadSignal, refetch]);
 
-  const refresh = () =>
-    getPlan()
-      .then((p) => p && setData(p))
-      .catch(() => {});
+  const refresh = () => void refetch();
   const bump = () => setReloadKey((k) => k + 1);
 
   async function acceptProp() {
@@ -105,13 +109,13 @@ export function PlanView({
     setNote('');
     try {
       const r = await acceptProposal();
-      setData((d) => (d ? { ...d, pendingProposal: null } : d));
+      setPlanData(queryClient, (d) => (d ? { ...d, pendingProposal: null } : d));
       if (r.status === 'committed') {
         setNote(r.note?.trim() || 'Updated your plan to fit how this stretch has been going.');
-        setData(await getPlan());
+        await refetch();
         bump();
       } else if (r.status === 'entered_disrupted') {
-        setData(await getPlan()); // the detour banner + paused overlay appear — that's the feedback
+        await refetch(); // the detour banner + paused overlay appear — that's the feedback
         bump();
       } else {
         setNote("I couldn't adjust it just now — give it another try in a bit.");
@@ -124,7 +128,7 @@ export function PlanView({
   }
 
   function dismissProp() {
-    setData((d) => (d ? { ...d, pendingProposal: null } : d));
+    setPlanData(queryClient, (d) => (d ? { ...d, pendingProposal: null } : d));
     dismissProposal().catch(() => {});
   }
 
