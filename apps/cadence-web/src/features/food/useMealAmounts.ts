@@ -1,0 +1,71 @@
+import { useMemo, useState } from 'react';
+import type { MealMacros, MealPreview } from '../../lib/api.ts';
+import { amountSource, scaleMacros, type AmountSource } from './amounts.ts';
+
+/** One row of the confirm card: the parsed item, where its amount came from, and where it is now. */
+export interface AmountRow {
+  name: string;
+  /** `null` while an asked amount is still open — the card cannot log until every one is answered. */
+  qty: number | null;
+  unit?: string;
+  est?: MealMacros;
+  source: AmountSource;
+  /** What the parser originally priced, so a re-answer scales from the read, not from the last answer. */
+  baseQty: number;
+}
+
+const MACRO_KEYS = ['kcal', 'protein_g', 'carbs_g', 'fat_g'] as const;
+
+function sum(rows: AmountRow[]): MealMacros {
+  const total: MealMacros = {};
+  for (const r of rows) {
+    const scaled = scaleMacros(r.est, r.qty == null ? 0 : r.qty / r.baseQty);
+    for (const k of MACRO_KEYS) {
+      const v = scaled?.[k];
+      if (typeof v === 'number') total[k] = (total[k] ?? 0) + v;
+    }
+  }
+  return total;
+}
+
+/**
+ * The confirm card's amount state (design 05c). Every item arrives either with an amount — kept,
+ * never re-asked — or without one, and the ones without are the only questions the card asks.
+ * Nothing counts until they tap, so what this returns from `toPreview()` is exactly and only what
+ * gets written.
+ */
+export function useMealAmounts(preview: MealPreview) {
+  const [rows, setRows] = useState<AmountRow[]>(() =>
+    preview.items.map((it) => ({
+      name: it.name,
+      qty: it.qty ?? null,
+      unit: it.unit,
+      est: it.est,
+      source: amountSource(it, preview.raw_text),
+      // An unpriced item was read at "a typical portion", which is one of whatever it is.
+      baseQty: it.qty && it.qty > 0 ? it.qty : 1,
+    })),
+  );
+
+  const setQty = (i: number, qty: number | null, unit?: string) =>
+    setRows((prev) => prev.map((r, j) => (j === i ? { ...r, qty, ...(unit !== undefined ? { unit } : {}) } : r)));
+
+  const removeRow = (i: number) => setRows((prev) => prev.filter((_, j) => j !== i));
+
+  const asked = rows.filter((r) => r.source === 'asked' && r.qty == null).length;
+  const total = useMemo(() => sum(rows), [rows]);
+
+  /** The card's own contents, in the shape the log endpoint takes back verbatim. */
+  const toPreview = (): MealPreview => ({
+    ...preview,
+    items: rows.map((r) => ({
+      name: r.name,
+      ...(r.qty != null ? { qty: r.qty } : {}),
+      ...(r.unit ? { unit: r.unit } : {}),
+      est: scaleMacros(r.est, r.qty == null ? 1 : r.qty / r.baseQty),
+    })),
+    macros: total,
+  });
+
+  return { rows, setQty, removeRow, asked, total, toPreview };
+}

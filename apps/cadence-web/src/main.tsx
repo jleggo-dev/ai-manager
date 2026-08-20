@@ -11,6 +11,9 @@ import './styles/coach.css';
 import './styles/onboarding.css';
 // The plan-card gate reuses onboarding.css's .gate-week strip and .gate-h, so it loads after.
 import './styles/gate.css';
+// The food CAPTURE surfaces (quick add, the Log screen, the confirm card). Separate from
+// styles.css's `.fh-*` reading screens on purpose — a capture and a read are different jobs.
+import './styles/food-capture.css';
 import { App } from './App.tsx';
 import { createAppQueryClient } from './lib/query/index.ts';
 import { initNativeAuth } from './lib/native-auth.ts';
