@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { ChatTurn } from './ChatTurn.tsx';
 import { viewTurns } from './coachTurns.ts';
 import type { CoachTurn } from './useCoachChat.ts';
@@ -19,14 +20,16 @@ import type { CoachTurn } from './useCoachChat.ts';
  * entirely rather than leaving an empty bubble in the record.
  */
 export function EarlierThread({ turns }: { turns: readonly CoachTurn[] }) {
-  if (!turns.length) return null;
+  // Memoized like OnboardingChat's own `views`: this component re-renders on every SSE delta of
+  // the LIVE conversation, and the retired transcript never changes — re-parsing it per delta is
+  // pure waste on a phone.
+  const views = useMemo(() => viewTurns(turns).filter((t) => t.text), [turns]);
+  if (!views.length) return null;
   return (
     <>
-      {viewTurns(turns)
-        .filter((t) => t.text)
-        .map((t, i) => (
-          <ChatTurn key={i} role={t.role} text={t.text} />
-        ))}
+      {views.map((t, i) => (
+        <ChatTurn key={i} role={t.role} text={t.text} />
+      ))}
       <div className="chat-earlier" role="separator">
         earlier conversation — your next message starts fresh
       </div>
