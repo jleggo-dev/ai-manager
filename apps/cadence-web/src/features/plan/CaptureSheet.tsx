@@ -20,10 +20,13 @@ export function CaptureSheet({
   occurrenceId,
   onClose,
   onLogged,
+  onOpenFood,
 }: {
   occurrenceId: string;
   onClose: () => void;
   onLogged?: () => void;
+  /** Leave the capture for the Food screen — the meal ring is the door (device report, 2026-08-20). */
+  onOpenFood?: () => void;
 }) {
   const { detail, setDetail, state } = useOccurrenceDetail(occurrenceId);
   const isWeigh = !!detail && /weigh/i.test(detail.title);
@@ -73,7 +76,13 @@ export function CaptureSheet({
                 </div>
               )
             ) : isFoodRow(detail) ? (
-              <MealCapturePanel detail={detail} setDetail={setDetail} onLogged={onLogged} onClose={onClose} />
+              <MealCapturePanel
+                detail={detail}
+                setDetail={setDetail}
+                onLogged={onLogged}
+                onClose={onClose}
+                onOpenFood={onOpenFood}
+              />
             ) : (
               <div className="sheet-msg">Tap it done when it happens.</div>
             )}

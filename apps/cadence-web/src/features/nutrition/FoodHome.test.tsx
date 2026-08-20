@@ -125,7 +125,8 @@ describe('FoodHome', () => {
         ],
       }),
     );
-    fireEvent.click(screen.getByLabelText("Confirm this meal's estimate"));
+    // The confirm names the meal — a day can hold more than one provisional row.
+    fireEvent.click(screen.getByLabelText('Confirm the estimate for burrito'));
     await waitFor(() => expect(api.patchMeal).toHaveBeenCalledWith('m1', { confirm: true }));
     expect(invalidate).toHaveBeenCalled();
   });
