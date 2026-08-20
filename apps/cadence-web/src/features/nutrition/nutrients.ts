@@ -182,3 +182,18 @@ export function countedLine(view: NutrientsView): string {
     `not its minerals, so these read low rather than wrong. ${source}`
   );
 }
+
+/** "14 of 18 mg" for a floor, "1,940 / 2,300 mg" for the ceiling — a budget reads as a fraction. */
+export function readingText(r: NutrientReading): { value: string; rest: string } {
+  return r.direction === 'ceiling'
+    ? { value: r.eatenText, rest: `/ ${r.targetText} ${r.unit}` }
+    : { value: r.eatenText, rest: `of ${r.targetText} ${r.unit}` };
+}
+
+/** What a screen reader should hear — never the label and the number welded into one token. */
+export function readingLabel(r: NutrientReading): string {
+  const t = readingText(r);
+  return r.direction === 'ceiling'
+    ? `${r.label}: ${t.value} of a ${r.targetText} ${r.unit} budget`
+    : `${r.label}: ${t.value} ${r.unit} of ${r.targetText}`;
+}

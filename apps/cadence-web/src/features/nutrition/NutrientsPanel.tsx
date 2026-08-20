@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Meal, MealMacros } from '../../lib/api.ts';
-import { CeilingBar, FloorBar, MiniFloorBar, readingLabel, readingText } from './NutrientBar.tsx';
-import { buildNutrientsView, countedLine, type NutrientReading } from './nutrients.ts';
+import { CeilingBar, FloorBar, MiniFloorBar } from './NutrientBar.tsx';
+import { buildNutrientsView, countedLine, readingLabel, readingText, type NutrientReading } from './nutrients.ts';
 
 /**
  * Nutrients (Food Journey 09/5C) — a drill-down off the macro block, not a tab of its own.

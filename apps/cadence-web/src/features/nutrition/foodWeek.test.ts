@@ -44,7 +44,10 @@ describe('buildWeek', () => {
     expect(byDate.get('2026-09-03')?.state).toBe('future');
     expect(byDate.get('2026-09-06')?.state).toBe('future');
     // Tuesday 1 Sep is logged; drop it and the same lived day becomes "nothing logged", not zero.
-    const thin = buildWeek(WED, meals.filter((m) => m.date !== '2026-09-01'));
+    const thin = buildWeek(
+      WED,
+      meals.filter((m) => m.date !== '2026-09-01'),
+    );
     expect(thin.days.find((d) => d.date === '2026-09-01')?.state).toBe('nothing');
   });
 

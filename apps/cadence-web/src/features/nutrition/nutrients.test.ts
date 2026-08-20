@@ -52,7 +52,9 @@ describe('buildNutrientsView', () => {
 
   /** The trap the whole screen is built to avoid: a hand-typed lunch is not seven deficiencies. */
   it('invents no shortfall when nothing logged carried mineral data', () => {
-    const v = buildNutrientsView({ kcal: 800, protein_g: 40 }, [meal({ macros: { kcal: 800 }, items: [{ name: 'x' }] })]);
+    const v = buildNutrientsView({ kcal: 800, protein_g: 40 }, [
+      meal({ macros: { kcal: 800 }, items: [{ name: 'x' }] }),
+    ]);
     expect(v.unmeasured).toBe(true);
     expect(v.aiming).toEqual([]);
     expect(countedLine(v)).toContain('counted its calories, not its minerals');
@@ -79,7 +81,10 @@ describe('countMeasured', () => {
   it('counts per item when items carry their own minerals', () => {
     const m = meal({
       macros: { kcal: 400, iron_mg: 3 },
-      items: [{ name: 'lentils', est: { kcal: 200, iron_mg: 3 } }, { name: 'a roll', est: { kcal: 200 } }],
+      items: [
+        { name: 'lentils', est: { kcal: 200, iron_mg: 3 } },
+        { name: 'a roll', est: { kcal: 200 } },
+      ],
     });
     expect(countMeasured([m])).toEqual({ measured: 1, total: 2 });
   });
@@ -108,9 +113,7 @@ describe('countedLine', () => {
 
   it('frames partial coverage as reading low rather than as the user falling short', () => {
     const totals = { iron_mg: 4 };
-    const meals = [
-      meal({ macros: totals, items: [{ name: 'a', est: { iron_mg: 4 } }, { name: 'b' }] }),
-    ];
+    const meals = [meal({ macros: totals, items: [{ name: 'a', est: { iron_mg: 4 } }, { name: 'b' }] })];
     const line = countedLine(buildNutrientsView(totals, meals));
     expect(line).toContain('Counted from 1 of your 2 items');
     expect(line).toContain('read low rather than wrong');
