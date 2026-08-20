@@ -5101,8 +5101,20 @@ never sent.
   shipped 2026-08-20 (PR #251) after a thread retirement left the Coach tab EMPTY ("a big missing
   component"): a retired thread's transcript now renders read-only above the fresh conversation
   (`EarlierThread`), under a quiet divider — "earlier conversation — your next message starts
-  fresh". No adoption change: sessionId stays null, next send opens fresh. Still open: the actual
-  history toggle / browsing more than the latest retired thread.
+  fresh". No adoption change: sessionId stays null, next send opens fresh. **Closed 2026-08-20
+  (PR #255):** #251 was a one-shot — it showed the previous transcript only while the retired
+  thread was still the NEWEST conversation, so the first message after a retirement opened a fresh
+  session and the older thread vanished again on the next open; every conversation before the
+  latest was unreachable by any endpoint. Now `GET /coach/conversations?before=&limit=` reads back
+  through the archive one conversation at a time (cursored on `created_at`, transcripts riding
+  along, empty/unreadable rows skipped with the cursor still advancing), rendered above the live
+  chat under dated dividers by `EarlierConversations`. Latency contract: the archive is fetched
+  ONLY on an explicit "Read earlier conversations" tap — never on tab open — and the current
+  conversation now paints from a device-local cache (`coach-transcript-cache.ts`, user-scoped and
+  cleared on identity change) before `/coach/current` returns, so the Coach tab is never blank
+  while the network is in flight. Display only: nothing archived is ever adopted as the live
+  session. Owner's need, verbatim: *"the visual representation of that history isn't for the
+  coach, it's for me… I also need to remember what we talked about and why."*
 
 **The blocker for everything server-side: ship main.** Rationale/suggested/area on GET /plan,
 the graduated fix's client half, milestone capture plumbing, the reset completeness — all inert

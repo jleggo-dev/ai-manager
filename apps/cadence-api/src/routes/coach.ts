@@ -9,9 +9,9 @@ import {
   recordCoachReply,
   anchorCoachThread,
   getCoachPersona,
-  getCoachHistory,
   cancelCoachTurn,
 } from '../ai/aim.ts';
+import { readArchivedConversations, readTranscript } from '../services/coach-transcript.ts';
 import { runCaptureExtract } from '../services/capture.ts';
 import { injectCoachBlocks, refreshChangedBlocks } from '../services/coach-block-refresh.ts';
 import { renderScreenNotes } from '../services/goal-screen.ts';
@@ -32,6 +32,7 @@ import { logAi, recentAiLog } from '../services/ai-log.ts';
 import { ensureHorizon } from '../services/plan-horizon.ts';
 import {
   createConversation,
+  countConversationsBefore,
   getConversationByAiSession,
   getLatestConversation,
   getNotifyOnReply,
@@ -41,34 +42,13 @@ import {
 } from '../repos/conversations.ts';
 import { getActivePlan, getFirstPlanCommitAt } from '../repos/plans.ts';
 
-/**
- * Turns the app authored rather than the user. They must be invisible everywhere the conversation
- * is read back: in a restored transcript they render as a message in the user's own bubble that
- * they never wrote, and in the Broker's capture window they get extracted as something they said.
- *
- * `<context` and `<note>` are live — the injected packs, and the notes the app hands the coach
- * mid-conversation so she speaks to something that just happened (the Apple Health history a user
- * has this second agreed to share). **`<open>` is legacy** and deliberately kept: the
- * client briefly opened onboarding by asking the model to speak first, and sessions created in
- * that window still carry the nudge. The opening question is a constant now
- * (`@cadence/shared`'s OPENING_QUESTION, painted client-side and never sent), so nothing new
- * writes one — but dropping the pattern would make those existing transcripts render wrong.
- */
-const APP_AUTHORED = /^\s*<(context|open|note)\b/;
-
-export const isRealTurn = (m: { role?: string; content?: string }) =>
-  (m.role === 'user' || m.role === 'assistant') && !APP_AUTHORED.test(m.content ?? '');
-
 /** Build the capture window from the FULL conversation (user + coach turns), excluding the
- *  app-authored turns above. Falls back to the latest message if history can't be read. */
+ *  app-authored turns (see coach-transcript.ts). Falls back to the latest message if history
+ *  can't be read. */
 async function captureWindow(userId: string, sessionId: string, latest: string): Promise<string> {
   try {
-    const hist = (await getCoachHistory(userId, sessionId)) as { messages?: unknown; data?: unknown };
-    const msgs = (hist.messages ?? hist.data ?? []) as Array<{ role?: string; content?: string }>;
-    const w = msgs
-      .filter(isRealTurn)
-      .map((m) => `${m.role === 'assistant' ? 'Coach' : 'User'}: ${(m.content ?? '').trim()}`)
-      .join('\n');
+    const turns = await readTranscript(userId, sessionId);
+    const w = turns.map((t) => `${t.role === 'coach' ? 'Coach' : 'User'}: ${t.content.trim()}`).join('\n');
     return w || latest;
   } catch {
     return latest;
@@ -217,7 +197,11 @@ router.get('/current', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
     const conv = await getLatestConversation(userId);
-    if (!conv) return void res.json({ sessionId: null, messages: [], stale: false });
+    // `ok` marks an answer the client can ACT on. Both failure paths (the catch below, and a
+    // non-2xx seen client-side) return the same empty shape, and a client that cannot tell them
+    // apart has to treat "the API hiccuped" as "you have no history" — which is how a cached
+    // transcript would get wiped off the screen by a blip. Only this handler sets it.
+    if (!conv) return void res.json({ ok: true, sessionId: null, messages: [], stale: false });
 
     let stale = false;
     let staleReason: 'idle' | 'graduated' | null = null;
@@ -233,11 +217,13 @@ router.get('/current', async (req: Request, res: Response) => {
       }
     }
 
-    const hist = (await getCoachHistory(userId, conv.ai_session_id)) as { messages?: unknown; data?: unknown };
-    const raw = (hist.messages ?? hist.data ?? []) as Array<{ role?: string; content?: string }>;
-    const messages = raw
-      .filter(isRealTurn)
-      .map((m) => ({ role: m.role === 'assistant' ? 'coach' : 'user', content: m.content ?? '' }));
+    // The transcript, and whether anything stands behind it. The count rides along here rather
+    // than costing a second request because the answer decides whether the chat offers to read
+    // back at all, and it is one indexed count against a table this handler has already opened.
+    const [messages, earlierCount] = await Promise.all([
+      readTranscript(userId, conv.ai_session_id),
+      countConversationsBefore(userId, conv.created_at).catch(() => 0),
+    ]);
     // `generating`: a reply is STILL being written server-side (the relay drains dropped streams
     // to completion, and 0029 records which response is in flight). A phone that backgrounded
     // mid-turn polls this on return, and "still generating" means keep waiting — not "give up
@@ -251,17 +237,62 @@ router.get('/current', async (req: Request, res: Response) => {
     const startedMs = new Date(conv.updated_at ?? conv.created_at).getTime();
     const inFlightFresh = Number.isFinite(startedMs) && Date.now() - startedMs < IN_FLIGHT_MAX_MS;
     res.json({
+      ok: true,
       sessionId: conv.ai_session_id,
       messages,
       stale,
       staleReason,
       generating: conv.in_flight_response_id != null && inFlightFresh,
+      // The cursor for reading back — where THIS conversation begins, so the next request asks
+      // for what came before it without the client having to invent a timestamp.
+      startedAt: conv.created_at,
+      hasEarlier: earlierCount > 0,
     });
   } catch (err) {
     const aim = AimError.fromUnknown(err);
     console.error('[GET /coach/current]', aim.kind, aim.message);
-    // Soft-fail: a blank restore is better than a hard error on the chat entry path.
+    // Soft-fail: a blank restore is better than a hard error on the chat entry path. No `ok`, so
+    // the client keeps whatever it had painted instead of reading this as "nothing on file".
     res.json({ sessionId: null, messages: [], stale: false });
+  }
+});
+
+/**
+ * GET /coach/conversations?before=<iso>&limit=<n> — the conversations BEHIND the one on screen.
+ *
+ * The Coach tab restored exactly one conversation and nothing else, so every thread before it was
+ * unreachable: retiring one and sending a message made the previous one vanish for good. Owner,
+ * 2026-08-20: *"my entire history of the chat is gone… the visual representation of that history
+ * isn't for the coach, it's for me. I also need to remember what we talked about and why."*
+ *
+ * On demand only, and never on the path that paints the chat: this is called when someone asks to
+ * read further back, one conversation at a time. The transcripts ride in the response because the
+ * only caller renders them immediately — a list endpoint plus a fetch per row would double the
+ * round trips to show the same thing.
+ *
+ * Read-only by construction. Nothing here hands back a session id the send path will adopt; the
+ * no-adopt contract lives in `/coach/current`, and displaying an archived thread must never be a
+ * way around it.
+ */
+const ARCHIVE_MAX_PER_REQUEST = 3;
+router.get('/conversations', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const before = typeof req.query.before === 'string' ? req.query.before : '';
+  if (!before || Number.isNaN(new Date(before).getTime())) {
+    res.status(400).json({ error: 'before (ISO timestamp) required' });
+    return;
+  }
+  const asked = Number(req.query.limit);
+  const limit = Number.isFinite(asked) ? Math.min(Math.max(Math.trunc(asked), 1), ARCHIVE_MAX_PER_REQUEST) : 1;
+  try {
+    res.json(await readArchivedConversations(userId, before, limit));
+  } catch (err) {
+    const aim = AimError.fromUnknown(err);
+    console.error('[GET /coach/conversations]', aim.kind, aim.message);
+    // Soft-fail like its neighbour: failing to read further back must never break the chat that
+    // is already on screen. `hasMore` stays true so the offer survives a blip and can be retried,
+    // and the cursor does not advance past archive nobody actually read.
+    res.json({ conversations: [], hasMore: true, nextBefore: null, error: aim.kind });
   }
 });
 

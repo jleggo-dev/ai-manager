@@ -85,3 +85,38 @@ export async function updateConversationContext(
     update cadence.conversations set ${sql(updates)}, updated_at = now()
     where conversation_id = ${conversationId}`;
 }
+
+/**
+ * The conversations that came BEFORE this one, newest first — the server half of reading back
+ * through the coach's history.
+ *
+ * Cursored on `created_at` rather than offset-paged because conversations are append-only: an
+ * offset would shift under a page the moment a new thread opened mid-read, and the reader would
+ * silently skip or repeat one.
+ *
+ * Returns the mapping rows only. The transcripts live in AI Admin (`chat_messages`) and are
+ * fetched per conversation by `coach-transcript.ts` — one round trip per conversation the reader
+ * actually asked for, never for the whole archive.
+ */
+export async function listConversationsBefore(userId: string, before: string, limit: number): Promise<Conversation[]> {
+  return sql<Conversation[]>`
+    select * from cadence.conversations
+    where user_id = ${userId} and created_at < ${before}
+    order by created_at desc limit ${limit}`;
+}
+
+/**
+ * Is there anything at all behind this conversation — so the client offers to read back only when
+ * there is somewhere to go.
+ *
+ * Counts ROWS, which includes conversations that turn out to hold no real turns (a session opened
+ * and never spoken into). That makes this an upper bound, not a promise: a load that comes back
+ * empty retracts the offer itself, which is cheaper than reading every archived transcript here
+ * just to answer a yes/no on the chat's opening request.
+ */
+export async function countConversationsBefore(userId: string, before: string): Promise<number> {
+  const [row] = await sql<{ n: number }[]>`
+    select count(*)::int as n from cadence.conversations
+    where user_id = ${userId} and created_at < ${before}`;
+  return row?.n ?? 0;
+}

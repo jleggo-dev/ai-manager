@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isRealTurn } from './coach.ts';
+import { isRealTurn } from './coach-turns.ts';
 
 /**
  * The filter that decides what counts as part of the conversation. It feeds two things at once —
