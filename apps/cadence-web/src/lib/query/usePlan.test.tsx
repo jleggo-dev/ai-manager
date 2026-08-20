@@ -25,9 +25,11 @@ function makeClient() {
 }
 
 function wrapperFor(client: QueryClient) {
-  return ({ children }: { children: ReactNode }) => (
+  const Wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
+  Wrapper.displayName = 'QueryWrapper';
+  return Wrapper;
 }
 
 beforeEach(() => {

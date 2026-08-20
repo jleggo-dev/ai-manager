@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { logWater } from '../../lib/api.ts';
 
-/** A glass is 250 ml — the unit the row counts in, and the amount one tap pours. */
-const GLASS_ML = 250;
+/** A glass is 250 ml — the unit the row counts in, and the amount one tap pours.
+ *  Exported so the capture surfaces pour the same glass this row counts. */
+export const GLASS_ML = 250;
 const GLASSES = 8;
 
 /**

@@ -2,20 +2,26 @@ import { useState } from 'react';
 import { logPreviewedMeal, type MealKind, type MealPreview, type PlateAdvice } from '../../lib/api.ts';
 import { useInvalidateNutritionDay } from '../../lib/query/index.ts';
 import { mealForNow } from '../plan/occurrence/format.ts';
+import { macroLineProteinFirst } from './amounts.ts';
+import { MealAmountRows } from './MealAmountRows.tsx';
+import { useMealAmounts } from './useMealAmounts.ts';
 
 const MEAL_KINDS: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
 
+const countLine = (n: number): string =>
+  n === 1 ? 'One thing' : n === 2 ? 'Two things' : n === 3 ? 'Three things' : `${n} things`;
+
 /**
- * "Here's how I read that meal — log it?"
+ * "Here's my read — confirm?"
  *
- * The confirm card for a multi-ingredient description. Every ingredient is a row with the
- * quantity the user GAVE — there is deliberately no serving-size question anywhere on this card,
- * because "1 cup frozen strawberries, 2/3 cup skyr, 1 scoop protein powder" already answered it:
- * those amounts are the serving (owner, 2026-08-15). The one thing still worth asking is which
- * meal this was, prefilled from the clock.
+ * The parse-and-confirm card for a described meal, and the place **the amounts rule** lives
+ * (design 05c): an amount they gave is KEPT and never re-asked; an amount they didn't give is
+ * ASKED for, as chips rather than a keypad. One thing assumed, one thing asked — never both
+ * guessed. The rule needs nothing invented: the `parse-meal` job only sets `qty` when an amount
+ * was stated or is plainly countable, so an item without one is exactly an open question.
  *
- * What logs is exactly what renders — the preview payload goes back verbatim and the server
- * inserts it with no second AI pass. And the escape hatch matters: the meal-vs-single-food split
+ * What logs is exactly what renders — the card's own contents go back verbatim and the server
+ * inserts them with no second AI pass. The escape hatch stays: the meal-vs-single-food split
  * upstream is a heuristic, so "just one food?" hands the same words to the resolver instead.
  */
 export function MealParseCard({
@@ -47,16 +53,14 @@ export function MealParseCard({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const invalidateNutritionDay = useInvalidateNutritionDay();
-
-  const total = preview.macros;
-  const provisional = preview.confidence != null && preview.confidence < 0.5;
+  const { rows, setQty, removeRow, asked, total, toPreview } = useMealAmounts(preview);
 
   async function confirm() {
-    if (busy) return;
+    if (busy || asked > 0 || !rows.length) return;
     setBusy(true);
     setErr('');
     try {
-      await logPreviewedMeal(preview, meal);
+      await logPreviewedMeal(toPreview(), meal);
       await invalidateNutritionDay();
       onLogged();
     } catch {
@@ -67,36 +71,22 @@ export function MealParseCard({
   }
 
   return (
-    <div className="food-confirm" role="region" aria-label="Confirm meal log">
-      <div className="food-panel-t">Here&apos;s how I read that — log it?</div>
-      <p className="food-panel-p">
-        Your amounts are the serving sizes. The nutrition is an estimate — close enough to coach from, and I&apos;ll
-        adjust as I learn how you eat. Nothing counts until you confirm.
-      </p>
-
-      <div className="mealparse-items">
-        {preview.items.map((it, i) => (
-          <div className="mealparse-item" key={`${it.name}-${i}`}>
-            <span className="mealparse-qty">{[it.qty, it.unit].filter((x) => x != null && x !== '').join(' ')}</span>
-            <span className="mealparse-name">{it.name}</span>
-            {it.est?.kcal != null && <span className="mealparse-kcal">~{Math.round(it.est.kcal)} kcal</span>}
-          </div>
-        ))}
+    <div className="fa-card" role="region" aria-label="Confirm meal log">
+      <div className="fa-card-h">
+        <b>{countLine(rows.length)}</b>
+        {asked > 0 && (
+          <span className="fa-card-open">
+            {asked} AMOUNT{asked === 1 ? '' : 'S'} TO SETTLE
+          </span>
+        )}
       </div>
 
-      {total && (
-        <div className="food-macro-preview">
-          {[
-            total.kcal != null ? `~${Math.round(total.kcal)} kcal` : '',
-            total.protein_g != null ? `P${Math.round(total.protein_g)}` : '',
-            total.carbs_g != null ? `C${Math.round(total.carbs_g)}` : '',
-            total.fat_g != null ? `F${Math.round(total.fat_g)}` : '',
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-          {provisional ? ' · rough read — tap the meal later to firm it up' : ''}
-        </div>
-      )}
+      <MealAmountRows rows={rows} busy={busy} onQty={setQty} onRemove={removeRow} />
+
+      <div className="fa-tot">
+        <b>~{Math.round(total.kcal ?? 0)} kcal</b>
+        <span>{macroLineProteinFirst(total)}</span>
+      </div>
 
       <label className="food-field">
         <span>Meal</span>
@@ -128,19 +118,23 @@ export function MealParseCard({
       {err && <div className="food-empty">{err}</div>}
 
       <div className="food-confirm-actions">
-        <button type="button" className="lockbtn" disabled={busy} onClick={() => void confirm()}>
+        <button type="button" className="fa-log" disabled={busy || asked > 0} onClick={() => void confirm()}>
           {busy
             ? 'Writing it down…'
-            : `Log it — ${preview.items.length} ingredient${preview.items.length === 1 ? '' : 's'}`}
+            : asked === 1
+              ? 'One amount to settle first'
+              : asked > 1
+                ? `${asked} amounts to settle first`
+                : `Log to ${meal}`}
         </button>
         {onAddAnother && (
           <button type="button" className="mc-addanother" disabled={busy} onClick={onAddAnother}>
-            ＋ Add another thing
+            ＋ Add something I forgot
           </button>
         )}
         {onNotAMeal && (
           <button type="button" className="lockbtn ghost" disabled={busy} onClick={onNotAMeal}>
-            Just one food? Match it instead
+            Not a meal — one food
           </button>
         )}
         <button type="button" className="lockbtn ghost" disabled={busy} onClick={onCancel}>

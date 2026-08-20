@@ -31,11 +31,17 @@ export function MicButton({
   value,
   onChange,
   disabled,
+  autoStart,
   onListeningChange,
 }: {
   value: string;
   onChange: (next: string) => void;
   disabled?: boolean;
+  /**
+   * Open already listening. Voice is not a separate interface — it is the chat screen with the mic
+   * live (design 05c) — so the caller sets this instead of building a second surface.
+   */
+  autoStart?: boolean;
   /** Told whenever dictation starts or stops, so a caller can keep the control on screen. */
   onListeningChange?: (listening: boolean) => void;
 }) {
@@ -55,6 +61,10 @@ export function MicButton({
   const valueRef = useRef(value);
   valueRef.current = value;
 
+  // `start` is defined below; the ref lets the auto-start effect reach it without re-ordering the
+  // whole component (and it is assigned during render, so it is set before any effect runs).
+  const startRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     aliveRef.current = true;
     return () => {
@@ -63,7 +73,11 @@ export function MicButton({
     };
   }, []);
 
-  if (!supported) return null;
+  useEffect(() => {
+    if (autoStart && supported && !disabled) startRef.current();
+    // Once, on open — a re-run would restart a mic the user deliberately stopped.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function stop() {
     wantOnRef.current = false;
@@ -144,6 +158,10 @@ export function MicButton({
       setListening(false);
     }
   }
+
+  startRef.current = start;
+
+  if (!supported) return null;
 
   return (
     <button

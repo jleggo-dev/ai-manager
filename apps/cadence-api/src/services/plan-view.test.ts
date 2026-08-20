@@ -73,15 +73,37 @@ beforeEach(() => {
 
 describe('buildPlanView', () => {
   it('reads what it can concurrently — the whole point of the batching', async () => {
-    const t0 = Date.now();
-    await buildPlanView(USER, 7, 'America/Toronto');
-    const ms = Date.now() - t0;
+    /**
+     * Deterministic, not wall-clock. The first version asserted elapsed time and flaked the moment
+     * other suites ran beside it — a timing assertion measures the machine as much as the code.
+     * Peak in-flight count measures the thing itself: serial execution can never exceed 1.
+     */
+    let inflight = 0;
+    let peak = 0;
+    const tracked =
+      <T,>(value: T) =>
+      () => {
+        inflight += 1;
+        peak = Math.max(peak, inflight);
+        return new Promise<T>((r) =>
+          setTimeout(() => {
+            inflight -= 1;
+            r(value);
+          }, HOP),
+        );
+      };
+    q.evaluateStreak.mockImplementation(tracked({ current: 4, best: 9, freezes: 1 }));
+    q.getActiveEpisode.mockImplementation(tracked(null));
+    q.getActivePlan.mockImplementation(tracked(PLAN));
+    q.listGoals.mockImplementation(tracked([]));
+    q.listOccurrences.mockImplementation(tracked([]));
+    q.listSessionStepCounts.mockImplementation(tracked([]));
 
-    // Ten repo calls at 60ms each: serial is >=600ms. Batched, the critical path is
-    // horizon → {streak,episode,plan,goals} → activities → user → {week,steps,past} ≈ 5 hops.
-    // The ceiling is deliberately loose enough not to flake and tight enough that re-serializing
-    // any batch breaks it.
-    expect(ms).toBeLessThan(HOP * 8);
+    await buildPlanView(USER, 7, 'America/Toronto');
+
+    // Four reads open together after the horizon top-up; three more for the day window later.
+    // Anything below 3 means a batch was re-serialized.
+    expect(peak).toBeGreaterThanOrEqual(3);
   });
 
   it('runs the four horizon-unblocked reads in ONE hop, not four', async () => {
