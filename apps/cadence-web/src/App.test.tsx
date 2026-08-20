@@ -1,6 +1,28 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App.tsx';
+import { createAppQueryClient } from './lib/query/index.ts';
 import { screenFromPlanStage } from './screenFromPlanStage.ts';
+
+/**
+ * App routes through the shared query cache now (PERF-02: the gate's `/plan` fetch IS the one
+ * PlanView paints from), so it needs a provider. Built with the APP's own factory rather than a
+ * bare QueryClient — `retry: 1` is what makes "absorbs a single blip" a real assertion instead of
+ * one that passes because the test client never retried. Fresh per render: a shared cache would
+ * let one case's plan satisfy the next case's gate.
+ */
+const renderApp = () => {
+  const client = createAppQueryClient();
+  // Keep the app's retry COUNT (that is the contract these tests assert) but drop its backoff
+  // DELAY: react-query waits ~1s before retry one, which outlives waitFor's default and made
+  // these read as failures when the behaviour was correct. Timing is not the contract.
+  client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, retryDelay: 0 } });
+  return render(
+    <QueryClientProvider client={client}>
+      <App />
+    </QueryClientProvider>,
+  );
+};
 
 const getPlan = vi.fn();
 
@@ -68,17 +90,17 @@ describe('App (dev mode)', () => {
   });
 
   it('routes getPlan stage to the matching screen', async () => {
-    const { unmount } = render(<App />);
+    const { unmount } = renderApp();
     await waitFor(() => expect(screen.getByText('Meet Cadence')).toBeInTheDocument());
     unmount();
 
     getPlan.mockResolvedValueOnce({ stage: 'in_progress' });
-    const mid = render(<App />);
+    const mid = renderApp();
     await waitFor(() => expect(mid.getByText('Onboarding chat')).toBeInTheDocument());
     mid.unmount();
 
     getPlan.mockResolvedValueOnce({ stage: 'committed' });
-    render(<App />);
+    renderApp();
     await waitFor(() => expect(screen.getByText('Main tabs')).toBeInTheDocument());
   });
 
@@ -90,7 +112,7 @@ describe('App (dev mode)', () => {
    */
   it('shows a retry — never the meet screen — when the plan cannot load', async () => {
     getPlan.mockResolvedValue(null); // both the load and its one silent retry fail
-    render(<App />);
+    renderApp();
     await waitFor(() => expect(screen.getByText(/safe on the server/)).toBeInTheDocument());
     expect(screen.queryByText('Meet Cadence')).not.toBeInTheDocument();
 
@@ -102,7 +124,7 @@ describe('App (dev mode)', () => {
 
   it('absorbs a single blip with the silent retry', async () => {
     getPlan.mockResolvedValueOnce(null).mockResolvedValueOnce({ stage: 'committed' });
-    render(<App />);
+    renderApp();
     await waitFor(() => expect(screen.getByText('Main tabs')).toBeInTheDocument());
   });
 });

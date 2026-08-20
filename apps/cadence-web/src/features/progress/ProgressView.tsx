@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { JournalStore } from '../journal/JournalStore.tsx';
 import type { ProgressTrend } from '@cadence/shared';
-import { getProgress } from '../../lib/api.ts';
 import { ProgressCardView, ProgressTrendCard } from '../../components/ProgressCards.tsx';
 import { useGoalEventAdd } from '../today/useGoalEventAdd.ts';
+import { useProgress } from '../../lib/query/index.ts';
 
 /**
  * The Progress tab — "variable, coach-shaped" content that derives entirely from the user's
@@ -15,21 +15,14 @@ import { useGoalEventAdd } from '../today/useGoalEventAdd.ts';
 
 export function ProgressView() {
   const [journalOpen, setJournalOpen] = useState(false);
-  const [data, setData] = useState<Awaited<ReturnType<typeof getProgress>> | null>(null);
-  const [err, setErr] = useState(false);
+  // Shared query cache (PERF-01): a tab return paints the cached dashboard instantly and
+  // revalidates in the background; the dots are only for the first load of a session. A refetch
+  // that fails keeps the last good numbers on screen — the error card is for having nothing.
+  const { data, error, refetch } = useProgress();
 
-  const load = () =>
-    getProgress()
-      .then(setData)
-      .catch(() => setErr(true));
+  const add = useGoalEventAdd(() => void refetch());
 
-  const add = useGoalEventAdd(load);
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  if (err) {
+  if (error && !data) {
     return (
       <div className="scrollbody">
         <div className="wiz-empty" style={{ marginTop: 24 }}>

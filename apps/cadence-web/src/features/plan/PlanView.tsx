@@ -109,13 +109,13 @@ export function PlanView({
     setNote('');
     try {
       const r = await acceptProposal();
-      setData((d) => (d ? { ...d, pendingProposal: null } : d));
+      setPlanData(queryClient, (d) => (d ? { ...d, pendingProposal: null } : d));
       if (r.status === 'committed') {
         setNote(r.note?.trim() || 'Updated your plan to fit how this stretch has been going.');
-        setData(await getPlan());
+        await refetch();
         bump();
       } else if (r.status === 'entered_disrupted') {
-        setData(await getPlan()); // the detour banner + paused overlay appear — that's the feedback
+        await refetch(); // the detour banner + paused overlay appear — that's the feedback
         bump();
       } else {
         setNote("I couldn't adjust it just now — give it another try in a bit.");
@@ -128,7 +128,7 @@ export function PlanView({
   }
 
   function dismissProp() {
-    setData((d) => (d ? { ...d, pendingProposal: null } : d));
+    setPlanData(queryClient, (d) => (d ? { ...d, pendingProposal: null } : d));
     dismissProposal().catch(() => {});
   }
 

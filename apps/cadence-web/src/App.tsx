@@ -16,7 +16,9 @@ import { listDeviceAccounts, rememberDeviceAccount } from './features/auth/devic
 import { syncLocalStateToUser } from './features/auth/localUserState.ts';
 import { PhoneFrame } from './components/PhoneFrame.tsx';
 import { CoachFaceProvider } from './features/coach/CoachFaceProvider.tsx';
-import { getPlan, setAuthToken, isDevMode, getHealthDigest, postHealthDigest, postWorkoutHistory } from './lib/api.ts';
+import { setAuthToken, isDevMode, getHealthDigest, postHealthDigest, postWorkoutHistory } from './lib/api.ts';
+import { useQueryClient } from '@tanstack/react-query';
+import { fetchPlanIntoCache } from './lib/query/index.ts';
 import { syncPlanLocalNotifications } from './lib/local-notifications-sync.ts';
 import { usePushRegistered } from './lib/usePushRegistered.ts';
 import { capabilities } from './lib/capability/index.ts';
@@ -84,26 +86,24 @@ function CoachApp({ session }: { session: Session | null }) {
   // which is why device_tokens was empty and no push Cadence ever sent could be delivered.
   usePushRegistered(screen !== 'loading');
 
+  const queryClient = useQueryClient();
   const loadPlan = () => {
     setScreen('loading');
-    getPlan()
+    /**
+     * Through the shared query cache (PERF-02), not a bare getPlan(): routing and PlanView's
+     * first paint used to be two sequential /plan round trips — the gate resolved, MainTabs
+     * mounted, and PlanView refetched the exact plan the gate had just thrown away, holding the
+     * typing dots for a second full trip (2026-08-20 latency report). Now the gate's fetch IS
+     * the cache PlanView paints from, and the dots end with round trip one.
+     *
+     * "Could not load" must never route anywhere a plan-stage routes: the API once dressed any
+     * failure as `stage: 'new'`, so a cold start or a 401 blip right after sign-in landed a
+     * fully signed-in owner on "meet Cadence" — onboarding, restarted, on top of a plan sitting
+     * on the server (2026-08-19). The cache fetch THROWS on that answer (one silent retry built
+     * into the client), so failure lands on the error screen below, never on a plan stage.
+     */
+    fetchPlanIntoCache(queryClient)
       .then((p) => {
-        /**
-         * `null` is "could not load", and it must never route anywhere a plan-stage routes.
-         * It used to: the API dressed any failure as `stage: 'new'`, so a cold start or a 401
-         * blip right after sign-in landed a fully signed-in owner on "meet Cadence" — onboarding,
-         * restarted, on top of a plan sitting on the server (2026-08-19). One silent retry
-         * absorbs the transient case; a screen that says so absorbs the rest.
-         */
-        if (!p) {
-          getPlan().then((again) => {
-            if (!again) return setScreen('error');
-            const next = screenFromPlanStage(again.stage);
-            setScreen(next === 'plan' && anonymous ? 'gate' : next);
-            void syncPlanLocalNotifications();
-          });
-          return;
-        }
         const next = screenFromPlanStage(p.stage);
         // A finished plan on an account that never signed up: the gate is what stands between
         // them and it, so land there rather than on a plan that could evaporate with the browser.
@@ -305,25 +305,34 @@ function PreAuth() {
 export function App() {
   const [ready, setReady] = useState(DEV_MODE);
   const [session, setSession] = useState<Session | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
+    // A different person signed in → their predecessor's cached server answers (plan, nutrition
+    // day, progress) are not theirs to inherit either — same rule as the localStorage sweep, now
+    // that the plan cache also routes the app (PERF-02). Same-person resumes keep their cache.
+    const syncUser = (userId: string | null) => {
+      if (syncLocalStateToUser(userId)) queryClient.clear();
+    };
     if (DEV_MODE) return;
     supabase.auth.getSession().then(({ data }) => {
       setAuthToken(data.session?.access_token ?? null);
       setSession(data.session);
       // Before anything reads a local answer: a different person means the last person's answers
       // are not theirs to inherit (features/auth/localUserState.ts).
-      syncLocalStateToUser(data.session?.user.id ?? null);
+      syncUser(data.session?.user.id ?? null);
       if (data.session) rememberDeviceAccount(data.session);
       setReady(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setAuthToken(s?.access_token ?? null);
       setSession(s);
-      syncLocalStateToUser(s?.user.id ?? null);
+      syncUser(s?.user.id ?? null);
       if (s) rememberDeviceAccount(s);
     });
     return () => sub.subscription.unsubscribe();
+    // queryClient is provider-stable for the app's life.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Tool previews short-circuit auth and the plan entirely. Sits below the hooks so the hook
