@@ -106,7 +106,12 @@ export function LogScreen({
           ‹
         </button>
         <h2>Log</h2>
-        <select className="fl-slot" value={meal} aria-label="Meal" onChange={(e) => setMeal(e.target.value as MealKind)}>
+        <select
+          className="fl-slot"
+          value={meal}
+          aria-label="Meal"
+          onChange={(e) => setMeal(e.target.value as MealKind)}
+        >
           {MEALS.map((m) => (
             <option key={m} value={m}>
               {m}
@@ -161,7 +166,12 @@ export function LogScreen({
           onBack={() => setRoute({ at: 'home' })}
           onLog={(p) =>
             void act
-              .logFood({ food_id: route.food.food_id, serving_index: p.servingIndex, quantity: p.quantity, meal: p.meal })
+              .logFood({
+                food_id: route.food.food_id,
+                serving_index: p.servingIndex,
+                quantity: p.quantity,
+                meal: p.meal,
+              })
               .then(settle)
           }
         />
@@ -178,7 +188,12 @@ export function LogScreen({
             disabled={act.busy}
             onChange={(e) => setCaption(e.target.value)}
           />
-          <button type="button" className="fa-log" disabled={act.busy} onClick={() => void act.logPhoto(route.photo, caption, meal).then(settle)}>
+          <button
+            type="button"
+            className="fa-log"
+            disabled={act.busy}
+            onClick={() => void act.logPhoto(route.photo, caption, meal).then(settle)}
+          >
             {act.busy ? 'Writing it down…' : `Log to ${meal}`}
           </button>
           <button type="button" className="lockbtn ghost" disabled={act.busy} onClick={() => setRoute({ at: 'home' })}>

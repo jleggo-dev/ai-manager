@@ -18,7 +18,10 @@ vi.mock('../../lib/query/index.ts', () => ({
 }));
 
 const api = vi.hoisted(() => ({
-  getFoodRecents: vi.fn(async () => ({ status: 'ok', foods: [{ food_id: 'f9', name: 'Whey protein', serving_label: '1 scoop' }] })),
+  getFoodRecents: vi.fn(async () => ({
+    status: 'ok',
+    foods: [{ food_id: 'f9', name: 'Whey protein', serving_label: '1 scoop' }],
+  })),
   getUsualAtSlot: vi.fn(async () => [
     { kind: 'food', id: 'f1', name: 'Skyr, plain', serving_label: '2/3 cup', kcal: 108, count: 14 },
   ]),
@@ -27,7 +30,12 @@ const api = vi.hoisted(() => ({
   getFoodById: vi.fn(async () => ({ status: 'ok', food: null })),
   logMeal: vi.fn(),
   logMealFromFood: vi.fn(),
-  logMealFromRecipe: vi.fn(async () => ({ log_id: 'new', meal: 'lunch', items: [{ name: 'Chicken orzo' }], macros: { kcal: 520 } })),
+  logMealFromRecipe: vi.fn(async () => ({
+    log_id: 'new',
+    meal: 'lunch',
+    items: [{ name: 'Chicken orzo' }],
+    macros: { kcal: 520 },
+  })),
   logWater: vi.fn(async () => 1250),
   patchMeal: vi.fn(async () => ({})),
 }));

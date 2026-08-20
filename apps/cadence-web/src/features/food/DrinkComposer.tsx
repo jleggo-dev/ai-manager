@@ -4,19 +4,13 @@ import { getFoodById, logMealFromItems, logWater, searchFoods, type FoodSummary,
 import { useInvalidateNutritionDay } from '../../lib/query/index.ts';
 import { GLASS_ML } from '../nutrition/WaterRow.tsx';
 import { macroLineProteinFirst } from './amounts.ts';
+import { waterCreditLine } from './waterCredit.ts';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 interface DrinkItem {
   food: Food;
   quantity: number;
-}
-
-/** "Counts as two glasses of water too" — the credit, in the glass this app already counts in. */
-export function waterCreditLine(ml: number): string {
-  const glasses = Math.round((ml / GLASS_ML) * 10) / 10;
-  const whole = Number.isInteger(glasses) ? String(glasses) : glasses.toFixed(1);
-  return `Counts as ${whole} glass${glasses === 1 ? '' : 'es'} of water too — ${ml} ml, and a glass is ${GLASS_ML}.`;
 }
 
 /**
@@ -72,7 +66,11 @@ export function DrinkComposer({ onLogged, onBack }: { onLogged: (meal: Meal | nu
     try {
       const logged = items.length
         ? await logMealFromItems({
-            items: items.map((it) => ({ food_id: it.food.food_id, serving_index: it.food.default_serving ?? 0, quantity: it.quantity })),
+            items: items.map((it) => ({
+              food_id: it.food.food_id,
+              serving_index: it.food.default_serving ?? 0,
+              quantity: it.quantity,
+            })),
             meal: 'drink',
           })
         : null;
@@ -107,7 +105,12 @@ export function DrinkComposer({ onLogged, onBack }: { onLogged: (meal: Meal | nu
             <span className="fa-row-s">the base · a glass is {GLASS_ML} ml</span>
           </div>
           <div className="fa-step">
-            <button type="button" aria-label="Less water" disabled={busy || ml <= 0} onClick={() => setMl((v) => Math.max(0, v - GLASS_ML))}>
+            <button
+              type="button"
+              aria-label="Less water"
+              disabled={busy || ml <= 0}
+              onClick={() => setMl((v) => Math.max(0, v - GLASS_ML))}
+            >
               −
             </button>
             <b>{ml} ml</b>
@@ -124,7 +127,10 @@ export function DrinkComposer({ onLogged, onBack }: { onLogged: (meal: Meal | nu
                 <b>{it.food.name}</b>
               </span>
               <span className="fa-row-s">
-                {[it.food.servings[it.food.default_serving ?? 0]?.label, `${Math.round(macrosForLog(it.food, { quantity: it.quantity }).kcal ?? 0)} kcal`]
+                {[
+                  it.food.servings[it.food.default_serving ?? 0]?.label,
+                  `${Math.round(macrosForLog(it.food, { quantity: it.quantity }).kcal ?? 0)} kcal`,
+                ]
                   .filter(Boolean)
                   .join(' · ')}
               </span>
@@ -134,7 +140,11 @@ export function DrinkComposer({ onLogged, onBack }: { onLogged: (meal: Meal | nu
                 type="button"
                 aria-label={`Less ${it.food.name}`}
                 disabled={busy || it.quantity <= 0.25}
-                onClick={() => setItems((p) => p.map((x, j) => (j === i ? { ...x, quantity: Math.max(0.25, round2(x.quantity - 0.25)) } : x)))}
+                onClick={() =>
+                  setItems((p) =>
+                    p.map((x, j) => (j === i ? { ...x, quantity: Math.max(0.25, round2(x.quantity - 0.25)) } : x)),
+                  )
+                }
               >
                 −
               </button>
@@ -143,12 +153,20 @@ export function DrinkComposer({ onLogged, onBack }: { onLogged: (meal: Meal | nu
                 type="button"
                 aria-label={`More ${it.food.name}`}
                 disabled={busy}
-                onClick={() => setItems((p) => p.map((x, j) => (j === i ? { ...x, quantity: round2(x.quantity + 0.25) } : x)))}
+                onClick={() =>
+                  setItems((p) => p.map((x, j) => (j === i ? { ...x, quantity: round2(x.quantity + 0.25) } : x)))
+                }
               >
                 +
               </button>
             </div>
-            <button type="button" className="fa-row-x" aria-label={`Remove ${it.food.name}`} disabled={busy} onClick={() => setItems((p) => p.filter((_, j) => j !== i))}>
+            <button
+              type="button"
+              className="fa-row-x"
+              aria-label={`Remove ${it.food.name}`}
+              disabled={busy}
+              onClick={() => setItems((p) => p.filter((_, j) => j !== i))}
+            >
               ×
             </button>
           </div>
@@ -164,7 +182,13 @@ export function DrinkComposer({ onLogged, onBack }: { onLogged: (meal: Meal | nu
             onChange={(e) => void look(e.target.value)}
           />
           {found.map((f) => (
-            <button type="button" key={f.food_id} className="fa-chip" disabled={busy} onClick={() => void add(f.food_id)}>
+            <button
+              type="button"
+              key={f.food_id}
+              className="fa-chip"
+              disabled={busy}
+              onClick={() => void add(f.food_id)}
+            >
               {f.name}
             </button>
           ))}

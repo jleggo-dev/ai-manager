@@ -70,7 +70,7 @@ describe('MealParseCard — one thing assumed, one thing asked', () => {
     fireEvent.click(log);
 
     await waitFor(() => expect(api.logPreviewedMeal).toHaveBeenCalled());
-    const [sent, meal] = api.logPreviewedMeal.mock.calls[0] as [typeof preview, string];
+    const [sent, meal] = api.logPreviewedMeal.mock.calls[0] as unknown as [typeof preview, string];
     expect(meal).toBe('breakfast');
     expect(sent.items[0]).toMatchObject({ name: 'eggs, fried', qty: 2, unit: 'large' });
     // Two slices of a one-slice read is twice the read.

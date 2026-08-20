@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { amountChoices, amountSource, countAsked, macroEnergyShare, macroLineProteinFirst, scaleMacros } from './amounts.ts';
+import {
+  amountChoices,
+  amountSource,
+  countAsked,
+  macroEnergyShare,
+  macroLineProteinFirst,
+  scaleMacros,
+} from './amounts.ts';
 
 describe('amountSource — the rule', () => {
   it('keeps an amount they said', () => {
-    expect(amountSource({ name: 'sourdough toast', qty: 2, unit: 'slice' }, '2 slices of sourdough toast and eggs')).toBe(
-      'given',
-    );
+    expect(
+      amountSource({ name: 'sourdough toast', qty: 2, unit: 'slice' }, '2 slices of sourdough toast and eggs'),
+    ).toBe('given');
   });
 
   it('asks for an amount they did not give', () => {
@@ -65,7 +72,11 @@ describe('amountChoices — chips, never a keypad', () => {
 
 describe('scaleMacros', () => {
   it('scales the numbers and leaves everything else alone', () => {
-    expect(scaleMacros({ kcal: 100, protein_g: 5, source: 'ai' }, 2)).toEqual({ kcal: 200, protein_g: 10, source: 'ai' });
+    expect(scaleMacros({ kcal: 100, protein_g: 5, source: 'ai' }, 2)).toEqual({
+      kcal: 200,
+      protein_g: 10,
+      source: 'ai',
+    });
   });
 
   it('returns the estimate untouched at a factor of one', () => {

@@ -27,7 +27,14 @@ export function MealCaptureRings({
 
   return (
     <div className="mc-rings">
-      <NutritionRing logged={eatenKcal} pending={pendingKcal} target={targetKcal} size={74} stroke={13} className="mc-ring">
+      <NutritionRing
+        logged={eatenKcal}
+        pending={pendingKcal}
+        target={targetKcal}
+        size={74}
+        stroke={13}
+        className="mc-ring"
+      >
         {pendingKcal > 0 && leftAfter != null ? (
           <>
             <b>{fmtKcal(Math.abs(leftAfter))}</b>

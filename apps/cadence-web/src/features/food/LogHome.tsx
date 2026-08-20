@@ -62,16 +62,26 @@ export function LogHome({
       {searchingNow ? (
         <div className="fl-results">
           {results.map((f) => (
-            <FoodPickRow key={f.food_id} name={f.name} sub={[f.brand, f.serving_label].filter(Boolean).join(' · ')} busy={busy} onAdd={() => onPickFood(f.food_id)} />
+            <FoodPickRow
+              key={f.food_id}
+              name={f.name}
+              sub={[f.brand, f.serving_label].filter(Boolean).join(' · ')}
+              busy={busy}
+              onAdd={() => onPickFood(f.food_id)}
+            />
           ))}
-          {!results.length && <div className="fq-foot">{searching ? 'Looking…' : 'Nothing by that name — say it or photograph it instead.'}</div>}
+          {!results.length && (
+            <div className="fq-foot">
+              {searching ? 'Looking…' : 'Nothing by that name — say it or photograph it instead.'}
+            </div>
+          )}
         </div>
       ) : (
         <>
           <MethodTiles methods={METHODS} variant="wide" disabled={busy} onPick={onMethod} onPhoto={onPhoto} />
           <p className="fl-note">
-            Chat and voice are one screen — the mic is always there, Voice just opens it listening. Give an amount and
-            I keep it; leave it out and I&apos;ll ask.
+            Chat and voice are one screen — the mic is always there, Voice just opens it listening. Give an amount and I
+            keep it; leave it out and I&apos;ll ask.
           </p>
 
           {(planned || alsoThisWeek.length > 0) && (
@@ -87,7 +97,13 @@ export function LogHome({
                 />
               )}
               {alsoThisWeek.map((m) => (
-                <FoodPickRow key={m.recipe_id} name={m.name} sub="also on your week" busy={busy} onAdd={() => onLogRecipe(m.recipe_id)} />
+                <FoodPickRow
+                  key={m.recipe_id}
+                  name={m.name}
+                  sub="also on your week"
+                  busy={busy}
+                  onAdd={() => onLogRecipe(m.recipe_id)}
+                />
               ))}
             </>
           )}
@@ -99,7 +115,9 @@ export function LogHome({
                 <FoodPickRow
                   key={`${u.kind}-${u.id}`}
                   name={u.name}
-                  sub={[u.serving_label, `logged ${u.count} time${u.count === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}
+                  sub={[u.serving_label, `logged ${u.count} time${u.count === 1 ? '' : 's'}`]
+                    .filter(Boolean)
+                    .join(' · ')}
                   kcal={kcal(u.kcal, u.kind === 'recipe')}
                   busy={busy}
                   onAdd={() => (u.kind === 'recipe' ? onLogRecipe(u.id) : onPickFood(u.id))}
@@ -112,7 +130,13 @@ export function LogHome({
             <>
               <FoodPickHead label="RECENTLY EATEN" />
               {recents.map((f) => (
-                <FoodPickRow key={f.food_id} name={f.name} sub={[f.brand, f.serving_label].filter(Boolean).join(' · ')} busy={busy} onAdd={() => onPickFood(f.food_id)} />
+                <FoodPickRow
+                  key={f.food_id}
+                  name={f.name}
+                  sub={[f.brand, f.serving_label].filter(Boolean).join(' · ')}
+                  busy={busy}
+                  onAdd={() => onPickFood(f.food_id)}
+                />
               ))}
             </>
           )}

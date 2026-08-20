@@ -48,7 +48,12 @@ export function AddFoodSheet({
           ‹
         </button>
         <h2>Add food</h2>
-        <button type="button" className="fd-do" disabled={busy} onClick={() => onLog({ servingIndex, quantity, meal: slot })}>
+        <button
+          type="button"
+          className="fd-do"
+          disabled={busy}
+          onClick={() => onLog({ servingIndex, quantity, meal: slot })}
+        >
           {busy ? 'Logging…' : 'Log'}
         </button>
       </div>
@@ -65,7 +70,12 @@ export function AddFoodSheet({
 
         <div className="fd-field">
           <span className="fd-field-l">Serving size</span>
-          <button type="button" className="fd-pick is-on" disabled={busy || food.servings.length < 2} onClick={() => setUnitOpen(true)}>
+          <button
+            type="button"
+            className="fd-pick is-on"
+            disabled={busy || food.servings.length < 2}
+            onClick={() => setUnitOpen(true)}
+          >
             {serving?.label ?? '1 serving'} {food.servings.length > 1 && <i aria-hidden>⌄</i>}
           </button>
         </div>
@@ -82,7 +92,12 @@ export function AddFoodSheet({
               −
             </button>
             <b>{quantity}</b>
-            <button type="button" aria-label="More servings" disabled={busy} onClick={() => setQuantity((q) => round2(q + 0.25))}>
+            <button
+              type="button"
+              aria-label="More servings"
+              disabled={busy}
+              onClick={() => setQuantity((q) => round2(q + 0.25))}
+            >
               +
             </button>
           </div>

@@ -45,11 +45,22 @@ function KeptRow({
           −
         </button>
         <b>{qty}</b>
-        <button type="button" aria-label={`More ${row.name}`} disabled={busy} onClick={() => onQty(index, round2(qty + 0.25))}>
+        <button
+          type="button"
+          aria-label={`More ${row.name}`}
+          disabled={busy}
+          onClick={() => onQty(index, round2(qty + 0.25))}
+        >
           +
         </button>
       </div>
-      <button type="button" className="fa-row-x" aria-label={`Remove ${row.name}`} disabled={busy} onClick={() => onRemove(index)}>
+      <button
+        type="button"
+        className="fa-row-x"
+        aria-label={`Remove ${row.name}`}
+        disabled={busy}
+        onClick={() => onRemove(index)}
+      >
         ×
       </button>
     </div>

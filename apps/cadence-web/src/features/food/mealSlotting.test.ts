@@ -12,7 +12,11 @@ const meal = (log_id: string, kind: Meal['meal'], items: string[], kcal?: number
 
 describe('foldCandidate', () => {
   it('offers the day’s latest named meal', () => {
-    const meals = [meal('c', 'drink', ['oat latte']), meal('b', 'breakfast', ['yogurt']), meal('a', 'dinner', ['chilli'])];
+    const meals = [
+      meal('c', 'drink', ['oat latte']),
+      meal('b', 'breakfast', ['yogurt']),
+      meal('a', 'dinner', ['chilli']),
+    ];
     expect(foldCandidate(meals, 'c')?.log_id).toBe('b');
   });
 
