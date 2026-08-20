@@ -10,7 +10,12 @@
  * gemini-backed job on the account was degraded at once. With no failover there was nowhere to go.
  *
  * `gpt-5-mini` is the pick, measured on that same photo rather than assumed:
- *   kimi-2.6-azure  — CANNOT see images ("I'm unable to view images"), 3,428 tokens to say so
+ *   kimi-2.6-azure  — REFUSED this image ("I'm unable to view images"), 3,428 tokens to say so.
+ *                     NOT a capability limit, and I first wrote it up as one from this single
+ *                     sample: the owner corrected it, and a re-test agreed with him. Devs.ai
+ *                     carries two K2.6 builds, only one of which takes images, and k3 takes them
+ *                     too. A refusal and an inability are indistinguishable from one reply — which
+ *                     is why the eval harness runs several photos and reports refusals separately.
  *   gpt-4o-mini     — vaguer read, and 27,760 input tokens: 8.7x gpt-5-mini for one image
  *   gpt-5-nano      — accurate but emits markdown, which fights a strict-JSON job
  *   gpt-5-mini      — "A berry yogurt (parfait) bowl ... and a cup of coffee", 3,188 in, 8.0s ✓

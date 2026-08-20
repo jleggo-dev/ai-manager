@@ -7494,3 +7494,137 @@ rule) and was never the problem: switching to it fires zero requests.
 
 **Verified while measuring:** account-1/account-2 had no committed plan; the numbers above use a
 seeded 5-activity plan (goals + `commitActivities`), wiped after per step 12b.
+
+## The photo said 0 calories: two-stage vision, and the eval that can tell (2026-08-20)
+
+Two photo logs came back empty on 2026-08-20 and were stored as **settled 0-kcal meals**. The
+immediate cause is fixed twice over — the vision profile had `failover_external_ai_id: null` while
+the entire gemini family was quota-exhausted (`set-vision-failover.ts`, now `gpt-5-mini`), and a
+failed parse now stays `provisional` with its reason preserved instead of reading as a confirmed
+zero. What those fixes do not answer is the owner's question underneath them: **when the call does
+succeed, how good is the answer?** Nobody knew. The only thing the app ever kept was the JSON, and
+a plausible `{"kcal": 320}` cannot be told apart from a model that read the cup versus one that
+pattern-matched the word "latte" to an average.
+
+### The split (owner's proposal, 2026-08-20)
+
+> "get the image model to give us an accurate size and verbose description and as much as it can
+> about the ingredients/content and then use a 2nd AI call to assess/return the json"
+
+Two jobs, synced live and additive (`sync-jobs.ts` dry-run: 2 create, 0 update):
+
+- **`describe-meal-photo`** — photo → PROSE. Components named separately, portions anchored to an
+  object *in the frame* (the cup, the fork, the plate rim), preparation, and an explicit statement
+  of what it could not tell. No JSON, no numbers.
+- **`parse-meal-description`** — prose → the same JSON `parse_meal` returns. No image reaches it,
+  so it can run on a model chosen for schema obedience rather than eyesight.
+
+The hypothesis is that a vision model spending its attention on filling a schema is not spending it
+on seeing, and that the prose is independently valuable: it is the only artefact that shows whether
+a portion was *reasoned* or *guessed*.
+
+### The harness (`npm run eval:food-vision`)
+
+`eval-food-vision.ts` + `-cases.ts` + `-score.ts` + `-report.ts`. Manual, costs money, not CI —
+same standing as `eval:tools`. Per case it runs the one-stage baseline, stage 1, and stage 2, and
+scores the description on four axes chosen because they fail independently: **recall** (of the
+components present, how many were named), **invented** (claims for food that is not there — an
+invented side becomes calories in somebody's day), **anchored** (was a portion tied to something
+with a knowable size — *not* "did it state a number", since a confident unanchored number is the
+failure mode and it reads as success), and **hedged** (did it name its own doubt, which stage 2 can
+act on). Scoring is deterministic string-matching over hand-written aliases, not an LLM judge: a
+grader that drifts makes week-to-week comparison meaningless, which is the only thing the harness
+is for.
+
+`--sweep m1,m2` compares vision models by calling the provider directly, holding the stage-2
+converter constant so a difference in the numbers is attributable to the *description*. That mode
+exists because it is the only one that runs off-deployment: image-bearing jobs take the in-process
+route, which needs `CREDENTIAL_ENCRYPTION_KEY` to decrypt the stored provider key. The app-path
+mode (no `--sweep`) 401s on a laptop for that reason and must be run from the deployment — it did
+confirm the failover chain now engages (`gemini-3.1-pro` → `gpt-5-mini`), which was previously
+untestable.
+
+**Ground truth is the limit, and it is stated on every line of the report.** The two seed cases are
+the owner's real logs, marked `caption-only`: their captions establish *what* was eaten, nothing
+establishes *how much*, so kcal accuracy is SKIPPED rather than guessed. A harness that scores
+against invented truth reports confident numbers about nothing. Filling in the truth needs the
+person who ate the meal.
+
+**Instrument fault caught on the first run, recorded because it is the cheapest lesson here:** the
+first version read a non-existent `output_text` field off `createResponse` (which returns raw SSE)
+and scored five different vendors at 0% recall and "empty reply" on both photos. Ten identical
+zeros across five vendors is the harness reporting on itself, never a finding. `readSseText` now
+mirrors `sse-transform.ts`, and the run prints transcripts (`--verbose`) so a zero can be read.
+
+### First run (2026-08-20, 4 models x 2 photos, `--sweep`)
+
+| model | recall | anchored | invented | refused | stage-1 latency |
+|---|---|---|---|---|---|
+| gpt-5-mini | 100% | 2/2 | 0 | 0 | 28.6s / 31.3s |
+| kimi-k3 | 100% | 2/2 | 0 | 0 | 28.4s / 23.5s |
+| grok-4.6 | 100% | 2/2 | 0 | 0 | 14.3s / 10.7s |
+| gemini-3.1-pro | — | — | — | — | **RATE-LIMITED, both cases** |
+
+**The description stage is not the problem.** Every model that answered named every component,
+anchored its portion to something in the frame, and stated its own doubt. The owner's question —
+can they capture quantity and ingredients — reads yes, across three vendors, on two real photos.
+`grok-4.6` did it in a third to half the time.
+
+**The finding worth acting on is the confidence, not the recall.** Same photos, same prompts:
+
+| | one-stage (today) | two-stage |
+|---|---|---|
+| confidence | 0.7, 0.6, 0.62, 0.7, 0.7, 0.7 | 0.4, 0.35, 0.35, 0.3, 0.35, 0.4 |
+| vs `PROVISIONAL_BELOW = 0.5` | **6/6 SETTLED** | **6/6 PROVISIONAL** |
+
+One-stage is confident about a closed takeaway cup it cannot see inside. Two-stage is not, because
+the prose said so out loud ("I cannot see the beverage itself, the lid is closed; I can't tell the
+milk type, the number of shots, or whether syrup was added") and stage 2 carried that doubt into
+its number. That difference is not cosmetic — `PROVISIONAL_BELOW` is the gate between a meal that
+silently counts in the day's totals and one that visibly waits for the user to confirm. Under
+one-stage, a guess about an opaque cup enters the day as settled fact. Under two-stage, it asks.
+
+Which is the brand rule ("confirm before committing — here's what I heard, did I get it right?")
+and the owner's actual complaint on 2026-08-20 — *"Cadence didn't return to me a confirmation of
+the macros"* — arriving at the same answer from opposite directions.
+
+**Two things the run turned up that were not being looked for:**
+1. `gemini-3.1-pro` is STILL `MODEL_REQUEST_RATE_LIMIT_EXCEEDED`, a day after the incident, on
+   both cases. It is the PRIMARY on the shared vision profile and `gpt-5-mini` is only its
+   failover. A primary that has been down for a day is not a primary; every photo log is paying a
+   failed call before it gets an answer. Swapping them is a one-line `set-vision-failover.ts` run —
+   owner's call, since it changes cost per photo.
+2. The latte cup in the photo is branded **MATERIA PRIMA**, not Starbucks. Every model that read it
+   said so and flagged the disagreement with the caption. Worth knowing next to the owner's report
+   that searching "starbucks" finds nothing: the log may be right that it was not a Starbucks cup.
+
+**Not yet wired into the app.** The jobs exist and are synced; `nutrition.ts` still runs one-stage.
+Two-stage costs a second call (~30s vs ~21s on gpt-5-mini, and stage 2 can go remote since it
+carries no image) and the case for it rests on calibration rather than accuracy — kcal correctness
+is unmeasurable until the cases carry real ground truth. Decide with numbers, not with this table.
+
+### AI Admin workflows cannot express "ask the user" (owner, 2026-08-20)
+
+Raised while the above was being built, and it is the piece this flow actually wants: describe →
+**confirm** → macros → **confirm** is "AI, ask, AI, ask", and none of it can be declared today.
+
+The gap is the opposite of what it looks like. The workflow framework's *only* advancement
+mechanism is already a human: a workflow attaches to a chat session, and `getCompletedWorkflowSteps`
+counts a step done when a **user message** carries its `workflow_step_id`. What is missing is at
+both ends of that:
+
+1. **A step with no AI call cannot be declared.** `workflow_steps.processing_job_id` is required, so
+   "ask the user for X and store it in `workflow_variables`" has to be smuggled in as an AI call
+   that happens to ask a question — which costs a model round-trip to do nothing, and puts the
+   question's wording in a prompt template instead of in the app's own voice.
+2. **Nothing runs the steps that DON'T need a human.** There is no executor: `depends_on` is only
+   ever read to *refuse* an out-of-order step, never to schedule one, and `inputMappings` are
+   resolved one step at a time by whoever calls `sendMessage`. `cadence-replan` has sat in config as
+   three declared steps that nothing has ever run as a chain.
+
+So the framework is half-built in both directions. Sketch: add `step_type: 'job' | 'input'` (making
+`processing_job_id` nullable for `input`), let an `input` step declare the variable it fills and its
+prompt copy, and let the existing `workflow.step.completed` trigger — which already exists and
+already fires — drive an executor that runs consecutive `job` steps automatically and halts at the
+next `input`. That makes "AI, ask, AI, ask" declarative, and `cadence-replan` runnable for the first
+time. Not yet scheduled; sized here so the decision is informed.
