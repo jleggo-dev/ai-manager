@@ -9,6 +9,14 @@ export const queryKeys = {
     /** ISO calendar date `YYYY-MM-DD` — always normalize before use so Today + Occurrence share cache. */
     day: (date: string) => ['nutritionDay', date] as const,
   },
+  /** The whole `/plan` view (PERF-01) — gate routing, PlanView, and plan-reading sheets share it. */
+  plan: {
+    all: ['plan'] as const,
+  },
+  /** The `/progress` dashboard (PERF-01) — one key, refetched on the ＋1 event path. */
+  progress: {
+    all: ['progress'] as const,
+  },
 } as const;
 
 /** Local calendar date as `YYYY-MM-DD` (nutrition day is calendar-local, not UTC). */
