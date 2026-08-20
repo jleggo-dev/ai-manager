@@ -7413,3 +7413,84 @@ bounds billed depth regardless of provider behaviour, uses the compaction machin
 the provider's isn't, and costs one full-price turn per rotation. #248's trigger would also need
 recalibrating first: its 32k is measured in char/4 estimate-units, which is ~1.78× optimistic —
 it fires near 60k real tokens, later than intended.
+
+
+## Latency: why every screen shows "…" (2026-08-20, measured)
+
+> *"Every time I click on any screen I get a '...' loading image, even though a lot of what
+> we're doing is deterministic. … This almost feels like we're communicating with devs.ai each
+> time."* — owner, 2026-08-20
+
+**The hypothesis is refuted; the feeling is right.** GET /plan, /progress and /nutrition/* are
+pure Postgres reads — no AI Admin job anywhere in the request path (`assessIfDue` and
+`prefetchImminentSessions` on GET /plan are `void`-fired after the response is sent). The spinner
+is real, and three causes compound into it: the client throws away every answer it has ever
+received, each refetch is ~11 sequential cross-country DB round trips, and the loader we show
+while waiting is literally the coach's *typing dots* — a deterministic DB read dressed as "the
+model is thinking." He diagnosed the UI truthfully; the UI was lying about what it was doing.
+
+### What actually fires (browser network log, per screen)
+
+| Screen | On open | Round trips | Deterministic? | Blocking? |
+|---|---|---|---|---|
+| App open | `/plan` **twice, sequentially** (App gate routes on it, then PlanView remounts and refetches the plan the gate just threw away) + coach-face, coach/current, prefs | 2× /plan + 4 | all DB | both /plan fetches gate first paint |
+| Plan tab, **every** return | `/plan` + weather + location + daily-checkin + notification-prefs + nutrition/day (when >30s) | ~6 | all DB | `/plan` holds the whole tab behind typing dots |
+| Coach tab | **0** — kept mounted (`display:none`) since 2026-08-16 | 0 | — | instant; the proof-of-concept |
+| Progress tab, every return | `/progress` | 1 | all DB | typing dots until it lands |
+| Food home | nutrition/day (react-query, deduped) + insight + recent + meal-plans + recipes | 5 | all DB | header paints, cards fill |
+| Settings sheet | location + dietary-profile (+ day if stale) | 2–3 | all DB | sheet opens instantly, rows fill |
+
+Plan and Progress are conditionally rendered in MainTabs, so every tab switch **unmounts** them;
+every return remounts with `data === null` and refetches from zero. Only `/nutrition/day` uses
+the react-query setup that already ships in the app (CROSS-03) — and in dev it visibly deduped
+StrictMode's double-mount while every raw `useEffect` fetch fired twice.
+
+### What each fetch costs (measured 2026-08-20)
+
+Server side, warm local Express, dev account with a committed 5-activity plan; DB = Supabase
+**us-west-2**, measured from Montreal (TCP RTT to pooler 87ms; effective per-query round trip
+through the transaction pooler ~181ms — the pooler ≈ doubles raw RTT):
+
+| Endpoint | Measured | Anatomy |
+|---|---|---|
+| GET /plan (committed) | **2.01–3.76s**, median ~2.03s | ~11 sequential queries: ensureHorizon (plan+activities+user+upsert) → streak (user+3 parallel) → episode → plan → activities → user → occurrences ×2 → step counts → goals |
+| GET /plan (no plan) | 0.86–2.5s | lighter branch |
+| GET /progress | 0.32–0.9s | ~5 queries incl. per-goal completion counts |
+| GET /nutrition/day | 0.70–0.84s | ~4 queries |
+| GET /me/daily-checkin | 0.26–0.35s | ~2 queries |
+| GET /coach/current | ~0.15s | 1 query |
+| bare `select 1` | 181ms avg | the floor every query above pays |
+
+Transport and topology (deployed): cadence-api answers from **iad1 (US East)** while the DB sits
+in **us-west-2 (Oregon)** — every one of those ~11 queries crosses the country, est. ~130ms each
+through the pooler → **GET /plan ≈ 1.4–1.5s server-side in production**. `/health` warm is
+78–216ms; the **first request after idle is +1.1s** (service wake). And `requireCadenceUser` adds
+two more round trips to every authed request (`auth.getUser` HTTPS call + `ensureUser` query)
+before any handler runs.
+
+### Diagnosis
+
+Deterministic screens spin because the client discards every answer (unmount on tab switch, no
+cache → full refetch behind a blocking "coach is thinking" loader), each refetch re-runs ~11
+sequential DB round trips that cross the country twice over (iad1 ↔ us-west-2, doubled by the
+transaction pooler), every request pays two auth round trips first, and the first tap after idle
+also pays a ~1.2s service wake. No AI is involved anywhere.
+
+### Fixes, prioritized (PERF-01…07)
+
+| ID | Fix | Effort | Impact | Status |
+|---|---|---|---|---|
+| PERF-01 | **react-query for /plan + /progress**: cached first paint, background revalidate (30s staleTime, client defaults); typing dots only on the true first load | S | Tab returns paint **instantly**; the owner's complaint as stated | **shipped in this PR** |
+| PERF-02 | **Seed the plan cache from the App-gate fetch** (`fetchPlanIntoCache`) | S | App open: 2 sequential /plan → 1 | **shipped in this PR** |
+| PERF-03 | Same treatment for weather / location / daily-checkin / notification-prefs / LogDidSheet (mechanical repeats of PERF-01) | S | Plan-tab return burst ~6 → ~0 requests inside staleTime | backlog |
+| PERF-04 | **Colocate API and DB** (move the Vercel service to us-west, or the DB east) — per-query ~130ms → ~5–15ms | config/ops | GET /plan server time ~1.5s → ~150–300ms; every endpoint wins | backlog — biggest server-side lever |
+| PERF-05 | Batch/parallelize buildPlanView (dedupe the plan/activities/user reads ensureHorizon already did; `Promise.all` independents; or one SQL) | M | ~11 round trips → ~3–4 even without PERF-04 | backlog |
+| PERF-06 | **Skeleton instead of typing dots** on deterministic screens — the dots are the coach's thinking animation and teach users that a DB read is an AI call | S (design) | honesty; perceived speed | backlog — needs a design pass, not built |
+| PERF-07 | Keep Plan/Progress mounted like Coach (`display:none`/`contents`) | M | preserves scroll + skips remount effects; PERF-01 already delivers the paint | optional after PERF-01; documented, not built |
+
+Also real but smaller: cache the auth verification (PERF-04 shrinks it too), and a keep-warm ping
+for the service wake. Coach-tab behaviour is untouched throughout — it stays mounted (2026-08-16
+rule) and was never the problem: switching to it fires zero requests.
+
+**Verified while measuring:** account-1/account-2 had no committed plan; the numbers above use a
+seeded 5-activity plan (goals + `commitActivities`), wiped after per step 12b.

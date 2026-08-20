@@ -6930,11 +6930,11 @@ textarea.wiz-title {
   background: oklch(94% 0.015 80);
   overflow: hidden;
 }
-.mbar-track.is-counting {
-  background: none;
-  border: 1.5px dashed oklch(88% 0.02 85);
-  box-sizing: border-box;
-}
+/* The counting (no-target) bar used to be a dashed outline. The design dropped it — verified
+   against the canvas 2026-08-20: zero dashed bar tracks, nine solid, and the solid track is this
+   same oklch(94% 0.015 80). So counting and scored share one track and differ only in fill, which
+   is the "nothing is added when targets arrive" rule the module is built on. Same reasoning as the
+   ring: an empty bar is awaiting, not broken. */
 .mbars.is-dense .mbar-track {
   height: 7px;
 }
@@ -7324,4 +7324,469 @@ textarea.wiz-title {
 .fh-water-add:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+/* ══ Food Journey slice 3 — reading the day ══════════════════════════════════════════════════
+   (One appended block, reviewable and reversible in one place, like the slice-1 block above.)
+
+   Three reads on one surface: the Day and the Week behind a segment (frames 08/08b — same
+   screen, second tab, no new navigation), and Nutrients as a drill-down off the macro block
+   (frame 09). The chart language does not change: a ring for calories, bars for macros. What is
+   new is the MICRONUTRIENT language, and its whole job is that a floor and a ceiling cannot be
+   mistaken for each other — a rounded track filling toward a tick versus a squared channel held
+   between two posts. Neither is red, and a met floor gets no tick of approval: it just stops
+   being mentioned. */
+.fh-seg {
+  flex: 0 0 auto;
+  margin: 2px 14px 6px;
+  background: #fff;
+  border-radius: 999px;
+  padding: 3px;
+  display: flex;
+  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.05);
+}
+.fh-seg button {
+  flex: 1;
+  border: none;
+  background: none;
+  border-radius: 999px;
+  padding: 8px 0;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: oklch(52% 0.02 150);
+  cursor: pointer;
+}
+.fh-seg button.is-on {
+  background: oklch(45% 0.09 152);
+  color: #fff;
+  font-weight: 900;
+}
+.fh-daypill.is-btn {
+  border: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.fh-daypill.is-btn i {
+  font-style: normal;
+  color: oklch(62% 0.02 120);
+}
+/* The ring is a door: the read it gives raises the question Nutrients answers. */
+.fh-ringbtn {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+.fh-nutrients {
+  margin-top: 7px;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 900;
+  color: oklch(48% 0.07 250);
+  cursor: pointer;
+}
+.fh-nutrients i {
+  font-style: normal;
+}
+
+/* ── THE DAY, opened (frame 08): a slot expands into the things that went into it ─────────── */
+.fh-slot-row {
+  border: none;
+  background: none;
+  padding: 0;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fh-slot-sub {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: oklch(56% 0.02 120);
+  white-space: nowrap;
+}
+.fh-slot-chev {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 800;
+  color: oklch(62% 0.02 120);
+}
+.fh-slot.is-quiet .fh-slot-name {
+  color: oklch(50% 0.02 150);
+}
+.fh-slot.is-quiet {
+  flex-direction: row;
+  align-items: baseline;
+}
+.fh-items {
+  display: flex;
+  flex-direction: column;
+  padding-left: 2px;
+}
+.fh-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid oklch(96% 0.008 95);
+}
+.fh-item-n {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: oklch(40% 0.02 150);
+}
+.fh-item-k {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  color: oklch(58% 0.02 120);
+}
+.fh-item-add {
+  margin-top: 3px;
+  border: none;
+  border-top: 1px dashed oklch(88% 0.03 85);
+  background: none;
+  padding: 7px 0 1px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  color: oklch(48% 0.07 250);
+  text-align: left;
+  cursor: pointer;
+}
+.fh-item-add i {
+  font-style: normal;
+  font-weight: 400;
+}
+
+/* ── The Week tab (frame 08b): averages, then every day — and never a zero ────────────────── */
+.fw {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.fw-head i {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 900;
+  color: oklch(45% 0.09 152);
+}
+.fw-days {
+  background: #fff;
+  border: 1px solid oklch(91% 0.015 85);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.fw-day {
+  width: 100%;
+  border: none;
+  border-top: 1px solid oklch(95% 0.01 95);
+  background: none;
+  padding: 9px 12px;
+  font: inherit;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.fw-day:first-child {
+  border-top: none;
+}
+.fw-day:disabled {
+  cursor: default;
+}
+.fw-day.is-today {
+  background: oklch(97% 0.02 152);
+}
+.fw-day-d {
+  flex: 0 0 52px;
+  display: flex;
+  flex-direction: column;
+}
+.fw-day-d b {
+  font-size: 11.5px;
+  font-weight: 900;
+  color: oklch(32% 0.02 150);
+}
+.fw-day.is-today .fw-day-d b {
+  color: oklch(42% 0.09 152);
+}
+.fw-day-d span {
+  font-size: 9px;
+  font-weight: 800;
+  color: oklch(60% 0.02 120);
+  margin-top: 1px;
+}
+.fw-day-bar {
+  flex: 1;
+  min-width: 0;
+  height: 9px;
+  border-radius: 5px;
+  background: oklch(94% 0.015 80);
+  overflow: hidden;
+}
+.fw-day-fill {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: linear-gradient(90deg, oklch(70% 0.1 152), oklch(58% 0.1 152));
+}
+.fw-day-v {
+  flex: 0 0 82px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.fw-day-v b {
+  font-size: 11.5px;
+  font-weight: 900;
+  color: oklch(32% 0.02 150);
+}
+.fw-day-v span {
+  font-size: 9px;
+  font-weight: 800;
+  color: oklch(58% 0.02 120);
+  margin-top: 1px;
+}
+
+/* ── Nutrients (frame 09) ─────────────────────────────────────────────────────────────────── */
+.nu {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink);
+}
+.nu-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.nu-sec {
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: oklch(52% 0.02 120);
+}
+.nu-card {
+  background: #fff;
+  border: 1px solid oklch(91% 0.015 85);
+  border-radius: 16px;
+  padding: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+.nu-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.nu-row-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.nu-row-n {
+  font-size: 12px;
+  font-weight: 900;
+  color: oklch(30% 0.02 150);
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.nu-row-v {
+  font-size: 11px;
+  font-weight: 800;
+  color: oklch(46% 0.02 150);
+  white-space: nowrap;
+}
+.nu-row-v span {
+  color: oklch(60% 0.02 120);
+}
+.nu-why {
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: oklch(56% 0.02 120);
+}
+.nu-under {
+  font-style: normal;
+  background: oklch(93% 0.03 60);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: oklch(44% 0.08 55);
+}
+.nu-ceil-card {
+  gap: 6px;
+}
+.nu-list {
+  padding: 0;
+  gap: 0;
+}
+.nu-lrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  border-top: 1px solid oklch(96% 0.008 95);
+}
+.nu-lrow:first-child {
+  border-top: none;
+}
+.nu-lrow-n {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: oklch(34% 0.02 150);
+}
+.nu-lrow-v {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: oklch(48% 0.02 150);
+  white-space: nowrap;
+}
+.nu-note,
+.nu-empty {
+  margin: 5px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: oklch(50% 0.02 150);
+  text-wrap: pretty;
+}
+.nu-ask {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: none;
+  border-top: 1px solid oklch(94% 0.01 95);
+  background: oklch(97% 0.012 85);
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 900;
+  color: oklch(34% 0.02 150);
+  text-align: left;
+  cursor: pointer;
+}
+.nu-ask span:first-child {
+  flex: 0 0 auto;
+}
+.nu-ask > span:nth-child(2) {
+  flex: 1;
+}
+.nu-ask i {
+  font-style: normal;
+  color: oklch(62% 0.02 120);
+}
+.nu-ask-face {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(165deg, oklch(62% 0.08 152) 0%, oklch(48% 0.08 152) 60%);
+  box-shadow: 0 3px 0 oklch(36% 0.07 152);
+}
+
+/* ── The two nutrient shapes. They must not be tellable apart by colour alone. ────────────── */
+.nb-floor {
+  position: relative;
+  display: block;
+  height: 13px;
+}
+.nb-track,
+.nb-fill {
+  position: absolute;
+  top: 3.5px;
+  height: 7px;
+  border-radius: 999px;
+}
+.nb-track {
+  left: 0;
+  right: 0;
+  background: oklch(94% 0.015 85);
+}
+.nb-fill {
+  left: 0;
+  background: oklch(70% 0.06 152);
+}
+/* The reference intake itself — a hard mark to reach, not a colour change at the far end. */
+.nb-tick {
+  position: absolute;
+  top: 0;
+  width: 2.5px;
+  height: 13px;
+  margin-left: -2px;
+  background: oklch(38% 0.02 150);
+}
+.nb-ceil {
+  display: flex;
+  align-items: stretch;
+  height: 14px;
+}
+.nb-post {
+  width: 2.5px;
+  flex: 0 0 auto;
+  background: oklch(38% 0.02 150);
+}
+.nb-chan {
+  flex: 1;
+  min-width: 0;
+  background: oklch(96% 0.012 85);
+  border-top: 1px solid oklch(90% 0.015 85);
+  border-bottom: 1px solid oklch(90% 0.015 85);
+  display: flex;
+  align-items: center;
+}
+/* Square, warm, and never red: past the line is a fact the number states. */
+.nb-cfill {
+  display: block;
+  height: 8px;
+  background: oklch(78% 0.05 60);
+}
+.nb-mini {
+  flex: 0 0 74px;
+  height: 6px;
+  border-radius: 3px;
+  background: oklch(94% 0.015 85);
+  overflow: hidden;
+}
+.nb-mini-fill {
+  display: block;
+  height: 100%;
+  background: oklch(78% 0.04 152);
+}
+
+/* The capture sheet's ring is a door out to the whole day (device report, 2026-08-20). */
+.mc-ringbtn {
+  border: none;
+  background: none;
+  padding: 0;
+  flex: 0 0 auto;
+  cursor: pointer;
+  display: block;
 }

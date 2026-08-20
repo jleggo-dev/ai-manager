@@ -14,6 +14,8 @@ import { estimateFood, identifyFood, parseNutritionLabel } from '../services/foo
 import { importUsdaFood, searchFoodsWithUsda } from '../services/food-sources/usda-enrich.ts';
 import { isUsdaConfigured, searchUsdaFoods, UsdaConfigError, UsdaHttpError } from '../services/food-sources/usda.ts';
 import { resolveFoods } from '../services/food-resolver.ts';
+import { isMeal } from '../services/nutrition-parse.ts';
+import { usualAtSlot } from '../services/food-usual-slot.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
 import {
   createFoodBodySchema,
@@ -118,6 +120,22 @@ router.get('/frequents', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /nutrition/foods/frequents]', err);
     res.status(500).json({ error: 'failed to list frequent foods' });
+  }
+});
+
+/**
+ * GET /nutrition/foods/usual?meal=&limit= — what they usually have AT THAT SLOT, counted.
+ * Recents are day-wide; this is the quick-add sheet's slot-aware list (design 05a).
+ */
+router.get('/usual', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const meal = req.query.meal;
+  if (!isMeal(meal)) return res.status(400).json({ error: 'meal must be a meal kind' });
+  try {
+    res.json({ items: await usualAtSlot(userId, meal, limitFromQuery(req.query.limit, 6)) });
+  } catch (err) {
+    console.error('[GET /nutrition/foods/usual]', err);
+    res.status(500).json({ error: 'failed to list usual foods' });
   }
 });
 

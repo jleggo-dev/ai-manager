@@ -40,13 +40,12 @@ export function MacroBars({
             <span className="mbar-l" style={{ color: row.color }}>
               {row.label}
             </span>
-            {scored ? (
-              <span className="mbar-track">
-                <span className="mbar-fill" style={{ width: `${pct}%`, background: row.color }} />
-              </span>
-            ) : (
-              <span className="mbar-track is-counting" />
-            )}
+            {/* One track in both states — solid, per the design (verified 2026-08-20). Counting
+                simply has nothing in it yet; the grams beside it say what happened, and the
+                denominator appears when a target does. Nothing is added when targets arrive. */}
+            <span className="mbar-track">
+              {scored && <span className="mbar-fill" style={{ width: `${pct}%`, background: row.color }} />}
+            </span>
             <span className="mbar-v">{scored ? `${e} / ${Math.round(t)} g` : dense ? `${e}` : `${e} g`}</span>
           </span>
         );

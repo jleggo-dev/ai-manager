@@ -1,7 +1,7 @@
 /**
  * The Food home is the permanent manage-nutrition surface (Food Journey 02/3D) — the fix for a
  * door that used to be gated on the thing it led to. What these pin:
- *   • one chart language in both states — counting (eaten, "no target yet", dashed) vs scored
+ *   • one chart language in both states — counting (eaten, "no target yet", unfilled) vs scored
  *     (left, "x of y kcal", denominators), with the earned countdown line while a goal waits;
  *   • doors are EARNED — This week / Shopping appear only once a week is planned; the Cookbook
  *     stays reachable, empty but labeled honestly;
@@ -125,7 +125,8 @@ describe('FoodHome', () => {
         ],
       }),
     );
-    fireEvent.click(screen.getByLabelText("Confirm this meal's estimate"));
+    // The confirm names the meal — a day can hold more than one provisional row.
+    fireEvent.click(screen.getByLabelText('Confirm the estimate for burrito'));
     await waitFor(() => expect(api.patchMeal).toHaveBeenCalledWith('m1', { confirm: true }));
     expect(invalidate).toHaveBeenCalled();
   });

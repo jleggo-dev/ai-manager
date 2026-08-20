@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { logWater } from '../../lib/api.ts';
 
-/** A glass is 250 ml — the unit the row counts in, and the amount one tap pours. */
-const GLASS_ML = 250;
+/** A glass is 250 ml — the unit the row counts in, and the amount one tap pours.
+ *  Exported so the capture surfaces pour the same glass this row counts. */
+export const GLASS_ML = 250;
 const GLASSES = 8;
 
 /**
@@ -16,7 +17,16 @@ const GLASSES = 8;
  * Never a target and never a scold: eight glasses is the row's LENGTH, not a quota. Past eight
  * the row simply says the litres, because "count what happened" applies to water too.
  */
-export function WaterRow({ ml, onLogged }: { ml: number; onLogged: (nextMl: number) => void }) {
+export function WaterRow({
+  ml,
+  onLogged,
+  readOnly = false,
+}: {
+  ml: number;
+  onLogged: (nextMl: number) => void;
+  /** A day behind you: the row still reads, but a pour would land on today rather than on it. */
+  readOnly?: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const litres = (ml / 1000).toFixed(1);
   const filled = Math.min(GLASSES, Math.floor(ml / GLASS_ML));
@@ -51,9 +61,11 @@ export function WaterRow({ ml, onLogged }: { ml: number; onLogged: (nextMl: numb
         ))}
       </span>
       <span className="fh-water-v">{litres} L</span>
-      <button className="fh-water-add" onClick={() => void pour()} disabled={busy} aria-label="Add a glass of water">
-        ＋
-      </button>
+      {!readOnly && (
+        <button className="fh-water-add" onClick={() => void pour()} disabled={busy} aria-label="Add a glass of water">
+          ＋
+        </button>
+      )}
     </div>
   );
 }
