@@ -3,10 +3,12 @@
  */
 import { DevsAiClient } from '../integrations/devs-ai/client.ts';
 import type { ExpectedSchemaInput } from '../services/expected-schema-to-json-schema.ts';
-import { buildProviderChatOptions } from '../services/ai-profile-runtime-options.ts';
+import { buildProviderChatOptions, v2ThreadingEnabled } from '../services/ai-profile-runtime-options.ts';
 import { resolveAttachments, resolveAttachmentsAsText } from '../services/attachment-resolver.ts';
 import { resolveProfileToolDefinitions } from './tool-fulfillment.ts';
 import { buildSessionChatMessages } from './chat-history.ts';
+import { sliceForThread } from './thread-mode.ts';
+import { updateV2ProviderMetadata } from './v2-metadata.ts';
 import type {
   Attachment,
   ChatMessage,
@@ -92,22 +94,33 @@ export async function openChatSendStream(args: {
         enrichedContent = `${fileBlock}\n\n---\n\n${enrichedContent}`;
       }
     }
-    const chatMessages: ChatMessage[] = await buildSessionChatMessages(sessionId, refreshedSession);
-    if (enrichedContent !== resolvedMessage && chatMessages.length > 0) {
-      const lastMsg = chatMessages[chatMessages.length - 1];
+    const fullHistory: ChatMessage[] = await buildSessionChatMessages(sessionId, refreshedSession);
+    if (enrichedContent !== resolvedMessage && fullHistory.length > 0) {
+      const lastMsg = fullHistory[fullHistory.length - 1];
       if (lastMsg) lastMsg.content = enrichedContent;
     }
+
+    /**
+     * One mode or the other, never both. Threaded (flag on + a completed response to hang off):
+     * `previous_response_id` + only what the server thread has not seen — the spec's ThreadWorkflow
+     * holds the rest, and re-sending it is not belt-and-braces, it is how injected context gets
+     * silently ignored (measured 2026-08-16: the thread wins and input items are dropped).
+     * Stateless (everyone else, and v2 by default): full history, NO thread pointer — which also
+     * retires a latent hazard, because the SSE scanner has always persisted response ids into
+     * provider_metadata and this code used to hand them straight back to the provider while still
+     * sending the full transcript.
+     */
+    const threading = v2ThreadingEnabled(provider.type, profile?.runtime_options || {});
+    const meta = refreshedSession.provider_metadata as {
+      previous_response_id?: string;
+      conversation_id?: string;
+    } | null;
+    const prevResponseId = threading ? meta?.previous_response_id : undefined;
+    const chatMessages = prevResponseId ? sliceForThread(fullHistory) : fullHistory;
+
     const chatOptions = buildProviderChatOptions(provider.type, profile?.runtime_options || {}, {
-      previousResponseId: (
-        refreshedSession.provider_metadata as {
-          previous_response_id?: string;
-        } | null
-      )?.previous_response_id,
-      conversationId: (
-        refreshedSession.provider_metadata as {
-          conversation_id?: string;
-        } | null
-      )?.conversation_id,
+      previousResponseId: prevResponseId,
+      conversationId: threading ? meta?.conversation_id : undefined,
       expectedSchema:
         providerType === 'devs-ai-v2' ? (resolvedJob?.config as JobConfig | undefined)?.expectedSchema : undefined,
     });
@@ -118,11 +131,48 @@ export async function openChatSendStream(args: {
       ...(args.extraTools ?? []),
     ];
     const modelId = String(profile?.external_ai_id || '').trim();
-    return client.chatCompletionStream(modelId, chatMessages, {
+    const toolsOpt = mergedTools.length > 0 ? { tools: mergedTools } : {};
+
+    let upstream = await client.chatCompletionStream(modelId, chatMessages, {
       ...chatOptions,
-      ...(mergedTools.length > 0 ? { tools: mergedTools } : {}),
+      ...toolsOpt,
       timeoutMs,
     });
+
+    /**
+     * A thread is a cache, and caches expire: the id may be gone (workflow retention), the run it
+     * names may have failed, or threading may have just been switched on against a stale id. Any
+     * of those answers 4xx/5xx here — so fall back to one stateless full-history send, clear the
+     * pointer, and let the capture below re-anchor the thread on this turn's response. The user
+     * pays full price for one turn instead of losing it.
+     */
+    if (prevResponseId && !upstream.ok) {
+      console.warn(`[thread-mode] threaded send failed (${upstream.status}) — falling back to stateless full history`);
+      await updateV2ProviderMetadata(sessionId, { previous_response_id: null }).catch(() => {});
+      const { previous_response_id: _p, conversation: _c, ...statelessOptions } = chatOptions;
+      upstream = await client.chatCompletionStream(modelId, fullHistory, {
+        ...statelessOptions,
+        ...toolsOpt,
+        timeoutMs,
+      });
+    }
+
+    /**
+     * Anchor the NEXT turn: the spec puts the response id in the `x-response-id` header at
+     * creation, on streaming responses too. Captured engine-side so the in-process consumer
+     * (Cadence's coach, which never touches the HTTP route where the SSE scanner lives) gets it
+     * as well. Harmless when the flag is off — the id is recorded and simply never sent.
+     */
+    if (providerType === 'devs-ai-v2' && upstream.ok) {
+      const responseId = upstream.headers.get('x-response-id');
+      if (responseId) {
+        await updateV2ProviderMetadata(sessionId, { previous_response_id: responseId }).catch((err) =>
+          console.warn('[thread-mode] response-id capture failed:', err),
+        );
+      }
+    }
+
+    return upstream;
   }
 
   throw new Error(`Unsupported provider type "${providerType}" for chat streaming`);

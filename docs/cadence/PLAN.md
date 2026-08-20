@@ -7328,3 +7328,47 @@ never for the prompt.
 
 Whichever ships, the honest interim is to say it out loud: **after `set-coach-persona.ts`, verify
 against a NEW session, and expect existing conversations to keep the old behaviour.**
+
+
+## v2 threading behind a flag — stop re-sending the conversation Devs.ai already has (2026-08-20)
+
+The owner (who works at Devs.ai) called it: *"the entire point of chat is to maintain the history…
+we're probably creating an issue by solving what devs.ai has already solved."* The published spec
+confirms it — `POST /api/v2/responses` has two execution modes: **Threaded** ("when
+`previous_response_id` or `conversation` is provided. Signals a long-lived Temporal ThreadWorkflow")
+and **Stateless** (one-shot). Org settings carry `contextBudgetPercentages` — "share of the model
+context window reserved for history… product defaults: 50 for chat" — so the provider not only
+keeps the history, it budgets it. The engine has only ever used the stateless shape, which is why
+one coach turn reached 119,605 prompt tokens.
+
+**Shipped (AI Admin, flag-gated, default OFF):** `runtime_options.devs_ai_v2.threading` on the AI
+profile. When on: the send path passes `previous_response_id` and slices `input` to what the thread
+has not seen (`thread-mode.ts` — system rows always ride, because the spec says instructions are
+NOT carried over between threaded responses; that is also what keeps the persona refresh effective
+mid-thread); response ids are captured engine-side from the `x-response-id` header (covers the
+in-process coach path, which the HTTP route's SSE scanner never sees) and after tool continuations
+(whose self-contained full-history shape makes their id a complete re-anchor); a threaded send that
+fails clears the anchor and retries once stateless, so an expired thread costs one full-price turn,
+never the turn itself. Local compaction (#248) now runs **only for stateless sessions** — it is the
+fallback story for providers with no server-side thread (e.g. a future Vercel AI Gateway), not a
+duplicate of Devs.ai's own budgeting, which would cost tokens and quality (owner ruling).
+
+**A latent hazard retired on the way:** the HTTP route's SSE scanner has always persisted
+`previous_response_id` into `provider_metadata`, and the send path handed it straight back to the
+provider while STILL sending the full history — the exact both-modes-at-once shape whose measured
+behaviour is "the thread wins and the input is ignored" (#232), meaning route consumers' injected
+context could silently never reach the model. The pointer is now sent only when the flag is on,
+and the flag implies the slice.
+
+**A misdiagnosis corrected:** #232's "instructions going missing" on threaded continuations is
+documented spec behaviour (threaded callers must re-send instructions every turn), not a provider
+fault — recorded in `request-builder.ts` beside the original finding, whose items-dropped half
+still stands on the byte-identical token counts.
+
+**Measurement (the owner's ask):** merge → `set-coach-threading.ts on` →
+`npm run eval:tools -- --only A2,A5` opens fresh sessions and prints prompt tokens/turn.
+Yesterday's stateless baseline on identical fresh sessions: **~20.4–20.9k prompt tokens per turn**
+(persona ~5.2k + dossier/blocks ~11.5k + tool definitions ~3.7k). Threaded, the upload drops to
+persona + tools + the new items; the BILLED number is whatever the ThreadWorkflow assembles under
+the org context budget — that number is the result. Multi-turn depth (does turn 30 stay flat?) is
+the second reading, via a scripted probe or a few days of `cadence.ai_log` on a threaded session.

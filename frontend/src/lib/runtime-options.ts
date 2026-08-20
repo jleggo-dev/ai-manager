@@ -9,6 +9,9 @@ export interface RuntimeOptions {
     parallel_tool_calls: boolean;
     chat_mode: 'execute' | 'chat' | 'plan';
     thread_mode: 'collect' | 'steer' | 'interrupt' | 'force';
+    /** Server-side threading (engine thread-mode). No UI control yet — carried so a profile
+     *  save never silently clears a flag set by script. */
+    threading: boolean;
     reasoning_effort?: string;
   };
   google_gemini: {
@@ -54,6 +57,7 @@ export const DEFAULT_RUNTIME_OPTIONS: RuntimeOptions = {
     parallel_tool_calls: true,
     chat_mode: 'execute',
     thread_mode: 'collect',
+    threading: false,
   },
   google_gemini: {
     grounding_with_google_search: false,
@@ -122,6 +126,7 @@ export function normaliseRuntimeOptions(raw: unknown = {}, providerType: string 
       parallel_tool_calls: devsV2.parallel_tool_calls !== false,
       chat_mode: chatMode,
       thread_mode: threadMode,
+      threading: devsV2.threading === true,
       reasoning_effort: devsV2.reasoning_effort ? String(devsV2.reasoning_effort) : undefined,
     },
     google_gemini: {
@@ -137,6 +142,7 @@ export function normaliseRuntimeOptions(raw: unknown = {}, providerType: string 
       parallel_tool_calls: true,
       chat_mode: 'execute',
       thread_mode: 'collect',
+      threading: false,
     };
   }
   if (normalizedType === 'devs-ai') {
@@ -146,6 +152,7 @@ export function normaliseRuntimeOptions(raw: unknown = {}, providerType: string 
       parallel_tool_calls: true,
       chat_mode: 'execute',
       thread_mode: 'collect',
+      threading: false,
     };
   }
   if (normalizedType === 'devs-ai-v2') {

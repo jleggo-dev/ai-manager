@@ -82,6 +82,7 @@ describe('DEFAULT_RUNTIME_OPTIONS', () => {
         parallel_tool_calls: true,
         chat_mode: 'execute',
         thread_mode: 'collect',
+        threading: false,
       },
       google_gemini: {
         grounding_with_google_search: false,

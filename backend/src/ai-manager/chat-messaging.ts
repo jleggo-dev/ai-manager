@@ -12,12 +12,10 @@ import { getAuthContext, effectiveUserId } from '../db/tenant.ts';
 import { resolveTimeoutMs } from './job-execution-utils.ts';
 import { getSessionProviderWithKey, resolveSessionClient } from './chat-session-lifecycle.ts';
 import { maybeCompactSession } from '../services/session-compaction.ts';
+import { v2ThreadingEnabled } from '../services/ai-profile-runtime-options.ts';
+import { updateV2ProviderMetadata } from './v2-metadata.ts';
 import { refreshSessionSystemPrompt } from '../services/session-persona-refresh.ts';
-import {
-  getChatSession as dbGetSession,
-  updateChatSession as dbUpdateSession,
-  createChatMessage,
-} from '../models/chat-sessions.ts';
+import { getChatSession as dbGetSession, createChatMessage } from '../models/chat-sessions.ts';
 import type { Attachment, FormattingRule } from '../types.ts';
 import { resolveChatInvocation } from './chat-messaging-resolve.ts';
 import { openChatSendStream } from './chat-messaging-stream.ts';
@@ -135,8 +133,14 @@ export async function sendChatMessage(
      and the token estimate reflects them. `resolvedJob` was already fetched above. */
   await refreshSessionSystemPrompt(session, resolvedJob);
 
-  /* Session compaction: summarize older turns when over token threshold */
-  await maybeCompactSession(session, session.calling_application || 'unknown');
+  /* Session compaction: summarize older turns when over token threshold. STATELESS providers
+     only — with threading on, the provider's own ThreadWorkflow holds and budgets the history
+     (org contextBudgetPercentages), and compacting our local copy would just spend summarizer
+     tokens shrinking a transcript that no longer feeds requests. The local rows stay the audit
+     trail either way, and remain the fallback if the thread expires. */
+  if (!v2ThreadingEnabled(session.provider_type ?? '', session.ai_profile?.runtime_options || {})) {
+    await maybeCompactSession(session, session.calling_application || 'unknown');
+  }
   const refreshedSession = (await dbGetSession(sessionId)) || session;
 
   if (diagnosticSession) diagnosticSession.startLlmTimer();
@@ -293,6 +297,13 @@ export async function submitV2ToolOutputs(
         exchange.map((e) => ({ ...e, arguments: argumentsAsJson(byId.get(e.toolCallId)?.arguments) })),
         toolOpts,
       );
+      /* Thread-mode anchor: the continuation carries the FULL conversation plus the exchange, so
+         its response id names a complete server-side thread — the next threaded turn can hang off
+         it without losing the tool round. Harmless with the flag off (recorded, never sent). */
+      const contResponseId = sseResponse.headers.get('x-response-id');
+      if (sseResponse.ok && contResponseId) {
+        await updateV2ProviderMetadata(sessionId, { previous_response_id: contResponseId }).catch(() => {});
+      }
       return { response: sseResponse, sessionId };
     } catch (err) {
       /**
@@ -314,26 +325,7 @@ export async function submitV2ToolOutputs(
   return { response: sseResponse, sessionId };
 }
 
-/** Persist v2 threading metadata on a chat session after a completed response. */
-
-/** Persist v2 threading metadata on a chat session after a completed response. */
-export async function updateV2ProviderMetadata(
-  sessionId: string,
-  patch: {
-    previous_response_id?: string;
-    conversation_id?: string;
-    last_sequence?: number;
-  },
-): Promise<void> {
-  const session = await dbGetSession(sessionId);
-  if (!session) return;
-  const current = (session.provider_metadata || {}) as Record<string, unknown>;
-  const next: Record<string, unknown> = { ...current };
-  if (patch.previous_response_id) next.previous_response_id = patch.previous_response_id;
-  if (patch.conversation_id) next.conversation_id = patch.conversation_id;
-  if (patch.last_sequence != null) next.last_sequence = patch.last_sequence;
-  await dbUpdateSession(sessionId, { provider_metadata: next });
-}
+export { updateV2ProviderMetadata } from './v2-metadata.ts';
 
 /**
  * Cancel the in-flight Devs.ai v2 response for a chat session.
