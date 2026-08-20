@@ -94,6 +94,7 @@ export { getAiProfile, getAiProfileBySlug, updateAiProfile } from '../../../back
 // response, submit their results as the continuation (a NEW response — see #190).
 export { extractFunctionCallsFromOutput } from '../../../backend/src/services/v2-stream-events.ts';
 export { submitV2ToolOutputs } from '../../../backend/src/ai-manager/chat-messaging.ts';
+export { updateV2ProviderMetadata } from '../../../backend/src/ai-manager/v2-metadata.ts';
 
 /* ── Processing jobs (create/update + id lookup for provisioning) ── */
 export {

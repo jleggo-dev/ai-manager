@@ -7,6 +7,7 @@ import {
   sendCoachMessage,
   submitCoachToolOutputs,
   recordCoachReply,
+  anchorCoachThread,
   getCoachPersona,
   getCoachHistory,
   cancelCoachTurn,
@@ -71,6 +72,55 @@ async function captureWindow(userId: string, sessionId: string, latest: string):
     return w || latest;
   } catch {
     return latest;
+  }
+}
+
+/**
+ * Write the finished turn down: thread anchor first, then the assistant reply + diagnostics —
+ * with the durable failure log that exists because a console line on a reclaimed serverless
+ * instance is not evidence, and this is the one failure that silently costs someone the reply
+ * they waited for. Extracted from the message handler when the anchor pushed it past the
+ * 150-line function gate; this block is the responsibility that grew, so it got the name.
+ */
+async function persistCoachTurn(turn: {
+  userId: string;
+  sessionIdParam: string;
+  sessionId: string;
+  content: string;
+  currentResponseId: string | null;
+  diagnosticSession: Parameters<typeof recordCoachReply>[1]['diag'];
+  metrics: Parameters<typeof recordCoachReply>[1]['metrics'];
+  model: string | null;
+  promptContent: string | null;
+  message: string;
+  responseId: string | null;
+  clientDropped: boolean;
+}): Promise<void> {
+  try {
+    // Thread-mode anchor (#250): the LAST response id of the turn — the continuation's after a
+    // tool loop — so the next turn can thread instead of re-sending the conversation.
+    if (turn.currentResponseId) {
+      anchorCoachThread(turn.userId, turn.sessionIdParam, turn.currentResponseId).catch((e) =>
+        console.warn('[anchorCoachThread]', e),
+      );
+    }
+    await recordCoachReply(turn.userId, {
+      sessionId: turn.sessionId,
+      content: turn.content,
+      diag: turn.diagnosticSession,
+      metrics: turn.metrics,
+      model: turn.model,
+      promptContent: turn.promptContent,
+    });
+  } catch (e) {
+    console.error('[recordCoachReply]', e);
+    await logAi(turn.userId, {
+      kind: 'coach',
+      sessionId: turn.sessionIdParam,
+      input: { user: turn.message },
+      output: { reply: turn.content },
+      meta: { persistFailed: true, error: String(e), responseId: turn.responseId, clientDropped: turn.clientDropped },
+    }).catch(() => {});
   }
 }
 
@@ -277,48 +327,55 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     // accumulating the assistant content + usage, so we can log the turn + diagnostics
     // to AI Admin after the stream (the in-process path must do this bookkeeping itself).
     const t0 = Date.now();
-    const { content, promptTokens, completionTokens, model, responseId, firstTokenMs, clientDropped } =
-      await relayCoachTurnWithTools(
-        userId,
-        response.body,
-        {
-          toolNames: coachToolNames(),
-          execute: (calls) => executeCoachToolCalls(userId, calls),
-          // The SAME tools the turn opened with. Without them the continuation is declared with an
-          // empty toolbox, which is why she called find_tools and then "ignored" use_tool for a day
-          // — she could not call it (chat-messaging.ts, submitV2ToolOutputs).
-          submit: async (respId, outputs, calls, revealed) =>
-            (
-              await submitCoachToolOutputs(userId, sessionId, respId, outputs, {
-                extraTools: [...coachToolDefinitions(), ...((revealed ?? []) as unknown[])],
-                calls,
-              })
-            ).response.body,
-          // What find_tools just revealed becomes REAL, callable-by-name definitions on the next
-          // round — ToolSearch's shape, and the thing the use_tool proxy was a poor substitute for.
-          revealedBy: (calls) => revealedDefinitions(calls),
-          // A word in her ear when she looked a tool up and never ran it. <note> turns are
-          // app-authored, so this never reaches the transcript or the capture window.
-          nudge: async (text) =>
-            (await sendCoachMessage(userId, sessionId, text, coachToolDefinitions())).response.body,
+    const {
+      content,
+      promptTokens,
+      completionTokens,
+      model,
+      responseId,
+      currentResponseId,
+      firstTokenMs,
+      clientDropped,
+    } = await relayCoachTurnWithTools(
+      userId,
+      response.body,
+      {
+        toolNames: coachToolNames(),
+        execute: (calls) => executeCoachToolCalls(userId, calls),
+        // The SAME tools the turn opened with. Without them the continuation is declared with an
+        // empty toolbox, which is why she called find_tools and then "ignored" use_tool for a day
+        // — she could not call it (chat-messaging.ts, submitV2ToolOutputs).
+        submit: async (respId, outputs, calls, revealed) =>
+          (
+            await submitCoachToolOutputs(userId, sessionId, respId, outputs, {
+              extraTools: [...coachToolDefinitions(), ...((revealed ?? []) as unknown[])],
+              calls,
+            })
+          ).response.body,
+        // What find_tools just revealed becomes REAL, callable-by-name definitions on the next
+        // round — ToolSearch's shape, and the thing the use_tool proxy was a poor substitute for.
+        revealedBy: (calls) => revealedDefinitions(calls),
+        // A word in her ear when she looked a tool up and never ran it. <note> turns are
+        // app-authored, so this never reaches the transcript or the capture window.
+        nudge: async (text) => (await sendCoachMessage(userId, sessionId, text, coachToolDefinitions())).response.body,
+      },
+      {
+        isClientAlive: () => clientAlive,
+        // Recorded mid-stream because that is the only moment it is useful: Stop needs the id of
+        // the response generating RIGHT NOW. Fire-and-forget — bookkeeping for a button must never
+        // interrupt the turn the user is waiting on.
+        onResponseId: (id) =>
+          void setInFlightResponse(sessionIdParam, id).catch((e) => console.error('[setInFlightResponse]', e)),
+        writeChunk: (chunk) => {
+          try {
+            res.write(chunk);
+          } catch {
+            clientAlive = false;
+            return false;
+          }
         },
-        {
-          isClientAlive: () => clientAlive,
-          // Recorded mid-stream because that is the only moment it is useful: Stop needs the id of
-          // the response generating RIGHT NOW. Fire-and-forget — bookkeeping for a button must never
-          // interrupt the turn the user is waiting on.
-          onResponseId: (id) =>
-            void setInFlightResponse(sessionIdParam, id).catch((e) => console.error('[setInFlightResponse]', e)),
-          writeChunk: (chunk) => {
-            try {
-              res.write(chunk);
-            } catch {
-              clientAlive = false;
-              return false;
-            }
-          },
-        },
-      );
+      },
+    );
     /**
      * AWAITED, and that is the whole fix for the backgrounded phone.
      *
@@ -336,27 +393,20 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
      * relay already wrote, so every line below runs after her reply is on screen.
      */
     if (content.trim()) {
-      try {
-        await recordCoachReply(userId, {
-          sessionId,
-          content,
-          diag: diagnosticSession,
-          metrics: { promptTokens, completionTokens, durationMs: Date.now() - t0, firstTokenMs },
-          model,
-          promptContent: resolvedMessage ?? message,
-        });
-      } catch (e) {
-        // Durably, because a console line on a reclaimed serverless instance is not evidence —
-        // and this is the one failure that silently costs someone the reply they waited for.
-        console.error('[recordCoachReply]', e);
-        await logAi(userId, {
-          kind: 'coach',
-          sessionId: req.params.id as string,
-          input: { user: message },
-          output: { reply: content },
-          meta: { persistFailed: true, error: String(e), responseId, clientDropped },
-        }).catch(() => {});
-      }
+      await persistCoachTurn({
+        userId,
+        sessionIdParam,
+        sessionId,
+        content,
+        currentResponseId,
+        diagnosticSession,
+        metrics: { promptTokens, completionTokens, durationMs: Date.now() - t0, firstTokenMs },
+        model,
+        promptContent: resolvedMessage ?? message,
+        message,
+        responseId,
+        clientDropped,
+      });
     }
 
     // Read BEFORE the turn's state is torn down: the client may have armed this at any point
