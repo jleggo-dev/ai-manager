@@ -5097,7 +5097,12 @@ never sent.
   failure"; protocol — the narrowing cap is a SCHEDULING budget, understanding the goal (history,
   what stopped them, what the thing demands) is a worthier one repetition-bounded, not
   depth-bounded. Synced.
-- **Backlog:** saved chats with a history toggle (owner item 4, future iteration).
+- **Backlog:** saved chats with a history toggle (owner item 4, future iteration). Minimal slice
+  shipped 2026-08-20 (PR #251) after a thread retirement left the Coach tab EMPTY ("a big missing
+  component"): a retired thread's transcript now renders read-only above the fresh conversation
+  (`EarlierThread`), under a quiet divider — "earlier conversation — your next message starts
+  fresh". No adoption change: sessionId stays null, next send opens fresh. Still open: the actual
+  history toggle / browsing more than the latest retired thread.
 
 **The blocker for everything server-side: ship main.** Rationale/suggested/area on GET /plan,
 the graduated fix's client half, milestone capture plumbing, the reset completeness — all inert

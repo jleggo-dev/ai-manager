@@ -187,8 +187,11 @@ router.post('/sessions', async (req: Request, res: Response) => {
  * persona and the injected <context> turn — just the user/coach turns.
  *
  * Also computes the FRESHNESS policy (P3-lite), server-side so there's one clock and it's
- * curl-testable. `stale: true` tells the client to start a fresh thread (and not render the
- * old transcript — a visible transcript the new session can't see reads as amnesia):
+ * curl-testable. `stale: true` tells the client not to adopt the thread — the next send opens a
+ * fresh session. The transcript still ships: the client renders it read-only above the fresh
+ * conversation (EarlierThread), under a divider saying the next message starts fresh. Hiding it
+ * instead left the Coach tab empty after a thread retirement (owner, 2026-08-20), and the divider
+ * is what keeps a visible transcript the new session can't see from reading as amnesia:
  *  - 'idle'      — no message activity for >7 days (touchConversation feeds updated_at)
  *  - 'graduated' — the conversation predates the user's FIRST plan commit and a plan is now
  *                  active: onboarding chatter shouldn't be the ongoing coaching thread.

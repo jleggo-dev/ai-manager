@@ -27,7 +27,7 @@ describe('useCoachChat', () => {
     prepareCoachFoodAction.mockResolvedValue({ status: 'ok', action: null });
   });
 
-  it('restores a non-stale thread and skips stale transcripts', async () => {
+  it('restores a non-stale thread and keeps a stale transcript aside, unadopted', async () => {
     getCurrentCoach.mockResolvedValueOnce({
       sessionId: 'sess-1',
       stale: false,
@@ -42,17 +42,56 @@ describe('useCoachChat', () => {
       { role: 'user', text: 'hi' },
       { role: 'coach', text: 'hello' },
     ]);
+    expect(result.current.earlierTurns).toEqual([]);
     expect(result.current.sessionId.current).toBe('sess-1');
 
+    // A stale thread is not adopted — but not hidden either (hiding it left the Coach tab empty
+    // after a thread retirement, owner 2026-08-20). Its transcript comes back as `earlierTurns`
+    // for read-only display; the live thread starts empty and unnamed.
     getCurrentCoach.mockResolvedValueOnce({
       sessionId: 'old',
       stale: true,
-      messages: [{ role: 'coach', content: 'stale chatter' }],
+      messages: [{ role: 'coach', content: 'earlier chatter' }],
     });
     const stale = renderHook(() => useCoachChat());
     await waitFor(() => expect(stale.result.current.restored).toBe(true));
     expect(stale.result.current.turns).toEqual([]);
+    expect(stale.result.current.earlierTurns).toEqual([{ role: 'coach', text: 'earlier chatter' }]);
     expect(stale.result.current.sessionId.current).toBeNull();
+  });
+
+  /**
+   * The rest of the retirement contract: the old transcript hangs above for reading, but the
+   * next message belongs to a brand-new session — never a resurrection of the thread the server
+   * retired, and never a word of the old transcript smuggled into the new session's state.
+   */
+  it('sends into a brand-new session after a stale restore, leaving the old transcript in place', async () => {
+    getCurrentCoach.mockResolvedValueOnce({
+      sessionId: 'old',
+      stale: true,
+      messages: [{ role: 'coach', content: 'earlier chatter' }],
+    });
+    sendCoachMessage.mockImplementation(async (_id: string, _t: string, onDelta: (d: string) => void) => {
+      onDelta('Fresh start.');
+      return { completed: true, responseId: null };
+    });
+    const { result } = renderHook(() => useCoachChat());
+    await waitFor(() => expect(result.current.restored).toBe(true));
+
+    act(() => result.current.setInput('hello again'));
+    await act(async () => {
+      await result.current.send();
+    });
+
+    expect(openCoachSession).toHaveBeenCalledTimes(1);
+    expect(sendCoachMessage.mock.calls[0]![0]).toBe('sess-new');
+    expect(result.current.sessionId.current).toBe('sess-new');
+    expect(result.current.turns).toEqual([
+      { role: 'user', text: 'hello again' },
+      { role: 'coach', text: 'Fresh start.' },
+    ]);
+    // Display state, not conversation state: the send moved nothing across the divider.
+    expect(result.current.earlierTurns).toEqual([{ role: 'coach', text: 'earlier chatter' }]);
   });
 
   it('applyStreamDelta appends without mutating the prior turn object', async () => {

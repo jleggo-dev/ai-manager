@@ -6,6 +6,7 @@ const sendCoachMessage = vi.fn();
 const openCoachSession = vi.fn();
 const getReview = vi.fn();
 const getPendingChange = vi.fn();
+const getCurrentCoach = vi.fn();
 
 // Written the way a session that opened before the protocol changed still writes it — `layout` and
 // all. Those sessions keep the instructions they were born with, so the field has to parse as
@@ -24,7 +25,7 @@ const PICKS = {
 const REPLY = `Good pair. So — what would you like to work on next?\n\n\`\`\`${COACH_PICKS_FENCE}\n${JSON.stringify(PICKS)}\n\`\`\``;
 
 vi.mock('../../lib/api.ts', () => ({
-  getCurrentCoach: vi.fn().mockResolvedValue({ sessionId: null, messages: [] }),
+  getCurrentCoach: (...args: unknown[]) => getCurrentCoach(...args),
   getReview: (...args: unknown[]) => getReview(...args),
   openCoachSession: (...args: unknown[]) => openCoachSession(...args),
   sendCoachMessage: (...args: unknown[]) => sendCoachMessage(...args),
@@ -55,6 +56,7 @@ vi.mock('../../components/MicButton.tsx', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getCurrentCoach.mockResolvedValue({ sessionId: null, messages: [] });
   getPendingChange.mockResolvedValue(null);
   getReview.mockResolvedValue({ goals: [] });
   openCoachSession.mockResolvedValue({ sessionId: 'test-session' });
@@ -111,6 +113,50 @@ describe('OnboardingChat', () => {
     render(<OnboardingChat chrome="none" intent="ongoing" />);
     await screen.findByText(/good to see you/);
     expect(screen.getByPlaceholderText('Message your coach…')).toBeInTheDocument();
+  });
+
+  /**
+   * A retired thread used to leave the Coach tab EMPTY — the owner hit it after a deliberate
+   * thread retirement (2026-08-20) and called it a big missing component. The transcript now
+   * stays on screen read-only, under a quiet divider that says where the fresh start begins.
+   * "stale" is a wire word; it never reaches the screen.
+   */
+  it('keeps a retired conversation on screen, read-only, above the fresh start', async () => {
+    getCurrentCoach.mockResolvedValue({
+      sessionId: 'old-thread',
+      stale: true,
+      staleReason: 'idle',
+      messages: [
+        { role: 'user', content: 'my knee was acting up' },
+        {
+          role: 'coach',
+          content: `Noted — we plan around the knee.\n\`\`\`${COACH_PICKS_FENCE}\n${JSON.stringify(PICKS)}\n\`\`\``,
+        },
+      ],
+    });
+    render(<OnboardingChat chrome="none" intent="ongoing" />);
+
+    // The old conversation is visible again…
+    expect(await screen.findByText('my knee was acting up')).toBeInTheDocument();
+    const oldReply = screen.getByText(/plan around the knee/);
+    // …but read-only: its pick block neither renders as buttons nor leaks as JSON.
+    expect(screen.queryByRole('button', { name: 'A steadier mind' })).not.toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(COACH_PICKS_FENCE))).not.toBeInTheDocument();
+
+    // The seam is explicit — and never wire vocabulary.
+    const divider = screen.getByText(/earlier conversation — your next message starts fresh/);
+    expect(screen.queryByText(/stale/i)).not.toBeInTheDocument();
+
+    // Order: old turns, then the divider, then the fresh conversation's greeting.
+    const greeting = await screen.findByText(/good to see you/);
+    expect(oldReply.compareDocumentPosition(divider) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(divider.compareDocumentPosition(greeting) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Not adopted: the next send opens a brand-new session, never a resurrection of the thread.
+    fireEvent.change(screen.getByPlaceholderText('Message your coach…'), { target: { value: 'hello again' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(openCoachSession).toHaveBeenCalledTimes(1));
+    expect(sendCoachMessage.mock.calls[0]![0]).toBe('test-session');
   });
 
   it("reports the coach's own read of how far through intake she is", async () => {
