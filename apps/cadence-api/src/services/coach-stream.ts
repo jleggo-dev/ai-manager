@@ -17,6 +17,9 @@ export interface CoachStreamResult {
   completionTokens: number | null;
   model: string | null;
   responseId: string | null;
+  /** The LAST response id of the turn — the continuation's after a tool loop. Thread mode (#250)
+   *  anchors the next turn on this, so it must be the id whose server-side thread is complete. */
+  currentResponseId: string | null;
   firstTokenMs: number | null;
   clientDropped: boolean;
 }

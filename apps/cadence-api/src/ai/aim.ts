@@ -23,6 +23,7 @@ import {
   pauseV2ChatResponse,
   cancelV2ChatResponse,
   type RequestAuthContext,
+  updateV2ProviderMetadata,
 } from '@ai-admin/core';
 import { cadenceConfig } from '../config.ts';
 import { rejectAsAimError } from './aim-errors.ts';
@@ -162,6 +163,24 @@ export function submitCoachToolOutputs(
   } = {},
 ) {
   return withAim(cadenceUserId, () => submitV2ToolOutputs(sessionId, responseId, outputs, options));
+}
+
+/**
+ * Anchor the session's server-side thread on the response that just finished.
+ *
+ * Thread mode (#250) needs the id of the last COMPLETED response to hang the next turn on. The
+ * engine tries to capture it from the `x-response-id` header at stream-open, but in practice the
+ * header is absent (measured 2026-08-20: a clean turn left provider_metadata null), so the SSE
+ * events are the source of truth — `v2.response.created` / `message.complete` carry the id, the
+ * relay already extracts it, and this persists it after the stream drains. After a tool loop the
+ * relay's `currentResponseId` is the CONTINUATION's id, which is the right anchor: continuations
+ * are self-contained with full history, so their thread is complete.
+ *
+ * Fire-and-forget by contract: with the flag off this is bookkeeping; with it on, a missed write
+ * just means the next turn goes stateless-full once and re-anchors itself.
+ */
+export function anchorCoachThread(cadenceUserId: string, sessionId: string, responseId: string) {
+  return withAim(cadenceUserId, () => updateV2ProviderMetadata(sessionId, { previous_response_id: responseId }));
 }
 
 /**
