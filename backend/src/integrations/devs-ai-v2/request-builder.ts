@@ -40,6 +40,13 @@ export interface V2CreateResponseBody {
  * from its own stored thread, which these items never join. The 6,207-token drop is the dossier
  * and the instructions going missing. No tool result has ever reached the model through here.
  *
+ * CORRECTION (2026-08-20, reading the published spec): the instructions half of that drop is
+ * DOCUMENTED behaviour, not a provider fault — "when used with previous_response_id, instructions
+ * from the previous response are not carried over", i.e. a threaded caller must re-send them every
+ * turn. The items-dropped half stands on the byte-identical token counts. Thread-mode
+ * (thread-mode.ts, flag-gated) threads the MAIN turns and re-sends instructions each time;
+ * continuations stay self-contained below for exactly the reason this comment records.
+ *
  * `toolResultsToV2Request` below is the replacement: self-contained, nothing threaded, the whole
  * exchange in `input`.
  */

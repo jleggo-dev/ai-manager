@@ -30,6 +30,8 @@ interface NormalisedRuntimeOptions {
     parallel_tool_calls: boolean;
     chat_mode: 'execute' | 'chat' | 'plan';
     thread_mode: 'collect' | 'steer' | 'interrupt' | 'force';
+    /** Server-side threading: send only NEW input under previous_response_id (see thread-mode.ts). */
+    threading: boolean;
     reasoning_effort?: string;
   };
   google_gemini: {
@@ -98,6 +100,7 @@ export function normaliseAiProfileRuntimeOptions(
       parallel_tool_calls: toBoolean(devsAiV2Input.parallel_tool_calls, true),
       chat_mode: chatMode,
       thread_mode: threadMode,
+      threading: toBoolean(devsAiV2Input.threading, false),
       reasoning_effort: devsAiV2Input.reasoning_effort ? String(devsAiV2Input.reasoning_effort) : undefined,
     },
     google_gemini: {
@@ -112,6 +115,7 @@ export function normaliseAiProfileRuntimeOptions(
       parallel_tool_calls: true,
       chat_mode: 'execute',
       thread_mode: 'collect',
+      threading: false,
     };
   }
   if (normalizedProviderType === 'devs-ai' || (!normalizedProviderType && normalizedProviderType !== 'devs-ai-v2')) {
@@ -121,6 +125,7 @@ export function normaliseAiProfileRuntimeOptions(
       parallel_tool_calls: true,
       chat_mode: 'execute',
       thread_mode: 'collect',
+      threading: false,
     };
   }
   if (normalizedProviderType === 'devs-ai-v2') {
@@ -140,6 +145,26 @@ export interface BuildChatOptionsExtra {
 /**
  * Build provider-specific chat completion / v2 response options from normalized runtime options.
  */
+/**
+ * Is server-side threading ON for this profile? (devs-ai-v2 only, opt-in, default off.)
+ *
+ * The gate for everything thread-mode does: when true, the send path passes
+ * `previous_response_id`, slices `input` down to what the server thread has not seen
+ * (thread-mode.ts), and skips local compaction — the provider owns the history
+ * (a long-lived ThreadWorkflow with an org-level context budget), and duplicating that
+ * client-side costs tokens and quality (owner, 2026-08-19). When false — every other
+ * provider, and v2 by default — the engine stays stateless: full history each turn,
+ * local compaction available. That path is the fallback story for providers with no
+ * server-side thread at all (e.g. a future Vercel AI Gateway).
+ */
+export function v2ThreadingEnabled(providerType: string, runtimeOptions: Record<string, unknown> = {}): boolean {
+  const t = String(providerType || '')
+    .trim()
+    .toLowerCase();
+  if (t !== 'devs-ai-v2') return false;
+  return normaliseAiProfileRuntimeOptions(t, runtimeOptions).devs_ai_v2.threading;
+}
+
 export function buildProviderChatOptions(
   providerType: string = '',
   runtimeOptions: Record<string, unknown> = {},
