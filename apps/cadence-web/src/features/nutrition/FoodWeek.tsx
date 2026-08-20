@@ -65,7 +65,7 @@ export function FoodWeek({
       <div className="fh-card">
         <div className="fh-card-row">
           <div className="fh-ringcol">
-            <NutritionRing logged={avgKcal} target={targetKcal} counting size={104} stroke={11}>
+            <NutritionRing logged={avgKcal} target={targetKcal} size={104} stroke={11}>
               {week.avg ? (
                 <>
                   <b>{fmt(avgKcal)}</b>

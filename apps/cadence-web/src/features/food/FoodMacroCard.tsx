@@ -17,7 +17,7 @@ export function FoodMacroCard({ macros }: { macros: MealMacros }) {
   const share = macroEnergyShare(macros);
   return (
     <div className="fd-macro">
-      <NutritionRing logged={macros.kcal ?? 0} target={null} counting size={86} stroke={11} className="fd-ring">
+      <NutritionRing logged={macros.kcal ?? 0} target={null} size={86} stroke={11} className="fd-ring">
         <b>{Math.round(macros.kcal ?? 0)}</b>
         <span>KCAL</span>
       </NutritionRing>

@@ -62,7 +62,6 @@ export function MealCapturePanel({
     );
   }
 
-
   return (
     <div className="mc">
       {/* Slice 2 extracted these rings; slice 3 made the ring the door out to the whole day. Both

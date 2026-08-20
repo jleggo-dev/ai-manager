@@ -107,7 +107,7 @@ export function FoodDay({
       <div className="fh-card">
         <div className="fh-card-row">
           <button className="fh-ringcol fh-ringbtn" onClick={onNutrients} aria-label="Open Nutrients">
-            <NutritionRing logged={eaten} target={scored ? targetKcal : null} counting size={112} stroke={12}>
+            <NutritionRing logged={eaten} target={scored ? targetKcal : null} size={112} stroke={12}>
               {scored && !over ? (
                 <>
                   <b>{fmt(left)}</b>

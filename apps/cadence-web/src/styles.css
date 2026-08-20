@@ -6930,11 +6930,11 @@ textarea.wiz-title {
   background: oklch(94% 0.015 80);
   overflow: hidden;
 }
-.mbar-track.is-counting {
-  background: none;
-  border: 1.5px dashed oklch(88% 0.02 85);
-  box-sizing: border-box;
-}
+/* The counting (no-target) bar used to be a dashed outline. The design dropped it — verified
+   against the canvas 2026-08-20: zero dashed bar tracks, nine solid, and the solid track is this
+   same oklch(94% 0.015 80). So counting and scored share one track and differ only in fill, which
+   is the "nothing is added when targets arrive" rule the module is built on. Same reasoning as the
+   ring: an empty bar is awaiting, not broken. */
 .mbars.is-dense .mbar-track {
   height: 7px;
 }
