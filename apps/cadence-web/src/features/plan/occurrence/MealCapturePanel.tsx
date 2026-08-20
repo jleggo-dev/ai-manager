@@ -56,6 +56,9 @@ export function MealCapturePanel({
       <LogScreen
         date={detail.date}
         initialMeal={cap.mealKind}
+        // The tile they already tapped — without this the Log screen opened on its own tile row
+        // and asked them to choose the same method a second time.
+        initialMethod={logOpen}
         onClose={() => setLogOpen(null)}
         onLogged={() => cap.markLogged()}
       />

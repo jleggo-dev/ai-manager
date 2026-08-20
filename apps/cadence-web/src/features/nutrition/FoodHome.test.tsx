@@ -28,6 +28,7 @@ const api = vi.hoisted(() => ({
 vi.mock('../../lib/api.ts', () => api);
 
 // The deep tools have their own tests and their own fetches — stubs keep this about the home.
+vi.mock('../food/LogScreen.tsx', () => ({ LogScreen: () => <div>log-screen</div> }));
 vi.mock('../food/RecipesPanel.tsx', () => ({ RecipesPanel: () => <div>cookbook-panel</div> }));
 vi.mock('../food/MealPlansPanel.tsx', () => ({ MealPlansPanel: () => <div>plan-panel</div> }));
 vi.mock('./ShopSheet.tsx', () => ({ ShopSheet: () => <div>shop-panel</div> }));
@@ -131,14 +132,28 @@ describe('FoodHome', () => {
     expect(invalidate).toHaveBeenCalled();
   });
 
-  it('hands the coach an app-authored note from "Talk food with me" and from a Log chip', () => {
+  it('hands the coach an app-authored note from "Talk food with me"', () => {
     const onCoach = vi.fn();
     mount(day({}), { onCoach });
     fireEvent.click(screen.getByText('Talk food with me'));
     expect(onCoach).toHaveBeenCalledWith(expect.stringContaining('Talk food with me'));
+  });
 
-    fireEvent.click(screen.getAllByText('Log')[0]!); // breakfast slot is empty → a Log chip
-    expect(onCoach).toHaveBeenCalledWith(expect.stringContaining('Log on breakfast'));
+  /**
+   * Logging is capture, not conversation. Both doors used to hand the user to the COACH — a
+   * slice-1 leftover from when talking was the only capture surface. The design's own caption for
+   * 05b says the Log screen is reached "from any method tile in quick add, from Log a meal, or the
+   * ＋ on the trail", and the owner hit it on device (2026-08-20): "log a meal in the full screen
+   * nutrition menu takes me to the coach chat (i think this is wrong)". Talking food is still one
+   * tap away — that is what "Talk food with me" is for, asserted above.
+   */
+  it('opens the Log screen from "Log a meal" and from an empty meal slot — not the coach', () => {
+    const onCoach = vi.fn();
+    mount(day({}), { onCoach });
+
+    fireEvent.click(screen.getByText('Log a meal'));
+    expect(screen.getByText('log-screen')).toBeTruthy();
+    expect(onCoach).not.toHaveBeenCalled();
   });
 
   it('opens straight to the shopping list when a shop task sent it there', () => {
