@@ -39,18 +39,29 @@ const SLUG = cadenceConfig.aim.coachJobSlug;
  *
  * Policy lives HERE, beside the persona, because it is a coaching decision; the mechanism lives in
  * the engine (`backend/src/services/session-compaction.ts`), which owns the transcript and the
- * request, and therefore survives a change of provider. Devs.ai does not compact for us — one live
- * thread climbed 8.5k → 119.6k prompt tokens over four days and 49 turns without a single drop
- * (2026-08-19) — and even if it did, an invisible compaction we cannot inspect is not something an
- * auditable-by-design product should rely on.
+ * request, and therefore survives a change of provider. Threading (#250) moved the transcript to
+ * the provider and the bill still grew ~594/turn with nothing bounding it (measured 2026-08-20,
+ * probe-thread-turns.ts) — so the bound is ours to own, and this is it.
  *
- * The numbers, and why: `estimateSessionTokens` measures the stored history, of which the persona
- * row alone is ~5k, so 32k leaves ~27k of conversation — comfortably under the depth where that
- * thread's tool-calling started missing, and far enough above a normal session (~20k at open) that
- * an ordinary chat never compacts at all. `keepLastNTurns` counts MESSAGES, so 16 is about eight
- * exchanges kept verbatim behind the summary. Both are build-rules-editable without a deploy.
+ * CALIBRATED FOR QUALITY, NOT COST (owner, 2026-08-20: "quality is more important than cost —
+ * 100K per message isn't indicative of quality though"). Both halves of that sentence are the
+ * spec: a huge context is ANTI-quality — the measured tool-calling refusal happened at ~119k —
+ * and an over-eager summary that eats live conversation is too. So the working set stays
+ * generous and bounded:
+ *
+ *  - `triggerTokens` is in `estimateSessionTokens` units — char/4 over the stored history — and
+ *    real billed tokens run ~1.78× that (solved against production billing, 2026-08-19). 20k
+ *    units ≈ first compaction near ~36k billed. After compacting, context falls to persona +
+ *    summary + the kept turns (~15k billed) and sawtooths in a ~15–40k band: far below the
+ *    degradation zone, far above ever compacting a short chat. The old 32k was set before the
+ *    units were calibrated and fired near ~60k billed — later than intended.
+ *  - `keepLastNTurns` counts MESSAGES: 20 is ten exchanges verbatim behind the summary, because
+ *    recency is where conversational quality lives; the summary only ever replaces the far past.
+ *
+ * Both are build-rules-editable without a deploy — but note the engine copies this onto the
+ * SESSION at open (`chat-session-open.ts`), so an edit reaches new sessions only.
  */
-const SUMMARIZER = { jobSlug: 'coach-compact', triggerTokens: 32_000, keepLastNTurns: 16 } as const;
+const SUMMARIZER = { jobSlug: 'coach-compact', triggerTokens: 20_000, keepLastNTurns: 20 } as const;
 
 async function main() {
   const profileId = cadenceConfig.aim.coachProfileId;
