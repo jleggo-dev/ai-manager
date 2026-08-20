@@ -212,14 +212,25 @@ describe('use_tool', () => {
   });
 
   /** An ALWAYS-ON action is called directly, never through here — it was never in the tail. */
-  it('will not run an always-on action through use_tool', async () => {
+  it('will not run an always-on action through use_tool — and says where it actually lives', async () => {
     const out = await COACH_META_TOOLS.use_tool!.run('u1', { name: 'propose_plan_change' });
-    expect(out).toMatch(/no readable tool/i);
+    expect(out).toContain('declared directly');
+    // Never the catalog pointer: sending her to find_tools for a tool she is HOLDING burns rounds.
+    expect(out).not.toContain('find_tools');
   });
 
-  it('will not run a dossier fact through the read door either', async () => {
-    const out = await COACH_META_TOOLS.use_tool!.run('u1', { name: 'get_identity' });
-    expect(out).toMatch(/no readable tool/i);
+  /**
+   * The fault text is a steering wheel. "Call find_tools" on a DOSSIER name was a deterministic
+   * misdirection — measured 2026-08-20 on the owner's session, three turns in a row:
+   * use_tool("get_weight") → sent to the catalog → find_tools → round cap → the turn ended with a
+   * promise instead of his numbers. The honest answer to a dossier name is "you are holding it".
+   */
+  it('a dossier fact answers "already in your context", never "call find_tools"', async () => {
+    for (const name of ['get_identity', 'get_weight']) {
+      const out = await COACH_META_TOOLS.use_tool!.run('u1', { name });
+      expect(out).toContain('ALREADY IN YOUR CONTEXT');
+      expect(out).not.toContain('find_tools');
+    }
   });
 });
 

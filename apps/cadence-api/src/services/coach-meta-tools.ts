@@ -8,6 +8,8 @@ import {
   isActionName,
   FIND_TOOLS_NAME,
   USE_TOOL_NAME,
+  DOSSIER_FUNCTIONS,
+  ALWAYS_ACTIONS,
 } from './coach-tool-tiers.ts';
 
 /**
@@ -135,6 +137,27 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
       // an always-on action is declared directly so its own contract sits in her context — routing
       // either through this door would be a second path to something she already has.
       if (!onDemandToolNames().includes(name)) {
+        /**
+         * Name the REASON, never just the absence. "Call find_tools to see the real names" was a
+         * deterministic misdirection when the name was a DOSSIER function: get_weight exists — it
+         * is hidden because the fact rides her context every turn — and the old text sent her
+         * hunting the catalog for something she was holding. Measured on the owner's session
+         * (2026-08-20, three turns in a row): use_tool("get_weight") → "call find_tools" →
+         * find_tools → round cap → the turn ended with a promise instead of his numbers.
+         */
+        if ((DOSSIER_FUNCTIONS as readonly string[]).includes(name)) {
+          return (
+            `"${name}" is not a tool because its answer is ALREADY IN YOUR CONTEXT — the dossier ` +
+            'block injected above carries it every turn. Do not call anything for it: read it from ' +
+            'your context and answer the user now.'
+          );
+        }
+        if ((ALWAYS_ACTIONS as readonly string[]).includes(name)) {
+          return (
+            `"${name}" is already declared directly in your tool list — call it by name as a ` +
+            'normal tool, not through this door.'
+          );
+        }
         return `There is no readable tool called "${name}". Call ${FIND_TOOLS_NAME} to see the real names.`;
       }
       const args = (params.arguments ?? {}) as Record<string, unknown>;

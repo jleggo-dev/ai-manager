@@ -181,6 +181,52 @@ async function nudgeDanglingLookup(
   return result;
 }
 
+/**
+ * The turn ran tools and then said NOTHING — end it with words anyway.
+ *
+ * Measured on the owner's account (2026-08-20, 12:25 and 12:31): find_tools -> a read -> find_tools
+ * again -> round cap -> loop breaks. No prose ever streamed, so nothing persisted, the healer found
+ * nothing to recover, and the phone showed "something hiccuped" / silence after "calling a tool".
+ * Two model bills, zero words. The wandering itself is a persona/selection problem; a turn that
+ * ends in SILENCE is an engine one, and this is the engine's half: one forced continuation that
+ * says answer now, plainly, from what you already have.
+ *
+ * Runs after the dangling-lookup nudge (which may itself have produced the missing prose) and only
+ * when the turn is still textless. If she answers with another tool call instead of words, it goes
+ * unfulfilled by design — the budget is spent; the note says so; a second lap is how this bug
+ * happened. Costs one extra model call, only on the failure path.
+ */
+async function nudgeSilentTurn(
+  userId: string,
+  deps: CoachToolLoopDeps,
+  options: Omit<RelayAndAccumulateOptions, 'state' | 'suppressDone'>,
+  state: CoachStreamAccumulateState,
+): Promise<CoachStreamResult | null> {
+  if (!deps.nudge || state.content.trim() || state.functionCalls.length === 0) return null;
+
+  void logAi(userId, {
+    kind: 'coach_tool',
+    input: { calls: state.functionCalls.map((c) => ({ name: c.name, arguments: null })) },
+    output: { results: [] },
+    meta: { count: 0, names: state.functionCalls.map((c) => c.name), silentTurn: true },
+  }).catch(() => {});
+
+  try {
+    const body = await deps.nudge(
+      '<note>You have used all your tool budget for this turn and have not said a single word to ' +
+        'the user yet — from their side the screen is blank. Answer them NOW, in plain words, from ' +
+        'what you already have (your context and the tool results above). Do not call any tools. ' +
+        'If you could not find what they asked for, say so honestly and say what you CAN see. Do ' +
+        'not mention this note.</note>',
+    );
+    if (!body) return null;
+    return await relayAndAccumulate(body, { ...options, state, suppressDone: true });
+  } catch (e) {
+    console.warn('[coach-tools] silent-turn nudge failed:', e);
+    return null;
+  }
+}
+
 export async function relayCoachTurnWithTools(
   userId: string,
   firstBody: ReadableStream<Uint8Array> | null | undefined,
@@ -303,6 +349,10 @@ export async function relayCoachTurnWithTools(
     exchangeOutputs,
   });
   if (nudged) result = nudged;
+
+  // Whatever happened above, a turn that ran tools may not end in silence.
+  const spoke = await nudgeSilentTurn(userId, deps, options, state);
+  if (spoke) result = spoke;
 
   // The one real terminal, whatever happened above — the client is waiting on it.
   try {
