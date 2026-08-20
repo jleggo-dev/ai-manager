@@ -475,3 +475,69 @@ describe('what find_tools reveals becomes callable by name', () => {
     expect(submit).toHaveBeenCalledWith('r1', expect.anything(), expect.anything(), []);
   });
 });
+
+/**
+ * A turn that ran tools may not end in silence — the engine's half of the 2026-08-20 failure
+ * (find_tools → a read → find_tools → cap → NOTHING streamed → nothing persisted → the healer had
+ * nothing to recover → "something hiccuped"). The wandering is a selection problem; the silence
+ * was ours.
+ */
+describe('silent-turn nudge', () => {
+  it('a capped turn with no prose gets one forced answer, and it becomes the result', async () => {
+    const execute = vi.fn(async (calls: Array<{ toolCallId: string }>) =>
+      calls.map((c) => ({ toolCallId: c.toolCallId, output: 'x' })),
+    );
+    let round = 0;
+    // Every round: tool calls only, not one delta of prose — the owner's exact shape.
+    const submit = vi.fn(async () => {
+      round++;
+      return stream([
+        complete(`r${round + 1}`, [{ id: `t${round + 1}`, name: 'get_weight', args: `{"r":${round}}` }]),
+        DONE,
+      ]);
+    });
+    const nudge = vi.fn(async (_note: string) => stream([delta('Here is what I can see: 82kg, target 78.'), DONE]));
+
+    const { writes, writeChunk } = collectWrites();
+    const result = await relayCoachTurnWithTools(
+      'u1',
+      stream([complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
+      { toolNames: new Set(['get_weight']), execute, submit, nudge },
+      { writeChunk },
+    );
+
+    expect(nudge).toHaveBeenCalledTimes(1);
+    expect(nudge.mock.calls[0]![0]).toContain('have not said a single word');
+    expect(result.content).toContain('82kg');
+    // Still exactly one terminal, after the nudge's prose.
+    expect(writes.filter((w) => w.includes('[DONE]'))).toHaveLength(1);
+  });
+
+  it('never fires when the turn already spoke', async () => {
+    const execute = vi.fn(async (calls: Array<{ toolCallId: string }>) =>
+      calls.map((c) => ({ toolCallId: c.toolCallId, output: 'x' })),
+    );
+    const submit = vi.fn(async () => stream([delta('Done — logged it.'), DONE]));
+    const nudge = vi.fn();
+    const result = await relayCoachTurnWithTools(
+      'u1',
+      stream([complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
+      { toolNames: new Set(['get_weight']), execute, submit, nudge },
+      {},
+    );
+    expect(result.content).toBe('Done — logged it.');
+    expect(nudge).not.toHaveBeenCalled();
+  });
+
+  it('never fires on a plain turn with no tools at all', async () => {
+    const nudge = vi.fn();
+    const result = await relayCoachTurnWithTools(
+      'u1',
+      stream([delta('Hi'), DONE]),
+      { toolNames: new Set(['get_weight']), execute: vi.fn(), submit: vi.fn(), nudge },
+      {},
+    );
+    expect(result.content).toBe('Hi');
+    expect(nudge).not.toHaveBeenCalled();
+  });
+});
