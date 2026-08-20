@@ -14,11 +14,14 @@ import { capabilities } from '../../lib/capability/index.ts';
 import { OPENING_PICKS, OPENING_PLACEHOLDER, OPENING_QUESTION } from '@cadence/shared';
 import { useEnsureCoachFace } from '../coach/useEnsureCoachFace.ts';
 import { useStickToBottom } from './useStickToBottom.ts';
+import { useAnchorOnPrepend } from './useAnchorOnPrepend.ts';
 import { useFloatingInset } from './useFloatingInset.ts';
 import { useCoachChat } from './useCoachChat.ts';
+import { useCoachHistory } from './useCoachHistory.ts';
 import { chatProgress, livePicks, viewTurns } from './coachTurns.ts';
 import { ChatTurn } from './ChatTurn.tsx';
 import { EarlierThread } from './EarlierThread.tsx';
+import { EarlierConversations } from './EarlierConversations.tsx';
 import { ChatComposer } from './ChatComposer.tsx';
 import { QuickPicks } from './QuickPicks.tsx';
 import { CapturedPills } from './CapturedPills.tsx';
@@ -124,6 +127,8 @@ export function OnboardingChat({
     activity,
     capturedGoals,
     restored,
+    painted,
+    cursor,
     send,
     stop,
     nudge,
@@ -131,6 +136,16 @@ export function OnboardingChat({
     clearFoodAction,
     sessionId,
   } = useCoachChat({ intent });
+
+  /**
+   * Everything said before the conversation on screen — loaded only when asked for, one
+   * conversation per tap. Onboarding has no history by definition, and offering to read back
+   * through an archive that cannot exist would be a control that never does anything.
+   */
+  const history = useCoachHistory({
+    startedAt: intent === 'onboarding' ? null : cursor.startedAt,
+    hasEarlier: intent !== 'onboarding' && cursor.hasEarlier,
+  });
 
   // Someone resuming mid-onboarding lands here directly, never passing MeetCadence — so the draw
   // has to happen here too, or Cadence speaks the whole conversation wearing the brand mark.
@@ -227,7 +242,10 @@ export function OnboardingChat({
   // Declared AFTER the inset on purpose: both are layout effects and they run in declaration
   // order, so measuring the stack first means the follow scrolls against the padding this render
   // actually ends up with, rather than chasing it on a second pass.
-  const { onScroll, onTouchStart, onTouchEnd, stickNow } = useStickToBottom(chatRef);
+  const { onScroll, onTouchStart, onTouchEnd, stickNow, unstick } = useStickToBottom(chatRef);
+  // Declared LAST of the layout effects on purpose — when older conversations land above the
+  // viewport this has to have the final word on where the reader ends up (useAnchorOnPrepend).
+  const markScroll = useAnchorOnPrepend(chatRef, history.earlier.length);
 
   return (
     <div className="chatscreen">
@@ -260,28 +278,44 @@ export function OnboardingChat({
         onTouchCancel={onTouchEnd}
         style={{ paddingBottom: inset }}
       >
+        {/* Further back still: the conversations before this one, above everything else because
+            that is where earlier belongs. Nothing loads until it is asked for. */}
+        <EarlierConversations
+          conversations={history.earlier}
+          canLoad={history.canLoad}
+          loading={history.loading}
+          onLoad={() => {
+            // Both halves of "the viewport is theirs now": stop following the newest turn, and
+            // remember where they are so the incoming history lands above them rather than under.
+            unstick();
+            markScroll();
+            void history.loadEarlier();
+          }}
+        />
         {/* The retired thread, read-only above everything the live conversation renders. Its own
             divider tells the user where the fresh start begins — see EarlierThread. */}
         <EarlierThread turns={earlierTurns} />
-        {!restored ? (
+        {!painted ? (
           <div className="chat-loading">
             <ChatTurn role="coach" text="" pending />
           </div>
         ) : (
-          intent === 'ongoing' && !turns.length && <ChatTurn role="coach" text={ONGOING_GREETING} />
+          // On the server's word, never on the cache's: a greeting painted because the device
+          // happened to remember nothing would be the app guessing that a conversation is empty.
+          intent === 'ongoing' && restored && !turns.length && <ChatTurn role="coach" text={ONGOING_GREETING} />
         )}
         {/* The opening turn is the app's, not the model's — always the same question, so it paints
             instantly instead of costing a round-trip before the user has done anything. It stays at
             the top of a restored transcript too: it IS the first thing they saw, even though it was
             never sent upstream. Its picks go live only while it is still the newest turn. */}
-        {restored && intent === 'onboarding' && (
+        {painted && intent === 'onboarding' && (
           <ChatTurn
             role="coach"
             text={OPENING_QUESTION}
             after={!turns.length ? <QuickPicks key="opening" picks={OPENING_PICKS} onCompose={setInput} /> : undefined}
           />
         )}
-        {restored &&
+        {painted &&
           views.map((t, i) => {
             const last = i === views.length - 1;
             return (

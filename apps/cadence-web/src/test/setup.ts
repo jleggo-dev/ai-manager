@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { beforeEach } from 'vitest';
 
 /**
  * Node 24+ ships its own `localStorage` global, and it SHADOWS jsdom's — resolving to `undefined`
@@ -23,6 +24,27 @@ if (!window.localStorage) {
     },
   });
 }
+
+/**
+ * A test starts with an empty device.
+ *
+ * `localStorage` is one store for a whole file, so anything a test leaves behind is state the next
+ * test silently inherits — and it only LOOKS harmless while the things kept there are flags nobody
+ * renders. The coach transcript cache (coach-transcript-cache.ts) made that concrete: a chat test
+ * that sent a message left the conversation on the device, and the next test in the file opened
+ * with the previous test's turns already painted, failing on messages it never sent.
+ *
+ * Registered here so it runs BEFORE any per-file `beforeEach` (setup files are loaded first), which
+ * means a test that seeds its own keys still gets to — it just starts from nothing, like a phone
+ * that has never run the app.
+ */
+beforeEach(() => {
+  try {
+    window.localStorage.clear();
+  } catch {
+    /* storage shadowed or disabled — nothing kept, nothing to clear */
+  }
+});
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

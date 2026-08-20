@@ -5,12 +5,11 @@
  * reducer — testable without mounting chrome (Review pill / settings gear / disclaimer).
  * Req 5: also prepares confirm-first food actions in parallel with the coach reply.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   openCoachSession,
   sendCoachMessage,
   getReview,
-  getCurrentCoach,
   prepareCoachFoodAction,
   stopCoachTurn,
   type CoachFoodAction,
@@ -18,6 +17,7 @@ import {
 import { capabilities } from '../../lib/capability/index.ts';
 import { useCoachActivity } from './useCoachActivity.ts';
 import { recoverTurnFromServer, useReplyNotifyArm, useResumeHealer } from './coach-recovery.ts';
+import { useCoachTranscript } from './useCoachTranscript.ts';
 import { healthOfferAnswered } from './health-digest.ts';
 
 export interface CoachTurn {
@@ -68,33 +68,6 @@ async function loadCapturedGoals(set: (g: CapturedGoal[]) => void): Promise<void
 }
 
 /**
- * Restore the conversation from the server (source of truth) before painting.
- *
- * A stale thread is NOT adopted: `adopt` never fires for it, sessionId stays null, and the next
- * send opens fresh. But its transcript is still theirs — `keepAside` hands it back for read-only
- * display above the fresh conversation (EarlierThread). Hiding it instead left the Coach tab
- * empty after a thread retirement, which read as the coach forgetting every word (owner,
- * 2026-08-20).
- *
- * Outside the hook for the same reason as loadCapturedGoals: it needs nothing from it but
- * setters, and the hook lives at its size gate.
- */
-async function restoreConversation(on: {
-  adopt: (sessionId: string, turns: CoachTurn[]) => void;
-  keepAside: (turns: CoachTurn[]) => void;
-}): Promise<void> {
-  try {
-    const c = await getCurrentCoach();
-    if (!c.sessionId) return;
-    const restored = c.messages.map((m) => ({ role: m.role, text: m.content }));
-    if (c.stale) on.keepAside(restored);
-    else on.adopt(c.sessionId, restored);
-  } catch {
-    /* fresh start */
-  }
-}
-
-/**
  * The two ways a streaming turn changes the transcript, as pure functions.
  *
  * Lifted out of `useCoachChat` when it hit the 150-line ceiling — and the split is the right one
@@ -116,17 +89,22 @@ function withDelta(turns: CoachTurn[], delta: string): CoachTurn[] {
 
 export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs = {}) {
   const wait = delay ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const [turns, setTurns] = useState<CoachTurn[]>([]);
-  // A retired thread's transcript, restored for display only — never sent back upstream.
-  const [earlierTurns, setEarlierTurns] = useState<CoachTurn[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   // What she is doing right now, in words (useCoachActivity) — shown beside the typing dots.
   const { activity, noteActivity, clearActivity } = useCoachActivity();
   const [capturedGoals, setCapturedGoals] = useState<CapturedGoal[]>([]);
-  const [restored, setRestored] = useState(false);
   const [foodAction, setFoodAction] = useState<CoachFoodAction | null>(null);
   const sessionId = useRef<string | null>(null);
+  /**
+   * The transcript itself: painted from the device, reconciled with the server, remembered when it
+   * settles. Its own hook because it is its own responsibility — see useCoachTranscript.
+   */
+  const { turns, setTurns, earlierTurns, cursor, restored, painted } = useCoachTranscript({
+    sessionId,
+    streaming,
+    onSettled: () => void loadCapturedGoals(setCapturedGoals),
+  });
   // Live only while a turn is streaming — the Stop button's handle on it.
   const abort = useRef<AbortController | null>(null);
   const stopped = useRef(false);
@@ -142,20 +120,6 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       clearActivity();
     },
   });
-
-  // Restore the conversation before painting — see restoreConversation for the stale contract.
-  useEffect(() => {
-    void restoreConversation({
-      adopt: (sid, restored) => {
-        sessionId.current = sid;
-        setTurns(restored);
-      },
-      keepAside: setEarlierTurns,
-    }).finally(() => {
-      void loadCapturedGoals(setCapturedGoals);
-      setRestored(true);
-    });
-  }, []);
 
   /** Thin wrapper so callers (and this hook's tests) keep one entry point; the polling
    *  conversation itself lives in coach-recovery.ts. */
@@ -310,6 +274,10 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     activity,
     capturedGoals,
     restored,
+    /** See useCoachTranscript: `painted` gates the transcript, `restored` gates anything that
+     *  must not act on a guess. `cursor` is where reading back starts. */
+    painted,
+    cursor,
     send,
     stop,
     nudge,

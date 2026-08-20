@@ -64,19 +64,68 @@ export async function notifyOnCoachReply(sessionId: string | null): Promise<bool
   }
 }
 
-/** The user's current coach session + history (to restore the chat on refresh). `stale` = the
- *  server's freshness verdict (idle >7d, or an onboarding-era thread after the plan committed):
- *  the client should start a fresh thread and not render the old transcript. */
-export async function getCurrentCoach(): Promise<{
+export interface CurrentCoach {
+  /**
+   * This answer is authoritative — the server looked and this is what it found.
+   *
+   * Absent on BOTH failure paths (a non-2xx here, and the route's own soft-fail), which return the
+   * same empty shape as a genuinely empty account. Without the flag a client has to read "the API
+   * hiccuped" as "you have no history", and the locally cached transcript gets wiped off the
+   * screen by a blip — the exact disappearance this whole feature exists to stop.
+   */
+  ok?: boolean;
   sessionId: string | null;
   messages: { role: 'user' | 'coach'; content: string }[];
   stale?: boolean;
   staleReason?: 'idle' | 'graduated' | null;
   /** A reply is still being written server-side — keep waiting, don't declare a drop. */
   generating?: boolean;
-}> {
+  /** When this conversation began — the cursor for asking what came before it. */
+  startedAt?: string;
+  /** There is at least one conversation behind this one, so offer to read back. */
+  hasEarlier?: boolean;
+}
+
+/** The user's current coach session + history (to restore the chat on refresh). `stale` = the
+ *  server's freshness verdict (idle >7d, or an onboarding-era thread after the plan committed):
+ *  the client must not adopt the thread — but it still renders it, read-only (EarlierThread). */
+export async function getCurrentCoach(): Promise<CurrentCoach> {
   const res = await fetch(`${BASE}/coach/current`, { headers: headers() });
   if (!res.ok) return { sessionId: null, messages: [] };
+  return res.json();
+}
+
+export interface ArchivedConversation {
+  sessionId: string;
+  startedAt: string;
+  lastActiveAt: string;
+  turns: { role: 'user' | 'coach'; content: string }[];
+  /** The thread ran past the display cap and kept its tail — the screen says so.  */
+  truncated: boolean;
+}
+
+/**
+ * The conversations BEHIND the one on screen — fetched only when someone asks to read further
+ * back, never on the path that paints the Coach tab.
+ *
+ * That split is the whole latency answer. Opening Coach costs what it always did (and now paints
+ * from cache before it even resolves); the archive costs a round trip only at the moment somebody
+ * has explicitly asked for it and is waiting on it deliberately.
+ *
+ * Display only. Nothing here is ever adopted as the live session — an archived thread's model
+ * context is gone, and resuming one would be the coach pretending to remember a conversation she
+ * genuinely cannot see.
+ */
+export async function getEarlierCoachConversations(
+  before: string,
+  limit = 1,
+): Promise<{ conversations: ArchivedConversation[]; hasMore: boolean; nextBefore: string | null }> {
+  const q = new URLSearchParams({ before, limit: String(limit) });
+  const res = await fetch(`${BASE}/coach/conversations?${q}`, { headers: headers() });
+  // A failure keeps `hasMore` true so the offer to read back survives a blip and can be retried,
+  // rather than quietly retiring and telling the user their history ended here. `nextBefore` stays
+  // null so the cursor does not advance past archive nobody actually read.
+  if (!res.ok) return { conversations: [], hasMore: true, nextBefore: null };
   return res.json();
 }
 
