@@ -109,6 +109,11 @@ Before this pin the service ran in the Vercel default **`iad1`** (AWS us-east-1,
 every query crossed the country. `GET /plan` issues ~11 queries in series, which is ~11 × ~130ms of
 pure distance. Colocating drops per-query latency to single-digit ms.
 
+**Second path, same direction.** cadence-api also runs the AI Admin engine *in-process*, so it holds
+`AI_MANAGER_SUPABASE_*` and talks to the `ai-admin` project in **us-west-1** on every job/workflow
+call. From `iad1` that was also transcontinental; from `pdx1` it is same-coast (`pdx1`→us-west-1 is a
+short hop). So this pin shortens both of cadence-api's database paths, not just the Cadence one.
+
 **The tradeoff, stated plainly:** moving west adds ~60–90ms to the *single* browser→API hop for
 East-coast users (the owner is in Montréal, whose PoP is `yul1`) and removes ~120ms × 11 from the
 API→DB chatter. Net strongly positive, but it is a real cost and it is why `/health` — which touches
