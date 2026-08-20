@@ -1,4 +1,5 @@
 import type { MealKind, NutritionDayData } from '../../lib/api.ts';
+import { Skeleton } from '../../components/Skeleton.tsx';
 import { FoodDiary } from './FoodDiary.tsx';
 import { MacroBars } from './MacroBars.tsx';
 import { NutritionInsightCard } from './NutritionInsightCard.tsx';
@@ -43,6 +44,7 @@ const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
  */
 export function FoodDay({
   day,
+  pending = false,
   isToday,
   weekDates,
   loggedDates,
@@ -57,6 +59,8 @@ export function FoodDay({
   onWater,
 }: {
   day: NutritionDayData | null;
+  /** The day's first fetch is still in flight — the numbers are placeholders, not answers. */
+  pending?: boolean;
   isToday: boolean;
   weekDates: string[];
   loggedDates: Set<string>;
@@ -107,8 +111,16 @@ export function FoodDay({
       <div className="fh-card">
         <div className="fh-card-row">
           <button className="fh-ringcol fh-ringbtn" onClick={onNutrients} aria-label="Open Nutrients">
+            {/* The ring's TRACK is the structure and it draws immediately — smooth and empty, which
+                is already how this ring says "nothing yet". What waits is the readout: while the
+                day is in flight the centre holds a bar, not a 0. Owner, 2026-08-20: "show
+                everything at 0 and then update" — and this is that, kept honest, because 0 kcal
+                eaten at eight in the morning is a true answer and a placeholder 0 would be
+                indistinguishable from it right up to the moment it became 740. */}
             <NutritionRing logged={eaten} target={scored ? targetKcal : null} size={112} stroke={12}>
-              {scored && !over ? (
+              {pending ? (
+                <Skeleton className="sk-num" w={58} h={22} />
+              ) : scored && !over ? (
                 <>
                   <b>{fmt(left)}</b>
                   <span>KCAL LEFT</span>
@@ -121,21 +133,32 @@ export function FoodDay({
               )}
             </NutritionRing>
             <span className="fh-ring-sub">
-              {scored
-                ? `${fmt(eaten)} of ${fmt(targetKcal)} kcal${itemTail}`
-                : wait
-                  ? `${wait.days_logged} / ${wait.days_needed} · days to your calorie target`
-                  : `no target yet${itemTail}`}
+              {pending ? (
+                <Skeleton w={132} h={11} />
+              ) : scored ? (
+                `${fmt(eaten)} of ${fmt(targetKcal)} kcal${itemTail}`
+              ) : wait ? (
+                `${wait.days_logged} / ${wait.days_needed} · days to your calorie target`
+              ) : (
+                `no target yet${itemTail}`
+              )}
             </span>
           </button>
           <div className="fh-barscol">
-            <MacroBars eaten={day?.totals ?? {}} targets={scored ? (day?.targets ?? null) : null} />
+            <MacroBars eaten={day?.totals ?? {}} targets={scored ? (day?.targets ?? null) : null} pending={pending} />
             <button className="fh-nutrients" onClick={onNutrients}>
               Nutrients <i aria-hidden>›</i>
             </button>
           </div>
         </div>
-        <WaterRow ml={waterMl ?? day?.water_ml ?? 0} onLogged={onWater} readOnly={!isToday} />
+        {/* A pour the user has already made is real even mid-flight, so a local `waterMl` ends the
+            wait early — the placeholder is only for having no number at all yet. */}
+        <WaterRow
+          ml={waterMl ?? day?.water_ml ?? 0}
+          onLogged={onWater}
+          readOnly={!isToday}
+          pending={pending && waterMl == null}
+        />
       </div>
 
       {isToday && <NutritionInsightCard compact />}

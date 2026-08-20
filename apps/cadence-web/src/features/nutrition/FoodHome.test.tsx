@@ -54,8 +54,12 @@ const day = (over: Record<string, unknown>) => ({
 });
 
 const refetch = vi.fn();
-function mount(d: Record<string, unknown> | null, props: Record<string, unknown> = {}) {
-  useNutritionDay.mockReturnValue({ data: d, refetch });
+function mount(
+  d: Record<string, unknown> | null,
+  props: Record<string, unknown> = {},
+  query: Record<string, unknown> = {},
+) {
+  useNutritionDay.mockReturnValue({ data: d, refetch, ...query });
   return render(<FoodHome onBack={() => {}} onCoach={() => {}} {...props} />);
 }
 
@@ -66,6 +70,51 @@ beforeEach(() => {
   api.getRecentMeals.mockResolvedValue([]);
 });
 afterEach(cleanup);
+
+describe('FoodHome — the day, before it lands (PERF-06)', () => {
+  /**
+   * The owner asked for "show everything at 0 and then update" (2026-08-20). Numbers are the one
+   * place that instruction cannot be followed literally: 0 kcal eaten IS a true answer before
+   * breakfast, so a placeholder 0 and a settled 0 are the same pixels — and the moment the ring
+   * jumped from 0 to 740, the screen he had been reading would turn out to have been wrong. The
+   * structure arrives instantly, which was the ask; the digits wait behind a bar.
+   */
+  it('paints the screen’s whole structure with no loader anywhere', () => {
+    const { container } = mount(null, {}, { isPending: true });
+    expect(screen.getByText('Food')).toBeTruthy();
+    expect(screen.getByText('Today')).toBeTruthy();
+    expect(screen.getByText('Log a meal')).toBeTruthy();
+    expect(screen.getByText('Talk food with me')).toBeTruthy();
+    expect(container.querySelector('.typing')).toBeNull();
+  });
+
+  it('holds a bar where every number goes, never a settled zero', () => {
+    const { container } = mount(null, {}, { isPending: true });
+    expect(screen.queryByText('0')).toBeNull();
+    expect(screen.queryByText('KCAL EATEN')).toBeNull();
+    expect(screen.queryByText('0 g')).toBeNull();
+    expect(screen.queryByText('0.0 L')).toBeNull(); // water too — 0.0 L is a true reading at 7am
+    expect(container.querySelectorAll('.sk').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the water row pourable while its total is still unknown', () => {
+    mount(null, {}, { isPending: true });
+    // The eight glasses and the ＋ never read the server; only the litres do.
+    expect(screen.getByLabelText('Add a glass of water')).toBeTruthy();
+  });
+
+  it('draws the ring’s track the whole time — the shape never waits, only the answer does', () => {
+    const { container } = mount(null, {}, { isPending: true });
+    expect(container.querySelector('.nring')).toBeTruthy();
+    expect(container.querySelectorAll('.mbar').length).toBe(3);
+  });
+
+  it('gives up the bars the instant the day arrives', () => {
+    const { container } = mount(day({}), {}, { isPending: false });
+    expect(screen.getByText('740')).toBeTruthy();
+    expect(container.querySelector('.sk')).toBeNull();
+  });
+});
 
 describe('FoodHome', () => {
   it('counts without a target: eaten kcal, "no target yet", bare-gram bars', () => {

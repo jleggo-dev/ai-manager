@@ -64,7 +64,10 @@ export function FoodHome({
   const [date, setDate] = useState(today);
   const [tab, setTab] = useState<'day' | 'week'>('day');
   const [nutrients, setNutrients] = useState(false);
-  const { data: day = null, refetch } = useNutritionDay(date);
+  // `isPending` is react-query's "no answer yet, first fetch in flight" — it is what tells FoodDay
+  // to hold bars where the numbers go instead of settled zeroes (PERF-06). The header, the day
+  // dots, the tabs and every door below paint immediately either way: none of them read the day.
+  const { data: day = null, isPending: dayPending, refetch } = useNutritionDay(date);
   const invalidate = useInvalidateNutritionDay();
   const [sub, setSub] = useState<FoodHomeSub>(initialSub);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -173,6 +176,7 @@ export function FoodHome({
         ) : (
           <FoodDay
             day={day}
+            pending={!day && dayPending}
             isToday={isToday}
             weekDates={weekDates(today)}
             loggedDates={loggedDates}

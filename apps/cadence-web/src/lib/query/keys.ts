@@ -17,7 +17,29 @@ export const queryKeys = {
   progress: {
     all: ['progress'] as const,
   },
+  /** `/me/weather` (PERF-03) — the trail header's one line of sky. */
+  weather: {
+    all: ['weather'] as const,
+  },
+  /** `/me/daily-checkin` (PERF-03) — is the one unprompted moment due today. */
+  dailyCheckin: {
+    all: ['dailyCheckin'] as const,
+  },
 } as const;
+
+/**
+ * Longer than the 30s client default, for the two Plan-tab reads whose answers genuinely do not
+ * move on that timescale (PERF-03). Both used to fire on EVERY return to the tab — the burst the
+ * 2026-08-20 latency report counted at ~6 requests per tab switch.
+ *
+ * Weather: five minutes. It is a forecast rounded to a condition word and a temperature; nothing
+ * observable changes inside that window, and a real move re-fetches explicitly (the travel check
+ * in useTodayHeader invalidates rather than waits).
+ *
+ * Daily check-in: five minutes. The gate is once per local DAY and lives server-side, so asking
+ * again thirty seconds later cannot produce a different answer.
+ */
+export const AMBIENT_STALE_MS = 300_000;
 
 /** Local calendar date as `YYYY-MM-DD` (nutrition day is calendar-local, not UTC). */
 export function localTodayIso(now = new Date()): string {
