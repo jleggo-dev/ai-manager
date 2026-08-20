@@ -7372,3 +7372,39 @@ Yesterday's stateless baseline on identical fresh sessions: **~20.4–20.9k prom
 persona + tools + the new items; the BILLED number is whatever the ThreadWorkflow assembles under
 the org context budget — that number is the result. Multi-turn depth (does turn 30 stay flat?) is
 the second reading, via a scripted probe or a few days of `cadence.ai_log` on a threaded session.
+
+
+### Threading measured at depth (2026-08-20, probe-thread-turns.ts — 12 real coach turns)
+
+Anchor verified live (`provider_metadata.previous_response_id` set after turn 1; #252 works).
+Billed prompt tokens per turn, threaded from turn 2:
+
+| turn | billed | Δ |
+|---|---|---|
+| 2 | 20,394 | — |
+| 4 | 21,415 | ~+500/turn |
+| 8 | 24,093 | ~+600/turn |
+| 12 | 26,358 | ~+600/turn |
+
+(Turns 1 and 5 reported 0 — the A10/A11 usage under-reporting gap, 2 of 12 here.)
+
+**Reading it straight: threading collapsed the UPLOAD, not the BILL.** The model reads the
+conversation either way; at 12 turns nothing on the provider side compacts or binds (their chat
+context budget is 50% of the model window — 500k on a 1M-window model — so it will never bind at
+coach scale). Billed context still grows linearly (~594/turn here vs ~870/turn on the owner's
+stateless thread, the difference being turn length, not mechanism). Extrapolated, a four-day
+threaded conversation still walks back toward six figures billed per turn unless the provider's
+chat compaction (which the owner reports exists in the product) also applies to API threads at
+some depth this probe did not reach.
+
+**The precise question for the Devs.ai product team** (owner has a direct line): does the
+Responses-API ThreadWorkflow apply the product's conversation compaction, and at what threshold?
+A 12-turn thread shows pure linear growth.
+
+**If the answer is no — the composed design (proposed, not built):** periodic re-anchor.
+Every N turns (or past a billed threshold), drop the anchor, run #248's local compaction, send ONE
+stateless turn carrying persona + summary + recent turns, and thread from its response id. That
+bounds billed depth regardless of provider behaviour, uses the compaction machinery exactly where
+the provider's isn't, and costs one full-price turn per rotation. #248's trigger would also need
+recalibrating first: its 32k is measured in char/4 estimate-units, which is ~1.78× optimistic —
+it fires near 60k real tokens, later than intended.
