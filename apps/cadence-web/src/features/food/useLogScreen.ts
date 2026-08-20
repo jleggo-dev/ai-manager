@@ -6,11 +6,19 @@ import { useUsualAtSlot } from './useUsualAtSlot.ts';
 /** Long enough that a fast typist doesn't fire six searches, short enough to feel like a list. */
 const DEBOUNCE_MS = 250;
 
+/** How many recents the list shows before "See all ›" (design 05b) opens the rest. */
+const RECENTS_PREVIEW = 6;
+
 export interface LogScreenData {
   planned: PlannedMeal | null;
   alsoThisWeek: PlannedMeal[];
   usual: UsualAtSlot[];
+  /** What to render now — the first few, or all of them once "See all ›" is tapped. */
   recents: FoodSummary[];
+  /** True when there are more on file than are showing, so the head can offer them. */
+  hasMoreRecents: boolean;
+  seeAllRecents: boolean;
+  setSeeAllRecents: (v: boolean) => void;
   query: string;
   setQuery: (q: string) => void;
   results: FoodSummary[];
@@ -26,13 +34,15 @@ export function useLogScreen(mealKind: MealKind, date: string): LogScreenData {
   const { planned, alsoThisWeek } = usePlannedMeal(mealKind, date);
   const usual = useUsualAtSlot(mealKind);
   const [recents, setRecents] = useState<FoodSummary[]>([]);
+  const [seeAllRecents, setSeeAllRecents] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoodSummary[]>([]);
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    void getFoodRecents().then((r) => alive && setRecents(r.foods.slice(0, 6)));
+    // Fetch the whole list, show a few. "See all ›" is then a reveal, not a second round trip.
+    void getFoodRecents().then((r) => alive && setRecents(r.foods));
     return () => {
       alive = false;
     };
@@ -60,5 +70,17 @@ export function useLogScreen(mealKind: MealKind, date: string): LogScreenData {
     };
   }, [query]);
 
-  return { planned, alsoThisWeek, usual, recents, query, setQuery, results, searching };
+  return {
+    planned,
+    alsoThisWeek,
+    usual,
+    recents: seeAllRecents ? recents : recents.slice(0, RECENTS_PREVIEW),
+    hasMoreRecents: recents.length > RECENTS_PREVIEW,
+    seeAllRecents,
+    setSeeAllRecents,
+    query,
+    setQuery,
+    results,
+    searching,
+  };
 }

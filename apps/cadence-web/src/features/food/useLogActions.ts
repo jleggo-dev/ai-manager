@@ -46,7 +46,12 @@ export function useLogActions() {
       setErr("Couldn't open that one — say it or photograph it instead.");
       return null;
     },
-    logFood: (input: { food_id: string; serving_index: number; quantity: number; meal: MealKind }) =>
+    /**
+     * Log a saved food. Leave the amount out and the server uses the food's own default serving,
+     * once — which for a food promoted from something they said IS the portion they said, so "a
+     * second latte" is one tap at the same amount, with no second estimate (design 05a/05b).
+     */
+    logFood: (input: { food_id: string; serving_index?: number; quantity?: number; meal: MealKind }) =>
       run(() => logMealFromFood(input)),
     logRecipe: (recipe_id: string, meal: MealKind) => run(() => logMealFromRecipe({ recipe_id, meal })),
     logPhoto: (photo: string, caption: string, meal: MealKind) => run(() => logMeal(caption.trim(), meal, photo)),

@@ -130,6 +130,7 @@ export function LogScreen({
           onMethod={onMethod}
           onPhoto={(f) => void pickPhoto(f)}
           onPickFood={(id) => void act.openFood(id).then((food) => food && setRoute({ at: 'food', food }))}
+          onQuickAddFood={(id) => void act.logFood({ food_id: id, meal }).then(settle)}
           onLogRecipe={(id) => void act.logRecipe(id, meal).then(settle)}
           onWater={setWaterMl}
           onDrink={() => setRoute({ at: 'drink' })}

@@ -17,6 +17,7 @@
 
 import {
   EMPTY_DIETARY_PROFILE,
+  macrosForLog,
   sanitizeDietaryProfile,
   type DietaryProfile,
   type Food,
@@ -41,6 +42,10 @@ export interface FoodSummary {
   brand?: string | null;
   /** Optional one-line serving hint for the recents list. */
   serving_label?: string | null;
+  /** Calories one tap would add, at the food's default serving. Null when the food carries none. */
+  kcal?: number | null;
+  /** How many times this user has logged it ("logged 14 times", design 05a). */
+  count?: number | null;
 }
 
 export interface FoodListResult {
@@ -118,7 +123,28 @@ function servingLabelFromFood(r: Record<string, unknown>): string | null {
   return typeof label === 'string' && label.trim() ? label : null;
 }
 
-function parseFoodList(body: unknown): FoodSummary[] {
+/**
+ * What one tap on this row would add, in calories — computed from the food's own default serving,
+ * exactly the way logging it will. The design puts macros on every row of RECENTLY EATEN (05b)
+ * because the ＋ beside them is a one-tap add, and an add has to show what it adds; `null` here is
+ * why such a row falls back to opening the amount sheet instead.
+ */
+function kcalFromFood(r: Record<string, unknown>): number | null {
+  const servings = Array.isArray(r.servings) ? (r.servings as unknown[]) : [];
+  const base = r.macros_per_base;
+  if (!servings.length || !base || typeof base !== 'object') return null;
+  const food = {
+    base_unit: (r.base_unit === 'ml' || r.base_unit === 'item' ? r.base_unit : 'g') as FoodBaseUnit,
+    macros_per_base: base as FoodNutrients,
+    servings: servings as FoodServing[],
+    default_serving: typeof r.default_serving === 'number' ? r.default_serving : 0,
+  };
+  const kcal = macrosForLog(food).kcal;
+  return typeof kcal === 'number' && kcal > 0 ? kcal : null;
+}
+
+/** Exported for its test — the wire shape here decides whether a row can be a one-tap ＋. */
+export function parseFoodList(body: unknown): FoodSummary[] {
   const list =
     body && typeof body === 'object' && Array.isArray((body as { foods?: unknown }).foods)
       ? (body as { foods: unknown[] }).foods
@@ -137,6 +163,8 @@ function parseFoodList(body: unknown): FoodSummary[] {
       name,
       brand: typeof r.brand === 'string' ? r.brand : null,
       serving_label: servingLabelFromFood(r),
+      kcal: kcalFromFood(r),
+      count: typeof r.use_count === 'number' && r.use_count > 0 ? r.use_count : null,
     });
   }
   return out;

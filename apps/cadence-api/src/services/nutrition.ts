@@ -34,6 +34,7 @@ import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } 
 import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW, type ParsedMealResult } from './nutrition-parse.ts';
 import { logAi } from './ai-log.ts';
 import { logMealFromFood, logMealFromItems, logMealFromRecipe } from './nutrition-log-saved.ts';
+import { promoteLoggedFoodsSafely } from './food-promote.ts';
 import type { PlateItemInput } from './plate-compose.ts';
 import { getFoodsByIds } from '../repos/foods.ts';
 import { buildNutritionInsight, type NutritionInsightPack } from './nutrition-insight.ts';
@@ -150,7 +151,8 @@ export async function logMeal(
       provisional,
     });
     await tickFoodLogOccurrence(userId, date, p.meal);
-    return row;
+    // Confirmed numbers, so the foods behind them are worth keeping (Req 5 §1).
+    return promoteLoggedFoodsSafely(userId, row);
   }
   if (input.items?.length) {
     return logMealFromItems(userId, { items: input.items, meal: input.meal, date: input.date });
@@ -232,7 +234,9 @@ export async function logMeal(
     output: { raw: rawOut.slice(0, 2000) },
     meta: { meal, items: items.length, flags, confidence, photo: !!photoRef, macros: !!macros, provisional },
   });
-  return row;
+  // Words and photos are how most meals arrive here, so this is the path that decides whether the
+  // app remembers food at all. A provisional parse is skipped and picked up by its confirm.
+  return promoteLoggedFoodsSafely(userId, row);
 }
 
 export interface NutritionDay extends DayTotals {
@@ -367,7 +371,10 @@ export async function patchMeal(
     update.ai_confidence = 1;
   }
   if (Object.keys(update).length === 0) return null;
-  return updateNutritionLog(userId, logId, update);
+  const row = await updateNutritionLog(userId, logId, update);
+  // The confirm tap is what makes a provisional estimate trustworthy — and therefore what makes it
+  // worth remembering. Already-promoted items carry a food_id and are skipped, so this is free.
+  return row && !row.provisional ? promoteLoggedFoodsSafely(userId, row) : row;
 }
 
 /** Deterministic Observe-phase summary over the last N days (the coach's food-log read). */

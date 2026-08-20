@@ -20,7 +20,18 @@ vi.mock('../../lib/query/index.ts', () => ({
 const api = vi.hoisted(() => ({
   getFoodRecents: vi.fn(async () => ({
     status: 'ok',
-    foods: [{ food_id: 'f9', name: 'Whey protein', serving_label: '1 scoop' }],
+    foods: [
+      { food_id: 'f9', name: 'Starbucks latte', serving_label: 'venti', kcal: 250, count: 2 },
+      // No calories on this one — its ＋ has nothing to promise, so it must open the sheet.
+      { food_id: 'f8', name: 'Whey protein', serving_label: '1 scoop', kcal: null, count: 1 },
+      ...Array.from({ length: 5 }, (_, i) => ({
+        food_id: `r${i}`,
+        name: `Leftover ${i}`,
+        serving_label: '1 serving',
+        kcal: 100,
+        count: 1,
+      })),
+    ],
   })),
   getUsualAtSlot: vi.fn(async () => [
     { kind: 'food', id: 'f1', name: 'Skyr, plain', serving_label: '2/3 cup', kcal: 108, count: 14 },
@@ -108,6 +119,60 @@ describe('LogScreen', () => {
     fireEvent.change(screen.getByPlaceholderText('Search foods, brands, your meals…'), { target: { value: 'oats' } });
     await waitFor(() => expect(screen.getByText('Whole grain oats')).toBeInTheDocument());
     expect(screen.queryByText('Barcode')).not.toBeInTheDocument();
+  });
+
+  /* RECENTLY EATEN is the answer to "what if I had a second latte?" (owner, on device,
+     2026-08-20). These pin the three things design 05b asks of it: the ＋ adds in ONE tap at the
+     amount already on the row, the row itself still opens the amount sheet, and the head carries
+     "See all ›" once there is more than a preview's worth. */
+  it('re-logs a recent food in one tap, at the amount the row names', async () => {
+    useNutritionDay.mockReturnValue({ data: day() });
+    render(<LogScreen date="2026-08-20" initialMeal="breakfast" onClose={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText('Starbucks latte')).toBeInTheDocument());
+    // The row says what one tap will add, which is what makes adding it without a card honest.
+    expect(screen.getByText('venti · logged 2 times')).toBeInTheDocument();
+    expect(screen.getByText('250 kcal')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Add Starbucks latte, 250 kcal'));
+
+    // No serving_index/quantity: the food's own default IS the portion that was logged, so this
+    // re-logs the same latte without a second estimate.
+    await waitFor(() => expect(api.logMealFromFood).toHaveBeenCalledWith({ food_id: 'f9', meal: 'breakfast' }));
+    expect(api.getFoodById).not.toHaveBeenCalled();
+  });
+
+  it('still opens the amount sheet from the row itself', async () => {
+    useNutritionDay.mockReturnValue({ data: day() });
+    render(<LogScreen date="2026-08-20" initialMeal="breakfast" onClose={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText('Starbucks latte')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Starbucks latte — change the amount'));
+
+    await waitFor(() => expect(api.getFoodById).toHaveBeenCalledWith('f9'));
+    expect(api.logMealFromFood).not.toHaveBeenCalled();
+  });
+
+  it('will not one-tap a food that cannot say what it would add', async () => {
+    useNutritionDay.mockReturnValue({ data: day() });
+    render(<LogScreen date="2026-08-20" initialMeal="breakfast" onClose={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText('Whey protein')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Add Whey protein'));
+
+    await waitFor(() => expect(api.getFoodById).toHaveBeenCalledWith('f8'));
+    expect(api.logMealFromFood).not.toHaveBeenCalled();
+  });
+
+  it('offers "See all ›" once there is more recently eaten than fits', async () => {
+    useNutritionDay.mockReturnValue({ data: day() });
+    render(<LogScreen date="2026-08-20" initialMeal="breakfast" onClose={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText('RECENTLY EATEN')).toBeInTheDocument());
+    expect(screen.queryByText('Leftover 4')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('See all ›'));
+    expect(screen.getByText('Leftover 4')).toBeInTheDocument();
   });
 
   it('has a door to the drink composer — a drink of several things is one meal', () => {

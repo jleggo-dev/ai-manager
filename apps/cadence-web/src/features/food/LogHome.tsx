@@ -2,18 +2,30 @@ import { FoodPickHead, FoodPickRow } from './FoodPickRow.tsx';
 import { LogWaterRow } from './LogWaterRow.tsx';
 import { MethodTiles, type CaptureMethod } from './MethodTiles.tsx';
 import { SearchIcon } from './captureIcons.tsx';
+import type { FoodSummary } from '../../lib/api.ts';
 import type { LogScreenData } from './useLogScreen.ts';
 
 const METHODS: CaptureMethod[] = ['chat', 'voice', 'picture', 'barcode'];
 
-const kcal = (n: number | null, approx = false): string | undefined =>
+const kcal = (n: number | null | undefined, approx = false): string | undefined =>
   n == null ? undefined : `${approx ? '~' : ''}${Math.round(n)} kcal`;
+
+const times = (n: number | null | undefined): string | undefined =>
+  n && n > 1 ? `logged ${n} times` : n === 1 ? 'logged once' : undefined;
+
+/** Brand · serving · how often — the row's sub-line, with whatever of it is actually known. */
+const subFor = (f: FoodSummary): string => [f.brand, f.serving_label, times(f.count)].filter(Boolean).join(' · ');
 
 /**
  * The body of the Log screen (design 05b) — six ways in, one screen: **search the list, then chat
  * / voice / picture / barcode, then quick add — planned meals first, recently eaten second.**
  * Water sits at the bottom because it is a tap, not a meal. Weight is not here at all; it belongs
  * to the weekly check-in.
+ *
+ * Every saved-food row is two targets, per the design's ＋-per-row: the ＋ logs it at the amount
+ * the row names, and the row opens the amount sheet. A ＋ only adds outright when the row can say
+ * what it will add — a food with no calories on it falls back to opening, because a silent add of
+ * numbers nobody has seen is not a confirm.
  */
 export function LogHome({
   data,
@@ -22,6 +34,7 @@ export function LogHome({
   onMethod,
   onPhoto,
   onPickFood,
+  onQuickAddFood,
   onLogRecipe,
   onWater,
   onDrink,
@@ -31,13 +44,30 @@ export function LogHome({
   busy: boolean;
   onMethod: (m: CaptureMethod) => void;
   onPhoto: (file: File | undefined) => void;
+  /** Open a food so its own servings can answer the amount question (design 05d). */
   onPickFood: (foodId: string) => void;
+  /** Log it as it stands — one tap, same amount, no re-parsing. */
+  onQuickAddFood: (foodId: string) => void;
   onLogRecipe: (recipeId: string) => void;
   onWater: (nextMl: number) => void;
   onDrink: () => void;
 }) {
   const { planned, alsoThisWeek, usual, recents, query, setQuery, results, searching } = data;
+  const { hasMoreRecents, seeAllRecents, setSeeAllRecents } = data;
   const searchingNow = query.trim().length > 0;
+
+  /** One food row: ＋ adds when the calories are on the row, opens the sheet when they aren't. */
+  const foodRow = (f: FoodSummary) => (
+    <FoodPickRow
+      key={f.food_id}
+      name={f.name}
+      sub={subFor(f)}
+      kcal={kcal(f.kcal)}
+      busy={busy}
+      onAdd={() => (f.kcal == null ? onPickFood(f.food_id) : onQuickAddFood(f.food_id))}
+      onOpen={() => onPickFood(f.food_id)}
+    />
+  );
 
   return (
     <div className="fl-body">
@@ -61,15 +91,7 @@ export function LogHome({
 
       {searchingNow ? (
         <div className="fl-results">
-          {results.map((f) => (
-            <FoodPickRow
-              key={f.food_id}
-              name={f.name}
-              sub={[f.brand, f.serving_label].filter(Boolean).join(' · ')}
-              busy={busy}
-              onAdd={() => onPickFood(f.food_id)}
-            />
-          ))}
+          {results.map(foodRow)}
           {!results.length && (
             <div className="fq-foot">
               {searching ? 'Looking…' : 'Nothing by that name — say it or photograph it instead.'}
@@ -115,12 +137,13 @@ export function LogHome({
                 <FoodPickRow
                   key={`${u.kind}-${u.id}`}
                   name={u.name}
-                  sub={[u.serving_label, `logged ${u.count} time${u.count === 1 ? '' : 's'}`]
-                    .filter(Boolean)
-                    .join(' · ')}
+                  sub={[u.serving_label, times(u.count)].filter(Boolean).join(' · ')}
                   kcal={kcal(u.kcal, u.kind === 'recipe')}
                   busy={busy}
-                  onAdd={() => (u.kind === 'recipe' ? onLogRecipe(u.id) : onPickFood(u.id))}
+                  onAdd={() =>
+                    u.kind === 'recipe' ? onLogRecipe(u.id) : u.kcal == null ? onPickFood(u.id) : onQuickAddFood(u.id)
+                  }
+                  {...(u.kind === 'food' ? { onOpen: () => onPickFood(u.id) } : {})}
                 />
               ))}
             </>
@@ -128,16 +151,17 @@ export function LogHome({
 
           {recents.length > 0 && (
             <>
-              <FoodPickHead label="RECENTLY EATEN" />
-              {recents.map((f) => (
-                <FoodPickRow
-                  key={f.food_id}
-                  name={f.name}
-                  sub={[f.brand, f.serving_label].filter(Boolean).join(' · ')}
-                  busy={busy}
-                  onAdd={() => onPickFood(f.food_id)}
-                />
-              ))}
+              <FoodPickHead
+                label="RECENTLY EATEN"
+                action={
+                  hasMoreRecents && (
+                    <button type="button" className="fq-head-a" onClick={() => setSeeAllRecents(!seeAllRecents)}>
+                      {seeAllRecents ? 'Show fewer' : 'See all ›'}
+                    </button>
+                  )
+                }
+              />
+              {recents.map(foodRow)}
             </>
           )}
 

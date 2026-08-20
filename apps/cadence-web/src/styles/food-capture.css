@@ -84,6 +84,17 @@
   letter-spacing: 0.09em;
   color: oklch(52% 0.02 120);
 }
+/* "See all ›" — the right half of a section head (design 05b). */
+.fq-head-a {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 10px;
+  font-weight: 800;
+  color: oklch(45% 0.07 152);
+  cursor: pointer;
+}
 .fq-row {
   display: flex;
   align-items: center;
@@ -97,8 +108,23 @@
   font: inherit;
   text-align: left;
 }
-.fq-row:disabled {
+.fq-row:disabled,
+.fq-row.is-busy {
   opacity: 0.55;
+}
+/* The row's own tap target when the ＋ beside it is a separate button: everything but the ＋. */
+.fq-row-open {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .fq-row-planned {
   background: oklch(97% 0.02 152);
@@ -133,6 +159,8 @@
 .fq-row-water .fq-row-k {
   color: oklch(46% 0.07 232);
 }
+/* Both a decoration (inside a whole-row button) and a real control (beside .fq-row-open), so the
+   button reset lives here rather than in a second rule that could drift away from this one. */
 .fq-row-add {
   display: flex;
   flex: 0 0 auto;
@@ -140,11 +168,15 @@
   justify-content: center;
   width: 30px;
   height: 30px;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
   background: oklch(94% 0.045 152);
   color: oklch(41% 0.09 152);
+  font-family: inherit;
   font-size: 17px;
   line-height: 1;
+  cursor: pointer;
 }
 .fq-row-water .fq-row-add {
   background: oklch(94% 0.04 232);

@@ -104,11 +104,20 @@ export async function searchFoods(userId: string, q: string, limit = 20): Promis
     limit ${capped}`;
 }
 
+/**
+ * A food plus how many times THIS user has logged it. The count rides along because the design
+ * prints it on the row ("logged 14 times" — 05a) and a one-tap ＋ has to say what it is offering;
+ * fetching it separately would be a second query for a number this join already holds.
+ */
+export interface UsedFood extends Food {
+  use_count: number;
+}
+
 /** Most recently used foods for this user (food_usage projection). */
-export async function listRecentFoods(userId: string, limit = 20): Promise<Food[]> {
+export async function listRecentFoods(userId: string, limit = 20): Promise<UsedFood[]> {
   const capped = Math.min(50, Math.max(1, limit));
-  return sql<Food[]>`
-    select ${FOOD_COLS}
+  return sql<UsedFood[]>`
+    select ${FOOD_COLS}, u.use_count
     from cadence.food_usage u
     join cadence.foods f on f.food_id = u.food_id
     where u.user_id = ${userId}
@@ -118,15 +127,37 @@ export async function listRecentFoods(userId: string, limit = 20): Promise<Food[
 }
 
 /** Most frequently used foods for this user (food_usage projection). */
-export async function listFrequentFoods(userId: string, limit = 20): Promise<Food[]> {
+export async function listFrequentFoods(userId: string, limit = 20): Promise<UsedFood[]> {
   const capped = Math.min(50, Math.max(1, limit));
-  return sql<Food[]>`
-    select ${FOOD_COLS}
+  return sql<UsedFood[]>`
+    select ${FOOD_COLS}, u.use_count
     from cadence.food_usage u
     join cadence.foods f on f.food_id = u.food_id
     where u.user_id = ${userId}
       and (f.owner_user_id = ${userId} or f.visibility = 'shared')
     order by u.use_count desc, u.last_used_at desc
+    limit ${capped}`;
+}
+
+/**
+ * Every food this user owns, most-used first — the candidate pool for de-duplicating a capture
+ * before it becomes a new Food.
+ *
+ * Deliberately NOT `searchFoods`: that is a SQL LIKE over the whole phrase, so a saved "Greek
+ * yogurt" is missed the moment the wording drifts by a plural — and a miss here does not merely
+ * rank something lower, it mints a twin. Matching happens in memory over the whole own-food list
+ * instead (see food-promote.ts), bounded by how many distinct things one person eats rather than
+ * by how many foods exist.
+ */
+export async function listOwnFoods(userId: string, limit = 500): Promise<Food[]> {
+  const capped = Math.min(1000, Math.max(1, limit));
+  return sql<Food[]>`
+    select ${FOOD_COLS}
+    from cadence.foods f
+    left join cadence.food_usage u
+      on u.food_id = f.food_id and u.user_id = ${userId}
+    where f.owner_user_id = ${userId}
+    order by coalesce(u.use_count, 0) desc, f.created_at desc
     limit ${capped}`;
 }
 
