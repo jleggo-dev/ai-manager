@@ -128,11 +128,14 @@ export function MealCapturePanel({
   setDetail,
   onLogged,
   onClose,
+  onOpenFood,
 }: {
   detail: OccurrenceDetail;
   setDetail: (d: OccurrenceDetail) => void;
   onLogged?: () => void;
   onClose?: () => void;
+  /** Leave the capture for the Food screen — the day's whole read, and the way into Nutrients. */
+  onOpenFood?: () => void;
 }) {
   const cap = useMealCapture(detail, setDetail, { onLogged, onClose });
   const { planned, alsoThisWeek } = usePlannedMeal(cap.mealKind, detail.date);
@@ -162,35 +165,48 @@ export function MealCapturePanel({
     void cap.pickPhoto(file);
   }
 
+  const ring = (
+    <NutritionRing
+      logged={eatenKcal}
+      pending={pendingKcal}
+      target={targetKcal}
+      size={74}
+      stroke={13}
+      className="mc-ring"
+    >
+      {pendingKcal > 0 && leftAfter != null ? (
+        <>
+          <b>{fmt(Math.abs(leftAfter))}</b>
+          <span>{leftAfter < 0 ? 'KCAL OVER' : 'LEFT AFTER THIS'}</span>
+        </>
+      ) : targetKcal != null ? (
+        <>
+          <b>{fmt(eatenKcal)}</b>
+          <span>OF {fmt(targetKcal)}</span>
+        </>
+      ) : (
+        <>
+          <b>{fmt(eatenKcal)}</b>
+          <span>SO FAR</span>
+        </>
+      )}
+    </NutritionRing>
+  );
+
   return (
     <div className="mc">
-      {/* Rings strip — logged / this-meal / free, all recomputing as the portion changes. */}
+      {/* Rings strip — logged / this-meal / free, all recomputing as the portion changes.
+          The ring is also the door out to the whole day: a capture answers "what did I just eat",
+          and the question it raises next ("so where does that leave me") lives in the Food screen,
+          which had no way in from here (owner device report, 2026-08-20). */}
       <div className="mc-rings">
-        <NutritionRing
-          logged={eatenKcal}
-          pending={pendingKcal}
-          target={targetKcal}
-          size={74}
-          stroke={13}
-          className="mc-ring"
-        >
-          {pendingKcal > 0 && leftAfter != null ? (
-            <>
-              <b>{fmt(Math.abs(leftAfter))}</b>
-              <span>{leftAfter < 0 ? 'KCAL OVER' : 'LEFT AFTER THIS'}</span>
-            </>
-          ) : targetKcal != null ? (
-            <>
-              <b>{fmt(eatenKcal)}</b>
-              <span>OF {fmt(targetKcal)}</span>
-            </>
-          ) : (
-            <>
-              <b>{fmt(eatenKcal)}</b>
-              <span>SO FAR</span>
-            </>
-          )}
-        </NutritionRing>
+        {onOpenFood ? (
+          <button type="button" className="mc-ringbtn" onClick={onOpenFood} aria-label="Open your whole day in Food">
+            {ring}
+          </button>
+        ) : (
+          ring
+        )}
         <div className="mc-rings-r">
           <div className="mc-left">
             {targetKcal != null

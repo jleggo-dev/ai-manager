@@ -427,6 +427,10 @@ export function PlanView({
             refresh();
             bump();
           }}
+          onOpenFood={() => {
+            setCaptureOcc(null);
+            onOpenFood();
+          }}
         />
       )}
       {cookOcc && (

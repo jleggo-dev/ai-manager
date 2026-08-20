@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Meal, MealKind, NutritionDayData } from '../../lib/api.ts';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
@@ -14,14 +15,18 @@ const EXTRA: Array<{ kind: MealKind; label: string }> = [
   { kind: 'other', label: 'Other' },
 ];
 
-function slotKcal(meals: Meal[]): { kcal: number; provisional: boolean } {
+function slotSum(meals: Meal[]): { kcal: number; protein: number; items: number; provisional: boolean } {
   let kcal = 0;
+  let protein = 0;
+  let items = 0;
   let provisional = false;
   for (const m of meals) {
     kcal += m.macros?.kcal ?? 0;
+    protein += m.macros?.protein_g ?? 0;
+    items += Math.max(1, m.items?.length ?? 0);
     if (m.provisional) provisional = true;
   }
-  return { kcal, provisional };
+  return { kcal, protein, items, provisional };
 }
 
 function mealName(m: Meal): string {
@@ -35,23 +40,121 @@ function mealName(m: Meal): string {
   );
 }
 
+/** Every item across a slot's meals, each carrying its own kcal when the estimate broke it out. */
+function slotItems(meals: Meal[]): Array<{ key: string; name: string; kcal: number | null }> {
+  const out: Array<{ key: string; name: string; kcal: number | null }> = [];
+  for (const m of meals) {
+    if (!m.items?.length) {
+      out.push({ key: m.log_id, name: mealName(m), kcal: m.macros?.kcal ?? null });
+      continue;
+    }
+    m.items.forEach((item, i) => {
+      out.push({ key: `${m.log_id}-${i}`, name: item.name || 'item', kcal: item.est?.kcal ?? null });
+    });
+  }
+  return out;
+}
+
 /**
- * TODAY on the Food home (Food Journey 02): one row per meal slot — logged slots read their
- * kcal (a `~` while any of it is provisional), empty slots stay dashed with a Log chip, so the
- * day always shows its whole shape. Provisional meals list under their slot with the one-tap
- * confirm the old sheet had: nothing counts until the user says so, and the saying is one tap.
+ * THE DAY on the Food screen (Food Journey 02 + 08) — one row per meal slot, so the day always
+ * shows its whole shape: logged slots read their kcal (a `~` while any of it is provisional),
+ * empty slots stay dashed with a Log chip.
+ *
+ * Slice 3 opens them. Tapping a logged slot expands it into the things that actually went into it,
+ * each with its own calories, and offers to add one more — which is the difference between a
+ * number you have to trust and a number you can check. Provisional meals keep the one-tap confirm:
+ * nothing counts until the user says so, and the saying is one tap.
+ *
+ * A day behind you expands and reads, but does not offer to log — the writes all land on today.
  */
+function SlotRow({
+  label,
+  meals,
+  open,
+  onToggle,
+  isToday,
+  confirming,
+  onConfirm,
+  onLog,
+}: {
+  label: string;
+  meals: Meal[];
+  open: boolean;
+  onToggle: () => void;
+  isToday: boolean;
+  confirming: string | null;
+  onConfirm: (logId: string) => void;
+  onLog: () => void;
+}) {
+  const { kcal, protein, items, provisional } = slotSum(meals);
+  const sub = [
+    `${items} ${items === 1 ? 'item' : 'items'}`,
+    `${provisional ? '~' : ''}${fmt(kcal)} kcal`,
+    protein > 0 ? `${fmt(protein)}g protein` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <div className={`fh-slot${open ? ' is-open-row' : ''}`}>
+      <button className="fh-slot-row" onClick={onToggle} aria-expanded={open} aria-label={`${label} — ${sub}`}>
+        <span className="fh-slot-name">
+          {label}
+          {provisional && <i className="fh-slot-prov">provisional</i>}
+        </span>
+        <span className="fh-slot-sub">{sub}</span>
+        <i className="fh-slot-chev" aria-hidden>
+          {open ? '⌃' : '⌄'}
+        </i>
+      </button>
+      {open && (
+        <div className="fh-items">
+          {slotItems(meals).map((it) => (
+            <div className="fh-item" key={it.key}>
+              <span className="fh-item-n">{it.name}</span>
+              <span className="fh-item-k">{it.kcal == null ? '—' : fmt(it.kcal)}</span>
+            </div>
+          ))}
+          {isToday && (
+            <button className="fh-item-add" onClick={onLog}>
+              <i aria-hidden>＋</i> Add to {label.toLowerCase()}
+            </button>
+          )}
+        </div>
+      )}
+      {meals
+        .filter((m) => m.provisional)
+        .map((m) => (
+          <div className="fh-prov-row" key={m.log_id}>
+            <span className="fh-prov-name">{mealName(m)}</span>
+            <button
+              className="fh-confirm"
+              onClick={() => onConfirm(m.log_id)}
+              disabled={confirming === m.log_id}
+              aria-label={`Confirm the estimate for ${mealName(m)}`}
+            >
+              {confirming === m.log_id ? '…' : '✓'}
+            </button>
+          </div>
+        ))}
+    </div>
+  );
+}
+
 export function FoodDiary({
   day,
+  isToday = true,
   confirming,
   onConfirm,
   onLog,
 }: {
   day: NutritionDayData | null;
+  isToday?: boolean;
   confirming: string | null;
   onConfirm: (logId: string) => void;
   onLog: (meal: MealKind) => void;
 }) {
+  const [open, setOpen] = useState<MealKind | null>(null);
   const meals = day?.meals ?? [];
   const byKind = (kind: MealKind) => meals.filter((m) => m.meal === kind);
   const rows = [...SLOTS, ...EXTRA.filter(({ kind }) => byKind(kind).length > 0)];
@@ -59,12 +162,20 @@ export function FoodDiary({
   return (
     <div className="fh-diary">
       <div className="fh-sec-head">
-        <span>TODAY</span>
+        <span>{isToday ? 'TODAY' : 'THE DAY'}</span>
       </div>
       {rows.map(({ kind, label }) => {
         const slot = byKind(kind);
-        const { kcal, provisional } = slotKcal(slot);
         if (slot.length === 0) {
+          // A slot behind you that was never logged is simply a slot nobody logged — not a gap to fill.
+          if (!isToday) {
+            return (
+              <div key={kind} className="fh-slot is-quiet">
+                <span className="fh-slot-name">{label}</span>
+                <span className="fh-slot-sub">nothing logged</span>
+              </div>
+            );
+          }
           return (
             <button key={kind} className="fh-slot is-open" onClick={() => onLog(kind)}>
               <span className="fh-slot-name">{label}</span>
@@ -73,33 +184,17 @@ export function FoodDiary({
           );
         }
         return (
-          <div key={kind} className="fh-slot">
-            <div className="fh-slot-row">
-              <span className="fh-slot-name">
-                {label}
-                {provisional && <i className="fh-slot-prov">provisional</i>}
-              </span>
-              <span className="fh-slot-kcal">
-                {provisional ? '~' : ''}
-                {fmt(kcal)} kcal
-              </span>
-            </div>
-            {slot
-              .filter((m) => m.provisional)
-              .map((m) => (
-                <div className="fh-prov-row" key={m.log_id}>
-                  <span className="fh-prov-name">{mealName(m)}</span>
-                  <button
-                    className="fh-confirm"
-                    onClick={() => onConfirm(m.log_id)}
-                    disabled={confirming === m.log_id}
-                    aria-label="Confirm this meal's estimate"
-                  >
-                    {confirming === m.log_id ? '…' : '✓'}
-                  </button>
-                </div>
-              ))}
-          </div>
+          <SlotRow
+            key={kind}
+            label={label}
+            meals={slot}
+            open={open === kind}
+            onToggle={() => setOpen(open === kind ? null : kind)}
+            isToday={isToday}
+            confirming={confirming}
+            onConfirm={onConfirm}
+            onLog={() => onLog(kind)}
+          />
         );
       })}
     </div>
