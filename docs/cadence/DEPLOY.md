@@ -95,6 +95,47 @@ and matches dev.)
 > `apps/cadence-api/vercel.json`). The root `experimentalServices` block is AI Admin–only and will
 > error if a Cadence project accidentally uses Root Directory `./`.
 
+### Compute region — `pdx1`, colocated with the database (PERF-04)
+
+`apps/cadence-api/vercel.json` pins **`"regions": ["pdx1"]`**. This is not a preference; it is the
+one config line that removes a transcontinental round trip from every database query.
+
+| Piece | Region | Why |
+|---|---|---|
+| Cadence DB (`health_tracker`, `qvukqinwmyvewzgcsgzt`) | AWS **us-west-2** | Fixed. Verified via the Supabase API; the pooler host in `src/config.ts` is `aws-1-us-west-2.pooler.supabase.com`. |
+| cadence-api compute | Vercel **`pdx1`** | `pdx1` **is** AWS us-west-2 (Portland) — same region as the DB, not merely nearby. |
+
+Before this pin the service ran in the Vercel default **`iad1`** (AWS us-east-1, Washington DC), so
+every query crossed the country. `GET /plan` issues ~11 queries in series, which is ~11 × ~130ms of
+pure distance. Colocating drops per-query latency to single-digit ms.
+
+**The tradeoff, stated plainly:** moving west adds ~60–90ms to the *single* browser→API hop for
+East-coast users (the owner is in Montréal, whose PoP is `yul1`) and removes ~120ms × 11 from the
+API→DB chatter. Net strongly positive, but it is a real cost and it is why `/health` — which touches
+no database — gets *slower* after this change. Judge the move on a DB-backed endpoint, never on
+`/health`.
+
+Rejected alternatives: migrating the DB east (a full Supabase project migration, not a config line —
+owner ruled out 2026-08-20); and running API + read replicas in both regions (optimal, but overkill
+at this stage — a future option, not a now option).
+
+**Where region config lives.** The top-level `regions` key is valid in `services` mode: Vercel's
+services docs invalidate only the *build/runtime* keys at top level (`functions`, `installCommand`,
+`buildCommand`, `devCommand`, `ignoreCommand`, `outputDirectory`, `framework`), and `regions` is not
+among them. There is **no per-service `regions` key** — the service config reference has no such
+property — and service backends run as Vercel Functions, which the top-level `regions` key governs.
+It overrides the dashboard's Function Region setting.
+
+If a deploy ever rejects the key, the dashboard fallback is: **Vercel → project `cadence-api` →
+Settings → Functions → Function Regions → select `pdx1` (Portland, us-west-2) → redeploy.** A region
+change only takes effect on a new deployment. Note the Hobby plan allows a single region; Pro allows
+five. One region is all this needs.
+
+**Not applied to AI Admin.** The AI Admin backend (repo-root `vercel.json`) talks to a *different*
+Supabase project — `ai-admin` / `mkxynwtuqceiblilxkvz` — which is in **us-west-1**, not us-west-2. It
+is left in `iad1` deliberately: it is a separate change with a different target region (`sfo1` is
+us-west-1), and it was out of scope for PERF-04.
+
 **Env (server-side — real secrets; set in the host's env, never committed):**
 `CADENCE_SUPABASE_SERVICE_ROLE_KEY`, `CADENCE_DB_PASSWORD` (or `CADENCE_DATABASE_URL`),
 `AIM_WORKSPACE_ID` + the `AIM_*` profile/job ids, and the AI Admin engine secrets
