@@ -12,11 +12,12 @@ const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
  * Three honest states, and the door outlives the score — the fix for the 2026-08-15 device report,
  * where gating the only entrance on a kcal target left every new user unable to reach recipes,
  * this week's meals or the shop:
- *   • scored — a kcal target exists: solid ring (what's left in the centre), filled bars with
- *     denominators. Nothing is added when targets arrive; the same bars gain a fill.
- *   • counting — food is active but no target: DASHED ring and bars (counting, not scoring),
- *     bare grams, and — while a goal is still EARNING its target — the 7-day countdown as a
- *     footer, so the wait stays finite and visible (owner, 2026-08-18).
+ *   • scored — a kcal target exists: the ring fills (what's left in the centre), filled bars with
+ *     denominators. Nothing is added when targets arrive; the same shapes gain a fill.
+ *   • counting — food is active but no target: the SAME smooth ring, simply unfilled, with bare
+ *     grams and — while a goal is still EARNING its target — the 7-day countdown as a footer, so
+ *     the wait stays finite and visible (owner, 2026-08-18). `counting` still gates whether the
+ *     strip renders at all; it no longer changes how the ring is drawn (owner, 2026-08-20).
  *   • nothing — no food signal at all (`has_recent_food` false): the bay simply ends at the face.
  *     A mind-only user never grows a calorie strip (owner ruling, PLAN §"calorie counter").
  */
@@ -37,7 +38,7 @@ export function TrailFoodStrip({ date, onOpen }: { date: string; onOpen: () => v
   return (
     <button className="trail-food" onClick={onOpen} aria-label="Open your food">
       <span className="trail-food-row">
-        <NutritionRing logged={eaten} target={scored ? target : null} counting size={52} stroke={9}>
+        <NutritionRing logged={eaten} target={scored ? target : null} size={52} stroke={9}>
           {scored && !over ? (
             <>
               <b>{fmt(left)}</b>

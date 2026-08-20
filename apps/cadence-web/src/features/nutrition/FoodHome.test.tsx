@@ -1,7 +1,7 @@
 /**
  * The Food home is the permanent manage-nutrition surface (Food Journey 02/3D) — the fix for a
  * door that used to be gated on the thing it led to. What these pin:
- *   • one chart language in both states — counting (eaten, "no target yet", dashed) vs scored
+ *   • one chart language in both states — counting (eaten, "no target yet", unfilled) vs scored
  *     (left, "x of y kcal", denominators), with the earned countdown line while a goal waits;
  *   • doors are EARNED — This week / Shopping appear only once a week is planned; the Cookbook
  *     stays reachable, empty but labeled honestly;

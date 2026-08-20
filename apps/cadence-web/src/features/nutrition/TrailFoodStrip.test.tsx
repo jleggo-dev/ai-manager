@@ -1,7 +1,9 @@
 /**
  * The strip has three honest states and must never invent a fourth: scored (a kcal target
- * exists — solid ring, filled bars), counting (food is active, no target — dashed, bare grams,
- * countdown while a goal is earning its target), and nothing at all when food is truly idle.
+ * exists — filled ring, filled bars), counting (food is active, no target — the same smooth ring
+ * left unfilled, bare grams, countdown while a goal is earning its target), and nothing at all
+ * when food is truly idle. The ring's texture never carries the difference (see
+ * `NutritionRing.test.tsx`); `counting` here is a door gate, not a drawing instruction.
  *
  * The door rule is the point (device report 2026-08-15): the strip is the only trail door to the
  * Food home, so it must outlive the score — `has_recent_food` keeps it for a target-less logger,

@@ -55,8 +55,10 @@ const TALK_NOTE =
  * the doors are EARNED: This week and Shopping appear once a week has been planned; the
  * Cookbook stays, empty but reachable, because it is where her recipes will live.
  *
- * One chart language: a ring for calories, bars for macros — dashed while counting (no target),
+ * One chart language: a ring for calories, bars for macros — unfilled while counting (no target),
  * denominators once targets exist. Nothing is added when they arrive; the same shapes fill in.
+ * The ring's track is always smooth: "no target yet" is said by the line under it, never by
+ * breaking the ring into a crenulated one (owner, 2026-08-20).
  */
 export function FoodHome({
   initialSub = null,
@@ -153,7 +155,7 @@ export function FoodHome({
         <div className="fh-card">
           <div className="fh-card-row">
             <div className="fh-ringcol">
-              <NutritionRing logged={eaten} target={scored ? targetKcal : null} counting size={112} stroke={12}>
+              <NutritionRing logged={eaten} target={scored ? targetKcal : null} size={112} stroke={12}>
                 {scored && !over ? (
                   <>
                     <b>{fmt(left)}</b>
