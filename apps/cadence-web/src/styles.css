@@ -6629,6 +6629,13 @@ textarea.wiz-title {
 /* Food on the trail (Food Journey 01/3B) — full width at the top of today: ring, bars,
    meal count, chevron; dashed everything while counting (no target). One tap = the Food home. */
 .trail-food {
+  /* Above the sky decor. `.trail-sun` is absolute at z-index 0, so a STATIC block like this one
+     paints underneath it: the 120px sunrise gradient sits at top:36px right:-26px, precisely over
+     the strip's right edge, washing out the meal count and hiding the chevron (owner, device,
+     2026-08-20). The nodes and the coach bay already sit above the sky the same way (`.trail-bay`
+     is z-index 3); the strip simply never joined them. */
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 6px;
