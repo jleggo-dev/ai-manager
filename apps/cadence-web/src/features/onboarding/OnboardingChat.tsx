@@ -18,6 +18,7 @@ import { useFloatingInset } from './useFloatingInset.ts';
 import { useCoachChat } from './useCoachChat.ts';
 import { chatProgress, livePicks, viewTurns } from './coachTurns.ts';
 import { ChatTurn } from './ChatTurn.tsx';
+import { EarlierThread } from './EarlierThread.tsx';
 import { ChatComposer } from './ChatComposer.tsx';
 import { QuickPicks } from './QuickPicks.tsx';
 import { CapturedPills } from './CapturedPills.tsx';
@@ -116,6 +117,7 @@ export function OnboardingChat({
 }) {
   const {
     turns,
+    earlierTurns,
     input,
     setInput,
     streaming,
@@ -258,6 +260,9 @@ export function OnboardingChat({
         onTouchCancel={onTouchEnd}
         style={{ paddingBottom: inset }}
       >
+        {/* The retired thread, read-only above everything the live conversation renders. Its own
+            divider tells the user where the fresh start begins — see EarlierThread. */}
+        <EarlierThread turns={earlierTurns} />
         {!restored ? (
           <div className="chat-loading">
             <ChatTurn role="coach" text="" pending />

@@ -68,6 +68,33 @@ async function loadCapturedGoals(set: (g: CapturedGoal[]) => void): Promise<void
 }
 
 /**
+ * Restore the conversation from the server (source of truth) before painting.
+ *
+ * A stale thread is NOT adopted: `adopt` never fires for it, sessionId stays null, and the next
+ * send opens fresh. But its transcript is still theirs — `keepAside` hands it back for read-only
+ * display above the fresh conversation (EarlierThread). Hiding it instead left the Coach tab
+ * empty after a thread retirement, which read as the coach forgetting every word (owner,
+ * 2026-08-20).
+ *
+ * Outside the hook for the same reason as loadCapturedGoals: it needs nothing from it but
+ * setters, and the hook lives at its size gate.
+ */
+async function restoreConversation(on: {
+  adopt: (sessionId: string, turns: CoachTurn[]) => void;
+  keepAside: (turns: CoachTurn[]) => void;
+}): Promise<void> {
+  try {
+    const c = await getCurrentCoach();
+    if (!c.sessionId) return;
+    const restored = c.messages.map((m) => ({ role: m.role, text: m.content }));
+    if (c.stale) on.keepAside(restored);
+    else on.adopt(c.sessionId, restored);
+  } catch {
+    /* fresh start */
+  }
+}
+
+/**
  * The two ways a streaming turn changes the transcript, as pure functions.
  *
  * Lifted out of `useCoachChat` when it hit the 150-line ceiling — and the split is the right one
@@ -90,6 +117,8 @@ function withDelta(turns: CoachTurn[], delta: string): CoachTurn[] {
 export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs = {}) {
   const wait = delay ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const [turns, setTurns] = useState<CoachTurn[]>([]);
+  // A retired thread's transcript, restored for display only — never sent back upstream.
+  const [earlierTurns, setEarlierTurns] = useState<CoachTurn[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   // What she is doing right now, in words (useCoachActivity) — shown beside the typing dots.
@@ -114,23 +143,18 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     },
   });
 
-  // Restore the conversation from the server (source of truth) before painting.
+  // Restore the conversation before painting — see restoreConversation for the stale contract.
   useEffect(() => {
-    getCurrentCoach()
-      .then((c) => {
-        // A stale thread is NOT adopted: leave sessionId null so the next send opens fresh.
-        if (c.sessionId && !c.stale) {
-          sessionId.current = c.sessionId;
-          setTurns(c.messages.map((m) => ({ role: m.role, text: m.content })));
-        }
-      })
-      .catch(() => {
-        /* fresh start */
-      })
-      .finally(() => {
-        void loadCapturedGoals(setCapturedGoals);
-        setRestored(true);
-      });
+    void restoreConversation({
+      adopt: (sid, restored) => {
+        sessionId.current = sid;
+        setTurns(restored);
+      },
+      keepAside: setEarlierTurns,
+    }).finally(() => {
+      void loadCapturedGoals(setCapturedGoals);
+      setRestored(true);
+    });
   }, []);
 
   /** Thin wrapper so callers (and this hook's tests) keep one entry point; the polling
@@ -279,6 +303,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
 
   return {
     turns,
+    earlierTurns,
     input,
     setInput,
     streaming,
