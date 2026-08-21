@@ -36,6 +36,7 @@
     "probe:replan": "node --import tsx apps/cadence-api/scripts/probe-replan-preview.ts",
     "eval:tools": "node --import tsx apps/cadence-api/scripts/eval-tool-selection.ts",
     "eval:outcomes": "node --import tsx apps/cadence-api/scripts/eval-outcomes.ts",
+    "eval:food-vision": "node --import tsx apps/cadence-api/scripts/eval-food-vision.ts",
     "cleanup:e2e-ai-admin": "npx tsx backend/scripts/cleanup-e2e-test-data.ts --yes",
     "cleanup:e2e-ai-admin:soft": "npx tsx backend/scripts/cleanup-e2e-test-data.ts --yes --soft",
     "cleanup:test-data": "npm run cleanup:cadence-dev-accounts && npm run cleanup:e2e-ai-admin",

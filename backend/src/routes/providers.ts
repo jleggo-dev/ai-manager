@@ -19,12 +19,8 @@ import {
 import { DevsAiClient } from '../integrations/devs-ai/client.ts';
 import { DevsAiV2Client } from '../integrations/devs-ai-v2/client.ts';
 import { GoogleGeminiClient } from '../integrations/google-gemini/client.ts';
-import {
-  categorizeModel,
-  prettifyModelId,
-  DEVS_AI_SEED_MODEL_IDS,
-  isGoogleGeminiCatalogModel,
-} from '../services/llm-models-seed.ts';
+import { isGoogleGeminiCatalogModel } from '../services/llm-models-seed.ts';
+import { syncProviderModels } from '../services/model-sync.ts';
 import { validateBody } from '../middleware/validate.ts';
 import { requireRole } from '../middleware/require-role.ts';
 import { createProviderSchema, updateProviderSchema } from '../schemas/providers.ts';
@@ -65,16 +61,6 @@ function filterModelsForProvider(providerType: string, models: LlmModelRow[] = [
     return models.filter((m) => isGoogleGeminiCatalogModel(m.model_id));
   }
   return models;
-}
-
-function modelIdMatchesProvider(providerType: string, modelId: string): boolean {
-  if (providerType === 'google-gemini') return isGoogleGeminiCatalogModel(modelId);
-  if (providerType === 'devs-ai' || providerType === 'devs-ai-v2') return true;
-  return true;
-}
-
-function isUuidLike(value: unknown): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
 }
 
 /* ================================================================
@@ -286,99 +272,23 @@ router.get('/:id/models', async (req: Request, res: Response) => {
 router.post('/:id/models/sync', requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     const provider = await getProvider(req.params.id as string);
-    let discoveredModelIds: string[] = [];
-    let discoverySource = 'provider-api';
-    let discoveryNote: string | null = null;
-
     if (!provider.api_key) {
       return res.status(400).json({ error: 'Provider has no API key configured' });
     }
-
-    if (provider.type === 'google-gemini') {
-      const client = new GoogleGeminiClient(provider.base_url, provider.api_key);
-      const models = await client.listModels();
-      discoveredModelIds = (models || [])
-        .filter(
-          (m: { supportedGenerationMethods?: string[]; name?: string }) =>
-            Array.isArray(m?.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'),
-        )
-        .map((m: { name?: string }) => String(m?.name || '').trim())
-        .filter((name: string) => name.startsWith('models/'))
-        .map((name: string) => name.replace(/^models\//, ''))
-        .filter(Boolean)
-        .filter(
-          (id: string) =>
-            !(
-              id.includes('embedding') ||
-              id.includes('imagen') ||
-              id.includes('veo') ||
-              id.includes('tts') ||
-              id.includes('speech') ||
-              id.includes('aqa')
-            ),
-        );
-    } else if (provider.type === 'devs-ai' || provider.type === 'devs-ai-v2') {
-      const client =
-        provider.type === 'devs-ai-v2'
-          ? new DevsAiV2Client(provider.base_url, provider.api_key)
-          : new DevsAiClient(provider.base_url, provider.api_key);
-      try {
-        const raw = await client.listModels();
-        const filtered = (raw || [])
-          .map((id: string) => String(id || '').trim())
-          .filter(Boolean)
-          .filter((id: string) => !isUuidLike(id));
-
-        /* If provider returns AI IDs (UUIDs) rather than model IDs, fallback to curated catalog. */
-        if (filtered.length < 5) {
-          discoverySource = 'seed-fallback';
-          discoveryNote = 'Provider returned non-model identifiers; used curated seed catalog';
-          discoveredModelIds = [...DEVS_AI_SEED_MODEL_IDS];
-        } else {
-          discoveredModelIds = filtered;
-        }
-      } catch (_err) {
-        discoverySource = 'seed-fallback';
-        discoveryNote = 'Provider model list endpoint unavailable; used curated seed catalog';
-        discoveredModelIds = [...DEVS_AI_SEED_MODEL_IDS];
-      }
-    } else {
-      return res
-        .status(400)
-        .json({ error: 'Model discovery is supported for Google Gemini, Devs.ai, and Devs.ai v2 providers' });
-    }
-
-    const unique = [...new Set(discoveredModelIds.filter(Boolean))]
-      .filter((id) => modelIdMatchesProvider(provider.type, id))
-      .sort();
-    if (unique.length === 0) {
-      return res.json({
-        synced: 0,
-        discovered: 0,
-        refreshedAt: new Date().toISOString(),
-        discoverySource,
-        discoveryNote,
-        models: [],
-      });
-    }
-
-    const rows = unique.map((modelId) => ({
-      model_id: modelId,
-      display_name: prettifyModelId(modelId),
-      category: categorizeModel(modelId),
-      is_active: true,
-    }));
-
-    const inserted = await bulkCreateLlmModels(provider.id, rows);
+    // One implementation, shared with `cron/tick/models` — this used to be ~70 lines inline here,
+    // reachable only by someone pressing the button, which is how the catalog went stale.
+    const r = await syncProviderModels(provider);
     return res.json({
-      synced: inserted.length,
-      discovered: unique.length,
-      refreshedAt: new Date().toISOString(),
-      discoverySource,
-      discoveryNote,
-      models: inserted,
+      synced: r.synced,
+      discovered: r.discovered,
+      missing: r.missing,
+      refreshedAt: r.refreshedAt,
+      discoverySource: r.discoverySource,
+      discoveryNote: r.discoveryNote,
     });
   } catch (err) {
+    const msg = err instanceof Error ? err.message : '';
+    if (/not supported for provider type/.test(msg)) return res.status(400).json({ error: msg });
     console.error('[POST /providers/:id/models/sync]', err);
     return res.status(500).json({ error: 'Failed to sync models' });
   }

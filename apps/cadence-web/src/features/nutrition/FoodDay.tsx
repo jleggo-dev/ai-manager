@@ -9,16 +9,6 @@ import type { FoodHomeSub } from './foodHomeSub.ts';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
 
-/** She takes the meal in words; the confirm card does the saving (nothing counts until a tap). */
-function logNote(meal?: MealKind): string {
-  const where = meal ? `Log on ${meal}` : 'Log a meal';
-  return (
-    `They tapped "${where}" on their Food home and switched to you to say what they ate. ` +
-    'Open on that — take the meal in their own words, one line is enough; the confirm card does ' +
-    'the saving. Keep any amount they state; ask plainly when one is missing rather than guessing.'
-  );
-}
-
 const TALK_NOTE =
   'They opened "Talk food with me" from their Food home. Open on food with the doors on offer: ' +
   'anything to work around (allergies first — they change every suggestion after), calorie and ' +
@@ -53,6 +43,7 @@ export function FoodDay({
   confirming,
   onConfirm,
   onCoach,
+  onLog,
   onSub,
   onNutrients,
   waterMl,
@@ -69,6 +60,15 @@ export function FoodDay({
   confirming: string | null;
   onConfirm: (logId: string) => void;
   onCoach: (note: string) => void;
+  /**
+   * Open the full-screen Log (frames 05b). "Log a meal" used to hand the user to the COACH — a
+   * slice-1 leftover from when conversation was the only capture surface there was. The design's
+   * own caption for 05b says it is reached "from any method tile in quick add, from Log a meal, or
+   * the ＋ on the trail", and the owner hit the mismatch on device 2026-08-20: "log a meal in the
+   * full screen nutrition menu takes me to the coach chat (i think this is wrong)". It was.
+   * Talking food is still one tap away — that is what "Talk food with me" is for.
+   */
+  onLog: (meal?: MealKind) => void;
   onSub: (sub: FoodHomeSub) => void;
   onNutrients: () => void;
   waterMl: number | null;
@@ -165,7 +165,7 @@ export function FoodDay({
 
       {isToday && (
         <>
-          <button className="fh-log" onClick={() => onCoach(logNote())}>
+          <button className="fh-log" onClick={() => onLog()}>
             <svg
               width="22"
               height="22"
@@ -224,7 +224,9 @@ export function FoodDay({
         isToday={isToday}
         confirming={confirming}
         onConfirm={onConfirm}
-        onLog={(meal) => onCoach(logNote(meal))}
+        // Same door as the button above, pre-set to the slot they tapped — an empty Dinner row
+        // asking "Log it" means capture, not conversation.
+        onLog={(meal) => onLog(meal)}
       />
     </>
   );

@@ -187,6 +187,9 @@ export async function logMeal(
   let macros: Macros | null = null;
   let confidence: number | null = null;
   let rawOut = '';
+  /** Set when the parse threw — the row must not read as a confirmed zero-calorie meal. */
+  let parseFailed = false;
+  let parseError: string | null = null;
   try {
     // Vision path: the freshly-uploaded photo rides to the model as a short-lived signed URL
     // (N1 content parts). Words, plate, or both — same job, same audit trail.
@@ -205,11 +208,29 @@ export async function logMeal(
     macros = shaped.macros;
     confidence = shaped.confidence;
   } catch (e) {
-    console.warn('[nutrition] parse-meal failed — storing the meal without a parse:', e);
+    /**
+     * The words survive a parse failure — that has always been right. What was wrong is what
+     * happened NEXT: `provisional` is computed from `!!macros`, so a parse that produced NOTHING
+     * came out `provisional: false` and the meal was stored as a SETTLED entry worth zero calories.
+     * The owner logged two photos on 2026-08-20 and got exactly that: raw_text kept, `items: []`,
+     * `macros: {}`, `provisional: false`, silently counted as 0 kcal in his day.
+     *
+     * And the diagnosis was destroyed with it: this catch collapsed every cause — a provider 401,
+     * an unreachable image, a model returning empty — into one empty string, so `ai_log` recorded
+     * `{"raw": ""}` and nothing could say why. Same rule tool-response.ts already enforces for the
+     * coach: an ERROR must never look like an empty result.
+     */
+    parseFailed = true;
+    parseError = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    console.warn('[nutrition] parse-meal failed — storing the meal UNPARSED and provisional:', parseError);
   }
 
   // Low-confidence estimates are provisional: listed, but excluded from totals until confirmed.
-  const provisional = !!macros && confidence !== null && confidence < PROVISIONAL_BELOW;
+  // So is a meal with NO numbers at all — a failed parse, or one that produced nothing usable.
+  // Provisional keeps it out of the day's totals and visibly awaiting a confirm, which is the
+  // honest reading; a confirmed 0 kcal quietly drags the day down and looks settled doing it.
+  const noNumbers = !macros || Object.keys(macros).length === 0;
+  const provisional = parseFailed || noNumbers || (!!macros && confidence !== null && confidence < PROVISIONAL_BELOW);
 
   const row = await insertNutritionLog(userId, {
     date,
@@ -230,7 +251,18 @@ export async function logMeal(
     kind: 'parse_meal',
     input: { text, meal_hint: input.meal ?? null },
     output: { raw: rawOut.slice(0, 2000) },
-    meta: { meal, items: items.length, flags, confidence, photo: !!photoRef, macros: !!macros, provisional },
+    meta: {
+      meal,
+      items: items.length,
+      flags,
+      confidence,
+      photo: !!photoRef,
+      macros: !!macros,
+      provisional,
+      // Why it was empty, and when: the difference between "the model saw nothing" and "the call
+      // never landed" is the whole diagnosis, and it used to be thrown away.
+      ...(parseFailed ? { parseFailed: true, parseError } : {}),
+    },
   });
   return row;
 }

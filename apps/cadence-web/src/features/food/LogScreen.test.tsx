@@ -127,3 +127,25 @@ describe('LogScreen', () => {
     expect(screen.getByText('1.3 L today')).toBeInTheDocument();
   });
 });
+
+/**
+ * A choice already made must not be asked for twice. The quick-add sheet's tiles set only "open the
+ * Log screen" and dropped WHICH tile was tapped, so Chat landed on the Log home — the same five
+ * tiles again — and the owner had to pick Chat a second time (device, 2026-08-20).
+ */
+describe('a method chosen before this screen opened', () => {
+  it('opens straight into chat, not the tile row', () => {
+    render(<LogScreen date="2026-08-20" initialMeal="breakfast" initialMethod="chat" onClose={() => {}} />);
+    expect(screen.getByText(/chat-screen listening:false/)).toBeInTheDocument();
+  });
+
+  it('voice opens the SAME chat screen already listening — one screen, not two', () => {
+    render(<LogScreen date="2026-08-20" initialMeal="breakfast" initialMethod="voice" onClose={() => {}} />);
+    expect(screen.getByText(/chat-screen listening:true/)).toBeInTheDocument();
+  });
+
+  it('opens the tile row when no method was chosen — "Log a meal" and the ＋', () => {
+    render(<LogScreen date="2026-08-20" initialMeal="breakfast" onClose={() => {}} />);
+    expect(screen.getByText('Chat')).toBeInTheDocument();
+  });
+});

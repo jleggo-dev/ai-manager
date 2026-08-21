@@ -83,7 +83,13 @@ d('API-04 — nutrition service (DB)', () => {
     runJobBySlug.mockReset();
   });
 
-  it('logMeal persists raw text with empty items when parse-meal fails (never lose their words)', async () => {
+  /**
+   * Keeping their words was always right; calling the result CONFIRMED was not. The owner logged
+   * two photos on 2026-08-20 whose parse produced nothing — and each was stored `provisional:
+   * false`, a settled meal worth zero calories, quietly dragging his day's totals down while
+   * looking like data he had approved. A meal with no numbers is awaiting, never settled.
+   */
+  it('logMeal keeps their words when parse-meal fails — and never calls the result confirmed', async () => {
     runJobBySlug.mockResolvedValueOnce({ formatted: 'NOT_JSON{{{' });
 
     const row = await logMeal(USER, { text: 'oats and berries', meal: 'breakfast', date: today() });
@@ -92,7 +98,8 @@ d('API-04 — nutrition service (DB)', () => {
     expect(row.meal).toBe('breakfast');
     expect(row.items).toEqual([]);
     expect(row.macros).toEqual({});
-    expect(row.provisional).toBe(false);
+    // Provisional keeps it OUT of the day's totals and visibly awaiting a confirm.
+    expect(row.provisional).toBe(true);
     expect(row.ai_confidence).toBeNull();
 
     const listed = await listNutritionLogs(USER, today(), today());

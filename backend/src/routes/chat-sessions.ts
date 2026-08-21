@@ -14,12 +14,15 @@ import { Router } from 'express';
 import { lifecycleRouter } from './chat-sessions/lifecycle.ts';
 import { sendMessageRouter } from './chat-sessions/send-message.ts';
 import { streamsRouter } from './chat-sessions/streams.ts';
+import { workflowInputRouter } from './chat-sessions/workflow-input.ts';
 import { adminRouter } from './chat-sessions/admin.ts';
 
 const router = Router();
 router.use(lifecycleRouter);
 router.use(sendMessageRouter);
 router.use(streamsRouter);
+// Its path is specific (/:id/workflow-steps/:stepKey/input) so it cannot shadow the routes above.
+router.use(workflowInputRouter);
 router.use(adminRouter);
 
 export default router;

@@ -21,6 +21,7 @@ function FoodDayPending() {
       confirming={null}
       onConfirm={() => {}}
       onCoach={() => {}}
+      onLog={() => {}}
       onSub={() => {}}
       onNutrients={() => {}}
       waterMl={null}
