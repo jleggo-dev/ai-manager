@@ -103,6 +103,18 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>) {
   }, []);
 
   /**
+   * The opposite intent, stated outright: they have asked to look at something that is NOT the
+   * newest turn (reading back through earlier conversations), so stop following.
+   *
+   * Scrolling up says this on its own in the normal case — but not when the whole transcript fits
+   * on screen, where the top of it is also the bottom and nobody ever scrolled away. Without this
+   * the next render would helpfully drag them back down from the history they just asked for.
+   */
+  const unstick = useCallback(() => {
+    sticking.current = false;
+  }, []);
+
+  /**
    * Follow on EVERY render, not on a turns dependency — and that is the fix for the second half of
    * "I can't get to the options".
    *
@@ -128,5 +140,5 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>) {
     el.scrollTop = el.scrollHeight;
   });
 
-  return { onScroll, onTouchStart, onTouchEnd, stickNow };
+  return { onScroll, onTouchStart, onTouchEnd, stickNow, unstick };
 }

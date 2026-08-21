@@ -1,4 +1,5 @@
 import type { MealMacros } from '../../lib/api.ts';
+import { Skeleton } from '../../components/Skeleton.tsx';
 
 /**
  * One chart language (Food Journey act 1): a ring for calories, BARS for macros — everywhere.
@@ -23,10 +24,17 @@ export function MacroBars({
   eaten,
   targets,
   dense = false,
+  pending = false,
 }: {
   eaten: MealMacros;
   targets: MealMacros | null;
   dense?: boolean;
+  /**
+   * The day hasn't landed yet (PERF-06). The labels and tracks are structure and paint at once;
+   * the GRAMS become a bar, because "0 g protein" is a real answer before breakfast and a
+   * placeholder 0 is indistinguishable from it right up until it turns into 38.
+   */
+  pending?: boolean;
 }) {
   return (
     <span className={`mbars${dense ? ' is-dense' : ''}`}>
@@ -46,7 +54,17 @@ export function MacroBars({
             <span className="mbar-track">
               {scored && <span className="mbar-fill" style={{ width: `${pct}%`, background: row.color }} />}
             </span>
-            <span className="mbar-v">{scored ? `${e} / ${Math.round(t)} g` : dense ? `${e}` : `${e} g`}</span>
+            <span className="mbar-v">
+              {pending ? (
+                <Skeleton className="sk-num" w={dense ? 22 : 40} h={10} />
+              ) : scored ? (
+                `${e} / ${Math.round(t)} g`
+              ) : dense ? (
+                `${e}`
+              ) : (
+                `${e} g`
+              )}
+            </span>
           </span>
         );
       })}

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CHECKIN_ADJUSTMENT_OPTIONS, MOODS, type CheckinAdjustment, type MoodValue } from '@cadence/shared';
-import { getDailyCheckinStatus, sendDailyCheckin } from '../../lib/api.ts';
+import { sendDailyCheckin } from '../../lib/api.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
+import { useDailyCheckinDue } from '../../lib/query/index.ts';
 
 /**
  * The daily check-in — Cadence's one unprompted moment.
@@ -30,19 +31,13 @@ export function DailyCheckIn({
   onCoach: () => void;
   onClose: () => void;
 }) {
-  const [due, setDue] = useState(false);
   const [mood, setMood] = useState<MoodValue | null>(null);
   const [picked, setPicked] = useState<CheckinAdjustment | null>(null);
   const [reply, setReply] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    void getDailyCheckinStatus().then((s) => alive && setDue(s.due));
-    return () => {
-      alive = false;
-    };
-  }, []);
-
+  // Through the cache (PERF-03) rather than a fetch per mount: the gate is once per local day and
+  // lives server-side, so re-asking on every Plan-tab return could never change the answer.
+  const due = useDailyCheckinDue();
   if (!due) return null;
 
   const chooseMood = (m: MoodValue) => {

@@ -9,6 +9,7 @@ import { TodayTrail } from '../today/TodayTrail.tsx';
 import { TrailHeader } from '../today/TrailHeader.tsx';
 import { DailyCheckIn } from '../today/DailyCheckIn.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
+import { PlanSkeleton } from './PlanSkeleton.tsx';
 import { DetourBar } from './DetourBar.tsx';
 import { DetourStateSheet } from './DetourStateSheet.tsx';
 import { DetourSetup, type DetourChoice } from './DetourSetup.tsx';
@@ -76,12 +77,15 @@ export function PlanView({
    * the cached week instantly; the query revalidates in the background once stale.
    */
   const queryClient = useQueryClient();
-  const { data, refetch } = usePlan();
+  const { data, error, refetch } = usePlan();
   const [note, setNote] = useState('');
   const [proposalBusy, setProposalBusy] = useState(false);
   const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)
   const [startOcc, setStartOcc] = useState<{ id: string; title: string } | null>(null); // redesign start sheet (stepped task)
-  const [captureOcc, setCaptureOcc] = useState<string | null>(null); // capture sheet (weigh-in / meal)
+  // The capture sheet, WITH what the trail already knew when it was tapped. Storing only the id
+  // meant the sheet had to re-learn the row's own title from the server before it could draw its
+  // header — a round trip to render words the phone was already holding (PERF-06).
+  const [captureOcc, setCaptureOcc] = useState<{ id: string; title: string; time_of_day?: string } | null>(null);
   const [cookOcc, setCookOcc] = useState<string | null>(null); // cook walkthrough (menu-derived cook task)
   const [detourSheet, setDetourSheet] = useState(false); // the live detour's state sheet
   const [detourEntry, setDetourEntry] = useState(false); // "Life happened?" — the self-declare door
@@ -215,19 +219,25 @@ export function PlanView({
     refresh(); // keeps the streak alive even with nothing completed
   }
 
-  if (!data) {
+  // A failed load with nothing cached says so and offers the retry. This branch used to not exist:
+  // `!data` rendered the typing dots whether the fetch was in flight or had already given up, so a
+  // dead load span forever — the skeleton-that-never-resolves this fix must not reintroduce.
+  if (error && !data) {
     return (
       <div className="scrollbody">
-        <div className="chat-loading">
-          <span className="typing">
-            <i />
-            <i />
-            <i />
-          </span>
+        <div className="wiz-empty" style={{ marginTop: 24 }}>
+          {"Couldn't reach your week just now — it's safe on the server."}
         </div>
+        <button className="cta" style={{ margin: '16px 20px' }} onClick={() => void refetch()}>
+          Try again
+        </button>
       </div>
     );
   }
+
+  // Structure first, numbers after (PERF-06). GET /plan is a Postgres read — never the coach
+  // thinking — so it gets the trail's own bones, not the chat's typing dots.
+  if (!data) return <PlanSkeleton />;
 
   if (!data.hasPlan) {
     return (
@@ -253,7 +263,7 @@ export function PlanView({
       case 'shop':
         return onOpenFood('shop');
       default: // weigh + meal
-        return setCaptureOcc(occ.occurrence_id);
+        return setCaptureOcc({ id: occ.occurrence_id, title: occ.title, time_of_day: occ.time_of_day });
     }
   };
 
@@ -421,7 +431,8 @@ export function PlanView({
       )}
       {captureOcc && (
         <CaptureSheet
-          occurrenceId={captureOcc}
+          occurrenceId={captureOcc.id}
+          known={{ title: captureOcc.title, time_of_day: captureOcc.time_of_day }}
           onClose={() => setCaptureOcc(null)}
           onLogged={() => {
             refresh();

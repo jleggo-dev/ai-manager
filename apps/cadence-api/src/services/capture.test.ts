@@ -12,6 +12,9 @@ const insertEquipment = vi.fn();
 const listEquipment = vi.fn();
 const updateEquipment = vi.fn();
 const mergeBaseline = vi.fn();
+const getUser = vi.fn(
+  async (_id: string) => ({ baseline: { weight_kg: 80 }, home_location: null, timezone: null }) as unknown,
+);
 const setName = vi.fn();
 const setTimezoneIfUnset = vi.fn();
 const logAi = vi.fn();
@@ -44,8 +47,8 @@ vi.mock('../repos/users.ts', () => ({
   setName: (...a: unknown[]) => setName(...a),
   setTimezoneIfUnset: (...a: unknown[]) => setTimezoneIfUnset(...a),
   // The goal screen reads baseline weight to price a loss rate; no home_location, so the
-  // geocode branch stays off.
-  getUser: async () => ({ baseline: { weight_kg: 80 }, home_location: null, timezone: null }),
+  // geocode branch stays off. Mockable because the weight-start guard reads the STORED record.
+  getUser: (id: string) => getUser(id),
   setHomeLocation: async () => {},
 }));
 vi.mock('./ai-log.ts', () => ({
@@ -267,5 +270,59 @@ describe('equipment survives a conversation that only mentions one thing', () =>
     await runCaptureExtract(USER, { conversation_window: 'the Rowing Machine is by the window' });
     expect(insertEquipment).not.toHaveBeenCalled();
     expect(updateEquipment.mock.calls[0]![1]).toBe('e2');
+  });
+});
+
+/**
+ * A weight mentioned in chat moves where you ARE, never where you STARTED.
+ *
+ * capture-extract runs on EVERY coach turn and writes a whole `weight_kg` record; `mergeBaseline`
+ * is a shallow jsonb merge, so that record replaces the stored one outright. Before the guard,
+ * saying "I'm 85 now" three months in overwrote the 88.5 you began at — every progress read
+ * silently rebased to zero, and the adaptive targets lost the series they reason from. `weigh-in.ts`
+ * has always merged this correctly for the weekly check-in; the chat path had not.
+ */
+describe('a weight said in chat', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    listGoalsByStatus.mockResolvedValue([]);
+    insertGoal.mockResolvedValue({ goal_id: 'g1' });
+    listEquipment.mockResolvedValue([]);
+    mergeBaseline.mockResolvedValue(undefined);
+    setName.mockResolvedValue(undefined);
+    setTimezoneIfUnset.mockResolvedValue(undefined);
+    logAi.mockResolvedValue(undefined);
+    runJobBySlug.mockResolvedValue({
+      formatted: JSON.stringify({
+        goals: [],
+        equipment: [],
+        baseline_updates: { weight: { value: 85, unit: 'kg' } },
+        confidence: 'high',
+      }),
+    });
+  });
+
+  it('updates current and KEEPS the original starting weight', async () => {
+    getUser.mockResolvedValue({
+      baseline: { weight_kg: { current: 88.54, start: 88.54, source: 'captured' } },
+      home_location: null,
+      timezone: null,
+    } as unknown);
+
+    await runCaptureExtract(USER, { conversation_window: "I'm 85 now" });
+
+    const patch = mergeBaseline.mock.calls[0]?.[1] as { weight_kg?: { current: number; start: number } };
+    expect(patch.weight_kg?.current).toBe(85);
+    expect(patch.weight_kg?.start).toBe(88.54); // the beginning survives
+  });
+
+  it('takes the spoken weight as the start when there is no history yet — onboarding', async () => {
+    getUser.mockResolvedValue({ baseline: {}, home_location: null, timezone: null } as unknown);
+
+    await runCaptureExtract(USER, { conversation_window: "I'm 85kg" });
+
+    const patch = mergeBaseline.mock.calls[0]?.[1] as { weight_kg?: { current: number; start: number } };
+    expect(patch.weight_kg?.current).toBe(85);
+    expect(patch.weight_kg?.start).toBe(85); // first time IS the beginning
   });
 });

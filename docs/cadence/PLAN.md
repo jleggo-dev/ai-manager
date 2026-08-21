@@ -5101,8 +5101,20 @@ never sent.
   shipped 2026-08-20 (PR #251) after a thread retirement left the Coach tab EMPTY ("a big missing
   component"): a retired thread's transcript now renders read-only above the fresh conversation
   (`EarlierThread`), under a quiet divider — "earlier conversation — your next message starts
-  fresh". No adoption change: sessionId stays null, next send opens fresh. Still open: the actual
-  history toggle / browsing more than the latest retired thread.
+  fresh". No adoption change: sessionId stays null, next send opens fresh. **Closed 2026-08-20
+  (PR #255):** #251 was a one-shot — it showed the previous transcript only while the retired
+  thread was still the NEWEST conversation, so the first message after a retirement opened a fresh
+  session and the older thread vanished again on the next open; every conversation before the
+  latest was unreachable by any endpoint. Now `GET /coach/conversations?before=&limit=` reads back
+  through the archive one conversation at a time (cursored on `created_at`, transcripts riding
+  along, empty/unreadable rows skipped with the cursor still advancing), rendered above the live
+  chat under dated dividers by `EarlierConversations`. Latency contract: the archive is fetched
+  ONLY on an explicit "Read earlier conversations" tap — never on tab open — and the current
+  conversation now paints from a device-local cache (`coach-transcript-cache.ts`, user-scoped and
+  cleared on identity change) before `/coach/current` returns, so the Coach tab is never blank
+  while the network is in flight. Display only: nothing archived is ever adopted as the live
+  session. Owner's need, verbatim: *"the visual representation of that history isn't for the
+  coach, it's for me… I also need to remember what we talked about and why."*
 
 **The blocker for everything server-side: ship main.** Rationale/suggested/area on GET /plan,
 the graduated fix's client half, milestone capture plumbing, the reset completeness — all inert
@@ -7480,17 +7492,253 @@ also pays a ~1.2s service wake. No AI is involved anywhere.
 
 | ID | Fix | Effort | Impact | Status |
 |---|---|---|---|---|
-| PERF-01 | **react-query for /plan + /progress**: cached first paint, background revalidate (30s staleTime, client defaults); typing dots only on the true first load | S | Tab returns paint **instantly**; the owner's complaint as stated | **shipped in this PR** |
-| PERF-02 | **Seed the plan cache from the App-gate fetch** (`fetchPlanIntoCache`) | S | App open: 2 sequential /plan → 1 | **shipped in this PR** |
-| PERF-03 | Same treatment for weather / location / daily-checkin / notification-prefs / LogDidSheet (mechanical repeats of PERF-01) | S | Plan-tab return burst ~6 → ~0 requests inside staleTime | backlog |
-| PERF-04 | **Colocate API and DB** (move the Vercel service to us-west, or the DB east) — per-query ~130ms → ~5–15ms | config/ops | GET /plan server time ~1.5s → ~150–300ms; every endpoint wins | backlog — biggest server-side lever |
-| PERF-05 | Batch/parallelize buildPlanView (dedupe the plan/activities/user reads ensureHorizon already did; `Promise.all` independents; or one SQL) | M | ~11 round trips → ~3–4 even without PERF-04 | backlog |
-| PERF-06 | **Skeleton instead of typing dots** on deterministic screens — the dots are the coach's thinking animation and teach users that a DB read is an AI call | S (design) | honesty; perceived speed | backlog — needs a design pass, not built |
-| PERF-07 | Keep Plan/Progress mounted like Coach (`display:none`/`contents`) | M | preserves scroll + skips remount effects; PERF-01 already delivers the paint | optional after PERF-01; documented, not built |
+| PERF-01 | **react-query for /plan + /progress**: cached first paint, background revalidate (30s staleTime, client defaults) | S | Tab returns paint **instantly** | **shipped** (#264) |
+| PERF-02 | **Seed the plan cache from the App-gate fetch** (`fetchPlanIntoCache`) | S | App open: 2 sequential /plan → 1 | **shipped** (#264) |
+| PERF-03 | Same treatment for weather / daily-checkin / notification-prefs / LogDidSheet | S | Plan-tab return burst ~6 → ~0 requests inside staleTime | **shipped** — see below |
+| PERF-04 | **Colocate API and DB** — the Vercel service moved to `pdx1`, beside us-west-2 | config/ops | GET /plan server time ~1.5s → **~0.2s** | **shipped** (#264; `apps/cadence-api/vercel.json` pins `regions: ["pdx1"]`) |
+| PERF-05 | Batch/parallelize buildPlanView | M | ~11 round trips → ~3–4 | **shipped** (#264) |
+| PERF-06 | **Skeleton instead of typing dots** on deterministic screens | S (design) | honesty; perceived speed | **shipped** — see below |
+| PERF-07 | Keep Plan/Progress mounted like Coach (`display:none`/`contents`) | M | preserves scroll + skips remount effects | **not built, and no longer needed for the paint** — PERF-01 delivers it; revisit only for scroll position |
 
-Also real but smaller: cache the auth verification (PERF-04 shrinks it too), and a keep-warm ping
-for the service wake. Coach-tab behaviour is untouched throughout — it stays mounted (2026-08-16
-rule) and was never the problem: switching to it fires zero requests.
+Also real but smaller: cache the auth verification, and a keep-warm ping for the service wake
+(still unbuilt — the 1.28s cold start below is what it would remove). Coach-tab behaviour is
+untouched throughout — it stays mounted (2026-08-16 rule) and was never the problem.
 
 **Verified while measuring:** account-1/account-2 had no committed plan; the numbers above use a
 seeded 5-activity plan (goals + `commitActivities`), wiped after per step 12b.
+
+## Latency, re-measured after the fixes (2026-08-20, deployed)
+
+> *"The first time logging in, it still takes 10s? to load the plan screen."* — owner, on device
+>
+> *"I click Log breakfast, I get the 3 loading dots. You know, we shouldn't show this. … Show the
+> Log breakfast screen, show everything at 0 and then update."* — owner, same report
+
+**10s did not reproduce, and the second complaint turned out not to be a latency bug at all.**
+Measured against the live API from Montreal, anonymous Supabase session, seeded 5-activity plan
+with 55 occurrences, scratch account wiped after:
+
+| Hop | Measured now | Was (pre-#264) |
+|---|---|---|
+| `/health` warm | 102–240ms | 78–216ms |
+| `/health` **after 10 min idle** | **1,284ms** | ~1.2s (unchanged — no keep-warm) |
+| Supabase `signInAnonymously` | 393ms | — |
+| GET /plan, committed plan | **176–503ms**, median ~200ms | 2.01–3.76s |
+| GET /plan, no plan | 151–196ms | 0.86–2.5s |
+| GET /progress | 144–158ms | 0.32–0.9s |
+| GET /nutrition/day | 145–156ms | 0.70–0.84s |
+| GET /me/daily-checkin | 280–420ms | 0.26–0.35s |
+| **GET /plan/occurrences/:id — meal capture** (`kind: 'system'`) | **136–163ms** | not measured before |
+| **GET /plan/occurrences/:id — coach session** (`kind: 'user'`, first open) | **34,241ms** | not measured before |
+| 7-request app-open burst, serial | 1,735ms | — |
+| 5 aux requests: parallel vs serial | 374ms vs 1,285ms | — |
+
+PERF-04 + PERF-05 together took GET /plan from ~2–3.8s to ~0.2s — a ~10× win, and the reason the
+owner's 10s cannot be the plan fetch on a current build. What his 10s most likely was: a **stale
+native bundle**. The phone bakes the web bundle at native build time, so without a rebuild since
+#264 he was running the pre-PERF-01/02 client, which fetched `/plan` **twice sequentially** at app
+open — 2 × ~2–3.8s, plus ~1.2s cold wake, plus auth, which reconstructs ~10s almost exactly.
+**Before any future device timing: rebuild (`npm run run:ios --prefix apps/cadence-ios`).**
+
+### The two real findings
+
+1. **The meal capture sheet was never slow — it was mislabelled.** "Log breakfast" is a
+   `kind: 'system'` row, so `getOccurrenceDetail`'s generate gate is false and no model is
+   involved: 136–163ms of Postgres, shown behind the coach's typing animation. The dots were the
+   bug.
+2. **The coach-session sheet really does take 34s on a first open**, because it genuinely
+   prescribes a session through an LLM. `prefetchImminentSessions` (void-fired from GET /plan)
+   hides this when it wins the race, and does not on a true first load. Its dots are honest and
+   they stay — but this, not `/plan`, is now the longest wait in the app. **Open: PERF-08** —
+   the prefetch should be awaited or the sheet should say what it is doing for that long.
+
+### PERF-06, as built
+
+The rule: **a skeleton draws shapes, never numbers.** The owner asked for zeroes ("show everything
+at 0 and then update"); shapes are that request kept honest, because 0 kcal eaten at eight in the
+morning is a *true* answer — a placeholder 0 and a settled 0 are the same pixels, and the moment
+the ring turns into 740 the screen he had been reading turns out to have been wrong. A bar is
+never mistaken for a value, and it arrives just as fast. BRAND.md holds: the treatment is a slow
+warm breath across the page's own materials, never a spinner and never a grey pulse — an empty
+state is *awaiting*, not broken (`styles/skeleton.css`, `components/Skeleton.tsx`).
+
+What paints instantly now: the **app-open gate**, **Plan**, **Progress**, the **meal capture
+sheet** (its header is real on the first frame — the trail already knew the title, so it is passed
+in rather than re-fetched), the **weigh-in sheet**, the **＋ log sheet**, and the **Food home**
+(ring track, macro labels, water glasses, every door — only the digits wait). The typing dots stay
+exactly where a model is thinking: StartSheet, OccurrenceSheet, CoachFoodActionSheet.
+
+Two failure-dressed-as-data bugs were removed on the way: PlanView showed the dots forever on a
+failed load (no error branch existed), and LogDidSheet's `.catch(() => setActivities([]))` drew
+*"Nothing in your plan yet"* over a network failure — the 2026-08-19 shape, in a quieter place.
+Both now say what happened. Guarded by `CaptureSheet.test.tsx`, `LogDidSheet.test.tsx`,
+`ProgressView.test.tsx`, `FoodHome.test.tsx`; `?preview=skeletons` renders them all for review.
+## The photo said 0 calories: two-stage vision, and the eval that can tell (2026-08-20)
+
+Two photo logs came back empty on 2026-08-20 and were stored as **settled 0-kcal meals**. The
+immediate cause is fixed twice over — the vision profile had `failover_external_ai_id: null` while
+the entire gemini family was quota-exhausted (`set-vision-failover.ts`, now `gpt-5-mini`), and a
+failed parse now stays `provisional` with its reason preserved instead of reading as a confirmed
+zero. What those fixes do not answer is the owner's question underneath them: **when the call does
+succeed, how good is the answer?** Nobody knew. The only thing the app ever kept was the JSON, and
+a plausible `{"kcal": 320}` cannot be told apart from a model that read the cup versus one that
+pattern-matched the word "latte" to an average.
+
+### The split (owner's proposal, 2026-08-20)
+
+> "get the image model to give us an accurate size and verbose description and as much as it can
+> about the ingredients/content and then use a 2nd AI call to assess/return the json"
+
+Two jobs, synced live and additive (`sync-jobs.ts` dry-run: 2 create, 0 update):
+
+- **`describe-meal-photo`** — photo → PROSE. Components named separately, portions anchored to an
+  object *in the frame* (the cup, the fork, the plate rim), preparation, and an explicit statement
+  of what it could not tell. No JSON, no numbers.
+- **`parse-meal-description`** — prose → the same JSON `parse_meal` returns. No image reaches it,
+  so it can run on a model chosen for schema obedience rather than eyesight.
+
+The hypothesis is that a vision model spending its attention on filling a schema is not spending it
+on seeing, and that the prose is independently valuable: it is the only artefact that shows whether
+a portion was *reasoned* or *guessed*.
+
+### The harness (`npm run eval:food-vision`)
+
+`eval-food-vision.ts` + `-cases.ts` + `-score.ts` + `-report.ts`. Manual, costs money, not CI —
+same standing as `eval:tools`. Per case it runs the one-stage baseline, stage 1, and stage 2, and
+scores the description on four axes chosen because they fail independently: **recall** (of the
+components present, how many were named), **invented** (claims for food that is not there — an
+invented side becomes calories in somebody's day), **anchored** (was a portion tied to something
+with a knowable size — *not* "did it state a number", since a confident unanchored number is the
+failure mode and it reads as success), and **hedged** (did it name its own doubt, which stage 2 can
+act on). Scoring is deterministic string-matching over hand-written aliases, not an LLM judge: a
+grader that drifts makes week-to-week comparison meaningless, which is the only thing the harness
+is for.
+
+`--sweep m1,m2` compares vision models by calling the provider directly, holding the stage-2
+converter constant so a difference in the numbers is attributable to the *description*. That mode
+exists because it is the only one that runs off-deployment: image-bearing jobs take the in-process
+route, which needs `CREDENTIAL_ENCRYPTION_KEY` to decrypt the stored provider key. The app-path
+mode (no `--sweep`) 401s on a laptop for that reason and must be run from the deployment — it did
+confirm the failover chain now engages (`gemini-3.1-pro` → `gpt-5-mini`), which was previously
+untestable.
+
+**Ground truth is the limit, and it is stated on every line of the report.** The two seed cases are
+the owner's real logs, marked `caption-only`: their captions establish *what* was eaten, nothing
+establishes *how much*, so kcal accuracy is SKIPPED rather than guessed. A harness that scores
+against invented truth reports confident numbers about nothing. Filling in the truth needs the
+person who ate the meal.
+
+**Instrument fault caught on the first run, recorded because it is the cheapest lesson here:** the
+first version read a non-existent `output_text` field off `createResponse` (which returns raw SSE)
+and scored five different vendors at 0% recall and "empty reply" on both photos. Ten identical
+zeros across five vendors is the harness reporting on itself, never a finding. `readSseText` now
+mirrors `sse-transform.ts`, and the run prints transcripts (`--verbose`) so a zero can be read.
+
+### First run (2026-08-20, 4 models x 2 photos, `--sweep`)
+
+| model | recall | anchored | invented | refused | stage-1 latency |
+|---|---|---|---|---|---|
+| gpt-5-mini | 100% | 2/2 | 0 | 0 | 28.6s / 31.3s |
+| kimi-k3 | 100% | 2/2 | 0 | 0 | 28.4s / 23.5s |
+| grok-4.6 | 100% | 2/2 | 0 | 0 | 14.3s / 10.7s |
+| gemini-3.1-pro | — | — | — | — | **RATE-LIMITED, both cases** |
+
+**The description stage is not the problem.** Every model that answered named every component,
+anchored its portion to something in the frame, and stated its own doubt. The owner's question —
+can they capture quantity and ingredients — reads yes, across three vendors, on two real photos.
+`grok-4.6` did it in a third to half the time.
+
+**The finding worth acting on is the confidence, not the recall.** Same photos, same prompts:
+
+| | one-stage (today) | two-stage |
+|---|---|---|
+| confidence | 0.7, 0.6, 0.62, 0.7, 0.7, 0.7 | 0.4, 0.35, 0.35, 0.3, 0.35, 0.4 |
+| vs `PROVISIONAL_BELOW = 0.5` | **6/6 SETTLED** | **6/6 PROVISIONAL** |
+
+One-stage is confident about a closed takeaway cup it cannot see inside. Two-stage is not, because
+the prose said so out loud ("I cannot see the beverage itself, the lid is closed; I can't tell the
+milk type, the number of shots, or whether syrup was added") and stage 2 carried that doubt into
+its number. That difference is not cosmetic — `PROVISIONAL_BELOW` is the gate between a meal that
+silently counts in the day's totals and one that visibly waits for the user to confirm. Under
+one-stage, a guess about an opaque cup enters the day as settled fact. Under two-stage, it asks.
+
+Which is the brand rule ("confirm before committing — here's what I heard, did I get it right?")
+and the owner's actual complaint on 2026-08-20 — *"Cadence didn't return to me a confirmation of
+the macros"* — arriving at the same answer from opposite directions.
+
+**Two things the run turned up that were not being looked for:**
+1. `gemini-3.1-pro` is STILL `MODEL_REQUEST_RATE_LIMIT_EXCEEDED`, a day after the incident, on
+   both cases. It is the PRIMARY on the shared vision profile and `gpt-5-mini` is only its
+   failover. A primary that has been down for a day is not a primary; every photo log is paying a
+   failed call before it gets an answer. Swapping them is a one-line `set-vision-failover.ts` run —
+   owner's call, since it changes cost per photo.
+2. The latte cup in the photo is branded **MATERIA PRIMA**, not Starbucks. Every model that read it
+   said so and flagged the disagreement with the caption. Worth knowing next to the owner's report
+   that searching "starbucks" finds nothing: the log may be right that it was not a Starbucks cup.
+
+**Not yet wired into the app.** The jobs exist and are synced; `nutrition.ts` still runs one-stage.
+Two-stage costs a second call (~30s vs ~21s on gpt-5-mini, and stage 2 can go remote since it
+carries no image) and the case for it rests on calibration rather than accuracy — kcal correctness
+is unmeasurable until the cases carry real ground truth. Decide with numbers, not with this table.
+
+### Second run, prompts rewritten to the owner's spec (2026-08-21)
+
+The first prompt was wrong, and the owner said what he actually wanted: the eyes should **commit to
+a reading and name the assumption**, not refuse to guess. My version forbade exactly that — "do NOT
+return JSON, numbers-only, or nutrition estimates" — so it produced careful prose that declined to
+say how much. His example: *"This looks like a 250ml beverage, the user said it's a latte. Let's
+assume it's a 250ml latte. There's probably 200ml of milk and 50ml of espresso."*
+
+Rewritten, and stage 2 reframed to his framing exactly: nutritionist context → the photo reading →
+"the user described this meal themselves as" → the user's own words. With the rule that resolves
+the disagreement: **the USER is right about what it was, the PHOTO is right about how much.**
+
+grok-4.6 on the parfait, 279 words:
+
+> Assumption I am locking in (please correct if wrong): One small yogurt parfait, fully eaten,
+> ~180–200 g total — ~140 g plain white yogurt, ~50 g sweetened berry compote/coulis (the even
+> purple stain and "coulis" look imply **added sugar**). […] The bowl is about the same diameter as
+> the takeaway cup beside it. […] No granola is clearly visible; I am **not** adding granola.
+
+Every behaviour asked for: a committed portion, the assumption named and offered for correction,
+the user's word ("coulis") turned into a nutritional inference, a scale anchored to another object
+in frame, and a refusal to invent the granola that belongs on a stock-photo parfait. gpt-5-mini
+reached the same place in 764 words; grok did it in a third of that and half the time.
+
+| | one-stage | two-stage (first prompt) | two-stage (owner's spec) |
+|---|---|---|---|
+| parfait, items | 1 | 1 | **2** (yogurt and compote separately) |
+| confidence | 0.62–0.7 | 0.35–0.4 | **0.6** |
+
+The confidence movement is the calibration working in both directions, which the first run could
+not show. Hedge-only prose produced 0.3–0.45 — under the gate, everything provisional, including
+readings that deserved better. A COMMITTED reading earns 0.6: above the gate, settled, because an
+anchored portion is a real basis for a number. The gate now separates confident-because-anchored
+from confident-because-guessing, which is what it was always supposed to do.
+
+### A workflow step can't be "ask the user" (owner, 2026-08-20; corrected 2026-08-21)
+
+Raised while the above was being built, and it is the piece this flow wants: describe → **confirm**
+→ macros is "AI, ask, AI", and the middle one cannot be declared.
+
+**I first wrote this section up as "there is no executor — nothing runs the steps." That was wrong,
+and the owner corrected it.** The workflow engine works and has been tested; I went looking for a
+background DAG walker, did not find one, and mistook a deliberate design for a hole. What actually
+happens, per step: `send-message.ts` records the reply, `extractAndAccumulateOutputs` pulls the
+declared `outputMappings` into `workflow_variables`, `<step>.prompt`/`<step>.response` are stored
+alongside, and `workflow.step.completed` fires. `chat-messaging-resolve.ts` then composes the next
+step by reading those variables back through `inputMappings`, refusing to run ahead of an
+unsatisfied `depends_on`. The loop is caller-driven on purpose; the framework does the variable
+plumbing between steps. Recorded here because the wrong version was written down first, and a wrong
+claim in a living doc outlives the conversation that produced it.
+
+**The real gap is one line wide.** `workflow_steps.processing_job_id` is NOT NULL, so every step
+must be an LLM call. "Ask the user for X and store it in `workflow_variables`" has to be faked as a
+model round-trip that does nothing but pose a question — which also puts the question's wording in
+a prompt template instead of in the app's own voice.
+
+Sketch: add `step_type: 'job' | 'input'`, make `processing_job_id` nullable when
+`step_type = 'input'`, and let an input step declare the variable it fills. Everything else is
+already there — the session already carries `workflow_variables`, a user message already tags its
+`workflow_step_id`, and `workflow.step.completed` already fires. Owner has asked for it
+(2026-08-21) for the photo-confirm flow.

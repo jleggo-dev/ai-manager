@@ -1,4 +1,5 @@
 import type { MealKind, NutritionDayData } from '../../lib/api.ts';
+import { Skeleton } from '../../components/Skeleton.tsx';
 import { FoodDiary } from './FoodDiary.tsx';
 import { MacroBars } from './MacroBars.tsx';
 import { NutritionInsightCard } from './NutritionInsightCard.tsx';
@@ -7,16 +8,6 @@ import { WaterRow } from './WaterRow.tsx';
 import type { FoodHomeSub } from './foodHomeSub.ts';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
-
-/** She takes the meal in words; the confirm card does the saving (nothing counts until a tap). */
-function logNote(meal?: MealKind): string {
-  const where = meal ? `Log on ${meal}` : 'Log a meal';
-  return (
-    `They tapped "${where}" on their Food home and switched to you to say what they ate. ` +
-    'Open on that — take the meal in their own words, one line is enough; the confirm card does ' +
-    'the saving. Keep any amount they state; ask plainly when one is missing rather than guessing.'
-  );
-}
 
 const TALK_NOTE =
   'They opened "Talk food with me" from their Food home. Open on food with the doors on offer: ' +
@@ -43,6 +34,7 @@ const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
  */
 export function FoodDay({
   day,
+  pending = false,
   isToday,
   weekDates,
   loggedDates,
@@ -51,12 +43,15 @@ export function FoodDay({
   confirming,
   onConfirm,
   onCoach,
+  onLog,
   onSub,
   onNutrients,
   waterMl,
   onWater,
 }: {
   day: NutritionDayData | null;
+  /** The day's first fetch is still in flight — the numbers are placeholders, not answers. */
+  pending?: boolean;
   isToday: boolean;
   weekDates: string[];
   loggedDates: Set<string>;
@@ -65,6 +60,15 @@ export function FoodDay({
   confirming: string | null;
   onConfirm: (logId: string) => void;
   onCoach: (note: string) => void;
+  /**
+   * Open the full-screen Log (frames 05b). "Log a meal" used to hand the user to the COACH — a
+   * slice-1 leftover from when conversation was the only capture surface there was. The design's
+   * own caption for 05b says it is reached "from any method tile in quick add, from Log a meal, or
+   * the ＋ on the trail", and the owner hit the mismatch on device 2026-08-20: "log a meal in the
+   * full screen nutrition menu takes me to the coach chat (i think this is wrong)". It was.
+   * Talking food is still one tap away — that is what "Talk food with me" is for.
+   */
+  onLog: (meal?: MealKind) => void;
   onSub: (sub: FoodHomeSub) => void;
   onNutrients: () => void;
   waterMl: number | null;
@@ -107,8 +111,16 @@ export function FoodDay({
       <div className="fh-card">
         <div className="fh-card-row">
           <button className="fh-ringcol fh-ringbtn" onClick={onNutrients} aria-label="Open Nutrients">
+            {/* The ring's TRACK is the structure and it draws immediately — smooth and empty, which
+                is already how this ring says "nothing yet". What waits is the readout: while the
+                day is in flight the centre holds a bar, not a 0. Owner, 2026-08-20: "show
+                everything at 0 and then update" — and this is that, kept honest, because 0 kcal
+                eaten at eight in the morning is a true answer and a placeholder 0 would be
+                indistinguishable from it right up to the moment it became 740. */}
             <NutritionRing logged={eaten} target={scored ? targetKcal : null} size={112} stroke={12}>
-              {scored && !over ? (
+              {pending ? (
+                <Skeleton className="sk-num" w={58} h={22} />
+              ) : scored && !over ? (
                 <>
                   <b>{fmt(left)}</b>
                   <span>KCAL LEFT</span>
@@ -121,28 +133,39 @@ export function FoodDay({
               )}
             </NutritionRing>
             <span className="fh-ring-sub">
-              {scored
-                ? `${fmt(eaten)} of ${fmt(targetKcal)} kcal${itemTail}`
-                : wait
-                  ? `${wait.days_logged} / ${wait.days_needed} · days to your calorie target`
-                  : `no target yet${itemTail}`}
+              {pending ? (
+                <Skeleton w={132} h={11} />
+              ) : scored ? (
+                `${fmt(eaten)} of ${fmt(targetKcal)} kcal${itemTail}`
+              ) : wait ? (
+                `${wait.days_logged} / ${wait.days_needed} · days to your calorie target`
+              ) : (
+                `no target yet${itemTail}`
+              )}
             </span>
           </button>
           <div className="fh-barscol">
-            <MacroBars eaten={day?.totals ?? {}} targets={scored ? (day?.targets ?? null) : null} />
+            <MacroBars eaten={day?.totals ?? {}} targets={scored ? (day?.targets ?? null) : null} pending={pending} />
             <button className="fh-nutrients" onClick={onNutrients}>
               Nutrients <i aria-hidden>›</i>
             </button>
           </div>
         </div>
-        <WaterRow ml={waterMl ?? day?.water_ml ?? 0} onLogged={onWater} readOnly={!isToday} />
+        {/* A pour the user has already made is real even mid-flight, so a local `waterMl` ends the
+            wait early — the placeholder is only for having no number at all yet. */}
+        <WaterRow
+          ml={waterMl ?? day?.water_ml ?? 0}
+          onLogged={onWater}
+          readOnly={!isToday}
+          pending={pending && waterMl == null}
+        />
       </div>
 
       {isToday && <NutritionInsightCard compact />}
 
       {isToday && (
         <>
-          <button className="fh-log" onClick={() => onCoach(logNote())}>
+          <button className="fh-log" onClick={() => onLog()}>
             <svg
               width="22"
               height="22"
@@ -201,7 +224,9 @@ export function FoodDay({
         isToday={isToday}
         confirming={confirming}
         onConfirm={onConfirm}
-        onLog={(meal) => onCoach(logNote(meal))}
+        // Same door as the button above, pre-set to the slot they tapped — an empty Dinner row
+        // asking "Log it" means capture, not conversation.
+        onLog={(meal) => onLog(meal)}
       />
     </>
   );

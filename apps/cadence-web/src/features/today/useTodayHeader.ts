@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { capabilities } from '../../lib/capability/index.ts';
-import { getWeather, getHomeLocation, saveHomeLocation, browserTimezone, type WeatherNow } from '../../lib/api.ts';
+import { getHomeLocation, saveHomeLocation, browserTimezone, type WeatherNow } from '../../lib/api.ts';
+import { fetchWeatherCached, forgetWeather } from '../../lib/query/index.ts';
 
 export type TodayHeader = {
   weather: WeatherNow | null;
@@ -31,21 +33,30 @@ export function useTodayHeader(): TodayHeader {
   const [weather, setWeather] = useState<WeatherNow | null>(null);
   const [city, setCity] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
+  const queryClient = useQueryClient();
 
+  /**
+   * Read the sky THROUGH the cache (PERF-03). The Plan tab unmounts on every tab switch, so this
+   * used to be a fresh `/me/weather` round trip each time someone came back to look at their day —
+   * for an answer that is a condition word and a temperature and does not move in five minutes.
+   * Inside that window a return costs nothing; every path that genuinely invalidates the sky (a
+   * saved location, a detected move) drops the entry first, below.
+   */
   const refreshWeather = useCallback(async () => {
-    const w = await getWeather();
+    const w = await fetchWeatherCached(queryClient);
     setWeather(w);
     if (w.available && w.label) setCity(w.label);
-  }, []);
+  }, [queryClient]);
 
   /** After a location change: pick up the NEW stored label (reverse-geocoded server-side) and the
    *  weather at the new coordinates together, so the header never mixes one city's name with the
    *  other's sky. */
   const refreshWeatherAndCity = useCallback(async () => {
+    forgetWeather(queryClient); // the cached sky belongs to the city they just left
     const loc = await getHomeLocation().catch(() => null);
     if (loc?.home_location) setCity(loc.home_location.label ?? null);
     await refreshWeather();
-  }, [refreshWeather]);
+  }, [queryClient, refreshWeather]);
 
   /**
    * Through the capability seam, NEVER `navigator.geolocation`. Two reasons, and the second is
@@ -66,11 +77,12 @@ export function useTodayHeader(): TodayHeader {
         lon: Number(pos.lon.toFixed(2)),
         timezone: browserTimezone(),
       });
+      forgetWeather(queryClient); // new coordinates — the cached sky is the wrong one
       await refreshWeather();
     } finally {
       setLocating(false);
     }
-  }, [refreshWeather]);
+  }, [queryClient, refreshWeather]);
 
   useEffect(() => {
     let alive = true;

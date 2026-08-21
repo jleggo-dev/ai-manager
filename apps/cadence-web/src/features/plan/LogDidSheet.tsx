@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
-import { getPlan, logDid, logAdhoc, type PlanActivity } from '../../lib/api.ts';
+import { useState } from 'react';
+import { logDid, logAdhoc, type PlanActivity } from '../../lib/api.ts';
 import { categoryOf, ICON } from '../today/category.ts';
 import { DoNowSection } from './DoNowSection.tsx';
+import { SheetRowsSkeleton } from './SheetSkeletons.tsx';
+import { usePlan } from '../../lib/query/index.ts';
 
 /**
  * The goal-aware "＋" sheet — "log something you did." The options are your PLAN's activities (the
@@ -12,25 +14,24 @@ import { DoNowSection } from './DoNowSection.tsx';
  * here changes the plan itself — it only records what already happened.
  */
 export function LogDidSheet({ onClose, onLogged }: { onClose: () => void; onLogged: () => void }) {
-  const [activities, setActivities] = useState<PlanActivity[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // id being logged (or 'free')
   const [text, setText] = useState('');
 
-  useEffect(() => {
-    let alive = true;
-    getPlan()
-      .then((p) => {
-        // Only the committed-rhythm activities (user-kind) — system weigh-ins + the off-plan bucket
-        // aren't things you "did." The plan view already excludes off-plan/episode from `activities`.
-        if (alive) setActivities((p?.activities ?? []).filter((a) => a.kind === 'user'));
-      })
-      .catch(() => {
-        if (alive) setActivities([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  /**
+   * The plan comes from the shared cache (PERF-03), not a fetch of its own. This sheet used to
+   * call `getPlan()` on every open — a second full `/plan` round trip for a list the app was
+   * already holding, behind the coach's typing dots. From the cache the ＋ opens with its rows
+   * already in it.
+   *
+   * The old catch also set `[]`, which drew "Nothing in your plan yet — jot it below." over a
+   * network failure: a full rhythm reported as an empty one, the exact failure-dressed-as-data
+   * shape removed from the routing layer on 2026-08-19. `usePlan` throws instead, so a failure is
+   * distinguishable from an honest empty plan and says so below.
+   */
+  const { data: plan, error } = usePlan();
+  // Only the committed-rhythm activities (user-kind) — system weigh-ins + the off-plan bucket
+  // aren't things you "did." The plan view already excludes off-plan/episode from `activities`.
+  const activities: PlanActivity[] | null = plan ? plan.activities.filter((a) => a.kind === 'user') : null;
 
   async function pick(a: PlanActivity) {
     if (busy) return;
@@ -65,66 +66,66 @@ export function LogDidSheet({ onClose, onLogged }: { onClose: () => void; onLogg
           <span>Tap what you did — it counts even if it wasn&apos;t scheduled for today.</span>
         </div>
 
-        {activities === null ? (
-          <div className="sheet-loading">
-            <span className="typing">
-              <i />
-              <i />
-              <i />
-            </span>
-          </div>
+        {error && !activities ? (
+          // Never "nothing in your plan yet" over a failed read — the free-text line below still
+          // works, so the honest sentence keeps the door open without inventing an empty rhythm.
+          <div className="ld-empty">{"Couldn't reach your plan just now — jot it below and it still counts."}</div>
+        ) : activities === null ? (
+          // The plan's own activity list — Postgres, not the coach (PERF-06).
+          <SheetRowsSkeleton rows={3} label="Loading what's in your plan." />
         ) : (
-          <>
-            <div className="ld-list">
-              {activities.length === 0 ? (
-                <div className="ld-empty">Nothing in your plan yet — jot it below.</div>
-              ) : (
-                activities.map((a) => {
-                  const cat = categoryOf(a.title);
-                  const meta = [a.cadence, a.time_of_day].filter(Boolean).join(' · ');
-                  return (
-                    <button
-                      key={a.activity_id}
-                      className="ld-row"
-                      onClick={() => pick(a)}
-                      disabled={!!busy}
-                      aria-label={`Log ${a.title}`}
-                    >
-                      <span className={`ld-ic ld-ic-${cat}`} aria-hidden>
-                        <svg viewBox="0 0 24 24" width="20" height="20">
-                          <path d={ICON[cat]} fill="#fff" />
-                        </svg>
-                      </span>
-                      <span className="ld-row-t">
-                        <b>{a.title}</b>
-                        {meta && <span>{meta}</span>}
-                      </span>
-                      <span className="ld-plus" aria-hidden>
-                        {busy === a.activity_id ? '·' : '＋'}
-                      </span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="ld-free">
-              <input
-                className="ld-input"
-                placeholder="Something else you did…"
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void freeLog();
-                }}
-                disabled={!!busy}
-              />
-              <button className="ld-log" onClick={() => void freeLog()} disabled={!text.trim() || !!busy}>
-                Log
-              </button>
-            </div>
-          </>
+          <div className="ld-list">
+            {activities.length === 0 ? (
+              <div className="ld-empty">Nothing in your plan yet — jot it below.</div>
+            ) : (
+              activities.map((a) => {
+                const cat = categoryOf(a.title);
+                const meta = [a.cadence, a.time_of_day].filter(Boolean).join(' · ');
+                return (
+                  <button
+                    key={a.activity_id}
+                    className="ld-row"
+                    onClick={() => pick(a)}
+                    disabled={!!busy}
+                    aria-label={`Log ${a.title}`}
+                  >
+                    <span className={`ld-ic ld-ic-${cat}`} aria-hidden>
+                      <svg viewBox="0 0 24 24" width="20" height="20">
+                        <path d={ICON[cat]} fill="#fff" />
+                      </svg>
+                    </span>
+                    <span className="ld-row-t">
+                      <b>{a.title}</b>
+                      {meta && <span>{meta}</span>}
+                    </span>
+                    <span className="ld-plus" aria-hidden>
+                      {busy === a.activity_id ? '·' : '＋'}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
         )}
+
+        {/* Always present, never behind the plan's fetch: the off-plan line reads nothing from the
+            server, so it is usable on the first frame and survives a failed plan read — which is
+            what makes "jot it below" true in both branches above. */}
+        <div className="ld-free">
+          <input
+            className="ld-input"
+            placeholder="Something else you did…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void freeLog();
+            }}
+            disabled={!!busy}
+          />
+          <button className="ld-log" onClick={() => void freeLog()} disabled={!text.trim() || !!busy}>
+            Log
+          </button>
+        </div>
       </div>
     </>
   );

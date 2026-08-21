@@ -146,6 +146,29 @@ export async function runCaptureExtract(
   const { constraints: capturedConstraints, ...restBaseline } = normBaseline as Record<string, unknown> & {
     constraints?: Constraint[];
   };
+
+  /**
+   * A weight said in chat updates where they ARE, never where they STARTED.
+   *
+   * Same shallow-merge trap as the constraints above, and the more expensive one. `normalizeBaseline`
+   * has to emit a whole `weight_kg` record, so it fills `start` with the only number it has — the
+   * one just spoken. `mergeBaseline` is a shallow jsonb merge, so that record REPLACES the stored
+   * one wholesale. Net effect before this: say "I'm 85 now" three months in and the 88.5 you began
+   * at is gone, every progress read silently rebases to zero, and the adaptive targets that key off
+   * actual weekly rate lose the series they reason from.
+   *
+   * `weigh-in.ts` has always merged this correctly for the weekly check-in ("update current WITHOUT
+   * clobbering .start"); the chat path never got the same care. Preserve the earliest `start` we
+   * have — capture may run many times over one conversation, and only the first can be a beginning.
+   */
+  const spokenWeight = restBaseline.weight_kg as { current?: number; start?: number } | undefined;
+  if (spokenWeight && typeof spokenWeight.current === 'number') {
+    const priorStart = (await getUser(userId))?.baseline?.weight_kg?.start;
+    if (typeof priorStart === 'number') {
+      restBaseline.weight_kg = { ...spokenWeight, start: priorStart };
+    }
+  }
+
   if (Object.keys(restBaseline).length > 0) {
     await mergeBaseline(userId, restBaseline as unknown as Parameters<typeof mergeBaseline>[1]);
     baseline = true;

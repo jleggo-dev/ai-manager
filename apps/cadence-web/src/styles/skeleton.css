@@ -1,0 +1,118 @@
+/* Skeletons — the honest loader for a deterministic read (PERF-06).
+ *
+ * Cadence had exactly ONE loading state, and it was the coach's typing dots: three blinking
+ * circles borrowed from the chat. Every screen wore them, including screens that only read
+ * Postgres — so the app taught its user that a 150ms database read is the model thinking (owner,
+ * 2026-08-20: "I click Log breakfast, I get the 3 loading dots… we shouldn't show this. Show the
+ * Log breakfast screen, show everything at 0 and then update"). The dots stay where they are
+ * true — the coach composing a reply, a session being prescribed — and every deterministic screen
+ * paints its own structure instead.
+ *
+ * THE RULE THIS FILE ENCODES: a skeleton draws SHAPES, never NUMBERS. A bar cannot be misread as
+ * a value, so nothing here can be mistaken for settled data — which matters most on the ring the
+ * owner described, where "0 kcal eaten" is a perfectly valid real answer at 8am and a real 0 is
+ * indistinguishable from a placeholder 0. The bar is the truthful version of "show it at 0".
+ *
+ * BRAND.md: an empty state is AWAITING, not broken — so the motion is a slow warm breath across
+ * the page's own materials (surface-2 → line-soft), never a spinner, never a grey pulse. Reduced
+ * motion holds it still; the shapes still say what is coming, which is the part carrying meaning.
+ */
+
+.sk {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(100deg, var(--surface-2) 32%, var(--line-soft) 50%, var(--surface-2) 68%);
+  background-size: 280% 100%;
+  animation: sk-breathe 2.1s ease-in-out infinite;
+}
+/* Placeholder for a NUMBER. Deliberately the same bar as everything else: the moment a skeleton
+   starts drawing digits it is asserting a value it does not have. */
+.sk-num {
+  border-radius: 6px;
+}
+.sk-circle {
+  border-radius: 50%;
+}
+/* A ring's TRACK with no progress arc — the shape of the read, with none of its answer. */
+.sk-ring {
+  border-radius: 50%;
+  background: none;
+  border: 12px solid var(--surface-2);
+  animation: sk-ring-breathe 2.1s ease-in-out infinite;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+}
+
+@keyframes sk-breathe {
+  0% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -30% 0;
+  }
+}
+@keyframes sk-ring-breathe {
+  0%,
+  100% {
+    border-color: var(--surface-2);
+  }
+  50% {
+    border-color: var(--line-soft);
+  }
+}
+
+/* The screen wrapper. `aria-busy` rides on this element; the one status line below is what a
+   screen reader actually hears, since a wall of decorative bars announces nothing. */
+.sk-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px 24px;
+}
+.sk-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sk-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+/* A card-shaped placeholder — same radius and inset as the real cards it stands in for, so the
+   real content lands where the eye is already looking instead of shifting it. */
+.sk-card {
+  border: 1px solid var(--line-soft);
+  background: var(--surface);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Announced, not drawn. */
+.sk-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk,
+  .sk-ring {
+    animation: none;
+  }
+  .sk {
+    background: var(--surface-2);
+  }
+}

@@ -33,6 +33,10 @@ export const USER_SCOPED_KEYS = [
   'cadence.journalDisclosed',
   'cadence.locationOffer.dismissed',
   'cadence.pushToken',
+  // The locally cached coach transcript (coach-transcript-cache.ts), kept so the Coach tab paints
+  // before the network answers. The most personal thing on this list by a distance: inheriting it
+  // would open one person's coaching conversation in front of the next person to use the phone.
+  'cadence.coachTranscript',
 ] as const;
 
 function read(key: string): string | null {

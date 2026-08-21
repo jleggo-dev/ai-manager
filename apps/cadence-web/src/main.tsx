@@ -14,6 +14,10 @@ import './styles/gate.css';
 // The food CAPTURE surfaces (quick add, the Log screen, the confirm card). Separate from
 // styles.css's `.fh-*` reading screens on purpose — a capture and a read are different jobs.
 import './styles/food-capture.css';
+// Skeletons (PERF-06). Last, and deliberately self-contained: these rules describe the SHAPE of a
+// screen that has not arrived, so they must not depend on — or be overridden by — any one
+// screen's stylesheet.
+import './styles/skeleton.css';
 import { App } from './App.tsx';
 import { createAppQueryClient } from './lib/query/index.ts';
 import { initNativeAuth } from './lib/native-auth.ts';

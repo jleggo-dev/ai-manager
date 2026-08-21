@@ -28,6 +28,7 @@ const api = vi.hoisted(() => ({
 vi.mock('../../lib/api.ts', () => api);
 
 // The deep tools have their own tests and their own fetches — stubs keep this about the home.
+vi.mock('../food/LogScreen.tsx', () => ({ LogScreen: () => <div>log-screen</div> }));
 vi.mock('../food/RecipesPanel.tsx', () => ({ RecipesPanel: () => <div>cookbook-panel</div> }));
 vi.mock('../food/MealPlansPanel.tsx', () => ({ MealPlansPanel: () => <div>plan-panel</div> }));
 vi.mock('./ShopSheet.tsx', () => ({ ShopSheet: () => <div>shop-panel</div> }));
@@ -54,8 +55,12 @@ const day = (over: Record<string, unknown>) => ({
 });
 
 const refetch = vi.fn();
-function mount(d: Record<string, unknown> | null, props: Record<string, unknown> = {}) {
-  useNutritionDay.mockReturnValue({ data: d, refetch });
+function mount(
+  d: Record<string, unknown> | null,
+  props: Record<string, unknown> = {},
+  query: Record<string, unknown> = {},
+) {
+  useNutritionDay.mockReturnValue({ data: d, refetch, ...query });
   return render(<FoodHome onBack={() => {}} onCoach={() => {}} {...props} />);
 }
 
@@ -66,6 +71,51 @@ beforeEach(() => {
   api.getRecentMeals.mockResolvedValue([]);
 });
 afterEach(cleanup);
+
+describe('FoodHome — the day, before it lands (PERF-06)', () => {
+  /**
+   * The owner asked for "show everything at 0 and then update" (2026-08-20). Numbers are the one
+   * place that instruction cannot be followed literally: 0 kcal eaten IS a true answer before
+   * breakfast, so a placeholder 0 and a settled 0 are the same pixels — and the moment the ring
+   * jumped from 0 to 740, the screen he had been reading would turn out to have been wrong. The
+   * structure arrives instantly, which was the ask; the digits wait behind a bar.
+   */
+  it('paints the screen’s whole structure with no loader anywhere', () => {
+    const { container } = mount(null, {}, { isPending: true });
+    expect(screen.getByText('Food')).toBeTruthy();
+    expect(screen.getByText('Today')).toBeTruthy();
+    expect(screen.getByText('Log a meal')).toBeTruthy();
+    expect(screen.getByText('Talk food with me')).toBeTruthy();
+    expect(container.querySelector('.typing')).toBeNull();
+  });
+
+  it('holds a bar where every number goes, never a settled zero', () => {
+    const { container } = mount(null, {}, { isPending: true });
+    expect(screen.queryByText('0')).toBeNull();
+    expect(screen.queryByText('KCAL EATEN')).toBeNull();
+    expect(screen.queryByText('0 g')).toBeNull();
+    expect(screen.queryByText('0.0 L')).toBeNull(); // water too — 0.0 L is a true reading at 7am
+    expect(container.querySelectorAll('.sk').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the water row pourable while its total is still unknown', () => {
+    mount(null, {}, { isPending: true });
+    // The eight glasses and the ＋ never read the server; only the litres do.
+    expect(screen.getByLabelText('Add a glass of water')).toBeTruthy();
+  });
+
+  it('draws the ring’s track the whole time — the shape never waits, only the answer does', () => {
+    const { container } = mount(null, {}, { isPending: true });
+    expect(container.querySelector('.nring')).toBeTruthy();
+    expect(container.querySelectorAll('.mbar').length).toBe(3);
+  });
+
+  it('gives up the bars the instant the day arrives', () => {
+    const { container } = mount(day({}), {}, { isPending: false });
+    expect(screen.getByText('740')).toBeTruthy();
+    expect(container.querySelector('.sk')).toBeNull();
+  });
+});
 
 describe('FoodHome', () => {
   it('counts without a target: eaten kcal, "no target yet", bare-gram bars', () => {
@@ -131,14 +181,28 @@ describe('FoodHome', () => {
     expect(invalidate).toHaveBeenCalled();
   });
 
-  it('hands the coach an app-authored note from "Talk food with me" and from a Log chip', () => {
+  it('hands the coach an app-authored note from "Talk food with me"', () => {
     const onCoach = vi.fn();
     mount(day({}), { onCoach });
     fireEvent.click(screen.getByText('Talk food with me'));
     expect(onCoach).toHaveBeenCalledWith(expect.stringContaining('Talk food with me'));
+  });
 
-    fireEvent.click(screen.getAllByText('Log')[0]!); // breakfast slot is empty → a Log chip
-    expect(onCoach).toHaveBeenCalledWith(expect.stringContaining('Log on breakfast'));
+  /**
+   * Logging is capture, not conversation. Both doors used to hand the user to the COACH — a
+   * slice-1 leftover from when talking was the only capture surface. The design's own caption for
+   * 05b says the Log screen is reached "from any method tile in quick add, from Log a meal, or the
+   * ＋ on the trail", and the owner hit it on device (2026-08-20): "log a meal in the full screen
+   * nutrition menu takes me to the coach chat (i think this is wrong)". Talking food is still one
+   * tap away — that is what "Talk food with me" is for, asserted above.
+   */
+  it('opens the Log screen from "Log a meal" and from an empty meal slot — not the coach', () => {
+    const onCoach = vi.fn();
+    mount(day({}), { onCoach });
+
+    fireEvent.click(screen.getByText('Log a meal'));
+    expect(screen.getByText('log-screen')).toBeTruthy();
+    expect(onCoach).not.toHaveBeenCalled();
   });
 
   it('opens straight to the shopping list when a shop task sent it there', () => {

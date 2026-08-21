@@ -34,20 +34,42 @@ type Route =
  * taken, nothing counts until it is confirmed, and once something lands the screen asks the one
  * question worth asking — where should it sit.
  */
+/**
+ * One mapping from a chosen method to the route that serves it — used both for the caller's
+ * pre-chosen method and for a tile tapped here, so the two can never drift apart.
+ * Picture is deliberately absent: it is a file input owned by the tile itself, not a route.
+ */
+function routeForMethod(m: CaptureMethod | undefined): Route {
+  if (m === 'chat') return { at: 'chat', listening: false };
+  if (m === 'voice') return { at: 'chat', listening: true };
+  if (m === 'barcode') return { at: 'barcode' };
+  return { at: 'home' };
+}
+
 export function LogScreen({
   date,
   initialMeal,
+  initialMethod,
   onClose,
   onLogged,
 }: {
   date: string;
   initialMeal: MealKind;
+  /**
+   * The method the CALLER already chose, so this screen opens on it.
+   *
+   * The quick-add sheet's tiles used to set only "open the Log screen" and drop which tile was
+   * tapped, so Chat landed on the Log home — showing the same five tiles again and asking the user
+   * to pick Chat a second time (owner, device, 2026-08-20). A choice already made must not be
+   * asked for twice. Absent, this opens on `home`, which is what "Log a meal" and the ＋ want.
+   */
+  initialMethod?: CaptureMethod;
   onClose: () => void;
   /** A meal landed — the host refreshes whatever it shows of the day. */
   onLogged?: () => void;
 }) {
   const [meal, setMeal] = useState<MealKind>(initialMeal);
-  const [route, setRoute] = useState<Route>({ at: 'home' });
+  const [route, setRoute] = useState<Route>(() => routeForMethod(initialMethod));
   const [caption, setCaption] = useState('');
   const [landed, setLanded] = useState<Meal | null>(null);
   const [waterMl, setWaterMl] = useState<number | null>(null);
@@ -77,10 +99,7 @@ export function LogScreen({
   }
 
   function onMethod(m: CaptureMethod) {
-    if (m === 'chat') setRoute({ at: 'chat', listening: false });
-    if (m === 'voice') setRoute({ at: 'chat', listening: true });
-    if (m === 'barcode') setRoute({ at: 'barcode' });
-    if (m === 'search') setRoute({ at: 'home' });
+    setRoute(routeForMethod(m));
   }
 
   if (landed) {

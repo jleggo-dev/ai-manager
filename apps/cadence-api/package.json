@@ -16,7 +16,8 @@
     "probe:backgrounded": "node --import tsx scripts/probe-backgrounded-phone.ts",
     "probe:replan": "node --import tsx scripts/probe-replan-preview.ts",
     "eval:tools": "node --import tsx scripts/eval-tool-selection.ts",
-    "eval:outcomes": "node --import tsx scripts/eval-outcomes.ts"
+    "eval:outcomes": "node --import tsx scripts/eval-outcomes.ts",
+    "eval:food-vision": "node --import tsx scripts/eval-food-vision.ts"
   },
   "dependencies": {
     "@ai-admin/core": "*",

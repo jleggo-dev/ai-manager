@@ -15,6 +15,7 @@ import { isAnonymousSession } from './features/auth/anonymous.ts';
 import { listDeviceAccounts, rememberDeviceAccount } from './features/auth/deviceAccounts.ts';
 import { syncLocalStateToUser } from './features/auth/localUserState.ts';
 import { PhoneFrame } from './components/PhoneFrame.tsx';
+import { PlanSkeleton } from './features/plan/PlanSkeleton.tsx';
 import { CoachFaceProvider } from './features/coach/CoachFaceProvider.tsx';
 import { setAuthToken, isDevMode, getHealthDigest, postHealthDigest, postWorkoutHistory } from './lib/api.ts';
 import { useQueryClient } from '@tanstack/react-query';
@@ -40,17 +41,21 @@ const DEV_MODE = isDevMode();
 // Resolved once at load, like DEV_MODE — the URL doesn't change without a reload.
 const PREVIEW = new URLSearchParams(window.location.search).get('preview');
 
+/**
+ * App open, while the session resolves and `/plan` decides which screen this is (PERF-06).
+ *
+ * This is the screen behind the owner's first complaint — "the first time logging in, it still
+ * takes 10s to load the plan screen" (2026-08-20) — and it was the coach's typing dots, which
+ * told him the app was talking to a model when it was in fact reading Postgres and waking a
+ * serverless function.
+ *
+ * It shows the PLAN's skeleton rather than a neutral one because that is what this fetch is
+ * literally for: `fetchPlanIntoCache`. For the rare brand-new account it flashes and gives way to
+ * "meet Cadence" — which costs nothing, because a skeleton asserts a shape, never a fact.
+ */
 const Loading = () => (
   <div className="app">
-    <div className="scrollbody">
-      <div className="chat-loading">
-        <span className="typing">
-          <i />
-          <i />
-          <i />
-        </span>
-      </div>
-    </div>
+    <PlanSkeleton />
   </div>
 );
 
