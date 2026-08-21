@@ -7156,7 +7156,7 @@ is added when they do; the same shapes fill in.
 |---|---|---|
 | 2 — capture | 05a–d, 05, 06, 07 | Slot-aware quick add sheet; occurrence-FREE full Log screen (today every capture needs a trail task); chat/voice parse-confirm with the amounts-kept rule (05c's card is also a coach TOOL candidate); serving/unit food detail; "where should it sit" post-log; drink composer. `MealCapturePanel` (~436 eff) must split first. |
 | 3 — reading | 08, 08b, 09 | Food full screen: Day/Week tabs + date nav; **Nutrients drill-down** — the 8 micros flow end-to-end with DRI floors/ceiling (`micronutrient-targets.ts`) and NOTHING renders them; floors ≠ ceilings visually; "counted from N of M items" honesty line. |
-| 4 — kitchen | 10, 10a–c | Kitchen tab: paste-a-recipe door, recipes with per-serving numbers, meal-prep composer (meal = recipes + foods → day + slot), planning week/day, shopping list generated never kept. Ruling: the Kitchen is prep, not one-tap logging. |
+| 4 — kitchen | 10, 10a–c | **SHIPPED — see below.** Kitchen tab: paste-a-recipe door, recipes with per-serving numbers, meal-prep composer (meal = recipes + foods → day + slot), planning week/day, shopping list generated never kept. Ruling: the Kitchen is prep, not one-tap logging. |
 | 5 — coach flows | 03, 04, 04b | "Talk food with me" menu as coach quick picks; allergies ask → HARD STOP / SOFT confirm card; day-7 week read-back ("what did we miss") ; weigh-in INSIDE the weekly check-in (units: two Settings controls, lb for body + grams for food, never one metric switch); targets proposal card ("your average minus 300, snacking included"). Wires `weekly-readout` (job exists, no caller). |
 
 **Water tracking — GREENLIT and built (owner, 2026-08-19).** `cadence.water_logs` (0037): one row
@@ -7165,6 +7165,50 @@ per pour, `ml` canonical (glasses and ounces are display arithmetic, never stora
 no confirm card, and never a target: eight is the row's LENGTH, not a quota. `POST /nutrition/water`
 is the write. Still open from the frames: "counts as two glasses of water" on a logged drink
 (07) needs the drink composer, which is slice 2.
+
+### Slice 4 — the Kitchen (act 04: frames 10, 10a–c), SHIPPED
+
+A third tab on the Food screen, beside the two reads: Day and Week say what happened, the
+**Kitchen** is where the week ahead gets prepped. Its own files, none of them the Day tab's:
+`FoodKitchen` (the tab) · `KitchenRecipes` (10a) · `KitchenPlanner` (10b/10c) · `KitchenShopList`
+· `KitchenPaste` · `kitchenPlan.ts` (pure week arithmetic) · `useKitchen` (the two fetches and the
+one write). The date pill does not follow — a date is a question the reading tabs ask.
+
+**The ruling is structural, not a copy line.** "Prep, not one-tap logging" is why the Kitchen does
+NOT reuse `RecipesPanel`, which the Day tab's Cookbook door opens: that panel offers *log N
+servings*, which is exactly the tap this surface must not have. A test walks the list, a recipe and
+a planned day asserting no button anywhere reads "log". The footer says it out loud — *planning
+something doesn't count it — log it when you eat it.*
+
+**Zero new endpoints; three behaviour fixes on existing ones.** The composer writes through
+`POST /nutrition/meal-plans` (no week yet — saved recipes ride `reuse_recipe_id`, so a planned
+dinner reuses the row instead of copying it), `PATCH …/:id { days }` (a week exists), and
+`DELETE …/:id` (the last meal came off — a week with no meals is not a shape the API stores; the
+day schema requires `meals.min(1)`). What was missing: **`syncMenuTasks` ran only on save**, so a
+week composed meal-by-meal never reached the trail, and a deleted week left its shop/cook tasks
+standing. Both paths now sync (best-effort, as the save path already was).
+
+**The shopping list is generated, never kept — and now that is one implementation.**
+`deriveShoppingList`/`categorizeGrocery` moved to `@cadence/shared`; the API re-exports them from
+`meal-plan-parse.ts` so its callers and tests are unchanged, and the Kitchen derives the same list
+client-side from whatever is planned *right now*. Nothing is written back: ticks last the length of
+a shop and no longer, and the saved week's own persisted list (the shop, `ShopSheet`) is left
+exactly as found. `groupByAisle` is shared too, so the walking order cannot drift between the two.
+
+**What the repo cannot honour yet** (report, don't fake):
+- **"meal = recipes + foods" is half-built — recipes only.** `MealPlanMeal` is
+  `{ slot, recipe_id }` and `persistedMealSchema` requires a recipe uuid, so an ad-hoc *food* (the
+  `foods` table) cannot be planned into a slot at all. Planning "an apple on Tuesday" needs a
+  schema change (`food_id` alongside `recipe_id`, nullable both ways) plus a migration — not
+  faked here.
+- **The frames themselves were unavailable.** The DesignSync MCP was not reachable in the build
+  session and `Cadence Food Journey.dc.html` is nowhere on disk, so 10/10a–c were built from this
+  table's own line plus the shipped slice-1/3 patterns. Layout, ordering and any redline in those
+  frames are unverified against the drawing.
+- **Two doors to the same tools.** The Day tab's earned pills (Cookbook · This week · Shopping ·
+  Plan your meals) still open the old sheets. They were left alone — they are shipped and tested,
+  and which of the two survives is a frame-10 question.
+- One plan per `(user_id, week_of)`, so the Kitchen plans **this** week only; no week-ahead nav.
 
 **The design asks for things the repo cannot honour yet** (report, don't fake):
 meal-slot open/close times ("closes 10:30", "still open");

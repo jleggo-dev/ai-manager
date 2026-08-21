@@ -175,6 +175,7 @@ export {
   generateMealPlan,
   saveMealPlan,
   patchMealPlan,
+  deleteMealPlan,
   probeRecipeDiscovery,
   discoverRecipes,
   weekOfMonday,

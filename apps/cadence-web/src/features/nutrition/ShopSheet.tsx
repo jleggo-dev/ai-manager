@@ -1,31 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ShoppingListItem } from '@cadence/shared';
 import { getCurrentMealPlan, patchMealPlan, type MealPlanRecord } from '../../lib/api.ts';
-
-/** Store-shaped aisle order + labels — the design's PRODUCE / BUTCHER / TINS & DRY / DAIRY (G). */
-const AISLES: Array<{ key: string; label: string }> = [
-  { key: 'produce', label: 'PRODUCE' },
-  { key: 'protein', label: 'BUTCHER & PROTEIN' },
-  { key: 'pantry', label: 'TINS & DRY' },
-  { key: 'dairy', label: 'DAIRY' },
-  { key: 'frozen', label: 'FROZEN' },
-  { key: 'bakery', label: 'BAKERY' },
-  { key: 'other', label: 'ANYTHING ELSE' },
-];
-
-function groupByAisle(
-  list: ShoppingListItem[],
-): Array<{ label: string; rows: Array<{ item: ShoppingListItem; index: number }> }> {
-  const byCat = new Map<string, Array<{ item: ShoppingListItem; index: number }>>();
-  list.forEach((item, index) => {
-    const cat = (item.category?.toString().trim() || 'other').toLowerCase();
-    const key = AISLES.some((a) => a.key === cat) ? cat : 'other';
-    const rows = byCat.get(key) ?? [];
-    rows.push({ item, index });
-    byCat.set(key, rows);
-  });
-  return AISLES.filter((a) => byCat.has(a.key)).map((a) => ({ label: a.label, rows: byCat.get(a.key) ?? [] }));
-}
+import { groupByAisle } from './aisles.ts';
 
 /**
  * The shop (design G) — the week's shopping list as an aisle-grouped checklist, grouped the way the
