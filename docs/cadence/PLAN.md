@@ -7492,17 +7492,84 @@ also pays a ~1.2s service wake. No AI is involved anywhere.
 
 | ID | Fix | Effort | Impact | Status |
 |---|---|---|---|---|
-| PERF-01 | **react-query for /plan + /progress**: cached first paint, background revalidate (30s staleTime, client defaults); typing dots only on the true first load | S | Tab returns paint **instantly**; the owner's complaint as stated | **shipped in this PR** |
-| PERF-02 | **Seed the plan cache from the App-gate fetch** (`fetchPlanIntoCache`) | S | App open: 2 sequential /plan → 1 | **shipped in this PR** |
-| PERF-03 | Same treatment for weather / location / daily-checkin / notification-prefs / LogDidSheet (mechanical repeats of PERF-01) | S | Plan-tab return burst ~6 → ~0 requests inside staleTime | backlog |
-| PERF-04 | **Colocate API and DB** (move the Vercel service to us-west, or the DB east) — per-query ~130ms → ~5–15ms | config/ops | GET /plan server time ~1.5s → ~150–300ms; every endpoint wins | backlog — biggest server-side lever |
-| PERF-05 | Batch/parallelize buildPlanView (dedupe the plan/activities/user reads ensureHorizon already did; `Promise.all` independents; or one SQL) | M | ~11 round trips → ~3–4 even without PERF-04 | backlog |
-| PERF-06 | **Skeleton instead of typing dots** on deterministic screens — the dots are the coach's thinking animation and teach users that a DB read is an AI call | S (design) | honesty; perceived speed | backlog — needs a design pass, not built |
-| PERF-07 | Keep Plan/Progress mounted like Coach (`display:none`/`contents`) | M | preserves scroll + skips remount effects; PERF-01 already delivers the paint | optional after PERF-01; documented, not built |
+| PERF-01 | **react-query for /plan + /progress**: cached first paint, background revalidate (30s staleTime, client defaults) | S | Tab returns paint **instantly** | **shipped** (#264) |
+| PERF-02 | **Seed the plan cache from the App-gate fetch** (`fetchPlanIntoCache`) | S | App open: 2 sequential /plan → 1 | **shipped** (#264) |
+| PERF-03 | Same treatment for weather / daily-checkin / notification-prefs / LogDidSheet | S | Plan-tab return burst ~6 → ~0 requests inside staleTime | **shipped** — see below |
+| PERF-04 | **Colocate API and DB** — the Vercel service moved to `pdx1`, beside us-west-2 | config/ops | GET /plan server time ~1.5s → **~0.2s** | **shipped** (#264; `apps/cadence-api/vercel.json` pins `regions: ["pdx1"]`) |
+| PERF-05 | Batch/parallelize buildPlanView | M | ~11 round trips → ~3–4 | **shipped** (#264) |
+| PERF-06 | **Skeleton instead of typing dots** on deterministic screens | S (design) | honesty; perceived speed | **shipped** — see below |
+| PERF-07 | Keep Plan/Progress mounted like Coach (`display:none`/`contents`) | M | preserves scroll + skips remount effects | **not built, and no longer needed for the paint** — PERF-01 delivers it; revisit only for scroll position |
 
-Also real but smaller: cache the auth verification (PERF-04 shrinks it too), and a keep-warm ping
-for the service wake. Coach-tab behaviour is untouched throughout — it stays mounted (2026-08-16
-rule) and was never the problem: switching to it fires zero requests.
+Also real but smaller: cache the auth verification, and a keep-warm ping for the service wake
+(still unbuilt — the 1.28s cold start below is what it would remove). Coach-tab behaviour is
+untouched throughout — it stays mounted (2026-08-16 rule) and was never the problem.
 
 **Verified while measuring:** account-1/account-2 had no committed plan; the numbers above use a
 seeded 5-activity plan (goals + `commitActivities`), wiped after per step 12b.
+
+## Latency, re-measured after the fixes (2026-08-20, deployed)
+
+> *"The first time logging in, it still takes 10s? to load the plan screen."* — owner, on device
+>
+> *"I click Log breakfast, I get the 3 loading dots. You know, we shouldn't show this. … Show the
+> Log breakfast screen, show everything at 0 and then update."* — owner, same report
+
+**10s did not reproduce, and the second complaint turned out not to be a latency bug at all.**
+Measured against the live API from Montreal, anonymous Supabase session, seeded 5-activity plan
+with 55 occurrences, scratch account wiped after:
+
+| Hop | Measured now | Was (pre-#264) |
+|---|---|---|
+| `/health` warm | 102–240ms | 78–216ms |
+| `/health` **after 10 min idle** | **1,284ms** | ~1.2s (unchanged — no keep-warm) |
+| Supabase `signInAnonymously` | 393ms | — |
+| GET /plan, committed plan | **176–503ms**, median ~200ms | 2.01–3.76s |
+| GET /plan, no plan | 151–196ms | 0.86–2.5s |
+| GET /progress | 144–158ms | 0.32–0.9s |
+| GET /nutrition/day | 145–156ms | 0.70–0.84s |
+| GET /me/daily-checkin | 280–420ms | 0.26–0.35s |
+| **GET /plan/occurrences/:id — meal capture** (`kind: 'system'`) | **136–163ms** | not measured before |
+| **GET /plan/occurrences/:id — coach session** (`kind: 'user'`, first open) | **34,241ms** | not measured before |
+| 7-request app-open burst, serial | 1,735ms | — |
+| 5 aux requests: parallel vs serial | 374ms vs 1,285ms | — |
+
+PERF-04 + PERF-05 together took GET /plan from ~2–3.8s to ~0.2s — a ~10× win, and the reason the
+owner's 10s cannot be the plan fetch on a current build. What his 10s most likely was: a **stale
+native bundle**. The phone bakes the web bundle at native build time, so without a rebuild since
+#264 he was running the pre-PERF-01/02 client, which fetched `/plan` **twice sequentially** at app
+open — 2 × ~2–3.8s, plus ~1.2s cold wake, plus auth, which reconstructs ~10s almost exactly.
+**Before any future device timing: rebuild (`npm run run:ios --prefix apps/cadence-ios`).**
+
+### The two real findings
+
+1. **The meal capture sheet was never slow — it was mislabelled.** "Log breakfast" is a
+   `kind: 'system'` row, so `getOccurrenceDetail`'s generate gate is false and no model is
+   involved: 136–163ms of Postgres, shown behind the coach's typing animation. The dots were the
+   bug.
+2. **The coach-session sheet really does take 34s on a first open**, because it genuinely
+   prescribes a session through an LLM. `prefetchImminentSessions` (void-fired from GET /plan)
+   hides this when it wins the race, and does not on a true first load. Its dots are honest and
+   they stay — but this, not `/plan`, is now the longest wait in the app. **Open: PERF-08** —
+   the prefetch should be awaited or the sheet should say what it is doing for that long.
+
+### PERF-06, as built
+
+The rule: **a skeleton draws shapes, never numbers.** The owner asked for zeroes ("show everything
+at 0 and then update"); shapes are that request kept honest, because 0 kcal eaten at eight in the
+morning is a *true* answer — a placeholder 0 and a settled 0 are the same pixels, and the moment
+the ring turns into 740 the screen he had been reading turns out to have been wrong. A bar is
+never mistaken for a value, and it arrives just as fast. BRAND.md holds: the treatment is a slow
+warm breath across the page's own materials, never a spinner and never a grey pulse — an empty
+state is *awaiting*, not broken (`styles/skeleton.css`, `components/Skeleton.tsx`).
+
+What paints instantly now: the **app-open gate**, **Plan**, **Progress**, the **meal capture
+sheet** (its header is real on the first frame — the trail already knew the title, so it is passed
+in rather than re-fetched), the **weigh-in sheet**, the **＋ log sheet**, and the **Food home**
+(ring track, macro labels, water glasses, every door — only the digits wait). The typing dots stay
+exactly where a model is thinking: StartSheet, OccurrenceSheet, CoachFoodActionSheet.
+
+Two failure-dressed-as-data bugs were removed on the way: PlanView showed the dots forever on a
+failed load (no error branch existed), and LogDidSheet's `.catch(() => setActivities([]))` drew
+*"Nothing in your plan yet"* over a network failure — the 2026-08-19 shape, in a quieter place.
+Both now say what happened. Guarded by `CaptureSheet.test.tsx`, `LogDidSheet.test.tsx`,
+`ProgressView.test.tsx`, `FoodHome.test.tsx`; `?preview=skeletons` renders them all for review.

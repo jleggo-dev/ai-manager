@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { logWater } from '../../lib/api.ts';
+import { Skeleton } from '../../components/Skeleton.tsx';
 
 /** A glass is 250 ml — the unit the row counts in, and the amount one tap pours.
  *  Exported so the capture surfaces pour the same glass this row counts. */
@@ -21,11 +22,19 @@ export function WaterRow({
   ml,
   onLogged,
   readOnly = false,
+  pending = false,
 }: {
   ml: number;
   onLogged: (nextMl: number) => void;
   /** A day behind you: the row still reads, but a pour would land on today rather than on it. */
   readOnly?: boolean;
+  /**
+   * The day's total hasn't arrived (PERF-06). The row, its eight glasses and the ＋ are all
+   * structure and paint at once — a pour works immediately, and its optimistic total simply
+   * replaces the placeholder. Only the LITRES wait, because "0.0 L" is a true reading at seven in
+   * the morning and would be indistinguishable from a placeholder until it turned into 1.2.
+   */
+  pending?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const litres = (ml / 1000).toFixed(1);
@@ -60,7 +69,7 @@ export function WaterRow({
           <i key={i} className={i < filled ? 'is-full' : ''} />
         ))}
       </span>
-      <span className="fh-water-v">{litres} L</span>
+      <span className="fh-water-v">{pending ? <Skeleton className="sk-num" w={38} h={11} /> : `${litres} L`}</span>
       {!readOnly && (
         <button className="fh-water-add" onClick={() => void pour()} disabled={busy} aria-label="Add a glass of water">
           ＋
