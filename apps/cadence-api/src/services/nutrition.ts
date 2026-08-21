@@ -46,7 +46,8 @@ export type { NutritionInsightPack } from './nutrition-insight.ts';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
-async function tickFoodLogOccurrence(userId: string, date: string, meal?: string): Promise<void> {
+/** Exported for the two-stage photo path (meal-photo-read.ts), which writes its own row. */
+export async function tickFoodLogOccurrence(userId: string, date: string, meal?: string): Promise<void> {
   try {
     // Prefer the specific meal task (the redesign's per-meal logs); fall back to the single "Food
     // log" row for plans that predate the split, and for drink/other which map to no meal task.

@@ -93,6 +93,8 @@ export {
   type PlateAdvice,
   clearMacroTargets,
   logMeal,
+  readMealPhoto,
+  logMealFromReading,
   logMealFromFood,
   previewMeal,
   logPreviewedMeal,

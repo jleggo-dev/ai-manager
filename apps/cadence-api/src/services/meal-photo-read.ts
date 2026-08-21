@@ -24,6 +24,10 @@
 import { runJobBySlug } from '../ai/aim.ts';
 import { putMealPhoto, signMealPhotoUrl } from './meal-photos.ts';
 import { logAi } from './ai-log.ts';
+import { insertNutritionLog } from '../repos/nutrition.ts';
+import { isMeal, parseMealResult, PROVISIONAL_BELOW } from './nutrition-parse.ts';
+import { tickFoodLogOccurrence } from './nutrition.ts';
+import type { MealKind, Macros, NutritionLog } from '@cadence/shared';
 
 export interface MealPhotoReading {
   photo_ref: string;
@@ -73,4 +77,100 @@ export async function readMealPhoto(
     });
     return { photo_ref, reading: '', error };
   }
+}
+
+export interface ReadingLogInput {
+  photo_ref: string;
+  /** The reading AS THE USER IS WILLING TO STAND BEHIND IT — possibly edited. See below. */
+  reading: string;
+  caption?: string;
+  meal?: MealKind;
+  date?: string;
+}
+
+/**
+ * Step 2 — prose to numbers, and the row.
+ *
+ * `reading` comes back from the CLIENT rather than being cached server-side, and that is the point
+ * of splitting here rather than streaming: the user may have corrected it ("that's oat milk", "it
+ * was the large one"), and a correction outranks anything the model saw. `parse-meal-description`
+ * is told the user is right about WHAT it was and the photo is right about HOW MUCH, so an edited
+ * reading wins exactly where it should.
+ *
+ * No image reaches this job, which means it takes the REMOTE path (see `runJobBySlug`: images ride
+ * in-process only) — faster, and testable off a laptop that has no credential encryption key.
+ *
+ * Every failure rule the one-stage path learned on 2026-08-20 applies unchanged, because they were
+ * learned the expensive way: the words survive a failed parse, a parse that produced no numbers is
+ * PROVISIONAL rather than a settled zero-calorie meal, and the reason is kept rather than collapsed
+ * into an empty string.
+ */
+export async function logMealFromReading(userId: string, input: ReadingLogInput): Promise<NutritionLog> {
+  const date = input.date || new Date().toISOString().slice(0, 10);
+  const hint = input.meal && isMeal(input.meal) ? input.meal : undefined;
+
+  let meal: MealKind = hint ?? 'other';
+  let items: NutritionLog['items'] = [];
+  let flags: NutritionLog['flags'] = {};
+  let macros: Macros | null = null;
+  let confidence: number | null = null;
+  let rawOut = '';
+  let parseFailed = false;
+  let parseError: string | null = null;
+
+  try {
+    const res = await runJobBySlug(userId, 'parse-meal-description', {
+      description: input.reading,
+      meal_text: input.caption ?? '',
+      meal_hint: input.meal ?? '',
+    });
+    rawOut = res.formatted ?? res.raw ?? '';
+    const shaped = parseMealResult(rawOut, hint);
+    meal = shaped.meal;
+    items = shaped.items;
+    flags = shaped.flags;
+    macros = shaped.macros;
+    confidence = shaped.confidence;
+  } catch (e) {
+    parseFailed = true;
+    parseError = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    console.warn('[nutrition] parse-meal-description failed — storing UNPARSED and provisional:', parseError);
+  }
+
+  const noNumbers = !macros || Object.keys(macros).length === 0;
+  const provisional = parseFailed || noNumbers || (!!macros && confidence !== null && confidence < PROVISIONAL_BELOW);
+
+  const row = await insertNutritionLog(userId, {
+    date,
+    meal,
+    items,
+    input_method: 'photo',
+    ai_confidence: confidence,
+    raw_text: input.caption || null,
+    flags,
+    photo_ref: input.photo_ref,
+    macros,
+    provisional,
+    // Kept so a number can be explained later, and corrected at its cause rather than its symptom.
+    photo_reading: input.reading || null,
+  });
+
+  await tickFoodLogOccurrence(userId, date, meal);
+
+  void logAi(userId, {
+    kind: 'parse_meal_description',
+    input: { caption: input.caption ?? null, reading_words: input.reading.split(/\s+/).filter(Boolean).length },
+    output: { raw: rawOut.slice(0, 2000) },
+    meta: {
+      meal,
+      items: items.length,
+      confidence,
+      macros: !!macros,
+      provisional,
+      two_stage: true,
+      ...(parseFailed ? { parseFailed: true, parseError } : {}),
+    },
+  });
+
+  return row;
 }

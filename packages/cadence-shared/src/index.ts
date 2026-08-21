@@ -46,3 +46,4 @@ export * from './local-notifications.ts';
 export * from './notifications/index.ts';
 export * from './micronutrient-targets.ts';
 export { coachActivityLine, resolveActivityNames, type CoachActivityFrame } from './coach-activity.ts';
+export * from './meal-read-progress.ts';

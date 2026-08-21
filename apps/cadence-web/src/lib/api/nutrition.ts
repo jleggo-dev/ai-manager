@@ -322,3 +322,49 @@ export async function getNutritionInsight(date?: string): Promise<NutritionInsig
     return null;
   }
 }
+
+export interface MealPhotoReading {
+  photo_ref: string;
+  reading: string;
+  error: string | null;
+}
+
+/**
+ * Two-stage photo logging, step 1 — the photo goes up and comes back described in words.
+ *
+ * Split from the log on purpose (see the API route): the wait is 40–70s end to end, and showing the
+ * reading in the middle turns it from a spinner into visible progress — early enough that the user
+ * can correct what it says before any number is computed from it. Nothing is written to the food
+ * log by this call, so abandoning here leaves no meal behind.
+ */
+export async function readMealPhoto(photo: string, caption?: string): Promise<MealPhotoReading> {
+  const res = await fetch(`${BASE}/nutrition/photo/read`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ photo, ...(caption ? { caption } : {}) }),
+  });
+  if (!res.ok) throw Object.assign(new Error(`photo read failed: ${res.status}`), { status: res.status });
+  return res.json();
+}
+
+/**
+ * Step 2 — the reading becomes numbers and a row.
+ *
+ * `reading` is sent BACK rather than held server-side because the user may have edited it, and a
+ * correction outranks anything the model saw. An empty reading is valid: a failed step 1 still logs
+ * the meal from the caption.
+ */
+export async function logMealFromReading(input: {
+  photo_ref: string;
+  reading: string;
+  caption?: string;
+  meal?: MealKind;
+}): Promise<Meal> {
+  const res = await fetch(`${BASE}/nutrition/photo/log`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw Object.assign(new Error(`meal log failed: ${res.status}`), { status: res.status });
+  return res.json();
+}

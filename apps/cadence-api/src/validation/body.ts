@@ -83,6 +83,33 @@ export const waterBodySchema = z.object({
     .optional(),
 });
 
+/**
+ * Two-stage photo logging (see services/meal-photo-read.ts).
+ *
+ * Step 1 takes the photo; step 2 takes the READING BACK from the client, because the user may have
+ * corrected it. The cap is generous — these readings run 250–800 words — but present, since this
+ * text is interpolated into a prompt and unbounded client input never should be.
+ */
+export const readPhotoBodySchema = z.object({
+  photo: z.string().refine((s) => s.startsWith('data:image/'), { message: 'photo must be a data:image URL' }),
+  caption: z.string().max(2000).optional(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD')
+    .optional(),
+});
+
+export const logFromReadingBodySchema = z.object({
+  photo_ref: z.string().min(1, 'photo_ref is required').max(400),
+  reading: z.string().max(20000),
+  caption: z.string().max(2000).optional(),
+  meal: mealKindSchema.optional(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD')
+    .optional(),
+});
+
 export const logMealBodySchema = z
   .object({
     text: z.string().optional(),

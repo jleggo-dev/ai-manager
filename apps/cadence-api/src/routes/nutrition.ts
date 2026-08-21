@@ -14,6 +14,7 @@ import {
   getPlateAdvice,
   previewMealParse,
 } from '../services/nutrition.ts';
+import { readMealPhoto, logMealFromReading } from '../services/meal-photo-read.ts';
 import { logWater } from '../services/water.ts';
 import {
   BodyValidationError,
@@ -22,6 +23,8 @@ import {
   macroTargetsBodySchema,
   previewMealBodySchema,
   waterBodySchema,
+  readPhotoBodySchema,
+  logFromReadingBodySchema,
 } from '../validation/body.ts';
 
 const router = Router();
@@ -53,6 +56,60 @@ router.post('/meals', async (req: Request, res: Response) => {
     if (/food not found|recipe not found/.test(msg)) return void res.status(404).json({ error: msg });
     console.error('[POST /nutrition/meals]', err);
     res.status(500).json({ error: 'failed to log meal' });
+  }
+});
+
+/**
+ * Two-stage photo logging — split into two calls ON PURPOSE.
+ *
+ * The pipeline costs 40–70s end to end, and a minute of spinner is not a feature. Owner's fix, and
+ * it is the right one: don't hide the wait, narrate it. "Any LLM message takes time; the boredom is
+ * alleviated usually by seeing the stream of reasoning." The client rotates its own copy during
+ * each call and shows the real reading in between.
+ *
+ * Two calls rather than SSE because the seam buys something a stream cannot: the user can CORRECT
+ * the reading before any number is computed from it. That is the confirm the brand asks for
+ * ("here's what I heard — did I get it right?"), arriving for free instead of bolted on.
+ *
+ * POST /nutrition/photo/read — step 1. Uploads the photo, returns PROSE. Writes no meal row, so a
+ * read the user abandons leaves nothing behind.
+ */
+router.post('/photo/read', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(readPhotoBodySchema, req.body);
+    res.json(await readMealPhoto(userId, { photo: body.photo, caption: body.caption, date: body.date }));
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    const msg = err instanceof Error ? err.message : '';
+    if (/invalid photo/.test(msg)) return void res.status(400).json({ error: msg });
+    console.error('[POST /nutrition/photo/read]', err);
+    res.status(500).json({ error: 'failed to read the photo' });
+  }
+});
+
+/**
+ * POST /nutrition/photo/log — step 2. The reading (possibly EDITED by the user) becomes numbers and
+ * a row. `reading` may be empty: a failed or skipped step 1 must still be able to log the meal from
+ * the caption, because a meal never vanishes because a model did.
+ */
+router.post('/photo/log', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(logFromReadingBodySchema, req.body);
+    res.json(
+      await logMealFromReading(userId, {
+        photo_ref: body.photo_ref,
+        reading: body.reading,
+        caption: body.caption,
+        meal: body.meal,
+        date: body.date,
+      }),
+    );
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /nutrition/photo/log]', err);
+    res.status(500).json({ error: 'failed to log the meal' });
   }
 });
 
