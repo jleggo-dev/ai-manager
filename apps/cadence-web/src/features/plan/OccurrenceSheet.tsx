@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { deriveWalkthrough, condense, type Walkthrough as WalkthroughData } from '@cadence/shared';
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
+import { useSessionPrepLine } from './occurrence/useSessionPrepLine.ts';
 import { isFoodRow, isWeighInPending, sheetMinutes } from './occurrence/format.ts';
 import { SessionLogPanel } from './occurrence/SessionLogPanel.tsx';
 import { MealLogPanel } from './occurrence/MealLogPanel.tsx';
@@ -11,7 +12,8 @@ import { setOccurrence, logOccurrence } from '../../lib/api.ts';
 /**
  * The session sheet — tap an occurrence, see the coach's concrete session (blocks of items with
  * sets × reps @ load), the why (coach note), and ▶ how-to links. First open generates the
- * session server-side (one coach call, a few seconds) — same typing-dots loading as chat.
+ * session server-side through one coach call, which takes ~34s on a true first open (PERF-08) —
+ * so the wait NARRATES itself rather than holding one static line for half a minute.
  * ▶ links are always YouTube SEARCH result pages built client-side from `video_query`; the
  * model never supplies URLs. A 404 means a re-plan replaced this day — say so plainly.
  *
@@ -30,6 +32,7 @@ export function OccurrenceSheet({
   onProposeChange?: (steer: string) => void;
 }) {
   const { detail, setDetail, state } = useOccurrenceDetail(occurrenceId);
+  const prepLine = useSessionPrepLine(state === 'loading');
   const session = detail?.session;
   const wt = useMemo(() => (session ? deriveWalkthrough(session) : null), [session]);
   const [run, setRun] = useState<WalkthroughData | null>(null);
@@ -60,7 +63,7 @@ export function OccurrenceSheet({
               <i />
               <i />
             </span>
-            <span className="sheet-loading-t">Chatting with your coach about this session…</span>
+            <span className="sheet-loading-t">{prepLine}</span>
           </div>
         ) : state === 'gone' ? (
           <div className="sheet-msg">

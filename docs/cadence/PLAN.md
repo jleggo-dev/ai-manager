@@ -7593,8 +7593,34 @@ open — 2 × ~2–3.8s, plus ~1.2s cold wake, plus auth, which reconstructs ~10
 2. **The coach-session sheet really does take 34s on a first open**, because it genuinely
    prescribes a session through an LLM. `prefetchImminentSessions` (void-fired from GET /plan)
    hides this when it wins the race, and does not on a true first load. Its dots are honest and
-   they stay — but this, not `/plan`, is now the longest wait in the app. **Open: PERF-08** —
+   they stay — but this, not `/plan`, is now the longest wait in the app. **PERF-08** —
    the prefetch should be awaited or the sheet should say what it is doing for that long.
+
+### PERF-08, as built (2026-08-21) — both halves, because they fix different things
+
+**The prefetch was losing a race it existed to win.** `prefetchImminentSessions` is void-fired from
+`GET /plan` so a generating session is warm before the tap. It awaited each occurrence IN TURN, and
+each generation is one coach call at ~34s — so with three pending, the last was not warm for a
+minute and a half, and every occurrence it warmed made it later for the next. Now runs in bounded
+batches of 3. Bounded rather than all-at-once because each slot is a real provider call: the entire
+gemini family was rate-limited at once on 2026-08-20, and an unbounded fan-out from every
+`GET /plan` is how you do that to the coach. Four tests, asserting PEAK IN-FLIGHT rather than
+elapsed time — a wall-clock assertion measures the machine as much as the code, which
+`plan-view.test.ts` already paid to learn.
+
+**And the 34s that remains now narrates itself.** The sheet held one true line — *"Chatting with
+your coach about this session…"* — for the whole wait, which after ten seconds is indistinguishable
+from a hang. Six lines following what is genuinely happening in order (reads the week, reads recent
+sessions, checks equipment and constraints, writes it out), so the sequence carries information
+rather than just motion. Same pattern and the same shared `readProgressLine` as the photo read;
+the tail line holds past 34s, because a screen that blanks at 40s has undone the point.
+
+The dots were always honest here and they stay — unlike the meal-capture sheet, this really is
+thinking. What was missing was any sign of progress *within* the thinking.
+
+Tested at the render level, not just the hook: this repo has twice shipped a status line that was
+correct in its unit test and invisible in the product, and asserting phrasing in isolation is the
+test that missed both.
 
 ### PERF-06, as built
 

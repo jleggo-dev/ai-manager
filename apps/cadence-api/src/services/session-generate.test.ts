@@ -26,7 +26,8 @@ vi.mock('../repos/occurrences.ts', () => ({
 
 import { runJobBySlug } from '../ai/aim.ts';
 import { getOccurrenceWithActivity } from '../repos/occurrences.ts';
-import { getOccurrenceDetail } from './session-generate.ts';
+import { listOccurrences } from '../repos/occurrences.ts';
+import { getOccurrenceDetail, prefetchImminentSessions } from './session-generate.ts';
 
 const GOOD = JSON.stringify({
   blocks: [{ label: 'Practice', items: [{ name: 'Settle', tool: 'breathing', breath_pattern: 'box' }] }],
@@ -87,5 +88,90 @@ describe('prescribe retry-on-normalize-null', () => {
     vi.mocked(runJobBySlug).mockRejectedValue(new Error('502'));
     await expect(getOccurrenceDetail('u1', 'o1')).rejects.toThrow('502');
     expect(runJobBySlug).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The prefetch has to WIN A RACE, and it was built so that losing was inevitable.
+ *
+ * `prefetchImminentSessions` is void-fired from `GET /plan` so a generating session is already warm
+ * when the user taps it. Each generation is one coach call — 34s measured 2026-08-20, the longest
+ * wait left in the app — and the loop awaited them one at a time, so every occurrence it warmed
+ * made it later for the next. With three pending, the last was not warm for a minute and a half.
+ *
+ * Asserted as PEAK IN-FLIGHT, never elapsed time. A wall-clock assertion measures the machine as
+ * much as the code and flakes the moment another suite runs beside it — a lesson `plan-view.test.ts`
+ * already paid for once.
+ */
+describe('prefetchImminentSessions', () => {
+  const occ = (n: number, status = 'pending') =>
+    Array.from({ length: n }, (_, i) => ({ occurrence_id: `o${i}`, status, date: tomorrow }));
+
+  /** Counts concurrency at the only place real work happens: the coach call. */
+  function trackingJob() {
+    const state = { inflight: 0, peak: 0 };
+    vi.mocked(runJobBySlug).mockImplementation((() => {
+      state.inflight += 1;
+      state.peak = Math.max(state.peak, state.inflight);
+      return new Promise((r) =>
+        setTimeout(() => {
+          state.inflight -= 1;
+          r({ raw: GOOD });
+        }, 15),
+      );
+    }) as never);
+    return state;
+  }
+
+  beforeEach(() => {
+    vi.mocked(getOccurrenceWithActivity).mockImplementation((async (_u: string, id: string) => ({
+      ...pendingOccurrence(),
+      occurrence_id: id,
+    })) as never);
+  });
+
+  it('warms several sessions at once instead of one after another', async () => {
+    const state = trackingJob();
+    vi.mocked(listOccurrences).mockResolvedValue(occ(6) as never);
+
+    await prefetchImminentSessions('u1');
+
+    // Serial execution can never exceed 1. Above it proves the batch opened together.
+    expect(state.peak).toBeGreaterThan(1);
+    expect(runJobBySlug).toHaveBeenCalledTimes(6);
+  });
+
+  /**
+   * Bounded, not unbounded. Every slot is a real provider call, and the entire gemini family was
+   * rate-limited at once on 2026-08-20 — an unbounded fan-out from every GET /plan is how you do
+   * that to the coach.
+   */
+  it('never opens more than the cap at once', async () => {
+    const state = trackingJob();
+    vi.mocked(listOccurrences).mockResolvedValue(occ(12) as never);
+
+    await prefetchImminentSessions('u1');
+    expect(state.peak).toBeLessThanOrEqual(3);
+  });
+
+  it('leaves occurrences that are not pending alone', async () => {
+    trackingJob();
+    vi.mocked(listOccurrences).mockResolvedValue([...occ(2), ...occ(3, 'done')] as never);
+
+    await prefetchImminentSessions('u1');
+    expect(runJobBySlug).toHaveBeenCalledTimes(2);
+  });
+
+  /** Best-effort: one failed generation must not stop the rest from warming. */
+  it('keeps going when one generation fails', async () => {
+    let n = 0;
+    vi.mocked(runJobBySlug).mockImplementation((() => {
+      n += 1;
+      return n === 2 ? Promise.reject(new Error('502')) : Promise.resolve({ raw: GOOD });
+    }) as never);
+    vi.mocked(listOccurrences).mockResolvedValue(occ(5) as never);
+
+    await expect(prefetchImminentSessions('u1')).resolves.toBeUndefined();
+    expect(runJobBySlug).toHaveBeenCalledTimes(5);
   });
 });

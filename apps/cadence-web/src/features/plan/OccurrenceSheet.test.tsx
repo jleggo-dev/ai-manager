@@ -59,6 +59,22 @@ describe('OccurrenceSheet dispatcher', () => {
     expect(await screen.findByText(/This session moved with your new plan/)).toBeInTheDocument();
   });
 
+  /**
+   * PERF-08, asserted where a person would see it.
+   *
+   * A first open takes ~34s because the coach genuinely writes the session, and the sheet used to
+   * hold ONE static line for all of it. The narration is only worth anything if it reaches the
+   * screen — this repo has twice shipped a status line that was right in its unit test and
+   * invisible in the product (PLAN.md, 2026-08-17 and 2026-08-21), so this renders the real sheet
+   * rather than trusting the hook.
+   */
+  it('narrates the wait on screen instead of holding one static line', async () => {
+    getOccurrenceDetail.mockReturnValue(new Promise(() => {})); // never settles: the 34s state
+    renderWithQuery(<OccurrenceSheet occurrenceId="slow" onClose={() => {}} />);
+
+    expect(await screen.findByText('Opening this session…')).toBeInTheDocument();
+  });
+
   it('maps non-404 fetch failures to the generic error copy', async () => {
     getOccurrenceDetail.mockRejectedValue(Object.assign(new Error('boom'), { status: 500 }));
     renderWithQuery(<OccurrenceSheet occurrenceId="bad" onClose={() => {}} />);

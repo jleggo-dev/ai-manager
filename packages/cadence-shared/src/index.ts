@@ -48,3 +48,4 @@ export * from './micronutrient-targets.ts';
 export * from './shopping-list.ts';
 export { coachActivityLine, resolveActivityNames, type CoachActivityFrame } from './coach-activity.ts';
 export * from './meal-read-progress.ts';
+export * from './session-prep-progress.ts';
