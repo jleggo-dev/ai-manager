@@ -19,6 +19,9 @@ import type { ProviderRow } from '../types.ts';
 
 const router = Router();
 
+/** How many vanished model ids the response lists before truncating. Enough to act on, not a dump. */
+const MISSING_REPORT_CAP = 50;
+
 function verifyCronSecret(req: Request): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
@@ -97,7 +100,18 @@ router.get('/tick/models', async (req: Request, res: Response) => {
           provider: name,
           synced: r.value.synced,
           discovered: r.value.discovered,
-          missing: r.value.missing.length,
+          /**
+           * The IDS, not a count. `missing` exists so a HUMAN can judge whether anything still
+           * points at a model that vanished — and "43" cannot be judged. Reported as a bare number
+           * on 2026-08-21 and the owner's response was, correctly, that it was gibberish: a count
+           * with no referent tells you something is wrong and gives you no way to look at it.
+           * Capped so a provider that drops half its catalog cannot produce an unbounded response.
+           */
+          missingCount: r.value.missing.length,
+          missing: r.value.missing.slice(0, MISSING_REPORT_CAP),
+          ...(r.value.missing.length > MISSING_REPORT_CAP
+            ? { missingTruncated: r.value.missing.length - MISSING_REPORT_CAP }
+            : {}),
           source: r.value.discoverySource,
         });
         if (r.value.missing.length) {
