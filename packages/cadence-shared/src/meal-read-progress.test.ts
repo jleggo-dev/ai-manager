@@ -23,7 +23,7 @@ describe('readProgressLine', () => {
    * screen must not go blank waiting for one. The last line HOLDS, however long it takes.
    */
   it('holds the last line past the longest measured run', () => {
-    const tail = READ_PHOTO_STEPS[READ_PHOTO_STEPS.length - 1]!.text;
+    const tail = READ_PHOTO_STEPS.at(-1)?.text;
     expect(readProgressLine(READ_PHOTO_STEPS, 60_000)).toBe(tail);
     expect(readProgressLine(READ_PHOTO_STEPS, 600_000)).toBe(tail);
   });

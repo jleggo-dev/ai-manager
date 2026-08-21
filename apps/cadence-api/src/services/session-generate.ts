@@ -197,6 +197,9 @@ export async function getOccurrenceDetail(
   return { ...occ, session };
 }
 
+/** How many session generations may be in flight at once. See prefetchImminentSessions. */
+const PREFETCH_CONCURRENCY = 3;
+
 /**
  * Warm the session cache for imminent occurrences so the first tap is instant (plan §prefetch).
  * Best-effort, fire-and-forget from GET /plan: getOccurrenceDetail generates-and-caches only when a
@@ -207,12 +210,28 @@ export async function getOccurrenceDetail(
 export async function prefetchImminentSessions(userId: string, days = 2): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   const to = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
-  for (const o of await listOccurrences(userId, today, to)) {
-    if (o.status !== 'pending') continue;
-    try {
-      await getOccurrenceDetail(userId, o.occurrence_id); // no-op when already cached or non-generating
-    } catch {
-      /* best-effort — a failure just means the user waits on tap, exactly as before */
-    }
+  const pending = (await listOccurrences(userId, today, to)).filter((o) => o.status === 'pending');
+
+  /**
+   * CONCURRENTLY, in bounded batches — and this is the fix, not a tidy-up.
+   *
+   * This loop used to `await` each occurrence in turn. A generating session costs one coach call
+   * (~34s measured 2026-08-20), so with three of them pending the last one was not warm for a
+   * minute and a half, and the user tapping it waited the full 34s on top. The prefetch existed
+   * precisely to win that race and was losing it by construction: every occurrence it had already
+   * handled made it later for the next.
+   *
+   * Bounded rather than all-at-once because each slot is a real provider call. The vision jobs hit
+   * `MODEL_REQUEST_RATE_LIMIT_EXCEEDED` on 2026-08-20 with the whole gemini family exhausted at
+   * once; firing an unbounded fan-out from every `GET /plan` is how you do that to the coach.
+   * Three is enough to cover a normal day's imminent work in one or two rounds.
+   */
+  for (let i = 0; i < pending.length; i += PREFETCH_CONCURRENCY) {
+    await Promise.all(
+      pending.slice(i, i + PREFETCH_CONCURRENCY).map((o) =>
+        // no-op when already cached or non-generating; a failure just means the user waits on tap
+        getOccurrenceDetail(userId, o.occurrence_id).catch(() => undefined),
+      ),
+    );
   }
 }
