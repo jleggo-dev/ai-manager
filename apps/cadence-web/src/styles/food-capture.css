@@ -877,3 +877,41 @@
   font-weight: 700;
   color: oklch(56% 0.02 120);
 }
+
+/* ── The two-stage photo read (2026-08-21) ──────────────────────────────────────────────── */
+/* The narration line. Understated on purpose: it is company during a wait, not an announcement. */
+.fl-progress {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  font-weight: 700;
+  color: oklch(54% 0.02 120);
+}
+.fl-reading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Editable, and it must LOOK editable — this is the confirm step, and a reading that reads as a
+   read-only transcript will not get corrected. */
+.fl-reading-text {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid oklch(88% 0.012 120);
+  border-radius: 14px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+  color: oklch(32% 0.02 120);
+  resize: vertical;
+}
+.fl-reading-text:focus {
+  outline: none;
+  border-color: oklch(62% 0.09 152);
+}
+.fl-reading-text:disabled {
+  background: oklch(97% 0.006 120);
+  color: oklch(48% 0.02 120);
+}

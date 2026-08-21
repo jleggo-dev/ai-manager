@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Food } from '@cadence/shared';
-import { getFoodById, logMeal, logMealFromFood, logMealFromRecipe, type Meal, type MealKind } from '../../lib/api.ts';
+import { getFoodById, logMealFromFood, logMealFromRecipe, type Meal, type MealKind } from '../../lib/api.ts';
 import { useInvalidateNutritionDay } from '../../lib/query/index.ts';
 
 const FAILED = "Couldn't write that down just now — try again in a moment.";
@@ -49,6 +49,5 @@ export function useLogActions() {
     logFood: (input: { food_id: string; serving_index: number; quantity: number; meal: MealKind }) =>
       run(() => logMealFromFood(input)),
     logRecipe: (recipe_id: string, meal: MealKind) => run(() => logMealFromRecipe({ recipe_id, meal })),
-    logPhoto: (photo: string, caption: string, meal: MealKind) => run(() => logMeal(caption.trim(), meal, photo)),
   };
 }

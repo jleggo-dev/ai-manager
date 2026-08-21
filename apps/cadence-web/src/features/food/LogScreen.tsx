@@ -3,6 +3,7 @@ import type { Food } from '@cadence/shared';
 import type { Meal, MealKind } from '../../lib/api.ts';
 import { useNutritionDay } from '../../lib/query/index.ts';
 import { downscalePhoto } from '../plan/occurrence/format.ts';
+import { PhotoReadPanel } from './PhotoReadPanel.tsx';
 import { AddFoodSheet } from './AddFoodSheet.tsx';
 import { DrinkComposer } from './DrinkComposer.tsx';
 import { FoodBarcodePanel } from './FoodBarcodePanel.tsx';
@@ -70,7 +71,6 @@ export function LogScreen({
 }) {
   const [meal, setMeal] = useState<MealKind>(initialMeal);
   const [route, setRoute] = useState<Route>(() => routeForMethod(initialMethod));
-  const [caption, setCaption] = useState('');
   const [landed, setLanded] = useState<Meal | null>(null);
   const [waterMl, setWaterMl] = useState<number | null>(null);
   const data = useLogScreen(meal, date);
@@ -197,28 +197,7 @@ export function LogScreen({
       )}
 
       {route.at === 'photo' && (
-        <div className="fl-body fl-photo">
-          <img src={route.photo} alt="your plate" />
-          <input
-            className="mc-cap-in"
-            value={caption}
-            aria-label="A few words about the photo"
-            placeholder="a few words help — “chicken burrito bowl”"
-            disabled={act.busy}
-            onChange={(e) => setCaption(e.target.value)}
-          />
-          <button
-            type="button"
-            className="fa-log"
-            disabled={act.busy}
-            onClick={() => void act.logPhoto(route.photo, caption, meal).then(settle)}
-          >
-            {act.busy ? 'Writing it down…' : `Log to ${meal}`}
-          </button>
-          <button type="button" className="lockbtn ghost" disabled={act.busy} onClick={() => setRoute({ at: 'home' })}>
-            Back
-          </button>
-        </div>
+        <PhotoReadPanel photo={route.photo} meal={meal} onLogged={settle} onBack={() => setRoute({ at: 'home' })} />
       )}
 
       {route.at === 'drink' && <DrinkComposer onLogged={settle} onBack={() => setRoute({ at: 'home' })} />}
