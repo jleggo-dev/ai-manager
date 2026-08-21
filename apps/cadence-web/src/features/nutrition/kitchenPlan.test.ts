@@ -43,45 +43,52 @@ describe('weekDaysFrom', () => {
   });
 });
 
+/**
+ * `addMeal` takes a MEAL now, not a recipe — frame 10a composes named meals of several items, so a
+ * "put this one recipe there" call is just the simplest meal you can build. This is the shape the
+ * planner passes.
+ */
+const asMeal = (r: { recipe_id: string; name: string }) => ({ recipe_id: r.recipe_id, recipe_name: r.name });
+
 describe('addMeal', () => {
   it('plans a recipe onto a day that had nothing', () => {
-    const days = addMeal([], '2026-08-26', 'dinner', recipe());
+    const days = addMeal([], '2026-08-26', 'dinner', asMeal(recipe()));
     expect(days).toEqual([
       { day: '2026-08-26', meals: [{ slot: 'dinner', recipe_id: 'r1', recipe_name: 'Beef chili' }] },
     ]);
   });
 
   it('REPLACES what was in the slot rather than stacking a second dinner on one day', () => {
-    const first = addMeal([], '2026-08-26', 'dinner', recipe());
-    const second = addMeal(first, '2026-08-26', 'dinner', recipe({ recipe_id: 'r2', name: 'Dal' }));
+    const first = addMeal([], '2026-08-26', 'dinner', asMeal(recipe()));
+    const second = addMeal(first, '2026-08-26', 'dinner', asMeal(recipe({ recipe_id: 'r2', name: 'Dal' })));
     expect(second[0]?.meals).toHaveLength(1);
     expect(mealAt(second, '2026-08-26', 'dinner')?.recipe_name).toBe('Dal');
   });
 
   it('keeps other slots on the same day, in the order a day runs', () => {
-    let days = addMeal([], '2026-08-26', 'dinner', recipe());
-    days = addMeal(days, '2026-08-26', 'breakfast', recipe({ recipe_id: 'r3', name: 'Oats' }));
+    let days = addMeal([], '2026-08-26', 'dinner', asMeal(recipe()));
+    days = addMeal(days, '2026-08-26', 'breakfast', asMeal(recipe({ recipe_id: 'r3', name: 'Oats' })));
     expect(days[0]?.meals.map((m) => m.slot)).toEqual(['breakfast', 'dinner']);
   });
 
   it('keeps days in date order however they were added', () => {
-    let days = addMeal([], '2026-08-28', 'dinner', recipe());
-    days = addMeal(days, '2026-08-25', 'lunch', recipe({ recipe_id: 'r2' }));
+    let days = addMeal([], '2026-08-28', 'dinner', asMeal(recipe()));
+    days = addMeal(days, '2026-08-25', 'lunch', asMeal(recipe({ recipe_id: 'r2' })));
     expect(days.map((d) => d.day)).toEqual(['2026-08-25', '2026-08-28']);
   });
 });
 
 describe('removeMeal', () => {
   it('takes one meal off and leaves the rest of the day', () => {
-    let days = addMeal([], '2026-08-26', 'dinner', recipe());
-    days = addMeal(days, '2026-08-26', 'lunch', recipe({ recipe_id: 'r2', name: 'Dal' }));
+    let days = addMeal([], '2026-08-26', 'dinner', asMeal(recipe()));
+    days = addMeal(days, '2026-08-26', 'lunch', asMeal(recipe({ recipe_id: 'r2', name: 'Dal' })));
     const after = removeMeal(days, '2026-08-26', 'lunch');
     expect(after[0]?.meals.map((m) => m.slot)).toEqual(['dinner']);
   });
 
   /** The API's day schema requires at least one meal, so an emptied day cannot simply linger. */
   it('drops a day entirely once its last meal comes off', () => {
-    const days = addMeal([], '2026-08-26', 'dinner', recipe());
+    const days = addMeal([], '2026-08-26', 'dinner', asMeal(recipe()));
     expect(removeMeal(days, '2026-08-26', 'dinner')).toEqual([]);
   });
 });

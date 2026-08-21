@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { MealPlanDay, Recipe } from '@cadence/shared';
+import { mealPlanItems, type MealPlanDay, type Recipe } from '@cadence/shared';
 import {
   deleteMealPlan,
   getCurrentMealPlan,
@@ -85,17 +85,42 @@ export function useKitchen(): KitchenData {
           setPlan(r.plan);
           return;
         }
+        /**
+         * First save of a week. The confirm endpoint speaks full recipe DRAFTS — it exists to turn
+         * a generated plan into saved recipes — so a composed meal (frame 10a: recipes AND loose
+         * foods, under a name the user gave it) cannot be expressed in that shape.
+         *
+         * So: create the week from its recipes, then immediately PATCH the true days over it. The
+         * patch endpoint takes the composed shape, so the meal the user actually built is what
+         * ends up stored. Without the second call, everything but the recipes would be dropped on
+         * the first save and silently reappear as a plain recipe — the worst kind of data loss,
+         * because it looks like it worked.
+         */
         const byId = new Map(recipes.map((x) => [x.recipe_id, x]));
-        const draftDays = days.map((d) => ({
-          day: d.day,
-          meals: d.meals.flatMap((m) => {
-            const recipe = byId.get(m.recipe_id);
-            return recipe ? [{ slot: m.slot, recipe: toDraftRecipe(recipe) }] : [];
-          }),
-        }));
+        const draftDays = days
+          .map((d) => ({
+            day: d.day,
+            meals: d.meals.flatMap((m) =>
+              mealPlanItems(m)
+                .filter((i) => i.kind === 'recipe')
+                .flatMap((i) => {
+                  const recipe = byId.get(i.id);
+                  return recipe ? [{ slot: m.slot, recipe: toDraftRecipe(recipe) }] : [];
+                }),
+            ),
+          }))
+          .filter((d) => d.meals.length > 0);
+
+        if (!draftDays.length) {
+          // A week of loose foods only: nothing for the recipe-shaped create endpoint to make.
+          return void setNote('Add at least one recipe to start the week — foods can join it after.');
+        }
+
         const r = await saveMealPlan({ week_of: weekOf, days: draftDays, shopping_list: [], notes: null });
         if (r.status !== 'ok') return void setNote(r.message);
-        setPlan(r.plan);
+
+        const composed = await patchMealPlan(r.plan.meal_plan_id, { days });
+        setPlan(composed.status === 'ok' ? composed.plan : r.plan);
       } finally {
         setBusy(false);
       }

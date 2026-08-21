@@ -21,7 +21,7 @@ type KitchenView = 'recipes' | 'week' | 'shop' | 'paste';
  * That separation is why this tab does not reuse the cookbook panel the Day tab's doors open: that
  * one offers "log N servings", which is exactly the tap this surface must not have.
  */
-export function FoodKitchen() {
+export function FoodKitchen({ targetKcal = null }: { targetKcal?: number | null } = {}) {
   const kitchen = useKitchen();
   const [view, setView] = useState<KitchenView>('recipes');
   const [pending, setPending] = useState<Recipe | null>(null);
@@ -108,6 +108,7 @@ export function FoodKitchen() {
               : `${planned} meal${planned === 1 ? '' : 's'} planned this week.`}
           </div>
           <KitchenPlanner
+            targetKcal={targetKcal}
             weekOf={kitchen.weekOf}
             days={days}
             recipes={kitchen.recipes}

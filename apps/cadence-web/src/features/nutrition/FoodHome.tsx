@@ -193,7 +193,7 @@ export function FoodHome({
 
       <div className="fh-body">
         {tab === 'kitchen' ? (
-          <FoodKitchen />
+          <FoodKitchen targetKcal={day?.targets?.kcal ?? null} />
         ) : tab === 'week' ? (
           <FoodWeek
             today={today}

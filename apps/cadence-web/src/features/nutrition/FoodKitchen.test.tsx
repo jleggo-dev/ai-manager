@@ -178,7 +178,7 @@ describe('the composer — a recipe onto a day and a slot (10b)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Tue 25 Aug/i }));
     fireEvent.click(
       within(screen.getByRole('region', { name: /Plan Tue 25 Aug/i })).getAllByRole('button', {
-        name: /Plan something/i,
+        name: /Pick a recipe/i,
       })[0]!,
     );
     fireEvent.click(screen.getByRole('button', { name: /Red lentil dal/i }));

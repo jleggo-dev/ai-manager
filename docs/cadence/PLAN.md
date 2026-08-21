@@ -7216,6 +7216,53 @@ XP/streak chrome in the frames is the OLD shell (pre-#237 Today/Week pill — th
 it); acts 05–07 frames don't exist yet. Frame 01's phone chrome ≠ shipped header, deliberately.
 
 
+### Slice 4 finished against the frames (2026-08-21)
+
+The first pass was built **blind** — the agent had no DesignSync access, so frames 10/10a–c were
+reconstructed from the slice line above. Gates were green and the hardest ruling was correctly
+enforced, but checking the actual drawings found the middle of the slice missing.
+
+**Frame 10a barely existed.** The design is a three-step composer: *"Define a meal once — recipes,
+food, or both — then say which day and which meal it is"*, with a NAME, several items, and a running
+total (674 kcal from three). What was built was "choose a day, choose a recipe". Most dinners are a
+main, a side and the oil it was cooked in; a planner that only holds recipes cannot describe them.
+
+`MealPlanMeal` now carries `name` and `items: MealPlanItem[]` — recipes AND loose foods — alongside
+the original `recipe_id`, which is still read and still what `generate_meal_plan` emits. **Nothing
+migrates**: `days` is JSONB, old plans stay as written, and `mealPlanItems()` normalizes on read so
+no caller branches on how old a plan is. Foods take their macros from `macrosForLog`, the app's own
+serving arithmetic, rather than a second implementation of it.
+
+**Frames 10b/10c had no numbers at all.** `kitchenPlan.ts` computed a count and nothing else, while
+the design leans on totals throughout — "1,880 of 1,940" per day, "1,870 KCAL A DAY, PLANNED"
+averaged *"across the 5 days you have set"*, "4 meals planned · lands on target". Now in
+`meal-plan-items.ts`, shared so the same sum cannot disagree between a week row, a day screen and a
+week header.
+
+Three rules the arithmetic carries:
+- **`counted` vs `items`.** A legacy meal stored no macros, so a week of them must not render a
+  confident 0 kcal — the plan does not get to repeat the 2026-08-20 zero-calorie mistake.
+- **Rounded at the SUM, not per item.** 520 + 119.3 prints 639, never 639.3 (precise-sounding
+  values, BRAND.md) and never 640 from four items each rounded up.
+- **`landsOnTarget` never judges.** Above target is "a little above", below is "leaves some room",
+  and with no target it says nothing rather than inventing a denominator. Targets are coach work in
+  slice 5, so every number degrades to a bare total until they exist.
+
+**Also fixed in passing:** the API's ownership check read `meal.recipe_id` alone, so a composed meal
+could have referenced any recipe or food id in the table — the check would still have passed,
+because the field it read was empty. It now covers `items` too, deduped.
+
+**Still not honoured, and reported rather than faked:**
+- Frame 10's fourth tile, **Targets & settings** (`1,940 kcal · 2 hard stops`) — belongs with slice 5.
+- **"snap the page"** (photograph a recipe) — the paste door exists, the camera one does not.
+- Frame 10c's **"From your meals ›"** implies a library of reusable saved MEALS. A meal is currently
+  composed into a slot, not saved for reuse; that is a bigger idea than this slice.
+- Recipe rows omit the micronutrient the design shows ("iron 4.2mg") — `recipeMacroHint` has no
+  micro channel yet.
+- **"＋ Add another meal to Wednesday"** — a slot still holds one meal; the design's second meal is a
+  second slot rather than a stacked dinner.
+
+
 ## The coach agreed to change the plan, and then didn't (owner, 2026-08-19)
 
 > "she's just not invoking the tools… I nudged, I pushed, I directly asked. She agrees, but doesn't

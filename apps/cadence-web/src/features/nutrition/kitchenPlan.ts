@@ -1,4 +1,10 @@
-import type { MealPlanDay, MealPlanMeal, MealPlanSlotKind, Recipe } from '@cadence/shared';
+import {
+  mealPlanItems,
+  type MealPlanDay,
+  type MealPlanMeal,
+  type MealPlanSlotKind,
+  type Recipe,
+} from '@cadence/shared';
 
 /**
  * The Kitchen's week arithmetic, kept pure (Food Journey 10b/10c).
@@ -63,16 +69,19 @@ function sortMeals(meals: MealPlanMeal[]): MealPlanMeal[] {
 }
 
 /**
- * Put a recipe on a day and slot. One recipe per slot: planning over Wednesday dinner replaces
- * what was there, because two dinners on one Wednesday is a data shape nobody asked for.
+ * Put a MEAL on a day and slot — a single recipe, or the composed kind frame 10a builds.
+ *
+ * One meal per slot: planning over Wednesday dinner replaces what was there. Frame 10c does offer
+ * "＋ Add another meal to Wednesday", which is a second SLOT rather than a second dinner; stacking
+ * two meals in one slot is a shape nothing downstream reads.
  */
 export function addMeal(
   days: MealPlanDay[],
   day: string,
   slot: string,
-  recipe: Pick<Recipe, 'recipe_id' | 'name'>,
+  what: Omit<MealPlanMeal, 'slot'>,
 ): MealPlanDay[] {
-  const meal: MealPlanMeal = { slot, recipe_id: recipe.recipe_id, recipe_name: recipe.name };
+  const meal: MealPlanMeal = { slot, ...what };
   const existing = days.find((d) => d.day === day);
   if (!existing) return sortDays([...days, { day, meals: [meal] }]);
   const meals = sortMeals([...existing.meals.filter((m) => m.slot !== slot), meal]);
@@ -89,16 +98,41 @@ export function removeMeal(days: MealPlanDay[], day: string, slot: string): Meal
     .filter((d) => d.meals.length > 0);
 }
 
-/** Every recipe the week plans, deduped and in week order — what the shopping list is derived from. */
+/**
+ * Every recipe the week plans, deduped and in week order — what the shopping list is derived from.
+ *
+ * Reads through `mealPlanItems`, so it sees recipes inside a composed meal (frame 10a) as well as
+ * the legacy single-recipe shape. Foods in a composed meal are skipped here on purpose: the
+ * shopping list is built from recipe INGREDIENTS, and a loose food is already the thing you buy —
+ * it joins the list by its own name further down rather than through a recipe lookup.
+ */
 export function plannedRecipes(days: MealPlanDay[], byId: Map<string, Recipe>): Recipe[] {
   const seen = new Set<string>();
   const out: Recipe[] = [];
   for (const d of sortDays(days)) {
     for (const m of d.meals) {
-      if (seen.has(m.recipe_id)) continue;
-      seen.add(m.recipe_id);
-      const recipe = byId.get(m.recipe_id);
-      if (recipe) out.push(recipe);
+      for (const item of mealPlanItems(m)) {
+        if (item.kind !== 'recipe' || seen.has(item.id)) continue;
+        seen.add(item.id);
+        const recipe = byId.get(item.id);
+        if (recipe) out.push(recipe);
+      }
+    }
+  }
+  return out;
+}
+
+/** Loose foods a week plans, deduped — they go on the shop as themselves, not via a recipe. */
+export function plannedFoods(days: MealPlanDay[]): Array<{ id: string; name: string; qty: number; unit?: string }> {
+  const seen = new Set<string>();
+  const out: Array<{ id: string; name: string; qty: number; unit?: string }> = [];
+  for (const d of sortDays(days)) {
+    for (const m of d.meals) {
+      for (const item of mealPlanItems(m)) {
+        if (item.kind !== 'food' || seen.has(item.id)) continue;
+        seen.add(item.id);
+        out.push({ id: item.id, name: item.name, qty: item.qty, unit: item.unit });
+      }
     }
   }
   return out;
