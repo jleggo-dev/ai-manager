@@ -13,6 +13,8 @@ export type AiLogKind =
   | 'prescribe_session'
   | 'parse_session_log'
   | 'parse_meal'
+  | 'describe_meal_photo'
+  | 'parse_meal_description'
   | 'nutrition_baseline'
   | 'plate_advice'
   | 'parse_nutrition_label'

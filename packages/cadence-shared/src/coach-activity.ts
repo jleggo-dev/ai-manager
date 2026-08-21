@@ -32,14 +32,43 @@ const PHRASES: Record<string, string> = {
   update_constraint: 'updating what we work around',
   correct_log: 'fixing that record',
   set_macro_targets: 'setting your targets',
-  // The meta tools are pure machinery. Naming them would be naming the harness, and "looking
-  // something up" is what she is actually doing from where the user sits.
-  find_tools: 'looking something up',
+  // find_tools genuinely IS a search — she is reading the menu, not the meal.
+  find_tools: 'looking up what she can check',
+  // use_tool is never the real answer: see resolveActivityNames, which unwraps it to its target.
   use_tool: 'looking something up',
 };
 
 /** Anything unmapped — a new tool nobody has written a phrase for yet — still says something true. */
 const FALLBACK = 'looking something up';
+
+/**
+ * Unwrap `use_tool` to the tool it is actually running.
+ *
+ * The phrase table was specific from the start — "checking your recorded workouts", "looking at
+ * your plan" — but the user almost never saw those, and it took the owner saying so twice to find
+ * out why. Most reads reach their tool THROUGH `use_tool`, so the name on the wire is the meta-tool
+ * and every one of them printed the same "looking something up". The specificity was written, and
+ * then thrown away one layer before the screen.
+ *
+ * Owner, 2026-08-21: *"we just say something like 'looking into it'. We should say 'calling the
+ * build plan tool', 'pulling your health data'."* Right — and the fix is not more phrases, it is
+ * looking through the indirection to the tool already in the table.
+ *
+ * Arguments are a JSON string off the provider, so they are parsed defensively: a malformed blob
+ * must degrade to the honest generic line, never throw inside a status message.
+ */
+export function resolveActivityNames(calls: Array<{ name: string; arguments?: string | null }>): string[] {
+  return calls.map((c) => {
+    if (c.name !== 'use_tool') return c.name;
+    try {
+      const inner = JSON.parse(c.arguments || '{}') as { name?: unknown };
+      const target = String(inner?.name ?? '').trim();
+      return target || c.name;
+    } catch {
+      return c.name;
+    }
+  });
+}
 
 /**
  * One line for a round of tool calls. Several at once collapse to the first rather than listing:

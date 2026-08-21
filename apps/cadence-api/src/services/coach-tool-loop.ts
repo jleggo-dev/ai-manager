@@ -1,4 +1,4 @@
-import type { CoachActivityFrame } from '@cadence/shared';
+import { resolveActivityNames, type CoachActivityFrame } from '@cadence/shared';
 import { logAi } from './ai-log.ts';
 import {
   createCoachStreamAccumulateState,
@@ -316,7 +316,10 @@ export async function relayCoachTurnWithTools(
      */
     try {
       // What actually RAN — a repeat served from `served` did no work and must not claim any.
-      const frame: CoachActivityFrame = { cadence: 'tool', names: fresh.map((c) => c.name) };
+      // Unwrapped: a `use_tool` call names the META tool on the wire, and printing that gave every
+      // read the same "looking something up" — the phrase table's specificity thrown away one layer
+      // before the screen. resolveActivityNames looks through to what actually ran.
+      const frame: CoachActivityFrame = { cadence: 'tool', names: resolveActivityNames(fresh) };
       options.writeChunk?.(`data: ${JSON.stringify(frame)}\n\n`);
     } catch {
       /* client gone; the turn continues server-side regardless */
