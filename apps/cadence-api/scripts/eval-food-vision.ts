@@ -197,7 +197,11 @@ async function runSweepCase(c: FoodVisionCase, models: string[], converter: stri
     // sweep so a difference in the numbers is attributable to the DESCRIPTION and not to the maths.
     if (r.description) {
       try {
-        const t = await callModel(converter, fill(convertTpl, { description: r.description, meal_hint: hint }), null);
+        const t = await callModel(
+          converter,
+          fill(convertTpl, { description: r.description, meal_text: c.caption ?? '', meal_hint: hint }),
+          null,
+        );
         r.twoStage = scoreMacros(t.text, c);
         r.twoStageRaw = t.text;
         r.twoStageMs = t.ms;
@@ -252,6 +256,7 @@ async function runPipeline(c: FoodVisionCase): Promise<CaseResult> {
     try {
       const res = await runJobBySlug(EVAL_USER, 'parse-meal-description', {
         description: result.description,
+        meal_text: c.caption ?? '',
         meal_hint: hint,
       });
       result.twoStage = scoreMacros(res.formatted ?? res.raw ?? '', c);

@@ -7603,28 +7603,64 @@ Two-stage costs a second call (~30s vs ~21s on gpt-5-mini, and stage 2 can go re
 carries no image) and the case for it rests on calibration rather than accuracy — kcal correctness
 is unmeasurable until the cases carry real ground truth. Decide with numbers, not with this table.
 
-### AI Admin workflows cannot express "ask the user" (owner, 2026-08-20)
+### Second run, prompts rewritten to the owner's spec (2026-08-21)
 
-Raised while the above was being built, and it is the piece this flow actually wants: describe →
-**confirm** → macros → **confirm** is "AI, ask, AI, ask", and none of it can be declared today.
+The first prompt was wrong, and the owner said what he actually wanted: the eyes should **commit to
+a reading and name the assumption**, not refuse to guess. My version forbade exactly that — "do NOT
+return JSON, numbers-only, or nutrition estimates" — so it produced careful prose that declined to
+say how much. His example: *"This looks like a 250ml beverage, the user said it's a latte. Let's
+assume it's a 250ml latte. There's probably 200ml of milk and 50ml of espresso."*
 
-The gap is the opposite of what it looks like. The workflow framework's *only* advancement
-mechanism is already a human: a workflow attaches to a chat session, and `getCompletedWorkflowSteps`
-counts a step done when a **user message** carries its `workflow_step_id`. What is missing is at
-both ends of that:
+Rewritten, and stage 2 reframed to his framing exactly: nutritionist context → the photo reading →
+"the user described this meal themselves as" → the user's own words. With the rule that resolves
+the disagreement: **the USER is right about what it was, the PHOTO is right about how much.**
 
-1. **A step with no AI call cannot be declared.** `workflow_steps.processing_job_id` is required, so
-   "ask the user for X and store it in `workflow_variables`" has to be smuggled in as an AI call
-   that happens to ask a question — which costs a model round-trip to do nothing, and puts the
-   question's wording in a prompt template instead of in the app's own voice.
-2. **Nothing runs the steps that DON'T need a human.** There is no executor: `depends_on` is only
-   ever read to *refuse* an out-of-order step, never to schedule one, and `inputMappings` are
-   resolved one step at a time by whoever calls `sendMessage`. `cadence-replan` has sat in config as
-   three declared steps that nothing has ever run as a chain.
+grok-4.6 on the parfait, 279 words:
 
-So the framework is half-built in both directions. Sketch: add `step_type: 'job' | 'input'` (making
-`processing_job_id` nullable for `input`), let an `input` step declare the variable it fills and its
-prompt copy, and let the existing `workflow.step.completed` trigger — which already exists and
-already fires — drive an executor that runs consecutive `job` steps automatically and halts at the
-next `input`. That makes "AI, ask, AI, ask" declarative, and `cadence-replan` runnable for the first
-time. Not yet scheduled; sized here so the decision is informed.
+> Assumption I am locking in (please correct if wrong): One small yogurt parfait, fully eaten,
+> ~180–200 g total — ~140 g plain white yogurt, ~50 g sweetened berry compote/coulis (the even
+> purple stain and "coulis" look imply **added sugar**). […] The bowl is about the same diameter as
+> the takeaway cup beside it. […] No granola is clearly visible; I am **not** adding granola.
+
+Every behaviour asked for: a committed portion, the assumption named and offered for correction,
+the user's word ("coulis") turned into a nutritional inference, a scale anchored to another object
+in frame, and a refusal to invent the granola that belongs on a stock-photo parfait. gpt-5-mini
+reached the same place in 764 words; grok did it in a third of that and half the time.
+
+| | one-stage | two-stage (first prompt) | two-stage (owner's spec) |
+|---|---|---|---|
+| parfait, items | 1 | 1 | **2** (yogurt and compote separately) |
+| confidence | 0.62–0.7 | 0.35–0.4 | **0.6** |
+
+The confidence movement is the calibration working in both directions, which the first run could
+not show. Hedge-only prose produced 0.3–0.45 — under the gate, everything provisional, including
+readings that deserved better. A COMMITTED reading earns 0.6: above the gate, settled, because an
+anchored portion is a real basis for a number. The gate now separates confident-because-anchored
+from confident-because-guessing, which is what it was always supposed to do.
+
+### A workflow step can't be "ask the user" (owner, 2026-08-20; corrected 2026-08-21)
+
+Raised while the above was being built, and it is the piece this flow wants: describe → **confirm**
+→ macros is "AI, ask, AI", and the middle one cannot be declared.
+
+**I first wrote this section up as "there is no executor — nothing runs the steps." That was wrong,
+and the owner corrected it.** The workflow engine works and has been tested; I went looking for a
+background DAG walker, did not find one, and mistook a deliberate design for a hole. What actually
+happens, per step: `send-message.ts` records the reply, `extractAndAccumulateOutputs` pulls the
+declared `outputMappings` into `workflow_variables`, `<step>.prompt`/`<step>.response` are stored
+alongside, and `workflow.step.completed` fires. `chat-messaging-resolve.ts` then composes the next
+step by reading those variables back through `inputMappings`, refusing to run ahead of an
+unsatisfied `depends_on`. The loop is caller-driven on purpose; the framework does the variable
+plumbing between steps. Recorded here because the wrong version was written down first, and a wrong
+claim in a living doc outlives the conversation that produced it.
+
+**The real gap is one line wide.** `workflow_steps.processing_job_id` is NOT NULL, so every step
+must be an LLM call. "Ask the user for X and store it in `workflow_variables`" has to be faked as a
+model round-trip that does nothing but pose a question — which also puts the question's wording in
+a prompt template instead of in the app's own voice.
+
+Sketch: add `step_type: 'job' | 'input'`, make `processing_job_id` nullable when
+`step_type = 'input'`, and let an input step declare the variable it fills. Everything else is
+already there — the session already carries `workflow_variables`, a user message already tags its
+`workflow_step_id`, and `workflow.step.completed` already fires. Owner has asked for it
+(2026-08-21) for the photo-confirm flow.
