@@ -57,6 +57,19 @@ export async function resolveChatInvocation(
     const step = await getWorkflowStepByKey(session.workflow_id, options.stepKey);
     if (!step) throw new Error(`Workflow step "${options.stepKey}" not found`);
 
+    /**
+     * An input step's answer comes from the person, not the model. Sending it down this path would
+     * spend a call to ask a question the app can ask itself — so refuse, and say where to go. The
+     * error names the endpoint because this is the kind of mistake that otherwise surfaces as a
+     * confusing 500 three layers down.
+     */
+    if (step.step_type === 'input') {
+      throw new Error(
+        `Workflow step "${options.stepKey}" is an input step: it collects an answer from the user. ` +
+          `Submit it with POST /api/chat-sessions/${sessionId}/workflow-steps/${options.stepKey}/input instead of sending a message.`,
+      );
+    }
+
     const job = step.processing_job;
     if (!job) throw new Error(`Workflow step "${options.stepKey}" has no linked processing job`);
 
