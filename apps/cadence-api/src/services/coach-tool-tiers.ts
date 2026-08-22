@@ -50,6 +50,16 @@ export const META_TOOL_NAMES = [FIND_TOOLS_NAME, USE_TOOL_NAME] as const;
  * tuned per conversation shape and change often, and a tool quietly appearing or vanishing because
  * someone re-tuned an intent would be a horrible way to find out.
  */
+/**
+ * The dossier facts re-sent on EVERY turn (turn-context.ts's floor).
+ *
+ * Lives here rather than in turn-context because two different files need to agree on it: the one
+ * that injects it, and the one that tells her she already has it. When they disagreed, `use_tool`
+ * told her `get_weight` was "already in your context every turn" while the floor did not re-send
+ * it — a confident refusal pointing at nothing. Keep this list and TURN_FLOOR identical.
+ */
+export const TURN_FLOOR_FUNCTIONS = ['get_identity', 'get_constraints', 'get_active_plan', 'get_weight'] as const;
+
 export const DOSSIER_FUNCTIONS = [
   'get_identity',
   'get_objectives',

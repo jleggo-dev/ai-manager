@@ -16,6 +16,12 @@
  *
  * Present participles on purpose: this appears while the work is happening, and it should read as
  * a glance over her shoulder rather than a status code.
+ *
+ * NO THIRD-PERSON PRONOUNS. The coach speaks as "I" (BRAND.md), so a line reading "looking up what
+ * SHE can check" is the app narrating her from outside — which is a different voice from the one
+ * saying every other sentence on the screen, and the owner spotted it immediately. A bare
+ * participle needs no pronoun at all; where one is unavoidable it is first person. Pinned by a
+ * test, because this is the kind of thing that reads fine to whoever wrote it.
  */
 const PHRASES: Record<string, string> = {
   get_active_plan: 'looking at your plan',
@@ -32,11 +38,14 @@ const PHRASES: Record<string, string> = {
   update_constraint: 'updating what we work around',
   correct_log: 'fixing that record',
   set_macro_targets: 'setting your targets',
-  // find_tools genuinely IS a search — she is reading the menu, not the meal.
-  find_tools: 'looking up what she can check',
+  // find_tools genuinely IS a search — reading the menu, not the meal.
+  find_tools: 'looking up what I can check',
   // use_tool is never the real answer: see resolveActivityNames, which unwraps it to its target.
   use_tool: 'looking something up',
 };
+
+/** Every tool that has a phrase. Exported so a voice test can walk them all, not a copied subset. */
+export const ALL_PHRASE_KEYS = Object.keys(PHRASES);
 
 /** Anything unmapped — a new tool nobody has written a phrase for yet — still says something true. */
 const FALLBACK = 'looking something up';

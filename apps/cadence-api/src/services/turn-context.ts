@@ -15,6 +15,7 @@
  * the chosen functions BY NAME into the X-ray trace + durable ai_log, so a turn that fetched
  * nothing is still visibly assessed.
  */
+import { TURN_FLOOR_FUNCTIONS } from './coach-tool-tiers.ts';
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 import { validateCalls, executeCalls, type FnCall } from './retrieval/select-and-run.ts';
 import { renderCatalogDoc } from './retrieval/catalog.ts';
@@ -86,6 +87,20 @@ async function priorInjectedContext(userId: string, sessionId: string): Promise<
  *  - `get_constraints` — safety. Nothing about training is safe to say without it.
  *  - `get_active_plan` — every plan edit names commitments exactly as the plan lists them, and the
  *    plan is the one dossier fact that changes DURING a conversation (she changes it herself).
+ *  - `get_weight` — added 2026-08-22, and the omission had teeth. Body facts are a DOSSIER
+ *    function, which means `find_tools` cannot surface them and `use_tool` refuses them, both on
+ *    the grounds that they are "already in her context". That was only ever true of the
+ *    session-open pack: this floor did not re-send weight, so once AI Admin compacted the opening
+ *    dossier away the fact was unreachable by EVERY route at once — not injected, not searchable,
+ *    not callable. Measured over 12 turns across two days: asked to set nutrition targets, she
+ *    called `find_tools("weight, height, age, body stats")`, got back tools that do not carry
+ *    weight, tried `get_goal_progress`, searched again, and never once reached
+ *    `set_macro_targets`. Every call succeeded; none of them could.
+ *
+ *    `context-pack.ts` had already made this exact argument for the session-open list on
+ *    2026-08-14 — "the pack-select pass CHOSE a list without it and the coach asked someone their
+ *    weight fifteen minutes after the Broker captured it" — and the per-turn floor, whose whole
+ *    purpose is surviving compaction, was left without it. ~20 tokens.
  *
  * Cheap, and cheaper than it looks: re-injecting identical content is marked `unchanged` by the
  * freshness classifier, so it reads as a reminder she already has rather than as news — the fix
@@ -93,7 +108,7 @@ async function priorInjectedContext(userId: string, sessionId: string): Promise<
  * not skip re-sending it: surviving AI Admin's session compaction is the entire reason this
  * mechanism exists.
  */
-const TURN_FLOOR = ['get_identity', 'get_constraints', 'get_active_plan'] as const;
+const TURN_FLOOR = TURN_FLOOR_FUNCTIONS;
 
 /** Floor first, then whatever the Broker chose, minus duplicates. Order matters only for reading. */
 function withFloor(chosen: FnCall[]): FnCall[] {

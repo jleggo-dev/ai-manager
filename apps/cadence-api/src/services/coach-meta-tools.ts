@@ -10,6 +10,7 @@ import {
   USE_TOOL_NAME,
   DOSSIER_FUNCTIONS,
   ALWAYS_ACTIONS,
+  TURN_FLOOR_FUNCTIONS,
 } from './coach-tool-tiers.ts';
 
 /**
@@ -45,19 +46,55 @@ export interface ToolSearchResult {
   names: string[];
   /** True when nothing actually matched and `names` is the whole list shown as a fallback. */
   noMatch: boolean;
+  /**
+   * Dossier facts the query was reaching for — she already has these, they are not tools she can
+   * call, and saying so is the whole point. See `dossierMatches`.
+   */
+  alreadyHave: string[];
+}
+
+/**
+ * Dossier facts a search is reaching for.
+ *
+ * Dossier functions are deliberately absent from `onDemandToolNames()`, so a search for one used to
+ * return the nearest unrelated tools under the heading "These are now LOADED and callable by name".
+ * That is not a near-miss, it is a wrong answer with a confident heading — and it cost two days.
+ *
+ * Measured 2026-08-22: asked to set nutrition targets, she needed a weight. `find_tools("weight,
+ * height, age, body stats")` answered with `get_practice_totals` and `get_goal_progress`; she tried
+ * them, learned nothing, searched again, and across 12 turns never once reached
+ * `set_macro_targets`. Every call succeeded and none of them could have worked. The fact was in the
+ * database the whole time.
+ *
+ * So a query that reaches for a dossier fact now gets told it already has it, by name. Matching is
+ * the same generous term-overlap the tool search uses, over the fact's own description.
+ */
+function dossierMatches(query: string): string[] {
+  const terms = query
+    .trim()
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length > 2);
+  if (!terms.length) return [];
+  return (DOSSIER_FUNCTIONS as readonly string[]).filter((name) => {
+    const f = RETRIEVAL_FUNCTIONS[name];
+    const hay = `${name} ${f?.description ?? ''} ${(f?.domains ?? []).join(' ')}`.toLowerCase();
+    return terms.some((t) => hay.includes(t));
+  });
 }
 
 export function searchTools(query: string): ToolSearchResult {
   const names = onDemandToolNames();
+  const alreadyHave = dossierMatches(query);
   const q = query.trim().toLowerCase();
-  if (!q) return { names, noMatch: false };
+  if (!q) return { names, noMatch: false, alreadyHave };
 
   // A category name is the fast path — the manifest teaches those, so she will use them.
   const byCategory = categoryMembers(q);
-  if (byCategory.length) return { names: byCategory, noMatch: false };
+  if (byCategory.length) return { names: byCategory, noMatch: false, alreadyHave };
 
   const terms = q.split(/[^a-z0-9]+/).filter((t) => t.length > 2);
-  if (!terms.length) return { names, noMatch: false };
+  if (!terms.length) return { names, noMatch: false, alreadyHave };
   const scored = names
     .map((name) => {
       const f = RETRIEVAL_FUNCTIONS[name] ?? COACH_ACTION_TOOLS[name];
@@ -76,7 +113,9 @@ export function searchTools(query: string): ToolSearchResult {
    * silent fallback to the full list invites exactly that pretence: she asked for sleep tracking,
    * got ten unrelated tools, and picks the nearest one. The flag is what lets the answer be honest.
    */
-  return scored.length ? { names: scored.map((s) => s.name), noMatch: false } : { names, noMatch: true };
+  return scored.length
+    ? { names: scored.map((s) => s.name), noMatch: false, alreadyHave }
+    : { names, noMatch: true, alreadyHave };
 }
 
 export interface MetaTool {
@@ -100,8 +139,31 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
       },
     },
     async run(_userId, params) {
-      const { names, noMatch } = searchTools(String(params.query ?? ''));
+      const { names, noMatch, alreadyHave } = searchTools(String(params.query ?? ''));
       const lines = names.map(catalogLine).filter(Boolean);
+
+      /**
+       * What she already has comes FIRST, and when it answers the question the tool list is not
+       * shown at all.
+       *
+       * Body facts, constraints, identity and the rest ride her context — they are not tools, so
+       * this search cannot return them, and it used to answer a query about them with the nearest
+       * unrelated tools under the heading "These are now LOADED and callable by name". She would
+       * call those, learn nothing, and search again. Across 12 turns on 2026-08-22 that loop kept
+       * her from ever calling `set_macro_targets`, with the weight sitting in the database.
+       *
+       * Listing them ahead of a tool list she does not need is the difference between an answer
+       * and a detour.
+       */
+      const have = alreadyHave.length
+        ? [
+            'You ALREADY HAVE these — they are in the context you were given for this turn, above. ' +
+              'Read them there; they are facts, not tools, and there is nothing to call:',
+            ...alreadyHave.map((n) => `- ${n}: ${RETRIEVAL_FUNCTIONS[n]?.description ?? ''}`.trimEnd()),
+          ]
+        : [];
+
+      if (have.length && !lines.length) return boundToolResponse(have.join('\n'));
       if (!lines.length) {
         return 'There is nothing else available. Tell the user plainly that you cannot do that today.';
       }
@@ -113,7 +175,7 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
       const tail =
         'Call the one you need directly, by its own name, now — they are real tools this turn, not a menu. ' +
         'Do not describe them to the user instead of using them.';
-      return boundToolResponse([head, ...lines, tail].join('\n'));
+      return boundToolResponse([...have, ...(have.length ? [''] : []), head, ...lines, tail].join('\n'));
     },
   },
 
@@ -145,12 +207,42 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
          * (2026-08-20, three turns in a row): use_tool("get_weight") → "call find_tools" →
          * find_tools → round cap → the turn ended with a promise instead of his numbers.
          */
-        if ((DOSSIER_FUNCTIONS as readonly string[]).includes(name)) {
+        /**
+         * Only say "you already have it" when she DOES.
+         *
+         * The old text said the dossier block "carries it every turn" for all seven dossier facts,
+         * and the per-turn floor re-sent three. So for `get_weight`, `get_dietary_profile`,
+         * `get_objectives`, `get_consistency` and `get_health_history` this was a confident refusal
+         * pointing at nothing: the session-open pack had them, AI Admin's compaction eventually did
+         * not, and by then no route reached them at all.
+         *
+         * `get_weight` is now in the floor, so the claim is true for it. For the rest the honest
+         * move is not a better sentence — it is to RUN THE THING. A fact she cannot see and cannot
+         * fetch is worse than a redundant read, and `get_dietary_profile` carries allergies.
+         */
+        if ((TURN_FLOOR_FUNCTIONS as readonly string[]).includes(name)) {
           return (
             `"${name}" is not a tool because its answer is ALREADY IN YOUR CONTEXT — the dossier ` +
             'block injected above carries it every turn. Do not call anything for it: read it from ' +
             'your context and answer the user now.'
           );
+        }
+        if ((DOSSIER_FUNCTIONS as readonly string[]).includes(name)) {
+          const fact = RETRIEVAL_FUNCTIONS[name];
+          if (fact) {
+            try {
+              const out = await fact.run(userId, {});
+              const rendered = fact.render ? fact.render(out) : String(out ?? '');
+              return boundToolResponse(
+                rendered.trim()
+                  ? rendered
+                  : `Nothing is on file for ${name}. Ask the user rather than estimating, and write down what they tell you.`,
+              );
+            } catch (e) {
+              console.error('[use_tool] dossier read failed:', name, e);
+              return `Could not read ${name} just now. Say so plainly rather than guessing at it.`;
+            }
+          }
         }
         if ((ALWAYS_ACTIONS as readonly string[]).includes(name)) {
           return (

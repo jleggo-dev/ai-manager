@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { coachActivityLine, resolveActivityNames } from './coach-activity.ts';
+import { coachActivityLine, resolveActivityNames, ALL_PHRASE_KEYS } from './coach-activity.ts';
 
 /**
  * Owner: *"they usually tell me when they're calling a tool. This would help us diagnose and it
@@ -63,7 +63,7 @@ describe('resolveActivityNames — seeing through use_tool', () => {
   });
 
   it('find_tools says what it is really doing — reading the menu, not the meal', () => {
-    expect(line([{ name: 'find_tools', arguments: '{"query":"workouts"}' }])).toBe('looking up what she can check');
+    expect(line([{ name: 'find_tools', arguments: '{"query":"workouts"}' }])).toBe('looking up what I can check');
   });
 
   /** A status line must never be the thing that throws. */
@@ -78,5 +78,27 @@ describe('resolveActivityNames — seeing through use_tool', () => {
 
   it('an unmapped inner tool still says something true', () => {
     expect(line([{ name: 'use_tool', arguments: '{"name":"get_something_new"}' }])).toBe('looking something up');
+  });
+});
+
+/**
+ * The coach speaks as "I" (BRAND.md). A status line reading "looking up what SHE can check" is the
+ * app narrating her from outside — a different voice from the one writing every other sentence on
+ * screen. Shipped 2026-08-21 and spotted by the owner the same day; this stops it coming back.
+ */
+describe('voice', () => {
+  it('never refers to the coach in the third person', () => {
+    const thirdPerson = /\b(she|her|hers|he|him|his|they|their|theirs|the coach|cadence)\b/i;
+    for (const name of ALL_PHRASE_KEYS) {
+      const line = coachActivityLine([name]);
+      expect(line, `${name}: "${line}"`).not.toMatch(thirdPerson);
+    }
+  });
+
+  it('reads as work in progress, not a status code', () => {
+    for (const name of ALL_PHRASE_KEYS) {
+      // Present participle: every line is something being done right now.
+      expect(coachActivityLine([name]), name).toMatch(/ing\b/);
+    }
   });
 });
