@@ -10,6 +10,7 @@ SHIPPED 2026-08-22. Phases 2–4 designed, not built.**
 > pg_trgm `%` operator and the resolver reads `cadence.food_usage_ctx`. Run
 > `node --import tsx apps/cadence-api/scripts/apply-migration-0039.ts` against each environment
 > (additive, idempotent, safe to re-run).
+
 Companion docs: [`DESIGN-BRIEF-nutrition.md`](DESIGN-BRIEF-nutrition.md) (where the food surfaces
 live), [`DESIGN-PROMPT-food-plan.md`](DESIGN-PROMPT-food-plan.md) (the coaching loop that runs
 through them — this doc builds the engine that loop needs). Backlog entry: PLAN.md §12 **A23**.
