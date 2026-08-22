@@ -1,7 +1,7 @@
 # Design — the consistent ledger and the calibrated check-in
 
-**Opened 2026-08-21 (owner + Claude working session). Status: PHASES 1 AND 2 COMPLETE — 1a, 1b, 1c,
-2a, 2b, 2c all SHIPPED 2026-08-22. Remaining: Phase 3 (calibration), Phase 4 (coverage).**
+**Opened 2026-08-21 (owner + Claude working session). Status: PHASES 1-3 SHIPPED 2026-08-22.
+Remaining: Phase 4 (coverage), on demand.**
 
 > **Two deploy steps, both required.** (1) `node --import tsx apps/cadence-api/scripts/sync-jobs.ts`
 > — the three meal prompts now ask for a per-item `brand` and are inert until synced (dry-run shows
@@ -372,7 +372,31 @@ honestly instead of pretending one week of data is a verdict.
 
 ---
 
-## Phase 3 — calibration: close the loop in ledger units (needs 1 + 2)
+## Phase 3 — calibration — **SHIPPED 2026-08-22**
+
+Landed as `services/energy-balance.ts` (pure) + `services/calibration.ts` (assembly), surfaced in
+the check-in. Deltas from the design:
+
+- **The target stopped being a model's proposal.** The doc had `nutrition_baseline` proposing an
+  anchored number; once maintenance is computed, the target is subtraction, so the app computes it
+  (`targetForSafePace`) and the job is *handed* the figure with an explicit instruction not to
+  argue with it. The model still owns the non-weight case and the words. This is the same
+  "code computes, models narrate" rule the ledger rests on, applied one layer up.
+- **Guardrails are code, as designed** — `MAINTENANCE_FLOOR_RATIO = 0.85` and a 300 kcal / 28-day
+  cap on cumulative *cuts*. Raises are never blocked (the too-fast case must always be able to
+  act), and `macro_targets.adjustments` is the ratchet's working memory, written by `setTargets`.
+- **"Not yet" is a first-class answer**, with a named blocker and progress (`9 of 17 days`), so the
+  panel shows a countdown rather than a closed door.
+- **Config fixed**: `weight_trend` and `current_targets` are now declared in the job's `variables`
+  (the service had been passing both undeclared), joined by `implied_maintenance`.
+- **A §2a bug surfaced and was fixed here**: `smoothedWeeklyRate` fitted its regression to the
+  EWMA-smoothed series, which lags — 34% too shallow at five weekly weigh-ins. Harmless as a
+  label; ~190 kcal/day of wrong maintenance once it became arithmetic. The fit now runs on raw
+  points; the EWMA stays on the displayed trend weight, where lag is the point.
+- **The proposal's home is the check-in**, as designed. The meal-log `BaselineReadPanel` was left
+  in place rather than deleted — retiring it is a follow-up once the recap has been used for real.
+
+### Phase 3 as designed
 
 New pure module `apps/cadence-api/src/services/energy-balance.ts`:
 

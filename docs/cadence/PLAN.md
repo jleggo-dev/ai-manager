@@ -2807,7 +2807,7 @@ already lives in Settings. Keep the "Set location for weather" button, which onl
 nothing is stored at all. Open: should the header signal you are away from home, or just say
 Montreal?
 
-**A23. The consistent ledger & the calibrated check-in — PHASES 1 + 2 COMPLETE 2026-08-22; Phases 3-4 designed (owner 2026-08-21)**
+**A23. The consistent ledger & the calibrated check-in — PHASES 1-3 SHIPPED 2026-08-22; Phase 4 on demand (owner 2026-08-21)**
 
 The lazy logging paths (voice/text/photo) let `parse-meal` invent macros on every log, so the same
 "venti latte from Starbucks" costs different kcal every day — the owner's trust complaint, and the
@@ -2849,10 +2849,19 @@ today's reading underneath, which is what makes an opt-in daily cadence safe to 
 (`baseline.weigh_in_cadence`, weekly by default; `POST /plan/weigh-in` hangs any day's reading off
 the same weigh-in activity, so there is no second store to drift).
 
-**Phases 1 and 2 are complete.** Next is **Phase 3** — implied-maintenance calibration in ledger
-units — which cannot start until ~3 weeks of *pinned* ledger data plus weigh-ins exist. That clock
-started when 1a landed, not when Phase 3's code is written. Phase 4 (USDA Branded, FatSecret,
-location context, embeddings) stays on demand.
+**Phase 3 landed the same day**: `energy-balance.ts` computes implied maintenance in ledger units
+(mean intake − 7700 × kg/week ÷ 7) and the target that follows, so the target stopped being a
+model's proposal and became arithmetic. Guardrails moved from prompt prose into code — never below
+85% of maintenance, and ≤300 kcal of cumulative *cuts* per four weeks, because a plateau looks
+exactly like "the deficit is too small". Surfaced in the check-in, suggest-never-auto-apply.
+
+**The engine is built; it needs DATA to speak.** Calibration gates on ~3 weeks of *pinned* ledger
+days plus 3+ weigh-ins spanning a fortnight, and returns a named blocker with progress until then.
+That clock started when 1a landed. Until it fills, `npm run metrics:food-ledger` has nothing to
+compare and the check-in will honestly say "still working it out".
+
+What remains of the original design is **Phase 4** — USDA Branded, FatSecret by-ID, location
+context, embeddings — which stays on demand rather than scheduled.
 
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 
