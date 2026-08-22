@@ -140,6 +140,33 @@ describe('recipes carry their per-serving numbers (10a)', () => {
 });
 
 describe('the composer — a recipe onto a day and a slot (10b)', () => {
+  /**
+   * Creating a week is TWO calls — create from recipes, then patch the composed days over it — and
+   * the patch is an upgrade, never a requirement. The week already exists by then.
+   *
+   * This is here because the original code read the patch result unguarded, so an absent one threw
+   * an unhandled rejection. Vitest reported the suite GREEN and failed the run: the throw happened
+   * after the assertions, so nothing asserted was wrong and the feature was still broken. Only CI
+   * surfaced it. Both failure shapes are covered — a rejection, and a result that is not there.
+   */
+  it.each([
+    ['the patch rejects', () => Promise.reject(new Error('offline'))],
+    ['the patch answers with nothing', () => Promise.resolve(undefined)],
+  ])('still saves the week when %s', async (_label, behaviour) => {
+    saveMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
+    patchMealPlan.mockImplementation(behaviour as () => Promise<never>);
+    await mountKitchen();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Beef chili/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Put it on a day/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Wed 26 Aug/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dinner' }));
+
+    // The week that was created survives; nothing throws.
+    await waitFor(() => expect(saveMealPlan).toHaveBeenCalled());
+    await waitFor(() => expect(patchMealPlan).toHaveBeenCalled());
+  });
+
   it('creates the week when there is none, reusing the saved recipe rather than copying it', async () => {
     saveMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
     await mountKitchen();

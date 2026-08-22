@@ -118,9 +118,21 @@ export function useKitchen(): KitchenData {
 
         const r = await saveMealPlan({ week_of: weekOf, days: draftDays, shopping_list: [], notes: null });
         if (r.status !== 'ok') return void setNote(r.message);
+        if (!r.plan?.meal_plan_id) return void setPlan(r.plan ?? null);
 
-        const composed = await patchMealPlan(r.plan.meal_plan_id, { days });
-        setPlan(composed.status === 'ok' ? composed.plan : r.plan);
+        /**
+         * The second call is an UPGRADE, never a requirement. The week already exists at this
+         * point; the patch only replaces its recipe-shaped days with the composed ones. So every
+         * way it can fail — rejected, or answering with something unexpected — falls back to the
+         * plan that was just created rather than throwing.
+         *
+         * Caught by CI, not by me: the result was read as `composed.status` with no guard, and an
+         * absent result made that an unhandled rejection. The tests still reported green, which is
+         * exactly the "false positive tests" vitest warns about — the failure happened after the
+         * assertions, so nothing that was asserted was wrong, and the feature was still broken.
+         */
+        const composed = await patchMealPlan(r.plan.meal_plan_id, { days }).catch(() => null);
+        setPlan(composed?.status === 'ok' ? composed.plan : r.plan);
       } finally {
         setBusy(false);
       }
