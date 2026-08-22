@@ -48,11 +48,23 @@ function today(): string {
 }
 
 /** One parse-meal response — the shape the job returns for a single-item meal. */
-function parse(name: string, est: Macros, opts: { qty?: number; unit?: string; confidence?: number } = {}) {
+function parse(
+  name: string,
+  est: Macros,
+  opts: { qty?: number; unit?: string; confidence?: number; brand?: string } = {},
+) {
   return {
     formatted: JSON.stringify({
       meal: 'snack',
-      items: [{ name, ...(opts.qty ? { qty: opts.qty } : {}), ...(opts.unit ? { unit: opts.unit } : {}), est }],
+      items: [
+        {
+          name,
+          ...(opts.brand ? { brand: opts.brand } : {}),
+          ...(opts.qty ? { qty: opts.qty } : {}),
+          ...(opts.unit ? { unit: opts.unit } : {}),
+          est,
+        },
+      ],
       confidence: opts.confidence ?? 0.8,
       est_macros: est,
     }),
@@ -223,6 +235,38 @@ d('A23 — the food ledger keeps a price (DB)', () => {
     runJobBySlug.mockResolvedValueOnce(parse('yogurt parfait', { kcal: 999 }, { qty: 1 }));
     const later = await logMeal(USER, { text: 'a yogurt parfait', date: today() });
     expect(later.macros?.kcal).toBeCloseTo(380, 0);
+    expect(await ownFoodCount()).toBe(1);
+  });
+
+  /**
+   * A23 §1b — the vendor is what makes a cafe item pinnable as ITSELF. Without it the parfait from
+   * the place by the office and any other parfait are one row, and the price stops meaning much.
+   */
+  it('pins the vendor the parse heard, and keeps it on the log', async () => {
+    runJobBySlug.mockResolvedValueOnce(
+      parse('yogurt parfait', { kcal: 380 }, { qty: 1, unit: 'parfait', brand: 'Materia Prima' }),
+    );
+    const row = await logMeal(USER, { text: 'a yogurt parfait from materia prima', date: today() });
+
+    expect(row.items[0]?.brand).toBe('Materia Prima');
+    const foods = await sql<{ name: string; brand: string | null }[]>`
+      select name, brand from cadence.foods where owner_user_id = ${USER}`;
+    expect(foods).toEqual([{ name: 'yogurt parfait', brand: 'Materia Prima' }]);
+  });
+
+  it('resolves a later log of the same vendor item to the row it already pinned', async () => {
+    runJobBySlug.mockResolvedValueOnce(
+      parse('yogurt parfait', { kcal: 380 }, { qty: 1, unit: 'parfait', brand: 'Materia Prima' }),
+    );
+    const first = await logMeal(USER, { text: 'a parfait from materia prima', date: today() });
+
+    runJobBySlug.mockResolvedValueOnce(
+      parse('yogurt parfait', { kcal: 999 }, { qty: 1, unit: 'parfait', brand: 'Materia Prima' }),
+    );
+    const second = await logMeal(USER, { text: 'a parfait from materia prima', date: today() });
+
+    expect(second.items[0]?.food_id).toBe(first.items[0]?.food_id);
+    expect(second.macros?.kcal).toBeCloseTo(380, 0);
     expect(await ownFoodCount()).toBe(1);
   });
 

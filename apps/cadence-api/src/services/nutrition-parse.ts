@@ -38,8 +38,12 @@ export function parseMealResult(raw: string, explicitMeal?: MealKind): ParsedMea
       .slice(0, 12)
       .map((i) => {
         const est = sanitizeMacros(i.est);
+        // A vendor the user actually named ("from Materia Prima") — the thing that makes a cafe
+        // item pinnable as itself rather than as a generic parfait (A23 §1b).
+        const brand = typeof i.brand === 'string' ? (i.brand as string).trim().slice(0, 120) : '';
         return {
           name: (i.name as string).trim(),
+          ...(brand ? { brand } : {}),
           ...(typeof i.qty === 'number' && i.qty > 0 ? { qty: i.qty } : {}),
           ...(typeof i.unit === 'string' && (i.unit as string).trim() ? { unit: (i.unit as string).trim() } : {}),
           ...(est ? { est } : {}),

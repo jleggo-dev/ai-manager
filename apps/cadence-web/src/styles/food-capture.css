@@ -459,6 +459,20 @@
   width: 100%;
   margin-top: 6px;
 }
+/* A23 §1b — the vendor question. Quiet by construction: it sits under the rows, above the total,
+   and never looks like something you have to answer. Reuses .food-field/.wiz-in so an optional
+   line needs no new control. */
+.fa-vendor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 0;
+  border-top: 1px solid oklch(95% 0.01 95);
+}
+.fa-vendor .food-field {
+  margin: 0;
+}
+
 .fa-tot {
   display: flex;
   align-items: baseline;

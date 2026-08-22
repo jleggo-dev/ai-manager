@@ -75,6 +75,34 @@ describe('wantsTargets', () => {
   });
 });
 
+describe('parseMealResult — the vendor (A23 §1b)', () => {
+  it('keeps a brand the model heard', () => {
+    const out = parseMealResult(
+      JSON.stringify({ items: [{ name: 'venti latte', brand: ' Starbucks ', qty: 1, unit: 'latte' }] }),
+    );
+    expect(out.items[0]).toEqual({ name: 'venti latte', brand: 'Starbucks', qty: 1, unit: 'latte' });
+  });
+
+  it('omits the field rather than carrying an empty one', () => {
+    const out = parseMealResult(JSON.stringify({ items: [{ name: 'oats', brand: '   ' }, { name: 'toast' }] }));
+    expect(out.items[0]).not.toHaveProperty('brand');
+    expect(out.items[1]).not.toHaveProperty('brand');
+  });
+
+  it('ignores a non-string brand and caps a runaway one', () => {
+    const out = parseMealResult(
+      JSON.stringify({
+        items: [
+          { name: 'oats', brand: 42 },
+          { name: 'toast', brand: 'x'.repeat(400) },
+        ],
+      }),
+    );
+    expect(out.items[0]).not.toHaveProperty('brand');
+    expect(out.items[1]?.brand).toHaveLength(120);
+  });
+});
+
 describe('usageSlot', () => {
   it('reads the UTC weekday off the log date, Sunday-first', () => {
     expect(usageSlot('2026-08-19', 'breakfast')).toEqual({ dow: 3, meal: 'breakfast' }); // a Wednesday

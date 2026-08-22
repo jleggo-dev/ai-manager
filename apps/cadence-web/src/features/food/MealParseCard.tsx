@@ -4,6 +4,7 @@ import { useInvalidateNutritionDay } from '../../lib/query/index.ts';
 import { mealForNow } from '../plan/occurrence/format.ts';
 import { macroLineProteinFirst } from './amounts.ts';
 import { MealAmountRows } from './MealAmountRows.tsx';
+import { MealVendorAsk } from './MealVendorAsk.tsx';
 import { useMealAmounts } from './useMealAmounts.ts';
 
 const MEAL_KINDS: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
@@ -53,7 +54,7 @@ export function MealParseCard({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const invalidateNutritionDay = useInvalidateNutritionDay();
-  const { rows, setQty, removeRow, asked, total, toPreview } = useMealAmounts(preview);
+  const { rows, setQty, setBrand, removeRow, asked, total, toPreview } = useMealAmounts(preview);
 
   async function confirm() {
     if (busy || asked > 0 || !rows.length) return;
@@ -82,6 +83,9 @@ export function MealParseCard({
       </div>
 
       <MealAmountRows rows={rows} busy={busy} onQty={setQty} onRemove={removeRow} />
+
+      {/* Optional, and deliberately below the numbers: it never gates the log (A23 §1b). */}
+      <MealVendorAsk rows={rows} busy={busy} onBrand={setBrand} />
 
       <div className="fa-tot">
         <b>~{Math.round(total.kcal ?? 0)} kcal</b>

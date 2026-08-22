@@ -165,6 +165,7 @@ async function priceOne(
 ): Promise<PricedOne> {
   const bare: NutritionLog['items'][number] = {
     name: item.name,
+    ...(item.brand?.trim() ? { brand: item.brand.trim() } : {}),
     ...(typeof item.qty === 'number' ? { qty: item.qty } : {}),
     ...(item.unit ? { unit: item.unit } : {}),
     ...(item.est ? { est: item.est } : {}),

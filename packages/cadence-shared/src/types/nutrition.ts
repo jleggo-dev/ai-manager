@@ -44,8 +44,12 @@ export interface NutritionLog {
   log_id: string;
   date: string;
   meal: MealKind;
-  /** Optional food_id correlates a free-form item back to a saved Food (Req 5 §5.4). */
-  items: { name: string; qty?: number; unit?: string; est?: Macros; food_id?: string }[];
+  /**
+   * Optional food_id correlates a free-form item back to a saved Food (Req 5 §5.4). `brand` is the
+   * place it came from when the user named it or the packaging showed it — kept on the item so a
+   * previewed meal can still pin its vendor after the round trip to the browser (A23 §1b).
+   */
+  items: { name: string; brand?: string; qty?: number; unit?: string; est?: Macros; food_id?: string }[];
   macros: Macros;
   input_method: 'photo' | 'voice' | 'text' | 'manual';
   ai_confidence?: number;
