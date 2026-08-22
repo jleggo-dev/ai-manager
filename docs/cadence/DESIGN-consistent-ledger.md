@@ -1,7 +1,12 @@
 # Design — the consistent ledger and the calibrated check-in
 
-**Opened 2026-08-21 (owner + Claude working session). Status: Phase 1a SHIPPED 2026-08-22; 1b/1c
-and Phases 2–4 designed, not built.**
+**Opened 2026-08-21 (owner + Claude working session). Status: Phases 1a and 1c SHIPPED 2026-08-22;
+1b and Phases 2–4 designed, not built.**
+
+> **Deploy note — migration 0039 must be applied before this code ships.** `searchFoods` uses the
+> pg_trgm `%` operator and the resolver reads `cadence.food_usage_ctx`. Run
+> `node --import tsx apps/cadence-api/scripts/apply-migration-0039.ts` against each environment
+> (additive, idempotent, safe to re-run).
 Companion docs: [`DESIGN-BRIEF-nutrition.md`](DESIGN-BRIEF-nutrition.md) (where the food surfaces
 live), [`DESIGN-PROMPT-food-plan.md`](DESIGN-PROMPT-food-plan.md) (the coaching loop that runs
 through them — this doc builds the engine that loop needs). Backlog entry: PLAN.md §12 **A23**.
@@ -188,7 +193,32 @@ smaller output, faster parse, and the last incentive for the model to invent num
   never asked again for that food. One question max per meal; skipping costs nothing. The
   economics are the anti-MFP: MFP makes you search every time; Cadence asks once and pins.
 
-### 1c. Ranking — context is the signal, the list stays length one
+### 1c. Ranking — **SHIPPED 2026-08-22**
+
+Landed as designed, with these specifics:
+
+- **Migration 0039.** `pg_trgm` in the `extensions` schema (matching pgcrypto/uuid-ossp, already on
+  the search_path), GIN trigram indexes on `lower(name)` and `lower(coalesce(brand,''))`, and
+  `cadence.food_usage_ctx (user_id, food_id, dow, meal)` with RLS. No backfill — the histogram
+  earns its rows from the next log, and an empty one scores nothing.
+- **`searchFoods` orders for RECALL, not final rank.** Similarity first with a `+0.15` own-food
+  bonus, rather than yours-first outright, because `rankFoods` re-scores anyway and at 450k rows
+  the `LIMIT` decides what the ranker is even allowed to see.
+- **Two rhythm signals, not one:** exact weekday+meal slot (`SLOT_BOOST_MAX = 0.15`) and
+  meal-across-all-days (`MEAL_BOOST_MAX = 0.05`), both saturating at 3 occurrences. The slot boost
+  is deliberately *larger* than `PRESELECT_SCORE_MARGIN` so a reliable slot food wins the
+  pre-select outright — one answer, not a list. Rhythm applies only where a lexical hit already
+  exists: it breaks ties, it never creates a candidate.
+- **`usageSlot(date, meal)`** in `nutrition-parse.ts` derives dow from the UTC date, matching every
+  other Cadence day-stamp. Every write path teaches the histogram — spoken, photo, food picker,
+  recipe, plate — and `POST /nutrition/foods/resolve` takes an optional `meal` so the Food tab's
+  own resolve gets it too (the web hook now sends its `mealKind`).
+- **`dev-reset.ts`** gained `food_usage_ctx`, so test users clean up.
+
+Still deferred to Phase 4 as planned: **cross-user popularity** in the SQL ordering (it only starts
+mattering when Branded lands) and **location** context (backlog A21).
+
+### 1c as designed
 
 The owner's Wednesday problem is not a search-UI problem ("I use MFP's *web* interface because the
 screen is bigger" = the user doing retrieval). The design goal: **the user describes, the system
