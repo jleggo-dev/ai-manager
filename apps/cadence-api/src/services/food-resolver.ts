@@ -138,29 +138,54 @@ async function loadRecipeCandidates(
 }
 
 /**
- * Resolve text (and optional photo hint) into ranked candidates + optional preselect.
- * Always appends a "new food" escape hatch when there is text and/or a photo.
+ * Per-user ranking inputs (usage projection + dietary profile) — four queries that do NOT depend
+ * on the query text. Loaded once and shared when resolving several items of one meal (A23 §1a);
+ * `resolveFoods` still loads its own when called for a single lookup.
  */
-export async function resolveFoods(userId: string, input: ResolveInput): Promise<ResolveResult> {
-  const text = typeof input.text === 'string' ? input.text.trim() : '';
-  const hasPhoto = typeof input.photo === 'string' && input.photo.startsWith('data:image/');
+export interface ResolveShared {
+  ctx: FoodRankContext;
+  recents: Food[];
+  frequents: Food[];
+  profile: DietaryProfile | null;
+}
+
+export async function loadResolveShared(userId: string): Promise<ResolveShared> {
   const [{ ctx, recents, frequents }, profile] = await Promise.all([
     loadRankContext(userId),
     getDietaryProfile(userId),
   ]);
+  return { ctx, recents, frequents, profile };
+}
 
-  let pool: Food[];
-  if (!text) {
-    pool = mergeFoodPools([recents, frequents]);
-  } else {
-    const hits = await searchFoods(userId, text, SEARCH_LIMIT);
-    // Cache-miss → USDA whole foods (always cached on import). Local stays first.
-    const withUsda = await enrichFoodsWithUsda(userId, text, hits);
-    // Also consider recents/frequents that may fuzzy-match beyond SQL LIKE.
-    pool = mergeFoodPools([withUsda, recents, frequents]);
-  }
+async function poolFor(userId: string, text: string, shared: ResolveShared): Promise<Food[]> {
+  if (!text) return mergeFoodPools([shared.recents, shared.frequents]);
+  const hits = await searchFoods(userId, text, SEARCH_LIMIT);
+  // Cache-miss → USDA whole foods (always cached on import). Local stays first.
+  const withUsda = await enrichFoodsWithUsda(userId, text, hits);
+  // Also consider recents/frequents that may fuzzy-match beyond SQL LIKE.
+  return mergeFoodPools([withUsda, shared.recents, shared.frequents]);
+}
 
-  const ranked = rankFoods(text, pool, ctx).slice(0, 12);
+/** Ranked foods WITH their rows — what pricing needs; `resolveFoods` narrows these to candidates. */
+export async function rankedFoodsFor(userId: string, text: string, shared: ResolveShared): Promise<RankedFood[]> {
+  return rankFoods(text, await poolFor(userId, text, shared), shared.ctx);
+}
+
+/**
+ * Resolve text (and optional photo hint) into ranked candidates + optional preselect.
+ * Always appends a "new food" escape hatch when there is text and/or a photo.
+ */
+export async function resolveFoods(
+  userId: string,
+  input: ResolveInput,
+  shared?: ResolveShared,
+): Promise<ResolveResult> {
+  const text = typeof input.text === 'string' ? input.text.trim() : '';
+  const hasPhoto = typeof input.photo === 'string' && input.photo.startsWith('data:image/');
+  const s = shared ?? (await loadResolveShared(userId));
+  const profile = s.profile;
+
+  const ranked = (await rankedFoodsFor(userId, text, s)).slice(0, 12);
   const candidates: ResolveCandidate[] = [
     ...ranked.map((r) => toCandidate(r, profile)),
     ...(await loadRecipeCandidates(userId, text, profile)),

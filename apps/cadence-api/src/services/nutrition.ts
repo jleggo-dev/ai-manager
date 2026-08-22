@@ -24,11 +24,9 @@ import {
   findPendingMealOccurrence,
   setOccurrenceStatus,
   listDoneUserOccurrencesForDay,
-  listWeighInSeries,
 } from '../repos/occurrences.ts';
 import { putMealPhoto, signMealPhotoUrl, signMealPhotoUrls } from './meal-photos.ts';
 import { estimateBurnKcal } from './burn.ts';
-import { actualWeeklyRate, safeWeeklyKg, classifyLossPace } from './weight-trend.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
 import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW, type ParsedMealResult } from './nutrition-parse.ts';
@@ -38,6 +36,10 @@ import type { PlateItemInput } from './plate-compose.ts';
 import { getFoodsByIds } from '../repos/foods.ts';
 import { buildNutritionInsight, type NutritionInsightPack } from './nutrition-insight.ts';
 import { buildMicroInsightRollup } from './nutrition-insight-micro.ts';
+import { OBSERVE_DAYS_NEEDED } from './nutrition-baseline.ts';
+export { getBaselineRead } from './nutrition-baseline.ts';
+export type { BaselineRead } from './nutrition-baseline.ts';
+import { priceParsedMeal } from './food-pricing.ts';
 
 export { parseMealResult, wantsTargets, PROVISIONAL_BELOW, isMeal } from './nutrition-parse.ts';
 export type { ParsedMealResult } from './nutrition-parse.ts';
@@ -90,13 +92,27 @@ export async function previewMealParse(
   });
   const rawOut = res.formatted ?? res.raw ?? '';
   const shaped = parseMealResult(rawOut, mealHint && isMeal(mealHint) ? mealHint : undefined);
+  // Price the card the user is about to see (A23 §1a) — but PIN NOTHING. A preview they walk away
+  // from must leave no food behind, the same rule the photo read follows. The confirm does the
+  // pinning, and pricing is deterministic, so what lands is what the card showed.
+  const ledger = await priceParsedMeal(
+    userId,
+    { items: shaped.items, macros: shaped.macros, confidence: shaped.confidence },
+    { pin: false },
+  );
   void logAi(userId, {
     kind: 'parse_meal',
     input: { text: trimmed, meal_hint: mealHint ?? null, preview: true },
     output: { raw: rawOut.slice(0, 2000) },
-    meta: { meal: shaped.meal, items: shaped.items.length, confidence: shaped.confidence, preview: true },
+    meta: {
+      meal: shaped.meal,
+      items: shaped.items.length,
+      confidence: shaped.confidence,
+      preview: true,
+      ledger_priced: ledger.fully_priced,
+    },
   });
-  return { ...shaped, raw_text: trimmed };
+  return { ...shaped, items: ledger.items, macros: ledger.macros, raw_text: trimmed };
 }
 
 /** A previewed parse, confirmed by the user — logged verbatim, no second AI pass. */
@@ -137,17 +153,23 @@ export async function logMeal(
       const est = sanitizeMacros(i.est);
       return { ...i, ...(est ? { est } : { est: undefined }) };
     });
-    const provisional = !!macros && p.confidence !== null && p.confidence < PROVISIONAL_BELOW;
+    // Re-priced server-side rather than trusted: the preview's wire shape drops `food_id`, so this
+    // is where the confirmed meal earns its ledger link and pins whatever was new. Deterministic,
+    // so the numbers match the card the user tapped — this fills the ledger, it does not overrule
+    // them (a correction still lands through correct_log, as `source: 'user'`).
+    const ledger = await priceParsedMeal(userId, { items, macros, confidence: p.confidence });
+    const provisional =
+      !ledger.fully_priced && !!ledger.macros && p.confidence !== null && p.confidence < PROVISIONAL_BELOW;
     const row = await insertNutritionLog(userId, {
       date,
       meal: p.meal,
-      items,
+      items: ledger.items,
       input_method: 'text',
       ai_confidence: p.confidence,
       raw_text: p.raw_text || null,
       flags: p.flags,
       photo_ref: null,
-      macros,
+      macros: ledger.macros,
       provisional,
     });
     await tickFoodLogOccurrence(userId, date, p.meal);
@@ -226,12 +248,24 @@ export async function logMeal(
     console.warn('[nutrition] parse-meal failed — storing the meal UNPARSED and provisional:', parseError);
   }
 
+  // The parse said WHAT it was; the ledger says what it costs (A23 §1a). Every item it can match
+  // to a saved food is repriced from that food, and every item it cannot is pinned as one — so the
+  // same words logged tomorrow produce the same numbers instead of a fresh guess.
+  const ledger = await priceParsedMeal(userId, { items, macros, confidence });
+  items = ledger.items;
+  macros = ledger.macros;
+
   // Low-confidence estimates are provisional: listed, but excluded from totals until confirmed.
   // So is a meal with NO numbers at all — a failed parse, or one that produced nothing usable.
   // Provisional keeps it out of the day's totals and visibly awaiting a confirm, which is the
   // honest reading; a confirmed 0 kcal quietly drags the day down and looks settled doing it.
+  // A fully ledger-priced meal is exempt: the confidence gate is about how well the MODEL guessed
+  // the numbers, and there is no guess left in a meal whose every item came from a food row.
   const noNumbers = !macros || Object.keys(macros).length === 0;
-  const provisional = parseFailed || noNumbers || (!!macros && confidence !== null && confidence < PROVISIONAL_BELOW);
+  const provisional =
+    parseFailed ||
+    noNumbers ||
+    (!ledger.fully_priced && !!macros && confidence !== null && confidence < PROVISIONAL_BELOW);
 
   const row = await insertNutritionLog(userId, {
     date,
@@ -473,111 +507,6 @@ export async function listRecentMeals(userId: string, days = 7): Promise<Nutriti
     console.warn('[nutrition] photo URL signing failed — returning rows without photos:', e);
     return rows;
   }
-}
-
-export type BaselineRead =
-  | { ready: false; days_logged: number; days_needed: number }
-  | {
-      ready: true;
-      read: string;
-      suggestion: string;
-      rationale: string;
-      /** Coach-proposed daily targets (S4) — suggest-never-auto-apply; null when not warranted
-       *  (no eating/weight goal), already set (Settings owns edits), or the model declined. */
-      proposed_targets: Macros | null;
-      targets_rationale: string | null;
-    };
-
-const OBSERVE_DAYS_NEEDED = 7;
-
-/**
- * The Baseline moment (module arc): after ~7 OBSERVED days, the coach gives their pattern read
- * and proposes exactly ONE gradual change. The gate is deterministic (distinct logged days);
- * the read is grounded in the actual log; the change is suggest-never-auto-apply — the caller
- * hands `suggestion` to the replan steer, and the existing preview→confirm flow owns the commit.
- */
-export async function getBaselineRead(userId: string): Promise<BaselineRead> {
-  const to = today();
-  const from = new Date(Date.now() - 13 * 86_400_000).toISOString().slice(0, 10); // 14d window: a slow logger still crosses the gate
-  const meals = await listNutritionLogs(userId, from, to);
-  const summary = summarizeNutrition(meals, 14);
-  if (summary.days_logged < OBSERVE_DAYS_NEEDED) {
-    return { ready: false, days_logged: summary.days_logged, days_needed: OBSERVE_DAYS_NEEDED };
-  }
-
-  const [goals, user, weighSeries] = await Promise.all([
-    listGoalsByStatus(userId, ['confirmed', 'committed']),
-    getUser(userId),
-    listWeighInSeries(userId),
-  ]);
-  const hasTargets = !!user?.macro_targets && Object.keys(user.macro_targets).length > 0;
-
-  // Two proposal modes. INITIAL (Baseline moment): propose targets only when a goal warrants them and
-  // none are set. ADAPTIVE (recurring): once targets ARE set and the weigh-in trend is trustworthy,
-  // propose an ADJUSTED target from the trend vs. a safe rate — throttled to ~weekly via last_reviewed.
-  const actualRate = actualWeeklyRate(weighSeries);
-  const currentKg = user?.baseline?.weight_kg?.current;
-  const lastReviewed = user?.macro_targets?.last_reviewed;
-  const dueForReview = !lastReviewed || Date.now() - Date.parse(lastReviewed) >= 7 * 86_400_000;
-  const proposeAdaptive = hasTargets && actualRate != null && typeof currentKg === 'number' && dueForReview;
-  const propose = proposeAdaptive || (!hasTargets && wantsTargets(goals));
-
-  const safeKg = typeof currentKg === 'number' ? safeWeeklyKg(currentKg) : null;
-  const weightTrend =
-    proposeAdaptive && actualRate != null && safeKg != null
-      ? {
-          actual_kg_per_week: Math.round(actualRate * 100) / 100,
-          safe_kg_per_week: safeKg,
-          pace: classifyLossPace(actualRate, safeKg),
-        }
-      : null;
-
-  const res = await runJobBySlug(userId, 'nutrition-baseline', {
-    summary: JSON.stringify(summary),
-    meals: JSON.stringify(
-      meals.map((m) => ({ date: m.date, meal: m.meal, items: m.items.map((i) => i.name), flags: m.flags })),
-    ),
-    goals: JSON.stringify(goals.map((g) => ({ title: g.title, area: g.area, type: g.type, measure: g.measure }))),
-    baseline: JSON.stringify(user?.baseline ?? {}),
-    propose_targets: propose ? 'yes' : 'no',
-    weight_trend: weightTrend ? JSON.stringify(weightTrend) : '',
-    current_targets: proposeAdaptive ? JSON.stringify(user?.macro_targets ?? {}) : '',
-  });
-  const raw = res.formatted ?? res.raw ?? '';
-  const parsed = JSON.parse(raw) as {
-    read?: unknown;
-    suggestion?: unknown;
-    rationale?: unknown;
-    proposed_targets?: unknown;
-    targets_rationale?: unknown;
-  };
-  const read = typeof parsed.read === 'string' ? parsed.read.trim() : '';
-  const suggestion = typeof parsed.suggestion === 'string' ? parsed.suggestion.trim().slice(0, 300) : '';
-  const rationale = typeof parsed.rationale === 'string' ? parsed.rationale.trim() : '';
-  if (!read || !suggestion) throw new Error('nutrition-baseline returned an incomplete read');
-  // The deterministic gate is the wall — a proposal the app didn't ask for is discarded.
-  const proposedTargets = propose ? sanitizeTargets(parsed.proposed_targets) : null;
-  const targetsRationale =
-    proposedTargets && typeof parsed.targets_rationale === 'string' ? parsed.targets_rationale.trim() : null;
-
-  // Throttle: stamp the review time so an adaptive proposal doesn't re-fire until ~a week out
-  // (whether or not the user accepts). Merge-write — keeps the macros + other settings intact.
-  if (proposeAdaptive) await setMacroTargets(userId, { ...user?.macro_targets, last_reviewed: today() });
-
-  void logAi(userId, {
-    kind: 'nutrition_baseline',
-    input: { summary },
-    output: { raw: raw.slice(0, 2000) },
-    meta: { days_logged: summary.days_logged, proposed_targets: !!proposedTargets, adaptive: proposeAdaptive },
-  });
-  return {
-    ready: true,
-    read,
-    suggestion,
-    rationale,
-    proposed_targets: proposedTargets,
-    targets_rationale: targetsRationale,
-  };
 }
 
 /** Confirm/edit daily targets (suggest-never-auto-apply: only ever called by the user's tap). Merges

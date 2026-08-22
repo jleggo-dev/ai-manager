@@ -29,8 +29,13 @@ export interface Macros {
   calcium_mg?: number;
   potassium_mg?: number;
   vitamin_b12_ug?: number;
-  /** Who produced these numbers: AI estimate ('ai') or the user's own correction ('user'). */
-  source?: 'ai' | 'user';
+  /**
+   * Who produced these numbers: a model's estimate ('ai'), the user's own correction ('user'), or
+   * the food ledger ('ledger' — every item priced from a saved food, so logging the same meal
+   * again reproduces them exactly). A mixed meal stays 'ai': it is only as reproducible as its
+   * least reproducible item.
+   */
+  source?: 'ai' | 'user' | 'ledger';
 }
 
 export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | 'other';
