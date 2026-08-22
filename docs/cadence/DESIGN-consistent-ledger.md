@@ -1,9 +1,12 @@
 # Design — the consistent ledger and the calibrated check-in
 
-**Opened 2026-08-21 (owner + Claude working session). Status: Phases 1a and 1c SHIPPED 2026-08-22;
-1b and Phases 2–4 designed, not built.**
+**Opened 2026-08-21 (owner + Claude working session). Status: PHASE 1 COMPLETE — 1a, 1b and 1c all
+SHIPPED 2026-08-22. Phases 2–4 designed, not built.**
 
-> **Deploy note — migration 0039 must be applied before this code ships.** `searchFoods` uses the
+> **Two deploy steps, both required.** (1) `node --import tsx apps/cadence-api/scripts/sync-jobs.ts`
+> — the three meal prompts now ask for a per-item `brand` and are inert until synced (dry-run shows
+> exactly `parse-meal`, `describe-meal-photo`, `parse-meal-description` updating, no other drift).
+> (2) **Migration 0039 must be applied before this code ships.** `searchFoods` uses the
 > pg_trgm `%` operator and the resolver reads `cadence.food_usage_ctx`. Run
 > `node --import tsx apps/cadence-api/scripts/apply-migration-0039.ts` against each environment
 > (additive, idempotent, safe to re-run).
@@ -178,7 +181,29 @@ today's behaviour, never lose the meal; same contract as the existing parse-fail
 the repeat-hit metric (below) holds, shrink the job to identification-only in a follow-up —
 smaller output, faster parse, and the last incentive for the model to invent numbers gone.
 
-### 1b. Vendor capture — extract when spoken, ask once when it pays
+### 1b. Vendor capture — **SHIPPED 2026-08-22**
+
+- **Prompts:** `parse_meal` and `parse_meal_description` gained a per-item `brand`, with an
+  explicit rule against guessing a chain from a cup or promoting a description into a brand
+  ("homemade", "the place near work" are not vendors). `describe_meal_photo` gained a step for
+  reading legible branding — the logo on the cup, the name on the bag. **Not live until synced.**
+- **The ask fires on a simpler rule than designed.** Rather than a keyword list of
+  "restaurant-shaped" foods, it asks about items that **matched nothing already on file** — which
+  is precisely the set about to be pinned from a guess, needs no vocabulary to maintain, and
+  self-selects (an apple matches a USDA row and is never asked about). Capped at two per card.
+- **No "already asked" state was needed.** Whatever they answer — or skip — is pinned on confirm,
+  so the same words come back matched and the question never returns. The design's "ask once"
+  falls out of the ledger rather than out of bookkeeping.
+- **It never gates the log**, unlike the amounts rule beside it. An unanswered vendor is a fine
+  outcome.
+- **The load-bearing fix was plumbing:** `brand` had to survive preview → browser → confirm. The
+  wire type dropped it and `useMealAmounts.toPreview()` rebuilt items without it, so a vendor the
+  model heard would have died between the card and the row it pins. Now carried on the shared item
+  type, `AmountRow`, and `toPreview()`, with a test at each seam.
+- Files: `MealVendorAsk.tsx` (component) + `vendorAsk.ts` (the pure rule, split out so the
+  `react-refresh/only-export-components` gate stays green).
+
+### 1b as designed
 
 - **Prompt changes** (NOT live until `sync-jobs.ts` runs — CLAUDE.md): `parse_meal` and
   `parse_meal_description` items gain optional `brand` — *"only when the user said it or the

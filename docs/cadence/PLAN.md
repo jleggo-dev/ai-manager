@@ -2807,7 +2807,7 @@ already lives in Settings. Keep the "Set location for weather" button, which onl
 nothing is stored at all. Open: should the header signal you are away from home, or just say
 Montreal?
 
-**A23. The consistent ledger & the calibrated check-in — PHASES 1a + 1c SHIPPED 2026-08-22, rest designed (owner 2026-08-21)**
+**A23. The consistent ledger & the calibrated check-in — PHASE 1 COMPLETE 2026-08-22, Phases 2-4 designed (owner 2026-08-21)**
 
 The lazy logging paths (voice/text/photo) let `parse-meal` invent macros on every log, so the same
 "venti latte from Starbucks" costs different kcal every day — the owner's trust complaint, and the
@@ -2833,10 +2833,14 @@ win the pre-select outright, so a Wednesday parfait is one answer rather than a 
 **⚠ Migration 0039 must be applied to every environment before this code ships** —
 `apply-migration-0039.ts`, additive and idempotent.
 
-Next, in order: **1b vendor capture** (prompt deltas + `sync-jobs.ts` + the ask-once question),
-then **2a/2b** (EWMA weight trend, then a caller for `weekly_readout` at last). Phase 3 cannot
-start until ~3 weeks of *pinned* ledger data plus weigh-ins exist — the clock started when 1a
-landed, not when its code is written.
+**Phase 1b landed the same day**: the three meal prompts hear a per-item `brand`, and the confirm
+card asks for one — once, optionally, never gating the log — about items that matched nothing on
+file. **⚠ `sync-jobs.ts` must be run before the prompts do anything** (deliberately left unsynced
+on this branch; the dry-run shows exactly three jobs updating).
+
+Next: **2a/2b** — EWMA weight trend, then a caller for `weekly_readout` at last, merging the
+weigh-in into the check-in. Phase 3 cannot start until ~3 weeks of *pinned* ledger data plus
+weigh-ins exist — the clock started when 1a landed, not when its code is written.
 
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 
