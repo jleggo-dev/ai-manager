@@ -1,3 +1,4 @@
+import type { UnitPrefs } from '@cadence/shared';
 import { sql, json } from '../db/sql.ts';
 import { mergeConstraints, sameConstraint } from '../services/constraint-merge.ts';
 import type {
@@ -17,6 +18,7 @@ export interface CadenceUserRow {
   name: string;
   email: string | null;
   baseline: Baseline;
+  unit_prefs?: UnitPrefs | null;
   macro_targets: MacroTargets | null;
   timezone: string | null;
   home_location: { lat: number; lon: number; label?: string } | null;
@@ -58,6 +60,20 @@ export async function ensureUser(userId: string, email: string | null = null): P
 /** Set the user's display name (top-level column, not baseline). */
 export async function setName(userId: string, name: string): Promise<void> {
   await sql`update cadence.users set name = ${name}, updated_at = now() where id = ${userId}`;
+}
+
+/**
+ * Merge per-axis display units.
+ *
+ * Shallow-merged rather than replaced so a Settings control that only knows about one axis cannot
+ * blank the other four — the same reason `mergeBaseline` merges. Storage everywhere stays
+ * canonical; this only says how numbers are SHOWN.
+ */
+export async function mergeUnitPrefs(userId: string, patch: Partial<UnitPrefs>): Promise<void> {
+  await sql`
+    update cadence.users
+       set unit_prefs = coalesce(unit_prefs, '{}'::jsonb) || ${json(patch)}, updated_at = now()
+     where id = ${userId}`;
 }
 
 /** Shallow-merge captured baseline deltas via jsonb `||`. */

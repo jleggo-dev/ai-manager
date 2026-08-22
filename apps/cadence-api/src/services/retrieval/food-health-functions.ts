@@ -7,7 +7,14 @@
  * still composes the one `RETRIEVAL_FUNCTIONS` map every caller reads.
  */
 import type { DietaryProfile, EatingWindow, Food, NutritionLog, NutritionSummary, Recipe } from '@cadence/shared';
-import { EMPTY_DIETARY_PROFILE, sanitizeDietaryProfile } from '@cadence/shared';
+import {
+  EMPTY_DIETARY_PROFILE,
+  sanitizeDietaryProfile,
+  formatWeight,
+  formatWeightRate,
+  type WeightUnit,
+  resolveUnit,
+} from '@cadence/shared';
 import { getDietaryProfile, getUser } from '../../repos/users.ts';
 import { listWeighInSeries } from '../../repos/occurrences.ts';
 import { getNutritionDay } from '../nutrition.ts';
@@ -272,6 +279,8 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
         targets: targets && Object.keys(targets).length ? targets : null,
         eaten: day.totals,
         left: day.left,
+        // Carried so the render converts rather than instructing her to (see the trend block).
+        unit: resolveUnit(user?.unit_prefs, 'body_weight', user?.baseline?.weight_unit) as WeightUnit,
         last_reviewed: targets?.last_reviewed ?? null,
         // Smoothed (A23 §2a) and carrying its own confidence, so the coach can hedge on a thin
         // series instead of reading a fortnight of water weight as a verdict.
@@ -279,7 +288,14 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
       };
     },
     render(r) {
-      const { targets, eaten, left, last_reviewed, trend } = r as {
+      const {
+        targets,
+        eaten,
+        left,
+        last_reviewed,
+        trend,
+        unit = 'kg',
+      } = r as {
         targets: Record<string, number | string | null> | null;
         eaten: Record<string, number>;
         left: Record<string, number> | null;
@@ -291,6 +307,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
           confidence: string;
           trend_kg: number | null;
         } | null;
+        unit?: WeightUnit;
       };
       const lines: string[] = [];
       if (!targets) {
@@ -313,20 +330,31 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
       }
       if (eaten?.kcal != null) lines.push(`Eaten today: ${Math.round(eaten.kcal)} kcal`);
       if (trend) {
-        // The whole point of the loop: are the targets actually doing what they were set to do?
+        /**
+         * In their unit, converted here.
+         *
+         * This is the read `set_macro_targets` tells her to take BEFORE adjusting — "get_macro_targets
+         * reports the actual weekly weight change against a safe rate" — so a user who thinks in
+         * pounds was being shown the evidence for their own targets in kilos. Same fix as
+         * `get_weight`, same reasoning: hand over a number that is already right rather than a rule
+         * for converting it.
+         */
+        const rate = (kgPerWeek: number) => formatWeightRate(kgPerWeek, unit);
         const verdict =
           trend.pace === 'too_fast'
-            ? `losing ${trend.actual_kg_per_week} kg/wk, FASTER than the safe ${trend.safe_kg_per_week} — the targets are too aggressive`
+            ? `losing ${rate(trend.actual_kg_per_week)}, FASTER than the safe ${rate(trend.safe_kg_per_week)} — the targets are too aggressive`
             : trend.pace === 'too_slow'
-              ? `changing ${trend.actual_kg_per_week} kg/wk, slower than expected — the targets may not be doing the work`
-              : `${trend.actual_kg_per_week} kg/wk, within the safe ${trend.safe_kg_per_week} — on track`;
+              ? `changing ${rate(trend.actual_kg_per_week)}, slower than expected — the targets may not be doing the work`
+              : `${rate(trend.actual_kg_per_week)}, within the safe ${rate(trend.safe_kg_per_week)} — on track`;
         // Confidence rides along so she hedges on a thin series instead of prescribing off it —
-        // two weigh-ins is a hint, and saying so is the honest coaching move (A23 §2a).
+        // two weigh-ins is a hint, and saying so is the honest coaching move (A23 §2a). The trend
+        // weight goes through the same unit conversion as everything else here: it is a weight,
+        // and telling a pounds user their trend in kg is the bug main just finished fixing.
         const hedge =
           trend.confidence === 'low'
             ? ' — only a little data behind this yet, so treat it as a hint, not a verdict'
             : '';
-        const at = trend.trend_kg != null ? ` (trend weight ~${trend.trend_kg} kg)` : '';
+        const at = trend.trend_kg != null ? ` (trend weight ~${formatWeight(trend.trend_kg, unit)})` : '';
         lines.push(`Weight trend: ${verdict}${at}${hedge}.`);
       }
       return lines.join('\n');

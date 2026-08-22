@@ -348,6 +348,16 @@ export const SCENARIOS: OutcomeScenario[] = [
       const failures: string[] = [];
       const goal = await goalByTitle(ctx, 'Read 100 books this year');
       if (!goal) return ['the reading goal row is gone entirely'];
+      /**
+       * The TITLE has to move with the number.
+       *
+       * The judge caught this on 2026-08-22 while this assert passed: the goal aimed at 50 and
+       * still read "Read 100 books this year", which is the string every list and card shows. An
+       * assert that only checks the field the tool just wrote can never see that.
+       */
+      if (/\b100\b/.test(String(goal.title ?? ''))) {
+        failures.push(`the title still says 100 — "${String(goal.title)}" contradicts a target of 50`);
+      }
       if (Number(goal.measure?.target) !== 50)
         failures.push(`goal target is ${String(goal.measure?.target)}, expected 50`);
       if (goal.status !== 'committed')
@@ -495,6 +505,76 @@ export const SCENARIOS: OutcomeScenario[] = [
         failures.push(
           `the unnamed targets were dropped: carbs_g=${String(macro.carbs_g)} fat_g=${String(macro.fat_g)}`,
         );
+      return failures;
+    },
+  },
+  /**
+   * THE ONE THAT WAS MISSING, and the shape of the bug it would have caught.
+   *
+   * `macro-targets-adjust` above hands her the numbers — "set my calories to 2000 and protein to
+   * 160". That tests the write. It does not test the COACHING, which is what the owner keeps
+   * asking for and what kept failing: "set my nutritional targets", no numbers, work them out.
+   *
+   * To do that she needs body facts, and on 2026-08-22 those were unreachable by every route at
+   * once — not in the per-turn floor, excluded from `find_tools` by construction, refused by
+   * `use_tool` as "already in your context". Measured over twelve turns and two days: she called
+   * `find_tools` and `get_goal_progress` repeatedly, every call succeeded, and `set_macro_targets`
+   * was never reached. `eval:tools` could not see it either — it scores tool SELECTION on FIRST
+   * turns, and she selected plenty.
+   *
+   * So this scenario deliberately withholds the numbers and seeds the facts, and asserts on the
+   * DATABASE. Nothing about her prose counts: the whole failure mode was a conversation that
+   * sounded like progress.
+   *
+   * The second turn is not decoration. A single request can be answered with a question, and
+   * answering with a question is legitimate coaching — the failure was never one turn, it was the
+   * loop. An explicit go-ahead removes the honest reason to stall, so anything still unset
+   * afterwards is the harness, not her judgement.
+   */
+  {
+    name: 'macro-targets-from-scratch',
+    why:
+      'The coaching case, not the write case: asked for targets with NO numbers given, she must reach the ' +
+      'body facts and commit. On 2026-08-22 the weight was unreachable by every route at once and she never ' +
+      'called set_macro_targets across twelve turns — every call succeeding, none able to work.',
+    seed: {
+      // Everything needed to work a target out is on file. If she asks for any of it, she is
+      // asking for something she was already given.
+      baseline: {
+        weight_kg: { current: 88.5, start: 88.5, source: 'captured' },
+        height_cm: 178,
+        age: 41,
+        sex: 'male',
+      },
+      goals: [RUN_GOAL],
+    },
+    turns: [
+      'can you set my nutrition targets for me?',
+      'yes please, go ahead and set them — use what you already know about me',
+    ],
+    touches: ['macro_targets'],
+    assert: async (ctx) => {
+      const failures: string[] = [];
+      const macro = (await userRow(ctx)).macro_targets;
+
+      // THE headline. Everything else is detail.
+      if (!macro?.kcal) {
+        return [
+          'macro_targets is still empty after being asked twice — she never committed. This is the ' +
+            '2026-08-22 failure exactly: tool calls without the work.',
+        ];
+      }
+
+      // Sanity, not accuracy — the point is that a real number was chosen, not that we can grade a
+      // nutritionist. A 41-year-old 88.5kg adult with a running goal is nowhere near these edges.
+      if (macro.kcal < 1200 || macro.kcal > 4000) {
+        failures.push(`kcal is ${String(macro.kcal)}, which is not a number anyone would defend out loud`);
+      }
+      if (macro.protein_g != null && (macro.protein_g < 40 || macro.protein_g > 300)) {
+        failures.push(`protein_g is ${String(macro.protein_g)}, outside anything plausible`);
+      }
+      // The tool requires a reason, and the stamp is what makes a target revisitable later.
+      if (!macro.last_reviewed) failures.push('last_reviewed was not stamped — the target cannot be reviewed later');
       return failures;
     },
   },

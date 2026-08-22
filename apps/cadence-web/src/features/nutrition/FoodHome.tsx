@@ -4,6 +4,7 @@ import { localTodayIso, useInvalidateNutritionDay, useNutritionDay } from '../..
 import type { MealKind } from '@cadence/shared';
 import { LogScreen } from '../food/LogScreen.tsx';
 import { FoodDay } from './FoodDay.tsx';
+import { FoodKitchen } from './FoodKitchen.tsx';
 import { FoodSubSheet } from './FoodSubSheet.tsx';
 import { FoodWeek } from './FoodWeek.tsx';
 import { NutrientsPanel } from './NutrientsPanel.tsx';
@@ -64,7 +65,7 @@ export function FoodHome({
 }) {
   const today = localTodayIso();
   const [date, setDate] = useState(today);
-  const [tab, setTab] = useState<'day' | 'week'>('day');
+  const [tab, setTab] = useState<'day' | 'week' | 'kitchen'>('day');
   const [nutrients, setNutrients] = useState(false);
   /** The full-screen Log (05b), opened by "Log a meal" or an empty meal slot. */
   const [logMeal, setLogMeal] = useState<MealKind | 'any' | null>(null);
@@ -152,7 +153,9 @@ export function FoodHome({
           ‹
         </button>
         <b className="fh-title">Food</b>
-        {isToday ? (
+        {/* The date pill steers the two READING tabs. The Kitchen is about a week ahead, not a day
+            behind, so it does not carry one. */}
+        {tab === 'kitchen' ? null : isToday ? (
           <span className="fh-daypill">Today</span>
         ) : (
           <button className="fh-daypill is-btn" onClick={() => setDate(today)}>
@@ -178,10 +181,20 @@ export function FoodHome({
         >
           Week
         </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'kitchen'}
+          className={tab === 'kitchen' ? 'is-on' : ''}
+          onClick={() => setTab('kitchen')}
+        >
+          Kitchen
+        </button>
       </div>
 
       <div className="fh-body">
-        {tab === 'week' ? (
+        {tab === 'kitchen' ? (
+          <FoodKitchen targetKcal={day?.targets?.kcal ?? null} />
+        ) : tab === 'week' ? (
           <FoodWeek
             today={today}
             meals={recent}

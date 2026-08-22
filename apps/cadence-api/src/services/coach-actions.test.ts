@@ -266,11 +266,41 @@ describe('update_goal', () => {
 
   it('retargets, keeping the unit, and leaves a trail on the goal', async () => {
     const out = await update.run('u1', { goal: 'Read 100 books', action: 'retarget', target: 50 });
-    expect(updateGoal).toHaveBeenCalledWith('u1', 'g1', { measure: { metric: 'count', target: 50, unit: 'books' } });
+    expect(updateGoal).toHaveBeenCalledWith('u1', 'g1', {
+      measure: { metric: 'count', target: 50, unit: 'books' },
+      // The TITLE moves too — see below.
+      title: 'Read 50 books',
+    });
     expect(insertGoalEvent.mock.calls[0]![1].label).toBe('Target changed: 100 → 50 books');
     expect(out).toMatch(/aims at 50 books/);
     // The plan does not follow automatically, and she must not imply it did.
     expect(out).toMatch(/offer to rebuild/);
+  });
+
+  /**
+   * The title is what every list, card and prompt shows, and retarget used to leave it saying the
+   * old number — "Read 100 books this year" aiming at 50. Caught by the outcome eval's JUDGE on
+   * 2026-08-22 while its deterministic assert passed, because that assert only checked the field
+   * the tool had just written. Both now check it.
+   */
+  it('carries the number in the title, and says the new title back', async () => {
+    const out = await update.run('u1', { goal: 'Read 100 books', action: 'retarget', target: 50 });
+    expect(out).toMatch(/"Read 50 books"/);
+  });
+
+  /** A title whose number is ambiguous is left as the user wrote it — see goal-retitle.test.ts. */
+  it('leaves a title alone when it carries no number of its own', async () => {
+    listGoals.mockResolvedValue([
+      {
+        goal_id: 'g9',
+        title: 'Read more books',
+        status: 'committed',
+        measure: { target: 100, unit: 'books' },
+        timeframe: {},
+      },
+    ]);
+    await update.run('u1', { goal: 'Read more books', action: 'retarget', target: 50 });
+    expect(updateGoal).toHaveBeenCalledWith('u1', 'g9', { measure: { target: 50, unit: 'books' } });
   });
 
   it('moves a date, and refuses one it cannot read', async () => {

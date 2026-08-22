@@ -125,6 +125,16 @@ router.patch('/:id', async (req: Request, res: Response) => {
     const body = parseBody(patchMealPlanBodySchema, req.body);
     const meal_plan = await patchMealPlanForUser(userId, String(req.params.id), body);
     if (!meal_plan) return void res.status(404).json({ error: 'meal plan not found' });
+    // The Kitchen composes a week meal by meal through this route, so the trail's shop + cook tasks
+    // have to follow the DAYS here exactly as they follow a save. A checkoff-only patch changes no
+    // days and needs no resync. Best-effort, same as the save path.
+    if (body.days) {
+      try {
+        await syncMenuTasks(userId, meal_plan);
+      } catch (e) {
+        console.warn('[PATCH /nutrition/meal-plans/:id] menu task sync failed (non-fatal):', e);
+      }
+    }
     res.json({ meal_plan });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
@@ -141,6 +151,13 @@ router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const ok = await removeMealPlan(userId, String(req.params.id));
     if (!ok) return void res.status(404).json({ error: 'meal plan not found' });
+    // A week that no longer exists must not leave its shop + cook tasks standing on the trail.
+    // An empty plan clears the menu-derived activities and adds none back.
+    try {
+      await syncMenuTasks(userId, { days: [], shopping_list: [] });
+    } catch (e) {
+      console.warn('[DELETE /nutrition/meal-plans/:id] menu task sync failed (non-fatal):', e);
+    }
     res.status(204).end();
   } catch (err) {
     console.error('[DELETE /nutrition/meal-plans/:id]', err);

@@ -183,6 +183,7 @@ export {
   generateMealPlan,
   saveMealPlan,
   patchMealPlan,
+  deleteMealPlan,
   probeRecipeDiscovery,
   discoverRecipes,
   weekOfMonday,
@@ -248,4 +249,12 @@ export {
   type WeatherNow,
 } from './api/location.ts';
 
-export { getConstraints, removeConstraint, renameConstraint, type UserConstraint } from './api/me.ts';
+export {
+  getConstraints,
+  removeConstraint,
+  renameConstraint,
+  getUnits,
+  setUnits,
+  type UserConstraint,
+  type UnitsResponse,
+} from './api/me.ts';

@@ -185,23 +185,6 @@ export function parseGenerateMealPlanResult(raw: string): ParsedMealPlanJob {
   return { days, shopping_list, notes };
 }
 
-/** Heuristic aisle for a grocery name when the job omits category. */
-export function categorizeGrocery(name: string): ShoppingListCategory {
-  const n = name.toLowerCase();
-  if (/\b(milk|yogurt|cheese|butter|cream|egg)\b/.test(n)) return 'dairy';
-  if (/\b(chicken|beef|pork|turkey|fish|salmon|tofu|tempeh|shrimp)\b/.test(n)) return 'protein';
-  if (/\b(frozen|ice cream)\b/.test(n)) return 'frozen';
-  if (/\b(bread|bagel|tortilla|bun)\b/.test(n)) return 'bakery';
-  if (
-    /\b(lettuce|spinach|kale|tomato|onion|garlic|pepper|broccoli|carrot|berry|berries|apple|banana|lemon|lime|avocado|potato|herb)\b/.test(
-      n,
-    )
-  )
-    return 'produce';
-  if (/\b(rice|pasta|bean|oat|flour|oil|salt|spice|sauce|can|broth)\b/.test(n)) return 'pantry';
-  return 'other';
-}
-
 export interface FridgeLike {
   name: string;
   qty?: number;
@@ -209,46 +192,12 @@ export interface FridgeLike {
 }
 
 /**
- * Derive a shopping list from planned recipe ingredients, subtracting fridge items by name.
- * Used when the job returns an empty shopping_list (or as a merge fill-in).
+ * Aisle bucketing and shopping-list derivation now live in `@cadence/shared` — the Kitchen derives
+ * the same list on the client (generated, never kept), and two copies of an aisle heuristic would
+ * drift the first time one of them learned a new word. Re-exported here so this module's existing
+ * callers and tests keep their import path.
  */
-export function deriveShoppingList(
-  recipes: Array<{ ingredients: StructuredIngredient[] }>,
-  fridge: FridgeLike[] = [],
-): ShoppingListItem[] {
-  const have = new Set(fridge.map((f) => f.name.trim().toLowerCase()).filter(Boolean));
-  const merged = new Map<string, { name: string; qty: number; unit?: string }>();
-
-  for (const recipe of recipes) {
-    for (const ing of recipe.ingredients) {
-      const key = ing.name.trim().toLowerCase();
-      if (!key || have.has(key)) continue;
-      const prev = merged.get(key);
-      if (!prev) {
-        merged.set(key, { name: ing.name.trim(), qty: ing.qty, unit: ing.unit });
-        continue;
-      }
-      // Same unit → sum; otherwise keep the first unit and bump qty loosely.
-      if (prev.unit && ing.unit && prev.unit === ing.unit) prev.qty += ing.qty;
-      else prev.qty += ing.qty;
-    }
-  }
-
-  return [...merged.values()]
-    .map((row) => ({
-      name: row.name.slice(0, 80),
-      qty: row.unit ? `${roundQty(row.qty)} ${row.unit}` : String(roundQty(row.qty)),
-      category: categorizeGrocery(row.name),
-      checked: false,
-    }))
-    .slice(0, 80);
-}
-
-function roundQty(n: number): number {
-  if (!Number.isFinite(n)) return 1;
-  if (n >= 10) return Math.round(n);
-  return Math.round(n * 10) / 10;
-}
+export { categorizeGrocery, deriveShoppingList } from '@cadence/shared';
 
 /** Format fridge rows for the generate_meal_plan job variable. */
 export function formatFridgeForJob(ingredients: FridgeLike[]): string {

@@ -114,9 +114,49 @@ export interface ShoppingListItem {
 /** Meal slot on a planned day (aligns with common MealKind values). */
 export type MealPlanSlotKind = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
+/**
+ * One thing in a planned meal — a recipe, or a loose food.
+ *
+ * Frame 10a is explicit that a meal is *"recipes, food, or both"*: chicken thighs and lemon orzo,
+ * plus a rocket salad, plus the olive oil it was dressed with. A planner that only holds recipes
+ * cannot describe most dinners.
+ *
+ * Macros are DENORMALIZED onto the item on purpose. Frames 10b and 10c show every day totalled
+ * against target — "1,880 of 1,940", "4 meals planned · lands on target" — and a week view that had
+ * to resolve every recipe and food to add that up would be 28 fetches to paint one screen. What is
+ * planned is an intention anyway; the numbers are the ones that applied when it was planned, and a
+ * recipe edited afterwards does not silently rewrite last Tuesday's plan.
+ */
+export interface MealPlanItem {
+  kind: 'recipe' | 'food';
+  /** recipe_id or food_id, per `kind`. */
+  id: string;
+  name: string;
+  /** Servings for a recipe; an amount for a food. */
+  qty: number;
+  /** 'serving' for a recipe; 'g' / 'ml' / 'tbsp' … for a food. */
+  unit?: string;
+  kcal?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+}
+
+/**
+ * A meal in the week's plan.
+ *
+ * `items` is the shape frame 10a composes. `recipe_id`/`recipe_name` are the ORIGINAL single-recipe
+ * shape and are still read and still written by `generate_meal_plan` — every plan saved before
+ * 2026-08-21 has them and nothing migrates. Read through `mealPlanItems()` rather than branching on
+ * which one is populated; a caller should not have to know how old a plan is.
+ */
 export interface MealPlanMeal {
   slot: MealPlanSlotKind | string;
-  recipe_id: string;
+  /** What the user called it — "Thighs, orzo & a side salad". Absent on generated/legacy meals. */
+  name?: string;
+  items?: MealPlanItem[];
+  /** Legacy single-recipe shape. Optional now; still the shape the generator emits. */
+  recipe_id?: string;
   /** Denormalized name for list UIs (optional; filled when known). */
   recipe_name?: string;
 }

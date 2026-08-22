@@ -433,6 +433,32 @@ export async function patchMealPlan(
 }
 
 /**
+ * DELETE /nutrition/meal-plans/:id — how a week is un-planned.
+ *
+ * The Kitchen needs this because a week cannot be emptied any other way: the API's day schema
+ * requires at least one meal per day and at least one day per plan, so taking the LAST meal off a
+ * week is a delete, not a patch of an empty list.
+ */
+export async function deleteMealPlan(
+  mealPlanId: string,
+): Promise<{ status: 'ok' } | { status: 'unavailable' | 'error'; message: string }> {
+  if (!mealPlanId.trim()) return { status: 'error', message: 'Missing meal plan.' };
+  try {
+    const res = await fetch(`${BASE}/nutrition/meal-plans/${encodeURIComponent(mealPlanId)}`, {
+      method: 'DELETE',
+      headers: headers(),
+    });
+    if (res.status === 404) {
+      return { status: 'unavailable', message: "Couldn't clear that week — meal plans aren't reachable just now." };
+    }
+    if (!res.ok) return { status: 'error', message: "Couldn't clear that week — try again in a moment." };
+    return { status: 'ok' };
+  } catch {
+    return { status: 'error', message: "Couldn't reach meal plans — try again in a moment." };
+  }
+}
+
+/**
  * Probe whether recipe discovery is deployed.
  * POST empty body: 404 → hide UI; 400 → route exists (validation).
  */
