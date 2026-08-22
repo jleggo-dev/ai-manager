@@ -527,7 +527,21 @@ export async function setTargets(userId: string, raw: unknown): Promise<Macros> 
   if (!t) throw new Error('no valid targets');
   const { source: _source, ...clean } = t;
   const user = await getUser(userId);
-  await setMacroTargets(userId, { ...user?.macro_targets, ...clean });
+  const prev = user?.macro_targets ?? {};
+
+  // A23 §3 — keep a short trail of kcal moves so the ratchet has a memory. Without it the loop
+  // cannot know it has already cut twice this month, and a plateau (which looks exactly like "the
+  // deficit is too small") would buy a third cut. Trimmed to the last 12: this is a guardrail's
+  // working memory, not an audit log.
+  const prevKcal = typeof prev.kcal === 'number' ? prev.kcal : null;
+  const nextKcal = typeof clean.kcal === 'number' ? clean.kcal : null;
+  const trail: NonNullable<MacroTargets['adjustments']> = Array.isArray(prev.adjustments) ? prev.adjustments : [];
+  const adjustments =
+    prevKcal !== null && nextKcal !== null && prevKcal !== nextKcal
+      ? [...trail, { date: today(), from: prevKcal, to: nextKcal }].slice(-12)
+      : trail;
+
+  await setMacroTargets(userId, { ...prev, ...clean, ...(adjustments.length ? { adjustments } : {}) });
   return clean;
 }
 

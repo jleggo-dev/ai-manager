@@ -74,6 +74,23 @@ export interface WeeklyRecap {
     trend_kg: number | null;
   } | null;
   episodes: Array<{ start: string; end: string }>;
+  /** A23 §3 — maintenance in ledger units and the targets that follow, or an honest "not yet". */
+  calibration: {
+    maintenance: {
+      maintenance_kcal: number;
+      mean_intake_kcal: number;
+      kg_per_week: number;
+      complete_days: number;
+      window_days: number;
+      confidence: 'low' | 'medium' | 'high';
+    } | null;
+    blocker: 'window_too_short' | 'not_enough_logged_days' | 'not_enough_weigh_ins' | null;
+    complete_days: number;
+    complete_days_needed: number;
+    direction: 'lose' | 'gain' | 'hold';
+    proposed: { kcal: number; limited_by: 'maintenance_floor' | 'ratchet' | null } | null;
+    current_kcal: number | null;
+  } | null;
   /** Empty when the narration failed — the figures still stand on their own. */
   note: string;
   weigh_in: { occurrence_id: string; date: string; pending: boolean } | null;

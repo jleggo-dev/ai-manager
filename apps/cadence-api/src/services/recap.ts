@@ -25,6 +25,7 @@ import { logAi } from './ai-log.ts';
 import { rollingConsistency } from './metrics.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { paceRead, type PaceRead } from './weight-trend.ts';
+import { getCalibration, type CalibrationRead } from './calibration.ts';
 
 /** The window the check-in speaks to. Seven days, ending on the day it lands. */
 const WEEK = 7;
@@ -63,6 +64,12 @@ export interface WeeklyRecap {
   nutrition: RecapNutrition | null;
   weight: PaceRead | null;
   episodes: Array<{ start: string; end: string }>;
+  /**
+   * The calibration (A23 §3) — maintenance in ledger units and the targets that follow from it,
+   * or an honest "not yet" with how far along the gates are. The check-in is where a target change
+   * belongs: it is the one moment that already looks back over a week.
+   */
+  calibration: CalibrationRead | null;
   /** The coach's narration. Empty when the job failed — the numbers still stand. */
   note: string;
   weigh_in: RecapWeighIn | null;
@@ -84,6 +91,11 @@ export async function buildRecapFacts(userId: string, today: string): Promise<Om
     listEpisodeRanges(userId, from, today),
   ]);
   const weighIn = await findWeighInOccurrence(userId, from, today);
+  // Deterministic and cheap — no model in this path, so it costs a few queries rather than a call.
+  const calibration = await getCalibration(userId, today).catch((e: unknown) => {
+    console.warn('[recap] calibration failed — the week still stands without it:', e);
+    return null;
+  });
 
   const at = new Date(todayMs);
   const summary = summarizeNutrition(meals, WEEK);
@@ -122,6 +134,7 @@ export async function buildRecapFacts(userId: string, today: string): Promise<Om
     weight: paceRead(weighSeries, user?.baseline?.weight_kg?.current),
     episodes,
     weigh_in: weighIn ? { ...weighIn, pending: weighIn.status === 'pending' } : null,
+    calibration,
   };
 }
 
@@ -136,6 +149,16 @@ function narrationVars(facts: Omit<WeeklyRecap, 'note'>): Record<string, string>
       avg_kcal: facts.nutrition.avg_kcal,
       target_kcal: facts.nutrition.target_kcal,
       avg_protein_g: facts.nutrition.avg_protein_g,
+    };
+  }
+  if (facts.calibration?.maintenance) {
+    outcomes.maintenance = {
+      // In LEDGER units: comparable to what this app counts, not to a lab. Named so the narration
+      // does not present it as a measured fact about their metabolism.
+      kcal_in_this_app_s_units: facts.calibration.maintenance.maintenance_kcal,
+      from_days_logged: facts.calibration.maintenance.complete_days,
+      confidence: facts.calibration.maintenance.confidence,
+      ...(facts.calibration.proposed ? { would_suggest_kcal: facts.calibration.proposed.kcal } : {}),
     };
   }
   if (facts.weight) {

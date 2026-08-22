@@ -979,3 +979,18 @@
   font-weight: 700;
   color: oklch(60% 0.02 120);
 }
+
+/* A23 §3 — the calibration block inside the check-in. Same figure treatment as the week above it,
+   separated by a rule: it is a different KIND of statement (what to do next, not what happened). */
+.recap-cal {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid oklch(95% 0.01 95);
+}
+.recap-cal-wait {
+  font-size: 12px;
+  line-height: 1.5;
+  color: oklch(52% 0.02 120);
+}

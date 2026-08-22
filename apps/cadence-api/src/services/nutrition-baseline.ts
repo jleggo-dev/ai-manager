@@ -17,6 +17,8 @@ import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, setMacroTargets } from '../repos/users.ts';
 import { listWeighInSeries } from '../repos/occurrences.ts';
 import { paceRead } from './weight-trend.ts';
+import { getCalibration } from './calibration.ts';
+import { clampProposal } from './energy-balance.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeTargets } from './nutrition-day.ts';
 import { wantsTargets } from './nutrition-parse.ts';
@@ -76,6 +78,11 @@ export async function getBaselineRead(userId: string): Promise<BaselineRead> {
 
   const weightTrend = proposeAdaptive ? pace : null;
 
+  // A23 §3 — hand the model the maintenance the app computed rather than letting it reason toward
+  // a number from the trend alone. Anchored beats blind: the old ADAPTIVE REVIEW clause could only
+  // nudge ±100-150 kcal because it had nothing to nudge FROM.
+  const calibration = await getCalibration(userId, today()).catch(() => null);
+
   const res = await runJobBySlug(userId, 'nutrition-baseline', {
     summary: JSON.stringify(summary),
     meals: JSON.stringify(
@@ -86,6 +93,16 @@ export async function getBaselineRead(userId: string): Promise<BaselineRead> {
     propose_targets: propose ? 'yes' : 'no',
     weight_trend: weightTrend ? JSON.stringify(weightTrend) : '',
     current_targets: proposeAdaptive ? JSON.stringify(user?.macro_targets ?? {}) : '',
+    implied_maintenance: calibration?.maintenance
+      ? JSON.stringify({
+          // Ledger units, and named as such: this is maintenance as THIS APP counts calories, not
+          // a measured fact about their metabolism, and the difference matters to how it is said.
+          kcal_in_app_units: calibration.maintenance.maintenance_kcal,
+          from_days_logged: calibration.maintenance.complete_days,
+          confidence: calibration.maintenance.confidence,
+          app_would_suggest_kcal: calibration.proposed?.kcal ?? null,
+        })
+      : '',
   });
   const raw = res.formatted ?? res.raw ?? '';
   const parsed = JSON.parse(raw) as {
@@ -100,7 +117,21 @@ export async function getBaselineRead(userId: string): Promise<BaselineRead> {
   const rationale = typeof parsed.rationale === 'string' ? parsed.rationale.trim() : '';
   if (!read || !suggestion) throw new Error('nutrition-baseline returned an incomplete read');
   // The deterministic gate is the wall — a proposal the app didn't ask for is discarded.
-  const proposedTargets = propose ? sanitizeTargets(parsed.proposed_targets) : null;
+  const sanitized = propose ? sanitizeTargets(parsed.proposed_targets) : null;
+  // …and the guardrails are the second wall (A23 §3). "Never more than ~15% below maintenance" and
+  // "small steps, never a big swing" were sentences in the prompt — requests a model was asked to
+  // remember. Now that maintenance is a number they are enforceable, and a rule that CAN be
+  // enforced should not be left as a request.
+  let proposedTargets = sanitized;
+  if (sanitized && typeof sanitized.kcal === 'number') {
+    const clamped = clampProposal(sanitized.kcal, {
+      current_kcal: typeof user?.macro_targets?.kcal === 'number' ? user.macro_targets.kcal : null,
+      maintenance_kcal: calibration?.maintenance?.maintenance_kcal ?? null,
+      adjustments: user?.macro_targets?.adjustments ?? [],
+      today: today(),
+    });
+    proposedTargets = { ...sanitized, kcal: clamped.kcal };
+  }
   const targetsRationale =
     proposedTargets && typeof parsed.targets_rationale === 'string' ? parsed.targets_rationale.trim() : null;
 

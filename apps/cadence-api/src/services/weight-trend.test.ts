@@ -115,6 +115,25 @@ describe('smoothedSeries / smoothedWeeklyRate', () => {
     expect(nextMonth).toBeLessThan(88.5);
   });
 
+  /**
+   * REGRESSION GUARD (2026-08-22). The fit used to run over the EWMA-smoothed series, and an EWMA
+   * lags a sustained trend — so at five weekly weigh-ins it reported a rate 34% too shallow, and
+   * only converged after about thirteen. A23 §3 turns this number into calories at 7700/kg, so
+   * that attenuation was ~190 kcal/day of wrong maintenance, biased toward "you are eating at
+   * maintenance". The fit now runs on the raw points, which is unbiased at every density.
+   */
+  it('recovers the true rate at the density a real user actually has', () => {
+    const everyWeek = (n: number, kgPerWeek: number): WeighPoint[] =>
+      Array.from({ length: n }, (_, i) => ({
+        date: new Date(Date.parse('2026-07-01T00:00:00Z') + i * 7 * 86_400_000).toISOString().slice(0, 10),
+        kg: 90 + kgPerWeek * i,
+      }));
+    // Five weigh-ins is one month in. It has to be right THEN, not only after a quarter.
+    expect(smoothedWeeklyRate(everyWeek(5, -0.5))).toBeCloseTo(-0.5, 2);
+    expect(smoothedWeeklyRate(everyWeek(5, 0.25))).toBeCloseTo(0.25, 2);
+    expect(smoothedWeeklyRate(everyWeek(13, -0.5))).toBeCloseTo(-0.5, 2);
+  });
+
   it('refuses to name a rate off too little', () => {
     expect(smoothedWeeklyRate([])).toBeNull();
     expect(smoothedWeeklyRate([{ date: '2026-07-01', kg: 90 }])).toBeNull();

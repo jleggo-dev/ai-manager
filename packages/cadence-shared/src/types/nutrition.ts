@@ -82,6 +82,13 @@ export interface MacroTargets {
   confirm_below_confidence?: number; // provisional threshold; defaults to 0.5 in nutrition.ts when unset
   eatback_pct?: number; // 0–100: % of a day's exercise burn added back to the kcal allowance (net calories); default 50
   last_reviewed?: string; // ISO date the coach last proposed an adaptive target adjustment (weekly throttle)
+  /**
+   * A short trail of kcal moves (A23 §3). The ratchet guardrail's working memory, not an audit
+   * log: without it the loop cannot know it has already cut twice this month, and a plateau —
+   * which looks exactly like "the deficit is too small" — would buy a third cut. Trimmed to the
+   * last 12 by `setTargets`.
+   */
+  adjustments?: { date: string; from: number; to: number }[];
 }
 
 export interface Recipe {

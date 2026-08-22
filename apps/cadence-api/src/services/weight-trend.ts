@@ -51,17 +51,28 @@ export function trendWeightKg(points: WeighPoint[], halfLifeDays = 10): number |
 }
 
 /**
- * Signed kg/week from a least-squares fit over the smoothed series inside `windowDays`
- * (negative = losing). This is the rate the adaptive loop should reason about.
+ * Signed kg/week from a least-squares fit over the weigh-ins inside `windowDays` (negative =
+ * losing). This is the rate the adaptive loop reasons about.
  *
  * Why a regression rather than first-to-last: a straight line between two readings gives both of
  * them infinite leverage, so one bloated Sunday could read as a stalled month and prompt a calorie
- * cut nobody needed. A fit uses every point, and the smoothing has already taken the edge off the
- * endpoints. Null under the same "not enough to trust" rule as before: fewer than 3 points or a
- * span under a week.
+ * cut nobody needed. A fit uses every point in the window instead.
+ *
+ * Why the fit runs on the RAW points and not the smoothed ones (corrected 2026-08-22): a
+ * least-squares fit IS the noise reduction, and smoothing first double-counts it. An EWMA lags a
+ * sustained trend, so fitting its output returns a slope shallower than the real one — measured at
+ * **34% too shallow with five weekly weigh-ins**, converging only after ~13. That error does not
+ * cancel anywhere downstream: A23 §3 turns this rate into calories at 7700/kg, so 0.17 kg/wk of
+ * attenuation is ~190 kcal/day of wrong maintenance, biased toward "you are eating at maintenance"
+ * — the loop would read a real loss as a stall. Smoothing stays where lag is a FEATURE
+ * (`trendWeightKg`, the number a person sees each morning); the rate is measured from what
+ * actually happened.
+ *
+ * Null under the same "not enough to trust" rule as before: fewer than 3 points, or a span under
+ * a week.
  */
-export function smoothedWeeklyRate(points: WeighPoint[], windowDays = 28, halfLifeDays = 10): number | null {
-  const all = smoothedSeries(points, halfLifeDays);
+export function smoothedWeeklyRate(points: WeighPoint[], windowDays = 28): number | null {
+  const all = clean(points);
   if (all.length === 0) return null;
   const last = all[all.length - 1]!.date;
   const win = all.filter((p) => daysBetween(p.date, last) <= windowDays);

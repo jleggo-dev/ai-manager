@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchWeeklyRecap, setOccurrence, type OccurrenceDetail, type WeeklyRecap } from '../../../lib/api.ts';
 import { WeighInPanel } from './WeighInPanel.tsx';
+import { RecapCalibration } from './RecapCalibration.tsx';
 
 /**
  * "Your weekly check-in" — the room the door has been opening onto nothing.
@@ -104,6 +105,8 @@ export function RecapPanel({
           </div>
         )}
       </div>
+
+      {recap.calibration && <RecapCalibration calibration={recap.calibration} />}
 
       {recap.episodes.length > 0 && (
         <div className="recap-k">
