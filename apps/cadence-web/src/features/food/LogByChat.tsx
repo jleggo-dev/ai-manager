@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { previewMeal, type MealKind, type MealPreview } from '../../lib/api.ts';
 import { MicButton } from '../../components/MicButton.tsx';
 import { MealParseCard } from './MealParseCard.tsx';
+import { GrowingTextarea } from '../../components/GrowingTextarea.tsx';
 
 /** What she says back while the card is being read — plain, and never about the food itself. */
 const READING = 'Reading that…';
@@ -84,14 +85,13 @@ export function LogByChat({
 
       {/* The composer is always here, mic included — that is what makes voice and chat one screen. */}
       <div className="fc-compose">
-        <textarea
-          className="mc-cap-in"
-          rows={1}
+        <GrowingTextarea
           value={text}
+          onChange={setText}
           disabled={busy}
-          aria-label="What did you have?"
+          ariaLabel="What did you have?"
           placeholder={preview ? 'Or just say the amount…' : 'What did you have?'}
-          onChange={(e) => setText(e.target.value)}
+          onSubmit={() => void read()}
         />
         <MicButton value={text} onChange={setText} disabled={busy} autoStart={listening} />
         {text.trim() && (

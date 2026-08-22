@@ -6,7 +6,6 @@ import {
   getFoodById,
   getFoodRecents,
   getPlateAdvice,
-  logMeal,
   logMealFromFood,
   logMealFromItems,
   logMealFromRecipe,
@@ -346,20 +345,15 @@ export function useMealCapture(
     }
   }
 
-  /** Photo (± a few words) → provisional meal — logs now, confirmable later in Today's food. */
-  async function logPhoto(caption: string) {
-    if (!photo || busy) return;
-    setBusy(true);
-    setLogErr('');
-    try {
-      await logMeal(caption.trim(), mealKind, photo);
-      await refreshDay();
-      markLogged();
-    } catch {
-      setLogErr("That didn't save — give it another try.");
-    } finally {
-      setBusy(false);
-    }
+  /**
+   * The photo path no longer logs from here (A23 / 2026-08-22): `MealCapturePhoto` runs the same
+   * read-then-confirm panel the Food tab uses, and the row is written by the user's confirm inside
+   * it. What is left for this hook is the bookkeeping that follows — refresh the day, tick the task.
+   */
+  async function afterPhotoLogged() {
+    clearPhoto();
+    await refreshDay();
+    markLogged();
   }
 
   async function logDraft(portion: DraftPortion) {
@@ -400,7 +394,7 @@ export function useMealCapture(
     pickPhoto,
     clearPhoto,
     checkPlate,
-    logPhoto,
+    afterPhotoLogged,
     logDraft,
   };
 }

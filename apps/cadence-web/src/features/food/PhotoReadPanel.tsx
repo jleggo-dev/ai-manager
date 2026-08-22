@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Meal, MealKind } from '../../lib/api.ts';
 import { useMealPhotoRead } from './useMealPhotoRead.ts';
+import { GrowingTextarea } from '../../components/GrowingTextarea.tsx';
 
 /**
  * Photographing a meal, in three visible acts.
@@ -30,13 +31,18 @@ export function PhotoReadPanel({
   meal,
   onLogged,
   onBack,
+  initialCaption = '',
+  backLabel = 'Back',
 }: {
   photo: string;
   meal: MealKind;
   onLogged: (m: Meal) => void;
   onBack: () => void;
+  /** Words already typed before the photo was attached — they are evidence, so they carry over. */
+  initialCaption?: string;
+  backLabel?: string;
 }) {
-  const [caption, setCaption] = useState('');
+  const [caption, setCaption] = useState(initialCaption);
   const r = useMealPhotoRead();
   const working = r.phase === 'reading' || r.phase === 'nutrition';
 
@@ -46,12 +52,11 @@ export function PhotoReadPanel({
 
       {r.phase === 'idle' && (
         <>
-          <input
-            className="mc-cap-in"
+          <GrowingTextarea
             value={caption}
-            aria-label="A few words about the photo"
+            onChange={setCaption}
+            ariaLabel="A few words about the photo"
             placeholder="a few words help — “chicken burrito bowl”"
-            onChange={(e) => setCaption(e.target.value)}
           />
           <button type="button" className="fa-log" onClick={() => void r.read(photo, caption.trim())}>
             Have a look at this
@@ -116,7 +121,7 @@ export function PhotoReadPanel({
       )}
 
       <button type="button" className="lockbtn ghost" disabled={working} onClick={onBack}>
-        Back
+        {backLabel}
       </button>
     </div>
   );

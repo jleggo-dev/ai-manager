@@ -82,15 +82,15 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     }
   }
 
+  /** Words only. A photo takes the read-then-confirm path and is logged by `PhotoReadPanel`. */
   async function submitMeal() {
     const text = mealText.trim();
-    if ((!text && !mealPhoto) || mealBusy) return;
+    if (!text || mealBusy) return;
     setMealBusy(true);
     setLogErr('');
     try {
-      await logMeal(text, mealKind, mealPhoto ?? undefined);
+      await logMeal(text, mealKind);
       setMealText('');
-      setMealPhoto(null);
       setPlateAdvice(null);
       await refreshDay(detail.date);
       if (detail.status === 'pending') setDetail({ ...detail, status: 'done' });
@@ -100,6 +100,16 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     } finally {
       setMealBusy(false);
     }
+  }
+
+  /** What follows a confirm inside the photo panel: clear the composer, refresh, tick the task. */
+  async function afterPhotoLogged() {
+    setMealText('');
+    setMealPhoto(null);
+    setPlateAdvice(null);
+    await refreshDay(detail.date);
+    if (detail.status === 'pending') setDetail({ ...detail, status: 'done' });
+    onLogged?.();
   }
 
   // 7d fetch only feeds the baseline phase gate (not the shared day rollup).
@@ -136,5 +146,6 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     confirmMeal,
     pickPhoto,
     submitMeal,
+    afterPhotoLogged,
   };
 }

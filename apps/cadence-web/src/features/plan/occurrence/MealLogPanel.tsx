@@ -3,6 +3,7 @@ import type { MealKind, OccurrenceDetail } from '../../../lib/api.ts';
 import { leftLine, macroLine } from './format.ts';
 import { BaselineReadPanel } from './BaselineReadPanel.tsx';
 import { useMealLog } from './useMealLog.ts';
+import { PhotoReadPanel } from '../../food/PhotoReadPanel.tsx';
 import { useNutritionBaseline } from './useNutritionBaseline.ts';
 
 /**
@@ -66,45 +67,36 @@ export function MealLogPanel({
           ))}
         </div>
       )}
-      <div className="steer-row">
-        <textarea
-          className="logbox-in"
-          value={meal.mealText}
-          onChange={(e) => meal.setMealText(e.target.value)}
-          placeholder={'e.g. "two eggs, sourdough toast and a coffee" — or just snap it'}
-          rows={2}
-          disabled={meal.mealBusy}
-        />
-        <MicButton value={meal.mealText} onChange={meal.setMealText} disabled={meal.mealBusy} />
-        {/* capture="environment" opens the rear camera on phones; a file picker on desktop. */}
-        <label
-          className={`photo-btn${meal.mealPhoto ? ' photo-on' : ''}`}
-          title="Snap your plate"
-          aria-label="Add a photo"
-        >
-          📷
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
+      {!meal.mealPhoto && (
+        <div className="steer-row">
+          <textarea
+            className="logbox-in"
+            value={meal.mealText}
+            onChange={(e) => meal.setMealText(e.target.value)}
+            placeholder={'e.g. "two eggs, sourdough toast and a coffee" — or just snap it'}
+            rows={2}
             disabled={meal.mealBusy}
-            onChange={(e) => {
-              void meal.pickPhoto(e.target.files?.[0]);
-              e.target.value = ''; // same photo re-pickable
-            }}
           />
-        </label>
-      </div>
-      {meal.mealPhoto && (
-        <div className="photo-preview">
-          <img src={meal.mealPhoto} alt="your plate" />
-          <button className="photo-clear" onClick={meal.clearPhoto} disabled={meal.mealBusy} aria-label="Remove photo">
-            ×
-          </button>
-          <span className="photo-hint">
-            {"I'll read what I can from the photo — estimates, not judgments. A few words help."}
-          </span>
+          <MicButton value={meal.mealText} onChange={meal.setMealText} disabled={meal.mealBusy} />
+          {/* capture="environment" opens the rear camera on phones; a file picker on desktop. */}
+          <label
+            className={`photo-btn${meal.mealPhoto ? ' photo-on' : ''}`}
+            title="Snap your plate"
+            aria-label="Add a photo"
+          >
+            📷
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              hidden
+              disabled={meal.mealBusy}
+              onChange={(e) => {
+                void meal.pickPhoto(e.target.files?.[0]);
+                e.target.value = ''; // same photo re-pickable
+              }}
+            />
+          </label>
         </div>
       )}
       {meal.mealPhoto && (
@@ -142,14 +134,29 @@ export function MealLogPanel({
           <option value="drink">drink</option>
           <option value="other">other</option>
         </select>
-        <button
-          className="logbox-btn meal-btn"
-          onClick={meal.submitMeal}
-          disabled={meal.mealBusy || (!meal.mealText.trim() && !meal.mealPhoto)}
-        >
-          {meal.mealBusy ? 'Writing it down…' : 'Log this meal'}
-        </button>
+        {!meal.mealPhoto && (
+          <button
+            className="logbox-btn meal-btn"
+            onClick={meal.submitMeal}
+            disabled={meal.mealBusy || !meal.mealText.trim()}
+          >
+            {meal.mealBusy ? 'Writing it down…' : 'Log this meal'}
+          </button>
+        )}
       </div>
+
+      {/* A photo goes through read-then-confirm, never straight to a row (A23 / 2026-08-22). The
+          words already typed ride along as the caption — they are evidence the photo cannot give. */}
+      {meal.mealPhoto && (
+        <PhotoReadPanel
+          photo={meal.mealPhoto}
+          meal={meal.mealKind}
+          initialCaption={meal.mealText}
+          onLogged={() => void meal.afterPhotoLogged()}
+          onBack={meal.clearPhoto}
+          backLabel="Use a different photo"
+        />
+      )}
       {meal.logErr && <div className="auth-error">{meal.logErr}</div>}
 
       <BaselineReadPanel

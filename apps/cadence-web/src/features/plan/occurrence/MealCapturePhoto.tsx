@@ -1,43 +1,47 @@
-import type { MealKind, PlateAdvice } from '../../../lib/api.ts';
+import type { Meal, MealKind, PlateAdvice } from '../../../lib/api.ts';
+import { PhotoReadPanel } from '../../food/PhotoReadPanel.tsx';
 
 /**
- * The picture path. Cadence supplies the quantity herself here — there is nothing to ask, so the
- * photo goes straight to a provisional log and stays dashed until it is confirmed. A read before
- * eating is offered, never imposed, and it writes nothing.
+ * The picture path, from the plan.
+ *
+ * It used to parse and log in one shot: photo in, row out, nothing shown in between. The Food tab
+ * has read-then-confirm — you see what the eyes made of the picture and can fix it before any
+ * number is computed — and this surface simply never got it. Owner, 2026-08-22, after a pack of
+ * dill-pickle-SEASONED peanuts logged as two foods, one of them invented:
+ *
+ *   "It didn't present what I was logging (like in the chat, as it's supposed to) so I didn't have
+ *    a chance to confirm before logging."
+ *
+ * Same app, two behaviours, and the one without a brake was on the daily path. So this now renders
+ * the SAME panel the Food tab does rather than a second implementation of it — one flow to reason
+ * about, and a fix in either place lands in both. That matters more since A23: an unmatched food is
+ * pinned permanently, so an unreviewed capture is no longer one bad row.
+ *
+ * What stays here is what is genuinely this surface's own: the pre-eat read, offered and never
+ * imposed, which writes nothing.
  */
 export function MealCapturePhoto({
   photo,
   caption,
-  setCaption,
   mealKind,
-  busy,
   advising,
   advice,
-  logErr,
   onClear,
   onAskRead,
-  onLog,
+  onLogged,
 }: {
   photo: string;
+  /** Anything typed before the photo was attached — carried in as the caption. */
   caption: string;
-  setCaption: (s: string) => void;
   mealKind: MealKind;
-  busy: boolean;
   advising: boolean;
   advice: PlateAdvice | null;
-  logErr: string;
   onClear: () => void;
   onAskRead: () => void;
-  onLog: () => void;
+  onLogged: (m: Meal) => void;
 }) {
   return (
     <div className="mc-photo">
-      <div className="mc-photo-prev">
-        <img src={photo} alt="your plate" />
-        <button className="mc-photo-x" onClick={onClear} disabled={busy} aria-label="Remove photo">
-          ×
-        </button>
-      </div>
       {advice ? (
         <div className={`mc-plate pa-${advice.verdict}`}>
           <div className="mc-plate-k">A READ, NOT A RULING</div>
@@ -46,20 +50,18 @@ export function MealCapturePhoto({
         </div>
       ) : (
         <button className="mc-plate-ask" onClick={onAskRead} disabled={advising}>
-          {advising ? 'Looking at your plate…' : 'Want a read before you eat? ›'}
+          {advising ? 'Looking at your plate…' : 'Want a read before you eat? \u203a'}
         </button>
       )}
-      <input
-        className="mc-cap-in"
-        value={caption}
-        placeholder="a few words help — “chicken burrito bowl”"
-        disabled={busy}
-        onChange={(e) => setCaption(e.target.value)}
+
+      <PhotoReadPanel
+        photo={photo}
+        meal={mealKind}
+        initialCaption={caption}
+        onLogged={onLogged}
+        onBack={onClear}
+        backLabel="Use a different photo"
       />
-      {logErr && <div className="mc-err">{logErr}</div>}
-      <button className="mc-log" disabled={busy} onClick={onLog}>
-        {busy ? 'Writing it down…' : `Log ${mealKind}`}
-      </button>
     </div>
   );
 }
