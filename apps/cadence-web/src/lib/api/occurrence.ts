@@ -51,3 +51,37 @@ export async function recordWeighIn(id: string, weight: number, unit: 'kg' | 'lb
   if (!res.ok) throw Object.assign(new Error(`weigh-in failed: ${res.status}`), { status: res.status });
   return res.json();
 }
+
+/** "Your weekly check-in" — the week's figures, plus the coach's read of them (A23 §2b). */
+export interface WeeklyRecap {
+  period: { from: string; to: string };
+  consistency: { kept: number; window: number };
+  rolling: { kept: number; window: number };
+  goals: Array<{ title: string; area: string | null }>;
+  nutrition: {
+    days_logged: number;
+    days_counted: number;
+    days_in_window: number;
+    avg_kcal: number | null;
+    target_kcal: number | null;
+    avg_protein_g: number | null;
+  } | null;
+  weight: {
+    actual_kg_per_week: number;
+    safe_kg_per_week: number;
+    pace: 'too_fast' | 'on_track' | 'too_slow';
+    confidence: 'low' | 'medium' | 'high';
+    trend_kg: number | null;
+  } | null;
+  episodes: Array<{ start: string; end: string }>;
+  /** Empty when the narration failed — the figures still stand on their own. */
+  note: string;
+  weigh_in: { occurrence_id: string; date: string; pending: boolean } | null;
+}
+
+/** POST because it is not free: the figures are SQL, the note is a coach call. Asked once on open. */
+export async function fetchWeeklyRecap(): Promise<WeeklyRecap> {
+  const res = await fetch(`${BASE}/plan/recap`, { method: 'POST', headers: headers() });
+  if (!res.ok) throw Object.assign(new Error(`recap failed: ${res.status}`), { status: res.status });
+  return res.json();
+}

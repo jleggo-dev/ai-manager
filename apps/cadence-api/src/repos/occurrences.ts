@@ -301,6 +301,28 @@ export async function listDoneUserOccurrencesForDay(
 
 /** The user's weigh-in series (date + kg) over the trailing window — feeds the adaptive-target
  *  weight-trend read. Weigh-ins store `value.weight_kg` on their occurrence (see weigh-in.ts). */
+/**
+ * This week's weigh-in row, so the check-in can carry it (A23 §2b). Its own query because
+ * `listOccurrences` deliberately omits the activity title, and the week view has no use for it.
+ * Prefers a still-pending row, else the most recent one in the window.
+ */
+export async function findWeighInOccurrence(
+  userId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<{ occurrence_id: string; date: string; status: string } | null> {
+  const [row] = await sql<Array<{ occurrence_id: string; date: string; status: string }>>`
+    select o.occurrence_id, to_char(o.date, 'YYYY-MM-DD') as date, o.status
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId}
+      and o.date >= ${fromDate} and o.date <= ${toDate}
+      and a.kind = 'system' and a.title ~* 'weigh'
+    order by (o.status = 'pending') desc, o.date desc
+    limit 1`;
+  return row ?? null;
+}
+
 export async function listWeighInSeries(userId: string, days = 60): Promise<Array<{ date: string; kg: number }>> {
   const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
   return sql<Array<{ date: string; kg: number }>>`

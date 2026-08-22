@@ -3,6 +3,7 @@ import type { OccurrenceDetail } from '../../../lib/api.ts';
 import {
   downscaleDimensions,
   isFoodRow,
+  isWeeklyCheckin,
   isWeighInPending,
   leftLine,
   macroLine,
@@ -69,6 +70,21 @@ describe('occurrence formatters', () => {
     expect(isFoodRow(detail({ kind: 'system', title: 'Food check-in' }))).toBe(true);
     expect(isFoodRow(detail({ kind: 'system', title: 'Nutrition observe' }))).toBe(true);
     expect(isFoodRow(detail({ kind: 'system', title: 'Weigh in' }))).toBe(false);
+  });
+
+  /**
+   * A23 §2b — the sheet and the server's notification producer must agree about which row is the
+   * check-in. Weigh-in rows are excluded explicitly: they are carried INSIDE the recap, and a
+   * title like "Weigh-in & check-in" must not open two different panels depending on the matcher.
+   */
+  it('isWeeklyCheckin matches the check-in row and never the weigh-in', () => {
+    expect(isWeeklyCheckin(detail({ kind: 'system', title: 'Weekly check-in' }))).toBe(true);
+    expect(isWeeklyCheckin(detail({ kind: 'system', title: 'Weekly checkin' }))).toBe(true);
+    expect(isWeeklyCheckin(detail({ kind: 'system', title: 'Your weekly recap' }))).toBe(true);
+    expect(isWeeklyCheckin(detail({ kind: 'system', title: 'Weigh in' }))).toBe(false);
+    expect(isWeeklyCheckin(detail({ kind: 'system', title: 'Weigh-in & check-in' }))).toBe(false);
+    expect(isWeeklyCheckin(detail({ kind: 'user', title: 'Weekly check-in' }))).toBe(false);
+    expect(isWeeklyCheckin(detail({ kind: 'system', title: 'Log food' }))).toBe(false);
   });
 
   it('isWeighInPending requires system + weigh title + pending', () => {
