@@ -16,7 +16,7 @@ import { listNutritionLogs } from '../repos/nutrition.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, setMacroTargets } from '../repos/users.ts';
 import { listWeighInSeries } from '../repos/occurrences.ts';
-import { actualWeeklyRate, safeWeeklyKg, classifyLossPace } from './weight-trend.ts';
+import { paceRead } from './weight-trend.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeTargets } from './nutrition-day.ts';
 import { wantsTargets } from './nutrition-parse.ts';
@@ -65,22 +65,16 @@ export async function getBaselineRead(userId: string): Promise<BaselineRead> {
   // Two proposal modes. INITIAL (Baseline moment): propose targets only when a goal warrants them and
   // none are set. ADAPTIVE (recurring): once targets ARE set and the weigh-in trend is trustworthy,
   // propose an ADJUSTED target from the trend vs. a safe rate — throttled to ~weekly via last_reviewed.
-  const actualRate = actualWeeklyRate(weighSeries);
   const currentKg = user?.baseline?.weight_kg?.current;
+  // A23 §2a: the smoothed fit, not a line through two mornings — one bloated Sunday must not read
+  // as a stalled month and buy the user a calorie cut.
+  const pace = paceRead(weighSeries, currentKg);
   const lastReviewed = user?.macro_targets?.last_reviewed;
   const dueForReview = !lastReviewed || Date.now() - Date.parse(lastReviewed) >= 7 * 86_400_000;
-  const proposeAdaptive = hasTargets && actualRate != null && typeof currentKg === 'number' && dueForReview;
+  const proposeAdaptive = hasTargets && pace !== null && dueForReview;
   const propose = proposeAdaptive || (!hasTargets && wantsTargets(goals));
 
-  const safeKg = typeof currentKg === 'number' ? safeWeeklyKg(currentKg) : null;
-  const weightTrend =
-    proposeAdaptive && actualRate != null && safeKg != null
-      ? {
-          actual_kg_per_week: Math.round(actualRate * 100) / 100,
-          safe_kg_per_week: safeKg,
-          pace: classifyLossPace(actualRate, safeKg),
-        }
-      : null;
+  const weightTrend = proposeAdaptive ? pace : null;
 
   const res = await runJobBySlug(userId, 'nutrition-baseline', {
     summary: JSON.stringify(summary),

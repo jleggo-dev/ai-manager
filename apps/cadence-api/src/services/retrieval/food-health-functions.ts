@@ -11,7 +11,7 @@ import { EMPTY_DIETARY_PROFILE, sanitizeDietaryProfile } from '@cadence/shared';
 import { getDietaryProfile, getUser } from '../../repos/users.ts';
 import { listWeighInSeries } from '../../repos/occurrences.ts';
 import { getNutritionDay } from '../nutrition.ts';
-import { actualWeeklyRate, classifyLossPace, safeWeeklyKg } from '../weight-trend.ts';
+import { paceRead } from '../weight-trend.ts';
 import { listNutritionLogs } from '../../repos/nutrition.ts';
 import { sumWaterMl } from '../../repos/water.ts';
 import { listRecipes, searchRecipes } from '../../repos/recipes.ts';
@@ -268,21 +268,14 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
       ]);
       const targets = user?.macro_targets ?? null;
       const currentKg = user?.baseline?.weight_kg?.current;
-      const actual = actualWeeklyRate(series);
-      const safe = typeof currentKg === 'number' ? safeWeeklyKg(currentKg) : null;
       return {
         targets: targets && Object.keys(targets).length ? targets : null,
         eaten: day.totals,
         left: day.left,
         last_reviewed: targets?.last_reviewed ?? null,
-        trend:
-          actual != null && safe != null
-            ? {
-                actual_kg_per_week: Math.round(actual * 100) / 100,
-                safe_kg_per_week: safe,
-                pace: classifyLossPace(actual, safe),
-              }
-            : null,
+        // Smoothed (A23 §2a) and carrying its own confidence, so the coach can hedge on a thin
+        // series instead of reading a fortnight of water weight as a verdict.
+        trend: paceRead(series, currentKg),
       };
     },
     render(r) {
@@ -291,7 +284,13 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
         eaten: Record<string, number>;
         left: Record<string, number> | null;
         last_reviewed: string | null;
-        trend: { actual_kg_per_week: number; safe_kg_per_week: number; pace: string } | null;
+        trend: {
+          actual_kg_per_week: number;
+          safe_kg_per_week: number;
+          pace: string;
+          confidence: string;
+          trend_kg: number | null;
+        } | null;
       };
       const lines: string[] = [];
       if (!targets) {
@@ -321,7 +320,14 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
             : trend.pace === 'too_slow'
               ? `changing ${trend.actual_kg_per_week} kg/wk, slower than expected — the targets may not be doing the work`
               : `${trend.actual_kg_per_week} kg/wk, within the safe ${trend.safe_kg_per_week} — on track`;
-        lines.push(`Weight trend: ${verdict}.`);
+        // Confidence rides along so she hedges on a thin series instead of prescribing off it —
+        // two weigh-ins is a hint, and saying so is the honest coaching move (A23 §2a).
+        const hedge =
+          trend.confidence === 'low'
+            ? ' — only a little data behind this yet, so treat it as a hint, not a verdict'
+            : '';
+        const at = trend.trend_kg != null ? ` (trend weight ~${trend.trend_kg} kg)` : '';
+        lines.push(`Weight trend: ${verdict}${at}${hedge}.`);
       }
       return lines.join('\n');
     },
