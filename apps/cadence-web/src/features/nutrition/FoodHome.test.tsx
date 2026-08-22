@@ -34,6 +34,7 @@ vi.mock('../food/MealPlansPanel.tsx', () => ({ MealPlansPanel: () => <div>plan-p
 vi.mock('./ShopSheet.tsx', () => ({ ShopSheet: () => <div>shop-panel</div> }));
 vi.mock('./WeekMenuSheet.tsx', () => ({ WeekMenuSheet: () => <div>week-panel</div> }));
 vi.mock('./NutritionInsightCard.tsx', () => ({ NutritionInsightCard: () => null }));
+vi.mock('./FoodKitchen.tsx', () => ({ FoodKitchen: () => <div>kitchen-tab</div> }));
 
 const { FoodHome } = await import('./FoodHome.tsx');
 
@@ -208,5 +209,38 @@ describe('FoodHome', () => {
   it('opens straight to the shopping list when a shop task sent it there', () => {
     mount(day({}), { initialSub: 'shop' });
     expect(screen.getByText('shop-panel')).toBeTruthy();
+  });
+});
+
+/**
+ * Slice 4 adds a third tab. Day and Week READ what happened; the Kitchen is where the week ahead
+ * gets prepped, so it is a peer of the two reads rather than another door in a sheet — and it
+ * carries no date pill, because a date is a question the reading tabs ask and the Kitchen doesn't.
+ */
+describe('FoodHome — the Kitchen tab', () => {
+  it('offers Kitchen beside Day and Week', () => {
+    mount(day({}));
+    expect(screen.getByRole('tab', { name: 'Kitchen' })).toBeTruthy();
+  });
+
+  it('swaps the day read for the Kitchen, and drops the date pill with it', () => {
+    mount(day({}));
+    expect(screen.getByText('Today')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Kitchen' }));
+    expect(screen.getByText('kitchen-tab')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Kitchen' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByText('Today')).toBeNull();
+    // The day's own read is gone while the Kitchen is up — one body, three tabs.
+    expect(screen.queryByText('Log a meal')).toBeNull();
+  });
+
+  it('goes back to the day read, date pill and all', () => {
+    mount(day({}));
+    fireEvent.click(screen.getByRole('tab', { name: 'Kitchen' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Day' }));
+    expect(screen.queryByText('kitchen-tab')).toBeNull();
+    expect(screen.getByText('Today')).toBeTruthy();
+    expect(screen.getByText('Log a meal')).toBeTruthy();
   });
 });

@@ -7790,3 +7790,573 @@ textarea.wiz-title {
   cursor: pointer;
   display: block;
 }
+
+/* ── The Kitchen (Food Journey 10, 10a–c) ───────────────────────────────────────────────────
+   The Food screen's third tab and its PREP surface: paste a recipe, read it per serving, put it
+   on a day, buy what it needs. It borrows the reading tabs' card language deliberately — same
+   white cards, same radii — because it is the same screen, one tab over. What it never borrows is
+   the Day tab's green log button: nothing in here counts a meal, so nothing in here gets the
+   colour that does. */
+.kt {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.kt-paste {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid oklch(91% 0.015 85);
+  border-radius: 16px;
+  padding: 11px 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.kt-paste-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.kt-paste-t b {
+  font-size: 13px;
+  font-weight: 900;
+  color: oklch(30% 0.02 150);
+}
+.kt-paste-t span,
+.kt-paste i {
+  font-size: 11px;
+  font-weight: 700;
+  color: oklch(56% 0.02 120);
+}
+.kt-paste i {
+  font-style: normal;
+  font-size: 15px;
+  font-weight: 800;
+  color: oklch(64% 0.02 120);
+}
+.kt-seg {
+  background: #fff;
+  border-radius: 999px;
+  padding: 3px;
+  display: flex;
+  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.05);
+}
+.kt-seg button {
+  flex: 1;
+  border: none;
+  background: none;
+  border-radius: 999px;
+  padding: 7px 0;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: oklch(52% 0.02 150);
+  cursor: pointer;
+}
+.kt-seg button.is-on {
+  background: oklch(45% 0.09 152);
+  color: #fff;
+  font-weight: 900;
+}
+.kt-note {
+  background: oklch(96% 0.02 85);
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: oklch(42% 0.03 60);
+}
+.kt-count,
+.kt-foot {
+  font-size: 11px;
+  font-weight: 700;
+  color: oklch(56% 0.02 120);
+  padding: 0 3px;
+}
+.kt-foot {
+  margin: 3px 0 0;
+  font-size: 10.5px;
+}
+.kt-list,
+.kt-plan,
+.kt-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.kt-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid oklch(91% 0.015 85);
+  border-radius: 14px;
+  padding: 10px 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.kt-row:disabled {
+  opacity: 0.55;
+}
+.kt-row-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.kt-row-t b {
+  font-size: 13px;
+  font-weight: 900;
+  color: oklch(30% 0.02 150);
+}
+.kt-row-t span {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: oklch(56% 0.02 120);
+}
+.kt-row i {
+  font-style: normal;
+  font-size: 15px;
+  font-weight: 800;
+  color: oklch(64% 0.02 120);
+}
+.kt-msg {
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: oklch(46% 0.02 120);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  align-items: flex-start;
+}
+.kt-inline {
+  border: 1px solid oklch(88% 0.02 85);
+  background: none;
+  border-radius: 999px;
+  padding: 7px 13px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 900;
+  color: oklch(38% 0.06 152);
+  cursor: pointer;
+}
+.kt-linkback {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 900;
+  color: oklch(48% 0.05 152);
+  cursor: pointer;
+}
+.kt-detail-t,
+.kt-plan-t {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 700;
+  color: oklch(27% 0.02 150);
+}
+.kt-detail-sub {
+  font-size: 11px;
+  font-weight: 800;
+  color: oklch(56% 0.02 120);
+}
+.kt-sec {
+  margin-top: 6px;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: oklch(60% 0.02 120);
+}
+.kt-ings,
+.kt-steps {
+  margin: 0;
+  padding: 12px 14px;
+  background: #fff;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: oklch(34% 0.02 150);
+}
+.kt-ings {
+  list-style: none;
+}
+.kt-steps {
+  padding-left: 30px;
+  gap: 8px;
+}
+.kt-ings li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.kt-ings li i {
+  font-style: normal;
+  font-weight: 800;
+  color: oklch(56% 0.02 120);
+}
+.kt-primary {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid oklch(88% 0.02 85);
+  border-radius: 14px;
+  padding: 12px 15px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  color: oklch(34% 0.06 152);
+}
+.kt-primary i {
+  font-style: normal;
+  font-weight: 800;
+}
+.kt-slots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.kt-slotbtn {
+  background: #fff;
+  border: 1px solid oklch(91% 0.015 85);
+  border-radius: 13px;
+  padding: 13px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 900;
+  color: oklch(30% 0.02 150);
+  cursor: pointer;
+}
+.kt-slotbtn:disabled {
+  opacity: 0.55;
+}
+.kt-slotrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 10px 13px;
+}
+.kt-slotrow-l {
+  flex: 0 0 74px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: oklch(58% 0.02 120);
+}
+.kt-slotrow-n {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 900;
+  color: oklch(30% 0.02 150);
+}
+.kt-off,
+.kt-fill {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.kt-off {
+  color: oklch(52% 0.03 60);
+}
+.kt-fill {
+  flex: 1;
+  text-align: left;
+  color: oklch(48% 0.05 152);
+}
+.kt-fill i {
+  font-style: normal;
+}
+.kt-off:disabled,
+.kt-fill:disabled {
+  opacity: 0.55;
+}
+.kt-shop-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 3px;
+}
+.kt-shop-head b {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 700;
+  color: oklch(27% 0.02 150);
+}
+.kt-shop-head span {
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: oklch(60% 0.02 120);
+}
+.kt-aisle {
+  background: #fff;
+  border-radius: 14px;
+  padding: 10px 6px 6px;
+}
+.kt-aisle-l {
+  padding: 0 8px 6px;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: oklch(60% 0.02 120);
+}
+.kt-shoprow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  background: none;
+  border-radius: 10px;
+  padding: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.kt-check {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid oklch(85% 0.02 85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 900;
+  color: #fff;
+}
+.kt-shoprow.is-checked .kt-check {
+  background: oklch(54% 0.11 152);
+  border-color: oklch(54% 0.11 152);
+}
+.kt-shopname {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: oklch(30% 0.02 150);
+}
+.kt-shoprow.is-checked .kt-shopname {
+  color: oklch(66% 0.015 120);
+  text-decoration: line-through;
+}
+.kt-shopqty {
+  font-size: 11px;
+  font-weight: 800;
+  color: oklch(58% 0.02 120);
+}
+
+/* ── The Kitchen: composing a meal, and the numbers a plan adds up to (frames 10a–c) ────────── */
+.kt-lede {
+  margin: 0 0 2px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  font-weight: 700;
+  color: oklch(54% 0.02 120);
+}
+.kt-step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid oklch(92% 0.012 120);
+}
+.kt-step-h {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: oklch(52% 0.02 120);
+}
+.kt-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kt-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid oklch(92% 0.012 120);
+  border-radius: 12px;
+  font-size: 12px;
+}
+.kt-item-kind {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: oklch(58% 0.02 120);
+}
+.kt-item-name {
+  font-weight: 800;
+  color: oklch(30% 0.02 120);
+}
+.kt-item-amt,
+.kt-item-kcal {
+  font-size: 11px;
+  font-weight: 700;
+  color: oklch(50% 0.02 120);
+  white-space: nowrap;
+}
+.kt-item-x {
+  border: 0;
+  background: none;
+  font-size: 16px;
+  line-height: 1;
+  color: oklch(58% 0.02 120);
+  cursor: pointer;
+}
+.kt-addrow,
+.kt-fill-pair {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.kt-add,
+.kt-cancel {
+  align-self: flex-start;
+  padding: 8px 12px;
+  border: 1px solid oklch(88% 0.03 152);
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: oklch(42% 0.09 152);
+  cursor: pointer;
+}
+.kt-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kt-pick ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kt-pick button {
+  width: 100%;
+  text-align: left;
+  padding: 9px 11px;
+  border: 1px solid oklch(92% 0.012 120);
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: oklch(30% 0.02 120);
+  cursor: pointer;
+}
+.kt-empty {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: oklch(54% 0.02 120);
+}
+.kt-days {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.kt-chip {
+  padding: 7px 11px;
+  border: 1px solid oklch(90% 0.015 120);
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: oklch(40% 0.02 120);
+  cursor: pointer;
+}
+.kt-chip.on {
+  border-color: oklch(62% 0.09 152);
+  background: oklch(96% 0.03 152);
+  color: oklch(34% 0.09 152);
+}
+/* The running total, and the week/day equivalents. One visual family on purpose: they are the
+   same fact at three scales, and the honesty line ("counted from N of M") rides all three. */
+.kt-total,
+.kt-weekhead,
+.kt-dayhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: 11px 13px;
+  border-radius: 14px;
+  background: oklch(97% 0.012 120);
+}
+.kt-total strong,
+.kt-weekhead strong,
+.kt-dayhead strong {
+  font-family: var(--display), serif;
+  font-size: 24px;
+  font-weight: 600;
+  color: oklch(28% 0.03 150);
+}
+.kt-total-macros,
+.kt-weekhead-m,
+.kt-weekhead-l,
+.kt-dayhead-l {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: oklch(44% 0.02 120);
+}
+.kt-total-note,
+.kt-weekhead-n {
+  flex-basis: 100%;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: oklch(56% 0.02 120);
+}
+/* The day's kcal on a week row. Quiet — it is context for the row, not its headline. */
+.kt-row-k {
+  margin-left: auto;
+  padding-right: 6px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: oklch(46% 0.02 120);
+  white-space: nowrap;
+}
+.kt-row-k em {
+  font-style: normal;
+  font-weight: 700;
+  color: oklch(60% 0.02 120);
+}

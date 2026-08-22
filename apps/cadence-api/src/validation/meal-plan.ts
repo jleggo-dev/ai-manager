@@ -68,11 +68,45 @@ export const confirmMealPlanBodySchema = z.object({
   notes: z.string().trim().max(400).nullable().optional(),
 });
 
-const persistedMealSchema = z.object({
-  slot: z.string().trim().min(1).max(24),
-  recipe_id: z.string().uuid(),
-  recipe_name: z.string().trim().min(1).max(120).optional(),
+/**
+ * One item in a composed meal — frame 10a's *"recipes, food, or both"*.
+ *
+ * Macros are accepted from the client because they are DENORMALIZED at plan time on purpose (see
+ * `meal-plan-items.ts`): a week view that resolved every recipe and food to total seven days would
+ * be 28 fetches to paint one screen. They are bounded rather than trusted — a plan is an intention,
+ * and nothing here reaches the food log, which does its own arithmetic from its own sources.
+ */
+const planItemSchema = z.object({
+  kind: z.enum(['recipe', 'food']),
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(120),
+  qty: z.number().positive().max(10_000),
+  unit: z.string().trim().max(24).optional(),
+  kcal: z.number().min(0).max(10_000).optional(),
+  protein_g: z.number().min(0).max(1_000).optional(),
+  carbs_g: z.number().min(0).max(1_000).optional(),
+  fat_g: z.number().min(0).max(1_000).optional(),
 });
+
+/**
+ * A meal is EITHER the legacy single recipe or a composed list — never neither.
+ *
+ * `recipe_id` stops being required so frame 10a can save a meal of loose foods, but it stays
+ * accepted: `generate_meal_plan` still emits that shape and every plan saved before 2026-08-21 is
+ * in it. The refine is what replaces the old `required` — without it, "neither" would validate and
+ * a meal that contains nothing would persist.
+ */
+const persistedMealSchema = z
+  .object({
+    slot: z.string().trim().min(1).max(24),
+    name: z.string().trim().min(1).max(120).optional(),
+    items: z.array(planItemSchema).max(12).optional(),
+    recipe_id: z.string().uuid().optional(),
+    recipe_name: z.string().trim().min(1).max(120).optional(),
+  })
+  .refine((m) => !!m.recipe_id || (m.items?.length ?? 0) > 0, {
+    message: 'a planned meal needs either a recipe_id or at least one item',
+  });
 
 const persistedDaySchema = z.object({
   day: isoDate,

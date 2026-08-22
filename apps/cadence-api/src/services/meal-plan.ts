@@ -20,6 +20,7 @@ import {
   upsertMealPlan,
 } from '../repos/meal-plans.ts';
 import { getRecipe, listRecipes } from '../repos/recipes.ts';
+import { getFood } from '../repos/foods.ts';
 import { getDietaryProfile, getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
 import {
@@ -321,12 +322,31 @@ export async function patchMealPlanForUser(
   mealPlanId: string,
   patch: { days?: MealPlanDay[]; shopping_list?: ShoppingListItem[]; notes?: string | null },
 ): Promise<MealPlan | null> {
+  /**
+   * Ownership, over BOTH meal shapes.
+   *
+   * This used to read `meal.recipe_id` alone. Frame 10a's composed meal carries recipes AND loose
+   * foods in `items`, so checking only the legacy field would have let a client plan a meal
+   * referencing any recipe or food id in the table — the check would still pass, because the field
+   * it read was empty. Ids are deduped first: a week that repeats Tuesday's dinner should not cost
+   * a lookup per repeat.
+   */
   if (patch.days) {
+    const recipeIds = new Set<string>();
+    const foodIds = new Set<string>();
     for (const day of patch.days) {
       for (const meal of day.meals) {
-        const owned = await getRecipe(userId, meal.recipe_id);
-        if (!owned) throw new Error(`recipe not found: ${meal.recipe_id}`);
+        if (meal.recipe_id) recipeIds.add(meal.recipe_id);
+        for (const item of meal.items ?? []) {
+          (item.kind === 'food' ? foodIds : recipeIds).add(item.id);
+        }
       }
+    }
+    for (const id of recipeIds) {
+      if (!(await getRecipe(userId, id))) throw new Error(`recipe not found: ${id}`);
+    }
+    for (const id of foodIds) {
+      if (!(await getFood(userId, id))) throw new Error(`food not found: ${id}`);
     }
   }
   return updateMealPlan(userId, mealPlanId, patch);
