@@ -48,6 +48,14 @@ export const mealFromTitle = (title: string): MealKind | null => {
   return (m?.[0] as MealKind | undefined) ?? null;
 };
 
+/**
+ * The weekly check-in row (A23 §2b). Same shape the server's local-notification producer matches
+ * on (`notify/local-plan.ts` findWeeklyCheckin), deliberately: the notification is the door and
+ * this is the room, and they must not disagree about which occurrence is which.
+ */
+export const isWeeklyCheckin = (d: OccurrenceDetail): boolean =>
+  d.kind === 'system' && /check-?in|recap/i.test(d.title) && !/weigh/i.test(d.title);
+
 /** Pending system weigh-in — deterministic capture, no LLM. */
 export const isWeighInPending = (d: OccurrenceDetail): boolean =>
   d.kind === 'system' && /weigh/i.test(d.title) && d.status === 'pending';

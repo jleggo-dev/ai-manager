@@ -38,8 +38,12 @@ export function parseMealResult(raw: string, explicitMeal?: MealKind): ParsedMea
       .slice(0, 12)
       .map((i) => {
         const est = sanitizeMacros(i.est);
+        // A vendor the user actually named ("from Materia Prima") — the thing that makes a cafe
+        // item pinnable as itself rather than as a generic parfait (A23 §1b).
+        const brand = typeof i.brand === 'string' ? (i.brand as string).trim().slice(0, 120) : '';
         return {
           name: (i.name as string).trim(),
+          ...(brand ? { brand } : {}),
           ...(typeof i.qty === 'number' && i.qty > 0 ? { qty: i.qty } : {}),
           ...(typeof i.unit === 'string' && (i.unit as string).trim() ? { unit: (i.unit as string).trim() } : {}),
           ...(est ? { est } : {}),
@@ -60,6 +64,22 @@ export function parseMealResult(raw: string, explicitMeal?: MealKind): ParsedMea
   const macros: Macros | null = est ? { ...est, source: 'ai' } : null;
 
   return { meal, items, flags, confidence, macros };
+}
+
+/**
+ * The weekday+meal slot a log belongs to — the key the rhythm ranking counts against (A23 §1c).
+ * dow is 0-6 Sunday-first from the UTC date, matching every other Cadence day-stamp, so a meal
+ * cannot land on one weekday here and another one elsewhere. Undefined when there is nothing
+ * usable to count, in which case ranking simply falls back to recency and frequency.
+ */
+export function usageSlot(
+  date: string | undefined,
+  meal: string | undefined,
+): { dow: number; meal: string } | undefined {
+  if (!date || !meal) return undefined;
+  const t = Date.parse(`${date}T00:00:00Z`);
+  if (!Number.isFinite(t)) return undefined;
+  return { dow: new Date(t).getUTCDay(), meal };
 }
 
 /** Deterministic gate: targets are only WORTH proposing for an eating-focused or weight goal. */

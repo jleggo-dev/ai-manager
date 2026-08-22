@@ -5,7 +5,12 @@
  * baseline.weight_kg.current WITHOUT clobbering .start (jsonb || is shallow — merge app-side).
  */
 import type { Baseline, WeightTrend } from '@cadence/shared';
-import { getOccurrenceWithActivity, recordOccurrenceLog } from '../repos/occurrences.ts';
+import {
+  findWeighInActivity,
+  getOccurrenceWithActivity,
+  getOrInsertOccurrenceId,
+  recordOccurrenceLog,
+} from '../repos/occurrences.ts';
 import { getUser, mergeBaseline } from '../repos/users.ts';
 
 const LB_PER_KG = 2.2046226218;
@@ -50,4 +55,26 @@ export async function recordWeighIn(
   await mergeBaseline(userId, { weight_kg, weight_unit });
 
   return { weight_kg: kg };
+}
+
+/**
+ * Log a weight on ANY day (A23 §2c) — what "daily weigh-ins" actually means in practice.
+ *
+ * The plan schedules one weigh-in a week and that stays true; this hangs today's reading off the
+ * SAME activity via get-or-insert, so a daily logger's points land in the same series, the same
+ * history, and the same trend as a weekly one. No parallel store, no second source of truth.
+ *
+ * Returns null when their plan has no weigh-in at all — the planner only schedules one for a
+ * weight-shaped goal, and inventing an activity here would be this file overreaching.
+ */
+export async function recordWeighInToday(
+  userId: string,
+  weight: number,
+  unit: 'kg' | 'lb',
+  date = new Date().toISOString().slice(0, 10),
+): Promise<{ weight_kg: number } | null> {
+  const activity = await findWeighInActivity(userId);
+  if (!activity) return null;
+  const occurrenceId = await getOrInsertOccurrenceId(activity.activity_id, userId, date);
+  return recordWeighIn(userId, occurrenceId, weight, unit);
 }

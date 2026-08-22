@@ -16,7 +16,7 @@ vi.mock('../../lib/query/index.ts', () => ({
 }));
 
 const api = vi.hoisted(() => ({
-  logPreviewedMeal: vi.fn(async () => ({ log_id: 'l1' })),
+  logPreviewedMeal: vi.fn(async (_preview: unknown, _meal?: unknown) => ({ log_id: 'l1' })),
 }));
 vi.mock('../../lib/api.ts', () => api);
 
@@ -90,5 +90,36 @@ describe('MealParseCard — one thing assumed, one thing asked', () => {
     expect(screen.queryByText('ASSUMED')).not.toBeInTheDocument();
     expect(screen.queryByText(/AMOUNTS? TO SETTLE/)).not.toBeInTheDocument();
     expect(screen.getByText('One thing')).toBeInTheDocument();
+  });
+});
+
+/**
+ * REGRESSION (2026-08-22, owner-reported "nada back in terms of micronutrients"). The card summed
+ * four keys into the total it posts, so every micronutrient the parse produced was dropped at the
+ * confirm — and the day sums that total. The card still DRAWS four; what it hands back is complete.
+ */
+describe('MealParseCard — the total it posts carries every nutrient', () => {
+  const withMicros = {
+    meal: 'breakfast' as const,
+    raw_text: '2 eggs and arugula',
+    items: [
+      { name: 'eggs', qty: 2, unit: 'large', est: { kcal: 140, protein_g: 12, iron_mg: 1.8, vitamin_b12_ug: 1.1 } },
+      { name: 'arugula', qty: 1, unit: 'handful', est: { kcal: 5, calcium_mg: 32 } },
+    ],
+    macros: { kcal: 145 },
+    confidence: 0.8,
+    flags: {},
+  };
+
+  it('sums micronutrients into the posted total', async () => {
+    render(<MealParseCard preview={withMicros} onLogged={() => {}} onCancel={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /Log to breakfast/ }));
+
+    await waitFor(() => expect(api.logPreviewedMeal).toHaveBeenCalled());
+    const posted = api.logPreviewedMeal.mock.calls[0]![0] as { macros: Record<string, number> };
+    expect(posted.macros.iron_mg).toBeCloseTo(1.8, 1);
+    expect(posted.macros.vitamin_b12_ug).toBeCloseTo(1.1, 1);
+    expect(posted.macros.calcium_mg).toBeCloseTo(32, 0);
+    expect(posted.macros.kcal).toBeCloseTo(145, 0);
   });
 });

@@ -29,8 +29,13 @@ export interface Macros {
   calcium_mg?: number;
   potassium_mg?: number;
   vitamin_b12_ug?: number;
-  /** Who produced these numbers: AI estimate ('ai') or the user's own correction ('user'). */
-  source?: 'ai' | 'user';
+  /**
+   * Who produced these numbers: a model's estimate ('ai'), the user's own correction ('user'), or
+   * the food ledger ('ledger' — every item priced from a saved food, so logging the same meal
+   * again reproduces them exactly). A mixed meal stays 'ai': it is only as reproducible as its
+   * least reproducible item.
+   */
+  source?: 'ai' | 'user' | 'ledger';
 }
 
 export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | 'other';
@@ -39,8 +44,12 @@ export interface NutritionLog {
   log_id: string;
   date: string;
   meal: MealKind;
-  /** Optional food_id correlates a free-form item back to a saved Food (Req 5 §5.4). */
-  items: { name: string; qty?: number; unit?: string; est?: Macros; food_id?: string }[];
+  /**
+   * Optional food_id correlates a free-form item back to a saved Food (Req 5 §5.4). `brand` is the
+   * place it came from when the user named it or the packaging showed it — kept on the item so a
+   * previewed meal can still pin its vendor after the round trip to the browser (A23 §1b).
+   */
+  items: { name: string; brand?: string; qty?: number; unit?: string; est?: Macros; food_id?: string }[];
   macros: Macros;
   input_method: 'photo' | 'voice' | 'text' | 'manual';
   ai_confidence?: number;
@@ -73,6 +82,13 @@ export interface MacroTargets {
   confirm_below_confidence?: number; // provisional threshold; defaults to 0.5 in nutrition.ts when unset
   eatback_pct?: number; // 0–100: % of a day's exercise burn added back to the kcal allowance (net calories); default 50
   last_reviewed?: string; // ISO date the coach last proposed an adaptive target adjustment (weekly throttle)
+  /**
+   * A short trail of kcal moves (A23 §3). The ratchet guardrail's working memory, not an audit
+   * log: without it the loop cannot know it has already cut twice this month, and a plateau —
+   * which looks exactly like "the deficit is too small" — would buy a third cut. Trimmed to the
+   * last 12 by `setTargets`.
+   */
+  adjustments?: { date: string; from: number; to: number }[];
 }
 
 export interface Recipe {

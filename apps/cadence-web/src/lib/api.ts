@@ -83,7 +83,15 @@ export {
   type PendingChange,
 } from './api/plan.ts';
 
-export { getOccurrenceDetail, logOccurrence, recordWeighIn, type OccurrenceDetail } from './api/occurrence.ts';
+export {
+  getOccurrenceDetail,
+  logOccurrence,
+  recordWeighIn,
+  recordWeighInToday,
+  fetchWeeklyRecap,
+  type OccurrenceDetail,
+  type WeeklyRecap,
+} from './api/occurrence.ts';
 
 export {
   getNutritionDay,

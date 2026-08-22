@@ -22,7 +22,7 @@ export interface Meal {
   log_id: string;
   date: string;
   meal: MealKind;
-  items: { name: string; qty?: number; unit?: string; est?: MealMacros }[];
+  items: { name: string; brand?: string; qty?: number; unit?: string; est?: MealMacros; food_id?: string }[];
   raw_text?: string | null;
   flags?: { alcohol?: boolean; caffeine?: boolean };
   photo_url?: string | null; // short-lived signed URL when the meal was snapped
@@ -125,7 +125,12 @@ export async function clearMacroTargets(): Promise<boolean> {
 /** An itemized read of a described meal — previewed, not logged. Confirm posts it verbatim. */
 export interface MealPreview {
   meal: MealKind;
-  items: { name: string; qty?: number; unit?: string; est?: MealMacros }[];
+  /**
+   * `brand` is the vendor the parse heard (or the user answered), and `food_id` says the item was
+   * matched to a food already on file — the card uses the absence of both to decide whether asking
+   * where it came from is worth a line (A23 §1b).
+   */
+  items: { name: string; brand?: string; qty?: number; unit?: string; est?: MealMacros; food_id?: string }[];
   macros: MealMacros | null;
   confidence: number | null;
   flags: { alcohol?: boolean; caffeine?: boolean };

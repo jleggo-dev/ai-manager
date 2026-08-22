@@ -25,8 +25,9 @@ import { runJobBySlug } from '../ai/aim.ts';
 import { putMealPhoto, signMealPhotoUrl } from './meal-photos.ts';
 import { logAi } from './ai-log.ts';
 import { insertNutritionLog } from '../repos/nutrition.ts';
-import { isMeal, parseMealResult, PROVISIONAL_BELOW } from './nutrition-parse.ts';
+import { isMeal, parseMealResult, usageSlot, PROVISIONAL_BELOW } from './nutrition-parse.ts';
 import { tickFoodLogOccurrence } from './nutrition.ts';
+import { priceParsedMeal } from './food-pricing.ts';
 import type { MealKind, Macros, NutritionLog } from '@cadence/shared';
 
 export interface MealPhotoReading {
@@ -137,8 +138,17 @@ export async function logMealFromReading(userId: string, input: ReadingLogInput)
     console.warn('[nutrition] parse-meal-description failed — storing UNPARSED and provisional:', parseError);
   }
 
+  // Same ledger pass as the words path (A23 §1a) — a photographed parfait and a spoken one resolve
+  // to the same pinned food, so they cost the same and only get estimated once between them.
+  const ledger = await priceParsedMeal(userId, { items, macros, confidence }, { slot: usageSlot(date, meal) });
+  items = ledger.items;
+  macros = ledger.macros;
+
   const noNumbers = !macros || Object.keys(macros).length === 0;
-  const provisional = parseFailed || noNumbers || (!!macros && confidence !== null && confidence < PROVISIONAL_BELOW);
+  const provisional =
+    parseFailed ||
+    noNumbers ||
+    (!ledger.fully_priced && !!macros && confidence !== null && confidence < PROVISIONAL_BELOW);
 
   const row = await insertNutritionLog(userId, {
     date,

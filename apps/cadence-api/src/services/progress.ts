@@ -26,6 +26,7 @@ import { countGoalCompletions, listGoalEvents } from '../repos/goal-events.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
 import { listNutritionLogs } from '../repos/nutrition.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
+import { paceRead } from './weight-trend.ts';
 import { rollingConsistency } from './metrics.ts';
 
 const WINDOW_DAYS = 90;
@@ -140,6 +141,13 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
         ? weightSeries[weightSeries.length - 1]!.value
         : (baseline.weight_kg?.current ?? null);
       const startKg = baseline.weight_kg?.start ?? (weightSeries.length ? weightSeries[0]!.value : null);
+      // The card leads with the TREND, not this morning's reading (A23 §2c) — computed in kg and
+      // converted last, so the smoothing never happens twice in different units.
+      const pace = paceRead(
+        weightSeries.map((p) => ({ date: p.date, kg: p.value })),
+        latestKg ?? undefined,
+      );
+      const trendKg = pace?.trend_kg ?? null;
       cards.push({
         kind: 'latest_vs_target',
         area: g.area,
@@ -149,6 +157,9 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
         start: startKg !== null && startKg !== undefined ? toUserUnit(startKg) : null,
         target, // targets are stated in the user's own unit at capture time
         series: weightSeries.map((p) => ({ date: p.date, value: toUserUnit(p.value) })),
+        trend: trendKg !== null ? toUserUnit(trendKg) : null,
+        rate_per_week: pace ? toUserUnit(pace.actual_kg_per_week) : null,
+        confidence: pace?.confidence ?? null,
       });
     } else if (g.type === 'target' && typeof target === 'number' && COUNTABLE_UNIT.test(unit)) {
       cards.push({

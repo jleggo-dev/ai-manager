@@ -5,6 +5,7 @@
 
 import { BASE, headers } from './http.ts';
 import type { ApiAvailability } from './foods.ts';
+import type { MealKind } from './nutrition.ts';
 
 export type ResolveCandidateKind = 'food' | 'recipe' | 'new';
 export type ResolveCapturePath = 'estimate' | 'parse-label';
@@ -92,7 +93,9 @@ export function portionHintFromResolve(c: ResolveCandidate): ResolvePortionHint 
 }
 
 /** POST /nutrition/foods/resolve — ranked candidates + optional clear-best preselect. */
-export async function resolveFoods(input: { text?: string; photo?: string } = {}): Promise<ResolveFoodsResult> {
+export async function resolveFoods(
+  input: { text?: string; photo?: string; meal?: MealKind } = {},
+): Promise<ResolveFoodsResult> {
   const text = typeof input.text === 'string' ? input.text.trim() : '';
   const photo = typeof input.photo === 'string' ? input.photo : undefined;
   try {
@@ -102,6 +105,8 @@ export async function resolveFoods(input: { text?: string; photo?: string } = {}
       body: JSON.stringify({
         ...(text ? { text } : {}),
         ...(photo ? { photo } : {}),
+        // Which meal this is for — lets the server rank by the user's weekday/meal rhythm.
+        ...(input.meal ? { meal: input.meal } : {}),
       }),
     });
     if (res.status === 404) {

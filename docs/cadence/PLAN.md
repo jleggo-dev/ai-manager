@@ -2807,6 +2807,62 @@ already lives in Settings. Keep the "Set location for weather" button, which onl
 nothing is stored at all. Open: should the header signal you are away from home, or just say
 Montreal?
 
+**A23. The consistent ledger & the calibrated check-in — PHASES 1-3 SHIPPED 2026-08-22; Phase 4 on demand (owner 2026-08-21)**
+
+The lazy logging paths (voice/text/photo) let `parse-meal` invent macros on every log, so the same
+"venti latte from Starbucks" costs different kcal every day — the owner's trust complaint, and the
+reason the coach can never calibrate targets against the scale. Design doc:
+[`docs/cadence/DESIGN-consistent-ledger.md`](DESIGN-consistent-ledger.md). The principle: **models
+identify and narrate; code resolves, prices, and computes.** Four phases: (1) route parse output
+through `resolveFoods`, pin every LLM estimate as a private food row (variance → at most once per
+user+food), vendor capture ask-once, pg_trgm + day-of-week/meal-slot rhythm ranking so the
+Wednesday parfait preselects; (2) EWMA weight trend + a caller at last for the orphaned
+`weekly_readout` job — weigh-in and check-in become one Sunday moment; (3) implied-maintenance
+calibration in ledger units (consistency > accuracy: bias calibrates out, variance never does),
+upgrading the existing pace controller, guardrails moved from prompt prose to code; (4) USDA
+Branded behind the new ranking, FatSecret live-by-ID for restaurant foods (ToS check first —
+their terms restrict retention; thin reference rows only). Related in-flight: the B12 USDA-map
+gap (spawned 2026-08-21). Supersedes nothing; gives `DESIGN-PROMPT-food-plan.md`'s loop the
+engine and the home it asked for.
+
+**Phase 1a landed 2026-08-22** (`services/food-pricing.ts` + `food-pricing-portion.ts`, wired into
+words / photo-read / preview / confirm; `nutrition-baseline.ts` split out when `nutrition.ts` hit
+the size gate). **Phase 1c landed the same day** — migration 0039 (pg_trgm + GIN indexes +
+`cadence.food_usage_ctx`), trigram `searchFoods`, and a weekday/meal rhythm boost big enough to
+win the pre-select outright, so a Wednesday parfait is one answer rather than a list.
+**⚠ Migration 0039 must be applied to every environment before this code ships** —
+`apply-migration-0039.ts`, additive and idempotent.
+
+**Phase 1b landed the same day**: the three meal prompts hear a per-item `brand`, and the confirm
+card asks for one — once, optionally, never gating the log — about items that matched nothing on
+file. **⚠ `sync-jobs.ts` must be run before the prompts do anything** (deliberately left unsynced
+on this branch; the dry-run shows exactly three jobs updating).
+
+**Phases 2a and 2b landed the same day.** The weight rate is now a least-squares fit over an EWMA
+(one bloated Sunday can no longer read as a stalled month and buy a calorie cut), carrying its own
+confidence so the coach hedges on thin data instead of prescribing. And `weekly_readout` finally
+has a caller: `services/recap.ts` + `POST /plan/recap` + `RecapPanel`, with the weigh-in carried
+inside the check-in so Sunday is one moment rather than two.
+
+**Phase 2c landed the same day**: the progress card leads with the smoothed trend and files
+today's reading underneath, which is what makes an opt-in daily cadence safe to offer at all
+(`baseline.weigh_in_cadence`, weekly by default; `POST /plan/weigh-in` hangs any day's reading off
+the same weigh-in activity, so there is no second store to drift).
+
+**Phase 3 landed the same day**: `energy-balance.ts` computes implied maintenance in ledger units
+(mean intake − 7700 × kg/week ÷ 7) and the target that follows, so the target stopped being a
+model's proposal and became arithmetic. Guardrails moved from prompt prose into code — never below
+85% of maintenance, and ≤300 kcal of cumulative *cuts* per four weeks, because a plateau looks
+exactly like "the deficit is too small". Surfaced in the check-in, suggest-never-auto-apply.
+
+**The engine is built; it needs DATA to speak.** Calibration gates on ~3 weeks of *pinned* ledger
+days plus 3+ weigh-ins spanning a fortnight, and returns a named blocker with progress until then.
+That clock started when 1a landed. Until it fills, `npm run metrics:food-ledger` has nothing to
+compare and the check-in will honestly say "still working it out".
+
+What remains of the original design is **Phase 4** — USDA Branded, FatSecret by-ID, location
+context, embeddings — which stays on demand rather than scheduled.
+
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 
 Hit on device: at the end of onboarding every way of saving the plan answered "you already have an

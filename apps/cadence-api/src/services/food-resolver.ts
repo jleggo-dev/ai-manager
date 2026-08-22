@@ -7,7 +7,14 @@
  * Deterministic ranking first; embeddings / AI disambiguation later.
  */
 import { assessDietarySafety, type DietaryProfile, type Food, type Recipe } from '@cadence/shared';
-import { listFoodUsageRows, listFrequentFoods, listRecentFoods, searchFoods } from '../repos/foods.ts';
+import {
+  listFoodContextRows,
+  listFoodUsageRows,
+  listFrequentFoods,
+  listRecentFoods,
+  searchFoods,
+  type FoodUsageSlot,
+} from '../repos/foods.ts';
 import { listRecipes, searchRecipes } from '../repos/recipes.ts';
 import { getDietaryProfile } from '../repos/users.ts';
 import { enrichFoodsWithUsda } from './food-sources/usda-enrich.ts';
@@ -93,18 +100,28 @@ function mergeFoodPools(pools: Food[][]): Food[] {
   return [...byId.values()];
 }
 
-async function loadRankContext(userId: string): Promise<{ ctx: FoodRankContext; recents: Food[]; frequents: Food[] }> {
-  const [recents, frequents, usageRows] = await Promise.all([
+async function loadRankContext(
+  userId: string,
+  slot?: FoodUsageSlot,
+): Promise<{ ctx: FoodRankContext; recents: Food[]; frequents: Food[] }> {
+  const [recents, frequents, usageRows, ctxRows] = await Promise.all([
     listRecentFoods(userId, USAGE_LIMIT),
     listFrequentFoods(userId, USAGE_LIMIT),
     listFoodUsageRows(userId, USAGE_LIMIT),
+    slot ? listFoodContextRows(userId, slot, USAGE_LIMIT) : Promise.resolve([]),
   ]);
   const useCountById = new Map<string, number>();
   for (const row of usageRows) useCountById.set(row.food_id, Number(row.use_count) || 0);
   const recentRankById = new Map<string, number>();
   recents.forEach((f, i) => recentRankById.set(f.food_id, i));
+  const slotCountById = new Map<string, number>();
+  const mealCountById = new Map<string, number>();
+  for (const row of ctxRows) {
+    slotCountById.set(row.food_id, Number(row.slot_count) || 0);
+    mealCountById.set(row.food_id, Number(row.meal_count) || 0);
+  }
   return {
-    ctx: { userId, useCountById, recentRankById },
+    ctx: { userId, useCountById, recentRankById, slotCountById, mealCountById },
     recents,
     frequents,
   };
@@ -138,29 +155,54 @@ async function loadRecipeCandidates(
 }
 
 /**
+ * Per-user ranking inputs (usage projection + dietary profile) — four queries that do NOT depend
+ * on the query text. Loaded once and shared when resolving several items of one meal (A23 §1a);
+ * `resolveFoods` still loads its own when called for a single lookup.
+ */
+export interface ResolveShared {
+  ctx: FoodRankContext;
+  recents: Food[];
+  frequents: Food[];
+  profile: DietaryProfile | null;
+}
+
+export async function loadResolveShared(userId: string, slot?: FoodUsageSlot): Promise<ResolveShared> {
+  const [{ ctx, recents, frequents }, profile] = await Promise.all([
+    loadRankContext(userId, slot),
+    getDietaryProfile(userId),
+  ]);
+  return { ctx, recents, frequents, profile };
+}
+
+async function poolFor(userId: string, text: string, shared: ResolveShared): Promise<Food[]> {
+  if (!text) return mergeFoodPools([shared.recents, shared.frequents]);
+  const hits = await searchFoods(userId, text, SEARCH_LIMIT);
+  // Cache-miss → USDA whole foods (always cached on import). Local stays first.
+  const withUsda = await enrichFoodsWithUsda(userId, text, hits);
+  // Also consider recents/frequents that may fuzzy-match beyond SQL LIKE.
+  return mergeFoodPools([withUsda, shared.recents, shared.frequents]);
+}
+
+/** Ranked foods WITH their rows — what pricing needs; `resolveFoods` narrows these to candidates. */
+export async function rankedFoodsFor(userId: string, text: string, shared: ResolveShared): Promise<RankedFood[]> {
+  return rankFoods(text, await poolFor(userId, text, shared), shared.ctx);
+}
+
+/**
  * Resolve text (and optional photo hint) into ranked candidates + optional preselect.
  * Always appends a "new food" escape hatch when there is text and/or a photo.
  */
-export async function resolveFoods(userId: string, input: ResolveInput): Promise<ResolveResult> {
+export async function resolveFoods(
+  userId: string,
+  input: ResolveInput,
+  shared?: ResolveShared,
+): Promise<ResolveResult> {
   const text = typeof input.text === 'string' ? input.text.trim() : '';
   const hasPhoto = typeof input.photo === 'string' && input.photo.startsWith('data:image/');
-  const [{ ctx, recents, frequents }, profile] = await Promise.all([
-    loadRankContext(userId),
-    getDietaryProfile(userId),
-  ]);
+  const s = shared ?? (await loadResolveShared(userId));
+  const profile = s.profile;
 
-  let pool: Food[];
-  if (!text) {
-    pool = mergeFoodPools([recents, frequents]);
-  } else {
-    const hits = await searchFoods(userId, text, SEARCH_LIMIT);
-    // Cache-miss → USDA whole foods (always cached on import). Local stays first.
-    const withUsda = await enrichFoodsWithUsda(userId, text, hits);
-    // Also consider recents/frequents that may fuzzy-match beyond SQL LIKE.
-    pool = mergeFoodPools([withUsda, recents, frequents]);
-  }
-
-  const ranked = rankFoods(text, pool, ctx).slice(0, 12);
+  const ranked = (await rankedFoodsFor(userId, text, s)).slice(0, 12);
   const candidates: ResolveCandidate[] = [
     ...ranked.map((r) => toCandidate(r, profile)),
     ...(await loadRecipeCandidates(userId, text, profile)),

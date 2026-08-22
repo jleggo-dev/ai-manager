@@ -16,10 +16,21 @@ export type ProgressCard =
       area: GoalArea;
       title: string;
       unit: string;
+      /** The most recent raw reading. Kept, but no longer the headline — see `trend` (A23 §2c). */
       latest: number | null;
       start: number | null;
       target: number;
       series: SeriesPoint[];
+      /**
+       * The SMOOTHED current value, and what the card leads with. A morning's weight is mostly
+       * water; showing it as the number is what makes stepping on a scale feel like a verdict.
+       * Null until there is enough series to smooth, in which case the raw latest stands in.
+       */
+      trend?: number | null;
+      /** Signed change per week in the same unit — negative is down. */
+      rate_per_week?: number | null;
+      /** How much data is behind the trend, so the UI can hedge rather than assert. */
+      confidence?: 'low' | 'medium' | 'high' | null;
     }
   | { kind: 'count'; area: GoalArea; title: string; goal_id: string; current: number; target: number; unit: string }
   | {

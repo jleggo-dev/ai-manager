@@ -7,7 +7,7 @@ import { getFood, touchFoodUsage } from '../repos/foods.ts';
 import { insertNutritionLog } from '../repos/nutrition.ts';
 import { getRecipe } from '../repos/recipes.ts';
 import { findPendingFoodLogOccurrence, setOccurrenceStatus } from '../repos/occurrences.ts';
-import { isMeal } from './nutrition-parse.ts';
+import { isMeal, usageSlot } from './nutrition-parse.ts';
 import { scaleMacros } from './recipe-macros.ts';
 import { composePlate, type PlateItemInput } from './plate-compose.ts';
 
@@ -74,7 +74,8 @@ export async function logMealFromFood(
   });
 
   try {
-    await touchFoodUsage(userId, food.food_id);
+    // Slot too: logging from the food picker teaches the same rhythm a spoken log does (A23 §1c).
+    await touchFoodUsage(userId, food.food_id, usageSlot(date, meal));
   } catch (e) {
     console.warn('[nutrition] food_usage touch failed:', e);
   }
@@ -138,7 +139,7 @@ export async function logMealFromRecipe(
   for (const ing of recipe.ingredients) {
     if (!ing.food_id) continue;
     try {
-      await touchFoodUsage(userId, ing.food_id);
+      await touchFoodUsage(userId, ing.food_id, usageSlot(date, meal));
     } catch (e) {
       console.warn('[nutrition] food_usage touch (recipe) failed:', e);
     }
@@ -182,7 +183,7 @@ export async function logMealFromItems(
 
   for (const f of foods) {
     try {
-      await touchFoodUsage(userId, f.food_id);
+      await touchFoodUsage(userId, f.food_id, usageSlot(date, meal));
     } catch (e) {
       console.warn('[nutrition] food_usage touch (plate) failed:', e);
     }

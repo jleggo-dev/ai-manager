@@ -962,6 +962,35 @@ html[data-native] #root {
   font-size: 12.5px;
   color: var(--text-dim);
 }
+/* A23 §2c — weigh-in cadence. Two chips and a sentence: the choice is small, and the sentence is
+   what makes it safe to offer (we show the trend, never the morning's number). */
+.set-cadence {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.set-chip {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line-soft);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-mute);
+  cursor: pointer;
+}
+.set-chip-on {
+  border-color: var(--accent, currentColor);
+  color: var(--text);
+  font-weight: 800;
+}
+.set-help {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-mute);
+  margin: 6px 0 0;
+}
 .set-targets-actions {
   display: flex;
   gap: 8px;
@@ -3096,6 +3125,13 @@ textarea.wiz-title {
   color: var(--text-mute);
   margin-top: 2px;
 }
+/* A23 §2c — the trend line under the headline. Quieter than the goal line beneath it: it is
+   context for the big number, not a second fact competing with it. */
+.prog-quiet {
+  opacity: 0.72;
+  font-variant-numeric: tabular-nums;
+}
+
 .prog-trend-row {
   display: flex;
   align-items: center;

@@ -13,8 +13,8 @@ import {
 import { estimateFood, identifyFood, parseNutritionLabel } from '../services/food-capture.ts';
 import { importUsdaFood, searchFoodsWithUsda } from '../services/food-sources/usda-enrich.ts';
 import { isUsdaConfigured, searchUsdaFoods, UsdaConfigError, UsdaHttpError } from '../services/food-sources/usda.ts';
-import { resolveFoods } from '../services/food-resolver.ts';
-import { isMeal } from '../services/nutrition-parse.ts';
+import { loadResolveShared, resolveFoods } from '../services/food-resolver.ts';
+import { isMeal, usageSlot } from '../services/nutrition-parse.ts';
 import { usualAtSlot } from '../services/food-usual-slot.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
 import {
@@ -191,10 +191,17 @@ router.post('/resolve', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
     const body = parseBody(resolveFoodBodySchema, req.body ?? {});
-    const result = await resolveFoods(userId, {
-      text: body.text ?? '',
-      ...(body.photo ? { photo: body.photo } : {}),
-    });
+    // Rhythm ranking (A23 §1c): when the client says which meal this is for, the resolver can put
+    // the food they actually eat in this slot first — the Wednesday parfait, without a search.
+    const shared = await loadResolveShared(userId, usageSlot(new Date().toISOString().slice(0, 10), body.meal));
+    const result = await resolveFoods(
+      userId,
+      {
+        text: body.text ?? '',
+        ...(body.photo ? { photo: body.photo } : {}),
+      },
+      shared,
+    );
     res.json(result);
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });

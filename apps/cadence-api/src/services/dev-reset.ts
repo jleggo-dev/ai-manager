@@ -39,6 +39,7 @@ export const DEV_CHILD_TABLES = [
   'episodes',
   'equipment',
   'food_usage',
+  'food_usage_ctx',
   'goal_events',
   'goals',
   'health_digests',
