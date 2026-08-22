@@ -1,6 +1,7 @@
 # Design — the consistent ledger and the calibrated check-in
 
-**Opened 2026-08-21 (owner + Claude working session). Status: DESIGNED, not built.**
+**Opened 2026-08-21 (owner + Claude working session). Status: Phase 1a SHIPPED 2026-08-22; 1b/1c
+and Phases 2–4 designed, not built.**
 Companion docs: [`DESIGN-BRIEF-nutrition.md`](DESIGN-BRIEF-nutrition.md) (where the food surfaces
 live), [`DESIGN-PROMPT-food-plan.md`](DESIGN-PROMPT-food-plan.md) (the coaching loop that runs
 through them — this doc builds the engine that loop needs). Backlog entry: PLAN.md §12 **A23**.
@@ -82,7 +83,37 @@ should close the loop against the scale is a checkbox.
 
 ## Phase 1 — the deterministic ledger (identify → resolve → pin)
 
-### 1a. Route the parse paths through the resolver
+### 1a. Route the parse paths through the resolver — **SHIPPED 2026-08-22**
+
+What landed, and the decisions taken while building (the spec below is what was designed; these
+are the deltas):
+
+- **`services/food-pricing.ts`** (`priceMealItems`, `priceParsedMeal`) + **pure
+  `food-pricing-portion.ts`** for the portion/pinning arithmetic. `food-resolver.ts` gained
+  `loadResolveShared` / `rankedFoodsFor` so a plate loads ranking context once and resolves its
+  items concurrently.
+- **Four call sites, not two.** Words (`logMeal`) and the photo read (`logMealFromReading`) as
+  planned — plus the two the design missed: `previewMealParse` prices the card **with pinning
+  off** (a preview walked away from leaves no food behind — the photo read's rule), and
+  `logMeal({parsed})` re-prices **server-side** on confirm, because the browser's `MealPreview`
+  wire shape drops `food_id` and the ledger link would otherwise be lost on every Food-tab log.
+  Pricing is deterministic, so the confirmed row still equals the card.
+- **Acceptance is stricter than the UI preselect**: `PRICING_MIN_SCORE = 0.7`, plus the existing
+  margin — a near-tie between strangers goes unpriced, but the user's **own** food wins a tie
+  against a stranger's row (the pinned parfait beating a generic one).
+- **`Macros.source` gained `'ledger'`**; a mixed meal stays `'ai'`. A fully ledger-priced meal is
+  exempt from the `PROVISIONAL_BELOW` gate.
+- **Under-counting guard:** the item sum replaces the model's meal total only when every item
+  carries numbers; otherwise the parse's total stands.
+- **`nutrition.ts` crossed the 500-line gate**, so the Baseline moment + adaptive review moved to
+  `services/nutrition-baseline.ts` — the file Phase 3 grows.
+- **Free quality win:** USDA/OFF matches now carry micronutrients into logged meals, which an AI
+  estimate never could.
+- **Baseline metric run:** `npm run metrics:food-ledger` works, but the dev DB holds 6 logs and
+  **zero repeat groups** — there is no meaningful before-number yet. Re-run it after real
+  on-device use; that is when the trust metric becomes readable.
+
+### 1a as designed
 
 New file `apps/cadence-api/src/services/food-pricing.ts` (new responsibility = new file, per the
 size rule) exporting `priceItems(userId, items, {mealHint})`:

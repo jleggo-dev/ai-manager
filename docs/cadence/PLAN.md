@@ -2807,7 +2807,7 @@ already lives in Settings. Keep the "Set location for weather" button, which onl
 nothing is stored at all. Open: should the header signal you are away from home, or just say
 Montreal?
 
-**A23. The consistent ledger & the calibrated check-in — DESIGNED, not built (owner 2026-08-21)**
+**A23. The consistent ledger & the calibrated check-in — PHASE 1a SHIPPED 2026-08-22, rest designed (owner 2026-08-21)**
 
 The lazy logging paths (voice/text/photo) let `parse-meal` invent macros on every log, so the same
 "venti latte from Starbucks" costs different kcal every day — the owner's trust complaint, and the
@@ -2824,6 +2824,14 @@ Branded behind the new ranking, FatSecret live-by-ID for restaurant foods (ToS c
 their terms restrict retention; thin reference rows only). Related in-flight: the B12 USDA-map
 gap (spawned 2026-08-21). Supersedes nothing; gives `DESIGN-PROMPT-food-plan.md`'s loop the
 engine and the home it asked for.
+
+**Phase 1a landed 2026-08-22** (`services/food-pricing.ts` + `food-pricing-portion.ts`, wired into
+words / photo-read / preview / confirm; `nutrition-baseline.ts` split out when `nutrition.ts` hit
+the size gate). Next, in order: **1c ranking** (pg_trgm + `food_usage_ctx` day-of-week/meal-slot
+boost — the Wednesday-parfait case), **1b vendor capture** (prompt deltas + `sync-jobs.ts` + the
+ask-once question), **2a/2b** (EWMA weight trend, then a caller for `weekly_readout` at last).
+Phase 3 cannot start until ~3 weeks of *pinned* ledger data plus weigh-ins exist — the clock
+started when 1a landed, not when its code is written.
 
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 
