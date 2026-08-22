@@ -270,6 +270,65 @@ d('A23 — the food ledger keeps a price (DB)', () => {
     expect(await ownFoodCount()).toBe(1);
   });
 
+  /**
+   * REGRESSION (2026-08-22, owner-reported). "I listed out a bunch of basic foods in a chat for my
+   * breakfast and it gave me nada back in terms of micronutrients."
+   *
+   * The model was never the problem — a real breakfast logged that morning carried 6, 3, 6, 2, 0
+   * and 6 micronutrients across its items. The confirm card summed FOUR keys into the meal total,
+   * the day sums the meal total, and so the Nutrients screen reported that nothing they ate carried
+   * mineral data. Fixed on both sides: the card sums every key, and the server recomputes the total
+   * from the items regardless, so an old app on a phone gets it without waiting for a rebuild.
+   */
+  it('carries micronutrients from the items onto the meal total', async () => {
+    runJobBySlug.mockResolvedValueOnce({
+      formatted: JSON.stringify({
+        meal: 'breakfast',
+        items: [
+          { name: 'eggs', qty: 2, unit: 'large', est: { kcal: 140, protein_g: 12, iron_mg: 1.8, vitamin_b12_ug: 1.1 } },
+          { name: 'arugula', qty: 1, unit: 'handful', est: { kcal: 5, calcium_mg: 32, vitamin_c_mg: 3.7 } },
+        ],
+        confidence: 0.8,
+        // Exactly what the browser used to post: four keys, no micros.
+        est_macros: { kcal: 145, protein_g: 12 },
+      }),
+    });
+
+    const row = await logMeal(USER, { text: '2 eggs and a handful of arugula', date: today() });
+
+    expect(row.macros?.iron_mg).toBeCloseTo(1.8, 1);
+    expect(row.macros?.vitamin_b12_ug).toBeCloseTo(1.1, 1);
+    expect(row.macros?.calcium_mg).toBeCloseTo(32, 0);
+    expect(row.macros?.vitamin_c_mg).toBeCloseTo(3.7, 1);
+  });
+
+  it('carries them through the confirm path too, even from a four-key client total', async () => {
+    runJobBySlug.mockResolvedValueOnce({
+      formatted: JSON.stringify({
+        meal: 'breakfast',
+        items: [{ name: 'eggs', qty: 2, unit: 'large', est: { kcal: 140, protein_g: 12, iron_mg: 1.8 } }],
+        confidence: 0.8,
+        est_macros: { kcal: 140, protein_g: 12 },
+      }),
+    });
+    const preview = await previewMealParse(USER, '2 eggs');
+
+    const row = await logMeal(USER, {
+      parsed: {
+        meal: preview.meal,
+        items: preview.items.map(({ name, qty, unit, est }) => ({ name, qty, unit, est })),
+        // The old client's total: no micros in it at all.
+        macros: { kcal: 140, protein_g: 12 },
+        confidence: preview.confidence,
+        flags: preview.flags,
+        raw_text: preview.raw_text,
+        date: today(),
+      },
+    });
+
+    expect(row.macros?.iron_mg).toBeCloseTo(1.8, 1);
+  });
+
   it('does not pin anything when the parse itself fails', async () => {
     runJobBySlug.mockResolvedValueOnce({ formatted: 'NOT_JSON{{{' });
     const row = await logMeal(USER, { text: 'oats and berries', date: today() });

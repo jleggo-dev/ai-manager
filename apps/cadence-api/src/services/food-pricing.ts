@@ -248,7 +248,9 @@ export async function priceMealItems(
   const outItems = results.map((r) => r.item);
   return {
     items: outItems,
-    macros: priced.length > 0 ? sumItemNutrients(outItems) : null,
+    // Always the item sum, priced or not: it is the most complete total available here, and the
+    // caller decides whether to prefer it (see priceParsedMeal's under-counting guard).
+    macros: sumItemNutrients(outItems),
     priced_count: priced.length,
     item_count: list.length,
     fully_priced: priced.length === list.length,
@@ -274,9 +276,21 @@ export async function priceParsedMeal(
     pin: opts.pin,
     slot: opts.slot,
   });
-  if (out.priced_count === 0) return { items: out.items, macros: parsed.macros, fully_priced: false };
 
-  const everyItemCounted = out.items.every((i) => i.est && Object.keys(i.est).length > 0);
+  /**
+   * The item sum wins whenever every item carries numbers — even when NOTHING was ledger-priced.
+   *
+   * A meal-level total is only ever as complete as whoever built it, and the browser's confirm card
+   * built one from four keys until 2026-08-22, dropping all eight micronutrients on the way back.
+   * The items had them; the total did not; the day summed the total. Recomputing here fixes that
+   * for any client, which matters because the web and the API ship separately — an old app on
+   * someone's phone gets the fix from the server rather than waiting for a rebuild.
+   */
+  const everyItemCounted = out.items.length > 0 && out.items.every((i) => i.est && Object.keys(i.est).length > 0);
+  if (out.priced_count === 0 && !everyItemCounted) {
+    return { items: out.items, macros: parsed.macros, fully_priced: false };
+  }
+
   const macros = (everyItemCounted ? (out.macros ?? parsed.macros) : (parsed.macros ?? out.macros)) ?? null;
   const fromLedger = out.fully_priced && everyItemCounted;
   return {

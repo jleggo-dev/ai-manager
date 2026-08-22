@@ -283,7 +283,10 @@ describe('priceMealItems — a failure never costs the meal', () => {
     const out = await priceMealItems(USER, [{ name: 'oats', qty: 1, est: { kcal: 300 } }]);
     expect(out.items).toEqual([{ name: 'oats', qty: 1, est: { kcal: 300 } }]);
     expect(out.priced_count).toBe(0);
-    expect(out.macros).toBeNull();
+    // The item sum still stands — a resolver outage costs the LEDGER LINK, never the numbers the
+    // parse already produced. (Before 2026-08-22 this was null, and the meal's micronutrients went
+    // with it.)
+    expect(out.macros).toEqual({ kcal: 300 });
   });
 
   it('returns the parsed items when the context load throws', async () => {

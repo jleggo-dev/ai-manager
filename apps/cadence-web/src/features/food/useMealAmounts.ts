@@ -18,13 +18,38 @@ export interface AmountRow {
   baseQty: number;
 }
 
-const MACRO_KEYS = ['kcal', 'protein_g', 'carbs_g', 'fat_g'] as const;
+/**
+ * EVERY nutrient a meal can carry, not just the four the card draws.
+ *
+ * This summed `kcal/protein/carbs/fat` alone until 2026-08-22, and the total it built is what the
+ * confirm posts — so all eight micronutrients were dropped on the way back, every time, on the
+ * main text-logging path. The model had been returning them per item all along (a logged breakfast
+ * on 2026-08-22 carried 6, 3, 6, 2, 0 and 6 of them across its items) and the day summed the MEAL
+ * total, which had none. Net effect: the Nutrients screen told people nothing they ate carried
+ * mineral data, which was never true.
+ *
+ * The card still DISPLAYS four. What it hands back has to be complete.
+ */
+const SUMMED_KEYS = [
+  'kcal',
+  'protein_g',
+  'carbs_g',
+  'fat_g',
+  'fiber_g',
+  'sodium_mg',
+  'iron_mg',
+  'zinc_mg',
+  'vitamin_c_mg',
+  'calcium_mg',
+  'potassium_mg',
+  'vitamin_b12_ug',
+] as const satisfies ReadonlyArray<keyof MealMacros>;
 
 function sum(rows: AmountRow[]): MealMacros {
   const total: MealMacros = {};
   for (const r of rows) {
     const scaled = scaleMacros(r.est, r.qty == null ? 0 : r.qty / r.baseQty);
-    for (const k of MACRO_KEYS) {
+    for (const k of SUMMED_KEYS) {
       const v = scaled?.[k];
       if (typeof v === 'number') total[k] = (total[k] ?? 0) + v;
     }
