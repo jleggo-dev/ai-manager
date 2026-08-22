@@ -7,7 +7,14 @@
  * Deterministic ranking first; embeddings / AI disambiguation later.
  */
 import { assessDietarySafety, type DietaryProfile, type Food, type Recipe } from '@cadence/shared';
-import { listFoodUsageRows, listFrequentFoods, listRecentFoods, searchFoods } from '../repos/foods.ts';
+import {
+  listFoodContextRows,
+  listFoodUsageRows,
+  listFrequentFoods,
+  listRecentFoods,
+  searchFoods,
+  type FoodUsageSlot,
+} from '../repos/foods.ts';
 import { listRecipes, searchRecipes } from '../repos/recipes.ts';
 import { getDietaryProfile } from '../repos/users.ts';
 import { enrichFoodsWithUsda } from './food-sources/usda-enrich.ts';
@@ -93,18 +100,28 @@ function mergeFoodPools(pools: Food[][]): Food[] {
   return [...byId.values()];
 }
 
-async function loadRankContext(userId: string): Promise<{ ctx: FoodRankContext; recents: Food[]; frequents: Food[] }> {
-  const [recents, frequents, usageRows] = await Promise.all([
+async function loadRankContext(
+  userId: string,
+  slot?: FoodUsageSlot,
+): Promise<{ ctx: FoodRankContext; recents: Food[]; frequents: Food[] }> {
+  const [recents, frequents, usageRows, ctxRows] = await Promise.all([
     listRecentFoods(userId, USAGE_LIMIT),
     listFrequentFoods(userId, USAGE_LIMIT),
     listFoodUsageRows(userId, USAGE_LIMIT),
+    slot ? listFoodContextRows(userId, slot, USAGE_LIMIT) : Promise.resolve([]),
   ]);
   const useCountById = new Map<string, number>();
   for (const row of usageRows) useCountById.set(row.food_id, Number(row.use_count) || 0);
   const recentRankById = new Map<string, number>();
   recents.forEach((f, i) => recentRankById.set(f.food_id, i));
+  const slotCountById = new Map<string, number>();
+  const mealCountById = new Map<string, number>();
+  for (const row of ctxRows) {
+    slotCountById.set(row.food_id, Number(row.slot_count) || 0);
+    mealCountById.set(row.food_id, Number(row.meal_count) || 0);
+  }
   return {
-    ctx: { userId, useCountById, recentRankById },
+    ctx: { userId, useCountById, recentRankById, slotCountById, mealCountById },
     recents,
     frequents,
   };
@@ -149,9 +166,9 @@ export interface ResolveShared {
   profile: DietaryProfile | null;
 }
 
-export async function loadResolveShared(userId: string): Promise<ResolveShared> {
+export async function loadResolveShared(userId: string, slot?: FoodUsageSlot): Promise<ResolveShared> {
   const [{ ctx, recents, frequents }, profile] = await Promise.all([
-    loadRankContext(userId),
+    loadRankContext(userId, slot),
     getDietaryProfile(userId),
   ]);
   return { ctx, recents, frequents, profile };

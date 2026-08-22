@@ -82,7 +82,18 @@ export async function findFoodByFdcId(fdcId: number): Promise<Food | null> {
 }
 
 /**
- * Search own foods + shared DB. Rank: yours first, then usage count, then name.
+ * Search own foods + shared DB (0039: trigram-indexed).
+ *
+ * Substring OR trigram-similar, so word order and small typos still find the row — "greek yogurt"
+ * reaches "Yogurt, Greek, plain", which plain LIKE never did. The `%` operator is the one the GIN
+ * index accelerates (threshold: pg_trgm's 0.3 default); LIKE stays for the short queries where
+ * trigrams are too weak to fire.
+ *
+ * Order here is about RECALL, not final rank — `rankFoods` re-scores whatever comes back — so
+ * similarity leads with a small own-food thumb on the scale, rather than yours-first outright.
+ * That mattered less at a few hundred rows and matters completely at 450k: once USDA Branded
+ * lands, this LIMIT decides what the ranker is even allowed to see.
+ *
  * Empty q returns [] — callers use listRecentFoods / listFrequentFoods for the empty-search UI.
  */
 export async function searchFoods(userId: string, q: string, limit = 20): Promise<Food[]> {
@@ -96,9 +107,16 @@ export async function searchFoods(userId: string, q: string, limit = 20): Promis
     left join cadence.food_usage u
       on u.food_id = f.food_id and u.user_id = ${userId}
     where (f.owner_user_id = ${userId} or f.visibility = 'shared')
-      and (lower(f.name) like ${pattern} or lower(coalesce(f.brand, '')) like ${pattern})
+      and (
+        lower(f.name) like ${pattern}
+        or lower(coalesce(f.brand, '')) like ${pattern}
+        or lower(f.name) % ${query}
+      )
     order by
-      case when f.owner_user_id = ${userId} then 0 else 1 end,
+      greatest(
+        similarity(lower(f.name), ${query}),
+        similarity(lower(coalesce(f.brand, '')), ${query})
+      ) + case when f.owner_user_id = ${userId} then 0.15 else 0 end desc,
       coalesce(u.use_count, 0) desc,
       lower(f.name)
     limit ${capped}`;
@@ -276,17 +294,61 @@ export async function deleteFood(userId: string, foodId: string): Promise<boolea
   return rows.length > 0;
 }
 
+/** When a food was eaten — the weekday/meal slot that teaches the rhythm (0039). */
+export interface FoodUsageSlot {
+  /** 0-6, Sunday-first, from the log's UTC date. */
+  dow: number;
+  meal: string;
+}
+
 /**
  * Bump the per-user usage projection after a confirmed log (teaches recents/frequents).
  * Idempotent upsert.
+ *
+ * With a slot, also bumps the per-weekday/meal histogram — that is what lets Wednesday breakfast
+ * rank the café parfait first without the user searching for it (A23 §1c).
  */
-export async function touchFoodUsage(userId: string, foodId: string): Promise<void> {
+export async function touchFoodUsage(userId: string, foodId: string, slot?: FoodUsageSlot): Promise<void> {
   await sql`
     insert into cadence.food_usage (user_id, food_id, use_count, last_used_at)
     values (${userId}, ${foodId}, 1, now())
     on conflict (user_id, food_id) do update set
       use_count = cadence.food_usage.use_count + 1,
       last_used_at = now()`;
+  if (!slot || !Number.isInteger(slot.dow) || slot.dow < 0 || slot.dow > 6 || !slot.meal) return;
+  await sql`
+    insert into cadence.food_usage_ctx (user_id, food_id, dow, meal, use_count, last_used_at)
+    values (${userId}, ${foodId}, ${slot.dow}, ${slot.meal}, 1, now())
+    on conflict (user_id, food_id, dow, meal) do update set
+      use_count = cadence.food_usage_ctx.use_count + 1,
+      last_used_at = now()`;
+}
+
+export interface FoodContextRow {
+  food_id: string;
+  /** Times eaten in exactly this weekday+meal slot. */
+  slot_count: number;
+  /** Times eaten at this meal on any day — the weaker "you have this for breakfast" signal. */
+  meal_count: number;
+}
+
+/**
+ * The rhythm lookup: how often this user eats each food in THIS slot, and at this meal generally.
+ * One query, both signals, so the ranker can weigh them differently.
+ */
+export async function listFoodContextRows(userId: string, slot: FoodUsageSlot, limit = 40): Promise<FoodContextRow[]> {
+  if (!Number.isInteger(slot.dow) || slot.dow < 0 || slot.dow > 6 || !slot.meal) return [];
+  const capped = Math.min(200, Math.max(1, limit));
+  return sql<FoodContextRow[]>`
+    select
+      food_id,
+      coalesce(sum(use_count) filter (where dow = ${slot.dow} and meal = ${slot.meal}), 0)::int as slot_count,
+      coalesce(sum(use_count) filter (where meal = ${slot.meal}), 0)::int as meal_count
+    from cadence.food_usage_ctx
+    where user_id = ${userId} and (dow = ${slot.dow} or meal = ${slot.meal})
+    group by food_id
+    order by slot_count desc, meal_count desc
+    limit ${capped}`;
 }
 
 /** Per-user usage rows for resolver ranking (use_count + recency). */

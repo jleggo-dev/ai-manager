@@ -2,6 +2,7 @@
  * Zod schemas for Req 5 food CRUD routes (WS1). Fail closed via parseBody.
  */
 import { z } from 'zod';
+import { mealKindSchema } from './body.ts';
 
 const foodNutrientsSchema = z
   .object({
@@ -159,6 +160,8 @@ export const resolveFoodBodySchema = z
   .object({
     text: z.string().max(500).optional(),
     photo: photoDataUrlSchema.optional(),
+    /** Which meal this resolve is for — feeds the weekday/meal rhythm ranking (A23 §1c). */
+    meal: mealKindSchema.optional(),
   })
   .superRefine((val, ctx) => {
     const text = typeof val.text === 'string' ? val.text.trim() : '';
@@ -173,6 +176,7 @@ export const resolveFoodBodySchema = z
   .transform((val) => ({
     text: typeof val.text === 'string' ? val.text.trim() : '',
     photo: val.photo,
+    meal: val.meal,
   }));
 
 /** POST /nutrition/foods/usda/import — cache a USDA food by FDC id. */

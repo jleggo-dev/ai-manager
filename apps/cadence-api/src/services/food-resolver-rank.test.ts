@@ -207,3 +207,69 @@ describe('pickPreselected with dietary safety', () => {
     expect(pickPreselected(candidates)).toBeNull();
   });
 });
+
+/**
+ * A23 §1c — the Wednesday parfait. The owner is in the office one day a week and eats the same
+ * thing from the café next door; a flat recents list buries it under six days of home breakfasts,
+ * so he ends up SEARCHING for a food he has logged twenty times. Rhythm is what deletes that
+ * chore — and it must break ties without ever inventing a match.
+ */
+describe('rhythm ranking (weekday + meal slot)', () => {
+  const parfait = yogurt({ food_id: 'parfait', name: 'Yogurt parfait', brand: 'Materia Prima' });
+  const homeYogurt = yogurt({ food_id: 'home', name: 'Yogurt parfait', brand: null });
+
+  it('lifts the food you eat in THIS slot above an equally-named one', () => {
+    const flat = ctx();
+    expect(scoreFood('yogurt parfait', parfait, flat)).toBe(scoreFood('yogurt parfait', homeYogurt, flat));
+
+    const wednesdayMorning = ctx({
+      slotCountById: new Map([['parfait', 4]]),
+      mealCountById: new Map([
+        ['parfait', 4],
+        ['home', 20],
+      ]),
+    });
+    expect(scoreFood('yogurt parfait', parfait, wednesdayMorning)).toBeGreaterThan(
+      scoreFood('yogurt parfait', homeYogurt, wednesdayMorning),
+    );
+  });
+
+  it('lifts it far enough to win the pre-select outright, not merely to sort first', () => {
+    const wednesdayMorning = ctx({ slotCountById: new Map([['parfait', 4]]) });
+    const ranked = rankFoods('yogurt parfait', [homeYogurt, parfait], wednesdayMorning);
+    expect(ranked[0]?.food.food_id).toBe('parfait');
+    // Clearing PRESELECT_SCORE_MARGIN is what turns a list into one confident answer.
+    expect(ranked[0]!.score - ranked[1]!.score).toBeGreaterThanOrEqual(0.1);
+  });
+
+  it('saturates, so twenty Wednesdays do not outrank the words themselves', () => {
+    const four = scoreFood('yogurt parfait', parfait, ctx({ slotCountById: new Map([['parfait', 4]]) }));
+    const forty = scoreFood('yogurt parfait', parfait, ctx({ slotCountById: new Map([['parfait', 40]]) }));
+    expect(forty).toBe(four);
+  });
+
+  it('never invents a match — rhythm ranks candidates, it does not create them', () => {
+    const heavy = ctx({ slotCountById: new Map([['parfait', 40]]), mealCountById: new Map([['parfait', 40]]) });
+    expect(scoreFood('grilled salmon', parfait, heavy)).toBe(0);
+    expect(rankFoods('grilled salmon', [parfait], heavy)).toEqual([]);
+  });
+
+  it('a weaker meal-only signal still helps, but less than the exact slot', () => {
+    const slot = scoreFood('yogurt parfait', parfait, ctx({ slotCountById: new Map([['parfait', 3]]) }));
+    const mealOnly = scoreFood('yogurt parfait', parfait, ctx({ mealCountById: new Map([['parfait', 3]]) }));
+    const flat = scoreFood('yogurt parfait', parfait, ctx());
+    expect(mealOnly).toBeGreaterThan(flat);
+    expect(slot).toBeGreaterThan(mealOnly);
+  });
+
+  it('orders the empty-query recents list by rhythm too', () => {
+    const ranked = rankFoods('', [homeYogurt, parfait], ctx({ slotCountById: new Map([['parfait', 5]]) }));
+    expect(ranked[0]?.food.food_id).toBe('parfait');
+  });
+
+  it('is inert when there is no rhythm data at all', () => {
+    const before = scoreFood('yogurt parfait', parfait, ctx());
+    const after = scoreFood('yogurt parfait', parfait, ctx({ slotCountById: new Map(), mealCountById: new Map() }));
+    expect(after).toBe(before);
+  });
+});

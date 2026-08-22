@@ -62,6 +62,22 @@ export function parseMealResult(raw: string, explicitMeal?: MealKind): ParsedMea
   return { meal, items, flags, confidence, macros };
 }
 
+/**
+ * The weekday+meal slot a log belongs to — the key the rhythm ranking counts against (A23 §1c).
+ * dow is 0-6 Sunday-first from the UTC date, matching every other Cadence day-stamp, so a meal
+ * cannot land on one weekday here and another one elsewhere. Undefined when there is nothing
+ * usable to count, in which case ranking simply falls back to recency and frequency.
+ */
+export function usageSlot(
+  date: string | undefined,
+  meal: string | undefined,
+): { dow: number; meal: string } | undefined {
+  if (!date || !meal) return undefined;
+  const t = Date.parse(`${date}T00:00:00Z`);
+  if (!Number.isFinite(t)) return undefined;
+  return { dow: new Date(t).getUTCDay(), meal };
+}
+
 /** Deterministic gate: targets are only WORTH proposing for an eating-focused or weight goal. */
 const WEIGHTY_MEASURE = /\b(kg|lbs?|weight)\b/i;
 export function wantsTargets(

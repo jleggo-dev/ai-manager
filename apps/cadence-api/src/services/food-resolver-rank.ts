@@ -10,7 +10,31 @@ export interface FoodRankContext {
   useCountById: ReadonlyMap<string, number>;
   /** food_id → rank in recents list (0 = most recent). */
   recentRankById: ReadonlyMap<string, number>;
+  /** food_id → times eaten in THIS weekday+meal slot (food_usage_ctx). Absent = no rhythm data. */
+  slotCountById?: ReadonlyMap<string, number>;
+  /** food_id → times eaten at this meal on any day. */
+  mealCountById?: ReadonlyMap<string, number>;
   userId: string;
+}
+
+/**
+ * Rhythm weights (A23 §1c). The slot boost is deliberately larger than PRESELECT_SCORE_MARGIN
+ * (0.1) so that a food you reliably eat in this slot can win a tie outright — that is the whole
+ * mechanic: on Wednesday morning the café parfait should be THE answer, not one of five.
+ *
+ * Both saturate fast (3 occurrences) and are capped well under a lexical hit, so rhythm breaks
+ * ties and never invents a match — searching "salmon" must not return your usual oatmeal.
+ */
+export const SLOT_BOOST_MAX = 0.15;
+export const MEAL_BOOST_MAX = 0.05;
+const BOOST_SATURATES_AT = 3;
+
+function rhythmBoost(foodId: string, ctx: FoodRankContext): number {
+  const slot = ctx.slotCountById?.get(foodId) ?? 0;
+  const meal = ctx.mealCountById?.get(foodId) ?? 0;
+  const slotPart = SLOT_BOOST_MAX * Math.min(1, slot / BOOST_SATURATES_AT);
+  const mealPart = MEAL_BOOST_MAX * Math.min(1, meal / BOOST_SATURATES_AT);
+  return slotPart + mealPart;
 }
 
 export interface RankedFood {
@@ -172,12 +196,15 @@ export function scoreFood(query: string, food: Food, ctx: FoodRankContext): numb
     const freqBoost = Math.min(0.08, useCount * 0.005);
     score = recentBoost + freqBoost;
   } else if (lexical <= 0) {
+    // No lexical hit means this is not the food they named, however often they eat it in this
+    // slot. Rhythm ranks candidates; it never creates one.
     return 0;
   }
 
   if (isOwn) score += 0.08;
   if (useCount > 0 && q) score += Math.min(0.12, useCount * 0.015);
   if (recentRank !== undefined && recentRank < 5 && q) score += 0.04;
+  score += rhythmBoost(food.food_id, ctx);
 
   return roundScore(score);
 }

@@ -44,8 +44,8 @@ export interface PlateEntry {
  * top saved food) becomes the draft with its portion prefill; otherwise we estimate a fresh
  * candidate, still confirm-first. Pure API orchestration, no React state, so the hook stays lean.
  */
-async function resolveToDraft(q: string): Promise<{ draft?: FoodDraft; note?: string }> {
-  const r = await resolveFoods({ text: q });
+async function resolveToDraft(q: string, meal?: MealKind): Promise<{ draft?: FoodDraft; note?: string }> {
+  const r = await resolveFoods({ text: q, ...(meal ? { meal } : {}) });
   const best =
     r.status === 'ok'
       ? ((r.preselected?.food_id ? r.preselected : null) ??
@@ -297,7 +297,7 @@ export function useMealCapture(
       }
       const preview = opts2?.forceSingle ? null : await previewIfMealShaped(q, mealKind);
       if (preview) return setMealPreview(preview);
-      const { draft: d, note: n } = await resolveToDraft(q);
+      const { draft: d, note: n } = await resolveToDraft(q, mealKind);
       if (d) setDraft(d);
       else if (n) setNote(n);
     } finally {

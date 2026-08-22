@@ -18,7 +18,7 @@ import {
   type Macros,
   type NutritionLog,
 } from '@cadence/shared';
-import { insertFood, searchFoods, touchFoodUsage } from '../repos/foods.ts';
+import { insertFood, searchFoods, touchFoodUsage, type FoodUsageSlot } from '../repos/foods.ts';
 import { estimateFood } from './food-capture.ts';
 import { priceFood, nutrientsPerBase, type PortionInput } from './food-pricing-portion.ts';
 import { lexicalMatchScore, type RankedFood } from './food-resolver-rank.ts';
@@ -208,14 +208,14 @@ async function priceOne(
 export async function priceMealItems(
   userId: string,
   items: PriceableItem[],
-  opts: { confidence?: number | null; pin?: boolean } = {},
+  opts: { confidence?: number | null; pin?: boolean; slot?: FoodUsageSlot } = {},
 ): Promise<PricingOutcome> {
   const list = items.filter((i) => i && typeof i.name === 'string' && i.name.trim());
   if (list.length === 0) return { items: [], macros: null, priced_count: 0, item_count: 0, fully_priced: false };
 
   let shared: ResolveShared;
   try {
-    shared = await loadResolveShared(userId);
+    shared = await loadResolveShared(userId, opts.slot);
   } catch (e) {
     console.warn('[food-pricing] context load failed — leaving the meal as parsed:', e);
     return {
@@ -238,7 +238,9 @@ export async function priceMealItems(
       .map((r) => r.food_id)
       .filter((id): id is string => !!id)
       .map((id) =>
-        touchFoodUsage(userId, id).catch((e: unknown) => console.warn('[food-pricing] usage touch failed:', e)),
+        touchFoodUsage(userId, id, opts.slot).catch((e: unknown) =>
+          console.warn('[food-pricing] usage touch failed:', e),
+        ),
       ),
   );
 
@@ -262,11 +264,15 @@ export async function priceMealItems(
 export async function priceParsedMeal(
   userId: string,
   parsed: { items: NutritionLog['items']; macros: Macros | null; confidence: number | null },
-  opts: { pin?: boolean } = {},
+  opts: { pin?: boolean; slot?: FoodUsageSlot } = {},
 ): Promise<{ items: NutritionLog['items']; macros: Macros | null; fully_priced: boolean }> {
   if (!parsed.items.length) return { items: parsed.items, macros: parsed.macros, fully_priced: false };
 
-  const out = await priceMealItems(userId, parsed.items, { confidence: parsed.confidence, pin: opts.pin });
+  const out = await priceMealItems(userId, parsed.items, {
+    confidence: parsed.confidence,
+    pin: opts.pin,
+    slot: opts.slot,
+  });
   if (out.priced_count === 0) return { items: out.items, macros: parsed.macros, fully_priced: false };
 
   const everyItemCounted = out.items.every((i) => i.est && Object.keys(i.est).length > 0);

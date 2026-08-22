@@ -94,7 +94,17 @@ describe('priceMealItems — a hit is priced from the ledger', () => {
   it('teaches recents/frequents from what was eaten', async () => {
     vi.mocked(rankedFoodsFor).mockResolvedValue([ranked(food(), 0.95)]);
     await priceMealItems(USER, [{ name: 'greek yogurt' }]);
-    expect(touchFoodUsage).toHaveBeenCalledWith(USER, 'f-1');
+    expect(touchFoodUsage).toHaveBeenCalledWith(USER, 'f-1', undefined);
+  });
+
+  /** The rhythm signal is only learned if the slot reaches both the ranker and the usage write. */
+  it('carries the weekday/meal slot into ranking and into what it teaches', async () => {
+    vi.mocked(rankedFoodsFor).mockResolvedValue([ranked(food(), 0.95)]);
+    const slot = { dow: 3, meal: 'breakfast' };
+    await priceMealItems(USER, [{ name: 'greek yogurt' }], { slot });
+
+    expect(loadResolveShared).toHaveBeenCalledWith(USER, slot);
+    expect(touchFoodUsage).toHaveBeenCalledWith(USER, 'f-1', slot);
   });
 });
 

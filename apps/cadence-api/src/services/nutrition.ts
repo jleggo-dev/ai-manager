@@ -29,7 +29,14 @@ import { putMealPhoto, signMealPhotoUrl, signMealPhotoUrls } from './meal-photos
 import { estimateBurnKcal } from './burn.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
-import { isMeal, parseMealResult, wantsTargets, PROVISIONAL_BELOW, type ParsedMealResult } from './nutrition-parse.ts';
+import {
+  isMeal,
+  parseMealResult,
+  usageSlot,
+  wantsTargets,
+  PROVISIONAL_BELOW,
+  type ParsedMealResult,
+} from './nutrition-parse.ts';
 import { logAi } from './ai-log.ts';
 import { logMealFromFood, logMealFromItems, logMealFromRecipe } from './nutrition-log-saved.ts';
 import type { PlateItemInput } from './plate-compose.ts';
@@ -98,7 +105,7 @@ export async function previewMealParse(
   const ledger = await priceParsedMeal(
     userId,
     { items: shaped.items, macros: shaped.macros, confidence: shaped.confidence },
-    { pin: false },
+    { pin: false, slot: usageSlot(today(), shaped.meal) },
   );
   void logAi(userId, {
     kind: 'parse_meal',
@@ -157,7 +164,11 @@ export async function logMeal(
     // is where the confirmed meal earns its ledger link and pins whatever was new. Deterministic,
     // so the numbers match the card the user tapped — this fills the ledger, it does not overrule
     // them (a correction still lands through correct_log, as `source: 'user'`).
-    const ledger = await priceParsedMeal(userId, { items, macros, confidence: p.confidence });
+    const ledger = await priceParsedMeal(
+      userId,
+      { items, macros, confidence: p.confidence },
+      { slot: usageSlot(date, p.meal) },
+    );
     const provisional =
       !ledger.fully_priced && !!ledger.macros && p.confidence !== null && p.confidence < PROVISIONAL_BELOW;
     const row = await insertNutritionLog(userId, {
@@ -251,7 +262,7 @@ export async function logMeal(
   // The parse said WHAT it was; the ledger says what it costs (A23 §1a). Every item it can match
   // to a saved food is repriced from that food, and every item it cannot is pinned as one — so the
   // same words logged tomorrow produce the same numbers instead of a fresh guess.
-  const ledger = await priceParsedMeal(userId, { items, macros, confidence });
+  const ledger = await priceParsedMeal(userId, { items, macros, confidence }, { slot: usageSlot(date, meal) });
   items = ledger.items;
   macros = ledger.macros;
 
