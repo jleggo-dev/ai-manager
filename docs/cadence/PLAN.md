@@ -2807,6 +2807,24 @@ already lives in Settings. Keep the "Set location for weather" button, which onl
 nothing is stored at all. Open: should the header signal you are away from home, or just say
 Montreal?
 
+**A23. The consistent ledger & the calibrated check-in — DESIGNED, not built (owner 2026-08-21)**
+
+The lazy logging paths (voice/text/photo) let `parse-meal` invent macros on every log, so the same
+"venti latte from Starbucks" costs different kcal every day — the owner's trust complaint, and the
+reason the coach can never calibrate targets against the scale. Design doc:
+[`docs/cadence/DESIGN-consistent-ledger.md`](DESIGN-consistent-ledger.md). The principle: **models
+identify and narrate; code resolves, prices, and computes.** Four phases: (1) route parse output
+through `resolveFoods`, pin every LLM estimate as a private food row (variance → at most once per
+user+food), vendor capture ask-once, pg_trgm + day-of-week/meal-slot rhythm ranking so the
+Wednesday parfait preselects; (2) EWMA weight trend + a caller at last for the orphaned
+`weekly_readout` job — weigh-in and check-in become one Sunday moment; (3) implied-maintenance
+calibration in ledger units (consistency > accuracy: bias calibrates out, variance never does),
+upgrading the existing pace controller, guardrails moved from prompt prose to code; (4) USDA
+Branded behind the new ranking, FatSecret live-by-ID for restaurant foods (ToS check first —
+their terms restrict retention; thin reference rows only). Related in-flight: the B12 USDA-map
+gap (spawned 2026-08-21). Supersedes nothing; gives `DESIGN-PROMPT-food-plan.md`'s loop the
+engine and the home it asked for.
+
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 
 Hit on device: at the end of onboarding every way of saving the plan answered "you already have an
