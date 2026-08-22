@@ -1,3 +1,4 @@
+import { retitleForTarget } from './goal-retitle.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import { listGoals, listGoalsByStatus, updateGoal, setGoalStatus } from '../repos/goals.ts';
@@ -408,15 +409,30 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           return 'No new target number was given, so nothing changed. Ask what it should be.';
         const unit = typeof params.unit === 'string' && params.unit.trim() ? params.unit.trim() : goal.measure?.unit;
         const was = goal.measure?.target;
+        /**
+         * Carry the number in the TITLE with it.
+         *
+         * Retarget wrote `measure.target` and left the title alone, so "Read 100 books this year"
+         * kept saying 100 while the goal aimed at 50 — and the title is what every list, card and
+         * prompt shows. The outcome eval's judge caught it on 2026-08-22 while the deterministic
+         * assert passed, because the assert only checked the number it had just written.
+         *
+         * Rewritten ONLY where the old target appears as a standalone number, so "Read 100 books
+         * this year" becomes "Read 50 books this year" and a title carrying no number, or a
+         * different one, is left exactly as the user wrote it. Their words are theirs; the stale
+         * digit is ours.
+         */
+        const retitled = retitleForTarget(goal.title, was, target);
         await updateGoal(userId, goal.goal_id, {
           measure: { ...goal.measure, target, ...(unit ? { unit } : {}) },
+          ...(retitled ? { title: retitled } : {}),
         });
         await insertGoalEvent(userId, {
           goal_id: goal.goal_id,
           kind: 'note',
           label: `Target changed: ${String(was ?? '?')} → ${target}${unit ? ` ${unit}` : ''}`,
         }).catch(() => null);
-        return `"${goal.title}" now aims at ${target}${unit ? ` ${unit}` : ''} (was ${String(was ?? 'unset')}). Say what changed in one line. Their plan still holds the old sessions — if the new target needs a different week, offer to rebuild.`;
+        return `"${retitled ?? goal.title}" now aims at ${target}${unit ? ` ${unit}` : ''} (was ${String(was ?? 'unset')}). Say what changed in one line. Their plan still holds the old sessions — if the new target needs a different week, offer to rebuild.`;
       }
 
       const date = String(params.date ?? '').trim();
