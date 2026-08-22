@@ -4,7 +4,7 @@
  * what he SAID, and every display path has to convert back. This is the one place that does it.
  */
 import { describe, it, expect } from 'vitest';
-import { displayWeightUnit, formatWeight, LB_PER_KG } from './weight-units.ts';
+import { displayWeightUnit, formatWeight, formatWeightRate, LB_PER_KG } from './weight-units.ts';
 
 describe('displayWeightUnit', () => {
   /** Both spellings are in the data: weigh-in.ts writes 'lbs', older rows carry 'lb'. */
@@ -40,5 +40,26 @@ describe('formatWeight', () => {
     const kg = 73.4;
     const lb = kg * LB_PER_KG;
     expect(Math.abs(lb / LB_PER_KG - kg)).toBeLessThan(0.1);
+  });
+});
+
+describe('formatWeightRate', () => {
+  /**
+   * Two decimals, not one. This string is the evidence `set_macro_targets` adjusts on, and it is
+   * compared against a safe threshold — 0.45 rounded to 0.5 is a different verdict from the one
+   * the numbers support. Reusing formatWeight here quietly did exactly that.
+   */
+  it('keeps the precision a threshold comparison needs', () => {
+    expect(formatWeightRate(0.45, 'kg')).toBe('0.45 kg/wk');
+    expect(formatWeightRate(0.45, 'kg')).not.toBe('0.5 kg/wk');
+  });
+
+  it('converts the rate, not just the label', () => {
+    expect(formatWeightRate(0.45, 'lb')).toBe('0.99 lb/wk');
+  });
+
+  /** A gain and a loss are not the same news, so the sign survives. */
+  it('keeps the sign', () => {
+    expect(formatWeightRate(-0.3, 'kg')).toBe('-0.3 kg/wk');
   });
 });

@@ -34,3 +34,16 @@ export function formatWeight(kg: number, unit: WeightUnit): string {
   const n = unit === 'lb' ? kg * LB_PER_KG : kg;
   return `${Math.round(n * 10) / 10}${unit}`;
 }
+
+/**
+ * A weekly rate of change, in their unit.
+ *
+ * Two decimals rather than `formatWeight`'s one, because a rate is compared against a THRESHOLD:
+ * a safe loss of 0.45 kg/wk rounded to 0.5 is a different verdict from the one the numbers support,
+ * and this string is the evidence `set_macro_targets` adjusts on. The sign is kept — a gain and a
+ * loss are not the same news.
+ */
+export function formatWeightRate(kgPerWeek: number, unit: WeightUnit): string {
+  const n = unit === 'lb' ? kgPerWeek * LB_PER_KG : kgPerWeek;
+  return `${Math.round(n * 100) / 100} ${unit}/wk`;
+}

@@ -278,11 +278,11 @@ describe('retrieval registry — render / rows', () => {
 
   it('get_weight renders body facts in the stored unit', () => {
     expect(RETRIEVAL_FUNCTIONS.get_weight!.render({ current: 82.5, start: 90, unit: 'kg' })).toBe(
-      'Weight: 82.5kg (start 90kg) — talk about weight in kg, it is the unit they gave.',
+      'Weight: 82.5kg (start 90kg)',
     );
     expect(
       RETRIEVAL_FUNCTIONS.get_weight!.render({ current: 88.5, start: null, unit: 'lb', height_cm: 178, age: 41 }),
-    ).toBe('Weight: 195.1lb · Height: 178cm · Age: 41 — talk about weight in lb, it is the unit they gave.');
+    ).toBe('Weight: 195.1lb · Height: 178cm · Age: 41');
   });
 
   const dietary = (profile: Record<string, unknown>, eating_window: unknown = null) => ({ profile, eating_window });

@@ -7,7 +7,13 @@
  * still composes the one `RETRIEVAL_FUNCTIONS` map every caller reads.
  */
 import type { DietaryProfile, EatingWindow, Food, NutritionLog, NutritionSummary, Recipe } from '@cadence/shared';
-import { EMPTY_DIETARY_PROFILE, sanitizeDietaryProfile } from '@cadence/shared';
+import {
+  EMPTY_DIETARY_PROFILE,
+  sanitizeDietaryProfile,
+  displayWeightUnit,
+  formatWeightRate,
+  type WeightUnit,
+} from '@cadence/shared';
 import { getDietaryProfile, getUser } from '../../repos/users.ts';
 import { listWeighInSeries } from '../../repos/occurrences.ts';
 import { getNutritionDay } from '../nutrition.ts';
@@ -274,6 +280,8 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
         targets: targets && Object.keys(targets).length ? targets : null,
         eaten: day.totals,
         left: day.left,
+        // Carried so the render converts rather than instructing her to (see the trend block).
+        unit: displayWeightUnit(user?.baseline?.weight_unit),
         last_reviewed: targets?.last_reviewed ?? null,
         trend:
           actual != null && safe != null
@@ -286,12 +294,20 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
       };
     },
     render(r) {
-      const { targets, eaten, left, last_reviewed, trend } = r as {
+      const {
+        targets,
+        eaten,
+        left,
+        last_reviewed,
+        trend,
+        unit = 'kg',
+      } = r as {
         targets: Record<string, number | string | null> | null;
         eaten: Record<string, number>;
         left: Record<string, number> | null;
         last_reviewed: string | null;
         trend: { actual_kg_per_week: number; safe_kg_per_week: number; pace: string } | null;
+        unit?: WeightUnit;
       };
       const lines: string[] = [];
       if (!targets) {
@@ -314,13 +330,22 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
       }
       if (eaten?.kcal != null) lines.push(`Eaten today: ${Math.round(eaten.kcal)} kcal`);
       if (trend) {
-        // The whole point of the loop: are the targets actually doing what they were set to do?
+        /**
+         * In their unit, converted here.
+         *
+         * This is the read `set_macro_targets` tells her to take BEFORE adjusting — "get_macro_targets
+         * reports the actual weekly weight change against a safe rate" — so a user who thinks in
+         * pounds was being shown the evidence for their own targets in kilos. Same fix as
+         * `get_weight`, same reasoning: hand over a number that is already right rather than a rule
+         * for converting it.
+         */
+        const rate = (kgPerWeek: number) => formatWeightRate(kgPerWeek, unit);
         const verdict =
           trend.pace === 'too_fast'
-            ? `losing ${trend.actual_kg_per_week} kg/wk, FASTER than the safe ${trend.safe_kg_per_week} — the targets are too aggressive`
+            ? `losing ${rate(trend.actual_kg_per_week)}, FASTER than the safe ${rate(trend.safe_kg_per_week)} — the targets are too aggressive`
             : trend.pace === 'too_slow'
-              ? `changing ${trend.actual_kg_per_week} kg/wk, slower than expected — the targets may not be doing the work`
-              : `${trend.actual_kg_per_week} kg/wk, within the safe ${trend.safe_kg_per_week} — on track`;
+              ? `changing ${rate(trend.actual_kg_per_week)}, slower than expected — the targets may not be doing the work`
+              : `${rate(trend.actual_kg_per_week)}, within the safe ${rate(trend.safe_kg_per_week)} — on track`;
         lines.push(`Weight trend: ${verdict}.`);
       }
       return lines.join('\n');

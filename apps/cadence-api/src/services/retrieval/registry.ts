@@ -360,6 +360,12 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
      *  - It printed `kg` unconditionally. He gave his weight in pounds, was told it back in kilos,
      *    and got coached in metric from then on. `baseline.weight_unit` records what he said and
      *    `progress.ts` already honoured it; this path never looked.
+     *
+     *    CONVERTED HERE, NOT EXPLAINED TO HER. The first fix appended "talk about weight in lb, it
+     *    is the unit they gave" — which is a rule to follow, spends tokens on every turn forever,
+     *    and can be got wrong. Owner's correction, and it is the better design: convert at the
+     *    boundary and hand over a number that is already right. The unit is in the string; there
+     *    is nothing left to reason about.
      *  - Height and age were on file and NO tool returned them, so she had to ask for both — the
      *    "never makes you repeat yourself" promise, broken by omission rather than by design. They
      *    come from the same `getUser` call this already makes, so carrying them is free.
@@ -382,9 +388,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
       }
       if (w.height_cm) bits.push(`Height: ${String(w.height_cm)}cm`);
       if (w.age) bits.push(`Age: ${String(w.age)}`);
-      if (!bits.length) return '';
-      // The unit is stated so she echoes it rather than converting on a guess.
-      return `${bits.join(' · ')} — talk about weight in ${unit}, it is the unit they gave.`;
+      return bits.join(' · ');
     },
     rows(r) {
       const w = r as { current?: unknown } | null;

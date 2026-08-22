@@ -119,8 +119,16 @@ describe('the onboarding facts survive a compacted session', () => {
     expect(asKg).toMatch(/88\.5kg/);
   });
 
-  it('says which unit to talk in, so she does not convert on a guess', () => {
-    expect(bodyFacts.render?.({ current: 88.5, unit: 'lb' })).toMatch(/talk about weight in lb/);
+  /**
+   * CONVERTED, NOT EXPLAINED. The first version appended "talk about weight in lb, it is the unit
+   * they gave" — a rule to follow, spent on every turn forever, and one more thing to get wrong.
+   * Owner's correction (2026-08-22): convert at the boundary and hand over a number that is
+   * already right. The unit is in the string; nothing is left to reason about.
+   */
+  it('carries no instruction — the number arrives already correct', () => {
+    const rendered = bodyFacts.render?.({ current: 88.5, unit: 'lb', height_cm: 178, age: 41 });
+    expect(rendered).toBe('Weight: 195.1lb · Height: 178cm · Age: 41');
+    expect(rendered).not.toMatch(/talk about|unit they gave|convert/i);
   });
 
   /** A body fact that is absent must stay absent — not render as a blank or a zero. */
