@@ -8360,3 +8360,48 @@ textarea.wiz-title {
   font-weight: 700;
   color: oklch(60% 0.02 120);
 }
+
+/* ── Units: one segmented control per axis (owner ruling 2026-08-22) ────────────────────────── */
+/* Two values, always. A segmented pair rather than a switch because neither end is "off" —
+   grams is not the absence of ounces, and a toggle would imply one side is the default. */
+.set-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: oklch(95% 0.008 120);
+}
+.set-seg-b {
+  padding: 6px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  color: oklch(46% 0.02 120);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.set-seg-b.on {
+  background: #fff;
+  color: oklch(34% 0.09 152);
+  box-shadow: 0 1px 2px oklch(50% 0.02 120 / 0.16);
+}
+.set-seg-b:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* `.set-row` is a column, built for a tappable row with a label above a sublabel. A unit row is a
+   label beside a control, so it opts into a split layout rather than overriding the base. */
+.set-row.set-row-split {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.set-row.set-row-split .set-row-l {
+  font-size: 12.5px;
+  font-weight: 800;
+}

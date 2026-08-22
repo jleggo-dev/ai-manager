@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../../lib/supabase.ts';
 import { deleteMyData, isDevMode, getDevAccount, resetAccount } from '../../lib/api.ts';
 import { NutritionTargets } from './NutritionTargets.tsx';
+import { UnitSettings } from './UnitSettings.tsx';
 import { DietaryProfileEditor } from './DietaryProfileEditor.tsx';
 import { LocationSettings } from './LocationSettings.tsx';
 import { AppleHealthSettings } from './AppleHealthSettings.tsx';
@@ -97,6 +98,7 @@ export function SettingsSheet({
           <CoachFaceSettings />
 
           <NutritionTargets />
+          <UnitSettings />
 
           <DietaryProfileEditor />
 

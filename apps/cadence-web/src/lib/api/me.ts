@@ -1,3 +1,4 @@
+import type { UnitPrefs } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /** What the plan is being built around, straight from the database — not the coach's account of it. */
@@ -36,4 +37,39 @@ export async function removeConstraint(id: string): Promise<UserConstraint[] | n
   });
   if (!res.ok) return null;
   return ((await res.json()) as { constraints: UserConstraint[] }).constraints ?? [];
+}
+
+export interface UnitsResponse {
+  prefs: UnitPrefs | null;
+  /** What each axis resolves to right now — never re-derive this client-side. */
+  resolved: Record<string, string>;
+}
+
+/**
+ * Display units, per axis. The server owns the precedence (explicit → legacy baseline.weight_unit
+ * → system fallback → metric) and hands back both the raw prefs and the resolved answer, so the
+ * client never re-implements it and the two cannot disagree.
+ */
+export async function getUnits(): Promise<UnitsResponse | null> {
+  try {
+    const res = await fetch(`${BASE}/me/units`, { headers: headers() });
+    if (!res.ok) return null;
+    return (await res.json()) as UnitsResponse;
+  } catch {
+    return null;
+  }
+}
+
+export async function setUnits(patch: Partial<UnitPrefs>): Promise<UnitsResponse | null> {
+  try {
+    const res = await fetch(`${BASE}/me/units`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as UnitsResponse;
+  } catch {
+    return null;
+  }
 }

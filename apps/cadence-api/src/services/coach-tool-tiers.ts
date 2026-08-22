@@ -58,7 +58,18 @@ export const META_TOOL_NAMES = [FIND_TOOLS_NAME, USE_TOOL_NAME] as const;
  * told her `get_weight` was "already in your context every turn" while the floor did not re-send
  * it — a confident refusal pointing at nothing. Keep this list and TURN_FLOOR identical.
  */
-export const TURN_FLOOR_FUNCTIONS = ['get_identity', 'get_constraints', 'get_active_plan', 'get_weight'] as const;
+export const TURN_FLOOR_FUNCTIONS = [
+  'get_identity',
+  'get_constraints',
+  'get_active_plan',
+  'get_weight',
+  // Added 2026-08-22 with get_weight, for the same reason and from the same report: asked to set
+  // targets, she re-asked his weight-loss goal, which he had told her weeks earlier. Objectives are
+  // the spine of a coaching conversation — what someone is working toward is not detail she should
+  // have to go looking for, and a coach who forgets it is the brand promise inverted. One short
+  // line per goal.
+  'get_objectives',
+] as const;
 
 export const DOSSIER_FUNCTIONS = [
   'get_identity',

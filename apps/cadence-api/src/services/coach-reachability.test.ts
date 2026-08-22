@@ -19,6 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import { DOSSIER_FUNCTIONS, TURN_FLOOR_FUNCTIONS, onDemandToolNames, ALWAYS_ACTIONS } from './coach-tool-tiers.ts';
 import { searchTools, COACH_META_TOOLS } from './coach-meta-tools.ts';
+import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 
 const USE_TOOL = COACH_META_TOOLS.use_tool!;
 const FIND_TOOLS = COACH_META_TOOLS.find_tools!;
@@ -77,5 +78,67 @@ describe('the action she never reached', () => {
   /** Always-on actions must not also be reachable through use_tool: two doors, two behaviours. */
   it('and is not duplicated into the on-demand tail', () => {
     expect(onDemandToolNames()).not.toContain('set_macro_targets');
+  });
+});
+
+/**
+ * THE FACTS SHE HAD TO ASK FOR ANYWAY (owner, 2026-08-22, after targets finally got set).
+ *
+ * "Cadence had to re-ask my age, height, weight — even though those were set during on-boarding.
+ * She also had to re-ask me for my weight loss goal, which she had previously."
+ *
+ * Weight had just been fixed. Age and height were a different failure with the same shape and a
+ * worse cause: they were on file and NO tool returned them at all, so there was nothing to reach.
+ * Objectives were reachable but not re-sent, so they survived exactly as long as the session did.
+ *
+ * The brand promise is "never makes you repeat yourself". These are the facts that promise is
+ * about, so they get a gate rather than a note.
+ */
+describe('the onboarding facts survive a compacted session', () => {
+  const bodyFacts = RETRIEVAL_FUNCTIONS.get_weight!;
+
+  it('body facts include height and age, not just weight', () => {
+    const rendered = bodyFacts.render?.({
+      current: 88.5,
+      start: 90,
+      unit: 'kg',
+      height_cm: 178,
+      age: 41,
+    });
+    expect(rendered).toMatch(/Height: 178cm/);
+    expect(rendered).toMatch(/Age: 41/);
+  });
+
+  /** Metric was the visible half of the complaint: he gave pounds and was answered in kilos. */
+  it('reads weight back in the unit the user gave', () => {
+    const asLb = bodyFacts.render?.({ current: 88.5, start: null, unit: 'lb' });
+    expect(asLb).toMatch(/195\.1lb/);
+    expect(asLb).not.toMatch(/kg/);
+
+    const asKg = bodyFacts.render?.({ current: 88.5, start: null, unit: 'kg' });
+    expect(asKg).toMatch(/88\.5kg/);
+  });
+
+  /**
+   * CONVERTED, NOT EXPLAINED. The first version appended "talk about weight in lb, it is the unit
+   * they gave" — a rule to follow, spent on every turn forever, and one more thing to get wrong.
+   * Owner's correction (2026-08-22): convert at the boundary and hand over a number that is
+   * already right. The unit is in the string; nothing is left to reason about.
+   */
+  it('carries no instruction — the number arrives already correct', () => {
+    const rendered = bodyFacts.render?.({ current: 88.5, unit: 'lb', height_cm: 178, age: 41 });
+    expect(rendered).toBe('Weight: 195.1lb · Height: 178cm · Age: 41');
+    expect(rendered).not.toMatch(/talk about|unit they gave|convert/i);
+  });
+
+  /** A body fact that is absent must stay absent — not render as a blank or a zero. */
+  it('omits what is not on file rather than inventing a shape for it', () => {
+    const rendered = bodyFacts.render?.({ current: 88.5, start: null, unit: 'kg', height_cm: null, age: null });
+    expect(rendered).toMatch(/Weight:/);
+    expect(rendered).not.toMatch(/Height|Age|null|undefined/);
+  });
+
+  it('objectives ride every turn — a coach does not ask what you are working toward twice', () => {
+    expect(TURN_FLOOR_FUNCTIONS as readonly string[]).toContain('get_objectives');
   });
 });
