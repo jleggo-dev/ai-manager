@@ -22,3 +22,15 @@ export const homeLocationBodySchema = z
   });
 
 export type HomeLocationBody = z.infer<typeof homeLocationBodySchema>;
+
+/**
+ * POST /me/current-location — where you ARE (A21). Coordinates only, and that is deliberate: this
+ * route exists for a device that has just measured a position it has already dwelt at. A TYPED
+ * city is a statement about where you live, and it keeps going through the home route.
+ */
+export const currentLocationBodySchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lon: z.number().min(-180).max(180),
+});
+
+export type CurrentLocationBody = z.infer<typeof currentLocationBodySchema>;

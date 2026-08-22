@@ -241,10 +241,13 @@ export {
   getHomeLocation,
   saveHomeLocation,
   clearHomeLocation,
+  saveCurrentLocation,
+  clearCurrentLocation,
   browserTimezone,
   getWeather,
   getTodayBrief,
   type HomeLocation,
+  type CurrentLocation,
   type LocationResult,
   type WeatherNow,
 } from './api/location.ts';

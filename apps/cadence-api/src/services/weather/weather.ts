@@ -141,11 +141,32 @@ export async function getWeatherAt(
   }
 }
 
+/** A stored point is only weather-able with real numbers in it — a half-written row must never
+ *  become a confident forecast for the Gulf of Guinea. */
+function usablePoint<T extends { lat: number; lon: number }>(loc: T | null | undefined): T | null {
+  return loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lon) ? loc : null;
+}
+
 /** Weather at the user's persisted home_location (null when missing/unconfigured). */
 export async function getWeatherForUser(userId: string): Promise<WeatherSnapshot | null> {
   const user = await getUser(userId);
-  const loc = user?.home_location;
-  if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lon)) return null;
+  const loc = usablePoint(user?.home_location);
+  if (!loc) return null;
+  return getWeatherAt(loc.lat, loc.lon, user?.timezone);
+}
+
+/**
+ * Weather where the user IS: the transient position when one is set, home otherwise (A21).
+ *
+ * Only the Today header reads this. Planning, the coach's weather facts and notification timing
+ * all keep reading HOME on purpose — the owner commutes 30 km and back most days, and an anchor
+ * that follows him downtown would take every scheduled nudge with it. Falls back rather than
+ * fails: an unusable transient row is treated as if it were not there.
+ */
+export async function getWeatherWhereYouAre(userId: string): Promise<WeatherSnapshot | null> {
+  const user = await getUser(userId);
+  const loc = usablePoint(user?.current_location) ?? usablePoint(user?.home_location);
+  if (!loc) return null;
   return getWeatherAt(loc.lat, loc.lon, user?.timezone);
 }
 

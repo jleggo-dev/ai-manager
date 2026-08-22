@@ -26,10 +26,11 @@ import { wxEmoji, wxLine } from './weatherCopy.ts';
  * shown, and one screen away has been enough to fail review.
  *
  * With no location at all there is no chip and so no door — the header keeps the plain
- * "Set location" prompt in that case, never a fabricated place.
+ * "Set location" prompt in that case, never a fabricated place. That first-run button is the one
+ * control here that sets where you LIVE; the sheet's city says where you ARE (A21).
  */
 export function TrailHeader({ streak, xp, now = new Date() }: { streak: number; xp: number; now?: Date }) {
-  const { weather, city, locating, requestLocation } = useTodayHeader();
+  const { weather, city, locating, requestLocation, setHereNow } = useTodayHeader();
   const head = useRef<HTMLDivElement>(null);
   const night = isNightHour(now.getHours());
   const dark = useSkyTint(head, night);
@@ -84,7 +85,7 @@ export function TrailHeader({ streak, xp, now = new Date() }: { streak: number; 
           weather={wx}
           city={city}
           night={night}
-          onChangeLocation={requestLocation}
+          onHereNow={setHereNow}
           onClose={() => setForecast(false)}
         />
       )}

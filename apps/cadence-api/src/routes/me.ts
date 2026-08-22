@@ -4,24 +4,34 @@ import { requireCadenceUser } from '../auth/middleware.ts';
 import { resetUserData } from '../services/dev-reset.ts';
 import { clearTrace } from '../services/dev-trace.ts';
 import { AimError, purgeUserAiData } from '../ai/aim.ts';
-import { clearHomeLocation, getUser, mergeBaseline, mergeUnitPrefs, setHomeLocation } from '../repos/users.ts';
+import {
+  clearCurrentLocation,
+  clearHomeLocation,
+  getUser,
+  mergeBaseline,
+  mergeUnitPrefs,
+  setCurrentLocation,
+  setHomeLocation,
+} from '../repos/users.ts';
 import {
   geocodeCity,
   reverseGeocode,
-  getWeatherForUser,
+  getWeatherWhereYouAre,
   needsAppleAttribution,
   APPLE_WEATHER_ATTRIBUTION_URL,
 } from '../services/weather/weather.ts';
 import { getDayRecap } from '../services/day-recap.ts';
 import { getNowMenu } from '../services/now-menu.ts';
 import { BodyValidationError, parseBody, unitPrefsBodySchema } from '../validation/body.ts';
-import { homeLocationBodySchema } from '../validation/location.ts';
+import { currentLocationBodySchema, homeLocationBodySchema } from '../validation/location.ts';
 
 const router = Router();
 router.use(requireCadenceUser);
 
 /**
- * GET /me/location — coarse home location + timezone (for Settings + first-run).
+ * GET /me/location — coarse home location + timezone (for Settings + first-run), plus the
+ * transient `current_location` when the user is somewhere else (A21). Two fields because they
+ * answer two different questions: Settings edits where you LIVE, the header draws where you ARE.
  * 200 with nulls when unset — never 404 for a missing preference.
  */
 router.get('/location', async (req: Request, res: Response) => {
@@ -30,6 +40,7 @@ router.get('/location', async (req: Request, res: Response) => {
     const user = await getUser(userId);
     res.json({
       home_location: user?.home_location ?? null,
+      current_location: user?.current_location ?? null,
       timezone: user?.timezone ?? null,
     });
   } catch (err) {
@@ -39,8 +50,8 @@ router.get('/location', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /me/weather — current conditions at the user's home location (+ the city label, when the
- * provider gives one), for the Today header. Deterministic provider data; `available:false` when
+ * GET /me/weather — current conditions where the user IS (+ the city label, when the provider
+ * gives one), for the Today header: the transient position when one is set, home otherwise (A21). Deterministic provider data; `available:false` when
  * there's no location or weather is unconfigured (the header then just shows the greeting — never
  * a fabricated location).
  *
@@ -51,7 +62,7 @@ router.get('/location', async (req: Request, res: Response) => {
 router.get('/weather', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
-    const w = await getWeatherForUser(userId);
+    const w = await getWeatherWhereYouAre(userId);
     if (!w) return void res.json({ available: false });
     res.json({
       available: true,
@@ -123,8 +134,10 @@ router.post('/location', async (req: Request, res: Response) => {
     if (!label) label = (await reverseGeocode(lat, lon)) ?? undefined;
 
     const location = { lat, lon, ...(label ? { label } : {}) };
+    // Setting home is also a statement that you are AT home — any transient position is stale the
+    // moment it is made, and the response says so, so the client drops its copy too.
     await setHomeLocation(userId, location, timezone);
-    res.json({ home_location: location, timezone });
+    res.json({ home_location: location, current_location: null, timezone });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /me/location]', err);
@@ -137,10 +150,43 @@ router.delete('/location', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
     await clearHomeLocation(userId, true);
-    res.json({ home_location: null, timezone: null });
+    res.json({ home_location: null, current_location: null, timezone: null });
   } catch (err) {
     console.error('[DELETE /me/location]', err);
     res.status(500).json({ error: 'failed to clear location' });
+  }
+});
+
+/**
+ * POST /me/current-location — "I am here now" (A21). Coordinates only; the reverse geocode that
+ * names the place is the whole per-call cost, which is why the client dwells for twenty minutes
+ * before it ever reaches this route. Home is untouched: notification anchoring, planning and the
+ * coach keep the point they had.
+ */
+router.post('/current-location', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const { lat, lon } = parseBody(currentLocationBodySchema, req.body);
+    const label = (await reverseGeocode(lat, lon)) ?? undefined;
+    const location = { lat, lon, ...(label ? { label } : {}) };
+    await setCurrentLocation(userId, location);
+    res.json({ current_location: location });
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /me/current-location]', err);
+    res.status(500).json({ error: 'failed to save current location' });
+  }
+});
+
+/** DELETE /me/current-location — home again; the header goes back to the place it can already name. */
+router.delete('/current-location', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    await clearCurrentLocation(userId);
+    res.json({ current_location: null });
+  } catch (err) {
+    console.error('[DELETE /me/current-location]', err);
+    res.status(500).json({ error: 'failed to clear current location' });
   }
 });
 
