@@ -23,6 +23,51 @@ describe('mapUsdaNutrients', () => {
     expect(nutrients.fat_g).toBe(0.3);
     expect(nutrients.zinc_mg).toBe(0.15);
   });
+
+  it('maps vitamin B-12 (FDC id 1178) in µg at 2 decimal places', () => {
+    const nutrients = mapUsdaNutrients([
+      { nutrient: { id: 1178, number: '418', name: 'Vitamin B-12', unitName: 'µg' }, amount: 0.443 },
+      { nutrient: { id: 1246, number: '578', name: 'Vitamin B-12, added', unitName: 'µg' }, amount: 0.9 },
+    ]);
+    // 0.44, not 0.4 — '_ug' must not fall into the '_g' 1dp bucket.
+    expect(nutrients.vitamin_b12_ug).toBe(0.44);
+    // "added" B-12 (1246) is a subset of the 1178 total — never mapped on its own.
+    expect(Object.keys(nutrients)).toEqual(['vitamin_b12_ug']);
+  });
+
+  it('maps a real full-format payload, where nutrient.number is the legacy code and only the id matches', () => {
+    // Trimmed from live GET /v1/food/175167 (salmon, SR Legacy): entry.id is the row id,
+    // nutrient.id the FDC id we key on, nutrient.number the legacy string code.
+    const nutrients = mapUsdaNutrients([
+      {
+        type: 'FoodNutrient',
+        id: 1817900,
+        nutrient: { id: 1008, number: '208', name: 'Energy', rank: 300, unitName: 'kcal' },
+        amount: 208,
+      },
+      {
+        type: 'FoodNutrient',
+        id: 1817879,
+        nutrient: { id: 1062, number: '268', name: 'Energy', rank: 400, unitName: 'kJ' },
+        amount: 870,
+      },
+      {
+        type: 'FoodNutrient',
+        id: 1817943,
+        nutrient: { id: 1003, number: '203', name: 'Protein', rank: 600, unitName: 'g' },
+        amount: 20.42,
+      },
+      {
+        type: 'FoodNutrient',
+        id: 1817905,
+        nutrient: { id: 1178, number: '418', name: 'Vitamin B-12', rank: 7300, unitName: 'µg' },
+        amount: 3.23,
+      },
+    ]);
+    expect(nutrients.kcal).toBe(208);
+    expect(nutrients.protein_g).toBe(20.4);
+    expect(nutrients.vitamin_b12_ug).toBe(3.23);
+  });
 });
 
 describe('mapUsdaPortions', () => {

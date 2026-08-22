@@ -4,7 +4,10 @@
  */
 import type { FoodBaseUnit, FoodNutrients, FoodServing } from '@cadence/shared';
 
-/** USDA nutrient numbers we care about (FoodData Central). */
+/**
+ * FDC nutrient **ids** we care about (`foodNutrients[].nutrient.id`), NOT the legacy
+ * `nutrient.number` codes — live payloads carry both (B12: id 1178, number "418").
+ */
 export const USDA_NUTRIENT_NUMBERS = {
   kcal: 1008,
   protein_g: 1003,
@@ -17,6 +20,8 @@ export const USDA_NUTRIENT_NUMBERS = {
   vitamin_c_mg: 1162,
   calcium_mg: 1087,
   potassium_mg: 1092,
+  // Total B-12 in µg; 1246 ("added") is the fortification subset already inside this total.
+  vitamin_b12_ug: 1178,
 } as const;
 
 export type UsdaNutrientKey = keyof typeof USDA_NUTRIENT_NUMBERS;
@@ -62,10 +67,12 @@ function asString(v: unknown): string | null {
 }
 
 function nutrientNumber(entry: Record<string, unknown>): number | null {
+  // Live FDC payloads always carry the id AND a legacy `number` code ("208" for Energy 1008,
+  // "418" for B-12 1178); our map keys are ids, so the id must win when both are present.
   const nested = asRecord(entry.nutrient);
-  const fromNested = asNumber(nested?.number) ?? asNumber(nested?.id);
+  const fromNested = asNumber(nested?.id) ?? asNumber(nested?.number);
   if (fromNested !== null) return fromNested;
-  return asNumber(entry.nutrientNumber) ?? asNumber(entry.nutrientId);
+  return asNumber(entry.nutrientId) ?? asNumber(entry.nutrientNumber);
 }
 
 function nutrientAmount(entry: Record<string, unknown>): number | null {
@@ -79,7 +86,8 @@ function nutrientUnit(entry: Record<string, unknown>): string {
 }
 
 function roundNutrient(key: UsdaNutrientKey, value: number): number {
-  const places = key === 'kcal' || key.endsWith('_g') ? 1 : 2;
+  // '_ug' also ends with '_g' — micrograms must keep 2dp (B12's whole daily reference is 2.4µg).
+  const places = key === 'kcal' || (key.endsWith('_g') && !key.endsWith('_ug')) ? 1 : 2;
   const f = 10 ** places;
   return Math.round(value * f) / f;
 }
