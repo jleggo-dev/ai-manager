@@ -110,6 +110,25 @@ export const logFromReadingBodySchema = z.object({
     .optional(),
 });
 
+/**
+ * Display units, per axis (owner ruling 2026-08-22).
+ *
+ * Every field optional so a control can set ONE axis without asserting anything about the others —
+ * the route merges. Enums rather than free strings: this is written straight into a jsonb column
+ * that a resolver reads, and an unrecognised value there would silently fall through to the
+ * fallback and look like the user never chose.
+ */
+export const unitPrefsBodySchema = z
+  .object({
+    system: z.enum(['metric', 'imperial']).optional(),
+    body_weight: z.enum(['kg', 'lb']).optional(),
+    height: z.enum(['cm', 'ft_in']).optional(),
+    food_mass: z.enum(['g', 'oz']).optional(),
+    food_volume: z.enum(['ml', 'cup']).optional(),
+    distance: z.enum(['km', 'mi']).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'nothing to update' });
+
 export const logMealBodySchema = z
   .object({
     text: z.string().optional(),

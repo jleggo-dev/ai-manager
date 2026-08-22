@@ -1,9 +1,10 @@
+import { resolveUnit, UNIT_AXES } from '@cadence/shared';
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { resetUserData } from '../services/dev-reset.ts';
 import { clearTrace } from '../services/dev-trace.ts';
 import { AimError, purgeUserAiData } from '../ai/aim.ts';
-import { clearHomeLocation, getUser, mergeBaseline, setHomeLocation } from '../repos/users.ts';
+import { clearHomeLocation, getUser, mergeBaseline, mergeUnitPrefs, setHomeLocation } from '../repos/users.ts';
 import {
   geocodeCity,
   reverseGeocode,
@@ -13,7 +14,7 @@ import {
 } from '../services/weather/weather.ts';
 import { getDayRecap } from '../services/day-recap.ts';
 import { getNowMenu } from '../services/now-menu.ts';
-import { BodyValidationError, parseBody } from '../validation/body.ts';
+import { BodyValidationError, parseBody, unitPrefsBodySchema } from '../validation/body.ts';
 import { homeLocationBodySchema } from '../validation/location.ts';
 
 const router = Router();
@@ -185,6 +186,53 @@ export default router;
  * Which is the right instinct and a bigger point than one bug: **a fact that shapes every plan
  * should be visible to the person it is about, not only to the model.** Equipment already is.
  */
+/**
+ * Display units, per axis.
+ *
+ * Owner, 2026-08-22: pounds for himself, feet and inches for his height, grams for food, cups for
+ * food volume, kilometres for distance. A single metric/imperial switch cannot express that, so
+ * each axis is its own setting over a `system` fallback.
+ *
+ * Returns BOTH the raw preferences and what each axis currently resolves to, because the client
+ * should never re-implement the precedence (explicit → legacy baseline.weight_unit → system →
+ * metric). One resolver, one answer.
+ */
+router.get('/units', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const user = await getUser(userId);
+    const prefs = user?.unit_prefs ?? null;
+    const legacy = user?.baseline?.weight_unit;
+    res.json({
+      prefs,
+      resolved: Object.fromEntries(UNIT_AXES.map((a) => [a, resolveUnit(prefs, a, legacy)])),
+    });
+  } catch (err) {
+    console.error('[GET /me/units]', err);
+    res.status(500).json({ error: 'failed to read units' });
+  }
+});
+
+/** PATCH /me/units — set one axis or several. Merged, so a partial write cannot blank the rest. */
+router.patch('/units', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(unitPrefsBodySchema, req.body);
+    await mergeUnitPrefs(userId, body);
+    const user = await getUser(userId);
+    const prefs = user?.unit_prefs ?? null;
+    const legacy = user?.baseline?.weight_unit;
+    res.json({
+      prefs,
+      resolved: Object.fromEntries(UNIT_AXES.map((a) => [a, resolveUnit(prefs, a, legacy)])),
+    });
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[PATCH /me/units]', err);
+    res.status(500).json({ error: 'failed to save units' });
+  }
+});
+
 router.get('/constraints', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {

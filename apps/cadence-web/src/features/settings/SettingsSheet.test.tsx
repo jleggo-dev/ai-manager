@@ -11,6 +11,10 @@ vi.mock('../../lib/api.ts', () => ({
   resetAccount: (...args: unknown[]) => resetAccount(...args),
   isDevMode: () => isDevMode(),
   getDevAccount: () => 'scratch',
+  // Units panel (2026-08-22): resolves to null here, so it renders nothing and these tests stay
+  // about the Erase gate rather than about units.
+  getUnits: vi.fn().mockResolvedValue(null),
+  setUnits: vi.fn().mockResolvedValue(null),
   setMacroTargets: vi.fn(),
   clearMacroTargets: vi.fn(),
   getDietaryProfile: vi.fn().mockResolvedValue({

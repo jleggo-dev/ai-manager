@@ -12,9 +12,9 @@ import {
   type GoalArea,
   type OccurrenceLog,
   type ProgressCard,
-  displayWeightUnit,
   formatWeight,
   type WeightUnit,
+  resolveUnit,
 } from '@cadence/shared';
 import { getUser } from '../../repos/users.ts';
 import { listGoals, listGoalsByStatus } from '../../repos/goals.ts';
@@ -346,7 +346,9 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
       return {
         current: b.weight_kg?.current ?? null,
         start: b.weight_kg?.start ?? null,
-        unit: displayWeightUnit(b.weight_unit),
+        // Through the resolver, so the Settings control reaches her: an explicit `unit_prefs`
+        // choice wins, then the legacy `baseline.weight_unit`, then the system fallback.
+        unit: resolveUnit(u?.unit_prefs, 'body_weight', b.weight_unit) as WeightUnit,
         height_cm: b.height_cm ?? null,
         age: b.age ?? null,
       };

@@ -10,9 +10,9 @@ import type { DietaryProfile, EatingWindow, Food, NutritionLog, NutritionSummary
 import {
   EMPTY_DIETARY_PROFILE,
   sanitizeDietaryProfile,
-  displayWeightUnit,
   formatWeightRate,
   type WeightUnit,
+  resolveUnit,
 } from '@cadence/shared';
 import { getDietaryProfile, getUser } from '../../repos/users.ts';
 import { listWeighInSeries } from '../../repos/occurrences.ts';
@@ -281,7 +281,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
         eaten: day.totals,
         left: day.left,
         // Carried so the render converts rather than instructing her to (see the trend block).
-        unit: displayWeightUnit(user?.baseline?.weight_unit),
+        unit: resolveUnit(user?.unit_prefs, 'body_weight', user?.baseline?.weight_unit) as WeightUnit,
         last_reviewed: targets?.last_reviewed ?? null,
         trend:
           actual != null && safe != null
