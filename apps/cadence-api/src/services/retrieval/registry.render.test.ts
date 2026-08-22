@@ -266,9 +266,23 @@ describe('retrieval registry — render / rows', () => {
     ).toBe('Equipment: Pegasus (120/500km ok)');
   });
 
+  /**
+   * Body facts, in the user's own unit, with height and age beside them (2026-08-22). It printed
+   * `kg` unconditionally and carried weight alone, so a user who gave pounds was answered in kilos
+   * and asked for his height and age he had already given.
+   */
   it('get_weight omits without current', () => {
     expect(RETRIEVAL_FUNCTIONS.get_weight!.render(null)).toBe('');
-    expect(RETRIEVAL_FUNCTIONS.get_weight!.render({ current: 82.5, start: 90 })).toBe('Weight: 82.5kg (start 90)');
+    expect(RETRIEVAL_FUNCTIONS.get_weight!.render({ current: null, height_cm: null, age: null })).toBe('');
+  });
+
+  it('get_weight renders body facts in the stored unit', () => {
+    expect(RETRIEVAL_FUNCTIONS.get_weight!.render({ current: 82.5, start: 90, unit: 'kg' })).toBe(
+      'Weight: 82.5kg (start 90kg) — talk about weight in kg, it is the unit they gave.',
+    );
+    expect(
+      RETRIEVAL_FUNCTIONS.get_weight!.render({ current: 88.5, start: null, unit: 'lb', height_cm: 178, age: 41 }),
+    ).toBe('Weight: 195.1lb · Height: 178cm · Age: 41 — talk about weight in lb, it is the unit they gave.');
   });
 
   const dietary = (profile: Record<string, unknown>, eating_window: unknown = null) => ({ profile, eating_window });

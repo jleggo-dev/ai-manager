@@ -6,7 +6,16 @@
  * Each function knows how to run, render a compact section, and report a row count for
  * provenance.
  */
-import { budgetNote, sessionBudget, type GoalArea, type OccurrenceLog, type ProgressCard } from '@cadence/shared';
+import {
+  budgetNote,
+  sessionBudget,
+  type GoalArea,
+  type OccurrenceLog,
+  type ProgressCard,
+  displayWeightUnit,
+  formatWeight,
+  type WeightUnit,
+} from '@cadence/shared';
 import { getUser } from '../../repos/users.ts';
 import { listGoals, listGoalsByStatus } from '../../repos/goals.ts';
 import { listEquipment } from '../../repos/equipment.ts';
@@ -321,19 +330,65 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_weight: {
     name: 'get_weight',
     description:
-      "The user's current weight and, when recorded, the weight they started at. Use before any calculation or conversation involving their weight; if it comes back empty, ask them rather than estimating.",
+      "The user's body facts: current weight and, when recorded, the weight they started at, plus height " +
+      'and age when those are on file. Use before any calculation or conversation involving their body — ' +
+      'targets, pacing, load — and read the WEIGHT BACK IN THE UNIT SHOWN, which is the one they use. If a ' +
+      'fact comes back missing, ask them for it rather than estimating.',
     domains: ['baseline'],
     async run(userId) {
       const u = await getUser(userId);
-      return (u?.baseline?.weight_kg ?? null) as { current?: unknown; start?: unknown } | null;
+      const b = (u?.baseline ?? {}) as {
+        weight_kg?: { current?: number; start?: number };
+        weight_unit?: unknown;
+        height_cm?: number;
+        age?: number;
+      };
+      return {
+        current: b.weight_kg?.current ?? null,
+        start: b.weight_kg?.start ?? null,
+        unit: displayWeightUnit(b.weight_unit),
+        height_cm: b.height_cm ?? null,
+        age: b.age ?? null,
+      };
     },
+    /**
+     * In THEIR unit, and with the rest of the body facts beside it.
+     *
+     * Two things were wrong here, both reported by the owner on 2026-08-22 after the first
+     * successful target-setting:
+     *
+     *  - It printed `kg` unconditionally. He gave his weight in pounds, was told it back in kilos,
+     *    and got coached in metric from then on. `baseline.weight_unit` records what he said and
+     *    `progress.ts` already honoured it; this path never looked.
+     *  - Height and age were on file and NO tool returned them, so she had to ask for both — the
+     *    "never makes you repeat yourself" promise, broken by omission rather than by design. They
+     *    come from the same `getUser` call this already makes, so carrying them is free.
+     */
     render(r) {
-      const w = r as { current?: unknown; start?: unknown } | null;
-      if (!w?.current) return '';
-      return `Weight: ${String(w.current)}kg${w.start ? ` (start ${String(w.start)})` : ''}`;
+      const w = r as {
+        current?: number | null;
+        start?: number | null;
+        unit?: WeightUnit;
+        height_cm?: number | null;
+        age?: number | null;
+      } | null;
+      if (!w) return '';
+      const unit = w.unit ?? 'kg';
+      const bits: string[] = [];
+      if (w.current) {
+        bits.push(
+          `Weight: ${formatWeight(w.current, unit)}${w.start ? ` (start ${formatWeight(w.start, unit)})` : ''}`,
+        );
+      }
+      if (w.height_cm) bits.push(`Height: ${String(w.height_cm)}cm`);
+      if (w.age) bits.push(`Age: ${String(w.age)}`);
+      if (!bits.length) return '';
+      // The unit is stated so she echoes it rather than converting on a guess.
+      return `${bits.join(' · ')} — talk about weight in ${unit}, it is the unit they gave.`;
     },
     rows(r) {
-      return r ? 1 : 0;
+      const w = r as { current?: unknown } | null;
+      return w?.current ? 1 : 0;
     },
   },
 

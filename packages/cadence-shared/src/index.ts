@@ -50,3 +50,4 @@ export { coachActivityLine, resolveActivityNames, type CoachActivityFrame } from
 export * from './meal-read-progress.ts';
 export * from './session-prep-progress.ts';
 export * from './meal-plan-items.ts';
+export * from './weight-units.ts';
