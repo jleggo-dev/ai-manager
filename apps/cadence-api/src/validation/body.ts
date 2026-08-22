@@ -349,6 +349,9 @@ const constraintSchema = z.object({
 export const patchBaselineBodySchema = z
   .object({
     constraints: z.array(constraintSchema).optional(),
+    // Explicit despite .passthrough(): this one reaches a jsonb column and then a UI branch, so an
+    // arbitrary string landing in it would be a bug nobody sees until the toggle misbehaves.
+    weigh_in_cadence: z.enum(['weekly', 'daily']).optional(),
   })
   .passthrough()
   .transform((val) => {

@@ -87,6 +87,7 @@ export {
   getOccurrenceDetail,
   logOccurrence,
   recordWeighIn,
+  recordWeighInToday,
   fetchWeeklyRecap,
   type OccurrenceDetail,
   type WeeklyRecap,

@@ -302,6 +302,22 @@ export async function listDoneUserOccurrencesForDay(
 /** The user's weigh-in series (date + kg) over the trailing window — feeds the adaptive-target
  *  weight-trend read. Weigh-ins store `value.weight_kg` on their occurrence (see weigh-in.ts). */
 /**
+ * The user's weigh-in activity, if their plan has one (A23 §2c). Daily weigh-ins hang their
+ * occurrence off this same activity rather than inventing a parallel store, so the series, the
+ * history entry and the trend all keep coming from one place.
+ */
+export async function findWeighInActivity(userId: string): Promise<{ activity_id: string } | null> {
+  const [row] = await sql<Array<{ activity_id: string }>>`
+    select a.activity_id
+    from cadence.activities a
+    join cadence.plans p on p.plan_id = a.plan_id
+    where a.user_id = ${userId} and a.kind = 'system' and a.title ~* 'weigh'
+    order by (p.status = 'active') desc
+    limit 1`;
+  return row ?? null;
+}
+
+/**
  * This week's weigh-in row, so the check-in can carry it (A23 §2b). Its own query because
  * `listOccurrences` deliberately omits the activity title, and the week view has no use for it.
  * Prefers a still-pending row, else the most recent one in the window.

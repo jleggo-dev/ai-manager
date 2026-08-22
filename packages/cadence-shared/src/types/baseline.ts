@@ -221,6 +221,13 @@ export interface Baseline {
   days_per_week?: number;
   weight_kg?: WeightTrend; // canonical store (kg); the UOM the user prefers is weight_unit
   weight_unit?: 'kg' | 'lbs';
+  /**
+   * How often they want to step on the scale (A23 §2c). Weekly is the default and always will be;
+   * daily is OPT-IN because a daily number is genuinely hard for some people. It is safe to offer
+   * only because the app shows the smoothed TREND rather than the morning's reading — more data
+   * makes the trend converge faster without making the user live with the noise.
+   */
+  weigh_in_cadence?: 'weekly' | 'daily';
   height_unit?: 'cm' | 'ft'; // canonical store is always height_cm; this is the display UOM
   /** Unified "what we work around" list — replaces the old injuries[] + free-text constraints[]. */
   constraints: Constraint[];

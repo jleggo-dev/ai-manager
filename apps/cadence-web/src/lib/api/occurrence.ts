@@ -85,3 +85,17 @@ export async function fetchWeeklyRecap(): Promise<WeeklyRecap> {
   if (!res.ok) throw Object.assign(new Error(`recap failed: ${res.status}`), { status: res.status });
   return res.json();
 }
+
+/**
+ * Today's weight, on any day (A23 §2c) — the daily-cadence path. 404 means their plan has no
+ * weigh-in to hang it off, which is a real answer rather than an error to swallow.
+ */
+export async function recordWeighInToday(weight: number, unit: 'kg' | 'lb'): Promise<{ weight_kg: number }> {
+  const res = await fetch(`${BASE}/plan/weigh-in`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ weight, unit }),
+  });
+  if (!res.ok) throw Object.assign(new Error(`weigh-in failed: ${res.status}`), { status: res.status });
+  return res.json();
+}

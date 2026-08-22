@@ -9,7 +9,7 @@ import { logOccurrence } from '../services/session-log.ts';
 import { logAdhocActivity, logPlannedActivity } from '../services/adhoc-log.ts';
 import { enterEpisode, endEpisode, reviseEpisodeEquipment, postponeEpisodeStart } from '../services/episode.ts';
 import { equipmentFromGymPhotos } from '../services/gym-photo.ts';
-import { recordWeighIn } from '../services/weigh-in.ts';
+import { recordWeighIn, recordWeighInToday } from '../services/weigh-in.ts';
 import { getWeeklyRecap } from '../services/recap.ts';
 import { getSessionInsight } from '../services/session-insight.ts';
 import { setPendingProposal, setPendingPlan, getUser } from '../repos/users.ts';
@@ -379,6 +379,27 @@ router.post('/occurrences/:id/weigh-in', async (req: Request, res: Response) => 
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/occurrences/:id/weigh-in]', err);
+    res.status(500).json({ error: 'weigh-in failed' });
+  }
+});
+
+/**
+ * POST /plan/weigh-in — today's weight, on any day (A23 §2c).
+ *
+ * The occurrence-scoped route above is for the scheduled weigh-in; this one is for someone who
+ * has opted into weighing daily. Same validation, same series, same history — it just gets today's
+ * occurrence created for it. 404 when their plan has no weigh-in to hang it off.
+ */
+router.post('/weigh-in', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const { weight, unit } = parseBody(weighInBodySchema, req.body);
+    const r = await recordWeighInToday(userId, weight, unit);
+    if (!r) return void res.status(404).json({ error: 'no weigh-in on your plan (or implausible weight)' });
+    res.json(r);
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /plan/weigh-in]', err);
     res.status(500).json({ error: 'weigh-in failed' });
   }
 });

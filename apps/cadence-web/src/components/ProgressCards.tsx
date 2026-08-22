@@ -116,6 +116,32 @@ function MeasuredCard({
   const startCopy =
     c.start !== null ? `started ${c.start}` : variant === 'dashboard' ? 'no start yet' : 'no starting point yet';
 
+  /**
+   * A23 §2c — the headline is the TREND, and today's reading is a footnote to it.
+   *
+   * The card used to lead with the latest raw number, which is mostly water and mostly noise: the
+   * morning after a salty dinner reads as a week undone. Leading with the smoothed value is what
+   * makes a daily weigh-in survivable — count what happened, never what broke. Falls back to the
+   * raw reading only while there is too little series to smooth.
+   */
+  const headline = c.trend ?? c.latest;
+  const showsTrend = c.trend != null;
+  const rate = c.rate_per_week;
+  const rateCopy =
+    showsTrend && rate != null && Math.abs(rate) >= 0.05
+      ? `${rate < 0 ? '↓' : '↑'} ${Math.abs(rate)} ${c.unit}/wk`
+      : showsTrend
+        ? 'holding steady'
+        : '';
+  const trendSub = [
+    showsTrend ? 'trend' : '',
+    rateCopy,
+    c.confidence === 'low' && showsTrend ? 'early days' : '',
+    c.latest != null && showsTrend ? `today ${c.latest}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   if (variant === 'dashboard') {
     return (
       <div className="prog-card">
@@ -123,9 +149,10 @@ function MeasuredCard({
         <div className="prog-trend-row">
           <div>
             <div className="prog-big">
-              {c.latest ?? '—'} <span className="prog-unit">{c.unit}</span>{' '}
+              {headline ?? '—'} <span className="prog-unit">{c.unit}</span>{' '}
               {dir && <span className="prog-dir">{dir}</span>}
             </div>
+            {trendSub && <div className="prog-sub prog-quiet">{trendSub}</div>}
             <div className="prog-sub">
               {startCopy} · target {c.target}
             </div>
@@ -140,8 +167,9 @@ function MeasuredCard({
     <div className="prog-card">
       <div className="prog-title">{c.title}</div>
       <div className="prog-big">
-        {c.latest ?? '—'} <span className="prog-unit">{c.unit}</span> {dir && <span className="prog-dir">{dir}</span>}
+        {headline ?? '—'} <span className="prog-unit">{c.unit}</span> {dir && <span className="prog-dir">{dir}</span>}
       </div>
+      {trendSub && <div className="prog-sub prog-quiet">{trendSub}</div>}
       <div className="prog-sub">
         {startCopy} · target {c.target}
       </div>
