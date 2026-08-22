@@ -2807,7 +2807,7 @@ already lives in Settings. Keep the "Set location for weather" button, which onl
 nothing is stored at all. Open: should the header signal you are away from home, or just say
 Montreal?
 
-**A23. The consistent ledger & the calibrated check-in — PHASE 1 COMPLETE 2026-08-22, Phases 2-4 designed (owner 2026-08-21)**
+**A23. The consistent ledger & the calibrated check-in — PHASE 1 + 2a/2b SHIPPED 2026-08-22; 2c, 3, 4 designed (owner 2026-08-21)**
 
 The lazy logging paths (voice/text/photo) let `parse-meal` invent macros on every log, so the same
 "venti latte from Starbucks" costs different kcal every day — the owner's trust complaint, and the
@@ -2838,9 +2838,15 @@ card asks for one — once, optionally, never gating the log — about items tha
 file. **⚠ `sync-jobs.ts` must be run before the prompts do anything** (deliberately left unsynced
 on this branch; the dry-run shows exactly three jobs updating).
 
-Next: **2a/2b** — EWMA weight trend, then a caller for `weekly_readout` at last, merging the
-weigh-in into the check-in. Phase 3 cannot start until ~3 weeks of *pinned* ledger data plus
-weigh-ins exist — the clock started when 1a landed, not when its code is written.
+**Phases 2a and 2b landed the same day.** The weight rate is now a least-squares fit over an EWMA
+(one bloated Sunday can no longer read as a stalled month and buy a calorie cut), carrying its own
+confidence so the coach hedges on thin data instead of prescribing. And `weekly_readout` finally
+has a caller: `services/recap.ts` + `POST /plan/recap` + `RecapPanel`, with the weigh-in carried
+inside the check-in so Sunday is one moment rather than two.
+
+Next: **2c** (daily weigh-in opt-in, trend-first display), then **Phase 3** — which cannot start
+until ~3 weeks of *pinned* ledger data plus weigh-ins exist. That clock started when 1a landed, not
+when Phase 3's code is written.
 
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 

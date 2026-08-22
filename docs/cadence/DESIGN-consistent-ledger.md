@@ -1,7 +1,7 @@
 # Design — the consistent ledger and the calibrated check-in
 
-**Opened 2026-08-21 (owner + Claude working session). Status: PHASE 1 COMPLETE — 1a, 1b and 1c all
-SHIPPED 2026-08-22. Phases 2–4 designed, not built.**
+**Opened 2026-08-21 (owner + Claude working session). Status: PHASE 1 COMPLETE (1a, 1b, 1c) and
+PHASE 2a/2b SHIPPED, all 2026-08-22. Remaining: 2c (daily weigh-in opt-in), Phase 3, Phase 4.**
 
 > **Two deploy steps, both required.** (1) `node --import tsx apps/cadence-api/scripts/sync-jobs.ts`
 > — the three meal prompts now ask for a per-item `brand` and are inert until synced (dry-run shows
@@ -274,7 +274,19 @@ escape hatch.
 
 ## Phase 2 — the check-in becomes real (parallel with Phase 1)
 
-### 2a. A trend, not a slope
+### 2a. A trend, not a slope — **SHIPPED 2026-08-22**
+
+- `smoothedSeries` (EWMA, weighted by **elapsed days** so weekly and daily cadences are
+  comparable), `trendWeightKg`, `smoothedWeeklyRate` (least-squares fit over the smoothed series
+  inside a 28-day window), and `trendConfidence`.
+- **`paceRead(points, currentKg)`** is the composed read both callers now use — rate, safe rate,
+  verdict, **confidence**, and the trend weight. `nutrition-baseline.ts` and the coach's
+  `get_macro_targets` both migrated; the coach's render now hedges out loud on a thin series.
+- **Falls back to `actualWeeklyRate` rather than going silent** on thin data — switching the
+  adaptive loop off for anyone with two weigh-ins would be worse than labelling it low-confidence.
+  `actualWeeklyRate` is kept and marked deprecated for exactly that.
+
+### 2a as designed
 
 `services/weight-trend.ts` stays pure/no-clock and gains:
 
@@ -288,7 +300,24 @@ escape hatch.
 Week-over-week the coach reads little into it (water weight is a known variable — the owner's
 words); month-over-month the slope is the signal. The EWMA makes that stance mechanical.
 
-### 2b. The recap assembler — a caller for the orphaned job, at last
+### 2b. The recap — **SHIPPED 2026-08-22**
+
+- **`services/recap.ts`**: `buildRecapFacts` (pure SQL + arithmetic, no AI) and `getWeeklyRecap`
+  (facts + narration). `POST /plan/recap`. `RecapPanel.tsx` mounted from `OccurrenceSheet` via a
+  shared `isWeeklyCheckin` matcher, so the sheet and `notify/local-plan.ts` cannot disagree about
+  which row is the check-in.
+- **The figures render without the narration.** A failed coach call returns `note: ''` and the
+  panel shows the week anyway — the same rule the photo path learned on 2026-08-20.
+- **`days_logged` and `days_counted` are reported separately** (4 logged, 3 with numbers we trust).
+  They were one field until a test caught the average dividing by a different set than the count it
+  sat beside — an invitation to multiply the wrong pair. The model-facing payload spells it out as
+  `avg_is_over_days`.
+- **The weigh-in rides along**: when the week's weigh-in is still pending the panel leads with the
+  scale. `findWeighInOccurrence` is its own query because `listOccurrences` deliberately omits the
+  activity title. This answers `DESIGN-PROMPT-food-plan.md`'s closing question.
+- `AiLogKind` gained `weekly_readout`, so the check-in is auditable like every other AI call.
+
+### 2b as designed
 
 New `apps/cadence-api/src/services/recap.ts`, pure assembly in app code:
 
