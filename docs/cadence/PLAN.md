@@ -2807,7 +2807,7 @@ already lives in Settings. Keep the "Set location for weather" button, which onl
 nothing is stored at all. Open: should the header signal you are away from home, or just say
 Montreal?
 
-**A23. The consistent ledger & the calibrated check-in — PHASE 1 + 2a/2b SHIPPED 2026-08-22; 2c, 3, 4 designed (owner 2026-08-21)**
+**A23. The consistent ledger & the calibrated check-in — PHASES 1 + 2 COMPLETE 2026-08-22; Phases 3-4 designed (owner 2026-08-21)**
 
 The lazy logging paths (voice/text/photo) let `parse-meal` invent macros on every log, so the same
 "venti latte from Starbucks" costs different kcal every day — the owner's trust complaint, and the
@@ -2844,9 +2844,15 @@ confidence so the coach hedges on thin data instead of prescribing. And `weekly_
 has a caller: `services/recap.ts` + `POST /plan/recap` + `RecapPanel`, with the weigh-in carried
 inside the check-in so Sunday is one moment rather than two.
 
-Next: **2c** (daily weigh-in opt-in, trend-first display), then **Phase 3** — which cannot start
-until ~3 weeks of *pinned* ledger data plus weigh-ins exist. That clock started when 1a landed, not
-when Phase 3's code is written.
+**Phase 2c landed the same day**: the progress card leads with the smoothed trend and files
+today's reading underneath, which is what makes an opt-in daily cadence safe to offer at all
+(`baseline.weigh_in_cadence`, weekly by default; `POST /plan/weigh-in` hangs any day's reading off
+the same weigh-in activity, so there is no second store to drift).
+
+**Phases 1 and 2 are complete.** Next is **Phase 3** — implied-maintenance calibration in ledger
+units — which cannot start until ~3 weeks of *pinned* ledger data plus weigh-ins exist. That clock
+started when 1a landed, not when Phase 3's code is written. Phase 4 (USDA Branded, FatSecret,
+location context, embeddings) stays on demand.
 
 **A4. Claiming an anonymous run into an account that already exists — NEEDS DESIGN (2026-08-10)**
 

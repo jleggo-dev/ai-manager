@@ -1,7 +1,7 @@
 # Design — the consistent ledger and the calibrated check-in
 
-**Opened 2026-08-21 (owner + Claude working session). Status: PHASE 1 COMPLETE (1a, 1b, 1c) and
-PHASE 2a/2b SHIPPED, all 2026-08-22. Remaining: 2c (daily weigh-in opt-in), Phase 3, Phase 4.**
+**Opened 2026-08-21 (owner + Claude working session). Status: PHASES 1 AND 2 COMPLETE — 1a, 1b, 1c,
+2a, 2b, 2c all SHIPPED 2026-08-22. Remaining: Phase 3 (calibration), Phase 4 (coverage).**
 
 > **Two deploy steps, both required.** (1) `node --import tsx apps/cadence-api/scripts/sync-jobs.ts`
 > — the three meal prompts now ask for a per-item `brand` and are inert until synced (dry-run shows
@@ -342,7 +342,26 @@ the week's weigh-in hasn't happened, the recap panel *leads* with the `WeighInPa
 shows the readout. Weigh-in 08:00 and check-in 20:00 collapse into one two-way moment: report,
 then ask how the week went.
 
-### 2c. Daily weigh-ins: opt-in, and the user never sees today's number
+### 2c. Daily weigh-ins — **SHIPPED 2026-08-22**
+
+- **The display rule landed first, because it is what makes the offer safe.** `ProgressCard`
+  (`latest_vs_target`) gained `trend`, `rate_per_week` and `confidence`; `MeasuredCard` leads with
+  the smoothed value and files today's raw reading underneath as a footnote ("trend · ↓ 0.4 kg/wk ·
+  today 88.9"), with "early days" when the series is thin. It falls back to the raw reading only
+  while there is too little to smooth.
+- **`baseline.weigh_in_cadence: 'weekly' | 'daily'`**, weekly by default and staying that way.
+  Validated explicitly rather than riding `.passthrough()` into a jsonb column.
+- **`POST /plan/weigh-in`** logs a weight on any day by hanging today's occurrence off the SAME
+  weigh-in activity (`findWeighInActivity` + the existing `getOrInsertOccurrenceId`). One series,
+  one history, one trend — the design's "no parallel store" made mechanical. Twice in a day
+  corrects rather than duplicates, because it is one occurrence per day.
+- **No prompt change and no extra plan tasks.** The planner still schedules exactly one weigh-in a
+  week; daily just opens somewhere to enter a number between them. A plan with no weigh-in returns
+  404 and the UI says why rather than rendering an error.
+- `WeighInSettings.tsx` in the settings sheet carries the copy that makes the choice safe, and is
+  careful not to imply weekly is the lesser answer.
+
+### 2c as designed
 
 Opt-in setting (alongside `notification_prefs`); the plan synthesizer keeps scheduling weekly by
 default. The display rule does the mental-health work: **the headline is always the smoothed
