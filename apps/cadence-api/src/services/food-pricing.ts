@@ -27,6 +27,7 @@ import { loadResolveShared, rankedFoodsFor, type ResolveShared } from './food-re
 import { PRESELECT_SCORE_MARGIN } from './food-resolver-types.ts';
 import { MACRO_KEYS } from './nutrition-day.ts';
 import { foodIsGoodEnough } from './food-sources/completeness.ts';
+import { researchFood, shouldResearchItem, type ResearchedFood } from './food-research.ts';
 
 /**
  * A ledger price is applied without anyone tapping it, so the bar sits above the UI's preselect:
@@ -112,8 +113,30 @@ async function findOwnDuplicate(userId: string, name: string, brand: string | nu
  * Pin one unpriceable item as a private food. Prefers the estimate the parse already made (free);
  * falls back to `estimate-food` only when the parse produced no numbers for it.
  */
-async function pinItem(userId: string, item: PriceableItem, confidence: number | null): Promise<Food | null> {
+async function pinItem(
+  userId: string,
+  item: PriceableItem,
+  confidence: number | null,
+  researched?: ResearchedFood | null,
+): Promise<Food | null> {
   const brand = item.brand?.trim() || null;
+
+  // A researched food pins with its REAL shape — the label's own serving and per-100 basis —
+  // rather than arithmetic reconstructed from one portion. Same numbers, better row.
+  if (researched) {
+    const r = researched.food;
+    return insertFood(userId, {
+      name: r.name,
+      brand: r.brand ?? brand,
+      source: 'research',
+      visibility: 'private',
+      confidence: r.confidence,
+      base_unit: r.base_unit,
+      macros_per_base: r.macros_per_base ?? {},
+      servings: r.servings,
+      default_serving: r.default_serving,
+    });
+  }
 
   if (item.est && Object.keys(item.est).length > 0) {
     const shape = nutrientsPerBase(item.est, portionOf(item));
@@ -121,7 +144,9 @@ async function pinItem(userId: string, item: PriceableItem, confidence: number |
       return insertFood(userId, {
         name: item.name,
         brand,
-        source: 'llm',
+        // The marker on a card that came back from preview: those numbers were researched, and
+        // the row should say so even though the transient shape did not survive the round trip.
+        source: item.est.source === 'research' ? 'research' : 'llm',
         visibility: 'private',
         confidence,
         ...shape,
@@ -215,6 +240,19 @@ async function priceOne(
   }
 
   /**
+   * The web-grounded rung — dearest of all (seconds of a person's attention), so it is last, and
+   * it fires only for a VENDOR-NAMED food that every deterministic source missed. It runs at
+   * PREVIEW so the card shows the numbers being confirmed — numbers that changed after a confirm
+   * would break confirm-first — and the `est.source === 'research'` marker rides the card back to
+   * the log call so the question is never asked twice. A23 is what makes an unstable source
+   * usable at all: asked once, pinned forever.
+   */
+  let researched: ResearchedFood | null = null;
+  if (!food && shouldResearchItem(item)) {
+    researched = await researchFood(userId, item);
+  }
+
+  /**
    * Pinning is for when there is NO food, never for when the one we have is thin.
    *
    * Gating this on completeness looked consistent and broke the ledger's central promise: a pinned
@@ -228,7 +266,7 @@ async function priceOne(
    */
   if (!food && pin) {
     try {
-      food = await pinItem(userId, item, confidence);
+      food = await pinItem(userId, item, confidence, researched);
     } catch (e) {
       // A pin that fails costs consistency, never the meal: the parse's own numbers stand. Any
       // incomplete match we already had keeps its id, so the item stays linked to a real row.
@@ -236,7 +274,15 @@ async function priceOne(
       return { item: bare, priced: false, food_id: food?.food_id ?? null };
     }
   }
-  if (!food) return { item: bare, priced: false, food_id: null };
+  if (!food) {
+    if (researched) {
+      const est = priceFood(researched.food, portion);
+      if (Object.keys(est).length > 0) {
+        return { item: { ...bare, est: { ...est, source: 'research' } }, priced: false, food_id: null };
+      }
+    }
+    return { item: bare, priced: false, food_id: null };
+  }
 
   const est = priceFood(food, portion);
   if (Object.keys(est).length === 0) return { item: bare, priced: false, food_id: food.food_id };

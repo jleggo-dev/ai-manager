@@ -72,6 +72,7 @@ vi.mock('../config.ts', () => ({
 }));
 
 import {
+  __setAimTestGuard,
   withAim,
   runJob,
   runJobBySlug,
@@ -101,6 +102,9 @@ function lastAuthArg() {
   const calls = core.runWithAuth.mock.calls;
   return calls[calls.length - 1]?.[0];
 }
+
+// This suite tests aim.ts itself with the ENGINE mocked — the guard's one legitimate bypass.
+__setAimTestGuard(false);
 
 describe('ai/aim.ts ΓÇö AI Admin seam (API-05)', () => {
   beforeEach(() => {

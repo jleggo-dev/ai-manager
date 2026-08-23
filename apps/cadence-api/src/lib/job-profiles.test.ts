@@ -6,7 +6,8 @@ import { isProfilePlaceholder, resolveProfileToken, resolveJobProfileIds } from 
 
 const COACH = 'coach-uuid-1111';
 const BROKER = 'broker-uuid-2222';
-const ids = { coachId: COACH, brokerId: BROKER };
+const RESEARCH = 'research-profile-uuid';
+const ids = { coachId: COACH, brokerId: BROKER, researchId: RESEARCH };
 
 /** The real shipped config — these tests are the contract between it and the sync scripts. */
 const CONFIG = JSON.parse(
@@ -81,7 +82,7 @@ describe('job profile resolution', () => {
           expect(job.ai_profile_id, `${job.slug} is pinned and must not be rewritten`).toBe(token);
           continue;
         }
-        const expected = token.includes('COACH') ? COACH : BROKER;
+        const expected = token.includes('COACH') ? COACH : token.includes('RESEARCH') ? RESEARCH : BROKER;
         expect(job.ai_profile_id, `${job.slug} declared ${token} but resolved elsewhere`).toBe(expected);
       }
     });

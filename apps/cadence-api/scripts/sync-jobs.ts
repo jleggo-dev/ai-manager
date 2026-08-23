@@ -72,12 +72,13 @@ async function main() {
   };
   const coachId = await idBySlug('/api/ai-profiles', 'cadence-coach');
   const brokerId = await idBySlug('/api/ai-profiles', 'cadence-broker');
+  const researchId = await idBySlug('/api/ai-profiles', 'cadence-research');
   if (!coachId || !brokerId) throw new Error(`missing profile ids coach=${coachId} broker=${brokerId}`);
 
   // Resolve placeholder ai_profile_id tokens (the token names its own tier) and leave explicit
   // UUIDs alone (e.g. parse-meal → the live Gemini vision profile). Shared with provision-aim so
   // the two can't drift. Profiles themselves are NOT synced here (deliberate).
-  resolveJobProfileIds(cfg.jobs, { coachId, brokerId });
+  resolveJobProfileIds(cfg.jobs, { coachId, brokerId, researchId });
 
   const r = await api('POST', '/api/sync', { jobs: cfg.jobs, dryRun });
   console.log(dryRun ? 'sync jobs dry-run →' : 'sync jobs →', JSON.stringify(r));

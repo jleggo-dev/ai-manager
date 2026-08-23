@@ -82,6 +82,7 @@ async function main() {
   console.log('sync profiles →', JSON.stringify(await api('POST', '/api/sync', { profiles: cfg.profiles })));
   const coachId = await idBySlug('/api/ai-profiles', 'cadence-coach');
   const brokerId = await idBySlug('/api/ai-profiles', 'cadence-broker');
+  const researchId = await idBySlug('/api/ai-profiles', 'cadence-research');
   console.log(`coach=${coachId} broker=${brokerId}`);
 
   // 4. Verify each profile with a live run-slot
@@ -107,7 +108,7 @@ async function main() {
   // with scripts/sync-jobs.ts so the two can no longer drift: the previous hardcoded slug set had
   // to be kept "in lockstep" by hand and silently mis-tiered whatever was forgotten — first
   // assess-goal, then nutrition-baseline.
-  resolveJobProfileIds(cfg.jobs, { coachId, brokerId });
+  resolveJobProfileIds(cfg.jobs, { coachId, brokerId, researchId });
   console.log('sync jobs →', JSON.stringify(await api('POST', '/api/sync', { jobs: cfg.jobs })));
   const jobIds: Record<string, string | null> = {};
   for (const slug of ['capture-extract', 'plan-vet', 'situation-assess', 'context-select', 'synthesize-plan', 'weekly-readout', 'surface-insights', 'disrupted-plan']) {
