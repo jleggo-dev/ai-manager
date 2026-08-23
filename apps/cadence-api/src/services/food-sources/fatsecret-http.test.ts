@@ -113,6 +113,22 @@ describe('the client', () => {
    * The retry earns its place on the refresh path: a failed refresh EXPIRES a cached row under the
    * 24-hour rule, so a dropped connection would otherwise cost a food its price.
    */
+  /**
+   * The boundary guard, and the reason the per-file mocks elsewhere are now belt-and-braces rather
+   * than load-bearing: a suite that forgets to mock the enricher gets a loud, self-explaining
+   * refusal instead of a live call that quietly writes shared cache rows other suites then read.
+   */
+  it('refuses to reach the network from a test with no fetch injected', async () => {
+    cadenceConfig.fatSecret.consumerKey = 'k';
+    cadenceConfig.fatSecret.consumerSecret = 's';
+    __setFatSecretFetchForTests(null); // nothing injected — the default under vitest
+    const { fatSecretCall } = await import('./fatsecret-http.ts');
+
+    await expect(fatSecretCall({ method: 'foods.search', search_expression: 'x' })).rejects.toThrow(
+      /refusing to call FatSecret from a test/i,
+    );
+  });
+
   it('retries once through a network blip', async () => {
     cadenceConfig.fatSecret.consumerKey = 'k';
     cadenceConfig.fatSecret.consumerSecret = 's';

@@ -38,6 +38,24 @@ function requireApiKey(): string {
 
 type FetchFn = typeof fetch;
 
+/**
+ * A test must not reach the network — and this is enforced here, at the boundary, rather than left
+ * to each suite to remember.
+ *
+ * Two suites were quietly calling live APIs on 2026-08-23. The damage was not the calls: it was
+ * that a DB test failed for reasons unrelated to its subject (a real import priced an item and a
+ * deliberately low-confidence meal came out non-provisional), and that the calls WROTE SHARED CACHE
+ * ROWS which then broke a different suite. `vi.mock` in each file fixes it only until somebody
+ * writes the next test that touches pricing, and the failure mode is subtle enough to survive
+ * review.
+ *
+ * So the default under vitest is: no fetch injected, no call. The clients' own tests inject one
+ * through the seam below and are unaffected; a deliberate live probe runs under tsx, not vitest.
+ * Set ALLOW_NETWORK_IN_TESTS=1 to opt a run back in.
+ */
+const IN_TEST = !!process.env.VITEST && process.env.ALLOW_NETWORK_IN_TESTS !== '1';
+let fetchInjected = false;
+
 let fetchImpl: FetchFn = globalThis.fetch.bind(globalThis);
 let inFlight = 0;
 let cooldownUntil = 0;
@@ -47,6 +65,7 @@ const singleFlight = new Map<string, Promise<unknown>>();
 /** Test seam — inject a mock fetch; resets rate-limit state. */
 export function __setUsdaFetchForTests(fn: FetchFn | null): void {
   fetchImpl = fn ?? globalThis.fetch.bind(globalThis);
+  fetchInjected = fn !== null;
   inFlight = 0;
   cooldownUntil = 0;
   waiters.length = 0;
@@ -93,6 +112,14 @@ async function rawUsdaGet(pathAndQuery: string): Promise<unknown> {
   const key = requireApiKey();
   const sep = pathAndQuery.includes('?') ? '&' : '?';
   const url = `${USDA_BASE}${pathAndQuery}${sep}api_key=${encodeURIComponent(key)}`;
+
+  if (IN_TEST && !fetchInjected) {
+    throw new UsdaHttpError(
+      0,
+      'refusing to call USDA from a test — inject a fetch with __setUsdaFetchForTests, ' +
+        'or mock services/food-sources/usda-enrich.ts',
+    );
+  }
 
   await acquireSlot();
   try {
