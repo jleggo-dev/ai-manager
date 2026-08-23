@@ -12,6 +12,20 @@
  * would spend the rate limit re-asking a question already answered. JSON means the API spoke.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
+
+/**
+ * The key is stubbed on the CONFIG, not the environment.
+ *
+ * `cadenceConfig` reads process.env once at module load, so `vi.stubEnv('USDA_API_KEY', …)` after
+ * the import does nothing at all — these tests passed locally purely because a real key sat in
+ * .env, and failed the moment CI ran them without one. A test that passes for a reason it does not
+ * state is not passing.
+ */
+vi.mock('../../config.ts', async (orig) => {
+  const actual = (await orig()) as { cadenceConfig: Record<string, unknown> };
+  return { ...actual, cadenceConfig: { ...actual.cadenceConfig, usdaApiKey: 'test-key-not-real' } };
+});
+
 import { __setUsdaFetchForTests, usdaGet } from './usda-http.ts';
 
 const HTML = { 'content-type': 'text/html; charset=utf-8' };
@@ -23,7 +37,6 @@ function res(status: number, headers: Record<string, string>, body: unknown = {}
 
 afterEach(() => {
   __setUsdaFetchForTests(null);
-  vi.unstubAllEnvs();
 });
 
 describe('USDA transport retries', () => {
@@ -33,7 +46,6 @@ describe('USDA transport retries', () => {
       .mockResolvedValueOnce(res(404, HTML, '<!DOCTYPE html><html>…</html>'))
       .mockResolvedValueOnce(res(200, JSON_CT, { foods: [{ fdcId: 1 }] }));
     __setUsdaFetchForTests(fetchMock);
-    vi.stubEnv('USDA_API_KEY', 'test-key');
 
     await expect(usdaGet('/foods/search?query=kale')).resolves.toEqual({ foods: [{ fdcId: 1 }] });
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -42,7 +54,6 @@ describe('USDA transport retries', () => {
   it('does NOT retry a JSON 404 — that is the API answering "no such food"', async () => {
     const fetchMock = vi.fn().mockResolvedValue(res(404, JSON_CT, { error: 'not found' }));
     __setUsdaFetchForTests(fetchMock);
-    vi.stubEnv('USDA_API_KEY', 'test-key');
 
     await expect(usdaGet('/food/999999999')).rejects.toThrow();
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -53,7 +64,6 @@ describe('USDA transport retries', () => {
     // api.data.gov quota on a service that is already down.
     const fetchMock = vi.fn().mockResolvedValue(res(404, HTML, '<!DOCTYPE html>'));
     __setUsdaFetchForTests(fetchMock);
-    vi.stubEnv('USDA_API_KEY', 'test-key');
 
     await expect(usdaGet('/foods/search?query=kale')).rejects.toThrow();
     expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -65,7 +75,6 @@ describe('USDA transport retries', () => {
       .mockResolvedValueOnce(res(503, HTML, 'upstream down'))
       .mockResolvedValueOnce(res(200, JSON_CT, { ok: true }));
     __setUsdaFetchForTests(fetchMock);
-    vi.stubEnv('USDA_API_KEY', 'test-key');
 
     await expect(usdaGet('/foods/search?query=kale')).resolves.toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledTimes(2);
