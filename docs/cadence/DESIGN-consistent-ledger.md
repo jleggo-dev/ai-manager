@@ -442,7 +442,13 @@ than replacing anything.
   like today's USDA imports.
 - **FatSecret, live-by-ID, for restaurant/chain foods** (the "venti latte" query USDA will never
   answer). `food-sources/fatsecret-http.ts` modeled on `usda-http.ts` (single-flight, in-flight
-  cap, 429 cooldown; OAuth2 client-credentials). Store a **thin reference row** —
+  cap, 429 cooldown). **OAuth 1.0, not 2.0** — corrected 2026-08-22 (owner): the OAuth 2.0 flow
+  requires whitelisting the caller's IP, and this API runs on Vercel serverless, which has dynamic
+  egress and no fixed address to register. OAuth 1.0 signs each request with the consumer secret
+  instead, so it needs no allowlist. Credentials are `FATSECRET_CONSUMER_KEY` /
+  `FATSECRET_CONSUMER_SECRET` (server-only, already slotted in `.env.example` and `config.ts`); an
+  empty key simply removes the rung, since the resolver already falls through to pinning an
+  estimate. Store a **thin reference row** —
   `foods.fatsecret_id`, name, brand, serving labels — and fetch nutrients by ID at pricing time.
   Consistency comes from re-reading the same record, not from storing it; their data barely
   changes. If (and only if) the current ToS permits performance caching, add nutrients with a
