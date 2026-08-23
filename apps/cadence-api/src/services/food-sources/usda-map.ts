@@ -3,6 +3,7 @@
  * Nutrients are per 100g for Foundation / SR Legacy (our Phase 3 whole-food target).
  */
 import type { FoodBaseUnit, FoodNutrients, FoodServing } from '@cadence/shared';
+import { applyNormalization } from './normalized.ts';
 
 /**
  * FDC nutrient **ids** we care about (`foodNutrients[].nutrient.id`), NOT the legacy
@@ -25,6 +26,32 @@ export const USDA_NUTRIENT_NUMBERS = {
 } as const;
 
 export type UsdaNutrientKey = keyof typeof USDA_NUTRIENT_NUMBERS;
+
+/**
+ * Energy, for the FOUNDATION records that never report it as "Energy" at all.
+ *
+ * Foundation Foods — USDA's newest and most carefully measured dataset, the right answer for a
+ * whole food — frequently carry NO nutrient 1008. They report energy only as Atwater factors:
+ * 957 (general, the 4/4/9 arithmetic every food label in the country is computed with) and 958
+ * (specific factors tuned to that food). "Peanuts, raw" is one of them, at 588 kcal.
+ *
+ * With only 1008 mapped, every such food imported with NO CALORIES and contributed zero to the
+ * day. Nothing errored — the food resolved, priced, and logged, silently worth nothing. It is the
+ * same failure shape as the branded numbering: the data was always there under a number we were
+ * not asking for.
+ *
+ * General before specific, deliberately. The two disagree by ~7% (588 vs 551 for raw peanuts) and
+ * general is what a NUTRITION LABEL says — so it is the figure a branded row or a FatSecret row
+ * for the same food will carry. This ledger's whole promise is that the same food costs the same
+ * every time; matching the labels keeps the three sources comparable, where preferring the more
+ * "accurate" specific factors would make USDA whole foods quietly cheaper than everyone else's.
+ *
+ * IDS FIRST, then the legacy `number` codes — the same two-name problem as everywhere else in
+ * this file, and the reason the first version of this fallback silently did nothing: FDC gives
+ * Atwater General id 2047 / number "957", and `nutrientNumber` resolves ids in preference, so a
+ * list of [957, 958] never matched a single record.
+ */
+const USDA_ENERGY_FALLBACK_NUMBERS = [2047, 957, 2048, 958] as const;
 
 /**
  * The SAME nutrients under USDA's older numbering, which BRANDED records still use.
@@ -116,6 +143,54 @@ function roundNutrient(key: UsdaNutrientKey, value: number): number {
   return Math.round(value * f) / f;
 }
 
+/** The first Atwater energy a record carries, in kcal. Only ever consulted when 1008/208 are absent. */
+function energyFallback(
+  byNumber: Map<number, { amount: number; unit: string }>,
+): { amount: number; unit: string } | undefined {
+  for (const num of USDA_ENERGY_FALLBACK_NUMBERS) {
+    const hit = byNumber.get(num);
+    if (hit && !hit.unit.includes('kj')) return hit;
+  }
+  return undefined;
+}
+
+/**
+ * The amount in the unit our column NAME promises, or null if we cannot honestly convert.
+ *
+ * Every key carries its unit in its own name — `sodium_mg`, `vitamin_b12_ug`, `protein_g` — and
+ * nothing was checking that USDA agreed. USDA is consistent in practice, so this has never fired;
+ * but the failure it prevents is silent and enormous: one mineral reported in g instead of mg is
+ * stored 1000× light, prices every meal containing it wrong, and — since A23 — gets PINNED that
+ * way. A wrong number that looks plausible is worse than a missing one, so an unconvertible unit
+ * drops the nutrient rather than guessing.
+ */
+function toExpectedUnit(key: UsdaNutrientKey, hit: { amount: number; unit: string }): number | null {
+  if (key === 'kcal') return hit.amount;
+  const want = key.endsWith('_ug') ? 'ug' : key.endsWith('_mg') ? 'mg' : 'g';
+  // USDA writes micrograms as 'µg' or 'ug' depending on the record and the endpoint version.
+  const got = hit.unit.replace('\u00b5', 'u').trim();
+  if (!got) return hit.amount; // Unstated unit: trust the column, as we always have.
+  if (got === want) return hit.amount;
+
+  const SCALE: Record<string, number> = { g: 1, mg: 1e-3, ug: 1e-6 };
+  const from = SCALE[got];
+  const to = SCALE[want];
+  if (from === undefined || to === undefined) return null;
+  return (hit.amount * from) / to;
+}
+
+/** Whether the record declares ethyl alcohol above a trace — see NormalizedFood.alcoholic. */
+export function hasAlcohol(foodNutrients: unknown): boolean {
+  if (!Array.isArray(foodNutrients)) return false;
+  return foodNutrients.some((raw) => {
+    const entry = asRecord(raw);
+    if (!entry) return false;
+    const num = nutrientNumber(entry);
+    const amount = nutrientAmount(entry);
+    return (num === 1018 || num === 221) && amount !== null && amount > 0.5;
+  });
+}
+
 /** Extract macros + micros per 100g from a USDA foodNutrients array. */
 export function mapUsdaNutrients(foodNutrients: unknown): FoodNutrients {
   if (!Array.isArray(foodNutrients)) return {};
@@ -136,11 +211,17 @@ export function mapUsdaNutrients(foodNutrients: unknown): FoodNutrients {
 
   const out: FoodNutrients = {};
   for (const [key, num] of Object.entries(USDA_NUTRIENT_NUMBERS) as Array<[UsdaNutrientKey, number]>) {
-    // Modern numbering first, then the legacy number Branded records use for the same nutrient.
-    const hit = byNumber.get(num) ?? byNumber.get(USDA_LEGACY_NUMBERS[key]);
+    // Modern numbering first, then the legacy number Branded records use for the same nutrient,
+    // then — for energy only — the Atwater factors Foundation reports INSTEAD of an Energy row.
+    const hit =
+      byNumber.get(num) ??
+      byNumber.get(USDA_LEGACY_NUMBERS[key]) ??
+      (key === 'kcal' ? energyFallback(byNumber) : undefined);
     if (!hit) continue;
     if (key === 'kcal' && hit.unit.includes('kj') && !hit.unit.includes('kcal')) continue;
-    out[key] = roundNutrient(key, hit.amount);
+    const amount = toExpectedUnit(key, hit);
+    if (amount === null) continue;
+    out[key] = roundNutrient(key, amount);
   }
   return out;
 }
@@ -272,7 +353,10 @@ export function mapUsdaFoodDetail(raw: unknown): UsdaMappedFood | null {
   // brandName is the product's own name ("CLOVER VALLEY"); brandOwner is the company behind it.
   // The name on the packet is the one a person would recognise, so it goes first.
   const brand = asString(o.brandName) ?? asString(o.brandOwner) ?? null;
-  return {
+  // Nothing leaves this adapter unchecked — see `normalized.ts` for why that is not paranoia.
+  return applyNormalization('usda', {
+    // Alcohol, ethyl (id 1018 / number "221") — declared so the energy cross-check stands down.
+    alcoholic: hasAlcohol(o.foodNutrients),
     fdc_id,
     name: name.slice(0, 200),
     brand: brand && brand.length < 80 ? brand : null,
@@ -284,5 +368,5 @@ export function mapUsdaFoodDetail(raw: unknown): UsdaMappedFood | null {
     confidence: 1,
     photo_ref: null,
     off_id: null,
-  };
+  });
 }

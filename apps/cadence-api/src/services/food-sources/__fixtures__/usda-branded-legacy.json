@@ -1,0 +1,740 @@
+{
+  "search": {
+    "totalHits": 65807,
+    "currentPage": 1,
+    "totalPages": 65807,
+    "pageList": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "foodSearchCriteria": {
+      "dataType": [
+        "Branded"
+      ],
+      "query": "planters dry roasted peanuts",
+      "generalSearchInput": "planters dry roasted peanuts",
+      "pageNumber": 1,
+      "numberOfResultsPerPage": 50,
+      "pageSize": 1,
+      "requireAllWords": false,
+      "foodTypes": [
+        "Branded"
+      ]
+    },
+    "foods": [
+      {
+        "fdcId": 2394962,
+        "description": "DRY ROAST PEANUTS, DRY ROAST",
+        "dataType": "Branded",
+        "gtinUpc": "034952147025",
+        "publishedDate": "2022-12-22",
+        "brandOwner": "Eillien's Candies Inc.",
+        "brandName": "FESTIVAL FOODS",
+        "ingredients": "PEANUTS, CONTAINS LESS THAN 2% SEA SALT, SUGAR, CORN SYRUP SOLIDS, CORN STARCH, TORULA YEAST, SPICES (CONTAINS CELERY), PAPRIKA, ONION POWDER, GARLIC POWDER, NATURAL FLAVOR, MALTODEXTRIN.",
+        "marketCountry": "United States",
+        "foodCategory": "Popcorn, Peanuts, Seeds & Related Snacks",
+        "modifiedDate": "2020-04-08",
+        "dataSource": "LI",
+        "packageWeight": "15 oz/425 g",
+        "servingSizeUnit": "g",
+        "servingSize": 30,
+        "householdServingFullText": "1/4 cup",
+        "shortDescription": "",
+        "tradeChannels": [
+          "NO_TRADE_CHANNEL"
+        ],
+        "allHighlightFields": "<b>Ingredients</b>: <em>PEANUTS</em>, CONTAINS LESS THAN 2% SEA SALT, SUGAR, CORN SYRUP SOLIDS, CORN STARCH, TORULA YEAST",
+        "score": 432.2054,
+        "microbes": [],
+        "foodNutrients": [
+          {
+            "nutrientId": 1003,
+            "nutrientName": "Protein",
+            "nutrientNumber": "203",
+            "unitName": "G",
+            "derivationCode": "LCCS",
+            "derivationDescription": "Calculated from value per serving size measure",
+            "derivationId": 70,
+            "value": 23.3,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 600,
+            "indentLevel": 1,
+            "foodNutrientId": 29495769
+          },
+          {
+            "nutrientId": 1004,
+            "nutrientName": "Total lipid (fat)",
+            "nutrientNumber": "204",
+            "unitName": "G",
+            "derivationCode": "LCCS",
+            "derivationDescription": "Calculated from value per serving size measure",
+            "derivationId": 70,
+            "value": 46.7,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 800,
+            "indentLevel": 1,
+            "foodNutrientId": 29495770,
+            "percentDailyValue": 18
+          },
+          {
+            "nutrientId": 1005,
+            "nutrientName": "Carbohydrate, by difference",
+            "nutrientNumber": "205",
+            "unitName": "G",
+            "derivationCode": "LCCS",
+            "derivationDescription": "Calculated from value per serving size measure",
+            "derivationId": 70,
+            "value": 23.3,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 1110,
+            "indentLevel": 2,
+            "foodNutrientId": 29495771,
+            "percentDailyValue": 3
+          },
+          {
+            "nutrientId": 1008,
+            "nutrientName": "Energy",
+            "nutrientNumber": "208",
+            "unitName": "KCAL",
+            "derivationCode": "LCCS",
+            "derivationDescription": "Calculated from value per serving size measure",
+            "derivationId": 70,
+            "value": 567,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 300,
+            "indentLevel": 1,
+            "foodNutrientId": 29495772
+          },
+          {
+            "nutrientId": 2000,
+            "nutrientName": "Total Sugars",
+            "nutrientNumber": "269",
+            "unitName": "G",
+            "derivationCode": "LCCS",
+            "derivationDescription": "Calculated from value per serving size measure",
+            "derivationId": 70,
+            "value": 6.67,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 1510,
+            "indentLevel": 3,
+            "foodNutrientId": 29495773
+          },
+          {
+            "nutrientId": 1079,
+            "nutrientName": "Fiber, total dietary",
+            "nutrientNumber": "291",
+            "unitName": "G",
+            "derivationCode": "LCCS",
+            "derivationDescription": "Calculated from value per serving size measure",
+            "derivationId": 70,
+            "value": 6.7,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 1200,
+            "indentLevel": 3,
+            "foodNutrientId": 29495774,
+            "percentDailyValue": 7
+          },
+          {
+            "nutrientId": 1087,
+            "nutrientName": "Calcium, Ca",
+            "nutrientNumber": "301",
+            "unitName": "MG",
+            "derivationCode": "LCCS",
+            "derivationDescription": "Calculated from value per serving size measure",
+            "derivationId": 70,
+            "value": 67,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 5300,
+            "indentLevel": 1,
+            "foodNutrientId": 29495775,
+            "percentDailyValue": 2
+          },
+          {
+            "nutrientId": 1089,
+            "nutrientName": "Iron, Fe",
+            "nutrientNumber": "303",
+            "unitName": "MG",
+            "derivationCode": "LCCS",
+            "derivationDescription": "Calculated from value per serving size measure",
+            "derivationId": 70,
+            "value": 1.67,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 5400,
+            "indentLevel": 1,
+            "foodNutrientId": 29495776,
+            "percentDailyValue": 2
+          },
+          {
+            "nutrientId": 1092,
+            "nutrientName": "Potassium, K",
+            "nutrientNumber": "306",
+            "unitName": "MG",
+            "derivationCode": "LCCS",
+            "derivationDescription": "Calculated from value per serving size measure",
+            "derivationId": 70,
+            "value": 633,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 5700,
+            "indentLevel": 1,
+            "foodNutrientId": 29495777,
+            "percentDailyValue": 4
+          },
+          {
+            "nutrientId": 1093,
+            "nutrientName": "Sodium, Na",
+            "nutrientNumber": "307",
+            "unitName": "MG",
+            "derivationCode": "LCCS",
+            "derivationDescription": "Calculated from value per serving size measure",
+            "derivationId": 70,
+            "value": 533,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 5800,
+            "indentLevel": 1,
+            "foodNutrientId": 29495778,
+            "percentDailyValue": 7
+          },
+          {
+            "nutrientId": 1110,
+            "nutrientName": "Vitamin D (D2 + D3), International Units",
+            "nutrientNumber": "324",
+            "unitName": "IU",
+            "derivationCode": "LCCD",
+            "derivationDescription": "Calculated from a daily value percentage per serving size measure",
+            "derivationId": 75,
+            "value": 0,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 8650,
+            "indentLevel": 1,
+            "foodNutrientId": 29495779,
+            "percentDailyValue": 0
+          },
+          {
+            "nutrientId": 1253,
+            "nutrientName": "Cholesterol",
+            "nutrientNumber": "601",
+            "unitName": "MG",
+            "derivationCode": "LCCD",
+            "derivationDescription": "Calculated from a daily value percentage per serving size measure",
+            "derivationId": 75,
+            "value": 0,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 15700,
+            "indentLevel": 1,
+            "foodNutrientId": 29495780,
+            "percentDailyValue": 0
+          },
+          {
+            "nutrientId": 1257,
+            "nutrientName": "Fatty acids, total trans",
+            "nutrientNumber": "605",
+            "unitName": "G",
+            "derivationCode": "LCCS",
+            "derivationDescription": "Calculated from value per serving size measure",
+            "derivationId": 70,
+            "value": 0,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 15400,
+            "indentLevel": 1,
+            "foodNutrientId": 29495781
+          },
+          {
+            "nutrientId": 1258,
+            "nutrientName": "Fatty acids, total saturated",
+            "nutrientNumber": "606",
+            "unitName": "G",
+            "derivationCode": "LCCS",
+            "derivationDescription": "Calculated from value per serving size measure",
+            "derivationId": 70,
+            "value": 6.67,
+            "foodNutrientSourceId": 9,
+            "foodNutrientSourceCode": "12",
+            "foodNutrientSourceDescription": "Manufacturer's analytical; partial documentation",
+            "rank": 9700,
+            "indentLevel": 1,
+            "foodNutrientId": 29495782,
+            "percentDailyValue": 10
+          }
+        ],
+        "finalFoodInputFoods": [],
+        "foodMeasures": [],
+        "foodAttributes": [],
+        "foodAttributeTypes": [],
+        "foodVersionIds": []
+      }
+    ],
+    "aggregations": {
+      "dataType": {
+        "Branded": 65807,
+        "SR Legacy": 1051,
+        "Survey (FNDDS)": 277,
+        "Foundation": 49,
+        "Experimental": 2
+      },
+      "nutrients": {}
+    }
+  },
+  "detail": {
+    "discontinuedDate": "",
+    "foodComponents": [],
+    "foodAttributes": [
+      {
+        "id": 2792092,
+        "value": 4,
+        "name": "Nutrient Updated"
+      },
+      {
+        "id": 2792093,
+        "value": 6,
+        "name": "Nutrient Removed"
+      }
+    ],
+    "foodPortions": [],
+    "fdcId": 2394962,
+    "description": "DRY ROAST PEANUTS, DRY ROAST",
+    "publicationDate": "12/22/2022",
+    "foodNutrients": [
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1092,
+          "number": "306",
+          "name": "Potassium, K",
+          "rank": 5700,
+          "unitName": "mg"
+        },
+        "foodNutrientDerivation": {
+          "id": 70,
+          "code": "LCCS",
+          "description": "Calculated from value per serving size measure"
+        },
+        "id": 29495777,
+        "amount": 633
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1008,
+          "number": "208",
+          "name": "Energy",
+          "rank": 300,
+          "unitName": "kcal"
+        },
+        "foodNutrientDerivation": {
+          "id": 70,
+          "code": "LCCS",
+          "description": "Calculated from value per serving size measure"
+        },
+        "id": 29495772,
+        "amount": 567
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1089,
+          "number": "303",
+          "name": "Iron, Fe",
+          "rank": 5400,
+          "unitName": "mg"
+        },
+        "foodNutrientDerivation": {
+          "id": 70,
+          "code": "LCCS",
+          "description": "Calculated from value per serving size measure"
+        },
+        "id": 29495776,
+        "amount": 1.67
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1253,
+          "number": "601",
+          "name": "Cholesterol",
+          "rank": 15700,
+          "unitName": "mg"
+        },
+        "foodNutrientDerivation": {
+          "id": 75,
+          "code": "LCCD",
+          "description": "Calculated from a daily value percentage per serving size measure"
+        },
+        "id": 29495780,
+        "amount": 0
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1257,
+          "number": "605",
+          "name": "Fatty acids, total trans",
+          "rank": 15400,
+          "unitName": "g"
+        },
+        "foodNutrientDerivation": {
+          "id": 70,
+          "code": "LCCS",
+          "description": "Calculated from value per serving size measure"
+        },
+        "id": 29495781,
+        "amount": 0
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1110,
+          "number": "324",
+          "name": "Vitamin D (D2 + D3), International Units",
+          "rank": 8650,
+          "unitName": "IU"
+        },
+        "foodNutrientDerivation": {
+          "id": 75,
+          "code": "LCCD",
+          "description": "Calculated from a daily value percentage per serving size measure"
+        },
+        "id": 29495779,
+        "amount": 0
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1003,
+          "number": "203",
+          "name": "Protein",
+          "rank": 600,
+          "unitName": "g"
+        },
+        "foodNutrientDerivation": {
+          "id": 70,
+          "code": "LCCS",
+          "description": "Calculated from value per serving size measure"
+        },
+        "id": 29495769,
+        "amount": 23.33
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1258,
+          "number": "606",
+          "name": "Fatty acids, total saturated",
+          "rank": 9700,
+          "unitName": "g"
+        },
+        "foodNutrientDerivation": {
+          "id": 70,
+          "code": "LCCS",
+          "description": "Calculated from value per serving size measure"
+        },
+        "id": 29495782,
+        "amount": 6.67
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1079,
+          "number": "291",
+          "name": "Fiber, total dietary",
+          "rank": 1200,
+          "unitName": "g"
+        },
+        "foodNutrientDerivation": {
+          "id": 70,
+          "code": "LCCS",
+          "description": "Calculated from value per serving size measure"
+        },
+        "id": 29495774,
+        "amount": 6.7
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1004,
+          "number": "204",
+          "name": "Total lipid (fat)",
+          "rank": 800,
+          "unitName": "g"
+        },
+        "foodNutrientDerivation": {
+          "id": 70,
+          "code": "LCCS",
+          "description": "Calculated from value per serving size measure"
+        },
+        "id": 29495770,
+        "amount": 46.67
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1087,
+          "number": "301",
+          "name": "Calcium, Ca",
+          "rank": 5300,
+          "unitName": "mg"
+        },
+        "foodNutrientDerivation": {
+          "id": 70,
+          "code": "LCCS",
+          "description": "Calculated from value per serving size measure"
+        },
+        "id": 29495775,
+        "amount": 67
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1005,
+          "number": "205",
+          "name": "Carbohydrate, by difference",
+          "rank": 1110,
+          "unitName": "g"
+        },
+        "foodNutrientDerivation": {
+          "id": 70,
+          "code": "LCCS",
+          "description": "Calculated from value per serving size measure"
+        },
+        "id": 29495771,
+        "amount": 23.33
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 2000,
+          "number": "269",
+          "name": "Total Sugars",
+          "rank": 1510,
+          "unitName": "g"
+        },
+        "foodNutrientDerivation": {
+          "id": 70,
+          "code": "LCCS",
+          "description": "Calculated from value per serving size measure"
+        },
+        "id": 29495773,
+        "amount": 6.67
+      },
+      {
+        "type": "FoodNutrient",
+        "nutrient": {
+          "id": 1093,
+          "number": "307",
+          "name": "Sodium, Na",
+          "rank": 5800,
+          "unitName": "mg"
+        },
+        "foodNutrientDerivation": {
+          "id": 70,
+          "code": "LCCS",
+          "description": "Calculated from value per serving size measure"
+        },
+        "id": 29495778,
+        "amount": 533
+      }
+    ],
+    "dataType": "Branded",
+    "foodClass": "Branded",
+    "shortDescription": "",
+    "modifiedDate": "4/8/2020",
+    "availableDate": "4/8/2020",
+    "brandOwner": "Eillien's Candies Inc.",
+    "brandName": "FESTIVAL FOODS",
+    "dataSource": "LI",
+    "brandedFoodCategory": "Popcorn, Peanuts, Seeds & Related Snacks",
+    "gtinUpc": "034952147025",
+    "householdServingFullText": "1/4 cup",
+    "ingredients": "PEANUTS, CONTAINS LESS THAN 2% SEA SALT, SUGAR, CORN SYRUP SOLIDS, CORN STARCH, TORULA YEAST, SPICES (CONTAINS CELERY), PAPRIKA, ONION POWDER, GARLIC POWDER, NATURAL FLAVOR, MALTODEXTRIN.",
+    "marketCountry": "United States",
+    "servingSize": 30,
+    "servingSizeUnit": "g",
+    "packageWeight": "15 oz/425 g",
+    "foodUpdateLog": [
+      {
+        "discontinuedDate": "",
+        "foodAttributes": [],
+        "fdcId": 2394962,
+        "description": "DRY ROAST PEANUTS, DRY ROAST",
+        "publicationDate": "12/22/2022",
+        "dataType": "Branded",
+        "foodClass": "Branded",
+        "shortDescription": "",
+        "modifiedDate": "4/8/2020",
+        "availableDate": "4/8/2020",
+        "brandOwner": "Eillien's Candies Inc.",
+        "brandName": "FESTIVAL FOODS",
+        "dataSource": "LI",
+        "brandedFoodCategory": "Popcorn, Peanuts, Seeds & Related Snacks",
+        "gtinUpc": "034952147025",
+        "householdServingFullText": "1/4 cup",
+        "ingredients": "PEANUTS, CONTAINS LESS THAN 2% SEA SALT, SUGAR, CORN SYRUP SOLIDS, CORN STARCH, TORULA YEAST, SPICES (CONTAINS CELERY), PAPRIKA, ONION POWDER, GARLIC POWDER, NATURAL FLAVOR, MALTODEXTRIN.",
+        "marketCountry": "United States",
+        "servingSize": 30,
+        "servingSizeUnit": "g",
+        "packageWeight": "15 oz/425 g"
+      },
+      {
+        "discontinuedDate": "",
+        "foodAttributes": [],
+        "fdcId": 1983888,
+        "description": "DRY ROAST PEANUTS, DRY ROAST",
+        "publicationDate": "7/29/2021",
+        "dataType": "Branded",
+        "foodClass": "Branded",
+        "modifiedDate": "4/8/2020",
+        "availableDate": "4/8/2020",
+        "brandOwner": "Eillien's Candies Inc.",
+        "brandName": "FESTIVAL FOODS",
+        "dataSource": "LI",
+        "brandedFoodCategory": "Popcorn, Peanuts, Seeds & Related Snacks",
+        "gtinUpc": "034952147025",
+        "householdServingFullText": "1/4 cup",
+        "ingredients": "PEANUTS, CONTAINS LESS THAN 2% SEA SALT, SUGAR, CORN SYRUP SOLIDS, CORN STARCH, TORULA YEAST, SPICES (CONTAINS CELERY), PAPRIKA, ONION POWDER, GARLIC POWDER, NATURAL FLAVOR, MALTODEXTRIN.",
+        "marketCountry": "United States",
+        "servingSize": 30,
+        "servingSizeUnit": "g",
+        "packageWeight": "15 oz/425 g"
+      },
+      {
+        "discontinuedDate": "",
+        "foodAttributes": [],
+        "fdcId": 1722204,
+        "description": "DRY ROAST PEANUTS, DRY ROAST",
+        "publicationDate": "3/19/2021",
+        "dataType": "Branded",
+        "foodClass": "Branded",
+        "modifiedDate": "4/8/2020",
+        "availableDate": "4/8/2020",
+        "brandOwner": "Eillien's Candies Inc.",
+        "brandName": "FESTIVAL FOODS",
+        "dataSource": "LI",
+        "brandedFoodCategory": "Popcorn, Peanuts, Seeds & Related Snacks",
+        "gtinUpc": "034952147025",
+        "householdServingFullText": "1/4 cup",
+        "ingredients": "PEANUTS, CONTAINS LESS THAN 2% SEA SALT, SUGAR, CORN SYRUP SOLIDS, CORN STARCH, TORULA YEAST, SPICES (CONTAINS CELERY), PAPRIKA, ONION POWDER, GARLIC POWDER, NATURAL FLAVOR, MALTODEXTRIN.",
+        "marketCountry": "United States",
+        "servingSize": 30,
+        "servingSizeUnit": "g"
+      },
+      {
+        "discontinuedDate": "",
+        "foodAttributes": [],
+        "fdcId": 1429907,
+        "description": "DRY ROAST PEANUTS, DRY ROAST",
+        "publicationDate": "2/26/2021",
+        "dataType": "Branded",
+        "foodClass": "Branded",
+        "modifiedDate": "4/8/2020",
+        "availableDate": "4/8/2020",
+        "brandOwner": "Eillien's Candies Inc.",
+        "brandName": "FESTIVAL FOODS",
+        "subbrandName": "",
+        "dataSource": "LI",
+        "brandedFoodCategory": "Popcorn, Peanuts, Seeds & Related Snacks",
+        "gtinUpc": "034952147025",
+        "householdServingFullText": "1/4 cup",
+        "ingredients": "PEANUTS, CONTAINS LESS THAN 2% SEA SALT, SUGAR, CORN SYRUP SOLIDS, CORN STARCH, TORULA YEAST, SPICES (CONTAINS CELERY), PAPRIKA, ONION POWDER, GARLIC POWDER, NATURAL FLAVOR, MALTODEXTRIN.",
+        "marketCountry": "United States",
+        "servingSize": 30,
+        "servingSizeUnit": "g",
+        "packageWeight": "",
+        "notaSignificantSourceOf": ""
+      },
+      {
+        "discontinuedDate": "",
+        "foodAttributes": [],
+        "fdcId": 1136891,
+        "description": "DRY ROAST PEANUTS, DRY ROAST",
+        "publicationDate": "11/13/2020",
+        "dataType": "Branded",
+        "foodClass": "Branded",
+        "modifiedDate": "4/8/2020",
+        "availableDate": "4/8/2020",
+        "brandOwner": "Eillien's Candies Inc.",
+        "dataSource": "LI",
+        "brandedFoodCategory": "Popcorn, Peanuts, Seeds & Related Snacks",
+        "gtinUpc": "034952147025",
+        "householdServingFullText": "1/4 cup",
+        "ingredients": "PEANUTS, CONTAINS LESS THAN 2% SEA SALT, SUGAR, CORN SYRUP SOLIDS, CORN STARCH, TORULA YEAST, SPICES (CONTAINS CELERY), PAPRIKA, ONION POWDER, GARLIC POWDER, NATURAL FLAVOR, MALTODEXTRIN.",
+        "marketCountry": "United States",
+        "servingSize": 30,
+        "servingSizeUnit": "g"
+      }
+    ],
+    "labelNutrients": {
+      "fat": {
+        "value": 14
+      },
+      "saturatedFat": {
+        "value": 2
+      },
+      "transFat": {
+        "value": 0
+      },
+      "cholesterol": {
+        "value": 0
+      },
+      "sodium": {
+        "value": 160
+      },
+      "carbohydrates": {
+        "value": 7
+      },
+      "fiber": {
+        "value": 2.01
+      },
+      "sugars": {
+        "value": 2
+      },
+      "protein": {
+        "value": 7
+      },
+      "calcium": {
+        "value": 20.1
+      },
+      "iron": {
+        "value": 0.501
+      },
+      "potassium": {
+        "value": 190
+      },
+      "calories": {
+        "value": 170
+      }
+    }
+  }
+}

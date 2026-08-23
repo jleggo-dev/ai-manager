@@ -18,7 +18,9 @@
     "eval:tools": "node --import tsx scripts/eval-tool-selection.ts",
     "eval:outcomes": "node --import tsx scripts/eval-outcomes.ts",
     "metrics:food-ledger": "node --import tsx scripts/food-variance-baseline.ts",
-    "eval:food-vision": "node --import tsx scripts/eval-food-vision.ts"
+    "eval:food-vision": "node --import tsx scripts/eval-food-vision.ts",
+    "smoke:food-sources": "tsx scripts/smoke-food-sources.ts",
+    "capture:food-fixtures": "tsx scripts/capture-food-fixtures.ts"
   },
   "dependencies": {
     "@ai-admin/core": "*",

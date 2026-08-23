@@ -6,6 +6,7 @@
  * serving that declares a metric amount, because that is the only one whose grams are knowable.
  */
 import type { FoodBaseUnit, FoodNutrients, FoodServing } from '@cadence/shared';
+import { applyNormalization } from './normalized.ts';
 
 export interface FatSecretHit {
   food_id: string;
@@ -180,7 +181,7 @@ export function mapFatSecretFood(raw: unknown): FatSecretMappedFood | null {
     servings.push({ label: `100 ${base_unit}`, unit: base_unit, amount_g: 100 });
   }
 
-  return {
+  return applyNormalization('fatsecret', {
     fatsecret_id,
     name,
     brand,
@@ -192,5 +193,5 @@ export function mapFatSecretFood(raw: unknown): FatSecretMappedFood | null {
       0,
       servings.findIndex((s) => s.amount_g !== 100),
     ),
-  };
+  });
 }
