@@ -150,4 +150,17 @@ export const cadenceConfig = {
    * Set in apps/cadence-api/.env locally and the cadence-api Vercel project env in prod.
    */
   usdaApiKey: process.env.USDA_API_KEY ?? '',
+
+  /**
+   * FatSecret Platform API — server-only, for the branded and restaurant foods USDA's whole-food
+   * datasets cannot hold (A23 §4). Empty means the rung is simply absent: the resolver already
+   * falls through to pinning an estimate, so an unset key degrades coverage and breaks nothing.
+   *
+   * OAuth 1.0 rather than 2.0 on purpose — their OAuth 2.0 requires an IP allowlist and this API
+   * runs on Vercel serverless, which has no fixed egress address. 1.0 signs per request instead.
+   */
+  fatSecret: {
+    consumerKey: process.env.FATSECRET_CONSUMER_KEY ?? '',
+    consumerSecret: process.env.FATSECRET_CONSUMER_SECRET ?? '',
+  },
 };
