@@ -43,6 +43,7 @@ let logMeal: (typeof import('./nutrition.ts'))['logMeal'];
 let previewMealParse: (typeof import('./nutrition.ts'))['previewMealParse'];
 let resetUserData: (typeof import('./dev-reset.ts'))['resetUserData'];
 let runJobBySlug: ReturnType<typeof vi.fn>;
+let clearUnusedSharedFoods: (typeof import('./test-foods.ts'))['clearUnusedSharedFoods'];
 
 /** The user's OWN pinned foods — shared rows (USDA/OFF) are not this test's business. */
 async function ownFoodCount(): Promise<number> {
@@ -84,6 +85,7 @@ d('A23 — the food ledger keeps a price (DB)', () => {
     ({ sql } = await import('../db/sql.ts'));
     ({ logMeal, previewMealParse } = await import('./nutrition.ts'));
     ({ resetUserData } = await import('./dev-reset.ts'));
+    ({ clearUnusedSharedFoods } = await import('./test-foods.ts'));
     ({ runJobBySlug } = (await import('../ai/aim.ts')) as unknown as { runJobBySlug: ReturnType<typeof vi.fn> });
   });
 
@@ -94,6 +96,10 @@ d('A23 — the food ledger keeps a price (DB)', () => {
 
   beforeEach(async () => {
     await resetUserData(USER);
+    // Shared cache rows belong to nobody, so resetUserData cannot reach them — and one answering
+    // a query these tests expect to MISS would stop the first log pinning anything. Only unused,
+    // unlogged rows go (see test-foods.ts).
+    await clearUnusedSharedFoods(['venti latte', 'yogurt parfait', 'oat bowl', 'mystery stew', 'arugula']);
   });
 
   afterEach(() => {
