@@ -4,12 +4,14 @@ import type { Food, FoodBaseUnit, FoodNutrients, FoodServing, FoodSource, FoodVi
 // Alias-qualified so joins (search / recents) never collide with food_usage.food_id.
 // created_at cast to text — postgres.js Date-object trap (same as nutrition.ts).
 const FOOD_COLS = sql`
-  f.food_id, f.owner_user_id, f.visibility, f.name, f.brand, f.source, f.off_id, f.fdc_id, f.base_unit,
+  f.food_id, f.owner_user_id, f.visibility, f.name, f.brand, f.source, f.off_id, f.fdc_id,
+  f.fatsecret_id, f.source_fetched_at::text as source_fetched_at, f.base_unit,
   f.macros_per_base, f.servings, f.default_serving, f.confidence, f.photo_ref,
   f.created_at::text as created_at`;
 
 const FOOD_COLS_PLAIN = sql`
-  food_id, owner_user_id, visibility, name, brand, source, off_id, fdc_id, base_unit,
+  food_id, owner_user_id, visibility, name, brand, source, off_id, fdc_id,
+  fatsecret_id, source_fetched_at::text as source_fetched_at, base_unit,
   macros_per_base, servings, default_serving, confidence, photo_ref,
   created_at::text as created_at`;
 
@@ -266,6 +268,77 @@ export async function upsertUsdaFood(input: UpsertUsdaFoodInput): Promise<Food> 
     returning ${FOOD_COLS_PLAIN}`;
   if (!row) throw new Error('upsertUsdaFood: no row returned');
   return row;
+}
+
+export interface UpsertFatSecretFoodInput {
+  fatsecret_id: string;
+  name: string;
+  brand?: string | null;
+  base_unit: FoodBaseUnit;
+  macros_per_base: FoodNutrients;
+  servings: FoodServing[];
+  default_serving?: number;
+}
+
+/**
+ * Upsert the shared FatSecret pointer row, stamping when its perishable half was read.
+ *
+ * Everything except `fatsecret_id` here is 24-hour data under their terms, so this is as much a
+ * cache write as an insert — `source_fetched_at` is what lets the read path tell fresh from stale
+ * rather than trusting that a row written once is still allowed to exist.
+ */
+export async function upsertFatSecretFood(input: UpsertFatSecretFoodInput): Promise<Food> {
+  const id = input.fatsecret_id.trim();
+  if (!id) throw new Error('upsertFatSecretFood: bad fatsecret_id');
+  const defaultServing = Number.isInteger(input.default_serving) ? (input.default_serving as number) : 0;
+  const [row] = await sql<Food[]>`
+    insert into cadence.foods (
+      owner_user_id, visibility, name, brand, source, off_id, fdc_id, fatsecret_id,
+      source_fetched_at, base_unit, macros_per_base, servings, default_serving, confidence, photo_ref
+    ) values (
+      null, 'shared', ${input.name}, ${input.brand ?? null}, 'fatsecret', null, null, ${id},
+      now(), ${input.base_unit}, ${json(input.macros_per_base ?? {})}, ${json(input.servings ?? [])},
+      ${defaultServing}, 1, null
+    )
+    on conflict (fatsecret_id) do update set
+      name = excluded.name,
+      brand = excluded.brand,
+      macros_per_base = excluded.macros_per_base,
+      servings = excluded.servings,
+      default_serving = excluded.default_serving,
+      source_fetched_at = now(),
+      source = 'fatsecret',
+      visibility = 'shared',
+      owner_user_id = null
+    returning ${FOOD_COLS_PLAIN}`;
+  if (!row) throw new Error('upsertFatSecretFood: no row returned');
+  return row;
+}
+
+/** The shared pointer row for a FatSecret food, fresh or stale — the caller decides. */
+export async function findFoodByFatSecretId(fatsecretId: string): Promise<Food | null> {
+  const id = fatsecretId.trim();
+  if (!id) return null;
+  const [row] = await sql<Food[]>`
+    select ${FOOD_COLS} from cadence.foods f
+    where f.fatsecret_id = ${id} and f.source = 'fatsecret'
+    limit 1`;
+  return row ?? null;
+}
+
+/**
+ * Strip a stale FatSecret row back to the one thing we may keep.
+ *
+ * Called when a row is past its 24 hours and the refresh failed. Retaining the numbers would breach
+ * the terms; deleting the row would throw away the `fatsecret_id` we ARE allowed to keep, and with
+ * it the user's stable reference. So the pointer survives and the perishable half does not — the
+ * food comes back the moment the network does.
+ */
+export async function expireFatSecretFood(fatsecretId: string): Promise<void> {
+  await sql`
+    update cadence.foods
+       set macros_per_base = '{}'::jsonb, servings = '[]'::jsonb, source_fetched_at = null
+     where fatsecret_id = ${fatsecretId} and source = 'fatsecret'`;
 }
 
 /** Patch a food the user owns. Shared/global rows (no owner) are not editable here. */

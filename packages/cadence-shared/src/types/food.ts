@@ -5,7 +5,7 @@
 /** Base unit for macros_per_base: g/ml are per 100; item is per 1. */
 export type FoodBaseUnit = 'g' | 'ml' | 'item';
 
-export type FoodSource = 'llm' | 'label_photo' | 'manual' | 'chat' | 'usda' | 'off';
+export type FoodSource = 'llm' | 'label_photo' | 'manual' | 'chat' | 'usda' | 'off' | 'fatsecret';
 
 export type FoodVisibility = 'private' | 'shared';
 
@@ -56,6 +56,18 @@ export interface Food {
   off_id: string | null;
   /** USDA FoodData Central id when source='usda'; null otherwise. */
   fdc_id: number | null;
+  /**
+   * FatSecret food id when source='fatsecret'; null otherwise. Their ToS lets us keep this
+   * indefinitely and almost nothing else — see `source_fetched_at`.
+   */
+  fatsecret_id?: string | null;
+  /**
+   * When the perishable half of this row (name, brand, servings, nutrients) was last read from
+   * source. NULL means it never expires: USDA is public domain and OFF is ODbL, so both keep their
+   * numbers. FatSecret data is 24-hour under their terms, so a row past that must be refreshed
+   * before use — and purged if the refresh fails.
+   */
+  source_fetched_at?: string | null;
   base_unit: FoodBaseUnit;
   macros_per_base: FoodNutrients;
   servings: FoodServing[];

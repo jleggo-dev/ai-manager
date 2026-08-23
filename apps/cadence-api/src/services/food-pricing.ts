@@ -20,6 +20,7 @@ import {
 } from '@cadence/shared';
 import { insertFood, searchFoods, touchFoodUsage, type FoodUsageSlot } from '../repos/foods.ts';
 import { estimateFood } from './food-capture.ts';
+import { findFatSecretMatch, isFatSecretRowFresh, refreshFatSecretFood } from './food-sources/fatsecret-enrich.ts';
 import { priceFood, nutrientsPerBase, type PortionInput } from './food-pricing-portion.ts';
 import { lexicalMatchScore, type RankedFood } from './food-resolver-rank.ts';
 import { loadResolveShared, rankedFoodsFor, type ResolveShared } from './food-resolver.ts';
@@ -180,6 +181,25 @@ async function priceOne(
   } catch (e) {
     console.warn('[food-pricing] resolve failed — leaving the item as parsed:', e);
     return { item: bare, priced: false, food_id: null };
+  }
+
+  /**
+   * The last deterministic rung (SPEC-fatsecret.md). Only reached when the ledger and USDA both
+   * came up empty, because it is the one source that costs a call every time it is priced — their
+   * terms make the numbers 24-hour data. Branded and restaurant food is exactly what it is for,
+   * and exactly what the other two structurally cannot hold.
+   */
+  if (!food) {
+    food = await findFatSecretMatch(item.name, item.brand);
+  }
+
+  /**
+   * A matched FatSecret row may have gone stale since the resolver put it in the pool, so it is
+   * re-read before it prices anything. A refresh that fails yields no food rather than a number we
+   * are no longer allowed to hold — the item falls through and keeps the parse's own estimate.
+   */
+  if (food && !isFatSecretRowFresh(food)) {
+    food = await refreshFatSecretFood(food.fatsecret_id ?? '');
   }
 
   if (!food && pin) {

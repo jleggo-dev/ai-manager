@@ -12,7 +12,7 @@ export interface MicroInsightItem {
 }
 
 /** Sources allowed to drive micro insights (never llm/chat/manual guesses). */
-const REAL_MICRO_SOURCES = new Set<FoodSource>(['usda', 'off', 'label_photo']);
+const REAL_MICRO_SOURCES = new Set<FoodSource>(['usda', 'off', 'label_photo', 'fatsecret']);
 
 /** Adult-ish daily anchors — conservative "likely low" floors, not clinical targets. */
 const ZINC_LOW_MG_PER_DAY = 7;
