@@ -10,6 +10,7 @@ import { FoodWeek } from './FoodWeek.tsx';
 import { NutrientsPanel } from './NutrientsPanel.tsx';
 import { buildWeek } from './foodWeekModel.ts';
 import type { FoodHomeSub } from './foodHomeSub.ts';
+import { useMealEnrichment } from './useMealEnrichment.ts';
 
 export type { FoodHomeSub } from './foodHomeSub.ts';
 
@@ -107,6 +108,13 @@ export function FoodHome({
     await refetch();
     onLogged?.();
   }
+
+  /**
+   * A meal can land before its numbers are final — a vendor-named food nothing matched gets looked
+   * up on the web afterwards (8-15s), and the day re-reads when it arrives. The user sees
+   * "logged" immediately and the macros sharpen under them.
+   */
+  useMealEnrichment(day ?? null, () => void onCorrected());
 
   async function onConfirm(logId: string) {
     if (confirming) return;

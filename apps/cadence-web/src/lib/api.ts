@@ -96,6 +96,7 @@ export {
 export {
   getNutritionDay,
   correctMealItem,
+  enrichMeal,
   patchMeal,
   setMacroTargets,
   getPlateAdvice,

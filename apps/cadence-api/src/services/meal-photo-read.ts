@@ -29,6 +29,7 @@ import { isMeal, parseMealResult, usageSlot, PROVISIONAL_BELOW } from './nutriti
 import { tickFoodLogOccurrence } from './nutrition.ts';
 import { priceParsedMeal } from './food-pricing.ts';
 import type { MealKind, Macros, NutritionLog } from '@cadence/shared';
+import { enrichFlags } from './meal-enrich.ts';
 
 export interface MealPhotoReading {
   photo_ref: string;
@@ -157,7 +158,7 @@ export async function logMealFromReading(userId: string, input: ReadingLogInput)
     input_method: 'photo',
     ai_confidence: confidence,
     raw_text: input.caption || null,
-    flags,
+    flags: { ...flags, ...enrichFlags(ledger.wants_research) },
     photo_ref: input.photo_ref,
     macros,
     provisional,

@@ -20,6 +20,8 @@ export interface DiaryRow {
   brand: string | null;
   amount: string | null;
   macros: MealMacros | null;
+  /** The numbers are still being looked up on the web — see useMealEnrichment. */
+  pending?: boolean;
 }
 
 /** "35.5 g", "1 cup", "2" — what they said, not what we inferred. Absent stays absent. */
@@ -44,6 +46,9 @@ export function mealName(m: Meal): string {
 export function diaryRows(meals: Meal[]): DiaryRow[] {
   const out: DiaryRow[] = [];
   for (const m of meals) {
+    // A meal whose vendor-named food is still being looked up. Said quietly on the row rather than
+    // as a spinner over the day: what is on screen is real, it is simply about to get better.
+    const pending = m.flags?.needs_enrich === true && m.flags?.enriched !== true;
     if (!m.items?.length) {
       // A meal we never broke down still owns its numbers — it is one row carrying the whole meal.
       out.push({
@@ -54,6 +59,7 @@ export function diaryRows(meals: Meal[]): DiaryRow[] {
         brand: null,
         amount: null,
         macros: m.macros ?? null,
+        ...(pending ? { pending: true } : {}),
       });
       continue;
     }
@@ -66,6 +72,7 @@ export function diaryRows(meals: Meal[]): DiaryRow[] {
         brand: item.brand?.trim() || null,
         amount: amountText(item.qty, item.unit),
         macros: item.est ?? null,
+        ...(pending && !item.food_id ? { pending: true } : {}),
       });
     });
   }

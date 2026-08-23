@@ -8735,3 +8735,12 @@ textarea.wiz-title {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* A row whose numbers are still being looked up (useMealEnrichment). Quiet by design — what is on
+   screen is real, it is simply about to get better. No spinner, no colour, no alarm. */
+.fh-item-p {
+  font-size: 9.5px;
+  font-weight: 600;
+  font-style: italic;
+  color: oklch(62% 0.02 150);
+}

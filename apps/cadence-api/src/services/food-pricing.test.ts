@@ -311,7 +311,14 @@ describe('priceMealItems — a failure never costs the meal', () => {
 
   it('handles an empty item list', async () => {
     const out = await priceMealItems(USER, []);
-    expect(out).toEqual({ items: [], macros: null, priced_count: 0, item_count: 0, fully_priced: false });
+    expect(out).toEqual({
+      items: [],
+      macros: null,
+      priced_count: 0,
+      item_count: 0,
+      fully_priced: false,
+      wants_research: [],
+    });
   });
 });
 

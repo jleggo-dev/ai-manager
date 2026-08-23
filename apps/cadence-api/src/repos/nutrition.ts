@@ -52,6 +52,8 @@ export async function updateNutritionLog(
     macros?: NutritionLog['macros'];
     ai_confidence?: number | null;
     provisional?: boolean;
+    /** Sparse signals on the row — merged, never replaced, so one writer cannot drop another's. */
+    flags?: Record<string, unknown>;
   },
 ): Promise<NutritionLog | null> {
   const [out] = await sql<NutritionLog[]>`
@@ -60,7 +62,8 @@ export async function updateNutritionLog(
       items = coalesce(${patch.items ? json(patch.items) : null}, items),
       macros = coalesce(${patch.macros ? json(patch.macros) : null}, macros),
       ai_confidence = coalesce(${patch.ai_confidence ?? null}, ai_confidence),
-      provisional = coalesce(${patch.provisional ?? null}, provisional)
+      provisional = coalesce(${patch.provisional ?? null}, provisional),
+      flags = flags || coalesce(${patch.flags ? json(patch.flags) : null}, '{}'::jsonb)
     where user_id = ${userId} and log_id = ${logId}
     returning ${COLS}`;
   return out ?? null;

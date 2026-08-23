@@ -19,6 +19,7 @@ import { readMealPhoto, logMealFromReading } from '../services/meal-photo-read.t
 import { logWater } from '../services/water.ts';
 import { mergeItems, reachBackToPin, renameItem } from '../services/meal-corrections.ts';
 import { findNutritionLog } from '../repos/nutrition.ts';
+import { enrichMeal } from '../services/meal-enrich.ts';
 import {
   BodyValidationError,
   parseBody,
@@ -214,6 +215,31 @@ router.patch('/meals/:id', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[PATCH /nutrition/meals/:id]', err);
     res.status(500).json({ error: 'failed to update meal' });
+  }
+});
+
+/**
+ * POST /nutrition/meals/:id/enrich — the slow lookup, after the meal is already safely on the day.
+ *
+ * The client fires this the moment a log lands carrying `flags.needs_enrich`, does not block on
+ * it, and re-reads the day when it resolves. It is a REQUEST rather than post-response work
+ * because this API has no `waitUntil` on Vercel — anything started after the response can be
+ * frozen when the function returns, which would leave the meal permanently half-priced with
+ * nothing to say so.
+ *
+ * Safe to call twice (it marks itself done), and safe never to call: the meal already carries the
+ * parse's numbers, which is precisely what it had before any of this existed.
+ */
+router.post('/meals/:id/enrich', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const out = await enrichMeal(userId, String(req.params.id));
+    if (!out.meal) return void res.status(404).json({ error: 'meal not found' });
+    res.json({ meal: out.meal, improved: out.improved });
+  } catch (err) {
+    console.error('[POST /nutrition/meals/:id/enrich]', err);
+    // The meal is untouched and still correct — say so rather than implying the log is damaged.
+    res.status(500).json({ error: 'could not improve those numbers just now' });
   }
 });
 

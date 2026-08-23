@@ -54,6 +54,7 @@ export { getBaselineRead } from './nutrition-baseline.ts';
 export type { BaselineRead } from './nutrition-baseline.ts';
 import { priceParsedMeal } from './food-pricing.ts';
 import { totalsFromItems } from './meal-corrections.ts';
+import { enrichFlags } from './meal-enrich.ts';
 
 export { parseMealResult, wantsTargets, PROVISIONAL_BELOW, isMeal } from './nutrition-parse.ts';
 export type { ParsedMealResult } from './nutrition-parse.ts';
@@ -185,7 +186,7 @@ export async function logMeal(
       input_method: 'text',
       ai_confidence: p.confidence,
       raw_text: p.raw_text || null,
-      flags: p.flags,
+      flags: { ...p.flags, ...enrichFlags(ledger.wants_research) },
       photo_ref: null,
       macros: ledger.macros,
       provisional,
@@ -292,7 +293,7 @@ export async function logMeal(
     input_method: photoRef ? 'photo' : 'text',
     ai_confidence: confidence,
     raw_text: text || null,
-    flags,
+    flags: { ...flags, ...enrichFlags(ledger.wants_research) },
     photo_ref: photoRef,
     macros,
     provisional,

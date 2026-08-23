@@ -66,6 +66,10 @@ export function FoodDiaryItems({
             {row.amount && <span className="fh-item-q">{row.amount}</span>}
           </span>
           {row.brand && <span className="fh-item-b">{row.brand}</span>}
+          {/* Never an error and never a spinner: the numbers below are real, they are just the
+              first estimate while the label is looked up. Counting what happened, not what is
+              missing. */}
+          {row.pending && <span className="fh-item-p">still checking the label…</span>}
           <span className="fh-item-nums">
             {COLUMNS.map((c) => {
               const v = cell(row.macros, c.key);

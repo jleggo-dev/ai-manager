@@ -24,7 +24,8 @@ export interface Meal {
   meal: MealKind;
   items: { name: string; brand?: string; qty?: number; unit?: string; est?: MealMacros; food_id?: string }[];
   raw_text?: string | null;
-  flags?: { alcohol?: boolean; caffeine?: boolean };
+  /** `needs_enrich`: a grounded lookup is worth doing. `enriched`: it has run. See enrichMeal. */
+  flags?: { alcohol?: boolean; caffeine?: boolean; needs_enrich?: boolean; enriched?: boolean };
   photo_url?: string | null; // short-lived signed URL when the meal was snapped
   macros?: MealMacros; // AI-documented estimates (or the user's correction)
   ai_confidence?: number | null;
@@ -112,6 +113,30 @@ export async function correctMealItem(
   });
   if (!res.ok) return null;
   return res.json();
+}
+
+/**
+ * Ask the server to improve a logged meal's numbers in the background.
+ *
+ * Fired — and deliberately NOT awaited by anything the user is looking at — the moment a log lands
+ * carrying `flags.needs_enrich`. The meal is already on the day with the parse's estimate; this
+ * goes and finds the manufacturer's real figures, which takes 8-15 seconds and occasionally much
+ * longer. Owner's ruling: show "logged", improve it after, update the UI when it arrives.
+ *
+ * Safe to call twice and safe never to call at all.
+ */
+export async function enrichMeal(logId: string): Promise<{ improved: number } | null> {
+  try {
+    const res = await fetch(`${BASE}/nutrition/meals/${encodeURIComponent(logId)}/enrich`, {
+      method: 'POST',
+      headers: headers(),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as { improved: number };
+  } catch {
+    // The meal is logged and correct; a failed improvement is not worth a word to anybody.
+    return null;
+  }
 }
 
 /** Confirm/edit daily macro targets (the user's tap; unlocks "left" + rings). */

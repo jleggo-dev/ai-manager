@@ -27,7 +27,7 @@ import { loadResolveShared, rankedFoodsFor, type ResolveShared } from './food-re
 import { PRESELECT_SCORE_MARGIN } from './food-resolver-types.ts';
 import { MACRO_KEYS } from './nutrition-day.ts';
 import { foodIsGoodEnough } from './food-sources/completeness.ts';
-import { researchFood, shouldResearchItem, type ResearchedFood } from './food-research.ts';
+import { shouldResearchItem, type ResearchedFood } from './food-research.ts';
 
 /**
  * A ledger price is applied without anyone tapping it, so the bar sits above the UI's preselect:
@@ -55,6 +55,11 @@ export interface PricingOutcome {
   item_count: number;
   /** Every item came from a food row — the meal's numbers are reproducible. */
   fully_priced: boolean;
+  /**
+   * Indexes of items that named a vendor and matched nothing — what `meal-enrich.ts` will look up
+   * in the background once the meal is safely on the day. Empty for a preview that pinned nothing.
+   */
+  wants_research: number[];
 }
 
 function portionOf(item: PriceableItem): PortionInput {
@@ -181,6 +186,8 @@ interface PricedOne {
   item: NutritionLog['items'][number];
   priced: boolean;
   food_id: string | null;
+  /** A vendor-named item nothing deterministic matched — worth a grounded lookup, LATER. */
+  wants_research?: boolean;
 }
 
 async function priceOne(
@@ -240,17 +247,20 @@ async function priceOne(
   }
 
   /**
-   * The web-grounded rung — dearest of all (seconds of a person's attention), so it is last, and
-   * it fires only for a VENDOR-NAMED food that every deterministic source missed. It runs at
-   * PREVIEW so the card shows the numbers being confirmed — numbers that changed after a confirm
-   * would break confirm-first — and the `est.source === 'research'` marker rides the card back to
-   * the log call so the question is never asked twice. A23 is what makes an unstable source
-   * usable at all: asked once, pinned forever.
+   * The web-grounded rung is NOT run here — pricing only reports that this item wants it.
+   *
+   * Owner's ruling (2026-08-23): *"we don't have to show that slowness to the user. We can just
+   * show 'logged' and input the information in the background — updating the user's UI / macros
+   * whenever we get the update back."* A grounded lookup is 8-15 seconds and occasionally much
+   * more, and nothing about it needs to happen while a person is standing there. So the meal
+   * lands immediately with the parse's own estimate, and `meal-enrich.ts` improves it afterwards.
+   *
+   * My worry that this breaks confirm-first was overstated, and the distinction matters: the user
+   * confirms WHAT they ate. Sharpening the numbers for a food they already named is not a change
+   * to what was logged — it is the brand promise (never make them repeat themselves) doing its job
+   * quietly.
    */
-  let researched: ResearchedFood | null = null;
-  if (!food && shouldResearchItem(item)) {
-    researched = await researchFood(userId, item);
-  }
+  const wants_research = !food && shouldResearchItem(item);
 
   /**
    * Pinning is for when there is NO food, never for when the one we have is thin.
@@ -266,7 +276,7 @@ async function priceOne(
    */
   if (!food && pin) {
     try {
-      food = await pinItem(userId, item, confidence, researched);
+      food = await pinItem(userId, item, confidence);
     } catch (e) {
       // A pin that fails costs consistency, never the meal: the parse's own numbers stand. Any
       // incomplete match we already had keeps its id, so the item stays linked to a real row.
@@ -274,15 +284,7 @@ async function priceOne(
       return { item: bare, priced: false, food_id: food?.food_id ?? null };
     }
   }
-  if (!food) {
-    if (researched) {
-      const est = priceFood(researched.food, portion);
-      if (Object.keys(est).length > 0) {
-        return { item: { ...bare, est: { ...est, source: 'research' } }, priced: false, food_id: null };
-      }
-    }
-    return { item: bare, priced: false, food_id: null };
-  }
+  if (!food) return { item: bare, priced: false, food_id: null, wants_research };
 
   const est = priceFood(food, portion);
   if (Object.keys(est).length === 0) return { item: bare, priced: false, food_id: food.food_id };
@@ -303,7 +305,8 @@ export async function priceMealItems(
   opts: { confidence?: number | null; pin?: boolean; slot?: FoodUsageSlot } = {},
 ): Promise<PricingOutcome> {
   const list = items.filter((i) => i && typeof i.name === 'string' && i.name.trim());
-  if (list.length === 0) return { items: [], macros: null, priced_count: 0, item_count: 0, fully_priced: false };
+  if (list.length === 0)
+    return { items: [], macros: null, priced_count: 0, item_count: 0, fully_priced: false, wants_research: [] };
 
   let shared: ResolveShared;
   try {
@@ -316,6 +319,7 @@ export async function priceMealItems(
       priced_count: 0,
       item_count: list.length,
       fully_priced: false,
+      wants_research: [],
     };
   }
 
@@ -345,6 +349,7 @@ export async function priceMealItems(
     priced_count: priced.length,
     item_count: list.length,
     fully_priced: priced.length === list.length,
+    wants_research: results.flatMap((r, i) => (r.wants_research ? [i] : [])),
   };
 }
 
@@ -359,8 +364,14 @@ export async function priceParsedMeal(
   userId: string,
   parsed: { items: NutritionLog['items']; macros: Macros | null; confidence: number | null },
   opts: { pin?: boolean; slot?: FoodUsageSlot } = {},
-): Promise<{ items: NutritionLog['items']; macros: Macros | null; fully_priced: boolean }> {
-  if (!parsed.items.length) return { items: parsed.items, macros: parsed.macros, fully_priced: false };
+): Promise<{
+  items: NutritionLog['items'];
+  macros: Macros | null;
+  fully_priced: boolean;
+  wants_research: number[];
+}> {
+  if (!parsed.items.length)
+    return { items: parsed.items, macros: parsed.macros, fully_priced: false, wants_research: [] };
 
   const out = await priceMealItems(userId, parsed.items, {
     confidence: parsed.confidence,
@@ -379,7 +390,7 @@ export async function priceParsedMeal(
    */
   const everyItemCounted = out.items.length > 0 && out.items.every((i) => i.est && Object.keys(i.est).length > 0);
   if (out.priced_count === 0 && !everyItemCounted) {
-    return { items: out.items, macros: parsed.macros, fully_priced: false };
+    return { items: out.items, macros: parsed.macros, fully_priced: false, wants_research: out.wants_research };
   }
 
   const macros = (everyItemCounted ? (out.macros ?? parsed.macros) : (parsed.macros ?? out.macros)) ?? null;
@@ -388,5 +399,6 @@ export async function priceParsedMeal(
     items: out.items,
     macros: macros ? { ...macros, source: fromLedger ? 'ledger' : 'ai' } : null,
     fully_priced: fromLedger,
+    wants_research: out.wants_research,
   };
 }
