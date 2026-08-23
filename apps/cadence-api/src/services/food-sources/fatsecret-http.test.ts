@@ -78,6 +78,53 @@ describe('the client', () => {
     expect(isFatSecretConfigured()).toBe(false);
   });
 
+  /**
+   * FatSecret reports quota exhaustion as HTTP 200 with `error.code`, so the 429 branch never sees
+   * it. Before this, hitting the daily cap meant a failed call on every subsequent pricing with no
+   * back-off at all — the API would be hammered for the rest of the day.
+   */
+  it('backs off when the daily limit is reported as a 200 with an error body', async () => {
+    cadenceConfig.fatSecret.consumerKey = 'k';
+    cadenceConfig.fatSecret.consumerSecret = 's';
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: { code: 11, message: 'Application request limit reached' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    __setFatSecretFetchForTests(fetchMock as unknown as typeof fetch);
+    const { fatSecretCall } = await import('./fatsecret-http.ts');
+
+    await expect(fatSecretCall({ method: 'foods.search', search_expression: 'a' })).rejects.toThrow(/limit/i);
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    // The next call waits on the cooldown rather than going straight back out.
+    const started = Date.now();
+    const pending = fatSecretCall({ method: 'foods.search', search_expression: 'b' });
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(Date.now() - started).toBeLessThan(50); // it is waiting, not blocking the event loop
+    void pending.catch(() => undefined);
+    __setFatSecretFetchForTests(null); // clears the cooldown so the suite does not stall
+  });
+
+  it('surfaces a non-throttling error without cooling down', async () => {
+    cadenceConfig.fatSecret.consumerKey = 'k';
+    cadenceConfig.fatSecret.consumerSecret = 's';
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: { code: 5, message: 'Invalid consumer key' } }), { status: 200 }),
+    );
+    __setFatSecretFetchForTests(fetchMock as unknown as typeof fetch);
+    const { fatSecretCall } = await import('./fatsecret-http.ts');
+
+    await expect(fatSecretCall({ method: 'food.get.v4', food_id: '1' })).rejects.toThrow(/consumer key/i);
+    // Bad credentials are not a reason to pause; the second call goes out immediately.
+    await expect(fatSecretCall({ method: 'food.get.v4', food_id: '2' })).rejects.toThrow(/consumer key/i);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('refuses to call without credentials rather than sending an unsigned request', async () => {
     const fetchMock = vi.fn();
     __setFatSecretFetchForTests(fetchMock as unknown as typeof fetch);

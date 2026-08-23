@@ -21,6 +21,17 @@ const MAX_IN_FLIGHT = 2;
 const DEFAULT_COOLDOWN_MS = 60_000;
 const MAX_COOLDOWN_MS = 5 * 60_000;
 
+/**
+ * FatSecret's throttling codes. These arrive as **HTTP 200 with an error body**, not as 429, so
+ * they never reach the status check below — which meant that before 2026-08-23 exhausting the
+ * daily quota produced a failed call on every subsequent pricing, forever, with no back-off.
+ *
+ *   11 — "Application request limit reached" (the tier's DAILY cap; Basic allows 5,000)
+ *   12 — "User is performing too many actions" (a transient per-user throttle)
+ */
+const ERR_APP_LIMIT = 11;
+const ERR_USER_THROTTLE = 12;
+
 export class FatSecretConfigError extends Error {
   constructor(message = 'FatSecret is not configured') {
     super(message);
@@ -132,15 +143,15 @@ function releaseSlot(): void {
   if (next) next();
 }
 
-function applyCooldown(res: Response): void {
-  const retryAfter = res.headers.get('retry-after');
-  let ms = DEFAULT_COOLDOWN_MS;
+function applyCooldown(reason: string, res?: Response, fallbackMs = DEFAULT_COOLDOWN_MS): void {
+  const retryAfter = res?.headers.get('retry-after');
+  let ms = fallbackMs;
   if (retryAfter) {
     const secs = Number(retryAfter);
     if (Number.isFinite(secs) && secs > 0) ms = Math.min(MAX_COOLDOWN_MS, secs * 1000);
   }
   cooldownUntil = Math.max(cooldownUntil, Date.now() + ms);
-  console.warn(`[fatsecret] rate limited (429); cooling down ${ms}ms`);
+  console.warn(`[fatsecret] ${reason}; cooling down ${ms}ms`);
 }
 
 async function rawCall(params: Record<string, string>): Promise<unknown> {
@@ -157,7 +168,7 @@ async function rawCall(params: Record<string, string>): Promise<unknown> {
       headers: { Accept: 'application/json' },
     });
     if (res.status === 429) {
-      applyCooldown(res);
+      applyCooldown('rate limited (429)', res);
       throw new FatSecretHttpError(429, 'FatSecret rate limit exceeded — try again shortly');
     }
     if (!res.ok) {
@@ -172,7 +183,17 @@ async function rawCall(params: Record<string, string>): Promise<unknown> {
      * credentials problem becomes "no results" for a week, so it is raised here instead.
      */
     const err = json?.error as { code?: number; message?: string } | undefined;
-    if (err) throw new FatSecretHttpError(err.code ?? 400, err.message ?? 'FatSecret returned an error');
+    if (err) {
+      /**
+       * Back off on the throttling codes, which is the whole reason they are named above. The
+       * daily cap gets the LONGEST cooldown we allow rather than the default minute: it resets on
+       * their clock, not ours, so a short retry is just a wasted call — but a fixed long one still
+       * recovers by itself once the day rolls over.
+       */
+      if (err.code === ERR_APP_LIMIT) applyCooldown('daily request limit reached', undefined, MAX_COOLDOWN_MS);
+      else if (err.code === ERR_USER_THROTTLE) applyCooldown('throttled (too many actions)', undefined);
+      throw new FatSecretHttpError(err.code ?? 400, err.message ?? 'FatSecret returned an error');
+    }
     return json;
   } finally {
     releaseSlot();

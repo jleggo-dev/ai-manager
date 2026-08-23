@@ -81,6 +81,38 @@ apply here: the base API is *free* at our size, and the AI features are **separa
 at undisclosed prices**. There is no per-call number to compare against tokens. That has to come
 from a sales conversation.
 
+## Rate limits, measured
+
+| Source | Limit | Scope | Signalled how |
+|---|---|---|---|
+| **FatSecret Basic** | **5,000 calls/day** | the whole app, not per user | error **code 11**, as HTTP **200** |
+| **FatSecret Premier Free** | unlimited | — | — |
+| **USDA** (api.data.gov) | **3,600 requests/hour** | the whole app | HTTP 429 + `x-ratelimit-*` headers |
+| **Open Food Facts** | browser-driven | the user's own device | does not pool against us |
+
+USDA's figure is measured from a live `x-ratelimit-limit` header rather than quoted from docs.
+
+**The trap, and it cost a fix:** FatSecret reports throttling as **HTTP 200 with an error body** —
+code 11 *"Application request limit reached"* (the daily cap) and code 12 *"User is performing too
+many actions"*. Neither reaches a `res.status === 429` check, so a client watching only the status
+keeps calling for the rest of the day after exhausting its quota. Both codes now trigger the
+cooldown; the daily one takes the longest we allow, because it resets on their clock and a short
+retry is a wasted call.
+
+Also worth noting: **code 21 is "Invalid IP address detected"** — the allowlist OAuth 2.0 would
+have required, and the reason we sign with 1.0.
+
+### What we will actually spend
+
+FatSecret is the last rung, so it only fires when the ledger AND USDA both miss. Discovering a new
+branded food costs **2 calls** (a search plus a `food.get.v4`); after that the shared row answers.
+The 24-hour rule then costs **one refresh per distinct food per day it is eaten** — and because
+those rows are shared, that cost does not multiply by users. Two people logging the same latte pay
+for one refresh between them.
+
+So 5,000/day binds at roughly *thousands of distinct branded foods logged per day*, not thousands
+of users. Comfortable at our size, and Premier Free removes the ceiling anyway.
+
 ## Are they just doing what we are doing?
 
 Partly — and the difference is the part that matters.
