@@ -3740,6 +3740,9 @@ textarea.wiz-title {
   font-family: inherit;
   line-height: 1.45;
   outline: none;
+  /* `resize: none` stays — the box grows to fit what was SAID (GrowingTextarea sets the height
+     from scrollHeight), which is better than a drag handle nobody finds on a phone. What is gone
+     is the fixed two rows that made a dictated paragraph unreadable. */
   resize: none;
 }
 .logbox-in:focus {
@@ -8653,4 +8656,82 @@ textarea.wiz-title {
   font: inherit;
   font-size: 13px;
   color: oklch(32% 0.03 150);
+}
+
+/* Caption + mic on one row — the composer shape, wherever a capture happens (brief 01). */
+.fl-cap-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+.fl-cap-row > textarea {
+  flex: 1;
+  min-width: 0;
+}
+
+/* CONFIRM CARD: the nutrients, visible before the log (brief 03).
+   Same four columns and the same "—" rule as the day's diary — one visual language for "a food
+   and its numbers", learned once and read the same whether it is about to be logged or already is.
+   No colour: this is what you are about to eat, not a verdict on it. */
+.fa-row-macros {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0 6px;
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px dashed oklch(92% 0.012 95);
+}
+.fa-row-m {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: oklch(48% 0.02 130);
+}
+.fa-row-m i {
+  font-style: normal;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: oklch(66% 0.02 150);
+}
+/* The name is a control, and has to look like one without shouting. */
+.fa-row-name {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 800;
+  color: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: oklch(86% 0.03 120);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.fa-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 6px 0 2px;
+  border: 1px solid oklch(89% 0.02 120);
+  border-radius: 12px;
+  background: oklch(99% 0.005 95);
+  padding: 11px;
+}
+.fa-edit-note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: oklch(52% 0.02 150);
+}
+.fa-edit-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }

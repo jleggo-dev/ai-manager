@@ -11,29 +11,53 @@ function KeptRow({
   busy,
   onQty,
   onRemove,
+  onEdit,
 }: {
   row: AmountRow;
   index: number;
   busy?: boolean;
   onQty: (i: number, q: number) => void;
   onRemove: (i: number) => void;
+  onEdit: (i: number) => void;
 }) {
   const qty = row.qty ?? 1;
-  const sub = [
-    [qty, row.unit].filter(Boolean).join(' '),
-    row.est?.kcal != null ? `${Math.round((row.est.kcal * qty) / row.baseQty)} kcal` : '',
-    row.est?.protein_g != null ? `${Math.round((row.est.protein_g * qty) / row.baseQty)}g protein` : '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  /**
+   * All four macros, not just calories and protein — brief 03.
+   *
+   * "This incident needed the NUTRIENTS visible too: the numbers were right and the name was
+   * wrong, and no arrangement of the current card lets you see that." Scaled to the amount on
+   * screen, so what is shown is what will be logged. A dash where we hold no number, never a
+   * zero — the same rule as the diary, because it is the same question being asked earlier.
+   */
+  const scaled = (v: number | null | undefined): string =>
+    typeof v === 'number' ? String(Math.round((v * qty) / row.baseQty)) : '—';
+  const macros = [
+    { k: 'kcal', v: scaled(row.est?.kcal) },
+    { k: 'P', v: scaled(row.est?.protein_g) },
+    { k: 'C', v: scaled(row.est?.carbs_g) },
+    { k: 'F', v: scaled(row.est?.fat_g) },
+  ];
+  const sub = [qty, row.unit].filter(Boolean).join(' ');
   return (
     <div className="fa-row">
       <div className="fa-row-t">
         <span className="fa-row-n">
-          <b>{row.name}</b>
+          {/* The name is the door: this is where a wrong one gets fixed while the numbers keep
+              their place, which is the whole of brief 03. */}
+          <button type="button" className="fa-row-name" disabled={busy} onClick={() => onEdit(index)}>
+            {row.name}
+          </button>
           {row.source === 'assumed' && <span className="fa-tag">ASSUMED</span>}
         </span>
         <span className="fa-row-s">{sub}</span>
+      </div>
+      <div className="fa-row-macros">
+        {macros.map((m) => (
+          <span key={m.k} className="fa-row-m">
+            <i>{m.k}</i>
+            {m.v}
+          </span>
+        ))}
       </div>
       <div className="fa-step">
         <button
@@ -140,11 +164,14 @@ export function MealAmountRows({
   busy,
   onQty,
   onRemove,
+  onEdit,
 }: {
   rows: AmountRow[];
   busy?: boolean;
   onQty: (i: number, q: number, unit?: string) => void;
   onRemove: (i: number) => void;
+  /** Open the rename/merge editor for one row — brief 03's repairs, before the log. */
+  onEdit: (i: number) => void;
 }) {
   return (
     <div className="fa-rows">
@@ -152,7 +179,15 @@ export function MealAmountRows({
         row.source === 'asked' && row.qty == null ? (
           <AskedRow key={`${row.name}-${i}`} row={row} index={i} busy={busy} onQty={onQty} />
         ) : (
-          <KeptRow key={`${row.name}-${i}`} row={row} index={i} busy={busy} onQty={onQty} onRemove={onRemove} />
+          <KeptRow
+            key={`${row.name}-${i}`}
+            row={row}
+            index={i}
+            busy={busy}
+            onQty={onQty}
+            onRemove={onRemove}
+            onEdit={onEdit}
+          />
         ),
       )}
     </div>

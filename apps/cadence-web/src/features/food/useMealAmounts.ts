@@ -86,6 +86,53 @@ export function useMealAmounts(preview: MealPreview) {
 
   const removeRow = (i: number) => setRows((prev) => prev.filter((_, j) => j !== i));
 
+  /**
+   * Fix the name, keep every number — brief 03's central move, here BEFORE anything is written.
+   *
+   * "We might not have the right name but we definitely have the right nutrients." The card is the
+   * last moment this is free: after the log, a name nothing matched is pinned as a permanent food
+   * and the wrong one resolves again tomorrow.
+   */
+  const renameRow = (i: number, name: string, brand?: string | null) =>
+    setRows((prev) =>
+      prev.map((r, j) =>
+        j !== i || !name.trim()
+          ? r
+          : {
+              ...r,
+              name: name.trim(),
+              ...(brand === undefined ? {} : brand?.trim() ? { brand: brand.trim() } : { brand: undefined }),
+            },
+      ),
+    );
+
+  /**
+   * "These are the same thing" — the repair a comma-split parse actually needs.
+   *
+   * Folds the nutrients, not just the row: a phantom item carries real numbers, and deleting it
+   * while keeping the meal total is how 450 mg of sodium that was never eaten stays on the day.
+   * The AMOUNT is not summed — two rows of one food are one portion read twice, and a doubled
+   * amount hides inside a plausible number where a wrong one is visible and correctable.
+   */
+  const mergeRow = (from: number, into: number) =>
+    setRows((prev) => {
+      const a = prev[from];
+      const b = prev[into];
+      if (from === into || !a || !b) return prev;
+      const est: Record<string, number> = {};
+      for (const side of [b.est, a.est]) {
+        for (const [k, v] of Object.entries(side ?? {})) {
+          if (typeof v === 'number' && Number.isFinite(v)) est[k] = (est[k] ?? 0) + v;
+        }
+      }
+      const merged: AmountRow = {
+        ...b,
+        ...(b.brand || a.brand ? { brand: b.brand || a.brand } : {}),
+        ...(Object.keys(est).length ? { est: est as MealMacros } : {}),
+      };
+      return prev.map((r, j) => (j === into ? merged : r)).filter((_, j) => j !== from);
+    });
+
   const asked = rows.filter((r) => r.source === 'asked' && r.qty == null).length;
   const total = useMemo(() => sum(rows), [rows]);
 
@@ -104,5 +151,5 @@ export function useMealAmounts(preview: MealPreview) {
     macros: total,
   });
 
-  return { rows, setQty, setBrand, removeRow, asked, total, toPreview };
+  return { rows, setQty, setBrand, removeRow, renameRow, mergeRow, asked, total, toPreview };
 }

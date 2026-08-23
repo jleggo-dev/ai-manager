@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useMealLog } from './useMealLog.ts';
 import { PhotoReadPanel } from '../../food/PhotoReadPanel.tsx';
 import { useNutritionBaseline } from './useNutritionBaseline.ts';
+import { GrowingTextarea } from '../../../components/GrowingTextarea.tsx';
 
 /**
  * Observe-phase meal logging: text and/or photo, day totals, tap-to-confirm provisional
@@ -100,12 +101,16 @@ export function MealLogPanel({
       )}
       {!meal.mealPhoto && (
         <div className="steer-row">
-          <textarea
+          {/* Grows with what is said, like the coach's composer — brief 01. This is the box the
+              owner dictated four sentences into and could not re-read: two fixed rows, `resize:
+              none`, and voice makes long captures the NORMAL case rather than the edge one.
+              A capture you cannot re-read is a capture you cannot correct. */}
+          <GrowingTextarea
             className="logbox-in"
             value={meal.mealText}
-            onChange={(e) => meal.setMealText(e.target.value)}
+            onChange={meal.setMealText}
+            ariaLabel="What did you have?"
             placeholder={'e.g. "two eggs, sourdough toast and a coffee" — or just snap it'}
-            rows={2}
             disabled={meal.mealBusy}
           />
           <MicButton value={meal.mealText} onChange={meal.setMealText} disabled={meal.mealBusy} />
