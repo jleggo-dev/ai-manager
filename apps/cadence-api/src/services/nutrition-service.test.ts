@@ -19,6 +19,14 @@ const d = HAS_DB ? describe : describe.skip;
 /** Dedicated synthetic user — isolated from plan-commit and demo accounts. */
 const USER = testUserId('a104');
 
+// The FatSecret rung is mocked for the same reason USDA is: a test must not depend on a third
+// party, and once real credentials exist in .env these would quietly start making live calls.
+vi.mock('./food-sources/fatsecret-enrich.ts', () => ({
+  findFatSecretMatch: vi.fn(async () => null),
+  refreshFatSecretFood: vi.fn(async () => null),
+  isFatSecretRowFresh: vi.fn(() => true),
+}));
+
 vi.mock('../ai/aim.ts', () => ({ runJob: vi.fn(), runJobBySlug: vi.fn() }));
 
 let sql: (typeof import('../db/sql.ts'))['sql'];

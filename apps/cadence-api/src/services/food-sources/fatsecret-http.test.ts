@@ -2,7 +2,18 @@
  * OAuth 1.0 signing and the HTTP guards. No credentials needed — the signature is checked against
  * a fixed key/nonce/timestamp, which is the only way to test it deterministically.
  */
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+
+/**
+ * The config is MOCKED rather than read from the environment: once real credentials landed in
+ * apps/cadence-api/.env these assertions started depending on whose machine they ran on, which is
+ * not a test. Configured-ness is set explicitly per case here.
+ */
+vi.mock('../../config.ts', () => ({
+  cadenceConfig: { fatSecret: { consumerKey: '', consumerSecret: '' } },
+}));
+
+import { cadenceConfig } from '../../config.ts';
 import { signRequest, __setFatSecretFetchForTests, isFatSecretConfigured } from './fatsecret-http.ts';
 
 describe('signRequest (OAuth 1.0, two-legged)', () => {
@@ -48,10 +59,22 @@ describe('signRequest (OAuth 1.0, two-legged)', () => {
 });
 
 describe('the client', () => {
+  beforeEach(() => {
+    cadenceConfig.fatSecret.consumerKey = '';
+    cadenceConfig.fatSecret.consumerSecret = '';
+  });
   afterEach(() => __setFatSecretFetchForTests(null));
 
   it('reports itself unconfigured when there are no credentials', () => {
-    // Nothing is set in the test env, which is the shipped default.
+    expect(isFatSecretConfigured()).toBe(false);
+  });
+
+  it('reports itself configured once both halves are present', () => {
+    cadenceConfig.fatSecret.consumerKey = 'k';
+    cadenceConfig.fatSecret.consumerSecret = 's';
+    expect(isFatSecretConfigured()).toBe(true);
+    // One half alone is not credentials.
+    cadenceConfig.fatSecret.consumerSecret = '';
     expect(isFatSecretConfigured()).toBe(false);
   });
 

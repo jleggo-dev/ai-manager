@@ -25,6 +25,14 @@ const USER = testUserId('a105');
 
 vi.mock('../ai/aim.ts', () => ({ runJob: vi.fn(), runJobBySlug: vi.fn() }));
 // No network in a determinism test: local rows only, so ranking is the only variable.
+// The FatSecret rung is mocked for the same reason USDA is: a test must not depend on a third
+// party, and once real credentials exist in .env these would quietly start making live calls.
+vi.mock('./food-sources/fatsecret-enrich.ts', () => ({
+  findFatSecretMatch: vi.fn(async () => null),
+  refreshFatSecretFood: vi.fn(async () => null),
+  isFatSecretRowFresh: vi.fn(() => true),
+}));
+
 vi.mock('./food-sources/usda-enrich.ts', () => ({
   enrichFoodsWithUsda: vi.fn(async (_u: string, _q: string, local: Food[]) => local),
   searchFoodsWithUsda: vi.fn(async () => []),
