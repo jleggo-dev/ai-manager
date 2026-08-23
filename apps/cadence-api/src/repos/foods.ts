@@ -358,6 +358,46 @@ export async function updateFood(userId: string, foodId: string, patch: UpdateFo
   return row ?? null;
 }
 
+/**
+ * Append one measure to a food's `servings[]` — including on a SHARED row, which `updateFood`
+ * deliberately refuses.
+ *
+ * Why this is allowed to touch a global row when nothing else is: a household weight is a fact
+ * about the FOOD, not about the user. A cup of chopped shallots weighs the same for everybody, so
+ * learning it once and keeping it per-user would fragment one fact into thousands of copies and
+ * re-ask a model for each — precisely the variance the ledger exists to remove. This is the
+ * manufacture-determinism pattern applied to portions: pay once, then the deterministic rung hits
+ * forever, for everyone.
+ *
+ * What keeps that safe is entirely upstream. The caller must have run `checkPlausible` first, so a
+ * density outside what real food occupies never reaches here. And the write is IDEMPOTENT on the
+ * label: a measure already on the row wins, so a second lookup can never quietly overwrite a
+ * value USDA published with one a model guessed.
+ *
+ * Returns the updated row, or null when the food does not exist.
+ */
+export async function appendFoodServing(foodId: string, serving: FoodServing): Promise<Food | null> {
+  const label = serving.label.trim();
+  if (!label || !(serving.amount_g > 0)) return null;
+  const [row] = await sql<Food[]>`
+    update cadence.foods f
+       set servings = f.servings || ${json([serving])}::jsonb
+     where f.food_id = ${foodId}
+       and not exists (
+         select 1 from jsonb_array_elements(f.servings) s
+          where lower(s->>'label') = lower(${label})
+       )
+    returning ${FOOD_COLS}`;
+  // No row back means the label was already there — a success, not a failure.
+  return row ?? (await getFoodAnyOwner(foodId));
+}
+
+/** Read a food row without the per-user visibility join — used only to confirm an idempotent write. */
+async function getFoodAnyOwner(foodId: string): Promise<Food | null> {
+  const [row] = await sql<Food[]>`select ${FOOD_COLS} from cadence.foods f where f.food_id = ${foodId}`;
+  return row ?? null;
+}
+
 /** Delete a food the user owns. Shared/global rows are not deletable by users. */
 export async function deleteFood(userId: string, foodId: string): Promise<boolean> {
   const rows = await sql`

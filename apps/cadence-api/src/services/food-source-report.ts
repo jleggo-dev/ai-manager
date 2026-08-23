@@ -18,6 +18,7 @@
  * included, with the guards' verdicts attached as `notes` rather than applied as a silent veto.
  */
 import { microProvenance, nutritionTier, type NutritionTier } from './food-sources/completeness.ts';
+import { parseMeasure, singular } from './portion-measure.ts';
 import { priceFood } from './food-pricing-portion.ts';
 import type { Food, FoodNutrients, FoodServing } from '@cadence/shared';
 
@@ -64,14 +65,45 @@ export function preferredServing(food: Food): FoodServing | null {
   return byDefault ?? servings[0] ?? null;
 }
 
-/** Find the serving a requested measure names — loose match, because she types like a person. */
+/**
+ * Find the serving a requested measure names.
+ *
+ * Matched on the UNIT WORD, not on substring containment, which was a real bug: "680 g" contains
+ * "g", so a containment match picked a "100 g" serving and priced the item at 68,000 g. A caught
+ * unit is either the same unit or it is not.
+ */
 export function matchMeasure(food: Food, requested: string | null | undefined): FoodServing | null {
   const want = (requested ?? '').trim().toLowerCase();
   if (!want) return null;
   const servings = Array.isArray(food.servings) ? food.servings : [];
+
+  const exact = servings.find((s) => s.label.trim().toLowerCase() === want);
+  if (exact) return exact;
+
+  const parsed = parseMeasure(want);
+
+  /**
+   * A COUNT matches on the NOUN, because a stored count serving files its unit as 'item' — a row
+   * for "1 shallot" carries unit 'item', so comparing units would never match "3 shallots" to it.
+   * Singularised on both sides, since people write the plural and rows tend to hold the singular.
+   */
+  if (parsed.kind === 'count') {
+    const noun = singular(parsed.countOf.split(/\s+/)[0] ?? '');
+    if (!noun) return null;
+    return (
+      servings.find((s) => {
+        const asCount = parseMeasure(s.label);
+        return asCount.kind === 'count' && singular(asCount.countOf.split(/\s+/)[0] ?? '') === noun;
+      }) ?? null
+    );
+  }
+
+  const unit = parsed.unit.toLowerCase();
+  if (!unit) return null;
   return (
-    servings.find((s) => s.label.toLowerCase() === want || s.unit.toLowerCase() === want) ??
-    servings.find((s) => s.label.toLowerCase().includes(want) || want.includes(s.unit.toLowerCase())) ??
+    servings.find((s) => s.unit.trim().toLowerCase() === unit) ??
+    // The label's own unit word, so "1 tbsp chopped" answers a request for tbsp.
+    servings.find((s) => parseMeasure(s.label.trim().toLowerCase()).unit.toLowerCase() === unit) ??
     null
   );
 }

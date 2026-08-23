@@ -20,6 +20,7 @@ export type AiLogKind =
   | 'parse_nutrition_label'
   | 'estimate_food'
   | 'research_food'
+  | 'resolve_portion'
   | 'identify_food'
   | 'structure_recipe'
   | 'parse_fridge_photo'
