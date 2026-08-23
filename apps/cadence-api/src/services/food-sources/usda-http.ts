@@ -132,12 +132,12 @@ function isTransport(res: Response): boolean {
   return res.status >= 500 || (res.status === 404 && !(res.headers.get('content-type') ?? '').includes('json'));
 }
 
-async function fetchWithRetries(url: string): Promise<Response> {
+async function fetchWithRetries(url: string, init?: RequestInit): Promise<Response> {
   let last: Response | null = null;
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     if (attempt > 0) await sleep(RETRY_DELAYS_MS[attempt - 1]!);
     try {
-      const res = await fetchImpl(url, { method: 'GET', headers: { Accept: 'application/json' } });
+      const res = await fetchImpl(url, init ?? { method: 'GET', headers: { Accept: 'application/json' } });
       if (!isTransport(res)) return res;
       last = res;
     } catch (e) {
@@ -147,7 +147,7 @@ async function fetchWithRetries(url: string): Promise<Response> {
   return last as Response;
 }
 
-async function rawUsdaGet(pathAndQuery: string): Promise<unknown> {
+async function rawUsdaCall(pathAndQuery: string, body?: unknown): Promise<unknown> {
   const key = requireApiKey();
   const sep = pathAndQuery.includes('?') ? '&' : '?';
   const url = `${USDA_BASE}${pathAndQuery}${sep}api_key=${encodeURIComponent(key)}`;
@@ -162,7 +162,16 @@ async function rawUsdaGet(pathAndQuery: string): Promise<unknown> {
 
   await acquireSlot();
   try {
-    const res = await fetchWithRetries(url);
+    const res = await fetchWithRetries(
+      url,
+      body === undefined
+        ? undefined
+        : {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify(body),
+          },
+    );
     if (res.status === 429) {
       applyCooldown(res);
       throw new UsdaHttpError(429, 'USDA rate limit exceeded — try again shortly');
@@ -186,9 +195,36 @@ export async function usdaGet(pathAndQuery: string): Promise<unknown> {
   const existing = singleFlight.get(pathAndQuery);
   if (existing) return existing;
 
-  const promise = rawUsdaGet(pathAndQuery).finally(() => {
+  const promise = rawUsdaCall(pathAndQuery).finally(() => {
     singleFlight.delete(pathAndQuery);
   });
   singleFlight.set(pathAndQuery, promise);
+  return promise;
+}
+
+/**
+ * POST the same API — how SEARCH must be issued, because one dataType cannot survive a query string.
+ *
+ * `Survey (FNDDS)` is the documented name of USDA's survey dataset and FDC returns it in results,
+ * but sending it as a `dataType` GET parameter is a hard 400 in EVERY encoding — literal parens,
+ * %28/%29, plus-space, comma-joined. Their query parser simply will not take it, and the failure
+ * is total: the whole search 400s, so adding FNDDS to the list silently broke every whole-food
+ * lookup. The POST form takes `dataType` as a JSON array and works first time.
+ *
+ * Found the day it shipped, by an unrelated end-to-end run — NOT by the smoke sweep, which called
+ * search without dataTypes and so never exercised the gate the app actually uses. The sweep now
+ * goes through `searchUsdaFoods` for that reason.
+ *
+ * Single-flight is keyed on path + body so two identical searches still collapse into one call.
+ */
+export async function usdaPost(path: string, body: unknown): Promise<unknown> {
+  const key = `${path}::${JSON.stringify(body)}`;
+  const existing = singleFlight.get(key);
+  if (existing) return existing;
+
+  const promise = rawUsdaCall(path, body).finally(() => {
+    singleFlight.delete(key);
+  });
+  singleFlight.set(key, promise);
   return promise;
 }

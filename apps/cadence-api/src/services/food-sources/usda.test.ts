@@ -46,11 +46,24 @@ describe('searchUsdaFoods / fetchUsdaFoodDetail', () => {
     expect(hits).toHaveLength(1);
     expect(hits[0]!.fdc_id).toBe(173944);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const url = String(fetchMock.mock.calls[0]![0]);
-    expect(url).toContain('/foods/search?');
-    expect(url).toContain('dataType=Foundation');
-    expect(url).toContain('api_key=');
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toContain('/foods/search?');
+    expect(String(url)).toContain('api_key=');
     // Never assert the key value — just that the query param is present.
+
+    /**
+     * The datasets ride in a POST BODY, and this assertion is the regression guard.
+     *
+     * 'Survey (FNDDS)' is a hard 400 as a `dataType` query parameter in every encoding, and the
+     * failure takes the entire search with it — so putting it in the list silently broke every
+     * whole-food lookup in the app. The old test asserted `dataType=Foundation` in the URL, which
+     * would keep passing against exactly the shape that does not work.
+     */
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(String(init.body)) as { dataType: string[]; query: string };
+    expect(body.query).toBe('banana');
+    expect(body.dataType).toContain('Foundation');
+    expect(body.dataType).toContain('Survey (FNDDS)');
   });
 
   it('coalesces concurrent identical requests (single-flight)', async () => {

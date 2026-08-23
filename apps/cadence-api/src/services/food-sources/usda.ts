@@ -3,7 +3,7 @@
  * Search + detail over HTTP; mapping is pure (usda-map). Always cache via usda-enrich.
  * No LLM. Key is server-only (cadenceConfig.usdaApiKey).
  */
-import { isUsdaConfigured, UsdaConfigError, usdaGet } from './usda-http.ts';
+import { isUsdaConfigured, UsdaConfigError, usdaGet, usdaPost } from './usda-http.ts';
 import { mapUsdaFoodDetail, parseUsdaSearchHit, type UsdaMappedFood, type UsdaSearchHit } from './usda-map.ts';
 import { USDA_SEARCH_PAGE_SIZE } from './usda-gate.ts';
 
@@ -50,14 +50,15 @@ export async function searchUsdaFoods(query: string, opts: UsdaSearchOpts = {}):
 
   const pageSize = Math.min(20, Math.max(1, opts.pageSize ?? USDA_SEARCH_PAGE_SIZE));
   const dataTypes = opts.dataTypes ?? WHOLE_FOOD_DATA_TYPES;
-  const params = new URLSearchParams({
-    query: q.slice(0, 80),
-    pageSize: String(pageSize),
-    pageNumber: '1',
-  });
-  for (const dt of dataTypes) params.append('dataType', dt);
 
-  const body = await usdaGet(`/foods/search?${params.toString()}`);
+  // POST, not GET — 'Survey (FNDDS)' is a hard 400 as a query parameter in every encoding, and
+  // the failure takes the whole search with it. See `usdaPost`.
+  const body = await usdaPost('/foods/search', {
+    query: q.slice(0, 80),
+    pageSize,
+    pageNumber: 1,
+    dataType: [...dataTypes],
+  });
   const foods = body && typeof body === 'object' ? (body as { foods?: unknown }).foods : null;
   if (!Array.isArray(foods)) return [];
 

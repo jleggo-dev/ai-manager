@@ -18,6 +18,7 @@
  * Exit code is 1 if any food came back unusable, so CI could gate on it if we ever want that.
  */
 import { usdaGet } from '../src/services/food-sources/usda-http.ts';
+import { searchUsdaFoods, usdaDataTypesFor } from '../src/services/food-sources/usda.ts';
 import { mapUsdaFoodDetail } from '../src/services/food-sources/usda-map.ts';
 import { fatSecretCall, isFatSecretConfigured } from '../src/services/food-sources/fatsecret-http.ts';
 import { mapFatSecretFood } from '../src/services/food-sources/fatsecret-map.ts';
@@ -78,10 +79,19 @@ function summarise(source: string, query: string, food: NormalizedFood & { macro
 async function sweepUsda(): Promise<Row[]> {
   const rows: Row[] = [];
   for (const q of QUERIES) {
-    const s = (await tryHard(() => usdaGet(`/foods/search?query=${encodeURIComponent(q)}&pageSize=3`))) as
-      | { foods?: Array<{ fdcId: number }> }
-      | null;
-    const ids = (s?.foods ?? []).map((f) => f.fdcId);
+    /**
+     * Through `searchUsdaFoods` WITH the gate's own dataType list — not a bare query string.
+     *
+     * The sweep used to call the search endpoint directly, which meant it never sent a dataType
+     * and never exercised the path the app actually uses. Adding 'Survey (FNDDS)' to that list
+     * made every whole-food search 400, and this sweep reported 49/49 healthy while it happened.
+     * A smoke test that skips the gate is testing something nobody runs.
+     */
+    const brandish = /starbucks|mcdonald|subway|chipotle|doritos|oreo|cheerios|skippy|clif|gatorade|planters/i.test(q);
+    const hits = await tryHard(() =>
+      searchUsdaFoods(q, { pageSize: 3, dataTypes: usdaDataTypesFor(brandish ? 'a vendor' : null) }),
+    );
+    const ids = (hits ?? []).map((h) => h.fdc_id);
     if (!ids.length) { rows.push({ source: 'usda', query: q, name: '—', micros: 0, problems: ['no search result'] }); continue; }
     // Keep going past a record the guard rejects — that is what the resolver does, and a source
     // publishing one corrupt row (USDA has a Starbucks K-Cup at 262.5 g carbs per 100 g) is not
@@ -131,18 +141,32 @@ async function sweepFatSecret(): Promise<Row[]> {
 }
 
 function report(rows: Row[]): number {
-  const bad = rows.filter((r) => r.problems.some((p) => !p.startsWith('warn:') && !p.startsWith('note:')));
+  /**
+   * "This source doesn't have that food" is a normal answer — the next rung exists for it. Only
+   * "the source answered and we could not read it" is a defect. Conflating them is how a sweep
+   * starts crying wolf and stops being read.
+   */
+  const missing = rows.filter((r) => r.problems.some((p) => p.startsWith('no ')));
+  const bad = rows.filter((r) =>
+    r.problems.some((p) => !p.startsWith('warn:') && !p.startsWith('note:') && !p.startsWith('no ')),
+  );
   const warned = rows.filter((r) => r.problems.some((p) => p.startsWith('warn:')));
   const noKcal = rows.filter((r) => r.kcal === undefined && !r.problems.length);
   const noMicros = rows.filter((r) => r.micros === 0 && !r.problems.length);
 
   console.log(`\n${'='.repeat(72)}`);
-  console.log(`${rows.length} foods swept · ${bad.length} unusable · ${warned.length} suspicious · ` +
-    `${noKcal.length} without calories · ${noMicros.length} without any micronutrient`);
+  console.log(
+    `${rows.length} foods swept · ${bad.length} unreadable · ${missing.length} not in this source · ` +
+      `${warned.length} suspicious · ${noKcal.length} without calories · ${noMicros.length} without any micronutrient`,
+  );
 
   if (bad.length) {
-    console.log('\nUNUSABLE — an adapter could not produce a food we would trust:');
+    console.log('\nUNREADABLE — the source answered and the adapter could not use it. This is OUR bug:');
     for (const r of bad) console.log(`  [${r.source}] "${r.query}" → ${r.name}\n      ${r.problems.join('\n      ')}`);
+  }
+  if (missing.length) {
+    console.log('\nnot in this source (normal — the next rung answers):');
+    for (const r of missing) console.log(`  [${r.source}] "${r.query}"`);
   }
   if (warned.length) {
     console.log('\nSUSPICIOUS — kept, but worth a human eye:');
