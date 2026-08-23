@@ -99,7 +99,10 @@ d('A23 — the food ledger keeps a price (DB)', () => {
     // Shared cache rows belong to nobody, so resetUserData cannot reach them — and one answering
     // a query these tests expect to MISS would stop the first log pinning anything. Only unused,
     // unlogged rows go (see test-foods.ts).
-    await clearUnusedSharedFoods(['venti latte', 'yogurt parfait', 'oat bowl', 'mystery stew', 'arugula']);
+    // Each DB suite owns a DISTINCT token. These patterns are case-insensitive and the suites run
+    // in parallel against one database, so a shared prefix means one suite deletes another's
+    // fixtures mid-run — 'zzq test' did exactly that to test-foods.test.ts.
+    await clearUnusedSharedFoods(['venti latte', 'yogurt parfait', 'oat bowl', 'mystery stew', 'zzqmicro']);
   });
 
   afterEach(() => {
@@ -295,12 +298,27 @@ d('A23 — the food ledger keeps a price (DB)', () => {
    * from the items regardless, so an old app on a phone gets it without waiting for a rebuild.
    */
   it('carries micronutrients from the items onto the meal total', async () => {
+    /**
+     * The names are deliberately unmatchable. This asserts that the PARSE's own micronutrients
+     * survive into the meal total, which only means anything while nothing prices them from the
+     * ledger instead — and since Health Canada's 5,690-food corpus landed, "eggs" and "arugula"
+     * both resolve to real rows with real (different) numbers. The suite used to get its isolation
+     * by DELETING shared rows that collided, which is how a cleanup pattern of ['salmon', 'stew']
+     * quietly removed 106 Canadian foods. Isolation now comes from names no food database will
+     * ever hold, the same discipline test-foods.test.ts already used — under this suite's OWN
+     * token, since these suites share a database and run at the same time.
+     */
     runJobBySlug.mockResolvedValueOnce({
       formatted: JSON.stringify({
         meal: 'breakfast',
         items: [
-          { name: 'eggs', qty: 2, unit: 'large', est: { kcal: 140, protein_g: 12, iron_mg: 1.8, vitamin_b12_ug: 1.1 } },
-          { name: 'arugula', qty: 1, unit: 'handful', est: { kcal: 5, calcium_mg: 32, vitamin_c_mg: 3.7 } },
+          {
+            name: 'zzqmicro eggs',
+            qty: 2,
+            unit: 'large',
+            est: { kcal: 140, protein_g: 12, iron_mg: 1.8, vitamin_b12_ug: 1.1 },
+          },
+          { name: 'zzqmicro arugula', qty: 1, unit: 'handful', est: { kcal: 5, calcium_mg: 32, vitamin_c_mg: 3.7 } },
         ],
         confidence: 0.8,
         // Exactly what the browser used to post: four keys, no micros.
@@ -308,7 +326,7 @@ d('A23 — the food ledger keeps a price (DB)', () => {
       }),
     });
 
-    const row = await logMeal(USER, { text: '2 eggs and a handful of arugula', date: today() });
+    const row = await logMeal(USER, { text: '2 zzqmicro eggs and a handful of zzqmicro arugula', date: today() });
 
     expect(row.macros?.iron_mg).toBeCloseTo(1.8, 1);
     expect(row.macros?.vitamin_b12_ug).toBeCloseTo(1.1, 1);

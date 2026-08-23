@@ -112,6 +112,22 @@ d('clearUnusedSharedFoods (DB)', () => {
     expect(Number(left[0]?.n)).toBe(1);
   });
 
+  it('will not touch a BULK-IMPORTED corpus, only a per-row cache', async () => {
+    // The 2026-08-23 incident, pinned. `nutrition-service.test.ts` cleans up with the patterns
+    // ['burrito', 'salmon', 'oats and berries', 'stew'] — harmless against a cache of test
+    // detritus, and it deleted 106 real Canadian foods once Health Canada's corpus landed in the
+    // same table. Every salmon and every stew in the country's nutrient file, gone, because the
+    // query could not tell a corpus from a cache. A cached row costs a refetch to lose; a corpus
+    // row costs a re-import of 5,690.
+    await sql`
+      insert into cadence.foods (owner_user_id, visibility, name, source, base_unit, macros_per_base, servings, default_serving, confidence)
+      values (null, 'shared', 'Zzq Test Salmon', 'cnf', 'g', '{}'::jsonb, '[]'::jsonb, 0, 1)`;
+    expect(await clearUnusedSharedFoods(['zzq test salmon'])).toBe(0);
+    const [still] = await sql<{ n: string }[]>`
+      select count(*)::text as n from cadence.foods where name = 'Zzq Test Salmon'`;
+    expect(still?.n).toBe('1');
+  });
+
   it('ignores patterns too short to be a name, so it cannot wildcard the cache away', async () => {
     await seedShared();
     expect(await clearUnusedSharedFoods([''])).toBe(0);
