@@ -1,14 +1,33 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { capabilities } from '../../lib/capability/index.ts';
-import { getHomeLocation, saveHomeLocation, browserTimezone, type WeatherNow } from '../../lib/api.ts';
+import {
+  clearCurrentLocation,
+  getHomeLocation,
+  saveCurrentLocation,
+  saveHomeLocation,
+  browserTimezone,
+  type WeatherNow,
+} from '../../lib/api.ts';
 import { fetchWeatherCached, forgetWeather } from '../../lib/query/index.ts';
+import {
+  decidePlace,
+  forgetCandidate,
+  loadCandidate,
+  loadLastSavedMs,
+  markSaved,
+  rememberCandidate,
+  type Point,
+} from './placeDwell.ts';
 
 export type TodayHeader = {
   weather: WeatherNow | null;
   city: string | null;
   locating: boolean;
+  /** Set where you LIVE — first-run auto-detect, and Settings-grade "this is my place". */
   requestLocation: () => void;
+  /** Say where you ARE, right now, deliberately — the weather sheet's CHANGE (A21). */
+  setHereNow: () => void;
 };
 
 /**
@@ -19,21 +38,19 @@ export type TodayHeader = {
  * declines or it's unavailable we stay quiet — no weather, just the greeting (deterministic; the
  * coach can still ask) — and expose `requestLocation` so the header's "change" affordance can
  * re-trigger it. Precise GPS / a typed city remain available in Settings.
+ *
+ * Two stored points, since A21: `home_location` is where you LIVE (notifications, planning and the
+ * coach are anchored to it and must not follow a commute) and `current_location` is where you ARE,
+ * which is what this header draws. The gates that decide when the second one moves — 5 km away,
+ * still there twenty minutes later, one save per half hour — live in `placeDwell.ts`.
  */
-/** Great-circle km between two points — the travel test's yardstick. */
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const rad = Math.PI / 180;
-  const dLat = (lat2 - lat1) * rad;
-  const dLon = (lon2 - lon1) * rad;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
-  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 export function useTodayHeader(): TodayHeader {
   const [weather, setWeather] = useState<WeatherNow | null>(null);
   const [city, setCity] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const queryClient = useQueryClient();
+  /** The two stored points, as of the last read — the yardstick every place decision measures against. */
+  const place = useRef<{ home: Point | null; current: Point | null }>({ home: null, current: null });
 
   /**
    * Read the sky THROUGH the cache (PERF-03). The Plan tab unmounts on every tab switch, so this
@@ -48,15 +65,24 @@ export function useTodayHeader(): TodayHeader {
     if (w.available && w.label) setCity(w.label);
   }, [queryClient]);
 
+  /** Read both stored points and keep the header's yardstick in step. The city shown is where you
+   *  ARE when that is somewhere other than home — that is the whole point of the second field. */
+  const syncPlace = useCallback(async () => {
+    const loc = await getHomeLocation().catch(() => null);
+    place.current = { home: loc?.home_location ?? null, current: loc?.current_location ?? null };
+    const shown = loc?.current_location ?? loc?.home_location;
+    if (shown) setCity(shown.label ?? null);
+    return loc;
+  }, []);
+
   /** After a location change: pick up the NEW stored label (reverse-geocoded server-side) and the
    *  weather at the new coordinates together, so the header never mixes one city's name with the
    *  other's sky. */
   const refreshWeatherAndCity = useCallback(async () => {
     forgetWeather(queryClient); // the cached sky belongs to the city they just left
-    const loc = await getHomeLocation().catch(() => null);
-    if (loc?.home_location) setCity(loc.home_location.label ?? null);
+    await syncPlace();
     await refreshWeather();
-  }, [queryClient, refreshWeather]);
+  }, [queryClient, refreshWeather, syncPlace]);
 
   /**
    * Through the capability seam, NEVER `navigator.geolocation`. Two reasons, and the second is
@@ -78,48 +104,89 @@ export function useTodayHeader(): TodayHeader {
         timezone: browserTimezone(),
       });
       forgetWeather(queryClient); // new coordinates — the cached sky is the wrong one
-      await refreshWeather();
+      await refreshWeatherAndCity();
     } finally {
       setLocating(false);
     }
-  }, [queryClient, refreshWeather]);
+  }, [queryClient, refreshWeatherAndCity]);
+
+  /** Act on a decision from the gates. The only branch that costs a reverse geocode is `commit`. */
+  const applyDecision = useCallback(
+    async (decision: ReturnType<typeof decidePlace>) => {
+      if (decision.kind === 'stay') return void forgetCandidate();
+      if (decision.kind === 'hold') return void rememberCandidate(decision.candidate);
+      if (decision.kind === 'home') {
+        forgetCandidate();
+        await clearCurrentLocation();
+      } else {
+        forgetCandidate();
+        markSaved(Date.now()); // the floor exists to bound geocodes, so only a real save arms it
+        await saveCurrentLocation({
+          lat: Number(decision.point.lat.toFixed(2)),
+          lon: Number(decision.point.lon.toFixed(2)),
+        });
+      }
+      await refreshWeatherAndCity();
+    },
+    [refreshWeatherAndCity],
+  );
+
+  /**
+   * "I'm here now", said out loud by tapping the city in the weather sheet. Same decision
+   * function, with the two gates satisfied by construction: a tap IS the dwell — the user has
+   * just told us they have arrived, so there is nothing left to wait for.
+   */
+  const setHereNow = useCallback(async () => {
+    if (!capabilities.location.isAvailable()) return;
+    setLocating(true);
+    try {
+      const pos = await capabilities.location.getCoarseLocation();
+      if (!pos) return;
+      await applyDecision(
+        decidePlace({
+          ...place.current,
+          reading: pos,
+          candidate: { lat: pos.lat, lon: pos.lon, firstSeenMs: 0 },
+          lastSavedMs: null,
+          nowMs: Date.now(),
+        }),
+      );
+    } finally {
+      setLocating(false);
+    }
+  }, [applyDecision]);
 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const loc = await getHomeLocation();
+      const loc = await syncPlace();
       if (!alive) return;
-      if (loc.home_location) {
-        setCity(loc.home_location.label ?? null);
-        await refreshWeather();
-        // Deterministic travel check (owner, 2026-08-14: flew Lisbon → Montreal and the header
-        // kept the old city all day). Permission was granted long ago, so this read is silent;
-        // a real move (> ~50 km — travel, never GPS jitter or a coarse-rounding wobble) updates
-        // the stored location, which reverse-geocodes the new label server-side. Failures of any
-        // kind change nothing — the stored city keeps standing.
-        void capabilities.location
-          .getCoarseLocation()
-          .then(async (pos) => {
-            if (!pos || !alive) return;
-            const stored = loc.home_location!;
-            const moved = haversineKm(stored.lat, stored.lon, pos.lat, pos.lon);
-            if (moved < 50 || !alive) return;
-            await saveHomeLocation({
-              lat: Number(pos.lat.toFixed(2)),
-              lon: Number(pos.lon.toFixed(2)),
-              timezone: browserTimezone(), // travel far enough to change cities changes clocks too
-            }).catch(() => undefined);
-            if (alive) await refreshWeatherAndCity();
-          })
-          .catch(() => undefined); // declined / unavailable — the stored location stands
-      } else {
-        requestLocation(); // one-time silent auto-detect
-      }
+      if (!loc?.home_location) return void requestLocation(); // one-time silent auto-detect
+
+      await refreshWeather();
+      // The deterministic place check (owner, 2026-08-17: downtown all day, header still said
+      // Île-Perrot). Permission was granted long ago, so this read is silent; the gates in
+      // placeDwell.ts decide whether it is worth a save. Failures of any kind change nothing —
+      // whatever the header already says keeps standing.
+      void capabilities.location
+        .getCoarseLocation()
+        .then(async (pos) => {
+          if (!pos || !alive) return;
+          const decision = decidePlace({
+            ...place.current,
+            reading: pos,
+            candidate: loadCandidate(),
+            lastSavedMs: loadLastSavedMs(),
+            nowMs: Date.now(),
+          });
+          if (alive) await applyDecision(decision);
+        })
+        .catch(() => undefined); // declined / unavailable — the stored location stands
     })();
     return () => {
       alive = false;
     };
-  }, [refreshWeather, refreshWeatherAndCity, requestLocation]);
+  }, [applyDecision, refreshWeather, requestLocation, syncPlace]);
 
-  return { weather, city, locating, requestLocation };
+  return { weather, city, locating, requestLocation, setHereNow };
 }

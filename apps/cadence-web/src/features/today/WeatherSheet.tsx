@@ -26,7 +26,7 @@ export function WeatherSheet({
   city,
   night,
   hours,
-  onChangeLocation,
+  onHereNow,
   onClose,
 }: {
   weather: WeatherNow;
@@ -34,7 +34,8 @@ export function WeatherSheet({
   /** Same clock signal the header's glyph uses, so the two show the same sky. */
   night: boolean;
   hours?: ForecastHour[];
-  onChangeLocation: () => void;
+  /** "I'm here now" — moves the transient position the header draws, never home (A21). */
+  onHereNow: () => void;
   onClose: () => void;
 }) {
   const conditions = weather.conditions ?? '';
@@ -51,9 +52,11 @@ export function WeatherSheet({
               <span aria-hidden>{wxEmoji(conditions, night)}</span>{' '}
               {[cap(conditions), temp].filter(Boolean).join(' · ')}
             </b>
-            {/* The city and CHANGE that used to sit under the header's weather line. Same control,
-                same words — it just stopped costing two lines of every screen. */}
-            <button className="thead-loc" type="button" onClick={onChangeLocation}>
+            {/* The city and CHANGE that used to sit under the header's weather line — same words,
+                for a fraction of the screen. What it changes is where you ARE, which is the only
+                thing a weather sheet has an opinion about; where you LIVE stays in Settings, with
+                notification timing anchored to it (A21). */}
+            <button className="thead-loc" type="button" onClick={onHereNow}>
               <span aria-hidden>📍</span> {city ?? 'Weather nearby'} <i>· CHANGE</i>
             </button>
           </div>

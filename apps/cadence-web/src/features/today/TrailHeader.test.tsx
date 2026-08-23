@@ -16,8 +16,13 @@ const getNotificationPrefs = vi.fn();
 vi.mock('../../lib/api.ts', () => ({
   getWeather: (...a: unknown[]) => getWeather(...a),
   getHomeLocation: () =>
-    Promise.resolve({ home_location: { lat: 45.4, lon: -73.9, label: "Notre-Dame-de-l'Île-Perrot, QC" } }),
+    Promise.resolve({
+      home_location: { lat: 45.4, lon: -73.9, label: "Notre-Dame-de-l'Île-Perrot, QC" },
+      current_location: null,
+    }),
   saveHomeLocation: vi.fn(),
+  saveCurrentLocation: vi.fn(),
+  clearCurrentLocation: vi.fn(),
   browserTimezone: () => 'America/Toronto',
   getNotificationPrefs: (...a: unknown[]) => getNotificationPrefs(...a),
   saveNotificationPrefs: vi.fn(),
@@ -192,14 +197,7 @@ describe('the weather sheet', () => {
     ];
     const sheet = (rows?: typeof hours) =>
       render(
-        <WeatherSheet
-          weather={CLEAR}
-          city="Montreal"
-          night
-          hours={rows}
-          onChangeLocation={() => {}}
-          onClose={() => {}}
-        />,
+        <WeatherSheet weather={CLEAR} city="Montreal" night hours={rows} onHereNow={() => {}} onClose={() => {}} />,
       );
 
     const withRows = sheet(hours);
@@ -218,7 +216,7 @@ describe('the weather sheet', () => {
         weather={{ ...CLEAR, precip_chance: 0.4 }}
         city="Montreal"
         night
-        onChangeLocation={() => {}}
+        onHereNow={() => {}}
         onClose={() => {}}
       />,
     );

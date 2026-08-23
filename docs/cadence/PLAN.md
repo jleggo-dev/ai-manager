@@ -2754,7 +2754,7 @@ async function enterDetour(choice: DetourChoice) {
 
 Needs back: the `DetourChoice` type import and `enterEpisode` from `lib/api.ts`.
 
-**A21. Where you live vs where you are — the location that never moved (owner 2026-08-17, DESIGNED, not built)**
+**A21. Where you live vs where you are — the location that never moved — SHIPPED 2026-08-22 (owner 2026-08-17)**
 
 Owner: *"I live in Notre-Dame-de-l'Île-Perrot. I'm currently downtown Montreal (and have been since
 7:30 am) — the location never updated."*
@@ -2806,6 +2806,60 @@ keep the city as plain text, since that label is how this bug was noticed; the m
 already lives in Settings. Keep the "Set location for weather" button, which only shows when
 nothing is stored at all. Open: should the header signal you are away from home, or just say
 Montreal?
+
+### As built (2026-08-22)
+
+Migration **0040** adds `cadence.users.current_location` — `{ lat, lon, label?, at }`, null meaning
+"at home". `home_location` did not change and did not move: `notify-candidates.ts`, `situation.ts`,
+`date-context.ts`, `plan-synthesis.ts` and `session-generate.ts` all still read it, which is the
+whole point of adding a column instead of lowering a threshold.
+
+- **The gates** are [`placeDwell.ts`](../../apps/cadence-web/src/features/today/placeDwell.ts):
+  one pure `decidePlace()` and four lines of localStorage. 5 km to be somewhere else, 2 km to still
+  be there, 20 minutes of dwell, a 30-minute floor between saves. No timers — every decision is
+  taken on a Today-tab mount, from stored state.
+- **Coming home is free and immediate.** A reading within 5 km of `home_location` drops the
+  transient with no dwell and no geocode, because home already has a name. Without that rule the
+  header would have said *Montreal* for the first twenty minutes of every evening at home.
+- **Routes:** `POST/DELETE /me/current-location`; `GET /me/location` returns both points;
+  `POST /me/location` clears the transient in the same statement (setting home is also a statement
+  that you are at it) and says so in its response.
+- **Only the header reads it** — `getWeatherWhereYouAre()` for `GET /me/weather`, while
+  `getWeatherForUser()` stays on home for every other caller. Tested from both sides: the same user
+  row, two different answers.
+- 20 web + 12 API tests, including the commute (holds, then commits), the train (three legs, never
+  settles), the wobble (1.3 km of coarse-rounding is not a journey), and the save floor.
+
+**Three judgement calls worth knowing about.**
+
+1. **The `· CHANGE` UI clause was already satisfied, by a different change.** The header redesign
+   moved city and CHANGE off the header entirely and into the weather sheet, so the real estate the
+   owner objected to is already gone. Deleting the control from the *sheet* would have been applying
+   a stale ruling, so it stayed — but what it DOES changed: in a weather sheet, "change" means
+   *the weather is for the wrong place*, so it now sets the transient position (one tap, no dwell,
+   because a tap IS the dwell). Where you LIVE is still Settings, and only Settings.
+2. **The coach's weather still comes from home**, along with planning and notification timing —
+   the ruling said the transient feeds the header "and nothing else", so it does. **Open, and now
+   one line to change:** should the coach's weather facts follow you downtown too? At 30 km the two
+   answers are usually the same; on a week in Lisbon they are not, and a coach that says "it's
+   raining" about a city you left is worse than one that says nothing.
+3. **The transient has no expiry.** A TTL would mean a two-week trip re-dwells every morning —
+   exactly the Lisbon bug, back on a timer. It stands until a dwelt move replaces it or you come
+   home, and the manual override in the sheet is there for the one case that leaves stranded (the
+   permission being revoked while away).
+
+Still open from the design above: whether the header should SIGNAL that you are away from home
+rather than just naming the city. Cheap to answer now — the two points are separate, so "away" is
+`current_location != null`.
+
+**⚠ Migration 0040 must be applied before this API ships** — `apply-migration-0040.ts`, additive
+and idempotent. `setHomeLocation` writes `current_location = null` in the same statement, so an
+unmigrated database fails to save a location at all, not just a transient one.
+
+**Housekeeping found on the way:** there are TWO `0039_` migrations — `0039_food_search_and_rhythm`
+and `0039_unit_prefs`, landed from parallel branches on the same day. Both are applied and neither
+is broken, but the numbering no longer orders them; this one took 0040 and the collision is left
+recorded rather than renamed.
 
 **A23. The consistent ledger & the calibrated check-in — PHASES 1-3 SHIPPED 2026-08-22; Phase 4 on demand (owner 2026-08-21)**
 

@@ -22,6 +22,9 @@ export interface CadenceUserRow {
   macro_targets: MacroTargets | null;
   timezone: string | null;
   home_location: { lat: number; lon: number; label?: string } | null;
+  // Present once migration 0040 is applied. Where you ARE, when that is somewhere other than
+  // where you live — read by the Today header's weather + city and by nothing else (A21).
+  current_location?: { lat: number; lon: number; label?: string; at?: string } | null;
   steer_back: SteerBack;
   last_assessed_at: string | null;
   pending_proposal: PendingProposal | null;
@@ -248,7 +251,33 @@ export async function setHomeLocation(userId: string, location: HomeLocation, ti
     update cadence.users
     set home_location = ${json(location)},
         timezone = ${timezone},
+        current_location = null,
         updated_at = now()
+    where id = ${userId}`;
+}
+
+/**
+ * Where the user IS, when that is somewhere other than home (A21). Written only after the client's
+ * dwell gate is satisfied — five kilometres away and still there twenty minutes later — so this is
+ * a settled place, not a train window. `at` is stamped here rather than passed in: the one thing a
+ * later reader wants to know about a transient position is how old it is.
+ *
+ * Deliberately NOT part of setHomeLocation's contract: notification anchoring, planning and the
+ * coach all keep reading home_location, and a commute must never move them.
+ */
+export async function setCurrentLocation(userId: string, location: HomeLocation): Promise<void> {
+  await sql`
+    update cadence.users
+    set current_location = ${json({ ...location, at: new Date().toISOString() })},
+        updated_at = now()
+    where id = ${userId}`;
+}
+
+/** Back home — the header returns to the place it already has a name for. */
+export async function clearCurrentLocation(userId: string): Promise<void> {
+  await sql`
+    update cadence.users
+    set current_location = null, updated_at = now()
     where id = ${userId}`;
 }
 
@@ -270,12 +299,12 @@ export async function clearHomeLocation(userId: string, clearTimezone = false): 
   if (clearTimezone) {
     await sql`
       update cadence.users
-      set home_location = null, timezone = null, updated_at = now()
+      set home_location = null, timezone = null, current_location = null, updated_at = now()
       where id = ${userId}`;
   } else {
     await sql`
       update cadence.users
-      set home_location = null, updated_at = now()
+      set home_location = null, current_location = null, updated_at = now()
       where id = ${userId}`;
   }
 }

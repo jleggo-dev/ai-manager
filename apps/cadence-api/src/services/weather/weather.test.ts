@@ -20,7 +20,13 @@ vi.mock('../../repos/weather-cache.ts', () => ({
 import { getUser } from '../../repos/users.ts';
 import { getCachedWeather, putCachedWeather } from '../../repos/weather-cache.ts';
 import { __setWeatherFetchForTests } from './weather-http.ts';
-import { __clearWeatherCacheForTests, getWeatherAt, getWeatherForUser, isWeatherConfigured } from './weather.ts';
+import {
+  __clearWeatherCacheForTests,
+  getWeatherAt,
+  getWeatherForUser,
+  getWeatherWhereYouAre,
+  isWeatherConfigured,
+} from './weather.ts';
 
 const getUserMock = getUser as unknown as ReturnType<typeof vi.fn>;
 const sharedGet = getCachedWeather as unknown as ReturnType<typeof vi.fn>;
@@ -194,5 +200,79 @@ describe('shared weather cache (L2)', () => {
     // The repo swallows its own errors in production; a rejecting mock proves the caller is
     // resilient even if that ever regressed.
     await expect(getWeatherAt(48.9, 2.3, 'Europe/Paris')).resolves.not.toThrow();
+  });
+});
+
+/**
+ * Where you live vs where you are (A21). The header follows the person; everything else — the
+ * notification anchor, planning, the coach's weather facts — stays on the address, because the
+ * owner commutes 30 km and back most days and a wandering anchor would take every scheduled
+ * nudge with it. The test that matters is the second one: same user row, two different answers.
+ */
+describe('two points, two questions', () => {
+  const HOME = { lat: 45.4, lon: -73.9, label: "Notre-Dame-de-l'Île-Perrot" };
+  const DOWNTOWN = { lat: 45.5, lon: -73.57, label: 'Montreal' };
+
+  /** Records the coordinates each call asked the provider for. */
+  function recordingFetch(seen: string[]) {
+    return vi.fn(async (url: string | URL) => {
+      const u = String(url);
+      if (u.includes('/weather?')) {
+        seen.push(u.slice(u.indexOf('lat=')).split('&units')[0] ?? u);
+        return jsonResponse({ main: { temp: 21 }, weather: [{ description: 'clear sky' }], wind: { speed: 1 } });
+      }
+      return jsonResponse({ list: [] });
+    });
+  }
+
+  beforeEach(() => {
+    __clearWeatherCacheForTests();
+    getUserMock.mockReset();
+    sharedGet.mockReset();
+    sharedGet.mockResolvedValue(null);
+    sharedPut.mockReset();
+  });
+  afterEach(() => __setWeatherFetchForTests(null));
+
+  it('draws the header at the transient position when there is one', async () => {
+    getUserMock.mockResolvedValue({ home_location: HOME, current_location: DOWNTOWN, timezone: 'America/Toronto' });
+    const seen: string[] = [];
+    __setWeatherFetchForTests(recordingFetch(seen) as unknown as typeof fetch);
+
+    expect((await getWeatherWhereYouAre('user-1'))?.tempC).toBe(21);
+    expect(seen).toEqual(['lat=45.5&lon=-73.57']);
+  });
+
+  it('leaves every other caller on home — the same row, the other answer', async () => {
+    getUserMock.mockResolvedValue({ home_location: HOME, current_location: DOWNTOWN, timezone: 'America/Toronto' });
+    const seen: string[] = [];
+    __setWeatherFetchForTests(recordingFetch(seen) as unknown as typeof fetch);
+
+    await getWeatherForUser('user-1');
+    expect(seen).toEqual(['lat=45.4&lon=-73.9']);
+  });
+
+  it('falls back to home when the transient is absent or unusable', async () => {
+    const seen: string[] = [];
+    __setWeatherFetchForTests(recordingFetch(seen) as unknown as typeof fetch);
+
+    getUserMock.mockResolvedValue({ home_location: HOME, current_location: null, timezone: null });
+    await getWeatherWhereYouAre('user-1');
+
+    // A half-written row must not become a confident forecast for the middle of the Atlantic.
+    __clearWeatherCacheForTests();
+    getUserMock.mockResolvedValue({
+      home_location: HOME,
+      current_location: { lat: Number.NaN, lon: -73.57 },
+      timezone: null,
+    });
+    await getWeatherWhereYouAre('user-1');
+
+    expect(seen).toEqual(['lat=45.4&lon=-73.9', 'lat=45.4&lon=-73.9']);
+  });
+
+  it('has nothing to draw when neither point is set', async () => {
+    getUserMock.mockResolvedValue({ home_location: null, current_location: null, timezone: null });
+    expect(await getWeatherWhereYouAre('user-1')).toBeNull();
   });
 });
