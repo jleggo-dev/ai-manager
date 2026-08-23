@@ -109,6 +109,52 @@ describe('the client', () => {
     __setFatSecretFetchForTests(null); // clears the cooldown so the suite does not stall
   });
 
+  /**
+   * The retry earns its place on the refresh path: a failed refresh EXPIRES a cached row under the
+   * 24-hour rule, so a dropped connection would otherwise cost a food its price.
+   */
+  it('retries once through a network blip', async () => {
+    cadenceConfig.fatSecret.consumerKey = 'k';
+    cadenceConfig.fatSecret.consumerSecret = 's';
+    let n = 0;
+    const fetchMock = vi.fn(async () => {
+      if (++n === 1) throw new Error('ECONNRESET');
+      return new Response(JSON.stringify({ foods: { food: [] } }), { status: 200 });
+    });
+    __setFatSecretFetchForTests(fetchMock as unknown as typeof fetch);
+    const { fatSecretCall } = await import('./fatsecret-http.ts');
+
+    await expect(fatSecretCall({ method: 'foods.search', search_expression: 'x' })).resolves.toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries once on a 5xx', async () => {
+    cadenceConfig.fatSecret.consumerKey = 'k';
+    cadenceConfig.fatSecret.consumerSecret = 's';
+    let n = 0;
+    const fetchMock = vi.fn(async () => {
+      if (++n === 1) return new Response('upstream boom', { status: 503 });
+      return new Response(JSON.stringify({ foods: { food: [] } }), { status: 200 });
+    });
+    __setFatSecretFetchForTests(fetchMock as unknown as typeof fetch);
+    const { fatSecretCall } = await import('./fatsecret-http.ts');
+
+    await expect(fatSecretCall({ method: 'foods.search', search_expression: 'y' })).resolves.toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  /** A 4xx is an ANSWER. Asking again just spends another call to be told the same thing. */
+  it('does not retry a 4xx', async () => {
+    cadenceConfig.fatSecret.consumerKey = 'k';
+    cadenceConfig.fatSecret.consumerSecret = 's';
+    const fetchMock = vi.fn(async () => new Response('nope', { status: 403 }));
+    __setFatSecretFetchForTests(fetchMock as unknown as typeof fetch);
+    const { fatSecretCall } = await import('./fatsecret-http.ts');
+
+    await expect(fatSecretCall({ method: 'food.get.v4', food_id: '1' })).rejects.toThrow(/403/);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it('surfaces a non-throttling error without cooling down', async () => {
     cadenceConfig.fatSecret.consumerKey = 'k';
     cadenceConfig.fatSecret.consumerSecret = 's';

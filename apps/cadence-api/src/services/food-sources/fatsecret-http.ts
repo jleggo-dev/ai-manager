@@ -154,6 +154,36 @@ function applyCooldown(reason: string, res?: Response, fallbackMs = DEFAULT_COOL
   console.warn(`[fatsecret] ${reason}; cooling down ${ms}ms`);
 }
 
+/**
+ * ONE retry, and only for a blip.
+ *
+ * Everywhere else in the waterfall a failed lookup is cheap: USDA falling over just means no USDA
+ * match, and the next rung answers. Here it is not, because of the 24-hour rule — a refresh that
+ * fails EXPIRES the cached row (see fatsecret-enrich), so a dropped connection costs a food its
+ * price until someone logs it again. Retrying once turns most of those blips into nothing.
+ *
+ * Deliberately narrow. A 5xx or a network error is worth a second attempt; a 4xx, an application
+ * error code, or a throttle is not — those are answers, and retrying them is just a second wrong
+ * call. Throttling already has the cooldown, which is a better tool for it.
+ */
+const RETRY_DELAY_MS = 250;
+
+async function fetchOnceWithRetry(url: string): Promise<Response> {
+  try {
+    const res = await fetchImpl(url, { method: 'GET', headers: { Accept: 'application/json' } });
+    if (res.status >= 500) {
+      await sleep(RETRY_DELAY_MS);
+      return await fetchImpl(url, { method: 'GET', headers: { Accept: 'application/json' } });
+    }
+    return res;
+  } catch (e) {
+    // Network-class failure: no response at all, so nothing to read a status from.
+    console.warn('[fatsecret] request failed, retrying once:', e instanceof Error ? e.message : String(e));
+    await sleep(RETRY_DELAY_MS);
+    return fetchImpl(url, { method: 'GET', headers: { Accept: 'application/json' } });
+  }
+}
+
 async function rawCall(params: Record<string, string>): Promise<unknown> {
   const { key, secret } = credentials();
   const signed = signRequest({ ...params, format: 'json' }, key, secret);
@@ -163,10 +193,7 @@ async function rawCall(params: Record<string, string>): Promise<unknown> {
 
   await acquireSlot();
   try {
-    const res = await fetchImpl(`${FATSECRET_BASE}?${query}`, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
+    const res = await fetchOnceWithRetry(`${FATSECRET_BASE}?${query}`);
     if (res.status === 429) {
       applyCooldown('rate limited (429)', res);
       throw new FatSecretHttpError(429, 'FatSecret rate limit exceeded — try again shortly');
