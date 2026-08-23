@@ -8,6 +8,7 @@ import {
   type MealKind,
   type OccurrenceDetail,
   type PlateAdvice,
+  deleteMeal,
 } from '../../../lib/api.ts';
 import { useInvalidateNutritionDay, useNutritionDay } from '../../../lib/query/index.ts';
 import { downscalePhoto, mealForNow, mealFromTitle } from './format.ts';
@@ -102,6 +103,23 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     }
   }
 
+  /**
+   * Take a meal back off the day. For one that did not happen — a mis-tap, a double log, a parse
+   * that invented a food. A meal that happened and was written down wrong is a correction instead.
+   */
+  async function removeLoggedMeal(logId: string) {
+    if (mealBusy) return;
+    setMealBusy(true);
+    setLogErr('');
+    try {
+      const ok = await deleteMeal(logId);
+      if (!ok) return setLogErr("Couldn't remove that one — try again in a moment.");
+      await refreshDay(detail.date);
+    } finally {
+      setMealBusy(false);
+    }
+  }
+
   /** What follows a confirm inside the photo panel: clear the composer, refresh, tick the task. */
   async function afterPhotoLogged() {
     setMealText('');
@@ -146,6 +164,7 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     confirmMeal,
     pickPhoto,
     submitMeal,
+    removeLoggedMeal,
     afterPhotoLogged,
   };
 }

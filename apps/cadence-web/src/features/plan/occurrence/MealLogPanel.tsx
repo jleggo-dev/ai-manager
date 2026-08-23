@@ -2,6 +2,7 @@ import { MicButton } from '../../../components/MicButton.tsx';
 import type { MealKind, OccurrenceDetail } from '../../../lib/api.ts';
 import { leftLine, macroLine } from './format.ts';
 import { BaselineReadPanel } from './BaselineReadPanel.tsx';
+import { useState } from 'react';
 import { useMealLog } from './useMealLog.ts';
 import { PhotoReadPanel } from '../../food/PhotoReadPanel.tsx';
 import { useNutritionBaseline } from './useNutritionBaseline.ts';
@@ -23,6 +24,7 @@ export function MealLogPanel({
   onProposeChange?: (steer: string) => void;
 }) {
   const meal = useMealLog(detail, setDetail, onLogged);
+  const [removing, setRemoving] = useState<string | null>(null);
   const baseline = useNutritionBaseline(meal.refreshDay, detail.date);
 
   return (
@@ -52,7 +54,7 @@ export function MealLogPanel({
                 {m.items.map((i) => i.name).join(', ') || m.raw_text || (m.photo_url ? '📷 photo' : '')}
                 {macroLine(m.macros) && <span className="meal-est"> · {macroLine(m.macros)}</span>}
               </span>
-              {m.provisional && (
+              {m.provisional && removing !== m.log_id && (
                 <button
                   className="meal-confirm"
                   onClick={() => meal.confirmMeal(m.log_id)}
@@ -61,6 +63,35 @@ export function MealLogPanel({
                   aria-label="Confirm this meal's estimates"
                 >
                   {meal.confirming === m.log_id ? '…' : '✓'}
+                </button>
+              )}
+              {/* Two taps, because removing is the one action here that cannot be undone — but no
+                  alarm either: a meal you did not eat is an error, not a confession. */}
+              {removing === m.log_id ? (
+                <span className="meal-rm-ask">
+                  <button
+                    className="meal-rm-yes"
+                    disabled={meal.mealBusy}
+                    onClick={() => {
+                      setRemoving(null);
+                      void meal.removeLoggedMeal(m.log_id);
+                    }}
+                  >
+                    Remove
+                  </button>
+                  <button className="meal-rm-no" onClick={() => setRemoving(null)}>
+                    Keep
+                  </button>
+                </span>
+              ) : (
+                <button
+                  className="meal-rm"
+                  onClick={() => setRemoving(m.log_id)}
+                  disabled={meal.mealBusy}
+                  title="I didn't eat this"
+                  aria-label={`Remove this ${m.meal} from the day`}
+                >
+                  ×
                 </button>
               )}
             </div>

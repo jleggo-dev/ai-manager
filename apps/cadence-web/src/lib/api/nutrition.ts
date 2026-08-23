@@ -162,6 +162,15 @@ export async function logPreviewedMeal(parsed: MealPreview, meal?: MealKind): Pr
   return res.json();
 }
 
+/**
+ * Take a meal back off the day — for one that did not happen (a mis-tap, a double log, a parse that
+ * invented a food). A meal that happened and was written down wrong is a correction, not this.
+ */
+export async function deleteMeal(logId: string): Promise<boolean> {
+  const res = await fetch(`${BASE}/nutrition/meals/${logId}`, { method: 'DELETE', headers: headers() });
+  return res.ok;
+}
+
 /** Record one meal — their words, a photo, or both. Nothing is ever judged. */
 export async function logMeal(text: string, meal?: MealKind, photo?: string): Promise<Meal> {
   const res = await fetch(`${BASE}/nutrition/meals`, {

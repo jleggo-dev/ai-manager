@@ -891,6 +891,48 @@ html[data-native] #root {
   line-height: 1;
   color: var(--text-dim);
 }
+/* Removing a logged meal (A23 / 2026-08-22). Quiet by default — a mis-log is an error, not a
+   confession — and two taps, because it is the one action here that cannot be undone. */
+.meal-rm {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-mute);
+  opacity: 0.55;
+}
+.meal-rm:hover {
+  opacity: 1;
+  border-color: var(--line);
+}
+.meal-rm-ask {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+}
+.meal-rm-yes,
+.meal-rm-no {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 8px;
+  color: var(--text-dim);
+}
+.meal-rm-yes:hover {
+  color: var(--text);
+  border-color: var(--text-mute);
+}
+
 .meal-confirm:hover {
   color: var(--text);
   border-style: solid;

@@ -1,18 +1,19 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import {
-  logMeal,
-  getNutritionSummary,
-  listRecentMeals,
+  clearTargets,
   getBaselineRead,
   getNutritionDay,
   getNutritionInsight,
-  patchMeal,
-  setTargets,
-  clearTargets,
-  setEatbackPct,
+  getNutritionSummary,
   getPlateAdvice,
+  listRecentMeals,
+  logMeal,
+  patchMeal,
   previewMealParse,
+  removeMeal,
+  setEatbackPct,
+  setTargets,
 } from '../services/nutrition.ts';
 import { readMealPhoto, logMealFromReading } from '../services/meal-photo-read.ts';
 import { logWater } from '../services/water.ts';
@@ -211,6 +212,24 @@ router.patch('/meals/:id', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[PATCH /nutrition/meals/:id]', err);
     res.status(500).json({ error: 'failed to update meal' });
+  }
+});
+
+/**
+ * DELETE /nutrition/meals/:id — take a meal back off the day.
+ *
+ * For a meal that did not happen: a mis-tap, a double log, a parse that invented a food. A meal
+ * that DID happen and was written down wrong is a PATCH, not this.
+ */
+router.delete('/meals/:id', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const ok = await removeMeal(userId, String(req.params.id));
+    if (!ok) return void res.status(404).json({ error: 'meal not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[DELETE /nutrition/meals/:id]', err);
+    res.status(500).json({ error: 'failed to remove meal' });
   }
 });
 

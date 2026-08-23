@@ -343,3 +343,23 @@ export async function createFood(input: CreateFoodInput): Promise<Food | null> {
     return null;
   }
 }
+
+/**
+ * Forget a food you saved. Since A23 an unmatched food is PINNED automatically, so a mis-parsed
+ * one ("dill pickles", from a caption about dill-pickle-seasoned peanuts) would otherwise keep
+ * resolving forever. The API has always allowed this; nothing in the app could reach it.
+ */
+export async function deleteFood(foodId: string): Promise<boolean> {
+  const res = await fetch(`${BASE}/nutrition/foods/${foodId}`, { method: 'DELETE', headers: headers() });
+  return res.ok;
+}
+
+/** Rename a saved food, or fix its brand — the numbers can be right while the label is wrong. */
+export async function updateFood(foodId: string, patch: { name?: string; brand?: string | null }): Promise<boolean> {
+  const res = await fetch(`${BASE}/nutrition/foods/${foodId}`, {
+    method: 'PATCH',
+    headers: headers(),
+    body: JSON.stringify(patch),
+  });
+  return res.ok;
+}

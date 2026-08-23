@@ -15,7 +15,13 @@ import {
   type NutritionSummary,
 } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
-import { insertNutritionLog, listNutritionLogs, updateNutritionLog, countNutritionDays } from '../repos/nutrition.ts';
+import {
+  insertNutritionLog,
+  listNutritionLogs,
+  updateNutritionLog,
+  deleteNutritionLog,
+  countNutritionDays,
+} from '../repos/nutrition.ts';
 import { sumWaterMl } from '../repos/water.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, setMacroTargets } from '../repos/users.ts';
@@ -423,6 +429,14 @@ export async function getNutritionDay(userId: string, date?: string): Promise<Nu
  * numbers but graduates them into the totals; any provided macros are sanitized and marked
  * source 'user' with full confidence.
  */
+/**
+ * Take a meal back off the day. See `deleteNutritionLog` for when this is the right move and when
+ * a correction is: this is for a meal that did not happen.
+ */
+export async function removeMeal(userId: string, logId: string): Promise<boolean> {
+  return deleteNutritionLog(userId, logId);
+}
+
 export async function patchMeal(
   userId: string,
   logId: string,

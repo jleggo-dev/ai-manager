@@ -329,6 +329,39 @@ d('A23 — the food ledger keeps a price (DB)', () => {
     expect(row.macros?.iron_mg).toBeCloseTo(1.8, 1);
   });
 
+  /**
+   * A23 / 2026-08-22, owner: "I can't delete a food I logged — so if I log it by accident, I'm
+   * kinda screwed." There was a PATCH to correct a meal and no delete at all. A meal that did not
+   * happen is an error, not history, and it was shaping the day's totals with no way out.
+   */
+  it('takes a meal back off the day, and only the owner’s own', async () => {
+    const { removeMeal } = await import('./nutrition.ts');
+    runJobBySlug.mockResolvedValueOnce(parse('oat bowl', { kcal: 300 }, { qty: 1, unit: 'bowl' }));
+    const row = await logMeal(USER, { text: 'an oat bowl', date: today() });
+
+    expect(await removeMeal(USER, row.log_id)).toBe(true);
+    const left = await sql<{ n: string }[]>`
+      select count(*)::text as n from cadence.nutrition_logs where user_id = ${USER}`;
+    expect(Number(left[0]?.n)).toBe(0);
+
+    // Gone is gone, and a second attempt is an honest "not found" rather than a silent success.
+    expect(await removeMeal(USER, row.log_id)).toBe(false);
+    // Another user's id cannot reach it either.
+    expect(await removeMeal('00000000-0000-4000-a000-0000000000ff', row.log_id)).toBe(false);
+  });
+
+  /** Removing the meal must NOT remove the food it pinned — the price stays learned. */
+  it('leaves the pinned food behind when a meal is removed', async () => {
+    runJobBySlug.mockResolvedValueOnce(parse('venti latte', { kcal: 190 }, { qty: 1, unit: 'latte' }));
+    const row = await logMeal(USER, { text: 'a venti latte', date: today() });
+    expect(await ownFoodCount()).toBe(1);
+
+    const { removeMeal } = await import('./nutrition.ts');
+    await removeMeal(USER, row.log_id);
+
+    expect(await ownFoodCount()).toBe(1);
+  });
+
   it('does not pin anything when the parse itself fails', async () => {
     runJobBySlug.mockResolvedValueOnce({ formatted: 'NOT_JSON{{{' });
     const row = await logMeal(USER, { text: 'oats and berries', date: today() });

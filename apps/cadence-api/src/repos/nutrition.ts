@@ -66,6 +66,25 @@ export async function updateNutritionLog(
   return out ?? null;
 }
 
+/**
+ * Remove a logged meal outright. Dual-keyed on user_id, so one user can never delete another's row.
+ *
+ * Reserved for a meal that DID NOT HAPPEN — a mis-tap, a double log, or a parse that invented a
+ * food nobody ate. That is the same distinction `removeCapturedConstraint` draws: a mis-capture is
+ * not history, it is an error, and leaving it on file keeps it shaping the day's totals.
+ *
+ * It is NOT how you fix a wrong number. "That was a large, not a small" keeps the meal and corrects
+ * it (`updateNutritionLog`, which marks the macros `source: 'user'`) — the meal happened, we simply
+ * wrote it down wrong. Count what happened; delete only what didn't.
+ */
+export async function deleteNutritionLog(userId: string, logId: string): Promise<boolean> {
+  const rows = await sql`
+    delete from cadence.nutrition_logs
+    where user_id = ${userId} and log_id = ${logId}
+    returning log_id`;
+  return rows.length > 0;
+}
+
 /** How many distinct days in [fromDate, toDate] have at least one meal logged. One count, no rows —
  *  this runs on every Plan render for a user with no targets yet (the 7-day countdown). */
 export async function countNutritionDays(userId: string, fromDate: string, toDate: string): Promise<number> {
