@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ringArcs } from './nutritionRing.ts';
+import { ringArcs } from './nutritionRingMath.ts';
 
 describe('ringArcs', () => {
   it('stacks pending after logged (design 2B: 820 logged, +650, 2000 target)', () => {

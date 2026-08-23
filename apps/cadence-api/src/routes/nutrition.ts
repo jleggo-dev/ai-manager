@@ -258,6 +258,17 @@ router.patch('/meals/:id/items', async (req: Request, res: Response) => {
       return void res.status(400).json({ error: 'op must be rename, merge or drop' });
     }
 
+    /**
+     * Nothing left on the meal means the meal did not happen — so it comes off the day rather than
+     * lingering as an empty husk reading "0 items · 0 kcal". Taking the last item off IS saying the
+     * meal was not eaten; making the user then find a second, differently-worded delete would be
+     * asking them to say it twice.
+     */
+    if (items.length === 0) {
+      await removeMeal(userId, logId);
+      return void res.json({ meal_removed: true, pin_renamed: pinRenamed });
+    }
+
     const row = await patchMeal(userId, logId, { items, confirm: true });
     if (!row) return void res.status(404).json({ error: 'meal not found' });
     res.json({ ...row, pin_renamed: pinRenamed });

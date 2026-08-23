@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ringArcs } from './nutritionRing.ts';
+import { ringArcs } from './nutritionRingMath.ts';
 
 /* Food-module palette (design redlines §"The two-tone ring"). */
 const TRACK = 'oklch(94% 0.015 80)';

@@ -92,6 +92,12 @@ describe('totalsFromItems', () => {
   it('has nothing to say about items carrying no numbers', () => {
     expect(totalsFromItems([{ name: 'a coffee' }])).toBeNull();
   });
+
+  it('returns null for an emptied meal — which the caller must WRITE, not skip', () => {
+    // Caught live: dropping the last item left the meal's old totals on the day, because the
+    // recompute was behind an `if (recomputed)` guard. Zero items, 215 kcal, still counted.
+    expect(totalsFromItems([])).toBeNull();
+  });
 });
 
 describe('reachBackToPin', () => {

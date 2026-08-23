@@ -461,8 +461,11 @@ export async function patchMeal(
      * after the user has deleted it, which is exactly the repair they came here to make.
      * Recomputed from the items themselves; a client-sent total is never trusted.
      */
-    const recomputed = totalsFromItems(update.items);
-    if (recomputed) update.macros = { ...recomputed, source: 'user' };
+    // Assigned UNCONDITIONALLY. `totalsFromItems` returns null when nothing is left to add up,
+    // and an earlier `if (recomputed)` guard here meant dropping the LAST item left the meal's old
+    // totals in place — zero items still contributing 215 kcal and 675 mg of sodium to the day.
+    // The empty case is the one that most needs writing, not the one to skip.
+    update.macros = { ...(totalsFromItems(update.items) ?? {}), source: 'user' };
   }
   if (patch.confirm || update.macros) {
     update.provisional = false;

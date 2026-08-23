@@ -1,5 +1,5 @@
 import type { Meal, MealMacros } from '../../lib/api.ts';
-import { buildWeek, type WeekDay } from './foodWeek.ts';
+import { buildWeek, type WeekDay } from './foodWeekModel.ts';
 import { MacroBars } from './MacroBars.tsx';
 import { NutritionRing } from './NutritionRing.tsx';
 
@@ -13,7 +13,7 @@ const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
  * read "not yet"; a lived day with nothing on it reads "nothing logged". Neither reads zero, and
  * neither gets a bar — an empty track is the honest picture of an empty day.
  *
- * Averages skip today for the same reason (see `foodWeek.ts`): a day in progress is not a result.
+ * Averages skip today for the same reason (see `foodWeekModel.ts`): a day in progress is not a result.
  */
 function DayRow({ d, scale, onOpen }: { d: WeekDay; scale: number; onOpen?: (date: string) => void }) {
   const lived = d.state === 'logged';

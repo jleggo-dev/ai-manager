@@ -87,6 +87,33 @@ export async function patchMeal(
   return res.json();
 }
 
+/**
+ * Correct an item on a meal that is already logged.
+ *
+ * `rename` keeps the numbers and fixes only the label — and reaches the pinned food behind it, so
+ * the wrong name stops resolving tomorrow (`pin_renamed` says whether it did). `merge` folds one
+ * item into another, nutrients included. `drop` takes off one that was never eaten. All three
+ * recompute the meal's totals server-side; a client-sent total is never trusted.
+ *
+ * Dropping the LAST item takes the whole meal off the day — `meal_removed` says so — because
+ * nothing left on a meal means the meal did not happen.
+ */
+export async function correctMealItem(
+  logId: string,
+  op:
+    | { op: 'rename'; index: number; name: string; brand?: string | null }
+    | { op: 'merge'; index: number; into: number }
+    | { op: 'drop'; index: number },
+): Promise<(Partial<Meal> & { pin_renamed?: boolean; meal_removed?: boolean }) | null> {
+  const res = await fetch(`${BASE}/nutrition/meals/${encodeURIComponent(logId)}/items`, {
+    method: 'PATCH',
+    headers: headers(),
+    body: JSON.stringify(op),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 /** Confirm/edit daily macro targets (the user's tap; unlocks "left" + rings). */
 export async function setMacroTargets(targets: MealMacros): Promise<MealMacros | null> {
   const res = await fetch(`${BASE}/nutrition/targets`, {

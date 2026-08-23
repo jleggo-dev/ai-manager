@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Meal } from '../../lib/api.ts';
-import { buildWeek, totalsByDate, weekOf } from './foodWeek.ts';
+import { buildWeek, totalsByDate, weekOf } from './foodWeekModel.ts';
 
 const meal = (date: string, over: Partial<Meal> = {}): Meal =>
   ({ log_id: `m-${date}-${Math.random()}`, date, meal: 'lunch', items: [], ...over }) as Meal;
