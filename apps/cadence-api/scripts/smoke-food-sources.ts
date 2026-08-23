@@ -83,17 +83,32 @@ async function sweepUsda(): Promise<Row[]> {
       | null;
     const ids = (s?.foods ?? []).map((f) => f.fdcId);
     if (!ids.length) { rows.push({ source: 'usda', query: q, name: '—', micros: 0, problems: ['no search result'] }); continue; }
+    // Keep going past a record the guard rejects — that is what the resolver does, and a source
+    // publishing one corrupt row (USDA has a Starbucks K-Cup at 262.5 g carbs per 100 g) is not
+    // the same as a source having nothing. Reporting it as a failure would train us to ignore
+    // this sweep, which is the one thing it cannot survive.
     let done = false;
+    const rejected: string[] = [];
     for (const id of ids) {
       const raw = await tryHard(() => usdaGet(`/food/${id}`), 2);
       if (!raw) continue;
       const m = mapUsdaFoodDetail(raw);
-      if (!m) { rows.push({ source: 'usda', query: q, name: `fdc:${id}`, micros: 0, problems: ['UNMAPPABLE'] }); done = true; break; }
-      rows.push(summarise('usda', q, m as never));
+      if (!m) { rejected.push(String(id)); continue; }
+      const row = summarise('usda', q, m as never);
+      if (rejected.length) row.problems.push(`note: skipped ${rejected.length} rejected record(s)`);
+      rows.push(row);
       done = true;
       break;
     }
-    if (!done) rows.push({ source: 'usda', query: q, name: '—', micros: 0, problems: ['no detail reachable'] });
+    if (!done) {
+      rows.push({
+        source: 'usda',
+        query: q,
+        name: '—',
+        micros: 0,
+        problems: [rejected.length ? `no usable record in ${ids.length} tried` : 'no detail reachable'],
+      });
+    }
   }
   return rows;
 }
@@ -116,7 +131,7 @@ async function sweepFatSecret(): Promise<Row[]> {
 }
 
 function report(rows: Row[]): number {
-  const bad = rows.filter((r) => r.problems.some((p) => !p.startsWith('warn:')));
+  const bad = rows.filter((r) => r.problems.some((p) => !p.startsWith('warn:') && !p.startsWith('note:')));
   const warned = rows.filter((r) => r.problems.some((p) => p.startsWith('warn:')));
   const noKcal = rows.filter((r) => r.kcal === undefined && !r.problems.length);
   const noMicros = rows.filter((r) => r.micros === 0 && !r.problems.length);

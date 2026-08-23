@@ -52,13 +52,13 @@ describe('usdaDataTypesFor', () => {
   it('searches whole foods only when no vendor is in play', () => {
     // Branded is ~450k packaged products. Opening it for "an apple" buries the generic answer
     // under supermarket variants of itself, which is the wrong result for the commonest query.
-    expect(usdaDataTypesFor(undefined)).toEqual(['Foundation', 'SR Legacy']);
-    expect(usdaDataTypesFor(null)).toEqual(['Foundation', 'SR Legacy']);
-    expect(usdaDataTypesFor('  ')).toEqual(['Foundation', 'SR Legacy']);
+    expect(usdaDataTypesFor(undefined)).toEqual(['Foundation', 'SR Legacy', 'Survey (FNDDS)']);
+    expect(usdaDataTypesFor(null)).toEqual(['Foundation', 'SR Legacy', 'Survey (FNDDS)']);
+    expect(usdaDataTypesFor('  ')).toEqual(['Foundation', 'SR Legacy', 'Survey (FNDDS)']);
   });
 
   it('opens the branded set once a vendor is named', () => {
     // A brand heard in the words is the strongest evidence we get that the food is packaged.
-    expect(usdaDataTypesFor('Clover Valley')).toEqual(['Foundation', 'SR Legacy', 'Branded']);
+    expect(usdaDataTypesFor('Clover Valley')).toEqual(['Foundation', 'SR Legacy', 'Survey (FNDDS)', 'Branded']);
   });
 });

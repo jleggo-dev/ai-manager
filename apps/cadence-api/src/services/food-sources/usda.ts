@@ -18,7 +18,20 @@ export {
 } from './usda-gate.ts';
 
 /** Whole-food analytical datasets — exclude Branded (OFF later) and Survey noise. */
-const WHOLE_FOOD_DATA_TYPES = ['Foundation', 'SR Legacy'] as const;
+/**
+ * The whole-food datasets, in the order FDC ranks them — now including Survey (FNDDS), which we
+ * had simply never asked for.
+ *
+ * MEASURED 2026-08-23, average nutrients published per record:
+ *   SR Legacy 77.5 · Survey (FNDDS) 65 · Foundation 22 · Branded 13.7
+ *
+ * The first three are laboratory panels; Branded is a transcription of the Nutrition Facts label.
+ * That gap is the whole reason micronutrient coverage was patchy — and FNDDS, at a full 65-nutrient
+ * panel, is also the dataset of what people actually EAT rather than what they buy: prepared and
+ * mixed dishes, the pad thai and the burrito bowl, which Foundation and SR Legacy mostly lack.
+ * Leaving it out meant a described dinner fell straight past the free rung to a paid or guessed one.
+ */
+const WHOLE_FOOD_DATA_TYPES = ['Foundation', 'SR Legacy', 'Survey (FNDDS)'] as const;
 
 export interface UsdaSearchOpts {
   pageSize?: number;

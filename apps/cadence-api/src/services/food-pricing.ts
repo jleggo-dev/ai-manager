@@ -26,6 +26,7 @@ import { lexicalMatchScore, type RankedFood } from './food-resolver-rank.ts';
 import { loadResolveShared, rankedFoodsFor, type ResolveShared } from './food-resolver.ts';
 import { PRESELECT_SCORE_MARGIN } from './food-resolver-types.ts';
 import { MACRO_KEYS } from './nutrition-day.ts';
+import { foodIsGoodEnough } from './food-sources/completeness.ts';
 
 /**
  * A ledger price is applied without anyone tapping it, so the bar sits above the UI's preselect:
@@ -184,13 +185,24 @@ async function priceOne(
   }
 
   /**
-   * The last deterministic rung (SPEC-fatsecret.md). Only reached when the ledger and USDA both
-   * came up empty, because it is the one source that costs a call every time it is priced — their
-   * terms make the numbers 24-hour data. Branded and restaurant food is exactly what it is for,
-   * and exactly what the other two structurally cannot hold.
+   * The last deterministic rung (SPEC-fatsecret.md). It costs a call every time it prices — their
+   * terms make the numbers 24-hour data — so it is only ever reached when the free rungs failed.
+   *
+   * "Failed" now means TWO things, where it used to mean one. A rung that found nothing has always
+   * fallen through; a rung that found something UNUSABLE now does too. The waterfall was gated
+   * purely on whether a name matched, so a USDA row carrying calories and nothing else was accepted
+   * and priced, and the source that might have completed it was never asked.
+   *
+   * The bar is calories plus the four macros — the owner's own line, that people are "okay with
+   * just macros" in most cases. It is emphatically NOT micronutrients: paying a billed call to
+   * chase the zinc content of an Oreo would spend a real rung on the half we cannot verify, for a
+   * food whose label was never going to say, and then pin the answer forever. See `completeness.ts`.
    */
-  if (!food) {
-    food = await findFatSecretMatch(item.name, item.brand);
+  if (!foodIsGoodEnough(food)) {
+    if (food) {
+      console.info(`[food-pricing] "${food.name}" has no usable macros — trying the next source`);
+    }
+    food = (await findFatSecretMatch(item.name, item.brand)) ?? food;
   }
 
   /**
@@ -202,13 +214,26 @@ async function priceOne(
     food = await refreshFatSecretFood(food.fatsecret_id ?? '');
   }
 
+  /**
+   * Pinning is for when there is NO food, never for when the one we have is thin.
+   *
+   * Gating this on completeness looked consistent and broke the ledger's central promise: a pinned
+   * row carrying only calories would fail the check on every later log, pin a SECOND row, and the
+   * same words would resolve to a different food each time — which is precisely the drift the pin
+   * exists to eliminate. Two DB tests caught it immediately ("resolves a later log of the same
+   * vendor item to the row it already pinned" got a new id).
+   *
+   * So completeness escalates through SOURCES, and stops at the ledger. Consistency outranks
+   * completeness once a food is ours: a thin row we reuse forever beats a fuller row we re-guess.
+   */
   if (!food && pin) {
     try {
       food = await pinItem(userId, item, confidence);
     } catch (e) {
-      // A pin that fails costs consistency, never the meal: the parse's own numbers stand.
+      // A pin that fails costs consistency, never the meal: the parse's own numbers stand. Any
+      // incomplete match we already had keeps its id, so the item stays linked to a real row.
       console.warn('[food-pricing] pin failed — keeping the parsed estimate:', e);
-      return { item: bare, priced: false, food_id: null };
+      return { item: bare, priced: false, food_id: food?.food_id ?? null };
     }
   }
   if (!food) return { item: bare, priced: false, food_id: null };

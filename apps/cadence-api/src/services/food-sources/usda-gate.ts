@@ -56,7 +56,8 @@ export function hasStrongLocalHit(query: string, foods: readonly Food[]): boolea
  */
 export function usdaDataTypesFor(brand?: string | null): readonly string[] {
   const named = (brand ?? '').trim().length >= 2;
-  return named ? ['Foundation', 'SR Legacy', 'Branded'] : ['Foundation', 'SR Legacy'];
+  const whole = ['Foundation', 'SR Legacy', 'Survey (FNDDS)'];
+  return named ? [...whole, 'Branded'] : whole;
 }
 
 export function shouldQueryUsda(query: string, localFoods: readonly Food[]): boolean {
