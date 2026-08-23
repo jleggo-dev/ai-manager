@@ -149,8 +149,8 @@ describe('runInternalToolJobLoop — the exchange accumulates', () => {
     ];
     for (const out of outputs) {
       const question = opts.calls.find((c) => c.toolCallId === out.toolCallId);
-      expect(question, `output ${out.toolCallId} has no matching call`).toBeDefined();
-      expect(out.output).toContain(question!.name);
+      if (!question) throw new Error(`output ${out.toolCallId} has no matching call`);
+      expect(out.output).toContain(question.name);
     }
   });
 
