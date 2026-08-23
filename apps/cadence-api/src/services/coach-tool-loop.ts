@@ -28,17 +28,34 @@ import type { CoachToolCall, CoachToolOutput } from './coach-tools.ts';
  * with whatever content exists — a reply that stops after "let me check" is recoverable by the
  * user asking again; a hung stream is not.
  *
- * **READ THIS BEFORE TRUSTING A LATER ROUND.** Measured 2026-08-17 (live probe, deployed API,
- * throwaway user): the continuation does not deliver the tool result to the model. Rounds two,
- * three and four of one turn each reported the SAME 12,772 input tokens and each re-emitted the
- * identical call, byte for byte, under a fresh provider call id. Devs.ai v2 accepts our
- * `function_call_output` items (HTTP 200) and rebuilds the model's input from the stored thread
- * instead; nothing we send on `previous_response_id` reaches the prompt. So every round after the
- * first is a fresh generation of the SAME turn, which is why "she over-calls", why a continuation
- * writes a whole new opening line rather than resuming, and why the dangling-lookup nudge below
- * has to be a new turn rather than a note on this one. The loop keeps submitting because that is
- * the correct request to make and the day the provider honours it everything here starts working;
- * until then `callFingerprint` is what stops a mutation running four times.
+ * **THE LATER ROUNDS WORK — measured 2026-08-23, and this comment used to say the opposite.** The
+ * warning it replaces described the THREADED continuation, and it was written the same day #232
+ * abandoned threading; it then outlived its subject by six days and cost a design review that
+ * concluded Cadence needed a different LLM provider to run an agent loop at all.
+ *
+ * What the threaded shape did (2026-08-17, still true of `continueWithToolOutputs`): rounds two,
+ * three and four each reported the SAME 12,772 input tokens against round one's 18,979 and
+ * re-emitted the identical call byte for byte, because Devs.ai v2 accepted our
+ * `function_call_output` items with a 200 and rebuilt the model's input from its own stored
+ * thread, which they never joined.
+ *
+ * `continueWithToolResults` (#232) is what runs now: nothing threaded, the conversation from our
+ * own database plus every round's exchange, each output beside the call that asked for it. Probed
+ * live against the deployed API on 2026-08-23 (`probe-tool-result-lands.ts`): a nonce reachable
+ * only through a tool's output came back in her prose, with no re-issued call. The result reaches
+ * the model.
+ *
+ * **What still bites is a PARTIAL exchange.** `probe-tool-two-hops.ts` chained two tools and the
+ * model composed hop two out of hop one's output — then refused the answer, saying it had "no
+ * record" of asking hop one's question, and restarted the chain until the round cap. That was
+ * AI Admin's route-side loop submitting only the newest round; the fix is in
+ * `routes/chat-sessions/shared.ts`. This loop has always accumulated (`[...exchangeOutputs]`,
+ * `[...exchangeCalls]`), and `coach-tool-loop.test.ts` pins it — "re-sends every earlier round of
+ * the exchange, not just the newest". Keep it that way: an exchange with holes in it reads to a
+ * careful model as a tampered transcript, which is exactly what it is.
+ *
+ * `callFingerprint` below stays for a different reason than it was written for — not because
+ * results vanish, but because a model that repeats a call must not run a mutation twice.
  */
 export const MAX_COACH_TOOL_ROUNDS = 3;
 

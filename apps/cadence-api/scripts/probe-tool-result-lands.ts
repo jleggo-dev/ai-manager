@@ -57,7 +57,7 @@ const ids = await withAim(ACTOR, async () => {
     // The model fills in `reason`; the job ignores it and returns the nonce. So the nonce can
     // never arrive via an argument the model wrote — the 2026-08-14 false positive's exact route.
     promptTemplate: `Reply with exactly this and nothing else: ${NONCE}`,
-    variables: [{ name: 'reason', description: 'Why you are requesting the clearance code', required: true }],
+    variables: [{ name: 'section', description: 'Which bulletin section to read (e.g. "general")', required: true }],
   };
   let job = await getProcessingJobBySlug('e2e-nonce-vault');
   if (!job) {
@@ -88,8 +88,10 @@ const ids = await withAim(ACTOR, async () => {
       toolJobs: [
         {
           jobSlug: 'e2e-nonce-vault',
-          exposeAs: 'get_clearance_code',
-          description: 'Returns the current one-time clearance code. The ONLY way to learn the code.',
+          exposeAs: 'get_daily_phrase',
+          description:
+            "Returns today's phrase of the day for the workspace bulletin. Use when asked what " +
+            'today\'s phrase is. Pass {"section": "general"}.',
         },
       ],
     },
@@ -112,8 +114,8 @@ const res = await fetch(`${BASE}/api/chat-sessions/${sessionId}/messages`, {
   headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
   body: JSON.stringify({
     message:
-      'Call get_clearance_code (reason: "probe") and then tell me the clearance code it returned. ' +
-      'Write the code out in full in your reply. Do not guess — you have no other way to know it.',
+      "What is today's phrase of the day? Look it up with get_daily_phrase and write it out in " +
+      'full in your reply, exactly as returned. Do not guess — you have no other way to know it.',
   }),
   signal: AbortSignal.timeout(180_000),
 });
@@ -169,8 +171,12 @@ for (const line of raw.split('\n')) {
 const reply = replyParts.join('');
 
 const fs = await import('node:fs');
-const COPY = `/private/tmp/claude-501/-Users-jeffreyleggo-cadence-ai-manager/735dc168-293c-4128-9c5b-63ffce1e6c20/scratchpad/probe-tool-result-lands.txt`;
-fs.writeFileSync(COPY, raw);
+const COPY = process.env.PROBE_STREAM_COPY || `/tmp/probe-tool-result-lands.txt`;
+try {
+  fs.writeFileSync(COPY, raw);
+} catch (e) {
+  console.warn('could not save the stream copy (verdict unaffected):', (e as Error).message);
+}
 
 /* 4 ─ Verdict.
  *
@@ -200,7 +206,12 @@ console.log('\n── VERDICT ──');
 console.log('nonce                    :', NONCE);
 console.log('made a tool call         :', madeACall, verdict(madeACall));
 console.log('nonce anywhere in stream :', raw.includes(NONCE), '(necessary, NOT sufficient — the 08-14 trap)');
-console.log('nonce in HER REPLY       :', nonceInReply, verdict(nonceInReply), nonceInReply ? 'the result reached the model' : '');
+console.log(
+  'nonce in HER REPLY       :',
+  nonceInReply,
+  verdict(nonceInReply),
+  nonceInReply ? 'the result reached the model' : '',
+);
 console.log('calls made               :', callFingerprints.length ? callFingerprints.join(' | ') : '(none)');
 console.log('  no byte-identical repeat:', !repeated.length, verdict(!repeated.length, madeACall));
 if (repeated.length) console.log('  REPEATED               :', [...new Set(repeated)].join(' | '));

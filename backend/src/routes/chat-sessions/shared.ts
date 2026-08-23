@@ -41,6 +41,18 @@ export async function runInternalToolJobLoop(options: {
 }): Promise<{ pendingSystemMessageId: string | undefined; pendingV2ResponseId: string | undefined }> {
   let { pendingSystemMessageId, pendingV2ResponseId } = options;
   const fulfilledCallIds = new Set<string>();
+  /**
+   * The whole turn's exchange, accumulated across rounds. The self-contained continuation
+   * (`submitV2ToolOutputs`) carries the conversation from the DB plus whatever exchange the
+   * caller hands it — and tool rounds are never persisted as chat messages, so anything not in
+   * these arrays simply vanishes from the model's next input. Passing only the newest round
+   * (the pre-2026-08-23 behaviour) fed the model a round-2 result whose round-1 question was
+   * missing; live-probed (probe-tool-two-hops.ts), the model called that "a result I have no
+   * record of requesting", refused to trust it, and restarted the chain until the round cap.
+   * Execution stays deduplicated via `fulfilledCallIds`; only the SUBMITTED exchange grows.
+   */
+  const exchangeCalls: PendingToolCall[] = [];
+  const exchangeOutputs: Array<{ toolCallId: string; output: string }> = [];
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const registeredCalls = selectUnfulfilledToolCalls(
@@ -59,6 +71,8 @@ export async function runInternalToolJobLoop(options: {
       if (outputs.length === 0) break;
 
       for (const call of registeredCalls) fulfilledCallIds.add(call.toolCallId);
+      exchangeCalls.push(...registeredCalls);
+      exchangeOutputs.push(...outputs);
 
       const v2ResponseId =
         pendingV2ResponseId ||
@@ -66,10 +80,14 @@ export async function runInternalToolJobLoop(options: {
         '';
       const toolStream =
         options.isV2Session && v2ResponseId
-          ? // `registeredCalls` names each output so the continuation can carry the call beside
-            // its result — without that pairing the provider drops the results (#232).
-            await submitV2ToolOutputs(options.sessionId, v2ResponseId, outputs, { calls: registeredCalls })
-          : await submitChatToolOutputs(options.sessionId, pendingSystemMessageId || '', outputs);
+          ? // EVERY round's exchange so far, each output beside the call that asked for it —
+            // without the pairing the provider drops the results (#232), and without the earlier
+            // rounds the model meets answers to questions the request no longer contains.
+            await submitV2ToolOutputs(options.sessionId, v2ResponseId, [...exchangeOutputs], {
+              calls: [...exchangeCalls],
+            })
+          : // v1 threads server-side and holds its own history — newest round only, or it repeats.
+            await submitChatToolOutputs(options.sessionId, pendingSystemMessageId || '', outputs);
 
       const toolBody = toolStream.response.body as ReadableStream<Uint8Array> | null;
       if (!toolBody) break;
