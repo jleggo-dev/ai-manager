@@ -90,7 +90,7 @@ router.post(
   validateBody(createProviderSchema),
   async (req: Request, res: Response) => {
     try {
-      const { name, type, base_url, api_key, is_active, request_timeout_ms } = req.body;
+      const { name, type, base_url, api_key, is_active, request_timeout_ms, max_tool_output_chars } = req.body;
 
       const row = await createProvider({
         name,
@@ -99,6 +99,7 @@ router.post(
         api_key,
         is_active: is_active !== false,
         ...(request_timeout_ms !== undefined && { request_timeout_ms: Number(request_timeout_ms) || null }),
+        ...(max_tool_output_chars !== undefined && { max_tool_output_chars: Number(max_tool_output_chars) || null }),
       });
 
       return res.status(201).json(sanitizeProvider(row));

@@ -24,6 +24,7 @@ import {
   type ToolJobBinding,
 } from '../services/tool-jobs.ts';
 import { executeJobById } from './job-execution.ts';
+import { boundToolOutput, resolveToolOutputChars } from '../services/tool-output-bounds.ts';
 import type { AiProfileRow } from '../types.ts';
 
 /**
@@ -113,14 +114,30 @@ export async function fulfillPendingToolJobCalls(
         callingApplication,
         variables: args,
       });
-      outputs.push({
-        toolCallId: call.toolCallId,
-        output: result.formatted || result.raw || JSON.stringify({ ok: true }),
-      });
+
+      /**
+       * The result is whatever an LLM wrote, and it goes straight into the next request beside
+       * every earlier round's exchange. Bound it before it becomes prompt — structured payloads
+       * are replaced wholesale rather than cut, because half a JSON object is worse than none
+       * (see tool-output-bounds.ts).
+       */
+      const raw = result.formatted || result.raw || JSON.stringify({ ok: true });
+      const limit = await resolveToolOutputChars({ binding, profile });
+      const bound = boundToolOutput(raw, { limit, job, tool: call.name });
+
+      outputs.push({ toolCallId: call.toolCallId, output: bound.output });
       console.info('[ai-manager] fulfilled internal tool job', {
         exposeAs: call.name,
         jobSlug: binding.jobSlug,
+        ...(bound.bounded ? { bounded: bound.strategy, originalBytes: bound.originalBytes, limit } : {}),
       });
+      if (bound.bounded) {
+        console.warn(
+          `[tool-jobs] "${call.name}" returned ${bound.originalBytes} chars over a ${limit} limit — ` +
+            `${bound.strategy === 'replaced' ? 'discarded (structured payload, never cut)' : 'truncated at a line boundary'}. ` +
+            "Bound the job's expectedSchema or narrow the tool description if this is routine.",
+        );
+      }
     } catch (err) {
       outputs.push({
         toolCallId: call.toolCallId,

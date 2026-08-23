@@ -37,6 +37,15 @@ interface NormalisedRuntimeOptions {
   google_gemini: {
     grounding_with_google_search: boolean;
   };
+  /**
+   * Provider-agnostic tool behaviour. Deliberately NOT nested under a provider: how big a tool
+   * result may be is a fact about this assistant's turns, not about who serves the model, and it
+   * must survive the provider-type resets below.
+   */
+  tools: {
+    /** Max characters of one tool result. null = inherit provider → app default → code floor. */
+    max_output_chars: number | null;
+  };
 }
 
 function toObject(value: unknown): Record<string, unknown> {
@@ -46,6 +55,12 @@ function toObject(value: unknown): Record<string, unknown> {
 function toBoolean(value: unknown, fallback: boolean = false): boolean {
   if (typeof value === 'boolean') return value;
   return fallback;
+}
+
+/** A configured positive limit, or null for "inherit" — 0 and junk both mean inherit. */
+function toPositiveIntOrNull(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
 }
 
 function normaliseToolList(value: unknown, allowed: string[]): string[] {
@@ -105,6 +120,9 @@ export function normaliseAiProfileRuntimeOptions(
     },
     google_gemini: {
       grounding_with_google_search: toBoolean(googleInput.grounding_with_google_search, false),
+    },
+    tools: {
+      max_output_chars: toPositiveIntOrNull(toObject(root.tools).max_output_chars),
     },
   };
 

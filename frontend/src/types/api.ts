@@ -8,6 +8,7 @@ export interface Provider {
   has_api_key?: boolean;
   is_active: boolean;
   request_timeout_ms: number | null;
+  max_tool_output_chars?: number | null;
   workspace_id: string;
   created_at: string;
   updated_at: string;

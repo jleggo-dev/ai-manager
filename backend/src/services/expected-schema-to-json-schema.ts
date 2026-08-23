@@ -33,6 +33,21 @@ export interface ExpectedSchemaFieldDef {
   fields?: Record<string, ExpectedSchemaFieldDef>;
   /** Let the model answer `null` rather than invent a value it was never given. */
   nullable?: boolean;
+  /**
+   * Ceiling on an array field's length — the strongest bound available on a job's output, because
+   * a schema is enforced where a prompt is merely requested.
+   *
+   * Emitted TWICE on purpose, and the redundancy is the point. As a `maxItems` keyword it is a
+   * hard constraint wherever the provider honours it; folded into the field's `description` it is
+   * an instruction the model reads even where the keyword is dropped. OpenAI-compatible strict
+   * mode accepts only a subset of JSON Schema and its treatment of `maxItems` is not something we
+   * have measured against Devs.ai — so this never relies on the keyword alone. A provider that
+   * silently ignores it would otherwise leave an author believing they were bounded, which is the
+   * one failure worse than being unbounded.
+   *
+   * Opt-in: no shipped job sets it, so nothing changes until one does.
+   */
+  maxItems?: number;
 }
 
 export interface ExpectedSchemaInput {
@@ -97,11 +112,17 @@ function mapField(def: ExpectedSchemaFieldDef | undefined): Record<string, unkno
     } else {
       prop.items = { type: 'string' };
     }
+    const max = Number(def?.maxItems);
+    if (Number.isFinite(max) && max > 0) prop.maxItems = Math.floor(max);
   } else {
     prop = mapFieldType(def?.type);
   }
 
-  if (def?.description) prop.description = def.description;
+  // The ceiling rides in the prose as well as the keyword — see `maxItems` above for why.
+  const ceiling =
+    typeof prop.maxItems === 'number' ? `Return at most ${prop.maxItems} item${prop.maxItems === 1 ? '' : 's'}.` : '';
+  const described = [def?.description, ceiling].filter(Boolean).join(' ');
+  if (described) prop.description = described;
   if (def?.allowedValues?.length) prop.enum = def.allowedValues;
   return def?.nullable ? withNull(prop) : prop;
 }

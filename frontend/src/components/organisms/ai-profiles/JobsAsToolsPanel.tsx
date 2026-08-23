@@ -6,13 +6,15 @@
  */
 
 import type { Dispatch, SetStateAction } from 'react';
-import { ActionIcon, Button, Group, Paper, Select, Stack, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Group, NumberInput, Paper, Select, Stack, Text, TextInput } from '@mantine/core';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 
 export interface ToolJobFormRow {
   jobSlug: string;
   exposeAs: string;
   description: string;
+  /** Per-tool result cap in characters. Empty inherits profile → provider → system default. */
+  maxOutputChars: number | null;
 }
 
 interface JobsAsToolsPanelProps {
@@ -31,6 +33,12 @@ export default function JobsAsToolsPanel({ toolJobs, setToolJobs, processingJobs
         <Text size="xs" c="dimmed">
           Expose processing jobs as model-callable tools. AI Admin runs the linked job server-side when the model
           invokes the tool (devs-ai v1 tool.call or devs-ai-v2 function_call).
+        </Text>
+        <Text size="xs" c="dimmed">
+          <strong>Max output</strong> caps one result from this tool. The better fix for a large result is a bounded
+          array in the job&apos;s expected schema — the provider enforces that. This is the backstop: over the limit, a
+          JSON result is replaced with an error object the model can retry against, and plain text is cut at a line
+          boundary and told so. Leave empty to inherit the profile, provider, then system default.
         </Text>
         {toolJobs.length === 0 && (
           <Text size="xs" c="dimmed">
@@ -73,6 +81,20 @@ export default function JobsAsToolsPanel({ toolJobs, setToolJobs, processingJobs
                 )
               }
             />
+            <NumberInput
+              label="Max output"
+              placeholder="Inherit"
+              style={{ width: 120 }}
+              min={500}
+              max={500000}
+              step={1000}
+              value={row.maxOutputChars ?? ''}
+              onChange={(val) =>
+                setToolJobs((prev) =>
+                  prev.map((r, i) => (i === index ? { ...r, maxOutputChars: val ? Number(val) : null } : r)),
+                )
+              }
+            />
             <ActionIcon
               color="red"
               variant="subtle"
@@ -87,7 +109,9 @@ export default function JobsAsToolsPanel({ toolJobs, setToolJobs, processingJobs
           variant="light"
           size="xs"
           leftSection={<IconPlus size={14} />}
-          onClick={() => setToolJobs((prev) => [...prev, { jobSlug: '', exposeAs: '', description: '' }])}
+          onClick={() =>
+            setToolJobs((prev) => [...prev, { jobSlug: '', exposeAs: '', description: '', maxOutputChars: null }])
+          }
         >
           Add tool job
         </Button>

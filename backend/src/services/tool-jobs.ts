@@ -12,6 +12,12 @@ export interface ToolJobBinding {
   jobSlug: string;
   exposeAs: string;
   description?: string;
+  /**
+   * Cap for THIS tool's result, in characters. The tier that knows the most — a tool returning a
+   * weight and a tool returning a week of rows have nothing in common — so it wins the cascade in
+   * `resolveToolOutputChars`. Omit to inherit profile → provider → app default → code floor.
+   */
+  maxOutputChars?: number | null;
 }
 
 export interface PendingToolCall {
