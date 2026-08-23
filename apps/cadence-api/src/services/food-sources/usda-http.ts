@@ -178,7 +178,17 @@ async function rawUsdaCall(pathAndQuery: string, body?: unknown): Promise<unknow
     }
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      console.warn(`[usda] HTTP ${res.status} for ${pathAndQuery.split('?')[0]}: ${body.slice(0, 200)}`);
+      /**
+       * FDC's intermittent outage answers with its website's HTML error page. It is retried,
+       * handled, and expected — so it gets ONE line, not two hundred characters of someone's
+       * Angular shell. Real errors (a JSON 400, a bad key) keep their body, because those are the
+       * ones worth reading and they were being buried under the noise.
+       */
+      const isTransportHtml = isTransport(res);
+      console.warn(
+        `[usda] HTTP ${res.status} for ${pathAndQuery.split('?')[0]}` +
+          (isTransportHtml ? ' (FDC transport flake — retried)' : `: ${body.slice(0, 200)}`),
+      );
       throw new UsdaHttpError(res.status, `USDA request failed (${res.status})`);
     }
     return (await res.json()) as unknown;

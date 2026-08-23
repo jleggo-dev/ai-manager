@@ -100,6 +100,28 @@ const KCAL_FLOOR = 50;
  */
 const KCAL_MISSING_FLOOR = 25;
 
+/**
+ * Drinks whose calories are mostly ethanol — for sources that publish NO alcohol figure.
+ *
+ * USDA states alcohol as a nutrient (id 1018 / number 221), so its adapter knows from the data.
+ * FatSecret does not publish one at all: a Red Table Wine row carries calories, carbohydrate,
+ * protein, fat and calcium, and nothing else. Its 85 kcal against ~11 implied is therefore
+ * flagged forever with no way to answer — and a guard that cries wolf on every glass of wine is
+ * a guard people stop reading.
+ *
+ * A name is weak evidence, and it is used here only because the cost of being wrong is so
+ * lopsided. A FALSE POSITIVE (matching "wine vinegar" or "rum cake") merely SUPPRESSES A WARNING;
+ * it can never change a number, and the impossible-value checks, which are the ones that actually
+ * drop data, run regardless. Getting it wrong costs a little vigilance on one row; getting it
+ * right buys back a check nobody was reading.
+ */
+const ALCOHOL_WORDS =
+  /\b(?:wine|beer|ale|lager|stout|cider|vodka|gin|rum|whisk(?:e)?y|bourbon|scotch|tequila|brandy|cognac|liqueur|schnapps|sake|prosecco|champagne|vermouth|absinthe|mead|shandy|sangria|margarita|mojito|martini)\b/i;
+
+export function looksAlcoholic(name: string): boolean {
+  return ALCOHOL_WORDS.test(name);
+}
+
 export function checkNormalizedFood(food: NormalizedFood): NormalizationProblem[] {
   const problems: NormalizationProblem[] = [];
 
@@ -142,7 +164,7 @@ export function checkNormalizedFood(food: NormalizedFood): NormalizationProblem[
     }
   }
 
-  problems.push(...checkEnergy(food.macros_per_base, food.alcoholic === true));
+  problems.push(...checkEnergy(food.macros_per_base, food.alcoholic === true || looksAlcoholic(food.name)));
   problems.push(...checkServings(food));
   return problems;
 }

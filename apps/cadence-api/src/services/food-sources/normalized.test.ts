@@ -7,7 +7,13 @@
  * next source arrives with its own private way of being wrong.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { applyNormalization, atwaterKcal, checkNormalizedFood, type NormalizedFood } from './normalized.ts';
+import {
+  applyNormalization,
+  atwaterKcal,
+  checkNormalizedFood,
+  looksAlcoholic,
+  type NormalizedFood,
+} from './normalized.ts';
 
 const food = (over: Partial<NormalizedFood> = {}): NormalizedFood => ({
   name: 'peanuts, raw',
@@ -69,6 +75,38 @@ describe('the energy cross-check', () => {
     expect(
       checkNormalizedFood(food({ macros_per_base: { kcal: 23, protein_g: 2.9, carbs_g: 3.6, fat_g: 0.4 } })),
     ).toEqual([]);
+  });
+});
+
+describe('alcohol, for sources that do not publish it', () => {
+  it('stands the energy check down for a drink named as one', () => {
+    // FatSecret publishes NO alcohol figure — a Red Table Wine row has calories, carbohydrate,
+    // protein, fat and calcium, full stop. So its 85 kcal against ~11 implied would be flagged
+    // forever with no way to answer, and a guard that cries wolf on every glass of wine stops
+    // being read.
+    const wine = food({
+      name: 'Red Table Wine',
+      macros_per_base: { kcal: 85, protein_g: 0.1, carbs_g: 2.7, fat_g: 0 },
+    });
+    expect(checkNormalizedFood(wine)).toEqual([]);
+    const vodka = food({ name: 'Vodka', macros_per_base: { kcal: 231, protein_g: 0, carbs_g: 0, fat_g: 0 } });
+    expect(checkNormalizedFood(vodka)).toEqual([]);
+  });
+
+  it('matches whole words only', () => {
+    expect(looksAlcoholic('Red Table Wine')).toBe(true);
+    expect(looksAlcoholic('Whiskey Sour')).toBe(true);
+    expect(looksAlcoholic('Ginger snaps')).toBe(false);
+    expect(looksAlcoholic('Sparkling water')).toBe(false);
+  });
+
+  it('still DROPS impossible numbers on a drink — only the warning is suppressed', () => {
+    // The asymmetry that makes a name-based guess safe: a false positive costs a warning, never
+    // a number. The checks that actually discard data run regardless of what a thing is called.
+    const bad = food({ name: 'Red Table Wine', macros_per_base: { kcal: 85, protein_g: 0, carbs_g: 262, fat_g: 0 } });
+    expect(checkNormalizedFood(bad)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'carbs_g', severity: 'drop' })]),
+    );
   });
 });
 
