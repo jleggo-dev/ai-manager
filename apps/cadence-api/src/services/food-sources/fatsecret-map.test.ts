@@ -90,6 +90,43 @@ describe('mapFatSecretFood', () => {
   });
 
   /** FatSecret returns neither, so a food sourced here simply has none — never a guessed zero. */
+  /**
+   * Found by the first live call: FatSecret returned `potassium: 0` for peanuts, which carry
+   * roughly 700mg per 100g. Their fields are documented "(where available)" and absence arrives as
+   * a zero, so storing it would be a fabricated measurement — and it would count as "covered" in
+   * the micro rollup while contributing nothing.
+   */
+  it('drops a zero micronutrient, because zero means not available', () => {
+    const f = mapFatSecretFood({
+      food: {
+        food_id: '1',
+        food_name: 'Peanuts',
+        servings: {
+          serving: {
+            metric_serving_amount: '28',
+            metric_serving_unit: 'g',
+            calories: '170',
+            fat: '14',
+            fiber: '0',
+            potassium: '0',
+            calcium: '0',
+            iron: '0',
+            vitamin_c: '0',
+            sodium: '0',
+          },
+        },
+      },
+    })!;
+    expect(f.macros_per_base.potassium_mg).toBeUndefined();
+    expect(f.macros_per_base.calcium_mg).toBeUndefined();
+    expect(f.macros_per_base.iron_mg).toBeUndefined();
+    expect(f.macros_per_base.vitamin_c_mg).toBeUndefined();
+    expect(f.macros_per_base.sodium_mg).toBeUndefined();
+    // Energy and macros keep their zeros — those are real measurements.
+    expect(f.macros_per_base.fiber_g).toBe(0);
+    expect(f.macros_per_base.kcal).toBeCloseTo(607.14, 1);
+  });
+
   it('leaves zinc and B12 absent rather than inventing them', () => {
     const f = mapFatSecretFood(PEANUTS)!;
     expect(f.macros_per_base.zinc_mg).toBeUndefined();
@@ -130,24 +167,54 @@ describe('mapFatSecretFood', () => {
   });
 
   /**
-   * Without a metric amount there is no honest way to say "per 100 g", and A23 pins what it
-   * prices — so a guess here would become a permanent wrong price.
+   * The restaurant case, and the reason FatSecret is here at all. A live lookup of Starbucks'
+   * Caffè Latte (Venti) declares "20 oz" — ambiguous between fluid and weight ounces, so it is
+   * mapped as ONE OF ITSELF rather than converted on a guess.
    */
-  it('refuses a food whose servings declare no metric amount', () => {
-    expect(
-      mapFatSecretFood({
-        food: {
-          food_id: '9',
-          food_name: 'Mystery',
-          servings: { serving: [{ serving_description: '1 plate', calories: '300' }] },
+  it('maps a restaurant item measured in ounces as a single serving', () => {
+    const f = mapFatSecretFood({
+      food: {
+        food_id: '125075080',
+        food_name: 'Caffè Latte (Venti)',
+        brand_name: 'Starbucks',
+        servings: {
+          serving: {
+            serving_description: '1 serving',
+            measurement_description: 'serving',
+            metric_serving_amount: '20.000',
+            metric_serving_unit: 'oz',
+            calories: '250',
+            protein: '16.00',
+            fat: '9.00',
+            carbohydrate: '24.00',
+            sodium: '220',
+          },
         },
-      }),
-    ).toBeNull();
+      },
+    })!;
+    expect(f.base_unit).toBe('item');
+    // Per ONE latte, unscaled — no ounce conversion was guessed at.
+    expect(f.macros_per_base).toMatchObject({ kcal: 250, protein_g: 16, fat_g: 9, sodium_mg: 220 });
+    expect(f.servings).toEqual([{ label: '1 serving', unit: 'serving', amount_g: 1 }]);
+  });
+
+  it('falls back to a single serving when no metric amount is declared at all', () => {
+    const f = mapFatSecretFood({
+      food: {
+        food_id: '9',
+        food_name: 'Mystery',
+        servings: { serving: [{ serving_description: '1 plate', calories: '300' }] },
+      },
+    })!;
+    expect(f.base_unit).toBe('item');
+    expect(f.macros_per_base.kcal).toBe(300);
+    expect(f.servings[0]?.label).toBe('1 plate');
   });
 
   it('refuses anything missing an id, a name, or servings', () => {
     expect(mapFatSecretFood({})).toBeNull();
     expect(mapFatSecretFood({ food: { food_id: '1' } })).toBeNull();
     expect(mapFatSecretFood({ food: { food_name: 'no id', servings: { serving: [] } } })).toBeNull();
+    expect(mapFatSecretFood({ food: { food_id: '2', food_name: 'Empty', servings: { serving: [] } } })).toBeNull();
   });
 });

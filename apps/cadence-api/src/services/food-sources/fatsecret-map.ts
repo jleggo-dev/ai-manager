@@ -54,21 +54,39 @@ function asArray(v: unknown): Record<string, unknown>[] {
  */
 function nutrientsFromServing(s: Record<string, unknown>): FoodNutrients {
   const out: FoodNutrients = {};
+  /** Energy and the macros: zero is a real measurement (water has no calories, oil has no fibre). */
   const put = (key: keyof FoodNutrients, raw: unknown) => {
     const n = num(raw);
     if (n !== null && n >= 0) out[key] = n;
+  };
+  /**
+   * Minerals and vitamins: **zero means NOT AVAILABLE, so it is dropped.**
+   *
+   * FatSecret documents every one of these "(where available)" and then expresses absence as 0
+   * rather than by omitting the field. A live lookup of Dill Pickle Peanuts came back with
+   * `potassium: 0`, and peanuts carry something like 700mg per 100g — so a stored 0 would be a
+   * fabricated measurement, not a low one.
+   *
+   * It matters twice over. A day's micro total is meant to be a FLOOR — what we can prove they
+   * ate — and a false zero adds nothing to it while counting as "covered" in the insight rollup,
+   * which quietly makes coverage look better than it is and suppresses the very insight the
+   * nutrient exists to raise.
+   */
+  const putMicro = (key: keyof FoodNutrients, raw: unknown) => {
+    const n = num(raw);
+    if (n !== null && n > 0) out[key] = n;
   };
   put('kcal', s.calories);
   put('protein_g', s.protein);
   put('carbs_g', s.carbohydrate);
   put('fat_g', s.fat);
   put('fiber_g', s.fiber);
-  put('sodium_mg', s.sodium);
-  put('potassium_mg', s.potassium);
   // v4 milligrams — see the version warning above.
-  put('calcium_mg', s.calcium);
-  put('iron_mg', s.iron);
-  put('vitamin_c_mg', s.vitamin_c);
+  putMicro('sodium_mg', s.sodium);
+  putMicro('potassium_mg', s.potassium);
+  putMicro('calcium_mg', s.calcium);
+  putMicro('iron_mg', s.iron);
+  putMicro('vitamin_c_mg', s.vitamin_c);
   return out;
 }
 
@@ -111,6 +129,7 @@ export function mapFatSecretFood(raw: unknown): FatSecretMappedFood | null {
 
   const rows = asArray((food.servings as Record<string, unknown> | undefined)?.serving);
   if (rows.length === 0) return null;
+  const brand = str(food.brand_name) || null;
 
   // The reference serving is the first with a usable metric amount — everything else scales to it.
   const metric = rows.find((s) => {
@@ -118,7 +137,30 @@ export function mapFatSecretFood(raw: unknown): FatSecretMappedFood | null {
     const unit = str(s.metric_serving_unit).toLowerCase();
     return amt !== null && amt > 0 && (unit === 'g' || unit === 'ml');
   });
-  if (!metric) return null;
+
+  /**
+   * No grams or millilitres? Then the food is ONE OF ITSELF, and that is not a compromise.
+   *
+   * Restaurant items — FatSecret's whole reason for being here — routinely declare their size in
+   * `oz`, which is ambiguous: a Starbucks venti latte's "20 oz" is fluid ounces (591 ml) while a
+   * bag of nuts' "2 oz" is weight (57 g). Guessing between them would put a silent ~7% error into
+   * every drink, or a much larger one into every solid. Cadence already has the honest answer in
+   * `base_unit: 'item'`: nutrients per one serving, logged the way a person actually says it —
+   * "a venti latte", not "591 millilitres of latte".
+   */
+  if (!metric) {
+    const first = rows[0]!;
+    const label = str(first.serving_description) || str(first.measurement_description) || '1 serving';
+    return {
+      fatsecret_id,
+      name,
+      brand,
+      base_unit: 'item',
+      macros_per_base: nutrientsFromServing(first),
+      servings: [{ label, unit: str(first.measurement_description) || 'serving', amount_g: 1 }],
+      default_serving: 0,
+    };
+  }
 
   const refAmount = num(metric.metric_serving_amount)!;
   const base_unit: FoodBaseUnit = str(metric.metric_serving_unit).toLowerCase() === 'ml' ? 'ml' : 'g';
@@ -141,7 +183,7 @@ export function mapFatSecretFood(raw: unknown): FatSecretMappedFood | null {
   return {
     fatsecret_id,
     name,
-    brand: str(food.brand_name) || null,
+    brand,
     base_unit,
     macros_per_base,
     servings,
