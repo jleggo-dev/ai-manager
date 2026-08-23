@@ -35,7 +35,8 @@ export interface Macros {
    * again reproduces them exactly). A mixed meal stays 'ai': it is only as reproducible as its
    * least reproducible item.
    */
-  source?: 'ai' | 'user' | 'ledger';
+  /** 'research' = a web-grounded lookup already ran for this item — never run it twice. */
+  source?: 'ai' | 'user' | 'ledger' | 'research';
 }
 
 export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | 'other';

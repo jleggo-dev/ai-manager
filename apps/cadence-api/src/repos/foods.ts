@@ -5,13 +5,13 @@ import type { Food, FoodBaseUnit, FoodNutrients, FoodServing, FoodSource, FoodVi
 // created_at cast to text — postgres.js Date-object trap (same as nutrition.ts).
 const FOOD_COLS = sql`
   f.food_id, f.owner_user_id, f.visibility, f.name, f.brand, f.source, f.off_id, f.fdc_id,
-  f.fatsecret_id, f.source_fetched_at::text as source_fetched_at, f.base_unit,
+  f.cnf_id, f.fatsecret_id, f.source_fetched_at::text as source_fetched_at, f.base_unit,
   f.macros_per_base, f.servings, f.default_serving, f.confidence, f.photo_ref,
   f.created_at::text as created_at`;
 
 const FOOD_COLS_PLAIN = sql`
   food_id, owner_user_id, visibility, name, brand, source, off_id, fdc_id,
-  fatsecret_id, source_fetched_at::text as source_fetched_at, base_unit,
+  cnf_id, fatsecret_id, source_fetched_at::text as source_fetched_at, base_unit,
   macros_per_base, servings, default_serving, confidence, photo_ref,
   created_at::text as created_at`;
 

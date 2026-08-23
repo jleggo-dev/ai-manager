@@ -1,0 +1,725 @@
+{
+ "food": {
+  "food_code": 2835,
+  "food_description": "Alcohol, beer, light (4% alcohol by volume)"
+ },
+ "nutrients": [
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 261,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 204,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 810,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 814,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 262,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 263,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 323,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 324,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 339,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 431,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 501,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 502,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 503,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 504,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 505,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 506,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 507,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 508,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 509,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 510,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 511,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 512,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 518,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 601,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 606,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 607,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 608,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 609,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 610,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 611,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 612,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 613,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 614,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 617,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 618,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 619,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 620,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 621,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 626,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 627,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 628,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 629,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 630,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 631,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 645,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 646,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 834,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 835,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 836,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 837,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 291,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 401,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 430,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 210,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 212,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 213,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 214,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 287,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 319,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 321,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 605,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 615,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 624,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 625,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 636,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 638,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 652,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 653,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 654,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 816,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 817,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 818,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 819,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 820,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 821,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 823,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 824,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 825,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 826,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 827,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 829,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 830,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 831,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 832,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 833,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 838,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 840,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 841,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 843,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 845,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 846,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 847,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 848,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 849,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 852,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 853,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 854,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 855,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 859,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 861,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 866,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 868,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 869,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 404,
+   "nutrient_value": 0.005
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 312,
+   "nutrient_value": 0.006
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 315,
+   "nutrient_value": 0.006
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 309,
+   "nutrient_value": 0.01
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 513,
+   "nutrient_value": 0.01
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 516,
+   "nutrient_value": 0.011
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 514,
+   "nutrient_value": 0.013
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 405,
+   "nutrient_value": 0.015
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 418,
+   "nutrient_value": 0.02
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 517,
+   "nutrient_value": 0.029
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 410,
+   "nutrient_value": 0.03
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 303,
+   "nutrient_value": 0.03
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 415,
+   "nutrient_value": 0.034
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 515,
+   "nutrient_value": 0.039
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 207,
+   "nutrient_value": 0.09
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 269,
+   "nutrient_value": 0.09
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 211,
+   "nutrient_value": 0.09
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 203,
+   "nutrient_value": 0.24
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 406,
+   "nutrient_value": 0.391
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 409,
+   "nutrient_value": 0.391
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 317,
+   "nutrient_value": 0.4
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 205,
+   "nutrient_value": 1.64
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 221,
+   "nutrient_value": 3.1
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 301,
+   "nutrient_value": 4.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 307,
+   "nutrient_value": 4.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 304,
+   "nutrient_value": 5.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 417,
+   "nutrient_value": 6.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 806,
+   "nutrient_value": 6.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 815,
+   "nutrient_value": 6.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 862,
+   "nutrient_value": 8.8
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 305,
+   "nutrient_value": 12.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 306,
+   "nutrient_value": 21.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 208,
+   "nutrient_value": 29.0
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 255,
+   "nutrient_value": 94.88
+  },
+  {
+   "food_code": 2835,
+   "nutrient_name_id": 268,
+   "nutrient_value": 123.0
+  }
+ ],
+ "servings": [
+  {
+   "food_code": 2835,
+   "measure_name": "100ml",
+   "conversion_factor_value": 0.99763
+  },
+  {
+   "food_code": 2835,
+   "measure_name": "250ml",
+   "conversion_factor_value": 2.49408
+  },
+  {
+   "food_code": 2835,
+   "measure_name": "1 bottle (341ml)",
+   "conversion_factor_value": 3.40193
+  },
+  {
+   "food_code": 2835,
+   "measure_name": "1 can (355 ml)",
+   "conversion_factor_value": 3.5416
+  },
+  {
+   "food_code": 2835,
+   "measure_name": "no serving specified",
+   "conversion_factor_value": 0.0
+  }
+ ]
+}

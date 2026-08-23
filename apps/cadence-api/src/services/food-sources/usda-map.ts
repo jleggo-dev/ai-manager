@@ -62,7 +62,7 @@ const USDA_ENERGY_FALLBACK_NUMBERS = [2047, 957, 2048, 958] as const;
  * back undefined, and `mapUsdaFoodDetail` rejects the food as unmappable. Every packaged product
  * would have been silently unimportable while the search that found them worked perfectly.
  */
-const USDA_LEGACY_NUMBERS: Record<UsdaNutrientKey, number> = {
+export const USDA_LEGACY_NUMBERS: Record<UsdaNutrientKey, number> = {
   kcal: 208,
   protein_g: 203,
   carbs_g: 205,

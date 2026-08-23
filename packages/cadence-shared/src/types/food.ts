@@ -5,7 +5,12 @@
 /** Base unit for macros_per_base: g/ml are per 100; item is per 1. */
 export type FoodBaseUnit = 'g' | 'ml' | 'item';
 
-export type FoodSource = 'llm' | 'label_photo' | 'manual' | 'chat' | 'usda' | 'off' | 'fatsecret';
+/**
+ * 'cnf'      — Health Canada's Canadian Nutrient File, bulk-imported as shared rows (lab panels).
+ * 'research' — a web-grounded AI lookup made ONCE at pin time; the pin is what makes an unstable
+ *              source usable, because the question is never asked twice.
+ */
+export type FoodSource = 'llm' | 'label_photo' | 'manual' | 'chat' | 'usda' | 'off' | 'fatsecret' | 'cnf' | 'research';
 
 export type FoodVisibility = 'private' | 'shared';
 
@@ -56,6 +61,8 @@ export interface Food {
   off_id: string | null;
   /** USDA FoodData Central id when source='usda'; null otherwise. */
   fdc_id: number | null;
+  /** Canadian Nutrient File food_code when source='cnf'; null otherwise. */
+  cnf_id?: number | null;
   /**
    * FatSecret food id when source='fatsecret'; null otherwise. Their ToS lets us keep this
    * indefinitely and almost nothing else — see `source_fetched_at`.
