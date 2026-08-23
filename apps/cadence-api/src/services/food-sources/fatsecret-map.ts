@@ -40,14 +40,17 @@ function asArray(v: unknown): Record<string, unknown>[] {
 }
 
 /**
- * The nutrients we take, and the ones we deliberately do not.
+ * ⚠️ THIS MAPPER IS FOR `food.get.v4` ONLY, AND THE VERSION IS A CORRECTNESS ISSUE, NOT A
+ * PREFERENCE.
  *
- * Calories, the macros, fibre, sodium and potassium are absolute amounts in every version of this
- * API, so they map cleanly. `calcium`, `iron` and `vitamin_c` are NOT taken: depending on the API
- * version they are either milligrams or a PERCENTAGE OF DAILY VALUE, and reading a %DV as mg would
- * silently multiply a nutrient by roughly ten. Cadence's own rule is that a micronutrient is a
- * floor built from real data and never a guess — a missing one is honest, a wrong one is not.
- * Revisit once there are credentials to confirm the shape against a live response.
+ * In v4 calcium, iron and vitamin C are documented as *"content in milligrams"*. In v1 the same
+ * field names are *"Percentage of daily recommended Calcium, based on a 2000 calorie diet"* — a
+ * percentage, not an amount. Pointing this mapper at v1 would therefore read 6%DV of iron as 6 mg
+ * and put a roughly tenfold error into a number nobody double-checks. v1 is deprecated; call v4.
+ *
+ * Not mapped because FatSecret does not return them: zinc and B12. Those stay the preserve of USDA
+ * and label photos, and their absence is honest — a Cadence micro total is a floor built from real
+ * data, never a guess.
  */
 function nutrientsFromServing(s: Record<string, unknown>): FoodNutrients {
   const out: FoodNutrients = {};
@@ -62,6 +65,10 @@ function nutrientsFromServing(s: Record<string, unknown>): FoodNutrients {
   put('fiber_g', s.fiber);
   put('sodium_mg', s.sodium);
   put('potassium_mg', s.potassium);
+  // v4 milligrams — see the version warning above.
+  put('calcium_mg', s.calcium);
+  put('iron_mg', s.iron);
+  put('vitamin_c_mg', s.vitamin_c);
   return out;
 }
 

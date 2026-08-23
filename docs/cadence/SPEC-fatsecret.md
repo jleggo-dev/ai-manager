@@ -143,11 +143,27 @@ a versioning distinction (v2/v5 endpoints vs older ones). **Confirm before depen
 Already written and unblocked: `fatsecret-http.ts` (OAuth 1.0, signed, rate-limited) and
 `fatsecret-map.ts` (pure mapping, nutrients-per-serving → per-base).
 
-Still to do: migration for `fatsecret_id` + `fetched_at`, the endpoint layer, refresh-on-read in the
-pricing path, attribution in the UI, and the resolver gate — brand-shaped queries go to FatSecret,
-whole-food queries to USDA, barcodes to Open Food Facts, and the local ledger always wins first.
+Still to do: migration for `fatsecret_id` + `fetched_at`, the endpoint layer (**v4**), refresh-on-read
+in the pricing path, attribution in the UI, and the resolver gate.
 
-**Deliberately not mapped:** `calcium`, `iron` and `vitamin_c`. Depending on API version those are
-either milligrams or a percentage of daily value, and reading a %DV as mg would multiply a nutrient
-by roughly ten. A missing micronutrient is honest; a wrong one is not. Revisit against a live
-response once there are credentials.
+**Ordering, ruled by the owner 2026-08-22:** FatSecret is the LAST rung in the series. The local
+ledger always wins first; then USDA for whole foods; then FatSecret. NLP and image recognition are
+not adopted for now.
+
+### The endpoint version is a correctness issue, not a preference
+
+Corrected 2026-08-22 after the owner pushed back on an over-cautious first pass. Both readings were
+true, of different versions:
+
+- **`food.get` v1 (deprecated):** *"Percentage of daily recommended Calcium, based on a 2000 calorie
+  diet"* — calcium, iron, vitamin A and vitamin C are all **percentages**.
+- **`food.get.v4` (current):** *"Calcium content in milligrams"* — the same field names are
+  **absolute amounts**.
+
+So the hazard is real and the fix is not to skip them: **pin v4 and map them.** Pointing the mapper
+at v1 would read 6 %DV of iron as 6 mg — a tenfold error in a number nobody double-checks. The
+warning lives on `nutrientsFromServing` so nobody wires the older endpoint later.
+
+Mapped from v4: kcal, protein, carbs, fat, fibre, sodium, potassium, **calcium, iron, vitamin C** —
+ten of Cadence's twelve. **Zinc and B12 are absent because FatSecret does not return them**; those
+stay the preserve of USDA and label photos, and their absence is honest rather than a guessed zero.

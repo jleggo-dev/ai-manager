@@ -29,9 +29,10 @@ const PEANUTS = {
           fiber: '6',
           sodium: '450',
           potassium: '450',
-          // Ambiguous between %DV and mg depending on version — deliberately not mapped.
-          calcium: '4',
-          iron: '6',
+          // v4 milligrams (v1 would have made these percentages — see the mapper's warning).
+          calcium: '40',
+          iron: '3',
+          vitamin_c: '2',
         },
       ],
     },
@@ -78,14 +79,21 @@ describe('mapFatSecretFood', () => {
   });
 
   /**
-   * A %DV read as mg is a tenfold error in a nutrient nobody would double-check. Cadence's rule is
-   * that a micro is a floor built from real data — missing is honest, wrong is not.
+   * v4 gives these in milligrams; v1 gave the same field names as a percentage of daily value.
+   * Mapping them is correct ONLY against v4 — see the warning on `nutrientsFromServing`.
    */
-  it('omits the nutrients whose unit is ambiguous between API versions', () => {
+  it('carries the v4 micronutrients through, scaled like everything else', () => {
     const f = mapFatSecretFood(PEANUTS)!;
-    expect(f.macros_per_base.calcium_mg).toBeUndefined();
-    expect(f.macros_per_base.iron_mg).toBeUndefined();
-    expect(f.macros_per_base.vitamin_c_mg).toBeUndefined();
+    expect(f.macros_per_base.calcium_mg).toBeCloseTo(56.34, 1); // 40mg in 71g
+    expect(f.macros_per_base.iron_mg).toBeCloseTo(4.23, 1);
+    expect(f.macros_per_base.vitamin_c_mg).toBeCloseTo(2.82, 1);
+  });
+
+  /** FatSecret returns neither, so a food sourced here simply has none — never a guessed zero. */
+  it('leaves zinc and B12 absent rather than inventing them', () => {
+    const f = mapFatSecretFood(PEANUTS)!;
+    expect(f.macros_per_base.zinc_mg).toBeUndefined();
+    expect(f.macros_per_base.vitamin_b12_ug).toBeUndefined();
   });
 
   it('keeps the pack as a serving and adds a 100-unit option', () => {
