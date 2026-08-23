@@ -9,6 +9,7 @@ export const createProviderSchema = z.object({
   api_key: z.string().max(500).optional().nullable(),
   is_active: z.boolean().optional().default(true),
   request_timeout_ms: z.number().int().positive().optional().nullable(),
+  max_tool_output_chars: z.number().int().positive().optional().nullable(),
 });
 
 export const updateProviderSchema = createProviderSchema.partial();

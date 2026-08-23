@@ -6,6 +6,8 @@ export interface ProviderRow {
   api_key: string | null;
   is_active: boolean;
   request_timeout_ms?: number | null;
+  /** Max characters of one tool result under this provider. NULL = inherit the app default. */
+  max_tool_output_chars?: number | null;
   created_at: string;
   updated_at?: string;
   workspace_id: string;

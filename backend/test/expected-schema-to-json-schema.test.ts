@@ -168,3 +168,64 @@ describe('nullability — "they did not say" has to stay legal', () => {
     expect(a.additionalProperties).toBe(false);
   });
 });
+
+/**
+ * Bounding an array at the SOURCE — the strongest limit available on a job's output, because a
+ * schema is enforced where a prompt is only requested. Added 2026-08-23 with the tool-output cap:
+ * the cap is the circuit breaker, this is the thing that should stop it ever tripping.
+ *
+ * The ceiling is deliberately emitted twice — as the `maxItems` keyword AND folded into the
+ * field's description. Strict json_schema accepts only a subset of JSON Schema, and we have not
+ * measured how Devs.ai treats `maxItems`; a provider that silently drops the keyword would leave
+ * an author believing they were bounded, which is worse than being unbounded knowingly. The prose
+ * survives that.
+ */
+describe('maxItems — bounding an array where the provider can enforce it', () => {
+  it('emits the keyword on an array field', () => {
+    expect(field({ fields: { rows: { type: 'array', maxItems: 10 } } }, 'rows')).toMatchObject({
+      type: 'array',
+      maxItems: 10,
+    });
+  });
+
+  it('also states the ceiling in the description, so a dropped keyword still bounds it', () => {
+    const rows = field({ fields: { rows: { type: 'array', maxItems: 10 } } }, 'rows');
+    expect(String(rows.description)).toContain('at most 10 items');
+  });
+
+  it('keeps the author’s own description and appends the ceiling to it', () => {
+    const rows = field({ fields: { rows: { type: 'array', maxItems: 3, description: 'Matching foods.' } } }, 'rows');
+    expect(String(rows.description)).toBe('Matching foods. Return at most 3 items.');
+  });
+
+  it('says "item" rather than "items" for a ceiling of one', () => {
+    const rows = field({ fields: { rows: { type: 'array', maxItems: 1 } } }, 'rows');
+    expect(String(rows.description)).toContain('at most 1 item.');
+  });
+
+  it('bounds an array of declared objects without disturbing its items schema', () => {
+    const rows = field(
+      { fields: { rows: { type: 'array', maxItems: 5, items: { fields: { name: { type: 'string' } } } } } },
+      'rows',
+    );
+    expect(rows.maxItems).toBe(5);
+    expect(sub(rows.items as Obj, 'name')).toEqual({ type: 'string' });
+  });
+
+  /** Opt-in: no shipped job sets it, so every existing schema must come out byte-identical. */
+  it('changes nothing when it is not set', () => {
+    expect(field({ fields: { rows: { type: 'array' } } }, 'rows')).toEqual({
+      type: 'array',
+      items: { type: 'string' },
+    });
+  });
+
+  it('ignores zero and nonsense rather than emitting a nonsense bound', () => {
+    expect(field({ fields: { rows: { type: 'array', maxItems: 0 } } }, 'rows')).not.toHaveProperty('maxItems');
+    expect(field({ fields: { rows: { type: 'array', maxItems: -3 } } }, 'rows')).not.toHaveProperty('maxItems');
+  });
+
+  it('is not applied to a non-array field', () => {
+    expect(field({ fields: { name: { type: 'string', maxItems: 5 } } }, 'name')).not.toHaveProperty('maxItems');
+  });
+});

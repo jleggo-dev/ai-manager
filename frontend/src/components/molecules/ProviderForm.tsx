@@ -21,6 +21,7 @@ interface ProviderFormData {
   api_key: string;
   is_active: boolean;
   request_timeout_ms: number | null;
+  max_tool_output_chars: number | null;
 }
 
 interface ProviderFormProps {
@@ -38,6 +39,7 @@ export default function ProviderForm({ initial, onSubmit, onCancel, loading }: P
     api_key: '',
     is_active: initial?.is_active !== false,
     request_timeout_ms: initial?.request_timeout_ms || null,
+    max_tool_output_chars: initial?.max_tool_output_chars || null,
   }));
 
   function updateField(key: keyof ProviderFormData, value: unknown) {
@@ -109,6 +111,24 @@ export default function ProviderForm({ initial, onSubmit, onCancel, loading }: P
             {(form.request_timeout_ms / 60000).toFixed(1)} minutes
           </Text>
         )}
+        <NumberInput
+          label="Max Tool Output (characters)"
+          description={
+            form.max_tool_output_chars
+              ? `~${Math.round(form.max_tool_output_chars / 4).toLocaleString()} tokens — overrides the system default for all tools using this provider`
+              : 'Leave empty to use the system default. A profile or an individual tool can override this.'
+          }
+          placeholder="e.g. 32000"
+          value={form.max_tool_output_chars || ''}
+          onChange={(val) => updateField('max_tool_output_chars', val ? Number(val) : null)}
+          min={500}
+          max={500000}
+          step={1000}
+        />
+        <Text size="xs" c="dimmed">
+          Results over the limit are handled by shape: a JSON result is replaced with a small error object the model can
+          act on, never cut; plain text is truncated at a line boundary and told it was truncated.
+        </Text>
         <Switch
           label="Active"
           checked={form.is_active}

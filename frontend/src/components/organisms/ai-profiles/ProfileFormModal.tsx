@@ -256,6 +256,7 @@ const ProfileFormModal = forwardRef<ProfileFormModalHandle, ProfileFormModalProp
             jobSlug: t.jobSlug || '',
             exposeAs: t.exposeAs || '',
             description: t.description || '',
+            maxOutputChars: t.maxOutputChars ?? null,
           }))
         : [],
     );
@@ -282,7 +283,11 @@ const ProfileFormModal = forwardRef<ProfileFormModalHandle, ProfileFormModalProp
         const priorConfig = (editing?.config as Record<string, unknown> | undefined) || {};
         payload.config = {
           ...priorConfig,
-          toolJobs: toolJobs.filter((t) => t.jobSlug.trim() && t.exposeAs.trim()),
+          // A blank cap is stored as absent, not null — "inherit" is the absence of a value, and
+          // writing null on every row would make every profile look deliberately configured.
+          toolJobs: toolJobs
+            .filter((t) => t.jobSlug.trim() && t.exposeAs.trim())
+            .map(({ maxOutputChars, ...rest }) => (maxOutputChars ? { ...rest, maxOutputChars } : rest)),
         };
       }
       if (editing) {
