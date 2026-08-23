@@ -108,6 +108,45 @@ function applyCooldown(res: Response): void {
   console.warn(`[usda] rate limited (429); cooling down ${ms}ms`);
 }
 
+/**
+ * FoodData Central is INTERMITTENTLY UNAVAILABLE, and it says so in HTML.
+ *
+ * Measured 2026-08-23: the same search, repeated eight times, succeeded three. The failures come
+ * back as **404 with an Angular error page** — the FDC website, not the API — while api.data.gov
+ * still counts the request against the rate limit. Every dataType behaves the same way, so it is
+ * the service rather than our query.
+ *
+ * This had been silently costing us the whole rung. `enrichFoodsWithUsda` swallows failures by
+ * design, so a coin-flip outage looked exactly like "no USDA match": whole foods fell through to a
+ * pinned guess, and the database held two USDA rows total. Not retrying was a deliberate choice —
+ * "a failed lookup is cheap, the next rung answers" — and it was wrong in a way worth naming: it is
+ * cheap for CORRECTNESS and expensive for QUALITY, because the rung we lose is the free,
+ * permanently-cacheable, public-domain one.
+ *
+ * The discriminator is content-type. A genuine API answer — including a real 404 for an fdcId that
+ * does not exist — arrives as JSON. An HTML body means the request never reached the API.
+ */
+const RETRY_DELAYS_MS = [200, 600];
+
+function isTransport(res: Response): boolean {
+  return res.status >= 500 || (res.status === 404 && !(res.headers.get('content-type') ?? '').includes('json'));
+}
+
+async function fetchWithRetries(url: string): Promise<Response> {
+  let last: Response | null = null;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) await sleep(RETRY_DELAYS_MS[attempt - 1]!);
+    try {
+      const res = await fetchImpl(url, { method: 'GET', headers: { Accept: 'application/json' } });
+      if (!isTransport(res)) return res;
+      last = res;
+    } catch (e) {
+      if (attempt === RETRY_DELAYS_MS.length) throw e;
+    }
+  }
+  return last as Response;
+}
+
 async function rawUsdaGet(pathAndQuery: string): Promise<unknown> {
   const key = requireApiKey();
   const sep = pathAndQuery.includes('?') ? '&' : '?';
@@ -123,10 +162,7 @@ async function rawUsdaGet(pathAndQuery: string): Promise<unknown> {
 
   await acquireSlot();
   try {
-    const res = await fetchImpl(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
+    const res = await fetchWithRetries(url);
     if (res.status === 429) {
       applyCooldown(res);
       throw new UsdaHttpError(429, 'USDA rate limit exceeded — try again shortly');

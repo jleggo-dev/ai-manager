@@ -176,7 +176,7 @@ async function priceOne(
 
   let food: Food | null = null;
   try {
-    const ranked = await rankedFoodsFor(userId, query, shared);
+    const ranked = await rankedFoodsFor(userId, query, shared, item.brand);
     food = acceptMatch(userId, ranked, shared.profile)?.food ?? null;
   } catch (e) {
     console.warn('[food-pricing] resolve failed — leaving the item as parsed:', e);

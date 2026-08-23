@@ -127,3 +127,64 @@ describe('parseUsdaSearchHit / mapUsdaFoodDetail', () => {
     ).toBeNull();
   });
 });
+
+/**
+ * BRANDED foods — a different numbering and a different serving, in the same endpoint.
+ *
+ * These are regression tests for a silent failure, not hypotheticals. Every packaged product came
+ * back `unmappable` while the search that found them worked perfectly, because Branded records
+ * answer with USDA's legacy three-digit nutrient numbers (208 energy) where Foundation answers
+ * with the modern four-digit set (1008). Nothing errored — the mapper simply found none of the
+ * numbers it was looking for and the food was dropped as nutrient-less.
+ */
+describe('branded records', () => {
+  const brandedNutrients = [
+    { nutrient: { number: '208', unitName: 'KCAL' }, amount: 607 },
+    { nutrient: { number: '203', unitName: 'G' }, amount: 25 },
+    { nutrient: { number: '205', unitName: 'G' }, amount: 25 },
+    { nutrient: { number: '204', unitName: 'G' }, amount: 46.4 },
+    { nutrient: { number: '291', unitName: 'G' }, amount: 14.3 },
+    { nutrient: { number: '307', unitName: 'MG' }, amount: 821 },
+  ];
+
+  it('reads the legacy nutrient numbers Branded uses', () => {
+    expect(mapUsdaNutrients(brandedNutrients)).toEqual({
+      kcal: 607,
+      protein_g: 25,
+      carbs_g: 25,
+      fat_g: 46.4,
+      fiber_g: 14.3,
+      sodium_mg: 821,
+    });
+  });
+
+  it('still prefers the modern number when a record carries both', () => {
+    const both = [
+      { nutrient: { number: '1008', unitName: 'KCAL' }, amount: 100 },
+      { nutrient: { number: '208', unitName: 'KCAL' }, amount: 999 },
+    ];
+    expect(mapUsdaNutrients(both).kcal).toBe(100);
+  });
+
+  it('makes the label serving the default, in the unit USDA writes it', () => {
+    // `servingSizeUnit` is UPPERCASE on branded records ('GRM'), not the 'g' of everywhere else —
+    // matching only lowercase left every packaged food with 100 g as its only portion.
+    const mapped = mapUsdaFoodDetail({
+      fdcId: 2104495,
+      description: 'DILL PICKLE PEANUTS',
+      dataType: 'Branded',
+      brandName: 'THE CAROLINA NUT CO.',
+      brandOwner: 'Some Distributor LLC',
+      servingSize: 28,
+      servingSizeUnit: 'GRM',
+      householdServingFullText: '1 ONZ',
+      foodNutrients: brandedNutrients,
+    });
+
+    expect(mapped).not.toBeNull();
+    expect(mapped!.servings[0]).toMatchObject({ amount_g: 28 });
+    expect(mapped!.default_serving).toBe(0);
+    // The name on the PACKET, not the distributor behind it — that is the word a person says.
+    expect(mapped!.brand).toBe('THE CAROLINA NUT CO.');
+  });
+});

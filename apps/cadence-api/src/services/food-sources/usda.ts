@@ -9,7 +9,13 @@ import { USDA_SEARCH_PAGE_SIZE } from './usda-gate.ts';
 
 export type { UsdaMappedFood, UsdaSearchHit } from './usda-map.ts';
 export { isUsdaConfigured, UsdaConfigError, UsdaHttpError } from './usda-http.ts';
-export { isGenericWholeFoodQuery, shouldQueryUsda, USDA_IMPORT_LIMIT, USDA_SEARCH_PAGE_SIZE } from './usda-gate.ts';
+export {
+  isGenericWholeFoodQuery,
+  shouldQueryUsda,
+  usdaDataTypesFor,
+  USDA_IMPORT_LIMIT,
+  USDA_SEARCH_PAGE_SIZE,
+} from './usda-gate.ts';
 
 /** Whole-food analytical datasets — exclude Branded (OFF later) and Survey noise. */
 const WHOLE_FOOD_DATA_TYPES = ['Foundation', 'SR Legacy'] as const;

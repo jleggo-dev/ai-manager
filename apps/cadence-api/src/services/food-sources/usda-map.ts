@@ -26,6 +26,30 @@ export const USDA_NUTRIENT_NUMBERS = {
 
 export type UsdaNutrientKey = keyof typeof USDA_NUTRIENT_NUMBERS;
 
+/**
+ * The SAME nutrients under USDA's older numbering, which BRANDED records still use.
+ *
+ * Foundation and SR Legacy answer with the modern four-digit numbers above; a Branded food comes
+ * back with the legacy three-digit set — 208 for energy where Foundation says 1008. Nothing warns
+ * you: `mapUsdaNutrients` simply finds none of the numbers it is looking for, every macro comes
+ * back undefined, and `mapUsdaFoodDetail` rejects the food as unmappable. Every packaged product
+ * would have been silently unimportable while the search that found them worked perfectly.
+ */
+const USDA_LEGACY_NUMBERS: Record<UsdaNutrientKey, number> = {
+  kcal: 208,
+  protein_g: 203,
+  carbs_g: 205,
+  fat_g: 204,
+  fiber_g: 291,
+  sodium_mg: 307,
+  iron_mg: 303,
+  zinc_mg: 309,
+  vitamin_c_mg: 401,
+  calcium_mg: 301,
+  potassium_mg: 306,
+  vitamin_b12_ug: 418,
+};
+
 export interface UsdaSearchHit {
   fdc_id: number;
   name: string;
@@ -112,7 +136,8 @@ export function mapUsdaNutrients(foodNutrients: unknown): FoodNutrients {
 
   const out: FoodNutrients = {};
   for (const [key, num] of Object.entries(USDA_NUTRIENT_NUMBERS) as Array<[UsdaNutrientKey, number]>) {
-    const hit = byNumber.get(num);
+    // Modern numbering first, then the legacy number Branded records use for the same nutrient.
+    const hit = byNumber.get(num) ?? byNumber.get(USDA_LEGACY_NUMBERS[key]);
     if (!hit) continue;
     if (key === 'kcal' && hit.unit.includes('kj') && !hit.unit.includes('kcal')) continue;
     out[key] = roundNutrient(key, hit.amount);
@@ -132,6 +157,32 @@ function portionUnit(modifier: string, unitName: string): string {
   if (m) return m.slice(0, 40);
   const u = unitName.toLowerCase().trim();
   return (u || 'serving').slice(0, 40);
+}
+
+/**
+ * The label serving on a BRANDED food, which does not use foodPortions at all.
+ *
+ * A packaged product declares `servingSize` + `servingSizeUnit` with `householdServingFullText` as
+ * its human label — "1 oz" over 28 GRM. Note the unit arrives UPPERCASE and abbreviated (`GRM`,
+ * `MLT`), not as the `g`/`ml` the rest of this file speaks, which is the kind of mismatch that
+ * silently produces a food whose only serving is "100 g".
+ *
+ * Anything not expressed in grams or millilitres is skipped rather than converted: a branded
+ * serving given in `IU` or `oz` is ambiguous by weight-versus-volume, and A23 pins what it prices.
+ */
+export function brandedLabelServing(o: Record<string, unknown>): FoodServing | null {
+  const amount = asNumber(o.servingSize);
+  if (amount === null || amount <= 0) return null;
+  const rawUnit = (asString(o.servingSizeUnit) ?? '').trim().toUpperCase();
+  const metric = rawUnit === 'GRM' || rawUnit === 'G' ? 'g' : rawUnit === 'MLT' || rawUnit === 'ML' ? 'ml' : null;
+  if (!metric) return null;
+  const household = asString(o.householdServingFullText) ?? '';
+  const label = household ? `${household} (${Math.round(amount * 10) / 10}${metric})` : `${amount}${metric}`;
+  return {
+    label: label.slice(0, 80),
+    unit: household ? household.slice(0, 24) : metric,
+    amount_g: Math.round(amount * 10) / 10,
+  };
 }
 
 /** Map foodPortions → MFP-style servings; always include a 100 g option. */
@@ -210,9 +261,17 @@ export function mapUsdaFoodDetail(raw: unknown): UsdaMappedFood | null {
   }
 
   const servings = mapUsdaPortions(o.foodPortions);
+  // A branded product's label serving leads: "1 oz (28g)" is how somebody eats it, and without
+  // this a packaged food offers nothing but "100 g" to log against.
+  const labelServing = brandedLabelServing(o);
+  if (labelServing && !servings.some((sv) => Math.abs(sv.amount_g - labelServing.amount_g) < 0.5)) {
+    servings.unshift(labelServing);
+  }
   if (servings.length === 0) return null;
 
-  const brand = asString(o.brandOwner) ?? asString(o.brandName) ?? null;
+  // brandName is the product's own name ("CLOVER VALLEY"); brandOwner is the company behind it.
+  // The name on the packet is the one a person would recognise, so it goes first.
+  const brand = asString(o.brandName) ?? asString(o.brandOwner) ?? null;
   return {
     fdc_id,
     name: name.slice(0, 200),
