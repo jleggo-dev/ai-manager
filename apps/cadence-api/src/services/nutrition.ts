@@ -53,6 +53,7 @@ import { OBSERVE_DAYS_NEEDED } from './nutrition-baseline.ts';
 export { getBaselineRead } from './nutrition-baseline.ts';
 export type { BaselineRead } from './nutrition-baseline.ts';
 import { priceParsedMeal } from './food-pricing.ts';
+import { totalsFromItems } from './meal-corrections.ts';
 
 export { parseMealResult, wantsTargets, PROVISIONAL_BELOW, isMeal } from './nutrition-parse.ts';
 export type { ParsedMealResult } from './nutrition-parse.ts';
@@ -453,6 +454,15 @@ export async function patchMeal(
   if (patch.macros !== undefined) {
     const m = sanitizeMacros(patch.macros);
     if (m) update.macros = { ...m, source: 'user' };
+  } else if (update.items) {
+    /**
+     * A meal's macros are STORED, not derived — so editing items without this leaves the old
+     * arithmetic sitting on the day. That is how a phantom item keeps contributing its sodium
+     * after the user has deleted it, which is exactly the repair they came here to make.
+     * Recomputed from the items themselves; a client-sent total is never trusted.
+     */
+    const recomputed = totalsFromItems(update.items);
+    if (recomputed) update.macros = { ...recomputed, source: 'user' };
   }
   if (patch.confirm || update.macros) {
     update.provisional = false;

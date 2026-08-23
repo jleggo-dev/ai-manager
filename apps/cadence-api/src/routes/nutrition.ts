@@ -17,6 +17,8 @@ import {
 } from '../services/nutrition.ts';
 import { readMealPhoto, logMealFromReading } from '../services/meal-photo-read.ts';
 import { logWater } from '../services/water.ts';
+import { mergeItems, reachBackToPin, renameItem } from '../services/meal-corrections.ts';
+import { findNutritionLog } from '../repos/nutrition.ts';
 import {
   BodyValidationError,
   parseBody,
@@ -212,6 +214,56 @@ router.patch('/meals/:id', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[PATCH /nutrition/meals/:id]', err);
     res.status(500).json({ error: 'failed to update meal' });
+  }
+});
+
+/**
+ * PATCH /nutrition/meals/:id/items — the repairs a logged meal actually needs.
+ *
+ * `rename` keeps every number and fixes only the label, on the log and — when the item is backed
+ * by a food this user pinned — on that food too, so the wrong name stops resolving tomorrow.
+ * `merge` folds one item into another, nutrients included. `drop` removes one that never happened.
+ * All three recompute the meal's totals from the surviving items on the way out.
+ */
+router.patch('/meals/:id/items', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const logId = String(req.params.id);
+  try {
+    const meal = await findNutritionLog(userId, logId);
+    if (!meal) return void res.status(404).json({ error: 'meal not found' });
+
+    const op = String(req.body?.op ?? '');
+    const index = Number(req.body?.index);
+    if (!Number.isInteger(index) || index < 0 || index >= meal.items.length) {
+      return void res.status(400).json({ error: 'index is not an item on this meal' });
+    }
+
+    let items = meal.items;
+    let pinRenamed = false;
+    if (op === 'rename') {
+      const name = String(req.body?.name ?? '').trim();
+      if (!name) return void res.status(400).json({ error: 'a rename needs a name' });
+      const brand = req.body?.brand === undefined ? undefined : req.body.brand;
+      items = renameItem(items, index, name, brand);
+      pinRenamed = await reachBackToPin(userId, meal.items[index], name, brand);
+    } else if (op === 'merge') {
+      const into = Number(req.body?.into);
+      if (!Number.isInteger(into) || into < 0 || into >= items.length || into === index) {
+        return void res.status(400).json({ error: 'merge needs a different item to merge into' });
+      }
+      items = mergeItems(items, index, into);
+    } else if (op === 'drop') {
+      items = items.filter((_, i) => i !== index);
+    } else {
+      return void res.status(400).json({ error: 'op must be rename, merge or drop' });
+    }
+
+    const row = await patchMeal(userId, logId, { items, confirm: true });
+    if (!row) return void res.status(404).json({ error: 'meal not found' });
+    res.json({ ...row, pin_renamed: pinRenamed });
+  } catch (err) {
+    console.error('[PATCH /nutrition/meals/:id/items]', err);
+    res.status(500).json({ error: 'failed to correct meal' });
   }
 });
 

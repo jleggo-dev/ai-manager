@@ -437,3 +437,33 @@ export async function listFoodUsageRows(
     order by last_used_at desc
     limit ${capped}`;
 }
+
+/**
+ * Rename a food the user OWNS — the backwards reach behind correcting a logged item.
+ *
+ * Scoped to `owner_user_id = userId` in the WHERE clause rather than checked beforehand, so a
+ * shared row cannot be renamed even by a caller that meant to: USDA, FatSecret and every other
+ * user read the same shared rows, and one person's tidier name is another's unrecognisable one.
+ * An own pin is different — it exists because nothing matched, it was named by a guess about
+ * their words, and they are the only person it will ever resolve for.
+ *
+ * Returns the updated row, or null when the id is not theirs to rename.
+ */
+export async function renameOwnFood(
+  userId: string,
+  foodId: string,
+  patch: { name?: string; brand?: string | null },
+): Promise<Food | null> {
+  const name = patch.name?.trim();
+  if (name !== undefined && !name) return null;
+  const brand = patch.brand === null ? null : patch.brand?.trim() || null;
+
+  const rows = await sql<Food[]>`
+    update cadence.foods
+       set name = coalesce(${name ?? null}, name),
+           brand = ${patch.brand === undefined ? sql`brand` : brand}
+     where food_id = ${foodId}
+       and owner_user_id = ${userId}
+    returning ${FOOD_COLS_PLAIN}`;
+  return rows[0] ?? null;
+}

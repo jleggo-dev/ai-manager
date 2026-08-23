@@ -77,6 +77,15 @@ export async function updateNutritionLog(
  * it (`updateNutritionLog`, which marks the macros `source: 'user'`) — the meal happened, we simply
  * wrote it down wrong. Count what happened; delete only what didn't.
  */
+/** One meal by id, scoped to its owner — what a correction reads before it edits. */
+export async function findNutritionLog(userId: string, logId: string): Promise<NutritionLog | null> {
+  const rows = await sql<NutritionLog[]>`
+    select ${COLS} from cadence.nutrition_logs
+    where user_id = ${userId} and log_id = ${logId}
+    limit 1`;
+  return rows[0] ?? null;
+}
+
 export async function deleteNutritionLog(userId: string, logId: string): Promise<boolean> {
   const rows = await sql`
     delete from cadence.nutrition_logs
