@@ -47,6 +47,17 @@ field name; `resources`/`limits` for constraints; streaks that reset to zero; we
 
 ## Engineering conventions
 
+- **The Coach is in control of the software, not the other way around** (owner, 2026-08-23).
+  Deterministic code is a **tool she calls**, never a pipeline that calls her; tools return facts in
+  a consistent shape (for food: macros + nutrients **by a quantity of a measure**, disagreements
+  included) and *she* does the adjudicating. Guards report evidence instead of silently returning
+  null; the model says WHAT, the store says HOW MUCH (it returns grams, `priceFood()` does the
+  arithmetic); whatever she works out gets written back so the deterministic rung hits next time.
+  The lone exception is safety — allergen flags are a union, either side may ADD one, only the user
+  may clear one. Full statement + rationale at the top of
+  [`docs/cadence/TOOL-HARNESS.md`](docs/cadence/TOOL-HARNESS.md). This never means bypassing AI
+  Admin: the inversion is about who is in charge, not about skipping the auditable engine.
+
 - **File & function size — small by default, enforced in CI.** ESLint gates every workspace:
   `max-lines` 500 (all source) and `max-lines-per-function` 150 (`.ts` logic; `.tsx` render bodies
   are file-capped only). Thresholds live in one place: [`eslint.config.sizes.mjs`](eslint.config.sizes.mjs).

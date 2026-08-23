@@ -10,6 +10,41 @@ tool.** Every rule below is either enforced in CI (`description-audit.test.ts`) 
 
 ---
 
+## The principle every rule below serves (owner, 2026-08-23)
+
+> *"Philosophically we want the software to be a skill or a tool used by the LLM, not the other way
+> around. Cadence is the AI Coach. The Coach is in control of the software at all times."*
+
+Everyone else is a SaaS app with AI layered on. Ours is the inversion — AI in a harness, and the
+SaaS is the skillset. That is not a slogan about tone; it decides how code gets shaped:
+
+- **Deterministic code is a tool she CALLS, never a pipeline that calls her.** The food waterfall
+  was the counter-example worth remembering: it walked ledger → USDA → FatSecret → research and
+  stopped at the first acceptable answer, with the model reduced to five single-shot oracles the
+  pipeline consulted between steps. A fan-out she invokes — and whose individual rungs she can also
+  invoke on their own — is the same code answering to her instead of the reverse.
+- **Return facts in a consistent shape and let her think.** For a food that means macros
+  (kcal/protein/carbs/fat) plus nutrients, expressed **by a quantity of a measure**; where several
+  measures exist she says which matters. Hand back what every source said *including the
+  disagreements*. Code must not pre-filter to one winner: adjudication is the reasoning, and it is
+  hers.
+- **A guard reports; it does not silently veto.** Physical invariants stay in code because they are
+  cheaper and stricter there — but a failed check should reach her as evidence she can act on, not
+  as a `null` that erases the record. (`research-food` used to discard a whole food when its two
+  views disagreed; the disagreement was the useful part.)
+- **The model says WHAT, the store says HOW MUCH.** A portion tool returns "1/4 cup chopped shallots
+  ≈ 40 g" and `priceFood()` does the scaling. Never accept calories the model computed itself.
+- **Use AI to manufacture determinism.** Whatever she works out — a composed food record, a portion
+  conversion, an allergen cross-reactivity — gets written back so the fast deterministic rung hits
+  next time. The system should get *faster* the more it runs.
+- **The one exception: safety.** Allergen checks are a union — the deterministic list and the model
+  may each ADD a flag, neither may clear one, and only the user can.
+
+None of this loosens the AI Admin rule: every model call still goes through an auditable job or the
+relay. The inversion is about who is in charge, not about bypassing the engine.
+
+---
+
 ## Adding a tool: the checklist
 
 Work through this in order. Steps 3–6 are enforced in CI, so a mistake there fails the build rather

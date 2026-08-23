@@ -187,7 +187,9 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
   {
     key: 'food',
     label: 'what they eat, their targets, their recipes, and nutrition facts',
-    members: ['get_nutrition'],
+    // `check_food_sources` is the deeper rung under get_nutrition's "lookup" view: same subject,
+    // but it asks every database at once and hands back the disagreements instead of one answer.
+    members: ['get_nutrition', 'check_food_sources'],
   },
   { key: 'writing', label: 'what they have written', members: ['get_journal'] },
 ];
