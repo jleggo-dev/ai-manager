@@ -126,15 +126,15 @@ export function MealCapturePanel({
         <MealCapturePhoto
           photo={cap.photo}
           caption={text}
-          setCaption={setText}
           mealKind={cap.mealKind}
-          busy={cap.busy}
           advising={cap.advising}
           advice={cap.plateAdvice}
-          logErr={cap.logErr}
           onClear={cap.clearPhoto}
           onAskRead={() => void cap.checkPlate()}
-          onLog={() => void cap.logPhoto(text)}
+          onLogged={() => {
+            setText('');
+            void cap.afterPhotoLogged();
+          }}
         />
       ) : (
         <>

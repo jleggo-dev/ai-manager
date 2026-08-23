@@ -10,6 +10,7 @@ import {
   isUsdaConfigured,
   searchUsdaFoods,
   shouldQueryUsda,
+  usdaDataTypesFor,
   UsdaConfigError,
   USDA_IMPORT_LIMIT,
   USDA_SEARCH_PAGE_SIZE,
@@ -57,7 +58,7 @@ export async function enrichFoodsWithUsda(
   userId: string,
   query: string,
   localFoods: Food[],
-  opts: { importLimit?: number } = {},
+  opts: { importLimit?: number; brand?: string | null } = {},
 ): Promise<Food[]> {
   if (!shouldQueryUsda(query, localFoods)) return localFoods;
   if (!isUsdaConfigured()) {
@@ -67,7 +68,10 @@ export async function enrichFoodsWithUsda(
 
   const importLimit = Math.min(5, Math.max(1, opts.importLimit ?? USDA_IMPORT_LIMIT));
   try {
-    const hits = await searchUsdaFoods(query, { pageSize: USDA_SEARCH_PAGE_SIZE });
+    const hits = await searchUsdaFoods(query, {
+      pageSize: USDA_SEARCH_PAGE_SIZE,
+      dataTypes: usdaDataTypesFor(opts.brand),
+    });
     if (hits.length === 0) return localFoods;
 
     // Prefer hits that lexically match the query; take top N.

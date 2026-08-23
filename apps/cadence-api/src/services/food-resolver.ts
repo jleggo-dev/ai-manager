@@ -174,18 +174,28 @@ export async function loadResolveShared(userId: string, slot?: FoodUsageSlot): P
   return { ctx, recents, frequents, profile };
 }
 
-async function poolFor(userId: string, text: string, shared: ResolveShared): Promise<Food[]> {
+async function poolFor(userId: string, text: string, shared: ResolveShared, brand?: string | null): Promise<Food[]> {
   if (!text) return mergeFoodPools([shared.recents, shared.frequents]);
   const hits = await searchFoods(userId, text, SEARCH_LIMIT);
   // Cache-miss → USDA whole foods (always cached on import). Local stays first.
-  const withUsda = await enrichFoodsWithUsda(userId, text, hits);
+  const withUsda = await enrichFoodsWithUsda(userId, text, hits, { brand });
   // Also consider recents/frequents that may fuzzy-match beyond SQL LIKE.
   return mergeFoodPools([withUsda, shared.recents, shared.frequents]);
 }
 
-/** Ranked foods WITH their rows — what pricing needs; `resolveFoods` narrows these to candidates. */
-export async function rankedFoodsFor(userId: string, text: string, shared: ResolveShared): Promise<RankedFood[]> {
-  return rankFoods(text, await poolFor(userId, text, shared), shared.ctx);
+/**
+ * Ranked foods WITH their rows — what pricing needs; `resolveFoods` narrows these to candidates.
+ *
+ * `brand` is not part of the query text (pricing folds it in there already) — it is a SIGNAL, and
+ * the only one that opens USDA's branded dataset. See `usdaDataTypesFor`.
+ */
+export async function rankedFoodsFor(
+  userId: string,
+  text: string,
+  shared: ResolveShared,
+  brand?: string | null,
+): Promise<RankedFood[]> {
+  return rankFoods(text, await poolFor(userId, text, shared, brand), shared.ctx);
 }
 
 /**

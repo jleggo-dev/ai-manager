@@ -42,6 +42,24 @@ export function hasStrongLocalHit(query: string, foods: readonly Food[]): boolea
 }
 
 /** Should we call USDA for this search/resolve? */
+/**
+ * Which USDA datasets to search, decided by whether a VENDOR is in play (A23 §4).
+ *
+ * Foundation and SR Legacy are whole foods — an apple, chicken breast, brown rice — and they are
+ * what a bare description should match. Branded adds roughly 450,000 packaged products, which is
+ * the right answer for "dill pickle peanuts from Couche-Tard" and the wrong one for "an apple":
+ * searching it unconditionally would bury a generic query under supermarket variants of itself.
+ *
+ * So the brand IS the signal. A vendor heard in the words (A23 §1b) or read off a label is the
+ * strongest evidence we ever get that the food is packaged, and it is the only thing that opens
+ * the branded set.
+ */
+export function usdaDataTypesFor(brand?: string | null): readonly string[] {
+  const named = (brand ?? '').trim().length >= 2;
+  const whole = ['Foundation', 'SR Legacy', 'Survey (FNDDS)'];
+  return named ? [...whole, 'Branded'] : whole;
+}
+
 export function shouldQueryUsda(query: string, localFoods: readonly Food[]): boolean {
   if (!isGenericWholeFoodQuery(query)) return false;
   return !hasStrongLocalHit(query, localFoods);

@@ -8,6 +8,7 @@ import {
   type MealKind,
   type OccurrenceDetail,
   type PlateAdvice,
+  deleteMeal,
 } from '../../../lib/api.ts';
 import { useInvalidateNutritionDay, useNutritionDay } from '../../../lib/query/index.ts';
 import { downscalePhoto, mealForNow, mealFromTitle } from './format.ts';
@@ -82,15 +83,15 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     }
   }
 
+  /** Words only. A photo takes the read-then-confirm path and is logged by `PhotoReadPanel`. */
   async function submitMeal() {
     const text = mealText.trim();
-    if ((!text && !mealPhoto) || mealBusy) return;
+    if (!text || mealBusy) return;
     setMealBusy(true);
     setLogErr('');
     try {
-      await logMeal(text, mealKind, mealPhoto ?? undefined);
+      await logMeal(text, mealKind);
       setMealText('');
-      setMealPhoto(null);
       setPlateAdvice(null);
       await refreshDay(detail.date);
       if (detail.status === 'pending') setDetail({ ...detail, status: 'done' });
@@ -100,6 +101,33 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     } finally {
       setMealBusy(false);
     }
+  }
+
+  /**
+   * Take a meal back off the day. For one that did not happen — a mis-tap, a double log, a parse
+   * that invented a food. A meal that happened and was written down wrong is a correction instead.
+   */
+  async function removeLoggedMeal(logId: string) {
+    if (mealBusy) return;
+    setMealBusy(true);
+    setLogErr('');
+    try {
+      const ok = await deleteMeal(logId);
+      if (!ok) return setLogErr("Couldn't remove that one — try again in a moment.");
+      await refreshDay(detail.date);
+    } finally {
+      setMealBusy(false);
+    }
+  }
+
+  /** What follows a confirm inside the photo panel: clear the composer, refresh, tick the task. */
+  async function afterPhotoLogged() {
+    setMealText('');
+    setMealPhoto(null);
+    setPlateAdvice(null);
+    await refreshDay(detail.date);
+    if (detail.status === 'pending') setDetail({ ...detail, status: 'done' });
+    onLogged?.();
   }
 
   // 7d fetch only feeds the baseline phase gate (not the shared day rollup).
@@ -136,5 +164,7 @@ export function useMealLog(detail: OccurrenceDetail, setDetail: (d: OccurrenceDe
     confirmMeal,
     pickPhoto,
     submitMeal,
+    removeLoggedMeal,
+    afterPhotoLogged,
   };
 }

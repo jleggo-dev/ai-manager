@@ -15,7 +15,13 @@ import {
   type NutritionSummary,
 } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
-import { insertNutritionLog, listNutritionLogs, updateNutritionLog, countNutritionDays } from '../repos/nutrition.ts';
+import {
+  insertNutritionLog,
+  listNutritionLogs,
+  updateNutritionLog,
+  deleteNutritionLog,
+  countNutritionDays,
+} from '../repos/nutrition.ts';
 import { sumWaterMl } from '../repos/water.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, setMacroTargets } from '../repos/users.ts';
@@ -47,6 +53,8 @@ import { OBSERVE_DAYS_NEEDED } from './nutrition-baseline.ts';
 export { getBaselineRead } from './nutrition-baseline.ts';
 export type { BaselineRead } from './nutrition-baseline.ts';
 import { priceParsedMeal } from './food-pricing.ts';
+import { totalsFromItems } from './meal-corrections.ts';
+import { enrichFlags } from './meal-enrich.ts';
 
 export { parseMealResult, wantsTargets, PROVISIONAL_BELOW, isMeal } from './nutrition-parse.ts';
 export type { ParsedMealResult } from './nutrition-parse.ts';
@@ -178,7 +186,7 @@ export async function logMeal(
       input_method: 'text',
       ai_confidence: p.confidence,
       raw_text: p.raw_text || null,
-      flags: p.flags,
+      flags: { ...p.flags, ...enrichFlags(ledger.wants_research) },
       photo_ref: null,
       macros: ledger.macros,
       provisional,
@@ -285,7 +293,7 @@ export async function logMeal(
     input_method: photoRef ? 'photo' : 'text',
     ai_confidence: confidence,
     raw_text: text || null,
-    flags,
+    flags: { ...flags, ...enrichFlags(ledger.wants_research) },
     photo_ref: photoRef,
     macros,
     provisional,
@@ -423,6 +431,14 @@ export async function getNutritionDay(userId: string, date?: string): Promise<Nu
  * numbers but graduates them into the totals; any provided macros are sanitized and marked
  * source 'user' with full confidence.
  */
+/**
+ * Take a meal back off the day. See `deleteNutritionLog` for when this is the right move and when
+ * a correction is: this is for a meal that did not happen.
+ */
+export async function removeMeal(userId: string, logId: string): Promise<boolean> {
+  return deleteNutritionLog(userId, logId);
+}
+
 export async function patchMeal(
   userId: string,
   logId: string,
@@ -439,6 +455,18 @@ export async function patchMeal(
   if (patch.macros !== undefined) {
     const m = sanitizeMacros(patch.macros);
     if (m) update.macros = { ...m, source: 'user' };
+  } else if (update.items) {
+    /**
+     * A meal's macros are STORED, not derived — so editing items without this leaves the old
+     * arithmetic sitting on the day. That is how a phantom item keeps contributing its sodium
+     * after the user has deleted it, which is exactly the repair they came here to make.
+     * Recomputed from the items themselves; a client-sent total is never trusted.
+     */
+    // Assigned UNCONDITIONALLY. `totalsFromItems` returns null when nothing is left to add up,
+    // and an earlier `if (recomputed)` guard here meant dropping the LAST item left the meal's old
+    // totals in place — zero items still contributing 215 kcal and 675 mg of sodium to the day.
+    // The empty case is the one that most needs writing, not the one to skip.
+    update.macros = { ...(totalsFromItems(update.items) ?? {}), source: 'user' };
   }
   if (patch.confirm || update.macros) {
     update.provisional = false;

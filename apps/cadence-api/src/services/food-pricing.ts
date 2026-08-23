@@ -20,11 +20,14 @@ import {
 } from '@cadence/shared';
 import { insertFood, searchFoods, touchFoodUsage, type FoodUsageSlot } from '../repos/foods.ts';
 import { estimateFood } from './food-capture.ts';
+import { findFatSecretMatch, isFatSecretRowFresh, refreshFatSecretFood } from './food-sources/fatsecret-enrich.ts';
 import { priceFood, nutrientsPerBase, type PortionInput } from './food-pricing-portion.ts';
 import { lexicalMatchScore, type RankedFood } from './food-resolver-rank.ts';
 import { loadResolveShared, rankedFoodsFor, type ResolveShared } from './food-resolver.ts';
 import { PRESELECT_SCORE_MARGIN } from './food-resolver-types.ts';
 import { MACRO_KEYS } from './nutrition-day.ts';
+import { foodIsGoodEnough } from './food-sources/completeness.ts';
+import { shouldResearchItem, type ResearchedFood } from './food-research.ts';
 
 /**
  * A ledger price is applied without anyone tapping it, so the bar sits above the UI's preselect:
@@ -52,6 +55,11 @@ export interface PricingOutcome {
   item_count: number;
   /** Every item came from a food row — the meal's numbers are reproducible. */
   fully_priced: boolean;
+  /**
+   * Indexes of items that named a vendor and matched nothing — what `meal-enrich.ts` will look up
+   * in the background once the meal is safely on the day. Empty for a preview that pinned nothing.
+   */
+  wants_research: number[];
 }
 
 function portionOf(item: PriceableItem): PortionInput {
@@ -110,8 +118,30 @@ async function findOwnDuplicate(userId: string, name: string, brand: string | nu
  * Pin one unpriceable item as a private food. Prefers the estimate the parse already made (free);
  * falls back to `estimate-food` only when the parse produced no numbers for it.
  */
-async function pinItem(userId: string, item: PriceableItem, confidence: number | null): Promise<Food | null> {
+async function pinItem(
+  userId: string,
+  item: PriceableItem,
+  confidence: number | null,
+  researched?: ResearchedFood | null,
+): Promise<Food | null> {
   const brand = item.brand?.trim() || null;
+
+  // A researched food pins with its REAL shape — the label's own serving and per-100 basis —
+  // rather than arithmetic reconstructed from one portion. Same numbers, better row.
+  if (researched) {
+    const r = researched.food;
+    return insertFood(userId, {
+      name: r.name,
+      brand: r.brand ?? brand,
+      source: 'research',
+      visibility: 'private',
+      confidence: r.confidence,
+      base_unit: r.base_unit,
+      macros_per_base: r.macros_per_base ?? {},
+      servings: r.servings,
+      default_serving: r.default_serving,
+    });
+  }
 
   if (item.est && Object.keys(item.est).length > 0) {
     const shape = nutrientsPerBase(item.est, portionOf(item));
@@ -119,7 +149,9 @@ async function pinItem(userId: string, item: PriceableItem, confidence: number |
       return insertFood(userId, {
         name: item.name,
         brand,
-        source: 'llm',
+        // The marker on a card that came back from preview: those numbers were researched, and
+        // the row should say so even though the transient shape did not survive the round trip.
+        source: item.est.source === 'research' ? 'research' : 'llm',
         visibility: 'private',
         confidence,
         ...shape,
@@ -154,6 +186,8 @@ interface PricedOne {
   item: NutritionLog['items'][number];
   priced: boolean;
   food_id: string | null;
+  /** A vendor-named item nothing deterministic matched — worth a grounded lookup, LATER. */
+  wants_research?: boolean;
 }
 
 async function priceOne(
@@ -175,23 +209,82 @@ async function priceOne(
 
   let food: Food | null = null;
   try {
-    const ranked = await rankedFoodsFor(userId, query, shared);
+    const ranked = await rankedFoodsFor(userId, query, shared, item.brand);
     food = acceptMatch(userId, ranked, shared.profile)?.food ?? null;
   } catch (e) {
     console.warn('[food-pricing] resolve failed — leaving the item as parsed:', e);
     return { item: bare, priced: false, food_id: null };
   }
 
+  /**
+   * The last deterministic rung (SPEC-fatsecret.md). It costs a call every time it prices — their
+   * terms make the numbers 24-hour data — so it is only ever reached when the free rungs failed.
+   *
+   * "Failed" now means TWO things, where it used to mean one. A rung that found nothing has always
+   * fallen through; a rung that found something UNUSABLE now does too. The waterfall was gated
+   * purely on whether a name matched, so a USDA row carrying calories and nothing else was accepted
+   * and priced, and the source that might have completed it was never asked.
+   *
+   * The bar is calories plus the four macros — the owner's own line, that people are "okay with
+   * just macros" in most cases. It is emphatically NOT micronutrients: paying a billed call to
+   * chase the zinc content of an Oreo would spend a real rung on the half we cannot verify, for a
+   * food whose label was never going to say, and then pin the answer forever. See `completeness.ts`.
+   */
+  if (!foodIsGoodEnough(food)) {
+    if (food) {
+      console.info(`[food-pricing] "${food.name}" has no usable macros — trying the next source`);
+    }
+    food = (await findFatSecretMatch(item.name, item.brand)) ?? food;
+  }
+
+  /**
+   * A matched FatSecret row may have gone stale since the resolver put it in the pool, so it is
+   * re-read before it prices anything. A refresh that fails yields no food rather than a number we
+   * are no longer allowed to hold — the item falls through and keeps the parse's own estimate.
+   */
+  if (food && !isFatSecretRowFresh(food)) {
+    food = await refreshFatSecretFood(food.fatsecret_id ?? '');
+  }
+
+  /**
+   * The web-grounded rung is NOT run here — pricing only reports that this item wants it.
+   *
+   * Owner's ruling (2026-08-23): *"we don't have to show that slowness to the user. We can just
+   * show 'logged' and input the information in the background — updating the user's UI / macros
+   * whenever we get the update back."* A grounded lookup is 8-15 seconds and occasionally much
+   * more, and nothing about it needs to happen while a person is standing there. So the meal
+   * lands immediately with the parse's own estimate, and `meal-enrich.ts` improves it afterwards.
+   *
+   * My worry that this breaks confirm-first was overstated, and the distinction matters: the user
+   * confirms WHAT they ate. Sharpening the numbers for a food they already named is not a change
+   * to what was logged — it is the brand promise (never make them repeat themselves) doing its job
+   * quietly.
+   */
+  const wants_research = !food && shouldResearchItem(item);
+
+  /**
+   * Pinning is for when there is NO food, never for when the one we have is thin.
+   *
+   * Gating this on completeness looked consistent and broke the ledger's central promise: a pinned
+   * row carrying only calories would fail the check on every later log, pin a SECOND row, and the
+   * same words would resolve to a different food each time — which is precisely the drift the pin
+   * exists to eliminate. Two DB tests caught it immediately ("resolves a later log of the same
+   * vendor item to the row it already pinned" got a new id).
+   *
+   * So completeness escalates through SOURCES, and stops at the ledger. Consistency outranks
+   * completeness once a food is ours: a thin row we reuse forever beats a fuller row we re-guess.
+   */
   if (!food && pin) {
     try {
       food = await pinItem(userId, item, confidence);
     } catch (e) {
-      // A pin that fails costs consistency, never the meal: the parse's own numbers stand.
+      // A pin that fails costs consistency, never the meal: the parse's own numbers stand. Any
+      // incomplete match we already had keeps its id, so the item stays linked to a real row.
       console.warn('[food-pricing] pin failed — keeping the parsed estimate:', e);
-      return { item: bare, priced: false, food_id: null };
+      return { item: bare, priced: false, food_id: food?.food_id ?? null };
     }
   }
-  if (!food) return { item: bare, priced: false, food_id: null };
+  if (!food) return { item: bare, priced: false, food_id: null, wants_research };
 
   const est = priceFood(food, portion);
   if (Object.keys(est).length === 0) return { item: bare, priced: false, food_id: food.food_id };
@@ -212,7 +305,8 @@ export async function priceMealItems(
   opts: { confidence?: number | null; pin?: boolean; slot?: FoodUsageSlot } = {},
 ): Promise<PricingOutcome> {
   const list = items.filter((i) => i && typeof i.name === 'string' && i.name.trim());
-  if (list.length === 0) return { items: [], macros: null, priced_count: 0, item_count: 0, fully_priced: false };
+  if (list.length === 0)
+    return { items: [], macros: null, priced_count: 0, item_count: 0, fully_priced: false, wants_research: [] };
 
   let shared: ResolveShared;
   try {
@@ -225,6 +319,7 @@ export async function priceMealItems(
       priced_count: 0,
       item_count: list.length,
       fully_priced: false,
+      wants_research: [],
     };
   }
 
@@ -254,6 +349,7 @@ export async function priceMealItems(
     priced_count: priced.length,
     item_count: list.length,
     fully_priced: priced.length === list.length,
+    wants_research: results.flatMap((r, i) => (r.wants_research ? [i] : [])),
   };
 }
 
@@ -268,8 +364,14 @@ export async function priceParsedMeal(
   userId: string,
   parsed: { items: NutritionLog['items']; macros: Macros | null; confidence: number | null },
   opts: { pin?: boolean; slot?: FoodUsageSlot } = {},
-): Promise<{ items: NutritionLog['items']; macros: Macros | null; fully_priced: boolean }> {
-  if (!parsed.items.length) return { items: parsed.items, macros: parsed.macros, fully_priced: false };
+): Promise<{
+  items: NutritionLog['items'];
+  macros: Macros | null;
+  fully_priced: boolean;
+  wants_research: number[];
+}> {
+  if (!parsed.items.length)
+    return { items: parsed.items, macros: parsed.macros, fully_priced: false, wants_research: [] };
 
   const out = await priceMealItems(userId, parsed.items, {
     confidence: parsed.confidence,
@@ -288,7 +390,7 @@ export async function priceParsedMeal(
    */
   const everyItemCounted = out.items.length > 0 && out.items.every((i) => i.est && Object.keys(i.est).length > 0);
   if (out.priced_count === 0 && !everyItemCounted) {
-    return { items: out.items, macros: parsed.macros, fully_priced: false };
+    return { items: out.items, macros: parsed.macros, fully_priced: false, wants_research: out.wants_research };
   }
 
   const macros = (everyItemCounted ? (out.macros ?? parsed.macros) : (parsed.macros ?? out.macros)) ?? null;
@@ -297,5 +399,6 @@ export async function priceParsedMeal(
     items: out.items,
     macros: macros ? { ...macros, source: fromLedger ? 'ledger' : 'ai' } : null,
     fully_priced: fromLedger,
+    wants_research: out.wants_research,
   };
 }

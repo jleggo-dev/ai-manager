@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { Meal, MealKind } from '../../lib/api.ts';
 import { useMealPhotoRead } from './useMealPhotoRead.ts';
+import { GrowingTextarea } from '../../components/GrowingTextarea.tsx';
+import { MicButton } from '../../components/MicButton.tsx';
 
 /**
  * Photographing a meal, in three visible acts.
@@ -30,13 +32,18 @@ export function PhotoReadPanel({
   meal,
   onLogged,
   onBack,
+  initialCaption = '',
+  backLabel = 'Back',
 }: {
   photo: string;
   meal: MealKind;
   onLogged: (m: Meal) => void;
   onBack: () => void;
+  /** Words already typed before the photo was attached — they are evidence, so they carry over. */
+  initialCaption?: string;
+  backLabel?: string;
 }) {
-  const [caption, setCaption] = useState('');
+  const [caption, setCaption] = useState(initialCaption);
   const r = useMealPhotoRead();
   const working = r.phase === 'reading' || r.phase === 'nutrition';
 
@@ -46,13 +53,18 @@ export function PhotoReadPanel({
 
       {r.phase === 'idle' && (
         <>
-          <input
-            className="mc-cap-in"
-            value={caption}
-            aria-label="A few words about the photo"
-            placeholder="a few words help — “chicken burrito bowl”"
-            onChange={(e) => setCaption(e.target.value)}
-          />
+          {/* Mic beside the box, exactly where it sits in the coach's composer and on the plan's
+              capture row — brief 01. This is the caption the dill-pickle incident was dictated
+              into, and voice is precisely why captions get long enough to need re-reading. */}
+          <div className="fl-cap-row">
+            <GrowingTextarea
+              value={caption}
+              onChange={setCaption}
+              ariaLabel="A few words about the photo"
+              placeholder="a few words help — “chicken burrito bowl”"
+            />
+            <MicButton value={caption} onChange={setCaption} />
+          </div>
           <button type="button" className="fa-log" onClick={() => void r.read(photo, caption.trim())}>
             Have a look at this
           </button>
@@ -116,7 +128,7 @@ export function PhotoReadPanel({
       )}
 
       <button type="button" className="lockbtn ghost" disabled={working} onClick={onBack}>
-        Back
+        {backLabel}
       </button>
     </div>
   );

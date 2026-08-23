@@ -19,6 +19,22 @@ const d = HAS_DB ? describe : describe.skip;
 /** Dedicated synthetic user — isolated from plan-commit and demo accounts. */
 const USER = testUserId('a104');
 
+// No network in a DB test: an unmocked USDA import lands a shared row mid-run, prices the item,
+// and the meal stops being provisional — which is how this suite's low-confidence case failed on
+// 2026-08-23 for a reason that had nothing to do with the code under test.
+vi.mock('./food-sources/usda-enrich.ts', () => ({
+  enrichFoodsWithUsda: vi.fn(async (_u: string, _q: string, local: unknown[]) => local),
+  searchFoodsWithUsda: vi.fn(async () => []),
+}));
+
+// The FatSecret rung is mocked for the same reason USDA is: a test must not depend on a third
+// party, and once real credentials exist in .env these would quietly start making live calls.
+vi.mock('./food-sources/fatsecret-enrich.ts', () => ({
+  findFatSecretMatch: vi.fn(async () => null),
+  refreshFatSecretFood: vi.fn(async () => null),
+  isFatSecretRowFresh: vi.fn(() => true),
+}));
+
 vi.mock('../ai/aim.ts', () => ({ runJob: vi.fn(), runJobBySlug: vi.fn() }));
 
 let sql: (typeof import('../db/sql.ts'))['sql'];
@@ -32,6 +48,7 @@ let insertGoal: (typeof import('../repos/goals.ts'))['insertGoal'];
 let setMacroTargets: (typeof import('../repos/users.ts'))['setMacroTargets'];
 let resetUserData: (typeof import('./dev-reset.ts'))['resetUserData'];
 let runJobBySlug: ReturnType<typeof vi.fn>;
+let clearUnusedSharedFoods: (typeof import('./test-foods.ts'))['clearUnusedSharedFoods'];
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -65,6 +82,7 @@ d('API-04 — nutrition service (DB)', () => {
     ({ insertGoal } = await import('../repos/goals.ts'));
     ({ setMacroTargets } = await import('../repos/users.ts'));
     ({ resetUserData } = await import('./dev-reset.ts'));
+    ({ clearUnusedSharedFoods } = await import('./test-foods.ts'));
     ({ runJobBySlug } = (await import('../ai/aim.ts')) as unknown as {
       runJobBySlug: ReturnType<typeof vi.fn>;
     });
@@ -77,6 +95,10 @@ d('API-04 — nutrition service (DB)', () => {
 
   beforeEach(async () => {
     await resetUserData(USER);
+    // Shared cache rows belong to nobody, so resetUserData cannot reach them — and one answering
+    // a query these tests expect to MISS would stop the first log pinning anything. Only unused,
+    // unlogged rows go (see test-foods.ts).
+    await clearUnusedSharedFoods(['burrito', 'salmon', 'oats and berries', 'stew']);
   });
 
   afterEach(() => {

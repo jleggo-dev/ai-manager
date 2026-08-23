@@ -3,16 +3,35 @@
  * Search + detail over HTTP; mapping is pure (usda-map). Always cache via usda-enrich.
  * No LLM. Key is server-only (cadenceConfig.usdaApiKey).
  */
-import { isUsdaConfigured, UsdaConfigError, usdaGet } from './usda-http.ts';
+import { isUsdaConfigured, UsdaConfigError, usdaGet, usdaPost } from './usda-http.ts';
 import { mapUsdaFoodDetail, parseUsdaSearchHit, type UsdaMappedFood, type UsdaSearchHit } from './usda-map.ts';
 import { USDA_SEARCH_PAGE_SIZE } from './usda-gate.ts';
 
 export type { UsdaMappedFood, UsdaSearchHit } from './usda-map.ts';
 export { isUsdaConfigured, UsdaConfigError, UsdaHttpError } from './usda-http.ts';
-export { isGenericWholeFoodQuery, shouldQueryUsda, USDA_IMPORT_LIMIT, USDA_SEARCH_PAGE_SIZE } from './usda-gate.ts';
+export {
+  isGenericWholeFoodQuery,
+  shouldQueryUsda,
+  usdaDataTypesFor,
+  USDA_IMPORT_LIMIT,
+  USDA_SEARCH_PAGE_SIZE,
+} from './usda-gate.ts';
 
 /** Whole-food analytical datasets — exclude Branded (OFF later) and Survey noise. */
-const WHOLE_FOOD_DATA_TYPES = ['Foundation', 'SR Legacy'] as const;
+/**
+ * The whole-food datasets, in the order FDC ranks them — now including Survey (FNDDS), which we
+ * had simply never asked for.
+ *
+ * MEASURED 2026-08-23, average nutrients published per record:
+ *   SR Legacy 77.5 · Survey (FNDDS) 65 · Foundation 22 · Branded 13.7
+ *
+ * The first three are laboratory panels; Branded is a transcription of the Nutrition Facts label.
+ * That gap is the whole reason micronutrient coverage was patchy — and FNDDS, at a full 65-nutrient
+ * panel, is also the dataset of what people actually EAT rather than what they buy: prepared and
+ * mixed dishes, the pad thai and the burrito bowl, which Foundation and SR Legacy mostly lack.
+ * Leaving it out meant a described dinner fell straight past the free rung to a paid or guessed one.
+ */
+const WHOLE_FOOD_DATA_TYPES = ['Foundation', 'SR Legacy', 'Survey (FNDDS)'] as const;
 
 export interface UsdaSearchOpts {
   pageSize?: number;
@@ -31,14 +50,15 @@ export async function searchUsdaFoods(query: string, opts: UsdaSearchOpts = {}):
 
   const pageSize = Math.min(20, Math.max(1, opts.pageSize ?? USDA_SEARCH_PAGE_SIZE));
   const dataTypes = opts.dataTypes ?? WHOLE_FOOD_DATA_TYPES;
-  const params = new URLSearchParams({
-    query: q.slice(0, 80),
-    pageSize: String(pageSize),
-    pageNumber: '1',
-  });
-  for (const dt of dataTypes) params.append('dataType', dt);
 
-  const body = await usdaGet(`/foods/search?${params.toString()}`);
+  // POST, not GET — 'Survey (FNDDS)' is a hard 400 as a query parameter in every encoding, and
+  // the failure takes the whole search with it. See `usdaPost`.
+  const body = await usdaPost('/foods/search', {
+    query: q.slice(0, 80),
+    pageSize,
+    pageNumber: 1,
+    dataType: [...dataTypes],
+  });
   const foods = body && typeof body === 'object' ? (body as { foods?: unknown }).foods : null;
   if (!Array.isArray(foods)) return [];
 

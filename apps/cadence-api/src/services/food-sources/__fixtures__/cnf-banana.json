@@ -1,0 +1,585 @@
+{
+ "food": {
+  "food_code": 1704,
+  "food_description": "Banana, raw"
+ },
+ "nutrients": [
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 835,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 836,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 213,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 287,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 811,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 221,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 262,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 263,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 324,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 339,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 418,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 431,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 601,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 607,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 608,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 609,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 620,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 621,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 627,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 628,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 629,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 630,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 631,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 319,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 832,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 840,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 852,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 854,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 855,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 861,
+   "nutrient_value": 0.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 610,
+   "nutrient_value": 0.001
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 611,
+   "nutrient_value": 0.002
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 612,
+   "nutrient_value": 0.002
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 614,
+   "nutrient_value": 0.005
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 506,
+   "nutrient_value": 0.008
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 501,
+   "nutrient_value": 0.009
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 507,
+   "nutrient_value": 0.009
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 509,
+   "nutrient_value": 0.009
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 813,
+   "nutrient_value": 0.01
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 214,
+   "nutrient_value": 0.01
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 626,
+   "nutrient_value": 0.01
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 812,
+   "nutrient_value": 0.02
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 617,
+   "nutrient_value": 0.022
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 619,
+   "nutrient_value": 0.027
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 831,
+   "nutrient_value": 0.027
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 502,
+   "nutrient_value": 0.028
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 503,
+   "nutrient_value": 0.028
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 517,
+   "nutrient_value": 0.028
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 404,
+   "nutrient_value": 0.031
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 645,
+   "nutrient_value": 0.032
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 516,
+   "nutrient_value": 0.038
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 513,
+   "nutrient_value": 0.04
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 518,
+   "nutrient_value": 0.04
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 618,
+   "nutrient_value": 0.046
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 510,
+   "nutrient_value": 0.047
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 508,
+   "nutrient_value": 0.049
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 511,
+   "nutrient_value": 0.049
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 505,
+   "nutrient_value": 0.05
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 504,
+   "nutrient_value": 0.068
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 405,
+   "nutrient_value": 0.073
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 646,
+   "nutrient_value": 0.073
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 512,
+   "nutrient_value": 0.077
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 312,
+   "nutrient_value": 0.078
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 323,
+   "nutrient_value": 0.1
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 863,
+   "nutrient_value": 0.1
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 613,
+   "nutrient_value": 0.102
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 606,
+   "nutrient_value": 0.112
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 514,
+   "nutrient_value": 0.124
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 309,
+   "nutrient_value": 0.15
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 515,
+   "nutrient_value": 0.152
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 303,
+   "nutrient_value": 0.26
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 315,
+   "nutrient_value": 0.27
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 204,
+   "nutrient_value": 0.33
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 410,
+   "nutrient_value": 0.334
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 415,
+   "nutrient_value": 0.367
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 430,
+   "nutrient_value": 0.5
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 406,
+   "nutrient_value": 0.665
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 409,
+   "nutrient_value": 0.815
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 207,
+   "nutrient_value": 0.82
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 317,
+   "nutrient_value": 1.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 307,
+   "nutrient_value": 1.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 203,
+   "nutrient_value": 1.09
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 291,
+   "nutrient_value": 1.74
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 210,
+   "nutrient_value": 2.39
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 814,
+   "nutrient_value": 3.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 212,
+   "nutrient_value": 4.85
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 211,
+   "nutrient_value": 4.98
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 301,
+   "nutrient_value": 5.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 810,
+   "nutrient_value": 5.38
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 401,
+   "nutrient_value": 8.7
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 862,
+   "nutrient_value": 9.8
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 269,
+   "nutrient_value": 12.23
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 636,
+   "nutrient_value": 16.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 417,
+   "nutrient_value": 20.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 806,
+   "nutrient_value": 20.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 815,
+   "nutrient_value": 20.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 305,
+   "nutrient_value": 22.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 837,
+   "nutrient_value": 22.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 205,
+   "nutrient_value": 22.84
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 834,
+   "nutrient_value": 25.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 321,
+   "nutrient_value": 26.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 304,
+   "nutrient_value": 27.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 255,
+   "nutrient_value": 74.91
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 208,
+   "nutrient_value": 89.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 306,
+   "nutrient_value": 358.0
+  },
+  {
+   "food_code": 1704,
+   "nutrient_name_id": 268,
+   "nutrient_value": 371.0
+  }
+ ],
+ "servings": [
+  {
+   "food_code": 1704,
+   "measure_name": "100ml mashed",
+   "conversion_factor_value": 0.95102
+  },
+  {
+   "food_code": 1704,
+   "measure_name": "250ml mashed",
+   "conversion_factor_value": 2.37755
+  },
+  {
+   "food_code": 1704,
+   "measure_name": "100ml slices",
+   "conversion_factor_value": 0.63401
+  },
+  {
+   "food_code": 1704,
+   "measure_name": "250ml slices",
+   "conversion_factor_value": 1.58503
+  },
+  {
+   "food_code": 1704,
+   "measure_name": "1 extra small (less than 15cm long)",
+   "conversion_factor_value": 0.81
+  },
+  {
+   "food_code": 1704,
+   "measure_name": "1 small (15cm to 17.5cm long)",
+   "conversion_factor_value": 1.01
+  },
+  {
+   "food_code": 1704,
+   "measure_name": "1 medium (18cm to 20cm long)",
+   "conversion_factor_value": 1.18
+  },
+  {
+   "food_code": 1704,
+   "measure_name": "1 large (20cm to 22.5cm long)",
+   "conversion_factor_value": 1.36
+  },
+  {
+   "food_code": 1704,
+   "measure_name": "1 extra large (23cm or longer)",
+   "conversion_factor_value": 1.52
+  }
+ ]
+}

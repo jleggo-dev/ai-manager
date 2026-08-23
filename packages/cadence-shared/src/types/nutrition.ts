@@ -35,7 +35,8 @@ export interface Macros {
    * again reproduces them exactly). A mixed meal stays 'ai': it is only as reproducible as its
    * least reproducible item.
    */
-  source?: 'ai' | 'user' | 'ledger';
+  /** 'research' = a web-grounded lookup already ran for this item — never run it twice. */
+  source?: 'ai' | 'user' | 'ledger' | 'research';
 }
 
 export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | 'other';
@@ -57,7 +58,13 @@ export interface NutritionLog {
   provisional?: boolean;
   photo_ref?: string;
   raw_text?: string | null; // the user's own words — always kept (0013)
-  flags?: { alcohol?: boolean; caffeine?: boolean }; // ONLY from explicit mentions, never inferred (0013)
+  /**
+   * Sparse row signals. `alcohol`/`caffeine` come ONLY from explicit mentions, never inferred
+   * (0013). `needs_enrich` says a vendor-named item matched nothing and a grounded lookup is worth
+   * doing; `enriched` says that lookup has since run (whatever it found), which is what makes the
+   * enrich endpoint safe to call twice.
+   */
+  flags?: { alcohol?: boolean; caffeine?: boolean; needs_enrich?: boolean; enriched?: boolean };
   photo_url?: string | null; // display-only: short-lived signed URL attached at read time (never stored)
   /** Set when the meal is N servings of a saved recipe (Req 5 §5.4). */
   recipe_id?: string | null;

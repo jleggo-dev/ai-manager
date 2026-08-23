@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Food } from '@cadence/shared';
-import { hasStrongLocalHit, isGenericWholeFoodQuery, shouldQueryUsda } from './usda-gate.ts';
+import { hasStrongLocalHit, isGenericWholeFoodQuery, shouldQueryUsda, usdaDataTypesFor } from './usda-gate.ts';
 
 function food(name: string, brand: string | null = null): Food {
   return {
@@ -45,5 +45,20 @@ describe('shouldQueryUsda', () => {
   it('queries USDA on cache miss for generic foods', () => {
     expect(shouldQueryUsda('spinach', [])).toBe(true);
     expect(shouldQueryUsda('spinach', [food('Greek Yogurt', 'Fage')])).toBe(true);
+  });
+});
+
+describe('usdaDataTypesFor', () => {
+  it('searches whole foods only when no vendor is in play', () => {
+    // Branded is ~450k packaged products. Opening it for "an apple" buries the generic answer
+    // under supermarket variants of itself, which is the wrong result for the commonest query.
+    expect(usdaDataTypesFor(undefined)).toEqual(['Foundation', 'SR Legacy', 'Survey (FNDDS)']);
+    expect(usdaDataTypesFor(null)).toEqual(['Foundation', 'SR Legacy', 'Survey (FNDDS)']);
+    expect(usdaDataTypesFor('  ')).toEqual(['Foundation', 'SR Legacy', 'Survey (FNDDS)']);
+  });
+
+  it('opens the branded set once a vendor is named', () => {
+    // A brand heard in the words is the strongest evidence we get that the food is packaged.
+    expect(usdaDataTypesFor('Clover Valley')).toEqual(['Foundation', 'SR Legacy', 'Survey (FNDDS)', 'Branded']);
   });
 });

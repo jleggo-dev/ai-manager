@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import type { Meal, MealKind, NutritionDayData } from '../../lib/api.ts';
+import { FoodDiaryItems } from './FoodDiaryItems.tsx';
+import { MealItemSheet } from './MealItemSheet.tsx';
+import { diaryRows, mealName, type DiaryRow } from './foodDiaryRows.ts';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
 
@@ -29,32 +32,6 @@ function slotSum(meals: Meal[]): { kcal: number; protein: number; items: number;
   return { kcal, protein, items, provisional };
 }
 
-function mealName(m: Meal): string {
-  return (
-    m.items
-      .map((i) => i.name)
-      .filter(Boolean)
-      .join(', ') ||
-    m.raw_text ||
-    (m.photo_url ? 'photo' : 'meal')
-  );
-}
-
-/** Every item across a slot's meals, each carrying its own kcal when the estimate broke it out. */
-function slotItems(meals: Meal[]): Array<{ key: string; name: string; kcal: number | null }> {
-  const out: Array<{ key: string; name: string; kcal: number | null }> = [];
-  for (const m of meals) {
-    if (!m.items?.length) {
-      out.push({ key: m.log_id, name: mealName(m), kcal: m.macros?.kcal ?? null });
-      continue;
-    }
-    m.items.forEach((item, i) => {
-      out.push({ key: `${m.log_id}-${i}`, name: item.name || 'item', kcal: item.est?.kcal ?? null });
-    });
-  }
-  return out;
-}
-
 /**
  * THE DAY on the Food screen (Food Journey 02 + 08) — one row per meal slot, so the day always
  * shows its whole shape: logged slots read their kcal (a `~` while any of it is provisional),
@@ -76,6 +53,7 @@ function SlotRow({
   confirming,
   onConfirm,
   onLog,
+  onOpenItem,
 }: {
   label: string;
   meals: Meal[];
@@ -85,6 +63,7 @@ function SlotRow({
   confirming: string | null;
   onConfirm: (logId: string) => void;
   onLog: () => void;
+  onOpenItem: (row: DiaryRow) => void;
 }) {
   const { kcal, protein, items, provisional } = slotSum(meals);
   const sub = [
@@ -108,19 +87,11 @@ function SlotRow({
         </i>
       </button>
       {open && (
-        <div className="fh-items">
-          {slotItems(meals).map((it) => (
-            <div className="fh-item" key={it.key}>
-              <span className="fh-item-n">{it.name}</span>
-              <span className="fh-item-k">{it.kcal == null ? '—' : fmt(it.kcal)}</span>
-            </div>
-          ))}
-          {isToday && (
-            <button className="fh-item-add" onClick={onLog}>
-              <i aria-hidden>＋</i> Add to {label.toLowerCase()}
-            </button>
-          )}
-        </div>
+        <FoodDiaryItems
+          rows={diaryRows(meals)}
+          onOpen={onOpenItem}
+          {...(isToday ? { onAdd: onLog, addLabel: `Add to ${label.toLowerCase()}` } : {})}
+        />
       )}
       {meals
         .filter((m) => m.provisional)
@@ -147,14 +118,18 @@ export function FoodDiary({
   confirming,
   onConfirm,
   onLog,
+  onCorrected,
 }: {
   day: NutritionDayData | null;
   isToday?: boolean;
   confirming: string | null;
   onConfirm: (logId: string) => void;
   onLog: (meal: MealKind) => void;
+  /** A correction landed — the day's totals moved, so whoever owns them should re-read. */
+  onCorrected?: () => void;
 }) {
   const [open, setOpen] = useState<MealKind | null>(null);
+  const [item, setItem] = useState<DiaryRow | null>(null);
   const meals = day?.meals ?? [];
   const byKind = (kind: MealKind) => meals.filter((m) => m.meal === kind);
   const rows = [...SLOTS, ...EXTRA.filter(({ kind }) => byKind(kind).length > 0)];
@@ -194,9 +169,19 @@ export function FoodDiary({
             confirming={confirming}
             onConfirm={onConfirm}
             onLog={() => onLog(kind)}
+            onOpenItem={setItem}
           />
         );
       })}
+
+      {item && (
+        <MealItemSheet
+          row={item}
+          siblings={diaryRows(meals.filter((m) => m.log_id === item.logId))}
+          onClose={() => setItem(null)}
+          onChanged={() => onCorrected?.()}
+        />
+      )}
     </div>
   );
 }

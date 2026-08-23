@@ -16,6 +16,8 @@
 export interface ProfileIds {
   coachId: string;
   brokerId: string;
+  /** Absent until scripts/provision-research-profile.ts has run — only jobs that USE the token need it. */
+  researchId?: string | null;
 }
 
 /** `<ANYTHING_IN_ANGLE_BRACKETS>` — the config's un-resolved placeholder form. */
@@ -28,9 +30,15 @@ export function isProfilePlaceholder(value: unknown): value is string {
 export function resolveProfileToken(token: string, ids: ProfileIds): string {
   if (token.includes('COACH')) return ids.coachId;
   if (token.includes('BROKER')) return ids.brokerId;
-  throw new Error(
-    `Unknown ai_profile_id placeholder ${token} — expected <CADENCE_COACH_PROFILE_UUID> or <CADENCE_BROKER_PROFILE_UUID>`,
-  );
+  if (token.includes('RESEARCH')) {
+    if (!ids.researchId) {
+      throw new Error(
+        `${token} used but no cadence-research profile exists — run scripts/provision-research-profile.ts first`,
+      );
+    }
+    return ids.researchId;
+  }
+  throw new Error(`Unknown ai_profile_id placeholder ${token} — expected COACH, BROKER or RESEARCH profile tokens`);
 }
 
 /** Resolve placeholders in place; pinned (explicit-UUID) jobs are returned untouched. */

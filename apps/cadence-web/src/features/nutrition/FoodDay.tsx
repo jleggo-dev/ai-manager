@@ -42,6 +42,7 @@ export function FoodDay({
   cookbookTail,
   confirming,
   onConfirm,
+  onCorrected,
   onCoach,
   onLog,
   onSub,
@@ -59,6 +60,8 @@ export function FoodDay({
   cookbookTail: string;
   confirming: string | null;
   onConfirm: (logId: string) => void;
+  /** An item on a logged meal was corrected — the day's numbers moved. */
+  onCorrected: () => void;
   onCoach: (note: string) => void;
   /**
    * Open the full-screen Log (frames 05b). "Log a meal" used to hand the user to the COACH — a
@@ -224,6 +227,7 @@ export function FoodDay({
         isToday={isToday}
         confirming={confirming}
         onConfirm={onConfirm}
+        onCorrected={onCorrected}
         // Same door as the button above, pre-set to the slot they tapped — an empty Dinner row
         // asking "Log it" means capture, not conversation.
         onLog={(meal) => onLog(meal)}

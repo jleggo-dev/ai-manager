@@ -95,6 +95,8 @@ export {
 
 export {
   getNutritionDay,
+  correctMealItem,
+  enrichMeal,
   patchMeal,
   setMacroTargets,
   getPlateAdvice,
@@ -123,6 +125,7 @@ export {
   type NutritionInsightKind,
   type NutritionInsightStatus,
   logWater,
+  deleteMeal,
 } from './api/nutrition.ts';
 
 export {
@@ -141,6 +144,8 @@ export {
   type FoodDetailResult,
   type CreateFoodInput,
   type ApiAvailability,
+  deleteFood,
+  updateFood,
 } from './api/foods.ts';
 
 export { getUsualAtSlot, type UsualAtSlot } from './api/foods-usual.ts';

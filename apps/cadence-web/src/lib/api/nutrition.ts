@@ -24,7 +24,8 @@ export interface Meal {
   meal: MealKind;
   items: { name: string; brand?: string; qty?: number; unit?: string; est?: MealMacros; food_id?: string }[];
   raw_text?: string | null;
-  flags?: { alcohol?: boolean; caffeine?: boolean };
+  /** `needs_enrich`: a grounded lookup is worth doing. `enriched`: it has run. See enrichMeal. */
+  flags?: { alcohol?: boolean; caffeine?: boolean; needs_enrich?: boolean; enriched?: boolean };
   photo_url?: string | null; // short-lived signed URL when the meal was snapped
   macros?: MealMacros; // AI-documented estimates (or the user's correction)
   ai_confidence?: number | null;
@@ -85,6 +86,57 @@ export async function patchMeal(
   });
   if (!res.ok) return null;
   return res.json();
+}
+
+/**
+ * Correct an item on a meal that is already logged.
+ *
+ * `rename` keeps the numbers and fixes only the label — and reaches the pinned food behind it, so
+ * the wrong name stops resolving tomorrow (`pin_renamed` says whether it did). `merge` folds one
+ * item into another, nutrients included. `drop` takes off one that was never eaten. All three
+ * recompute the meal's totals server-side; a client-sent total is never trusted.
+ *
+ * Dropping the LAST item takes the whole meal off the day — `meal_removed` says so — because
+ * nothing left on a meal means the meal did not happen.
+ */
+export async function correctMealItem(
+  logId: string,
+  op:
+    | { op: 'rename'; index: number; name: string; brand?: string | null }
+    | { op: 'merge'; index: number; into: number }
+    | { op: 'drop'; index: number },
+): Promise<(Partial<Meal> & { pin_renamed?: boolean; meal_removed?: boolean }) | null> {
+  const res = await fetch(`${BASE}/nutrition/meals/${encodeURIComponent(logId)}/items`, {
+    method: 'PATCH',
+    headers: headers(),
+    body: JSON.stringify(op),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+/**
+ * Ask the server to improve a logged meal's numbers in the background.
+ *
+ * Fired — and deliberately NOT awaited by anything the user is looking at — the moment a log lands
+ * carrying `flags.needs_enrich`. The meal is already on the day with the parse's estimate; this
+ * goes and finds the manufacturer's real figures, which takes 8-15 seconds and occasionally much
+ * longer. Owner's ruling: show "logged", improve it after, update the UI when it arrives.
+ *
+ * Safe to call twice and safe never to call at all.
+ */
+export async function enrichMeal(logId: string): Promise<{ improved: number } | null> {
+  try {
+    const res = await fetch(`${BASE}/nutrition/meals/${encodeURIComponent(logId)}/enrich`, {
+      method: 'POST',
+      headers: headers(),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as { improved: number };
+  } catch {
+    // The meal is logged and correct; a failed improvement is not worth a word to anybody.
+    return null;
+  }
 }
 
 /** Confirm/edit daily macro targets (the user's tap; unlocks "left" + rings). */
@@ -160,6 +212,15 @@ export async function logPreviewedMeal(parsed: MealPreview, meal?: MealKind): Pr
   });
   if (!res.ok) throw Object.assign(new Error(`meal log failed: ${res.status}`), { status: res.status });
   return res.json();
+}
+
+/**
+ * Take a meal back off the day — for one that did not happen (a mis-tap, a double log, a parse that
+ * invented a food). A meal that happened and was written down wrong is a correction, not this.
+ */
+export async function deleteMeal(logId: string): Promise<boolean> {
+  const res = await fetch(`${BASE}/nutrition/meals/${logId}`, { method: 'DELETE', headers: headers() });
+  return res.ok;
 }
 
 /** Record one meal — their words, a photo, or both. Nothing is ever judged. */

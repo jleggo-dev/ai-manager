@@ -52,6 +52,8 @@ export async function updateNutritionLog(
     macros?: NutritionLog['macros'];
     ai_confidence?: number | null;
     provisional?: boolean;
+    /** Sparse signals on the row — merged, never replaced, so one writer cannot drop another's. */
+    flags?: Record<string, unknown>;
   },
 ): Promise<NutritionLog | null> {
   const [out] = await sql<NutritionLog[]>`
@@ -60,10 +62,39 @@ export async function updateNutritionLog(
       items = coalesce(${patch.items ? json(patch.items) : null}, items),
       macros = coalesce(${patch.macros ? json(patch.macros) : null}, macros),
       ai_confidence = coalesce(${patch.ai_confidence ?? null}, ai_confidence),
-      provisional = coalesce(${patch.provisional ?? null}, provisional)
+      provisional = coalesce(${patch.provisional ?? null}, provisional),
+      flags = flags || coalesce(${patch.flags ? json(patch.flags) : null}, '{}'::jsonb)
     where user_id = ${userId} and log_id = ${logId}
     returning ${COLS}`;
   return out ?? null;
+}
+
+/**
+ * Remove a logged meal outright. Dual-keyed on user_id, so one user can never delete another's row.
+ *
+ * Reserved for a meal that DID NOT HAPPEN — a mis-tap, a double log, or a parse that invented a
+ * food nobody ate. That is the same distinction `removeCapturedConstraint` draws: a mis-capture is
+ * not history, it is an error, and leaving it on file keeps it shaping the day's totals.
+ *
+ * It is NOT how you fix a wrong number. "That was a large, not a small" keeps the meal and corrects
+ * it (`updateNutritionLog`, which marks the macros `source: 'user'`) — the meal happened, we simply
+ * wrote it down wrong. Count what happened; delete only what didn't.
+ */
+/** One meal by id, scoped to its owner — what a correction reads before it edits. */
+export async function findNutritionLog(userId: string, logId: string): Promise<NutritionLog | null> {
+  const rows = await sql<NutritionLog[]>`
+    select ${COLS} from cadence.nutrition_logs
+    where user_id = ${userId} and log_id = ${logId}
+    limit 1`;
+  return rows[0] ?? null;
+}
+
+export async function deleteNutritionLog(userId: string, logId: string): Promise<boolean> {
+  const rows = await sql`
+    delete from cadence.nutrition_logs
+    where user_id = ${userId} and log_id = ${logId}
+    returning log_id`;
+  return rows.length > 0;
 }
 
 /** How many distinct days in [fromDate, toDate] have at least one meal logged. One count, no rows —

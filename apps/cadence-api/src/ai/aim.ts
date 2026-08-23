@@ -79,8 +79,36 @@ function clockVars(): { today: string; day_of_week: string } {
 const REMOTE_JOBS = remoteJobsEnabled();
 if (REMOTE_JOBS) console.info(`[aim] jobs → ${remoteJobsTarget()} (remote; coach chat stays in-process)`);
 
+/**
+ * Tests cannot reach a model — the same boundary `usda-http` and `fatsecret-http` already hold,
+ * now at the layer every AI job passes through. Without it, a unit test that happens to walk a
+ * code path ending in a job call makes a REAL billed request (remote or in-process), and the
+ * failure mode is the quiet one: the suite passes, slowly, while spending money and coupling
+ * green CI to a live provider. Found while wiring the research rung: pricing a vendor-named item
+ * in a test would have gone straight to the web. Suites mock at the service layer (or mock this
+ * module); a run that genuinely wants live AI opts in with ALLOW_NETWORK_IN_TESTS=1.
+ */
+const IN_TEST = !!process.env.VITEST && process.env.ALLOW_NETWORK_IN_TESTS !== '1';
+
+/** aim.test.ts exercises THIS module with the engine underneath mocked — the one caller allowed
+ *  to stand the guard down, exactly like `__setUsdaFetchForTests` on the fetch guards. */
+let guardEnabled = true;
+export function __setAimTestGuard(enabled: boolean): void {
+  guardEnabled = enabled;
+}
+
+function refuseInTest(what: string): void {
+  if (IN_TEST && guardEnabled) {
+    throw new Error(
+      `refusing to run ${what} from a test — mock the calling service (or src/ai/aim.ts), ` +
+        'or set ALLOW_NETWORK_IN_TESTS=1 to opt this run into live AI calls',
+    );
+  }
+}
+
 /** Run any templated processing job (Broker- or Coach-tier) in the user's AI Admin context. */
 export function runJob(cadenceUserId: string, jobId: string, variables: Record<string, unknown>) {
+  refuseInTest(`job ${jobId}`);
   const vars = { ...clockVars(), ...variables };
   if (REMOTE_JOBS) return remoteRunJobById(jobId, CALLING_APP, vars).catch(rejectAsAimError);
   return withAim(cadenceUserId, () => executeJobById(jobId, { callingApplication: CALLING_APP, variables: vars }));
@@ -95,6 +123,7 @@ export function runJobBySlug(
   variables: Record<string, unknown>,
   opts: { images?: string[] } = {},
 ) {
+  refuseInTest(`job ${slug}`);
   const vars = { ...clockVars(), ...variables };
   // Images ride the in-process path only — the remote job endpoint takes attachments in a
   // different shape, and no image-bearing job has needed remote mode yet.

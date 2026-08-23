@@ -25,6 +25,14 @@ const USER = testUserId('a105');
 
 vi.mock('../ai/aim.ts', () => ({ runJob: vi.fn(), runJobBySlug: vi.fn() }));
 // No network in a determinism test: local rows only, so ranking is the only variable.
+// The FatSecret rung is mocked for the same reason USDA is: a test must not depend on a third
+// party, and once real credentials exist in .env these would quietly start making live calls.
+vi.mock('./food-sources/fatsecret-enrich.ts', () => ({
+  findFatSecretMatch: vi.fn(async () => null),
+  refreshFatSecretFood: vi.fn(async () => null),
+  isFatSecretRowFresh: vi.fn(() => true),
+}));
+
 vi.mock('./food-sources/usda-enrich.ts', () => ({
   enrichFoodsWithUsda: vi.fn(async (_u: string, _q: string, local: Food[]) => local),
   searchFoodsWithUsda: vi.fn(async () => []),
@@ -35,6 +43,7 @@ let logMeal: (typeof import('./nutrition.ts'))['logMeal'];
 let previewMealParse: (typeof import('./nutrition.ts'))['previewMealParse'];
 let resetUserData: (typeof import('./dev-reset.ts'))['resetUserData'];
 let runJobBySlug: ReturnType<typeof vi.fn>;
+let clearUnusedSharedFoods: (typeof import('./test-foods.ts'))['clearUnusedSharedFoods'];
 
 /** The user's OWN pinned foods — shared rows (USDA/OFF) are not this test's business. */
 async function ownFoodCount(): Promise<number> {
@@ -76,6 +85,7 @@ d('A23 — the food ledger keeps a price (DB)', () => {
     ({ sql } = await import('../db/sql.ts'));
     ({ logMeal, previewMealParse } = await import('./nutrition.ts'));
     ({ resetUserData } = await import('./dev-reset.ts'));
+    ({ clearUnusedSharedFoods } = await import('./test-foods.ts'));
     ({ runJobBySlug } = (await import('../ai/aim.ts')) as unknown as { runJobBySlug: ReturnType<typeof vi.fn> });
   });
 
@@ -86,6 +96,13 @@ d('A23 — the food ledger keeps a price (DB)', () => {
 
   beforeEach(async () => {
     await resetUserData(USER);
+    // Shared cache rows belong to nobody, so resetUserData cannot reach them — and one answering
+    // a query these tests expect to MISS would stop the first log pinning anything. Only unused,
+    // unlogged rows go (see test-foods.ts).
+    // Each DB suite owns a DISTINCT token. These patterns are case-insensitive and the suites run
+    // in parallel against one database, so a shared prefix means one suite deletes another's
+    // fixtures mid-run — 'zzq test' did exactly that to test-foods.test.ts.
+    await clearUnusedSharedFoods(['venti latte', 'yogurt parfait', 'oat bowl', 'mystery stew', 'zzqmicro']);
   });
 
   afterEach(() => {
@@ -281,12 +298,27 @@ d('A23 — the food ledger keeps a price (DB)', () => {
    * from the items regardless, so an old app on a phone gets it without waiting for a rebuild.
    */
   it('carries micronutrients from the items onto the meal total', async () => {
+    /**
+     * The names are deliberately unmatchable. This asserts that the PARSE's own micronutrients
+     * survive into the meal total, which only means anything while nothing prices them from the
+     * ledger instead — and since Health Canada's 5,690-food corpus landed, "eggs" and "arugula"
+     * both resolve to real rows with real (different) numbers. The suite used to get its isolation
+     * by DELETING shared rows that collided, which is how a cleanup pattern of ['salmon', 'stew']
+     * quietly removed 106 Canadian foods. Isolation now comes from names no food database will
+     * ever hold, the same discipline test-foods.test.ts already used — under this suite's OWN
+     * token, since these suites share a database and run at the same time.
+     */
     runJobBySlug.mockResolvedValueOnce({
       formatted: JSON.stringify({
         meal: 'breakfast',
         items: [
-          { name: 'eggs', qty: 2, unit: 'large', est: { kcal: 140, protein_g: 12, iron_mg: 1.8, vitamin_b12_ug: 1.1 } },
-          { name: 'arugula', qty: 1, unit: 'handful', est: { kcal: 5, calcium_mg: 32, vitamin_c_mg: 3.7 } },
+          {
+            name: 'zzqmicro eggs',
+            qty: 2,
+            unit: 'large',
+            est: { kcal: 140, protein_g: 12, iron_mg: 1.8, vitamin_b12_ug: 1.1 },
+          },
+          { name: 'zzqmicro arugula', qty: 1, unit: 'handful', est: { kcal: 5, calcium_mg: 32, vitamin_c_mg: 3.7 } },
         ],
         confidence: 0.8,
         // Exactly what the browser used to post: four keys, no micros.
@@ -294,7 +326,7 @@ d('A23 — the food ledger keeps a price (DB)', () => {
       }),
     });
 
-    const row = await logMeal(USER, { text: '2 eggs and a handful of arugula', date: today() });
+    const row = await logMeal(USER, { text: '2 zzqmicro eggs and a handful of zzqmicro arugula', date: today() });
 
     expect(row.macros?.iron_mg).toBeCloseTo(1.8, 1);
     expect(row.macros?.vitamin_b12_ug).toBeCloseTo(1.1, 1);
@@ -327,6 +359,39 @@ d('A23 — the food ledger keeps a price (DB)', () => {
     });
 
     expect(row.macros?.iron_mg).toBeCloseTo(1.8, 1);
+  });
+
+  /**
+   * A23 / 2026-08-22, owner: "I can't delete a food I logged — so if I log it by accident, I'm
+   * kinda screwed." There was a PATCH to correct a meal and no delete at all. A meal that did not
+   * happen is an error, not history, and it was shaping the day's totals with no way out.
+   */
+  it('takes a meal back off the day, and only the owner’s own', async () => {
+    const { removeMeal } = await import('./nutrition.ts');
+    runJobBySlug.mockResolvedValueOnce(parse('oat bowl', { kcal: 300 }, { qty: 1, unit: 'bowl' }));
+    const row = await logMeal(USER, { text: 'an oat bowl', date: today() });
+
+    expect(await removeMeal(USER, row.log_id)).toBe(true);
+    const left = await sql<{ n: string }[]>`
+      select count(*)::text as n from cadence.nutrition_logs where user_id = ${USER}`;
+    expect(Number(left[0]?.n)).toBe(0);
+
+    // Gone is gone, and a second attempt is an honest "not found" rather than a silent success.
+    expect(await removeMeal(USER, row.log_id)).toBe(false);
+    // Another user's id cannot reach it either.
+    expect(await removeMeal('00000000-0000-4000-a000-0000000000ff', row.log_id)).toBe(false);
+  });
+
+  /** Removing the meal must NOT remove the food it pinned — the price stays learned. */
+  it('leaves the pinned food behind when a meal is removed', async () => {
+    runJobBySlug.mockResolvedValueOnce(parse('venti latte', { kcal: 190 }, { qty: 1, unit: 'latte' }));
+    const row = await logMeal(USER, { text: 'a venti latte', date: today() });
+    expect(await ownFoodCount()).toBe(1);
+
+    const { removeMeal } = await import('./nutrition.ts');
+    await removeMeal(USER, row.log_id);
+
+    expect(await ownFoodCount()).toBe(1);
   });
 
   it('does not pin anything when the parse itself fails', async () => {

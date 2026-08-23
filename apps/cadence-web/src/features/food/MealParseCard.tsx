@@ -5,6 +5,7 @@ import { mealForNow } from '../plan/occurrence/format.ts';
 import { macroLineProteinFirst } from './amounts.ts';
 import { MealAmountRows } from './MealAmountRows.tsx';
 import { MealVendorAsk } from './MealVendorAsk.tsx';
+import { MealItemEdit } from './MealItemEdit.tsx';
 import { useMealAmounts } from './useMealAmounts.ts';
 
 const MEAL_KINDS: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
@@ -54,7 +55,8 @@ export function MealParseCard({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const invalidateNutritionDay = useInvalidateNutritionDay();
-  const { rows, setQty, setBrand, removeRow, asked, total, toPreview } = useMealAmounts(preview);
+  const { rows, setQty, setBrand, removeRow, renameRow, mergeRow, asked, total, toPreview } = useMealAmounts(preview);
+  const [editing, setEditing] = useState<number | null>(null);
 
   async function confirm() {
     if (busy || asked > 0 || !rows.length) return;
@@ -82,7 +84,24 @@ export function MealParseCard({
         )}
       </div>
 
-      <MealAmountRows rows={rows} busy={busy} onQty={setQty} onRemove={removeRow} />
+      <MealAmountRows rows={rows} busy={busy} onQty={setQty} onRemove={removeRow} onEdit={setEditing} />
+
+      {/* The last honest moment: after this, an unmatched food is pinned and its name resolves
+          again tomorrow. Both repairs keep the nutrition and change only the label. */}
+      {editing != null && rows[editing] && (
+        <MealItemEdit
+          row={rows[editing]}
+          index={editing}
+          siblings={rows.map((r, i) => ({ row: r, index: i })).filter(({ index: i }) => i !== editing)}
+          busy={busy}
+          onRename={renameRow}
+          onMerge={(from, into) => {
+            mergeRow(from, into);
+            setEditing(null);
+          }}
+          onClose={() => setEditing(null)}
+        />
+      )}
 
       {/* Optional, and deliberately below the numbers: it never gates the log (A23 §1b). */}
       <MealVendorAsk rows={rows} busy={busy} onBrand={setBrand} />

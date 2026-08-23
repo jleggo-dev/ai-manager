@@ -891,6 +891,48 @@ html[data-native] #root {
   line-height: 1;
   color: var(--text-dim);
 }
+/* Removing a logged meal (A23 / 2026-08-22). Quiet by default — a mis-log is an error, not a
+   confession — and two taps, because it is the one action here that cannot be undone. */
+.meal-rm {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-mute);
+  opacity: 0.55;
+}
+.meal-rm:hover {
+  opacity: 1;
+  border-color: var(--line);
+}
+.meal-rm-ask {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+}
+.meal-rm-yes,
+.meal-rm-no {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 8px;
+  color: var(--text-dim);
+}
+.meal-rm-yes:hover {
+  color: var(--text);
+  border-color: var(--text-mute);
+}
+
 .meal-confirm:hover {
   color: var(--text);
   border-style: solid;
@@ -3698,6 +3740,9 @@ textarea.wiz-title {
   font-family: inherit;
   line-height: 1.45;
   outline: none;
+  /* `resize: none` stays — the box grows to fit what was SAID (GrowingTextarea sets the height
+     from scrollHeight), which is better than a drag handle nobody finds on a phone. What is gone
+     is the fixed two rows that made a dictated paragraph unreadable. */
   resize: none;
 }
 .logbox-in:focus {
@@ -7468,25 +7513,77 @@ textarea.wiz-title {
   flex-direction: column;
   padding-left: 2px;
 }
+/* THE DAY'S FOODS, WITH THEIR MACROS (design brief 04).
+   The name owns a full line and stays the largest thing in the row; the four numbers sit under it
+   in a fixed grid. That ordering is what keeps this a list of food rather than a spreadsheet — the
+   eye reads down the names first and across the numbers only when it goes looking. Squeezing the
+   name into a fifth column would invert that.
+   No colour anywhere: nothing here is high or over, it is what was eaten. */
+.fh-item-head {
+  display: grid;
+  grid-template-columns: 1fr repeat(4, 3.1em);
+  gap: 0 6px;
+  padding: 6px 0 2px;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: oklch(64% 0.02 150);
+  text-align: right;
+}
 .fh-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 0;
+  border: none;
+  border-top: 1px solid oklch(96% 0.008 95);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fh-item:active {
+  background: oklch(97.5% 0.008 95);
+}
+.fh-item-top {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 4px 0;
-  border-top: 1px solid oklch(96% 0.008 95);
 }
 .fh-item-n {
   flex: 1;
   min-width: 0;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   color: oklch(40% 0.02 150);
 }
-.fh-item-k {
+.fh-item-q,
+.fh-item-b {
   flex: 0 0 auto;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: oklch(60% 0.02 150);
+}
+.fh-item-b {
+  font-style: italic;
+}
+.fh-item-nums {
+  display: grid;
+  grid-template-columns: 1fr repeat(4, 3.1em);
+  gap: 0 6px;
+  text-align: right;
+}
+.fh-item-nums::before {
+  content: '';
+}
+.fh-item-c {
+  /* Digits must line up column to column — proportional figures make a tidy grid look ragged. */
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   font-weight: 700;
-  color: oklch(58% 0.02 120);
+  color: oklch(52% 0.02 130);
 }
 .fh-item-add {
   margin-top: 3px;
@@ -8440,4 +8537,210 @@ textarea.wiz-title {
 .set-row.set-row-split .set-row-l {
   font-size: 12.5px;
   font-weight: 800;
+}
+
+
+/* ONE LOGGED FOOD, OPENED (design brief 05) — what it contributed, and the three repairs.
+   Read state first; every correction is one tap behind a named intent, and nothing writes until
+   that tap. Same surface the confirm card is, shown later. */
+.mis {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 10px 18px 22px;
+}
+.mis-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mis-name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: oklch(32% 0.03 150);
+  text-wrap: balance;
+}
+.mis-sub {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: oklch(58% 0.02 150);
+}
+.mis-nut {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  gap: 0;
+}
+.mis-nut-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-top: 1px solid oklch(95% 0.008 95);
+}
+.mis-nut-row dt {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: oklch(42% 0.02 150);
+}
+.mis-nut-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 800;
+  color: oklch(36% 0.02 140);
+}
+/* The one ceiling says so in words. Drawing it in an alarm colour would make the day a scoreboard;
+   drawing it like the floors above it would be bad advice. */
+.mis-ceil {
+  margin-left: 7px;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: oklch(58% 0.03 90);
+}
+.mis-empty {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: oklch(52% 0.02 150);
+}
+.mis-acts {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.mis-act {
+  border: 1px solid oklch(89% 0.02 120);
+  border-radius: 11px;
+  background: oklch(99% 0.005 95);
+  padding: 11px 13px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: oklch(38% 0.03 150);
+  text-align: left;
+  cursor: pointer;
+}
+.mis-act.is-quiet {
+  color: oklch(52% 0.02 150);
+}
+.mis-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mis-note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: oklch(52% 0.02 150);
+}
+.mis-lab {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: oklch(60% 0.02 150);
+}
+.mis-input {
+  border: 1px solid oklch(89% 0.02 120);
+  border-radius: 10px;
+  background: oklch(99.5% 0.004 95);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: oklch(32% 0.03 150);
+}
+
+/* Caption + mic on one row — the composer shape, wherever a capture happens (brief 01). */
+.fl-cap-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+.fl-cap-row > textarea {
+  flex: 1;
+  min-width: 0;
+}
+
+/* CONFIRM CARD: the nutrients, visible before the log (brief 03).
+   Same four columns and the same "—" rule as the day's diary — one visual language for "a food
+   and its numbers", learned once and read the same whether it is about to be logged or already is.
+   No colour: this is what you are about to eat, not a verdict on it. */
+.fa-row-macros {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0 6px;
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px dashed oklch(92% 0.012 95);
+}
+.fa-row-m {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: oklch(48% 0.02 130);
+}
+.fa-row-m i {
+  font-style: normal;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: oklch(66% 0.02 150);
+}
+/* The name is a control, and has to look like one without shouting. */
+.fa-row-name {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 800;
+  color: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: oklch(86% 0.03 120);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.fa-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 6px 0 2px;
+  border: 1px solid oklch(89% 0.02 120);
+  border-radius: 12px;
+  background: oklch(99% 0.005 95);
+  padding: 11px;
+}
+.fa-edit-note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: oklch(52% 0.02 150);
+}
+.fa-edit-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* A row whose numbers are still being looked up (useMealEnrichment). Quiet by design — what is on
+   screen is real, it is simply about to get better. No spinner, no colour, no alarm. */
+.fh-item-p {
+  font-size: 9.5px;
+  font-weight: 600;
+  font-style: italic;
+  color: oklch(62% 0.02 150);
 }

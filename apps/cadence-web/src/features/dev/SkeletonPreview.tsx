@@ -20,6 +20,7 @@ function FoodDayPending() {
       cookbookTail=""
       confirming={null}
       onConfirm={() => {}}
+      onCorrected={() => {}}
       onCoach={() => {}}
       onLog={() => {}}
       onSub={() => {}}

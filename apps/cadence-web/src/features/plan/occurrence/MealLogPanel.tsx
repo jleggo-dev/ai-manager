@@ -2,8 +2,11 @@ import { MicButton } from '../../../components/MicButton.tsx';
 import type { MealKind, OccurrenceDetail } from '../../../lib/api.ts';
 import { leftLine, macroLine } from './format.ts';
 import { BaselineReadPanel } from './BaselineReadPanel.tsx';
+import { useState } from 'react';
 import { useMealLog } from './useMealLog.ts';
+import { PhotoReadPanel } from '../../food/PhotoReadPanel.tsx';
 import { useNutritionBaseline } from './useNutritionBaseline.ts';
+import { GrowingTextarea } from '../../../components/GrowingTextarea.tsx';
 
 /**
  * Observe-phase meal logging: text and/or photo, day totals, tap-to-confirm provisional
@@ -22,6 +25,7 @@ export function MealLogPanel({
   onProposeChange?: (steer: string) => void;
 }) {
   const meal = useMealLog(detail, setDetail, onLogged);
+  const [removing, setRemoving] = useState<string | null>(null);
   const baseline = useNutritionBaseline(meal.refreshDay, detail.date);
 
   return (
@@ -51,7 +55,7 @@ export function MealLogPanel({
                 {m.items.map((i) => i.name).join(', ') || m.raw_text || (m.photo_url ? '📷 photo' : '')}
                 {macroLine(m.macros) && <span className="meal-est"> · {macroLine(m.macros)}</span>}
               </span>
-              {m.provisional && (
+              {m.provisional && removing !== m.log_id && (
                 <button
                   className="meal-confirm"
                   onClick={() => meal.confirmMeal(m.log_id)}
@@ -62,49 +66,73 @@ export function MealLogPanel({
                   {meal.confirming === m.log_id ? '…' : '✓'}
                 </button>
               )}
+              {/* Two taps, because removing is the one action here that cannot be undone — but no
+                  alarm either: a meal you did not eat is an error, not a confession. */}
+              {removing === m.log_id ? (
+                <span className="meal-rm-ask">
+                  <button
+                    className="meal-rm-yes"
+                    disabled={meal.mealBusy}
+                    onClick={() => {
+                      setRemoving(null);
+                      void meal.removeLoggedMeal(m.log_id);
+                    }}
+                  >
+                    Remove
+                  </button>
+                  <button className="meal-rm-no" onClick={() => setRemoving(null)}>
+                    Keep
+                  </button>
+                </span>
+              ) : (
+                <button
+                  className="meal-rm"
+                  onClick={() => setRemoving(m.log_id)}
+                  disabled={meal.mealBusy}
+                  title="I didn't eat this"
+                  aria-label={`Remove this ${m.meal} from the day`}
+                >
+                  ×
+                </button>
+              )}
             </div>
           ))}
         </div>
       )}
-      <div className="steer-row">
-        <textarea
-          className="logbox-in"
-          value={meal.mealText}
-          onChange={(e) => meal.setMealText(e.target.value)}
-          placeholder={'e.g. "two eggs, sourdough toast and a coffee" — or just snap it'}
-          rows={2}
-          disabled={meal.mealBusy}
-        />
-        <MicButton value={meal.mealText} onChange={meal.setMealText} disabled={meal.mealBusy} />
-        {/* capture="environment" opens the rear camera on phones; a file picker on desktop. */}
-        <label
-          className={`photo-btn${meal.mealPhoto ? ' photo-on' : ''}`}
-          title="Snap your plate"
-          aria-label="Add a photo"
-        >
-          📷
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
+      {!meal.mealPhoto && (
+        <div className="steer-row">
+          {/* Grows with what is said, like the coach's composer — brief 01. This is the box the
+              owner dictated four sentences into and could not re-read: two fixed rows, `resize:
+              none`, and voice makes long captures the NORMAL case rather than the edge one.
+              A capture you cannot re-read is a capture you cannot correct. */}
+          <GrowingTextarea
+            className="logbox-in"
+            value={meal.mealText}
+            onChange={meal.setMealText}
+            ariaLabel="What did you have?"
+            placeholder={'e.g. "two eggs, sourdough toast and a coffee" — or just snap it'}
             disabled={meal.mealBusy}
-            onChange={(e) => {
-              void meal.pickPhoto(e.target.files?.[0]);
-              e.target.value = ''; // same photo re-pickable
-            }}
           />
-        </label>
-      </div>
-      {meal.mealPhoto && (
-        <div className="photo-preview">
-          <img src={meal.mealPhoto} alt="your plate" />
-          <button className="photo-clear" onClick={meal.clearPhoto} disabled={meal.mealBusy} aria-label="Remove photo">
-            ×
-          </button>
-          <span className="photo-hint">
-            {"I'll read what I can from the photo — estimates, not judgments. A few words help."}
-          </span>
+          <MicButton value={meal.mealText} onChange={meal.setMealText} disabled={meal.mealBusy} />
+          {/* capture="environment" opens the rear camera on phones; a file picker on desktop. */}
+          <label
+            className={`photo-btn${meal.mealPhoto ? ' photo-on' : ''}`}
+            title="Snap your plate"
+            aria-label="Add a photo"
+          >
+            📷
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              hidden
+              disabled={meal.mealBusy}
+              onChange={(e) => {
+                void meal.pickPhoto(e.target.files?.[0]);
+                e.target.value = ''; // same photo re-pickable
+              }}
+            />
+          </label>
         </div>
       )}
       {meal.mealPhoto && (
@@ -142,14 +170,29 @@ export function MealLogPanel({
           <option value="drink">drink</option>
           <option value="other">other</option>
         </select>
-        <button
-          className="logbox-btn meal-btn"
-          onClick={meal.submitMeal}
-          disabled={meal.mealBusy || (!meal.mealText.trim() && !meal.mealPhoto)}
-        >
-          {meal.mealBusy ? 'Writing it down…' : 'Log this meal'}
-        </button>
+        {!meal.mealPhoto && (
+          <button
+            className="logbox-btn meal-btn"
+            onClick={meal.submitMeal}
+            disabled={meal.mealBusy || !meal.mealText.trim()}
+          >
+            {meal.mealBusy ? 'Writing it down…' : 'Log this meal'}
+          </button>
+        )}
       </div>
+
+      {/* A photo goes through read-then-confirm, never straight to a row (A23 / 2026-08-22). The
+          words already typed ride along as the caption — they are evidence the photo cannot give. */}
+      {meal.mealPhoto && (
+        <PhotoReadPanel
+          photo={meal.mealPhoto}
+          meal={meal.mealKind}
+          initialCaption={meal.mealText}
+          onLogged={() => void meal.afterPhotoLogged()}
+          onBack={meal.clearPhoto}
+          backLabel="Use a different photo"
+        />
+      )}
       {meal.logErr && <div className="auth-error">{meal.logErr}</div>}
 
       <BaselineReadPanel
