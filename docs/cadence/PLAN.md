@@ -8165,7 +8165,7 @@ Sizes: **S** ≤ half a day · **M** ~1–2 days · **L** ≥ 3 days. Dependenci
 | **MP6** | Retire the regex gate on recipe capture | `coach-food-classify.ts:66` gates on three hard-coded patterns; the scenario's message matches **none** — no literal "I made", and "Yields 3 cups" is not the "makes/serves N" the pattern demands. The recipe would never be captured | `coach-food-classify.ts` | S | MP5 |
 | **MP7** | Sub-recipes: a recipe that contains another recipe | "Pork chops with mushroom sauce" IS sauce + chops. Composition by reference does not exist at any layer. **But it is one filter away**: `food-resolver.ts:83` already returns `kind:'recipe'` candidates and `recipe.ts:127` throws them out with `.find(c => c.kind === 'food')` | `types/nutrition.ts`, `recipe.ts`, `recipe-macros.ts`, migration | L | MP5 |
 | **MP8** | Pin every unheld ingredient as a reusable Food during capture | Owner: *"log and save the profile of each ingredient."* `resolveOneIngredient` falls through to `estimateFood` and returns **no `food_id` and no insert** — the estimate is thrown away every time | `recipe.ts` | M | — |
-| **MP9** | Batched ingredient resolution | Eleven ingredients resolve one at a time with **no shared context** — `resolveFoods(userId, {text})` is called without the optional third `shared` arg, so the four per-user ranking queries run 11× | `recipe.ts`, `food-resolver.ts` | M | MP8 |
+| **MP9** | Point recipe capture at the batch engine that already exists | Eleven ingredients resolve one at a time with **no shared context** — `recipe.ts:126` calls `resolveFoods(userId, {text})` without the optional third `shared` arg, so the four per-user ranking queries run 11×. **Verified 2026-08-25: `priceMealItems(userId, items[], opts)` (`food-pricing.ts:302`) is already exactly this — one call pricing N named ingredients with shared context, in production.** Wiring, not building | `recipe.ts` | S | MP8 |
 | **MP10** | An explicit "this ingredient has no numbers" signal | No field means this on draft or saved row; `estimated?: boolean` means something else | `recipe.ts`, `types/nutrition.ts` | S | MP8 |
 | **MP11** | Fractional recipe yields | `servings: z.number().int()` blocks non-integer yields at **8 sites, one needing a migration**. "Yields 3 cups" divided by 4 chops is not an integer | `validation/recipe.ts` +7, migration | M | — |
 
@@ -8173,7 +8173,7 @@ Sizes: **S** ≤ half a day · **M** ~1–2 days · **L** ≥ 3 days. Dependenci
 
 | ID | What | Why the scenario needs it | Touches | Size | Deps |
 |---|---|---|---|---|---|
-| **MP12** | Ask `parse-nutrition-label` for the other six nutrients | The job asks only kcal/protein/carbs/fat. The attached label prints **potassium 250 mg, calcium 10 mg, iron 0.3 mg** and we would discard all three | `ai-admin.config.json` (jobs[15]) + sync | S | — |
+| **MP12** | Ask `parse-nutrition-label` for iron, calcium and potassium (**three**, not six — verified 2026-08-25: the prompt already asks for `fiber_g` and `sodium_mg`) | The job asks only kcal/protein/carbs/fat. The attached label prints **potassium 250 mg, calcium 10 mg, iron 0.3 mg** and we would discard all three | `ai-admin.config.json` (jobs[15]) + sync | S | — |
 | **MP13** | An attachment channel on the coach chat turn | `routes/coach.ts:306` reads exactly `req.body?.message` and 400s on anything else. No image can reach her, on any branch. **The v2 request builder already maps `input_image` parts** (`request-builder.ts:105-111`) — chat is the only consumer that never builds them | `routes/coach.ts`, `chat-messaging.ts` | L | — |
 | **MP14** | A coach tool that reads an attached image (`read_label(photo_ref)`) | No tool in the whole harness takes an image. `POST /nutrition/foods/parse-label` and `/identify` are built, auth'd, validated, unit-tested — and have **zero callers anywhere in the repo** | new retrieval fn wrapping `parseNutritionLabel` | M | MP13 |
 | **MP15** | Source priority: an attached label outranks a web lookup | Owner: *"she should actually prioritize the image, since it's a more authoritative source."* No notion of source priority exists | `food-source-report.ts`, `food-source-fanout.ts` | S | MP14 |
@@ -8195,9 +8195,9 @@ Sizes: **S** ≤ half a day · **M** ~1–2 days · **L** ≥ 3 days. Dependenci
 | **MP21** | A coach tool that logs a meal | **No coach-callable tool writes `cadence.nutrition_logs`.** `log_nutrition` was withdrawn 2026-08-19 and the chat path deliberately writes nothing — but the scenario requires *"just tell Cadence in chat that they ate it and it gets logged."* This reverses that ruling for the planned-meal case and needs an explicit decision | `coach-actions.ts` | M | — |
 | **MP22** | Serving derivation from an asked-for count | *"1 pork chop with a % of sauce that matches."* Nothing derives "1 chop + 1/N of the remainder", and there is no notion of an ingredient that does not scale with the batch | `recipe-macros.ts`, `types/nutrition.ts` | L | MP7, MP11 |
 | **MP23** | One log row = one food PLUS a fraction of a recipe | `NutritionLog['items']` has no `recipe_id`. No path puts a food item and a fractional recipe in one row | `types/nutrition.ts`, `nutrition.ts`, migration | M | MP22 |
-| **MP24** | A portion picker on the fast recipe-log paths | All three one-tap surfaces hardcode the quantity. `CookSheet.tsx:71` logs `servings: recipe.servings` — **a 4-serving dish cooked for the family lands as a 4-serving meal in one person's day** | `apps/cadence-web` | M | MP20 |
+| **MP24** | Route the fast recipe-log paths through the portion confirm that already exists | All three one-tap surfaces hardcode the quantity. `CookSheet.tsx:71` logs `servings: recipe.servings` — **a 4-serving dish cooked for the family lands as a 4-serving meal in one person's day**. **Verified 2026-08-25: `RecipeLogConfirm.tsx` is a complete portion-aware confirm — servings input, min 0.25, step 0.25, macros scaling live.** Wiring, not building | `apps/cadence-web` | S | MP20 |
 | **MP25** | Recipe-aware pricing | `food-pricing.ts` contains the substring "recipe" **zero times** — verified across every local and remote ref. The ledger cannot match "pork chops with mushroom sauce" to the saved recipe | `food-pricing.ts` | M | MP7 |
-| **MP26** | Micronutrients must survive the recipe path | `recipe-macros.ts:7` `MACRO_KEYS` truncates to four keys at **five discard points**. The label's potassium/calcium/iron die here even after MP12 | `recipe-macros.ts` | S | — |
+| **MP26** | Micronutrients must survive the recipe path | `recipe-macros.ts:7` declares its **own file-local** `MACRO_KEYS = ['kcal','protein_g','carbs_g','fat_g']`, shadowing the 12-key shared export — so every recipe number is truncated to four. The label's potassium/calcium/iron die here even after MP12. **The single most corroborated finding of the audit: five agents confirmed it independently and the discard surface widened each time — 4 sites, then 5, then 7 (two of them in the web client).** | `recipe-macros.ts` +2 web | M | — |
 | **MP27** | `research_food` as a coach tool | She cannot reach the web-grounded rung; it only fires from background enrichment. The scenario's *"look up the wild mushroom co"* needs it | new retrieval fn | S | — |
 | **MP28** | Accept `vitamin_b12_ug` and the `fatsecret`/`cnf`/`research` sources in the create-food schema | Executed against the live schema: b12 → *"Unrecognized key"*, and three of five real sources are rejected outright | `validation/food.ts` | S | — |
 
@@ -8284,4 +8284,44 @@ session limit — and the final synthesis agent was among them, so this section 
 Journal: `subagents/workflows/wf_618d8401-f16/journal.jsonl`. Re-runnable with
 `Workflow({scriptPath: '…/meal-prep-gap-map-wf_618d8401-f16.js', resumeFromRunId: 'wf_618d8401-f16'})`
 — completed agents replay from cache, so only the twelve failures re-run.
+
+
+### Second pass — the investigation completed 2026-08-25
+
+The 12 agents that died to a machine sleep and the session limit all finished on resume. **77 of 78
+agents; 40 verified gaps, 30 refuted.** The adversarial pass earned its keep twice over: nearly half
+of every "missing" claim turned out to be already built. What changed:
+
+**Closed by the 2026-08-25 fixes (commit `808a41c`)** — three claims were refuted because the code
+landed while they were being written:
+
+- *"Render `food_id` in `check_food_sources`"* — closed; `candidateBlock` prints it, tested.
+- *"A fault-vs-empty guard on the render"* — closed; `undefined` → `toolFaultText`, `null` → usage
+  hint, with a test asserting they share no word longer than four characters.
+- *"Any volume→mass or count→mass conversion reachable from the log path"* — closed by
+  `resolve_portion` (`e04c07e`, hardened in `808a41c`).
+
+**The rejection channel question is ANSWERED, and the answer is not what the earlier note assumed.**
+The claim that a discard reaches the Coach as an absence indistinguishable from "this food does not
+exist" was **refuted**: four shipped, tested channels already carry a reason — `SourceCheck` (typed,
+per rung), `candidateNotes`, `PortionOutcome.reason`, and `toolFaultText`. So the plumbing exists.
+What remains is narrower and easier than "build a channel": **`food-research.ts`'s ten `return null`
+paths and `applyNormalization`'s dropped fields do not USE it.** Wire those two into the existing
+channels (MP35).
+
+**New gaps the second pass found:**
+
+| ID | What | Why it matters | Size |
+|---|---|---|---|
+| **MP35** | Make `food-research.ts` and `applyNormalization` report through the channels that already exist | Ten silent `return null`s and a `NormalizationProblem[]` that never escapes its module. The Coach is never told a record was found, checked and refused | S |
+| **MP36** | **A yield model — there is none, anywhere** | `yield_qty\|yield_unit\|yield_g\|yield_ml\|recipe_yield\|total_yield\|total_g\|total_mass\|batch_size\|portions_per` return **ZERO hits across the entire git history**. `Recipe` is `servings: number` and nothing else, so "Yields 3 cups" has nowhere to land. This is the hard blocker under MP22 — serving derivation is impossible without it. The vocabulary half exists (`portion-measure.ts` parses "3 cups" as 709.76 ml, unit-tested by that exact phrase); the storage and the reconciliation to summed ingredient mass do not | L |
+| **MP37** | An escape from the thin-row research trap | Both research gates key on food **absence**, never on **thinness** — `food-pricing.ts:263` is `!food && shouldResearchItem(item)`. A food matched with calories and nothing else therefore never earns a lookup, and the thin row is pinned forever | M |
+
+**Also refuted — do not rebuild:** the capability manifest's honesty mechanism exists
+(`FOOD_CONFIRM_CONTEXT`, `coach-food-classify.ts:48-55`) and simply is not wired to the photo lines;
+and a yield *vocabulary* exists even though yield *storage* does not.
+
+**Sequencing changes.** MP9 and MP24 drop from M to **S** — both are wiring to shipped engines
+(`priceMealItems`, `RecipeLogConfirm`). MP36 joins Slice E and is its critical path: MP22 cannot
+start without it. MP35 joins Slice A, since it is small and closes the audit's original question.
 
