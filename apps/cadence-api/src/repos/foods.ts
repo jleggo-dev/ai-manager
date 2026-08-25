@@ -362,17 +362,19 @@ export async function updateFood(userId: string, foodId: string, patch: UpdateFo
  * Append one measure to a food's `servings[]` — including on a SHARED row, which `updateFood`
  * deliberately refuses.
  *
- * Why this is allowed to touch a global row when nothing else is: a household weight is a fact
- * about the FOOD, not about the user. A cup of chopped shallots weighs the same for everybody, so
- * learning it once and keeping it per-user would fragment one fact into thousands of copies and
- * re-ask a model for each — precisely the variance the ledger exists to remove. This is the
- * manufacture-determinism pattern applied to portions: pay once, then the deterministic rung hits
- * forever, for everyone.
+ * THIS IS THE PROMOTION WRITE, AND IT HAS NO CALLER YET (MP4). A lookup no longer lands here: the
+ * owner ruled 2026-08-23 that a weight the Coach works out is recorded PRIVATELY in
+ * `food_portions`, and only a consensus across users earns a place on the row everyone reads. So
+ * this is the second half of that flow, waiting on the rule that decides when the corpus has
+ * agreed — `portionConsensus` returns the median and how many observations sit within 15% of it,
+ * which is the number such a rule should gate on.
  *
- * What keeps that safe is entirely upstream. The caller must have run `checkPlausible` first, so a
- * density outside what real food occupies never reaches here. And the write is IDEMPOTENT on the
- * label: a measure already on the row wins, so a second lookup can never quietly overwrite a
- * value USDA published with one a model guessed.
+ * Why it may touch a global row when nothing else may: a household weight is a fact about the
+ * FOOD, not about the user. A cup of chopped shallots weighs the same for everybody, so a promoted
+ * answer belongs on the food itself rather than copied into every account that ever asked.
+ *
+ * The write is IDEMPOTENT on the label: a measure already on the row wins, so a promotion can
+ * never overwrite a value USDA published with one derived from observations.
  *
  * Returns the updated row, or null when the food does not exist.
  */
@@ -506,4 +508,79 @@ export async function renameOwnFood(
        and owner_user_id = ${userId}
     returning ${FOOD_COLS_PLAIN}`;
   return rows[0] ?? null;
+}
+
+/* ── Observed household weights (0043) ─────────────────────────────────────────
+ * Private on write, promoted from consensus. See MP4 in docs/cadence/PLAN.md.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+export interface FoodPortionRow {
+  food_id: string;
+  label: string;
+  unit: string;
+  amount_g: number;
+  basis: string | null;
+  source: string;
+}
+
+/**
+ * Record one person's observation of what a measure of a food weighs.
+ *
+ * Upserts on (food_id, user_id, label) so the corpus counts PEOPLE WHO AGREE rather than times
+ * anyone asked — a user who looks the same thing up twice is one data point, not two, and that
+ * distinction is the difference between a median worth trusting and one skewed by whoever
+ * re-tapped the most.
+ */
+export async function recordFoodPortion(
+  userId: string,
+  foodId: string,
+  portion: { label: string; unit: string; amount_g: number; basis?: string | null; source?: string },
+): Promise<void> {
+  const label = portion.label.trim();
+  if (!label || !(portion.amount_g > 0)) return;
+  await sql`
+    insert into cadence.food_portions (food_id, user_id, label, unit, amount_g, basis, source)
+    values (${foodId}, ${userId}, ${label}, ${portion.unit}, ${portion.amount_g},
+            ${portion.basis ?? null}, ${portion.source ?? 'llm'})
+    on conflict (food_id, user_id, lower(label)) do update
+      set amount_g = excluded.amount_g,
+          basis    = excluded.basis,
+          source   = excluded.source,
+          unit     = excluded.unit`;
+}
+
+/** Everything this user has already observed about one food's measures. */
+export async function listFoodPortions(userId: string, foodId: string): Promise<FoodPortionRow[]> {
+  return sql<FoodPortionRow[]>`
+    select food_id, label, unit, amount_g::float8 as amount_g, basis, source
+      from cadence.food_portions
+     where user_id = ${userId} and food_id = ${foodId}`;
+}
+
+/**
+ * What the corpus says about one food+measure, across everyone — the promotion input.
+ *
+ * Returns the MEDIAN rather than the mean: one bad lookup should move the answer by nothing, and
+ * with a handful of observations a mean is exactly what an outlier captures. `agreement` is how
+ * many of them sit within 15% of that median, which is the number a promotion rule should gate on
+ * — a count of observations that agree, not a count of observations.
+ */
+export async function portionConsensus(
+  foodId: string,
+  label: string,
+): Promise<{ median_g: number; observations: number; agreement: number } | null> {
+  const [row] = await sql<Array<{ median_g: number; observations: number; agreement: number }>>`
+    with obs as (
+      select amount_g::float8 as g
+        from cadence.food_portions
+       where food_id = ${foodId} and lower(label) = lower(${label})
+    ), m as (
+      select percentile_cont(0.5) within group (order by g) as median_g from obs
+    )
+    select m.median_g,
+           (select count(*) from obs)::int as observations,
+           (select count(*) from obs where abs(obs.g - m.median_g) <= m.median_g * 0.15)::int as agreement
+      from m
+     where m.median_g is not null`;
+  return row ?? null;
 }

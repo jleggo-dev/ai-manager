@@ -20,6 +20,8 @@ const findFatSecretMatch = vi.hoisted(() => vi.fn());
 
 vi.mock('../repos/foods.ts', () => ({ searchFoods }));
 vi.mock('./food-sources/usda-enrich.ts', () => ({ enrichFoodsWithUsda }));
+const isUsdaConfigured = vi.hoisted(() => vi.fn(() => true));
+vi.mock('./food-sources/usda.ts', () => ({ isUsdaConfigured }));
 vi.mock('./food-sources/fatsecret-enrich.ts', () => ({ findFatSecretMatch }));
 
 const { fanOutFoodSources } = await import('./food-source-fanout.ts');
@@ -47,6 +49,7 @@ beforeEach(() => {
   searchFoods.mockResolvedValue([]);
   enrichFoodsWithUsda.mockImplementation(async (_u: string, _q: string, local: Food[]) => local);
   findFatSecretMatch.mockResolvedValue(null);
+  isUsdaConfigured.mockReturnValue(true);
   vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
 
@@ -154,5 +157,30 @@ describe('brand steers the search without becoming the query', () => {
   it('passes the vendor through to USDA, which is what opens its branded set', async () => {
     await fanOutFoodSources('u1', { query: 'greek yogurt', brand: 'Chobani' });
     expect(enrichFoodsWithUsda).toHaveBeenCalledWith('u1', 'greek yogurt', [], { brand: 'Chobani' });
+  });
+});
+
+describe('the trace never claims a source it did not call', () => {
+  /**
+   * The bug this pins: `enrichFoodsWithUsda` returns the local list unchanged with no API key, so
+   * diffing it found nothing new and the trace read "miss — no new match". That told the Coach USDA
+   * had been consulted and had nothing, when USDA was never called. Decorative copy, which the
+   * file header forbids.
+   */
+  it('reports USDA as skipped, not missed, when it is not configured', async () => {
+    isUsdaConfigured.mockReturnValue(false);
+    const r = await fanOutFoodSources('u1', { query: 'shallots' });
+
+    const usda = check(r, 'usda');
+    expect(usda?.status).toBe('skipped');
+    expect(usda?.detail).toContain('not configured');
+    expect(enrichFoodsWithUsda).not.toHaveBeenCalled();
+  });
+
+  it('still reports a genuine miss as a miss when it IS configured', async () => {
+    isUsdaConfigured.mockReturnValue(true);
+    const r = await fanOutFoodSources('u1', { query: 'shallots' });
+    expect(check(r, 'usda')?.status).toBe('miss');
+    expect(enrichFoodsWithUsda).toHaveBeenCalledOnce();
   });
 });

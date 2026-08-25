@@ -13,9 +13,17 @@
  * store says HOW MUCH).
  *
  * THE ANSWER IS PERMANENT, WHICH IS WHY IT IS WORTH BUYING. A cup of shallots weighs the same next
- * Tuesday and weighs the same for everybody, so the result is appended to the food's `servings[]`
- * and the next log of the same words never asks again. Same manufacture-determinism loop as the
- * food ledger, pointed at portions instead of nutrients — the system gets faster the more it runs.
+ * Tuesday, so the result is kept and the next log of the same words never asks again. Same
+ * manufacture-determinism loop as the food ledger, pointed at portions — the system gets faster the
+ * more it runs.
+ *
+ * WHERE IT IS KEPT: PRIVATELY, AND PROMOTED FROM CONSENSUS (owner ruling 2026-08-23, MP4). This
+ * first wrote straight onto the shared food row, which was the one option none of the owner's
+ * reasoning argued for. His rationale for private is data rather than caution — *"the benefit of
+ * saving it privately is to gain a large store of data that we can operate on."* N independent
+ * observations of "1/4 cup shallots" is something you can take a median of and promote a consensus
+ * from; one model's first opinion written to a row every user reads is not. `food_portions` (0043)
+ * holds the observations; `portionConsensus` is the promotion input.
  *
  * WHAT STOPS A BAD ANSWER STICKING: `checkPlausible` rejects any weight implying a density outside
  * what real food occupies, and the append is idempotent on the label, so a published USDA measure
@@ -24,7 +32,7 @@
  * it wrong" must never look the same to her.
  */
 import { runJobBySlug } from '../ai/aim.ts';
-import { appendFoodServing, getFood } from '../repos/foods.ts';
+import { getFood, listFoodPortions, recordFoodPortion } from '../repos/foods.ts';
 import { logAi } from './ai-log.ts';
 import { matchMeasure } from './food-source-report.ts';
 import { checkPlausible, gramsPerUnit, parseMeasure, type ParsedMeasure } from './portion-measure.ts';
@@ -166,6 +174,29 @@ export async function resolvePortion(userId: string, input: ResolvePortionInput)
     return { status: 'known', grams: gramsPerUnit(existing) * measure.qty, measure: existing.label, food };
   }
 
+  /**
+   * Then this user's own observations, which the shared row does not carry.
+   *
+   * Checked AFTER the food's own servings on purpose: a measure a source published outranks one we
+   * worked out, so a private observation can never quietly shadow USDA.
+   */
+  try {
+    const mine = await listFoodPortions(userId, food.food_id);
+    const hit = mine.find(
+      (p) =>
+        p.label.trim().toLowerCase() ===
+        (measure.unit === 'item'
+          ? `1 ${measure.countOf}`.trim().toLowerCase()
+          : `1 ${measure.unit}`.trim().toLowerCase()),
+    );
+    if (hit) {
+      return { status: 'known', grams: hit.amount_g * measure.qty, measure: measure.label, food };
+    }
+  } catch (e) {
+    // The corpus is an optimisation; failing to read it costs a lookup, never the answer.
+    console.warn('[portion-resolve] could not read stored portions:', e);
+  }
+
   const name = [food.brand, food.name].filter(Boolean).join(' ');
   const found = await lookupPortionGrams(userId, name, measure);
   if (!found) {
@@ -195,11 +226,13 @@ export async function resolvePortion(userId: string, input: ResolvePortionInput)
 
   let stored = false;
   try {
-    // Store the SINGLE-unit weight, so the row reads "1/4 cup = 40 g" whatever quantity was asked
-    // about; `priceFood` multiplies by the quantity at log time.
+    // Stored per SINGLE unit, so the observation reads "1 cup = 160 g" whatever quantity was asked
+    // about; the quantity is re-applied at read time and by `priceFood` at log time.
     const perUnit = found.grams / Math.max(measure.qty, Number.EPSILON);
     const single = parseMeasure(`1 ${measure.kind === 'count' ? measure.countOf : measure.unit}`);
-    stored = (await appendFoodServing(food.food_id, servingFor(single, perUnit))) !== null;
+    const serving = servingFor(single, perUnit);
+    await recordFoodPortion(userId, food.food_id, { ...serving, basis: found.basis, source: 'llm' });
+    stored = true;
   } catch (e) {
     // A failed write costs the next lookup, never this one — the grams are already good.
     console.warn('[portion-resolve] could not store the resolved measure:', e);

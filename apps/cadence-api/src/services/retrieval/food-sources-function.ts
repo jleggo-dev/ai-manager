@@ -19,6 +19,7 @@
  */
 import { fanOutFoodSources, type FanOutResult, type SourceCheck } from '../food-source-fanout.ts';
 import { hasFullMacros, type SourceCandidate } from '../food-source-report.ts';
+import { toolFaultText } from '../tool-response.ts';
 import type { RetrievalFunction } from './types.ts';
 
 /** How many candidates to render. The rest are counted, never silently dropped. */
@@ -58,7 +59,13 @@ function checkLine(c: SourceCheck): string {
 function candidateBlock(c: SourceCandidate): string {
   const title = [c.name, c.brand ? `(${c.brand})` : ''].filter(Boolean).join(' ');
   const lines = [
-    `[${c.source}] ${title} — per ${c.per.measure}`,
+    /**
+     * The id is printed because `resolve_portion` REQUIRES one, and without it here the two tools
+     * cannot be chained: she would be told a source has no "1/4 cup" measure and pointed at a tool
+     * she has no way to address. A tool that names a follow-up must hand over what the follow-up
+     * needs.
+     */
+    `[${c.source}] ${title} — per ${c.per.measure}${c.food_id ? ` · food_id ${c.food_id}` : ' · not saved yet'}`,
     `    ${nutrientLine(c)}`,
     `    completeness: ${c.completeness}${hasFullMacros(c) ? '' : ' (macros incomplete)'} · micros: ${c.micros}`,
   ];
@@ -91,7 +98,19 @@ export const CHECK_FOOD_SOURCES: RetrievalFunction = {
   },
 
   render(result) {
-    if (!result) return 'Food sources: pass q (the food name).';
+    /**
+     * `undefined` and `null` are DIFFERENT ANSWERS here and collapsing them was a live bug.
+     *
+     * `executeCalls` logs a throwing `run` to the console and leaves `results[name]` unset, so a
+     * crashed lookup arrives as `undefined` — and returning the usage hint for it told the Coach
+     * she had passed bad arguments when in fact the search had broken. That is the
+     * error-wearing-the-clothes-of-something-else shape `tool-response.ts` exists to prevent, and
+     * the layer above already guards a throwing RENDER; this defeated it for a throwing RUN.
+     *
+     * `null` is the honest usage case: `run` returns it when no query was given.
+     */
+    if (result === undefined) return toolFaultText('The food databases');
+    if (result === null) return 'Food sources: pass q (the food name).';
     const r = result as FanOutResult;
 
     const trace = ['Sources checked:', ...r.sources_checked.map(checkLine)].join('\n');

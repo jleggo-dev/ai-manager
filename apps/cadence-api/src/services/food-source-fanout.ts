@@ -32,6 +32,7 @@ import { searchFoods } from '../repos/foods.ts';
 import { enrichFoodsWithUsda } from './food-sources/usda-enrich.ts';
 import { findFatSecretMatch } from './food-sources/fatsecret-enrich.ts';
 import { isGenericWholeFoodQuery } from './food-sources/usda-gate.ts';
+import { isUsdaConfigured } from './food-sources/usda.ts';
 import { findDisagreements, toCandidate, type FoodSourceName, type SourceCandidate } from './food-source-report.ts';
 import type { Food } from '@cadence/shared';
 
@@ -119,6 +120,21 @@ async function usdaRung(
     return {
       foods: [],
       check: { source: 'usda', status: 'skipped', ms: 0, detail: 'query is a barcode or too long for a food search' },
+    };
+  }
+
+  /**
+   * An unconfigured USDA is a SKIP, not a MISS, and the difference is the whole point of the trace.
+   *
+   * `enrichFoodsWithUsda` returns the local list unchanged when there is no API key, so diffing it
+   * found nothing new and this reported "no new match" — the trace saying USDA had been consulted
+   * and had nothing, when USDA was never called at all. That is precisely the decorative copy the
+   * header of this file forbids, written three screens below the rule.
+   */
+  if (!isUsdaConfigured()) {
+    return {
+      foods: [],
+      check: { source: 'usda', status: 'skipped', ms: 0, detail: 'not configured here (no USDA_API_KEY)' },
     };
   }
 

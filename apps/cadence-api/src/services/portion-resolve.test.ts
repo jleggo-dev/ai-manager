@@ -17,11 +17,12 @@ import type { Food } from '@cadence/shared';
 
 const runJobBySlug = vi.hoisted(() => vi.fn());
 const getFood = vi.hoisted(() => vi.fn());
-const appendFoodServing = vi.hoisted(() => vi.fn());
+const recordFoodPortion = vi.hoisted(() => vi.fn());
+const listFoodPortions = vi.hoisted(() => vi.fn());
 const logAi = vi.hoisted(() => vi.fn());
 
 vi.mock('../ai/aim.ts', () => ({ runJobBySlug }));
-vi.mock('../repos/foods.ts', () => ({ getFood, appendFoodServing }));
+vi.mock('../repos/foods.ts', () => ({ getFood, recordFoodPortion, listFoodPortions }));
 vi.mock('./ai-log.ts', () => ({ logAi }));
 
 const { resolvePortion, servingFor } = await import('./portion-resolve.ts');
@@ -46,9 +47,10 @@ const answers = (grams: number, basis = 'a medium shallot is about 25 g peeled')
   runJobBySlug.mockResolvedValue({ formatted: JSON.stringify({ grams, basis, confidence: 0.9 }) });
 
 beforeEach(() => {
-  for (const m of [runJobBySlug, getFood, appendFoodServing, logAi]) m.mockReset();
+  for (const m of [runJobBySlug, getFood, recordFoodPortion, listFoodPortions, logAi]) m.mockReset();
   getFood.mockResolvedValue(shallots());
-  appendFoodServing.mockResolvedValue(shallots());
+  recordFoodPortion.mockResolvedValue(undefined);
+  listFoodPortions.mockResolvedValue([]);
   logAi.mockResolvedValue(undefined);
   vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
@@ -83,12 +85,12 @@ describe('it does not buy what it already has', () => {
 });
 
 describe('what it buys, it keeps', () => {
-  it('looks up an unknown measure and writes it back onto the food', async () => {
+  it('looks up an unknown measure and keeps the answer', async () => {
     answers(40, 'USDA lists 1 cup chopped shallots at 160 g');
     const r = await resolvePortion('u1', { foodId: 'usda-shallots', measure: '1/4 cup' });
 
     expect(r).toMatchObject({ status: 'looked_up', grams: 40, stored: true });
-    expect(appendFoodServing).toHaveBeenCalledOnce();
+    expect(recordFoodPortion).toHaveBeenCalledOnce();
     expect(runJobBySlug).toHaveBeenCalledWith(
       'u1',
       'resolve-portion',
@@ -101,14 +103,14 @@ describe('what it buys, it keeps', () => {
     answers(75);
     await resolvePortion('u1', { foodId: 'usda-shallots', measure: '3 shallots' });
 
-    const [, serving] = appendFoodServing.mock.calls[0] as [string, { label: string; amount_g: number }];
+    const [, , serving] = recordFoodPortion.mock.calls[0] as [string, string, { label: string; amount_g: number }];
     expect(serving.amount_g).toBeCloseTo(25, 1);
     expect(serving.label).toContain('1');
   });
 
   it('still answers when the write-back fails, and says the answer was not kept', async () => {
     answers(40);
-    appendFoodServing.mockRejectedValue(new Error('db down'));
+    recordFoodPortion.mockRejectedValue(new Error('db down'));
 
     const r = await resolvePortion('u1', { foodId: 'usda-shallots', measure: '1/4 cup' });
     expect(r).toMatchObject({ status: 'looked_up', grams: 40, stored: false });
@@ -130,7 +132,7 @@ describe('a refusal is reported, never swallowed', () => {
     expect(r).toMatchObject({ reason: expect.stringContaining('refused') });
     expect((r as { reason: string }).reason).toContain('g/ml');
     // And critically: the bad number never reached the food.
-    expect(appendFoodServing).not.toHaveBeenCalled();
+    expect(recordFoodPortion).not.toHaveBeenCalled();
   });
 
   it('distinguishes "nothing came back" from "what came back was refused"', async () => {
@@ -170,5 +172,51 @@ describe('servingFor', () => {
 
   it('files a count as an item', () => {
     expect(servingFor(parseMeasure('1 shallot'), 25)).toMatchObject({ unit: 'item', amount_g: 25 });
+  });
+});
+
+describe('the private corpus (MP4)', () => {
+  it('writes the observation privately, never onto the shared food row', async () => {
+    answers(40, 'USDA lists 1 cup chopped shallots at 160 g');
+    await resolvePortion('u1', { foodId: 'usda-shallots', measure: '1/4 cup' });
+
+    const [userId, foodId, portion] = recordFoodPortion.mock.calls[0] as [
+      string,
+      string,
+      { amount_g: number; basis: string; source: string },
+    ];
+    expect(userId).toBe('u1');
+    expect(foodId).toBe('usda-shallots');
+    expect(portion.source).toBe('llm');
+    expect(portion.basis).toContain('USDA lists');
+  });
+
+  it('answers from this user\u2019s own earlier observation without paying again', async () => {
+    listFoodPortions.mockResolvedValue([
+      { food_id: 'usda-shallots', label: '1 cup', unit: 'cup', amount_g: 160, basis: null, source: 'llm' },
+    ]);
+    const r = await resolvePortion('u1', { foodId: 'usda-shallots', measure: '1/4 cup' });
+
+    expect(r).toMatchObject({ status: 'known', grams: 40 });
+    expect(runJobBySlug).not.toHaveBeenCalled();
+  });
+
+  /** A published measure outranks one we worked out — a private note must never shadow USDA. */
+  it('prefers the food\u2019s own serving over a private observation', async () => {
+    getFood.mockResolvedValue(
+      shallots({ servings: [{ label: '1 cup', unit: 'cup', amount_g: 160 }], default_serving: 0 }),
+    );
+    listFoodPortions.mockResolvedValue([
+      { food_id: 'usda-shallots', label: '1 cup', unit: 'cup', amount_g: 999, basis: null, source: 'llm' },
+    ]);
+    const r = await resolvePortion('u1', { foodId: 'usda-shallots', measure: '1 cup' });
+    expect(r).toMatchObject({ grams: 160 });
+  });
+
+  it('still answers when the corpus cannot be read', async () => {
+    listFoodPortions.mockRejectedValue(new Error('db down'));
+    answers(40);
+    const r = await resolvePortion('u1', { foodId: 'usda-shallots', measure: '1/4 cup' });
+    expect(r).toMatchObject({ status: 'looked_up', grams: 40 });
   });
 });
