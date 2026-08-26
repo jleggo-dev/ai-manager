@@ -104,8 +104,8 @@ describe('prescribe retry-on-normalize-null', () => {
  * already paid for once.
  */
 describe('prefetchImminentSessions', () => {
-  const occ = (n: number, status = 'pending') =>
-    Array.from({ length: n }, (_, i) => ({ occurrence_id: `o${i}`, status, date: tomorrow }));
+  const occ = (n: number, status = 'pending', kind = 'user', has_session = false) =>
+    Array.from({ length: n }, (_, i) => ({ occurrence_id: `o${i}`, status, kind, has_session, date: tomorrow }));
 
   /** Counts concurrency at the only place real work happens: the coach call. */
   function trackingJob() {
@@ -160,6 +160,34 @@ describe('prefetchImminentSessions', () => {
 
     await prefetchImminentSessions('u1');
     expect(runJobBySlug).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * A `system` row (Log breakfast, weigh-in) never generates — getOccurrenceDetail's own gate
+   * rejects it — but before this filter it still occupied a batch slot, delaying the real
+   * generations behind it for nothing.
+   */
+  it('never spends a batch slot on a system row', async () => {
+    trackingJob();
+    vi.mocked(listOccurrences).mockResolvedValue([...occ(2), ...occ(3, 'pending', 'system')] as never);
+
+    await prefetchImminentSessions('u1');
+    expect(runJobBySlug).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * `has_session` makes re-running the prefetch on every plan load affordable: a fully-warm week
+   * is one list query and zero per-row reads — which is what lets the window cover the whole
+   * visible week instead of two days.
+   */
+  it('skips rows whose session is already cached without reading them', async () => {
+    trackingJob();
+    vi.mocked(getOccurrenceWithActivity).mockClear(); // counts accumulate — no clearMocks in config
+    vi.mocked(listOccurrences).mockResolvedValue([...occ(2), ...occ(4, 'pending', 'user', true)] as never);
+
+    await prefetchImminentSessions('u1');
+    expect(runJobBySlug).toHaveBeenCalledTimes(2);
+    expect(getOccurrenceWithActivity).toHaveBeenCalledTimes(2);
   });
 
   /** Best-effort: one failed generation must not stop the rest from warming. */

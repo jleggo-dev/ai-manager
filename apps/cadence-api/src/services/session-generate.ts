@@ -201,16 +201,34 @@ export async function getOccurrenceDetail(
 const PREFETCH_CONCURRENCY = 3;
 
 /**
- * Warm the session cache for imminent occurrences so the first tap is instant (plan §prefetch).
- * Best-effort, fire-and-forget from GET /plan: getOccurrenceDetail generates-and-caches only when a
- * row has no session yet, so deterministic sessions compute in ms and a coach/eval session takes its
- * AI call now instead of on tap. Bounded to the next `days` days (imminent, likely to be opened) so
- * we don't pre-spend coach calls on far-off or skipped work; per-occurrence errors are swallowed.
+ * The warm-up window: the VIEW window (buildPlanView's 7 days), not the materialization horizon.
+ * "If the button is on the screen, its shape should be there too" — days 8+ are materialized but
+ * invisible, so warming them is speculation, and on a replan-heavy day it doubles real provider
+ * spend for sessions a re-plan may wipe before anyone sees them. Folds into the single horizon
+ * constant when the horizon itself becomes 7 (check-in rebuild, step 6).
  */
-export async function prefetchImminentSessions(userId: string, days = 2): Promise<void> {
+const PREFETCH_WINDOW_DAYS = 7;
+
+/**
+ * Warm the session cache so the first tap is instant (plan §prefetch). Best-effort and
+ * fire-and-forget from BOTH its callers — commitActivities (the moment the buttons are born) and
+ * GET /plan (the backstop that catches rows the rolling horizon materialized after the commit,
+ * and retries failed generations). The backstop is load-bearing: the 2026-08-25 device report was
+ * exactly a rolling-materialized row that no commit had ever warmed.
+ *
+ * Cheap to re-run: `has_session` comes back on the list row, so a fully-warm week is one SELECT
+ * and zero per-row reads. `kind === 'user'` matters as much as the status filter — a `system` row
+ * (Log breakfast, weigh-in) never generates (getOccurrenceDetail's own gate rejects it) but would
+ * still occupy a batch slot, delaying the real generations behind it for nothing. Overlapping
+ * passes (a commit racing a plan load) share generations per-occurrence via the `inflight` map,
+ * so the provider never sees the same session twice.
+ */
+export async function prefetchImminentSessions(userId: string, days = PREFETCH_WINDOW_DAYS): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   const to = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
-  const pending = (await listOccurrences(userId, today, to)).filter((o) => o.status === 'pending');
+  const pending = (await listOccurrences(userId, today, to)).filter(
+    (o) => o.kind === 'user' && o.status === 'pending' && !o.has_session,
+  );
 
   /**
    * CONCURRENTLY, in bounded batches — and this is the fix, not a tidy-up.

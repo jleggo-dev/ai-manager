@@ -7,6 +7,7 @@ import { insertActivities, listActivities } from '../repos/activities.ts';
 import { deleteFuturePendingOccurrences } from '../repos/occurrences.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
 import { ensureHorizon } from './plan-horizon.ts';
+import { prefetchImminentSessions } from './session-generate.ts';
 import { toRRule, describeRecurrence } from './scheduling.ts';
 import { matchGoal } from './plan-match.ts';
 import { splitCoverage } from './plan-coverage.ts';
@@ -424,6 +425,14 @@ export async function commitActivities(
   // FULL — including slots whose hour has passed. Without it, committing in the afternoon deletes
   // the morning off the day the user is looking at (see plan-horizon.ts).
   const occurrences = await ensureHorizon(userId, occurrenceDays, { keepElapsedToday: true });
+
+  // Author the session shape now, not on first tap — the whole reason the button and its shape
+  // should be born together (PERF-08 follow-up). Fire-and-forget, same as GET /plan's own call:
+  // committing must not wait on a coach call, but starting the warm-up here instead of on the next
+  // GET /plan gives it a head start before the user can plausibly reach the plan screen and tap.
+  // Deliberately the default window (the visible week), NOT occurrenceDays — days beyond the view
+  // are materialized-but-invisible, and warming them doubles provider spend for nothing.
+  void prefetchImminentSessions(userId).catch((err) => console.error('[commit-prefetch]', err));
 
   return {
     status: 'committed',

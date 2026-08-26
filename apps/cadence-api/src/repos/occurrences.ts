@@ -28,7 +28,12 @@ export interface NewOccurrence {
 export type OccurrenceListRow = Pick<
   Occurrence,
   'occurrence_id' | 'activity_id' | 'date' | 'status' | 'value' | 'provenance' | 'weather'
-> & { kind: Activity['kind'] };
+> & {
+  kind: Activity['kind'];
+  /** Whether a session is already cached — a flag, never the jsonb itself (see the SELECT's
+   *  comment). Lets the prefetch skip warm rows at list time instead of paying a read per row. */
+  has_session: boolean;
+};
 
 /** Bulk insert scheduled occurrences (idempotent on (activity_id, date)). */
 export async function upsertOccurrences(rows: NewOccurrence[]): Promise<void> {
@@ -66,11 +71,16 @@ export async function listOccurrences(userId: string, fromDate: string, toDate: 
   // The occurrence-detail path (getOccurrenceWithActivity) fetches them.
   // The activities join is for `a.kind` alone (see OccurrenceListRow) — activity_id is the PK on
   // the other side, so it can neither drop nor duplicate a row.
+  // Ordered date-first, then by the activity's clock time so "soonest" is well-defined for the
+  // prefetch (the 06:30 sit warms before the 18:00 run). Word times ("morning") and missing times
+  // sort last within their day — best-effort, same stance minutesOfDay takes.
   return sql<OccurrenceListRow[]>`
-    select o.occurrence_id, o.activity_id, o.date, o.status, o.value, o.provenance, o.weather, a.kind
+    select o.occurrence_id, o.activity_id, o.date, o.status, o.value, o.provenance, o.weather, a.kind,
+           (o.session is not null) as has_session
     from cadence.occurrences o
     join cadence.activities a on a.activity_id = o.activity_id
-    where o.user_id = ${userId} and o.date >= ${fromDate} and o.date <= ${toDate}`;
+    where o.user_id = ${userId} and o.date >= ${fromDate} and o.date <= ${toDate}
+    order by o.date, a.schedule->>'time_of_day' nulls last`;
 }
 
 /** Step counts (total prescribed items across a cached session's blocks) for occurrences in a range
