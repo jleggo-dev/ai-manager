@@ -1,5 +1,17 @@
 # The check-in — the coach's half of the week
 
+> **⚠️ PARTIALLY SUPERSEDED (2026-08-26).** This document's *product reasoning* (the measured
+> latency evidence, the owner rulings, the horizon/consistency findings) still stands — but its
+> *architecture* predates the approved v3 mockup (`Cadence Check-in.dc.html`) and the build now in
+> flight on `feat/weekly-check-in-rebuild`. What shipped instead of the chat-card design described
+> below: the coach's `open_week_review` tool persists a `pending_week_review` pointer (migration
+> 0044) the client polls; the review is a FULL-SCREEN sheet (`features/plan/week-review/`), not a
+> chat card; per-item plan changes ride `PendingPlanActivity.enabled`/`change_reason` with a
+> revert-not-delete partial-apply (`plan-partial-apply.ts`); the check-in-due nudge is a push
+> producer, not the local weekly nudge. Full current spec: the build plan + the mockup. This file
+> gets its v3 rewrite when the build lands — until then, do not implement against the sections
+> below.
+
 **Status:** designed, not built. Owner rulings 2026-08-25.
 **Branch:** `investigate/activity-panel-latency` (started as a latency investigation; the latency
 turned out to be a symptom of this).
