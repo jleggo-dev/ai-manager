@@ -46,6 +46,7 @@ export const CAPABILITIES: CapabilityGroup[] = [
       'prescribe a specific session for today, and log what you actually did when you tell me',
       'change ONE thing in the plan without rebuilding it — move, retime, resize, drop or add a session, or swap what one contains (dead hangs instead of farmers carries)',
       'give you a weekly check-in on how you showed up, and flag what I am noticing',
+      'pull your week up on your screen to look back on, any time you ask',
     ],
   },
   {

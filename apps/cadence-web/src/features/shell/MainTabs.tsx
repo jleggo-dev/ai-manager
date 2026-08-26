@@ -89,6 +89,9 @@ export function MainTabs({
    * means rebuilding; onboarding's first build is the other host of the same card (App.tsx).
    */
   const [rebuild, setRebuild] = useState(false);
+  /** The WeekReviewCard's Open tap. The sheet here is a PLACEHOLDER — the real full-screen review
+   *  is a later step; this just proves the card-to-screen wiring end to end. */
+  const [weekReviewOpen, setWeekReviewOpen] = useState(false);
   const [logDidOpen, setLogDidOpen] = useState(false);
   const [planReload, setPlanReload] = useState(0); // bump → PlanView refetches after a ＋ log
   /** App-authored context for the next coach turn (e.g. the session they just finished). */
@@ -175,6 +178,7 @@ export function MainTabs({
               sessionNote={coachNote}
               onSessionNoteUsed={() => setCoachNote(null)}
               onPlanChanged={() => setPlanReload((k) => k + 1)}
+              onOpenWeekReview={() => setWeekReviewOpen(true)}
             />
             {/* The deterministic way back to the crafted plan UI from inside the conversation. */}
             <button className="plan-pill" onClick={() => setPlanCardOpen(true)}>
@@ -266,6 +270,27 @@ export function MainTabs({
               setPlanReload((k) => k + 1);
             }}
           />
+        )}
+        {/* PLACEHOLDER — proves the card → screen wiring end to end; the real full-screen review
+            (reading pending_week_review's from/to and rendering the actual week) is a later step. */}
+        {weekReviewOpen && (
+          <>
+            <div className="sheet-scrim" onClick={() => setWeekReviewOpen(false)} aria-hidden />
+            <div className="sheet" role="dialog" aria-label="Week review">
+              <div className="sheet-grab" aria-hidden />
+              <div className="sheet-head">
+                <div className="sheet-title">
+                  <b>Week review</b>
+                </div>
+                <button className="sheet-x" onClick={() => setWeekReviewOpen(false)} aria-label="Close">
+                  ×
+                </button>
+              </div>
+              <div className="sheet-body">
+                <p>Your week review is on its way.</p>
+              </div>
+            </div>
+          </>
         )}
         {logDidOpen && (
           <LogDidSheet

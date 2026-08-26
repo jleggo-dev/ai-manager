@@ -8,6 +8,7 @@ import type {
   MacroTargets,
   PendingProposal,
   PendingPlan,
+  PendingWeekReview,
   PointsState,
   SteerBack,
   StreakState,
@@ -29,6 +30,10 @@ export interface CadenceUserRow {
   last_assessed_at: string | null;
   pending_proposal: PendingProposal | null;
   pending_plan: PendingPlan | null;
+  // Present once migration 0044 is applied. The pointer `open_week_review` writes — which plan
+  // week is up for review, never the figures themselves (the app renders those from the user's
+  // own data). Older rows (or a pre-migration read) leave it undefined.
+  pending_week_review?: PendingWeekReview | null;
   // Present once migration 0015 is applied; older rows (or a pre-migration read) leave it
   // undefined and callers fall back to initialStreakState().
   streak_state?: StreakState | null;
@@ -202,6 +207,13 @@ export async function setPendingProposal(userId: string, proposal: PendingPropos
  *  of setPendingProposal. The user's confirm/dismiss resolves it. */
 export async function setPendingPlan(userId: string, plan: PendingPlan | null): Promise<void> {
   await sql`update cadence.users set pending_plan = ${plan ? json(plan) : null} where id = ${userId}`;
+}
+
+/** Store (or clear, with null) the pointer `open_week_review` puts up — which plan week is due
+ *  for review. The user's open/dismiss on the card resolves it; the review's own figures are
+ *  never stored here, only which week to render. */
+export async function setPendingWeekReview(userId: string, review: PendingWeekReview | null): Promise<void> {
+  await sql`update cadence.users set pending_week_review = ${review ? json(review) : null} where id = ${userId}`;
 }
 
 /** Persist the forward-only streak state (Req 4) — written by services/streak.ts after it

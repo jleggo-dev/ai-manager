@@ -102,6 +102,20 @@ export interface PendingPlan {
   created_at: string;
 }
 
+/**
+ * `open_week_review` puts THIS up — not the review's numbers, just the pointer to which plan week
+ * it covers. The chat wire is pure SSE prose (a tool call never reaches the browser), so this is
+ * how the client learns a card is due: it polls, and a labelled "Week review" card renders from
+ * this alone. `from`/`to` are the plan week the card covers (YYYY-MM-DD); the review itself — the
+ * actual figures — is rendered by the app from the user's own data, never carried on this pointer
+ * and never recited by the coach.
+ */
+export interface PendingWeekReview {
+  from: string;
+  to: string;
+  built_at: string;
+}
+
 /** context_select — current turn → which retrieval FUNCTIONS to call just-in-time (§4.3).
  *  Same calls-shape as pack_select, but scoped to the turn; [] when the standing pack covers it. */
 export interface ContextSelectResult {
