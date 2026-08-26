@@ -101,6 +101,24 @@ export async function listSessionStepCounts(
 }
 
 /**
+ * Session + log jsonb for occurrences in a date range — the lean read the week-review's mind rows
+ * need (step-level completion: `session.blocks[].items[].name` overlaid with `log.items[].done`),
+ * without paying `listOccurrences`' cost of carrying those payloads for every row in the week when
+ * only a handful (the mind/practice ones) actually want them. Same window shape as
+ * `listSessionStepCounts`, one query, no join needed (nothing here comes from `activities`).
+ */
+export async function listOccurrenceSessionLogs(
+  userId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<Array<{ occurrence_id: string; session: OccurrenceSession | null; log: OccurrenceLog | null }>> {
+  return sql<Array<{ occurrence_id: string; session: OccurrenceSession | null; log: OccurrenceLog | null }>>`
+    select occurrence_id, session, log
+    from cadence.occurrences
+    where user_id = ${userId} and date >= ${fromDate} and date <= ${toDate}`;
+}
+
+/**
  * Today's pending "Food log" system row, if any — the deterministic anchor the nutrition module
  * ticks when the first meal of the day is logged (mirrors the weigh-in title-test pattern).
  */
@@ -130,6 +148,29 @@ export async function findPendingMealOccurrence(userId: string, date: string, me
       and a.kind = 'system' and a.title ~* ${meal}
     limit 1`;
   return row?.occurrence_id ?? null;
+}
+
+/**
+ * Today's — or any day's — meal-log system row for a specific meal, REGARDLESS of status. The
+ * week-review's meal slots need to toggle a day both directions (logged → unlogged, not just the
+ * one-way "log it" `findPendingMealOccurrence` was built for), so this drops that function's
+ * `status = 'pending'` gate and returns the status alongside the id instead of assuming it.
+ * Same `breakfast|lunch|dinner|snack` guard and title-regex match; `null` for anything else.
+ */
+export async function findMealOccurrence(
+  userId: string,
+  date: string,
+  meal: string,
+): Promise<{ occurrence_id: string; status: OccurrenceStatus } | null> {
+  if (!/^(breakfast|lunch|dinner|snack)$/.test(meal)) return null;
+  const [row] = await sql<Array<{ occurrence_id: string; status: OccurrenceStatus }>>`
+    select o.occurrence_id, o.status
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and o.date = ${date}
+      and a.kind = 'system' and a.title ~* ${meal}
+    limit 1`;
+  return row ?? null;
 }
 
 /** An occurrence joined with its activity — the payload behind the session detail sheet. */

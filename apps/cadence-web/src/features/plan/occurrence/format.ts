@@ -1,4 +1,4 @@
-import type { SessionItem } from '@cadence/shared';
+import { isWeeklyCheckinTitle, type SessionItem } from '@cadence/shared';
 import type { MealKind, MealMacros, OccurrenceDetail } from '../../../lib/api.ts';
 
 /** "3×8 @ 55 lb · 12 min · 5 km" — compose only from the fields the item actually has. */
@@ -49,12 +49,12 @@ export const mealFromTitle = (title: string): MealKind | null => {
 };
 
 /**
- * The weekly check-in row (A23 §2b). Same shape the server's local-notification producer matches
- * on (`notify/local-plan.ts` findWeeklyCheckin), deliberately: the notification is the door and
- * this is the room, and they must not disagree about which occurrence is which.
+ * The weekly check-in row (A23 §2b). Backed by the canonical matcher in `@cadence/shared`
+ * (`isWeeklyCheckinTitle`), shared with the server's local-notification producer
+ * (`notify/local-plan.ts` findWeeklyCheckin): the notification is the door and this is the room,
+ * and they must not disagree about which occurrence is which.
  */
-export const isWeeklyCheckin = (d: OccurrenceDetail): boolean =>
-  d.kind === 'system' && /check-?in|recap/i.test(d.title) && !/weigh/i.test(d.title);
+export const isWeeklyCheckin = (d: OccurrenceDetail): boolean => d.kind === 'system' && isWeeklyCheckinTitle(d.title);
 
 /** Pending system weigh-in — deterministic capture, no LLM. */
 export const isWeighInPending = (d: OccurrenceDetail): boolean =>
