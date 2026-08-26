@@ -1,4 +1,4 @@
-import type { IosWeekday, NudgeWaypoint, SchedulableActivity } from '@cadence/shared';
+import { isWeeklyCheckinTitle, type IosWeekday, type NudgeWaypoint, type SchedulableActivity } from '@cadence/shared';
 import { getActivePlan } from '../../repos/plans.ts';
 import { listActivities } from '../../repos/activities.ts';
 import { listOccurrences } from '../../repos/occurrences.ts';
@@ -56,7 +56,7 @@ function iosWeekday(dateIso: string): IosWeekday {
 
 /** The system activity that IS the weekly check-in, if the committed plan has one. */
 function findWeeklyCheckin(activities: Awaited<ReturnType<typeof listActivities>>) {
-  const found = activities.find((a) => a.kind === 'system' && /check-?in|recap/i.test(a.title));
+  const found = activities.find((a) => a.kind === 'system' && isWeeklyCheckinTitle(a.title));
   if (!found) return null;
   const byday = /BYDAY=([A-Z]{2})/i.exec(found.schedule?.recurrence ?? '');
   const map: Record<string, IosWeekday> = { SU: 1, MO: 2, TU: 3, WE: 4, TH: 5, FR: 6, SA: 7 };
