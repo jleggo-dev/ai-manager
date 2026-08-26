@@ -1,36 +1,8 @@
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities, NON_PLAN_CATEGORIES } from '../repos/activities.ts';
-import { describeRecurrence } from './scheduling.ts';
 import { commitActivities, type CommitResult } from './plan-synthesis.ts';
+import { toPendingPlanActivity } from './plan-partial-apply.ts';
 import { computeWeekState } from './plan-view.ts';
-import type { Activity, PendingPlanActivity } from '@cadence/shared';
-
-/**
- * Activity (the committed shape, `schedule: { recurrence, time_of_day, duration_min }`) →
- * PendingPlanActivity (the shape `commitActivities` actually reads its fields off — see
- * plan-synthesis.ts's own `proposed` mapping, which pulls `a.recurrence` / `a.time_of_day` /
- * `a.duration_min` flat, not nested). `cadence` is a display-only humanized string that
- * commitActivities never reads, but the field is required on the type, so it's computed anyway
- * for anything downstream that assumes a PendingPlanActivity is always display-ready.
- */
-function toPendingPlanActivity(a: Activity): PendingPlanActivity {
-  return {
-    commitment_id: a.commitment_id,
-    title: a.title,
-    kind: a.kind,
-    category: a.category,
-    cadence: describeRecurrence(a.schedule?.recurrence ?? ''),
-    recurrence: a.schedule?.recurrence ?? '',
-    time_of_day: a.schedule?.time_of_day,
-    duration_min: a.schedule?.duration_min,
-    target: a.target,
-    completion_source: a.completion_source,
-    goal_id: a.goal_id,
-    why: a.why ?? undefined,
-    how_to: a.how_to ?? undefined,
-    suggested: a.suggested,
-  };
-}
 
 export interface WeekBuildResult {
   status: 'committed' | 'no_plan' | 'not_due';
