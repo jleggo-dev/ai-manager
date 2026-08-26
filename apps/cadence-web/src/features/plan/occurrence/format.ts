@@ -52,8 +52,13 @@ export const mealFromTitle = (title: string): MealKind | null => {
  * The weekly check-in row (A23 §2b). Same shape the server's local-notification producer matches
  * on (`notify/local-plan.ts` findWeeklyCheckin), deliberately: the notification is the door and
  * this is the room, and they must not disagree about which occurrence is which.
+ *
+ * Typed on just the two fields it reads (not the full `OccurrenceDetail`) so the trail — which
+ * only ever holds the slimmer `PlanOccurrence` list shape (no `date`/`schedule`/etc.) — can reuse
+ * this SAME matcher to retire the row visually (check-in rebuild, step 6) instead of growing a
+ * second regex that could drift from this one.
  */
-export const isWeeklyCheckin = (d: OccurrenceDetail): boolean =>
+export const isWeeklyCheckin = (d: Pick<OccurrenceDetail, 'kind' | 'title'>): boolean =>
   d.kind === 'system' && /check-?in|recap/i.test(d.title) && !/weigh/i.test(d.title);
 
 /** Pending system weigh-in — deterministic capture, no LLM. */

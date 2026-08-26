@@ -13,7 +13,8 @@ import { PlanSkeleton } from './PlanSkeleton.tsx';
 import { DetourBar } from './DetourBar.tsx';
 import { DetourStateSheet } from './DetourStateSheet.tsx';
 import { DetourSetup, type DetourChoice } from './DetourSetup.tsx';
-import { downscalePhoto } from './occurrence/format.ts';
+import { downscalePhoto, isWeeklyCheckin } from './occurrence/format.ts';
+import { EndOfTrail } from './EndOfTrailCard.tsx';
 import {
   endEpisode,
   checkin,
@@ -252,6 +253,12 @@ export function PlanView({
   const doneCount = data.week.reduce((n, d) => n + d.occurrences.filter((o) => o.status === 'done').length, 0);
   const xp = doneCount * 10; // stopgap XP until the REQ8 points finalize is wired to the plan response
 
+  // Layer 1's own trigger (check-in rebuild, step 6): nothing left past today, counted the same
+  // way the trail itself will actually render it (the retired check-in row doesn't count as
+  // content). OR'd with the server's `checkin_due` in the render below — either can fire this on
+  // its own, and this half needs nothing but the week already on screen to work.
+  const restEmpty = data.week.slice(1).every((d) => d.occurrences.filter((o) => !isWeeklyCheckin(o)).length === 0);
+
   // Trail node tap → routed by task shape: captures (weigh-in, meals) open the minimal CaptureSheet;
   // coach sessions open the StartSheet walkthrough. (The Week view keeps its own OccurrenceSheet.)
   const openTask = (occ: PlanOccurrence) => {
@@ -371,6 +378,19 @@ export function PlanView({
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
         <TodayTrail plan={data} onOpen={openTask} onOpenFood={() => onOpenFood()} onCoach={onCoach} />
+
+        <EndOfTrail
+          show={restEmpty || !!data.weekState?.checkin_due}
+          version={data.version}
+          // "Start check-in" — the sentence, not a mode (DESIGN-check-in.md): the same coach
+          // bridge every other trail affordance uses (PlanView's own `onCoach`, threaded from
+          // MainTabs), which switches to the Coach tab and hands her the note.
+          onStartCheckIn={() => onCoach('Start my check-in')}
+          onBuilt={() => {
+            refresh();
+            bump();
+          }}
+        />
 
         {!data.activeEpisode && (
           <button className="detour-trigger" onClick={() => setDetourEntry(true)}>

@@ -13,6 +13,16 @@ export type ConsistencyOccurrence = Pick<Occurrence, 'date' | 'status'>;
  * Rolling-window consistency: how many of the last `windowDays` days had ≥1 completed
  * occurrence, as kept/window (e.g. "5 of 7"). Replaces streaks per BRAND.md — a missed day
  * lowers the ratio, it NEVER resets progress to zero ("hearth, not scoreboard"). Pure.
+ *
+ * **The denominator excludes days with NOTHING scheduled at all** (check-in rebuild, step 6) —
+ * a day with zero occurrences leaves both `kept` and `window` alone, rather than silently
+ * counting as a miss. This matters for two real cases, not just a future one: once the horizon
+ * stops rolling (`DEFAULT_HORIZON_DAYS`), days past it are genuine gaps — nothing was ever
+ * materialized there, not "materialized and missed" — and a brand-new user with no plan yet has
+ * NO occurrences in the window at all, which now reads as 0 of 0, never the streak-shame "0 of 7"
+ * BRAND.md forbids (DESIGN-check-in.md's own open question). A day that HAD something scheduled
+ * but wasn't completed (pending/skipped/missed) still counts against the denominator exactly as
+ * before — only a true absence of any row for that date is new.
  */
 export function rollingConsistency(
   occurrences: ConsistencyOccurrence[],
@@ -24,13 +34,21 @@ export function rollingConsistency(
   const doneDays = new Set(
     occurrences.filter((o) => o.status === 'done').map((o) => new Date(o.date).toISOString().slice(0, 10)),
   );
+  // ANY occurrence on a date — regardless of status — means something was actually due that day.
+  // A date with no entry here never had anything scheduled at all.
+  const scheduledDays = new Set(occurrences.map((o) => new Date(o.date).toISOString().slice(0, 10)));
   let kept = 0;
+  let window = 0;
   const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
   for (let i = 0; i < windowDays; i++) {
-    if (doneDays.has(d.toISOString().slice(0, 10))) kept++;
+    const key = d.toISOString().slice(0, 10);
+    if (scheduledDays.has(key)) {
+      window++;
+      if (doneDays.has(key)) kept++;
+    }
     d.setUTCDate(d.getUTCDate() - 1);
   }
-  return { kept, window: windowDays };
+  return { kept, window };
 }
 
 /* ────────────────────────────────────────────────────────────────

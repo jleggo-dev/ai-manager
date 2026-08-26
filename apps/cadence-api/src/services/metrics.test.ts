@@ -25,18 +25,24 @@ describe('rollingConsistency (brand: never resets to zero)', () => {
       occ('2026-07-13'),
       occ('2026-07-12'),
       occ('2026-07-11'),
-      // 07-10 missed
+      occ('2026-07-10', 'missed'), // due, not done — still counts against the denominator
       occ('2026-07-09'),
     ];
     expect(rollingConsistency(occurrences, TODAY, 7)).toEqual({ kept: 6, window: 7 });
   });
 
   it('a missed day lowers the ratio — it never resets progress to zero', () => {
-    // 4 of 7 kept, then miss today → still 3 of 7, not 0
-    const beforeMiss = [occ('2026-07-14'), occ('2026-07-13'), occ('2026-07-12'), occ('2026-07-11')];
+    // A full week on file: 4 of 7 done, 3 due-but-not-done (today included) — still 4 of 7, not 0.
+    const beforeMiss = [
+      occ('2026-07-15', 'pending'), // today — on the plan, nothing done yet
+      occ('2026-07-14'),
+      occ('2026-07-13'),
+      occ('2026-07-12'),
+      occ('2026-07-11'),
+      occ('2026-07-10', 'missed'),
+      occ('2026-07-09', 'missed'),
+    ];
     expect(rollingConsistency(beforeMiss, TODAY, 7)).toEqual({ kept: 4, window: 7 });
-
-    // Same history, still no done on today — kept stays 4, never collapses to a "broken streak"
     expect(rollingConsistency(beforeMiss, TODAY, 7).kept).toBeGreaterThan(0);
   });
 
@@ -47,6 +53,8 @@ describe('rollingConsistency (brand: never resets to zero)', () => {
       occ('2026-07-13', 'skipped'),
       occ('2026-07-12', 'missed'),
       occ('2026-07-11', 'done'),
+      occ('2026-07-10', 'missed'), // fills out the window so this stays a pure status test
+      occ('2026-07-09', 'pending'),
     ];
     expect(rollingConsistency(occurrences, TODAY, 7)).toEqual({ kept: 2, window: 7 });
   });
@@ -57,12 +65,20 @@ describe('rollingConsistency (brand: never resets to zero)', () => {
       occ('2026-07-15'), // second activity same day
       occ('2026-07-14'),
     ];
-    expect(rollingConsistency(occurrences, TODAY, 7)).toEqual({ kept: 2, window: 7 });
+    // Only two distinct days had anything scheduled at all — the rest of the window is a genuine
+    // gap here (see 'a day with no occurrence at all' below), so the denominator is 2, not 7.
+    expect(rollingConsistency(occurrences, TODAY, 7)).toEqual({ kept: 2, window: 2 });
   });
 
   it('excludes done days outside the window', () => {
     const occurrences = [
       occ('2026-07-15'),
+      occ('2026-07-14', 'missed'),
+      occ('2026-07-13', 'missed'),
+      occ('2026-07-12', 'missed'),
+      occ('2026-07-11', 'missed'),
+      occ('2026-07-10', 'missed'),
+      occ('2026-07-09', 'missed'),
       occ('2026-07-08'), // 8 days ago — outside a 7-day window ending today
       occ('2026-07-01'),
     ];
@@ -78,15 +94,28 @@ describe('rollingConsistency (brand: never resets to zero)', () => {
     ];
     const asStrings = [occ('2026-07-15'), occ('2026-07-14'), occ('2026-07-13')];
     expect(rollingConsistency(asDates, TODAY, 7)).toEqual(rollingConsistency(asStrings, TODAY, 7));
-    expect(rollingConsistency(asDates, TODAY, 7)).toEqual({ kept: 3, window: 7 });
+    // Three distinct scheduled days on file, all done — the other four are gaps, not misses.
+    expect(rollingConsistency(asDates, TODAY, 7)).toEqual({ kept: 3, window: 3 });
   });
 
-  it('returns kept 0 (not a reset flag) when the window is empty', () => {
-    expect(rollingConsistency([], TODAY, 7)).toEqual({ kept: 0, window: 7 });
+  /** The all-empty edge (required case): nothing ever scheduled reads as 0 of 0, never 0 of 7 —
+   *  the exact streak-shame BRAND.md forbids, and the open question DESIGN-check-in.md named. */
+  it('reads as 0 of 0 — never 0 of 7 — when nothing was ever scheduled', () => {
+    expect(rollingConsistency([], TODAY, 7)).toEqual({ kept: 0, window: 0 });
+  });
+
+  /** The other required case: a day with NO occurrence at all (nothing due, not "due and missed")
+   *  leaves the denominator — this is what makes the ratio honest once the horizon stops rolling
+   *  and days past it are gaps, not silent misses, and for a fresh user with no plan yet. */
+  it('a day with no occurrence at all leaves the denominator — a gap is not a miss', () => {
+    const occurrences = [occ('2026-07-15'), occ('2026-07-14', 'missed')];
+    // Only 07-15 and 07-14 had anything scheduled; the other 5 days of the window are genuine
+    // gaps (nothing materialized, nothing due) and must not count as five silent misses.
+    expect(rollingConsistency(occurrences, TODAY, 7)).toEqual({ kept: 1, window: 2 });
   });
 
   it('honors a custom windowDays', () => {
-    const occurrences = [occ('2026-07-15'), occ('2026-07-14'), occ('2026-07-10')];
+    const occurrences = [occ('2026-07-15'), occ('2026-07-14'), occ('2026-07-13', 'missed'), occ('2026-07-10')];
     expect(rollingConsistency(occurrences, TODAY, 3)).toEqual({ kept: 2, window: 3 });
   });
 });

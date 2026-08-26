@@ -1,4 +1,4 @@
-import type { OccurrenceStatus, PendingProposal, StreakView } from '@cadence/shared';
+import type { OccurrenceStatus, PendingProposal, Plan, StreakView } from '@cadence/shared';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities, NON_PLAN_CATEGORIES } from '../repos/activities.ts';
 import { listOccurrences, listSessionStepCounts } from '../repos/occurrences.ts';
@@ -6,7 +6,7 @@ import { getActiveEpisode } from '../repos/episodes.ts';
 import { getUser } from '../repos/users.ts';
 import { getLatestConversation } from '../repos/conversations.ts';
 import { listGoals } from '../repos/goals.ts';
-import { ensureHorizon } from './plan-horizon.ts';
+import { DEFAULT_HORIZON_DAYS } from './plan-horizon.ts';
 import { describeRecurrence } from './scheduling.ts';
 import { rollingConsistency } from './metrics.ts';
 import { evaluateStreak } from './streak.ts';
@@ -67,6 +67,9 @@ export interface PlanView {
   streak: StreakView; // the PROTECTED momentum counter that sits BESIDE consistency (Req 4)
   activeEpisode: ActiveEpisodeView | null; // set when the user is in a disrupted detour (Req 4)
   pendingProposal: PendingProposal | null; // a coach-proposed re-plan awaiting accept/dismiss
+  /** Named `weekState`, not `week` — `week: PlanViewDay[]` above already owns that name. Null
+   *  before a plan exists; see `computeWeekState`. */
+  weekState: WeekState | null;
 }
 
 /** The slim "you're on a detour" shape the Today/Week view needs — the full episode isn't sent. */
@@ -85,9 +88,43 @@ const EMPTY_STREAK: StreakView = { current: 0, longest: 0, freezes: 0, savedByFr
 const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10);
 
 /**
- * Assemble the ongoing "Today / Your week" view from the active plan. Tops up the rolling horizon
- * first so the week is always materialized, then groups this week's occurrences by day and reports
- * rolling-window consistency (days you showed up, never a streak that resets).
+ * "Your week ends → you say so → she pulls the review" (DESIGN-check-in.md). `checkin_due` is the
+ * ONE fact that loop needs, read fresh on every load — no new column, no notification involved (a
+ * later step owns the push; this is deliberately silent). Any commit IS the week being handled: the
+ * active plan `getActivePlan` returns is by construction the newest version (every commit
+ * supersedes the one before it), so "no newer version exists" needs no extra query — it's already
+ * true of whatever this reads.
+ *
+ * `ends_on` is the DUE date (generated_at + the horizon), not the last day that actually has
+ * content — those differ by one day (a 7-day materialization spans days 0-6, so day 6 is the last
+ * real day and day 7 is when `checkin_due` flips). The card copy hardcodes "today" regardless of
+ * which of those it lands on; the client's own "is there anything left to show" check (PlanView's
+ * `restEmpty`) is what catches the former a day early, and is why that check is OR'd with this flag
+ * rather than relied on alone.
+ */
+export interface WeekState {
+  ends_on: string;
+  checkin_due: boolean;
+}
+export function computeWeekState(plan: Pick<Plan, 'generated_at'> | null): WeekState | null {
+  if (!plan) return null;
+  const generatedMs = new Date(plan.generated_at).getTime();
+  const dueMs = generatedMs + DEFAULT_HORIZON_DAYS * 86_400_000;
+  return { ends_on: iso(new Date(dueMs)), checkin_due: Date.now() >= dueMs };
+}
+
+/**
+ * Assemble the ongoing "Today / Your week" view from the active plan: groups this week's
+ * occurrences by day and reports rolling-window consistency (days you showed up, never a streak
+ * that resets).
+ *
+ * **Does NOT top up the horizon (check-in rebuild, step 6).** This used to void-fire
+ * `ensureHorizon` on every load, silently materializing a rolling two weeks forever — the reason
+ * nobody ever reached the end of their plan and the coach never had a natural moment to ask about
+ * it. A week now materializes ONCE, at the commit that creates it (plan-synthesis.ts's
+ * `commitActivities`, which keeps its own `ensureHorizon` call), and this view simply renders
+ * whatever that commit left behind — including the day it runs out, which `computeWeekState`
+ * reports below so the client can offer the check-in instead of a silently-extending plan.
  */
 export async function buildPlanView(
   userId: string,
@@ -95,14 +132,10 @@ export async function buildPlanView(
   /** The caller's own zone, used only when the user has none stored — 94 of 96 rows today. */
   tzHint?: string | null,
 ): Promise<PlanView> {
-  await ensureHorizon(userId).catch(() => {
-    /* best-effort top-up; view still renders from what's materialized */
-  });
-
   /**
-   * Everything the horizon top-up unblocks, at once (PERF-05).
+   * Four independent reads, in one hop (PERF-05).
    *
-   * These four reads are independent of each other and were awaited one after another, which on a
+   * These reads are independent of each other and were awaited one after another, which on a
    * cross-country hop is four full round trips for no reason: measured 2026-08-20, a bare query
    * costs ~181ms through the pooler, and GET /plan spent 2.0-3.8s running ~11 of them in series.
    * The dependency graph is much shallower than the old sequence implied — only `activities`
@@ -111,9 +144,6 @@ export async function buildPlanView(
    * Each keeps its OWN catch, deliberately: `Promise.all` rejects on the first failure, so a
    * shared one would turn a missing episode into a failed screen. The per-call fallbacks below
    * are the same ones these calls always had.
-   *
-   * Streak still runs after `ensureHorizon` (it reads occurrences, so today's must be
-   * materialized first) and is still reported by both the no-plan and committed branches.
    */
   const [streak, episode, plan, goalsList] = await Promise.all([
     evaluateStreak(userId).catch((e) => {
@@ -153,6 +183,7 @@ export async function buildPlanView(
       streak,
       activeEpisode,
       pendingProposal: null,
+      weekState: null,
     };
   }
 
@@ -264,5 +295,6 @@ export async function buildPlanView(
     streak,
     activeEpisode,
     pendingProposal: user?.pending_proposal ?? null,
+    weekState: computeWeekState(plan),
   };
 }

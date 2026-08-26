@@ -8,6 +8,7 @@ import { listEquipment } from '../repos/equipment.ts';
 import { getUser, setPendingPlan } from '../repos/users.ts';
 import { evaluateGuardrail } from './goal-guardrail.ts';
 import { observedHealthForPlanning } from './observed-health.ts';
+import { DEFAULT_HORIZON_DAYS } from './plan-horizon.ts';
 import { type PlanFlowResult } from './plan-synthesis.ts';
 import { planSynthesize } from './plan-fanout.ts';
 import { confirmPendingPlan } from './plan-commit-flow.ts';
@@ -82,7 +83,7 @@ export async function previewLock(userId: string): Promise<PlanFlowResult> {
  * any caller that skips the preview step), runs previewLock first so this never errors just
  * because preview wasn't called; it only ever commits a plan that's actually been vetted.
  */
-export async function confirmLock(userId: string, occurrenceDays = 14): Promise<PlanFlowResult> {
+export async function confirmLock(userId: string, occurrenceDays = DEFAULT_HORIZON_DAYS): Promise<PlanFlowResult> {
   const result = await confirmPendingPlan(
     userId,
     () => previewLock(userId),
