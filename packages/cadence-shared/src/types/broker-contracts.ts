@@ -85,6 +85,28 @@ export interface PendingPlanActivity {
    */
   how_to?: string;
   suggested?: boolean; // TRUE when the coach proposed this herself (adjacent support), not the user
+  /**
+   * The per-item toggle on a swap-card: whether this item should actually apply at commit.
+   * Absent/undefined means true — every flow that predates this field (first lock, an ordinary
+   * re-plan, a `propose_plan_change` edit) keeps committing every activity it proposes, unchanged.
+   *
+   * Toggled OFF is NOT the same as "leave it out of the array": `commitActivities` treats
+   * `activities` as the COMPLETE next plan version, so silently filtering a disabled item would
+   * delete it from the plan rather than leave it as it was. The commit funnel
+   * (`confirmPendingPlan` in plan-commit-flow.ts) resolves this before calling `commitActivities`
+   * — see `resolveToggledActivities` in plan-partial-apply.ts: an item WITH a `commitment_id`
+   * reverts to that commitment's CURRENT version in the still-active plan ("keep doing it the old
+   * way"); a pure add (no `commitment_id`) is dropped (declining an add means it never existed).
+   */
+  enabled?: boolean;
+  /**
+   * The one-line human reason a swap-card shows beside its toggle — "swapped in because your last
+   * three long runs skipped this", "dropped: you said Tuesdays don't work anymore". Display-only;
+   * `commitActivities` never reads it and it never lands on a committed `Activity` row. Not yet
+   * SET by the coach — the swap-candidate synthesis that would populate it is a later step; this
+   * is the storage half of that feature, landing ahead of the tool that fills it in.
+   */
+  change_reason?: string;
 }
 
 /** The FIRST-lock analog of PendingProposal: synthesize_plan + plan_vet already ran, the result
