@@ -98,6 +98,20 @@ tool choice actually got better or worse:
 npm run eval:tools
 ```
 
+**Write the numbers down here when you do.** The 2026-08-26 run (adding `open_week_review`,
+claude-sonnet-5, 36 cases) discovered the hard way that no baseline had ever been recorded, which
+makes "better or worse" unanswerable without a second 45-minute, ~700K-token run on the prior
+commit. Baseline as of that run — diff the NEXT run against this line instead of re-running the
+old commit:
+
+| date | change | precision | recall | F1 | clean | false-fires | under-calls | tokens/turn |
+|---|---|---|---|---|---|---|---|---|
+| 2026-08-26 | `open_week_review` → always-on | 70.4% | 76.0% | 73.1% | 24/36 | 0/11 | 6/25 (A7 A13 A14 A15 A16 B3) | 20,654 median |
+
+Reading of that run: every failure is the under-calling class (called nothing where a tool was
+needed) on cases predating the new tool; the risk an always-on ADDITION could introduce —
+firing where nothing was needed — measured 0, with silence and canary cases both 100%.
+
 ---
 
 ## Where we stand, measured
