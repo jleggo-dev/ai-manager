@@ -44,6 +44,11 @@ vi.mock('../../lib/api.ts', () => ({
   getPendingChange: (...args: unknown[]) => getPendingChange(...args),
   dismissPendingChange: vi.fn().mockResolvedValue(true),
   lockPlan: vi.fn().mockResolvedValue({ status: 200, body: {} }),
+  // The week-review card now mounts on every finished last turn too, same reasoning as
+  // getPendingChange above — it must exist even in a chat test that never calls
+  // open_week_review, and its default answer is "nothing pending" so the card renders nothing.
+  getPendingWeekReview: vi.fn().mockResolvedValue(null),
+  dismissPendingWeekReview: vi.fn().mockResolvedValue(true),
   notifyOnCoachReply: vi.fn().mockResolvedValue(true),
   stopCoachTurn: vi.fn().mockResolvedValue(true),
 }));

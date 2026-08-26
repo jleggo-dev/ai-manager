@@ -1,4 +1,4 @@
-import type { PendingPlanActivity, ProgressData, StreakView } from '@cadence/shared';
+import type { PendingPlanActivity, PendingWeekReview, ProgressData, StreakView } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /* ── Ongoing plan view (Today / Your week) ─────────────────────── */
@@ -243,6 +243,25 @@ export async function getPendingChange(): Promise<PendingChange | null> {
 /** "Not now" — drop the proposal. The plan is untouched and she can offer again. */
 export async function dismissPendingChange(): Promise<boolean> {
   const res = await fetch(`${BASE}/plan/pending-change/dismiss`, { method: 'POST', headers: headers() });
+  return res.ok;
+}
+
+/**
+ * The week the coach's `open_week_review` tool put up, if it's still waiting to be opened or
+ * dismissed. Read from the server, same reasoning as getPendingChange: the card shows the week
+ * the TOOL actually pointed at, not whatever the turn that announced it said.
+ */
+export async function getPendingWeekReview(): Promise<PendingWeekReview | null> {
+  const res = await fetch(`${BASE}/plan/week-review/pending`, { headers: headers() });
+  if (!res.ok) return null;
+  const body = (await res.json()) as { review: PendingWeekReview | null };
+  return body.review;
+}
+
+/** Dismiss the week-review card without opening it. Nothing else was written by putting it up,
+ *  so there is nothing else to undo — she can put another one up whenever asked. */
+export async function dismissPendingWeekReview(): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/week-review/dismiss`, { method: 'POST', headers: headers() });
   return res.ok;
 }
 

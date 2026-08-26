@@ -68,6 +68,8 @@ export {
   lockPlan,
   getPendingChange,
   dismissPendingChange,
+  getPendingWeekReview,
+  dismissPendingWeekReview,
   previewPlan,
   dismissPlanPreview,
   getProgress,

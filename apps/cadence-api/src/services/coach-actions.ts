@@ -14,6 +14,7 @@ import { getUser, setMacroTargets, setPendingPlan } from '../repos/users.ts';
 import { sanitizeTargets } from './nutrition-day.ts';
 import type { CoachActionTool } from './coach-action-types.ts';
 import { UPDATE_CONSTRAINT } from './coach-action-constraint.ts';
+import { OPEN_WEEK_REVIEW } from './coach-action-week-review.ts';
 
 /** Today, YYYY-MM-DD — stamped on a target change so the weekly review throttle can see it. */
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -535,6 +536,8 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   },
 
   update_constraint: UPDATE_CONSTRAINT,
+
+  open_week_review: OPEN_WEEK_REVIEW,
 
   log_session: {
     name: 'log_session',

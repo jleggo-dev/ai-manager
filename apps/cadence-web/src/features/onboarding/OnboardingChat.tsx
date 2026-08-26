@@ -27,6 +27,7 @@ import { QuickPicks } from './QuickPicks.tsx';
 import { CapturedPills } from './CapturedPills.tsx';
 import { ConfirmCard } from './ConfirmCard.tsx';
 import { ChangeCard } from './ChangeCard.tsx';
+import { WeekReviewCard } from './WeekReviewCard.tsx';
 
 /**
  * What the app tells Cadence the moment someone shares their Apple Health history. Without it she
@@ -97,6 +98,7 @@ export function OnboardingChat({
   sessionNote = null,
   onSessionNoteUsed,
   onPlanChanged,
+  onOpenWeekReview,
 }: {
   /**
    * Run the coach's build tool. Onboarding hands over its build screen; the Coach tab hands over
@@ -117,6 +119,8 @@ export function OnboardingChat({
    *  "Talk to me" from. Spoken as a note the coach reads and the user never sees. */
   sessionNote?: string | null;
   onSessionNoteUsed?: () => void;
+  /** The WeekReviewCard's Open tap — the host mounts the (today, placeholder) full-screen review. */
+  onOpenWeekReview?: () => void;
 }) {
   const {
     turns,
@@ -347,6 +351,12 @@ export function OnboardingChat({
                        * refetches; gated on `!streaming` so it reads AFTER the tool has run.
                        */}
                       {last && !streaming && <ChangeCard key={`chg${i}`} onApplied={onPlanChanged} />}
+                      {/**
+                       * Same contract as ChangeCard, one paragraph up: `open_week_review` writes a
+                       * pointer, never a tag, so this asks the server what is pending and draws
+                       * nothing when the answer is nothing. Safe to mount unconditionally beside it.
+                       */}
+                      {last && !streaming && <WeekReviewCard key={`wkr${i}`} onOpen={onOpenWeekReview} />}
                       {/**
                        * Her block says WHAT, never how. The only thing left for it to declare is
                        * `build` — the build card is an act, not a shape, and nothing durable is
