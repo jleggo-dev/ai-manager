@@ -109,8 +109,11 @@ d('A23 §2b — the weekly check-in (DB)', () => {
   it('says nothing about food rather than reporting a zero week', async () => {
     const facts = await buildRecapFacts(USER, TODAY);
     expect(facts.nutrition).toBeNull();
-    expect(facts.consistency).toEqual({ kept: 0, window: 7 });
-    expect(facts.rolling.window).toBe(28);
+    // A freshly-reset user has no plan and so no occurrences at all in either window — 0 of 0,
+    // never 0 of 7/28 (rollingConsistency's gap-days-leave-the-denominator rule, step 6): nothing
+    // was ever scheduled here, which is not the same claim as "scheduled and missed".
+    expect(facts.consistency).toEqual({ kept: 0, window: 0 });
+    expect(facts.rolling.window).toBe(0);
   });
 
   it('hands the job every variable it declares, and only data', async () => {
@@ -128,8 +131,10 @@ d('A23 §2b — the weekly check-in (DB)', () => {
     );
     const v = vars as Record<string, string>;
     expect(v.period).toBe(`${daysBefore(6)} to ${TODAY}`);
-    expect(v.consistency).toMatch(/^\d+ of 7 days$/);
-    expect(v.rolling_window).toMatch(/^\d+ of 28 days$/);
+    // seedFood() only inserts nutrition rows, no plan/activities/occurrences — so both windows
+    // are the all-empty edge (0 of 0), not 0 of 7/28 (see the dedicated test above).
+    expect(v.consistency).toBe('0 of 0 days');
+    expect(v.rolling_window).toBe('0 of 0 days');
     const food = JSON.parse(v.outcomes!).food;
     expect(food.days_logged).toBe('4 of 7');
     expect(food.avg_is_over_days).toBe(3);

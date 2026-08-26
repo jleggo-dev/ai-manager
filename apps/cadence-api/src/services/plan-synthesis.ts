@@ -6,7 +6,7 @@ import { getActivePlan, supersedeActivePlans, insertPlan } from '../repos/plans.
 import { insertActivities, listActivities } from '../repos/activities.ts';
 import { deleteFuturePendingOccurrences } from '../repos/occurrences.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
-import { ensureHorizon } from './plan-horizon.ts';
+import { DEFAULT_HORIZON_DAYS, ensureHorizon } from './plan-horizon.ts';
 import { prefetchImminentSessions } from './session-generate.ts';
 import { toRRule, describeRecurrence } from './scheduling.ts';
 import { matchGoal } from './plan-match.ts';
@@ -371,7 +371,7 @@ export async function commitActivities(
     occurrenceDays?: number;
   },
 ): Promise<CommitResult> {
-  const occurrenceDays = opts.occurrenceDays ?? 14;
+  const occurrenceDays = opts.occurrenceDays ?? DEFAULT_HORIZON_DAYS;
   const proposed: Partial<Activity>[] = opts.activities.map((a) => ({
     // Which commitment this is a new version OF (0036). Edits carry it through the proposal; a
     // full rebuild does not, and inheritCommitmentIds below supplies it from the outgoing plan.

@@ -29,7 +29,6 @@ import { buildContextPack } from '../services/context-pack.ts';
 import { ensureDateStamped } from '../services/date-context.ts';
 import { getTrace, updateTrace } from '../services/dev-trace.ts';
 import { logAi, recentAiLog } from '../services/ai-log.ts';
-import { ensureHorizon } from '../services/plan-horizon.ts';
 import {
   createConversation,
   countConversationsBefore,
@@ -118,9 +117,9 @@ router.post('/sessions', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
     const { intent, topic, healthAvailable, healthAnswered } = req.body ?? {};
-    // Roll the plan horizon forward (idempotent) whenever the user comes back to the coach —
-    // this is the top-up that keeps a long/undated plan materialized ~2 weeks ahead. Best-effort.
-    void ensureHorizon(userId).catch((e) => console.error('[ensureHorizon]', e));
+    // No more speculative horizon top-up here (check-in rebuild, step 6) — a week materializes
+    // once, at the commit that creates it (plan-synthesis.ts), and this session-open no longer
+    // extends it. Opening the coach is not the moment a new week gets born.
     // Persona-only system prompt (from the coach job); no caller systemPrompt.
     const session = await openCoachSession(userId);
     // Build the context pack from the retrieval registry (P1) + inject as a non-triggering,

@@ -74,6 +74,7 @@ export {
   dismissPlanPreview,
   getProgress,
   addGoalEvent,
+  buildNextWeek,
   type PlanOccurrence,
   type PlanDay,
   type PlanActivity,
@@ -83,6 +84,7 @@ export {
   type ReplanPreview,
   type LockPreview,
   type PendingChange,
+  type WeekBuildResult,
 } from './api/plan.ts';
 
 export {

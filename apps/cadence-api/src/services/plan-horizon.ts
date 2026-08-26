@@ -5,7 +5,15 @@ import { upsertOccurrences, type NewOccurrence } from '../repos/occurrences.ts';
 import { expandRecurrence } from './scheduling.ts';
 import { localMinutes } from './notify/policy.ts';
 
-export const DEFAULT_HORIZON_DAYS = 14;
+/**
+ * The horizon IS the view window (check-in rebuild, step 6) — 7, not 14. A plan used to
+ * materialize two weeks ahead of whatever the user could actually see, so the trail never had an
+ * edge and the coach never got a natural moment to ask "how was the week?" Owner: "Just infinitely
+ * generating a plan doesn't really ensure success and success is what we're after." Now the week
+ * the user sees IS the week that's materialized, and reaching its last day is the deliberate
+ * check-in moment (docs/cadence/DESIGN-check-in.md, plan-view.ts's `computeWeekState`).
+ */
+export const DEFAULT_HORIZON_DAYS = 7;
 
 /** "06:30" → 390. Anything that isn't a clock time (a word like "morning", or nothing at all)
  *  returns null and is never treated as past — we only skip what we can actually place. */
@@ -19,13 +27,17 @@ export function minutesOfDay(timeOfDay: string | undefined | null): number | nul
 }
 
 /**
- * Rolling-horizon materialization (the "living plan" foundation): ensure dated occurrences exist
- * for the user's active plan from today through today+`days`. Idempotent — `upsertOccurrences`
- * is `on conflict (activity_id, date) do nothing` — so calling it repeatedly (on every
- * coach-session open / daily-view load) just tops up newly-in-range days as time passes. A
- * 6-month or open-ended goal never needs a giant up-front dump; it rolls forward two weeks at a
- * time. Recurrences are anchored to the plan's `generated_at`, so INTERVAL patterns (every other
- * day / week) keep the same parity across every top-up. Returns the count materialized this call.
+ * Horizon materialization: ensure dated occurrences exist for the user's active plan from today
+ * through today+`days`. Idempotent — `upsertOccurrences` is `on conflict (activity_id, date) do
+ * nothing` — so a repeat call just tops up newly-in-range days without disturbing what's there.
+ *
+ * **No longer a speculative, ever-rolling top-up (check-in rebuild, step 6).** It used to be
+ * void-fired from every plan load and every coach-session open, silently materializing two weeks
+ * forever, so nobody ever reached the end of their week and the coach never got a natural moment
+ * to ask about it. The ONLY caller now is `commitActivities` (plan-synthesis.ts) — a week
+ * materializes exactly once, at the commit that creates it, and stops there. Recurrences are still
+ * anchored to the plan's `generated_at`, so INTERVAL patterns (every other day / week) keep the
+ * same parity if this is ever called again for the same plan. Returns the count materialized.
  *
  * **Never invents a task in the past.** A slot for TODAY whose time has already gone by is
  * skipped, and the reason shows up hardest on the day a plan is born: someone who finished

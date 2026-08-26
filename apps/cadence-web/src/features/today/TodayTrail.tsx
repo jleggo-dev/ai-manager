@@ -1,5 +1,6 @@
 import { type CSSProperties, type RefObject } from 'react';
 import { type PlanViewData, type PlanDay, type PlanOccurrence } from '../../lib/api.ts';
+import { isWeeklyCheckin } from '../plan/occurrence/format.ts';
 import { TrailFoodStrip } from '../nutrition/TrailFoodStrip.tsx';
 import { categoryOf, ICON } from './category.ts';
 import { currentNodeIndex, useLandOnNow } from './useLandOnNow.ts';
@@ -235,7 +236,12 @@ export function TodayTrail({
   onOpenFood: () => void;
   onCoach: () => void;
 }) {
-  const days = plan.week;
+  // The synthesized "Weekly check-in" system row is retired from the trail (check-in rebuild, step
+  // 7): the new end-of-trail card is its replacement, and the two must not compete on the same
+  // screen. Visual only — the row (and its occurrence) still exists server-side; this just never
+  // renders it. Filtered once, up front, so every downstream index (the crescent geometry, the
+  // "now" node) already agrees with what's on screen — filtering later would shift them apart.
+  const days = plan.week.map((d) => ({ ...d, occurrences: d.occurrences.filter((o) => !isWeeklyCheckin(o)) }));
   // The one node the trail opens on, and the day it belongs to. Only today has a "now".
   const nowDay = days.findIndex((d) => d.isToday);
   const nowNode = nowDay === -1 ? -1 : currentNodeIndex(days[nowDay]!.occurrences);

@@ -70,6 +70,9 @@ export interface PlanViewData {
   streak?: StreakView;
   activeEpisode?: ActiveEpisode | null; // set while the user is on a disrupted detour (Req 4)
   pendingProposal?: PendingProposal | null;
+  /** Named `weekState`, not `week` — `week: PlanDay[]` above already owns that name. Null before
+   *  a plan exists. `checkin_due` drives the end-of-trail card (check-in rebuild, step 6). */
+  weekState?: { ends_on: string; checkin_due: boolean } | null;
 }
 
 /**
@@ -337,4 +340,23 @@ export async function postponeDetour(): Promise<{ ok: boolean; cancelled?: boole
   const res = await fetch(`${BASE}/plan/episode/not-yet`, { method: 'POST', headers: headers() });
   if (!res.ok) return { ok: false };
   return { ok: true, ...((await res.json()) as { cancelled?: boolean }) };
+}
+
+/**
+ * "Just build my week — I trust you" (check-in rebuild, step 6): the end-of-trail card's trust
+ * path. A commit, not a synthesis — no coach call, no preview step; the outgoing week's own
+ * activities are recommitted as the next version. 409 with `status: 'no_plan' | 'not_due'` when
+ * the guard on the other end declines (nothing to rebuild, or the week genuinely isn't over yet).
+ */
+export interface WeekBuildResult {
+  status: 'committed' | 'no_plan' | 'not_due';
+  planId?: string;
+  version?: number;
+  activities?: number;
+  occurrences?: number;
+  note?: string;
+}
+export async function buildNextWeek(): Promise<WeekBuildResult> {
+  const res = await fetch(`${BASE}/plan/week/build`, { method: 'POST', headers: headers() });
+  return res.json();
 }
