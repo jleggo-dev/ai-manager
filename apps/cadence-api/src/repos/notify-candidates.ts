@@ -92,6 +92,37 @@ export async function listReEntryCandidates(): Promise<ReEntryCandidate[]> {
     having max(o.date) between current_date - 9 and current_date - 3`;
 }
 
+export interface CheckinDueCandidate {
+  user_id: string;
+  timezone: string | null;
+  generated_at: string;
+}
+
+/**
+ * Users whose ACTIVE plan's week has already run out.
+ *
+ * The bound is the SAME fact `computeWeekState` (plan-view.ts) reports to the app as
+ * `checkin_due` — `generated_at + DEFAULT_HORIZON_DAYS <= now()` — read the same way, so the push
+ * and the in-app affordance can never disagree about which day it started being true. Hardcoded
+ * as 7 days rather than the constant because a query can't share a TS import; if
+ * `DEFAULT_HORIZON_DAYS` ever moves, this bound has to move with it by hand.
+ *
+ * No upper bound, unlike `listReEntryCandidates`'s day-9 ceiling — there is nothing here to decay
+ * away from. An ignored check-in never supersedes the active plan, so `generated_at` (and the
+ * `target` the producer derives from it) never changes; the SAME row keeps coming back on every
+ * tick until the user actually commits a next week, which is exactly what makes the producer's
+ * one-shot-per-week guarantee hold (see checkin-due.ts).
+ */
+export async function listCheckinDueCandidates(): Promise<CheckinDueCandidate[]> {
+  return sql<CheckinDueCandidate[]>`
+    select u.id as user_id, u.timezone, to_char(pl.generated_at, 'YYYY-MM-DD') as generated_at
+    from cadence.notification_prefs p
+    join cadence.users u on u.id = p.user_id
+    join cadence.plans pl on pl.user_id = u.id and pl.status = 'active'
+    where p.enabled
+      and pl.generated_at <= now() - interval '7 days'`;
+}
+
 export interface WeatherMoveCandidate {
   user_id: string;
   timezone: string | null;

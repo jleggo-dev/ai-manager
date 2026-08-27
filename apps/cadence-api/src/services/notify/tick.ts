@@ -7,8 +7,8 @@
  * quiet hours, the daily cap, muting and dedupe all live in the dispatcher, so a new
  * notification type cannot accidentally ship without them.
  *
- * The registry holds the four PUSH nudges — the ones only the server can know about. The other
- * five in the catalog are LOCAL: the device schedules them from the committed plan, so they need
+ * The registry holds the five PUSH nudges — the ones only the server can know about. The other
+ * four in the catalog are LOCAL: the device schedules them from the committed plan, so they need
  * no tick, no APNs and no network. Adding a type is one entry in `producers/index.ts` plus a
  * function that returns candidates.
  */
@@ -27,7 +27,7 @@ export interface RegisteredProducer {
 }
 
 /**
- * The live registry — the four PUSH nudges. Order is the tie-break when several become due on the
+ * The live registry — the five PUSH nudges. Order is the tie-break when several become due on the
  * same day and only one fits under the cap; see `producers/index.ts` for why it is this order.
  *
  * The producers type-import `RegisteredProducer` from here, which is erased at build time, so this

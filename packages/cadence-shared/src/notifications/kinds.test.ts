@@ -85,14 +85,18 @@ describe('channels', () => {
     expect(LOCAL_NUDGE_KINDS.length + PUSH_NUDGE_KINDS.length).toBe(NUDGE_KINDS.length);
   });
 
-  it('routes the five the device can work out itself to local', () => {
+  it('routes the four the device can work out itself to local', () => {
     expect([...LOCAL_NUDGE_KINDS].sort()).toEqual(
-      ['almost_time', 'before_quiet_hours', 'milestone_waypoint', 'morning_adjust', 'weekly_checkin'].sort(),
+      ['almost_time', 'before_quiet_hours', 'milestone_waypoint', 'morning_adjust'].sort(),
     );
   });
 
-  it('routes the four only the server could know to push', () => {
-    expect([...PUSH_NUDGE_KINDS].sort()).toEqual(['detour_ending', 'freeze_save', 're_entry', 'weather_move'].sort());
+  it('routes the five only the server could know to push', () => {
+    // weekly_checkin joined this side in the check-in rebuild (step 8): "this plan's week has run
+    // out" is a fact only the server holds (computeWeekState), so only the server can say it.
+    expect([...PUSH_NUDGE_KINDS].sort()).toEqual(
+      ['detour_ending', 'freeze_save', 're_entry', 'weather_move', 'weekly_checkin'].sort(),
+    );
   });
 
   it('has a channel for every kind', () => {

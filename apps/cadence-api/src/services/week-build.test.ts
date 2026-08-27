@@ -12,6 +12,8 @@ import type { Activity } from '@cadence/shared';
 const getActivePlan = vi.fn();
 const listActivities = vi.fn();
 const commitActivities = vi.fn();
+const listOccurrences = vi.fn();
+const sendPlanReadyPush = vi.fn();
 
 vi.mock('../repos/plans.ts', () => ({ getActivePlan: (...a: unknown[]) => getActivePlan(...a) }));
 vi.mock('../repos/activities.ts', () => ({
@@ -19,9 +21,15 @@ vi.mock('../repos/activities.ts', () => ({
   // Mirrors activities.ts's real values — kept in sync by hand since this mock replaces the module.
   NON_PLAN_CATEGORIES: new Set(['adhoc', 'episode', 'menu']),
 }));
+vi.mock('../repos/occurrences.ts', () => ({ listOccurrences: (...a: unknown[]) => listOccurrences(...a) }));
 vi.mock('./plan-synthesis.ts', () => ({ commitActivities: (...a: unknown[]) => commitActivities(...a) }));
+vi.mock('./plan-ready-push.ts', () => ({ sendPlanReadyPush: (...a: unknown[]) => sendPlanReadyPush(...a) }));
 
 const { buildNextWeek } = await import('./week-build.ts');
+
+/** Lets the fire-and-forget ready-push chain (never awaited by `buildNextWeek` itself) settle
+ *  before assertions run — it is all mocked, microtask-only work, so a macrotask flush is enough. */
+const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 const USER = 'u1';
 const DUE_PLAN = {
@@ -51,6 +59,10 @@ function activity(over: Partial<Activity> = {}): Activity {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Safe baseline for the fire-and-forget ready-push, so tests that don't care about it never see
+  // an unmocked repo call: no user occurrence in the window → the fallback body → a harmless send.
+  listOccurrences.mockResolvedValue([]);
+  sendPlanReadyPush.mockResolvedValue(undefined);
 });
 
 describe('buildNextWeek — the guard', () => {
@@ -156,5 +168,104 @@ describe('buildNextWeek — the commit', () => {
       occurrences: 7,
       note: 'Kept your rhythm — building your next week.',
     });
+  });
+});
+
+describe('buildNextWeek — the ready push', () => {
+  const occurrence = (over: Record<string, unknown> = {}) => ({
+    occurrence_id: 'o1',
+    activity_id: 'a1',
+    date: '2026-08-11', // a Tuesday
+    status: 'pending',
+    kind: 'user' as const,
+    ...over,
+  });
+
+  beforeEach(() => {
+    getActivePlan.mockResolvedValue(DUE_PLAN);
+    commitActivities.mockResolvedValue({ status: 'committed', planId: 'p2', version: 4, activities: 1, occurrences: 7 });
+  });
+
+  it('composes "first up" from the new week\'s first user-kind occurrence', async () => {
+    listActivities.mockResolvedValue([activity()]); // a1, "Easy run", 07:00
+    listOccurrences.mockResolvedValue([occurrence()]);
+
+    await buildNextWeek(USER);
+    await flush();
+
+    expect(listOccurrences).toHaveBeenCalledWith(USER, expect.any(String), expect.any(String));
+    expect(sendPlanReadyPush).toHaveBeenCalledWith(
+      USER,
+      'checkin_replan_ready',
+      'p2',
+      'Week 4 is ready',
+      'First up: Tuesday, 7 — Easy run.',
+    );
+  });
+
+  it('skips past a system-kind occurrence (the check-in itself) to the first user one', async () => {
+    listActivities.mockResolvedValue([
+      activity({ activity_id: 'sys', title: 'Weekly check-in' }),
+      activity({ activity_id: 'a1', title: 'Easy run' }),
+    ]);
+    listOccurrences.mockResolvedValue([
+      occurrence({ occurrence_id: 'o0', activity_id: 'sys', date: '2026-08-10', kind: 'system' }),
+      occurrence({ occurrence_id: 'o1', activity_id: 'a1', date: '2026-08-11', kind: 'user' }),
+    ]);
+
+    await buildNextWeek(USER);
+    await flush();
+
+    const [, , , , body] = sendPlanReadyPush.mock.calls[0]!;
+    expect(body).toContain('Easy run');
+  });
+
+  it('falls back to the calm line when the window has no user-kind occurrence at all', async () => {
+    listActivities.mockResolvedValue([activity()]);
+    listOccurrences.mockResolvedValue([occurrence({ kind: 'system' })]);
+
+    await buildNextWeek(USER);
+    await flush();
+
+    expect(sendPlanReadyPush).toHaveBeenCalledWith(
+      USER,
+      'checkin_replan_ready',
+      'p2',
+      'Week 4 is ready',
+      "Come take a look when you're ready.",
+    );
+  });
+
+  it('falls back when the first user occurrence has no clock time', async () => {
+    listActivities.mockResolvedValue([
+      activity({ activity_id: 'a1', schedule: { recurrence: 'FREQ=DAILY', time_of_day: undefined } }),
+    ]);
+    listOccurrences.mockResolvedValue([occurrence()]);
+
+    await buildNextWeek(USER);
+    await flush();
+
+    const [, , , , body] = sendPlanReadyPush.mock.calls[0]!;
+    expect(body).toBe("Come take a look when you're ready.");
+  });
+
+  it('still returns the committed result when the ready push throws — the build already landed', async () => {
+    listActivities.mockResolvedValue([activity()]);
+    listOccurrences.mockRejectedValue(new Error('db down'));
+
+    const r = await buildNextWeek(USER);
+    await flush();
+
+    expect(r.status).toBe('committed');
+    expect(r.planId).toBe('p2');
+  });
+
+  it('never fires the ready push when the guard declines — there is no plan to build from', async () => {
+    getActivePlan.mockResolvedValue(null);
+
+    await buildNextWeek(USER);
+    await flush();
+
+    expect(sendPlanReadyPush).not.toHaveBeenCalled();
   });
 });

@@ -1,17 +1,35 @@
 /* ════════════════════════════════════════════════════════════════
-   Copy for the PUSH nudges — the four only the server could know
+   Copy for the PUSH nudges — the five only the server could know
    ════════════════════════════════════════════════════════════════ */
 
 import type { NudgeCopy, NudgeCopyInputFor } from './copy-types.ts';
 import { pickVariant, type Variants } from './variant.ts';
 
 /**
- * These four cost more than the local set, and not in money: a push arrives from outside, so it
+ * These five cost more than the local set, and not in money: a push arrives from outside, so it
  * carries an implicit claim that something happened worth interrupting for. Each of these has one.
- * A freeze fired overnight. A detour is ending. Nobody has logged anything for three days.
- * Tomorrow's forecast disagrees with tomorrow's run. None of them is a reminder of something the
- * user already knows.
+ * A plan's week has run out. A freeze fired overnight. A detour is ending. Nobody has logged
+ * anything for three days. Tomorrow's forecast disagrees with tomorrow's run. None of them is a
+ * reminder of something the user already knows.
  */
+
+/* ── weekly_checkin ───────────────────────────────────────────────────────────────────────────
+   Push, not local (check-in rebuild, step 8): the device can schedule a reminder about a check-in
+   already ON the plan, but "this plan's week has run out" is a fact only the server holds
+   (`computeWeekState`, plan-view.ts) — a device that never hears from the server again would never
+   know to say so. See notify/producers/checkin-due.ts for the once-per-stalled-week guarantee.
+
+   One fixed line, not a rotation: unlike the other kinds here, this is not something a person lives
+   with for months of variety — it is what happens once when a week goes unclaimed, and it says so
+   plainly rather than performing surprise about it every time it does. Never "overdue", never a day
+   count — DESIGN-check-in.md's whole case against a check-in that can be a thing you are LATE for. */
+
+export function weeklyCheckinCopy(): NudgeCopy {
+  return {
+    title: 'Your week wraps up',
+    body: "If you have time, let's grab a few minutes to chat through next week.",
+  };
+}
 
 /* ── freeze_save ──────────────────────────────────────────────────────────────────────────────
    The ONLY streak notification that exists, and it only ever arrives AFTER the save. There is no

@@ -48,7 +48,7 @@ export async function saveNotificationPrefs(patch: NotificationPrefsPatch): Prom
 }
 
 /**
- * The inputs the DEVICE needs to schedule the five local nudges, resolved server-side.
+ * The inputs the DEVICE needs to schedule the four local nudges, resolved server-side.
  *
  * Resolved there because the suppression rules are the important part and they need data the plan
  * view does not carry — the streak state (was yesterday already covered by a freeze?), the episode
@@ -60,7 +60,6 @@ export interface LocalNudgePlan {
   todayWeekday: IosWeekday;
   nowMinutes: number;
   activities: SchedulableActivity[];
-  weeklyCheckin: { activityId: string; weekday: IosWeekday; hour?: number; minute?: number } | null;
   flexibleToday: SchedulableActivity | null;
   yesterday: { done: number; planned: number } | null;
   waypoints: NudgeWaypoint[];

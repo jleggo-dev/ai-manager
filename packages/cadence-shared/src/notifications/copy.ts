@@ -3,14 +3,14 @@
    ════════════════════════════════════════════════════════════════ */
 
 import type { NudgeCopy, NudgeCopyInput } from './copy-types.ts';
+import { almostTimeCopy, beforeQuietHoursCopy, milestoneWaypointCopy, morningAdjustCopy } from './copy-local.ts';
 import {
-  almostTimeCopy,
-  beforeQuietHoursCopy,
-  milestoneWaypointCopy,
-  morningAdjustCopy,
+  detourEndingCopy,
+  freezeSaveCopy,
+  reEntryCopy,
+  weatherMoveCopy,
   weeklyCheckinCopy,
-} from './copy-local.ts';
-import { detourEndingCopy, freezeSaveCopy, reEntryCopy, weatherMoveCopy } from './copy-push.ts';
+} from './copy-push.ts';
 
 /**
  * `nudgeCopy` is the ONLY way anything outside this folder gets words for a notification. The
@@ -24,7 +24,7 @@ import { detourEndingCopy, freezeSaveCopy, reEntryCopy, weatherMoveCopy } from '
 export function nudgeCopy(input: NudgeCopyInput): NudgeCopy {
   switch (input.kind) {
     case 'weekly_checkin':
-      return weeklyCheckinCopy(input);
+      return weeklyCheckinCopy();
     case 'almost_time':
       return almostTimeCopy(input);
     case 'milestone_waypoint':
@@ -49,11 +49,11 @@ export function nudgeCopy(input: NudgeCopyInput): NudgeCopy {
 }
 
 export type { NudgeCopy, NudgeCopyInput, NudgeCopyInputFor } from './copy-types.ts';
+export { almostTimeCopy, beforeQuietHoursCopy, milestoneWaypointCopy, morningAdjustCopy } from './copy-local.ts';
 export {
-  almostTimeCopy,
-  beforeQuietHoursCopy,
-  milestoneWaypointCopy,
-  morningAdjustCopy,
+  detourEndingCopy,
+  freezeSaveCopy,
+  reEntryCopy,
+  weatherMoveCopy,
   weeklyCheckinCopy,
-} from './copy-local.ts';
-export { detourEndingCopy, freezeSaveCopy, reEntryCopy, weatherMoveCopy } from './copy-push.ts';
+} from './copy-push.ts';

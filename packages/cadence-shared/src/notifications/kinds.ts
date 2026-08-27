@@ -112,7 +112,11 @@ export function maxPerDayForTier(tier: NudgeTier): number {
  * from, and separating them is how the two halves drift.
  */
 export const NUDGE_CHANNEL: Record<NudgeKind, 'local' | 'push'> = {
-  weekly_checkin: 'local',
+  // PUSH, not local (check-in rebuild, step 8): the device can schedule a reminder about a
+  // check-in it already knows is on the plan, but it has no way to know the plan's week ran out
+  // without a commit ever landing — that fact lives only server-side (`computeWeekState`), so only
+  // the server can produce this nudge. See notify/producers/checkin-due.ts.
+  weekly_checkin: 'push',
   freeze_save: 'push',
   detour_ending: 'push',
   almost_time: 'local',
