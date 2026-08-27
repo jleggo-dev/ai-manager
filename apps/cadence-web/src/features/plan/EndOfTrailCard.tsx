@@ -22,6 +22,20 @@ interface EndOfTrailActions {
   busy: boolean;
 }
 
+/**
+ * "Wraps up today" is only true the day the trail's own edge is reached — someone who left it
+ * sitting there for a week and a half comes back to a card confidently wrong about when its own
+ * week ended. `endsOn` is `weekState.ends_on` (plan-view.ts's `computeWeekState`, YYYY-MM-DD); the
+ * card only tips into the past tense once that date is clearly behind us (≥2 days), so an ordinary
+ * same-day or one-day-late visit still reads exactly as it always has. Undefined/unparseable reads
+ * as 0 — the present-tense default a caller not yet passing the date already gets today.
+ */
+function daysPastEnd(endsOn: string | undefined): number {
+  const end = endsOn ? Date.parse(`${endsOn}T00:00:00Z`) : NaN;
+  if (Number.isNaN(end)) return 0;
+  return Math.floor((Date.now() - end) / 86_400_000);
+}
+
 const fallbackWrap: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
@@ -77,12 +91,14 @@ export function EndOfTrailFallback({ onStartCheckIn, onJustBuild, busy }: EndOfT
  */
 export function EndOfTrailCard({
   version,
+  endsOn,
   onStartCheckIn,
   onJustBuild,
   busy,
   error,
-}: EndOfTrailActions & { version?: number; error: string | null }) {
-  const title = version != null ? `Week ${version} wraps up today` : 'Your week wraps up today';
+}: EndOfTrailActions & { version?: number; endsOn?: string; error: string | null }) {
+  const verb = daysPastEnd(endsOn) >= 2 ? 'wrapped up' : 'wraps up today';
+  const title = version != null ? `Week ${version} ${verb}` : `Your week ${verb}`;
   return (
     <div className="plan-proposal eot-card">
       <Orb />
@@ -133,11 +149,14 @@ export class EndOfTrailBoundary extends Component<{ fallback: ReactNode; childre
 export function EndOfTrail({
   show,
   version,
+  endsOn,
   onStartCheckIn,
   onBuilt,
 }: {
   show: boolean;
   version?: number;
+  /** `weekState.ends_on` — optional so a caller not yet passing it keeps today's-tense copy. */
+  endsOn?: string;
   onStartCheckIn: () => void;
   onBuilt: () => void;
 }) {
@@ -167,6 +186,7 @@ export function EndOfTrail({
     >
       <EndOfTrailCard
         version={version}
+        endsOn={endsOn}
         onStartCheckIn={onStartCheckIn}
         onJustBuild={justBuild}
         busy={busy}

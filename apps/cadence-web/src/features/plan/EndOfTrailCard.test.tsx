@@ -4,7 +4,7 @@
  * that literally: `EndOfTrailBoundary` (what `EndOfTrail` wraps Layer 2 in) must fall back to
  * Layer 1's plain content on a render failure, not disappear.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { EndOfTrail, EndOfTrailBoundary, EndOfTrailCard, EndOfTrailFallback } from './EndOfTrailCard.tsx';
 
@@ -64,6 +64,100 @@ describe('EndOfTrailCard (Layer 2 — the rich card)', () => {
     );
     expect(screen.getByText(/Couldn't build your next week/)).toBeTruthy();
     expect(screen.getByText('Building…')).toBeTruthy();
+  });
+});
+
+/**
+ * `endsOn` is `weekState.ends_on` (plan-view.ts). Nobody wires it up yet (PlanView.tsx passes only
+ * `version`), so today every card still reads exactly as before — these tests exercise the prop
+ * directly, the same way the rest of this file exercises `EndOfTrailCard` in isolation from its
+ * caller. "Week 5 wraps up today" stops being true the moment the visit isn't the same day the
+ * trail's edge was reached; two-plus days gets the past tense instead of a wrong claim about "today".
+ */
+describe('EndOfTrailCard — copy once the visit is no longer "today"', () => {
+  const NOW = '2026-08-26T12:00:00.000Z';
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('keeps the present tense the day the week actually ends', () => {
+    render(
+      <EndOfTrailCard
+        version={5}
+        endsOn="2026-08-26"
+        onStartCheckIn={vi.fn()}
+        onJustBuild={vi.fn()}
+        busy={false}
+        error={null}
+      />,
+    );
+    expect(screen.getByText('Week 5 wraps up today')).toBeTruthy();
+  });
+
+  it('keeps the present tense one day late — not "very" late yet', () => {
+    render(
+      <EndOfTrailCard
+        version={5}
+        endsOn="2026-08-25"
+        onStartCheckIn={vi.fn()}
+        onJustBuild={vi.fn()}
+        busy={false}
+        error={null}
+      />,
+    );
+    expect(screen.getByText('Week 5 wraps up today')).toBeTruthy();
+  });
+
+  it('switches to the past tense two or more days after the week ended', () => {
+    render(
+      <EndOfTrailCard
+        version={5}
+        endsOn="2026-08-16"
+        onStartCheckIn={vi.fn()}
+        onJustBuild={vi.fn()}
+        busy={false}
+        error={null}
+      />,
+    );
+    expect(screen.getByText('Week 5 wrapped up')).toBeTruthy();
+    expect(screen.queryByText(/wraps up today/)).toBeNull();
+  });
+
+  it('leaves the body copy alone when the title goes past tense', () => {
+    render(
+      <EndOfTrailCard
+        version={5}
+        endsOn="2026-08-16"
+        onStartCheckIn={vi.fn()}
+        onJustBuild={vi.fn()}
+        busy={false}
+        error={null}
+      />,
+    );
+    expect(screen.getByText(/tailor next week and ensure a smooth progression/)).toBeTruthy();
+  });
+
+  it('applies the same past-tense switch to the no-version fallback title', () => {
+    render(
+      <EndOfTrailCard endsOn="2026-08-16" onStartCheckIn={vi.fn()} onJustBuild={vi.fn()} busy={false} error={null} />,
+    );
+    expect(screen.getByText('Your week wrapped up')).toBeTruthy();
+  });
+
+  it('defaults to present tense when no endsOn is supplied at all', () => {
+    render(<EndOfTrailCard version={5} onStartCheckIn={vi.fn()} onJustBuild={vi.fn()} busy={false} error={null} />);
+    expect(screen.getByText('Week 5 wraps up today')).toBeTruthy();
+  });
+
+  it('EndOfTrail threads endsOn down to the rich card', () => {
+    render(<EndOfTrail show={true} version={3} endsOn="2026-08-16" onStartCheckIn={vi.fn()} onBuilt={vi.fn()} />);
+    expect(screen.getByText('Week 3 wrapped up')).toBeTruthy();
   });
 });
 
