@@ -64,7 +64,6 @@ describe('tier gating happens where the notification is MADE', () => {
         flexibleToday: run({ activity_id: 'flex', title: 'stretch', schedule: { recurrence: 'FREQ=DAILY' } }),
         yesterday: { done: 1, planned: 3 },
         waypoints: [{ label: 'race day', date: '2026-09-01', weeksOut: 3 }],
-        weeklyCheckin: { activityId: 'ck', weekday: 1 },
       }),
     );
     expect(specs.length).toBeGreaterThan(0);
@@ -216,28 +215,6 @@ describe('milestone_waypoint', () => {
   });
 });
 
-describe('weekly_checkin', () => {
-  it('repeats weekly in the morning, on the day the plan puts it', () => {
-    const spec = only(
-      buildLocalNudges(input({ tier: 'few', activities: [], weeklyCheckin: { activityId: 'ck', weekday: 1 } })),
-      'weekly_checkin',
-    );
-    expect(spec.weekday).toBe(1);
-    expect(spec.date).toBeNull();
-    expect(spec.hour).toBe(8);
-  });
-
-  it('honours an explicit time on the check-in activity', () => {
-    const spec = only(
-      buildLocalNudges(
-        input({ tier: 'few', activities: [], weeklyCheckin: { activityId: 'ck', weekday: 1, hour: 9, minute: 30 } }),
-      ),
-      'weekly_checkin',
-    );
-    expect([spec.hour, spec.minute]).toEqual([9, 30]);
-  });
-});
-
 describe('ids and the ceiling', () => {
   it('gives every spec a distinct positive id, so a re-sync replaces rather than stacks', () => {
     const specs = buildLocalNudges(
@@ -245,7 +222,6 @@ describe('ids and the ceiling', () => {
         quietEndMin: 5 * 60,
         flexibleToday: run({ activity_id: 'flex', title: 'stretch', schedule: { recurrence: 'FREQ=DAILY' } }),
         yesterday: { done: 1, planned: 2 },
-        weeklyCheckin: { activityId: 'ck', weekday: 1 },
         waypoints: [{ label: 'race day', date: '2026-08-20', weeksOut: 3 }],
       }),
     );
@@ -273,7 +249,6 @@ describe('ids and the ceiling', () => {
       input({
         quietEndMin: 5 * 60,
         yesterday: { done: 1, planned: 2 },
-        weeklyCheckin: { activityId: 'ck', weekday: 7 },
       }),
     );
     const firstRepeat = specs.findIndex((s) => s.date === null);

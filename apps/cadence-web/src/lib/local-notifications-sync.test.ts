@@ -40,7 +40,6 @@ const PLAN = {
       schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO,WE,FR', time_of_day: '07:00' },
     },
   ],
-  weeklyCheckin: { activityId: 'ck', weekday: 1 },
   flexibleToday: { activity_id: 'flex', title: 'stretch', schedule: { recurrence: 'FREQ=DAILY' } },
   yesterday: { done: 2, planned: 4 },
   waypoints: [],
@@ -73,15 +72,15 @@ describe('syncPlanLocalNotifications', () => {
   it('schedules the full local set at "lots"', async () => {
     const r = await syncPlanLocalNotifications();
     expect(r.scheduled).toBeGreaterThan(0);
-    expect(new Set(scheduledKinds())).toEqual(
-      new Set(['weekly_checkin', 'almost_time', 'before_quiet_hours', 'morning_adjust']),
-    );
+    expect(new Set(scheduledKinds())).toEqual(new Set(['almost_time', 'before_quiet_hours', 'morning_adjust']));
   });
 
   it('drops everything above the tier when the dial is turned down', async () => {
+    // weekly_checkin was the one LOCAL kind `few` allowed through; now that it ships as a PUSH
+    // nudge instead (check-in rebuild, step 8), `few` leaves the local scheduler nothing to build.
     getPrefs.mockResolvedValue(prefs({ tier: 'few' }));
     await syncPlanLocalNotifications();
-    expect(scheduledKinds()).toEqual(['weekly_checkin']);
+    expect(scheduledKinds()).toEqual([]);
   });
 
   it('drops what the new quiet window now covers', async () => {

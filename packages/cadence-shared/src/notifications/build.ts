@@ -71,8 +71,6 @@ export interface NudgePlanInput {
   /** Minutes past local midnight, right now — decides whether today's slots are still ahead. */
   nowMinutes: number;
   activities: SchedulableActivity[];
-  /** The committed plan's weekly check-in, when there is one. */
-  weeklyCheckin?: { activityId: string; weekday: IosWeekday; hour?: number; minute?: number } | null;
   /** Today's still-unlogged flexible (untimed) activity — the whole trigger for before_quiet_hours. */
   flexibleToday?: SchedulableActivity | null;
   /** Yesterday's count, supplied ONLY when neither a freeze-save nor a detour already explains it. */
@@ -158,22 +156,6 @@ function addAlmostTime(out: LocalNotificationSpec[], input: NudgePlanInput): voi
       });
     }
   }
-}
-
-/** weekly_checkin — a repeating morning slot on the day the check-in sits on the plan. */
-function addWeeklyCheckin(out: LocalNotificationSpec[], input: NudgePlanInput): void {
-  const c = input.weeklyCheckin;
-  if (!c) return;
-  const at = c.hour != null ? { hour: c.hour, minute: c.minute ?? 0 } : shiftMinutes(morningMinutes(input), 0);
-  emit(out, input, {
-    id: specId('weekly_checkin', c.activityId, c.weekday),
-    kind: 'weekly_checkin',
-    activityId: c.activityId,
-    ...nudgeCopy({ kind: 'weekly_checkin', weekday: c.weekday }),
-    weekday: c.weekday,
-    date: null,
-    ...at,
-  });
 }
 
 /** before_quiet_hours — a ONE-SHOT for today, and only while the slot is still ahead of now. */
@@ -270,7 +252,6 @@ function byUrgency(a: LocalNotificationSpec, b: LocalNotificationSpec): number {
  */
 export function buildLocalNudges(input: NudgePlanInput): LocalNotificationSpec[] {
   const out: LocalNotificationSpec[] = [];
-  addWeeklyCheckin(out, input);
   addAlmostTime(out, input);
   addWaypoints(out, input);
   addBeforeQuietHours(out, input);

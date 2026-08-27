@@ -55,7 +55,6 @@ export async function syncPlanLocalNotifications(): Promise<SyncResult> {
       todayWeekday: plan.todayWeekday,
       nowMinutes: plan.nowMinutes,
       activities: plan.activities,
-      weeklyCheckin: plan.weeklyCheckin,
       flexibleToday: plan.flexibleToday,
       yesterday: plan.yesterday,
       waypoints: plan.waypoints,
