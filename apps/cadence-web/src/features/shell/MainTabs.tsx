@@ -9,6 +9,7 @@ import { ReviewScreen } from '../review/ReviewScreen.tsx';
 import { PlanCardSheet } from '../gate/PlanCardSheet.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { FoodHome } from '../nutrition/FoodHome.tsx';
+import { WeekReviewSheet } from '../plan/week-review/WeekReviewSheet.tsx';
 
 /**
  * Today and Week were separate TABS sharing one PlanView, and the owner's device verdict
@@ -89,13 +90,20 @@ export function MainTabs({
    * means rebuilding; onboarding's first build is the other host of the same card (App.tsx).
    */
   const [rebuild, setRebuild] = useState(false);
-  /** The WeekReviewCard's Open tap. The sheet here is a PLACEHOLDER — the real full-screen review
-   *  is a later step; this just proves the card-to-screen wiring end to end. */
+  /** The WeekReviewCard's Open tap — mounts the real full-screen review (check-in rebuild, step 4). */
   const [weekReviewOpen, setWeekReviewOpen] = useState(false);
   const [logDidOpen, setLogDidOpen] = useState(false);
   const [planReload, setPlanReload] = useState(0); // bump → PlanView refetches after a ＋ log
   /** App-authored context for the next coach turn (e.g. the session they just finished). */
   const [coachNote, setCoachNote] = useState<string | null>(null);
+  /**
+   * "Start check-in" (EndOfTrailCard, via PlanView's `onStartCheckIn`) — unlike `coachNote`
+   * above, this is not whispered to her as a note: it is sent VISIBLY, the same way a typed
+   * message would be (check-in rebuild, step 4 — the approved design shows "Start my check-in"
+   * as something the user said). `key` is bumped on every tap so a SECOND end-of-trail later in
+   * the same session fires again; OnboardingChat's own effect is what actually consumes it once.
+   */
+  const [autoSend, setAutoSend] = useState<{ text: string; key: number } | null>(null);
   /**
    * The Food home (Food Journey 02) — a full screen that replaces the Plan tab's content while
    * the tab bar stays, the same escape ReviewScreen uses minus the bar. It lives HERE rather
@@ -132,6 +140,12 @@ export function MainTabs({
             }}
             onOpenFood={(sub) => setFood(sub ?? 'home')}
             reloadSignal={planReload}
+            // "Start check-in" — a visible send, not a note: see the `autoSend` state comment
+            // above for why this is its own bridge rather than riding `onCoach`.
+            onStartCheckIn={() => {
+              setTab('coach');
+              setAutoSend({ text: 'Start my check-in', key: Date.now() });
+            }}
           />
         )}
         {tab === 'plan' && food && (
@@ -179,6 +193,7 @@ export function MainTabs({
               onSessionNoteUsed={() => setCoachNote(null)}
               onPlanChanged={() => setPlanReload((k) => k + 1)}
               onOpenWeekReview={() => setWeekReviewOpen(true)}
+              autoSend={autoSend}
             />
             {/* The deterministic way back to the crafted plan UI from inside the conversation. */}
             <button className="plan-pill" onClick={() => setPlanCardOpen(true)}>
@@ -271,27 +286,7 @@ export function MainTabs({
             }}
           />
         )}
-        {/* PLACEHOLDER — proves the card → screen wiring end to end; the real full-screen review
-            (reading pending_week_review's from/to and rendering the actual week) is a later step. */}
-        {weekReviewOpen && (
-          <>
-            <div className="sheet-scrim" onClick={() => setWeekReviewOpen(false)} aria-hidden />
-            <div className="sheet" role="dialog" aria-label="Week review">
-              <div className="sheet-grab" aria-hidden />
-              <div className="sheet-head">
-                <div className="sheet-title">
-                  <b>Week review</b>
-                </div>
-                <button className="sheet-x" onClick={() => setWeekReviewOpen(false)} aria-label="Close">
-                  ×
-                </button>
-              </div>
-              <div className="sheet-body">
-                <p>Your week review is on its way.</p>
-              </div>
-            </div>
-          </>
-        )}
+        {weekReviewOpen && <WeekReviewSheet onClose={() => setWeekReviewOpen(false)} />}
         {logDidOpen && (
           <LogDidSheet
             onClose={() => setLogDidOpen(false)}

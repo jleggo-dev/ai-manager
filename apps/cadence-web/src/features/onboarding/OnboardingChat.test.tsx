@@ -329,3 +329,81 @@ describe('OnboardingChat', () => {
     expect(screen.queryByRole('button', { name: /apply/i })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * `autoSend` (check-in rebuild, step 4) — the end-of-trail card's "Start check-in" bridge. Unlike
+ * `sessionNote`'s invisible nudge, the approved design shows this text as something the user
+ * SAID: a real bubble, a real turn. These pin the three things that make an app-driven send safe
+ * to fire from a component that never unmounts (MainTabs keeps the Coach tab alive at all times).
+ */
+describe('OnboardingChat autoSend', () => {
+  it('delivers the text as a real, visible turn — a user bubble, then her reply', async () => {
+    sendCoachMessage.mockImplementation(async (_id: string, _t: string, onDelta: (d: string) => void) => {
+      onDelta("Let's see how the week went.");
+      return { completed: true, responseId: null };
+    });
+
+    render(<OnboardingChat chrome="none" intent="ongoing" autoSend={{ text: 'Start my check-in', key: 1 }} />);
+
+    expect(await screen.findByText('Start my check-in')).toBeInTheDocument();
+    expect(await screen.findByText("Let's see how the week went.")).toBeInTheDocument();
+    expect(sendCoachMessage).toHaveBeenCalledTimes(1);
+    expect(sendCoachMessage.mock.calls[0]![1]).toBe('Start my check-in');
+  });
+
+  it('never re-fires the same key on a re-render, even with a brand-new object', async () => {
+    sendCoachMessage.mockImplementation(async (_id: string, _t: string, onDelta: (d: string) => void) => {
+      onDelta('Reply.');
+      return { completed: true, responseId: null };
+    });
+
+    const { rerender } = render(
+      <OnboardingChat chrome="none" intent="ongoing" autoSend={{ text: 'Start my check-in', key: 7 }} />,
+    );
+    await screen.findByText('Start my check-in');
+    await waitFor(() => expect(sendCoachMessage).toHaveBeenCalledTimes(1));
+
+    // A FRESH object carrying the same key — the shape a parent produces on every render once its
+    // own state is set (an inline literal, never memoized), so this is the realistic re-render.
+    rerender(<OnboardingChat chrome="none" intent="ongoing" autoSend={{ text: 'Start my check-in', key: 7 }} />);
+    await screen.findByText('Reply.');
+
+    expect(sendCoachMessage).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText('Start my check-in')).toHaveLength(1);
+  });
+
+  it('fires again for a NEW key — a later end-of-trail in the same still-mounted session', async () => {
+    sendCoachMessage.mockImplementation(async (_id: string, _t: string, onDelta: (d: string) => void) => {
+      onDelta('Reply.');
+      return { completed: true, responseId: null };
+    });
+
+    const { rerender } = render(
+      <OnboardingChat chrome="none" intent="ongoing" autoSend={{ text: 'Start my check-in', key: 1 }} />,
+    );
+    await screen.findByText('Start my check-in');
+    await waitFor(() => expect(sendCoachMessage).toHaveBeenCalledTimes(1));
+
+    rerender(<OnboardingChat chrome="none" intent="ongoing" autoSend={{ text: 'Start my check-in', key: 2 }} />);
+    await waitFor(() => expect(sendCoachMessage).toHaveBeenCalledTimes(2));
+  });
+
+  /**
+   * The known failure mode: a dead/stale session. `getCurrentCoach`'s SECOND call here is the
+   * recovery poll `sendCoachMessage`'s dropped turn falls back to — answering `stale: true` is
+   * recovery's own fast "this is not mine to adopt" exit (coach-recovery.ts), so the whole path
+   * resolves in one poll instead of paying its patient multi-attempt real-time budget.
+   */
+  it('a dead/stale session leaves the text in the composer instead of losing it', async () => {
+    getCurrentCoach
+      .mockResolvedValueOnce({ sessionId: null, messages: [], stale: false }) // mount restore
+      .mockResolvedValueOnce({ sessionId: 'sess-new', messages: [], stale: true }); // recovery poll
+    sendCoachMessage.mockResolvedValueOnce({ completed: false, responseId: null });
+
+    render(<OnboardingChat chrome="none" intent="ongoing" autoSend={{ text: 'Start my check-in', key: 1 }} />);
+
+    await waitFor(() => expect(screen.getByPlaceholderText('Message your coach…')).toHaveValue('Start my check-in'), {
+      timeout: 3000,
+    });
+  });
+});

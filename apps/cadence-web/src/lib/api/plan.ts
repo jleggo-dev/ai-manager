@@ -1,4 +1,10 @@
-import type { PendingPlanActivity, PendingWeekReview, ProgressData, StreakView } from '@cadence/shared';
+import type {
+  OccurrenceStatus,
+  PendingPlanActivity,
+  PendingWeekReview,
+  ProgressData,
+  StreakView,
+} from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /* ── Ongoing plan view (Today / Your week) ─────────────────────── */
@@ -266,6 +272,64 @@ export async function getPendingWeekReview(): Promise<PendingWeekReview | null> 
 export async function dismissPendingWeekReview(): Promise<boolean> {
   const res = await fetch(`${BASE}/plan/week-review/dismiss`, { method: 'POST', headers: headers() });
   return res.ok;
+}
+
+/* ── Week review facts (check-in rebuild, step 4) ──────────────── */
+/** Mirrors `week-review-facts.ts`'s server-side shape exactly — this is the client's own view of
+ *  the same JSON, not a shared type, the same way `PlanDay`/`PlanActivity` above are the client's
+ *  own reading of `/plan` rather than an import of a server-internal type. */
+export type WeekReviewMeal = 'breakfast' | 'lunch' | 'dinner';
+export interface WeekReviewMealSlot {
+  meal: WeekReviewMeal;
+  occurrence_id: string | null;
+  logged: boolean;
+}
+export interface WeekReviewSessionRow {
+  occurrence_id: string;
+  title: string;
+  status: OccurrenceStatus;
+  planned_min?: number;
+  logged_min?: number;
+}
+export interface WeekReviewMindStep {
+  name: string;
+  done: boolean;
+}
+export interface WeekReviewMindRow {
+  occurrence_id: string;
+  title: string;
+  status: OccurrenceStatus;
+  steps?: WeekReviewMindStep[];
+  done?: boolean;
+}
+export interface WeekReviewDay {
+  date: string;
+  sessions: WeekReviewSessionRow[];
+  meals: WeekReviewMealSlot[];
+  mind: WeekReviewMindRow[];
+}
+export interface WeekReviewWeighIn {
+  occurrence_id: string;
+  date: string;
+  status: string;
+}
+export interface WeekReviewFacts {
+  period: { from: string; to: string };
+  days: WeekReviewDay[];
+  weigh_in: WeekReviewWeighIn | null;
+}
+
+/**
+ * The week the pending pointer names, computed in full — what the read-only review sheet
+ * renders. `null` covers every reason it might not be there (nothing pending, a stale pointer
+ * dismissed on another device, a server hiccup) the same way `getPendingChange`/`getPlan` already
+ * collapse "couldn't load" and "nothing to load" into one falsy answer: the sheet has one honest
+ * fallback message for all of them, not a diagnosis.
+ */
+export async function getWeekReviewFacts(): Promise<{ review: PendingWeekReview; facts: WeekReviewFacts } | null> {
+  const res = await fetch(`${BASE}/plan/week-review/facts`, { headers: headers() });
+  if (!res.ok) return null;
+  return res.json();
 }
 
 export async function lockPlan(): Promise<{ status: number; body: Record<string, unknown> }> {

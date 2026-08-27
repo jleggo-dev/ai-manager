@@ -20,6 +20,13 @@ vi.mock('../../lib/api.ts', () => ({
   getPendingChange: vi.fn().mockResolvedValue(null),
   dismissPendingChange: vi.fn().mockResolvedValue(true),
   lockPlan: vi.fn().mockResolvedValue({ status: 200, body: {} }),
+  // The week-review card mounts on every finished last turn (same as getPendingChange above) —
+  // it must exist even here, where nobody exercises it, or OnboardingChat's real render throws
+  // reaching into a mock that never defined it. Pre-existing gap from the check-in rebuild's
+  // step 6 merge (WeekReviewCard wired into OnboardingChat without every sibling mock catching
+  // up); fixed here because it blocks this whole suite, not because this file exercises it.
+  getPendingWeekReview: vi.fn().mockResolvedValue(null),
+  dismissPendingWeekReview: vi.fn().mockResolvedValue(true),
   notifyOnCoachReply: vi.fn().mockResolvedValue(true),
   stopCoachTurn: vi.fn().mockResolvedValue(true),
 }));

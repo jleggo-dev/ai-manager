@@ -63,12 +63,20 @@ export function PlanView({
   onCoach,
   onOpenFood,
   reloadSignal,
+  onStartCheckIn,
 }: {
   /** Switch to the coach. `note` is app-authored context she reads and the user never sees. */
   onCoach: (note?: string) => void;
   /** Open the Food home (MainTabs swaps this view for it); 'shop' lands on the shopping list. */
   onOpenFood: (sub?: 'shop') => void;
   reloadSignal?: number;
+  /**
+   * The end-of-trail card's "Start check-in" (check-in rebuild, step 4). Deliberately its OWN
+   * prop, not routed through `onCoach`: that bridge whispers a note to her, and the approved
+   * design shows "Start my check-in" as something the user visibly said — MainTabs wires this one
+   * to its `autoSend` bridge instead. `onCoach` keeps its other callers unchanged.
+   */
+  onStartCheckIn: () => void;
 }) {
   /**
    * The plan comes from the shared query cache (PERF-01), not per-mount state. Tab switches
@@ -382,10 +390,10 @@ export function PlanView({
         <EndOfTrail
           show={restEmpty || !!data.weekState?.checkin_due}
           version={data.version}
-          // "Start check-in" — the sentence, not a mode (DESIGN-check-in.md): the same coach
-          // bridge every other trail affordance uses (PlanView's own `onCoach`, threaded from
-          // MainTabs), which switches to the Coach tab and hands her the note.
-          onStartCheckIn={() => onCoach('Start my check-in')}
+          // "Start check-in" — the sentence, not a mode (DESIGN-check-in.md), but a VISIBLE one:
+          // MainTabs' `onStartCheckIn` switches to the Coach tab and sends it through the same
+          // path the composer's own Send uses, not a whispered note (check-in rebuild, step 4).
+          onStartCheckIn={onStartCheckIn}
           onBuilt={() => {
             refresh();
             bump();

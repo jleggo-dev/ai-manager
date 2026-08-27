@@ -70,6 +70,7 @@ export {
   dismissPendingChange,
   getPendingWeekReview,
   dismissPendingWeekReview,
+  getWeekReviewFacts,
   previewPlan,
   dismissPlanPreview,
   getProgress,
@@ -85,6 +86,14 @@ export {
   type LockPreview,
   type PendingChange,
   type WeekBuildResult,
+  type WeekReviewMeal,
+  type WeekReviewMealSlot,
+  type WeekReviewSessionRow,
+  type WeekReviewMindStep,
+  type WeekReviewMindRow,
+  type WeekReviewDay,
+  type WeekReviewWeighIn,
+  type WeekReviewFacts,
 } from './api/plan.ts';
 
 export {
