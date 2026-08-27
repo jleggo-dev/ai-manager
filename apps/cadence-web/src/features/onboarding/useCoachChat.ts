@@ -139,8 +139,13 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
   /**
    * One turn, streamed. `echo: false` is the app speaking on the user's behalf — her reply is
    * what they should see, not a synthetic message in their voice that they did not write.
+   *
+   * Returns whether the turn actually landed. `nudge` and `send` both ignore it (their own
+   * on-screen fallbacks — a retracted note, a "connection dropped" reply — already say what
+   * happened); `sendText` is the one caller that acts on it, because an auto-sent message with
+   * nowhere left to retry from would otherwise just vanish.
    */
-  async function deliver(text: string, echo = true) {
+  async function deliver(text: string, echo = true): Promise<boolean> {
     const window = turnsWindow(turns, text);
     setTurns((t) => [...t, ...(echo ? [{ role: 'user' as const, text }] : []), { role: 'coach' as const, text: '' }]);
     setStreaming(true);
@@ -171,6 +176,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
         const last = t[t.length - 1];
         return last?.role === 'coach' && !last.text ? t.slice(0, -1) : t;
       });
+    let ok = true;
     try {
       if (!sessionId.current) {
         sessionId.current = (
@@ -198,15 +204,16 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       if (!completed && !stopped.current && !healer.recovered.current && !(await recoverFromServer())) {
         if (echo) fillLastCoach('⚠️ Connection dropped — send again to continue.');
         else retractPendingNote();
+        ok = false;
       }
     } catch (err) {
       // The resume healer already collected this reply — the fetch we were holding is just a
       // corpse from being backgrounded, and it has nothing to report.
-      if (healer.recovered.current) return;
+      if (healer.recovered.current) return true;
       // A deliberate stop is not a failure: keep what she had said and hand the composer back.
       if (stopped.current) {
         fillLastCoach('…');
-        return;
+        return true;
       }
       // The user gets a warm, useless sentence — correct, they can't act on a stack trace. But it
       // was ALSO all anyone got: this catch discarded the error, so "Auth failed" from the API and
@@ -216,6 +223,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       if (!(await recoverFromServer())) {
         if (echo) fillLastCoach('Something hiccuped on my end — say that again?');
         else retractPendingNote();
+        ok = false;
       }
     } finally {
       abort.current = null;
@@ -224,6 +232,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       healer.end();
       setTimeout(() => void loadCapturedGoals(setCapturedGoals), 900);
     }
+    return ok;
   }
 
   /**
@@ -258,11 +267,24 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     if (sessionId.current) void stopCoachTurn(sessionId.current);
   }
 
+  /**
+   * `deliver`'s own guard, generalized so a caller with text that never touched the composer (an
+   * auto-send) goes through the exact same visible-bubble, real-turn call `send()` uses below, and
+   * gets back whether it actually landed. Deliberately does NOT touch `input` — that is the
+   * composer's own state, and a caller passing its own text has no reason to also clear a box it
+   * never wrote into (which would erase an unrelated draft the user happened to be mid-typing).
+   */
+  async function sendText(text: string): Promise<boolean> {
+    const trimmed = text.trim();
+    if (!trimmed || streaming) return false;
+    return deliver(trimmed);
+  }
+
   async function send() {
     const text = input.trim();
     if (!text || streaming) return;
     setInput('');
-    await deliver(text);
+    await sendText(text);
   }
 
   return {
@@ -279,6 +301,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     painted,
     cursor,
     send,
+    sendText,
     stop,
     nudge,
     foodAction,

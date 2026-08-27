@@ -321,6 +321,93 @@ describe('stop', () => {
   });
 });
 
+/**
+ * `sendText` is `send()`'s own path generalized to take its text as an argument — the primitive
+ * the check-in rebuild's auto-send bridge (OnboardingChat.tsx) calls directly, so a canned message
+ * that never touched the composer still produces a real visible bubble and a real turn, and the
+ * caller learns whether it actually landed.
+ */
+describe('sendText', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCurrentCoach.mockResolvedValue({ sessionId: null, messages: [], stale: false });
+    getReview.mockResolvedValue({ goals: [] });
+    openCoachSession.mockResolvedValue({ sessionId: 'sess-new' });
+    prepareCoachFoodAction.mockResolvedValue({ status: 'ok', action: null });
+  });
+
+  it('sends a visible user turn, same as send(), and reports success', async () => {
+    sendCoachMessage.mockImplementation(async (_id: string, _t: string, onDelta: (d: string) => void) => {
+      onDelta('Good — let’s see how the week went.');
+      return { completed: true, responseId: null };
+    });
+    const { result } = renderHook(() => useCoachChat());
+    await waitFor(() => expect(result.current.restored).toBe(true));
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.sendText('Start my check-in');
+    });
+
+    expect(ok).toBe(true);
+    expect(result.current.turns).toEqual([
+      { role: 'user', text: 'Start my check-in' },
+      { role: 'coach', text: 'Good — let’s see how the week went.' },
+    ]);
+  });
+
+  it('never touches the composer input — the caller owns that text', async () => {
+    sendCoachMessage.mockResolvedValue({ completed: true, responseId: null });
+    const { result } = renderHook(() => useCoachChat());
+    await waitFor(() => expect(result.current.restored).toBe(true));
+    act(() => result.current.setInput('unrelated draft'));
+
+    await act(async () => {
+      await result.current.sendText('Start my check-in');
+    });
+
+    expect(result.current.input).toBe('unrelated draft');
+  });
+
+  it('reports failure (rather than throwing) when the stream drops and recovery finds nothing', async () => {
+    getCurrentCoach.mockResolvedValue({ sessionId: null, messages: [], stale: false }); // recovery finds nothing new
+    sendCoachMessage.mockResolvedValueOnce({ completed: false, responseId: null });
+    const { result } = renderHook(() => useCoachChat());
+    await waitFor(() => expect(result.current.restored).toBe(true));
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.sendText('Start my check-in');
+    });
+
+    expect(ok).toBe(false);
+    expect(result.current.turns.some((t) => t.text.includes('Connection dropped'))).toBe(true);
+  });
+
+  it('reports failure for blank text or a turn already in flight, without calling the API', async () => {
+    const { result } = renderHook(() => useCoachChat());
+    await waitFor(() => expect(result.current.restored).toBe(true));
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.sendText('   ');
+    });
+    expect(ok).toBe(false);
+    expect(openCoachSession).not.toHaveBeenCalled();
+
+    // A turn already in flight: the suspended fetch this hook's other tests use to reach `streaming`.
+    sendCoachMessage.mockImplementation(() => new Promise(() => {}));
+    act(() => void result.current.sendText('first one'));
+    await waitFor(() => expect(result.current.streaming).toBe(true));
+
+    let second = true;
+    await act(async () => {
+      second = await result.current.sendText('a second, while she is still replying');
+    });
+    expect(second).toBe(false);
+  });
+});
+
 describe('the food surface during onboarding', () => {
   beforeEach(() => {
     vi.clearAllMocks();
