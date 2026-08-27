@@ -182,14 +182,16 @@ describe('the check-in edge cases — late arrivals and empty weeks', () => {
     );
   });
 
-  it('routes "Run through last week" to open_week_review and leaves "Just build this week" entirely to the app', () => {
+  it('routes "Run through last week" to open_week_review and "Just build this week" to build_next_week', () => {
     const out = renderPickProtocol();
     expect(out).toMatch(
       /"Run through last week" is answered exactly like any other check-in request — call open_week_review/,
     );
-    expect(out).toMatch(/"Just build this week" needs NOTHING further from you/);
+    expect(out).toMatch(/"Just build this week" means call build_next_week/);
     // The failure mode this guards: her own build tool is a full resynthesis, not a plain rollover.
-    expect(out).toMatch(/never follow it with your own build card/);
+    expect(out).toMatch(/Never answer it with your own build card/);
+    // Say-texts are editable — the routing is intent, never an exact-string match.
+    expect(out).toMatch(/an edited say-text still means the same choice/);
   });
 
   it('never opens the review for an empty week, and puts the empty case ahead of the late offer', () => {
@@ -213,7 +215,7 @@ describe('the check-in edge cases — late arrivals and empty weeks', () => {
 
   it('sends each of the three answers down a different route', () => {
     const out = renderPickProtocol();
-    expect(out).toMatch(/their word stands in for the missing log — proceed to build/);
+    expect(out).toMatch(/their word stands in for the missing log — call build_next_week/);
     expect(out).toMatch(/use propose_plan_change to put it up rather than building the identical week again/);
     expect(out).toMatch(/offer the existing detour, or a lighter build/);
   });
