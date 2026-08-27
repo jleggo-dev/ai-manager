@@ -255,6 +255,53 @@ export async function dismissPendingChange(): Promise<boolean> {
   return res.ok;
 }
 
+/* ── Changes sheet (the swap-card toggle surface, check-in rebuild, step 7 client half) ────── */
+export interface PendingChangeDetailItem {
+  index: number;
+  title: string;
+  /** The coach's one-line why, when propose_plan_change was given one. Absent for an ordinary
+   *  edit that carried no reason. */
+  change_reason?: string;
+  enabled: boolean;
+  /** The active plan's current schedule for this commitment, summarized ("Thu · 6:30 pm"). Null
+   *  for a pure add — there is no "now" for a commitment that doesn't exist yet. */
+  now: string | null;
+  next: string;
+}
+export interface PendingChangeDetail {
+  /** The active plan's version, so the sheet can label the row "WEEK {version + 1}". Null when
+   *  there is nothing pending. */
+  plan_version: number | null;
+  items: PendingChangeDetailItem[];
+}
+
+/**
+ * The full per-item view the Changes sheet renders — every proposed swap's title, reason (if the
+ * coach gave one), current enabled/disabled toggle state, and NOW → NEXT WEEK schedule. Same
+ * fallback shape as getPendingChange: nothing pending (or a read that fails) is an empty list,
+ * never a thrown error — the sheet has one honest "nothing to show" message for all of them.
+ */
+export async function getPendingChangeDetail(): Promise<PendingChangeDetail> {
+  const res = await fetch(`${BASE}/plan/pending-change/detail`, { headers: headers() }).catch(() => null);
+  if (!res?.ok) return { plan_version: null, items: [] };
+  return res.json();
+}
+
+/**
+ * Persist the sheet's toggle flips before applying. `index` addresses the STORED array position —
+ * stable, because propose_plan_change never reorders it — so these survive to the commit funnel
+ * (resolveToggledActivities in plan-partial-apply.ts) even though the tap that applies happens in
+ * a separate call (lockPlan).
+ */
+export async function setPendingChangeToggles(toggles: { index: number; enabled: boolean }[]): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/pending-change/toggles`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ toggles }),
+  }).catch(() => null);
+  return !!res?.ok;
+}
+
 /**
  * The week the coach's `open_week_review` tool put up, if it's still waiting to be opened or
  * dismissed. Read from the server, same reasoning as getPendingChange: the card shows the week

@@ -4272,6 +4272,136 @@ textarea.wiz-title {
   text-align: center;
   margin: 8px 0 0;
   line-height: 1.4;
+
+/* ── Week changes sheet (check-in rebuild, step 7 client half) ────────────────────────────
+   The swap-card list: title + OPTIONAL tag, a NOW → NEXT WEEK pair, the coach's reason, a
+   toggle. Own classes rather than reusing wkr-* — a different sheet, owned separately. */
+.wkc-sheet {
+  max-height: 86%;
+}
+.wkc-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  padding: 13px 15px;
+  margin-bottom: 10px;
+}
+.wkc-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.wkc-card-head b {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 14.5px;
+}
+.wkc-tag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.wkc-cols {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.wkc-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.wkc-col-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-mute);
+  font-family: var(--mono);
+}
+.wkc-col span:last-child {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+.wkc-arrow {
+  flex: 0 0 auto;
+  color: var(--text-mute);
+  font-size: 14px;
+}
+.wkc-reason {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+.wkc-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 40px;
+  height: 24px;
+  margin-top: 10px;
+  cursor: pointer;
+}
+.wkc-switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.wkc-switch-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background 0.15s ease;
+}
+.wkc-switch-track::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+.wkc-switch input:checked + .wkc-switch-track {
+  background: oklch(54% 0.1 152);
+}
+.wkc-switch input:checked + .wkc-switch-track::before {
+  transform: translateX(16px);
+}
+.wkc-switch input:focus-visible + .wkc-switch-track {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+.wkc-helper {
+  font-size: 12.5px;
+  color: var(--text-mute);
+  margin: 2px 0 10px;
+  text-align: center;
+}
+.wkc-err {
+  font-size: 12.5px;
+  color: oklch(52% 0.16 25);
+  margin-bottom: 6px;
+  text-align: center;
+
 }
 
 /* ── Visual Today: the sky-trail (REQ8 redesign — docs/cadence/design/redesign-today-trail) ── */

@@ -99,6 +99,7 @@ export function OnboardingChat({
   onSessionNoteUsed,
   onPlanChanged,
   onOpenWeekReview,
+  onShowChanges,
   autoSend = null,
 }: {
   /**
@@ -122,6 +123,9 @@ export function OnboardingChat({
   onSessionNoteUsed?: () => void;
   /** The WeekReviewCard's Open tap — the host mounts the full-screen review sheet. */
   onOpenWeekReview?: () => void;
+  /** ChangeCard's "Show me" tap, offered only when the pending change carries per-item fields
+   *  (a check-in offer) — the host mounts the Changes sheet, same idiom as onOpenWeekReview. */
+  onShowChanges?: () => void;
   /**
    * A canned message the host wants SENT, visibly — a real user bubble and a real coach turn,
    * unlike `sessionNote`'s invisible nudge. Today's one caller is the end-of-trail card's "Start
@@ -382,7 +386,9 @@ export function OnboardingChat({
                        * self-correcting. Keyed on the turn so a fresh proposal remounts and
                        * refetches; gated on `!streaming` so it reads AFTER the tool has run.
                        */}
-                      {last && !streaming && <ChangeCard key={`chg${i}`} onApplied={onPlanChanged} />}
+                      {last && !streaming && (
+                        <ChangeCard key={`chg${i}`} onApplied={onPlanChanged} onShowChanges={onShowChanges} />
+                      )}
                       {/**
                        * Same contract as ChangeCard, one paragraph up: `open_week_review` writes a
                        * pointer, never a tag, so this asks the server what is pending and draws

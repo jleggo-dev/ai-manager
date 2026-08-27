@@ -87,6 +87,19 @@ export interface PlanEdit {
   /** `add`: how often, in the same day vocabulary as `move`. Defaults to weekly on one day. */
   goal_title?: string;
   why?: string;
+  /**
+   * A one-line human why for THIS edit, shown on the swap card under the row it produced — "You've
+   * made 4 of 4 morning sessions this month and 1 of 4 evening ones." Every action but `remove`
+   * carries it through to the resulting `PendingPlanActivity.change_reason`; `remove` deletes its
+   * row outright, so there is nothing left to attach a reason to.
+   */
+  reason?: string;
+  /**
+   * True marks the resulting row a take-it-or-leave-it offer — `PendingPlanActivity.enabled` is
+   * written `false`, so the funnel defaults it OUT unless the user turns it on (plan-partial-apply.ts).
+   * Same exclusion as `reason`: not offered on `remove`.
+   */
+  optional?: boolean;
 }
 
 /** Every field an edit can carry besides its action. */
@@ -102,14 +115,18 @@ type PlanEditField = Exclude<keyof PlanEdit, 'action'>;
  *
  * `add` is the one action with no addressing row: it creates rather than targets, so for `add` —
  * and only for `add` — the addressing trio itself is stray and gets said.
+ *
+ * `reason`/`optional` ride on every row here EXCEPT `remove` — the swap card's per-item fields
+ * apply to any change that leaves a row behind to carry them, and `remove` is the one action that
+ * doesn't (see `attachSwapMeta`).
  */
 export const EDIT_FIELDS_READ: Record<PlanEditAction, readonly PlanEditField[]> = {
-  move: ['activities', 'activity', 'on_days', 'days'],
-  retime: ['activities', 'activity', 'on_days', 'time_of_day'],
-  resize: ['activities', 'activity', 'on_days', 'duration_min'],
+  move: ['activities', 'activity', 'on_days', 'days', 'reason', 'optional'],
+  retime: ['activities', 'activity', 'on_days', 'time_of_day', 'reason', 'optional'],
+  resize: ['activities', 'activity', 'on_days', 'duration_min', 'reason', 'optional'],
   remove: ['activities', 'activity', 'on_days'],
-  rework: ['activities', 'activity', 'on_days', 'title', 'how_to', 'duration_min'],
-  add: ['days', 'time_of_day', 'duration_min', 'title', 'how_to', 'goal_title', 'why'],
+  rework: ['activities', 'activity', 'on_days', 'title', 'how_to', 'duration_min', 'reason', 'optional'],
+  add: ['days', 'time_of_day', 'duration_min', 'title', 'how_to', 'goal_title', 'why', 'reason', 'optional'],
 };
 
 export interface PlanEditResult {
@@ -152,6 +169,8 @@ const STEER: Record<string, string> = {
   activities: 'add creates a new commitment, so there is nothing to address by handle',
   activity: 'the new commitment\'s name goes in "title"',
   on_days: 'the days a new commitment runs on go in "days"',
+  reason: 'remove deletes its row outright, so there is nothing left to explain',
+  optional: 'remove deletes its row outright, so there is nothing left to toggle',
 };
 
 /**
@@ -364,6 +383,27 @@ const showTime = (t: string | undefined) => (!t ? 'no time set' : t === ANYTIME 
  */
 function where(a: PendingPlanActivity): string {
   return `(${describeRecurrence(a.recurrence)}, ${showTime(a.time_of_day)})`;
+}
+
+/**
+ * The swap card's per-item fields, landed on the row an edit just changed.
+ *
+ * Written ONLY when the edit actually supplies the field — never stamped as a default on every
+ * touched row. `propose_plan_change` accumulates edits across calls onto one standing card
+ * (coach-actions.ts), so a FOLLOW-UP edit to the same commitment that says nothing about
+ * `reason`/`optional` must leave whatever an earlier call in this same proposal already set;
+ * silently resetting it back to "no reason"/"not optional" would undo that call for a reason
+ * this one never mentioned.
+ *
+ * Called only from the two places a row actually results from an edit — `applyAdd`'s new row and
+ * `applyToOne`'s successful (change-producing) branches — never on a no-op or a rejection, since
+ * there is nothing to explain about a row that did not change.
+ */
+function attachSwapMeta(edit: PlanEdit, row: PendingPlanActivity): void {
+  const reason = edit.reason?.trim().slice(0, 200);
+  if (reason) row.change_reason = reason;
+  if (edit.optional === true) row.enabled = false;
+  else if (edit.optional === false) row.enabled = true;
 }
 
 /** `add` — the one action with no existing target. */
@@ -607,6 +647,7 @@ export function applyPlanEdits(
         working.push(added);
         // Addressable within the same batch: "add it, then make it 30 minutes" is two edits.
         handles.set(added, `new${++addedSeq}`);
+        attachSwapMeta(edit, added);
       }
       if (change) changes.push(change);
       continue;
@@ -621,7 +662,10 @@ export function applyPlanEdits(
       const r = applyToOne(edit, found, working);
       if (r.reject) rejected.push(r.reject);
       if (r.noop) noops.push(r.noop);
-      if (r.change) changes.push(r.change);
+      if (r.change) {
+        changes.push(r.change);
+        attachSwapMeta(edit, found);
+      }
     }
   }
 

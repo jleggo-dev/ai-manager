@@ -42,6 +42,9 @@ vi.mock('../../lib/api.ts', () => ({
   // that never proposes a change. That is the point of the redesign: the card follows the stored
   // proposal, not a tag in her prose.
   getPendingChange: (...args: unknown[]) => getPendingChange(...args),
+  // ChangeCard now ALSO reads the per-item detail to decide which branch to render (Show me vs
+  // inline Apply) — default "nothing pending" here too, same reasoning as getPendingChange.
+  getPendingChangeDetail: vi.fn().mockResolvedValue({ plan_version: null, items: [] }),
   dismissPendingChange: vi.fn().mockResolvedValue(true),
   lockPlan: vi.fn().mockResolvedValue({ status: 200, body: {} }),
   // The week-review card now mounts on every finished last turn too, same reasoning as

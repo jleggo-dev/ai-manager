@@ -427,3 +427,20 @@ export const weekReviewMindStepBodySchema = z.object({
   step: z.string({ message: 'step required' }).min(1, 'step required').max(200),
   done: z.boolean({ message: 'done (boolean) required' }),
 });
+
+/**
+ * The Changes sheet's toggle flips. `index` addresses a position in the STORED pending-change
+ * array — stable, since nothing reorders it — so the route validates it in bounds rather than
+ * trusting a stale index from a sheet that fetched before the array changed underneath it.
+ */
+export const pendingChangeTogglesBodySchema = z.object({
+  toggles: z
+    .array(
+      z.object({
+        index: z.number().int().min(0),
+        enabled: z.boolean(),
+      }),
+    )
+    .min(1, { message: 'toggles must name at least one row' })
+    .max(50),
+});

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { dismissPendingChange, getPendingChange, lockPlan } from '../../lib/api.ts';
+import { dismissPendingChange, getPendingChange, getPendingChangeDetail, lockPlan } from '../../lib/api.ts';
 
 /**
  * "Here's the one change — apply it?"
@@ -13,21 +13,37 @@ import { dismissPendingChange, getPendingChange, lockPlan } from '../../lib/api.
  * or gets it wrong, still cannot alter what the user is agreeing to — the card is the truth and
  * the tap is the consent.
  *
- * Applying runs the same commit path a first build runs, so a changed plan is a normal new
- * version with its occurrences materialized — not a special case anything downstream has to know
- * about. "Not now" drops the proposal and leaves the plan exactly as it was; the coach can offer
- * again in the same conversation, which is the whole reason this is a repeatable tool and not a
- * one-shot screen.
+ * **Two branches, decided by whether any item carries a per-item field.** An ordinary requested
+ * tweak ("move Thursday's run to Friday") applies inline exactly as it always has — Apply runs the
+ * same commit path a first build runs. A change that came from a check-in offer carries a
+ * `change_reason` and/or an optional add (propose_plan_change's `reason`/`optional`, stamped onto
+ * the stored activities as `change_reason`/`enabled` — plan-edit.ts) — those need the Changes
+ * sheet's toggles and NOW/NEXT detail, not a blind inline Apply that would commit every optional
+ * add for free. "Not now" drops the proposal either way and leaves the plan exactly as it was; the
+ * coach can offer again in the same conversation, which is the whole reason this is a repeatable
+ * tool and not a one-shot screen.
  */
-export function ChangeCard({ onApplied }: { onApplied?: () => void }) {
+export function ChangeCard({
+  onApplied,
+  onShowChanges,
+}: {
+  onApplied?: () => void;
+  /** Opens the Changes sheet instead of applying inline — set only when this pending change
+   *  carries per-item fields, the signature of a check-in offer. Same idiom as WeekReviewCard's
+   *  `onOpen`: the host mounts the real surface, this card only asks for it. */
+  onShowChanges?: () => void;
+}) {
   const [lines, setLines] = useState<string[] | null>(null);
+  const [hasOffers, setHasOffers] = useState(false);
   const [state, setState] = useState<'idle' | 'applying' | 'applied' | 'gone' | 'failed'>('idle');
 
   useEffect(() => {
     let alive = true;
-    void getPendingChange()
-      .then((c) => {
-        if (alive) setLines(c?.changes ?? null);
+    void Promise.all([getPendingChange(), getPendingChangeDetail()])
+      .then(([c, detail]) => {
+        if (!alive) return;
+        setLines(c?.changes ?? null);
+        setHasOffers(detail.items.some((i) => !!i.change_reason || !i.enabled));
       })
       .catch(() => {
         /* the prose still says what she proposed; a missing card is not a broken turn */
@@ -58,6 +74,27 @@ export function ChangeCard({ onApplied }: { onApplied?: () => void }) {
     await dismissPendingChange().catch(() => {
       /* it stays pending server-side; the next card will show it again */
     });
+  }
+
+  // A check-in offer needs the sheet's toggles + NOW/NEXT detail before it commits — an inline
+  // Apply here would ship every optional add for free, which is the one thing an offer must not do.
+  if (hasOffers && onShowChanges && state === 'idle') {
+    return (
+      <div className="cfm chg">
+        <div className="chg-t">Your coach has some ideas for next week</div>
+        <ul className="chg-list">
+          {lines.map((l, i) => (
+            <li key={i}>{l}</li>
+          ))}
+        </ul>
+        <button type="button" className="cfm-build" onClick={onShowChanges}>
+          Show me
+        </button>
+        <button type="button" className="cfm-more" onClick={() => void dismiss()}>
+          Not now
+        </button>
+      </div>
+    );
   }
 
   return (

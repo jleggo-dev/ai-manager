@@ -10,6 +10,7 @@ import { PlanCardSheet } from '../gate/PlanCardSheet.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { FoodHome } from '../nutrition/FoodHome.tsx';
 import { WeekReviewSheet } from '../plan/week-review/WeekReviewSheet.tsx';
+import { WeekChangesSheet } from '../plan/week-changes/WeekChangesSheet.tsx';
 
 /**
  * Today and Week were separate TABS sharing one PlanView, and the owner's device verdict
@@ -92,6 +93,9 @@ export function MainTabs({
   const [rebuild, setRebuild] = useState(false);
   /** The WeekReviewCard's Open tap — mounts the real full-screen review (check-in rebuild, step 4). */
   const [weekReviewOpen, setWeekReviewOpen] = useState(false);
+  /** ChangeCard's "Show me" tap — mounts the Changes sheet for a check-in-offered swap (check-in
+   *  rebuild, step 7 client half). Same idiom as weekReviewOpen just above. */
+  const [weekChangesOpen, setWeekChangesOpen] = useState(false);
   const [logDidOpen, setLogDidOpen] = useState(false);
   const [planReload, setPlanReload] = useState(0); // bump → PlanView refetches after a ＋ log
   /** App-authored context for the next coach turn (e.g. the session they just finished). */
@@ -193,6 +197,7 @@ export function MainTabs({
               onSessionNoteUsed={() => setCoachNote(null)}
               onPlanChanged={() => setPlanReload((k) => k + 1)}
               onOpenWeekReview={() => setWeekReviewOpen(true)}
+              onShowChanges={() => setWeekChangesOpen(true)}
               autoSend={autoSend}
             />
             {/* The deterministic way back to the crafted plan UI from inside the conversation. */}
@@ -297,6 +302,9 @@ export function MainTabs({
               setAutoSend({ text: receiptText, key: Date.now() });
             }}
           />
+        )}
+        {weekChangesOpen && (
+          <WeekChangesSheet onClose={() => setWeekChangesOpen(false)} onApplied={() => setPlanReload((k) => k + 1)} />
         )}
         {logDidOpen && (
           <LogDidSheet

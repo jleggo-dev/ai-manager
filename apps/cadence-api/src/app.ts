@@ -8,6 +8,7 @@ import coachRoutes from './routes/coach.ts';
 import coachFoodRoutes from './routes/coach-food.ts';
 import planRoutes from './routes/plan.ts';
 import weekReviewRoutes from './routes/week-review.ts';
+import planChangesRoutes from './routes/plan-changes.ts';
 import weekRoutes from './routes/week.ts';
 import reviewRoutes from './routes/review.ts';
 import progressRoutes from './routes/progress.ts';
@@ -37,6 +38,7 @@ export function createApp() {
   app.use('/coach', coachFoodRoutes);
   app.use('/plan', planRoutes);
   app.use('/plan', weekReviewRoutes);
+  app.use('/plan', planChangesRoutes);
   app.use('/plan/week', weekRoutes);
   app.use('/review', reviewRoutes);
   app.use('/progress', progressRoutes);
