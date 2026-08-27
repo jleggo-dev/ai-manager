@@ -1,4 +1,5 @@
-import type { WeekReviewDay, WeekReviewMindRow } from '../../../lib/api.ts';
+import type { WeekReviewDay, WeekReviewMeal, WeekReviewMindRow, WeekReviewSessionRow } from '../../../lib/api.ts';
+import { MinutesStepper } from './MinutesStepper.tsx';
 
 function fullDate(iso: string): string {
   try {
@@ -13,22 +14,63 @@ function fullDate(iso: string): string {
 }
 const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1);
 
-/**
- * One inert row — read-only this step (DESIGN-check-in.md's corrections-on-the-card are a later
- * slice; this one only shows what happened). A real `<input type="checkbox">`, disabled, so the
- * shape a future correction lands into already exists — the tap just isn't wired to anything yet.
- */
-function InertRow({ label, done, sub }: { label: string; done: boolean; sub?: string }) {
+/** A live row: a real checkbox, checked flips it. `disabled` is for the one case with nothing
+ *  underneath it to write to (a meal slot outside the materialized horizon) — everything else
+ *  here always has a real occurrence behind it. */
+function LiveRow({
+  label,
+  done,
+  onToggle,
+  disabled,
+}: {
+  label: string;
+  done: boolean;
+  onToggle: (done: boolean) => void;
+  disabled?: boolean;
+}) {
   return (
     <label className="wkr-row">
-      <input type="checkbox" checked={done} disabled readOnly />
+      <input type="checkbox" checked={done} disabled={disabled} onChange={(e) => onToggle(e.target.checked)} />
       <span className="wkr-row-label">{label}</span>
-      {sub && <span className="wkr-row-sub">{sub}</span>}
     </label>
   );
 }
 
-function MindRows({ rows }: { rows: WeekReviewMindRow[] }) {
+/** One session row: the done/skipped checkbox, plus its minutes stepper. Adjusting minutes
+ *  writes `done: true` along with the value — `confirmSession` only persists minutes on a done
+ *  row, so setting how long it took IS confirming it happened. */
+function SessionRow({
+  s,
+  onToggle,
+}: {
+  s: WeekReviewSessionRow;
+  onToggle: (occurrenceId: string, done: boolean, minutes?: number) => void;
+}) {
+  const minutes = s.logged_min ?? s.planned_min ?? 1;
+  return (
+    <div className="wkr-row wkr-row-session">
+      <label className="wkr-row-check">
+        <input
+          type="checkbox"
+          checked={s.status === 'done'}
+          onChange={(e) => onToggle(s.occurrence_id, e.target.checked)}
+        />
+        <span className="wkr-row-label">{s.title}</span>
+      </label>
+      <MinutesStepper value={minutes} onChange={(next) => onToggle(s.occurrence_id, true, next)} />
+    </div>
+  );
+}
+
+function MindRows({
+  rows,
+  onToggleStep,
+  onToggleSession,
+}: {
+  rows: WeekReviewMindRow[];
+  onToggleStep: (occurrenceId: string, step: string, done: boolean) => void;
+  onToggleSession: (occurrenceId: string, done: boolean) => void;
+}) {
   return (
     <>
       {rows.map((row) =>
@@ -36,11 +78,21 @@ function MindRows({ rows }: { rows: WeekReviewMindRow[] }) {
           <div key={row.occurrence_id} className="wkr-mind-block">
             <div className="wkr-row-label">{row.title}</div>
             {row.steps.map((step) => (
-              <InertRow key={step.name} label={step.name} done={step.done} />
+              <LiveRow
+                key={step.name}
+                label={step.name}
+                done={step.done}
+                onToggle={(done) => onToggleStep(row.occurrence_id, step.name, done)}
+              />
             ))}
           </div>
         ) : (
-          <InertRow key={row.occurrence_id} label={row.title} done={row.done === true} />
+          <LiveRow
+            key={row.occurrence_id}
+            label={row.title}
+            done={row.done === true}
+            onToggle={(done) => onToggleSession(row.occurrence_id, done)}
+          />
         ),
       )}
     </>
@@ -48,11 +100,25 @@ function MindRows({ rows }: { rows: WeekReviewMindRow[] }) {
 }
 
 /**
- * One day, drilled into from its DayChips ring — every session, meal slot and mind row it holds.
- * Client-side only: `onBack` just clears the parent's selected date, nothing here fetches or
- * mutates (read-only this step).
+ * One day, drilled into from its DayChips ring — every session, meal slot and mind row it holds,
+ * now LIVE (check-in rebuild, step 5): a session's checkbox + minutes stepper, a meal slot's
+ * flip, a mind step's tick. `onBack` just clears the parent's selected date; the toggle callbacks
+ * come straight from `useWeekReview` (via WeekReviewSheet) — this component never fetches or
+ * holds its own copy of the facts, so what it shows is always the parent's current `facts`.
  */
-export function DayDrillIn({ day, onBack }: { day: WeekReviewDay; onBack: () => void }) {
+export function DayDrillIn({
+  day,
+  onBack,
+  onToggleSession,
+  onToggleMeal,
+  onToggleMindStep,
+}: {
+  day: WeekReviewDay;
+  onBack: () => void;
+  onToggleSession: (occurrenceId: string, done: boolean, minutes?: number) => void;
+  onToggleMeal: (date: string, meal: WeekReviewMeal, logged: boolean) => void;
+  onToggleMindStep: (occurrenceId: string, step: string, done: boolean) => void;
+}) {
   const nothingScheduled =
     day.sessions.length === 0 && day.mind.length === 0 && day.meals.every((m) => m.occurrence_id === null);
 
@@ -70,31 +136,30 @@ export function DayDrillIn({ day, onBack }: { day: WeekReviewDay; onBack: () => 
           {day.sessions.length > 0 && (
             <div className="wkr-drillin-group">
               {day.sessions.map((s) => (
-                <InertRow
-                  key={s.occurrence_id}
-                  label={s.title}
-                  done={s.status === 'done'}
-                  sub={
-                    s.logged_min != null
-                      ? `${s.logged_min} min`
-                      : s.planned_min != null
-                        ? `${s.planned_min} min planned`
-                        : undefined
-                  }
-                />
+                <SessionRow key={s.occurrence_id} s={s} onToggle={onToggleSession} />
               ))}
             </div>
           )}
 
           <div className="wkr-drillin-group">
             {day.meals.map((m) => (
-              <InertRow key={m.meal} label={cap(m.meal)} done={m.logged} />
+              <LiveRow
+                key={m.meal}
+                label={cap(m.meal)}
+                done={m.logged}
+                disabled={m.occurrence_id === null}
+                onToggle={(logged) => onToggleMeal(day.date, m.meal, logged)}
+              />
             ))}
           </div>
 
           {day.mind.length > 0 && (
             <div className="wkr-drillin-group">
-              <MindRows rows={day.mind} />
+              <MindRows
+                rows={day.mind}
+                onToggleStep={onToggleMindStep}
+                onToggleSession={(occurrenceId, done) => onToggleSession(occurrenceId, done)}
+              />
             </div>
           )}
         </>

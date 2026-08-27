@@ -10,7 +10,6 @@ import { logAdhocActivity, logPlannedActivity } from '../services/adhoc-log.ts';
 import { enterEpisode, endEpisode, reviseEpisodeEquipment, postponeEpisodeStart } from '../services/episode.ts';
 import { equipmentFromGymPhotos } from '../services/gym-photo.ts';
 import { recordWeighIn, recordWeighInToday } from '../services/weigh-in.ts';
-import { getWeeklyRecap } from '../services/recap.ts';
 import { getSessionInsight } from '../services/session-insight.ts';
 import { setPendingProposal, setPendingPlan, getUser } from '../repos/users.ts';
 import { setOccurrenceStatus, getOccurrenceWithActivity } from '../repos/occurrences.ts';
@@ -401,23 +400,6 @@ router.post('/weigh-in', async (req: Request, res: Response) => {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/weigh-in]', err);
     res.status(500).json({ error: 'weigh-in failed' });
-  }
-});
-
-/**
- * POST /plan/recap — "Your weekly check-in" (A23 §2b).
- *
- * POST rather than GET because it is not free: the numbers are SQL, but the narration is a coach
- * call. The client asks once when the check-in opens. A narration failure still returns the week —
- * `note` simply comes back empty and the panel renders the figures on their own.
- */
-router.post('/recap', async (req: Request, res: Response) => {
-  const userId = req.cadenceUserId!;
-  try {
-    res.json(await getWeeklyRecap(userId));
-  } catch (err) {
-    console.error('[POST /plan/recap]', err);
-    res.status(500).json({ error: 'could not put the week together' });
   }
 });
 

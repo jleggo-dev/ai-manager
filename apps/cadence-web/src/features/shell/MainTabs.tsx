@@ -286,7 +286,18 @@ export function MainTabs({
             }}
           />
         )}
-        {weekReviewOpen && <WeekReviewSheet onClose={() => setWeekReviewOpen(false)} />}
+        {weekReviewOpen && (
+          <WeekReviewSheet
+            onClose={() => setWeekReviewOpen(false)}
+            // "Confirm my week" hands the coach the finished receipt VISIBLY — the same autoSend
+            // bridge "Start my check-in" already uses (see the state comment above): a real user
+            // bubble and a real coach turn, not a whispered note.
+            onConfirmed={(receiptText) => {
+              setTab('coach');
+              setAutoSend({ text: receiptText, key: Date.now() });
+            }}
+          />
+        )}
         {logDidOpen && (
           <LogDidSheet
             onClose={() => setLogDidOpen(false)}
