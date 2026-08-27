@@ -114,6 +114,10 @@ const PROBE: Record<string, unknown> = {
   how_to: 'Eight by ninety seconds, hard up, walk down',
   goal_title: 'Run a 10k',
   why: 'Because the last 2km is where it falls apart',
+  // Neither has a stored value the plan already carries pre-edit, so either probe value is
+  // genuinely different from "not set" — reason lands as `change_reason`, optional as `enabled`.
+  reason: "You've made 4 of 4 morning sessions this month and 1 of 4 evening ones.",
+  optional: true,
 };
 
 /** The smallest edit each action needs to be valid, minus any addressing. */

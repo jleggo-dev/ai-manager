@@ -18,6 +18,9 @@ vi.mock('../../lib/api.ts', () => ({
   postHealthDigest: vi.fn().mockResolvedValue(true),
   postWorkoutHistory: vi.fn().mockResolvedValue(true),
   getPendingChange: vi.fn().mockResolvedValue(null),
+  // ChangeCard also reads the per-item detail now (to pick Show me vs inline Apply) — same
+  // pre-existing-gap reasoning as getPendingWeekReview just below.
+  getPendingChangeDetail: vi.fn().mockResolvedValue({ plan_version: null, items: [] }),
   dismissPendingChange: vi.fn().mockResolvedValue(true),
   lockPlan: vi.fn().mockResolvedValue({ status: 200, body: {} }),
   // The week-review card mounts on every finished last turn (same as getPendingChange above) —

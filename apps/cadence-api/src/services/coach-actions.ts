@@ -20,6 +20,7 @@ import { OPEN_WEEK_REVIEW } from './coach-action-week-review.ts';
 const today = (): string => new Date().toISOString().slice(0, 10);
 import { expandRecurrence } from './scheduling.ts';
 import { applyPlanEdits, matchActivity, type PlanEdit } from './plan-edit.ts';
+import { PLAN_EDIT_ACTIONS, EDIT_SCHEMA } from './plan-edit-schema.ts';
 
 /**
  * The coach's ACTION tools — the half of the harness that changes something.
@@ -54,70 +55,9 @@ import { applyPlanEdits, matchActivity, type PlanEdit } from './plan-edit.ts';
 
 export type { CoachActionTool } from './coach-action-types.ts';
 
-/** The actions the engine can carry out. One list, shared with the schema so they cannot drift. */
-export const PLAN_EDIT_ACTIONS = ['move', 'retime', 'resize', 'remove', 'add', 'rework'] as const;
-
-const EDIT_SCHEMA = {
-  type: 'array',
-  description: 'The changes to make, applied in order.',
-  items: {
-    type: 'object',
-    properties: {
-      action: {
-        type: 'string',
-        enum: [...PLAN_EDIT_ACTIONS],
-        description:
-          'move = which days it happens on; retime = what time of day; resize = how many minutes; remove = drop it; add = a new commitment; rework = change what the session CONTAINS, keeping its slot (swap an exercise, change the focus).',
-      },
-      activities: {
-        type: 'array',
-        items: { type: 'string' },
-        description:
-          'WHICH commitments, by the handles get_active_plan prints (e.g. ["a3f19c2b","5d01f807"]). Several in one edit is how you change every run at once. Not used for add. A commitment this call or the standing card created is "new1", "new2"… in card order — address it by that until the card is applied.',
-      },
-      activity: {
-        type: 'string',
-        description:
-          'Fallback when you have no handle: the title, exactly as the plan lists it. Refused if two share it — use activities instead. Not used for add.',
-      },
-      on_days: {
-        type: 'array',
-        items: { type: 'string' },
-        description:
-          'ONLY for narrowing the `activity` title fallback when two share a name — the days it happens on NOW. Meaningless beside `activities` handles, and it is NOT where you say the new days: that is `days`. Omit whenever you passed a handle.',
-      },
-      days: {
-        type: 'array',
-        items: { type: 'string' },
-        description:
-          'For move and add: ALL the days it should happen on afterwards — this replaces its whole weekly pattern, so a twice-a-week session keeps both days only if you name both, e.g. ["tuesday","friday"].',
-      },
-      time_of_day: {
-        type: 'string',
-        description:
-          'REQUIRED on add, and for retime. A clock time ("07:00") or a part of day ("morning"). If it genuinely has no fixed slot, pass "anytime" — but that is a DECISION to make with them, not a field to leave out: an add without this is refused. When they have not said, use the time their other sessions of that kind run at, or ask.',
-      },
-      duration_min: {
-        type: 'integer',
-        description:
-          'For resize, add and rework: minutes of the ACTIVITY ITSELF — exactly the number they said. "A 40 minute run" is 40; "a 20 minute meditation" is 20. Do NOT pad it for warm-up, cool-down or getting there: the app adds that around the effort and shows them the total to set aside. Never quietly shrink it either — 20 minutes of meditation means 20 minutes meditating.',
-      },
-      title: {
-        type: 'string',
-        description:
-          'For add: what the new commitment is called. For rework: a new name, only if the change earns one.',
-      },
-      how_to: {
-        type: 'string',
-        description:
-          'For rework AND add: what this session should CONTAIN from now on, in plain words — "dead hangs instead of farmers carries", "conversational pace, ~5km". Its character and any distance go here; how many minutes the effort runs for is duration_min, not this. Applies to every future session of it.',
-      },
-      goal_title: { type: 'string', description: 'For add: which goal it serves, by title.' },
-      why: { type: 'string', description: 'For add: one sentence on why it is worth doing.' },
-    },
-    required: ['action'],
-  },
-};
+/** Re-exported for callers that used to import it from here (nothing does today, but the schema's
+ *  own home is now plan-edit-schema.ts — see that file for `EDIT_SCHEMA` and its field prose). */
+export { PLAN_EDIT_ACTIONS } from './plan-edit-schema.ts';
 
 /**
  * Words the model reaches for that mean an action by another name.
@@ -147,6 +87,8 @@ function asEdits(raw: unknown): { edits: PlanEdit[]; unknown: string[] } {
       ...(typeof e.how_to === 'string' ? { how_to: e.how_to } : {}),
       ...(typeof e.goal_title === 'string' ? { goal_title: e.goal_title } : {}),
       ...(typeof e.why === 'string' ? { why: e.why } : {}),
+      ...(typeof e.reason === 'string' ? { reason: e.reason } : {}),
+      ...(typeof e.optional === 'boolean' ? { optional: e.optional } : {}),
     }))
     /**
      * An action this engine cannot perform is REPORTED, never quietly removed.
@@ -167,7 +109,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   propose_plan_change: {
     name: 'propose_plan_change',
     description:
-      'Propose a change to the plan they have — move, retime, resize, drop, add one, or rework what one CONTAINS. This does NOT change anything: it shows the week on a card with an Apply button, so the plan moves only when they tap. Use it the moment they name a change, in the same reply even when you think it unnecessary: say so, and still show the card. Never claim it is done before the tap. Read get_active_plan first — edits address commitments BY the handles it prints; one edit can carry several. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45}]}. Calling again ADDS to the card up; if it holds a mistake, never add a fix beside it — redo with "start_over": true and ONLY the corrected edits. A whole rebuild is the build card.',
+      'Propose a plan change — move, retime, resize, drop, add, or rework what one CONTAINS. Does NOT change anything — the card needs a tap, and you must never say it is done before that. Use it the moment they name a change, however small — always put up the card. Read get_active_plan first — edits address commitments BY its printed handles; one edit can carry several. Give an edit a "reason" (one line, shown under that swap) and mark a take-it-or-leave-it add "optional": true — it starts unchecked. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45, "reason": "..."}]}. Calling again ADDS to the card; if it holds a mistake, never add a fix beside it — redo with "start_over": true, ONLY the corrected edits. A whole rebuild is the build card.',
     parameters: {
       properties: {
         edits: EDIT_SCHEMA,

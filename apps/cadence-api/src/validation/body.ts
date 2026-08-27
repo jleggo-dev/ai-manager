@@ -400,3 +400,20 @@ export const episodePhotoBodySchema = z.object({
 export const episodeEquipmentBodySchema = z.object({
   equipment: z.array(z.object({ name: z.string().min(1).max(60) })).max(20),
 });
+
+/**
+ * The Changes sheet's toggle flips. `index` addresses a position in the STORED pending-change
+ * array — stable, since nothing reorders it — so the route validates it in bounds rather than
+ * trusting a stale index from a sheet that fetched before the array changed underneath it.
+ */
+export const pendingChangeTogglesBodySchema = z.object({
+  toggles: z
+    .array(
+      z.object({
+        index: z.number().int().min(0),
+        enabled: z.boolean(),
+      }),
+    )
+    .min(1, { message: 'toggles must name at least one row' })
+    .max(50),
+});
