@@ -1,346 +1,149 @@
 # The check-in — the coach's half of the week
 
-> **⚠️ PARTIALLY SUPERSEDED (2026-08-26).** This document's *product reasoning* (the measured
-> latency evidence, the owner rulings, the horizon/consistency findings) still stands — but its
-> *architecture* predates the approved v3 mockup (`Cadence Check-in.dc.html`) and the build now in
-> flight on `feat/weekly-check-in-rebuild`. What shipped instead of the chat-card design described
-> below: the coach's `open_week_review` tool persists a `pending_week_review` pointer (migration
-> 0044) the client polls; the review is a FULL-SCREEN sheet (`features/plan/week-review/`), not a
-> chat card; per-item plan changes ride `PendingPlanActivity.enabled`/`change_reason` with a
-> revert-not-delete partial-apply (`plan-partial-apply.ts`); the check-in-due nudge is a push
-> producer, not the local weekly nudge. Full current spec: the build plan + the mockup. This file
-> gets its v3 rewrite when the build lands — until then, do not implement against the sections
-> below.
+**Status: BUILT** (v3, 2026-08-27, `feat/weekly-check-in-rebuild`). Owner rulings 2026-08-25; the
+approved mockup is `Cadence Check-in.dc.html` in the design project ("The coach calls the screens.
+The screens do the work."). §1–3 below are the product reasoning that produced the build and still
+stand; §4 onward describes what shipped, with file names — this is the reference, the earlier
+chat-card architecture drafts are superseded.
+**Read first:** [BRAND.md](BRAND.md), [TOOL-HARNESS.md](TOOL-HARNESS.md).
 
-**Status:** designed, not built. Owner rulings 2026-08-25.
-**Branch:** `investigate/activity-panel-latency` (started as a latency investigation; the latency
-turned out to be a symptom of this).
-**Read first:** [BRAND.md](BRAND.md), [TOOL-HARNESS.md](TOOL-HARNESS.md),
-[MEMORY-ARCHITECTURE.md](MEMORY-ARCHITECTURE.md).
-
-> **The governing sentence, and the one this document got wrong once already:**
-> the check-in is **not a feature and not a flow**. It is a conversation the coach knows how to
-> have, entered by a sentence the user sends, backed by one deterministic tool she calls and one
-> card she emits. Every phase-shaped design of it is the pipeline-calls-the-model inversion
-> sneaking back in wearing a wireframe.
+> **The governing sentence:** the check-in is a conversation the coach runs — entered by a sentence
+> the user sends, served by tools SHE calls, rendered by deterministic screens the app owns. The
+> app never orchestrates her; she calls the screens like tools, and every number on them comes from
+> the log database, never from her prose.
 
 ---
 
-## How we got here: the tap that took two minutes
+## 1. How we got here: the tap that took two minutes
 
-The owner tapped a meditation and a run on 2026-08-25 and waited ~63 seconds across the two. The
-measurement (163 runs of `prescribe-session`, 14 days) says the wait is real and structural:
+The owner tapped a meditation and a run on 2026-08-25 and waited ~63 seconds across the two.
+Measured across 163 `prescribe-session` runs: `total ≈ 12.6s fixed + 8.4ms/output-char`; app-side
+work averaged 76–153ms. The wait was one live coach call authoring the session **at first tap** —
+the button was built at plan commit, its shape wasn't.
 
-```
-total ≈ 12.6s fixed + 8.4ms per output character
-```
+Owner: *"The activity isn't just the button, it includes the shape of the activity. If the button
+is on the screen, the activities it represents should also be there."*
 
-App-side work — every DB read, the weather call, normalization — averages **76–153ms**. The database
-is 0.4% of the wait. The rest is one live coach call, at tap time, authoring the session the button
-has been promising since the plan was committed.
+**Fixed** (step 1): `commitActivities` fires `prefetchImminentSessions` the moment occurrences
+materialize, and the `GET /plan` backstop covers the whole 7-day view window (cheap via the
+`has_session` list flag; overlapping passes dedupe per-occurrence). The device report's exact case
+— a rolling-materialized row tapped 1s after plan load — is covered by the backstop, and the
+rolling materialization itself is gone (§4).
 
-**The bug is not the latency. The bug is *when* the work happens.**
+## 2. The horizon was extending itself
 
-| | What it is | Built when | Stored |
-|---|---|---|---|
-| The button | "Easy run", Tuesday 7am | plan commit (`synthesize_plan`) | `activities` + `occurrences` |
-| **The shape** | blocks, sets × reps, the note | **first tap** (`prescribe-session`) | `occurrences.session` |
+Three clocks that never met: the view showed 7 days, `ensureHorizon` silently materialized 14 on
+every load, the check-in gate ran on its own 7. Nobody could ever scroll to the end of their plan,
+so the coach never got a natural moment to ask how the week went.
 
-Owner:
+Owner: *"Just infinitely generating a plan doesn't really ensure success and success is what
+we're after."*
 
-> "The activity isn't just the button, it includes the shape of the activity. If the button is on the
-> screen, the activities it represents should also be there."
+**Fixed** (step 6): one constant (`DEFAULT_HORIZON_DAYS = 7`, imported by lock/commit/prefetch),
+speculative `ensureHorizon` callers deleted (only the commit-path call remains), and
+`rollingConsistency` excludes zero-occurrence days from its denominator — a week in check-in limbo
+is a gap, never a miss.
 
-Author the shape when the button is born. Which raises the question this document answers — *when is
-a button born, and who decides?*
+## 3. What the old check-in was: a receipt
 
----
-
-## The horizon has been extending itself
-
-Three clocks, none of which talk to each other:
-
-| | Today | Where |
-|---|---|---|
-| What the user *sees* | 7 days | `buildPlanView(userId, 7, …)` |
-| What *materializes* | **14 days**, silently, on every plan load | `DEFAULT_HORIZON_DAYS`, [plan-horizon.ts:8](../../apps/cadence-api/src/services/plan-horizon.ts) |
-| Check-in cadence | 7 days, consent-gated | `ASSESS_INTERVAL_DAYS`, [situation.ts:13](../../apps/cadence-api/src/services/situation.ts) |
-
-Two consequences:
-
-1. **The edge is invisible by construction.** The horizon always runs a week ahead of the view, so
-   nobody can scroll to the end of their plan. There is no moment at which the coach can ask "shall
-   we make another week?" because there is never an end in sight.
-2. **The horizon is decoupled from the check-in.** `ensureHorizon` is void-fired from
-   [plan-view.ts:98](../../apps/cadence-api/src/services/plan-view.ts) and
-   [coach.ts:123](../../apps/cadence-api/src/routes/coach.ts) with no user involvement.
-
-Owner:
-
-> "Just infinitely generating a plan doesn't really ensure success and success is what we're after."
-
-**The horizon should end where the week ends, and reaching it should be the moment the coach gets
-your attention.**
+`recap.ts` (now deleted): the app computed everything, the model narrated a paragraph, and nothing
+could change. Against the owner's three real coaches — piano teacher (new piece when one is
+mastered), trainer (reads the scale, adjusts the plan), boss (unblocks, angles at growth) — every
+real check-in **ends in a change**. A readout that ends in a paragraph is a receipt for a week you
+already lived. That gap is what v3 closes.
 
 ---
 
-## What the check-in is today: a receipt
+## 4. As built — the loop
 
-[`recap.ts`](../../apps/cadence-api/src/services/recap.ts), in its own words:
+> Week ends → the trail says so → "Start my check-in" (a real, visible message) → she calls
+> `open_week_review` → the card appears in the thread → Open mounts the full-screen review →
+> toggles correct the log → "Confirm my week" → the receipt lands in the chat, visibly → she reads
+> it and may put up swap cards with reasons → the Changes sheet applies what stays toggled on →
+> the commit warms every session → "Week N is ready. First up: Tuesday, 7 — Easy run."
 
-> *"code computes, the model narrates. Every number here comes out of Postgres and arithmetic; the
-> job turns them into a warm paragraph… **Nothing it writes can change a number.**"*
+### The trail's end (step 6)
+`computeWeekState` (plan-view.ts) returns `weekState: {ends_on, checkin_due}` — due iff the active
+plan's `generated_at` is ≥7 days old and no newer version exists. **Any commit IS the week being
+handled**; nothing else is tracked, nothing can be "overdue." Two independent layers render it
+(`EndOfTrailCard.tsx`): a hard-to-break plain fallback, and the rich card ("Week {version} wraps up
+today" — past tense once ≥2 days by) inside an error boundary whose fallback IS layer 1. A bug in
+the nice card degrades to a plain button, never to a blank week.
 
-The coach arrives with **no tools, nothing to pull, and nothing she can change.** She is handed a
-finished report and asked to read it aloud warmly.
+### Entry is a sentence, visibly sent (steps 4/6)
+"Start check-in" posts **"Start my check-in"** through the real send pipeline — a visible user
+bubble and a real coach turn (`autoSend` on OnboardingChat; keyed latch since the tab never
+unmounts; a dead session lands the text in the composer rather than eating the tap). Never a
+whispered `<note>`.
 
-### Why that is the miss
+### She opens the review (step 3)
+`open_week_review` (always-on; the measured `update_constraint` 0-of-3 precedent is why) persists
+`pending_week_review` (migration 0044) — the plan week, capped at today, so "late" needs nothing
+special. The client polls (`WeekReviewCard`, ChangeCard's contract), renders the labelled card;
+Open mounts the sheet. Tool calls never cross the SSE wire — persisted state is the only channel.
 
-The owner has this ritual with three real coaches. Every one **ends in a change**:
+### The review is software (steps 2/4/5)
+`features/plan/week-review/` + `week-review-facts.ts` (server): per-day grid — sessions
+(planned/logged minutes), 3 meal slots, mind rows with named steps — all Postgres, no model.
+Write-back is plain CRUD (`week-review-write.ts`: read-merge-write per the `correct_log` rule).
+"Confirm my week" counts fixes client-side (`Confirm week · save N fixes`), dismisses the pointer,
+and sends the receipt **visibly**: `Week confirmed — {S} of {St} sessions · {M} of {Mt} meals ·
+{C} correction(s)`. She replies to it for real. The old surface (RecapPanel, `/plan/recap`,
+`recap.ts`, the `weekly-readout` narration) is deleted.
 
-| | The review | The change |
-|---|---|---|
-| Piano teacher | checks progress on current pieces | **new song when one is mastered, new scale** |
-| Fitness coach | weigh-in | **adjusts the plan** |
-| Boss (1:1) | reviews the week's work | **unblocks, angles at career growth** |
+### Changes end in a tap, never in her prose (step 7)
+`propose_plan_change` edits now carry per-edit `reason` and `optional`; they land on
+`PendingPlanActivity.change_reason`/`enabled`. ChangeCard shows **"Show me"** when per-item data
+exists (plain old changes keep inline Apply), opening `features/plan/week-changes/`: NOW → NEXT
+WEEK swap cards, the reason under each, toggles (optional starts off), "Nothing changes until you
+tap this." Apply persists toggles then runs the one commit funnel — where `resolveToggledActivities`
+(plan-partial-apply.ts) makes a declined edit **revert to the commitment's current version** and a
+declined add disappear. `commitActivities` treats its array as the complete next plan; a bare
+filter would have deleted what the user meant to keep.
 
-A readout that ends in a paragraph is not a check-in. It is a receipt for a week you already lived.
+### The trust path (steps 6/8)
+"Just build my week" — never "Skip" — is a **commit, not a synthesis**: `buildNextWeek`
+(week-build.ts) recommits the same activities, the new version materializes and warms, and the
+ready push says the one fact worth saying: *"Week {N} is ready. First up: {weekday}, {time} —
+{title}."* From the trail it's the card's button (`POST /plan/week/build`); from conversation it's
+her `build_next_week` tool (always-on) — an exact-string interception of the say-text was rejected
+as brittle, since say-texts are editable by design.
 
----
+### The knock (step 8)
+A push producer (`notify/producers/checkin-due.ts`), not the old ungated local nudge (removed in
+the same change — it had no "already done" suppression and locals can't be server-cancelled).
+Candidate: active plan ≥7 days old, no newer version; dedupe `target = generated_at + 7` — which
+never changes while ignored, so it fires **once per stalled week-end and structurally cannot nag**.
+Normal `notify()` path: quiet hours, caps, opt-in.
 
-## The architecture: she runs it, we don't
-
-**Owner ruling, 2026-08-25** — and it corrected this document's first draft, which had specced a
-three-phase screen flow:
-
-> "The coach can and should call these tools itself… When we call the coach for a weekly check-in
-> this is just a pre-baked user prompt (hey I want to do my checkin, or I'd love to look back on the
-> past few months with you). They should be able to invoke the tools they need."
-
-The first draft had **Phase 1 → Phase 2 → Phase 3**: the app renders a confirm screen, then hands to
-the coach, then commits. That is the pipeline-calls-the-model shape — the exact inversion CLAUDE.md
-forbids — redrawn as a wireframe. It also broke a protocol rule that already ships in
-[`coach-picks-protocol.ts`](../../apps/cadence-api/src/services/coach-picks-protocol.ts):
-
-> *"BUILD IS SOMETHING YOU DO, NOT SOMEWHERE YOU SEND THEM. There is no review screen and no other
-> route to a plan: never tell anyone to 'head to Review', to confirm somewhere, or to go to any
-> screen."*
-
-### The four pieces, and three of them already exist
-
-| Piece | What it does | Status |
-|---|---|---|
-| **A sentence** | The check-in is entered by a user message: *"I'd like to do my check-in."* | **Exists** — picks carry a `say` that "is dropped into their composer and they can edit it" |
-| **One fat tool** | `review_period(from, to)` returns the whole assembled review in ONE call | **To build** |
-| **A card she emits** | The week's facts rendered by the app, with corrections inline | **Pattern exists** — the build card and the `propose_plan_change` card both work this way |
-| **Knowing the cadence** | She knows a weekly check-in is due, or a quarterly | **To add** — context, not a pipeline |
-
-### The sentence, not the mode
-
-There is no "check-in mode". The trail-edge affordance and the due-nudge both do exactly what every
-other pick does: **drop an editable sentence into the composer.**
-
-- *"I'd like to do my check-in"*
-- *"I'd love to look back on the past few months with you"*
-- *"I missed last week's — can we do it now?"*
-
-The last one is not a special case. It is a sentence, and she handles it by calling the tool with a
-different window. **Nothing expires, because there is no object to expire.**
-
-### One fat tool, not seven small ones
-
-Owner:
-
-> "Maybe they call the tool themselves, based on the kind of request the user has — and it is a
-> deterministic job that grabs all of the relevant data for them (rather than a series of specific
-> queries they need to call to do it themselves)."
-
-She should not have to assemble a check-in out of `get_consistency` + `get_goal_progress` +
-`get_weight` + `get_recent_logs` + `get_practice_totals` and remember all five. One call returns the
-review.
-
-**Precedent in this repo:** the nutrition facade, described in
-[`coach-tool-tiers.ts`](../../apps/cadence-api/src/services/coach-tool-tiers.ts) as *"Covered by a
-facade… never listed to her, because **choosing between them WAS the problem**."* Same reasoning,
-same shape.
-
-The tool is **windowed and deterministic** — no model inside it. That is what makes it serve every
-case at once:
-
-| Window | Serves |
-|---|---|
-| Last 7 days | The weekly check-in |
-| An arbitrary 7 days | "I missed last week's" |
-| A quarter | The quarterly ritual |
-| Anything | *"How am I doing?"*, asked at 11pm on a Tuesday |
-
-`buildRecapFacts` already computes most of this deterministically and is the obvious core to grow.
-
-### The card, not the recital
-
-She does not read the numbers out. The protocol already states the rule for the change card, and it
-transfers verbatim:
-
-> *"That change card renders the edit the TOOL computed, not your description of it, so let it do the
-> listing. Say in one line what you have put up… never recite the diff."*
-
-So: one warm line, then the card. The app renders the week; corrections happen on the card via
-`correct_log`, which already exists.
-
-**Owner ruling on friction:** show the whole week, edits opt-in, **silence is agreement**, with
-explicit confirmation only on anomalies — a gap, a provisional meal, a missed weigh-in.
-
-### Reviewing your own data, any time
-
-Owner: *"A user should be able to review their data (honestly, probably at any time)."*
-
-Two doors to the same facts, and neither is a mode:
-
-1. **She pulls it up** — mid-conversation, whenever it would help, the same way she emits any card.
-2. **The user opens it** — a plain review surface, no coach required.
-
-The same deterministic tool backs both. Nobody has to start a conversation to look at their own week.
+### Late, and the week nobody logged (edge cases)
+Protocol blocks (`coach-picks-protocol.ts`) + a once-per-day context line ("Their plan week ended
+N days ago; check-in not yet done" / "Last week has no logged activity" — date-context.ts). Late:
+one warm line, two picks ("Run through last week" → `open_week_review`; "Just build this week" →
+`build_next_week`), never "overdue," never counting days out loud. Empty: she must NOT open a
+review of zeroes — one question, three answers ("Fine — I just didn't log" → `build_next_week`;
+"Rough, honestly" → talk, then `propose_plan_change`; "Life got busy" → the existing detour).
+Persona changes reach **new sessions only** (AI Admin snapshots at open).
 
 ---
 
-## The loop: the check-in *is* the horizon extension
+## 5. Verification state
 
-> Your week ends → you say so → she pulls the review and puts it up → you talk → she proposes → you
-> accept → that commit builds next week → sessions warm at commit → every tap is instant.
+Everything above merged on `feat/weekly-check-in-rebuild`: 1,608 api tests (140 files, including
+the real-DB commit funnel) + 945 web tests, typecheck and `eslint --max-warnings 0` clean in both
+workspaces. `eval:tools` baseline table lives in TOOL-HARNESS.md — first recorded run 73.1 F1 with
+zero false-fires from the new always-on tools; re-run after any always-on change and append a row.
+Migration 0044 applied. The `weekly-readout` job in `config/ai-admin/ai-admin.config.json` is now
+orphaned (its only caller is deleted) — remove in a deployment-scoped change with a jobs sync.
 
-There is no separate "extend my week" button. **Checking in is how the next week gets made.**
+## 6. Still open
 
-It also resolves the cost objection against pre-warming: warming is no longer speculative. You warm
-exactly one week, at a moment the person explicitly asked for.
-
----
-
-## The data she gets
-
-Owner's specification: detail near, compression far.
-
-| Window | Resolution |
-|---|---|
-| Last 7 days | Full detail |
-| Previous 5–6 weeks | Week-over-week |
-| Earlier | Month-over-month summaries |
-
-Today's `ROLLING = 28` (4 weeks) is the whole long view. This ladder extends it and should reuse
-[MEMORY-ARCHITECTURE.md](MEMORY-ARCHITECTURE.md)'s compression rather than growing a parallel one.
-
----
-
-## Three cadences, one machinery
-
-| | Trigger | Difference |
-|---|---|---|
-| **Weekly** | Due nudge, or any time | Window = the week |
-| **Ad-hoc** | A sentence, whenever | Window = whatever they asked about |
-| **Quarterly** | Due every ~13 weeks, **replaces** that week's check-in | Wider window, plus re-measurement and goal revision |
-
-**She knows the cadence.** That a weekly is due, or a quarterly, is a fact in her context — the same
-way identity, goals and constraints already arrive. It is not a mode the app puts her in, and it does
-not stop her doing one whenever asked.
-
-### Quarterly is a different ritual, not a bigger weekly
-
-The owner's models: a fitness test with real measurements, a piano teacher revisiting what you're
-ultimately working toward, a performance review of wins and opportunities. All three are
-*re-measurement plus goal revision*. `rebaseline` already exists as a `pending_proposal` action.
-
----
-
-## Skipping, lateness, and regret
-
-**Owner ruling:** skippable, but the default. The opt-out is easy, obvious, and **not a dismissal**:
-
-> "I trust the coach, I don't need to chat with them, let them just auto-generate and I'll keep on
-> keeping on."
-
-Copy is about trust, never about skipping. *"Just build my week — I trust you."* Never *"Skip"*,
-*"Not now"*, *"Dismiss"*.
-
-Note what the opt-out actually **is**: the existing **build card**, emitted without the conversation.
-It is not a new mechanism.
-
-### The one the architecture has to earn
-
-Owner:
-
-> "…the user who is paranoid haha, or who maybe skipped a weekly or quarterly checkin because they
-> were making their kids lunches and they have regret about it."
-
-Two people, one requirement: **a check-in must never be a thing you can be late for.**
-
-- **The anxious one** wants to look more often than weekly. They say so; she pulls the review. No
-  ceremony, no "your next check-in is Sunday."
-- **The one who missed it** says *"I missed last week's."* She calls the tool with last week's window
-  and they have the conversation. She does **not** open with "you missed your check-in."
-
-This is why the check-in **must not be a scheduled row with a status**. The moment it becomes an
-object with a state, it can be `overdue`, and `overdue` is a red mark — exactly what BRAND.md
-forbids. Track the cadence the way `last_assessed_at` already does (a timestamp that decides whether
-to nudge), never as a task that can fail.
-
-**Skipping never counts as a miss.** Count what happened, never what broke.
-
----
-
-## The risk this design must survive
-
-[coach-tool-tiers.ts](../../apps/cadence-api/src/services/coach-tool-tiers.ts) records a measured
-failure — same evening, same user, same model:
-
-| tool | reached how | called |
-|---|---|---|
-| `log_session` | always-on | **4 of 4** |
-| `update_constraint` | behind `find_tools` | **0 of 3** |
-
-She *found* it every time and **told the owner it was done instead of doing it.** Diagnosed as
-structural — *"a continuation is a FRESH generation."*
-
-For a check-in whose value is that it **ends in a change**, this is fatal, and worse than today: a
-warm conversation, an unmoved plan, and a person who believes something happened.
-
-**The mitigation is already the house pattern, not a new invention:** the plan changes when a card is
-tapped, so she cannot *claim* it. The protocol says it outright — *"Talking it through is the
-agreement; the card is the commit"*, and *"never say a PLAN change is done… before they have tapped
-the button."* A check-in that agreed on something and ended without a card is the bug, and it is
-detectable without a human: **assert the card, not the prose.**
-
-Needs an eval before ship (`npm run eval:tools`) asserting **cards emitted / acts fired**, never acts
-described.
-
----
-
-## What changes in code
-
-| # | Change | Notes |
-|---|---|---|
-| 1 | **Warm sessions at `commitActivities`** | Independent of all of this; removes the 21–35s tap. Ship first. |
-| 2 | `DEFAULT_HORIZON_DAYS` 14 → **7** | View, horizon and check-in cadence become one number. |
-| 3 | Drop speculative `ensureHorizon` | Remove [plan-view.ts:98](../../apps/cadence-api/src/services/plan-view.ts) + [coach.ts:123](../../apps/cadence-api/src/routes/coach.ts). **Keep** [plan-synthesis.ts:426](../../apps/cadence-api/src/services/plan-synthesis.ts) (commit path). |
-| 4 | **`review_period` tool** | One deterministic call, windowed. Grow from `buildRecapFacts`. Facade over the small reads. |
-| 5 | **A review card she emits** | App renders the facts; corrections inline via `correct_log`. Same family as the build card. |
-| 6 | **Cadence in her context** | She knows a weekly/quarterly is due. Context, not a mode. |
-| 7 | Entry affordances emit a `say` | Trail edge + due nudge drop an editable sentence in the composer. No new mechanism. |
-| 8 | Standalone review surface | The user's own data, openable without a conversation. |
-| 9 | Retire `weekly-readout` | The narrate-only job has no place once she runs the check-in herself. |
-| 10 | Data ladder: 7d / 5–6w / monthly | Extends `ROLLING = 28`; reuse memory compression. |
-| 11 | Prefetch demoted to a backstop | Repair-only: filter `kind === 'user' && !session` before batching, order by date, rolling pool. A cron may **repair** failed generations, never **extend** the horizon. |
-
-### Not in this document
-
-The **12.6s fixed floor** on every `prescribe-session` call (`claude-sonnet-5` via the Devs.ai v2
-relay) is a separate track — roughly half of every generation is relay overhead producing nothing. It
-blocks nothing above, but it is the difference between a background job costing 25s and 12s, which
-matters once a full week generates at commit.
-
----
-
-## Open
-
-- **Where the standalone review lives** — Progress screen, coach tab, both?
-- **Quarterly trigger** — fixed 13-week clock, or anchored to when the goals were set?
-- **The empty week** — someone who logged nothing. There is nothing to confirm, and *"0 of 7"* is
-  exactly the streak-shame BRAND.md forbids. Most likely to hurt someone if we get it wrong.
+- **Ad-hoc and quarterly** — deliberately out of this pass (mockup's own scoping). The quarterly
+  is re-measurement + goal revision, replacing that week's check-in; `rebaseline` exists as its
+  seed. `open_week_review` takes no window args yet; "look back on the past few months" needs them.
+- **The receipt as a record, not speech** — the mockup styles the confirm receipt as a document-ish
+  user-side card; today it's a plain user bubble with the same text.
+- **Auto-open on tool call** — the review card ships with an Open button (no precedent for a sheet
+  mounting itself); the mockup calls auto-open a tweak. One-line flip when wanted.
+- **Standalone "your data, any time" surface** — the review opens via the coach today; a
+  conversation-free door (Progress tab?) is unbuilt.
