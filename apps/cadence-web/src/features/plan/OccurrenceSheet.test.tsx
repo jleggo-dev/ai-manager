@@ -117,4 +117,18 @@ describe('OccurrenceSheet dispatcher', () => {
     expect(await screen.findByText(/What's the scale saying today/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText('e.g. 195')).toBeInTheDocument();
   });
+
+  /**
+   * Check-in rebuild, step 5: RecapPanel and its dispatch branch are gone — the real review is
+   * the full-screen sheet, opened from the coach's card, never a direct link to this occurrence.
+   * A stale link to one must still fall through to a sane read, not a blank or broken panel.
+   */
+  it('a stale weekly check-in link falls through to the generic system-row message', async () => {
+    getOccurrenceDetail.mockResolvedValue(base({ kind: 'system', title: 'Weekly check-in', status: 'pending' }));
+    renderWithQuery(<OccurrenceSheet occurrenceId="checkin" onClose={() => {}} />);
+
+    expect(
+      await screen.findByText('A quick built-in check-in — just tap it done when it happens.'),
+    ).toBeInTheDocument();
+  });
 });

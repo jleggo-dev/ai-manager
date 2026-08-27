@@ -2,9 +2,10 @@
  * The check-in's deterministic half (DESIGN-check-in.md: "one fat tool, not seven small ones").
  *
  * Given a window, return the whole week as a grid the review card can render and the user can
- * correct — no model call anywhere in this file. Same division of labour `recap.ts` states for
- * itself: "code computes, the model narrates." This is the "code computes" side for the NEW
- * check-in; `buildRecapFacts` stays the old readout's, until DESIGN-check-in.md item 9 retires it.
+ * correct — no model call anywhere in this file. Same division of labour the old `recap.ts`
+ * stated for itself: "code computes, the model narrates." DESIGN-check-in.md item 9 is done —
+ * `recap.ts` (and `buildRecapFacts` with it) is retired: the narrate-only readout has no place
+ * once the review write-back (check-in rebuild, step 5) lets the user correct it directly.
  *
  * The join is deliberately the same shape `buildPlanView` (plan-view.ts) already uses —
  * `listOccurrences` + `listActivities`, bucketed by day — because this is the same week the Week
@@ -139,9 +140,9 @@ function buildMindRow(
 const isMindArea = (area: GoalArea | undefined): boolean => area === 'mind' || area === 'practice';
 
 /**
- * The week's facts, computed. No AI in this function, deliberately — same rule `buildRecapFacts`
- * states for itself. `(from, to)` are whatever window the caller wants reviewed (a plan week, "last
- * week", a quarter); nothing here assumes seven days.
+ * The week's facts, computed. No AI in this function, deliberately — same rule the old
+ * `buildRecapFacts` stated for itself. `(from, to)` are whatever window the caller wants reviewed
+ * (a plan week, "last week", a quarter); nothing here assumes seven days.
  *
  * Known limitation, inherited from `buildPlanView`'s own join rather than introduced here: activities
  * are read from the CURRENT active plan only, so an occurrence whose activity belonged to a plan

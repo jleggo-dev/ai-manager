@@ -71,6 +71,9 @@ export {
   getPendingWeekReview,
   dismissPendingWeekReview,
   getWeekReviewFacts,
+  confirmWeekReviewSession,
+  toggleWeekReviewMeal,
+  toggleWeekReviewMindStep,
   previewPlan,
   dismissPlanPreview,
   getProgress,
@@ -101,9 +104,7 @@ export {
   logOccurrence,
   recordWeighIn,
   recordWeighInToday,
-  fetchWeeklyRecap,
   type OccurrenceDetail,
-  type WeeklyRecap,
 } from './api/occurrence.ts';
 
 export {

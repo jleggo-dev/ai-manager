@@ -332,6 +332,46 @@ export async function getWeekReviewFacts(): Promise<{ review: PendingWeekReview;
   return res.json();
 }
 
+/* ── Week review write-back (check-in rebuild, step 5) ─────────────────────
+   Plain writes onto the same rows `getWeekReviewFacts` reads. Each returns a bare `ok` — the
+   sheet already holds the toggled value optimistically, so all a caller needs is whether the
+   write actually landed (revert-on-false is the caller's job, not this fetch's). */
+
+/** Confirm (or correct) a session row — done/skipped, optionally with minutes. The SAME route
+ *  backs the week's weigh-in row: a weigh-in is just another occurrence to confirm. */
+export async function confirmWeekReviewSession(
+  occurrenceId: string,
+  done: boolean,
+  minutes?: number,
+): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/week-review/session`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ occurrence_id: occurrenceId, done, minutes }),
+  });
+  return res.ok;
+}
+
+/** Flip one day's meal slot logged/not. */
+export async function toggleWeekReviewMeal(date: string, meal: WeekReviewMeal, logged: boolean): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/week-review/meal`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ date, meal, logged }),
+  });
+  return res.ok;
+}
+
+/** Flip one named step of a mind/practice occurrence's checklist. */
+export async function toggleWeekReviewMindStep(occurrenceId: string, step: string, done: boolean): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/week-review/mind-step`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ occurrence_id: occurrenceId, step, done }),
+  });
+  return res.ok;
+}
+
 export async function lockPlan(): Promise<{ status: number; body: Record<string, unknown> }> {
   const res = await fetch(`${BASE}/plan/lock`, { method: 'POST', headers: headers() });
   return { status: res.status, body: await res.json() };

@@ -4175,6 +4175,105 @@ textarea.wiz-title {
   background: var(--forest);
 }
 
+/* Live rows (check-in rebuild, step 5) — real checkboxes now; a disabled one (a meal slot with
+   no occurrence to toggle) reads visibly inert instead of just quietly ignoring the tap. */
+.wkr-row input[type='checkbox']:disabled {
+  opacity: 0.45;
+}
+
+/* A session row: the done/skipped checkbox on the left, its minutes stepper pinned right. */
+.wkr-row-session {
+  justify-content: space-between;
+}
+.wkr-row-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* The app's FIRST stepper — plain by design: two round buttons and a number, no text entry. */
+.wkr-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.wkr-stepper-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--forest);
+  font-size: 15px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+.wkr-stepper-btn:disabled {
+  opacity: 0.4;
+}
+.wkr-stepper-n {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text-dim);
+  min-width: 44px;
+  text-align: center;
+}
+
+/* Weekly tasks' weigh-in mark is now a real (visually-hidden) checkbox under the round mark it
+   always drew — same accessible-checkbox-under-a-styled-sibling pattern as everywhere else here. */
+.wkr-task-row {
+  cursor: pointer;
+}
+.wkr-task-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+/* A toggle that didn't save (useWeekReview's writeError) — one quiet line, no toast system. */
+.wkr-write-err {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--danger);
+  line-height: 1.4;
+  padding: 6px 2px 0;
+}
+
+/* "Confirm my week" — the footer that finalizes the review. Outside .sheet-body on purpose (see
+   WeekReviewSheet.tsx) so it stays put while the body above it scrolls. */
+.wkr-confirm-foot {
+  flex-shrink: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.wkr-confirm-btn {
+  width: 100%;
+  background: var(--forest);
+  border: none;
+  border-radius: 12px;
+  padding: 13px 16px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14.5px;
+}
+.wkr-confirm-btn:disabled {
+  opacity: 0.6;
+}
+.wkr-confirm-helper {
+  font-size: 12.5px;
+  color: var(--text-mute);
+  text-align: center;
+  margin: 8px 0 0;
+  line-height: 1.4;
+}
+
 /* ── Visual Today: the sky-trail (REQ8 redesign — docs/cadence/design/redesign-today-trail) ── */
 .trail {
   margin: 0 -20px;
@@ -8739,7 +8838,6 @@ textarea.wiz-title {
   font-size: 12.5px;
   font-weight: 800;
 }
-
 
 /* ONE LOGGED FOOD, OPENED (design brief 05) — what it contributed, and the three repairs.
    Read state first; every correction is one tap behind a named intent, and nothing writes until

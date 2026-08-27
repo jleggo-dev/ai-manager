@@ -4,10 +4,23 @@ import type { WeekReviewFacts } from '../../../lib/api.ts';
 import { WeekReviewSheet } from './WeekReviewSheet.tsx';
 
 const getWeekReviewFacts = vi.fn();
-vi.mock('../../../lib/api.ts', () => ({ getWeekReviewFacts: (...a: unknown[]) => getWeekReviewFacts(...a) }));
+const dismissPendingWeekReview = vi.fn();
+const confirmWeekReviewSession = vi.fn();
+const toggleWeekReviewMeal = vi.fn();
+const toggleWeekReviewMindStep = vi.fn();
+
+vi.mock('../../../lib/api.ts', () => ({
+  getWeekReviewFacts: (...a: unknown[]) => getWeekReviewFacts(...a),
+  dismissPendingWeekReview: (...a: unknown[]) => dismissPendingWeekReview(...a),
+  confirmWeekReviewSession: (...a: unknown[]) => confirmWeekReviewSession(...a),
+  toggleWeekReviewMeal: (...a: unknown[]) => toggleWeekReviewMeal(...a),
+  toggleWeekReviewMindStep: (...a: unknown[]) => toggleWeekReviewMindStep(...a),
+}));
 
 const REVIEW = { from: '2026-08-17', to: '2026-08-23', built_at: '2026-08-24T09:00:00.000Z' };
 
+// Day 2 (2026-08-19) carries the one session, done. Day 4 (2026-08-21) has nothing logged at
+// all — the toggle tests use it so a flip there is unambiguous.
 const FACTS: WeekReviewFacts = {
   period: { from: REVIEW.from, to: REVIEW.to },
   weigh_in: { occurrence_id: 'w1', date: '2026-08-23', status: 'pending' },
@@ -22,10 +35,16 @@ const FACTS: WeekReviewFacts = {
     mind: [],
   })),
 };
+// sessions: 1 of 1 done. meals: breakfast+lunch logged for i<4 (4 each), dinner for i<3 (3) = 11 of 21.
+const ZERO_CORRECTIONS_RECEIPT = 'Week confirmed — 1 of 1 sessions · 11 of 21 meals · 0 corrections';
 
 beforeEach(() => {
   vi.clearAllMocks();
   getWeekReviewFacts.mockResolvedValue({ review: REVIEW, facts: FACTS });
+  dismissPendingWeekReview.mockResolvedValue(true);
+  confirmWeekReviewSession.mockResolvedValue(true);
+  toggleWeekReviewMeal.mockResolvedValue(true);
+  toggleWeekReviewMindStep.mockResolvedValue(true);
 });
 
 describe('WeekReviewSheet', () => {
@@ -100,5 +119,69 @@ describe('WeekReviewSheet', () => {
     getWeekReviewFacts.mockRejectedValue(new Error('network down'));
     render(<WeekReviewSheet onClose={vi.fn()} />);
     await waitFor(() => expect(screen.getByText(/Nothing to review right now/)).toBeInTheDocument());
+  });
+
+  describe('the confirm footer (check-in rebuild, step 5)', () => {
+    it('reads as the plain confirm before anything has changed', async () => {
+      render(<WeekReviewSheet onClose={vi.fn()} />);
+      await screen.findByText('DAY BY DAY');
+      expect(screen.getByText('Confirm my week')).toBeInTheDocument();
+      expect(screen.getByText('Nothing changed — confirms the week as logged.')).toBeInTheDocument();
+    });
+
+    it('updates the label and helper as a toggle diverges from the initial fetch', async () => {
+      render(<WeekReviewSheet onClose={vi.fn()} />);
+      await screen.findByText('DAY BY DAY');
+
+      screen.getAllByRole('listitem')[4]!.click(); // 2026-08-21 — nothing logged that day
+      await screen.findByText('← Back to the week');
+      screen.getByLabelText('Breakfast').click();
+
+      await waitFor(() => expect(screen.getByText('Confirm week · save 1 fix')).toBeInTheDocument());
+      expect(
+        screen.getByText('1 correction will be written to your log, then a summary goes to your coach.'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows a quiet inline error and reverts the toggle when a write fails', async () => {
+      toggleWeekReviewMeal.mockResolvedValue(false);
+      render(<WeekReviewSheet onClose={vi.fn()} />);
+      await screen.findByText('DAY BY DAY');
+      screen.getAllByRole('listitem')[4]!.click();
+      await screen.findByText('← Back to the week');
+
+      screen.getByLabelText('Breakfast').click();
+
+      await waitFor(() => expect(screen.getByText("That didn't save — try again in a moment.")).toBeInTheDocument());
+      expect(screen.getByLabelText('Breakfast')).not.toBeChecked();
+      // Nothing landed, so the footer still reads the plain confirm.
+      expect(screen.getByText('Confirm my week')).toBeInTheDocument();
+    });
+
+    it('tapping confirm dismisses the pointer, closes the sheet, and hands the coach the receipt', async () => {
+      const onClose = vi.fn();
+      const onConfirmed = vi.fn();
+      render(<WeekReviewSheet onClose={onClose} onConfirmed={onConfirmed} />);
+      await screen.findByText('Confirm my week');
+
+      screen.getByText('Confirm my week').click();
+
+      await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+      expect(dismissPendingWeekReview).toHaveBeenCalledTimes(1);
+      expect(onConfirmed).toHaveBeenCalledWith(ZERO_CORRECTIONS_RECEIPT);
+    });
+
+    it('still closes and hands off the receipt even when the dismiss write fails', async () => {
+      dismissPendingWeekReview.mockRejectedValue(new Error('db down'));
+      const onClose = vi.fn();
+      const onConfirmed = vi.fn();
+      render(<WeekReviewSheet onClose={onClose} onConfirmed={onConfirmed} />);
+      await screen.findByText('Confirm my week');
+
+      screen.getByText('Confirm my week').click();
+
+      await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+      expect(onConfirmed).toHaveBeenCalledWith(ZERO_CORRECTIONS_RECEIPT);
+    });
   });
 });

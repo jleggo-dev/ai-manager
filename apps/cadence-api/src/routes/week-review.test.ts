@@ -11,6 +11,9 @@ import express from 'express';
 const getUser = vi.fn();
 const setPendingWeekReview = vi.fn(async (..._a: unknown[]) => {});
 const buildWeekReviewFacts = vi.fn();
+const confirmSession = vi.fn();
+const toggleMealSlot = vi.fn();
+const toggleMindStep = vi.fn();
 
 vi.mock('../repos/users.ts', () => ({
   getUser: (...a: unknown[]) => getUser(...a),
@@ -18,6 +21,11 @@ vi.mock('../repos/users.ts', () => ({
 }));
 vi.mock('../services/week-review-facts.ts', () => ({
   buildWeekReviewFacts: (...a: unknown[]) => buildWeekReviewFacts(...a),
+}));
+vi.mock('../services/week-review-write.ts', () => ({
+  confirmSession: (...a: unknown[]) => confirmSession(...a),
+  toggleMealSlot: (...a: unknown[]) => toggleMealSlot(...a),
+  toggleMindStep: (...a: unknown[]) => toggleMindStep(...a),
 }));
 vi.mock('../auth/middleware.ts', () => ({
   requireCadenceUser: (req: { cadenceUserId?: string }, _res: unknown, next: () => void) => {
@@ -36,14 +44,17 @@ interface RouteResponse {
   body: Record<string, unknown>;
 }
 
-async function call(method: 'GET' | 'POST', path: string): Promise<RouteResponse> {
+async function call(method: 'GET' | 'POST', path: string, body?: Record<string, unknown>): Promise<RouteResponse> {
   const app = express();
   app.use(express.json());
   app.use('/plan', weekReviewRoutes);
   const server = app.listen(0);
   const port = (server.address() as { port: number }).port;
   try {
-    const res = await fetch(`http://127.0.0.1:${port}${path}`, { method });
+    const res = await fetch(`http://127.0.0.1:${port}${path}`, {
+      method,
+      ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+    });
     return { status: res.status, body: ((await res.json().catch(() => ({}))) ?? {}) as Record<string, unknown> };
   } finally {
     server.close();
@@ -54,6 +65,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   getUser.mockResolvedValue({ pending_week_review: REVIEW });
   buildWeekReviewFacts.mockResolvedValue(FACTS);
+  confirmSession.mockResolvedValue(true);
+  toggleMealSlot.mockResolvedValue(true);
+  toggleMindStep.mockResolvedValue(true);
 });
 
 describe('GET /plan/week-review/pending', () => {
@@ -110,5 +124,87 @@ describe('GET /plan/week-review/facts', () => {
     buildWeekReviewFacts.mockRejectedValueOnce(new Error('db down'));
     const r = await call('GET', '/plan/week-review/facts');
     expect(r.status).toBe(500);
+  });
+});
+
+describe('POST /plan/week-review/session', () => {
+  it('confirms a session done, with minutes', async () => {
+    const r = await call('POST', '/plan/week-review/session', { occurrence_id: 'o1', done: true, minutes: 32 });
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ ok: true });
+    expect(confirmSession).toHaveBeenCalledWith('u1', 'o1', { done: true, minutes: 32 });
+  });
+
+  it('confirms without minutes when none is sent', async () => {
+    const r = await call('POST', '/plan/week-review/session', { occurrence_id: 'o1', done: false });
+    expect(r.status).toBe(200);
+    expect(confirmSession).toHaveBeenCalledWith('u1', 'o1', { done: false, minutes: undefined });
+  });
+
+  it('404s when the occurrence is not found', async () => {
+    confirmSession.mockResolvedValueOnce(false);
+    const r = await call('POST', '/plan/week-review/session', { occurrence_id: 'gone', done: true });
+    expect(r.status).toBe(404);
+  });
+
+  it('400s a minutes value below the stepper floor rather than trusting the widget', async () => {
+    const r = await call('POST', '/plan/week-review/session', { occurrence_id: 'o1', done: true, minutes: 0 });
+    expect(r.status).toBe(400);
+    expect(confirmSession).not.toHaveBeenCalled();
+  });
+
+  it('400s a missing occurrence_id', async () => {
+    const r = await call('POST', '/plan/week-review/session', { done: true });
+    expect(r.status).toBe(400);
+  });
+
+  it('reports a write failure rather than a false confirm', async () => {
+    confirmSession.mockRejectedValueOnce(new Error('db down'));
+    const r = await call('POST', '/plan/week-review/session', { occurrence_id: 'o1', done: true });
+    expect(r.status).toBe(500);
+  });
+});
+
+describe('POST /plan/week-review/meal', () => {
+  it('flips a meal slot', async () => {
+    const r = await call('POST', '/plan/week-review/meal', { date: '2026-08-19', meal: 'lunch', logged: true });
+    expect(r.status).toBe(200);
+    expect(toggleMealSlot).toHaveBeenCalledWith('u1', '2026-08-19', 'lunch', true);
+  });
+
+  it('404s when the day has no per-meal row to toggle', async () => {
+    toggleMealSlot.mockResolvedValueOnce(false);
+    const r = await call('POST', '/plan/week-review/meal', { date: '2026-08-19', meal: 'dinner', logged: true });
+    expect(r.status).toBe(404);
+  });
+
+  it("400s a meal outside breakfast|lunch|dinner — the grid doesn't confirm snack", async () => {
+    const r = await call('POST', '/plan/week-review/meal', { date: '2026-08-19', meal: 'snack', logged: true });
+    expect(r.status).toBe(400);
+    expect(toggleMealSlot).not.toHaveBeenCalled();
+  });
+
+  it('400s a malformed date', async () => {
+    const r = await call('POST', '/plan/week-review/meal', { date: '19-08-2026', meal: 'lunch', logged: true });
+    expect(r.status).toBe(400);
+  });
+});
+
+describe('POST /plan/week-review/mind-step', () => {
+  it('flips a named step', async () => {
+    const r = await call('POST', '/plan/week-review/mind-step', { occurrence_id: 'g1', step: 'Settle', done: true });
+    expect(r.status).toBe(200);
+    expect(toggleMindStep).toHaveBeenCalledWith('u1', 'g1', 'Settle', true);
+  });
+
+  it('404s when the occurrence has no such step', async () => {
+    toggleMindStep.mockResolvedValueOnce(false);
+    const r = await call('POST', '/plan/week-review/mind-step', { occurrence_id: 'g1', step: 'Nope', done: true });
+    expect(r.status).toBe(404);
+  });
+
+  it('400s a missing step name', async () => {
+    const r = await call('POST', '/plan/week-review/mind-step', { occurrence_id: 'g1', done: true });
+    expect(r.status).toBe(400);
   });
 });
