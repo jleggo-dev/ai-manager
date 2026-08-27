@@ -4272,6 +4272,7 @@ textarea.wiz-title {
   text-align: center;
   margin: 8px 0 0;
   line-height: 1.4;
+}
 
 /* ── Week changes sheet (check-in rebuild, step 7 client half) ────────────────────────────
    The swap-card list: title + OPTIONAL tag, a NOW → NEXT WEEK pair, the coach's reason, a
