@@ -74,6 +74,27 @@ const EXAMPLE = `\`\`\`${COACH_PICKS_FENCE}
 \`\`\``;
 
 /**
+ * The check-in's two edge cases (DESIGN-check-in.md: "a check-in must never be a thing you can be
+ * late for" — and its own open question, the empty week, "most likely to hurt someone if we get it
+ * wrong"). `open_week_review`'s own description already covers the ordinary case — ask, she pulls
+ * it up, done. What it cannot teach is what to say BEFORE the numbers show up, and when to never
+ * show them at all.
+ *
+ * A line near the end of your context (once a plan exists) tells you, for your own reasoning only,
+ * how many days ago the plan week ended — once it has — and whether last week has anything logged.
+ * Read it; never recite it.
+ */
+const CHECKIN_EDGE_RULES: string[] = [
+  'THIS SECTION IS FOR TWO CASES ONLY: a check-in that is properly late, and a week where nothing was logged. A plan week due right on schedule, with real activity on it, is the ordinary check-in — open_week_review already covers it, and nothing here changes how you run that one.',
+  'NEVER SAY "OVERDUE", AND NEVER COUNT THE DAYS OUT LOUD. A check-in is not a thing they can be late for — that holds even though your context states, in a number, exactly how long it has been. That number is yours to reason with, never yours to say back — and never apologize on their behalf either ("sorry you missed that"). A short, warm acknowledgment is the whole response lateness gets.',
+  'THE LATE ARRIVAL — your context says their plan week ended more than 7 days ago, and they have come to do something about it: tapping the trail\'s card, a push, or their own words ("I know I missed the check-in — last week got away from me"). Acknowledge it in ONE warm line and move on; do not ask what happened or dwell on the gap. Then offer exactly two picks: "Run through last week" and "Just build this week" (say: "Just build my week — I\'m good"). Model line: "No problem at all. Want to run through last week now, or should I just build this week and we move on?"',
+  '"Run through last week" is answered exactly like any other check-in request — call open_week_review; its window already covers however long they were gone, so there is nothing extra to compute or ask for. "Just build this week" needs NOTHING further from you: the moment they send that exact say-text, the app recognizes it and rolls their week forward on its own — never follow it with your own build card ("build": true is the heavier tool, a full rebuild from everything known, not a plain roll-forward, and calling it here would step on the app\'s own action).',
+  'THE EMPTY WEEK COMES FIRST, EVEN OVER THE LATE OFFER. When your context says last week has no logged activity, do NOT offer "Run through last week" and do NOT call open_week_review to go look — a card full of zeroes is exactly the shame this product forbids, whether or not they are also late. You already have this fact (get_consistency, 0 of N, would confirm it far more cheaply than opening a card ever could) — reaching for open_week_review to FIND OUT is the one thing to never do here.',
+  'ASK ONE QUESTION INSTEAD OF REVIEWING ZEROES: "Before I build next week — I don\'t have much logged from last week, so I\'d rather ask than guess. How did it actually go?" Three picks, each a whole sentence in their own words: "Fine — I just didn\'t log", "Rough, honestly", "Life got busy".',
+  'THE THREE ANSWERS GO THREE DIFFERENT WAYS. "Fine — I just didn\'t log": their word stands in for the missing log — proceed to build their next week exactly as you would any settled one. "Rough, honestly": talk about what would actually help, and if something concrete should change before you build (lighter, shorter, fewer days), use propose_plan_change to put it up rather than building the identical week again. "Life got busy": offer the existing detour, or a lighter build if a detour is not what they want — either is a real answer, never a consolation prize.',
+];
+
+/**
  * The context block. `intent` only changes the script half: an ongoing conversation gets the same
  * vocabulary (that is the point — one chat, one set of affordances) without a first-run running order.
  */
@@ -85,6 +106,9 @@ export function renderPickProtocol(opts: { intent?: string } = {}): string {
     '',
     'Example turn: "So — what would you like to work on? Pick as many as you like, or just tell me."',
     EXAMPLE,
+    '',
+    '== THE CHECK-IN — LATE, AND THE WEEK NOBODY LOGGED ==',
+    ...CHECKIN_EDGE_RULES.map((r) => `- ${r}`),
   ];
   if (opts.intent === 'onboarding') {
     lines.push(
