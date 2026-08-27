@@ -390,6 +390,7 @@ export function PlanView({
         <EndOfTrail
           show={restEmpty || !!data.weekState?.checkin_due}
           version={data.version}
+          endsOn={data.weekState?.ends_on}
           // "Start check-in" — the sentence, not a mode (DESIGN-check-in.md), but a VISIBLE one:
           // MainTabs' `onStartCheckIn` switches to the Coach tab and sends it through the same
           // path the composer's own Send uses, not a whispered note (check-in rebuild, step 4).
