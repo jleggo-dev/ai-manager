@@ -115,7 +115,15 @@ describe('the research rung — deferred, not run inline', () => {
     expect(researchFood).not.toHaveBeenCalled();
     expect(insertFood).toHaveBeenCalledWith(USER, expect.objectContaining({ source: 'llm' }));
     expect(out.items[0]!.food_id).toBe('pinned-1');
-    // Flagged for the background pass even though it pinned — the estimate is a placeholder.
-    expect(out.wants_research).toEqual([]);
+    /**
+     * Flagged for the background pass even though it pinned — the estimate is a placeholder
+     * (MP37). This assertion used to say the opposite of this very comment: `wants_research` was
+     * computed correctly (before the pin runs, against the food nothing matched) but `priceOne`'s
+     * two post-pin returns never carried it, so a successful pin always silently dropped the flag
+     * regardless of what the parse's own numbers were worth. A pin from `est` is exactly the "ask
+     * it twice, get two numbers" case the top-of-file doc warns about — it earns the same lookup a
+     * flat miss would have, not a pass just because something got written to the ledger.
+     */
+    expect(out.wants_research).toEqual([0]);
   });
 });

@@ -1,7 +1,7 @@
 import type { Food, FoodBaseUnit, FoodNutrients, FoodServing } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { logAi } from './ai-log.ts';
-import { applyNormalization } from './food-sources/normalized.ts';
+import { normalizeFood, describeNormalizationProblems } from './food-sources/normalized.ts';
 import { nutritionTier } from './food-sources/completeness.ts';
 
 /**
@@ -32,6 +32,32 @@ export interface ResearchedFood {
   /** A transient row — NOT inserted; pinItem persists it (with real servings) when the log commits. */
   food: Food;
   source_url: string | null;
+}
+
+/**
+ * Every way this rung can end without a usable food, in words instead of a bare `null` (MP35).
+ *
+ * Ten separate `return null`s used to live below this line, and the type system flattened every
+ * one of them into the same signal: nothing. That is a lie by omission for most of them. A
+ * low-confidence hit, a missing name, a thin macro split, two views disagreeing by arithmetic, a
+ * record the normalization guard would not pass — each of those means something WAS found and was
+ * turned away, which is a different fact from "there was nothing to find," which is itself a
+ * different fact from "the lookup broke before it answered." A `console.warn` and an `ai_log` row
+ * do not tell the Coach either — only text riding the return value does, because only the return
+ * value reaches whoever called this.
+ *
+ * Collapsing those three facts into one is exactly the mistake `tool-response.ts` guards against
+ * for tool text ("an error must never look like an empty result"); this is the same discipline one
+ * layer earlier, before there is any tool text to guard. The three buckets never share wording —
+ * `food-research.test.ts` asserts it the same way `tool-response.test.ts` does for its pair:
+ * "nothing" names an empty search, "refused" names something found and turned away, "broke" names
+ * a fault in the asking.
+ */
+export interface ResearchOutcome {
+  /** Set only when the rung produced something worth pinning. */
+  result: ResearchedFood | null;
+  /** Null exactly when `result` is set. Never blank when `result` is null. */
+  reason: string | null;
 }
 
 /** Owner ruling 2026-08-23: LLM timeouts are MINUTES, not seconds — "they're unpredictable" and
@@ -90,12 +116,21 @@ function toNutrients(raw: unknown): FoodNutrients {
   return out;
 }
 
-function shapeResult(parsed: Record<string, unknown>, fallbackBrand: string | null): ResearchedFood | null {
+function shapeResult(parsed: Record<string, unknown>, fallbackBrand: string | null): ResearchOutcome {
   const confidence = num(parsed.confidence) ?? 0;
-  if (confidence < MIN_CONFIDENCE) return null;
+  if (confidence < MIN_CONFIDENCE) {
+    return {
+      result: null,
+      reason:
+        `refused — confidence ${confidence.toFixed(2)} is below the ${MIN_CONFIDENCE} floor this rung holds ` +
+        'itself to; a wrong-product match pinned forever is this rung’s whole failure mode',
+    };
+  }
 
   const name = typeof parsed.name === 'string' ? parsed.name.trim().slice(0, 200) : '';
-  if (!name) return null;
+  if (!name) {
+    return { result: null, reason: 'refused — the lookup returned no product name to pin' };
+  }
   const brand =
     typeof parsed.brand === 'string' && parsed.brand.trim() ? parsed.brand.trim().slice(0, 80) : fallbackBrand;
   const base_unit = BASE_UNITS.includes(parsed.base_unit as FoodBaseUnit) ? (parsed.base_unit as FoodBaseUnit) : 'g';
@@ -104,7 +139,14 @@ function shapeResult(parsed: Record<string, unknown>, fallbackBrand: string | nu
   // The whole point of paying for this rung is numbers better than a guess — kcal and the full
   // macro split, or the item falls through to estimate-food.
   const tier = nutritionTier(macros);
-  if (tier !== 'macros' && tier !== 'full') return null;
+  if (tier !== 'macros' && tier !== 'full') {
+    return {
+      result: null,
+      reason:
+        `refused — only reached nutrition tier '${tier}', short of the full macro split this rung requires; ` +
+        'a thin researched row would still get pinned and reused forever, so the floor here sits above the ledger’s',
+    };
+  }
 
   const perServing = toNutrients(parsed.macros_per_serving);
   const servings: FoodServing[] = [];
@@ -124,11 +166,12 @@ function shapeResult(parsed: Record<string, unknown>, fallbackBrand: string | nu
     const expected = (macros.kcal * amount) / 100;
     const bigger = Math.max(expected, perServing.kcal);
     if (bigger >= 20 && Math.abs(expected - perServing.kcal) / bigger > 0.2) {
-      console.warn(
-        `[food-research] rejected: per-100 (${macros.kcal} kcal) × ${amount}/100 = ${Math.round(expected)} ` +
-          `disagrees with the label serving (${perServing.kcal} kcal) — per-serving filed as per-100?`,
-      );
-      return null;
+      const detail =
+        `per-100 (${macros.kcal} kcal) × ${amount}/100 = ${Math.round(expected)} disagrees with the label ` +
+        `serving (${perServing.kcal} kcal) — per-serving filed as per-100?`;
+      console.warn(`[food-research] rejected: ${detail}`);
+      // The disagreement IS the useful part (TOOL-HARNESS): she gets the arithmetic, not just "no".
+      return { result: null, reason: `refused — the two views disagree by arithmetic: ${detail}` };
     }
   }
   const label = typeof parsed.serving_label === 'string' ? parsed.serving_label.trim() : '';
@@ -141,7 +184,7 @@ function shapeResult(parsed: Record<string, unknown>, fallbackBrand: string | nu
     servings.push({ label: `100 ${base_unit}`, unit: base_unit, amount_g: 100 });
   }
 
-  const normalized = applyNormalization('research', {
+  const outcome = normalizeFood('research', {
     name,
     brand,
     base_unit,
@@ -149,7 +192,19 @@ function shapeResult(parsed: Record<string, unknown>, fallbackBrand: string | nu
     servings,
     default_serving: 0,
   });
-  if (!normalized || nutritionTier(normalized.macros_per_base) === 'unusable') return null;
+  if (!outcome.food) {
+    return {
+      result: null,
+      reason: `refused — the normalization guard would not pass it: ${describeNormalizationProblems(outcome.problems)}`,
+    };
+  }
+  if (nutritionTier(outcome.food.macros_per_base) === 'unusable') {
+    const detail = describeNormalizationProblems(outcome.problems);
+    return {
+      result: null,
+      reason: `refused — cleanup left too little to use${detail ? `: ${detail}` : ' (the macro split fell apart after normalization)'}`,
+    };
+  }
 
   const source_url =
     typeof parsed.source_url === 'string' && /^https?:\/\//.test(parsed.source_url)
@@ -160,33 +215,55 @@ function shapeResult(parsed: Record<string, unknown>, fallbackBrand: string | nu
     food_id: '',
     owner_user_id: null,
     visibility: 'private',
-    name: normalized.name,
-    brand: normalized.brand,
+    name: outcome.food.name,
+    brand: outcome.food.brand,
     source: 'research',
     off_id: null,
     fdc_id: null,
-    base_unit: normalized.base_unit,
-    macros_per_base: normalized.macros_per_base,
-    servings: normalized.servings,
-    default_serving: normalized.default_serving,
+    base_unit: outcome.food.base_unit,
+    macros_per_base: outcome.food.macros_per_base,
+    servings: outcome.food.servings,
+    default_serving: outcome.food.default_serving,
     confidence,
     photo_ref: null,
     created_at: '',
   };
-  return { food, source_url };
+  return { result: { food, source_url }, reason: null };
 }
 
-/** Look one food up on the web, once. Null on ANY failure — the waterfall falls through, never over. */
+/**
+ * Look one food up on the web, once. Null on ANY failure — the waterfall falls through, never over.
+ *
+ * MP35: the refusal reason now lives in `researchFoodOutcome` below. This function keeps the exact
+ * shape it always had — `meal-enrich.ts` (a different parcel's file) calls it and pattern-matches
+ * on `null` — so fixing the silence here could not also mean changing a caller this parcel does
+ * not own. Any new caller that wants the reason should call `researchFoodOutcome` instead.
+ */
 export async function researchFood(
   userId: string,
   item: { name: string; brand?: string | null; qty?: number; unit?: string },
 ): Promise<ResearchedFood | null> {
+  return (await researchFoodOutcome(userId, item)).result;
+}
+
+/** The full outcome of one lookup — same search as `researchFood`, with the reason attached. */
+export async function researchFoodOutcome(
+  userId: string,
+  item: { name: string; brand?: string | null; qty?: number; unit?: string },
+): Promise<ResearchOutcome> {
   const foodText = [item.brand?.trim(), item.name.trim()].filter(Boolean).join(' — ').slice(0, 300);
-  if (!foodText) return null;
+  if (!foodText) {
+    return { result: null, reason: 'nothing to search — the item carried no name or brand to look up' };
+  }
 
   const missKey = foodText.toLowerCase();
   const missedAt = recentMisses.get(missKey);
-  if (missedAt && Date.now() - missedAt < RESEARCH_COOLDOWN_MS) return null;
+  if (missedAt && Date.now() - missedAt < RESEARCH_COOLDOWN_MS) {
+    return {
+      result: null,
+      reason: 'nothing new to report — this exact search missed recently and is still in its cooldown window',
+    };
+  }
 
   let rawOut = '';
   try {
@@ -201,29 +278,33 @@ export async function researchFood(
     ]);
     rawOut = res.formatted ?? res.raw ?? '';
     const parsed = firstJsonObject(rawOut);
-    const shaped = parsed ? shapeResult(parsed, item.brand?.trim() || null) : null;
+    const outcome: ResearchOutcome = parsed
+      ? shapeResult(parsed, item.brand?.trim() || null)
+      : { result: null, reason: 'nothing usable came back — the response carried no readable JSON to shape' };
     void logAi(userId, {
       kind: 'research_food',
       input: { food_text: foodText },
       output: { raw: rawOut.slice(0, 2000) },
       meta: {
-        accepted: !!shaped,
-        name: shaped?.food.name ?? null,
-        kcal: shaped?.food.macros_per_base?.kcal ?? null,
-        source_url: shaped?.source_url ?? null,
+        accepted: !!outcome.result,
+        name: outcome.result?.food.name ?? null,
+        kcal: outcome.result?.food.macros_per_base?.kcal ?? null,
+        source_url: outcome.result?.source_url ?? null,
+        reason: outcome.reason,
       },
     });
-    if (!shaped) recentMisses.set(missKey, Date.now());
-    return shaped;
+    if (!outcome.result) recentMisses.set(missKey, Date.now());
+    return outcome;
   } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
     console.warn('[food-research] research-food failed — falling through to the estimate:', e);
     void logAi(userId, {
       kind: 'research_food',
       input: { food_text: foodText },
-      output: { raw: rawOut.slice(0, 500), error: e instanceof Error ? e.message : String(e) },
+      output: { raw: rawOut.slice(0, 500), error: message },
       meta: { accepted: false },
     });
     recentMisses.set(missKey, Date.now());
-    return null;
+    return { result: null, reason: `the lookup broke before it could answer — ${message}` };
   }
 }

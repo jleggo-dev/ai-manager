@@ -8,7 +8,12 @@
  * every other source passes through.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { researchFood, shouldResearchItem, __resetResearchCooldownForTests } from './food-research.ts';
+import {
+  researchFood,
+  researchFoodOutcome,
+  shouldResearchItem,
+  __resetResearchCooldownForTests,
+} from './food-research.ts';
 
 const runJobBySlug = vi.hoisted(() => vi.fn());
 vi.mock('../ai/aim.ts', () => ({ runJobBySlug }));
@@ -114,5 +119,131 @@ describe('researchFood', () => {
     runJobBySlug.mockResolvedValue({ formatted: JSON.stringify(sneaky) });
     const out = await researchFood('u1', { name: 'peanuts', brand: 'X' });
     expect(out!.source_url).toBeNull();
+  });
+});
+
+/**
+ * MP35 — every one of the ten silent `return null`s in this file now carries a `reason` a caller
+ * can read. `researchFood` above still returns bare `null` (it is `meal-enrich.ts`'s contract, a
+ * file this parcel does not own); `researchFoodOutcome` is the same lookup with the reason kept.
+ */
+describe('researchFoodOutcome — a refusal says why, not just no (MP35)', () => {
+  it('low confidence: refused, and says so', async () => {
+    const shaky = JSON.parse(GOOD) as Record<string, unknown>;
+    shaky.confidence = 0.3;
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify(shaky) });
+    const out = await researchFoodOutcome('u1', { name: 'peanuts', brand: 'X' });
+    expect(out.result).toBeNull();
+    expect(out.reason).toContain('refused');
+    expect(out.reason).toMatch(/confidence/i);
+  });
+
+  it('no product name: refused, and says so', async () => {
+    const noName = JSON.parse(GOOD) as Record<string, unknown>;
+    delete noName.name;
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify(noName) });
+    const out = await researchFoodOutcome('u1', { name: 'peanuts', brand: 'X' });
+    expect(out.result).toBeNull();
+    expect(out.reason).toContain('refused');
+    expect(out.reason).toMatch(/no product name/i);
+  });
+
+  it('incomplete macro split: refused, and names the tier it actually reached', async () => {
+    const partial = JSON.parse(GOOD) as Record<string, unknown>;
+    partial.macros_per_100 = { kcal: 607, protein_g: 25 };
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify(partial) });
+    const out = await researchFoodOutcome('u1', { name: 'peanuts', brand: 'X' });
+    expect(out.result).toBeNull();
+    expect(out.reason).toContain('refused');
+    expect(out.reason).toMatch(/tier 'partial'/);
+  });
+
+  it('the two views disagree: refused, and hands over the arithmetic rather than just "no"', async () => {
+    // Same shape as the live incident this guard exists for: 160 kcal/100g really meant per-ounce.
+    const shifted = JSON.parse(GOOD) as Record<string, unknown>;
+    shifted.macros_per_100 = { kcal: 160, protein_g: 6, carbs_g: 10, fat_g: 11 };
+    shifted.macros_per_serving = { kcal: 160, protein_g: 6, carbs_g: 10, fat_g: 11 };
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify(shifted) });
+    const out = await researchFoodOutcome('u1', { name: 'peanuts', brand: 'Couche-Tard' });
+    expect(out.result).toBeNull();
+    expect(out.reason).toContain('refused');
+    expect(out.reason).toMatch(/disagree/);
+    // TOOL-HARNESS: the disagreement is the useful part — the numbers ride along, not just a verdict.
+    expect(out.reason).toContain('45');
+    expect(out.reason).toContain('160');
+  });
+
+  it('the normalization guard refuses it: refused, and names the field it refused on', async () => {
+    // The Starbucks K-Cup shape: per-package values filed as per-100g — a 'drop' in normalized.ts.
+    const corrupt = JSON.parse(GOOD) as Record<string, unknown>;
+    corrupt.macros_per_100 = { kcal: 607, protein_g: 50, carbs_g: 262.5, fat_g: 12 };
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify(corrupt) });
+    const out = await researchFoodOutcome('u1', { name: 'latte', brand: 'Starbucks' });
+    expect(out.result).toBeNull();
+    expect(out.reason).toContain('refused');
+    expect(out.reason).toMatch(/normalization guard/);
+    expect(out.reason).toMatch(/carbs_g/);
+  });
+
+  it('nothing to search: an item with no name or brand never calls the model', async () => {
+    const out = await researchFoodOutcome('u1', { name: '', brand: '' });
+    expect(out.result).toBeNull();
+    expect(out.reason).toContain('nothing');
+    expect(runJobBySlug).not.toHaveBeenCalled();
+  });
+
+  it('cooldown: nothing new to report, and the model is not asked again', async () => {
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify({ confidence: 0 }) });
+    await researchFoodOutcome('u1', { name: 'mystery snack', brand: 'Couche-Tard' });
+    const out = await researchFoodOutcome('u1', { name: 'mystery snack', brand: 'Couche-Tard' });
+    expect(out.result).toBeNull();
+    expect(out.reason).toContain('nothing');
+    expect(runJobBySlug).toHaveBeenCalledTimes(1);
+  });
+
+  it('no readable JSON in the response: nothing usable, not a fault', async () => {
+    runJobBySlug.mockResolvedValue({ formatted: 'I could not find that product, sorry!' });
+    const out = await researchFoodOutcome('u1', { name: 'x', brand: 'Y' });
+    expect(out.result).toBeNull();
+    expect(out.reason).toContain('nothing');
+  });
+
+  it('the job throws: the lookup broke, and the message rides along', async () => {
+    runJobBySlug.mockRejectedValue(new Error('job not provisioned'));
+    const out = await researchFoodOutcome('u1', { name: 'x', brand: 'Y' });
+    expect(out.result).toBeNull();
+    expect(out.reason).toContain('broke');
+    expect(out.reason).toContain('job not provisioned');
+  });
+});
+
+describe('the three refusal buckets never share wording (MP35)', () => {
+  // "nothing was found", "something was found and refused", and "the lookup broke" are three
+  // different facts — the same discipline tool-response.test.ts enforces for toolFaultText vs
+  // toolEmptyText, one layer earlier, before there is any tool text to guard.
+  it('a "refused" reason never says nothing or broke', async () => {
+    const shaky = JSON.parse(GOOD) as Record<string, unknown>;
+    shaky.confidence = 0.1;
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify(shaky) });
+    const out = await researchFoodOutcome('u1', { name: 'peanuts', brand: 'X' });
+    expect(out.reason).toContain('refused');
+    expect(out.reason).not.toMatch(/\bnothing\b/i);
+    expect(out.reason).not.toMatch(/\bbroke\b/i);
+  });
+
+  it('a "nothing" reason never says refused or broke', async () => {
+    runJobBySlug.mockResolvedValue({ formatted: 'not json at all' });
+    const out = await researchFoodOutcome('u1', { name: 'x', brand: 'Y' });
+    expect(out.reason).toContain('nothing');
+    expect(out.reason).not.toMatch(/\brefused\b/i);
+    expect(out.reason).not.toMatch(/\bbroke\b/i);
+  });
+
+  it('a "broke" reason never says nothing or refused', async () => {
+    runJobBySlug.mockRejectedValue(new Error('network down'));
+    const out = await researchFoodOutcome('u1', { name: 'x', brand: 'Y' });
+    expect(out.reason).toContain('broke');
+    expect(out.reason).not.toMatch(/\bnothing\b/i);
+    expect(out.reason).not.toMatch(/\brefused\b/i);
   });
 });

@@ -11,7 +11,9 @@ import {
   applyNormalization,
   atwaterKcal,
   checkNormalizedFood,
+  describeNormalizationProblems,
   looksAlcoholic,
+  normalizeFood,
   type NormalizedFood,
 } from './normalized.ts';
 
@@ -201,5 +203,73 @@ describe('applyNormalization', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     applyNormalization('usda', food({ default_serving: 9 }));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('[usda]'));
+  });
+});
+
+/**
+ * MP35: `NormalizationProblem` used to have zero references outside this module — the verdict
+ * reached `console.warn` and nowhere else, so a `drop` was indistinguishable from a source that was
+ * never asked, and a `warn` was kept (per its own doc comment: "SAY SO AND KEEP IT") but never said.
+ * `normalizeFood` is the same check with the verdict attached to the return value instead of only
+ * the log.
+ */
+describe('normalizeFood — the verdict travels with the food, not just to the console (MP35)', () => {
+  it('a dropped food carries WHY it was dropped, not just a bare null', () => {
+    const bad = food({ macros_per_base: { protein_g: 50, carbs_g: 262.5, fat_g: 12, sodium_mg: 875 } });
+    const outcome = normalizeFood('usda', bad);
+    expect(outcome.food).toBeNull();
+    expect(outcome.problems.length).toBeGreaterThan(0);
+    expect(outcome.problems).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'carbs_g', severity: 'drop' })]),
+    );
+  });
+
+  it('a food that survives with a caveat carries the caveat, not silence', () => {
+    const out = normalizeFood('usda', food({ macros_per_base: { kcal: 100, protein_g: 5, carbs_g: 71, fat_g: 20 } }));
+    expect(out.food).not.toBeNull();
+    // Exactly the `warn` case the type comment says to "SAY SO AND KEEP IT" about — now it does.
+    expect(out.problems).toEqual([expect.objectContaining({ severity: 'warn', field: 'kcal' })]);
+  });
+
+  it('a clean food carries no problems at all', () => {
+    expect(normalizeFood('test', food()).problems).toEqual([]);
+  });
+
+  it('applyNormalization is now a thin projection of normalizeFood — same food, every time', () => {
+    // usda-map.ts / fatsecret-map.ts / cnf-map.ts return `applyNormalization(...)` directly from
+    // their own adapters and are owned by other parcels of this build; this is the contract that
+    // keeps their return value byte-for-byte identical to what it was before MP35.
+    for (const input of [
+      food({ macros_per_base: { protein_g: 50, carbs_g: 262.5, fat_g: 12 } }),
+      food({ macros_per_base: { kcal: 100, protein_g: 5, carbs_g: 71, fat_g: 20 } }),
+      food({ name: '   ' }),
+      food(),
+    ]) {
+      expect(applyNormalization('test', input)).toEqual(normalizeFood('test', input).food);
+    }
+  });
+});
+
+describe('describeNormalizationProblems', () => {
+  it('turns the verdict into one line a caller can relay, not a server-log format', () => {
+    const problems = checkNormalizedFood(food({ default_serving: 9 }));
+    const described = describeNormalizationProblems(problems);
+    expect(described).toContain('default_serving');
+    // Not the `[source] name:` prefix `applyNormalization` writes to the console — a caller may
+    // not know or care which source this is, only what was wrong.
+    expect(described).not.toMatch(/^\[/);
+  });
+
+  it('joins multiple problems into one line rather than dropping all but the first', () => {
+    const problems = checkNormalizedFood(
+      food({ macros_per_base: { protein_g: 50, carbs_g: 262.5, fat_g: 12 }, default_serving: 9 }),
+    );
+    expect(problems.length).toBeGreaterThan(1);
+    const described = describeNormalizationProblems(problems);
+    for (const p of problems) expect(described).toContain(p.detail);
+  });
+
+  it('is empty text for a clean record rather than a stray separator', () => {
+    expect(describeNormalizationProblems([])).toBe('');
   });
 });
