@@ -31,11 +31,11 @@ it is worth being blunt about how:
 **What did NOT get smaller is the part nobody had looked at: the units are wrong in production.**
 That is now the whole first wave, and it is the only work that blocks everything else.
 
-**The one thing still needing an owner decision before it can be scheduled** is MP21 — a coach tool
-that logs a meal. `log_nutrition` was deliberately withdrawn on 2026-08-19 (*"logging food should
-probably just have the AI tell the user to go into the nutrition module"*), and the test case
-requires *"just tell Cadence in chat that they ate it and it gets logged."* Those conflict. Nothing
-should be built here until that is settled.
+**And one thing got bigger.** I had MP21 down as blocked on a conflict between the 2026-08-19
+withdrawal of `log_nutrition` and the test case's *"just tell Cadence in chat that they ate it."*
+There is no conflict — see §7. The withdrawal was about a bad surface, and chasing that down found
+the last place in the food stack where a regex drives the software and the Coach is managed into not
+contradicting it. MP21 is unblocked; MP40 is new and is the real work.
 
 ---
 
