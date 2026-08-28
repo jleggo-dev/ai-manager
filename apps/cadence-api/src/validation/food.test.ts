@@ -46,6 +46,35 @@ describe('createFoodBodySchema', () => {
     });
     expect(r.success).toBe(false);
   });
+
+  it('accepts vitamin_b12_ug — carried everywhere else in the system (MP28)', () => {
+    const r = createFoodBodySchema.safeParse({
+      ...validBody,
+      macros_per_base: { ...validBody.macros_per_base, vitamin_b12_ug: 1.2 },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts client-assertable sources but rejects server-derived provenance', () => {
+    // manual / label_photo are things a CLIENT can honestly claim about a food it is submitting.
+    // fatsecret / cnf / research are never created through this route — they're written
+    // server-side (upsertFatSecretFood raw SQL, the CNF bulk import, food-research.ts +
+    // insertFood from background enrichment), all bypassing this schema entirely. Downstream code
+    // reads `source` as provenance (food-source-report.ts's candidateNotes, and
+    // nutrition-insight-micro.ts's REAL_MICRO_SOURCES, which feeds a food's micros straight into
+    // coaching insights for a trusted source) — so a client that could assert one of these here
+    // could hand-carry fabricated micronutrients past both as if they were lab-analysed. Widening
+    // this enum to match the full FoodSource union is the bug, not the fix — see the comment on
+    // foodSourceSchema before reopening this.
+    for (const source of ['manual', 'label_photo'] as const) {
+      const r = createFoodBodySchema.safeParse({ ...validBody, source });
+      expect(r.success, `source "${source}" should be accepted`).toBe(true);
+    }
+    for (const source of ['fatsecret', 'cnf', 'research'] as const) {
+      const r = createFoodBodySchema.safeParse({ ...validBody, source });
+      expect(r.success, `source "${source}" must NOT be client-assertable`).toBe(false);
+    }
+  });
 });
 
 describe('patchFoodBodySchema', () => {
