@@ -210,6 +210,13 @@ tool performance."* Aim for 3–4 sentences; more if complex. Every description 
 Length caps are a budget, not a target: **520** chars for reads, **800** for actions. They exist
 because all 24 ride every request; they are not a claim that shorter is better.
 
+**They bound the description ONLY — this is a gap in the rule, not just a stale number.**
+`propose_plan_change` obeys the 800-char cap on its description and still costs 1,338 tokens
+(measured 2026-08-28, MP34 — full per-tool numbers in "Adding a tool: the checklist," step 2)
+because its **parameter schema** — properties, enums, every nested description rule 4 tells you to
+write in prose — carries no length rule of its own. A tool can pass this check and still be the
+most expensive one in the set. See the backlog: no rule here bounds a schema's size today.
+
 **Write for a new hire, not a colleague.** Ban internal vocabulary — `occurrences` is a table,
 `baseline` is a column, "Broker" is a hidden entity. The banned list is in the audit and grows
 whenever a real one slips through.
@@ -341,6 +348,12 @@ written convention; the `claw-code` harness asserts only that a description is n
    prose (rule 3 above) because the field is not available through our provider. Worth revisiting.
 7. **Negative assertions in tests.** Assert what a tool set does *not* contain, so a later refactor
    cannot silently widen a capability boundary.
+8. **A size budget on the parameter schema, not just the description.** Rule 1's 520/800-char caps
+   bound `description`; nothing bounds `parameters`. Measured 2026-08-28 (MP34):
+   `propose_plan_change` passes its description cap and still costs 1,338 tokens — 7× the
+   cheapest of today's eight `ALWAYS_ACTIONS` (`open_week_review`, 195) — because the schema is
+   where the size actually is. A rule that only checks the cheaper half can be satisfied by the
+   exact tool that motivated writing it.
 
 ## Model
 

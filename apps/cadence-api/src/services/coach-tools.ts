@@ -246,14 +246,23 @@ export async function executeCoachToolCalls(userId: string, calls: CoachToolCall
     recordToolCalls(userId, actionOutputs, wanted);
     return actionOutputs;
   }
-  const { results } = await executeCalls(
+  /**
+   * `perCall`, not `results` — kept apart by POSITION instead of by function name (MP0e,
+   * 2026-08-28). `results[fn] = result` collided when the model called the same read twice in one
+   * round with different arguments (`get_nutrition` with two different `view`s is the shape most
+   * likely to hit this): both toolCallIds rendered off whichever call happened to run LAST, so one
+   * of the two answers was silently wrong — attributed to the wrong question. `perCall` lines up
+   * with `reads` one-for-one (same array, same order, passed straight in below), so each call
+   * keeps its own result regardless of what any other call in the round was named.
+   */
+  const { perCall } = await executeCalls(
     userId,
     reads.map((c) => ({ fn: c.name, params: parseArgs(c.arguments) })),
     { logLabel: 'coach-tool' },
   );
   const all = [
     ...actionOutputs,
-    ...reads.map((c) => {
+    ...reads.map((c, i) => {
       const fn = RETRIEVAL_FUNCTIONS[c.name]!;
       /**
        * "Found nothing" and "broke" are different answers and must never share a sentence.
@@ -266,10 +275,13 @@ export async function executeCoachToolCalls(userId: string, calls: CoachToolCall
        *
        * So an error now says it is an error, tells her what to do about it, and gets logged where
        * someone can find it. She can say "I couldn't read that just now" — which is true, and
-       * which the user can push back on.
+       * which the user can push back on. `perCall[i]?.result` (not `results[c.name]`, see above)
+       * is `undefined` on the exact same fault this render is already guarding against, so that
+       * distinction (`check_food_sources` tells `undefined` = fault apart from `null` = bad args)
+       * survives the swap unchanged.
        */
       try {
-        const output = fn.render(results[c.name]);
+        const output = fn.render(perCall[i]?.result);
         return { toolCallId: c.toolCallId, output: boundToolResponse(output || toolEmptyText()) };
       } catch (e) {
         console.error('[coach-tool] render failed:', c.name, e);
