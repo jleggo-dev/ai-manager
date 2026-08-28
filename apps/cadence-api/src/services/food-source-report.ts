@@ -18,9 +18,17 @@
  * included, with the guards' verdicts attached as `notes` rather than applied as a silent veto.
  */
 import { microProvenance, nutritionTier, type NutritionTier } from './food-sources/completeness.ts';
-import { parseMeasure, singular } from './portion-measure.ts';
+import { matchMeasure, parseMeasure, scaleFromOwnMeasures } from './portion-measure.ts';
 import { priceFood } from './food-pricing-portion.ts';
-import type { Food, FoodNutrients, FoodServing } from '@cadence/shared';
+import { scaleNutrients, type Food, type FoodNutrients, type FoodServing } from '@cadence/shared';
+
+/**
+ * `matchMeasure` moved to `portion-measure.ts` (MP0c) so `food-pricing-portion.ts` can call the
+ * same matcher without a circular import (this file already depends on that one, for `priceFood`).
+ * Re-exported so nothing that imports it from here — `portion-resolve.ts`, this file's own test —
+ * has to change.
+ */
+export { matchMeasure } from './portion-measure.ts';
 
 /** Which rung answered. `ledger` covers the user's own foods and the CNF corpus alike. */
 export type FoodSourceName = 'ledger' | 'usda' | 'fatsecret' | 'research';
@@ -63,49 +71,6 @@ export function preferredServing(food: Food): FoodServing | null {
   if (servings.length === 0) return null;
   const byDefault = servings[food.default_serving ?? 0];
   return byDefault ?? servings[0] ?? null;
-}
-
-/**
- * Find the serving a requested measure names.
- *
- * Matched on the UNIT WORD, not on substring containment, which was a real bug: "680 g" contains
- * "g", so a containment match picked a "100 g" serving and priced the item at 68,000 g. A caught
- * unit is either the same unit or it is not.
- */
-export function matchMeasure(food: Food, requested: string | null | undefined): FoodServing | null {
-  const want = (requested ?? '').trim().toLowerCase();
-  if (!want) return null;
-  const servings = Array.isArray(food.servings) ? food.servings : [];
-
-  const exact = servings.find((s) => s.label.trim().toLowerCase() === want);
-  if (exact) return exact;
-
-  const parsed = parseMeasure(want);
-
-  /**
-   * A COUNT matches on the NOUN, because a stored count serving files its unit as 'item' — a row
-   * for "1 shallot" carries unit 'item', so comparing units would never match "3 shallots" to it.
-   * Singularised on both sides, since people write the plural and rows tend to hold the singular.
-   */
-  if (parsed.kind === 'count') {
-    const noun = singular(parsed.countOf.split(/\s+/)[0] ?? '');
-    if (!noun) return null;
-    return (
-      servings.find((s) => {
-        const asCount = parseMeasure(s.label);
-        return asCount.kind === 'count' && singular(asCount.countOf.split(/\s+/)[0] ?? '') === noun;
-      }) ?? null
-    );
-  }
-
-  const unit = parsed.unit.toLowerCase();
-  if (!unit) return null;
-  return (
-    servings.find((s) => s.unit.trim().toLowerCase() === unit) ??
-    // The label's own unit word, so "1 tbsp chopped" answers a request for tbsp.
-    servings.find((s) => parseMeasure(s.label.trim().toLowerCase()).unit.toLowerCase() === unit) ??
-    null
-  );
 }
 
 function measuresOf(food: Food): MeasureOption[] {
@@ -154,6 +119,24 @@ export function candidateNotes(food: Food, n: FoodNutrients): string[] {
 }
 
 /**
+ * Grams for ONE of the requested measure, scaled from the food's OWN reported points when no
+ * serving names it directly (MP1) — the same reach `portionFactor` gets, applied here so asking
+ * about "1 tbsp" doesn't cost a round trip through resolve_portion when the CNF row that already
+ * answers it is sitting in `servings[]` spelled "15 mL". Normalises to ONE unit first (dividing
+ * the parsed quantity back out), matching this file's existing contract of reporting per ONE named
+ * measure regardless of how many were asked for — see `toCandidate` below.
+ */
+function deriveOneUnit(servings: readonly FoodServing[], requested: string): { grams: number; label: string } | null {
+  const parsed = parseMeasure(requested);
+  if (parsed.kind !== 'mass' && parsed.kind !== 'volume') return null;
+  const total = parsed.kind === 'mass' ? parsed.grams : parsed.ml;
+  const perOne = total !== null && parsed.qty > 0 ? total / parsed.qty : null;
+  if (perOne === null || !(perOne > 0)) return null;
+  const grams = scaleFromOwnMeasures(servings, parsed.kind, perOne);
+  return grams === null ? null : { grams, label: `1 ${parsed.unit}` };
+}
+
+/**
  * Shape one stored food into a candidate, priced at the measure she asked for.
  *
  * `priceFood` does the arithmetic on purpose: the model's job is to say WHICH measure matters, and
@@ -161,18 +144,37 @@ export function candidateNotes(food: Food, n: FoodNutrients): string[] {
  * the variance the ledger exists to remove.
  */
 export function toCandidate(food: Food, source: FoodSourceName, requestedMeasure?: string | null): SourceCandidate {
-  const matched = matchMeasure(food, requestedMeasure) ?? preferredServing(food);
   const base = food.macros_per_base ?? {};
+  const servings = Array.isArray(food.servings) ? food.servings : [];
+  const exact = matchMeasure(food, requestedMeasure);
+  const derived = !exact && requestedMeasure ? deriveOneUnit(servings, requestedMeasure) : null;
 
-  const nutrients = matched ? priceFood(food, { qty: 1, unit: matched.unit, text: matched.label }) : base;
-  const measureLabel = matched?.label ?? `100 ${food.base_unit}`;
-  const grams = matched?.amount_g ?? (food.base_unit === 'item' ? 1 : 100);
+  let nutrients: FoodNutrients;
+  let measureLabel: string;
+  let grams: number;
+  if (exact) {
+    nutrients = priceFood(food, { qty: 1, unit: exact.unit, text: exact.label });
+    measureLabel = exact.label;
+    grams = exact.amount_g;
+  } else if (derived) {
+    nutrients = scaleNutrients(base, derived.grams / 100);
+    measureLabel = derived.label;
+    grams = derived.grams;
+  } else {
+    const matched = preferredServing(food);
+    nutrients = matched ? priceFood(food, { qty: 1, unit: matched.unit, text: matched.label }) : base;
+    measureLabel = matched?.label ?? `100 ${food.base_unit}`;
+    grams = matched?.amount_g ?? (food.base_unit === 'item' ? 1 : 100);
+  }
 
   const notes = candidateNotes(food, base);
-  if (requestedMeasure && !matchMeasure(food, requestedMeasure)) {
+  if (requestedMeasure && !exact) {
     notes.push(
-      `This source has no "${requestedMeasure}" measure — the numbers above are per ${measureLabel}. ` +
-        'Use resolve_portion to convert, rather than assuming a density.',
+      derived
+        ? `This source has no "${requestedMeasure}" row — the numbers above are scaled from its own ` +
+            'measures, not printed.'
+        : `This source has no "${requestedMeasure}" measure — the numbers above are per ${measureLabel}. ` +
+            'Use resolve_portion to convert, rather than assuming a density.',
     );
   }
 
