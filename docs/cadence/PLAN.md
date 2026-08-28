@@ -8325,3 +8325,54 @@ and a yield *vocabulary* exists even though yield *storage* does not.
 (`priceMealItems`, `RecipeLogConfirm`). MP36 joins Slice E and is its critical path: MP22 cannot
 start without it. MP35 joins Slice A, since it is small and closes the audit's original question.
 
+
+### Owner ruling 2026-08-25 — portions are ONE model, and MP36 is not a new field
+
+> *"As a user I should be able to specify different quantities for a yield: 1 serving (based on
+> known serving size from a recipe or a packaged food) · serving size as specified by a manufacturer
+> for a given product (in weight or volume) · by volume · by weight. The default presented to the
+> user should be what they last selected for that item."*
+
+With MyFitnessPal named as the model to follow, and its own screens as the reference:
+
+| Item | Serving Size | Number of Servings | The unit list offered |
+|---|---|---|---|
+| Blueberries | `1 cup` | `¼` | 1 cup · 1 berries · 1 milligram · 1 gram · 1 ounce · 1 pound |
+| Chobani Greek yogurt | `1 container` | `1` | 1 container · 150 g · 1 g |
+| Italian Style Mixed Vegetables | `1 cup` | `1⅓` | 0.5 cup · 1 cup · **1 container (4 cups ea.)** · 4 fluid ounce · 1 milliliter |
+
+**This collapses MP36 rather than sizing it.** The instinct was to add a `yield_qty`/`yield_unit`
+pair to `Recipe`. That is the wrong shape: what the owner is describing is exactly what a **Food**
+already has. `FoodServing` is `{ label, unit, amount_g }` and `servings[]` IS that unit picker — a
+manufacturer serving, a volume, a weight and a count can all sit in one list because each carries a
+gram equivalent. A recipe does not need a new vocabulary. **It needs the one Foods already speak.**
+
+So: **`Recipe` gains `servings[]` (the measures) beside its existing `servings: number` (the
+portion count).** "Yields 3 cups" stops being a homeless string and becomes one entry —
+`{ label: '3 cups', unit: 'cup', amount_g: <batch mass> }` — from which `1 cup`, `1 serving`,
+`100 g` and `1 batch` all derive. Recipes stop being a special case in the portion model, which is
+also why MP22 (serving derivation) gets much smaller: dividing a batch four ways is one more entry
+in a list, not an algorithm.
+
+**Already built — do not rebuild.** The two-axis model MyFitnessPal uses is already ours:
+`serving_index` (which unit) × `quantity` (how many) are on `POST /nutrition/meals`, in
+`validation/body.ts:144-157`, and honoured by `logMeal`. Fractional multipliers already validate
+(`z.number().positive()`), so `¼` and `1⅓` need only a display format. `FoodServing.label` is free
+text, so `1 container (4 cups ea.)` is a label-generation job, not a schema change.
+
+**Genuinely missing, and small:**
+
+| ID | What | Why | Size |
+|---|---|---|---|
+| **MP36** *(revised)* | `Recipe.servings[]` — the same `FoodServing[]` a food carries, so a recipe offers a unit picker. `1 serving` becomes one entry among `1 cup` / `100 g` / `1 batch` | "Yields 3 cups" has somewhere to land, and every portion question becomes the same question | **M** (was L) |
+| **MP38** | Remember the unit each user last picked, per item | `default_serving` is a column on the FOOD row — one value shared by every user. The owner wants per-user recency, which does not exist. Likely home: the existing `food_usage` / `food_usage_ctx` tables, which already track per-user food behaviour | S |
+| **MP39** | Generate compound labels — `1 container (4 cups ea.)` | The pattern that makes a manufacturer serving legible next to a volume. Pure formatting over `servings[]` | S |
+
+**What still needs deciding (carried from the MP36 questions, now narrower):** a recipe's
+`servings[]` entries need a gram basis, and the batch mass is not the ingredient sum — the owner's
+own sauce is ~1,360 g of ingredients yielding ~745 g of sauce, because ~615 g of water leaves the
+pan. Water leaves; calories do not. So `1 cup of sauce` is ~1.8× as calorie-dense as the raw mixture
+implies, and the yield is the ONLY thing that carries that fact. Open: whether a stated yield that
+disagrees with the ingredient sum is flagged as a note (the guards-report pattern) and whether the
+Coach asks for a yield, estimates one, or degrades to even division when nobody supplies one.
+
