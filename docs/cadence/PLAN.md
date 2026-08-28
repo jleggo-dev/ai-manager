@@ -8376,3 +8376,48 @@ implies, and the yield is the ONLY thing that carries that fact. Open: whether a
 disagrees with the ingredient sum is flagged as a note (the guards-report pattern) and whether the
 Coach asks for a yield, estimates one, or degrades to even division when nobody supplies one.
 
+
+### Owner ruling 2026-08-25 (second) — recipes divide, they do not measure. MP36 CLOSES.
+
+> *"For serving size for recipes specifically, the user specifies it. Then the nutritional content is
+> 'total nutritional content' / # servings — I think this is how MFP does it. Other serving sizes are
+> manufacturer defined already."*
+
+This closes MP36 rather than shrinking it again, and it is worth being explicit about why, because
+the previous two entries in this section talked themselves into a much larger problem than exists.
+
+**Even division is immune to cooking loss.** The whole yield argument rested on the sauce being
+~1,360 g in and ~745 g out — water leaves, calories stay, so a *cup* of finished sauce is ~1.8× as
+calorie-dense as the raw mixture implies. All true, and all irrelevant the moment a portion is
+expressed as a **fraction of the batch** rather than as a volume. Σ(ingredients) ÷ 4 is the same
+number whether the pan gave up 600 g of steam or none. The density only ever mattered because I was
+trying to price a *cup*; nobody asked for that.
+
+**So the model is what already ships.** `Recipe.servings: number` (the user states it) and
+`macros_per_serving` = *"Σ(ingredient macros) ÷ servings — never free-guessed for the dish"*, which
+is the existing comment on the type. Nothing to build. `Recipe` does NOT get `servings[]`; the
+previous entry's proposal is withdrawn.
+
+**And the test case's hardest-looking step turns out to be one question.** *"She should ask how many
+pork chops the user will be preparing and use that to create serving sizes"* — the answer to that
+question **is** `servings`. Four chops, `servings: 4`, and one serving is a chop plus a quarter of
+the sauce. MP22 needed no algorithm; it needed her to ask.
+
+**The chosen boundary, stated so it does not surprise us later.** Under this ruling *"I had about a
+cup of the sauce"* is not directly loggable — it is logged as `0.33 servings`. MyFitnessPal has the
+same limitation for user recipes and it has not hurt them. Manufacturer foods keep full unit
+pickers, because those servings are publisher-defined and already live in `servings[]`.
+
+**Status changes:**
+
+| ID | Was | Now |
+|---|---|---|
+| **MP36** yield model | L, then M — the critical path under MP22 | **CLOSED.** No yield field, no `Recipe.servings[]`, no ingredient-sum reconciliation, no cooking-loss model. Already shipped as `servings: number` + even division |
+| **MP22** serving derivation | L, blocked on MP36 | **S.** She asks "how many are you making?" and writes the answer to `servings`. Needs MP5 (a recipe write tool) and nothing else |
+| **MP11** fractional yields | M | **S, and lower priority.** `servings: z.number().int()` at 8 sites blocks a recipe *yielding* 2.5 portions, which is rare; logging a *fraction of* a serving already works — `quantity` is `z.number().positive()` on the log path |
+
+What survives from the portion work is only the part about **foods**, where the units really are
+publisher-defined and really do need a picker: **MP38** (remember the unit each user last picked —
+`default_serving` is a column on the food row, so today it is one value shared by every user) and
+**MP39** (compound labels like `1 container (4 cups ea.)`). Both S.
+
