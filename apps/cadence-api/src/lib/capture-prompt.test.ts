@@ -67,6 +67,33 @@ describe('capture-extract prompt (the Broker contract)', () => {
   });
 });
 
+describe('parse-nutrition-label prompt (labels print more than macros)', () => {
+  /**
+   * MP28/MP12: a real dried-mushroom label (Borde / The Wild Mushroom Co, PLAN.md test case)
+   * prints potassium 250 mg, calcium 10 mg, iron 0.3 mg — all three silently discarded because
+   * the prompt's declared JSON shape and its "report only if printed" rule never named them.
+   * Three, not six: the prompt already asked for fiber_g and sodium_mg.
+   */
+  it('declares iron_mg, calcium_mg and potassium_mg in the returned JSON shape', () => {
+    const p = prompt('parse-nutrition-label');
+    expect(p).toContain('"iron_mg": number|null');
+    expect(p).toContain('"calcium_mg": number|null');
+    expect(p).toContain('"potassium_mg": number|null');
+  });
+
+  it('extends the "only if printed" rule to the three new micronutrients', () => {
+    const p = prompt('parse-nutrition-label');
+    expect(p).toMatch(/fiber_g \/ sodium_mg \/ iron_mg \/ calcium_mg \/ potassium_mg ONLY if printed; else null/);
+  });
+
+  it('carries the dried-mushroom label as a worked example of the new fields', () => {
+    const p = prompt('parse-nutrition-label');
+    expect(p).toContain('"iron_mg":0.3');
+    expect(p).toContain('"calcium_mg":10');
+    expect(p).toContain('"potassium_mg":250');
+  });
+});
+
 describe('synthesize-plan prompt (what the planner is told to do with it)', () => {
   it('keeps observed history apart from our occurrences, and treats it as a floor', () => {
     const p = prompt('synthesize-plan');

@@ -17,6 +17,7 @@ const foodNutrientsSchema = z
     vitamin_c_mg: z.number().finite().optional(),
     calcium_mg: z.number().finite().optional(),
     potassium_mg: z.number().finite().optional(),
+    vitamin_b12_ug: z.number().finite().optional(),
   })
   .strict();
 
@@ -26,9 +27,10 @@ const foodServingSchema = z.object({
   amount_g: z.number().positive({ message: 'serving amount_g must be > 0' }),
 });
 
-export const foodSourceSchema = z.enum(['llm', 'label_photo', 'manual', 'chat', 'usda', 'off'], {
-  message: 'bad food source',
-});
+export const foodSourceSchema = z.enum(
+  ['llm', 'label_photo', 'manual', 'chat', 'usda', 'off', 'fatsecret', 'cnf', 'research'],
+  { message: 'bad food source' },
+);
 export const foodBaseUnitSchema = z.enum(['g', 'ml', 'item'], { message: 'bad base_unit' });
 export const foodVisibilitySchema = z.enum(['private', 'shared'], { message: 'bad visibility' });
 

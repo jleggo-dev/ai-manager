@@ -46,6 +46,21 @@ describe('createFoodBodySchema', () => {
     });
     expect(r.success).toBe(false);
   });
+
+  it('accepts vitamin_b12_ug — carried everywhere else in the system (MP28)', () => {
+    const r = createFoodBodySchema.safeParse({
+      ...validBody,
+      macros_per_base: { ...validBody.macros_per_base, vitamin_b12_ug: 1.2 },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts every real food source: off, usda, fatsecret, cnf, research (MP28)', () => {
+    for (const source of ['off', 'usda', 'fatsecret', 'cnf', 'research'] as const) {
+      const r = createFoodBodySchema.safeParse({ ...validBody, source });
+      expect(r.success, `source "${source}" should be accepted`).toBe(true);
+    }
+  });
 });
 
 describe('patchFoodBodySchema', () => {
