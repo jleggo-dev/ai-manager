@@ -27,10 +27,27 @@ const foodServingSchema = z.object({
   amount_g: z.number().positive({ message: 'serving amount_g must be > 0' }),
 });
 
-export const foodSourceSchema = z.enum(
-  ['llm', 'label_photo', 'manual', 'chat', 'usda', 'off', 'fatsecret', 'cnf', 'research'],
-  { message: 'bad food source' },
-);
+/**
+ * Deliberately narrower than the canonical `FoodSource` union (which also has `fatsecret`, `cnf`,
+ * `research`). This schema guards the ONE route that lets a client assert a food's `source` from a
+ * request body — POST /nutrition/foods, the confirm-path save. `fatsecret`/`cnf`/`research` rows
+ * are never created there: they're written server-side via their own paths (`upsertFatSecretFood`
+ * raw SQL, the CNF bulk import, `food-research.ts` + `insertFood(..., source: 'research')` from
+ * background enrichment), all of which bypass this schema entirely.
+ *
+ * `source` is read downstream as provenance, not a label — `food-source-report.ts`'s
+ * `candidateNotes` skips its "estimated, not measured" caveat for anything that isn't `llm`/
+ * `research`, and `nutrition-insight-micro.ts`'s `REAL_MICRO_SOURCES` feeds a food's micronutrient
+ * values straight into coaching insights when its `source` is `usda`/`off`/`label_photo`/
+ * `fatsecret`. A client that could claim `source: 'cnf'` or `'fatsecret'` here could hand-carry
+ * fabricated micronutrient numbers past both checks as if they were lab-analysed. If a real
+ * `fatsecret`/`cnf`/`research` need for this route ever exists, it needs its own server-side
+ * assertion (see `import-off` / `usda/import`'s pattern of never trusting `source` from the body)
+ * — not a wider enum here.
+ */
+export const foodSourceSchema = z.enum(['llm', 'label_photo', 'manual', 'chat', 'usda', 'off'], {
+  message: 'bad food source',
+});
 export const foodBaseUnitSchema = z.enum(['g', 'ml', 'item'], { message: 'bad base_unit' });
 export const foodVisibilitySchema = z.enum(['private', 'shared'], { message: 'bad visibility' });
 
