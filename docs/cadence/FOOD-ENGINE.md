@@ -239,3 +239,89 @@ allowlist, and `npm run cleanup:test-data` after any parcel that touches probes 
 - **A portion picker component.** `RecipeLogConfirm` is one.
 - **A rejection channel.** Four exist; P2 wires two call sites into them.
 - **Anything under MP21** until the 2026-08-19 withdrawal is revisited.
+
+---
+
+## 7. Owner ruling 2026-08-25 — MP21 unblocked, and the last inversion in the food path
+
+> *"The main ruling here was just about having a crappy in-chat nutrition module. SaaS design here is
+> about the AI invoking the tool. The coach only really needs to know what you logged when you need
+> their opinion — during a daily, weekly, quarterly check-in or ad-hoc 'tell me how to make this meal
+> healthier'. But yeah, if I tell Cadence 'I ate this thing' can Cadence log it? Yes… in fact Cadence
+> does log it when you use the chat. So the question is about how to take this question and invoke
+> the right tool to present the right UI to the user."*
+
+I had this backwards. The 2026-08-19 withdrawal was about **a bad surface** — a confirm sheet
+competing with the Food home that had just become a real screen — not about whether she may log. So
+MP21 is **unblocked**, and the actual question is which UI a tool call puts in front of the person.
+
+### What is there today, and why it is the last thing standing against the governing principle
+
+Food-in-chat does not go through the harness at all. It is a **second, parallel pass over the same
+message**, and it is regexes:
+
+1. The client posts the turn to `POST /coach/food-actions`.
+2. `classifyFoodIntent` (`coach-food-classify.ts`) runs hand-written patterns — `hasSaveRecipeIntent`
+   wants a literal *"save that as a recipe"* or *"I made … makes/serves N"*; `hasDietaryIntent` wants
+   *"allergic to"*, *"I'm a vegan"*; and `NOT_FOOD_CONTEXT` **vetoes** a food reading if the sentence
+   contains any of ~50 training words, `back pain` among them.
+3. For a recipe or a dietary change it returns a draft and the client draws a sheet.
+4. For food it returns `null`, and the coach is handed `FOOD_CONFIRM_CONTEXT` — a paragraph whose
+   first job is to tell her what she is not allowed to say: *"You do NOT log food yourself and no card
+   is coming, so never say it is logged, saved or counted."*
+
+**That is precisely the inversion TOOL-HARNESS §"The principle every rule below serves" rejects.** A
+regex decides what the software does, and the Coach is then managed into not contradicting it. She
+is not in control of this path; she is being worked around on it.
+
+It already fails in ways the audit caught:
+
+- The meal-prep test case's own message **matches none of the recipe patterns** — no literal "I made",
+  and *"Yields 3 cups"* is not the *"makes/serves N"* the regex demands. The sauce would never be
+  captured, by design.
+- *"Had a protein shake, my back's sore"* is vetoed as not-food by `NOT_FOOD_CONTEXT`.
+
+### The redesign
+
+**Delete the classifier. Give her the tools and let her call them.**
+
+| | now | after |
+|---|---|---|
+| Who decides it was food | a regex, in a parallel request | the Coach, mid-turn |
+| How the app finds out | `POST /coach/food-actions` | a tool call in the normal harness |
+| What she is told | *"you do NOT log food"* | nothing — she has a tool |
+| `FOOD_CONFIRM_CONTEXT` | injected on a regex match | **deleted** |
+
+Each food write tool returns, alongside its result, a **surface** saying what to put in front of the
+person. Three, and the third is why the 2026-08-19 ruling existed:
+
+- **`inline`** — it is logged and unambiguous. One line in her reply, no interruption. This is the
+  common case and it is what "Cadence does log it when you use the chat" should feel like.
+- **`module`** — open the Food home, deep-linked and pre-filled. For anything wanting the screen's
+  affordances: a slot to choose, a portion to pick, a photo to attach, an unresolved measure.
+- **`card`** — a confirm sheet in chat. **Only for things with no screen of their own**, which today
+  means recipes and dietary updates. Never for a plain meal; that is the mistake being avoided.
+
+**Confirmed already correct, and worth not breaking:** the food *log* is not in the always-on
+dossier. `get_food_log` sits behind the on-demand `get_nutrition` facade, so she reads it when a
+check-in or an ad-hoc question needs it and pays nothing on every other turn — exactly the economy the
+ruling describes.
+
+### Still open — one design question
+
+**Who picks the surface: the tool or the Coach?** She can see intent (are they telling me, or asking
+me to sort it out?) but not mechanics (did every item price cleanly? is a measure unresolved?). The
+tool can see mechanics but not intent. My inclination is that she chooses the **tool** and the tool
+reports the **surface** from what it actually managed — `inline` when everything priced, `module`
+when something needs a human decision — so neither is guessing at what it cannot see. That needs a
+ruling before P8 starts.
+
+### Plan changes
+
+| ID | Change |
+|---|---|
+| **MP21** | **Unblocked.** A coach tool that logs a meal, returning a surface. The 2026-08-19 withdrawal was about the sheet, not the capability |
+| **MP40** *(new)* | **Retire `classifyFoodIntent` and `FOOD_CONFIRM_CONTEXT`.** Replace the `/coach/food-actions` regex pass with coach-invoked tools. **M**, and it is the last SaaS-drives-AI seam in the food path |
+| **P6** | Gains MP40's deletions (`coach-food-classify.ts` is already its file) |
+| **P8** | Gains MP21 and MP40's tool side; no longer blocked |
+
