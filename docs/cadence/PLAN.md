@@ -7974,6 +7974,11 @@ already there — the session already carries `workflow_variables`, a user messa
 
 ## Meal prep, end to end — the agentic harness test case (owner, 2026-08-23)
 
+> **Architecture and the parallel build plan live in [FOOD-ENGINE.md](FOOD-ENGINE.md)** — the layer
+> map, the one-portion-path design, nine file-exclusive parcels across three waves, the agent brief
+> template, and the five review questions. This section remains the requirements and the rulings.
+
+
 This is the week's focus. It is one scenario, and it is deliberately the hardest ordinary thing a
 person does with food: cook something on Sunday from a recipe in their head, and eat it on Wednesday.
 Nothing about it is exotic, and almost none of it works today.
