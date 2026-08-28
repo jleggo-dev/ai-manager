@@ -108,15 +108,18 @@ old commit:
 |---|---|---|---|---|---|---|---|---|
 | 2026-08-26 | (deployed main) | 70.4% | 76.0% | 73.1% | 24/36 | 0/11 | 6/25 (A7 A13 A14 A15 A16 B3) | 20,654 median |
 | 2026-08-27 | (deployed main, identical code) | 70.0% | 84.0% | 76.4% | 24/36 | 2/11 (C6 C8) | 4/25 (A13 A14 A15 B6) | 20,703 median |
+| 2026-08-28 | `open_week_review` + `build_next_week` live (#280) | 71.0% | 88.0% | 78.6% | 27/36 | **0/11** | 2/25 (A14 A15) | 22,473 median |
 
 **Two things those rows taught, the second the hard way:**
 
 1. **`eval:tools` measures the DEPLOYED api** (the run header prints the vercel URL) — it has to,
    because coach chat only streams there. A tool-list change on a branch is therefore evaluated
    only AFTER it ships; running the eval pre-merge measures main, whatever your worktree holds.
-   The check-in rebuild's two additions (`open_week_review`, `build_next_week`) still owe their
-   real post-deploy run — diff it against the band below, and re-run C6/C8-style spot checks
-   (`npm run eval:tools -- --only <ids>`) before reading any single-case blip as a regression.
+   The check-in rebuild's two additions (`open_week_review`, `build_next_week`) got their real
+   post-deploy run on 2026-08-28 (row below): every headline at or above the top of the band, and
+   the dangerous mode — an unasked action firing, which for `build_next_week` would commit a week
+   — at 0/11 with silence 100%. The +1,770 tokens/turn is the two definitions' standing cost.
+   For future single-case blips, spot-check before believing them: `npm run eval:tools -- --only <ids>`.
 2. **The same-code variance band**: the two rows above are IDENTICAL deployed code run twice —
    ±3 F1 points, under-calls 6↔4, false-fires 0↔2 (and C6/C8 passed clean on a targeted re-run).
    A future run has to beat the band, not the point, before it means anything.
