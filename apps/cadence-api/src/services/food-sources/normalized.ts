@@ -234,19 +234,41 @@ function checkServings(food: NormalizedFood): NormalizationProblem[] {
 }
 
 /**
- * Apply the guard: log what is wrong, discard only what cannot be trusted, and say whether the
- * food may be used at all. Dropping a nutrient beats keeping a wrong one — since A23 an unmatched
- * food is PINNED, so a plausible-looking wrong number does not get corrected tomorrow, it gets
- * reused forever.
+ * The same verdict `applyNormalization` computes, minus the part that used to erase it.
+ *
+ * MP35: `NormalizationProblem` carries a `severity` and a `detail` string built for exactly this —
+ * and until now grep found zero references to it outside this module. The `warn` case even says so
+ * in its own doc comment ("SAY SO AND KEEP IT") while the code that ran directly below only ever
+ * said it to `console.warn`, which is not a place the Coach can read. A `drop` was worse: the whole
+ * record vanished into a bare `null`, indistinguishable from a source that was never asked. This is
+ * what lets a caller hand the verdict onward instead of re-deriving it from a server log.
  */
-export function applyNormalization<T extends NormalizedFood>(source: string, food: T): T | null {
+export interface NormalizationOutcome<T extends NormalizedFood> {
+  /** The usable food — repaired where a single field was impossible — or null on a `drop`. */
+  food: T | null;
+  /** Every problem this record raised, `drop` and `field` and `warn` alike. Never filtered. */
+  problems: NormalizationProblem[];
+}
+
+/** One line per problem, in words a person could read rather than a `[source] name: detail` log line. */
+export function describeNormalizationProblems(problems: NormalizationProblem[]): string {
+  return problems.map((p) => p.detail).join('; ');
+}
+
+/**
+ * Check, log, and repair — the guard's full verdict, food AND problems both returned.
+ *
+ * Dropping a nutrient beats keeping a wrong one — since A23 an unmatched food is PINNED, so a
+ * plausible-looking wrong number does not get corrected tomorrow, it gets reused forever.
+ */
+export function normalizeFood<T extends NormalizedFood>(source: string, food: T): NormalizationOutcome<T> {
   const problems = checkNormalizedFood(food);
-  if (problems.length === 0) return food;
+  if (problems.length === 0) return { food, problems };
 
   for (const p of problems) {
     console.warn(`[${source}] ${food.name || '(unnamed)'}: ${p.detail}`);
   }
-  if (problems.some((p) => p.severity === 'drop')) return null;
+  if (problems.some((p) => p.severity === 'drop')) return { food: null, problems };
 
   const macros: Record<string, unknown> = { ...food.macros_per_base };
   for (const p of problems) {
@@ -273,5 +295,16 @@ export function applyNormalization<T extends NormalizedFood>(source: string, foo
     }
   }
 
-  return { ...food, macros_per_base: macros as FoodNutrients };
+  return { food: { ...food, macros_per_base: macros as FoodNutrients }, problems };
+}
+
+/**
+ * The pre-MP35 surface, kept byte-for-byte compatible: `usda-map.ts`, `fatsecret-map.ts` and
+ * `cnf-map.ts` all return this value directly from their own adapters, so its signature is a
+ * contract those three files depend on and this parcel does not own. `normalizeFood` above is the
+ * same check with the verdict attached; this is now a thin projection of it so the two can never
+ * drift apart. New callers that want the reason should call `normalizeFood` directly.
+ */
+export function applyNormalization<T extends NormalizedFood>(source: string, food: T): T | null {
+  return normalizeFood(source, food).food;
 }

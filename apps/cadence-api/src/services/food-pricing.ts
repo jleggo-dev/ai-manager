@@ -259,8 +259,20 @@ async function priceOne(
    * confirms WHAT they ate. Sharpening the numbers for a food they already named is not a change
    * to what was logged — it is the brand promise (never make them repeat themselves) doing its job
    * quietly.
+   *
+   * THINNESS EARNS THE TRIP TOO, NOT JUST ABSENCE (MP37). This used to read `!food` alone, so a
+   * food that MATCHED but carried only calories — the exact shape `foodIsGoodEnough` already calls
+   * "not good enough" two paragraphs up, for the identical reason — sailed past this line forever:
+   * FatSecret had already been tried and had nothing better, and nothing downstream of here ever
+   * asks the completeness question again. The vendor-named item that pinned a stub row was pinned
+   * on it for good, because a present-but-thin `food` made `!food` false and the web rung never
+   * saw it. The bar is the SAME one `completeness.ts` already tested and already uses just above —
+   * not a stricter one invented here — so a `partial` row (the Greek yogurt case: kcal + protein +
+   * calcium) still counts as good enough and stays cheap; only a stub, kcal and nothing else, or no
+   * food at all, is worth the trip. `foodIsGoodEnough(null)` is already false, so this single check
+   * subsumes the old `!food` test rather than adding a second condition beside it.
    */
-  const wants_research = !food && shouldResearchItem(item);
+  const wants_research = !foodIsGoodEnough(food) && shouldResearchItem(item);
 
   /**
    * Pinning is for when there is NO food, never for when the one we have is thin.
@@ -273,6 +285,9 @@ async function priceOne(
    *
    * So completeness escalates through SOURCES, and stops at the ledger. Consistency outranks
    * completeness once a food is ours: a thin row we reuse forever beats a fuller row we re-guess.
+   * `wants_research` above must stay independent of this gate for exactly that reason — it is
+   * computed from the PRE-pin `food`, so pinning a thin estimate here never suppresses the flag a
+   * vendor-named item already earned.
    */
   if (!food && pin) {
     try {
@@ -287,11 +302,15 @@ async function priceOne(
   if (!food) return { item: bare, priced: false, food_id: null, wants_research };
 
   const est = priceFood(food, portion);
-  if (Object.keys(est).length === 0) return { item: bare, priced: false, food_id: food.food_id };
+  // `wants_research` is threaded through every return from here on, not just the `!food` branch —
+  // a thin MATCHED food used to lose the flag right here, because these two returns simply never
+  // carried it. Fixing the predicate above and not this would have kept the trap fully intact.
+  if (Object.keys(est).length === 0) return { item: bare, priced: false, food_id: food.food_id, wants_research };
   return {
     item: { ...bare, est, food_id: food.food_id },
     priced: true,
     food_id: food.food_id,
+    wants_research,
   };
 }
 

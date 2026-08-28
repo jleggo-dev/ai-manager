@@ -19,10 +19,19 @@ vi.mock('../repos/foods.ts', () => ({
   touchFoodUsage: vi.fn(async () => undefined),
 }));
 vi.mock('./food-capture.ts', () => ({ estimateFood: vi.fn() }));
+// A thin ledger match now escalates to FatSecret (MP37, see below) where it never used to be
+// exercised by this file at all — every pre-existing fixture food is `partial` tier, which stops
+// short of that branch. Mocked here rather than left to hit the real network in a unit test.
+vi.mock('./food-sources/fatsecret-enrich.ts', () => ({
+  findFatSecretMatch: vi.fn(),
+  isFatSecretRowFresh: vi.fn(),
+  refreshFatSecretFood: vi.fn(),
+}));
 
 import { loadResolveShared, rankedFoodsFor, type ResolveShared } from './food-resolver.ts';
 import { insertFood, searchFoods, touchFoodUsage } from '../repos/foods.ts';
 import { estimateFood } from './food-capture.ts';
+import { findFatSecretMatch, isFatSecretRowFresh, refreshFatSecretFood } from './food-sources/fatsecret-enrich.ts';
 import { priceMealItems, PRICING_MIN_SCORE } from './food-pricing.ts';
 import type { RankedFood } from './food-resolver-rank.ts';
 
@@ -68,6 +77,9 @@ beforeEach(() => {
   vi.mocked(searchFoods).mockReset().mockResolvedValue([]);
   vi.mocked(touchFoodUsage).mockReset().mockResolvedValue(undefined);
   vi.mocked(estimateFood).mockReset();
+  vi.mocked(findFatSecretMatch).mockReset().mockResolvedValue(null);
+  vi.mocked(isFatSecretRowFresh).mockReset().mockReturnValue(true);
+  vi.mocked(refreshFatSecretFood).mockReset().mockResolvedValue(null);
 });
 
 describe('priceMealItems — a hit is priced from the ledger', () => {
@@ -105,6 +117,74 @@ describe('priceMealItems — a hit is priced from the ledger', () => {
 
     expect(loadResolveShared).toHaveBeenCalledWith(USER, slot);
     expect(touchFoodUsage).toHaveBeenCalledWith(USER, 'f-1', slot);
+  });
+});
+
+/**
+ * MP37 — both `wants_research` and the pin stayed gated on `!food` alone, so a food that MATCHED
+ * but was thin (calories and nothing else) never earned the background lookup and the thin row
+ * stood forever. The fix keys `wants_research` on `foodIsGoodEnough`, the SAME bar `completeness.ts`
+ * already uses to decide whether to try FatSecret — not a new, stricter one — so this suite also
+ * has to prove the two incidents that bar exists to prevent stay closed: a `partial` row (kcal +
+ * protein + calcium, exactly the Greek yogurt case) must stay cheap, and pinning itself must stay
+ * gated on absence alone.
+ */
+describe('priceMealItems — a matched food earns research when it is THIN, not just when absent (MP37)', () => {
+  const thin = (over: Partial<Food> = {}) =>
+    food({ food_id: 'thin-1', name: 'Mystery Bar', macros_per_base: { kcal: 250 }, ...over });
+
+  it('flags a vendor-named item matched to a calories-only row', async () => {
+    vi.mocked(rankedFoodsFor).mockResolvedValue([ranked(thin(), 0.95)]);
+
+    const out = await priceMealItems(USER, [{ name: 'mystery bar', qty: 1, unit: 'container', brand: 'Couche-Tard' }]);
+
+    // Still priced from the thin row as-is — research runs in the BACKGROUND (meal-enrich.ts),
+    // never inline, so a matched food is never re-guessed just because it also earned a flag.
+    expect(out.items[0]?.food_id).toBe('thin-1');
+    expect(out.fully_priced).toBe(true);
+    expect(out.wants_research).toEqual([0]);
+    // The completeness check above this line already tried the next deterministic rung first.
+    expect(findFatSecretMatch).toHaveBeenCalledWith('mystery bar', 'Couche-Tard');
+  });
+
+  it('does not flag an item with no vendor named, even matched to the same thin row', async () => {
+    vi.mocked(rankedFoodsFor).mockResolvedValue([ranked(thin(), 0.95)]);
+    const out = await priceMealItems(USER, [{ name: 'mystery bar', qty: 1, unit: 'container' }]);
+    expect(out.wants_research).toEqual([]);
+  });
+
+  it('does NOT flag a vendor-named item matched to a partial row — the Greek yogurt case stays cheap', async () => {
+    // completeness.ts's own example (kcal + protein + calcium) is deliberately `partial`, not
+    // `unusable` — good enough to stop looking. Demanding more here would re-open exactly the
+    // regression completeness.ts's history records: nine tests failed the day this bar was raised.
+    vi.mocked(rankedFoodsFor).mockResolvedValue([ranked(food(), 0.95)]);
+    const out = await priceMealItems(USER, [{ name: 'greek yogurt', qty: 1, unit: 'container', brand: 'Fage' }]);
+    expect(out.wants_research).toEqual([]);
+    expect(findFatSecretMatch).not.toHaveBeenCalled();
+  });
+
+  it('still flags a vendor-named item nothing matched at all, even when the pin prices to nothing', async () => {
+    // The predicate (`!food`) was never the only way this could be lost. `priceOne` had TWO
+    // returns below the predicate that simply never carried `wants_research` at all — this pin
+    // happens to price empty (base_unit forced to 'item' against a leftover 'container' serving),
+    // which lands on exactly the branch that used to drop the flag on the floor regardless of the
+    // predicate above it. Fixing the predicate without fixing this would have looked done and
+    // still lost the flag here.
+    vi.mocked(rankedFoodsFor).mockResolvedValue([]);
+    vi.mocked(insertFood).mockResolvedValue(food({ food_id: 'p-9', owner_user_id: USER, base_unit: 'item' }));
+    const out = await priceMealItems(USER, [
+      { name: 'venti latte', qty: 1, brand: 'Starbucks', est: { kcal: 250, protein_g: 12 } },
+    ]);
+    expect(out.wants_research).toEqual([0]);
+  });
+
+  it('pinning stays gated on absence alone — a thin MATCH is never pinned as a second row', async () => {
+    // The other half of the incident this bar must not re-open: completeness must never gate the
+    // PIN, or the same words resolve to a different food each time (a prior fix, tracked in
+    // memory). A thin row that matched is used as-is; `insertFood` must not run for it.
+    vi.mocked(rankedFoodsFor).mockResolvedValue([ranked(thin(), 0.95)]);
+    await priceMealItems(USER, [{ name: 'mystery bar', qty: 1, unit: 'container', brand: 'Couche-Tard' }]);
+    expect(insertFood).not.toHaveBeenCalled();
   });
 });
 
