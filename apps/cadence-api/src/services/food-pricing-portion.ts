@@ -154,11 +154,19 @@ export function portionFactor(food: PricedFood, input: PortionInput): Portion {
 
   const unitWord = input.unit?.trim();
 
-  // Nobody named a unit or described one — not "failed to understand", nothing was said. A
-  // quick-add of "just log a serving of X" is a real, common request, and the food's own default
-  // is the correct answer to it. This is the ONLY place `default_serving` is read outside of
+  // Nobody named a unit or described one, AND the amount is at most one serving — not "failed to
+  // understand", nothing was said. A quick-add of "just log a serving of X" (or half of one) is a
+  // real, common request, and the food's own default is the correct answer to it, bounded by the
+  // size of ONE serving either way. This is the ONLY place `default_serving` is read outside of
   // pinning — everywhere below, an unmatched unit reports `unresolved` instead.
-  if (!unitWord && !text.trim()) {
+  //
+  // `quantity > 1` is EXCLUDED on purpose, even with no unit/text: "3" of an unnamed default is
+  // exactly how "3 shallots" became 300 g when a caller (recipe.ts's 3-arg call shape, still true
+  // today for a bare count — see recipe-macros.ts) drops the unit/name and keeps only the number.
+  // Multiplying an unrelated default by an arbitrary count is the bug this file exists to remove;
+  // scaling it by at most 1 is not, because the error is bounded by one serving's own uncertainty
+  // either way. A caller with more than "1" to say has to say what it is more than one OF.
+  if (!unitWord && !text.trim() && quantity <= 1) {
     const index = defaultServingIndex(food.default_serving, servings.length);
     const serving = servings[index]!;
     return {
@@ -195,6 +203,32 @@ export function portionFactor(food: PricedFood, input: PortionInput): Portion {
     }
   }
 
+  /**
+   * A count-shaped request against an ITEM-based food with exactly one serving has no ambiguity to
+   * resolve, whether or not the words matched — the base unit already IS "one of this specific
+   * thing" (per-item foods carry `amount_g: 1` on their one serving by convention; see
+   * `nutrientsPerBase`), so there is no other-sized candidate it could have meant instead. This is
+   * what makes a freshly-pinned one-off estimate price back out: `nutrientsPerBase` gives an
+   * unnamed item ("1 venti latte", no `unit` given) a single generic "1 serving" row, and the very
+   * next call re-describes it by its NAME ("venti latte"), which correctly does not match the word
+   * "serving" — yet there is nothing else it could be.
+   *
+   * Deliberately scoped to `base_unit === 'item'` and not e.g. `beans()` carrying a single "1 can
+   * (400g)" row: a mass/volume food's one named serving is an ARBITRARY-SIZED convenience label
+   * (a can happens to be 400 g), and "bowl" silently becoming "can" because it is the only option
+   * on file is exactly the shallots bug in miniature — see the recipe-macros.test.ts case this
+   * would otherwise reintroduce. An item-based food has no size to have mismatched.
+   */
+  if (measure.kind === 'count' && food.base_unit === 'item' && servings.length === 1) {
+    const only = servings[0]!;
+    return {
+      factor: servingFactor(food.base_unit, only, quantity),
+      serving_index: 0,
+      unit: only.unit || unitWord || 'serving',
+      quantity,
+    };
+  }
+
   // Step 3 (MP1): reach the food's own OTHER mass/volume measures — CNF's ml/count servings,
   // scaled from whichever point is closest, never a generic density. See scaleFromOwnMeasures.
   if (measure.kind === 'mass' || measure.kind === 'volume') {
@@ -214,13 +248,16 @@ export function portionFactor(food: PricedFood, input: PortionInput): Portion {
 
   // Step 4: nothing legitimate matched. A wrong number nobody can see is worse than no number —
   // see the module header — so this reports instead of guessing.
+  const available = servings.map((s) => s.label).join(', ');
   return {
     factor: 0,
     serving_index: null,
     unit: unitWord || 'serving',
     quantity,
     unresolved: true,
-    reason: `no "${requested}" measure on file for this food — it only has: ${servings.map((s) => s.label).join(', ')}`,
+    reason: requested.trim()
+      ? `no "${requested}" measure on file for this food — it only has: ${available}`
+      : `asked for ${quantity} with no unit or description to resolve it against — this food's measures are: ${available}`,
   };
 }
 

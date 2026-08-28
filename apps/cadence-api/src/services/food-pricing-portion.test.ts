@@ -190,6 +190,69 @@ describe('portionFactor', () => {
     expect(p.factor).toBeCloseTo(1.7, 6);
   });
 
+  it('a bare fractional quantity with no unit is still bounded — half of the default is fine', () => {
+    const p = portionFactor(YOGURT, { qty: 0.5 });
+    expect(p.unresolved).toBeUndefined();
+    expect(p.factor).toBeCloseTo(0.85, 6); // half a 170 g container
+  });
+
+  /**
+   * The gap a fail-first test on recipe-macros.ts caught while writing THIS PR: `!unitWord &&
+   * !text.trim()` alone would treat `{qty: 3}` (unit and text both dropped, quantity meaningfully
+   * NOT 1) exactly like `{}` — silently pricing 3 OF the food's unrelated default serving. That is
+   * the identical shape to "3 shallots" landing on 3× a 100 g default; only the missing piece
+   * differs (here the caller dropped the unit, there the resolver couldn't understand it). A
+   * quantity greater than one, with nothing to say what it is three of, must ask, not guess.
+   */
+  it('a quantity greater than one with NO unit or text is unresolved, not 3× the default', () => {
+    const p = portionFactor(YOGURT, { qty: 3 });
+    expect(p.factor).not.toBe(5.1); // the old shape: 3 × the 170 g container
+    expect(p.factor).toBe(0);
+    expect(p.unresolved).toBe(true);
+    expect(p.reason).toMatch(/no unit or description/);
+  });
+
+  /**
+   * Found by the full suite while writing this PR (3 real failures in food-pricing.test.ts,
+   * food-pricing-research.test.ts, nutrition-ledger.test.ts): a freshly-pinned one-off estimate
+   * (`nutrientsPerBase` on an unnamed item — no `unit` given) gets ONE generic "1 serving" row.
+   * Pricing it back out re-describes it by the item's actual NAME ("venti latte"), which correctly
+   * does not match the word "serving" — but with only one row on the food, that mismatch must not
+   * become unresolved: there is nothing else it could mean. This is the round-trip invariant this
+   * file's header describes, for the specific case where the pin carried no separate unit at all.
+   */
+  it('a pinned one-off with a single generic serving prices back out by name, not by matching "serving"', () => {
+    const pinnedSnack: TestFood = {
+      base_unit: 'item',
+      macros_per_base: { kcal: 200, protein_g: 5 },
+      servings: [{ label: '1 serving', unit: 'serving', amount_g: 1 }],
+      default_serving: 0,
+    };
+    const p = portionFactor(pinnedSnack, { qty: 1, text: '1  mystery snack' });
+    expect(p.unresolved).toBeUndefined();
+    expect(p.factor).toBe(1);
+    expect(priceFood(pinnedSnack, { qty: 1, text: '1  mystery snack' })).toEqual({ kcal: 200, protein_g: 5 });
+  });
+
+  /**
+   * The guard against over-applying the fix above: a MASS-based food's single named serving is an
+   * arbitrary-sized convenience label (a can happens to be 400 g), not the food's own irreducible
+   * unit — "bowl" silently becoming "can" because it is the only option on file would be the
+   * shallots bug in miniature. Scoped to `base_unit === 'item'` specifically; see recipe-macros.ts's
+   * matching case for the food this distinction protects.
+   */
+  it("does NOT extend the single-serving exception to a mass-based food's one named serving", () => {
+    const cannedBeans: TestFood = {
+      base_unit: 'g',
+      macros_per_base: { kcal: 90, protein_g: 6 },
+      servings: [{ label: '1 can (400g)', unit: 'can', amount_g: 400 }],
+      default_serving: 0,
+    };
+    const p = portionFactor(cannedBeans, { qty: 1, unit: 'bowl' });
+    expect(p.factor).not.toBeCloseTo(4, 1); // the old shape: 1 × the 400 g can
+    expect(p.unresolved).toBe(true);
+  });
+
   it('infers quantity from phrasing when qty is absent', () => {
     expect(portionFactor(EGG, { text: 'half an egg' }).quantity).toBe(0.5);
   });
@@ -260,14 +323,6 @@ describe('the meal-prep scenario, against real CNF rows (MP0a, MP0b, MP1)', () =
     expect(p.unresolved).toBe(true);
     expect(p.reason).toMatch(/no ".*" measure/);
     expect(priceFood(SHALLOT_RAW, { qty: 3, text: '3 shallots' })).toEqual({});
-  });
-
-  it('an ambiguous "ml" request does not silently pick the food\'s smallest ml row', () => {
-    // The bug behind the 16× disagreement (see recipe-macros.test.ts): a bare "ml" or "g" request
-    // must never match a household row by unit-family alone (every CNF volume row is spelled in
-    // ml), only by proximity — scaleFromOwnMeasures, not matchMeasure, answers this one.
-    const p = portionFactor(EVAPORATED_MILK_WHOLE, { qty: 500, unit: 'ml' });
-    expect(p.factor).not.toBeCloseTo(0.8, 2); // (16/100)*500/100 shape of the old recipe-path bug
   });
 });
 

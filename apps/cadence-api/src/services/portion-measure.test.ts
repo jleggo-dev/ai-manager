@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { checkPlausible, parseLeadingQuantity, parseMeasure } from './portion-measure.ts';
+import type { FoodServing } from '@cadence/shared';
+import {
+  checkPlausible,
+  matchMeasure,
+  MAX_SCALE_RATIO,
+  parseLeadingQuantity,
+  parseMeasure,
+  scaleFromOwnMeasures,
+} from './portion-measure.ts';
 
 /**
  * Reading a measure, and refusing an impossible answer about one.
@@ -136,5 +144,142 @@ describe('the density guard catches unit errors, not wrong-but-possible answers'
 
   it('has no density opinion about a count, because there is no volume to have one about', () => {
     expect(checkPlausible(parseMeasure('2 green onions'), 30).ok).toBe(true);
+  });
+});
+
+/**
+ * A leading article ("a"/"an"/"the") is never part of the unit or the noun. Before this fix,
+ * `parseMeasure('half an egg')` parsed the unit as "an" (found in neither MASS_G nor VOLUME_ML),
+ * so the count noun for matching came out "an" instead of "egg" — a food's own "1 egg" serving
+ * silently stopped matching a request as ordinary as "half an egg".
+ */
+describe('a leading article never becomes the unit or the noun', () => {
+  it('"half an egg" reads its unit as egg, not an', () => {
+    const m = parseMeasure('half an egg');
+    expect(m.kind).toBe('count');
+    expect(m.countOf).toBe('egg');
+    expect(m.qty).toBe(0.5);
+  });
+
+  it('matchMeasure finds a food\'s own "1 egg" serving from "half an egg"', () => {
+    const egg: FoodServing[] = [{ label: '1 egg', unit: 'egg', amount_g: 50 }];
+    expect(matchMeasure({ servings: egg }, 'half an egg')?.amount_g).toBe(50);
+  });
+
+  it('"an ounce of cheese" reads as a mass, not a count of "an"', () => {
+    const m = parseMeasure('an ounce of cheese');
+    expect(m.kind).toBe('mass');
+    expect(m.grams).toBeCloseTo(28.35, 1);
+  });
+
+  it('still handles phrasing where parseLeadingQuantity already consumed the article', () => {
+    // "a tbsp" / "cup of milk" — no article left over for this fix to touch.
+    expect(parseLeadingQuantity('a tbsp of pepper').qty).toBe(1);
+    expect(parseMeasure('a tbsp of pepper').kind).toBe('volume');
+  });
+});
+
+/**
+ * `matchMeasure` moved here from `food-source-report.ts` (MP0c, to break a circular import with
+ * `food-pricing-portion.ts` — see that file's header). Behaviour is unchanged; re-verified here as
+ * the function's new home. `food-source-report.test.ts` covers it again through the re-export, so
+ * a caller that only ever imports it from there never has to know it moved.
+ */
+describe('matchMeasure — the one true serving-matcher', () => {
+  const servings: FoodServing[] = [
+    { label: '1 tbsp chopped', unit: 'tbsp', amount_g: 10 },
+    { label: '100 g', unit: 'g', amount_g: 100 },
+  ];
+
+  it('matches the unit word, not any substring of the label', () => {
+    // MP0b's exact shape: the OLD recipe-path bug was `label.includes(unit)` — unbounded
+    // containment — so a request for "g" matched "15ml (16g)" because the label's OWN gram
+    // annotation happens to contain the letter "g", an entirely different unit from what the row
+    // actually measures. Word-based comparison (parsing both sides) correctly refuses: the row's
+    // OWN unit, reparsed from its label, is "ml", and "ml" is not "g".
+    const mlOnly: FoodServing[] = [{ label: '15ml (16g)', unit: '15ml', amount_g: 16 }];
+    expect(matchMeasure({ servings: mlOnly }, 'g')).toBeNull();
+  });
+
+  it('DOES match "g" against a row genuinely denominated in g — that is correct, not the bug', () => {
+    // Whether the food's own gram row should ever be reached with a raw absolute quantity (e.g.
+    // "680 g") is `portionFactor`'s job (the absolute-amount step runs BEFORE any servings match —
+    // see food-pricing-portion.test.ts and portion-resolve.ts's own comment on the same guard).
+    // matchMeasure itself is a context-free "does this food have a serving spelled this way", and
+    // for a food whose serving genuinely IS "g", the honest answer is yes.
+    const withHundredG: FoodServing[] = [{ label: '100 g', unit: 'g', amount_g: 100 }];
+    expect(matchMeasure({ servings: withHundredG }, 'g')?.amount_g).toBe(100);
+  });
+
+  it('matches loosely on case and label noise', () => {
+    expect(matchMeasure({ servings }, 'tbsp')?.amount_g).toBe(10);
+    expect(matchMeasure({ servings }, '1 TBSP CHOPPED')?.amount_g).toBe(10);
+  });
+
+  it('never invents a measure the food does not have', () => {
+    expect(matchMeasure({ servings }, 'cup')).toBeNull();
+  });
+});
+
+/**
+ * MP1: CNF prints household measures as raw "15 mL (16 g)" rows, not under the name "tbsp" — even
+ * though Health Canada's own convention already IS 1 tbsp = 15 mL. This is what lets the pricing
+ * path reach that data for the units people actually speak, using only what the food itself
+ * reported. Cases and numbers verified against real production CNF rows (see the PR description).
+ */
+describe("scaleFromOwnMeasures — reading a nearby amount off the food's own line", () => {
+  const rosemary: FoodServing[] = [
+    { unit: '5ml', label: '5ml (1.2g)', amount_g: 1.2 },
+    { unit: '15ml', label: '15ml (3.3g)', amount_g: 3.3 },
+    { unit: 'g', label: '100 g', amount_g: 100 },
+  ];
+
+  it('answers "1 tbsp" (14.79 ml) from the food\'s own 15 ml row', () => {
+    const g = scaleFromOwnMeasures(rosemary, 'volume', 14.7868);
+    expect(g).not.toBeNull();
+    expect(g!).toBeCloseTo(3.25, 1);
+  });
+
+  it('answers a bare "500 ml" by scaling the closest point, not the smallest one', () => {
+    const evapMilk: FoodServing[] = [
+      { unit: '15ml', label: '15ml (16g)', amount_g: 16 },
+      { unit: '100ml', label: '100ml (106.5g)', amount_g: 106.5 },
+      { unit: '250ml', label: '250ml (266.3g)', amount_g: 266.3 },
+    ];
+    // Scaling from the 15 ml row (the recipe path's old bug — see recipe-macros.test.ts) would
+    // give (16/15)*500 ≈ 533.3; scaling from the correct, CLOSEST 250 ml row gives 532.6. Distinct
+    // enough at 1 decimal to prove which point actually won.
+    const g = scaleFromOwnMeasures(evapMilk, 'volume', 500);
+    expect(g!).toBeCloseTo(532.6, 1);
+  });
+
+  it('refuses to scale a volume request against a food with no volume-kind points at all', () => {
+    expect(scaleFromOwnMeasures([{ label: '100 g', unit: 'g', amount_g: 100 }], 'volume', 15)).toBeNull();
+  });
+
+  it('a mass request DOES scale off rosemary\'s own trivial "100 g" row — that is not a bug', () => {
+    // Every CNF row carries a "100 g" fallback by construction, so a mass request always has at
+    // least this one point: scaling 100 g by 50/100 is just 50 g, identical to the absolute path.
+    // This is here so a future change to the ratio guard cannot quietly start refusing it.
+    expect(scaleFromOwnMeasures(rosemary, 'mass', 50)).toBeCloseTo(50, 6);
+  });
+
+  it(`refuses when nothing reported is within ${MAX_SCALE_RATIO}× of what was asked (a cup from a tablespoon)`, () => {
+    // The exact case matchMeasure's own 'cup' test guards: a food with only a tablespoon-sized
+    // point must not have a cup (16× away) invented from it.
+    const tbspOnly: FoodServing[] = [{ label: '1 tbsp chopped', unit: 'tbsp', amount_g: 10 }];
+    expect(scaleFromOwnMeasures(tbspOnly, 'volume', 236.588)).toBeNull();
+  });
+
+  it('accepts right at the boundary and refuses just past it', () => {
+    const point: FoodServing[] = [{ label: '10 ml', unit: 'ml', amount_g: 10 }];
+    expect(scaleFromOwnMeasures(point, 'volume', 10 * MAX_SCALE_RATIO)).not.toBeNull();
+    expect(scaleFromOwnMeasures(point, 'volume', 10 * MAX_SCALE_RATIO + 0.01)).toBeNull();
+  });
+
+  it('rejects a non-positive or non-finite amount outright', () => {
+    expect(scaleFromOwnMeasures(rosemary, 'volume', 0)).toBeNull();
+    expect(scaleFromOwnMeasures(rosemary, 'volume', -5)).toBeNull();
+    expect(scaleFromOwnMeasures(rosemary, 'volume', Number.NaN)).toBeNull();
   });
 });

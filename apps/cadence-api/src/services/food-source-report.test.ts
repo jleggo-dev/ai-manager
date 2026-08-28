@@ -81,6 +81,32 @@ describe('a candidate answers in the measure that was asked for', () => {
     expect(c.notes.join(' ')).toMatch(/resolve_portion/);
     expect(c.per.measure).not.toContain('cup');
   });
+
+  /**
+   * MP1: a CNF row spells its household measures as raw "15 mL (16 g)" rows, never as "tbsp" —
+   * even though Health Canada's own convention already IS 1 tbsp = 15 mL. Before this fix, asking
+   * for "1 tbsp" against a food shaped like this fell all the way to the "no such measure" branch
+   * above and reported per-100g with a note, even though the food's OWN data already answered it.
+   * Real CNF row shape (Spices, rosemary, dried), verified against production 2026-08-28.
+   */
+  it('reaches a CNF-shaped food\'s own ml row for a spoken "tbsp" instead of falling back to 100 g', () => {
+    const rosemary = food({
+      name: 'Spices, rosemary, dried',
+      source: 'cnf',
+      macros_per_base: { kcal: 331, protein_g: 4.9, carbs_g: 64.1, fat_g: 15.2 },
+      servings: [
+        { unit: '5ml', label: '5ml (1.2g)', amount_g: 1.2 },
+        { unit: '15ml', label: '15ml (3.3g)', amount_g: 3.3 },
+        { unit: 'g', label: '100 g', amount_g: 100 },
+      ],
+      default_serving: 2,
+    });
+    const c = toCandidate(rosemary, 'ledger', '1 tbsp');
+    expect(c.per.measure).toBe('1 tbsp');
+    expect(c.per.grams).toBeCloseTo(3.25, 1); // scaled from the food's own 15 ml row, not 100 g
+    expect(c.per.nutrients.kcal).toBeCloseTo(10.8, 0); // NOT 331 (the old, per-100g fallback)
+    expect(c.notes.join(' ')).toContain('scaled from its own');
+  });
 });
 
 describe('guards report as evidence, never as a veto', () => {

@@ -125,6 +125,37 @@ describe('macrosForIngredientAmount', () => {
     expect(total.iron_mg).toBeCloseTo(3.5, 1);
     expect(scaleMacros(total, 2).iron_mg).toBeCloseTo(7, 1);
   });
+
+  /**
+   * The "3 shallots" case (FOOD-ENGINE.md §2.2), reached through the recipe path specifically.
+   * `recipe.ts`'s three call sites pass only `{qty, unit}` — for a bare count like "3 shallots"
+   * the LLM extraction typically leaves `unit` empty (the noun IS the food name), so
+   * `macrosForIngredientAmount`'s 3-arg shape has nothing to resolve against and this correctly
+   * still returns `{}` rather than a wrong number. `priceIngredientAmount`'s optional 4th `text`
+   * parameter is there so a future call site CAN pass `ing.name` and get the full picture —
+   * verified here with a food that genuinely has no per-item count serving (real "Shallot, raw"
+   * shape: only volume/mass measures), which must resolve to `unresolved`, not a guess.
+   */
+  it('a bare count with the name threaded through resolves correctly to unresolved, not a guess', () => {
+    const shallot: Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'> = {
+      base_unit: 'g',
+      macros_per_base: { kcal: 72, protein_g: 2.5, carbs_g: 16.8, fat_g: 0.1 },
+      servings: [
+        { unit: '15ml chopped', label: '15ml chopped (10.1g)', amount_g: 10.1 },
+        { unit: 'g', label: '100 g', amount_g: 100 },
+      ],
+      default_serving: 1,
+    };
+    // Without the name, there is nothing to resolve — correctly {} rather than a guess.
+    expect(macrosForIngredientAmount(shallot, 3, undefined)).toEqual({});
+
+    // With the name (what recipe.ts has in scope but does not pass today — see PR description),
+    // still correctly unresolved, now WITH a reason a caller could act on.
+    const p = priceIngredientAmount(shallot, 3, undefined, '3 shallots');
+    expect(p.nutrients).toEqual({});
+    expect(p.unresolved).toBe(true);
+    expect(p.reason).toBeTruthy();
+  });
 });
 
 describe('computeMacrosPerServing', () => {
