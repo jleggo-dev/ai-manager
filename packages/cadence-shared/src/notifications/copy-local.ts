@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════
-   Copy for the LOCAL nudges — the five the device can schedule itself
+   Copy for the LOCAL nudges — the four the device can schedule itself
    ════════════════════════════════════════════════════════════════ */
 
 import type { NudgeCopy, NudgeCopyInputFor } from './copy-types.ts';
@@ -15,24 +15,6 @@ import type { NudgeRegister } from './pillar.ts';
  * the same nudge does not read identically every week, and few enough that the whole catalog can
  * be held in a reviewer's head and pinned by a test.
  */
-
-/* ── weekly_checkin ───────────────────────────────────────────────────────────────────────────
-   Calibration, not a status report. It fires the MORNING of the check-in the plan already
-   contains, so the body's job is to say "this is here when you want it" and then stop. Anything
-   that hinted at a score would turn a two-way conversation into a report card before it opened. */
-
-const WEEKLY_CHECKIN_BODIES = [
-  "It's on today's plan — ten minutes to tune next week, whenever suits.",
-  "On today's plan: ten minutes to shape next week, whenever suits you.",
-  "Ten minutes today to set next week's shape — whenever suits.",
-] as const satisfies Variants;
-
-export function weeklyCheckinCopy(input: NudgeCopyInputFor<'weekly_checkin'>): NudgeCopy {
-  return {
-    title: 'Weekly check-in',
-    body: pickVariant(WEEKLY_CHECKIN_BODIES, 'weekly_checkin', input.weekday),
-  };
-}
 
 /* ── almost_time ──────────────────────────────────────────────────────────────────────────────
    The title is the activity, verbatim: "Your Tuesday run", because that is what the user called

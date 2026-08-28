@@ -1,4 +1,10 @@
-import type { PendingPlanActivity, ProgressData, StreakView } from '@cadence/shared';
+import type {
+  OccurrenceStatus,
+  PendingPlanActivity,
+  PendingWeekReview,
+  ProgressData,
+  StreakView,
+} from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /* ── Ongoing plan view (Today / Your week) ─────────────────────── */
@@ -70,6 +76,9 @@ export interface PlanViewData {
   streak?: StreakView;
   activeEpisode?: ActiveEpisode | null; // set while the user is on a disrupted detour (Req 4)
   pendingProposal?: PendingProposal | null;
+  /** Named `weekState`, not `week` — `week: PlanDay[]` above already owns that name. Null before
+   *  a plan exists. `checkin_due` drives the end-of-trail card (check-in rebuild, step 6). */
+  weekState?: { ends_on: string; checkin_due: boolean } | null;
 }
 
 /**
@@ -246,6 +255,170 @@ export async function dismissPendingChange(): Promise<boolean> {
   return res.ok;
 }
 
+/* ── Changes sheet (the swap-card toggle surface, check-in rebuild, step 7 client half) ────── */
+export interface PendingChangeDetailItem {
+  index: number;
+  title: string;
+  /** The coach's one-line why, when propose_plan_change was given one. Absent for an ordinary
+   *  edit that carried no reason. */
+  change_reason?: string;
+  enabled: boolean;
+  /** The active plan's current schedule for this commitment, summarized ("Thu · 6:30 pm"). Null
+   *  for a pure add — there is no "now" for a commitment that doesn't exist yet. */
+  now: string | null;
+  next: string;
+}
+export interface PendingChangeDetail {
+  /** The active plan's version, so the sheet can label the row "WEEK {version + 1}". Null when
+   *  there is nothing pending. */
+  plan_version: number | null;
+  items: PendingChangeDetailItem[];
+}
+
+/**
+ * The full per-item view the Changes sheet renders — every proposed swap's title, reason (if the
+ * coach gave one), current enabled/disabled toggle state, and NOW → NEXT WEEK schedule. Same
+ * fallback shape as getPendingChange: nothing pending (or a read that fails) is an empty list,
+ * never a thrown error — the sheet has one honest "nothing to show" message for all of them.
+ */
+export async function getPendingChangeDetail(): Promise<PendingChangeDetail> {
+  const res = await fetch(`${BASE}/plan/pending-change/detail`, { headers: headers() }).catch(() => null);
+  if (!res?.ok) return { plan_version: null, items: [] };
+  return res.json();
+}
+
+/**
+ * Persist the sheet's toggle flips before applying. `index` addresses the STORED array position —
+ * stable, because propose_plan_change never reorders it — so these survive to the commit funnel
+ * (resolveToggledActivities in plan-partial-apply.ts) even though the tap that applies happens in
+ * a separate call (lockPlan).
+ */
+export async function setPendingChangeToggles(toggles: { index: number; enabled: boolean }[]): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/pending-change/toggles`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ toggles }),
+  }).catch(() => null);
+  return !!res?.ok;
+}
+
+/**
+ * The week the coach's `open_week_review` tool put up, if it's still waiting to be opened or
+ * dismissed. Read from the server, same reasoning as getPendingChange: the card shows the week
+ * the TOOL actually pointed at, not whatever the turn that announced it said.
+ */
+export async function getPendingWeekReview(): Promise<PendingWeekReview | null> {
+  const res = await fetch(`${BASE}/plan/week-review/pending`, { headers: headers() });
+  if (!res.ok) return null;
+  const body = (await res.json()) as { review: PendingWeekReview | null };
+  return body.review;
+}
+
+/** Dismiss the week-review card without opening it. Nothing else was written by putting it up,
+ *  so there is nothing else to undo — she can put another one up whenever asked. */
+export async function dismissPendingWeekReview(): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/week-review/dismiss`, { method: 'POST', headers: headers() });
+  return res.ok;
+}
+
+/* ── Week review facts (check-in rebuild, step 4) ──────────────── */
+/** Mirrors `week-review-facts.ts`'s server-side shape exactly — this is the client's own view of
+ *  the same JSON, not a shared type, the same way `PlanDay`/`PlanActivity` above are the client's
+ *  own reading of `/plan` rather than an import of a server-internal type. */
+export type WeekReviewMeal = 'breakfast' | 'lunch' | 'dinner';
+export interface WeekReviewMealSlot {
+  meal: WeekReviewMeal;
+  occurrence_id: string | null;
+  logged: boolean;
+}
+export interface WeekReviewSessionRow {
+  occurrence_id: string;
+  title: string;
+  status: OccurrenceStatus;
+  planned_min?: number;
+  logged_min?: number;
+}
+export interface WeekReviewMindStep {
+  name: string;
+  done: boolean;
+}
+export interface WeekReviewMindRow {
+  occurrence_id: string;
+  title: string;
+  status: OccurrenceStatus;
+  steps?: WeekReviewMindStep[];
+  done?: boolean;
+}
+export interface WeekReviewDay {
+  date: string;
+  sessions: WeekReviewSessionRow[];
+  meals: WeekReviewMealSlot[];
+  mind: WeekReviewMindRow[];
+}
+export interface WeekReviewWeighIn {
+  occurrence_id: string;
+  date: string;
+  status: string;
+}
+export interface WeekReviewFacts {
+  period: { from: string; to: string };
+  days: WeekReviewDay[];
+  weigh_in: WeekReviewWeighIn | null;
+}
+
+/**
+ * The week the pending pointer names, computed in full — what the read-only review sheet
+ * renders. `null` covers every reason it might not be there (nothing pending, a stale pointer
+ * dismissed on another device, a server hiccup) the same way `getPendingChange`/`getPlan` already
+ * collapse "couldn't load" and "nothing to load" into one falsy answer: the sheet has one honest
+ * fallback message for all of them, not a diagnosis.
+ */
+export async function getWeekReviewFacts(): Promise<{ review: PendingWeekReview; facts: WeekReviewFacts } | null> {
+  const res = await fetch(`${BASE}/plan/week-review/facts`, { headers: headers() });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+/* ── Week review write-back (check-in rebuild, step 5) ─────────────────────
+   Plain writes onto the same rows `getWeekReviewFacts` reads. Each returns a bare `ok` — the
+   sheet already holds the toggled value optimistically, so all a caller needs is whether the
+   write actually landed (revert-on-false is the caller's job, not this fetch's). */
+
+/** Confirm (or correct) a session row — done/skipped, optionally with minutes. The SAME route
+ *  backs the week's weigh-in row: a weigh-in is just another occurrence to confirm. */
+export async function confirmWeekReviewSession(
+  occurrenceId: string,
+  done: boolean,
+  minutes?: number,
+): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/week-review/session`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ occurrence_id: occurrenceId, done, minutes }),
+  });
+  return res.ok;
+}
+
+/** Flip one day's meal slot logged/not. */
+export async function toggleWeekReviewMeal(date: string, meal: WeekReviewMeal, logged: boolean): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/week-review/meal`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ date, meal, logged }),
+  });
+  return res.ok;
+}
+
+/** Flip one named step of a mind/practice occurrence's checklist. */
+export async function toggleWeekReviewMindStep(occurrenceId: string, step: string, done: boolean): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/week-review/mind-step`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ occurrence_id: occurrenceId, step, done }),
+  });
+  return res.ok;
+}
+
 export async function lockPlan(): Promise<{ status: number; body: Record<string, unknown> }> {
   const res = await fetch(`${BASE}/plan/lock`, { method: 'POST', headers: headers() });
   return { status: res.status, body: await res.json() };
@@ -318,4 +491,23 @@ export async function postponeDetour(): Promise<{ ok: boolean; cancelled?: boole
   const res = await fetch(`${BASE}/plan/episode/not-yet`, { method: 'POST', headers: headers() });
   if (!res.ok) return { ok: false };
   return { ok: true, ...((await res.json()) as { cancelled?: boolean }) };
+}
+
+/**
+ * "Just build my week — I trust you" (check-in rebuild, step 6): the end-of-trail card's trust
+ * path. A commit, not a synthesis — no coach call, no preview step; the outgoing week's own
+ * activities are recommitted as the next version. 409 with `status: 'no_plan' | 'not_due'` when
+ * the guard on the other end declines (nothing to rebuild, or the week genuinely isn't over yet).
+ */
+export interface WeekBuildResult {
+  status: 'committed' | 'no_plan' | 'not_due';
+  planId?: string;
+  version?: number;
+  activities?: number;
+  occurrences?: number;
+  note?: string;
+}
+export async function buildNextWeek(): Promise<WeekBuildResult> {
+  const res = await fetch(`${BASE}/plan/week/build`, { method: 'POST', headers: headers() });
+  return res.json();
 }

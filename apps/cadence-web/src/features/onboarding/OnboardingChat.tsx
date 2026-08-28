@@ -27,6 +27,7 @@ import { QuickPicks } from './QuickPicks.tsx';
 import { CapturedPills } from './CapturedPills.tsx';
 import { ConfirmCard } from './ConfirmCard.tsx';
 import { ChangeCard } from './ChangeCard.tsx';
+import { WeekReviewCard } from './WeekReviewCard.tsx';
 
 /**
  * What the app tells Cadence the moment someone shares their Apple Health history. Without it she
@@ -97,6 +98,9 @@ export function OnboardingChat({
   sessionNote = null,
   onSessionNoteUsed,
   onPlanChanged,
+  onOpenWeekReview,
+  onShowChanges,
+  autoSend = null,
 }: {
   /**
    * Run the coach's build tool. Onboarding hands over its build screen; the Coach tab hands over
@@ -117,6 +121,19 @@ export function OnboardingChat({
    *  "Talk to me" from. Spoken as a note the coach reads and the user never sees. */
   sessionNote?: string | null;
   onSessionNoteUsed?: () => void;
+  /** The WeekReviewCard's Open tap — the host mounts the full-screen review sheet. */
+  onOpenWeekReview?: () => void;
+  /** ChangeCard's "Show me" tap, offered only when the pending change carries per-item fields
+   *  (a check-in offer) — the host mounts the Changes sheet, same idiom as onOpenWeekReview. */
+  onShowChanges?: () => void;
+  /**
+   * A canned message the host wants SENT, visibly — a real user bubble and a real coach turn,
+   * unlike `sessionNote`'s invisible nudge. Today's one caller is the end-of-trail card's "Start
+   * check-in" (the approved design shows it as something the user said, not something whispered to
+   * her). `key` is what makes a REPEAT of the same text fire again on a later end-of-trail: bump it
+   * on every tap, because a plain "have I ever sent this" latch would never re-arm after the first.
+   */
+  autoSend?: { text: string; key: number } | null;
 }) {
   const {
     turns,
@@ -130,6 +147,7 @@ export function OnboardingChat({
     painted,
     cursor,
     send,
+    sendText,
     stop,
     nudge,
     foodAction,
@@ -195,6 +213,28 @@ export function OnboardingChat({
     // `restored` is the arm signal; streaming is a guard, not a trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionNote, restored]);
+
+  /**
+   * The visible check-in bridge (check-in rebuild, step 4). Keyed, not booleaned, because this
+   * component stays mounted for the whole Coach tab's life (MainTabs.tsx) — a plain "have I fired"
+   * latch would never re-arm for a SECOND end-of-trail later in the same session. Consuming a key
+   * only once, ever, is still the point: a parent re-render that hands down a new `autoSend` OBJECT
+   * carrying the same `key` must not resend it, which is why the ref compares the key, not the
+   * prop reference.
+   */
+  const autoSendKeyRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!autoSend || !restored || autoSendKeyRef.current === autoSend.key) return;
+    autoSendKeyRef.current = autoSend.key;
+    const { text } = autoSend;
+    void sendText(text).then((ok) => {
+      // A dead/stale session (or a turn already in flight) must not eat the tap silently — the
+      // text lands back in the composer so the SAME Send the user already trusts can retry it.
+      if (!ok) setInput(text);
+    });
+    // `restored` is the arm signal, same as sessionNote's own effect just above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSend, restored]);
 
   useEffect(() => {
     if (!openWalkthrough || !restored || walkthroughFired.current) return;
@@ -346,7 +386,15 @@ export function OnboardingChat({
                        * self-correcting. Keyed on the turn so a fresh proposal remounts and
                        * refetches; gated on `!streaming` so it reads AFTER the tool has run.
                        */}
-                      {last && !streaming && <ChangeCard key={`chg${i}`} onApplied={onPlanChanged} />}
+                      {last && !streaming && (
+                        <ChangeCard key={`chg${i}`} onApplied={onPlanChanged} onShowChanges={onShowChanges} />
+                      )}
+                      {/**
+                       * Same contract as ChangeCard, one paragraph up: `open_week_review` writes a
+                       * pointer, never a tag, so this asks the server what is pending and draws
+                       * nothing when the answer is nothing. Safe to mount unconditionally beside it.
+                       */}
+                      {last && !streaming && <WeekReviewCard key={`wkr${i}`} onOpen={onOpenWeekReview} />}
                       {/**
                        * Her block says WHAT, never how. The only thing left for it to declare is
                        * `build` — the build card is an act, not a shape, and nothing durable is

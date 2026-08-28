@@ -26,7 +26,10 @@ export interface NudgeCopy {
  * Saturday, matching `IosWeekday`, so a local notification's own trigger weekday is the seed.
  */
 export type NudgeCopyInput =
-  | { kind: 'weekly_checkin'; weekday: number }
+  // No fields beyond the tag: this fires once per stalled week (see checkin-due.ts's producer),
+  // not often enough to need the rotation every other kind gets, and there is nothing about a
+  // particular week worth naming in the line itself.
+  | { kind: 'weekly_checkin' }
   | {
       kind: 'almost_time';
       /** Seeds the variant rotation, so this activity's Tuesday line is always this sentence. */

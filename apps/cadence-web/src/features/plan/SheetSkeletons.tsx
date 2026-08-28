@@ -74,3 +74,24 @@ export function SheetRowsSkeleton({ rows = 3, label }: { rows?: number; label: s
     </SkeletonScreen>
   );
 }
+
+/**
+ * The week review's body (check-in rebuild, step 4) — a pure DB read same as the others here, so
+ * it gets shapes, not dots: seven rings for the day chips row, then the rollup cards beneath.
+ */
+export function WeekReviewSkeleton() {
+  return (
+    <SkeletonScreen label="Opening your week review." className="sk-sheet">
+      <div className="sk-row" style={{ gap: 8 }}>
+        {Array.from({ length: 7 }, (_, i) => (
+          <SkeletonRing key={i} size={40} stroke={4} />
+        ))}
+      </div>
+      <div className="sk-row" style={{ gap: 10, marginTop: 4 }}>
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} h={64} radius={14} />
+        ))}
+      </div>
+    </SkeletonScreen>
+  );
+}

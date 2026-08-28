@@ -15,7 +15,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const q = {
-  ensureHorizon: vi.fn(),
   evaluateStreak: vi.fn(),
   getActiveEpisode: vi.fn(),
   getActivePlan: vi.fn(),
@@ -34,7 +33,6 @@ const slow =
   () =>
     new Promise<T>((r) => setTimeout(() => r(value), HOP));
 
-vi.mock('./horizon.ts', () => ({ ensureHorizon: (...a: unknown[]) => q.ensureHorizon(...a) }));
 vi.mock('./streak.ts', () => ({
   evaluateStreak: (...a: unknown[]) => q.evaluateStreak(...a),
   EMPTY_STREAK: { current: 0, best: 0, freezes: 0 },
@@ -52,14 +50,13 @@ vi.mock('../repos/occurrences.ts', () => ({
   listSessionStepCounts: (...a: unknown[]) => q.listSessionStepCounts(...a),
 }));
 
-const { buildPlanView } = await import('./plan-view.ts');
+const { buildPlanView, computeWeekState } = await import('./plan-view.ts');
 
 const PLAN = { plan_id: 'p1', version: 3, generated_at: '2026-08-01', rationale: null };
 const USER = 'u1';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  q.ensureHorizon.mockResolvedValue(undefined);
   q.evaluateStreak.mockImplementation(slow({ current: 4, best: 9, freezes: 1 }));
   q.getActiveEpisode.mockImplementation(slow(null));
   q.getActivePlan.mockImplementation(slow(PLAN));
@@ -147,5 +144,49 @@ describe('buildPlanView', () => {
     const view = await buildPlanView(USER, 7, 'America/Toronto');
     expect(view.hasPlan).toBe(false);
     expect(q.listGoals).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Week state (check-in rebuild, step 6) — the pure half is tested directly below; this just
+   * pins that `buildPlanView` actually wires `computeWeekState`'s result onto the payload.
+   */
+  it('carries weekState on the payload, and null when there is no active plan', async () => {
+    const withPlan = await buildPlanView(USER, 7, 'America/Toronto');
+    expect(withPlan.weekState).toEqual({ ends_on: expect.any(String), checkin_due: expect.any(Boolean) });
+
+    q.getActivePlan.mockImplementation(slow(null));
+    const noPlan = await buildPlanView(USER, 7, 'America/Toronto');
+    expect(noPlan.weekState).toBeNull();
+  });
+});
+
+describe('computeWeekState (the week ends where the horizon does — step 6)', () => {
+  it('is null with no active plan', () => {
+    expect(computeWeekState(null)).toBeNull();
+  });
+
+  it('is not due the day a plan commits', () => {
+    const state = computeWeekState({ generated_at: new Date().toISOString() });
+    expect(state?.checkin_due).toBe(false);
+  });
+
+  it('is not due at 6 days, 23 hours old — just under the line', () => {
+    const generated_at = new Date(Date.now() - (7 * 86_400_000 - 3_600_000)).toISOString();
+    expect(computeWeekState({ generated_at })?.checkin_due).toBe(false);
+  });
+
+  it('is due once the active plan is exactly 7 days old', () => {
+    const generated_at = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    expect(computeWeekState({ generated_at })?.checkin_due).toBe(true);
+  });
+
+  it('is due for a plan well past 7 days old', () => {
+    const generated_at = new Date(Date.now() - 14 * 86_400_000).toISOString();
+    expect(computeWeekState({ generated_at })?.checkin_due).toBe(true);
+  });
+
+  it('ends_on is exactly 7 days after generated_at', () => {
+    const state = computeWeekState({ generated_at: '2026-08-01T12:00:00.000Z' });
+    expect(state?.ends_on).toBe('2026-08-08');
   });
 });

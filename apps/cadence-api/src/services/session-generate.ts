@@ -12,6 +12,7 @@
  */
 import { renderCoachToolCatalog, type OccurrenceSession, type OccurrenceWeather } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
+import { DEFAULT_HORIZON_DAYS } from './plan-horizon.ts';
 import {
   getOccurrenceWithActivity,
   listOccurrences,
@@ -201,16 +202,32 @@ export async function getOccurrenceDetail(
 const PREFETCH_CONCURRENCY = 3;
 
 /**
- * Warm the session cache for imminent occurrences so the first tap is instant (plan §prefetch).
- * Best-effort, fire-and-forget from GET /plan: getOccurrenceDetail generates-and-caches only when a
- * row has no session yet, so deterministic sessions compute in ms and a coach/eval session takes its
- * AI call now instead of on tap. Bounded to the next `days` days (imminent, likely to be opened) so
- * we don't pre-spend coach calls on far-off or skipped work; per-occurrence errors are swallowed.
+ * Warm the session cache so the first tap is instant (plan §prefetch). Best-effort and
+ * fire-and-forget from BOTH its callers — commitActivities (the moment the buttons are born) and
+ * GET /plan (a retry backstop for generations that failed or were still in flight when the
+ * commit's own pass fired). The 2026-08-25 device report that motivated this backstop — a tapped
+ * row nobody had ever warmed — was a rolling-materialized day the horizon top-up invented after
+ * the fact; now that the horizon only ever moves at a commit (check-in rebuild, step 6), that
+ * specific shape can't recur, but a slow or failed generation from the commit's own fire-and-forget
+ * pass is still exactly what this backstop catches on the next load.
+ *
+ * Cheap to re-run: `has_session` comes back on the list row, so a fully-warm week is one SELECT
+ * and zero per-row reads. `kind === 'user'` matters as much as the status filter — a `system` row
+ * (Log breakfast, weigh-in) never generates (getOccurrenceDetail's own gate rejects it) but would
+ * still occupy a batch slot, delaying the real generations behind it for nothing. Overlapping
+ * passes (a commit racing a plan load) share generations per-occurrence via the `inflight` map,
+ * so the provider never sees the same session twice.
+ *
+ * `days` defaults to `DEFAULT_HORIZON_DAYS` — the warm-up window IS the materialization horizon
+ * now that both are the view window (7). They remain two different constants that happen to share
+ * a value, not one collapsed into the other: re-split them deliberately if they ever diverge again.
  */
-export async function prefetchImminentSessions(userId: string, days = 2): Promise<void> {
+export async function prefetchImminentSessions(userId: string, days = DEFAULT_HORIZON_DAYS): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   const to = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
-  const pending = (await listOccurrences(userId, today, to)).filter((o) => o.status === 'pending');
+  const pending = (await listOccurrences(userId, today, to)).filter(
+    (o) => o.kind === 'user' && o.status === 'pending' && !o.has_session,
+  );
 
   /**
    * CONCURRENTLY, in bounded batches — and this is the fix, not a tidy-up.

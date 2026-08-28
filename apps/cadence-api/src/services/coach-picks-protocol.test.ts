@@ -148,3 +148,75 @@ describe('the protocol stays honest about what she is holding', () => {
     }
   });
 });
+
+/**
+ * DESIGN-check-in.md: "a check-in must never be a thing you can be late for" — and its own open
+ * question, the empty week, flagged as "most likely to hurt someone if we get it wrong." Neither
+ * case is intake or onboarding, so unlike the first-conversation script these rules render for
+ * every intent — a returning user is exactly who arrives late or comes back to an empty week.
+ */
+describe('the check-in edge cases — late arrivals and empty weeks', () => {
+  it('renders the section for every intent, not just onboarding', () => {
+    for (const intent of [undefined, 'onboarding', 'ongoing', 'initial']) {
+      const out = renderPickProtocol(intent ? { intent } : {});
+      expect(out).toContain('THE CHECK-IN — LATE, AND THE WEEK NOBODY LOGGED');
+    }
+  });
+
+  it('bans "overdue" and any day-count in her own words, while allowing the fact she reasons from', () => {
+    const out = renderPickProtocol();
+    expect(out).toMatch(/NEVER SAY "OVERDUE"/);
+    expect(out).toMatch(/NEVER COUNT THE DAYS OUT LOUD/);
+    expect(out).toMatch(/never apologize on their behalf/i);
+  });
+
+  it("teaches the two-pick late shape with the mockup's model line, verbatim", () => {
+    const out = renderPickProtocol();
+    expect(out).toContain('THE LATE ARRIVAL');
+    expect(out).toContain('their plan week ended more than 7 days ago');
+    expect(out).toContain('"Run through last week"');
+    expect(out).toContain('"Just build this week"');
+    expect(out).toContain('say: "Just build my week — I\'m good"');
+    expect(out).toContain(
+      'No problem at all. Want to run through last week now, or should I just build this week and we move on?',
+    );
+  });
+
+  it('routes "Run through last week" to open_week_review and "Just build this week" to build_next_week', () => {
+    const out = renderPickProtocol();
+    expect(out).toMatch(
+      /"Run through last week" is answered exactly like any other check-in request — call open_week_review/,
+    );
+    expect(out).toMatch(/"Just build this week" means call build_next_week/);
+    // The failure mode this guards: her own build tool is a full resynthesis, not a plain rollover.
+    expect(out).toMatch(/Never answer it with your own build card/);
+    // Say-texts are editable — the routing is intent, never an exact-string match.
+    expect(out).toMatch(/an edited say-text still means the same choice/);
+  });
+
+  it('never opens the review for an empty week, and puts the empty case ahead of the late offer', () => {
+    const out = renderPickProtocol();
+    expect(out).toContain('THE EMPTY WEEK COMES FIRST, EVEN OVER THE LATE OFFER');
+    expect(out).toMatch(/do NOT offer "Run through last week" and do NOT call open_week_review/);
+    expect(out).toMatch(/a card full of zeroes is exactly the shame this product forbids/);
+    // The deterministic facts she is told to trust instead of looking.
+    expect(out).toMatch(/get_consistency/);
+  });
+
+  it('asks the one empty-week question with its exact three picks', () => {
+    const out = renderPickProtocol();
+    expect(out).toContain(
+      "Before I build next week — I don't have much logged from last week, so I'd rather ask than guess. How did it actually go?",
+    );
+    expect(out).toContain('"Fine — I just didn\'t log"');
+    expect(out).toContain('"Rough, honestly"');
+    expect(out).toContain('"Life got busy"');
+  });
+
+  it('sends each of the three answers down a different route', () => {
+    const out = renderPickProtocol();
+    expect(out).toMatch(/their word stands in for the missing log — call build_next_week/);
+    expect(out).toMatch(/use propose_plan_change to put it up rather than building the identical week again/);
+    expect(out).toMatch(/offer the existing detour, or a lighter build/);
+  });
+});

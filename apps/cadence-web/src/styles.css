@@ -2371,6 +2371,13 @@ textarea.wiz-title {
   opacity: 0.6;
   cursor: default;
 }
+/* End-of-trail card (check-in rebuild, step 6) — same `.plan-proposal` family; only the error
+   line is new, matching ChangeCard's `.chg-err` treatment for a failed action. */
+.eot-err {
+  font-size: 12.5px;
+  color: oklch(52% 0.16 25);
+  margin-top: 4px;
+}
 .planbar {
   padding: 12px 20px 16px;
   border-top: 1px solid var(--line-soft);
@@ -3972,6 +3979,430 @@ textarea.wiz-title {
 .devpre.dump {
   max-height: 220px;
   overflow: auto;
+}
+
+/* ── Week review sheet (check-in rebuild, step 4) ─────────────────────────────────────────
+   WEEKLY TASKS / DAY BY DAY, seven day chips with completion rings, three rollup cards. Every
+   count here reads "kept of total" (BRAND.md: count what happened, never what broke) — nothing
+   in this section owns a red variant on purpose. */
+.wkr-sheet {
+  max-height: 88%;
+}
+.wkr-section-label {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-mute);
+  font-family: var(--mono);
+  margin: 16px 0 6px;
+}
+.wkr-section-label:first-child {
+  margin-top: 0;
+}
+.wkr-helper {
+  font-size: 12.5px;
+  color: var(--text-mute);
+  margin: -2px 0 10px;
+}
+.wkr-empty {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  padding: 2px 0 8px;
+}
+
+/* Weekly tasks — today just the weigh-in; an inert row (toggles disabled this step). */
+.wkr-task-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.wkr-task-mark {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  font-size: 12px;
+  color: var(--forest);
+}
+.wkr-task-mark.is-done {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: #fff;
+}
+.wkr-task-label {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+}
+.wkr-task-date {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-mute);
+}
+
+/* Day chips — seven small rings, tap opens the drill-in. */
+.wkr-daychips {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+.wkr-daychip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  padding: 4px 0;
+  border-radius: 12px;
+}
+.wkr-daychip:hover {
+  background: var(--surface-2);
+}
+.wkr-daychip-n {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+}
+.wkr-daychip-wd {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Day drill-in — the chip's detail, read-only (inert checkboxes; corrections are a later slice). */
+.wkr-back {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  padding: 2px 0;
+  margin-bottom: 6px;
+}
+.wkr-back:hover {
+  color: var(--forest);
+}
+.wkr-drillin-date {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.wkr-drillin-group {
+  margin-bottom: 14px;
+}
+.wkr-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--line-soft);
+  cursor: default;
+}
+.wkr-row:last-child {
+  border-bottom: none;
+}
+.wkr-row input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  accent-color: var(--forest);
+}
+.wkr-row-label {
+  flex: 1;
+  font-size: 14px;
+}
+.wkr-row-sub {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-mute);
+}
+.wkr-mind-block {
+  margin-bottom: 4px;
+}
+.wkr-mind-block > .wkr-row-label {
+  font-weight: 600;
+  padding: 8px 2px 2px;
+}
+
+/* Rollup cards — MEALS / SESSIONS / MINDSET, each a count over a small cell grid. */
+.wkr-rollups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.wkr-rollup-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.wkr-rollup-label {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.wkr-rollup-n {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.wkr-segrid {
+  display: grid;
+  gap: 4px;
+}
+.wkr-seg {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: var(--line-soft);
+}
+.wkr-seg.is-kept {
+  background: var(--forest);
+}
+
+/* Live rows (check-in rebuild, step 5) — real checkboxes now; a disabled one (a meal slot with
+   no occurrence to toggle) reads visibly inert instead of just quietly ignoring the tap. */
+.wkr-row input[type='checkbox']:disabled {
+  opacity: 0.45;
+}
+
+/* A session row: the done/skipped checkbox on the left, its minutes stepper pinned right. */
+.wkr-row-session {
+  justify-content: space-between;
+}
+.wkr-row-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* The app's FIRST stepper — plain by design: two round buttons and a number, no text entry. */
+.wkr-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.wkr-stepper-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--forest);
+  font-size: 15px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+.wkr-stepper-btn:disabled {
+  opacity: 0.4;
+}
+.wkr-stepper-n {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text-dim);
+  min-width: 44px;
+  text-align: center;
+}
+
+/* Weekly tasks' weigh-in mark is now a real (visually-hidden) checkbox under the round mark it
+   always drew — same accessible-checkbox-under-a-styled-sibling pattern as everywhere else here. */
+.wkr-task-row {
+  cursor: pointer;
+}
+.wkr-task-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+/* A toggle that didn't save (useWeekReview's writeError) — one quiet line, no toast system. */
+.wkr-write-err {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--danger);
+  line-height: 1.4;
+  padding: 6px 2px 0;
+}
+
+/* "Confirm my week" — the footer that finalizes the review. Outside .sheet-body on purpose (see
+   WeekReviewSheet.tsx) so it stays put while the body above it scrolls. */
+.wkr-confirm-foot {
+  flex-shrink: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.wkr-confirm-btn {
+  width: 100%;
+  background: var(--forest);
+  border: none;
+  border-radius: 12px;
+  padding: 13px 16px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14.5px;
+}
+.wkr-confirm-btn:disabled {
+  opacity: 0.6;
+}
+.wkr-confirm-helper {
+  font-size: 12.5px;
+  color: var(--text-mute);
+  text-align: center;
+  margin: 8px 0 0;
+  line-height: 1.4;
+}
+
+/* ── Week changes sheet (check-in rebuild, step 7 client half) ────────────────────────────
+   The swap-card list: title + OPTIONAL tag, a NOW → NEXT WEEK pair, the coach's reason, a
+   toggle. Own classes rather than reusing wkr-* — a different sheet, owned separately. */
+.wkc-sheet {
+  max-height: 86%;
+}
+.wkc-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  padding: 13px 15px;
+  margin-bottom: 10px;
+}
+.wkc-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.wkc-card-head b {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 14.5px;
+}
+.wkc-tag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.wkc-cols {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.wkc-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.wkc-col-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-mute);
+  font-family: var(--mono);
+}
+.wkc-col span:last-child {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+.wkc-arrow {
+  flex: 0 0 auto;
+  color: var(--text-mute);
+  font-size: 14px;
+}
+.wkc-reason {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+.wkc-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 40px;
+  height: 24px;
+  margin-top: 10px;
+  cursor: pointer;
+}
+.wkc-switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.wkc-switch-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background 0.15s ease;
+}
+.wkc-switch-track::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+.wkc-switch input:checked + .wkc-switch-track {
+  background: oklch(54% 0.1 152);
+}
+.wkc-switch input:checked + .wkc-switch-track::before {
+  transform: translateX(16px);
+}
+.wkc-switch input:focus-visible + .wkc-switch-track {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+.wkc-helper {
+  font-size: 12.5px;
+  color: var(--text-mute);
+  margin: 2px 0 10px;
+  text-align: center;
+}
+.wkc-err {
+  font-size: 12.5px;
+  color: oklch(52% 0.16 25);
+  margin-bottom: 6px;
+  text-align: center;
+
 }
 
 /* ── Visual Today: the sky-trail (REQ8 redesign — docs/cadence/design/redesign-today-trail) ── */
@@ -8538,7 +8969,6 @@ textarea.wiz-title {
   font-size: 12.5px;
   font-weight: 800;
 }
-
 
 /* ONE LOGGED FOOD, OPENED (design brief 05) — what it contributed, and the three repairs.
    Read state first; every correction is one tap behind a named intent, and nothing writes until

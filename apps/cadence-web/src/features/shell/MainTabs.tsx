@@ -9,6 +9,8 @@ import { ReviewScreen } from '../review/ReviewScreen.tsx';
 import { PlanCardSheet } from '../gate/PlanCardSheet.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { FoodHome } from '../nutrition/FoodHome.tsx';
+import { WeekReviewSheet } from '../plan/week-review/WeekReviewSheet.tsx';
+import { WeekChangesSheet } from '../plan/week-changes/WeekChangesSheet.tsx';
 
 /**
  * Today and Week were separate TABS sharing one PlanView, and the owner's device verdict
@@ -89,10 +91,23 @@ export function MainTabs({
    * means rebuilding; onboarding's first build is the other host of the same card (App.tsx).
    */
   const [rebuild, setRebuild] = useState(false);
+  /** The WeekReviewCard's Open tap — mounts the real full-screen review (check-in rebuild, step 4). */
+  const [weekReviewOpen, setWeekReviewOpen] = useState(false);
+  /** ChangeCard's "Show me" tap — mounts the Changes sheet for a check-in-offered swap (check-in
+   *  rebuild, step 7 client half). Same idiom as weekReviewOpen just above. */
+  const [weekChangesOpen, setWeekChangesOpen] = useState(false);
   const [logDidOpen, setLogDidOpen] = useState(false);
   const [planReload, setPlanReload] = useState(0); // bump → PlanView refetches after a ＋ log
   /** App-authored context for the next coach turn (e.g. the session they just finished). */
   const [coachNote, setCoachNote] = useState<string | null>(null);
+  /**
+   * "Start check-in" (EndOfTrailCard, via PlanView's `onStartCheckIn`) — unlike `coachNote`
+   * above, this is not whispered to her as a note: it is sent VISIBLY, the same way a typed
+   * message would be (check-in rebuild, step 4 — the approved design shows "Start my check-in"
+   * as something the user said). `key` is bumped on every tap so a SECOND end-of-trail later in
+   * the same session fires again; OnboardingChat's own effect is what actually consumes it once.
+   */
+  const [autoSend, setAutoSend] = useState<{ text: string; key: number } | null>(null);
   /**
    * The Food home (Food Journey 02) — a full screen that replaces the Plan tab's content while
    * the tab bar stays, the same escape ReviewScreen uses minus the bar. It lives HERE rather
@@ -129,6 +144,12 @@ export function MainTabs({
             }}
             onOpenFood={(sub) => setFood(sub ?? 'home')}
             reloadSignal={planReload}
+            // "Start check-in" — a visible send, not a note: see the `autoSend` state comment
+            // above for why this is its own bridge rather than riding `onCoach`.
+            onStartCheckIn={() => {
+              setTab('coach');
+              setAutoSend({ text: 'Start my check-in', key: Date.now() });
+            }}
           />
         )}
         {tab === 'plan' && food && (
@@ -175,6 +196,9 @@ export function MainTabs({
               sessionNote={coachNote}
               onSessionNoteUsed={() => setCoachNote(null)}
               onPlanChanged={() => setPlanReload((k) => k + 1)}
+              onOpenWeekReview={() => setWeekReviewOpen(true)}
+              onShowChanges={() => setWeekChangesOpen(true)}
+              autoSend={autoSend}
             />
             {/* The deterministic way back to the crafted plan UI from inside the conversation. */}
             <button className="plan-pill" onClick={() => setPlanCardOpen(true)}>
@@ -266,6 +290,21 @@ export function MainTabs({
               setPlanReload((k) => k + 1);
             }}
           />
+        )}
+        {weekReviewOpen && (
+          <WeekReviewSheet
+            onClose={() => setWeekReviewOpen(false)}
+            // "Confirm my week" hands the coach the finished receipt VISIBLY — the same autoSend
+            // bridge "Start my check-in" already uses (see the state comment above): a real user
+            // bubble and a real coach turn, not a whispered note.
+            onConfirmed={(receiptText) => {
+              setTab('coach');
+              setAutoSend({ text: receiptText, key: Date.now() });
+            }}
+          />
+        )}
+        {weekChangesOpen && (
+          <WeekChangesSheet onClose={() => setWeekChangesOpen(false)} onApplied={() => setPlanReload((k) => k + 1)} />
         )}
         {logDidOpen && (
           <LogDidSheet

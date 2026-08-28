@@ -400,3 +400,47 @@ export const episodePhotoBodySchema = z.object({
 export const episodeEquipmentBodySchema = z.object({
   equipment: z.array(z.object({ name: z.string().min(1).max(60) })).max(20),
 });
+
+/* ── Week review write-back (check-in rebuild, step 5) ──────────────────────── */
+
+/** Confirm (or correct) a session row — also the week's weigh-in, which is just another
+ *  occurrence to confirm (see `confirmSession`'s own doc). `minutes`, when sent, is the stepper's
+ *  value: floored at 1 by the control itself, but re-checked here since the body is the trust
+ *  boundary, not the widget. */
+export const weekReviewSessionBodySchema = z.object({
+  occurrence_id: z.string({ message: 'occurrence_id required' }).min(1, 'occurrence_id required'),
+  done: z.boolean({ message: 'done (boolean) required' }),
+  minutes: z.coerce.number().int().min(1).max(1440).optional(),
+});
+
+/** Flip one day's meal slot. Deliberately the same three slots `week-review-facts.ts` computes —
+ *  never `snack`, which the review grid does not confirm. */
+export const weekReviewMealBodySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' }),
+  meal: z.enum(['breakfast', 'lunch', 'dinner'], { message: 'meal must be breakfast|lunch|dinner' }),
+  logged: z.boolean({ message: 'logged (boolean) required' }),
+});
+
+/** Flip one named step of a mind/practice occurrence's checklist. */
+export const weekReviewMindStepBodySchema = z.object({
+  occurrence_id: z.string({ message: 'occurrence_id required' }).min(1, 'occurrence_id required'),
+  step: z.string({ message: 'step required' }).min(1, 'step required').max(200),
+  done: z.boolean({ message: 'done (boolean) required' }),
+});
+
+/**
+ * The Changes sheet's toggle flips. `index` addresses a position in the STORED pending-change
+ * array — stable, since nothing reorders it — so the route validates it in bounds rather than
+ * trusting a stale index from a sheet that fetched before the array changed underneath it.
+ */
+export const pendingChangeTogglesBodySchema = z.object({
+  toggles: z
+    .array(
+      z.object({
+        index: z.number().int().min(0),
+        enabled: z.boolean(),
+      }),
+    )
+    .min(1, { message: 'toggles must name at least one row' })
+    .max(50),
+});

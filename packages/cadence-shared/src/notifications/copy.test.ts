@@ -25,7 +25,6 @@ const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
 function allInputs(): NudgeCopyInput[] {
   const out: NudgeCopyInput[] = [];
   for (const weekday of WEEKDAYS) {
-    out.push({ kind: 'weekly_checkin', weekday });
     out.push({ kind: 'morning_adjust', done: 2, planned: 4, weekday });
     out.push({ kind: 'morning_adjust', done: 0, planned: 1, weekday });
     out.push({
@@ -76,6 +75,7 @@ function allInputs(): NudgeCopyInput[] {
       }
     }
   }
+  out.push({ kind: 'weekly_checkin' });
   for (const streakDays of [1, 12, 40]) {
     out.push({ kind: 'freeze_save', streakDays, savedDate: `2026-08-0${(streakDays % 9) + 1}` });
   }
@@ -181,6 +181,13 @@ describe('never send — the list, enforced', () => {
 });
 
 describe('the copy the catalog specifies', () => {
+  it('weekly_checkin never says "overdue" and never counts the days', () => {
+    const { title, body } = nudgeCopy({ kind: 'weekly_checkin' });
+    expect(title).toBe('Your week wraps up');
+    expect(body).toBe("If you have time, let's grab a few minutes to chat through next week.");
+    expect(`${title} ${body}`).not.toMatch(/overdue|\d+\s*days?/i);
+  });
+
   it('almost_time titles the activity in the user’s own words', () => {
     const c = nudgeCopy({
       kind: 'almost_time',

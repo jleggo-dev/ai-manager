@@ -128,6 +128,15 @@ export const ALWAYS_READS = ['get_active_plan'] as const;
  * forever, and the Broker prefetches the common ones before she has to ask. The cost of this revert
  * is ~1,500 tokens a turn, which buys actions that actually fire.
  *
+ * `open_week_review` joined for the identical reason, not a new one: it happens weekly at most,
+ * which is the shape `update_constraint` had when it was demoted and measured at 0 of 3. A
+ * check-in's whole value is that it ends in a change (docs/cadence/DESIGN-check-in.md) — an act she
+ * finds instead of calls is worse here than anywhere else in the harness, because the visible
+ * failure is a warm conversation that never puts the card up at all. `build_next_week` rides
+ * beside it for the identical trigger shape — the trust path's say-text arrives as a fresh
+ * message, and a roll-forward that silently does not happen is a person who said "just build it"
+ * and got nothing.
+ *
  * Run `npm run eval:tools` after changing this list.
  */
 export const ALWAYS_ACTIONS = [
@@ -137,6 +146,8 @@ export const ALWAYS_ACTIONS = [
   'update_constraint',
   'correct_log',
   'set_macro_targets',
+  'open_week_review',
+  'build_next_week',
 ] as const;
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */

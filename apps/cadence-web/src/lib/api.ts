@@ -68,10 +68,21 @@ export {
   lockPlan,
   getPendingChange,
   dismissPendingChange,
+  getPendingChangeDetail,
+  setPendingChangeToggles,
+  type PendingChangeDetailItem,
+  type PendingChangeDetail,
+  getPendingWeekReview,
+  dismissPendingWeekReview,
+  getWeekReviewFacts,
+  confirmWeekReviewSession,
+  toggleWeekReviewMeal,
+  toggleWeekReviewMindStep,
   previewPlan,
   dismissPlanPreview,
   getProgress,
   addGoalEvent,
+  buildNextWeek,
   type PlanOccurrence,
   type PlanDay,
   type PlanActivity,
@@ -81,6 +92,15 @@ export {
   type ReplanPreview,
   type LockPreview,
   type PendingChange,
+  type WeekBuildResult,
+  type WeekReviewMeal,
+  type WeekReviewMealSlot,
+  type WeekReviewSessionRow,
+  type WeekReviewMindStep,
+  type WeekReviewMindRow,
+  type WeekReviewDay,
+  type WeekReviewWeighIn,
+  type WeekReviewFacts,
 } from './api/plan.ts';
 
 export {
@@ -88,9 +108,7 @@ export {
   logOccurrence,
   recordWeighIn,
   recordWeighInToday,
-  fetchWeeklyRecap,
   type OccurrenceDetail,
-  type WeeklyRecap,
 } from './api/occurrence.ts';
 
 export {

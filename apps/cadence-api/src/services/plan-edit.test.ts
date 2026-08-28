@@ -576,3 +576,89 @@ describe('applyPlanEdits — a proposal-only add stays addressable', () => {
     expect(r.rejected[0]).not.toMatch(/start_over/);
   });
 });
+
+/**
+ * The Changes surface's own fields: `reason` and `optional` land on the row an edit actually
+ * changes — `change_reason` and `enabled` on the resulting `PendingPlanActivity` — for the swap
+ * card the coach persists the moment she offers a change (step 7's client half). Every action but
+ * `remove` carries them; `remove` deletes its row outright, so there is nothing left to attach
+ * either to.
+ */
+describe('applyPlanEdits — reason and optional (the swap card)', () => {
+  const REASON = "You've made 4 of 4 morning sessions this month and 1 of 4 evening ones.";
+
+  it('attaches a reason to the row a move actually changes', () => {
+    const r = applyPlanEdits(PLAN, [{ action: 'move', activity: 'Easy run', days: ['friday'], reason: REASON }], GOALS);
+    expect(r.activities.find((a) => a.title === 'Easy run')!.change_reason).toBe(REASON);
+  });
+
+  it('marks an add optional — `enabled: false`, the take-it-or-leave-it default', () => {
+    const r = applyPlanEdits(PLAN, [
+      { action: 'add', title: 'Second strength day', days: ['saturday'], time_of_day: '09:00', optional: true },
+    ]);
+    expect(r.activities.find((a) => a.title === 'Second strength day')!.enabled).toBe(false);
+  });
+
+  it('an edit with neither field leaves change_reason and enabled untouched', () => {
+    const r = applyPlanEdits(PLAN, [{ action: 'retime', activity: 'Sit', time_of_day: '07:00' }], GOALS);
+    const sit = r.activities.find((a) => a.title === 'Sit')!;
+    expect(sit.change_reason).toBeUndefined();
+    expect(sit.enabled).toBeUndefined();
+  });
+
+  it('explicit `optional: false` writes `enabled: true`, not silence', () => {
+    const r = applyPlanEdits(PLAN, [{ action: 'resize', activity: 'Sit', duration_min: 25, optional: false }], GOALS);
+    expect(r.activities.find((a) => a.title === 'Sit')!.enabled).toBe(true);
+  });
+
+  it('caps a reason at 200 characters rather than storing an essay verbatim', () => {
+    const long = 'x'.repeat(260);
+    const r = applyPlanEdits(PLAN, [{ action: 'retime', activity: 'Sit', time_of_day: '07:00', reason: long }], GOALS);
+    expect(r.activities.find((a) => a.title === 'Sit')!.change_reason).toHaveLength(200);
+  });
+
+  it('stamps every target the same way when one edit addresses several handles', () => {
+    const runHandle = activityHandle(PLAN[0]!.commitment_id);
+    const longHandle = activityHandle(PLAN[1]!.commitment_id);
+    const r = applyPlanEdits(PLAN, [
+      { action: 'resize', activities: [runHandle, longHandle], duration_min: 35, reason: REASON },
+    ]);
+    expect(r.activities.find((a) => a.title === 'Easy run')!.change_reason).toBe(REASON);
+    expect(r.activities.find((a) => a.title === 'Long run')!.change_reason).toBe(REASON);
+  });
+
+  it('never attaches to a no-op — nothing changed, so there is nothing to explain', () => {
+    const r = applyPlanEdits(PLAN, [{ action: 'resize', activity: 'Sit', duration_min: 10, reason: REASON }], GOALS);
+    expect(r.noops).toHaveLength(1);
+    expect(r.activities.find((a) => a.title === 'Sit')!.change_reason).toBeUndefined();
+  });
+
+  it('reports both as unread on remove — the row is gone, so neither field lands', () => {
+    const r = applyPlanEdits(PLAN, [{ action: 'remove', activity: 'Sit', reason: REASON, optional: true }], GOALS);
+    expect(r.changes).toEqual(['Drop Sit (Every day, no time set)']);
+    expect(r.ignored.some((n) => n.includes('"reason"'))).toBe(true);
+    expect(r.ignored.some((n) => n.includes('"optional"'))).toBe(true);
+  });
+
+  /**
+   * `propose_plan_change` accumulates edits across calls onto one standing card (coach-actions.ts):
+   * a FOLLOW-UP call that resizes the same row must not silently erase a reason an EARLIER call in
+   * the same proposal already gave it.
+   */
+  it('a later edit to the same row, with neither field, keeps what an earlier call in this proposal set', () => {
+    const firstCall = applyPlanEdits(
+      PLAN,
+      [{ action: 'move', activity: 'Easy run', days: ['friday'], reason: REASON }],
+      GOALS,
+    );
+    const secondCall = applyPlanEdits(
+      PLAN,
+      [{ action: 'resize', activity: 'Easy run', duration_min: 20 }],
+      GOALS,
+      firstCall.activities,
+    );
+    const run = secondCall.activities.find((a) => a.title === 'Easy run')!;
+    expect(run.duration_min).toBe(20);
+    expect(run.change_reason).toBe(REASON);
+  });
+});

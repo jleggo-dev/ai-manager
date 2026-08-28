@@ -10,7 +10,7 @@ import { addDays, daysBetween, userToday } from './producers/clock.ts';
 import { waypointsForGoals } from './waypoints.ts';
 
 /**
- * Everything the DEVICE needs in order to schedule the five local nudges itself.
+ * Everything the DEVICE needs in order to schedule the four local nudges itself.
  *
  * Assembled here rather than in the web client for one reason: the suppression rules are the
  * important part, and they need data the plan view does not carry. "Was yesterday already
@@ -28,7 +28,6 @@ export interface LocalNudgePlan {
   todayWeekday: IosWeekday;
   nowMinutes: number;
   activities: SchedulableActivity[];
-  weeklyCheckin: { activityId: string; weekday: IosWeekday; hour?: number; minute?: number } | null;
   flexibleToday: SchedulableActivity | null;
   yesterday: { done: number; planned: number } | null;
   waypoints: NudgeWaypoint[];
@@ -41,7 +40,6 @@ const EMPTY: LocalNudgePlan = {
   todayWeekday: 1,
   nowMinutes: 0,
   activities: [],
-  weeklyCheckin: null,
   flexibleToday: null,
   yesterday: null,
   waypoints: [],
@@ -52,19 +50,6 @@ function iosWeekday(dateIso: string): IosWeekday {
   const [y, m, d] = dateIso.split('-').map(Number);
   const day = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1)).getUTCDay();
   return (day + 1) as IosWeekday;
-}
-
-/** The system activity that IS the weekly check-in, if the committed plan has one. */
-function findWeeklyCheckin(activities: Awaited<ReturnType<typeof listActivities>>) {
-  const found = activities.find((a) => a.kind === 'system' && /check-?in|recap/i.test(a.title));
-  if (!found) return null;
-  const byday = /BYDAY=([A-Z]{2})/i.exec(found.schedule?.recurrence ?? '');
-  const map: Record<string, IosWeekday> = { SU: 1, MO: 2, TU: 3, WE: 4, TH: 5, FR: 6, SA: 7 };
-  const weekday = map[(byday?.[1] ?? '').toUpperCase()];
-  // No weekday, no nudge. A check-in reminder on a guessed day is worse than none — it is a
-  // reminder about something that is not there.
-  if (!weekday) return null;
-  return { activityId: found.activity_id, weekday };
 }
 
 function toSchedulable(a: Awaited<ReturnType<typeof listActivities>>[number]): SchedulableActivity {
@@ -150,7 +135,6 @@ export async function buildLocalNudgePlan(userId: string, now: Date = new Date()
     todayWeekday: iosWeekday(today),
     nowMinutes: mins,
     activities,
-    weeklyCheckin: findWeeklyCheckin(rows),
     flexibleToday: findFlexibleToday(occurrences, activities, today),
     yesterday: onDetour || freezeCoveredYesterday ? null : yesterdayCount(occurrences, yesterdayIso),
     // A countdown to a day you have already told us you cannot train for is pressure, not

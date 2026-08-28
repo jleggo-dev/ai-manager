@@ -71,7 +71,7 @@ router.put('/notification-prefs', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /me/local-nudges — the inputs the DEVICE needs to schedule the five local nudges.
+ * GET /me/local-nudges — the inputs the DEVICE needs to schedule the four local nudges.
  *
  * The suppression rules (a detour, a freeze that already covered yesterday, a goal that has passed
  * its date) need the streak state, the episode table and the goal set, so they are resolved here

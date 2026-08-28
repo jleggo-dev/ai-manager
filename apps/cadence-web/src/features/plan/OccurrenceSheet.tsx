@@ -2,11 +2,10 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { deriveWalkthrough, condense, type Walkthrough as WalkthroughData } from '@cadence/shared';
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
 import { useSessionPrepLine } from './occurrence/useSessionPrepLine.ts';
-import { isFoodRow, isWeeklyCheckin, isWeighInPending, sheetMinutes } from './occurrence/format.ts';
+import { isFoodRow, isWeighInPending, sheetMinutes } from './occurrence/format.ts';
 import { SessionLogPanel } from './occurrence/SessionLogPanel.tsx';
 import { MealLogPanel } from './occurrence/MealLogPanel.tsx';
 import { WeighInPanel } from './occurrence/WeighInPanel.tsx';
-import { RecapPanel } from './occurrence/RecapPanel.tsx';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
 import { setOccurrence, logOccurrence } from '../../lib/api.ts';
 
@@ -119,9 +118,11 @@ export function OccurrenceSheet({
               />
             ) : isWeighInPending(detail) ? (
               <WeighInPanel detail={detail} setDetail={setDetail} onLogged={onLogged} />
-            ) : isWeeklyCheckin(detail) ? (
-              <RecapPanel detail={detail} setDetail={setDetail} onLogged={onLogged} />
             ) : detail.kind === 'system' ? (
+              // Catches the weekly check-in row too (check-in rebuild, step 5 retired its own
+              // panel here — the real review is the full-screen sheet, opened from the coach's
+              // card, never this direct link). A stale link to one still lands here and reads
+              // fine: a plain, correct sentence for any built-in system row.
               <div className="sheet-msg">A quick built-in check-in — just tap it done when it happens.</div>
             ) : detail.status !== 'pending' ? (
               <div className="sheet-msg">

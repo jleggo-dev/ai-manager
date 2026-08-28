@@ -115,7 +115,7 @@ export async function resetUserData(userId: string): Promise<void> {
   await sql`
     update cadence.users
     set name = '', baseline = ${json({})}, macro_targets = ${json({})},
-        last_assessed_at = null, pending_proposal = null, pending_plan = null,
+        last_assessed_at = null, pending_proposal = null, pending_plan = null, pending_week_review = null,
         streak_state = ${json(initialStreakState())},
         dietary_profile = ${json(EMPTY_DIETARY_PROFILE)},
         updated_at = now()
