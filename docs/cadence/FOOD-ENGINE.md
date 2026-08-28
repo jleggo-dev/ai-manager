@@ -307,21 +307,46 @@ dossier. `get_food_log` sits behind the on-demand `get_nutrition` facade, so she
 check-in or an ad-hoc question needs it and pays nothing on every other turn — exactly the economy the
 ruling describes.
 
-### Still open — one design question
+### Owner ruling — same tools, both doors. The "which surface" question was wrong.
 
-**Who picks the surface: the tool or the Coach?** She can see intent (are they telling me, or asking
-me to sort it out?) but not mechanics (did every item price cleanly? is a measure unresolved?). The
-tool can see mechanics but not intent. My inclination is that she chooses the **tool** and the tool
-reports the **surface** from what it actually managed — `inline` when everything priced, `module`
-when something needs a human decision — so neither is guessing at what it cannot see. That needs a
-ruling before P8 starts.
+> *"If I'm talking to Cadence about my food, or I click 'log breakfast' and choose 'chat', why would
+> the experience be different? This is a software harness operated by an AI. Some things the coach
+> doesn't need to know about or track all the time — let the software do the logging and Cadence
+> doesn't always need to weigh in. This is why I said she should just invoke the existing tools. The
+> question is: does she know the tool, and to what extent? Fundamentally we need a way to bridge the
+> experiences so that we're using the same tools and creating a consistent experience."*
+
+This retires the three-way surface vocabulary above. She is not choosing a UI; she is calling the
+same operations the Food screen calls, and it is the RESULT that says whether anything is left to do.
+
+**The duplication, precisely.** The Food screen does words → meal in two calls:
+`POST /nutrition/meals/preview` (parse, resolve each food, price it, return an itemised meal) then
+`POST /nutrition/meals` (commit). Chat touches **neither**: it goes to `POST /coach/food-actions` and
+a keyword matcher. The commit is shared; the half that does the actual work is not — and the worse
+implementation is the one behind the conversation.
+
+**So she gets exactly two tools, and they are the screen's two.** Read-into-a-meal, and log-it.
+Nothing about screens, cards or sheets — those are the client's business. The preview result already
+carries what she needs to behave sensibly: the items, their prices, and what could not be settled
+(an unresolved measure now says so, since guards report rather than veto). Everything priced → log
+it and say one line. Something unsettled → she has a fact to act on, so she asks, or opens the Food
+screen with **that same reading** loaded.
+
+**The preview result IS the bridge.** One object, produced by one pipeline, finishable from either
+door. Start in chat, finish on the screen; nothing is re-parsed, nothing is re-priced, and the two
+experiences cannot drift because there is only one implementation left.
+
+**Logging is bookkeeping, not coaching.** She invokes it and moves on; she does not comment on every
+meal. Her opinion belongs at a check-in or when asked — *"tell me how to make this healthier."*
+Already true structurally and worth not breaking: the food log is not in her always-on context, it
+sits behind the on-demand `get_nutrition` read.
 
 ### Plan changes
 
 | ID | Change |
 |---|---|
-| **MP21** | **Unblocked.** A coach tool that logs a meal, returning a surface. The 2026-08-19 withdrawal was about the sheet, not the capability |
-| **MP40** *(new)* | **Retire `classifyFoodIntent` and `FOOD_CONFIRM_CONTEXT`.** Replace the `/coach/food-actions` regex pass with coach-invoked tools. **M**, and it is the last SaaS-drives-AI seam in the food path |
+| **MP21** | **Unblocked.** Two coach tools that ARE the screen's two calls: read-into-a-meal and log-it. No new pipeline, no chat-specific parsing |
+| **MP40** *(new)* | **Retire `classifyFoodIntent`, `FOOD_CONFIRM_CONTEXT` and `POST /coach/food-actions`.** The keyword matcher is a second implementation of a job the preview endpoint already does properly. **M**, and it is the last SaaS-drives-AI seam in the food path |
 | **P6** | Gains MP40's deletions (`coach-food-classify.ts` is already its file) |
-| **P8** | Gains MP21 and MP40's tool side; no longer blocked |
+
 
