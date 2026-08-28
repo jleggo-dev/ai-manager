@@ -393,3 +393,72 @@ no business in the chat path.
 | **P6** | Gains MP40's deletions (`coach-food-classify.ts` is already its file) |
 
 
+
+---
+
+## 8. The food desk (owner, 2026-08-25) — and a correction to §7
+
+> *"If we think of that AI as your nutritionist, Cadence is basically just handing your food request
+> over to the nutritionist. She can be transparent about it… The real nutritionist is actually
+> Cadence though, so it's a misnomer, it's really a food logging AI (Food scientist?). The AI
+> advising you on nutrition is Cadence. That food scientist is also taking your pictures and
+> converting them to nutritional things too. Done right, we have that AI and we kind of fine-tune it
+> over time to get really good at food facts. The smart reader still needs AI. There's a decision
+> tree for tracking food and it ends with AI… So Cadence can pass it to an AI, but you're right that
+> she passes it to software first."*
+
+### Correcting §7
+
+§7 concluded that she should hand over **structured items** and that `parse-meal` should leave the
+chat path. That over-corrected, and it deleted the one part of the existing design that is already
+right.
+
+- **She selects; she does not summarise.** She forwards the person's own words about the food, plus
+  what only she knows from the conversation (*which* chilli, which meal, that they said "the usual").
+  Nothing is lost in a retelling because there is no retelling — the tension in §7 was about a
+  *précis* reaching a second model, and a selection is not a précis.
+- **The tree ends in AI, and that ordering stays.** Coach → deterministic rungs (their foods, the
+  corpus, USDA, known portions) → the specialist AI for whatever the databases could not settle. §7's
+  "hand over structure and skip the parse" quietly removed the last rung.
+- **There is no running conversation with the specialist.** These are stateless jobs, so the handoff
+  is a request, not a second chat the person has to maintain.
+
+### There is no food specialist — there are fourteen fragments of one
+
+| Profile | Food jobs it carries |
+|---|---|
+| an unnamed vision profile | `parse-meal`, `describe-meal-photo`, `parse-meal-description`, `plate-advice`, `parse-nutrition-label`, `identify-food` |
+| **Broker** (`gpt-4.1-mini`) | `estimate-food`, `resolve-portion` |
+| **the Coach's own profile** (`claude-sonnet-5`) | `structure-recipe`, `generate-recipe`, `generate-meal-plan`, `discover-recipe`, `nutrition-baseline` |
+| **Research** (`gpt-4.1`) | `research-food` |
+
+Fourteen jobs, four profiles, three of them general-purpose and shared with non-food work. **This is
+why "fine-tune it over time to get really good at food facts" is not possible today: there is no
+*it*.** Six already share one profile, which is the seed.
+
+### The role, named
+
+- **Cadence is the nutritionist.** She advises — your iron is low, here is what to do about it. She
+  is also the only one the person talks to.
+- **The food desk** does not advise anyone. It identifies foods, reads labels, turns photos into
+  nutrition, works out what a cup of something weighs, and researches a vendor item. **Facts, not
+  opinions.** That is the whole job description, and it is the same job whether the input is a
+  sentence, a label or a photograph.
+
+**What consolidation buys** — and none of it is available while the role is scattered:
+one profile to tune and one place food knowledge accumulates · consistent behaviour across sentence,
+label and photo · an honest trace with one specialist to describe rather than six jobs to narrate ·
+and a real answer to "which model should be doing this", since the choice is currently made four
+times by accident.
+
+**Open — is the food desk ever named to a user?** BRAND.md's rule is that the person only ever meets
+the coach; UI describes the *behaviour*, never the entity (the Broker precedent). The owner has said
+she can be transparent about the handoff, and *"let me check this against the label"* satisfies both
+readings. Whether it is ever named is an owner call and a genuine fork.
+
+### Plan change
+
+| ID | Change |
+|---|---|
+| **MP41** *(new)* | **Consolidate the food desk.** Move the 14 food jobs onto one dedicated profile, vision-capable, so the role exists as a thing that can be measured and improved. Precondition for tuning; also the honest unit for the trace. **M**, and it lands before P7 (images) so label/photo work targets the right profile |
+
