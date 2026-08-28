@@ -129,6 +129,7 @@ export {
   type MealPreview,
   logMealFromRecipe,
   logMealFromItems,
+  logPlannedMealItems,
   type PlateItem,
   getRecentMeals,
   getBaselineRead,

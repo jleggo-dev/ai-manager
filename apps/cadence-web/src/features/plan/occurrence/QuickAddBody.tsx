@@ -23,6 +23,7 @@ export function QuickAddBody({
   onMethod,
   onPhoto,
   onLogRecipe,
+  onLogPlanned,
   onAddFood,
 }: {
   mealKind: MealKind;
@@ -32,6 +33,8 @@ export function QuickAddBody({
   onMethod: (m: CaptureMethod) => void;
   onPhoto: (file: File | undefined) => void;
   onLogRecipe: (recipeId: string) => void;
+  /** MP19 — the planned row: a legacy single recipe OR a composed meal, either shape. */
+  onLogPlanned: (meal: PlannedMeal) => void;
   onAddFood: (foodId: string) => void;
 }) {
   const methods: CaptureMethod[] = ['chat', 'voice', 'picture', 'barcode', 'search'];
@@ -47,7 +50,7 @@ export function QuickAddBody({
             sub="from your week’s plan"
             tone="planned"
             busy={busy}
-            onAdd={() => onLogRecipe(planned.recipe_id)}
+            onAdd={() => onLogPlanned(planned)}
           />
         </>
       )}

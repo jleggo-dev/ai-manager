@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { macrosForLog, type Food, type FoodServing } from '@cadence/shared';
 import type { MealKind, MealMacros } from '../../../lib/api.ts';
 import { draftBrand, draftName, type FoodDraft } from '../../food/foodDraft.ts';
+import { compoundLabel, orderServingIndices } from '../../food/servingPicker.ts';
 import type { DraftPortion } from './useMealCapture.ts';
 
 /** The shape both draft kinds share for the serving math. */
@@ -64,6 +65,9 @@ export function MealDraftCard({
   onBack: () => void;
 }) {
   const shape = foodShape(draft);
+  // MP3: brand/source/name live outside `foodShape`'s pick, so read them straight off whichever
+  // draft half is present — same object `shape` narrows, just a wider view of it.
+  const servingOrder = orderServingIndices(draft.kind === 'saved' ? draft.food : draft.candidate);
   const [servingIndex, setServingIndex] = useState(() => {
     const fromResolver =
       typeof draft.servingIndex === 'number' && Number.isInteger(draft.servingIndex) ? draft.servingIndex : null;
@@ -123,17 +127,20 @@ export function MealDraftCard({
         <div className="mc-field">
           <span className="mc-field-l">SERVING</span>
           <div className="mc-segs">
-            {shape.servings.map((s, i) => (
-              <button
-                key={`${s.label}-${i}`}
-                type="button"
-                className={`mc-seg${i === servingIndex ? ' mc-seg-on' : ''}`}
-                disabled={busy}
-                onClick={() => setServingIndex(i)}
-              >
-                {s.label}
-              </button>
-            ))}
+            {servingOrder.map((i) => {
+              const s = shape.servings[i]!;
+              return (
+                <button
+                  key={`${s.label}-${i}`}
+                  type="button"
+                  className={`mc-seg${i === servingIndex ? ' mc-seg-on' : ''}`}
+                  disabled={busy}
+                  onClick={() => setServingIndex(i)}
+                >
+                  {compoundLabel(s, shape.servings)}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

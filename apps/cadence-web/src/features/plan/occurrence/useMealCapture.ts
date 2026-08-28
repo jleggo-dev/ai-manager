@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Food } from '@cadence/shared';
+import type { Food, MealPlanItem } from '@cadence/shared';
 import {
   createFood,
   estimateFood,
@@ -8,7 +8,7 @@ import {
   getPlateAdvice,
   logMealFromFood,
   logMealFromItems,
-  logMealFromRecipe,
+  logPlannedMealItems,
   portionHintFromResolve,
   resolveFoods,
   previewMeal,
@@ -136,14 +136,19 @@ function usePlate(deps: {
     }
   }
 
-  /** One-tap log of a planned dish (design 2B) — the saved recipe the week names for this slot. */
-  async function logRecipe(recipeId: string) {
+  /**
+   * MP19 — one-tap log of a composed planned dish (frame 10a — recipes, food, or both). The
+   * legacy single-recipe planned dish no longer logs from here: MP24 routes it through
+   * `RecipeQuickLog`/`RecipeLogConfirm` instead, so a tap always shows the portion confirm rather
+   * than silently writing one serving.
+   */
+  async function logPlannedComposed(items: MealPlanItem[]) {
     if (deps.busy) return;
     deps.setBusy(true);
     deps.setLogErr('');
     try {
-      const logged = await logMealFromRecipe({ recipe_id: recipeId, meal: deps.mealKind });
-      if (!logged) return deps.setLogErr("Couldn't log that just now — try again in a moment.");
+      const ok = await logPlannedMealItems(items, deps.mealKind);
+      if (!ok) return deps.setLogErr("Couldn't log that just now — try again in a moment.");
       await deps.refreshDay();
       deps.markLogged();
     } finally {
@@ -155,7 +160,7 @@ function usePlate(deps: {
     plate,
     addToPlate,
     logPlate,
-    logRecipe,
+    logPlannedComposed,
     setPlateQty: (i: number, quantity: number) => setPlate((p) => p.map((e, j) => (j === i ? { ...e, quantity } : e))),
     removePlateItem: (i: number) => setPlate((p) => p.filter((_, j) => j !== i)),
   };

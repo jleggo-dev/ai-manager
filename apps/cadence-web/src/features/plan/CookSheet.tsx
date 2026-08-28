@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Recipe } from '@cadence/shared';
-import { getCurrentMealPlan, getRecipeById, logMealFromRecipe, setOccurrence } from '../../lib/api.ts';
+import { getCurrentMealPlan, getRecipeById, setOccurrence } from '../../lib/api.ts';
+import { RecipeLogConfirm } from '../food/RecipeLogConfirm.tsx';
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
 
 const dishFromTitle = (title: string): string => title.replace(/^\s*cook\s+/i, '').trim() || 'dinner';
@@ -21,9 +22,15 @@ async function resolveRecipe(date: string, dish: string): Promise<Recipe | null>
 
 /**
  * The cook task (design 1A "cook → task(n steps)") — a multi-step walkthrough over the recipe's own
- * steps, ending in the meal capture pre-filled with N servings of this recipe. The recipe carries the
- * steps, so nothing is generated; the final step logs it (logMealFromRecipe) and ticks the task. When
- * the recipe can't be resolved (no menu that day) it degrades to a plain "mark it cooked".
+ * steps, ending in the SAME portion-aware confirm `RecipesPanel`'s "Log again" uses (MP24). The
+ * recipe carries the steps, so nothing is generated; the final step opens that confirm and ticks
+ * the task once it logs. When the recipe can't be resolved (no menu that day) it degrades to a
+ * plain "mark it cooked".
+ *
+ * MP24: this used to log `servings: recipe.servings` unconditionally — the recipe's whole BATCH
+ * size, not a portion — so a 4-serving family dish landed as 4 servings in the one person logging
+ * it. Routing through `RecipeLogConfirm` fixes that by construction: its own default is 1 serving,
+ * adjustable before anything writes.
  */
 export function CookSheet({
   occurrenceId,
@@ -40,6 +47,7 @@ export function CookSheet({
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [confirming, setConfirming] = useState(false);
 
   const dish = detail ? dishFromTitle(detail.title) : '';
   const occDate = detail?.date;
@@ -63,13 +71,13 @@ export function CookSheet({
   const servings = recipe?.servings ?? 1;
   const onLast = step >= steps.length;
 
-  async function finish() {
+  /** No recipe resolved for this task — there is nothing to portion, so this just ticks the task. */
+  async function markCookedOnly() {
     if (busy || !detail) return;
     setBusy(true);
     setErr('');
     try {
-      if (recipe) await logMealFromRecipe({ recipe_id: recipe.recipe_id, servings, meal: 'dinner' });
-      else await setOccurrence(detail.occurrence_id, 'done');
+      await setOccurrence(detail.occurrence_id, 'done');
       setDetail({ ...detail, status: 'done' });
       onLogged?.();
       onClose();
@@ -77,6 +85,14 @@ export function CookSheet({
       setErr("That didn't save — give it another try.");
       setBusy(false);
     }
+  }
+
+  function afterConfirmedLog() {
+    setConfirming(false);
+    if (!detail) return onClose();
+    setDetail({ ...detail, status: 'done' });
+    onLogged?.();
+    onClose();
   }
 
   return (
@@ -94,6 +110,13 @@ export function CookSheet({
           </div>
         ) : !detail ? (
           <div className="sheet-msg">{"Couldn't open this just now — close and tap it again."}</div>
+        ) : confirming && recipe ? (
+          <RecipeLogConfirm
+            recipe={recipe}
+            initialMeal="dinner"
+            onCancel={() => setConfirming(false)}
+            onLogged={afterConfirmedLog}
+          />
         ) : (
           <>
             <div className="ss-head">
@@ -150,12 +173,12 @@ export function CookSheet({
                   </div>
                 )}
                 {err && <div className="mc-err">{err}</div>}
-                <button className="mc-log" disabled={busy} onClick={finish}>
-                  {busy
-                    ? 'Logging…'
-                    : recipe
-                      ? `Log ${recipe.name} · ${servings} serving${servings === 1 ? '' : 's'}`
-                      : 'Mark it cooked'}
+                <button
+                  className="mc-log"
+                  disabled={busy}
+                  onClick={() => (recipe ? setConfirming(true) : void markCookedOnly())}
+                >
+                  {busy ? 'Logging…' : recipe ? `Log ${recipe.name}` : 'Mark it cooked'}
                 </button>
                 {steps.length > 0 && !busy && (
                   <button className="ck-back" onClick={() => setStep((s) => Math.max(0, s - 1))}>

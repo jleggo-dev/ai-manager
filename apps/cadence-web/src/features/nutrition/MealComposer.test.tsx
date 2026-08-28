@@ -125,6 +125,40 @@ describe('MealComposer', () => {
     );
   });
 
+  /**
+   * MP20 — no writer ever set a planned item's qty to anything but 1. Bumping the amount control
+   * has to rescale that item's macros AND move the running total, or the number on the card would
+   * stop matching what it says.
+   */
+  it('scales a recipe item’s macros — and the total — when its amount changes', async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: /Add a recipe/i }));
+    await user.click(screen.getByRole('button', { name: /Chicken thighs/i }));
+
+    await user.click(await screen.findByRole('button', { name: /More Chicken thighs/i }));
+    await user.click(screen.getByRole('button', { name: /More Chicken thighs/i }));
+    await user.click(screen.getByRole('button', { name: /More Chicken thighs/i }));
+    // 3 × 0.25 = 0.75 more than the 1 it started at → 1.75 servings.
+    expect(screen.getByText('1.75')).toBeInTheDocument();
+    // 520 kcal/serving × 1.75 = 910.
+    expect(await screen.findByText('910')).toBeInTheDocument();
+  });
+
+  it('saves the amount the user actually chose, not the hardcoded 1 the composer used to write', async () => {
+    const { user, onSave } = setup();
+    await user.click(screen.getByRole('button', { name: /Add a recipe/i }));
+    await user.click(screen.getByRole('button', { name: /Chicken thighs/i }));
+    await user.click(await screen.findByRole('button', { name: /More Chicken thighs/i }));
+
+    await user.click(await screen.findByRole('button', { name: /Save & put on/i }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      '2026-09-03',
+      'dinner',
+      expect.objectContaining({ items: [expect.objectContaining({ qty: 1.25, kcal: 650 })] }),
+    );
+  });
+
   /** The ruling, in this screen too: no button anywhere offers to log. */
   it('offers no way to log', async () => {
     const { user } = setup();
