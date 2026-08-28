@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { macrosForLog, type Food } from '@cadence/shared';
 import { FoodMacroCard } from './FoodMacroCard.tsx';
+import { compoundLabel } from './servingPicker.ts';
 import { UnitSheet } from './UnitSheet.tsx';
 import type { MealKind } from '../../lib/api.ts';
 
@@ -76,7 +77,8 @@ export function AddFoodSheet({
             disabled={busy || food.servings.length < 2}
             onClick={() => setUnitOpen(true)}
           >
-            {serving?.label ?? '1 serving'} {food.servings.length > 1 && <i aria-hidden>⌄</i>}
+            {serving ? compoundLabel(serving, food.servings) : '1 serving'}{' '}
+            {food.servings.length > 1 && <i aria-hidden>⌄</i>}
           </button>
         </div>
 
@@ -132,7 +134,7 @@ export function AddFoodSheet({
 
       {unitOpen && (
         <UnitSheet
-          servings={food.servings}
+          food={food}
           selected={servingIndex}
           onPick={(i) => {
             setServingIndex(i);

@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import type { FoodDetailResult, MealPlanDetailResult } from '../../lib/api.ts';
 
 const invalidate = vi.fn();
 const useNutritionDay = vi.fn();
@@ -26,8 +27,11 @@ const api = vi.hoisted(() => ({
     { kind: 'food', id: 'f1', name: 'Skyr, plain', serving_label: '2/3 cup', kcal: 108, count: 14 },
   ]),
   searchFoods: vi.fn(async () => ({ status: 'ok', foods: [{ food_id: 'f2', name: 'Whole grain oats' }] })),
-  getCurrentMealPlan: vi.fn(async () => ({ status: 'empty', plan: null })),
-  getFoodById: vi.fn(async () => ({ status: 'ok', food: null })),
+  // Widened return types: several tests below override these with a differently-shaped `ok` result
+  // (a real plan / a real food), which a bare inferred default return type would reject.
+  getCurrentMealPlan: vi.fn(async (): Promise<MealPlanDetailResult> => ({ status: 'not_found', plan: null })),
+  getFoodById: vi.fn(async (): Promise<FoodDetailResult> => ({ status: 'not_found', food: null })),
+  getRecipeById: vi.fn(),
   logMeal: vi.fn(),
   logMealFromFood: vi.fn(),
   logMealFromRecipe: vi.fn(async () => ({
@@ -36,8 +40,10 @@ const api = vi.hoisted(() => ({
     items: [{ name: 'Chicken orzo' }],
     macros: { kcal: 520 },
   })),
+  logPlannedMealItems: vi.fn(),
   logWater: vi.fn(async () => 1250),
   patchMeal: vi.fn(async () => ({})),
+  recipeMacroHint: () => '',
 }));
 vi.mock('../../lib/api.ts', () => api);
 
@@ -147,5 +153,88 @@ describe('a method chosen before this screen opened', () => {
   it('opens the tile row when no method was chosen — "Log a meal" and the ＋', () => {
     render(<LogScreen date="2026-08-20" initialMeal="breakfast" onClose={() => {}} />);
     expect(screen.getByText('Chat')).toBeInTheDocument();
+  });
+});
+
+/**
+ * MP19/MP24 — the planned-meal quick-add row, in both shapes it can carry. A legacy single recipe
+ * used to log one silent serving on tap (MP24); a composed meal (frame 10a) never appeared here at
+ * all (MP19), because `usePlannedMeal` only ever looked for `recipe_id`.
+ */
+describe('quick add — the planned-for-this-slot row', () => {
+  it('opens the portion confirm for a legacy planned recipe — never a silent one-serving log', async () => {
+    useNutritionDay.mockReturnValue({ data: day() });
+    api.getCurrentMealPlan.mockResolvedValue({
+      status: 'ok',
+      plan: {
+        meal_plan_id: 'mp1',
+        week_of: '2026-08-17',
+        shopping_list: [],
+        days: [{ day: '2026-08-20', meals: [{ slot: 'lunch', recipe_id: 'r1', recipe_name: 'Beef chili' }] }],
+      },
+    });
+    api.getRecipeById.mockResolvedValue({
+      status: 'ok',
+      recipe: {
+        recipe_id: 'r1',
+        name: 'Beef chili',
+        source: 'user',
+        servings: 6,
+        ingredients: [],
+        steps: [],
+        macros_per_serving: { kcal: 320 },
+        tags: [],
+        saved: true,
+      },
+    });
+
+    render(<LogScreen date="2026-08-20" initialMeal="lunch" onClose={() => {}} />);
+
+    const row = await screen.findByText('Beef chili');
+    fireEvent.click(row.closest('button')!);
+
+    await waitFor(() => expect(screen.getByText(/Log Beef chili\?/i)).toBeInTheDocument());
+    expect(api.logMealFromRecipe).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Servings')).toHaveValue(1);
+  });
+
+  it('logs a composed planned meal directly — items fan out, no confirm needed', async () => {
+    useNutritionDay.mockReturnValue({ data: day() });
+    api.getCurrentMealPlan.mockResolvedValue({
+      status: 'ok',
+      plan: {
+        meal_plan_id: 'mp2',
+        week_of: '2026-08-17',
+        shopping_list: [],
+        days: [
+          {
+            day: '2026-08-20',
+            meals: [
+              {
+                slot: 'lunch',
+                name: 'Salad night',
+                items: [{ kind: 'food', id: 'f1', name: 'Big salad', qty: 1, unit: 'bowl' }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    api.logPlannedMealItems.mockResolvedValue(true);
+    const onClose = vi.fn();
+
+    render(<LogScreen date="2026-08-20" initialMeal="lunch" onClose={onClose} />);
+
+    const row = await screen.findByText('Salad night');
+    fireEvent.click(row.closest('button')!);
+
+    await waitFor(() =>
+      expect(api.logPlannedMealItems).toHaveBeenCalledWith(
+        [{ kind: 'food', id: 'f1', name: 'Big salad', qty: 1, unit: 'bowl' }],
+        'lunch',
+      ),
+    );
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(api.getRecipeById).not.toHaveBeenCalled();
   });
 });

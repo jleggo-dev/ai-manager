@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { MealMacros, MealPreview, OccurrenceDetail } from '../../../lib/api.ts';
 import { LogScreen } from '../../food/LogScreen.tsx';
 import { MealParseCard } from '../../food/MealParseCard.tsx';
+import { RecipeQuickLog } from '../../food/RecipeQuickLog.tsx';
 import { useUsualAtSlot } from '../../food/useUsualAtSlot.ts';
 import type { CaptureMethod } from '../../food/MethodTiles.tsx';
 import { MealCapturePhoto } from './MealCapturePhoto.tsx';
@@ -11,7 +12,7 @@ import { MealPlateList } from './MealPlateList.tsx';
 import { QuickAddBody } from './QuickAddBody.tsx';
 import { fmtKcal, sumPlate } from './mealPlate.ts';
 import { useMealCapture } from './useMealCapture.ts';
-import { usePlannedMeal } from './usePlannedMeal.ts';
+import { usePlannedMeal, type PlannedMeal } from './usePlannedMeal.ts';
 
 /**
  * The meal capture, from the trail — a *capture*, never a walkthrough. Today's two-tone rings sit
@@ -44,12 +45,22 @@ export function MealCapturePanel({
   const [pending, setPending] = useState<MealMacros | null>(null);
   /** The full Log screen, opened over the sheet by a method tile. */
   const [logOpen, setLogOpen] = useState<CaptureMethod | null>(null);
+  /** MP24 — a one-tap "planned"/"usual" recipe row opens the portion confirm on this id, rather
+   *  than silently logging one serving of it. */
+  const [pendingRecipeId, setPendingRecipeId] = useState<string | null>(null);
 
   const day = cap.day;
   const eaten = day?.totals ?? {};
   const plateMacros = sumPlate(cap.plate);
   const alreadyLogged = (day?.meals ?? []).filter((m) => m.meal === cap.mealKind);
   const pendingKcal = (plateMacros.kcal ?? 0) + (pending?.kcal ?? 0);
+
+  /** MP19 — a planned dish taps through here in either shape: a legacy recipe opens the confirm
+   *  (MP24); a composed meal logs its items directly, exactly as planned. */
+  function logPlanned(meal: PlannedMeal) {
+    if (meal.recipe_id) return setPendingRecipeId(meal.recipe_id);
+    if (meal.items?.length) void cap.logPlannedComposed(meal.items);
+  }
 
   if (logOpen) {
     return (
@@ -61,6 +72,20 @@ export function MealCapturePanel({
         initialMethod={logOpen}
         onClose={() => setLogOpen(null)}
         onLogged={() => cap.markLogged()}
+      />
+    );
+  }
+
+  if (pendingRecipeId) {
+    return (
+      <RecipeQuickLog
+        recipeId={pendingRecipeId}
+        initialMeal={cap.mealKind}
+        onCancel={() => setPendingRecipeId(null)}
+        onLogged={() => {
+          setPendingRecipeId(null);
+          cap.markLogged();
+        }}
       />
     );
   }
@@ -169,11 +194,13 @@ export function MealCapturePanel({
             busy={cap.busy}
             onMethod={setLogOpen}
             onPhoto={(file) => void cap.pickPhoto(file)}
-            onLogRecipe={(id) => void cap.logRecipe(id)}
+            onLogRecipe={(id) => setPendingRecipeId(id)}
+            onLogPlanned={logPlanned}
             onAddFood={(id) => void cap.pickSaved(id)}
           />
 
           {cap.note && <div className="mc-note">{cap.note}</div>}
+          {cap.logErr && <div className="mc-err">{cap.logErr}</div>}
 
           {cap.plate.length > 0 && (
             <div className="mc-plate-foot">

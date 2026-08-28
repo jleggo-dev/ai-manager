@@ -10,6 +10,34 @@ import {
 import { searchFoods, getFoodById, type FoodSummary } from '../../lib/api.ts';
 import { KITCHEN_SLOTS, SLOT_LABEL, dayLabel } from './kitchenPlan.ts';
 
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** Rescale one denormalized macro proportionally to a new qty — 1 decimal, matching `roundNutrient`
+ *  in @cadence/shared (the precision every macro on a Food or Recipe already carries). */
+function scaledMacro(value: number | undefined, fromQty: number, toQty: number): number | undefined {
+  if (value == null || !Number.isFinite(value) || !(fromQty > 0)) return value;
+  return Math.round(value * (toQty / fromQty) * 10) / 10;
+}
+
+/**
+ * MP20 — no writer ever set a planned item's `qty` to anything but 1, so a plan could describe "1
+ * chicken thigh" for a family tray. `kcal`/`protein_g`/etc. are DENORMALIZED onto the item (the
+ * total this item contributes, not a per-unit rate — see `MealPlanItem` in @cadence/shared), so
+ * changing the amount has to rescale them too or the running total would silently stop matching what
+ * the row says. `mealTotals` sums whatever is stored here; there is nothing else to update.
+ */
+function withQty(item: MealPlanItem, qty: number): MealPlanItem {
+  if (!(qty > 0)) return item;
+  return {
+    ...item,
+    qty,
+    kcal: scaledMacro(item.kcal, item.qty, qty),
+    protein_g: scaledMacro(item.protein_g, item.qty, qty),
+    carbs_g: scaledMacro(item.carbs_g, item.qty, qty),
+    fat_g: scaledMacro(item.fat_g, item.qty, qty),
+  };
+}
+
 /**
  * Frame 10a — define a meal once, then say when you'll eat it.
  *
@@ -126,7 +154,27 @@ export function MealComposer({
               <span className="kt-item-kind">{it.kind === 'recipe' ? 'Recipe' : 'Food'}</span>
               <span className="kt-item-name">{it.name}</span>
               <span className="kt-item-amt">
-                {it.qty} {it.unit ?? ''}
+                <button
+                  type="button"
+                  className="kt-istep"
+                  aria-label={`Less ${it.name}`}
+                  disabled={it.qty <= 0.25}
+                  onClick={() =>
+                    setItems((xs) => xs.map((x, j) => (j === i ? withQty(x, Math.max(0.25, round2(x.qty - 0.25))) : x)))
+                  }
+                >
+                  −
+                </button>
+                <b>{it.qty}</b>
+                <span>{it.unit ?? ''}</span>
+                <button
+                  type="button"
+                  className="kt-istep"
+                  aria-label={`More ${it.name}`}
+                  onClick={() => setItems((xs) => xs.map((x, j) => (j === i ? withQty(x, round2(x.qty + 0.25)) : x)))}
+                >
+                  +
+                </button>
               </span>
               <span className="kt-item-kcal">{it.kcal == null ? '—' : `${Math.round(it.kcal)} kcal`}</span>
               <button

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Food } from '@cadence/shared';
-import { getFoodById, logMealFromFood, logMealFromRecipe, type Meal, type MealKind } from '../../lib/api.ts';
+import type { Food, MealPlanItem } from '@cadence/shared';
+import { getFoodById, logMealFromFood, logPlannedMealItems, type Meal, type MealKind } from '../../lib/api.ts';
 import { useInvalidateNutritionDay } from '../../lib/query/index.ts';
 
 const FAILED = "Couldn't write that down just now — try again in a moment.";
@@ -35,6 +35,27 @@ export function useLogActions() {
     }
   }
 
+  /**
+   * MP19 — a composed planned meal fans out to several writes (see `logPlannedMealItems`), so there
+   * is no single `Meal` to hand back the way `run` does. Same busy/err shape, boolean result.
+   */
+  async function runBool(work: () => Promise<boolean>): Promise<boolean> {
+    if (busy) return false;
+    setBusy(true);
+    setErr('');
+    try {
+      const ok = await work();
+      if (!ok) setErr(FAILED);
+      else await invalidateNutritionDay();
+      return ok;
+    } catch {
+      setErr(FAILED);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return {
     busy,
     err,
@@ -48,6 +69,6 @@ export function useLogActions() {
     },
     logFood: (input: { food_id: string; serving_index: number; quantity: number; meal: MealKind }) =>
       run(() => logMealFromFood(input)),
-    logRecipe: (recipe_id: string, meal: MealKind) => run(() => logMealFromRecipe({ recipe_id, meal })),
+    logPlannedComposed: (items: MealPlanItem[], meal: MealKind) => runBool(() => logPlannedMealItems(items, meal)),
   };
 }

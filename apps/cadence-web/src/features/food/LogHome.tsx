@@ -2,6 +2,7 @@ import { FoodPickHead, FoodPickRow } from './FoodPickRow.tsx';
 import { LogWaterRow } from './LogWaterRow.tsx';
 import { MethodTiles, type CaptureMethod } from './MethodTiles.tsx';
 import { SearchIcon } from './captureIcons.tsx';
+import type { PlannedMeal } from '../plan/occurrence/usePlannedMeal.ts';
 import type { LogScreenData } from './useLogScreen.ts';
 
 const METHODS: CaptureMethod[] = ['chat', 'voice', 'picture', 'barcode'];
@@ -23,6 +24,7 @@ export function LogHome({
   onPhoto,
   onPickFood,
   onLogRecipe,
+  onLogPlanned,
   onWater,
   onDrink,
 }: {
@@ -33,6 +35,8 @@ export function LogHome({
   onPhoto: (file: File | undefined) => void;
   onPickFood: (foodId: string) => void;
   onLogRecipe: (recipeId: string) => void;
+  /** MP19 — a planned row: a legacy single recipe OR a composed meal, either shape. */
+  onLogPlanned: (meal: PlannedMeal) => void;
   onWater: (nextMl: number) => void;
   onDrink: () => void;
 }) {
@@ -90,19 +94,19 @@ export function LogHome({
               {planned && (
                 <FoodPickRow
                   name={planned.name}
-                  sub="today’s plan · 1 serving"
+                  sub="from your week’s plan"
                   tone="planned"
                   busy={busy}
-                  onAdd={() => onLogRecipe(planned.recipe_id)}
+                  onAdd={() => onLogPlanned(planned)}
                 />
               )}
-              {alsoThisWeek.map((m) => (
+              {alsoThisWeek.map((m, i) => (
                 <FoodPickRow
-                  key={m.recipe_id}
+                  key={m.recipe_id ?? `${i}-${m.name}`}
                   name={m.name}
                   sub="also on your week"
                   busy={busy}
-                  onAdd={() => onLogRecipe(m.recipe_id)}
+                  onAdd={() => onLogPlanned(m)}
                 />
               ))}
             </>

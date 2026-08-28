@@ -12,7 +12,7 @@
  *   POST   /nutrition/recipes/discover     → RecipeDraft[] (confirm via saveRecipe)
  */
 
-import type { MealPlan, MealPlanDay, MealPlanMeal, ShoppingListItem } from '@cadence/shared';
+import type { MealPlan, MealPlanDay, MealPlanItem, MealPlanMeal, ShoppingListItem } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 import type { ApiAvailability } from './foods.ts';
 import { parseRecipeDraft, type RecipeDraft } from './recipes.ts';
@@ -100,14 +100,59 @@ function parseShoppingList(raw: unknown): ShoppingListItem[] {
   return out;
 }
 
+/**
+ * One thing in a composed meal (frame 10a — "recipes, food, or both"). Mirrors the server's
+ * `planItemSchema` (`apps/cadence-api/src/validation/meal-plan.ts`): kind + id + name + qty are
+ * required, macros are denormalized and optional.
+ */
+function parsePlanItem(raw: unknown): MealPlanItem | null {
+  if (!isRecord(raw)) return null;
+  const kind = raw.kind === 'recipe' || raw.kind === 'food' ? raw.kind : null;
+  const id = typeof raw.id === 'string' ? raw.id : '';
+  const name = typeof raw.name === 'string' ? raw.name : '';
+  const qty = typeof raw.qty === 'number' ? raw.qty : Number(raw.qty);
+  if (!kind || !id.trim() || !name.trim() || !Number.isFinite(qty) || qty <= 0) return null;
+  const item: MealPlanItem = { kind, id, name: name.trim(), qty };
+  if (typeof raw.unit === 'string' && raw.unit.trim()) item.unit = raw.unit.trim();
+  if (typeof raw.kcal === 'number') item.kcal = raw.kcal;
+  if (typeof raw.protein_g === 'number') item.protein_g = raw.protein_g;
+  if (typeof raw.carbs_g === 'number') item.carbs_g = raw.carbs_g;
+  if (typeof raw.fat_g === 'number') item.fat_g = raw.fat_g;
+  return item;
+}
+
+function parsePlanItems(raw: unknown): MealPlanItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: MealPlanItem[] = [];
+  for (const row of raw) {
+    const item = parsePlanItem(row);
+    if (item) out.push(item);
+  }
+  return out;
+}
+
+/**
+ * MP18 — the server persists a meal as EITHER the legacy single recipe (`recipe_id`) or a composed
+ * list (`items`), never neither (see `persistedMealSchema`'s refine, same file). This used to hard
+ * -require `recipe_id` and never read `items` or `name` at all, so every composed meal the server
+ * saved correctly came back from a GET as if it had never been written. Mirror the server's own
+ * either/or check instead of the old both-required one.
+ */
 function parsePersistedMeal(raw: unknown): MealPlanMeal | null {
   if (!isRecord(raw)) return null;
   const slot = typeof raw.slot === 'string' ? raw.slot : '';
+  if (!slot.trim()) return null;
   const recipeId = typeof raw.recipe_id === 'string' ? raw.recipe_id : '';
-  if (!slot.trim() || !recipeId.trim()) return null;
-  const meal: MealPlanMeal = { slot: slot.trim(), recipe_id: recipeId };
+  const items = parsePlanItems(raw.items);
+  if (!recipeId.trim() && !items.length) return null;
+  const meal: MealPlanMeal = { slot: slot.trim() };
+  if (recipeId.trim()) meal.recipe_id = recipeId;
+  if (items.length) meal.items = items;
   if (typeof raw.recipe_name === 'string' && raw.recipe_name.trim()) {
     meal.recipe_name = raw.recipe_name.trim();
+  }
+  if (typeof raw.name === 'string' && raw.name.trim()) {
+    meal.name = raw.name.trim();
   }
   return meal;
 }

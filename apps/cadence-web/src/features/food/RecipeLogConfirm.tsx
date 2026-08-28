@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import type { DietaryProfile, Recipe } from '@cadence/shared';
 import { assessDietarySafety } from '@cadence/shared';
-import { logMealFromRecipe, recipeMacroHint, type MealKind } from '../../lib/api.ts';
+import { logMealFromRecipe, recipeMacroHint, type Meal, type MealKind } from '../../lib/api.ts';
 import { useInvalidateNutritionDay } from '../../lib/query/index.ts';
 import { mealForNow } from '../plan/occurrence/format.ts';
 
@@ -35,7 +35,9 @@ export function RecipeLogConfirm({
   initialMeal?: MealKind;
   initialServings?: number;
   onCancel: () => void;
-  onLogged: () => void;
+  /** The written row, so a caller that shows "where should it sit?" after any other log (LogScreen)
+   *  can do the same here — a recipe log used to skip that step entirely. */
+  onLogged: (meal: Meal) => void;
 }) {
   const [servings, setServings] = useState(() =>
     typeof initialServings === 'number' && Number.isFinite(initialServings) && initialServings > 0
@@ -74,7 +76,7 @@ export function RecipeLogConfirm({
         return;
       }
       await invalidateNutritionDay();
-      onLogged();
+      onLogged(logged);
     } finally {
       setBusy(false);
     }

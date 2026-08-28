@@ -8795,6 +8795,28 @@ textarea.wiz-title {
   color: oklch(50% 0.02 120);
   white-space: nowrap;
 }
+.kt-item-amt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.kt-istep {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid oklch(88% 0.02 120);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  color: oklch(50% 0.02 120);
+  cursor: pointer;
+}
+.kt-istep:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .kt-item-x {
   border: 0;
   background: none;

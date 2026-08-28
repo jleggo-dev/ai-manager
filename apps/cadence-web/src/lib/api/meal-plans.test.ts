@@ -24,6 +24,68 @@ describe('meal-plans parsers', () => {
     expect(plan?.shopping_list[0]?.name).toBe('beans');
   });
 
+  /**
+   * MP18 — the server persists a composed meal (frame 10a: "recipes, food, or both") as
+   * `{ slot, name, items }` with NO `recipe_id`. The old parser hard-required `recipe_id`, so this
+   * exact shape came back from a GET as if the day had nothing planned — failed on the prior code.
+   */
+  it('reads a composed meal back — the round trip MP18 was dropping', () => {
+    const plan = parseMealPlan({
+      meal_plan_id: 'mp2',
+      week_of: '2026-08-24',
+      days: [
+        {
+          day: '2026-08-26',
+          meals: [
+            {
+              slot: 'dinner',
+              name: 'Thighs, orzo & a side salad',
+              items: [
+                { kind: 'recipe', id: 'r2', name: 'Chicken thighs & lemon orzo', qty: 1, unit: 'serving', kcal: 520 },
+                { kind: 'food', id: 'f1', name: 'Rocket & tomato salad', qty: 120, unit: 'g', kcal: 35 },
+              ],
+            },
+          ],
+        },
+      ],
+      shopping_list: [],
+    });
+    const meal = plan?.days[0]?.meals[0];
+    expect(meal?.name).toBe('Thighs, orzo & a side salad');
+    expect(meal?.items).toHaveLength(2);
+    expect(meal?.items?.[0]).toMatchObject({ kind: 'recipe', id: 'r2', name: 'Chicken thighs & lemon orzo', qty: 1 });
+    expect(meal?.recipe_id).toBeUndefined();
+  });
+
+  /** A week can mix a legacy single-recipe day with a composed one — neither shape drops the other. */
+  it('keeps the legacy single-recipe shape working alongside a composed meal', () => {
+    const plan = parseMealPlan({
+      meal_plan_id: 'mp3',
+      week_of: '2026-08-24',
+      days: [
+        { day: '2026-08-24', meals: [{ slot: 'lunch', recipe_id: 'r1', recipe_name: 'Beef chili' }] },
+        {
+          day: '2026-08-26',
+          meals: [{ slot: 'dinner', items: [{ kind: 'food', id: 'f2', name: 'Olive oil', qty: 1, unit: 'tbsp' }] }],
+        },
+      ],
+      shopping_list: [],
+    });
+    expect(plan?.days[0]?.meals[0]).toMatchObject({ recipe_id: 'r1', recipe_name: 'Beef chili' });
+    expect(plan?.days[1]?.meals[0]?.items?.[0]).toMatchObject({ id: 'f2', name: 'Olive oil' });
+  });
+
+  /** A meal with neither a recipe_id nor any item is not a plan — nothing to silently keep. */
+  it('drops a meal that has neither a recipe_id nor items', () => {
+    const plan = parseMealPlan({
+      meal_plan_id: 'mp4',
+      week_of: '2026-08-24',
+      days: [{ day: '2026-08-24', meals: [{ slot: 'snack' }] }],
+      shopping_list: [],
+    });
+    expect(plan?.days[0]?.meals ?? []).toHaveLength(0);
+  });
+
   it('parses generate draft with nested recipes', () => {
     const draft = parseMealPlanDraft({
       week_of: '2026-07-20',

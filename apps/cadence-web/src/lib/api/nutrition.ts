@@ -1,3 +1,4 @@
+import type { MealPlanItem } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /* ── Nutrition (Observe phase) ─────────────────────────────────── */
@@ -313,6 +314,32 @@ export async function logMealFromItems(input: { items: PlateItem[]; meal?: MealK
   } catch {
     return null;
   }
+}
+
+/**
+ * MP19 — log a composed planned meal (frame 10a — "recipes, food, or both") in one tap.
+ *
+ * There is no single endpoint for a mixed recipe+food row, so this fans out to the calls that
+ * already exist above: each recipe item logs through the same deterministic call a saved-recipe
+ * "log again" uses, and every food item batches into one plate call. Neither re-derives a portion —
+ * `serving_index` is left unset so the server falls back to the food's OWN default serving, which is
+ * exactly the basis the Kitchen composer priced the item on when it was planned
+ * (`macrosForLog(food)`, no override — see `MealComposer.tsx`). Several log rows can land rather
+ * than one; that already matches how a recipe and a plate are two separate row shapes everywhere
+ * else in this store.
+ */
+export async function logPlannedMealItems(items: MealPlanItem[], meal?: MealKind): Promise<boolean> {
+  const recipeItems = items.filter((i) => i.kind === 'recipe' && i.qty > 0);
+  const foodItems = items.filter((i) => i.kind === 'food' && i.qty > 0);
+  if (!recipeItems.length && !foodItems.length) return false;
+  const writes: Promise<Meal | null>[] = recipeItems.map((i) =>
+    logMealFromRecipe({ recipe_id: i.id, servings: i.qty, meal }),
+  );
+  if (foodItems.length) {
+    writes.push(logMealFromItems({ items: foodItems.map((i) => ({ food_id: i.id, quantity: i.qty })), meal }));
+  }
+  const results = await Promise.all(writes);
+  return results.every((r) => r !== null);
 }
 
 /** Recent meals, newest first (the food-log sheet's list). */

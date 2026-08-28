@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Food } from '@cadence/shared';
 import type { Meal, MealKind } from '../../lib/api.ts';
 import { useNutritionDay } from '../../lib/query/index.ts';
+import type { PlannedMeal } from '../plan/occurrence/usePlannedMeal.ts';
 import { downscalePhoto } from '../plan/occurrence/format.ts';
 import { PhotoReadPanel } from './PhotoReadPanel.tsx';
 import { AddFoodSheet } from './AddFoodSheet.tsx';
@@ -10,6 +11,7 @@ import { FoodBarcodePanel } from './FoodBarcodePanel.tsx';
 import { LogByChat } from './LogByChat.tsx';
 import { LogHome } from './LogHome.tsx';
 import { MealSlotChoice } from './MealSlotChoice.tsx';
+import { RecipeQuickLog } from './RecipeQuickLog.tsx';
 import { foldCandidate } from './mealSlotting.ts';
 import { useLogActions } from './useLogActions.ts';
 import { useLogScreen } from './useLogScreen.ts';
@@ -23,7 +25,10 @@ type Route =
   | { at: 'barcode' }
   | { at: 'food'; food: Food }
   | { at: 'photo'; photo: string }
-  | { at: 'drink' };
+  | { at: 'drink' }
+  /** MP24 — a recipe row (planned or usual) opens the portion confirm on this id, rather than
+   *  silently logging one serving of it. */
+  | { at: 'recipe'; recipeId: string };
 
 /**
  * **The full-screen Log** (design 05b) — reachable from any method tile in quick add, from "Log a
@@ -89,6 +94,22 @@ export function LogScreen({
     else onClose();
   }
 
+  /**
+   * MP19 — a planned row hands over either shape: a legacy recipe opens the portion confirm
+   * (MP24); a composed meal (frame 10a) logs its items directly, exactly as planned. A composed
+   * write can land as more than one row, so there is no single `Meal` to fold into "where should
+   * it sit" the way `settle` does — it just refreshes and closes, same as the Kitchen's own save.
+   */
+  function logPlanned(planned: PlannedMeal) {
+    if (planned.recipe_id) return setRoute({ at: 'recipe', recipeId: planned.recipe_id });
+    if (!planned.items?.length) return;
+    void act.logPlannedComposed(planned.items, meal).then((ok) => {
+      if (!ok) return;
+      onLogged?.();
+      onClose();
+    });
+  }
+
   async function pickPhoto(file: File | undefined) {
     if (!file) return;
     try {
@@ -149,7 +170,8 @@ export function LogScreen({
           onMethod={onMethod}
           onPhoto={(f) => void pickPhoto(f)}
           onPickFood={(id) => void act.openFood(id).then((food) => food && setRoute({ at: 'food', food }))}
-          onLogRecipe={(id) => void act.logRecipe(id, meal).then(settle)}
+          onLogRecipe={(id) => setRoute({ at: 'recipe', recipeId: id })}
+          onLogPlanned={logPlanned}
           onWater={setWaterMl}
           onDrink={() => setRoute({ at: 'drink' })}
         />
@@ -198,6 +220,15 @@ export function LogScreen({
 
       {route.at === 'photo' && (
         <PhotoReadPanel photo={route.photo} meal={meal} onLogged={settle} onBack={() => setRoute({ at: 'home' })} />
+      )}
+
+      {route.at === 'recipe' && (
+        <RecipeQuickLog
+          recipeId={route.recipeId}
+          initialMeal={meal}
+          onCancel={() => setRoute({ at: 'home' })}
+          onLogged={settle}
+        />
       )}
 
       {route.at === 'drink' && <DrinkComposer onLogged={settle} onBack={() => setRoute({ at: 'home' })} />}
