@@ -1817,43 +1817,6 @@
       }
     },
     {
-      "slug": "weekly-readout",
-      "name": "weekly_readout",
-      "ai_profile_id": "<CADENCE_COACH_PROFILE_UUID>",
-      "description": "Weekly recap / check-in (spec \u00a76/\u00a7A5): app-computed consistency+outcome+episodes -> a warm, two-way 'how am I doing' note. The app supplies ALL data as variables; the model only narrates.",
-      "config": {
-        "promptTemplate": "You are Cadence's coach writing a short, warm, specific weekly check-in. Use ONLY the data provided \u2014 never invent numbers. Name what went well, the ONE thing to focus on next, and reference real specifics. Count what happened, never what broke: describe how they showed up (e.g. '5 of 7 days'), never a reset to zero \u2014 a missed day is information, not failure. Then ask how the week actually felt. Supportive and non-judgmental. 120-180 words.\n\n<period>{{period}}</period>\n<goals_progress>{{goals_progress}}</goals_progress>\n<consistency>{{consistency}}</consistency>\n<outcomes>{{outcomes}}</outcomes>\n<episodes>{{episodes}}</episodes>\n<rolling_window>{{rolling_window}}</rolling_window>",
-        "variables": [
-          {
-            "name": "period",
-            "required": true
-          },
-          {
-            "name": "goals_progress",
-            "required": true
-          },
-          {
-            "name": "consistency",
-            "required": true
-          },
-          {
-            "name": "outcomes"
-          },
-          {
-            "name": "episodes"
-          },
-          {
-            "name": "rolling_window"
-          }
-        ],
-        "formattingRules": [
-          {
-            "type": "remove-reasoning"
-          }
-        ]
-      }
-    },
-    {
       "slug": "surface-insights",
       "name": "surface_insights",
       "ai_profile_id": "<CADENCE_BROKER_PROFILE_UUID>",
