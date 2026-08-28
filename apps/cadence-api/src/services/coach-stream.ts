@@ -92,8 +92,34 @@ export function applySseDataPayload(state: CoachStreamAccumulateState, data: str
     // OpenAI-style usage/model arrive on the final chunk (Devs.ai completion stream).
     const usage = p.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
     if (usage) {
-      state.promptTokens = usage.prompt_tokens ?? state.promptTokens;
-      state.completionTokens = usage.completion_tokens ?? state.completionTokens;
+      /**
+       * SUM across rounds, never overwrite (MP30). `state` is the SAME object threaded through
+       * every round of the tool loop (`coach-tool-loop.ts` passes `{ ...options, state }` into
+       * each `relayAndAccumulate` call), and each round is its own full, separately-billed model
+       * call — round two's prompt is round one's plus the tool exchange, round three's is bigger
+       * again. The turn's real cost is the SUM of every round's prompt tokens, not any one round's.
+       *
+       * This used to be `usage.prompt_tokens ?? state.promptTokens` — a plain overwrite. A
+       * continuation reports `prompt_tokens: 0` (not a missing field — an explicit zero; see
+       * `coach-tools.ts`'s `recordToolCalls` comment), and `0 ?? x` is `0`, not `x`, because `??`
+       * only falls through on `null`/`undefined`. So the LAST round's zero silently replaced the
+       * running total: a turn that ran three tool rounds could report FEWER prompt tokens than one
+       * that ran none — the most expensive turns reporting the least, straight into AI Admin's
+       * cost diagnostics (`recordCoachReply`'s `usage.prompt_tokens`).
+       *
+       * Only add when a real number arrived — an absent field must still leave `state.promptTokens`
+       * untouched (still `null` if nothing has landed yet, still the prior total otherwise), same
+       * as the old `?? state.promptTokens` fallback did for a genuinely missing field. Only the
+       * EXPLICIT-zero case changes: it now adds zero (a no-op on the total) instead of replacing it.
+       * `completionTokens` gets the identical fix for the identical reason — it is just as much a
+       * separately-billed per-round number as the prompt side.
+       */
+      if (typeof usage.prompt_tokens === 'number') {
+        state.promptTokens = (state.promptTokens ?? 0) + usage.prompt_tokens;
+      }
+      if (typeof usage.completion_tokens === 'number') {
+        state.completionTokens = (state.completionTokens ?? 0) + usage.completion_tokens;
+      }
     }
     if (typeof p.model === 'string' && !state.model) state.model = p.model;
 
@@ -108,12 +134,14 @@ export function applySseDataPayload(state: CoachStreamAccumulateState, data: str
       for (const call of extractFunctionCallsFromOutput(p.output)) {
         if (!state.functionCalls.some((c) => c.toolCallId === call.toolCallId)) state.functionCalls.push(call);
       }
-      state.promptTokens =
-        (p.inputTokens as number | undefined) ?? (p.estimatedInputTokens as number | undefined) ?? state.promptTokens;
-      state.completionTokens =
-        (p.outputTokens as number | undefined) ??
-        (p.estimatedOutputTokens as number | undefined) ??
-        state.completionTokens;
+      // Same SUM-not-overwrite fix as the OpenAI-shaped branch above (MP30), for v2's own usage
+      // fields. `typeof … === 'number'` also guards against a malformed/non-numeric field, which
+      // the old `as number | undefined` cast trusted blindly — consistent with the `typeof delta
+      // === 'string'` check this file already uses a few lines up for the same untrusted JSON.
+      const inputTokens = (p.inputTokens as number | undefined) ?? (p.estimatedInputTokens as number | undefined);
+      if (typeof inputTokens === 'number') state.promptTokens = (state.promptTokens ?? 0) + inputTokens;
+      const outputTokens = (p.outputTokens as number | undefined) ?? (p.estimatedOutputTokens as number | undefined);
+      if (typeof outputTokens === 'number') state.completionTokens = (state.completionTokens ?? 0) + outputTokens;
       if (p.modelId) state.model = String(p.modelId);
       if (!state.content && (p.text ?? p.content)) {
         state.content = String(p.text ?? p.content);

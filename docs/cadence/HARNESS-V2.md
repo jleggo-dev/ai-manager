@@ -139,13 +139,21 @@ preselection can never cost a capability because there is no preselection.
 |---|---|---|
 | Definition tokens per turn | ~5,000 | **~1,100** |
 | Growth per new READ tool | +~110 tokens/turn, forever | **0** |
-| Growth per new ACTION tool | +~190 tokens/turn | +~190 tokens/turn |
+| Growth per new ACTION tool | +~305–375 tokens/turn* | +~305–375 tokens/turn* |
 | Decisions she must make to reach a dossier fact | 1 (which tool) | **0** (it is already there) |
 
 Reads become free to add, which is the property we actually want — the owner's 100-tool worry is
 mostly a 100-*read* worry. Actions stay expensive on purpose: they are the ones that need her full
 attention, and if we ever have twenty of them, that is a consolidation problem worth being forced
 to confront.
+
+\* Corrected 2026-08-28 (MP34) — this row said ~190 in both columns since the spec was written, and
+nobody had re-checked it against a real definition. Measured by serializing each of today's eight
+`ALWAYS_ACTIONS` (`JSON.stringify({type, function})`, chars/4): 195–1,338 tokens depending on the
+tool, four of the eight landing in a 305–375 band — full per-tool numbers and method in
+[TOOL-HARNESS.md](TOOL-HARNESS.md). The direction of this row is unchanged, only the number was: an
+ordinarily-shaped new action should still budget ~305–375, and one with a `propose_plan_change`-sized
+parameter schema should budget several times that.
 
 #### The one rule for deciding where a new tool goes
 
@@ -242,6 +250,30 @@ any of it worked.
 - **Duplicated replies.** A turn that runs the tool loop can come back with two complete drafts
   concatenated, which points at the accumulator carrying round-one content into the continuation.
   **Logged; fix before the tiering lands**, since tiering will make tool rounds more common.
+- **Compaction eats the capability manifest and the pick protocol (MP33).** They ride in as
+  `injectCoachContext`'s `role: 'user'` blocks (`ai/aim.ts:294`), but the session compactor's
+  `isInstruction = (m) => m.role === 'system'` (`backend/src/services/session-compaction.ts:61`)
+  only ever protects the persona row from being summarised away — everything Layer 1 depends on
+  reads as ordinary conversation to it and can be compacted mid-session. Confirmed live, not
+  theoretical: `apps/cadence-api/scripts/set-coach-persona.ts` sets `summarizer: { jobSlug:
+  'coach-compact', triggerTokens: 20_000, keepLastNTurns: 20 }` on every coach session, so this
+  fires once a real conversation crosses ~20k estimated characters/4. **Not fixed here**:
+  `session-compaction.ts` lives in `backend/` — AI Admin's shared compaction engine, used by every
+  chat session AI Admin hosts, reached only in-process through `@ai-admin/core` — not in
+  `apps/cadence-api` and outside this doc's own parcel. The fix likely needs `isInstruction` to
+  recognise a provenance-wrapped block (`injectCoachContext` always wraps its content in `<context
+  source="..." version="..." built_at="...">`) as protected even on `role: 'user'`, product-agnostic
+  rather than Cadence-specific, since the same function guards every AI-Admin-hosted session.
+- **The same-name collision `select-and-run.ts` fixes still reaches the model unfixed (MP0e).**
+  `executeCalls` now returns `perCall` — the same calls kept apart by position instead of by name,
+  because `results[fn] = result` lets a second call to the same read silently overwrite the first
+  when the model calls it twice in one round with different arguments (`check_food_sources` on two
+  different foods is the live shape). The one place that actually happens, `coach-tools.ts:249`'s
+  batch of a round's parallel reads, still renders off `results[c.name]` afterwards, so today both
+  `toolCallId`s still get whichever query ran last. **Not fixed here**: `coach-tools.ts` is outside
+  this parcel. The swap is small once someone who owns that file makes it — `reads` and `perCall`
+  share an order (`executeCalls` is called with `reads.map(...)` as the `calls` argument), so
+  `results[c.name]` becomes the matching `perCall` entry by position, not by re-deriving a name.
 
 ## The measure of success
 

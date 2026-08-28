@@ -196,4 +196,79 @@ describe('relayAndAccumulate', () => {
     });
     expect(onResponseId).not.toHaveBeenCalled();
   });
+
+  /**
+   * MP30 — `state.promptTokens = usage.prompt_tokens ?? state.promptTokens` was a plain overwrite,
+   * and `state` is the SAME object the tool loop threads through every round
+   * (`coach-tool-loop.ts`'s `relayAndAccumulate(body, { ...options, state, suppressDone: true })`).
+   * A continuation reports `prompt_tokens: 0` — an explicit zero, not a missing field — and
+   * `0 ?? x` is `0`, so the last round's zero silently erased the total instead of adding to it.
+   */
+  describe('prompt/completion tokens sum across tool-loop rounds (MP30)', () => {
+    it("a later round reporting 0 does not erase an earlier round's count", async () => {
+      const state = createCoachStreamAccumulateState();
+      await relayAndAccumulate(
+        streamFromChunks([
+          'data: {"usage":{"prompt_tokens":18979,"completion_tokens":40},"choices":[{"delta":{}}]}\n\n',
+        ]),
+        { state, suppressDone: true },
+      );
+      expect(state.promptTokens).toBe(18979);
+
+      // Round two: a tool-loop continuation, sharing the SAME state — exactly as coach-tool-loop.ts
+      // calls it. Upstream reports 0, the documented continuation shape (coach-tools.ts).
+      const result = await relayAndAccumulate(
+        streamFromChunks(['data: {"usage":{"prompt_tokens":0,"completion_tokens":12},"choices":[{"delta":{}}]}\n\n']),
+        { state, suppressDone: true },
+      );
+
+      expect(result.promptTokens).toBe(18979);
+      expect(result.completionTokens).toBe(52);
+    });
+
+    it('a three-round tool-loop turn reports MORE prompt tokens than a one-round turn, not less', async () => {
+      const oneRoundFrame =
+        'data: {"usage":{"prompt_tokens":18979,"completion_tokens":40},"choices":[{"delta":{}}]}\n\n';
+      const oneRound = await relayAndAccumulate(streamFromChunks([oneRoundFrame]));
+
+      const state = createCoachStreamAccumulateState();
+      // Three separate rounds of the SAME turn, each its own full billed call — the exchange grows
+      // every round, so the prompt genuinely gets bigger, never smaller or flat.
+      for (const frame of [
+        'data: {"usage":{"prompt_tokens":18979,"completion_tokens":40},"choices":[{"delta":{}}]}\n\n',
+        'data: {"usage":{"prompt_tokens":19412,"completion_tokens":55},"choices":[{"delta":{}}]}\n\n',
+        'data: {"usage":{"prompt_tokens":19800,"completion_tokens":63},"choices":[{"delta":{}}]}\n\n',
+      ]) {
+        await relayAndAccumulate(streamFromChunks([frame]), { state, suppressDone: true });
+      }
+
+      expect(state.promptTokens).toBeGreaterThan(oneRound.promptTokens!);
+      expect(state.promptTokens).toBe(18979 + 19412 + 19800);
+    });
+
+    it('sums the v2 message.complete shape across rounds too, not just the OpenAI shape', async () => {
+      const state = createCoachStreamAccumulateState();
+      await relayAndAccumulate(
+        streamFromChunks(['data: {"type":"message.complete","text":"a","inputTokens":12772,"outputTokens":9}\n\n']),
+        { state, suppressDone: true },
+      );
+      const result = await relayAndAccumulate(
+        streamFromChunks(['data: {"type":"message.complete","text":"b","inputTokens":13050,"outputTokens":14}\n\n']),
+        { state, suppressDone: true },
+      );
+
+      expect(result.promptTokens).toBe(12772 + 13050);
+      expect(result.completionTokens).toBe(9 + 14);
+    });
+
+    it('leaves an accumulated total untouched when a later frame carries no usage at all', () => {
+      const state = createCoachStreamAccumulateState();
+      applySseDataPayload(state, JSON.stringify({ usage: { prompt_tokens: 5000, completion_tokens: 20 } }));
+      // A delta-only frame — no `usage` key present at all, unlike the explicit-zero case above.
+      applySseDataPayload(state, JSON.stringify({ choices: [{ delta: { content: 'more' } }] }));
+
+      expect(state.promptTokens).toBe(5000);
+      expect(state.completionTokens).toBe(20);
+    });
+  });
 });

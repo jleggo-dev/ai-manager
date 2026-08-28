@@ -216,34 +216,6 @@ const ACTIONS: EvalCase[] = [
     allow: [...DOSSIER_READS, 'get_recent_logs'],
     from: 'Owner transcript 2026-08-19 12:12, adapted to the seeded world. His words were "cut out everything expcept piano and meal tracking"; pasted verbatim the case tested nothing, because this world has no piano and no overloaded day, and she correctly asked what he meant ("today\'s actually a pretty light day already"). What survives is the shape that produced the failure: a rough stretch named as the reason, specific commitments named for removal, and a coach whose brand voice tempts her to reassure instead of act.',
   },
-  {
-    id: 'A14',
-    kind: 'action',
-    turn: 'just got back from the ride, downed a big bottle of water, maybe 750ml. felt good out there',
-    expect: ['log_nutrition'],
-    allow: [...DOSSIER_READS, 'log_session', 'get_recent_logs'],
-    args: {
-      tool: 'log_nutrition',
-      check: (a) => {
-        const ml = Number(a.water_ml);
-        if (!Number.isFinite(ml) || ml <= 0) return `water_ml was "${String(a.water_ml)}", expected a positive number`;
-        return ml >= 500 && ml <= 1000 ? null : `water_ml was ${ml}, expected ~750 (they said the amount)`;
-      },
-    },
-    from: 'Owner directive 2026-08-19 — nutrition as a callable tool; water is the case the confirm sheet never catches.',
-  },
-  {
-    id: 'A15',
-    kind: 'action',
-    turn: 'oh and i never logged lunch — had leftover chili around noon, decent bowl of it',
-    expect: ['log_nutrition'],
-    allow: [...DOSSIER_READS, 'get_food_log'],
-    args: {
-      tool: 'log_nutrition',
-      check: (a) => (String(a.text ?? '').trim() ? null : 'text was empty — the meal goes down in their words'),
-    },
-    from: 'Owner directive 2026-08-19 — the remembered-meal case: food arriving sideways, hours after the fact.',
-  },
 ];
 
 /* ══ B · LONG-TAIL READS — the ones nothing injects, so a miss is genuinely a miss ═══════════ */
@@ -339,7 +311,10 @@ const SILENCE: EvalCase[] = [
     turn: 'i had to skip it',
     expect: [],
     allow: [...DOSSIER_READS, 'get_recent_logs', 'correct_log'],
-    forbid: ['lookup_food', 'get_food_log', 'log_nutrition'],
+    // log_nutrition was in this list until MP34 (2026-08-28) — withdrawn 2026-08-19, nothing has
+    // replaced it, and a forbidden tool that cannot be called proves nothing. Drop it back in if a
+    // logging tool returns (MP21).
+    forbid: ['lookup_food', 'get_food_log'],
     from: 'PLAN.md:5783 (2026-08-15) — verbatim. This logged a ~2000 kcal Spartan Beast for breakfast.',
   },
   {
@@ -356,7 +331,8 @@ const SILENCE: EvalCase[] = [
     turn: "i'm just tired today honestly. not sure i want to talk about training",
     expect: [],
     allow: [...DOSSIER_READS],
-    forbid: ['propose_plan_change', 'update_goal', 'update_constraint', 'log_session', 'log_nutrition'],
+    // log_nutrition was in this list until MP34 (2026-08-28) — see the note on C2 above.
+    forbid: ['propose_plan_change', 'update_goal', 'update_constraint', 'log_session'],
     from: 'PLAN.md:658 (2026-08-10) — the voice failure. A hard day is not a data-entry event.',
   },
   {
@@ -410,6 +386,42 @@ const SILENCE: EvalCase[] = [
     expect: [],
     allow: [...DOSSIER_READS],
     from: 'The cheapest possible turn — and the one where a 5,000-token tool preamble buys nothing.',
+  },
+  /**
+   * A14 and A15 lived in `ACTIONS` above, both `expect: ['log_nutrition']`, until MP34
+   * (2026-08-28) found `log_nutrition` had been withdrawn 2026-08-19 — the SAME day these two were
+   * written — and never replaced. PLAN.md MP21: "No coach-callable tool writes
+   * `cadence.nutrition_logs`... the chat path deliberately writes nothing." That is a ruling, not a
+   * bug, so today's correct behaviour on both turns is calling nothing — moved here rather than
+   * deleted, kept as `A14`/`A15` rather than renumbered so the eval-history table in
+   * TOOL-HARNESS.md and PLAN.md's MP34 row still point at the right case.
+   *
+   * NOT rewritten to expect some other tool: MP21 is a separate, unbuilt requirement and inventing
+   * a replacement here would test a tool that does not exist. When MP21 lands, flip `expect` back
+   * to name it and these belong back in `ACTIONS`.
+   */
+  {
+    id: 'A14',
+    kind: 'silence',
+    turn: 'just got back from the ride, downed a big bottle of water, maybe 750ml. felt good out there',
+    expect: [],
+    allow: [...DOSSIER_READS, 'log_session', 'get_recent_logs'],
+    from:
+      'Owner directive 2026-08-19 — nutrition as a callable tool; water is the case the confirm sheet never ' +
+      'catches. Reopened 2026-08-28 (MP34): `log_nutrition` no longer exists and nothing reads water_ml from ' +
+      'chat, so the only correct call today is none — kept as a silence case so a hallucinated logging call ' +
+      'still fails it.',
+  },
+  {
+    id: 'A15',
+    kind: 'silence',
+    turn: 'oh and i never logged lunch — had leftover chili around noon, decent bowl of it',
+    expect: [],
+    allow: [...DOSSIER_READS, 'get_food_log'],
+    from:
+      'Owner directive 2026-08-19 — the remembered-meal case: food arriving sideways, hours after the fact. ' +
+      'Reopened 2026-08-28 (MP34): this is the exact scenario PLAN.md MP21 names as still needed, but ' +
+      '`log_nutrition` is gone and MP21 is not built, so the correct call today is none.',
   },
 ];
 

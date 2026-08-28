@@ -69,9 +69,19 @@ One question decides it: **does calling it change the user's data?**
 | **Only reads, and it's long-tail** | On-demand read | goes in a category below |
 | **Only reads, and it's dossier** | Not a tool — see step 1 | |
 
-Adding to **`ALWAYS_ACTIONS` costs ~190 tokens on every message, forever.** That is the expensive
-choice and it needs a reason in the comment. Everything else costs nothing until she asks for it, so
-**reads and rare actions are free to add** — that is the whole point of the tiering.
+Adding to **`ALWAYS_ACTIONS` costs real tokens on every message, forever** — and this line quoted
+~190 since it was written (#223, 2026-08-16) without anyone re-checking it against the actual
+definitions. Measured 2026-08-28 (MP34) by serializing each of today's eight — `JSON.stringify({type,
+function})`, the exact object that rides the request's `tools` array — and dividing chars by 4, the
+same heuristic `eval-tool-selection-report.ts` already prints as its own "chars ≈ tokens" line, so
+this is not a new method: `open_week_review` 195, `build_next_week` 224, `log_session` 305,
+`correct_log` 309, `set_macro_targets` 359, `update_goal` 374, `update_constraint` 481,
+`propose_plan_change` 1,338. Every one of the eight is above the old claim; the middle four cluster in
+a **305–375** band worth planning against for an ordinarily-shaped action, and the top is not the
+description — rule 3 already caps that at 800 chars — it is the **parameter schema**, which this
+budget was never counting. That is the expensive choice and it needs a reason in the comment.
+Everything else costs nothing until she asks for it, so **reads and rare actions are free to add** —
+that is the whole point of the tiering.
 
 **Then file it in a category** (`TOOL_CATEGORIES`): training, body, food, writing, changes. She
 reaches the tail by drilling into a category, so a tool in none is a tool she has to guess the name
@@ -199,6 +209,13 @@ tool performance."* Aim for 3–4 sentences; more if complex. Every description 
 
 Length caps are a budget, not a target: **520** chars for reads, **800** for actions. They exist
 because all 24 ride every request; they are not a claim that shorter is better.
+
+**They bound the description ONLY — this is a gap in the rule, not just a stale number.**
+`propose_plan_change` obeys the 800-char cap on its description and still costs 1,338 tokens
+(measured 2026-08-28, MP34 — full per-tool numbers in "Adding a tool: the checklist," step 2)
+because its **parameter schema** — properties, enums, every nested description rule 4 tells you to
+write in prose — carries no length rule of its own. A tool can pass this check and still be the
+most expensive one in the set. See the backlog: no rule here bounds a schema's size today.
 
 **Write for a new hire, not a colleague.** Ban internal vocabulary — `occurrences` is a table,
 `baseline` is a column, "Broker" is a hidden entity. The banned list is in the audit and grows
@@ -331,6 +348,12 @@ written convention; the `claw-code` harness asserts only that a description is n
    prose (rule 3 above) because the field is not available through our provider. Worth revisiting.
 7. **Negative assertions in tests.** Assert what a tool set does *not* contain, so a later refactor
    cannot silently widen a capability boundary.
+8. **A size budget on the parameter schema, not just the description.** Rule 1's 520/800-char caps
+   bound `description`; nothing bounds `parameters`. Measured 2026-08-28 (MP34):
+   `propose_plan_change` passes its description cap and still costs 1,338 tokens — 7× the
+   cheapest of today's eight `ALWAYS_ACTIONS` (`open_week_review`, 195) — because the schema is
+   where the size actually is. A rule that only checks the cheaper half can be satisfied by the
+   exact tool that motivated writing it.
 
 ## Model
 
