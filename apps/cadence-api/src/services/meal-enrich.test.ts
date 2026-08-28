@@ -13,10 +13,15 @@ import type { NutritionLog } from '@cadence/shared';
 const findNutritionLog = vi.hoisted(() => vi.fn());
 const updateNutritionLog = vi.hoisted(() => vi.fn());
 const insertFood = vi.hoisted(() => vi.fn());
+const updateFood = vi.hoisted(() => vi.fn());
+const searchFoods = vi.hoisted(() => vi.fn());
 const researchFood = vi.hoisted(() => vi.fn());
 
 vi.mock('../repos/nutrition.ts', () => ({ findNutritionLog, updateNutritionLog }));
-vi.mock('../repos/foods.ts', () => ({ insertFood }));
+// updateFood/searchFoods are MP37 additions — `homeForResearchedFood` tries the existing row first
+// (updateFood) and falls back to a name search (searchFoods, via food-pricing.ts's
+// findOwnDuplicate) before ever minting a new one.
+vi.mock('../repos/foods.ts', () => ({ insertFood, updateFood, searchFoods }));
 vi.mock('./food-research.ts', async (orig) => ({ ...(await orig()), researchFood }));
 
 import { enrichFlags, enrichMeal, itemsWantingResearch } from './meal-enrich.ts';
@@ -48,10 +53,14 @@ const found = {
 };
 
 beforeEach(() => {
-  for (const m of [findNutritionLog, updateNutritionLog, insertFood, researchFood]) m.mockReset();
+  for (const m of [findNutritionLog, updateNutritionLog, insertFood, updateFood, searchFoods, researchFood]) {
+    m.mockReset();
+  }
   updateNutritionLog.mockImplementation(async (_u, _id, patch) => ({ ...meal(), ...patch }));
   insertFood.mockResolvedValue({ food_id: 'pinned-1' });
+  searchFoods.mockResolvedValue([]); // no existing duplicate under this name, by default
   vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 describe('enrichFlags', () => {
@@ -67,12 +76,36 @@ describe('itemsWantingResearch', () => {
   });
 
   it('skips an item already priced from the ledger', () => {
-    const priced = meal({ items: [{ name: 'peanuts', brand: 'Couche-Tard', food_id: 'f-1' }] });
+    // A REAL priced item always carries `est` alongside `food_id` (`priceOne` sets both together) —
+    // a food_id with no macros behind it is not what "already priced" looks like.
+    const priced = meal({
+      items: [
+        {
+          name: 'peanuts',
+          brand: 'Couche-Tard',
+          food_id: 'f-1',
+          est: { kcal: 585, protein_g: 24, carbs_g: 20, fat_g: 45 },
+        },
+      ],
+    });
     expect(itemsWantingResearch(priced)).toEqual([]);
   });
 
   it('skips an item with no vendor — the expensive rung needs the strong signal', () => {
     expect(itemsWantingResearch(meal({ items: [{ name: 'an apple' }] }))).toEqual([]);
+  });
+
+  /**
+   * MP37: `food_id` alone used to mean "resolved, leave it alone" — so a food matched with
+   * calories and nothing else earned a food_id at price time and was never reconsidered here.
+   * `item.est` mirrors the matched food's completeness (it IS that food's macros, scaled), so this
+   * checks the same bar `food-pricing.ts`'s `wants_research` checks instead of just presence.
+   */
+  it('still wants a lookup when the food it matched is THIN — calories and nothing else', () => {
+    const thin = meal({
+      items: [{ name: 'peanuts', brand: 'Couche-Tard', food_id: 'existing-thin-1', est: { kcal: 585 } }],
+    });
+    expect(itemsWantingResearch(thin)).toEqual([0]);
   });
 });
 

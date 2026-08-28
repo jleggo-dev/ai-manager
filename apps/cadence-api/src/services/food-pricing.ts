@@ -98,8 +98,15 @@ export function sumItemNutrients(items: NutritionLog['items']): Macros | null {
   return Object.keys(rounded).length ? rounded : null;
 }
 
-/** An existing own-food that is the same food under another name — reuse beats a duplicate row. */
-async function findOwnDuplicate(userId: string, name: string, brand: string | null): Promise<Food | null> {
+/**
+ * An existing own-food that is the same food under another name — reuse beats a duplicate row.
+ *
+ * Exported for `meal-enrich.ts` (MP37): the same duplicate-pin incident this guards against here —
+ * completeness-gated pinning once sent the same words to a different food on every later log — is
+ * exactly what a naive "insert the researched food" step would reopen for an item that already had
+ * an owned row. One dedup check, one place it is tested, both callers use it.
+ */
+export async function findOwnDuplicate(userId: string, name: string, brand: string | null): Promise<Food | null> {
   const hits = await searchFoods(userId, name, 10);
   let best: Food | null = null;
   let bestScore = 0;
