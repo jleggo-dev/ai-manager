@@ -1400,6 +1400,32 @@
       }
     },
     {
+      "slug": "resolve-portion",
+      "name": "resolve_portion",
+      "ai_profile_id": "<CADENCE_BROKER_PROFILE_UUID>",
+      "description": "How much one household measure of ONE food weighs, in grams. The shallots rung: USDA has the food but only by weight, and the person said \"1/4 cup\". Returns GRAMS ONLY - never nutrients, because the app does the scaling from a row that now carries the measure.",
+      "config": {
+        "expectedResponseFormat": "json",
+        "expectedSchema": {
+          "fields": {
+            "grams": {
+              "type": "number",
+              "description": "Weight in grams of the stated measure of this food."
+            },
+            "basis": {
+              "type": "string",
+              "description": "One short sentence saying where the figure comes from."
+            },
+            "confidence": {
+              "type": "number",
+              "description": "0-1."
+            }
+          }
+        },
+        "promptTemplate": "You answer ONE question: how much does a stated household measure of a stated food weigh?\n\nFood: <food_text>{{food_text}}</food_text>\nMeasure: <measure_text>{{measure_text}}</measure_text>\nVolume of that measure in millilitres, when it is a volume: <measure_ml>{{measure_ml}}</measure_ml>\n\nReturn ONLY this JSON:\n{ \"grams\": number, \"basis\": string, \"confidence\": number }\n\nRules:\n- grams is the weight of the WHOLE measure as stated. If the measure is \"1/4 cup\", give the weight of a quarter cup, not of a cup.\n- NEVER return calories, protein, carbs, fat or any nutrient. Weight only. The app computes nutrition itself from this weight; a nutrient here would be discarded.\n- Use the ordinary prepared form the measure implies. \"1 tbsp chopped rosemary\" is chopped fresh rosemary, not a whole sprig and not dried. \"3 shallots\" is three medium shallots, peeled.\n- For a COUNT of a whole item (\"3 shallots\", \"2 green onions\"), give the total for that many medium items, and say in basis what you took \"medium\" to be.\n- Where a volume is given, sanity-check yourself against it: grams divided by millilitres is the density, and real food sits between about 0.03 g/ml (dried, airy, flaked) and 2.5 g/ml (salt, syrup). Water and most liquids are near 1.0. If your figure falls outside that, you have made a unit error.\n- basis: one short sentence - \"USDA lists 1 cup chopped shallots at 160 g\" or \"a medium shallot is about 25 g peeled\". Say when you are estimating.\n- confidence: 0.9+ for a standard measure of a common food, 0.5 or below for an unusual one.\n- If you genuinely cannot say, return grams: 0 rather than a guess you do not believe."
+      }
+    },
+    {
       "slug": "structure-recipe",
       "name": "structure_recipe",
       "ai_profile_id": "<CADENCE_COACH_PROFILE_UUID>",

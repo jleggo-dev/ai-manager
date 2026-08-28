@@ -7969,3 +7969,359 @@ Sketch: add `step_type: 'job' | 'input'`, make `processing_job_id` nullable when
 already there — the session already carries `workflow_variables`, a user message already tags its
 `workflow_step_id`, and `workflow.step.completed` already fires. Owner has asked for it
 (2026-08-21) for the photo-confirm flow.
+
+---
+
+## Meal prep, end to end — the agentic harness test case (owner, 2026-08-23)
+
+This is the week's focus. It is one scenario, and it is deliberately the hardest ordinary thing a
+person does with food: cook something on Sunday from a recipe in their head, and eat it on Wednesday.
+Nothing about it is exotic, and almost none of it works today.
+
+**What it proves.** Everything else in this plan is a feature. This is the *thesis* — the governing
+assertion, recorded in `CLAUDE.md` and at the top of [`TOOL-HARNESS.md`](TOOL-HARNESS.md):
+
+> *"Philosophically we want the software to be a skill or a tool used by the LLM, not the other way
+> around. Cadence is the AI Coach. The Coach is in control of the software at all times."*
+
+A SaaS app with AI bolted on cannot do this scenario, because every step needs judgement that no form
+can encode: which source to believe, what "3 shallots" weighs, whether the photo beats the web, how
+much of a batch one plate is. The four rules that follow from the assertion, and that every
+requirement below serves:
+
+1. **Deterministic code is a tool she calls**, never a pipeline that calls her.
+2. **Guards report as evidence; they do not silently veto.** A refused number must reach her *with
+   the reason*, because "I could not check" and "I checked and it was wrong" are different facts.
+3. **The model says WHAT, the store says HOW MUCH.** She supplies the fact (a quarter cup of chopped
+   shallots is about 40 g); `priceFood()` does the arithmetic. A model that multiplies for us
+   reintroduces the variance the ledger exists to remove.
+4. **Use AI to manufacture determinism.** Every conversion, composed record and portion she works out
+   is written back, so the fast deterministic rung hits next time. The system gets *faster* the more
+   it runs — which is the whole answer to "AI is slower".
+
+### The scenario, verbatim
+
+> Doing my weekend prep for meals this week - going to make pork chops with mushroom sauce.
+> Made the mushroom sauce:
+>
+> **Mushroom sauce**
+> - 680g button mushrooms
+> - 500 ml evaporated milk, no name brand
+> - 1 tbsp black pepper
+> - 1/2 tsp salt
+> - 1/2 tsp xanthan gum
+> - 1 tbsp chopped rosemary
+> - 1 tbsp chopped tarragon
+> - 3 shallots
+> - 2 green onions
+> - 1 tbsp collagen (organika)
+> - 15 pieces of mixed dried mushroom from "the wild mushroom co" *(photo of the package attached)*
+>
+> Yields 3 cups of sauce
+>
+> — Cadence should log this as a recipe. She should be able to look up the wild mushroom co mixed
+> dried mushrooms, but she should actually **prioritize the image**, since it's a more authoritative
+> source. She should be able to look up each of the other ingredients. Log and save the profile of
+> each ingredient, if we don't already have it.
+>
+> She should **ask how many pork chops** the user will be preparing and use that to create serving
+> sizes. She should add "Pork chops with mushroom sauce" as a recipe, but also **in the weekly food
+> plan**.
+>
+> During the week the user should be able to select it as a planned meal to log, or just tell Cadence
+> in chat that they ate it and it gets logged. What portion gets logged? Presumably **1 pork chop with
+> a % of sauce that matches**. So we need to determine serving size.
+>
+> And, here's the catch, we need to do it **accurately, but using as few tokens as possible**.
+
+### The attached label — a fixture, not a hypothetical
+
+The photo is a Borde / "The Wild Mushroom Co" dried mixed-mushroom jar (ITM 234131, UPC
+7 59033 72499 4). Its panel reads:
+
+| | |
+|---|---|
+| **Serving** | Per 15 pieces (15 g) |
+| Calories | 40 |
+| Fat | 1 g (sat 0, trans 0) |
+| Carbohydrate | 8 g — fibre 5 g, sugars 0 g |
+| Protein | 3 g |
+| Cholesterol | 0 mg |
+| Sodium | 4 mg |
+| Potassium | 250 mg |
+| Calcium | 10 mg |
+| Iron | 0.3 mg |
+| Ingredients | Yellow boletes, oyster mushrooms, portobello, porcini. Dried. **May contain: sulfites.** |
+
+**Why this single artifact justifies image-first.** The recipe says *15 pieces*. The label is
+denominated in *15 pieces*. It answers the exact question asked, for the exact product, with no
+conversion — while a web lookup for "mixed dried mushrooms" returns a generic per-100 g figure that
+someone then has to guess a piece-weight against. The label also carries **potassium, calcium and
+iron**, which our own `parse-nutrition-label` job does not currently ask for (MP12).
+
+Second lesson, equally important: those 15 pieces contribute **40 kcal to the entire batch**. Getting
+them slightly wrong barely matters — but the Coach can only *know* that by having the number. The
+value of precision is itself something she has to be able to compute.
+
+### Test case 2 — the shallots case (owner, same day)
+
+> Cadence looks up 1/4 c shallots. USDA has shallots, but only by oz. Cadence should be able to look
+> up how much 1/4 c of shallots typically weighs (on the internet) and do that math.
+
+Shipped as `resolve_portion` on `feat/coach-food-sources-tool`. Kept here because it is the smallest
+complete instance of rules 3 and 4: the model returns **grams only**, `priceFood` does the scaling,
+and the answer is written into `servings[]` so it is free forever after.
+
+**Owner ruling 2026-08-23 on where that write goes: PRIVATE FIRST, promote from the corpus.** Not
+for safety — for data. *"The benefit of saving it privately is to gain a large store of data that we
+can operate on."* N independent observations of "1/4 cup shallots = X g" is a dataset you can take a
+median of, spot outliers in, and promote a consensus from; one model's opinion written straight to a
+shared row is not. The currently-merged behaviour writes shared on first sight and **must be changed**
+(MP4).
+
+### Test case 3 — volume is a first-class portion, not a conversion artifact
+
+Owner, 2026-08-23, correcting the framing:
+
+> *"If, as a user, I'm deterministically selecting a portion size, volume is probably a lot easier
+> than weight. I HATE it when MyFitnessPal offers me to select based on weight. Unless I'm eating
+> packaged food or meat (which is pre-weighed and on the package), it's really annoying to break out
+> a scale… The user needs to select against both deterministically, if we have it available. People
+> will want to be able to pick from both, but volume is largely easier."*
+
+This is a product ruling with an architectural consequence: **`servings[]` is the pick-list.** A
+volume measure written into it is not a cache entry, it is an option the user is offered. The
+resulting heuristic for which to lead with:
+
+- **Packaged food and meat → weight.** The number is already printed; no scale required.
+- **Produce, grains, anything cooked from scratch → volume or count.** Nobody weighs three shallots.
+- **Offer both whenever both are held.** Never weight-only.
+
+**And the data already exists.** The CNF corpus carries Health Canada's conversion factors as
+`servings[]` on rows already in production: **3,767 rows with ml measures, 608 with count measures,
+across 5,690 foods** — and the pricing code cannot reach them for the units people actually speak
+(MP1). This is the cheapest large win on the board: wiring, not building.
+
+---
+
+## The live bugs — wrong TODAY, before any of the new work
+
+Found by the 2026-08-23 gap-map (66 agents; 42 gaps claimed, 28 refuted by adversarial verification,
+31 surviving). These are not gaps in the scenario; they are **current mispricing in shipped code**.
+Every one fails silently, and each in a different direction, which is why none has been noticed.
+
+Traced through the live code using the scenario's own ingredients:
+
+| Input | Prices as | Error | Cause |
+|---|---|---|---|
+| `3 shallots` | 300 g | 2–4× over | falls through to the `100 g` default serving |
+| `1 tbsp rosemary` | 100 g | ~30× over | same default |
+| `1/2 tsp salt` | 100 g | ~200× over | same default |
+| `500 ml evaporated milk` | 500 g / 670 kcal | ~6% over | `portionFactor` treats ml as g on a `base_unit:'g'` food |
+
+**MP0a — `portionFactor` must not treat a VOLUME unit as mass on a `base_unit:'g'` food.**
+`apps/cadence-api/src/services/food-pricing-portion.ts`. Reproduced with a throwaway vitest probe
+against a food carrying `{label:'100ml (106.5g)', unit:'ml', amount_g:106.5}`. **S.**
+
+**MP0b — the recipe path's label match is a bare substring test.**
+`apps/cadence-api/src/services/recipe-macros.ts:81` is
+`servings.findIndex((s) => normalizeUnit(s.label).includes(u))` — no word boundary, so a request for
+`ml` matches the label `15ml (16g)`. Same class as the `"680 g"`-matches-`"100 g"` bug already fixed
+in `matchMeasure`. **S.**
+
+**MP0c — the recipe path and the log path are two independently-written unit resolvers that disagree
+by 16× on the same input.** They must become one. **M.**
+
+**MP0d — two bugs in the fan-out shipped 2026-08-23**, both violating a rule stated in the same file:
+- `usdaRung` reports `miss` when USDA was never called (no API key), so the trace — which the file
+  header insists must be true — lies about what ran.
+- `check_food_sources` renders a *crash* as a usage hint (`if (!result) return 'pass q…'`), because
+  `executeCalls` leaves `results[name]` undefined when `run` throws. This is precisely the
+  error-looks-like-empty pattern `tool-response.ts` exists to prevent. **S.**
+
+**MP0e — `results` is keyed by function name**, so two parallel same-name reads in one round overwrite
+each other (`retrieval/select-and-run.ts`). **S.**
+
+---
+
+## Requirements
+
+Sizes: **S** ≤ half a day · **M** ~1–2 days · **L** ≥ 3 days. Dependencies are on other MP ids.
+
+### Units and portions — the foundation everything else stands on
+
+| ID | What | Why the scenario needs it | Touches | Size | Deps |
+|---|---|---|---|---|---|
+| **MP1** | Reach CNF's existing volume/count servings from the pricing path | 3,767 ml + 608 count measures already in prod and unreachable; the cheapest large win | `food-pricing-portion.ts`, `food-source-report.ts` | M | MP0a |
+| **MP2** | Wire `resolve_portion` into the RECIPE path | Recipe capture resolves ingredients deterministically and never calls `parseMeasure`/`resolvePortion`/`checkPlausible` — verified: 4 non-test call sites, none in `recipe.ts` | `recipe.ts`, `recipe-macros.ts` | M | MP0c |
+| **MP3** | Offer BOTH weight and volume in the portion picker, leading with the one that needs no scale | Owner ruling (test case 3) | web food UI, `servings[]` render | M | MP1 |
+| **MP4** | Change `resolve_portion`'s write-back to private-first, with a promote-on-consensus path | Owner ruling; currently writes shared on first sight | `portion-resolve.ts`, `repos/foods.ts`, new promote job | M | — |
+
+### Recipe capture — the Sunday half
+
+| ID | What | Why the scenario needs it | Touches | Size | Deps |
+|---|---|---|---|---|---|
+| **MP5** | A coach-callable **write** tool for recipes | `COACH_ACTION_TOOLS` has exactly six keys, none touching recipes. She literally cannot create one | `coach-actions.ts`, `recipe.ts` | M | — |
+| **MP6** | Retire the regex gate on recipe capture | `coach-food-classify.ts:66` gates on three hard-coded patterns; the scenario's message matches **none** — no literal "I made", and "Yields 3 cups" is not the "makes/serves N" the pattern demands. The recipe would never be captured | `coach-food-classify.ts` | S | MP5 |
+| **MP7** | Sub-recipes: a recipe that contains another recipe | "Pork chops with mushroom sauce" IS sauce + chops. Composition by reference does not exist at any layer. **But it is one filter away**: `food-resolver.ts:83` already returns `kind:'recipe'` candidates and `recipe.ts:127` throws them out with `.find(c => c.kind === 'food')` | `types/nutrition.ts`, `recipe.ts`, `recipe-macros.ts`, migration | L | MP5 |
+| **MP8** | Pin every unheld ingredient as a reusable Food during capture | Owner: *"log and save the profile of each ingredient."* `resolveOneIngredient` falls through to `estimateFood` and returns **no `food_id` and no insert** — the estimate is thrown away every time | `recipe.ts` | M | — |
+| **MP9** | Point recipe capture at the batch engine that already exists | Eleven ingredients resolve one at a time with **no shared context** — `recipe.ts:126` calls `resolveFoods(userId, {text})` without the optional third `shared` arg, so the four per-user ranking queries run 11×. **Verified 2026-08-25: `priceMealItems(userId, items[], opts)` (`food-pricing.ts:302`) is already exactly this — one call pricing N named ingredients with shared context, in production.** Wiring, not building | `recipe.ts` | S | MP8 |
+| **MP10** | An explicit "this ingredient has no numbers" signal | No field means this on draft or saved row; `estimated?: boolean` means something else | `recipe.ts`, `types/nutrition.ts` | S | MP8 |
+| **MP11** | Fractional recipe yields | `servings: z.number().int()` blocks non-integer yields at **8 sites, one needing a migration**. "Yields 3 cups" divided by 4 chops is not an integer | `validation/recipe.ts` +7, migration | M | — |
+
+### Images — why the photo beats the web
+
+| ID | What | Why the scenario needs it | Touches | Size | Deps |
+|---|---|---|---|---|---|
+| **MP12** | Ask `parse-nutrition-label` for iron, calcium and potassium (**three**, not six — verified 2026-08-25: the prompt already asks for `fiber_g` and `sodium_mg`) | The job asks only kcal/protein/carbs/fat. The attached label prints **potassium 250 mg, calcium 10 mg, iron 0.3 mg** and we would discard all three | `ai-admin.config.json` (jobs[15]) + sync | S | — |
+| **MP13** | An attachment channel on the coach chat turn | `routes/coach.ts:306` reads exactly `req.body?.message` and 400s on anything else. No image can reach her, on any branch. **The v2 request builder already maps `input_image` parts** (`request-builder.ts:105-111`) — chat is the only consumer that never builds them | `routes/coach.ts`, `chat-messaging.ts` | L | — |
+| **MP14** | A coach tool that reads an attached image (`read_label(photo_ref)`) | No tool in the whole harness takes an image. `POST /nutrition/foods/parse-label` and `/identify` are built, auth'd, validated, unit-tested — and have **zero callers anywhere in the repo** | new retrieval fn wrapping `parseNutritionLabel` | M | MP13 |
+| **MP15** | Source priority: an attached label outranks a web lookup | Owner: *"she should actually prioritize the image, since it's a more authoritative source."* No notion of source priority exists | `food-source-report.ts`, `food-source-fanout.ts` | S | MP14 |
+
+### Meal plans — the Wednesday half
+
+| ID | What | Why the scenario needs it | Touches | Size | Deps |
+|---|---|---|---|---|---|
+| **MP16** | A coach READ of the weekly plan | No coach-reachable read of `cadence.meal_plans` exists | new retrieval fn | S | — |
+| **MP17** | A coach WRITE that puts a meal on the weekly plan | *"but also in the weekly food plan."* No coach path, read or write, on any branch or worktree. **The capability manifest already promises this** (`coach-capabilities.ts:55`) — she is told she can do a thing she has no tool for | `coach-actions.ts` | M | MP16 |
+| **MP18** | Web client must stop dropping composed meals on read | `parsePersistedMeal` (`lib/api/meal-plans.ts:103-113`) hard-requires `recipe_id` and never copies `items` or `name`. The server persists them correctly; the client discards them | `apps/cadence-web` | S | — |
+| **MP19** | Composed meals visible to `usePlannedMeal` and the Log quick-add | Neither consumer reads `items` | `apps/cadence-web` | S | MP18 |
+| **MP20** | An amount control on a planned item | No writer ever sets `qty` to anything but 1 | `MealComposer.tsx` +2 | M | MP18 |
+
+### Logging — what actually lands on the day
+
+| ID | What | Why the scenario needs it | Touches | Size | Deps |
+|---|---|---|---|---|---|
+| **MP21** | A coach tool that logs a meal | **No coach-callable tool writes `cadence.nutrition_logs`.** `log_nutrition` was withdrawn 2026-08-19 and the chat path deliberately writes nothing — but the scenario requires *"just tell Cadence in chat that they ate it and it gets logged."* This reverses that ruling for the planned-meal case and needs an explicit decision | `coach-actions.ts` | M | — |
+| **MP22** | Serving derivation from an asked-for count | *"1 pork chop with a % of sauce that matches."* Nothing derives "1 chop + 1/N of the remainder", and there is no notion of an ingredient that does not scale with the batch | `recipe-macros.ts`, `types/nutrition.ts` | L | MP7, MP11 |
+| **MP23** | One log row = one food PLUS a fraction of a recipe | `NutritionLog['items']` has no `recipe_id`. No path puts a food item and a fractional recipe in one row | `types/nutrition.ts`, `nutrition.ts`, migration | M | MP22 |
+| **MP24** | Route the fast recipe-log paths through the portion confirm that already exists | All three one-tap surfaces hardcode the quantity. `CookSheet.tsx:71` logs `servings: recipe.servings` — **a 4-serving dish cooked for the family lands as a 4-serving meal in one person's day**. **Verified 2026-08-25: `RecipeLogConfirm.tsx` is a complete portion-aware confirm — servings input, min 0.25, step 0.25, macros scaling live.** Wiring, not building | `apps/cadence-web` | S | MP20 |
+| **MP25** | Recipe-aware pricing | `food-pricing.ts` contains the substring "recipe" **zero times** — verified across every local and remote ref. The ledger cannot match "pork chops with mushroom sauce" to the saved recipe | `food-pricing.ts` | M | MP7 |
+| **MP26** | Micronutrients must survive the recipe path | `recipe-macros.ts:7` declares its **own file-local** `MACRO_KEYS = ['kcal','protein_g','carbs_g','fat_g']`, shadowing the 12-key shared export — so every recipe number is truncated to four. The label's potassium/calcium/iron die here even after MP12. **The single most corroborated finding of the audit: five agents confirmed it independently and the discard surface widened each time — 4 sites, then 5, then 7 (two of them in the web client).** | `recipe-macros.ts` +2 web | M | — |
+| **MP27** | `research_food` as a coach tool | She cannot reach the web-grounded rung; it only fires from background enrichment. The scenario's *"look up the wild mushroom co"* needs it | new retrieval fn | S | — |
+| **MP28** | Accept `vitamin_b12_ug` and the `fatsecret`/`cnf`/`research` sources in the create-food schema | Executed against the live schema: b12 → *"Unrecognized key"*, and three of five real sources are rejected outright | `validation/food.ts` | S | — |
+
+### Token discipline — the catch
+
+Measured, and the docs are wrong: **an always-on tool costs 305–375 tokens/turn, not the ~190 both
+`TOOL-HARNESS.md:72` and `HARNESS-V2.md:142` claim** — up to 6× off. A turn is ~20.4–20.9k prompt
+tokens (persona ~5.2k + dossier/blocks ~11.5k + tool definitions ~3.7k), growing ~600/turn threaded.
+
+An eleven-ingredient recipe conversation is the worst case in the product: every ingredient lookup's
+result rides in context for the remainder of the turn, and the fan-out returns *every* source
+deliberately.
+
+| ID | What | Size |
+|---|---|---|
+| **MP29** | Request prompt caching and measure `cached_tokens`. `cache_control` appears **nowhere in the repo** and has never existed on any branch — persona + tool definitions are a ~9k stable prefix billed in full every turn | M |
+| **MP30** | Sum prompt tokens across tool rounds instead of overwriting. `state.promptTokens = usage.prompt_tokens ?? state.promptTokens` with continuations reporting 0 — and `0 ?? x` is **0**, so **the most expensive turns report the least** | S |
+| **MP31** | A batch/multi-food lookup: one call resolving eleven ingredients rather than eleven calls | M |
+| **MP32** | Cap the total tool-exchange size per turn — a per-output cap does not bound a turn (see AI Admin PR #278) | M |
+| **MP33** | Fix compaction eating the capability manifest: `isInstruction` tests `role === 'system'` but `injectCoachContext` writes `role: 'user'`, so the manifest, pick protocol and context pack are all compactable prose | S |
+| **MP34** | Correct the always-on tool cost in both docs, and bring `eval-tool-selection-cases.ts` up to date — cases A14/A15 still `expect: ['log_nutrition']`, a tool deleted in August, and **A15 is literally the remembered-meal case this scenario needs** | S |
+
+---
+
+### What already exists — do not rebuild
+
+- **The fan-out and the report layer.** `check_food_sources` asks every source at once, unranked,
+  disagreements named; guards report as `notes` rather than vetoing. Shipped 2026-08-23.
+- **`resolve_portion` and the measure parser.** Every ingredient in the scenario parses correctly —
+  `680g`, `500 ml`, `1 tbsp`, `1/2 tsp`, `3 shallots`, `15 pieces`, `3 cups`, `1 1/2`, `½`. Physics
+  guard on density (0.03–2.5 g/ml). Write-back needs MP4.
+- **CNF's conversion factors** — 3,767 ml + 608 count servings, in production, unreachable (MP1).
+- **`mapUsdaPortions`** already maps USDA `foodPortions` into `servings[]`.
+- **Label parse + identify endpoints** — built, auth'd, validated, tested, zero callers (MP14).
+- **Multimodal request building** — `request-builder.ts:105-111` maps `input_image` parts already;
+  only the chat path never builds them (MP13).
+- **Recipe candidates in the resolver** — `food-resolver.ts:83` returns them; `recipe.ts:127`
+  discards them. Sub-recipes are one filter away (MP7).
+- **`meal_plans` table + composed-meal persistence** — the server side is correct; the web read
+  parser is the broken half (MP18).
+
+### Sequencing
+
+**Slice A — stop being wrong (MP0a–MP0e, MP26, MP28).** All S. Nothing new; the units are actively
+mispricing by up to 200× and two of the bugs are in code shipped this week. Demonstrable as a test
+table over the scenario's own ingredients.
+
+**Slice B — the foundation (MP1, MP2, MP4, MP0c).** Reach the CNF data, unify the two unit resolvers,
+fix the write path per the owner's ruling. After this, every ingredient in the scenario prices
+correctly, which nothing else can be built on top of.
+
+**Slice C — she can capture a recipe (MP5, MP6, MP8, MP10, MP27).** The Sunday half, minus sub-recipes.
+Demonstrable end-to-end on the sauce alone.
+
+**Slice D — the photo (MP12, MP13, MP14, MP15).** MP13 is the only L and it unblocks the whole
+image story. MP12 is an S that must land first or the label's micros die on arrival.
+
+**Slice E — composition and serving derivation (MP7, MP11, MP22, MP23, MP25).** The hard half.
+
+**Slice F — plan and log (MP16, MP17, MP18, MP19, MP20, MP21, MP24).** The Wednesday half.
+
+**Slice G — token discipline (MP29–MP34).** MP29 and MP30 pay for themselves; run them alongside
+whatever else is in flight rather than last.
+
+### What the investigation did NOT finish (resume here)
+
+The 2026-08-23 gap-map ran 66 of 78 agents. **Twelve failed** — three to a machine sleep, nine to the
+session limit — and the final synthesis agent was among them, so this section was written by hand from
+`journal.jsonl` rather than generated. Unverified claims, still to be checked before being trusted:
+
+- micronutrients in recipe per-serving macros
+- serving size derived from a yield
+- whether **any** channel at all carries a rejection reason to the Coach
+- re-injecting the capability manifest and pick protocol after compaction
+- the tool-selection eval's currency
+- wiring the token budget that already exists
+- a cap on total tool-exchange size per turn
+- durable per-user/per-task token accounting
+- a batch/multi-food lookup
+- an escape from the thin-row research trap
+- rendering `food_id` in `check_food_sources` output *(without it the Coach cannot call
+  `resolve_portion`, which requires a `food_id` — likely a real hole in what shipped)*
+
+Journal: `subagents/workflows/wf_618d8401-f16/journal.jsonl`. Re-runnable with
+`Workflow({scriptPath: '…/meal-prep-gap-map-wf_618d8401-f16.js', resumeFromRunId: 'wf_618d8401-f16'})`
+— completed agents replay from cache, so only the twelve failures re-run.
+
+
+### Second pass — the investigation completed 2026-08-25
+
+The 12 agents that died to a machine sleep and the session limit all finished on resume. **77 of 78
+agents; 40 verified gaps, 30 refuted.** The adversarial pass earned its keep twice over: nearly half
+of every "missing" claim turned out to be already built. What changed:
+
+**Closed by the 2026-08-25 fixes (commit `808a41c`)** — three claims were refuted because the code
+landed while they were being written:
+
+- *"Render `food_id` in `check_food_sources`"* — closed; `candidateBlock` prints it, tested.
+- *"A fault-vs-empty guard on the render"* — closed; `undefined` → `toolFaultText`, `null` → usage
+  hint, with a test asserting they share no word longer than four characters.
+- *"Any volume→mass or count→mass conversion reachable from the log path"* — closed by
+  `resolve_portion` (`e04c07e`, hardened in `808a41c`).
+
+**The rejection channel question is ANSWERED, and the answer is not what the earlier note assumed.**
+The claim that a discard reaches the Coach as an absence indistinguishable from "this food does not
+exist" was **refuted**: four shipped, tested channels already carry a reason — `SourceCheck` (typed,
+per rung), `candidateNotes`, `PortionOutcome.reason`, and `toolFaultText`. So the plumbing exists.
+What remains is narrower and easier than "build a channel": **`food-research.ts`'s ten `return null`
+paths and `applyNormalization`'s dropped fields do not USE it.** Wire those two into the existing
+channels (MP35).
+
+**New gaps the second pass found:**
+
+| ID | What | Why it matters | Size |
+|---|---|---|---|
+| **MP35** | Make `food-research.ts` and `applyNormalization` report through the channels that already exist | Ten silent `return null`s and a `NormalizationProblem[]` that never escapes its module. The Coach is never told a record was found, checked and refused | S |
+| **MP36** | **A yield model — there is none, anywhere** | `yield_qty\|yield_unit\|yield_g\|yield_ml\|recipe_yield\|total_yield\|total_g\|total_mass\|batch_size\|portions_per` return **ZERO hits across the entire git history**. `Recipe` is `servings: number` and nothing else, so "Yields 3 cups" has nowhere to land. This is the hard blocker under MP22 — serving derivation is impossible without it. The vocabulary half exists (`portion-measure.ts` parses "3 cups" as 709.76 ml, unit-tested by that exact phrase); the storage and the reconciliation to summed ingredient mass do not | L |
+| **MP37** | An escape from the thin-row research trap | Both research gates key on food **absence**, never on **thinness** — `food-pricing.ts:263` is `!food && shouldResearchItem(item)`. A food matched with calories and nothing else therefore never earns a lookup, and the thin row is pinned forever | M |
+
+**Also refuted — do not rebuild:** the capability manifest's honesty mechanism exists
+(`FOOD_CONFIRM_CONTEXT`, `coach-food-classify.ts:48-55`) and simply is not wired to the photo lines;
+and a yield *vocabulary* exists even though yield *storage* does not.
+
+**Sequencing changes.** MP9 and MP24 drop from M to **S** — both are wiring to shipped engines
+(`priceMealItems`, `RecipeLogConfirm`). MP36 joins Slice E and is its critical path: MP22 cannot
+start without it. MP35 joins Slice A, since it is small and closes the audit's original question.
+

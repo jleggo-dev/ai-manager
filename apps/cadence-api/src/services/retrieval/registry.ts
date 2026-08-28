@@ -26,6 +26,8 @@ import { buildProgress } from '../progress.ts';
 import { activityHandle, ANYTIME } from '../plan-edit.ts';
 import { describeRecurrence } from '../scheduling.ts';
 import { FOOD_HEALTH_FUNCTIONS } from './food-health-functions.ts';
+import { CHECK_FOOD_SOURCES } from './food-sources-function.ts';
+import { RESOLVE_PORTION } from './portion-function.ts';
 import { GET_NUTRITION } from './nutrition-facade.ts';
 import { isoRange, type RetrievalFunction } from './types.ts';
 
@@ -455,6 +457,8 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
 export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
   ...CORE_FUNCTIONS,
   ...FOOD_HEALTH_FUNCTIONS,
+  [CHECK_FOOD_SOURCES.name]: CHECK_FOOD_SOURCES,
+  [RESOLVE_PORTION.name]: RESOLVE_PORTION,
   // One door for every food question (nutrition-facade.ts). The four it dispatches to stay in the
   // registry — the Broker may still prefetch any of them — but `find_tools` lists only this.
   [GET_NUTRITION.name]: GET_NUTRITION,
