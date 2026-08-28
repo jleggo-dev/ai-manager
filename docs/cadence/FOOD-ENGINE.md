@@ -341,6 +341,49 @@ meal. Her opinion belongs at a check-in or when asked — *"tell me how to make 
 Already true structurally and worth not breaking: the food log is not in her always-on context, it
 sits behind the on-demand `get_nutrition` read.
 
+### She hands over STRUCTURE, not prose (owner, 2026-08-25)
+
+> *"Cadence kind of needs to invoke the tool and pass to it the string about the food the user wants
+> to log? Cadence needs to determine if a food is being logged and call the tool. But she can't just
+> call the tool because… the user doesn't want to retype what they typed from one AI to another AI or
+> app. That's the inherent tension. The good news is that the coach is smart."*
+
+The tension is real and it dissolves on the last sentence. Chaining her to `parse-meal` would mean
+she reads the turn, summarises it, and a second, weaker model reads the summary — lossy twice over,
+and when it comes out wrong the person is re-explaining to a model they never addressed.
+
+**She has already done the reading.** So she does not pass prose to another parser; she passes the
+items she understood. `[{ name: 'chicken salad', qty: 1, unit: 'bowl' }]`. The software takes it
+from there: match each name against the ledger and the sources, price it, write it.
+
+This is the governing principle at its cleanest — **the model says WHAT, the store says HOW MUCH** —
+and `parse-meal` turns out to have existed only because there was no strong reader in the loop.
+There is now.
+
+**The door is already built.** `POST /nutrition/meals` accepts `parsed`
+(`validation/body.ts:53`) — `{ meal, items: [{name, qty, unit, est}], macros, confidence, flags,
+raw_text }` — and its own comment reads *"A previewed parse the user confirmed — logged verbatim,
+**no second AI pass**."* Someone already built the idea that structure from a trusted reader is not
+re-parsed. Today the Food screen fills it from `/meals/preview`; she can fill it directly.
+
+**Correcting the previous note in this file:** I recorded that retiring the keyword matcher would
+cost more thinking per turn. It does the opposite — it REMOVES a model call from every conversational
+log, because the parse step disappears for anything she has already read. Better and cheaper. And the
+matcher was never cheap in any useful sense: `NOT_FOOD_CONTEXT`'s fifty-word veto list is scar tissue
+from precisely the false positive the owner describes — talking about learning to cook and being
+offered a meal log.
+
+**The bridge is the ITEM LIST, not the reading.** Two producers, one consumer:
+
+```
+  conversation ──▶ the Coach reads it ──┐
+                                        ├──▶ items[] ──▶ resolve · price · write
+  typed box ─────▶ parse-meal ──────────┘        (one implementation, both doors)
+```
+
+`parse-meal` survives for the typed box on the Food screen, where nobody has read the words. It has
+no business in the chat path.
+
 ### Plan changes
 
 | ID | Change |
