@@ -7,15 +7,23 @@
  * `ABSOLUTE_UNITS` in `food-pricing-portion.ts` deliberately refuses cups, and that refusal is
  * correct — *"a food that has a cup serving should use its own cup, and one that doesn't should not
  * have a volume invented for it."* Grams per cup is a property of the FOOD, not of the unit: a cup
- * of shallots and a cup of honey share a volume and nothing else. So this module does not convert
- * volume to mass. It only says what was asked for, precisely enough that something else can go and
- * find out, and then checks the answer against physics.
+ * of shallots and a cup of honey share a volume and nothing else. So this module never converts a
+ * GENERIC volume to mass — there is no cup→grams table here and there never will be.
+ *
+ * `scaleFromOwnMeasures` is the one narrow exception, and it is not a counter-example to the rule
+ * above: it reads a food's OWN reported points — CNF prints its household measures as raw
+ * "15 mL (16 g)" rows rather than under the name "tbsp", even though Health Canada's own
+ * convention already IS 1 tbsp = 15 mL — and answers a NEARBY amount off the same line through the
+ * origin. That is the food's own cup, spelled as a number instead of a word. It refuses rather
+ * than extrapolate when nothing reported is close enough (`MAX_SCALE_RATIO`). Everything else
+ * here — `parseMeasure`, `matchMeasure` — only says what was asked for, precisely enough that
+ * something else can go and find out, and then checks the answer against physics.
  *
  * Nothing here talks to a model or a database; it is arithmetic and vocabulary, so it tests without
  * either.
  */
 
-import type { FoodServing } from '@cadence/shared';
+import type { Food, FoodServing } from '@cadence/shared';
 
 export type MeasureKind = 'mass' | 'volume' | 'count';
 
@@ -137,7 +145,14 @@ export function parseLeadingQuantity(text: string): { qty: number; rest: string 
  */
 export function parseMeasure(text: string): ParsedMeasure {
   const raw = (text ?? '').trim();
-  const { qty, rest } = parseLeadingQuantity(raw);
+  const { qty, rest: afterQty } = parseLeadingQuantity(raw);
+
+  // A leading article is never part of the unit or the noun — "half AN egg" was leaving "an" as
+  // the parsed unit (finding nothing, MASS_G/VOLUME_ML don't have it), so the noun for matching
+  // came out "an" instead of "egg" and a food's own "1 egg" serving silently stopped matching a
+  // request as ordinary as "half an egg". Only strips when parseLeadingQuantity left it behind —
+  // "a cup" and "an egg" already consume the article as the quantity word itself.
+  const rest = afterQty.replace(/^(a|an|the)\s+/i, '');
 
   // The unit is the first word after the quantity; the remainder describes the food.
   const firstWord = rest.match(/^([a-zÀ-ɏ.]+)/i)?.[1] ?? '';
@@ -250,4 +265,103 @@ export function gramsPerUnit(serving: FoodServing): number {
   const { qty } = parseLeadingQuantity(serving.label ?? '');
   const divisor = Number.isFinite(qty) && qty > 0 ? qty : 1;
   return serving.amount_g / divisor;
+}
+
+/**
+ * Find the servings[] entry that answers a requested measure, or null when none does.
+ *
+ * Matched on the UNIT WORD, not on substring containment, which was a real bug: "680 g" contains
+ * "g", so a containment match picked a "100 g" serving and priced the item at 68,000 g. A caught
+ * unit is either the same unit or it is not.
+ *
+ * The one true serving-matcher: `food-source-report`'s candidate listing and
+ * `food-pricing-portion`'s actual pricing both call this (the latter through the re-export below),
+ * so "what does '1 tbsp' match" has one answer instead of two independently-written ones (MP0c).
+ * It only ever finds an EXISTING row spelled the way the food itself spells it — it never derives
+ * or scales one, which is what makes `matchMeasure(food, 'cup')` correctly say null for a food that
+ * only carries a tablespoon. `scaleFromOwnMeasures`, below, is the function that takes that further.
+ */
+export function matchMeasure(food: Pick<Food, 'servings'>, requested: string | null | undefined): FoodServing | null {
+  const want = (requested ?? '').trim().toLowerCase();
+  if (!want) return null;
+  const servings = Array.isArray(food.servings) ? food.servings : [];
+
+  const exact = servings.find((s) => s.label.trim().toLowerCase() === want);
+  if (exact) return exact;
+
+  const parsed = parseMeasure(want);
+
+  /**
+   * A COUNT matches on the NOUN, because a stored count serving files its unit as 'item' — a row
+   * for "1 shallot" carries unit 'item', so comparing units would never match "3 shallots" to it.
+   * Singularised on both sides, since people write the plural and rows tend to hold the singular.
+   */
+  if (parsed.kind === 'count') {
+    const noun = singular(parsed.countOf.split(/\s+/)[0] ?? '');
+    if (!noun) return null;
+    return (
+      servings.find((s) => {
+        const asCount = parseMeasure(s.label);
+        return asCount.kind === 'count' && singular(asCount.countOf.split(/\s+/)[0] ?? '') === noun;
+      }) ?? null
+    );
+  }
+
+  const unit = parsed.unit.toLowerCase();
+  if (!unit) return null;
+  return (
+    servings.find((s) => s.unit.trim().toLowerCase() === unit) ??
+    // The label's own unit word, so "1 tbsp chopped" answers a request for tbsp.
+    servings.find((s) => parseMeasure(s.label.trim().toLowerCase()).unit.toLowerCase() === unit) ??
+    null
+  );
+}
+
+/**
+ * How far a request may sit from the food's own nearest reported point before `scaleFromOwnMeasures`
+ * refuses to scale rather than guess. tsp↔tbsp is 3× apart; the evaporated-milk case (500 ml scaled
+ * from the food's own 250 ml row) is 2×. A cup guessed from a single tablespoon row is 16× and MUST
+ * stay refused — that is `matchMeasure`'s 'cup' test, one narrow floor below this one. 4× sits with
+ * comfortable room on both sides of the real cases and well short of the one that must fail.
+ */
+export const MAX_SCALE_RATIO = 4;
+
+/**
+ * Grams (or ml, for a food already stored per ml) for a mass/volume amount that has no serving of
+ * its own, scaled from the closest OTHER same-kind measure the food DOES carry — never a generic
+ * density. See the module header for why this is not the same thing as inventing a conversion.
+ *
+ * MP1: CNF prints its household measures as raw "15 mL (16 g)", "250 mL (266.3 g)" rows — Health
+ * Canada's own convention already IS 1 tsp = 5 mL, 1 tbsp = 15 mL, 1 cup = 250 mL, so "1 tbsp" has
+ * no row spelled that way for `matchMeasure` to find, even though the row that answers it is
+ * sitting right there under a different spelling. And a bare "500 ml" is not a named unit at all —
+ * the food's closest point is 250 ml, and 500 is simply two of it. Both are the same operation:
+ * take whichever of the food's own points is closest, and read the request off the same line
+ * through the origin (the two points a food reports are never far from co-linear through zero,
+ * because they are the same substance at different amounts).
+ *
+ * Picks the CLOSEST point by ratio (not array order — matching the first "…ml" row regardless of
+ * its own size is the exact bug that made the recipe path disagree with the log path by 16× on
+ * 500 ml of evaporated milk, MP0c) and refuses when even the closest is farther than
+ * `MAX_SCALE_RATIO`.
+ */
+export function scaleFromOwnMeasures(
+  servings: readonly FoodServing[],
+  kind: 'mass' | 'volume',
+  amount: number,
+): number | null {
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  let best: { ratio: number; scaled: number } | null = null;
+  for (const s of servings) {
+    const parsed = parseMeasure(s.label || s.unit || '');
+    if (parsed.kind !== kind) continue;
+    const per = kind === 'mass' ? parsed.grams : parsed.ml;
+    if (per === null || per <= 0 || !Number.isFinite(s.amount_g) || s.amount_g <= 0) continue;
+
+    const ratio = amount >= per ? amount / per : per / amount;
+    if (!best || ratio < best.ratio) best = { ratio, scaled: (s.amount_g / per) * amount };
+  }
+
+  return best && best.ratio <= MAX_SCALE_RATIO ? best.scaled : null;
 }
