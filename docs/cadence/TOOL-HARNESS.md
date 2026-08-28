@@ -69,9 +69,19 @@ One question decides it: **does calling it change the user's data?**
 | **Only reads, and it's long-tail** | On-demand read | goes in a category below |
 | **Only reads, and it's dossier** | Not a tool — see step 1 | |
 
-Adding to **`ALWAYS_ACTIONS` costs ~190 tokens on every message, forever.** That is the expensive
-choice and it needs a reason in the comment. Everything else costs nothing until she asks for it, so
-**reads and rare actions are free to add** — that is the whole point of the tiering.
+Adding to **`ALWAYS_ACTIONS` costs real tokens on every message, forever** — and this line quoted
+~190 since it was written (#223, 2026-08-16) without anyone re-checking it against the actual
+definitions. Measured 2026-08-28 (MP34) by serializing each of today's eight — `JSON.stringify({type,
+function})`, the exact object that rides the request's `tools` array — and dividing chars by 4, the
+same heuristic `eval-tool-selection-report.ts` already prints as its own "chars ≈ tokens" line, so
+this is not a new method: `open_week_review` 195, `build_next_week` 224, `log_session` 305,
+`correct_log` 309, `set_macro_targets` 359, `update_goal` 374, `update_constraint` 481,
+`propose_plan_change` 1,338. Every one of the eight is above the old claim; the middle four cluster in
+a **305–375** band worth planning against for an ordinarily-shaped action, and the top is not the
+description — rule 3 already caps that at 800 chars — it is the **parameter schema**, which this
+budget was never counting. That is the expensive choice and it needs a reason in the comment.
+Everything else costs nothing until she asks for it, so **reads and rare actions are free to add** —
+that is the whole point of the tiering.
 
 **Then file it in a category** (`TOOL_CATEGORIES`): training, body, food, writing, changes. She
 reaches the tail by drilling into a category, so a tool in none is a tool she has to guess the name
