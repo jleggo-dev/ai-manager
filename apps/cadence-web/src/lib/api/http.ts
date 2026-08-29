@@ -59,6 +59,24 @@ function tzHeader(): Record<string, string> {
   }
 }
 
+/**
+ * A timeout signal for fetches that gate a screen — because a fetch with no signal can hang
+ * FOREVER. iOS suspends the webview when the app backgrounds; a request in flight at that moment
+ * can come back to a dead socket that never errors and never resolves, and the screen it gates
+ * (the app-open skeleton, 2026-08-29 device round) sits there for minutes until the OS happens to
+ * notice. A timeout turns that silent hang into a *failure*, which is a thing the query client's
+ * retry and the resume hook actually know how to rescue.
+ *
+ * Guarded because the deployment floor is iOS 15 and `AbortSignal.timeout` arrived with Safari
+ * 16 — on an older webview the fetch simply keeps its old behaviour. Never use this on the coach
+ * SSE stream: a reply is SUPPOSED to be long-lived.
+ */
+export function timeoutSignal(ms: number): AbortSignal | undefined {
+  return typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+    ? AbortSignal.timeout(ms)
+    : undefined;
+}
+
 export function headers(): HeadersInit {
   // Dev mode → identify as a named dev account (no real auth). Otherwise → the Supabase JWT.
   // Sending only one keeps the backend's two paths unambiguous.
