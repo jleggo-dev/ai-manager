@@ -47,6 +47,8 @@ export interface EvalCase {
 }
 
 /** Reads the dossier already carries — never penalised as a false trigger anywhere. */
+import { alwaysOnToolNames, onDemandToolNames } from '../src/services/coach-tool-tiers.ts';
+
 const DOSSIER_READS = [
   'get_identity',
   'get_objectives',
@@ -126,7 +128,11 @@ const ACTIONS: EvalCase[] = [
     turn: 'that last run was good but i had a really hard time keeping my hr in zone 2. 77 minutes in the end',
     expect: ['log_session'],
     allow: [...DOSSIER_READS, 'get_recent_logs', 'get_workout_history'],
-    forbid: ['lookup_food', 'get_food_log'],
+    // The whole SUBJECT is wrong here, not the view — so the facade is forbidden outright rather
+    // than by argument. `log_meal`/`preview_meal` join it (MP21/MP40, 2026-08-28): the classifier
+    // that priced this run as a meal is gone, and this is the turn that proves its replacement
+    // does not repeat it.
+    forbid: ['get_nutrition', 'log_meal', 'preview_meal'],
     from: 'PLAN.md:5771 (2026-08-15, #212) — verbatim. The food classifier priced this run as a meal; and PLAN.md:5849 (#214), talking about a session IS logging it.',
   },
   {
@@ -182,7 +188,7 @@ const ACTIONS: EvalCase[] = [
     kind: 'action',
     turn: "i've dropped 1.1kg this week on the 2200 and that feels like too much too fast. can we go up a bit",
     expect: ['set_macro_targets'],
-    allow: [...DOSSIER_READS, 'get_macro_targets', 'get_food_log'],
+    allow: [...DOSSIER_READS, 'get_nutrition'],
     from: 'PLAN.md:5730 (2026-08-15, #215) — adjusting the numbers when the evidence says they are not working IS the coaching.',
   },
   {
@@ -243,7 +249,7 @@ const ACTIONS: EvalCase[] = [
     kind: 'action',
     turn: 'oh and i never logged lunch — had leftover chili around noon, decent bowl of it',
     expect: ['log_meal'],
-    allow: [...DOSSIER_READS, 'get_food_log'],
+    allow: [...DOSSIER_READS, 'get_nutrition'],
     args: {
       tool: 'log_meal',
       check: (a) => (/chili/i.test(str(a.text)) ? null : `text "${String(a.text)}" did not carry "chili"`),
@@ -271,27 +277,41 @@ const READS: EvalCase[] = [
     id: 'B2',
     kind: 'read',
     turn: "what have i got saved that uses chicken thighs, i've got a pack to use up",
-    expect: ['get_recipes'],
-    allow: [...DOSSIER_READS, 'get_food_log'],
-    forbid: ['lookup_food'],
-    from: 'PLAN.md:5347 (2026-08-14, #199) — the food quartet tiebreak: their dishes, not facts about one food.',
+    expect: ['get_nutrition'],
+    allow: [...DOSSIER_READS],
+    args: {
+      tool: 'get_nutrition',
+      check: (a) => (a.view === 'recipes' ? null : `view was ${JSON.stringify(a.view)}, wanted "recipes"`),
+    },
+    from: 'PLAN.md:5347 (2026-08-14, #199) — the food quartet tiebreak: their dishes, not facts about one food. Rewritten 2026-08-29: the facade collapsed the quartet into get_nutrition, so the tiebreak this case exists to test now lives in the `view` argument, not the tool name.',
   },
   {
     id: 'B3',
     kind: 'read',
     turn: 'how much protein is in 100g of halloumi',
-    expect: ['lookup_food'],
+    expect: ['get_nutrition'],
     allow: [...DOSSIER_READS],
-    forbid: ['get_recipes', 'get_food_log'],
-    from: 'PLAN.md:5312 (2026-08-14, #198) — lookup_food is nothing without its query; the other side of the quartet.',
+    args: {
+      tool: 'get_nutrition',
+      check: (a) =>
+        a.view !== 'lookup'
+          ? `view was ${JSON.stringify(a.view)}, wanted "lookup"`
+          : typeof a.q === 'string' && a.q.trim()
+            ? null
+            : 'lookup without a q is nothing — the food was never named',
+    },
+    from: 'PLAN.md:5312 (2026-08-14, #198) — lookup_food is nothing without its query; the other side of the quartet. Rewritten 2026-08-29: the facade collapsed the quartet into get_nutrition, so the tiebreak this case exists to test now lives in the `view` argument, not the tool name.',
   },
   {
     id: 'B4',
     kind: 'read',
     turn: 'what did i actually eat yesterday, i completely lost track by the evening',
-    expect: ['get_food_log'],
-    allow: [...DOSSIER_READS, 'get_macro_targets'],
-    forbid: ['lookup_food', 'get_recipes'],
+    expect: ['get_nutrition'],
+    allow: [...DOSSIER_READS],
+    args: {
+      tool: 'get_nutrition',
+      check: (a) => (a.view === 'log' ? null : `view was ${JSON.stringify(a.view)}, wanted "log"`),
+    },
     from: 'PLAN.md:5301 (2026-08-14, #198) — she could be asked about your eating and had no way to look at it.',
   },
   {
@@ -336,7 +356,7 @@ const READS: EvalCase[] = [
     kind: 'read',
     turn: 'thinking about breakfast — roughly how many calories in two eggs, toast and half an avocado?',
     expect: ['preview_meal'],
-    allow: [...DOSSIER_READS, 'lookup_food', 'check_food_sources'],
+    allow: [...DOSSIER_READS, 'get_nutrition', 'check_food_sources'],
     forbid: ['log_meal'],
     from:
       'MP21/MP40 (2026-08-28) — a hypothetical, not a meal yet: "thinking about" is the tell. preview_meal ' +
@@ -347,7 +367,7 @@ const READS: EvalCase[] = [
     kind: 'read',
     turn: 'can you look up the wild mushroom co mixed dried mushrooms — i cannot find their nutrition panel anywhere online and want the real numbers off it, not a guess',
     expect: ['research_food'],
-    allow: [...DOSSIER_READS, 'check_food_sources', 'lookup_food'],
+    allow: [...DOSSIER_READS, 'get_nutrition', 'check_food_sources'],
     from:
       'MP27 (2026-08-28), PLAN.md "Meal prep, end to end" — the scenario\'s own line, verbatim in spirit. A ' +
       'named vendor, an explicit "I could not find it", worth the wait for the exact numbers.',
@@ -374,7 +394,7 @@ const SILENCE: EvalCase[] = [
     // ("skip it" → "a Spartan Beast, for breakfast") and there is nothing here to log — no food
     // word, no first-person "had", nothing eaten. A model reaching for log_meal or preview_meal on
     // a bare training-skip is the exact failure this case exists to catch.
-    forbid: ['lookup_food', 'get_food_log', 'log_meal', 'preview_meal'],
+    forbid: ['get_nutrition', 'log_meal', 'preview_meal'],
     from: 'PLAN.md:5783 (2026-08-15) — verbatim. This logged a ~2000 kcal Spartan Beast for breakfast.',
   },
   {
@@ -462,7 +482,7 @@ const SILENCE: EvalCase[] = [
     kind: 'silence',
     turn: "i'm thinking about trying that mushroom sauce recipe this weekend, pork chops with a creamy sauce",
     expect: [],
-    allow: [...DOSSIER_READS, 'get_recipes'],
+    allow: [...DOSSIER_READS, 'get_nutrition'],
     forbid: ['log_meal', 'preview_meal'],
     from:
       'A recipe someone MIGHT cook, not one they made — no ingredients, no quantities, plainly future tense. ' +
@@ -473,7 +493,7 @@ const SILENCE: EvalCase[] = [
     kind: 'silence',
     turn: "what should i actually have for dinner tonight, i want something high protein but i'm bored of chicken",
     expect: [],
-    allow: [...DOSSIER_READS, 'get_recipes', 'lookup_food'],
+    allow: [...DOSSIER_READS, 'get_nutrition'],
     forbid: ['log_meal', 'preview_meal'],
     from:
       'Asking WHAT to eat, not reporting what she ate — advice-seeking with no food named yet to parse or ' +
@@ -484,7 +504,7 @@ const SILENCE: EvalCase[] = [
     kind: 'silence',
     turn: "i've been so wiped this week, barely touching my lunch most days if i'm honest. is that something i should be worried about?",
     expect: [],
-    allow: [...DOSSIER_READS, 'get_food_log', 'get_recent_logs'],
+    allow: [...DOSSIER_READS, 'get_nutrition', 'get_recent_logs'],
     forbid: ['log_meal', 'preview_meal'],
     from:
       'A past meal mentioned in service of a wellness question, not a log request — "barely touching my ' +
@@ -496,7 +516,7 @@ const SILENCE: EvalCase[] = [
     kind: 'silence',
     turn: "what's the protein in a quest bar, the cookies and cream one",
     expect: [],
-    allow: [...DOSSIER_READS, 'lookup_food', 'check_food_sources'],
+    allow: [...DOSSIER_READS, 'get_nutrition', 'check_food_sources'],
     forbid: ['research_food'],
     from:
       'MP27 restraint: a common, widely-sold product a shared database almost certainly already carries. ' +
@@ -531,7 +551,7 @@ const SILENCE: EvalCase[] = [
     kind: 'silence',
     turn: 'my wife had the salmon at that new place last night and said it was incredible, might have to go back',
     expect: [],
-    allow: [...DOSSIER_READS, 'get_recipes'],
+    allow: [...DOSSIER_READS, 'get_nutrition'],
     forbid: ['log_meal', 'preview_meal'],
     from:
       'The harder half of the same family (PR #289 review): real food this time, so the tell is entirely ' +
@@ -613,22 +633,23 @@ export const ACTION_TOOLS = new Set([
   'log_meal',
 ]);
 
-/** The set a call must belong to; anything else the model emits is an invented tool. */
-export const KNOWN_TOOLS = new Set([
-  ...DOSSIER_READS,
-  ...ACTION_TOOLS,
-  'get_workout_history',
-  'get_recent_logs',
-  'get_goal_progress',
-  'get_practice_totals',
-  'get_food_log',
-  'get_journal',
-  'get_recipes',
-  'get_macro_targets',
-  'lookup_food',
-  'preview_meal',
-  'research_food',
-]);
+/**
+ * The set a call must belong to; anything else the model emits is an invented tool.
+ *
+ * DERIVED FROM THE LIVE HARNESS, not hand-listed — because a hand-listed copy rotted, and the rot
+ * was invisible in a way that inverted the result. On 2026-08-29 this set still named four tools
+ * the harness had HIDDEN behind the `get_nutrition` facade (`lookup_food`, `get_food_log`,
+ * `get_recipes`, `get_macro_targets`) and knew nothing of nine it exposes — `get_nutrition`,
+ * `find_tools` and `use_tool` among them. So the run reported "invented tool names: find_tools,
+ * get_nutrition, use_tool", all three of which are real, live, correct tools, and scored a case
+ * that expected `lookup_food` as BOTH a miss and a hallucination when the coach did the right
+ * thing. A miscalibrated instrument does not just add noise; it points the wrong way, and anyone
+ * tuning against it would have tuned toward tools that no longer exist.
+ *
+ * `DOSSIER_READS` stays explicit: those are Broker prefetches, carried in the pack rather than
+ * declared to the model, so they are not in either harness list.
+ */
+export const KNOWN_TOOLS = new Set([...DOSSIER_READS, ...alwaysOnToolNames(), ...onDemandToolNames()]);
 
 /**
  * Not ours, not the model's, and not a hallucination — Devs.ai v2 emits a `suggested_actions`
