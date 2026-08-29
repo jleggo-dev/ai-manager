@@ -261,9 +261,22 @@ describe('maybeRefreshHealthDigest', () => {
     },
   });
   const now = () => Date.parse('2026-08-06T12:00:00Z');
+  /**
+   * Built on the SAME pinned clock the deps use, which is the whole point of pinning one.
+   *
+   * `buildDigestFromWorkouts`'s `nowMs` defaults to the real `Date.now()`, so omitting it here made
+   * this fixture drift away from the digest `maybeRefreshHealthDigest` computes (it passes `now()`).
+   * The recency figures are measured back from that clock, so once real time had moved far enough
+   * from 2026-08-06 the two digests stopped comparing equal and the `unchanged` cases started
+   * returning `posted` — a dated time bomb that went off on 2026-08-29, on main, with nobody having
+   * touched the file since #213. `health-digest.ts` states the rule this restores: "Same clock the
+   * `since` window was cut from, so the recency figures cannot straddle two."
+   */
   const digest = buildDigestFromWorkouts(
     [{ type: 'HKWorkoutActivityTypeRunning', distanceKm: 5, durationMin: 30, start: '2026-08-01T08:00:00Z' }],
     90,
+    [],
+    now(),
   );
   const deps = (over: Partial<Parameters<typeof maybeRefreshHealthDigest>[0]>) => ({
     isAvailable: () => true,
