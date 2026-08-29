@@ -261,7 +261,7 @@ export async function seed(userId: string, token: string): Promise<void> {
   ];
   await upsertWorkoutHistory(
     userId,
-    'apple_health',
+    'healthkit',
     deviceRuns.map((r) => {
       const startISO = new Date(daysAgo(r.daysAgo).setUTCHours(7, 30, 0, 0)).toISOString();
       return {
