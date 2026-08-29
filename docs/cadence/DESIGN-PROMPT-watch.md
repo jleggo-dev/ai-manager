@@ -1,104 +1,142 @@
 # Design prompt — Cadence on the wrist (watch app v1.5)
 
-**Paste-ready for Claude Design.** Self-contained on purpose. Engineering record:
-`PLAN.md` §"A13 revisited" (owner rulings 2026-08-29). Brand canon: [`BRAND.md`](BRAND.md).
+**Run through a design round 2026-08-29** — canvas: *Cadence on the Wrist*
+(claude.ai/code/artifact/54b03895-811b-48c8-95a8-a0174441e090, thirteen boards). The four
+questions below are now **answered** (owner-ruled where marked), the face set grew from five to
+thirteen, and the honesty contract got its own section. This file is the settled spec the build
+works from; the canvas is the picture of it. Engineering record: `PLAN.md` §"A13 revisited".
+Brand canon: [`BRAND.md`](BRAND.md).
 
 ---
 
-## The prompt
+## The prompt (as settled)
 
 > Design the Apple Watch app for **Cadence**, a conversational AI coach. This is the product's
-> first native watch surface, and it is deliberately small: **five faces**, listed below.
+> first native watch surface.
 >
 > **The product in one line:** a coach you just talk to — it listens, remembers you, and turns
-> what you say into a rhythm you can keep. A **coach, not a fitness app**; fitness is the launch
-> focus, not the category. **Hearth, not scoreboard** — and a wrist is where scoreboards live,
-> which makes this the hardest brand test the product has faced.
+> what you say into a rhythm you can keep. A **coach, not a fitness app**. **Hearth, not
+> scoreboard** — and a wrist is where scoreboards live, which makes this the hardest brand test
+> the product has faced.
 >
-> **What the watch app is:** the coach's plan, runnable from the wrist. The user's phone already
-> holds this week's sessions; the watch shows today's, and runs the ones a wrist is good at —
-> intervals, strength timers, a meditation sit — with live heart rate, our chimes, and our
-> colours. Apple's workout engine runs underneath (sensors, calories, the save to Health); our
-> app is the face on it.
+> **What the watch app is:** the coach's plan, runnable from the wrist — today's sessions and the
+> week, the ones a wrist is good at run in our frame (intervals, strength timers, a sit) with
+> live heart rate, our chimes, our colours. Apple's workout engine runs underneath (sensors,
+> calories, the save to Health); our app is the face on it.
 >
-> **What the watch app is NOT:** it does not track runs. An outdoor run in the list hands off,
-> in one tap, to Apple's own Workout app — GPS is theirs on purpose. There is no mid-run
-> coaching (that's v2), no complication, no Smart Stack card, no custom notification layout yet.
-> Do not design those.
+> **What the watch app is NOT:** it does not track runs — a run row hands off, in one tap, to
+> Apple's own Workout app; GPS is theirs on purpose. No mid-run coaching (v2), no complication,
+> no Smart Stack card, no custom notification layout yet.
 >
 > ### The single most important constraint
 >
-> **The wrist is glanced at, not read.** The phone's interval player already has the right
-> contract, in its own shipped copy: *"the screen turns amber when it is time to push and green
-> when it is time to breathe, and a chime marks every handover — so you can put the phone on the
-> floor and work from the colour and the sound."* The watch inherits that contract and adds the
-> haptic. Every face should survive: sweaty hands, three seconds of attention, mid-plank.
+> **The wrist is glanced at, not read.** The phone's interval player owns the contract: *"the
+> screen turns amber when it is time to push and green when it is time to breathe, and a chime
+> marks every handover."* The watch inherits it and adds the haptic. Every face must survive:
+> sweaty hands, three seconds of attention, mid-plank.
 
 ---
 
-## Design system — use exactly these
+## Design system — settled values, use exactly these
 
-**Typeface:** Plus Jakarta Sans, everywhere (it holds on native iOS; watchOS embeds custom fonts
-in SwiftUI). Space Mono for small data/utility labels only — a heart-rate number qualifies.
+**Typeface:** Plus Jakarta Sans everywhere; Space Mono for data values only (a heart-rate number,
+a `3 × 8 · 24 kg` spec, a countdown label like `0:45 hold`).
 
-**Palette** (the product's live tokens):
+**Ground (Q1, owner-ruled):** **true black, everywhere.** The bezel disappears and Always-On
+stays honest; the hearth lives **in the light** — linen white and the brand greys, never browned
+tints. A warm-dark `#1b1815` alternate was drawn and rejected: it read brown, and the screen edge
+showed as a grey rectangle on the wrist. (Related same-day ruling: no browned ambers anywhere —
+darkening amber to make a ground turns it to ochre; the phase colours stay at full brightness on
+black instead.)
 
-| Token | Hex | Role |
+**Palette — every value is a token, a `tone.ts` stop, or a token at alpha:**
+
+| Use | Value | Source |
 |---|---|---|
-| linen | `#fbf9f4` | app ground (phone) — see question 1 |
-| surface | `#ffffff` | cards |
-| line | `#dcd2bc` | rules, borders |
-| text | `#2c2f33` | primary |
-| text-dim | `#5c5f63` | secondary |
-| **forest** | `#2c5545` | primary action, structure |
-| **sage** | `#8ba88e` | quiet secondary |
-| **sun** | `#d85a30` | the one hot accent — **use rarely** |
-| **dusk** | `#3e5c76` | depth |
-| danger | `#b5453a` | errors only |
+| Primary text | `#fbf9f4` | linen |
+| Secondary text | `#8b8d91` · whispers `#5c5f63` | text-mute / text-dim |
+| Card fill | `rgba(251,249,244,0.07)` | linen at alpha |
+| Hairlines, ghost borders | `rgba(220,210,188,0.16–0.28)` | line at alpha |
+| Primary button | bg `#8ba88e`, text `#2c5545` | sage on forest — the brand pair |
+| The one hot accent | `#d85a30` (hand-off arrow, End) | sun — use rarely |
+| The sit's family | `#3e5c76` at alpha; glyphs are dusk lifted for black | dusk |
+| Work phase | fill `oklch(79% 0.16 70)` · done `oklch(63% 0.15 68)` | tone.ts, verbatim |
+| Recover phase | fill `oklch(66% 0.11 152)` · done `oklch(52% 0.09 152)` | tone.ts, verbatim |
+| Phase track (ahead) | the fill stop at `/ 0.22` | tone.ts pattern |
 
-The interval player's phase colours are already product law: **amber = push, green = breathe,
-grey = neither.** Keep the meanings; tune the values for OLED if needed.
+**The signature is the ring-as-session** (`intervalRing.ts`): one wedge per phase, sized by its
+seconds — the ring's shape IS the session's shape, so a Tabata looks nothing like a HIIT before
+you press anything. Past wedges wear the *done* stop, the current one fills in the *fill* stop,
+the shape ahead sits in track tint — which is why "what's left" never needs a caption. The ring
+appears live (around the countdown), finished (on Done), dimmed (Always-On), and segmented per
+day on the week view, exactly as the phone's trail does.
 
-**Coach mark:** *Metronome Split* — a geometric C cut on a 45° diagonal, terracotta day over
-dusk night.
+**The coach's face:** the user's chosen portrait — a picture, never a personality — anchors the
+Today and rest-day headers and speaks on the hand-off face ("I've set up your run…"). The
+Metronome Split mark stays the app icon; on the faces themselves, her portrait is the presence.
 
-**Canvas:** design at 45mm (396×484pt); verify at 41mm (352×430pt). Ultra (410×502pt) gets more
-room, never different behaviour.
+**Canvas:** 45mm (396×484pt) primary; verify 41mm (352×430); Ultra gets more room, never
+different behaviour. Top-right stays clear for the system clock — never paint a fake one.
 
 ---
 
-## The five faces
+## The faces (thirteen boards on the canvas)
 
-**01 · Today.** The sessions the coach set for today — usually one, sometimes two or three, often
-none. Each row: what it is, roughly how long, and one tap to start. A **run** row is visually the
-same family but its tap opens Apple's Workout app pre-loaded — design the row so that hand-off
-reads as *the coach handing you to the right tool*, never as being kicked out of Cadence (see
-question 3). A rest day is quiet and warm — never an empty state, never "no workouts scheduled."
+**Core five:**
+- **01 · Today** — portrait + weekday, then today's sessions as cards; a run row's tap opens
+  Apple's Workout app (framed as the coach handing you to the right tool). Rest day is its own
+  quiet board — never an empty state.
+- **02 · Intervals, live** — the hero: wedge ring around the countdown, phase word and numerals
+  in the phase colour, "Round 3 of 6", HR small in a corner, tap to pause. The ring replaced the
+  "then 20s to breathe" caption — the shape ahead is that information.
+- **03 · Timer, mid-set** — name + spec (`3 × 8 · 24 kg` in mono), set dots (done sets filled
+  sage), big elapsed, HR, "up next — Split squats", **Set done**.
+- **04 · The sit** — bells as haptic + chime, quiet remaining time, the "came back" tap (never a
+  running total). **No heart rate on this face, ever.** Breathing stays off the wrist unless a
+  shape exists that is not Apple's Mindfulness app in our colours.
+- **05 · Done (Q4, answered)** — the finished ring, one warm line ("That's done."), three facts,
+  the felt question (Easy / Right / Hard — it feeds next week's plan), the mic row, "Saved to
+  Health" as a whisper, one exit. No score, no comparison; the rings closing are Apple's moment.
 
-**02 · The interval face.** The hero. Work/recover rounds with the amber/green/grey contract,
-a chime and a haptic at every handover, round count as "Round 3 of 6", and **live heart rate as
-information** — a number that is present the way a clock is present, not a gauge begging to be
-raised (see question 2). Tap to pause. Stopping early **keeps the rounds you actually did** — the
-end of a stopped session must feel like a receipt, not a penalty. Design the Always-On dimmed
-state: colour must still carry the phase when the wrist drops.
+**The honesty surfaces (added by the round — see "The contract"):**
+- **06 · Controls** — one swipe away: Pause · Skip phase · Next exercise · End (End in sun).
+  Captioned with the player's own promise: stopping early keeps the rounds you did; a skipped
+  push never counts as done.
+- **07 · Your week** — the whole plan: seven day rows with trail-style segmented rings (done in
+  sage, today carded, rest quiet), footer counting what happened ("showed up 2 of 2 so far").
+- **08 · Session detail** — the prescription before starting: blocks, every item with sets ×
+  reps @ load in mono, **Start** beside **Less time** (the phone's condense).
+- **09 · Set-log** — "I did 5, not 6": the crown turns the number, "planned 8" stays as a
+  whisper, the button logs reality (**Log 5**).
+- **10 · Hands full** — a timed hold (dead hang): "Get set" pre-roll, starts on the chime, ends
+  itself, double-tap skips. Nothing needs a touch.
 
-**03 · The timer face.** The plain cousin of 02, for strength blocks and timed holds: the item's
-name ("Goblet squats · 3×8"), elapsed or remaining, live HR, done. Same silhouette as 02 so the
-two read as one tool wearing two moods.
+**States and moments:** **11 · Always-On** (dim ring + numeral in the done stop, no HR) ·
+**12 · Rest day** (portrait header, crescent, "Today's clear. Rest is part of the rhythm.", one
+line about tomorrow) · **13 · Hand-off (Q3, answered)** — her portrait, one line ("I've set up
+your run — Workout takes it from here"), the run card, "opens automatically"; the return needs no
+design — the finished run comes back through the read-back as an ordinary Done.
 
-**04 · The sit.** Meditation on the wrist: start, bells as haptic + soft chime (start/end, or
-interval bells), and the **"came back" tap** — the phone tool's rule holds verbatim: it never
-shows a running total. **No heart rate on this face, ever.** HR during a sit is a calm signal
-for the coach's later reading, never a live number — a pulse on screen during meditation is a
-scoreboard on the one face that must not have one. Breathing is **not** in scope unless design
-finds a shape that is not Apple's Mindfulness app wearing our colours — if it doesn't earn its
-place, leave it on the phone.
+---
 
-**05 · Done.** The workout saved itself to Apple Health (rings close; that's Apple's moment, let
-them have it). Ours is one warm line and the facts: what happened — rounds, minutes, average
-heart rate — in the register of *count what happened*. "5 rounds, 14 minutes" — never "1 round
-short." One tap back to Today. If the user stopped early, this face is where that must feel
-completely fine.
+## The contract on the wrist (owner, 2026-08-29 — "those functions somehow")
+
+The phone's honesty affordances all exist here, each in its watch-native form:
+
+| The phone's promise | On the wrist |
+|---|---|
+| Tap pauses; what you said stays | Tap pauses (02) |
+| Skip phase / skip exercise | Controls page, one swipe (06) |
+| Stopping early keeps the rounds you did | Written on the controls page; Done shows what happened |
+| A skipped push never counts as done | Same rule, same wording |
+| "I did 5, not 6" | The crown amends at set-log (09) |
+| "I did more/less/different" | The mic on Done — dictation into the same words-to-log path the phone uses (05) |
+| "I don't have time for all of it" | Less time beside Start (08) |
+| Hands are occupied | Pre-roll + chime; holds run themselves; double-tap skips (10) |
+
+Buildability, stated honestly: crown input, dictation, chimes/haptics and pre-rolls are plain
+watchOS APIs — nothing above is speculative. The one conditional is **double-tap** (Series 9 /
+Ultra 2 hardware; degrades to a tap elsewhere — copy must not promise it universally).
 
 ---
 
@@ -106,45 +144,22 @@ completely fine.
 
 | Rule | On the wrist |
 |---|---|
-| **Count what happened** | Rounds done, minutes moved. Never what was left. Nothing resets |
-| **The coach says "I"** | Sparingly here — the wrist is mostly the tool, not the voice. Where words appear, they're hers |
-| **Warm, level, unhyped** | No confetti, no fireworks, no "crushed it". A steady nod |
-| **Hearth, not scoreboard** | HR is information. No zones drawn as targets, no colour-coded judgment on a number |
-| **Their words** | The session's own name from the plan ("Tuesday intervals"), never a category label |
+| **Count what happened** | Rounds done, minutes moved, "Log 5". Never what was left. Nothing resets |
+| **The coach says "I"** | Sparingly — the wrist is mostly the tool. Where words appear (hand-off), they're hers, under her face |
+| **Warm, level, unhyped** | No confetti, no "crushed it". A steady nod |
+| **Hearth, not scoreboard** | HR is information (Q2, answered): Space Mono, small, corner, no zone bar, no colour on the number; absent on the sit |
+| **Their words** | The session's own name from the plan, never a category label |
 
 **Banned outright:** "captured" · "journey" · "unlock" · "empower" · streak anything · any face
 that could be mistaken for a leaderboard.
 
 ---
 
-## What already exists (extend, don't reinvent)
+## Still open (small, deliberate)
 
-- **The phone interval player** — amber/green phases, chimes, "Round 3 of 6", pause on tap,
-  stopping early keeps the rounds. The watch faces 02/03 are its wrist-sized siblings, not a new
-  design language.
-- **The meditate tool** — bells (none / start+end / interval) and the "came back" tap, rules
-  already ruled. Face 04 ports it.
-- **The session shapes** — every runnable item arrives structured (work/recover/rounds,
-  durations, names) from the same composer the phone uses. No face needs a loading state for
-  its own content.
-- **The hand-off** — the phone already schedules runs into Apple's Workout app ("On your watch
-  for Thursday"); face 01's run row is the wrist-side door to the same thing.
-- **Notifications already reach the watch** (iPhone mirroring), with the coach's portrait via
-  communication notifications. Nothing to design there yet.
-
----
-
-## Four questions we'd like answered in the work
-
-1. **Does the hearth survive OLED?** The platform idiom is pure black ground (bezel disappears,
-   battery loves it); the brand's dark is "warm, dusk-biased — never pure black." Which wins on
-   a watch, and what does linen-warmth even mean at 45mm? This is the brief's deepest brand
-   question — we'd rather you answer it than we guess.
-2. **What does heart rate look like as information, not judgment?** A number with no target
-   drawn around it, present but not performing. If it quietly changes size/prominence by
-   context (working vs resting face), show us.
-3. **The hand-off moment.** Tapping a run opens Apple's Workout app. What half-second of framing
-   makes that feel like the coach handing you to the right tool — and what does the user see
-   from us when they're done and back?
-4. **How quiet can Done be?** The temptation is a summary screen; the brand wants a nod. Where
-   is the line between a receipt and a report card?
+- The numeral-vs-ring size trade on the live face (76px inside the ring vs 118px bare) shipped
+  ring-first; revisit only if the device round says glanceability lost.
+- Whether Week (07) and Session detail (08) land in the v1.5 build or fast-follow — a build-scope
+  call, not a design one.
+- Double-tap copy on hardware that lacks it.
+- Breathing on the wrist: out until it earns its place.
