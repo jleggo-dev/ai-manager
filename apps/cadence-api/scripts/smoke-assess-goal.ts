@@ -7,14 +7,14 @@
  */
 import { randomUUID } from 'node:crypto';
 import { sql } from '../src/db/sql.ts';
-import { cadenceConfig } from '../src/config.ts';
+import { devAccount } from './dev-account.ts';
 import { resetUserData } from '../src/services/dev-reset.ts';
 import { insertGoal, listGoalsByStatus } from '../src/repos/goals.ts';
 import { runCaptureExtract } from '../src/services/capture.ts';
 
 const BASE = 'http://localhost:3101';
 const H = { 'Content-Type': 'application/json', 'X-Cadence-Dev-User': 'account-2' };
-const U = cadenceConfig.devAccounts['account-2'];
+const U = devAccount('account-2');
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const ok = (l: string, c: boolean) => console.log(`${c ? '✓' : '✗'} ${l}`);
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();

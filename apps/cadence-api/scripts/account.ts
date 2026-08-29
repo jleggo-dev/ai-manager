@@ -47,8 +47,9 @@ async function rowCounts(id: string): Promise<{ total: number; per: Record<strin
   let total = 0;
   for (const t of DEV_CHILD_TABLES) {
     const [r] = await sql<{ n: number }[]>`select count(*)::int as n from cadence.${sql(t)} where user_id = ${id}`;
-    if (r.n > 0) per[t] = r.n;
-    total += r.n;
+    const n = r?.n ?? 0;
+    if (n > 0) per[t] = n;
+    total += n;
   }
   return { total, per };
 }

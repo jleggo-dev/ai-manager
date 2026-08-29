@@ -17,7 +17,7 @@ async function main() {
   try {
     const goal = await insertGoal(DEV, {
       title: 'SMOKE 10k',
-      category: 'fitness',
+      area: 'movement',
       type: 'milestone',
       measure: { metric: 'distance', target: 10, unit: 'km', direction: 'increase' },
       timeframe: { start: '2026-06-29' },

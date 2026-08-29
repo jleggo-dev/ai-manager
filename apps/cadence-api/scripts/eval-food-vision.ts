@@ -65,10 +65,12 @@ const EVAL_USER = process.env.CADENCE_DEV_USER_ID || '';
  * the app runs makes the whole exercise a measurement of a file nobody deploys.
  */
 function promptFor(jobName: string): string {
-  const cfg = JSON.parse(readFileSync(path.join(REPO, 'config/ai-admin/ai-admin.config.json'), 'utf8'));
-  const job = (cfg.jobs as Array<Record<string, never>>).find((j) => (j as { name: string }).name === jobName);
+  const cfg = JSON.parse(readFileSync(path.join(REPO, 'config/ai-admin/ai-admin.config.json'), 'utf8')) as {
+    jobs?: Array<{ name?: string; config?: { promptTemplate?: string } }>;
+  };
+  const job = cfg.jobs?.find((j) => j.name === jobName);
   if (!job) throw new Error(`Job "${jobName}" is not in ai-admin.config.json`);
-  const tpl = (job as { config?: { promptTemplate?: string } }).config?.promptTemplate;
+  const tpl = job.config?.promptTemplate;
   if (!tpl) throw new Error(`Job "${jobName}" has no promptTemplate`);
   return tpl;
 }

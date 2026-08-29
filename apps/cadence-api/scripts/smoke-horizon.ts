@@ -9,9 +9,9 @@ import { insertPlan } from '../src/repos/plans.ts';
 import { insertActivities } from '../src/repos/activities.ts';
 import { ensureHorizon } from '../src/services/plan-horizon.ts';
 import { resetUserData } from '../src/services/dev-reset.ts';
-import { cadenceConfig } from '../src/config.ts';
+import { devAccount } from './dev-account.ts';
 
-const U = cadenceConfig.devAccounts['account-2'];
+const U = devAccount('account-2');
 const ok = (l: string, c: boolean) => console.log(`${c ? '✓' : '✗'} ${l}`);
 
 async function countOcc(): Promise<number> {

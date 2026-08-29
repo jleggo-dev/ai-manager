@@ -22,7 +22,6 @@ import {
   SESSION_TOOL_KINDS,
   bankFamily,
   clampCycles,
-  clampIntervalPlan,
   intervalShorthand,
   intervalTotalMinutes,
   isBreathPatternId,
@@ -34,6 +33,7 @@ import {
   patternById,
   patternCounts,
   renderCoachToolCatalog,
+  singleSetPlan,
   type JournalFamily,
   type SessionItem,
   type SessionItemTool,
@@ -218,7 +218,7 @@ function checkItem(i: SessionItem, wantFamily?: JournalFamily): void {
     if (!bellsOk) flag(`invented bells "${String(i.meditate_bells)}"`);
   }
   if (i.tool === 'interval') {
-    const plan = clampIntervalPlan({
+    const plan = singleSetPlan({
       warmupSec: i.interval_warmup_sec,
       workSec: i.interval_work_sec,
       recoverSec: i.interval_recover_sec,

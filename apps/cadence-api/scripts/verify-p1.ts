@@ -8,9 +8,9 @@ import { sql } from '../src/db/sql.ts';
 import { insertGoal } from '../src/repos/goals.ts';
 import { insertEquipment } from '../src/repos/equipment.ts';
 import { ensureUser, resetUserData } from '../src/services/dev-reset.ts';
-import { cadenceConfig } from '../src/config.ts';
+import { devAccount } from './dev-account.ts';
 
-const U = cadenceConfig.devAccounts['account-2'];
+const U = devAccount('account-2');
 
 async function main() {
   await resetUserData(U);

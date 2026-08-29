@@ -84,6 +84,10 @@ async function main() {
   const brokerId = await idBySlug('/api/ai-profiles', 'cadence-broker');
   const researchId = await idBySlug('/api/ai-profiles', 'cadence-research');
   console.log(`coach=${coachId} broker=${brokerId}`);
+  // The sync above creates both, so a missing id means that sync did not take. Stopping here beats
+  // resolving every placeholder job to `null` and syncing them onto no profile at all (the same
+  // guard sync-jobs.ts carries).
+  if (!coachId || !brokerId) throw new Error(`missing profile ids coach=${coachId} broker=${brokerId}`);
 
   // 4. Verify each profile with a live run-slot
   for (const [name, id] of [

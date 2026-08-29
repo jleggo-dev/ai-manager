@@ -79,7 +79,7 @@ async function main() {
     const goals = await listGoals(DEV);
     const equip = await listEquipment(DEV);
     const user = await getUser(DEV);
-    console.log('✓ goals in DB:    ', goals.map((g) => `${g.title} [${g.category}/${g.type}]`).join(' | ') || '(none)');
+    console.log('✓ goals in DB:    ', goals.map((g) => `${g.title} [${g.area}/${g.type}]`).join(' | ') || '(none)');
     console.log('✓ equipment in DB:', equip.map((e) => e.name).join(' | ') || '(none)');
     console.log('✓ baseline:       ', JSON.stringify(user?.baseline ?? {}));
 

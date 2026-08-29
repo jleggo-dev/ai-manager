@@ -39,7 +39,7 @@ async function main() {
     await clean();
 
     const r1 = await runCaptureExtract(DEV, { conversation_window: WINDOW });
-    const goals1 = await listGoalsByStatus(DEV, ['captured', 'confirmed', 'locked']);
+    const goals1 = await listGoalsByStatus(DEV, ['captured', 'confirmed', 'committed']);
     const equip1 = await listEquipment(DEV);
     console.log('=== after run 1 ===');
     console.log('persisted   :', JSON.stringify(r1.persisted));
@@ -52,7 +52,7 @@ async function main() {
     if ((r1 as { coerced?: string[] }).coerced) console.log('coerced     :', JSON.stringify((r1 as { coerced?: string[] }).coerced));
 
     const r2 = await runCaptureExtract(DEV, { conversation_window: WINDOW });
-    const goals2 = await listGoalsByStatus(DEV, ['captured', 'confirmed', 'locked']);
+    const goals2 = await listGoalsByStatus(DEV, ['captured', 'confirmed', 'committed']);
     console.log('\n=== after run 2 (dedup check) ===');
     console.log('persisted   :', JSON.stringify(r2.persisted), '(expect 0 new)');
     console.log('total goals :', goals2.length);
