@@ -5,6 +5,7 @@ import { replanPlan, previewReplan, confirmReplan, dismissReplan, REBASELINE_STE
 import { buildPlanView } from '../services/plan-view.ts';
 import { assessIfDue } from '../services/situation.ts';
 import { getOccurrenceDetail, prefetchImminentSessions } from '../services/session-generate.ts';
+import { runInBackground } from '../services/background.ts';
 import { logOccurrence } from '../services/session-log.ts';
 import { logAdhocActivity, logPlannedActivity } from '../services/adhoc-log.ts';
 import { enterEpisode, endEpisode, reviseEpisodeEquipment, postponeEpisodeStart } from '../services/episode.ts';
@@ -54,8 +55,10 @@ router.get('/', async (req: Request, res: Response) => {
     // The client's own zone, used only when the user has none stored. The screen's idea of
     // "today" must be the person's, not the server's (see buildPlanView).
     const view = await buildPlanView(userId, 7, tzHint(req));
-    void assessIfDue(userId).catch((err) => console.error('[assessIfDue]', err));
-    void prefetchImminentSessions(userId).catch((err) => console.error('[prefetch]', err));
+    // Through runInBackground, NOT `void`: on Vercel the instance freezes at res.json and a
+    // bare fire-and-forget dies mid-flight — this backstop had never actually run in prod.
+    runInBackground('assessIfDue', assessIfDue(userId));
+    runInBackground('prefetch', prefetchImminentSessions(userId));
     res.json(view);
   } catch (err) {
     console.error('[GET /plan]', err);

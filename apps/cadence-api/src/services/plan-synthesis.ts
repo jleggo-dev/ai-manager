@@ -8,6 +8,7 @@ import { deleteFuturePendingOccurrences } from '../repos/occurrences.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
 import { DEFAULT_HORIZON_DAYS, ensureHorizon } from './plan-horizon.ts';
 import { prefetchImminentSessions } from './session-generate.ts';
+import { runInBackground } from './background.ts';
 import { toRRule, describeRecurrence } from './scheduling.ts';
 import { matchGoal } from './plan-match.ts';
 import { splitCoverage } from './plan-coverage.ts';
@@ -432,7 +433,7 @@ export async function commitActivities(
   // GET /plan gives it a head start before the user can plausibly reach the plan screen and tap.
   // Deliberately the default window (the visible week), NOT occurrenceDays — days beyond the view
   // are materialized-but-invisible, and warming them doubles provider spend for nothing.
-  void prefetchImminentSessions(userId).catch((err) => console.error('[commit-prefetch]', err));
+  runInBackground('commit-prefetch', prefetchImminentSessions(userId));
 
   return {
     status: 'committed',

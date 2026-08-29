@@ -22,6 +22,19 @@
         "apps/cadence-api"
       ],
       "port": 3101
+    },
+    {
+      "name": "cadence-ios-bundle",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--port",
+        "4173",
+        "--strictPort"
+      ],
+      "cwd": "apps/cadence-web",
+      "port": 4173
     }
   ]
 }

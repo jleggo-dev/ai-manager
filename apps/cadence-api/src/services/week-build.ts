@@ -1,4 +1,5 @@
 import { getActivePlan } from '../repos/plans.ts';
+import { runInBackground } from './background.ts';
 import { listActivities, NON_PLAN_CATEGORIES } from '../repos/activities.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
 import { commitActivities, type CommitResult } from './plan-synthesis.ts';
@@ -95,9 +96,12 @@ export async function buildNextWeek(userId: string): Promise<WeekBuildResult> {
   if (result.planId) {
     const planId = result.planId;
     const version = result.version;
-    void composeReadyPushBody(userId, planId)
-      .then((body) => sendPlanReadyPush(userId, 'checkin_replan_ready', planId, `Week ${version} is ready`, body))
-      .catch((err) => console.error('[buildNextWeek] ready-push failed (the build landed regardless):', err));
+    runInBackground(
+      'buildNextWeek ready-push (the build landed regardless)',
+      composeReadyPushBody(userId, planId).then((body) =>
+        sendPlanReadyPush(userId, 'checkin_replan_ready', planId, `Week ${version} is ready`, body),
+      ),
+    );
   }
 
   return {
