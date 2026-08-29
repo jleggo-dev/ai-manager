@@ -170,9 +170,24 @@ export function openCoachSession(cadenceUserId: string, opts: { workflowSlug?: s
  * Coach: send a message. Returns the engine result whose `.response` is a
  * standard fetch Response — its `.body` is a ReadableStream of SSE bytes we
  * relay straight to the client. (This is the in-process win: no double relay.)
+ *
+ * `images` (MP13): short-lived signed Storage URLs from `services/meal-photos.ts`, forwarded to
+ * `sendChatMessage`'s `images` option — the same `input_image` content-part path job execution
+ * already uses (`runJobBySlug`'s `opts.images` above). Attached to THIS turn only; never persisted.
  */
-export function sendCoachMessage(cadenceUserId: string, sessionId: string, message: string, extraTools?: unknown[]) {
-  return withAim(cadenceUserId, () => sendChatMessage(sessionId, message, extraTools ? { extraTools } : {}));
+export function sendCoachMessage(
+  cadenceUserId: string,
+  sessionId: string,
+  message: string,
+  extraTools?: unknown[],
+  images?: string[],
+) {
+  return withAim(cadenceUserId, () =>
+    sendChatMessage(sessionId, message, {
+      ...(extraTools ? { extraTools } : {}),
+      ...(images?.length ? { images } : {}),
+    }),
+  );
 }
 
 /**

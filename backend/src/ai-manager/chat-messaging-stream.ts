@@ -5,6 +5,7 @@ import { DevsAiClient } from '../integrations/devs-ai/client.ts';
 import type { ExpectedSchemaInput } from '../services/expected-schema-to-json-schema.ts';
 import { buildProviderChatOptions, v2ThreadingEnabled } from '../services/ai-profile-runtime-options.ts';
 import { resolveAttachments, resolveAttachmentsAsText } from '../services/attachment-resolver.ts';
+import { contentText, withImageParts } from '../lib/message-content.ts';
 import { resolveProfileToolDefinitions } from './tool-fulfillment.ts';
 import { buildSessionChatMessages } from './chat-history.ts';
 import { sliceForThread } from './thread-mode.ts';
@@ -41,6 +42,9 @@ export async function openChatSendStream(args: {
   resolvedMessage: string;
   resolvedJob: ProcessingJobRow | null;
   attachments: Attachment[];
+  /** https URLs (short-lived signed Storage URLs) — spliced onto THIS turn's message as real
+   *  `image_url` content parts, never persisted. See `SendChatMessageOptions.images`. */
+  images: string[];
   timeoutMs: number;
   /** Caller-supplied tool definitions merged beside the profile's toolJobs — the in-process
    *  consumer's door into function calling (Cadence's coach registry tools ride here). The
@@ -58,6 +62,7 @@ export async function openChatSendStream(args: {
     resolvedMessage,
     resolvedJob,
     attachments,
+    images,
     timeoutMs,
   } = args;
 
@@ -98,6 +103,20 @@ export async function openChatSendStream(args: {
     if (enrichedContent !== resolvedMessage && fullHistory.length > 0) {
       const lastMsg = fullHistory[fullHistory.length - 1];
       if (lastMsg) lastMsg.content = enrichedContent;
+    }
+
+    /**
+     * Vision (MP13): splice the photo onto THIS turn's message as a real `input_image` content
+     * part — the same shape job execution already sends (job-execution.ts `imageUrls`,
+     * request-builder.ts:105-111 `messagesToV2Request`) — so the model actually SEES it, not just
+     * a text mention of it. In-memory only, exactly like the text-attachment splice above: the DB
+     * row was already written (with the plain resolvedMessage) before this function ran, so a
+     * later turn rebuilding history from scratch never resends a signed URL that has likely
+     * expired by then. Independent of the attachments-as-text block above — both can apply.
+     */
+    if (images.length > 0 && fullHistory.length > 0) {
+      const lastMsg = fullHistory[fullHistory.length - 1];
+      if (lastMsg) lastMsg.content = withImageParts(contentText(lastMsg.content), images);
     }
 
     /**

@@ -30,6 +30,14 @@ interface SendChatMessageOptions {
   timeoutMs?: number;
   /** Caller-supplied tool definitions (see openChatSendStream) — the caller fulfills them. */
   extraTools?: unknown[];
+  /**
+   * https URLs (short-lived signed Storage URLs) attached as REAL vision content parts on this
+   * turn's message — the same shape job execution already sends (job-execution.ts `images`,
+   * request-builder.ts:105-111). Distinct from `attachments` above: those are flattened to text
+   * (OpenAI-style) or uploaded as file refs (devs-ai v1) — neither puts pixels in front of the
+   * model. In-process chat (Cadence's coach) is the first caller; see openChatSendStream.
+   */
+  images?: string[];
 }
 
 interface SendChatMessageResult {
@@ -89,6 +97,7 @@ export async function sendChatMessage(
   const providerType = session.provider_type ?? provider.type;
   const timeoutMs = options.timeoutMs || (await resolveTimeoutMs({}, provider));
   const attachments: Attachment[] = options.attachments || [];
+  const images: string[] = options.images || [];
 
   const { resolvedMessage, workflowStepId, stepFormattingRules, stepOutputMappings, ruleSetKey, resolvedJob } =
     await resolveChatInvocation(session, sessionId, message, options);
@@ -156,6 +165,7 @@ export async function sendChatMessage(
     resolvedMessage,
     resolvedJob,
     attachments,
+    images,
     timeoutMs,
     extraTools: options.extraTools,
   });
