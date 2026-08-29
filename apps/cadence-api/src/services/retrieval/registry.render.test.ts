@@ -439,9 +439,24 @@ describe('retrieval registry — render / rows', () => {
         log: { summary: '5k easy', items: [{ felt: 'good' }] },
       },
     ];
-    expect(RETRIEVAL_FUNCTIONS.get_recent_logs!.render(rows)).toBe(
-      'Recent session reports:\n- 2026-07-17 · Easy run: 5k easy (felt good)',
-    );
+    const text = RETRIEVAL_FUNCTIONS.get_recent_logs!.render(rows);
+    expect(text).toContain('- 2026-07-17 · Easy run: 5k easy (felt good)');
+  });
+
+  /**
+   * The block is PREFETCHED into the pack, so it arrives without the tool description that says
+   * these are the user's own write-ups and points at `get_workout_history` for the device record.
+   * Measured 2026-08-29: asked for "the actual longest" run, she answered 11.4 km — the longest he
+   * had written up — in 3 of 4 samples, calling nothing, while his watch held an unlogged 13.2 km.
+   * Confident and wrong by 1.8 km, off a block that looked complete and never said it wasn't.
+   */
+  it('get_recent_logs says what it is NOT, because it is prefetched without its description', () => {
+    const text = RETRIEVAL_FUNCTIONS.get_recent_logs!.render([
+      { date: '2026-07-17', title: 'Long run', log: { summary: '11.4 km in 77 minutes', items: [] } },
+    ]);
+    expect(text).toMatch(/NOT a complete record/i);
+    expect(text).toContain('get_workout_history');
+    expect(text).toMatch(/never answer "how far"/i);
   });
 
   it('lookup_food renders cache/USDA hits with micros when present', () => {

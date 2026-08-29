@@ -224,7 +224,26 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
         const felt = x.log.items.find((i) => i.felt)?.felt;
         return `- ${x.date} · ${x.title}: ${x.log.summary}${felt ? ` (felt ${felt})` : ''}`;
       });
-      return `Recent session reports:\n${lines.join('\n')}`;
+      /**
+       * The provenance travels WITH the data, because a PREFETCHED block arrives without the tool
+       * description that would otherwise carry it. This one's description already says these are
+       * the user's own write-ups and points at `get_workout_history` for the device record — but
+       * she only ever reads a description when she goes looking for the tool, and the Broker hands
+       * this straight into the pack.
+       *
+       * Measured 2026-08-29: asked "what's my longest run in the last month? not the average, the
+       * actual longest", she answered "11.4 km on August 23" in 3 of 4 samples, calling nothing.
+       * 11.4 km was the longest run the user had WRITTEN UP; his watch had recorded a 13.2 km run
+       * he never logged. Specific, confident, and wrong by 1.8 km — off a block that looked
+       * complete and never said it wasn't.
+       */
+      return [
+        'Recent session reports — the write-ups they did themselves, most recent few only.',
+        'NOT a complete record of what they did: sessions they never wrote up are absent entirely,',
+        'and anything their watch recorded lives in get_workout_history. Never answer "how far",',
+        '"how long" or "how many" from this alone — read it for what they SAID, not for totals.',
+        lines.join('\n'),
+      ].join('\n');
     },
     rows(r) {
       return (r as unknown[]).length;
