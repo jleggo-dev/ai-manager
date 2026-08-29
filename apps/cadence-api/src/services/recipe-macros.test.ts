@@ -1,14 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import type { Food } from '@cadence/shared';
 import { priceFood } from './food-pricing-portion.ts';
-import {
-  computeMacrosPerServing,
-  macrosForIngredientAmount,
-  priceIngredientAmount,
-  scaleMacros,
-  sumMacros,
-  toMacros,
-} from './recipe-macros.ts';
+import { computeMacrosPerServing, priceIngredientAmount, scaleMacros, sumMacros, toMacros } from './recipe-macros.ts';
+
+/** `priceIngredientAmount(...).nutrients` — the shape these tests exercised before MP2 retired
+ *  the 3-arg `macrosForIngredientAmount` shim (recipe.ts's last three callers migrated to
+ *  `priceIngredientAmount` directly, so nothing in production called the 3-arg shape any more). */
+function priced(
+  food: Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'>,
+  qty: number,
+  unit?: string,
+) {
+  return priceIngredientAmount(food, qty, unit).nutrients;
+}
 
 function beef(): Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'> {
   return {
@@ -31,15 +35,15 @@ function beans(): Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'def
   };
 }
 
-describe('macrosForIngredientAmount', () => {
+describe('priceIngredientAmount', () => {
   it('scales grams against macros_per_base (per 100g)', () => {
-    const m = macrosForIngredientAmount(beef(), 500, 'g');
+    const m = priced(beef(), 500, 'g');
     expect(m.kcal).toBeCloseTo(1250, 0);
     expect(m.protein_g).toBeCloseTo(130, 0);
   });
 
   it('matches named serving units (can × qty)', () => {
-    const m = macrosForIngredientAmount(beans(), 2, 'can');
+    const m = priced(beans(), 2, 'can');
     // 400g × 2 / 100 × 90 kcal = 720
     expect(m.kcal).toBeCloseTo(720, 0);
     expect(m.protein_g).toBeCloseTo(48, 0);
@@ -54,12 +58,12 @@ describe('macrosForIngredientAmount', () => {
    * test for the old behaviour.
    */
   it('an unrecognised unit returns no macros rather than the default serving priced as if it answered', () => {
-    const m = macrosForIngredientAmount(beans(), 1, 'bowl');
+    const m = priced(beans(), 1, 'bowl');
     expect(m.kcal).not.toBeCloseTo(360, 0); // the old, silently-wrong answer
     expect(m).toEqual({});
   });
 
-  it('reports WHY, for a caller that reads it (priceIngredientAmount, the richer sibling)', () => {
+  it('reports WHY, for a caller that reads it', () => {
     const p = priceIngredientAmount(beans(), 1, 'bowl');
     expect(p.nutrients).toEqual({});
     expect(p.unresolved).toBe(true);
@@ -68,13 +72,13 @@ describe('macrosForIngredientAmount', () => {
 
   /**
    * MP0c: the log path (`portionFactor`/`priceFood`) and the recipe path
-   * (`macrosForIngredientAmount`) used to be two independently-written resolvers that could
-   * disagree by up to 16× on the same input — 500 ml of evaporated milk priced at 500 g on the log
-   * path (MP0a: ml read as g) and 8,000 g on the recipe path (a substring match on the food's
-   * SMALLEST ml-labelled serving, then multiplied by the raw request of 500 as if it were 500 OF
-   * that serving — see food-pricing-portion.test.ts for the same case traced through the log
-   * path). `macrosForIngredientAmount` is now a caller of `priceFood`, so there is exactly one
-   * answer regardless of which path asks.
+   * (`priceIngredientAmount`) used to be two independently-written resolvers that could disagree
+   * by up to 16× on the same input — 500 ml of evaporated milk priced at 500 g on the log path
+   * (MP0a: ml read as g) and 8,000 g on the recipe path (a substring match on the food's SMALLEST
+   * ml-labelled serving, then multiplied by the raw request of 500 as if it were 500 OF that
+   * serving — see food-pricing-portion.test.ts for the same case traced through the log path).
+   * `priceIngredientAmount` is now a thin caller of `portionFactor`, so there is exactly one answer
+   * regardless of which path asks.
    */
   it('agrees exactly with the log path — no more 16× disagreement on the same input', () => {
     const evapMilk: Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'> = {
@@ -89,7 +93,7 @@ describe('macrosForIngredientAmount', () => {
       ],
       default_serving: 4,
     };
-    const viaRecipePath = macrosForIngredientAmount(evapMilk, 500, 'ml');
+    const viaRecipePath = priced(evapMilk, 500, 'ml');
     const viaLogPath = priceFood(evapMilk, { qty: 500, unit: 'ml' });
     expect(viaRecipePath.kcal).toBeCloseTo(viaLogPath.kcal!, 6);
     // Both now correct (~713.7 kcal, scaled from the food's own 250 ml row) — neither the old
@@ -110,9 +114,9 @@ describe('macrosForIngredientAmount', () => {
       servings: [{ label: '100 g', unit: 'g', amount_g: 100 }],
       default_serving: 0,
     };
-    const m = toMacros(macrosForIngredientAmount(rosemary, 100, 'g'));
+    const m = toMacros(priced(rosemary, 100, 'g'));
     // FAILS on pre-fix code: the local 4-key MACRO_KEYS meant iron_mg/calcium_mg never survived
-    // `toMacros`, regardless of whether macrosForIngredientAmount itself carried them.
+    // `toMacros`, regardless of whether the pricer itself carried them.
     expect(m.iron_mg).toBeCloseTo(28.12, 1);
     expect(m.calcium_mg).toBeCloseTo(1280, 0);
     expect(m.kcal).toBeCloseTo(331, 0);
@@ -128,15 +132,12 @@ describe('macrosForIngredientAmount', () => {
 
   /**
    * The "3 shallots" case (FOOD-ENGINE.md §2.2), reached through the recipe path specifically.
-   * `recipe.ts`'s three call sites pass only `{qty, unit}` — for a bare count like "3 shallots"
-   * the LLM extraction typically leaves `unit` empty (the noun IS the food name), so
-   * `macrosForIngredientAmount`'s 3-arg shape has nothing to resolve against and this correctly
-   * still returns `{}` rather than a wrong number. `priceIngredientAmount`'s optional 4th `text`
-   * parameter is there so a future call site CAN pass `ing.name` and get the full picture —
-   * verified here with a food that genuinely has no per-item count serving (real "Shallot, raw"
-   * shape: only volume/mass measures), which must resolve to `unresolved`, not a guess.
+   * Without a name/text to resolve against, a bare count has nothing to match a food's count
+   * serving on and correctly stays `{}` rather than guessing. Verified here with a food that
+   * genuinely has no per-item count serving (real "Shallot, raw" shape: only volume/mass
+   * measures), which must resolve to `unresolved`, not a guess either way.
    */
-  it('a bare count with the name threaded through resolves correctly to unresolved, not a guess', () => {
+  it('a bare count with no name has nothing to resolve against — unresolved, not a guess', () => {
     const shallot: Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'> = {
       base_unit: 'g',
       macros_per_base: { kcal: 72, protein_g: 2.5, carbs_g: 16.8, fat_g: 0.1 },
@@ -147,21 +148,44 @@ describe('macrosForIngredientAmount', () => {
       default_serving: 1,
     };
     // Without the name, there is nothing to resolve — correctly {} rather than a guess.
-    expect(macrosForIngredientAmount(shallot, 3, undefined)).toEqual({});
+    expect(priced(shallot, 3, undefined)).toEqual({});
 
-    // With the name (what recipe.ts has in scope but does not pass today — see PR description),
-    // still correctly unresolved, now WITH a reason a caller could act on.
+    // With the name (what recipe.ts now passes as of MP2 — see recipe.test.ts for the version of
+    // this fixture that DOES carry a count serving and prices instead of refusing), still
+    // correctly unresolved here, now WITH a reason a caller could act on.
     const p = priceIngredientAmount(shallot, 3, undefined, '3 shallots');
     expect(p.nutrients).toEqual({});
     expect(p.unresolved).toBe(true);
     expect(p.reason).toBeTruthy();
   });
+
+  /**
+   * The positive twin of the test above: MP2's whole point is that `recipe.ts` now threads the
+   * ingredient's own name through, so a food that DOES carry a count serving for "shallot" prices
+   * instead of refusing. `matchMeasure`'s count branch matches on the noun, singularised — "3
+   * shallots" against a "1 shallot" row.
+   */
+  it('a bare count WITH the name matches the food’s own count serving', () => {
+    const shallot: Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'> = {
+      base_unit: 'g',
+      macros_per_base: { kcal: 72, protein_g: 2.5, carbs_g: 16.8, fat_g: 0.1 },
+      servings: [
+        { unit: 'shallot', label: '1 shallot (25g)', amount_g: 25 },
+        { unit: 'g', label: '100 g', amount_g: 100 },
+      ],
+      default_serving: 1,
+    };
+    const p = priceIngredientAmount(shallot, 3, undefined, '3 shallots');
+    expect(p.unresolved).toBeUndefined();
+    // 3 × 25 g = 75 g → 75/100 × 72 kcal = 54
+    expect(p.nutrients.kcal).toBeCloseTo(54, 0);
+  });
 });
 
 describe('computeMacrosPerServing', () => {
   it('divides the batch total by servings (chili-style)', () => {
-    const beefM = toMacros(macrosForIngredientAmount(beef(), 500, 'g'));
-    const beansM = toMacros(macrosForIngredientAmount(beans(), 2, 'can'));
+    const beefM = toMacros(priced(beef(), 500, 'g'));
+    const beansM = toMacros(priced(beans(), 2, 'can'));
     const per = computeMacrosPerServing([beefM, beansM], 6);
     // (1250 + 720) / 6 = 328.33
     expect(per.kcal).toBeCloseTo(328.3, 0);
