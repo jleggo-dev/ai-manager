@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { supabase } from './supabase.ts';
@@ -37,32 +37,68 @@ export function initNativeAuth(): void {
   // start a second flow (see below).
   void Browser.addListener('browserFinished', () => announce(AUTH_SHEET_CLOSED_EVENT));
 
+  // The deep-link route is the FALLBACK now (an old build's sheet, a magic link later) — the
+  // primary path gets the callback URL handed straight back by ASWebAuthenticationSession and
+  // never touches appUrlOpen at all. Both funnel into completeAuthCallback.
   void App.addListener('appUrlOpen', ({ url }) => {
     if (!url.startsWith(NATIVE_AUTH_CALLBACK)) return;
     void Browser.close().catch(() => undefined); // dismiss the sheet even if close is a no-op
+    void completeAuthCallback(url);
+  });
+}
 
-    const parsed = new URL(url);
-    const code = parsed.searchParams.get('code');
-    // The provider can also come back with a refusal rather than a code.
-    const denied = parsed.searchParams.get('error_description') || parsed.searchParams.get('error');
-    if (!code) {
-      announce(AUTH_FAILED_EVENT, denied?.trim() || 'That sign-in did not complete — try again.');
+/**
+ * Finish the flow from a callback URL, wherever it arrived from. Every failure announces —
+ * a bare `void` here once made a failed exchange look identical to a cancelled sheet.
+ */
+async function completeAuthCallback(url: string): Promise<void> {
+  const parsed = new URL(url);
+  const code = parsed.searchParams.get('code');
+  // The provider can also come back with a refusal rather than a code.
+  const denied = parsed.searchParams.get('error_description') || parsed.searchParams.get('error');
+  if (!code) {
+    announce(AUTH_FAILED_EVENT, denied?.trim() || 'That sign-in did not complete — try again.');
+    return;
+  }
+  try {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) announce(AUTH_FAILED_EVENT, error.message?.trim() || 'Could not finish signing in — try again.');
+  } catch (err) {
+    console.error('[cadence/auth] code exchange failed', err);
+    announce(AUTH_FAILED_EVENT, 'Could not finish signing in — try again.');
+  }
+}
+
+/**
+ * The owned ASWebAuthenticationSession bridge (ios/App/App/CadenceAuthSession). Lazy like every
+ * plugin: a build without it compiled in fails at call time, and the catch below falls back to
+ * the SFSafariViewController flow that shipped before it existed.
+ */
+const AuthSession = registerPlugin<{
+  start(options: { url: string; callbackScheme: string }): Promise<{ callbackUrl?: string; cancelled?: boolean }>;
+}>('CadenceAuthSession');
+
+/**
+ * Open the provider URL the right way. ASWebAuthenticationSession owns the callback scheme
+ * natively — no first-run "open in Cadence?" stall (the 70-seconds-late exchange of 2026-08-29,
+ * diagnosed from the auth logs), no gesture rule, self-dismissing sheet, callback handed back
+ * directly. The Browser-sheet path stays as the fallback for a build without the plugin.
+ */
+async function openProviderUrl(url: string): Promise<void> {
+  try {
+    const result = await AuthSession.start({ url, callbackScheme: 'cadence' });
+    if (result.cancelled) {
+      announce(AUTH_SHEET_CLOSED_EVENT);
       return;
     }
-
-    // Every failure below used to be discarded by a bare `void`: the PKCE verifier having been
-    // overwritten by a second launch, an expired code, a network blip. All of them looked
-    // identical from the outside — the sheet closed and nothing happened.
-    supabase.auth
-      .exchangeCodeForSession(code)
-      .then(({ error }) => {
-        if (error) announce(AUTH_FAILED_EVENT, error.message?.trim() || 'Could not finish signing in — try again.');
-      })
-      .catch((err: unknown) => {
-        console.error('[cadence/auth] code exchange failed', err);
-        announce(AUTH_FAILED_EVENT, 'Could not finish signing in — try again.');
-      });
-  });
+    if (result.callbackUrl) {
+      await completeAuthCallback(result.callbackUrl);
+      return;
+    }
+    announce(AUTH_SHEET_CLOSED_EVENT);
+  } catch {
+    await Browser.open({ url });
+  }
 }
 
 /** Providers offered on the sign-in screen. Apple is not optional — see AuthScreen. */
@@ -92,7 +128,7 @@ export async function signInWithProviderNative(provider: NativeOAuthProvider): P
   if (error || !data?.url) {
     return error?.message?.trim() || `Could not start ${PROVIDER_LABEL[provider]} sign-in — try again.`;
   }
-  await Browser.open({ url: data.url });
+  await openProviderUrl(data.url);
   return null;
 }
 
@@ -110,7 +146,7 @@ export async function linkProviderNative(provider: NativeOAuthProvider): Promise
   if (error || !data?.url) {
     return error?.message?.trim() || `Could not start ${PROVIDER_LABEL[provider]} sign-in — try again.`;
   }
-  await Browser.open({ url: data.url });
+  await openProviderUrl(data.url);
   return null;
 }
 

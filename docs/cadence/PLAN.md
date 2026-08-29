@@ -8656,3 +8656,29 @@ execution — the `logAi` diagnostics family (mostly settle mid-request; severit
 vanish), and `coach.ts`'s SSE-adjacent fires (the stream holds the instance open, so judged safe
 — verify, don't assume). And the boot-latency question deserves its own measured pass now that
 skeletons are provably not the network's fault.
+### The OAuth bounce, diagnosed from the auth logs — the sign-in that succeeded 70 seconds late (2026-08-29)
+
+Finding 2 of tonight's device round, closed. The Supabase auth logs for the first attempt:
+`/authorize` 17:03:20 → Google → `/callback` 302 at 17:03:50 (auth complete in 30s) → the PKCE
+`/token` exchange from the phone at **17:05:00** — seventy seconds later — **200, session
+minted**. Then a second full `/authorize` at 17:07:11 (the user, still looking at the gate,
+signing in again) completing in five seconds. Attempt one never failed; it succeeded silently
+behind the sign-in screen, a minute after the sheet stalled.
+
+The stall: `@capacitor/browser` opens SFSafariViewController, a general browser, and a custom
+`cadence://` redirect there is subject to iOS's first-run confirmation and user-gesture rules —
+on a fresh install it just sits. Swiping the sheet away is what finally delivered the queued
+deep link (`browserFinished` unlocking the buttons is the "eventually I could try again").
+
+**The fix:** `CadenceAuthSession`, the third owned plugin — `ASWebAuthenticationSession`, the API
+Apple built for OAuth: it owns the callback scheme natively (no confirmation, no gesture rule,
+self-dismissing sheet) and hands the callback URL straight back to the caller. `native-auth.ts`
+routes both sign-in and identity-linking through it; cancel resolves as an answer, not an error;
+the deep-link listener stays as the fallback for a build without the plugin, both paths funneling
+through one `completeAuthCallback`. Cookies share with Safari, so a returning Google session
+keeps the whole flow to seconds.
+
+Left open from the same trace: the session minted at 17:05:00 did not move the UI off the gate —
+by 17:07 the user was still there to tap again. Whether `onAuthStateChange` fired into a
+suspended webview or the gate ignored it is a separate question, and the new flow makes it near
+unreachable — recorded, not chased.
