@@ -21,13 +21,24 @@ import { READ_LABEL } from './label-function.ts';
 
 const USER = '00000000-0000-4000-a000-00000000a201';
 
-function fakeImageResponse(opts: { ok?: boolean; status?: number; contentType?: string | null } = {}): Response {
-  const { ok = true, status = ok ? 200 : 404, contentType = 'image/jpeg' } = opts;
+function fakeImageResponse(
+  opts: {
+    ok?: boolean;
+    status?: number;
+    contentType?: string | null;
+    contentLength?: number | null;
+    bodyBytes?: number;
+    arrayBuffer?: () => Promise<ArrayBuffer>;
+  } = {},
+): Response {
+  const { ok = true, status = ok ? 200 : 404, contentType = 'image/jpeg', contentLength = null, bodyBytes = 3 } = opts;
+  const headerMap: Record<string, string> = { 'content-type': contentType ?? '' };
+  if (contentLength !== null) headerMap['content-length'] = String(contentLength);
   return {
     ok,
     status,
-    headers: { get: (k: string) => (k.toLowerCase() === 'content-type' ? contentType : null) },
-    arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+    headers: { get: (k: string) => headerMap[k.toLowerCase()] ?? null },
+    arrayBuffer: opts.arrayBuffer ?? (async () => new Uint8Array(bodyBytes).buffer),
   } as unknown as Response;
 }
 
@@ -127,6 +138,58 @@ describe('read_label — run()', () => {
       vi.fn(async () => fakeImageResponse({ contentType: 'text/html' })),
     );
     await expect(READ_LABEL.run(USER, { photo_ref: 'weird' })).rejects.toThrow();
+  });
+
+  /**
+   * The re-sign -> fetch -> re-encode round trip runs on EVERY read_label call, so it needs its own
+   * bounds rather than trusting the far end. Two checks, both a real fault (never "no label found"):
+   * a declared size over MAX_PHOTO_BYTES is rejected WITHOUT reading the body, and an undeclared
+   * size is still caught once the bytes are in hand — a header can be absent or simply wrong.
+   */
+  it('rejects an oversized photo by its declared content-length, without reading the body', async () => {
+    const arrayBuffer = vi.fn(async () => new Uint8Array(0).buffer);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => fakeImageResponse({ contentLength: 2_000_000, arrayBuffer })),
+    );
+    await expect(READ_LABEL.run(USER, { photo_ref: 'huge' })).rejects.toThrow(/too large/);
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  it('rejects an oversized photo by its real size when no content-length was declared', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => fakeImageResponse({ contentLength: null, bodyBytes: 2_000_000 })),
+    );
+    await expect(READ_LABEL.run(USER, { photo_ref: 'huge-undeclared' })).rejects.toThrow(/too large/);
+  });
+
+  it('calls fetch with an abort signal, so a stalled connection can actually be cancelled', async () => {
+    const fetchMock = vi.fn(async () => fakeImageResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    await READ_LABEL.run(USER, { photo_ref: 'ref1' });
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), { signal: expect.any(AbortSignal) });
+  });
+
+  it('aborts and reports a fault instead of hanging past the timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          (_url: string, opts?: { signal?: AbortSignal }) =>
+            new Promise((_resolve, reject) => {
+              opts?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+            }),
+        ),
+      );
+      const runPromise = READ_LABEL.run(USER, { photo_ref: 'stalled' });
+      const assertion = expect(runPromise).rejects.toThrow(/timed out/);
+      await vi.advanceTimersByTimeAsync(15_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -228,12 +291,11 @@ describe('read_label — rows()', () => {
 });
 
 /**
- * Self-contained CI-shape checks (mirrors retrieval/description-audit.test.ts). `read_label` is
- * not yet in registry.ts — that wiring is a dependency reported to the parcel owner, not this
- * agent's file to touch — so the shared audit does not see it yet. This is the safety net until it
- * does, and stays useful afterward as a description-drift regression test either way.
+ * Self-contained CI-shape checks (mirrors retrieval/description-audit.test.ts, which now covers
+ * `read_label` for real via its registry.ts entry). Kept here too as a fast, local, single-file
+ * regression guard against description drift — cheap redundancy, not a substitute.
  */
-describe('read_label — description obeys the harness rules ahead of registry.ts wiring', () => {
+describe('read_label — description obeys the harness rules', () => {
   const BANNED: RegExp[] = [
     /\boccurrences?\b/i,
     /\bwindow\b/i,

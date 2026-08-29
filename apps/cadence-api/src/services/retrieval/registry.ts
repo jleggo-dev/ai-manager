@@ -28,6 +28,7 @@ import { describeRecurrence } from '../scheduling.ts';
 import { FOOD_HEALTH_FUNCTIONS } from './food-health-functions.ts';
 import { CHECK_FOOD_SOURCES } from './food-sources-function.ts';
 import { RESOLVE_PORTION } from './portion-function.ts';
+import { READ_LABEL } from './label-function.ts';
 import { GET_NUTRITION } from './nutrition-facade.ts';
 import { PREVIEW_MEAL } from './food-log-function.ts';
 import { RESEARCH_FOOD } from './food-research-function.ts';
@@ -461,6 +462,9 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
   ...FOOD_HEALTH_FUNCTIONS,
   [CHECK_FOOD_SOURCES.name]: CHECK_FOOD_SOURCES,
   [RESOLVE_PORTION.name]: RESOLVE_PORTION,
+  // MP14: reads a photo attached this turn (routes/coach.ts, MP13's photo_ref) — a nutrition panel
+  // or a front-of-package shot, via the vision jobs check_food_sources cannot reach.
+  [READ_LABEL.name]: READ_LABEL,
   // One door for every food question (nutrition-facade.ts). The four it dispatches to stay in the
   // registry — the Broker may still prefetch any of them — but `find_tools` lists only this.
   [GET_NUTRITION.name]: GET_NUTRITION,

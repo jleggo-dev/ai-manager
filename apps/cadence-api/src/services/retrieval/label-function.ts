@@ -19,10 +19,11 @@
  * re-encoding it is the seam that lets this wrap them UNCHANGED (services/food-capture.ts is
  * explicitly not this parcel's file to edit) rather than inventing a second upload path.
  *
- * A read successful candidate is shaped through `toCandidateAtOwnServing` (../food-source-report.ts)
- * — same `SourceCandidate` shape `check_food_sources` reports, so a label read looks like every
- * other source's answer, and MP15's "most authoritative" note rides along automatically because the
- * candidate's underlying `source: 'label_photo'` triggers it in `candidateNotes`.
+ * A successful read is shaped through `toCandidate` (../food-source-report.ts, called with no
+ * requested measure so it reports at the label's own preferred serving) — same `SourceCandidate`
+ * shape `check_food_sources` reports, so a label read looks like every other source's answer, and
+ * MP15's "most authoritative" note rides along automatically because the candidate's underlying
+ * `source: 'label_photo'` triggers it in `candidateNotes`.
  */
 import {
   identifyFood,
@@ -31,7 +32,8 @@ import {
   type ParsedLabelCapture,
 } from '../food-capture.ts';
 import { signMealPhotoUrl } from '../meal-photos.ts';
-import { toCandidateAtOwnServing, type SourceCandidate } from '../food-source-report.ts';
+import { MAX_PHOTO_BYTES } from '../photo-validate.ts';
+import { toCandidate, type SourceCandidate } from '../food-source-report.ts';
 import { boundToolResponse, toolFaultText } from '../tool-response.ts';
 import type { FoodNutrients } from '@cadence/shared';
 import type { RetrievalFunction } from './types.ts';
@@ -44,23 +46,48 @@ interface LabelRunResult {
   identify?: ParsedIdentifyCapture;
 }
 
+/** Bounds on the re-sign → fetch → re-encode round trip — this runs on every read_label call. */
+const FETCH_TIMEOUT_MS = 10_000;
+
 /**
  * `parseNutritionLabel`/`identifyFood` only take a raw `data:image/...` string (they upload it
  * themselves). A `photo_ref` names a photo ALREADY in Storage — re-sign it for a fresh short-lived
- * URL, fetch the bytes back, and re-wrap them as a data URL. Throws on any failure (unknown ref,
- * signing error, fetch error, non-image content-type); the caller lets that propagate so
- * `executeCalls` marks the call a genuine FAULT rather than an empty result — an unreadable photo
- * is not "no label found" (see render() below).
+ * URL, fetch the bytes back, and re-wrap them as a data URL. Bounded two ways: a 10s timeout
+ * (`AbortController`, same pattern `DevsAiV2Client.chatCompletionStream` already uses) so a stalled
+ * fetch cannot hang the turn, and a size cap — `MAX_PHOTO_BYTES` (photo-validate.ts), the SAME limit
+ * `putMealPhoto` already enforces at upload time, checked from `content-length` where the storage
+ * response sends one and again against the real buffer either way, since a header can be absent or
+ * wrong. Throws on any failure (unknown ref, signing error, timeout, oversized, non-image
+ * content-type); the caller lets that propagate so `executeCalls` marks the call a genuine FAULT
+ * rather than an empty result — an unreadable photo is not "no label found" (see render() below).
  */
 async function dataUrlFromPhotoRef(photoRef: string): Promise<string> {
   const signedUrl = await signMealPhotoUrl(photoRef, 300);
-  const res = await fetch(signedUrl);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(signedUrl, { signal: controller.signal });
+  } catch (e) {
+    const timedOut = e instanceof Error && e.name === 'AbortError';
+    throw new Error(`could not read the attached photo (${timedOut ? 'timed out' : 'network error'})`, { cause: e });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new Error(`could not read the attached photo (storage returned ${res.status})`);
+
   const mime = (res.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase();
   if (!mime || !/^image\/(jpeg|jpg|png|webp)$/.test(mime)) {
     throw new Error(`attached photo has an unsupported type (${mime || 'unknown'})`);
   }
+  const declaredLength = Number(res.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_PHOTO_BYTES) {
+    throw new Error(`attached photo is too large (${declaredLength} bytes)`);
+  }
+
   const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.length > MAX_PHOTO_BYTES) throw new Error(`attached photo is too large (${buffer.length} bytes)`);
   return `data:${mime};base64,${buffer.toString('base64')}`;
 }
 
@@ -91,8 +118,9 @@ function nutrientLine(n: FoodNutrients): string {
 /**
  * `label_readable` is the job's own honest verdict, not a guess by this file — "the panel was
  * unreadable" and "nothing on file" must read as different facts (TOOL-HARNESS step 4 / this
- * parcel's non-negotiables). A real read renders through `toCandidateAtOwnServing` so MP12's
- * micronutrients (potassium/calcium/iron) and MP15's authority note both survive untouched.
+ * parcel's non-negotiables). A real read renders through `toCandidate` (no requested measure, so it
+ * reports at the label's own preferred serving) so MP12's micronutrients (potassium/calcium/iron)
+ * and MP15's authority note both survive untouched.
  */
 function renderLabel(cap: ParsedLabelCapture): string {
   if (!cap.label_readable) {
@@ -103,7 +131,7 @@ function renderLabel(cap: ParsedLabelCapture): string {
       'clearer photo of the nutrition panel. This is not the same as the food having no numbers.'
     );
   }
-  const c: SourceCandidate = toCandidateAtOwnServing(cap.candidate, 'label');
+  const c: SourceCandidate = toCandidate(cap.candidate, 'label');
   const pct = Math.round((cap.candidate.confidence ?? 0) * 100);
   const lines = [
     `[label] ${[c.brand, c.name].filter(Boolean).join(' ') || 'Unnamed product'} — per ${c.per.measure}, read confidence ${pct}%`,

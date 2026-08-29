@@ -9,7 +9,6 @@ import {
   sortByAuthority,
   sourceAuthority,
   toCandidate,
-  toCandidateAtOwnServing,
   type SourceCandidate,
 } from './food-source-report.ts';
 
@@ -248,7 +247,9 @@ describe('a photographed label outranks a web lookup', () => {
   });
 
   it('toCandidate accepts an unsaved capture (no food_id yet) the same way it accepts a saved food', () => {
-    // MP14's read_label reports a FoodCandidate — no food_id, because it has not been saved.
+    // MP14's read_label reports a FoodCandidate — no food_id, because it has not been saved. The
+    // serving's unit ("g") deliberately equals base_unit — this is the exact shape that used to
+    // mis-price (below), so this fixture doubles as the regression case.
     const capture = {
       name: 'Wild Mushroom Co mixed dried mushroom',
       brand: 'The Wild Mushroom Co',
@@ -262,17 +263,26 @@ describe('a photographed label outranks a web lookup', () => {
     };
     const c = toCandidate(capture, 'label');
     expect(c.food_id).toBeNull();
+    // A "100 g" serving on a base_unit:'g' food is the food's own macros unscaled — this used to
+    // come back at 1/100th of this value (the exact-100g-serving instance of the bug below).
+    expect(c.per.nutrients.kcal).toBeCloseTo(72, 0);
     expect(c.notes.join(' ')).toContain('most authoritative');
   });
 
   /**
    * The mushroom-jar fixture is the real shape `parse-nutrition-label` returns — verified against
-   * the job's own worked example in ai-admin.config.json: `serving_size:15, serving_unit:"g"`. A
-   * capture is reported at its OWN stated serving, so this exercises toCandidateAtOwnServing, not
-   * toCandidate's requested-measure path.
+   * the job's own worked example in ai-admin.config.json: `serving_size:15, serving_unit:"g"`.
+   *
+   * Regression pair for a real bug that was live on `main`: `toCandidate` reported this exact
+   * fixture's numbers at 1/15th of the printed figure, because its `priceFood(food, {qty:1, unit,
+   * text})` call read a bare "g" unit as an ABSOLUTE amount ("1 gram") whenever it matched the
+   * food's own base_unit, discarding the serving's real `amount_g`. Both branches that used to hit
+   * this — no requested measure (falls to the food's preferred serving) and an EXPLICITLY requested
+   * measure that matches one (`matchMeasure`'s `exact`) — are covered below, since the fix
+   * (`nutrientsAtServing`, using `servingFactor`/`scaleNutrients` directly) applies to both.
    */
-  it('reports a label capture at its own printed serving — the exact mushroom-jar fixture', () => {
-    const capture = {
+  describe('the mushroom-jar fixture prices correctly (regression: was 1/15th on main)', () => {
+    const mushroomCapture = () => ({
       name: 'Dried Mixed Mushrooms',
       brand: 'The Wild Mushroom Co',
       source: 'label_photo' as const,
@@ -297,46 +307,33 @@ describe('a photographed label outranks a web lookup', () => {
       default_serving: 0,
       confidence: 0.9,
       photo_ref: 'user1/2026-08-28/mushroom.jpg',
-    };
-    const c = toCandidateAtOwnServing(capture, 'label');
-    expect(c.food_id).toBeNull();
-    expect(c.per.measure).toBe('15 g');
-    expect(c.per.grams).toBe(15);
-    // MP12: potassium/calcium/iron must survive — they are the three the mushroom label prints,
-    // and the ones parse-nutrition-label did not used to ask for.
-    expect(c.per.nutrients.kcal).toBeCloseTo(40, 0);
-    expect(c.per.nutrients.potassium_mg).toBeCloseTo(250, 0);
-    expect(c.per.nutrients.calcium_mg).toBeCloseTo(10, 0);
-    expect(c.per.nutrients.iron_mg).toBeCloseTo(0.3, 1);
-    expect(c.notes.join(' ')).toContain('most authoritative');
-  });
+    });
 
-  /**
-   * Fail-first: this is the exact bug toCandidateAtOwnServing exists to route around.
-   * toCandidate's unrequested-measure branch passes {qty:1, unit: matched.unit} straight to
-   * priceFood — and priceFood/portionFactor treats a bare mass-unit word as an ABSOLUTE amount
-   * ("1 g"), not "1 of this serving", whenever it equals the food's own base_unit. Documented here
-   * so a future fix to food-pricing-portion.ts (outside this parcel) has a red test to go green
-   * against, and so nobody "fixes" toCandidateAtOwnServing by routing it back through toCandidate.
-   */
-  it('documents why toCandidate itself still mis-prices this shape (not this parcel to fix)', () => {
-    const capture = {
-      name: 'Dried Mixed Mushrooms',
-      brand: null,
-      source: 'label_photo' as const,
-      base_unit: 'g' as const,
-      macros_per_base: { kcal: (40 / 15) * 100 },
-      servings: [{ label: '15 g', unit: 'g', amount_g: 15 }],
-      default_serving: 0,
-      confidence: 0.9,
-      photo_ref: null,
+    const assertsPrintedFigures = (c: SourceCandidate) => {
+      expect(c.food_id).toBeNull();
+      expect(c.per.measure).toBe('15 g');
+      expect(c.per.grams).toBe(15);
+      // MP12: potassium/calcium/iron must survive — they are the three the mushroom label prints,
+      // and the ones parse-nutrition-label did not used to ask for.
+      expect(c.per.nutrients.kcal).toBeCloseTo(40, 0);
+      expect(c.per.nutrients.potassium_mg).toBeCloseTo(250, 0);
+      expect(c.per.nutrients.calcium_mg).toBeCloseTo(10, 0);
+      expect(c.per.nutrients.iron_mg).toBeCloseTo(0.3, 1);
+      expect(c.notes.join(' ')).toContain('most authoritative');
     };
-    const broken = toCandidate(capture, 'label');
-    // priceFood read "1 g" (an absolute unit) instead of "1 × the 15 g serving" — 1/15th of the
-    // true 40 kcal, not the printed figure.
-    expect(broken.per.nutrients.kcal).toBeCloseTo(40 / 15, 1);
-    expect(broken.per.nutrients.kcal).not.toBeCloseTo(40, 0);
-    // The safe path gets it right on the same fixture.
-    expect(toCandidateAtOwnServing(capture, 'label').per.nutrients.kcal).toBeCloseTo(40, 0);
+
+    it('at its own preferred serving (no requested measure — the toCandidate fallback branch)', () => {
+      assertsPrintedFigures(toCandidate(mushroomCapture(), 'label'));
+    });
+
+    it('at an explicitly requested measure that matches one (the toCandidate exact branch)', () => {
+      assertsPrintedFigures(toCandidate(mushroomCapture(), 'label', '15 g'));
+    });
+
+    it("is never off by the tell-tale 15×/100× that priceFood's absolute-unit branch produced", () => {
+      const kcal = toCandidate(mushroomCapture(), 'label').per.nutrients.kcal ?? 0;
+      expect(kcal).not.toBeCloseTo(40 / 15, 1); // the old fallback-branch answer
+      expect(kcal).not.toBeCloseTo(40 / 100, 2); // the old exact-100g-serving answer
+    });
   });
 });

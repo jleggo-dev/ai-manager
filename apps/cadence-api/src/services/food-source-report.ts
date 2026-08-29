@@ -19,14 +19,12 @@
  */
 import { microProvenance, nutritionTier, type NutritionTier } from './food-sources/completeness.ts';
 import { matchMeasure, parseMeasure, scaleFromOwnMeasures } from './portion-measure.ts';
-import { priceFood } from './food-pricing-portion.ts';
 import { scaleNutrients, servingFactor, type Food, type FoodNutrients, type FoodServing } from '@cadence/shared';
 
 /**
  * `matchMeasure` moved to `portion-measure.ts` (MP0c) so `food-pricing-portion.ts` can call the
- * same matcher without a circular import (this file already depends on that one, for `priceFood`).
- * Re-exported so nothing that imports it from here — `portion-resolve.ts`, this file's own test —
- * has to change.
+ * same matcher without a circular import. Re-exported so nothing that imports it from here —
+ * `portion-resolve.ts`, this file's own test — has to change.
  */
 export { matchMeasure } from './portion-measure.ts';
 
@@ -204,11 +202,33 @@ function deriveOneUnit(servings: readonly FoodServing[], requested: string): { g
 }
 
 /**
+ * Nutrients for ONE of `serving`, priced directly from its own `amount_g` — never through
+ * `priceFood`/`portionFactor`'s `{unit, qty}` request-parsing interface.
+ *
+ * That interface is for re-resolving something a PERSON typed ("170 g", "1/4 cup") against a
+ * food's servings from scratch, and its first step deliberately treats a bare mass/volume unit
+ * word as an ABSOLUTE amount when it matches the food's own `base_unit` — correct for "log 1 g of
+ * X", wrong here. `toCandidate` has ALREADY found the exact serving object to report (`exact` from
+ * `matchMeasure`, or `matched` from `preferredServing`); asking `portionFactor` to re-derive it
+ * from `{unit: serving.unit, qty: 1}` re-enters that same absolute-unit branch whenever the
+ * serving's own unit happens to be a bare "g"/"ml" equal to the food's base — so a serving genuinely
+ * labelled "15 g" on a `base_unit:'g'` food priced at 1/100th of ONE GRAM, not at the 15 g the
+ * serving actually names (confirmed against `parse-nutrition-label`'s own worked example: the
+ * mushroom jar that motivates this parcel prints exactly "Per 15 pieces (15 g)", `serving_unit:"g"`
+ * — this is not a hypothetical, it was live on `main`). `servingFactor` reads
+ * `serving.amount_g` directly and never re-parses a unit word, so there is nothing left to misread.
+ */
+function nutrientsAtServing(base: FoodNutrients, baseUnit: Food['base_unit'], serving: FoodServing): FoodNutrients {
+  return scaleNutrients(base, servingFactor(baseUnit, serving, 1));
+}
+
+/**
  * Shape one stored food into a candidate, priced at the measure she asked for.
  *
- * `priceFood` does the arithmetic on purpose: the model's job is to say WHICH measure matters, and
+ * The store does the arithmetic on purpose: the model's job is to say WHICH measure matters, and
  * the store's job is to say how much that is. A model that returns calories it multiplied itself is
- * the variance the ledger exists to remove.
+ * the variance the ledger exists to remove. See `nutrientsAtServing` above for why that arithmetic
+ * is `servingFactor`/`scaleNutrients` directly rather than a round trip through `priceFood`.
  */
 export function toCandidate(food: FoodLike, source: FoodSourceName, requestedMeasure?: string | null): SourceCandidate {
   const base = food.macros_per_base ?? {};
@@ -220,7 +240,7 @@ export function toCandidate(food: FoodLike, source: FoodSourceName, requestedMea
   let measureLabel: string;
   let grams: number;
   if (exact) {
-    nutrients = priceFood(food, { qty: 1, unit: exact.unit, text: exact.label });
+    nutrients = nutrientsAtServing(base, food.base_unit, exact);
     measureLabel = exact.label;
     grams = exact.amount_g;
   } else if (derived) {
@@ -229,7 +249,7 @@ export function toCandidate(food: FoodLike, source: FoodSourceName, requestedMea
     grams = derived.grams;
   } else {
     const matched = preferredServing(food);
-    nutrients = matched ? priceFood(food, { qty: 1, unit: matched.unit, text: matched.label }) : base;
+    nutrients = matched ? nutrientsAtServing(base, food.base_unit, matched) : base;
     measureLabel = matched?.label ?? `100 ${food.base_unit}`;
     grams = matched?.amount_g ?? (food.base_unit === 'item' ? 1 : 100);
   }
@@ -255,43 +275,6 @@ export function toCandidate(food: FoodLike, source: FoodSourceName, requestedMea
     micros: microProvenance(base),
     completeness: nutritionTier(base),
     notes,
-  };
-}
-
-/**
- * Shape a food AT ITS OWN preferred serving — for a caller that has no REQUESTED measure to
- * resolve, because there isn't one to ask about. `toCandidate` above answers "what does measure Y
- * cost at food X", which is the right question for a stored food someone is querying; MP14's
- * `read_label` already HAS the answer — a freshly-read label states its own serving — so there is
- * nothing to match, and routing it through `toCandidate`'s unrequested-measure branch hits a real
- * landmine: `priceFood`'s `{qty: 1, unit}` shape means literally "1 of `unit`" wherever `unit` is a
- * bare mass/volume word, so a serving genuinely labelled "15 g" on a `base_unit:'g'` food prices as
- * 1 g, not 15 (confirmed against `parse-nutrition-label`'s own worked example — the mushroom jar
- * that motivates this parcel prints exactly "Per 15 pieces (15 g)", `serving_unit:"g"`). Computed
- * with `servingFactor`/`scaleNutrients` (packages/cadence-shared) instead, which have no such
- * ambiguity: they take the serving's own gram amount directly, never re-parse a unit word. Flagged
- * as a dependency for whoever next owns `food-pricing-portion.ts` — `toCandidate`'s own unrequested
- * branch still carries the same landmine for any OTHER caller relying on it.
- */
-export function toCandidateAtOwnServing(food: FoodLike, source: FoodSourceName): SourceCandidate {
-  const base = food.macros_per_base ?? {};
-  const matched = preferredServing(food);
-  const nutrients = matched ? scaleNutrients(base, servingFactor(food.base_unit, matched, 1)) : base;
-
-  return {
-    source,
-    food_id: food.food_id || null,
-    name: food.name,
-    brand: food.brand ?? null,
-    per: {
-      measure: matched?.label ?? `100 ${food.base_unit}`,
-      grams: matched?.amount_g ?? (food.base_unit === 'item' ? 1 : 100),
-      nutrients,
-    },
-    measures: measuresOf(food),
-    micros: microProvenance(base),
-    completeness: nutritionTier(base),
-    notes: candidateNotes(food, base),
   };
 }
 

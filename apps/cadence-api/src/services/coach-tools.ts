@@ -100,6 +100,26 @@ const TOOL_PARAMS: Record<string, { properties: Record<string, unknown>; require
     },
     required: ['name'],
   },
+
+  read_label: {
+    properties: {
+      photo_ref: { type: 'string', description: "The photo_ref from this turn's attached photo." },
+      mode: {
+        type: 'string',
+        enum: ['nutrition_label', 'identify'],
+        description:
+          'Which read to run: the nutrition panel numbers, or a front-of-package name and brand. ' +
+          'Default "nutrition_label" when omitted.',
+      },
+      hint: {
+        type: 'string',
+        description:
+          'Short context to help a hard-to-read photo, such as a product name you already know. ' +
+          'Omit if there is nothing to add.',
+      },
+    },
+    required: ['photo_ref'],
+  },
 };
 
 export interface CoachToolCall {

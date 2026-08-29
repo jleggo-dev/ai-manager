@@ -215,7 +215,10 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // `preview_meal` reads new words into a priced meal without logging it (log_meal, the write
     // half, is always-on and not filed here — see ALWAYS_ACTIONS). `research_food` is the
     // web-grounded rung for a named vendor nothing else has (MP21/MP40/MP27).
-    members: ['get_nutrition', 'check_food_sources', 'resolve_portion', 'preview_meal', 'research_food'],
+    // `read_label` (MP13/MP14) is only relevant on a turn carrying a photo, which is why it is a
+    // read in this tail rather than an ALWAYS_ACTIONS entry — a permanent slot would cost
+    // 305–375 tokens on every message forever for something most turns have no photo to use it on.
+    members: ['get_nutrition', 'check_food_sources', 'resolve_portion', 'preview_meal', 'research_food', 'read_label'],
   },
   { key: 'writing', label: 'what they have written', members: ['get_journal'] },
 ];
