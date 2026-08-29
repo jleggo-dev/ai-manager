@@ -15,6 +15,21 @@ export interface CoachStreamResult {
   content: string;
   promptTokens: number | null;
   completionTokens: number | null;
+  /**
+   * How much of `promptTokens` the provider served from its prompt cache, summed across the turn's
+   * rounds the same way the others are.
+   *
+   * Here to answer a question nobody could answer before: a coach turn carries a byte-identical
+   * ~9,600-token prefix (persona + tool definitions) on every single message, and the provider has
+   * always reported `input_tokens_details.cached_tokens` — the field is in `V2Usage` — but nothing
+   * read it. So "22,869 prompt tokens/turn" could never be told apart from what was actually
+   * billed, and no cost decision had an honest baseline.
+   *
+   * `null` = the provider said nothing. `0` = it said nothing was cached. Keeping those apart is
+   * the point: a zero proves the reporting works and the prefix is simply not being reused, which
+   * is a different problem from silence and has a different fix.
+   */
+  cachedPromptTokens: number | null;
   model: string | null;
   responseId: string | null;
   /** The LAST response id of the turn — the continuation's after a tool loop. Thread mode (#250)
@@ -53,6 +68,8 @@ export interface CoachStreamAccumulateState {
   content: string;
   promptTokens: number | null;
   completionTokens: number | null;
+  /** Provider-reported cache hits on the prompt, summed across rounds. See `CoachStreamResult`. */
+  cachedPromptTokens: number | null;
   model: string | null;
   responseId: string | null;
   /** The id of the response generating RIGHT NOW — updated every round of a tool loop, where
@@ -69,6 +86,7 @@ export function createCoachStreamAccumulateState(): CoachStreamAccumulateState {
     content: '',
     promptTokens: null,
     completionTokens: null,
+    cachedPromptTokens: null,
     model: null,
     responseId: null,
     currentResponseId: null,
@@ -140,6 +158,10 @@ export function applySseDataPayload(state: CoachStreamAccumulateState, data: str
       // === 'string'` check this file already uses a few lines up for the same untrusted JSON.
       const inputTokens = (p.inputTokens as number | undefined) ?? (p.estimatedInputTokens as number | undefined);
       if (typeof inputTokens === 'number') state.promptTokens = (state.promptTokens ?? 0) + inputTokens;
+      // Summed, not overwritten — same reasoning as promptTokens above (MP30): every round is its
+      // own billed call, and a cache hit on round three is as real as one on round one.
+      const cachedIn = p.cachedInputTokens as number | undefined;
+      if (typeof cachedIn === 'number') state.cachedPromptTokens = (state.cachedPromptTokens ?? 0) + cachedIn;
       const outputTokens = (p.outputTokens as number | undefined) ?? (p.estimatedOutputTokens as number | undefined);
       if (typeof outputTokens === 'number') state.completionTokens = (state.completionTokens ?? 0) + outputTokens;
       if (p.modelId) state.model = String(p.modelId);

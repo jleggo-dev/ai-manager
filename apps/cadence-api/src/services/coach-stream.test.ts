@@ -153,6 +153,7 @@ describe('relayAndAccumulate', () => {
     expect(result).toEqual({
       content: '',
       promptTokens: null,
+      cachedPromptTokens: null,
       completionTokens: null,
       model: null,
       responseId: null,
