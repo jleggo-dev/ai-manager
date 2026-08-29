@@ -8574,3 +8574,44 @@ HealthKit delivers a slice of A14 for free.
 3. A design brief — `DESIGN-PROMPT-watch.md` (session list, timer faces, live HR frame,
    done-summary). This is the arc's first genuine design engagement; the brand constraints
    (hearth not scoreboard; count what happened) bind especially hard on a wrist-sized screen.
+
+## The watch app exists — W1 scaffold, as built (2026-08-29)
+
+Owner: *"why don't we just get building the app now!"* — so it is building. Same day as the A13
+revisit and the design round, the `CadenceWatch` target is real, compiling, and RUNNING in the
+watchOS 26.5 simulator (Today face screenshot verified against the canvas: linen titles, brand
+greys, sun arrow on the run row, system clock untouched).
+
+**What W1 is** (branch `feat/watch-app`, stacked on `feat/watch-handoff`):
+- **The target** — a single-target watchOS SwiftUI app at `apps/cadence-ios/ios/App/CadenceWatch/`
+  (9 files), hand-wired into `project.pbxproj` the same way the plugins were (ids
+  `CAD0C0DE2FE100…`): native target + Embed Watch Content phase + dependency on App, generated
+  Info.plist (`WKApplication`, companion = `builders.cadence.app`, honest HealthKit usage
+  strings), HealthKit entitlement, watchOS 10 floor, device family 4. `xcodebuild -scheme App`
+  builds phone AND watch and embeds the latter — one command, both products.
+- **The engine** — `IntervalEngine.swift` is a line-for-line port of
+  `packages/cadence-shared/src/interval.ts` (same constants, same clamp/trim, same
+  outside-the-rounds rule), marked KEEP IN LOCKSTEP. Position is a pure function of elapsed time,
+  so backgrounding resumes in the right phase because nothing was counting.
+- **The faces built**: Today (cards, run row hands off, rest-day quiet state), Session detail
+  (blocks, sets × reps @ load in mono, Start + Less time stubs), the interval player (wedge ring
+  from the engine's phases — past wedges in tone.ts DONE stops, current filling in FILL, ahead in
+  track tint — phase word + countdown in phase colour, tap pauses, haptic per handover via
+  `WKInterfaceDevice.play`), and the controls page one swipe away (Pause · Skip phase · End,
+  captioned "Stopping early keeps the rounds you did."). Colours are the styles.css tokens and
+  the oklch→sRGB conversions of tone.ts's stops, in `WatchTheme.swift`.
+- **Apple's engine underneath** — `WorkoutController.swift`: `HKWorkoutSession` +
+  `HKLiveWorkoutBuilder` + live data source; HR at workout cadence via the builder delegate; end
+  saves through the builder with `HKMetadataKeyExternalUUID = occurrence id` — the SAME join key
+  as the phone's WorkoutKit hand-off, so the read-back attributes a session whoever ran it, and
+  our bundle id rides as the source (what `recordedByBundleId` dedup keys on). A failed session
+  start degrades to timer+haptics, never breaks the run.
+- **Sample data** (`SampleWeek`) stands in for the plan; the Codable shapes mirror the composer's
+  session fields so the sync slice replaces the source, not the models.
+
+**W2, in order:** WatchConnectivity sync (phone pushes the committed week; a small Capacitor
+plugin on the phone side); the strength timer flow behind Start (set dots → set-log with crown
+amend → up next); wrist-side `openInWorkoutApp` for the run row; Done face (felt + mic); the sit.
+**Known debts:** Plus Jakarta Sans needs the ttf embedded (system face ships W1, recorded in
+WatchTheme); IntervalEngine has no Swift tests yet (the TS original is the tested source of
+truth — a parity test comparing expansions is the right shape); no app icon asset catalog yet.

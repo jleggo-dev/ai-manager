@@ -18,6 +18,16 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		CAD0C0DE2FE0000200EA8C5F /* CadenceCoachIdentityPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE0000100EA8C5F /* CadenceCoachIdentityPlugin.swift */; };
 		CAD0C0DE2FE0000400EA8C5F /* CadenceWorkoutPlanPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE0000300EA8C5F /* CadenceWorkoutPlanPlugin.swift */; };
+		CAD0C0DE2FE1001100EA8C5F /* CadenceWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000100EA8C5F /* CadenceWatchApp.swift */; };
+		CAD0C0DE2FE1001200EA8C5F /* WatchTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000200EA8C5F /* WatchTheme.swift */; };
+		CAD0C0DE2FE1001300EA8C5F /* IntervalEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000300EA8C5F /* IntervalEngine.swift */; };
+		CAD0C0DE2FE1001400EA8C5F /* WatchSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000400EA8C5F /* WatchSession.swift */; };
+		CAD0C0DE2FE1001500EA8C5F /* WedgeRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000500EA8C5F /* WedgeRing.swift */; };
+		CAD0C0DE2FE1001600EA8C5F /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000600EA8C5F /* TodayView.swift */; };
+		CAD0C0DE2FE1001700EA8C5F /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000700EA8C5F /* SessionDetailView.swift */; };
+		CAD0C0DE2FE1001800EA8C5F /* IntervalPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000800EA8C5F /* IntervalPlayerView.swift */; };
+		CAD0C0DE2FE1001900EA8C5F /* WorkoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000900EA8C5F /* WorkoutController.swift */; };
+		CAD0C0DE2FE1002B00EA8C5F /* CadenceWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1002100EA8C5F /* CadenceWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,7 +44,42 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		CAD0C0DE2FE0000100EA8C5F /* CadenceCoachIdentityPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CadenceCoachIdentityPlugin.swift; path = CadenceCoachIdentity/CadenceCoachIdentityPlugin.swift; sourceTree = "<group>"; };
 		CAD0C0DE2FE0000300EA8C5F /* CadenceWorkoutPlanPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CadenceWorkoutPlanPlugin.swift; path = CadenceWorkoutPlan/CadenceWorkoutPlanPlugin.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1000100EA8C5F /* CadenceWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CadenceWatchApp.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1000200EA8C5F /* WatchTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTheme.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1000300EA8C5F /* IntervalEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntervalEngine.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1000400EA8C5F /* WatchSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSession.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1000500EA8C5F /* WedgeRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WedgeRing.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1000600EA8C5F /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1000700EA8C5F /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1000800EA8C5F /* IntervalPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntervalPlayerView.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1000900EA8C5F /* WorkoutController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutController.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1002000EA8C5F /* CadenceWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CadenceWatch.entitlements; sourceTree = "<group>"; };
+		CAD0C0DE2FE1002100EA8C5F /* CadenceWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CadenceWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXContainerItemProxy section */
+		CAD0C0DE2FE1002C00EA8C5F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CAD0C0DE2FE1002600EA8C5F;
+			remoteInfo = CadenceWatch;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CAD0C0DE2FE1002A00EA8C5F /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				CAD0C0DE2FE1002B00EA8C5F /* CadenceWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		504EC3011FED79650016851F /* Frameworks */ = {
@@ -42,6 +87,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CAD0C0DE2FE1002400EA8C5F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,6 +105,7 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
+				CAD0C0DE2FE1002200EA8C5F /* CadenceWatch */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -61,6 +114,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				CAD0C0DE2FE1002100EA8C5F /* CadenceWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -83,6 +137,23 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		CAD0C0DE2FE1002200EA8C5F /* CadenceWatch */ = {
+			isa = PBXGroup;
+			children = (
+				CAD0C0DE2FE1000100EA8C5F /* CadenceWatchApp.swift */,
+				CAD0C0DE2FE1000200EA8C5F /* WatchTheme.swift */,
+				CAD0C0DE2FE1000300EA8C5F /* IntervalEngine.swift */,
+				CAD0C0DE2FE1000400EA8C5F /* WatchSession.swift */,
+				CAD0C0DE2FE1000500EA8C5F /* WedgeRing.swift */,
+				CAD0C0DE2FE1000600EA8C5F /* TodayView.swift */,
+				CAD0C0DE2FE1000700EA8C5F /* SessionDetailView.swift */,
+				CAD0C0DE2FE1000800EA8C5F /* IntervalPlayerView.swift */,
+				CAD0C0DE2FE1000900EA8C5F /* WorkoutController.swift */,
+				CAD0C0DE2FE1002000EA8C5F /* CadenceWatch.entitlements */,
+			);
+			path = CadenceWatch;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -93,10 +164,12 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				CAD0C0DE2FE1002A00EA8C5F /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				CAD0C0DE2FE1002D00EA8C5F /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -104,6 +177,23 @@
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		CAD0C0DE2FE1002600EA8C5F /* CadenceWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CAD0C0DE2FE1002700EA8C5F /* Build configuration list for PBXNativeTarget "CadenceWatch" */;
+			buildPhases = (
+				CAD0C0DE2FE1002300EA8C5F /* Sources */,
+				CAD0C0DE2FE1002400EA8C5F /* Frameworks */,
+				CAD0C0DE2FE1002500EA8C5F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CadenceWatch;
+			productName = CadenceWatch;
+			productReference = CAD0C0DE2FE1002100EA8C5F /* CadenceWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -139,6 +229,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				CAD0C0DE2FE1002600EA8C5F /* CadenceWatch */,
 			);
 		};
 /* End PBXProject section */
@@ -157,6 +248,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CAD0C0DE2FE1002500EA8C5F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -171,7 +269,31 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CAD0C0DE2FE1002300EA8C5F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CAD0C0DE2FE1001100EA8C5F /* CadenceWatchApp.swift in Sources */,
+				CAD0C0DE2FE1001200EA8C5F /* WatchTheme.swift in Sources */,
+				CAD0C0DE2FE1001300EA8C5F /* IntervalEngine.swift in Sources */,
+				CAD0C0DE2FE1001400EA8C5F /* WatchSession.swift in Sources */,
+				CAD0C0DE2FE1001500EA8C5F /* WedgeRing.swift in Sources */,
+				CAD0C0DE2FE1001600EA8C5F /* TodayView.swift in Sources */,
+				CAD0C0DE2FE1001700EA8C5F /* SessionDetailView.swift in Sources */,
+				CAD0C0DE2FE1001800EA8C5F /* IntervalPlayerView.swift in Sources */,
+				CAD0C0DE2FE1001900EA8C5F /* WorkoutController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		CAD0C0DE2FE1002D00EA8C5F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CAD0C0DE2FE1002600EA8C5F /* CadenceWatch */;
+			targetProxy = CAD0C0DE2FE1002C00EA8C5F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
@@ -350,6 +472,65 @@
 			};
 			name = Release;
 		};
+		CAD0C0DE2FE1002800EA8C5F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CadenceWatch/CadenceWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ZLU84LMGQ6;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Cadence;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads your heart rate during a session so the coach can see how it went. It never tracks where you go.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Saves the sessions you finish here to Apple Health, so your rings close.";
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = builders.cadence.app;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = builders.cadence.app.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		CAD0C0DE2FE1002900EA8C5F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CadenceWatch/CadenceWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ZLU84LMGQ6;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Cadence;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads your heart rate during a session so the coach can see how it went. It never tracks where you go.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Saves the sessions you finish here to Apple Health, so your rings close.";
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = builders.cadence.app;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = builders.cadence.app.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -367,6 +548,15 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CAD0C0DE2FE1002700EA8C5F /* Build configuration list for PBXNativeTarget "CadenceWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CAD0C0DE2FE1002800EA8C5F /* Debug */,
+				CAD0C0DE2FE1002900EA8C5F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
