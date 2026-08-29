@@ -86,10 +86,25 @@ export function transformV2SseDataLine(dataStr: string, state: SseTransformState
   if (eventType === 'response.completed' || eventType === 'response.done') {
     const usage = parsed.response?.usage || parsed.usage;
     if (usage?.input_tokens != null) state.inputTokens = usage.input_tokens;
-    // Read-only and additive: a provider that omits the detail block leaves this null, exactly as
-    // before this line existed.
-    const cached = usage?.input_tokens_details?.cached_tokens;
-    if (cached != null) state.cachedInputTokens = cached;
+    /**
+     * Assigned from THIS usage block including its ABSENCE, which is why it is not guarded the way
+     * `input_tokens` is.
+     *
+     * The guard it replaces ("a provider that omits the detail block leaves this null") was true of
+     * a fresh state and false of a reused one. Upstream emits both `response.completed` AND
+     * `response.done` for one response, and the second carries `input_tokens: 0` with no detail
+     * block — so the old `if (cached != null)` kept the FIRST event's figure and re-emitted it
+     * beside a zero prompt. Captured off the wire:
+     *
+     *     message.complete{inputTokens:24081, cachedInputTokens:15255} resp=4fc60fcb82c1
+     *     message.complete{inputTokens:0,     cachedInputTokens:15255} resp=4fc60fcb82c1
+     *
+     * The consumer summed both and reported 30,510 cached against 24,081 prompt. A response that
+     * reports usage and no cached detail cached nothing; say that, rather than repeating what the
+     * last one cached. (`coach-stream` also counts each response once now — either fix alone closes
+     * this case, and the pair also covers the duplicate that repeats input as well as cached.)
+     */
+    if (usage) state.cachedInputTokens = usage.input_tokens_details?.cached_tokens ?? null;
     if (usage?.output_tokens != null) state.outputTokens = usage.output_tokens;
     if (parsed.response?.model) state.model = parsed.response.model;
     if (parsed.response?.id) state.responseId = parsed.response.id;

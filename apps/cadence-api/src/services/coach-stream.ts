@@ -99,6 +99,80 @@ export function createCoachStreamAccumulateState(): CoachStreamAccumulateState {
  * prefix and trimmed). Ignores `[DONE]` and non-JSON keepalives.
  * Exported for characterization tests of both upstream frame shapes.
  */
+/**
+ * What one response has ALREADY contributed to the turn's totals.
+ *
+ * `null` means "this response has never reported that field", which is deliberately different from
+ * `0`: a first report of zero must still move `promptTokens` off `null` (a zero proves the provider
+ * is reporting and nothing was cached — see `cachedPromptTokens`), while a REPEAT of zero must not.
+ */
+interface CountedUsage {
+  prompt: number | null;
+  cached: number | null;
+  completion: number | null;
+}
+
+/**
+ * Kept in a side table rather than on the state, so the object `relayAndAccumulate` returns keeps
+ * exactly the shape its callers destructure and its exhaustive `toEqual` test asserts. This is
+ * bookkeeping ABOUT the accumulation, not part of the turn's result. Weak so it dies with the state.
+ */
+const counted = new WeakMap<CoachStreamAccumulateState, Map<string, CountedUsage>>();
+
+/**
+ * Add a usage figure, counting each RESPONSE at most once — the fix for totals that were provably
+ * impossible (2026-08-29).
+ *
+ * Captured off the wire, a single turn looked like this:
+ *
+ *     message.complete{inputTokens:24081, cachedInputTokens:15255} resp=4fc60fcb82c1
+ *     message.complete{inputTokens:0,     cachedInputTokens:15255} resp=4fc60fcb82c1
+ *
+ * The SAME response reported twice — `sse-transform` emits `message.complete` for both
+ * `response.completed` and `response.done` — and every frame was being summed. The trailing frame
+ * carries `input_tokens: 0`, so the prompt side added nothing, while the cached side added a second
+ * 15,255. Every multi-run measurement showed a byte-identical 30,510 cached against 24,113 prompt:
+ * 127% of a prompt cached, which cannot happen. A duplicate that repeats input AND output (also
+ * observed) double-counts the prompt instead.
+ *
+ * So: per response, remember what each field has contributed and add only the INCREASE. A duplicate
+ * reporting 0 cannot lower a total; a duplicate repeating a figure cannot inflate one; a later,
+ * larger figure for the same response still lands.
+ *
+ * Frames with no `responseId` keep the old straight-sum behaviour. That is what MP30 fixed and its
+ * tests still pin: separate tool-loop ROUNDS are separate responses and must still add up.
+ */
+function contribute(
+  state: CoachStreamAccumulateState,
+  responseId: string | null,
+  field: keyof CountedUsage,
+  value: number,
+): void {
+  const apply = (delta: number): void => {
+    if (field === 'prompt') state.promptTokens = (state.promptTokens ?? 0) + delta;
+    else if (field === 'completion') state.completionTokens = (state.completionTokens ?? 0) + delta;
+    else state.cachedPromptTokens = (state.cachedPromptTokens ?? 0) + delta;
+  };
+
+  if (!responseId) {
+    apply(value);
+    return;
+  }
+
+  let ledger = counted.get(state);
+  if (!ledger) {
+    ledger = new Map();
+    counted.set(state, ledger);
+  }
+  const entry = ledger.get(responseId) ?? { prompt: null, cached: null, completion: null };
+  const seen = entry[field];
+  if (seen === null) apply(value);
+  else if (value > seen) apply(value - seen);
+  else return;
+  entry[field] = value;
+  ledger.set(responseId, entry);
+}
+
 export function applySseDataPayload(state: CoachStreamAccumulateState, data: string): void {
   if (data === '[DONE]') return;
   try {
@@ -106,6 +180,10 @@ export function applySseDataPayload(state: CoachStreamAccumulateState, data: str
     const choices = p.choices as Array<{ delta?: { content?: unknown } }> | undefined;
     const delta = choices?.[0]?.delta?.content;
     if (typeof delta === 'string') state.content += delta;
+
+    // Read from the FRAME, not from `state.currentResponseId`, which is only assigned further down
+    // — and which would wrongly attribute a frame to the previous response until it caught up.
+    const frameResponseId = typeof p.responseId === 'string' ? p.responseId : null;
 
     // OpenAI-style usage/model arrive on the final chunk (Devs.ai completion stream).
     const usage = p.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
@@ -133,10 +211,10 @@ export function applySseDataPayload(state: CoachStreamAccumulateState, data: str
        * separately-billed per-round number as the prompt side.
        */
       if (typeof usage.prompt_tokens === 'number') {
-        state.promptTokens = (state.promptTokens ?? 0) + usage.prompt_tokens;
+        contribute(state, frameResponseId, 'prompt', usage.prompt_tokens);
       }
       if (typeof usage.completion_tokens === 'number') {
-        state.completionTokens = (state.completionTokens ?? 0) + usage.completion_tokens;
+        contribute(state, frameResponseId, 'completion', usage.completion_tokens);
       }
     }
     if (typeof p.model === 'string' && !state.model) state.model = p.model;
@@ -157,13 +235,14 @@ export function applySseDataPayload(state: CoachStreamAccumulateState, data: str
       // the old `as number | undefined` cast trusted blindly — consistent with the `typeof delta
       // === 'string'` check this file already uses a few lines up for the same untrusted JSON.
       const inputTokens = (p.inputTokens as number | undefined) ?? (p.estimatedInputTokens as number | undefined);
-      if (typeof inputTokens === 'number') state.promptTokens = (state.promptTokens ?? 0) + inputTokens;
-      // Summed, not overwritten — same reasoning as promptTokens above (MP30): every round is its
-      // own billed call, and a cache hit on round three is as real as one on round one.
+      if (typeof inputTokens === 'number') contribute(state, frameResponseId, 'prompt', inputTokens);
+      // Counted per RESPONSE, not per frame (see `contribute`): every ROUND is its own billed call
+      // and a cache hit on round three is as real as one on round one, but the same response
+      // reported twice is one call, not two.
       const cachedIn = p.cachedInputTokens as number | undefined;
-      if (typeof cachedIn === 'number') state.cachedPromptTokens = (state.cachedPromptTokens ?? 0) + cachedIn;
+      if (typeof cachedIn === 'number') contribute(state, frameResponseId, 'cached', cachedIn);
       const outputTokens = (p.outputTokens as number | undefined) ?? (p.estimatedOutputTokens as number | undefined);
-      if (typeof outputTokens === 'number') state.completionTokens = (state.completionTokens ?? 0) + outputTokens;
+      if (typeof outputTokens === 'number') contribute(state, frameResponseId, 'completion', outputTokens);
       if (p.modelId) state.model = String(p.modelId);
       if (!state.content && (p.text ?? p.content)) {
         state.content = String(p.text ?? p.content);

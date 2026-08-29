@@ -106,6 +106,31 @@ describe('devs-ai-v2 SSE transform — cached prompt tokens', () => {
     expect(completeFrame(lines).cachedInputTokens).toBeNull();
   });
 
+  /**
+   * CAPTURED OFF THE WIRE 2026-08-29. Upstream emits BOTH `response.completed` and `response.done`
+   * for a single response, and the second carries `input_tokens: 0` with no detail block:
+   *
+   *     message.complete{inputTokens:24081, cachedInputTokens:15255} resp=4fc60fcb82c1
+   *     message.complete{inputTokens:0,     cachedInputTokens:15255} resp=4fc60fcb82c1
+   *
+   * The old `if (cached != null)` guard kept the first event's figure and re-emitted it beside the
+   * zero prompt, and the consumer summed both — reporting 30,510 cached against 24,081 prompt,
+   * i.e. 127% of the prompt cached. A response reporting usage and no cached detail cached nothing.
+   */
+  it("does not repeat the previous response's cached figure on a second event for the same response", () => {
+    const state = createSseTransformState();
+    const say = (usage: unknown): string[] =>
+      transformV2SseDataLine(JSON.stringify({ type: 'response.completed', response: { id: 'resp_1', usage } }), state);
+
+    const first = say({ input_tokens: 24081, output_tokens: 139, input_tokens_details: { cached_tokens: 15255 } });
+    expect(completeFrame(first).cachedInputTokens).toBe(15255);
+
+    // The `response.done` twin: usage present, detail block absent.
+    const second = say({ input_tokens: 0, output_tokens: 0 });
+    expect(completeFrame(second).cachedInputTokens).toBeNull();
+    expect(state.cachedInputTokens).toBeNull();
+  });
+
   it('does not disturb the input/output counts it sits beside', () => {
     const { state } = complete({
       input_tokens: 100,

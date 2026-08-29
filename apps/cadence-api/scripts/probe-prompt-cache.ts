@@ -31,6 +31,26 @@ const TURNS = [
   'and remind me what the plan says for tomorrow',
 ];
 
+/**
+ * `fetch` fails with a bare "TypeError: fetch failed" that names neither the call nor the cause,
+ * and on a loaded machine it fails for reasons that have nothing to do with the server. A first run
+ * of this probe died exactly that way and took a cycle to tell apart from an outage. So: say which
+ * call, bound the wait, and retry once — the turns here take ~30s each and a transient is not news.
+ */
+async function call(label: string, url: string, init: RequestInit, tries = 2): Promise<Response> {
+  let last: unknown;
+  for (let attempt = 1; attempt <= tries; attempt += 1) {
+    try {
+      return await fetch(url, { ...init, signal: AbortSignal.timeout(180_000) });
+    } catch (e) {
+      last = e;
+      const why = e instanceof Error ? `${e.name}: ${e.message}${e.cause ? ` (${String(e.cause)})` : ''}` : String(e);
+      console.error(`  ! ${label} failed on attempt ${attempt}/${tries} — ${why}`);
+    }
+  }
+  throw new Error(`${label} failed after ${tries} attempts: ${String(last)}`);
+}
+
 async function main(): Promise<void> {
   const { API, missingEnv, setUp, tearDown } = await import('./eval-tool-selection-world.ts');
   const missing = missingEnv();
@@ -44,7 +64,7 @@ async function main(): Promise<void> {
   try {
     world = await setUp(); // seeds the fixture itself
 
-    const open = await fetch(`${API}/coach/sessions`, {
+    const open = await call('open session', `${API}/coach/sessions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${world.token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ intent: 'ongoing', healthAvailable: false, healthAnswered: true }),
@@ -55,7 +75,7 @@ async function main(): Promise<void> {
 
     for (const [i, text] of TURNS.entries()) {
       const t0 = Date.now();
-      const res = await fetch(`${API}/coach/sessions/${sessionId}/messages`, {
+      const res = await call(`turn ${i + 1}`, `${API}/coach/sessions/${sessionId}/messages`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${world.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text }),
