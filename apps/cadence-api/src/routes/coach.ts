@@ -297,6 +297,80 @@ router.get('/conversations', async (req: Request, res: Response) => {
 });
 
 /**
+ * Push the reply only to someone who actually left — the two gates are explained in full at the
+ * call site. Extracted alongside `recordCoachTurn` to bring the message handler back under the
+ * 150-line function cap it was sitting exactly on.
+ */
+async function notifyIfTheyLeft(a: {
+  userId: string;
+  armed: boolean;
+  clientAlive: boolean;
+  content: string;
+  sessionIdParam: string;
+  responseId: string | null;
+}): Promise<void> {
+  if (!((a.armed || !a.clientAlive) && a.content.trim())) return;
+  await sendPlanReadyPush(
+    a.userId,
+    'coach_reply',
+    `${a.sessionIdParam}:${a.responseId ?? Date.now()}`,
+    'Cadence replied',
+    firstLine(a.content),
+  );
+}
+
+/** What one finished coach turn is worth recording: the model, what it cost, and how it ended. */
+interface CoachTurnMetrics {
+  model: string | null;
+  promptTokens: number | null;
+  /**
+   * How much of `promptTokens` the provider served from cache.
+   *
+   * Logged so the question "is the ~9,600-token persona+tools prefix actually being cached" is
+   * answerable from `ai_log` rather than argued about. `null` means the provider said nothing at
+   * all; `0` means it said nothing was cached — different findings with different fixes, so they
+   * are kept apart here rather than collapsed to a number.
+   */
+  cachedPromptTokens: number | null;
+  completionTokens: number | null;
+  responseId: string | null;
+  clientDropped: boolean;
+}
+
+/**
+ * Dev X-ray + durable log of a coach turn. Extracted from the message handler, which was sitting
+ * exactly at the 150-line function cap — the convention is to split before a function grows, not to
+ * trim comments until it fits (comments are already skipped by the rule, so trimming them would not
+ * have helped anyway).
+ *
+ * Never throws: bookkeeping must not cost a reply that already reached the person.
+ */
+async function recordCoachTurn(
+  userId: string,
+  sessionId: string,
+  message: string,
+  content: string,
+  m: CoachTurnMetrics,
+): Promise<void> {
+  updateTrace(userId, {
+    coach: {
+      user: message,
+      reply: content,
+      model: m.model,
+      promptTokens: m.promptTokens,
+      completionTokens: m.completionTokens,
+    },
+  });
+  await logAi(userId, {
+    kind: 'coach',
+    sessionId,
+    input: { user: message },
+    output: { reply: content },
+    meta: m,
+  }).catch(() => {});
+}
+
+/**
  * POST /coach/sessions/:id/messages — send a message; stream the Coach reply (SSE).
  * `assembleTurn` is the just-in-time injection hook (§4.3); ambient capture (Broker)
  * fires in parallel (§6.1). 409-safe: client disables send until it sees [DONE].
@@ -374,6 +448,7 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     const {
       content,
       promptTokens,
+      cachedPromptTokens,
       completionTokens,
       model,
       responseId,
@@ -497,26 +572,16 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
      * Awaited, like everything else after the stream: a promise left running past the handler is
      * a promise this platform may never finish (#195).
      */
-    if ((armed || !clientAlive) && content.trim()) {
-      await sendPlanReadyPush(
-        userId,
-        'coach_reply',
-        `${sessionIdParam}:${responseId ?? Date.now()}`,
-        'Cadence replied',
-        firstLine(content),
-      );
-    }
+    await notifyIfTheyLeft({ userId, armed, clientAlive, content, sessionIdParam, responseId });
 
-    // Dev X-ray + durable log of the coach turn (responseId + drop flag aid diagnostics
-    // and a future live re-attach via the v2 Responses API stream-reconnect).
-    updateTrace(userId, { coach: { user: message, reply: content, model, promptTokens, completionTokens } });
-    await logAi(userId, {
-      kind: 'coach',
-      sessionId: req.params.id as string,
-      input: { user: message },
-      output: { reply: content },
-      meta: { model, promptTokens, completionTokens, responseId, clientDropped },
-    }).catch(() => {});
+    await recordCoachTurn(userId, req.params.id as string, message, content, {
+      model,
+      promptTokens,
+      cachedPromptTokens,
+      completionTokens,
+      responseId,
+      clientDropped,
+    });
 
     // Ambient capture on the FULL conversation (§6.1) — not just the last message — so goals
     // aren't fragmented per-turn. Result recorded for the X-ray. The detour capture rides the

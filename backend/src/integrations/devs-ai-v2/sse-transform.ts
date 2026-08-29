@@ -1,7 +1,7 @@
 /**
  * Transform Devs.ai v2 Responses SSE events into shapes chat-sessions.ts already parses:
  *   - choices[0].delta.content for streaming deltas
- *   - message.complete with inputTokens/outputTokens at end
+ *   - message.complete with inputTokens/outputTokens/cachedInputTokens at end
  */
 
 import type { V2StreamEvent } from './types.ts';
@@ -11,6 +11,21 @@ export interface SseTransformState {
   fullText: string;
   inputTokens: number | null;
   outputTokens: number | null;
+  /**
+   * How many of `inputTokens` the provider served from its prompt cache.
+   *
+   * The field has been in `V2Usage` all along (`input_tokens_details.cached_tokens`, the OpenAI
+   * Responses shape) and nothing has ever read it — so we have never known whether a discount was
+   * already being applied. It matters because a coach turn carries a byte-identical ~9,600-token
+   * prefix (persona + tool definitions) on EVERY message, which is exactly the shape an
+   * automatic prefix cache is for. Without this number, a measured "22,869 tokens/turn" cannot be
+   * told apart from a billed one, and any cost work would be guessing at its own baseline.
+   *
+   * `null` means the provider said nothing; `0` means it said nothing was cached. Those are
+   * different answers and the difference is the whole point — a `0` proves the pass-through works
+   * and the prefix simply is not being reused, which is an entirely different problem from silence.
+   */
+  cachedInputTokens: number | null;
   model: string | null;
   responseId: string | null;
   conversationId: string | null;
@@ -21,6 +36,7 @@ export function createSseTransformState(): SseTransformState {
   return {
     fullText: '',
     inputTokens: null,
+    cachedInputTokens: null,
     outputTokens: null,
     model: null,
     responseId: null,
@@ -70,6 +86,10 @@ export function transformV2SseDataLine(dataStr: string, state: SseTransformState
   if (eventType === 'response.completed' || eventType === 'response.done') {
     const usage = parsed.response?.usage || parsed.usage;
     if (usage?.input_tokens != null) state.inputTokens = usage.input_tokens;
+    // Read-only and additive: a provider that omits the detail block leaves this null, exactly as
+    // before this line existed.
+    const cached = usage?.input_tokens_details?.cached_tokens;
+    if (cached != null) state.cachedInputTokens = cached;
     if (usage?.output_tokens != null) state.outputTokens = usage.output_tokens;
     if (parsed.response?.model) state.model = parsed.response.model;
     if (parsed.response?.id) state.responseId = parsed.response.id;
@@ -94,6 +114,7 @@ export function transformV2SseDataLine(dataStr: string, state: SseTransformState
         text,
         inputTokens: state.inputTokens,
         outputTokens: state.outputTokens,
+        cachedInputTokens: state.cachedInputTokens,
         modelId: state.model,
         responseId: state.responseId,
         conversationId: state.conversationId,
