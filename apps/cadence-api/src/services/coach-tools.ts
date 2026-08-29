@@ -61,17 +61,39 @@ const TOOL_PARAMS: Record<string, { properties: Record<string, unknown>; require
   get_journal: {
     properties: { limit: { type: 'integer', description: 'How many entries to return (default 8, up to 20).' } },
   },
-  get_recipes: {
+  /**
+   * The nutrition facade's own parameters — MISSING until 2026-08-29, which is why she called it
+   * bare and got the wrong answer.
+   *
+   * `nutrition-facade.ts` collapsed four reads into one with a `view`, and hid the originals so she
+   * could never call them. But their TOOL_PARAMS rows stayed and no row was written for the facade,
+   * so the one tool she can actually reach declared NO parameters at all — `view` existed only in
+   * the description's prose. The 2026-08-29 eval caught it as "right tool, wrong arguments":
+   * asked what recipes used chicken thighs, she called `get_nutrition` with `view: undefined`,
+   * which the facade defaults to "log". The right tool, answering a different question.
+   *
+   * `view` is REQUIRED on purpose. It has a default in code so an omission is never a crash, but a
+   * default is not an intention — leaving it optional here is what let a bare call look complete
+   * while silently choosing for her.
+   */
+  get_nutrition: {
     properties: {
-      query: { type: 'string', description: 'Search their book by dish name; omit to get their saved recipes.' },
+      view: {
+        type: 'string',
+        enum: ['log', 'targets', 'recipes', 'lookup'],
+        description:
+          'Which view: "log" is what they actually ate, "targets" their daily goals and how today ' +
+          'is tracking, "recipes" the dishes they have saved, "lookup" nutrition facts for one ' +
+          'named food (that one needs q).',
+      },
+      q: {
+        type: 'string',
+        description: 'For view "lookup" only — the food to look up, e.g. "halloumi". Ignored otherwise.',
+      },
+      query: { type: 'string', description: 'For view "recipes" only — search their book by dish name.' },
+      limit: { type: 'integer', description: 'For view "lookup" — how many matches (default 5, up to 10).' },
     },
-  },
-  lookup_food: {
-    properties: {
-      q: { type: 'string', description: 'The food to look up, by name.' },
-      limit: { type: 'integer', description: 'How many matches to return (default 5, up to 10).' },
-    },
-    required: ['q'],
+    required: ['view'],
   },
   // MP21/MP40 (FOOD-ENGINE.md §7 §8) — the Coach's write surface. `preview_meal` and `research_food`
   // are reads (no side effects); `log_meal`, the commit half, is an action and declares its own

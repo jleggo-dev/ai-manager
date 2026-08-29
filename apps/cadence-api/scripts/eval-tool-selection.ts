@@ -99,6 +99,7 @@
 import { ACTION_TOOLS, CASES, KNOWN_TOOLS, PROVIDER_BUILTINS, type EvalCase } from './eval-tool-selection-cases.ts';
 import { dryRun, graderVerdict, header, line, summarize, type Outcome } from './eval-tool-selection-report.ts';
 import { API, missingEnv, setUp, tearDown, type World } from './eval-tool-selection-world.ts';
+import { GET_NUTRITION, NUTRITION_FACADE_COVERS } from '../src/services/retrieval/nutrition-facade.ts';
 
 const argv = process.argv.slice(2);
 const flag = (name: string): string | null => {
@@ -240,7 +241,26 @@ function score(c: EvalCase, obs: Observed, ms: number, prefetched: string[] | nu
    * reached her either way, which is the thing that matters and the thing HARNESS-V2 calls
    * Layer 0. An ACTION never counts this way: prefetch cannot change anybody's data.
    */
-  const gotByPrefetch = (t: string): boolean => !ACTION_TOOLS.has(t) && (prefetched ?? []).includes(t);
+  /**
+   * A facade is credited by what it COVERS, not only by its own name (fixed 2026-08-29).
+   *
+   * The Broker prefetches the underlying reads — `get_food_log`, `get_recipes` — while a case now
+   * expects the facade `get_nutrition`, so an exact-name match credited neither. B4 ("what did I
+   * actually eat yesterday") was scored as calling nothing at all when the transcript shows her
+   * answering correctly from a prefetched food log: *"I've got your food log for the last few days
+   * pulled up already."* That is the design working — reads are context, actions are hers — and the
+   * scorer was calling it a miss because I mapped the case expectations onto the facade and forgot
+   * to map this.
+   *
+   * Derived from `NUTRITION_FACADE_COVERS` rather than restated here, for the same reason
+   * `KNOWN_TOOLS` is derived: a hand-kept copy is what drifted in the first place.
+   */
+  const covers = (t: string): readonly string[] => (t === GET_NUTRITION.name ? NUTRITION_FACADE_COVERS : []);
+  const gotByPrefetch = (t: string): boolean => {
+    if (ACTION_TOOLS.has(t)) return false;
+    const pre = prefetched ?? [];
+    return pre.includes(t) || covers(t).some((u) => pre.includes(u));
+  };
   const unmet = c.expect.filter((t) => !called.includes(t));
   const viaPrefetch = unmet.filter(gotByPrefetch);
   const missing = unmet.filter((t) => !gotByPrefetch(t));
