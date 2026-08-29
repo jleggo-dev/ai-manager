@@ -356,7 +356,26 @@ const READS: EvalCase[] = [
     turn: "what's my longest run in the last month? not the average, the actual longest",
     expect: ['get_workout_history'],
     allow: [...DOSSIER_READS, 'get_recent_logs', 'get_goal_progress'],
-    from: 'PLAN.md:871 (2026-08-11) — "where did that number come from?" She quoted a 90-day mean as current form.',
+    /**
+     * MADE ANSWERABLE 2026-08-29. It failed twice, and both times she was right.
+     *
+     * `cadence.workout_history` was never seeded, so `get_workout_history` could only return an
+     * empty list — the tool this case demands had nothing in it. Meanwhile the Broker prefetched
+     * `get_recent_logs`, which held the answer, and she used it: *"Your longest run in the last
+     * month was that long run on August 23 — 11.4 km in 77 minutes. Nothing since has topped it."*
+     * Correct, specific, and explicitly not an average, which is the exact failure this case was
+     * written for. It was scored a miss anyway.
+     *
+     * The fixture now seeds device runs (`eval-tool-selection-world.ts`), and the longest — 13.2 km
+     * — was never logged by hand. So the prefetched reports top out at 11.4 km and answering from
+     * them is wrong BY A NUMBER, while `get_workout_history` has the real one. The case tests the
+     * line the tool descriptions draw ("device records vs their own words", pinned by
+     * `description-audit.test.ts`) instead of asking for a tool that returns nothing.
+     */
+    from:
+      'PLAN.md:871 (2026-08-11) — "where did that number come from?" She quoted a 90-day mean as current form. ' +
+      'Made answerable 2026-08-29: the device table was empty, so the expected tool could not answer and she ' +
+      'correctly used the prefetched reports instead; the fixture now carries an unlogged 13.2 km run.',
   },
   {
     id: 'B7',
@@ -691,3 +710,14 @@ export const KNOWN_TOOLS = new Set([...DOSSIER_READS, ...alwaysOnToolNames(), ..
  * in the report as provider noise, not vanish.
  */
 export const PROVIDER_BUILTINS = new Set(['suggested_actions']);
+
+/**
+ * The discovery path, which is plumbing rather than a selection.
+ *
+ * Most tools are on-demand — absent from the always-on list, reachable only by looking them up
+ * with `find_tools` and invoking them. Counting that step as an unasked-for call penalised correct
+ * behaviour on every on-demand tool: B1 called `find_tools` then `get_journal` (precisely the
+ * designed path) and was failed on precision for it. Never counted as `extra`; a case that really
+ * does want to assert she did not go looking can name them in `forbid`, which is checked first.
+ */
+export const META_TOOLS = ['find_tools', 'use_tool'] as const;
