@@ -36,6 +36,12 @@ struct TodayView: View {
             }
         }
         .navigationTitle(weekday)
+        .toolbar {
+            // Her presence, per the settled brief: the portrait anchors the header; the mark
+            // stays the app icon. W1 bundles a stand-in portrait — the user's CHOSEN face
+            // arrives with the WatchConnectivity sync, not a new surface.
+            ToolbarItem(placement: .topBarLeading) { CoachPortrait() }
+        }
         .background(Color.black)
     }
 
@@ -64,6 +70,24 @@ struct TodayView: View {
 
     private var weekday: String {
         Date().formatted(.dateTime.weekday(.wide))
+    }
+}
+
+/** The coach's portrait, from the bundled stand-in (synced choice comes with W2). A missing
+ *  file degrades to the sage circle — never a broken image on a wrist. */
+struct CoachPortrait: View {
+    var body: some View {
+        Group {
+            if let path = Bundle.main.path(forResource: "coach", ofType: "jpg"),
+               let image = UIImage(contentsOfFile: path) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                Circle().fill(Theme.sage)
+            }
+        }
+        .frame(width: 24, height: 24)
+        .clipShape(Circle())
+        .accessibilityLabel("Your coach")
     }
 }
 

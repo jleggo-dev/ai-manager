@@ -28,6 +28,8 @@
 		CAD0C0DE2FE1001800EA8C5F /* IntervalPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000800EA8C5F /* IntervalPlayerView.swift */; };
 		CAD0C0DE2FE1001900EA8C5F /* WorkoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000900EA8C5F /* WorkoutController.swift */; };
 		CAD0C0DE2FE1002B00EA8C5F /* CadenceWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1002100EA8C5F /* CadenceWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CAD0C0DE2FE1003000EA8C5F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1002E00EA8C5F /* Assets.xcassets */; };
+		CAD0C0DE2FE1003100EA8C5F /* coach.jpg in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1002F00EA8C5F /* coach.jpg */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -55,6 +57,8 @@
 		CAD0C0DE2FE1000900EA8C5F /* WorkoutController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutController.swift; sourceTree = "<group>"; };
 		CAD0C0DE2FE1002000EA8C5F /* CadenceWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CadenceWatch.entitlements; sourceTree = "<group>"; };
 		CAD0C0DE2FE1002100EA8C5F /* CadenceWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CadenceWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CAD0C0DE2FE1002E00EA8C5F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CAD0C0DE2FE1002F00EA8C5F /* coach.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = coach.jpg; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXContainerItemProxy section */
@@ -150,6 +154,8 @@
 				CAD0C0DE2FE1000800EA8C5F /* IntervalPlayerView.swift */,
 				CAD0C0DE2FE1000900EA8C5F /* WorkoutController.swift */,
 				CAD0C0DE2FE1002000EA8C5F /* CadenceWatch.entitlements */,
+				CAD0C0DE2FE1002E00EA8C5F /* Assets.xcassets */,
+				CAD0C0DE2FE1002F00EA8C5F /* coach.jpg */,
 			);
 			path = CadenceWatch;
 			sourceTree = "<group>";
@@ -252,6 +258,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CAD0C0DE2FE1003000EA8C5F /* Assets.xcassets in Resources */,
+				CAD0C0DE2FE1003100EA8C5F /* coach.jpg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -475,6 +483,7 @@
 		CAD0C0DE2FE1002800EA8C5F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = CadenceWatch/CadenceWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -505,6 +514,7 @@
 		CAD0C0DE2FE1002900EA8C5F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = CadenceWatch/CadenceWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
