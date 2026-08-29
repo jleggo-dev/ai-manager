@@ -27,6 +27,7 @@
     "@ai-admin/core": "*",
     "@cadence/shared": "*",
     "@supabase/supabase-js": "^2",
+    "@vercel/functions": "^3.9.5",
     "dotenv": "^16",
     "express": "^4",
     "postgres": "^3.4.5",

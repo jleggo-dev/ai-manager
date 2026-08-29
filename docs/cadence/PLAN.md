@@ -8615,3 +8615,44 @@ amend → up next); wrist-side `openInWorkoutApp` for the run row; Done face (fe
 **Known debts:** Plus Jakarta Sans needs the ttf embedded (system face ships W1, recorded in
 WatchTheme); IntervalEngine has no Swift tests yet (the TS original is the tested source of
 truth — a parity test comparing expansions is the right shape); no app icon asset catalog yet.
+
+## The warm that never ran — fire-and-forget is dead on Vercel (owner device round, 2026-08-29)
+
+Three findings from the first on-wrist evening, one root cause bigger than its symptom:
+
+**1. "Blank screen" was the Today skeleton over a cold boot.** The signed-in phone boot sat on
+linen shimmer long enough to read as broken (screenshot in session). The bundle is healthy
+(desktop boot clean), the API is healthy (~120–270ms even first-hit) — the wait is the WORK the
+authed boot does, serially, worst-case on a fresh sign-in. Known PERF territory; recorded, not
+re-fixed tonight. A **boot-error trap** now ships in `index.html` (first-thing error/rejection
+listeners: echo through the console bridge + paint the message where the blank would be) — a JS
+boot failure can never again present as a silent linen void.
+
+**2. Google sign-in bounced on the first attempt** — landed back on the gate with buttons greyed
+("One moment…" stuck), recovered, worked on retry. Recorded as a finding (OAuth
+browser-return race, likely); not diagnosed tonight.
+
+**3. Tap-an-activity latency was back — because the fix for it had never run in production.**
+The owner's account: ~70 pending occurrences across eight days, **3 warm** (the three tapped
+live at ~30s each). `prefetchImminentSessions` — "fire-and-forget from BOTH its callers" — was
+`void`-fired and then `res.json()` sent: **on Vercel the instance freezes the moment the response
+goes out, killing every in-flight background promise.** The commit warm, the GET /plan backstop,
+and `buildNextWeek`'s ready-push composition all shared the pattern: verified locally (where the
+process outlives the request), dead in prod since the day each shipped. The device report of
+2026-08-25 ("a tapped row nobody had ever warmed") was this, misattributed to horizon timing.
+
+**The fix (`services/background.ts`):** `runInBackground(label, promise)` wraps Vercel's
+`waitUntil` — the invocation stays alive until the promise settles (bounded by maxDuration, so a
+cold week heals a few sessions per plan open rather than all at once); outside a request context
+(local, scripts, tests) the guard is a no-op and the living process finishes the work. Converted
+tonight: both `plan.ts` fire-and-forgets (`assessIfDue`, `prefetch`), the commit warm in
+`plan-synthesis.ts`, and the ready-push in `week-build.ts`.
+
+**Bulk relief:** `scripts/warm-sessions.ts <email> [days]` — the same prefetch from a process
+that lives; run once per cold account. Run for the owner tonight.
+
+**Follow-up owed (recorded, not done):** audit the remaining `void` sites for post-response
+execution — the `logAi` diagnostics family (mostly settle mid-request; severity low but rows can
+vanish), and `coach.ts`'s SSE-adjacent fires (the stream holds the instance open, so judged safe
+— verify, don't assume). And the boot-latency question deserves its own measured pass now that
+skeletons are provably not the network's fault.

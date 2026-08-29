@@ -13,6 +13,35 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <title>Cadence</title>
+    <!-- Boot-error trap: a JS exception during module evaluation otherwise leaves a BLANK screen
+      on device with nothing in any log a developer can reach (Capacitor prints only "JS Eval
+      error" with no message). Guards report — so the first error is echoed through the console
+      bridge (visible in the attached device console) and painted plainly once, instead of a
+      silent linen void. Runs before any module; keep it dependency-free and first. -->
+    <script>
+      window.addEventListener('error', function (e) {
+        try {
+          if (window.__bootErrorShown) return;
+          window.__bootErrorShown = true;
+          var msg = (e.message || 'unknown error') + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?');
+          var stack = e.error && e.error.stack ? String(e.error.stack).slice(0, 600) : '';
+          console.error('[boot-error]', msg, stack);
+          var root = document.getElementById('root');
+          if (root && !root.childElementCount) {
+            var pre = document.createElement('pre');
+            pre.style.cssText = 'padding:16px;font:12px monospace;white-space:pre-wrap;color:#b5453a;';
+            pre.textContent = 'Something broke while starting.\n\n' + msg + '\n\n' + stack;
+            root.appendChild(pre);
+          }
+        } catch (_) {}
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        try {
+          var r = e.reason || {};
+          console.error('[boot-rejection]', r.message || String(r), r.stack ? String(r.stack).slice(0, 600) : '');
+        } catch (_) {}
+      });
+    </script>
     <meta
       name="description"
       content="A coach you just talk to — it listens, remembers you, and turns what you say into a rhythm you can keep."
