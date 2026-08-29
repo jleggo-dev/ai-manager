@@ -16,6 +16,7 @@ export * from './types/plan.ts';
 export * from './types/occurrence.ts';
 export * from './occurrence-titles.ts';
 export * from './types/progress.ts';
+export * from './types/progress-widgets.ts';
 export * from './types/nutrition.ts';
 export * from './types/food.ts';
 export * from './types/dietary.ts';
