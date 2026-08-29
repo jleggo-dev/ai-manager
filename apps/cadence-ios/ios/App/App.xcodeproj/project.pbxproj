@@ -30,6 +30,7 @@
 		CAD0C0DE2FE1002B00EA8C5F /* CadenceWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1002100EA8C5F /* CadenceWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		CAD0C0DE2FE1003000EA8C5F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1002E00EA8C5F /* Assets.xcassets */; };
 		CAD0C0DE2FE1003100EA8C5F /* coach.jpg in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1002F00EA8C5F /* coach.jpg */; };
+		CAD0C0DE2FE1003300EA8C5F /* CadenceAuthSessionPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1003200EA8C5F /* CadenceAuthSessionPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -59,6 +60,7 @@
 		CAD0C0DE2FE1002100EA8C5F /* CadenceWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CadenceWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CAD0C0DE2FE1002E00EA8C5F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CAD0C0DE2FE1002F00EA8C5F /* coach.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = coach.jpg; sourceTree = "<group>"; };
+		CAD0C0DE2FE1003200EA8C5F /* CadenceAuthSessionPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CadenceAuthSessionPlugin.swift; path = CadenceAuthSession/CadenceAuthSessionPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXContainerItemProxy section */
@@ -129,6 +131,7 @@
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				CAD0C0DE2FE0000100EA8C5F /* CadenceCoachIdentityPlugin.swift */,
 				CAD0C0DE2FE0000300EA8C5F /* CadenceWorkoutPlanPlugin.swift */,
+				CAD0C0DE2FE1003200EA8C5F /* CadenceAuthSessionPlugin.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -274,6 +277,7 @@
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				CAD0C0DE2FE0000200EA8C5F /* CadenceCoachIdentityPlugin.swift in Sources */,
 				CAD0C0DE2FE0000400EA8C5F /* CadenceWorkoutPlanPlugin.swift in Sources */,
+				CAD0C0DE2FE1003300EA8C5F /* CadenceAuthSessionPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
