@@ -1,10 +1,8 @@
-import { injectCoachContext } from '../ai/aim.ts';
 import { getUser } from '../repos/users.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { countNutritionDays } from '../repos/nutrition.ts';
 import { wantsTargets } from './nutrition-parse.ts';
 import { listEquipment } from '../repos/equipment.ts';
-import { classifyFoodIntent, FOOD_CONFIRM_CONTEXT } from './coach-food-classify.ts';
 import { injectTurnContext } from './turn-context.ts';
 import { startingPointGaps } from './intake.ts';
 
@@ -164,15 +162,15 @@ export function intentFraming(intent: CoachIntent, topic?: CoachTopic): string {
  * so the coach sees fresh, turn-relevant data instead of only the session-open snapshot. The user's
  * message is always returned UNCHANGED — the retrieval is a side-effect on the session, never mixed
  * into the user's turn. Best-effort: a retrieval failure never blocks the message.
+ *
+ * MP21/MP40 (FOOD-ENGINE.md §7): this used to also run `classifyFoodIntent` and, on any match,
+ * inject `FOOD_CONFIRM_CONTEXT` — a stand-down paragraph opening with "you do NOT log food
+ * yourself". That was the software deciding a message was "about food" and managing the Coach
+ * around it instead of letting her act. Deleted along with the classifier's `log_food` kind: she
+ * now has `preview_meal` and `log_meal` as real tools, so there is nothing left for this hook to
+ * warn her off.
  */
 export async function assembleTurn(userId: string, sessionId: string, message: string): Promise<string> {
   await injectTurnContext(userId, sessionId, message).catch((e) => console.error('[assembleTurn]', e));
-  // Req 5 coach food surface: confirm-before-commit — remind the model not to claim a log/save.
-  if (classifyFoodIntent(message)) {
-    await injectCoachContext(userId, sessionId, FOOD_CONFIRM_CONTEXT, {
-      source: 'food-confirm',
-      version: 1,
-    }).catch((e) => console.error('[assembleTurn food-confirm]', e));
-  }
   return message;
 }

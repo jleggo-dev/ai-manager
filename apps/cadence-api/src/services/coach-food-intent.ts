@@ -1,11 +1,16 @@
 /**
- * Req 5 coach food surface — prepare confirm-first actions from a chat turn.
- * Reuses resolve / recipes from-chat / dietary profile; never commits.
+ * Req 5 coach food surface — prepare confirm-first actions from a chat turn, for the two kinds
+ * with no screen of their own: a captured recipe and a dietary-profile change.
+ *
+ * MP21/MP40 (FOOD-ENGINE.md §7): a plain meal used to classify here too (`kind: 'log_food'`) and
+ * `materializeAction` always returned null for it — the sheet was retired 2026-08-19 and the kind
+ * survived only to drive `FOOD_CONFIRM_CONTEXT` from a different call site (coach-context.ts). Both
+ * are gone now: she has `preview_meal` and `log_meal` as real tools and calls them herself, so
+ * nothing needs to classify a message as "about food" before she can act on it.
  */
-import type { DietaryProfile, MealKind } from '@cadence/shared';
+import type { DietaryProfile } from '@cadence/shared';
 import { getDietaryProfile } from '../repos/users.ts';
 import { recipeFromChat, type RecipeDraft } from './recipe.ts';
-import type { ResolveResult } from './food-resolver.ts';
 import {
   classifyFoodIntent,
   mergeDietaryProposal,
@@ -15,20 +20,10 @@ import {
 
 export {
   classifyFoodIntent,
-  FOOD_CONFIRM_CONTEXT,
   mergeDietaryProposal,
-  parseUsualMeal,
   type ClassifiedFoodIntent,
   type CoachFoodIntentKind,
 } from './coach-food-classify.ts';
-
-export type CoachFoodLogAction = {
-  kind: 'log_food';
-  query: string;
-  mealHint?: MealKind;
-  usualMeal?: MealKind;
-  resolve: ResolveResult;
-};
 
 export type CoachFoodRecipeAction = {
   kind: 'save_recipe';
@@ -42,7 +37,7 @@ export type CoachFoodDietaryAction = {
   proposed: DietaryProfile;
 };
 
-export type CoachFoodAction = CoachFoodLogAction | CoachFoodRecipeAction | CoachFoodDietaryAction;
+export type CoachFoodAction = CoachFoodRecipeAction | CoachFoodDietaryAction;
 
 export interface PrepareFoodActionInput {
   message: string;
@@ -74,19 +69,6 @@ async function materializeAction(
   window: string | undefined,
 ): Promise<CoachFoodAction | null> {
   switch (classified.kind) {
-    /**
-     * **No sheet for a meal any more** (owner ruling 2026-08-19): *"logging food should probably
-     * just have the AI tell the user to go into the nutrition module… I don't care to have a log
-     * nutrition popup like that, it breaks our new nutrition UI."*
-     *
-     * The Food home is now a real screen with a diary, slot rows and one-tap confirm, so a sheet
-     * arriving over the conversation competes with it — and when the classifier is wrong, it
-     * interrupts to ask someone to affirm something absurd. The intent is still DETECTED, because
-     * the coach is told to point at the module (`FOOD_CONFIRM_CONTEXT`); it just no longer draws
-     * anything. Recipes and dietary updates keep their sheets: neither has a screen of its own.
-     */
-    case 'log_food':
-      return null;
     case 'save_recipe': {
       const recipeText = classified.needsWindow
         ? recipeTextFromWindow(window ?? '', message)

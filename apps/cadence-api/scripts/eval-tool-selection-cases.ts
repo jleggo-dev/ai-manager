@@ -1,5 +1,5 @@
 /**
- * The golden set for the tool-selection eval — 36 turns, every one of them sourced from something
+ * The golden set for the tool-selection eval — 42 turns, every one of them sourced from something
  * that actually happened. See `eval-tool-selection.ts` for how they are run and scored.
  *
  * THE VOICE IS THE POINT. Every turn here is lowercase, hedged, half-punctuated and often about
@@ -216,6 +216,44 @@ const ACTIONS: EvalCase[] = [
     allow: [...DOSSIER_READS, 'get_recent_logs'],
     from: 'Owner transcript 2026-08-19 12:12, adapted to the seeded world. His words were "cut out everything expcept piano and meal tracking"; pasted verbatim the case tested nothing, because this world has no piano and no overloaded day, and she correctly asked what he meant ("today\'s actually a pretty light day already"). What survives is the shape that produced the failure: a rough stretch named as the reason, specific commitments named for removal, and a coach whose brand voice tempts her to reassure instead of act.',
   },
+  /**
+   * A14 and A15 lived in SILENCE, both `expect: []`, from MP34 (2026-08-28) until now. `log_nutrition`
+   * had been withdrawn 2026-08-19 and nothing had replaced it, so calling nothing was briefly the
+   * correct answer and a hallucinated logging call still failed the case. MP21/MP40 (2026-08-28,
+   * this parcel) is the tool that was missing — moved back here, `expect` flipped to name it, exactly
+   * as the note left on both said to do.
+   */
+  {
+    id: 'A14',
+    kind: 'action',
+    turn: 'just got back from the ride, downed a big bottle of water, maybe 750ml. felt good out there',
+    expect: ['log_meal'],
+    allow: [...DOSSIER_READS, 'log_session', 'get_recent_logs'],
+    args: {
+      tool: 'log_meal',
+      check: (a) => (/water/i.test(str(a.text)) ? null : `text "${String(a.text)}" did not carry "water"`),
+    },
+    from:
+      'Owner directive 2026-08-19 — nutrition as a callable tool; water is the case the confirm sheet never ' +
+      'caught. Reopened 2026-08-28 (MP34) as silence when log_nutrition turned out to be gone; reopened again ' +
+      'now that log_meal exists to call. "the ride" may also earn log_session — both are correct here.',
+  },
+  {
+    id: 'A15',
+    kind: 'action',
+    turn: 'oh and i never logged lunch — had leftover chili around noon, decent bowl of it',
+    expect: ['log_meal'],
+    allow: [...DOSSIER_READS, 'get_food_log'],
+    args: {
+      tool: 'log_meal',
+      check: (a) => (/chili/i.test(str(a.text)) ? null : `text "${String(a.text)}" did not carry "chili"`),
+    },
+    from:
+      'Owner directive 2026-08-19 — the remembered-meal case: food arriving sideways, hours after the fact, ' +
+      'exactly what "just tell Cadence in chat that they ate it and it gets logged" (PLAN.md, "Meal prep, end ' +
+      'to end") describes. Reopened 2026-08-28 (MP34) as silence when log_nutrition turned out to be gone; ' +
+      'reopened again now that log_meal exists to call. No explicit date: "around noon" today means omit it.',
+  },
 ];
 
 /* ══ B · LONG-TAIL READS — the ones nothing injects, so a miss is genuinely a miss ═══════════ */
@@ -293,6 +331,28 @@ const READS: EvalCase[] = [
     },
     from: 'PLAN.md:4022 (2026-07) — the standing nit: the window in the words does not reach the call.',
   },
+  {
+    id: 'B9',
+    kind: 'read',
+    turn: "thinking about breakfast — roughly how many calories in two eggs, toast and half an avocado?",
+    expect: ['preview_meal'],
+    allow: [...DOSSIER_READS, 'lookup_food', 'check_food_sources'],
+    forbid: ['log_meal'],
+    from:
+      'MP21/MP40 (2026-08-28) — a hypothetical, not a meal yet: "thinking about" is the tell. preview_meal ' +
+      'prices it without writing anything down; log_meal here would invent a meal nobody has eaten.',
+  },
+  {
+    id: 'B10',
+    kind: 'read',
+    turn:
+      'can you look up the wild mushroom co mixed dried mushrooms — i cannot find their nutrition panel anywhere online and want the real numbers off it, not a guess',
+    expect: ['research_food'],
+    allow: [...DOSSIER_READS, 'check_food_sources', 'lookup_food'],
+    from:
+      'MP27 (2026-08-28), PLAN.md "Meal prep, end to end" — the scenario\'s own line, verbatim in spirit. A ' +
+      'named vendor, an explicit "I could not find it", worth the wait for the exact numbers.',
+  },
 ];
 
 /* ══ C · SILENCE — a set of only positive cases measures recall and ignores false triggering ══ */
@@ -311,10 +371,11 @@ const SILENCE: EvalCase[] = [
     turn: 'i had to skip it',
     expect: [],
     allow: [...DOSSIER_READS, 'get_recent_logs', 'correct_log'],
-    // log_nutrition was in this list until MP34 (2026-08-28) — withdrawn 2026-08-19, nothing has
-    // replaced it, and a forbidden tool that cannot be called proves nothing. Drop it back in if a
-    // logging tool returns (MP21).
-    forbid: ['lookup_food', 'get_food_log'],
+    // log_meal (MP21/MP40, 2026-08-28) is the tool this turn used to be about: it read as food
+    // ("skip it" → "a Spartan Beast, for breakfast") and there is nothing here to log — no food
+    // word, no first-person "had", nothing eaten. A model reaching for log_meal or preview_meal on
+    // a bare training-skip is the exact failure this case exists to catch.
+    forbid: ['lookup_food', 'get_food_log', 'log_meal', 'preview_meal'],
     from: 'PLAN.md:5783 (2026-08-15) — verbatim. This logged a ~2000 kcal Spartan Beast for breakfast.',
   },
   {
@@ -331,8 +392,10 @@ const SILENCE: EvalCase[] = [
     turn: "i'm just tired today honestly. not sure i want to talk about training",
     expect: [],
     allow: [...DOSSIER_READS],
-    // log_nutrition was in this list until MP34 (2026-08-28) — see the note on C2 above.
-    forbid: ['propose_plan_change', 'update_goal', 'update_constraint', 'log_session'],
+    // log_meal (MP21/MP40, 2026-08-28) joins the forbid list for the same reason as C2 — see the
+    // note there. Nothing here is food, tired is not a meal, and a data-entry reflex is precisely
+    // the voice failure this case exists to catch.
+    forbid: ['propose_plan_change', 'update_goal', 'update_constraint', 'log_session', 'log_meal'],
     from: 'PLAN.md:658 (2026-08-10) — the voice failure. A hard day is not a data-entry event.',
   },
   {
@@ -388,40 +451,59 @@ const SILENCE: EvalCase[] = [
     from: 'The cheapest possible turn — and the one where a 5,000-token tool preamble buys nothing.',
   },
   /**
-   * A14 and A15 lived in `ACTIONS` above, both `expect: ['log_nutrition']`, until MP34
-   * (2026-08-28) found `log_nutrition` had been withdrawn 2026-08-19 — the SAME day these two were
-   * written — and never replaced. PLAN.md MP21: "No coach-callable tool writes
-   * `cadence.nutrition_logs`... the chat path deliberately writes nothing." That is a ruling, not a
-   * bug, so today's correct behaviour on both turns is calling nothing — moved here rather than
-   * deleted, kept as `A14`/`A15` rather than renumbered so the eval-history table in
-   * TOOL-HARNESS.md and PLAN.md's MP34 row still point at the right case.
-   *
-   * NOT rewritten to expect some other tool: MP21 is a separate, unbuilt requirement and inventing
-   * a replacement here would test a tool that does not exist. When MP21 lands, flip `expect` back
-   * to name it and these belong back in `ACTIONS`.
+   * C11–C14 (MP21/MP40, 2026-08-28) — restraint cases for the food write surface, added alongside
+   * A14/A15's restoration and deliberately outnumbering it. The deleted `NOT_FOOD_CONTEXT` veto and
+   * the `log_food` regex were crude protection against exactly this failure shape: logging
+   * something the person was only thinking about, asking about, or mentioning in passing. Removing
+   * them puts the burden on her judgement, so these are what stand in for that protection now — the
+   * failure that matters here is not a missed meal (she would be asked again) but an invented one.
    */
   {
-    id: 'A14',
+    id: 'C11',
     kind: 'silence',
-    turn: 'just got back from the ride, downed a big bottle of water, maybe 750ml. felt good out there',
+    turn: "i'm thinking about trying that mushroom sauce recipe this weekend, pork chops with a creamy sauce",
     expect: [],
-    allow: [...DOSSIER_READS, 'log_session', 'get_recent_logs'],
+    allow: [...DOSSIER_READS, 'get_recipes'],
+    forbid: ['log_meal', 'preview_meal'],
     from:
-      'Owner directive 2026-08-19 — nutrition as a callable tool; water is the case the confirm sheet never ' +
-      'catches. Reopened 2026-08-28 (MP34): `log_nutrition` no longer exists and nothing reads water_ml from ' +
-      'chat, so the only correct call today is none — kept as a silence case so a hallucinated logging call ' +
-      'still fails it.',
+      'A recipe someone MIGHT cook, not one they made — no ingredients, no quantities, plainly future tense. ' +
+      'log_meal here would invent a meal that has not happened; preview_meal has nothing to price either.',
   },
   {
-    id: 'A15',
+    id: 'C12',
     kind: 'silence',
-    turn: 'oh and i never logged lunch — had leftover chili around noon, decent bowl of it',
+    turn: "what should i actually have for dinner tonight, i want something high protein but i'm bored of chicken",
     expect: [],
-    allow: [...DOSSIER_READS, 'get_food_log'],
+    allow: [...DOSSIER_READS, 'get_recipes', 'lookup_food'],
+    forbid: ['log_meal', 'preview_meal'],
     from:
-      'Owner directive 2026-08-19 — the remembered-meal case: food arriving sideways, hours after the fact. ' +
-      'Reopened 2026-08-28 (MP34): this is the exact scenario PLAN.md MP21 names as still needed, but ' +
-      '`log_nutrition` is gone and MP21 is not built, so the correct call today is none.',
+      'Asking WHAT to eat, not reporting what she ate — advice-seeking with no food named yet to parse or ' +
+      'price. The correct response is a suggestion, not a tool call that assumes the meal already happened.',
+  },
+  {
+    id: 'C13',
+    kind: 'silence',
+    turn:
+      "i've been so wiped this week, barely touching my lunch most days if i'm honest. is that something i should be worried about?",
+    expect: [],
+    allow: [...DOSSIER_READS, 'get_food_log', 'get_recent_logs'],
+    forbid: ['log_meal', 'preview_meal'],
+    from:
+      'A past meal mentioned in service of a wellness question, not a log request — "barely touching my ' +
+      'lunch" has no amount, no day, and is not why she is talking. The question is about energy, and ' +
+      'get_food_log (not a write) is the reasonable way to check the pattern behind it.',
+  },
+  {
+    id: 'C14',
+    kind: 'silence',
+    turn: "what's the protein in a quest bar, the cookies and cream one",
+    expect: [],
+    allow: [...DOSSIER_READS, 'lookup_food', 'check_food_sources'],
+    forbid: ['research_food'],
+    from:
+      'MP27 restraint: a common, widely-sold product a shared database almost certainly already carries. ' +
+      'research_food is slow and billed for exactly the cases the free sources cannot cover — reaching for ' +
+      'it before trying lookup_food or check_food_sources is the failure its description exists to prevent.',
   },
 ];
 
@@ -479,9 +561,13 @@ const CANARIES: EvalCase[] = [
 export const CASES: EvalCase[] = [...CANARIES, ...ACTIONS, ...READS, ...SILENCE];
 
 /**
- * The six that change the user's data. Load-bearing for scoring, not decoration: a READ she did
+ * The seven that change the user's data. Load-bearing for scoring, not decoration: a READ she did
  * not call may have been handed to her by the Broker's prefetch and the run credits that, whereas
  * an action has no second path — nothing but the call can satisfy it.
+ *
+ * `log_meal` joined 2026-08-28 (MP21/MP40) — the tool that used to not exist, which is why A14/A15
+ * spent a stretch as silence cases. `preview_meal` and `research_food` are reads and belong in
+ * `KNOWN_TOOLS` below, not here.
  */
 export const ACTION_TOOLS = new Set([
   'propose_plan_change',
@@ -490,6 +576,7 @@ export const ACTION_TOOLS = new Set([
   'log_session',
   'correct_log',
   'set_macro_targets',
+  'log_meal',
 ]);
 
 /** The set a call must belong to; anything else the model emits is an invented tool. */
@@ -505,6 +592,8 @@ export const KNOWN_TOOLS = new Set([
   'get_recipes',
   'get_macro_targets',
   'lookup_food',
+  'preview_meal',
+  'research_food',
 ]);
 
 /**

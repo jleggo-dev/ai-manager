@@ -1,34 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import {
   classifyFoodIntent,
-  extractLogQuery,
-  FOOD_CONFIRM_CONTEXT,
   mergeDietaryProposal,
-  parseUsualMeal,
   proposeDietaryPatch,
   recipeTextFromWindow,
 } from './coach-food-classify.ts';
 
 describe('classifyFoodIntent', () => {
-  it('detects usual breakfast as log_food', () => {
-    const c = classifyFoodIntent('I had my usual breakfast');
-    expect(c?.kind).toBe('log_food');
-    if (c?.kind === 'log_food') {
-      expect(c.usualMeal).toBe('breakfast');
-      expect(c.mealHint).toBe('breakfast');
-      expect(c.query).toBe('breakfast');
-    }
-  });
-
-  it('detects I ate / I had food phrases', () => {
-    const c = classifyFoodIntent('I ate 3 eggs and toast');
-    expect(c?.kind).toBe('log_food');
-    if (c?.kind === 'log_food') expect(c.query).toMatch(/eggs/);
-  });
-
-  it('does not treat goal-setting as a log', () => {
+  it('does not treat goal-setting or a plain meal as anything — she has real tools for that now', () => {
+    // MP21/MP40: a plain meal is no longer classified here at all. "I ate 3 eggs" used to come
+    // back `kind: 'log_food'`; now it is null, exactly like any other ordinary turn, because
+    // preview_meal/log_meal are tools she calls herself rather than a regex deciding for her.
     expect(classifyFoodIntent('I want to eat better')).toBeNull();
-    expect(classifyFoodIntent('I want to have more energy')).toBeNull();
+    expect(classifyFoodIntent('I ate 3 eggs and toast')).toBeNull();
+    expect(classifyFoodIntent('I had a chicken salad for lunch')).toBeNull();
+    expect(classifyFoodIntent('I had my usual breakfast')).toBeNull();
   });
 
   it('detects save as recipe', () => {
@@ -46,6 +32,51 @@ describe('classifyFoodIntent', () => {
     }
   });
 
+  /**
+   * MP6 (FOOD-ENGINE.md) — the meal-prep scenario's own message, which the OLD gate never caught:
+   * no literal "I made" (it says "Made the mushroom sauce"), and "Yields 3 cups" is not the
+   * "makes N" / "serves N" the old pattern demanded. Reproduced at reduced length.
+   */
+  it('catches the meal-prep scenario: a cooking verb plus an ingredient list, no "serves N"', () => {
+    const turn = [
+      'Doing my weekend prep for meals this week - going to make pork chops with mushroom sauce.',
+      'Made the mushroom sauce:',
+      '',
+      '**Mushroom sauce**',
+      '- 680g button mushrooms',
+      '- 500 ml evaporated milk, no name brand',
+      '- 1 tbsp black pepper',
+      '- 1/2 tsp salt',
+      '- 1/2 tsp xanthan gum',
+      '- 1 tbsp chopped rosemary',
+      '- 1 tbsp chopped tarragon',
+      '- 3 shallots',
+      '- 2 green onions',
+      '- 1 tbsp collagen (organika)',
+      '- 15 pieces of mixed dried mushroom from "the wild mushroom co"',
+      '',
+      'Yields 3 cups of sauce',
+    ].join('\n');
+    expect(classifyFoodIntent(turn)?.kind).toBe('save_recipe');
+  });
+
+  it('catches a stated yield even with a short ingredient list', () => {
+    const turn = ['Prepped a quick dressing:', '- 2 tbsp olive oil', '- 1 tbsp vinegar', 'Makes 1/4 cup'].join('\n');
+    expect(classifyFoodIntent(turn)?.kind).toBe('save_recipe');
+  });
+
+  it('does not read a workout report as a recipe', () => {
+    // The shape that made the ingredient-list heuristic worth guarding: a rep scheme is also
+    // "several lines starting with a number", and "made it through leg day" contains "made".
+    const turn = ['Made it through leg day:', '3x10 squats', '3x10 lunges', '3x10 leg press'].join('\n');
+    expect(classifyFoodIntent(turn)).toBeNull();
+  });
+
+  it('does not read an ordinary "made" sentence as a recipe with no yield or list', () => {
+    expect(classifyFoodIntent('I made a mistake booking the gym, sorted now')).toBeNull();
+    expect(classifyFoodIntent('made it to the session on time for once')).toBeNull();
+  });
+
   it('detects dietary allergies and diet labels', () => {
     const a = classifyFoodIntent("I'm allergic to peanuts and shellfish");
     expect(a?.kind).toBe('dietary_update');
@@ -61,18 +92,6 @@ describe('classifyFoodIntent', () => {
     const c = classifyFoodIntent('I dislike cilantro');
     expect(c?.kind).toBe('dietary_update');
     if (c?.kind === 'dietary_update') expect(c.patch.dislikes).toContain('cilantro');
-  });
-});
-
-describe('extractLogQuery / parseUsualMeal', () => {
-  it('strips lead-ins', () => {
-    expect(extractLogQuery('I just had greek yogurt')).toBe('greek yogurt');
-    expect(extractLogQuery('log my lunch')).toBe('lunch');
-  });
-
-  it('parses usual meal', () => {
-    expect(parseUsualMeal('my usual dinner')).toBe('dinner');
-    expect(parseUsualMeal('eggs')).toBeUndefined();
   });
 });
 
@@ -97,160 +116,19 @@ describe('dietary merge + recipe window', () => {
 });
 
 /**
- * Regression: the worst false positive we have shipped. Reported from the device — the user was
- * talking about Spartan races, and a confirm sheet appeared offering to log "1 beast" for
- * breakfast at ~2000 kcal.
- *
- * `had` is an auxiliary verb far more often than it is eating. These are all sentences a coaching
- * conversation produces constantly, and none of them is a meal.
+ * Someone else's meal must still not read as a recipe or a dietary change — the classifier's only
+ * remaining jobs. The first-person guard that used to protect log_food is gone WITH log_food; what
+ * is left here is checking the two surviving kinds stay silent on ordinary third-person chatter.
  */
-describe('"had" is usually not eating', () => {
-  const notMeals = [
-    'I do at least one beast a year, but I had to skip it this year',
-    'I had to skip my run yesterday',
-    'I had been running consistently until October',
-    'I had a rough week at work',
-    'I had a long day and did not get out',
-    'I had enough of the treadmill',
-  ];
-  for (const line of notMeals) {
-    it(`does not offer to log: "${line}"`, () => {
-      expect(classifyFoodIntent(line)).toBeNull();
-    });
-  }
-
-  /** The guard must not cost us the real thing. */
-  const meals = [
-    'I had eggs and toast',
-    'I had a chicken salad for lunch',
-    'just ate a banana',
-    'I had my usual breakfast',
-  ];
-  for (const line of meals) {
-    it(`still catches: "${line}"`, () => {
-      expect(classifyFoodIntent(line)?.kind).toBe('log_food');
-    });
-  }
-});
-
-/**
- * The turns that must NOT open a food sheet — each one a real message that did.
- *
- * A wrong draft here is expensive in a way a missed one is not: the sheet interrupts a
- * conversation to ask someone to affirm something absurd, which is how confirm-first loses trust
- * instead of earning it. So the bias is silence when the only evidence is the word "had".
- */
-describe('classifyFoodIntent — what is not a meal', () => {
-  const notFood = (msg: string) => expect(classifyFoodIntent(msg)?.kind).not.toBe('log_food');
-
-  it('does not price a training report as a food', () => {
-    // Observed on device 2026-08-15: this reached estimate-food, which returned
-    // {"name":"That last run","serving_label":"1 run"}. The old guard listed adjectives right
-    // after "had a", so the adverb in "a really hard time" walked straight past it.
-    notFood('That last run was good but I had a really hard time keeping my Hr in zone 2 (except for walking).');
-  });
-
-  it('survives the modifier that broke the last version', () => {
-    notFood('I had a really hard time today');
-    notFood('I had an absolutely brutal week');
-    notFood('I had a pretty rough night');
-  });
-
-  it('still refuses the Spartan Beast', () => {
-    notFood('I do at least one beast a year, but I had to skip it this year');
-  });
-
-  it('ignores auxiliary "had" in ordinary talk', () => {
-    notFood('I had been running before the knee went');
-    notFood('I had enough of the treadmill');
-    notFood("I've had a look at the plan");
-    notFood('I had a chat with my physio about the elbow');
-  });
-
-  it('does not fire on sleep, mood or injury talk', () => {
-    notFood('I had a terrible sleep and my shoulder is sore');
-    notFood('Had a stressful day, skipped my session');
-  });
-});
-
-describe('classifyFoodIntent — what IS a meal', () => {
-  const isFood = (msg: string) => expect(classifyFoodIntent(msg)?.kind).toBe('log_food');
-
-  it('reads the specific verbs without help', () => {
-    isFood('I ate a burrito');
-    isFood('just drank a protein shake');
-  });
-
-  it('reads a meal word even inside a busy sentence', () => {
-    // The activity veto must not swallow a real log that happens to mention training.
-    isFood('after my run I had breakfast');
-    isFood('I had a coffee before the session');
-  });
-
-  it('reads a plain "had" when nothing contradicts it', () => {
-    isFood('I had a burrito');
-    isFood('I had two eggs and toast');
-  });
-});
-
-/**
- * The bead in the ear (owner, 2026-08-19) — the failure that proved a not-food NOUN list can
- * never be finished, and the one that cost more than a silly sheet.
- *
- * > "Thank you. Can we clean the plan up though? My son is okay he just had a bead stuck in his
- * > ear. I can still log my meals."
- *
- * The classifier read that as a meal, so `estimate-food` was handed a child's ER trip and priced
- * it as "Unknown Food" (confidence 0.3) behind a confirm sheet — AND the match injected
- * `FOOD_CONFIRM_CONTEXT`, which told the coach a sheet was up. She acknowledged it and never
- * called `propose_plan_change`, on the very turn he asked her to clean up his plan.
- *
- * Neither "bead" nor "ear" belongs on a not-food list; no list would have held. What holds is that
- * a food log is FIRST PERSON.
- */
-describe('someone else had it — never the user’s meal', () => {
-  const notMine = [
-    'Thank you. Can we clean the plan up though? My son is okay he just had a bead stuck in his ear. I can still log my meals.',
-    'he just had a bead stuck in his ear',
+describe('ordinary chatter about other people stays silent', () => {
+  const notFood = [
+    'Thank you. Can we clean the plan up though? My son is okay he just had a bead stuck in his ear.',
     'my daughter had a rough night',
     'she had surgery on Tuesday so I am on kid duty',
-    'they had a long drive up',
   ];
-  for (const line of notMine) {
-    it(`does not offer to log: "${line.slice(0, 52)}…"`, () => {
+  for (const line of notFood) {
+    it(`classifies nothing for: "${line.slice(0, 52)}…"`, () => {
       expect(classifyFoodIntent(line)).toBeNull();
     });
   }
-
-  /** First person still logs — including "we", which is the user eating too. */
-  const mine = ['I had a burrito', 'we had dinner at my parents', 'I had eggs and toast'];
-  for (const line of mine) {
-    it(`still catches: "${line}"`, () => {
-      expect(classifyFoodIntent(line)?.kind).toBe('log_food');
-    });
-  }
-});
-
-/**
- * The injected stand-down must be about the FOOD and nothing else. It used to open "Acknowledge
- * what you heard and wait", which reads as an instruction about the whole turn — the mechanism
- * behind a coach who agreed to change a plan and then did not call the tool.
- */
-describe('FOOD_CONFIRM_CONTEXT points at the module and frees the rest of the turn', () => {
-  it('sends them to the Food home rather than promising a card', () => {
-    expect(FOOD_CONFIRM_CONTEXT).toMatch(/Food home/i);
-    expect(FOOD_CONFIRM_CONTEXT).toMatch(/no card is coming/i);
-    expect(FOOD_CONFIRM_CONTEXT).toMatch(/never say it is logged/i);
-  });
-
-  it('offers to start tracking when it is not in their plan, rather than assuming', () => {
-    expect(FOOD_CONFIRM_CONTEXT).toMatch(/not part of their plan/i);
-    expect(FOOD_CONFIRM_CONTEXT).toMatch(/ask plainly/i);
-  });
-
-  /** The clause that unblocks the plan: mentioning a meal must not freeze everything else. */
-  it('tells her to act on the rest of the turn as normal', () => {
-    expect(FOOD_CONFIRM_CONTEXT).toMatch(/plan change/i);
-    expect(FOOD_CONFIRM_CONTEXT).toMatch(/exactly as you normally would/i);
-  });
 });

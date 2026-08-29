@@ -52,7 +52,10 @@ describe('what she carries', () => {
   });
 
   it('carries far fewer definitions than the eighteen reads it replaced', () => {
-    expect(coachToolDefinitions().length).toBeLessThan(12);
+    // 12 as of 2026-08-28 (MP21/MP40 added `log_meal` to ALWAYS_ACTIONS) — still far under the 18
+    // reads this tiering replaced, and under the 24-tool total from before the split. Bump this
+    // deliberately, one at a time, rather than loosening it to something that stops noticing growth.
+    expect(coachToolDefinitions().length).toBeLessThan(13);
   });
 
   /** The whole point. A read in the tail costs zero tokens per turn, so reads are free to add. */

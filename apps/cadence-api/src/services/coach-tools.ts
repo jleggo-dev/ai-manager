@@ -73,6 +73,33 @@ const TOOL_PARAMS: Record<string, { properties: Record<string, unknown>; require
     },
     required: ['q'],
   },
+  // MP21/MP40 (FOOD-ENGINE.md §7 §8) — the Coach's write surface. `preview_meal` and `research_food`
+  // are reads (no side effects); `log_meal`, the commit half, is an action and declares its own
+  // parameters directly on its CoachActionTool entry in coach-actions.ts, so it needs no row here.
+  preview_meal: {
+    properties: {
+      text: {
+        type: 'string',
+        description: 'Their own words about the food — not your summary of it, e.g. "two eggs, toast and coffee".',
+      },
+      meal: {
+        type: 'string',
+        enum: ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'],
+        description: 'Which meal, when they said one. Omit and the parse guesses from context.',
+      },
+    },
+    required: ['text'],
+  },
+  research_food: {
+    properties: {
+      name: { type: 'string', description: 'What the product is, e.g. "mixed dried mushrooms".' },
+      brand: {
+        type: 'string',
+        description: 'Who makes it, when they named it, e.g. "the wild mushroom co". Omit only if nobody did.',
+      },
+    },
+    required: ['name'],
+  },
 };
 
 export interface CoachToolCall {

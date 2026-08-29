@@ -1,20 +1,25 @@
 /**
- * Pure coach food-intent classification (Req 5 coach surface).
- * Deterministic — no DB / AIM. prepareCoachFoodAction runs the side effects.
+ * Pure coach food-intent classification for the two surfaces with NO screen of their own: a
+ * captured recipe and a dietary-profile change. Both still produce a confirm card via
+ * `POST /coach/food-actions` (coach-food-intent.ts) because neither has a Food-tab equivalent to
+ * finish on.
+ *
+ * WHAT USED TO LIVE HERE AND WHY IT DOES NOT ANY MORE (MP21/MP40, FOOD-ENGINE.md §7): a third
+ * kind, `log_food`, ran a second, parallel regex pass over every message to decide whether the
+ * Coach was told `FOOD_CONFIRM_CONTEXT` — a paragraph whose first job was telling her what she may
+ * not say ("you do NOT log food yourself"). That was the software deciding and the Coach being
+ * managed around it, exactly the inversion TOOL-HARNESS.md exists to reject. She now has real
+ * tools — `preview_meal` and `log_meal` — and calls them herself; nothing needs to classify a
+ * message as "about food" first. Deleted with it: `hasLogFoodIntent`, the `NOT_FOOD_CONTEXT` /
+ * `SOMEONE_ELSE_HAD` / `NOT_FOOD_NOUN` guards built to keep that regex from firing on training
+ * reports and someone else's meal, `parseUsualMeal`, `parseMealHint`, `extractLogQuery`, and
+ * `FOOD_CONFIRM_CONTEXT` itself. The burden those guards carried moves to her judgement — see the
+ * restraint cases in `scripts/eval-tool-selection-cases.ts`.
  */
-import type { DietaryProfile, MealKind } from '@cadence/shared';
+import type { DietaryProfile } from '@cadence/shared';
 import { DIET_OPTIONS, EMPTY_DIETARY_PROFILE } from '@cadence/shared';
 
-export type CoachFoodIntentKind = 'log_food' | 'save_recipe' | 'dietary_update';
-
-export interface ClassifiedLogFood {
-  kind: 'log_food';
-  /** Text to resolve (after stripping "I had" / "usual …"). */
-  query: string;
-  /** When the user said "usual breakfast" etc. */
-  usualMeal?: MealKind;
-  mealHint?: MealKind;
-}
+export type CoachFoodIntentKind = 'save_recipe' | 'dietary_update';
 
 export interface ClassifiedSaveRecipe {
   kind: 'save_recipe';
@@ -28,31 +33,7 @@ export interface ClassifiedDietary {
   patch: Partial<DietaryProfile>;
 }
 
-export type ClassifiedFoodIntent = ClassifiedLogFood | ClassifiedSaveRecipe | ClassifiedDietary;
-
-const MEAL_WORDS: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack'];
-
-/**
- * What the coach is told when a turn mentions eating.
- *
- * **It used to describe a confirm sheet and tell her to wait for it. Both halves were wrong.**
- * The sheet is gone (owner ruling 2026-08-19 — logging belongs in the nutrition module, not in a
- * popup over the conversation), and "acknowledge what you heard and wait" read as an instruction
- * about the WHOLE turn: on a message that mentioned a meal AND asked for a plan change, she
- * acknowledged and waited, and the plan never moved.
- *
- * So it now says the two true things: point them at the screen that does this properly, and let
- * the rest of the turn proceed exactly as it would have. Keeping the name means every call site
- * and test that referenced it still resolves.
- */
-export const FOOD_CONFIRM_CONTEXT = [
-  'FOOD MENTIONED: they said something about what they ate or drank.',
-  'You do NOT log food yourself and no card is coming, so never say it is logged, saved or counted.',
-  'Point them at their Food home instead — it is one tap from the food strip on their plan, and it holds the day, every meal slot, water and their targets.',
-  'Say it in one short line, in your own words, and only once — it is a signpost, not a lecture.',
-  'If food tracking is not part of their plan at all, do not assume they want it: ask plainly whether they would like to start tracking what they eat, and if they say yes, put up the card that adds it.',
-  'None of this changes the rest of the turn: if they also asked for a plan change, a goal edit or anything else, do that now with the right tool exactly as you normally would.',
-].join(' ');
+export type ClassifiedFoodIntent = ClassifiedSaveRecipe | ClassifiedDietary;
 
 function hasDietaryIntent(t: string): boolean {
   return (
@@ -63,115 +44,46 @@ function hasDietaryIntent(t: string): boolean {
   );
 }
 
+/**
+ * A line that reads as one recipe ingredient — a leading quantity, then either a unit attached
+ * directly ("680g") or at least a space before the next word ("3 shallots"). The second form is
+ * deliberately loose (recipes name bare counts constantly — "2 eggs", "3 shallots") but the
+ * mandatory boundary is what keeps a rep scheme ("3x10 squats") from reading as one: "3x10" has no
+ * space and "x10" is not a recognised unit, so neither branch matches it.
+ */
+const INGREDIENT_LINE =
+  /^[-*•]?\s*[\d½¼¾⅓⅔]+(?:[./]\d+)?\s*(?:g|kg|mg|ml|l|oz)\b|^[-*•]?\s*[\d½¼¾⅓⅔]+(?:[./]\d+)?\s+[a-zA-Z]/;
+
+function looksLikeIngredientList(t: string): boolean {
+  const lines = t
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  return lines.filter((l) => INGREDIENT_LINE.test(l)).length >= 3;
+}
+
+/**
+ * MP6 — the regex gate on recipe capture, widened rather than removed.
+ *
+ * Recipes keep a confirm card because they have no Food-screen equivalent to finish on (unlike a
+ * plain meal, which now goes through `preview_meal`/`log_meal`), so SOMETHING still has to decide
+ * a message described a dish worth structuring. The old gate required a literal "I made" plus a
+ * literal "makes N" / "serves N" — and the meal-prep scenario's own message matches neither: it
+ * says "Made the mushroom sauce" (no "I"), and "Yields 3 cups" is not "makes" or "serves". The
+ * sauce would never have been captured (FOOD-ENGINE.md MP6).
+ *
+ * Widened on two axes: "yields" now counts as a stated amount alongside "makes"/"serves", and a
+ * cooking verb next to a genuine ingredient LIST (3+ lines that read as one ingredient each) is
+ * accepted even with no stated yield at all — the shape of "Made the mushroom sauce:" followed by
+ * eleven quantity-led lines. A false positive here costs an unwanted confirm CARD the user
+ * dismisses, not a silent write, so the bar is lower than it was for the deleted log_food path.
+ */
 function hasSaveRecipeIntent(t: string): boolean {
-  return (
-    /\bsave (that |this |it |them )?as a recipe\b/i.test(t) ||
-    /\b(make|structure|turn) (this |that |it )?into a recipe\b/i.test(t) ||
-    /\bi made\b.+\b(makes?|serves?)\s*\d+/i.test(t) ||
-    /\b(makes?|serves?)\s*\d+\b.+\bi made\b/i.test(t)
-  );
-}
-
-/**
- * Words that mean this turn is about TRAINING, sleep or mood — not eating. Their presence vetoes a
- * "had"-based guess outright, because someone describing a session is not describing a meal.
- */
-const NOT_FOOD_CONTEXT =
-  /\b(run|runs|running|ran|walk|walked|jog|ride|rode|cycl\w*|swim|swam|lift\w*|workout|training|session|reps?|sets?|pace|tempo|zone \d|heart ?rate|hr\b|bpm|km|kms|kilometers?|miles?|mins? of|stretch\w*|mobility|yoga|meditat\w*|breathwork|journal\w*|sleep|slept|nap|mood|stress|anxious|physio|injur\w*|knee|shoulder|elbow|ankle|back pain)\b/i;
-
-/**
- * Somebody other than the user did the having — so it is not a meal to log, whatever followed.
- *
- * "we" and "I" are deliberately absent: "we had dinner" is a log. Everyone else is not, and this
- * is the one guard that does not need to guess at the object, which is why it catches the sentence
- * that broke the noun list ("My son is okay he just had a bead stuck in his ear").
- */
-const SOMEONE_ELSE_HAD =
-  /\b(he|she|they|his|her|their|my (son|daughter|kid|kids|child|wife|husband|partner|mum|mom|dad|father|mother|friend|boss|colleague|sister|brother))\b[^.!?]{0,40}?\bhad\b/i;
-
-/** Nouns that follow "had a/an" and are never food, however they are modified. */
-const NOT_FOOD_NOUN =
-  /\b(time|day|week|weekend|month|year|morning|afternoon|evening|night|go|chat|talk|think|rest|break|nap|shower|call|meeting|look|feeling|sense|moment|problem|issue|setback|flare|episode)\b/i;
-
-/**
- * Does this turn say what they ATE?
- *
- * "had" is an auxiliary verb far more often than it is eating, and every version of this function
- * that tried to enumerate the non-eating phrasings has eventually lost to English. Two shipped
- * failures paid for the rules below:
- *  - "I do at least one beast a year, but I HAD TO skip it this year" → a confirm sheet offering
- *    to log one Spartan Beast, for breakfast, at ~2000 kcal.
- *  - "That last run was good but I HAD A REALLY HARD TIME keeping my HR in zone 2" → the food
- *    estimator was handed a run and dutifully priced it as `{"name":"That last run"}`. The old
- *    guard listed adjectives immediately after "had a", so a single adverb walked straight past it.
- *
- * So the shape changed. A blocklist of phrasings cannot win — and the third failure is what finally
- * proved it, because no list would have held:
- *  - "My son is okay he just HAD A BEAD STUCK IN HIS EAR. I can still log my meals." → a confirm
- *    sheet offering to log a child's ER trip as a meal ("Unknown Food", confidence 0.3). "bead"
- *    and "ear" are not on any not-food list, and never could be: the list would have to contain
- *    every noun in English that is not a food.
- *
- * **The rule that catches it is not another noun list: a food log is FIRST PERSON.** Whatever the
- * object turns out to be, "he had", "she had", "my son had" is somebody else's sentence and never
- * this user's meal — which holds for beads, surgery, meetings and every other noun we will never
- * think of. `NOT_FOOD_NOUN` stays for the first-person cases it already covers ("I had a rough
- * week"); this is the guard for the ones it structurally cannot.
- *
- * A wrong draft is the expensive mistake here, and not only because it looks silly: the same match
- * tells the coach a sheet is up, and on 2026-08-19 that landed on the turn where the owner asked
- * her to clean up his plan — she acknowledged the sheet and never touched the plan. Confirm-first
- * is only trustworthy when what it offers to confirm is plausible.
- */
-function hasLogFoodIntent(t: string): boolean {
-  if (/\b(my )?usual\s+(breakfast|lunch|dinner|snack)\b/i.test(t)) return true;
-  if (/\blog (my |this |that |the )?(breakfast|lunch|dinner|snack|meal|food|it)\b/i.test(t)) return true;
-
-  // Specific verbs: eating is the only thing they mean.
-  if (/\b(ate|drank)\b/i.test(t) && !/\bwant to (eat|drink|have)\b/i.test(t)) return true;
-
-  // "had": only when nothing in the turn contradicts it.
-  if (!/\bhad\b/i.test(t)) return false;
-  if (/\bwant to (eat|have)\b/i.test(t)) return false;
-  if (/\bhad\s+(to|been|enough)\b/i.test(t)) return false;
-  // Somebody ELSE had it — not a meal of theirs to log, whatever the object turns out to be.
-  if (SOMEONE_ELSE_HAD.test(t)) return false;
-  // "had a really hard time", "had an absolutely brutal week" — any modifiers, then a non-food noun.
-  if (/\bhad\s+(a|an|the)\s+(?:\w+\s+){0,3}?(?=\w)/i.test(t) && NOT_FOOD_NOUN.test(t)) return false;
-  // A meal word makes it unambiguous even in a busy sentence ("after my run I had breakfast").
-  if (/\bhad\s+(my\s+|a\s+|an\s+|the\s+)?(breakfast|lunch|dinner|snack|meal|coffee|tea)\b/i.test(t)) return true;
-  if (NOT_FOOD_CONTEXT.test(t)) return false;
-  return true;
-}
-
-/** Extract "usual breakfast" → breakfast. */
-export function parseUsualMeal(message: string): MealKind | undefined {
-  const m = message.match(/\b(?:my )?usual\s+(breakfast|lunch|dinner|snack)\b/i);
-  if (!m) return undefined;
-  const meal = m[1]!.toLowerCase() as MealKind;
-  return MEAL_WORDS.includes(meal) ? meal : undefined;
-}
-
-/** Soft meal hint from phrasing ("for lunch", "this morning"). */
-export function parseMealHint(message: string): MealKind | undefined {
-  const usual = parseUsualMeal(message);
-  if (usual) return usual;
-  const forMeal = message.match(/\b(?:for|as)\s+(breakfast|lunch|dinner|snack)\b/i);
-  if (forMeal) return forMeal[1]!.toLowerCase() as MealKind;
-  if (/\bthis morning\b/i.test(message)) return 'breakfast';
-  if (/\btonight\b/i.test(message)) return 'dinner';
-  return undefined;
-}
-
-/** Strip lead-ins so the resolver sees the food phrase. */
-export function extractLogQuery(message: string): string {
-  let q = message.trim();
-  q = q.replace(/^(hey[,.]?\s+|ok[,.]?\s+|yeah[,.]?\s+)/i, '');
-  q = q.replace(/^(i\s+)?(just\s+)?(had|ate|drank|logged)\s+(my\s+)?/i, '');
-  q = q.replace(/^log\s+(my\s+|this\s+|that\s+|the\s+)?/i, '');
-  q = q.replace(/\bfor\s+(breakfast|lunch|dinner|snack)\s*$/i, '');
-  q = q.replace(/\s+/g, ' ').trim();
-  return q;
+  if (/\bsave (that |this |it |them )?as a recipe\b/i.test(t)) return true;
+  if (/\b(make|structure|turn) (this |that |it )?into a recipe\b/i.test(t)) return true;
+  const hasStatedYield = /\b(yields?|makes?|serves?)\s*\d+/i.test(t);
+  const cooked = /\b(made|cooked|prepped|prepared)\b/i.test(t);
+  return cooked && (hasStatedYield || looksLikeIngredientList(t));
 }
 
 /** Propose a dietary profile patch from chat (merge later with current). */
@@ -226,8 +138,9 @@ export function mergeDietaryProposal(
 }
 
 /**
- * Classify a coach turn for food surface actions.
- * Priority: dietary → save_recipe → log_food (most specific first).
+ * Classify a coach turn for the two food surfaces with no screen of their own.
+ * Priority: dietary → save_recipe (most specific first). Everything else — including every plain
+ * meal — is null here and reaches the Coach as an ordinary turn with real tools to call.
  */
 export function classifyFoodIntent(message: string): ClassifiedFoodIntent | null {
   const t = message.trim();
@@ -243,19 +156,6 @@ export function classifyFoodIntent(message: string): ClassifiedFoodIntent | null
     const needsWindow = /\bsave (that |this |it |them )?as a recipe\b/i.test(t) && !/\bi made\b/i.test(t);
     const recipeText = needsWindow ? '' : t;
     return { kind: 'save_recipe', recipeText, needsWindow };
-  }
-
-  if (hasLogFoodIntent(t)) {
-    const usualMeal = parseUsualMeal(t);
-    const mealHint = parseMealHint(t);
-    const query = usualMeal ? usualMeal : extractLogQuery(t);
-    if (!query && !usualMeal) return null;
-    return {
-      kind: 'log_food',
-      query: query || usualMeal || t,
-      ...(usualMeal ? { usualMeal } : {}),
-      ...(mealHint ? { mealHint } : {}),
-    };
   }
 
   return null;
