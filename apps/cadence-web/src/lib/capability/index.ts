@@ -17,6 +17,10 @@ export interface Workout {
   id?: string;
   /** The app that originally recorded it (HealthKit's sourceName) — future cross-source dedup. */
   recordedBy?: string;
+  /** The recording app's BUNDLE id (HealthKit's sourceBundleId). The display name above is for
+   *  people; this one is for the machine — A14's dedup drops rows recorded by our own bundle on
+   *  the device once we write workouts, and only the bundle id makes that exact. */
+  recordedByBundleId?: string;
 }
 
 /** One day's step count, as an aggregated bucket — never the individual samples behind it. */
@@ -111,6 +115,39 @@ export interface CoachIdentityCapability {
   registerCategories(): Promise<void>;
 }
 
+/** What the watch's scheduler answers about itself. `unavailable` = no WorkoutKit (iOS < 17),
+ *  no paired watch, or the web build — the affordance must not render at all in that state. */
+export type WatchAuthState = 'notDetermined' | 'restricted' | 'denied' | 'authorized' | 'unavailable';
+
+/** One entry in Apple's scheduled-workouts list, keyed by OUR plan id (= the occurrence id). */
+export interface ScheduledWatchWorkout {
+  id: string;
+  dateISO?: string;
+  hour?: number;
+  minute?: number;
+  complete: boolean;
+}
+
+/**
+ * The WorkoutKit hand-off (A13 v1): the phone composes the session, Apple's Workout app on the
+ * watch runs it. Scheduled, never started — from an iPhone the only route is
+ * `WorkoutScheduler.schedule`, so the affordance is "it's on your watch for Thursday", and the
+ * result comes back through `health.getWorkouts` carrying the plan id we chose.
+ */
+export interface WorkoutPlanCapability {
+  isAvailable(): boolean;
+  /** One round-trip gate for the affordance: scheduler supported AND the current auth state. */
+  isSupported(): Promise<{ supported: boolean; state: WatchAuthState }>;
+  requestAuthorization(): Promise<WatchAuthState>;
+  /** Schedule finished specs (composed + clamped in @cadence/shared). Per-item verdicts. */
+  schedule(
+    items: Array<{ spec: WorkoutPlanSpec; dateISO: string; hour?: number; minute?: number }>,
+  ): Promise<Array<{ id: string; scheduled: boolean; reason?: string }>>;
+  listScheduled(): Promise<ScheduledWatchWorkout[]>;
+  /** Remove every entry for this plan id — one occurrence, however many times it was scheduled. */
+  remove(id: string, dateISO?: string): Promise<number>;
+}
+
 export interface Capabilities {
   health: HealthCapability;
   push: PushCapability;
@@ -118,9 +155,10 @@ export interface Capabilities {
   coachIdentity: CoachIdentityCapability;
   location: LocationCapability;
   dictation: DictationCapability;
+  workoutPlan: WorkoutPlanCapability;
 }
 
-import type { LocalNotificationSpec } from '@cadence/shared';
+import type { LocalNotificationSpec, WorkoutPlanSpec } from '@cadence/shared';
 import { Capacitor } from '@capacitor/core';
 import { webCapabilities } from './web.ts';
 import { nativeCapabilities } from './native.ts';
