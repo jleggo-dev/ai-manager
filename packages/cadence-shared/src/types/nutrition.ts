@@ -106,8 +106,24 @@ export interface Recipe {
   /**
    * food_id set once the Resolver resolves the ingredient; ad-hoc name/qty/unit allowed.
    * est holds contribution macros for unresolved / estimated ingredients (recompute on save).
+   *
+   * `unresolved`/`reason` are the explicit "this ingredient has no numbers at all" signal (MP10):
+   * no field means this on its own — `est` simply being absent was never distinguishable from "we
+   * have not looked yet" — and `estimated` (below, on the resolve-time shape only) means something
+   * different again: numbers ARE present, they just came from a guess rather than a saved food.
+   * `unresolved: true` means the opposite — no `est` was possible — and `reason` says why, so a
+   * recipe total can be honest about what it could not count instead of quietly under-summing with
+   * no trace. Set by `recipe.ts` and carried verbatim into the saved row (`stripRuntimeFields`).
    */
-  ingredients: { food_id?: string; name: string; qty: number | string; unit?: string; est?: Macros }[];
+  ingredients: {
+    food_id?: string;
+    name: string;
+    qty: number | string;
+    unit?: string;
+    est?: Macros;
+    unresolved?: true;
+    reason?: string;
+  }[];
   steps: string[];
   /** Computed by the app: Σ(ingredient macros) ÷ servings — never free-guessed for the dish. */
   macros_per_serving: Macros;

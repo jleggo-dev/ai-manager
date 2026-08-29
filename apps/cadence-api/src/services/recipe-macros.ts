@@ -60,8 +60,8 @@ export interface IngredientPricing {
    *  `portionFactor` in `food-pricing-portion.ts` for the full decision this summarises. */
   unresolved?: true;
   /** Why, for a caller to act on (a coach tool can surface it, or call `resolve_portion`). Recipe
-   *  capture (`recipe.ts`, outside this parcel's file list — see the PR description) does not read
-   *  this yet; `macrosForIngredientAmount` below is its current call shape and quietly drops it. */
+   *  capture (`recipe.ts`, MP2) reads this and carries it onto the ingredient row rather than
+   *  dropping it — see `Recipe.ingredients[].unresolved`/`.reason` in `@cadence/shared` (MP10). */
   reason?: string;
 }
 
@@ -78,7 +78,8 @@ export interface IngredientPricing {
  * There is exactly one way to turn a quantity and a unit into a mass now (`portionFactor`), and
  * this is a thin caller of it — `text` is threaded through so a bare count with no separate unit
  * field ("3 shallots", `unit` undefined) still has something to resolve against instead of
- * silently defaulting; see `macrosForIngredientAmount` below for callers that don't have it.
+ * silently defaulting. `recipe.ts` passes `[qty, unit, name].join(' ')` (MP2) — every one of its
+ * call sites has the ingredient's own name in scope, so there is no remaining caller that doesn't.
  */
 export function priceIngredientAmount(
   food: Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'>,
@@ -93,23 +94,6 @@ export function priceIngredientAmount(
   const portion = portionFactor(food, input);
   const nutrients = portion.factor > 0 ? scaleNutrients(food.macros_per_base, portion.factor) : {};
   return portion.unresolved ? { nutrients, unresolved: true, reason: portion.reason } : { nutrients };
-}
-
-/**
- * Backward-compatible shape for `recipe.ts`'s existing three call sites (outside this parcel —
- * P1 owns `recipe-macros.ts`, not `recipe.ts`; MP2 is the call-site work of wiring `resolve_portion`
- * into the recipe path, tracked in PLAN.md against P6). An ingredient whose unit cannot be resolved
- * now returns `{}` — no macros contributed — rather than the food's default serving priced as if it
- * were the answer. `{}` is a safe under-count (recipe.ts already skips missing keys when summing);
- * the old behaviour was a silent, unbounded OVER-count in either direction, which is strictly worse.
- * Prefer `priceIngredientAmount` above for any new caller: it keeps the reason instead of dropping it.
- */
-export function macrosForIngredientAmount(
-  food: Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'>,
-  qty: number,
-  unit?: string | null,
-): FoodNutrients {
-  return priceIngredientAmount(food, qty, unit).nutrients;
 }
 
 /**
