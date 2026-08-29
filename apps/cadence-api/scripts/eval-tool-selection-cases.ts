@@ -1,5 +1,5 @@
 /**
- * The golden set for the tool-selection eval — 42 turns, every one of them sourced from something
+ * The golden set for the tool-selection eval — 44 turns, every one of them sourced from something
  * that actually happened. See `eval-tool-selection.ts` for how they are run and scored.
  *
  * THE VOICE IS THE POINT. Every turn here is lowercase, hedged, half-punctuated and often about
@@ -334,7 +334,7 @@ const READS: EvalCase[] = [
   {
     id: 'B9',
     kind: 'read',
-    turn: "thinking about breakfast — roughly how many calories in two eggs, toast and half an avocado?",
+    turn: 'thinking about breakfast — roughly how many calories in two eggs, toast and half an avocado?',
     expect: ['preview_meal'],
     allow: [...DOSSIER_READS, 'lookup_food', 'check_food_sources'],
     forbid: ['log_meal'],
@@ -345,8 +345,7 @@ const READS: EvalCase[] = [
   {
     id: 'B10',
     kind: 'read',
-    turn:
-      'can you look up the wild mushroom co mixed dried mushrooms — i cannot find their nutrition panel anywhere online and want the real numbers off it, not a guess',
+    turn: 'can you look up the wild mushroom co mixed dried mushrooms — i cannot find their nutrition panel anywhere online and want the real numbers off it, not a guess',
     expect: ['research_food'],
     allow: [...DOSSIER_READS, 'check_food_sources', 'lookup_food'],
     from:
@@ -451,7 +450,7 @@ const SILENCE: EvalCase[] = [
     from: 'The cheapest possible turn — and the one where a 5,000-token tool preamble buys nothing.',
   },
   /**
-   * C11–C14 (MP21/MP40, 2026-08-28) — restraint cases for the food write surface, added alongside
+   * C11–C16 (MP21/MP40, 2026-08-28) — restraint cases for the food write surface, added alongside
    * A14/A15's restoration and deliberately outnumbering it. The deleted `NOT_FOOD_CONTEXT` veto and
    * the `log_food` regex were crude protection against exactly this failure shape: logging
    * something the person was only thinking about, asking about, or mentioning in passing. Removing
@@ -483,8 +482,7 @@ const SILENCE: EvalCase[] = [
   {
     id: 'C13',
     kind: 'silence',
-    turn:
-      "i've been so wiped this week, barely touching my lunch most days if i'm honest. is that something i should be worried about?",
+    turn: "i've been so wiped this week, barely touching my lunch most days if i'm honest. is that something i should be worried about?",
     expect: [],
     allow: [...DOSSIER_READS, 'get_food_log', 'get_recent_logs'],
     forbid: ['log_meal', 'preview_meal'],
@@ -504,6 +502,42 @@ const SILENCE: EvalCase[] = [
       'MP27 restraint: a common, widely-sold product a shared database almost certainly already carries. ' +
       'research_food is slow and billed for exactly the cases the free sources cannot cover — reaching for ' +
       'it before trying lookup_food or check_food_sources is the failure its description exists to prevent.',
+  },
+  /**
+   * C15/C16 (PR #289 review) — the "someone else had it" family, missing from the first pass of
+   * restraint cases even though it is the single best-documented false positive in this file's
+   * history. `SOMEONE_ELSE_HAD` (coach-food-classify.ts, deleted with the rest of the log_food
+   * regex under MP21/MP40) existed for exactly this: "we" and "I" log, everyone else does not,
+   * whatever the object turns out to be — which is why it was the one guard that caught the
+   * sentence no noun list ever could. Removing the regex means these two are what test whether a
+   * model really does read "had" correctly, which is the whole argument for deleting it.
+   */
+  {
+    id: 'C15',
+    kind: 'silence',
+    turn: "my son's okay now, he just had a bead stuck in his ear earlier, gave us a bit of a scare",
+    expect: [],
+    allow: [...DOSSIER_READS],
+    forbid: ['log_meal', 'preview_meal'],
+    from:
+      'Owner, 2026-08-19, verbatim in spirit — the exact sentence that broke the old noun-list guard: ' +
+      '"My son is okay he just had a bead stuck in his ear. I can still log my meals." The prior system ' +
+      'read it as a meal and injected FOOD_CONFIRM_CONTEXT on the very turn he asked to clean up his plan. ' +
+      'Third person, "had" doing ordinary English work, no food anywhere in the sentence — the easier half ' +
+      'of the family, since neither "bead" nor "ear" is food-shaped at all.',
+  },
+  {
+    id: 'C16',
+    kind: 'silence',
+    turn: 'my wife had the salmon at that new place last night and said it was incredible, might have to go back',
+    expect: [],
+    allow: [...DOSSIER_READS, 'get_recipes'],
+    forbid: ['log_meal', 'preview_meal'],
+    from:
+      'The harder half of the same family (PR #289 review): real food this time, so the tell is entirely ' +
+      '"my wife had", not the object. log_meal could price "salmon" correctly without any trouble and would ' +
+      'still be wrong to write it to his day — a model that reads for whose meal this is, not just whether ' +
+      'the sentence contains food, is what this case actually checks.',
   },
 ];
 
