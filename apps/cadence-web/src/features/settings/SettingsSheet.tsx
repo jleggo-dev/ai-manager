@@ -12,10 +12,11 @@ import { NotificationSettings } from './NotificationSettings.tsx';
 import { CoachFaceSettings } from './CoachFaceSettings.tsx';
 
 /**
- * Settings, as a sheet from the header gear. Real-auth: email, sign out, password reset (email
- * link — v1 skips in-app updateUser reauth), Edit goals & equipment (Review manage mode), and
- * the danger zone: "Start over" wipes Cadence data after the user TYPES the phrase (the server
- * re-verifies it; the login itself survives and the copy says so). Dev mode: shows the account
+ * Settings, as a sheet opened from the tab bar's Settings button (MainTabs). Real-auth: email,
+ * sign out, password reset (email link — v1 skips in-app updateUser reauth), Edit goals &
+ * equipment (Review manage mode), and the danger zone: "Start over" wipes Cadence data after the
+ * user TYPES the phrase (the server re-verifies it; the login itself survives and the copy says
+ * so). Dev mode: shows the account
  * slug and routes Start over through /dev/reset (which also clears the X-ray trace).
  */
 export function SettingsSheet({
