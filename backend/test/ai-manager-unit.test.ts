@@ -14,7 +14,7 @@
  * to the same public surface throughout).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { AiProfileRow, ChatSessionRow, ProcessingJobRow, ProviderRow } from '../src/types.ts';
+import type { AiProfileRow, ChatMessageRow, ChatSessionRow, ProcessingJobRow, ProviderRow } from '../src/types.ts';
 
 /* ── Mocks: models ──────────────────────────────────────────── */
 
@@ -139,7 +139,7 @@ import {
 import { getProcessingJobBySlug, getProcessingJob, updateProcessingJob } from '../src/models/processing-jobs.ts';
 import { getAiProfileWithKeys } from '../src/models/ai-profiles.ts';
 import { createLlmClientForProvider } from '../src/integrations/client-factory.ts';
-import { createChatSession, getChatSession, createChatMessage } from '../src/models/chat-sessions.ts';
+import { createChatSession, getChatSession, createChatMessage, listChatMessages } from '../src/models/chat-sessions.ts';
 import { applyFormattingRules } from '../src/services/formatting-rules.ts';
 
 const asProviderRow = (overrides: Partial<ProviderRow> = {}): ProviderRow =>
@@ -452,6 +452,58 @@ describe('sendChatMessage', () => {
 
     expect(result.ruleSetKey).toBe('summarize');
     expect(result.resolvedMessage).toBe('Summarize: <user_input name="topic">cats</user_input>');
+  });
+
+  /**
+   * MP13 (Cadence, feat/chat-images): `options.images` is what puts a photo IN FRONT OF the model,
+   * not just mentioned in text — request-builder.ts's `messagesToV2Request` only maps
+   * `input_image` parts off a `ContentPart[]` content, so this is the one behaviour that has to be
+   * right for the coach chat path to see an attached photo at all. `mockResolvedValueOnce` on
+   * `listChatMessages` stands in for "the user's turn was already persisted" (sendChatMessage
+   * writes it via createChatMessage above, then openChatSendStream reads history back fresh) —
+   * without a non-empty history the splice has nothing to attach to.
+   */
+  it('splices an attached image onto this turn as a real vision content part (MP13)', async () => {
+    vi.mocked(getChatSession).mockResolvedValue(baseSession());
+    vi.mocked(getAiProfileWithKeys).mockResolvedValue(
+      asAiProfileRow({ provider: asProviderRow({ type: 'devs-ai-v2' }) }),
+    );
+    vi.mocked(listChatMessages).mockResolvedValueOnce([
+      { id: 'msg-1', chat_session_id: 'session-1', role: 'user', content: 'What is this?', created_at: '2024-01-01' },
+    ] as ChatMessageRow[]);
+    const fakeResponse = new Response('ok');
+    const mockClient = { chatCompletionStream: vi.fn().mockResolvedValue(fakeResponse) };
+    vi.mocked(createLlmClientForProvider).mockReturnValue(
+      mockClient as unknown as ReturnType<typeof createLlmClientForProvider>,
+    );
+
+    await sendChatMessage('session-1', 'What is this?', { images: ['https://example.com/signed.jpg'] });
+
+    const sentMessages = (mockClient.chatCompletionStream.mock.calls[0]?.[1] ?? []) as Array<{ content: unknown }>;
+    expect(sentMessages.at(-1)?.content).toEqual([
+      { type: 'text', text: 'What is this?' },
+      { type: 'image_url', url: 'https://example.com/signed.jpg' },
+    ]);
+  });
+
+  it('leaves the message a plain string when no images are attached', async () => {
+    vi.mocked(getChatSession).mockResolvedValue(baseSession());
+    vi.mocked(getAiProfileWithKeys).mockResolvedValue(
+      asAiProfileRow({ provider: asProviderRow({ type: 'devs-ai-v2' }) }),
+    );
+    vi.mocked(listChatMessages).mockResolvedValueOnce([
+      { id: 'msg-1', chat_session_id: 'session-1', role: 'user', content: 'Hello there', created_at: '2024-01-01' },
+    ] as ChatMessageRow[]);
+    const fakeResponse = new Response('ok');
+    const mockClient = { chatCompletionStream: vi.fn().mockResolvedValue(fakeResponse) };
+    vi.mocked(createLlmClientForProvider).mockReturnValue(
+      mockClient as unknown as ReturnType<typeof createLlmClientForProvider>,
+    );
+
+    await sendChatMessage('session-1', 'Hello there');
+
+    const sentMessages = (mockClient.chatCompletionStream.mock.calls[0]?.[1] ?? []) as Array<{ content: unknown }>;
+    expect(sentMessages.at(-1)?.content).toBe('Hello there');
   });
 });
 

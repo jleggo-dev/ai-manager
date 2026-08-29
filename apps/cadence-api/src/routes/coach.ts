@@ -12,6 +12,7 @@ import {
   cancelCoachTurn,
 } from '../ai/aim.ts';
 import { readArchivedConversations, readTranscript } from '../services/coach-transcript.ts';
+import { attachPhotoToTurn } from '../services/coach-photo-attach.ts';
 import { runCaptureExtract } from '../services/capture.ts';
 import { injectCoachBlocks, refreshChangedBlocks } from '../services/coach-block-refresh.ts';
 import { renderScreenNotes } from '../services/goal-screen.ts';
@@ -307,6 +308,10 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'message (string) required' });
     return;
   }
+  // MP13: an image can ride a chat turn. `message` above is required and rejected with a clean
+  // 400; `photo` is optional and soft-fails instead (attachPhotoToTurn) — a malformed or missing
+  // photo must not sink an otherwise-valid text message once we are already streaming SSE.
+  const photo: string | null = typeof req.body?.photo === 'string' ? req.body.photo : null;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -345,6 +350,11 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
      * somebody does not get a reply — the refresh swallows its own faults too.
      */
     await refreshChangedBlocks(userId, req.params.id as string).catch((e) => console.error('[blockRefresh]', e));
+
+    // MP13: images ride the turn as real vision content parts (see coach-photo-attach.ts for what
+    // this also hands her as a durable, transcript-invisible photo_ref note).
+    const images = await attachPhotoToTurn(userId, sessionIdParam, photo);
+
     const turnMessage = await assembleTurn(userId, req.params.id as string, message);
     // The coach's read tools ride the request; when she calls one, the loop below fulfills it
     // against the retrieval registry and pumps the continuation — "let me check your file",
@@ -354,6 +364,7 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       req.params.id as string,
       turnMessage,
       coachToolDefinitions(),
+      images,
     );
 
     // Relay upstream SSE bytes verbatim (upstream emits its own `data: [DONE]`) while

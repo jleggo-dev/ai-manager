@@ -6,7 +6,10 @@ import {
   hasFullMacros,
   matchMeasure,
   preferredServing,
+  sortByAuthority,
+  sourceAuthority,
   toCandidate,
+  toCandidateAtOwnServing,
   type SourceCandidate,
 } from './food-source-report.ts';
 
@@ -186,5 +189,154 @@ describe('disagreements are named, not resolved', () => {
 
   it('says nothing when there is only one opinion', () => {
     expect(findDisagreements([candidate({})])).toEqual([]);
+  });
+});
+
+/**
+ * MP15 — owner: "she should actually prioritize the image, since it's a more authoritative
+ * source." A photographed label answers the exact question for the exact product; a `research`
+ * candidate is a generic web guess. The ordering must be explicit (sourceAuthority/sortByAuthority)
+ * AND nothing may be dropped — the fan-out's contract is every source that answered comes back.
+ */
+describe('a photographed label outranks a web lookup', () => {
+  const candidate = (over: Partial<SourceCandidate>): SourceCandidate =>
+    ({
+      source: 'ledger',
+      food_id: 'x',
+      name: 'Mixed dried mushroom',
+      brand: null,
+      per: { measure: '15 pieces', grams: 15, nutrients: { kcal: 40 } },
+      measures: [],
+      micros: 'none',
+      completeness: 'partial',
+      notes: [],
+      ...over,
+    }) as SourceCandidate;
+
+  it('ranks label ahead of every other rung, and research last', () => {
+    expect(sourceAuthority('label')).toBeLessThan(sourceAuthority('ledger'));
+    expect(sourceAuthority('ledger')).toBeLessThanOrEqual(sourceAuthority('usda'));
+    expect(sourceAuthority('usda')).toBeLessThanOrEqual(sourceAuthority('fatsecret'));
+    expect(sourceAuthority('fatsecret')).toBeLessThan(sourceAuthority('research'));
+  });
+
+  it('sorts a label candidate ahead of a research candidate, dropping neither', () => {
+    const research = candidate({ source: 'research', name: 'Dried mushrooms (generic)' });
+    const label = candidate({ source: 'label', name: 'Wild Mushroom Co mixed dried mushroom' });
+
+    // Fed in the "wrong" order on purpose — sortByAuthority must be doing the work, not fixture order.
+    const sorted = sortByAuthority([research, label]);
+
+    expect(sorted).toHaveLength(2);
+    expect(sorted[0]!.source).toBe('label');
+    expect(sorted[1]!.source).toBe('research');
+    // Nothing filtered — the fan-out's contract survives sorting.
+    expect(sorted).toEqual(expect.arrayContaining([research, label]));
+  });
+
+  it('is stable when authority ties, so equal-ranked candidates keep their relative order', () => {
+    const usda = candidate({ source: 'usda', name: 'USDA row' });
+    const fatsecret = candidate({ source: 'fatsecret', name: 'FatSecret row' });
+    expect(sortByAuthority([usda, fatsecret]).map((c) => c.source)).toEqual(['usda', 'fatsecret']);
+    expect(sortByAuthority([fatsecret, usda]).map((c) => c.source)).toEqual(['fatsecret', 'usda']);
+  });
+
+  it('names the label as the most authoritative source, right in the notes she reads', () => {
+    const label = food({ source: 'label_photo' });
+    const notes = candidateNotes(label, label.macros_per_base).join(' ');
+    expect(notes).toContain('most authoritative');
+  });
+
+  it('toCandidate accepts an unsaved capture (no food_id yet) the same way it accepts a saved food', () => {
+    // MP14's read_label reports a FoodCandidate — no food_id, because it has not been saved.
+    const capture = {
+      name: 'Wild Mushroom Co mixed dried mushroom',
+      brand: 'The Wild Mushroom Co',
+      source: 'label_photo' as const,
+      base_unit: 'g' as const,
+      macros_per_base: { kcal: 72, protein_g: 2.5, carbs_g: 16.8, fat_g: 0.1 },
+      servings: [{ label: '100 g', unit: 'g', amount_g: 100 }],
+      default_serving: 0,
+      confidence: 0.9,
+      photo_ref: 'user1/2026-08-28/x.jpg',
+    };
+    const c = toCandidate(capture, 'label');
+    expect(c.food_id).toBeNull();
+    expect(c.notes.join(' ')).toContain('most authoritative');
+  });
+
+  /**
+   * The mushroom-jar fixture is the real shape `parse-nutrition-label` returns — verified against
+   * the job's own worked example in ai-admin.config.json: `serving_size:15, serving_unit:"g"`. A
+   * capture is reported at its OWN stated serving, so this exercises toCandidateAtOwnServing, not
+   * toCandidate's requested-measure path.
+   */
+  it('reports a label capture at its own printed serving — the exact mushroom-jar fixture', () => {
+    const capture = {
+      name: 'Dried Mixed Mushrooms',
+      brand: 'The Wild Mushroom Co',
+      source: 'label_photo' as const,
+      base_unit: 'g' as const,
+      // macros_per_base is per 100 g (servingMacrosToPerBase's g/ml convention); the label's own
+      // "15 g" serving is what scales it back down to the printed per-15-pieces figures.
+      macros_per_base: {
+        kcal: (40 / 15) * 100,
+        protein_g: (3 / 15) * 100,
+        carbs_g: (8 / 15) * 100,
+        fat_g: (1 / 15) * 100,
+        fiber_g: (5 / 15) * 100,
+        sodium_mg: (4 / 15) * 100,
+        potassium_mg: (250 / 15) * 100,
+        calcium_mg: (10 / 15) * 100,
+        iron_mg: (0.3 / 15) * 100,
+      },
+      servings: [
+        { label: '15 g', unit: 'g', amount_g: 15 },
+        { label: '100 g', unit: 'g', amount_g: 100 },
+      ],
+      default_serving: 0,
+      confidence: 0.9,
+      photo_ref: 'user1/2026-08-28/mushroom.jpg',
+    };
+    const c = toCandidateAtOwnServing(capture, 'label');
+    expect(c.food_id).toBeNull();
+    expect(c.per.measure).toBe('15 g');
+    expect(c.per.grams).toBe(15);
+    // MP12: potassium/calcium/iron must survive — they are the three the mushroom label prints,
+    // and the ones parse-nutrition-label did not used to ask for.
+    expect(c.per.nutrients.kcal).toBeCloseTo(40, 0);
+    expect(c.per.nutrients.potassium_mg).toBeCloseTo(250, 0);
+    expect(c.per.nutrients.calcium_mg).toBeCloseTo(10, 0);
+    expect(c.per.nutrients.iron_mg).toBeCloseTo(0.3, 1);
+    expect(c.notes.join(' ')).toContain('most authoritative');
+  });
+
+  /**
+   * Fail-first: this is the exact bug toCandidateAtOwnServing exists to route around.
+   * toCandidate's unrequested-measure branch passes {qty:1, unit: matched.unit} straight to
+   * priceFood — and priceFood/portionFactor treats a bare mass-unit word as an ABSOLUTE amount
+   * ("1 g"), not "1 of this serving", whenever it equals the food's own base_unit. Documented here
+   * so a future fix to food-pricing-portion.ts (outside this parcel) has a red test to go green
+   * against, and so nobody "fixes" toCandidateAtOwnServing by routing it back through toCandidate.
+   */
+  it('documents why toCandidate itself still mis-prices this shape (not this parcel to fix)', () => {
+    const capture = {
+      name: 'Dried Mixed Mushrooms',
+      brand: null,
+      source: 'label_photo' as const,
+      base_unit: 'g' as const,
+      macros_per_base: { kcal: (40 / 15) * 100 },
+      servings: [{ label: '15 g', unit: 'g', amount_g: 15 }],
+      default_serving: 0,
+      confidence: 0.9,
+      photo_ref: null,
+    };
+    const broken = toCandidate(capture, 'label');
+    // priceFood read "1 g" (an absolute unit) instead of "1 × the 15 g serving" — 1/15th of the
+    // true 40 kcal, not the printed figure.
+    expect(broken.per.nutrients.kcal).toBeCloseTo(40 / 15, 1);
+    expect(broken.per.nutrients.kcal).not.toBeCloseTo(40, 0);
+    // The safe path gets it right on the same fixture.
+    expect(toCandidateAtOwnServing(capture, 'label').per.nutrients.kcal).toBeCloseTo(40, 0);
   });
 });

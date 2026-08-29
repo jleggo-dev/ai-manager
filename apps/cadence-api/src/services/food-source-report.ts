@@ -20,7 +20,7 @@
 import { microProvenance, nutritionTier, type NutritionTier } from './food-sources/completeness.ts';
 import { matchMeasure, parseMeasure, scaleFromOwnMeasures } from './portion-measure.ts';
 import { priceFood } from './food-pricing-portion.ts';
-import { scaleNutrients, type Food, type FoodNutrients, type FoodServing } from '@cadence/shared';
+import { scaleNutrients, servingFactor, type Food, type FoodNutrients, type FoodServing } from '@cadence/shared';
 
 /**
  * `matchMeasure` moved to `portion-measure.ts` (MP0c) so `food-pricing-portion.ts` can call the
@@ -30,8 +30,12 @@ import { scaleNutrients, type Food, type FoodNutrients, type FoodServing } from 
  */
 export { matchMeasure } from './portion-measure.ts';
 
-/** Which rung answered. `ledger` covers the user's own foods and the CNF corpus alike. */
-export type FoodSourceName = 'ledger' | 'usda' | 'fatsecret' | 'research';
+/**
+ * Which rung answered. `ledger` covers the user's own foods and the CNF corpus alike. `label` is a
+ * nutrition-facts panel or front-of-package photo the person just attached and the Coach just read
+ * (MP14, `read_label`) — see `SOURCE_AUTHORITY` below for how it ranks against the others.
+ */
+export type FoodSourceName = 'ledger' | 'usda' | 'fatsecret' | 'research' | 'label';
 
 export interface MeasureOption {
   label: string;
@@ -63,17 +67,71 @@ export interface SourceCandidate {
   notes: string[];
 }
 
+/**
+ * Structural subset every candidate-shaping helper below actually reads. A saved `Food` satisfies
+ * this trivially; so does an unsaved capture (`FoodCandidate`, food-capture-parse.ts) — MP14's
+ * `read_label` reports what she just photographed the same way this file reports a stored food,
+ * before it has ever been saved. `food_id` is exactly what a capture lacks, so it is optional here;
+ * `toCandidate` reports it as `null`, same as a researched-but-unsaved row.
+ */
+type FoodLike = Pick<
+  Food,
+  'source' | 'name' | 'brand' | 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'
+> & {
+  food_id?: string | null;
+};
+
+/**
+ * MP15 — how authoritative each rung is FOR THIS PRODUCT, most trustworthy first.
+ *
+ * Owner (2026-08-23), of a photographed nutrition-facts panel versus a web lookup for the same
+ * product: *"she should actually prioritize the image, since it's a more authoritative source."*
+ * The motivating artifact is a dried-mushroom jar whose panel reads "Per 15 pieces (15 g)" for a
+ * recipe that calls for 15 pieces — the label answers the exact question, for the exact product, no
+ * conversion. A `research` rung is the opposite: a generic web figure for a product-shaped guess,
+ * usually per 100 g, that someone then has to convert against an assumed density. `ledger` (the
+ * user's own foods and the CNF lab corpus) and `usda`/`fatsecret` sit between: structured, but not
+ * guaranteed to be THIS product's own printed numbers.
+ *
+ * Ranking only — nothing here drops or reorders a fan-out's results by itself. `sortByAuthority` is
+ * an opt-in a caller applies to a candidate LIST; a rung's own report (`toCandidate` below) always
+ * still returns every candidate it is given. The fan-out's contract — every source that answered
+ * comes back, disagreements included — does not change.
+ */
+export const SOURCE_AUTHORITY: Record<FoodSourceName, number> = {
+  label: 0,
+  ledger: 1,
+  usda: 2,
+  fatsecret: 2,
+  research: 3,
+};
+
+/** Lower = more authoritative for this product. An unrecognised source sorts last, not first. */
+export function sourceAuthority(source: FoodSourceName): number {
+  return SOURCE_AUTHORITY[source] ?? Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * Most-authoritative-first. Stable, and NOTHING IS DROPPED — sorting is the only thing this does,
+ * so a candidate that came back stays in the list regardless of where it ranks. Available for a
+ * caller that renders a mixed list (a label read alongside a fan-out's web/database candidates) and
+ * wants the ordering itself to carry the signal, on top of the notes toCandidate already attaches.
+ */
+export function sortByAuthority(candidates: readonly SourceCandidate[]): SourceCandidate[] {
+  return [...candidates].sort((a, b) => sourceAuthority(a.source) - sourceAuthority(b.source));
+}
+
 const MACRO_KEYS = ['kcal', 'protein_g', 'carbs_g', 'fat_g'] as const;
 
 /** The measure to lead with when she did not name one: the food's own default, else 100 base. */
-export function preferredServing(food: Food): FoodServing | null {
+export function preferredServing(food: FoodLike): FoodServing | null {
   const servings = Array.isArray(food.servings) ? food.servings : [];
   if (servings.length === 0) return null;
   const byDefault = servings[food.default_serving ?? 0];
   return byDefault ?? servings[0] ?? null;
 }
 
-function measuresOf(food: Food): MeasureOption[] {
+function measuresOf(food: FoodLike): MeasureOption[] {
   const servings = Array.isArray(food.servings) ? food.servings : [];
   return servings
     .filter((s) => Number.isFinite(s.amount_g) && s.amount_g > 0)
@@ -88,7 +146,7 @@ function measuresOf(food: Food): MeasureOption[] {
  * "this row's energy and its macros do not agree, so treat its calories with suspicion" — and only
  * she can weigh that against what the other sources said.
  */
-export function candidateNotes(food: Food, n: FoodNutrients): string[] {
+export function candidateNotes(food: FoodLike, n: FoodNutrients): string[] {
   const notes: string[] = [];
 
   const tier = nutritionTier(n);
@@ -114,6 +172,15 @@ export function candidateNotes(food: Food, n: FoodNutrients): string[] {
 
   if (food.source === 'llm' || food.source === 'research') {
     notes.push(`Estimated (${food.source}), not measured — prefer a lab-analysed source if one agrees.`);
+  }
+  // MP15: the provenance-level twin of the rung-level note toCandidate adds below — this one fires
+  // off the FOOD's own recorded source, so it still applies to a label-derived row found again later
+  // via `ledger`, not only on the turn it was first read.
+  if (food.source === 'label_photo') {
+    notes.push(
+      'Read from a photographed nutrition label for this exact product — the most authoritative ' +
+        'source available; prefer it over a database or web lookup when they disagree.',
+    );
   }
   return notes;
 }
@@ -143,7 +210,7 @@ function deriveOneUnit(servings: readonly FoodServing[], requested: string): { g
  * the store's job is to say how much that is. A model that returns calories it multiplied itself is
  * the variance the ledger exists to remove.
  */
-export function toCandidate(food: Food, source: FoodSourceName, requestedMeasure?: string | null): SourceCandidate {
+export function toCandidate(food: FoodLike, source: FoodSourceName, requestedMeasure?: string | null): SourceCandidate {
   const base = food.macros_per_base ?? {};
   const servings = Array.isArray(food.servings) ? food.servings : [];
   const exact = matchMeasure(food, requestedMeasure);
@@ -188,6 +255,43 @@ export function toCandidate(food: Food, source: FoodSourceName, requestedMeasure
     micros: microProvenance(base),
     completeness: nutritionTier(base),
     notes,
+  };
+}
+
+/**
+ * Shape a food AT ITS OWN preferred serving — for a caller that has no REQUESTED measure to
+ * resolve, because there isn't one to ask about. `toCandidate` above answers "what does measure Y
+ * cost at food X", which is the right question for a stored food someone is querying; MP14's
+ * `read_label` already HAS the answer — a freshly-read label states its own serving — so there is
+ * nothing to match, and routing it through `toCandidate`'s unrequested-measure branch hits a real
+ * landmine: `priceFood`'s `{qty: 1, unit}` shape means literally "1 of `unit`" wherever `unit` is a
+ * bare mass/volume word, so a serving genuinely labelled "15 g" on a `base_unit:'g'` food prices as
+ * 1 g, not 15 (confirmed against `parse-nutrition-label`'s own worked example — the mushroom jar
+ * that motivates this parcel prints exactly "Per 15 pieces (15 g)", `serving_unit:"g"`). Computed
+ * with `servingFactor`/`scaleNutrients` (packages/cadence-shared) instead, which have no such
+ * ambiguity: they take the serving's own gram amount directly, never re-parse a unit word. Flagged
+ * as a dependency for whoever next owns `food-pricing-portion.ts` — `toCandidate`'s own unrequested
+ * branch still carries the same landmine for any OTHER caller relying on it.
+ */
+export function toCandidateAtOwnServing(food: FoodLike, source: FoodSourceName): SourceCandidate {
+  const base = food.macros_per_base ?? {};
+  const matched = preferredServing(food);
+  const nutrients = matched ? scaleNutrients(base, servingFactor(food.base_unit, matched, 1)) : base;
+
+  return {
+    source,
+    food_id: food.food_id || null,
+    name: food.name,
+    brand: food.brand ?? null,
+    per: {
+      measure: matched?.label ?? `100 ${food.base_unit}`,
+      grams: matched?.amount_g ?? (food.base_unit === 'item' ? 1 : 100),
+      nutrients,
+    },
+    measures: measuresOf(food),
+    micros: microProvenance(base),
+    completeness: nutritionTier(base),
+    notes: candidateNotes(food, base),
   };
 }
 
