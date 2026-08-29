@@ -8,10 +8,20 @@
  * construction, and no amount of re-running it can say whether caching works — the question needs
  * consecutive turns in ONE session.
  *
- * Turn one establishes the prefix; turns two onward should hit it. What we send is append-only
- * (`refreshChangedBlocks` injects a NEW block rather than editing an earlier one), and the persona
- * is snapshotted at session open, so the prefix genuinely is stable across a session — the shape
- * caching wants. This measures whether the provider honours it.
+ * MEASURED 2026-08-29, and it corrects what this comment used to claim. The guess here was "turn
+ * one establishes the prefix; turns two onward should hit it". Wrong: turn one caches just as hard
+ * as the rest — 22,695 in / 15,255 cached, 67%, on the FIRST message of a brand-new session for a
+ * brand-new user. The cached prefix is her persona plus the tool menu, which is byte-identical
+ * across every session and every user of a deployment, so the provider's cache is already warm from
+ * other traffic. It is not per-conversation, and there is no cold first turn to pay for.
+ *
+ * What we send is also append-only within a session (`refreshChangedBlocks` injects a NEW block
+ * rather than editing an earlier one) and the persona is snapshotted at session open, so nothing
+ * later invalidates the prefix either.
+ *
+ * The number this CANNOT answer: whether Devs.ai bills the discount through. The count is the
+ * provider's, and reselling sits between it and the invoice — that is a question for their pricing
+ * terms, not for this script.
  *
  * Reads `cachedPromptTokens` straight from `cadence.ai_log`, which only carries the field since the
  * SSE transform started reading `input_tokens_details.cached_tokens` (#292). Rows are read BEFORE
