@@ -34,7 +34,12 @@ import { parseStructureRecipeResult, type StructuredIngredient, type StructuredR
 
 export type { StructuredRecipe } from './recipe-parse.ts';
 
-/** Ingredient after resolve / optional inline estimate (may carry est macros). */
+/**
+ * Ingredient after resolve / optional inline estimate (may carry est macros).
+ * `unresolved`/`reason` (MP10) are inherited from `RecipeIngredient` — see
+ * `Recipe.ingredients[]` in `@cadence/shared` for what they mean and why they're distinct from
+ * `estimated` below.
+ */
 export interface ResolvedRecipeIngredient extends RecipeIngredient {
   /** True when macros came from estimate_food (not a saved Food). */
   estimated?: boolean;
