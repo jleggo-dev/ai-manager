@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { MeetCadence } from './features/onboarding/MeetCadence.tsx';
 import { OnboardingChat } from './features/onboarding/OnboardingChat.tsx';
@@ -24,6 +24,7 @@ import { syncPlanLocalNotifications } from './lib/local-notifications-sync.ts';
 import { usePushRegistered } from './lib/usePushRegistered.ts';
 import { capabilities } from './lib/capability/index.ts';
 import { maybeRefreshHealthDigest } from './features/onboarding/health-digest.ts';
+import { useForegroundResume } from './lib/useForegroundResume.ts';
 import { supabase } from './lib/supabase.ts';
 import { screenFromPlanStage } from './screenFromPlanStage.ts';
 
@@ -121,6 +122,23 @@ function CoachApp({ session }: { session: Session | null }) {
       })
       .catch(() => setScreen('error'));
   };
+
+  /**
+   * The rescuer for a boot interrupted by backgrounding (2026-08-29 device round): a fetch
+   * suspended mid-flight comes back to a dead socket, and with no timeout and no resume signal
+   * the skeleton sat for minutes. The plan fetch now times out (api/plan.ts) so a hang becomes a
+   * failure — and this is the other half: coming back to the foreground retries a gate stuck on
+   * loading/error, and nudges every stale active query so what IS on screen is current.
+   *
+   * `screenRef` rather than a dependency: re-subscribing the native listener per screen change
+   * would race Capacitor's remove/add across a fast background-foreground flip.
+   */
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
+  useForegroundResume(() => {
+    if (screenRef.current === 'loading' || screenRef.current === 'error') loadPlan();
+    else void queryClient.refetchQueries({ type: 'active', stale: true });
+  });
 
   useEffect(() => {
     loadPlan();

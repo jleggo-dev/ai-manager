@@ -5,7 +5,7 @@ import type {
   ProgressData,
   StreakView,
 } from '@cadence/shared';
-import { BASE, headers } from './http.ts';
+import { BASE, headers, timeoutSignal } from './http.ts';
 
 /* ── Ongoing plan view (Today / Your week) ─────────────────────── */
 export interface PlanOccurrence {
@@ -89,7 +89,9 @@ export interface PlanViewData {
  * 2026-08-19). "I could not load your plan" and "you have no plan" must never share a value.
  */
 export async function getPlan(): Promise<PlanViewData | null> {
-  const res = await fetch(`${BASE}/plan`, { headers: headers() }).catch(() => null);
+  // 15s is ~75× the measured endpoint (median ~200ms deployed) and still short enough that a
+  // suspended-socket hang becomes a retryable failure instead of a minutes-long skeleton.
+  const res = await fetch(`${BASE}/plan`, { headers: headers(), signal: timeoutSignal(15_000) }).catch(() => null);
   if (!res?.ok) return null;
   return res.json();
 }

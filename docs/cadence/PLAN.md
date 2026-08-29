@@ -8682,3 +8682,30 @@ Left open from the same trace: the session minted at 17:05:00 did not move the U
 by 17:07 the user was still there to tap again. Whether `onAuthStateChange` fired into a
 suspended webview or the gate ignored it is a separate question, and the new flow makes it near
 unreachable — recorded, not chased.
+### The boot-latency pass — the skeleton was a hang, not a slow fetch (2026-08-29)
+
+The measured pass the evening's findings demanded. The endpoints are still fast (prior pass's
+~200ms /plan holds; API answers 120–270ms first-hit tonight) — the minutes of skeleton were a
+HANG with three cooperating causes, all code-level, none of them network speed:
+
+1. **No fetch in the client carries a timeout.** iOS suspends the webview on backgrounding; a
+   request in flight at that moment can return to a dead socket that never errors and never
+   resolves. The boot gate (`screen === 'loading'`) waits on exactly one such fetch.
+2. **Nothing listens for the foreground.** `refetchOnWindowFocus` is deliberately off (right call
+   — window focus is unreliable in a webview) but no `appStateChange` listener existed anywhere,
+   so a hung boot had no rescuer.
+3. `retry: 1` retries *failures* — a hang never fails, so the retry never armed.
+
+**Fixed (fix/boot-hang-resume):** `timeoutSignal(ms)` in `api/http.ts` (guarded — the floor is
+iOS 15 and `AbortSignal.timeout` is Safari 16; never for the coach SSE stream, which is SUPPOSED
+to live long) applied to the boot-critical `getPlan` at 15s — a hang becomes a failure the
+client's retry absorbs. And `useForegroundResume` (Capacitor `appStateChange` + web
+`visibilitychange`, deduped): a return to the foreground retries a gate stuck on loading/error
+and refetches stale active queries, so what is on screen is also current. Seven hook tests; the
+full web suite green.
+
+**Still open on the latency ledger, priced honestly:** migrating the remaining bare fetches onto
+a shared timeout (wide, mechanical — the boot gate was the one that stranded a screen);
+`signInWithIdToken` native Apple sign-in (pre-submission polish; Google stays on the fixed web
+session); the keep-warm ping for the ~1.2s idle wake (unbuilt since 2026-08-20); and the OAuth
+consent-screen branding check (config, not code).
