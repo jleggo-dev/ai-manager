@@ -58,6 +58,16 @@ export const webCapabilities: Capabilities = {
     donate: async () => false,
     registerCategories: async () => {},
   },
+  // A browser has no watch to schedule onto. isAvailable() === false keeps the affordance from
+  // rendering at all, which is the contract every consumer relies on.
+  workoutPlan: {
+    isAvailable: () => false,
+    isSupported: async () => ({ supported: false, state: 'unavailable' }),
+    requestAuthorization: async () => 'unavailable',
+    schedule: async () => [],
+    listScheduled: async () => [],
+    remove: async () => 0,
+  },
   dictation: {
     isAvailable: () => getSpeechRecognitionCtor() !== null,
     createSession: () => {

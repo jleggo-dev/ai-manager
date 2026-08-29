@@ -4,6 +4,7 @@ import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
 import { useSessionPrepLine } from './occurrence/useSessionPrepLine.ts';
 import { isFoodRow, isWeighInPending, sheetMinutes } from './occurrence/format.ts';
 import { SessionLogPanel } from './occurrence/SessionLogPanel.tsx';
+import { WatchHandoffRow } from './occurrence/WatchHandoffRow.tsx';
 import { MealLogPanel } from './occurrence/MealLogPanel.tsx';
 import { WeighInPanel } from './occurrence/WeighInPanel.tsx';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
@@ -107,6 +108,13 @@ export function OccurrenceSheet({
                     )}
                   </div>
                 )}
+                <WatchHandoffRow
+                  occurrenceId={detail.occurrence_id}
+                  title={detail.title}
+                  dateISO={detail.date}
+                  session={session}
+                  pending={detail.status === 'pending'}
+                />
                 <SessionLogPanel detail={detail} session={session} setDetail={setDetail} onLogged={onLogged} />
               </>
             ) : isFoodRow(detail) ? (

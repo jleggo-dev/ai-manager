@@ -9,6 +9,7 @@ import { grantedFromPermissionResponse } from './health-permissions.ts';
 import { readDailySteps } from './health-steps.ts';
 import { recordedDistanceKm } from './workout-distance.ts';
 import { webCapabilities } from './web.ts';
+import { nativeWorkoutPlan } from './workout-plan-native.ts';
 
 /**
  * The local Swift plugin that donates the coach's portrait (ios/App/App/CadenceCoachIdentity).
@@ -72,25 +73,51 @@ interface PluginWorkout {
   endDate?: string;
   duration?: number; // seconds
   distance?: number; // meters
-  avgHeartRate?: number;
+  /** Raw samples — the plugin has NO average field. An earlier revision read `w.avgHeartRate`,
+   *  a field the plugin never emits, so `avgHr` had been undefined on every workout ever read. */
+  heartRate?: { bpm: number }[];
   /** HealthKit's per-workout UUID — present on iOS, optional in the plugin's own types. */
   id?: string;
   /** The recording app's display name (e.g. "Strava", "Apple Watch"). */
   sourceName?: string;
+  /** The recording app's bundle id — A14's one guaranteed-correct dedup key: rows recorded by
+   *  OUR bundle are dropped on the device once we write workouts, so they never re-enter. */
+  sourceBundleId?: string;
+}
+
+/**
+ * The mean of the heart-rate series, reduced HERE — an hour's run carries 700+ samples
+ * (HKObjectQueryNoLimit), and an unbounded raw array must never cross into React state. One
+ * number is also all any consumer wants: the digest, the history rows and the coach all speak
+ * `avgHr`, and the 20–260 plausibility gate stays where it has always lived (health-digest.ts).
+ */
+function meanBpm(samples: PluginWorkout['heartRate']): number | null {
+  if (!samples?.length) return null;
+  let sum = 0;
+  let n = 0;
+  for (const s of samples) {
+    if (typeof s?.bpm === 'number' && Number.isFinite(s.bpm)) {
+      sum += s.bpm;
+      n += 1;
+    }
+  }
+  return n > 0 ? sum / n : null;
 }
 
 function toSeamWorkout(w: PluginWorkout): Workout {
   // A 0 here is the plugin's `?? 0` for "HealthKit had no distance", not a real zero — see
   // workout-distance.ts. The session is kept either way; only the distance goes missing.
   const km = recordedDistanceKm(w.distance);
+  const avgHr = meanBpm(w.heartRate);
   return {
     type: w.workoutType ?? 'workout',
     start: w.startDate,
     ...(km != null ? { distanceKm: km } : {}),
     ...(typeof w.duration === 'number' ? { durationMin: Math.round(w.duration / 60) } : {}),
-    ...(typeof w.avgHeartRate === 'number' ? { avgHr: Math.round(w.avgHeartRate) } : {}),
+    ...(avgHr != null ? { avgHr: Math.round(avgHr) } : {}),
     ...(w.id ? { id: w.id } : {}),
     ...(w.sourceName ? { recordedBy: w.sourceName } : {}),
+    ...(w.sourceBundleId ? { recordedByBundleId: w.sourceBundleId } : {}),
   };
 }
 
@@ -159,7 +186,9 @@ export const nativeCapabilities: Capabilities = {
       const res = await Health.queryWorkouts({
         startDate: sinceISO,
         endDate: new Date().toISOString(),
-        includeHeartRate: false,
+        // true is what makes requirement 2 (heart rate for the non-running work) real: the
+        // series reduces to one number in toSeamWorkout and never leaves this file raw.
+        includeHeartRate: true,
         includeRoute: false,
         includeSteps: false,
       });
@@ -323,5 +352,6 @@ export const nativeCapabilities: Capabilities = {
       }
     },
   },
+  workoutPlan: nativeWorkoutPlan,
   dictation: webCapabilities.dictation,
 };

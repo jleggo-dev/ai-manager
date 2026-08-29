@@ -2308,7 +2308,10 @@ The owner's three requirements, in priority order: **(1)** run tracking in our a
 heart rate for the non-running work — HIIT, resistance, meditation, **(3)** Apple Watch
 notifications.
 
-**The ruling — settled, do not reopen.** Our phone app *composes* the workout (goal / pace /
+**The ruling — REVISITED 2026-08-29, see "A13 revisited" at the end of this file.** The hand-off
+below still stands (and shipped 2026-08-29); what changed is that the native watch app is pulled
+forward from v2 — the owner: "the truth is I always wanted a watch app." Original text follows.
+Our phone app *composes* the workout (goal / pace /
 interval structure) with **WorkoutKit**, hands it to Apple's own Workout app on the watch — where it
 appears with our icon and name — Apple does all the live tracking (GPS, heart rate,
 battery-optimised), the result lands in HealthKit, and we read it back through the path we already
@@ -8426,3 +8429,148 @@ publisher-defined and really do need a picker: **MP38** (remember the unit each 
 `default_serving` is a column on the food row, so today it is one value shared by every user) and
 **MP39** (compound labels like `1 container (4 cups ea.)`). Both S.
 
+
+## The movement pillar gets hands — A13 v1 first slice, as built (2026-08-29)
+
+The two food-harness weeks closed with the meal-prep plan's slices A–D and G shipped (#283–#294).
+The next big step chosen against that state: **the movement pillar becomes two-way**, the same
+inversion the food work proved. Food already reads five sources and writes the log; movement read
+your health and wrote a plan, and then nothing she planned reached your wrist and nothing done in
+her app reached your rings. A13 (the WorkoutKit hand-off) is the first half; A14 (write-back +
+canonical store) is the second; A20 (partial completion) rides behind them.
+
+### Shipped in this slice
+
+- **The composer** (`packages/cadence-shared/src/workout-plan.ts`, 32 tests) — A13's build-order
+  step 1, all the design risk, no Xcode. `composeWorkoutPlan(occurrenceId, title, session)` →
+  `WorkoutPlanSpec | null`. The mapping: any interval item → `CustomWorkout` (EMOM emits a
+  work-only step; `restBetweenSetsSec` becomes its OWN single-iteration block so it never
+  multiplies with rounds — folded into the set's block it would repeat every round); distance AND
+  time → `PacerWorkout`; one of them → `SingleGoalWorkout`; anything else → **null, never an open
+  goal**, and the affordance renders nothing. Mind practices (`meditate`, `breathing`, `grounding`,
+  `feeling_log`, `journal`) NEVER compose — a sit is not exercise, and HealthKit models it as
+  `mindfulSession`, not a workout. The load-bearing test: the composed body's wall-clock equals
+  `intervalTotalSeconds` of the plan the user was shown, for every shape including the
+  trimmed-to-fit cap case. `workoutFromIntervalPlan` is a second entry point so a hand-edited
+  multi-set plan (IntervalEditSheet) sends what the user is looking at, not the prescription.
+- **The seam** — `WorkoutPlanCapability` in `capability/index.ts` (isSupported / requestAuthorization
+  / schedule / listScheduled / remove), native impl in `capability/workout-plan-native.ts` (lazy
+  `registerPlugin`, every call caught, failure posture = "the affordance may not render"), web
+  no-op.
+- **The bridge** (`apps/cadence-ios/ios/App/App/CadenceWorkoutPlan/`) — decodes the spec, calls
+  WorkoutKit, makes no judgements. Wired into `project.pbxproj` by script (no manual drag) and —
+  new for this repo — **actually compiled**: Xcode 26.6 was available for the first time, so the
+  API surface is compiler-verified against the iOS 26.5 SDK. The compiler corrected two claims:
+  `WorkoutScheduler.isSupported` is synchronous, and `schedule(_:at:)` does not throw. Status:
+  COMPILED, NOT DEVICE-VERIFIED (README has the device checklist; the support-matrix probe and
+  `maxAllowedScheduledWorkoutCount` read are on it).
+- **The door** — `WatchHandoffRow` under the session sheet's Start button (`useWatchHandoff` owns
+  the gate). Renders ONLY when the whole chain says yes: native, WorkoutKit, paired watch, not
+  denied/restricted, session composes. Copy: "⌚ Send to your watch" → "On your watch for
+  Thursday" / "Take it off". A refusal at Apple's sheet removes the row (an answer, not an error);
+  re-offering after a Settings-level deny would be nagging. 12 hook tests.
+
+### Two read-path bugs fixed in passing (both blocking requirement 2 / A14)
+
+- **`Workout.avgHr` had been `undefined` on every workout ever read.** The seam read
+  `w.avgHeartRate` — a field `capacitor-health` has never emitted (its payload is
+  `heartRate?: HeartRateSample[]`) — and passed `includeHeartRate: false` regardless. Now: ask for
+  the series, reduce to a mean AT THE SEAM (700+ samples/hour must never cross into React state),
+  round, and the existing 20–260 gate in health-digest.ts keeps its job. The downstream was
+  already built and waiting: digest field, `avgHr` validation (`validation/health.ts:102`),
+  `workout_history.avg_hr` column. Wiring, not building.
+- **`sourceBundleId` now survives the seam** as `Workout.recordedByBundleId` — A14's one
+  guaranteed-correct dedup rule (drop rows recorded by our own bundle on the device, before the
+  wire) was impossible while the seam discarded it. `PluginWorkout` note: A14's entry said the
+  seam also dropped `id` and `sourceName`; those two had since been added — only the bundle id
+  was still missing.
+
+### Stale-doc correction (A8)
+
+A8's "settled" diagnosis says nothing anywhere computes a max, a personal best, or a recency
+window. Since then `observed-health.ts` grew `best_distance_km`, `best_duration_min`, a 6-point
+weekly trend, `days_since_last_workout` and a last-7-days steps line — the A8 gap is largely
+closed and the entry predates the fix. Left in place as history; this note is the pointer.
+
+### Still open on this arc, in order
+
+1. **Device round on the bridge** (owner + watch): the README checklist, especially the
+   `supportsActivity/Goal/Alert` probe and the join-key proof (`HKWorkout.workoutPlan` returns our
+   occurrence id).
+2. **A14 write-back**: the `CadenceHealthWrite` bridge (`HKWorkoutBuilder`; `capacitor-health`
+   can request WRITE_WORKOUTS but exposes no save), the `workout_sources`/`workouts` pair, and the
+   read-side dedup that `recordedByBundleId` just unblocked. Do not request the write scope
+   before the bridge exists — it spends the one prompt iOS gives us.
+3. **A20 partial completion**: per-step record on the occurrence, `log_session` carries it, the
+   ring reads it — drawn as what happened, never as what broke.
+4. **Open questions carried** (A13): schedule cadence (whole week vs rolling; replan = remove +
+   re-schedule), `HeartRateRangeAlert` targets per step (free in v1, probe legality per activity),
+   and whether the coach ALSO offers the hand-off in conversation (the session-sheet door is the
+   committed v1; a coach-offered path would be a tool with the same composer behind it).
+
+## A13 revisited — the watch app comes forward (owner, 2026-08-29)
+
+The day after the hand-off slice shipped, the owner reopened the v1/v2 split, and the revisit
+surfaced a premise worth correcting on the record:
+
+> *"The reason we said 'no' to native app is only because I understood that we didn't have the
+> expertise to balance GPS & battery life… The truth is I always wanted a watch app. I want watch
+> notifications. I want timers on the watch. I want heart rate for non-cardio workouts to be
+> tracked. Mid-run coaching though, that's a V2. That's longer term."*
+
+**The premise correction.** GPS/battery expertise was the recorded argument against **v0 —
+phone-based tracking** (hand-rolled CLLocationManager, noise filtering, auto-pause). The watch app
+was deferred for a different recorded cost: a second native SwiftUI codebase and review surface.
+On watchOS the sensor/battery balancing is Apple's — `HKWorkoutSession` + `HKLiveWorkoutBuilder`
+manage sampling cadence, background runtime and power. (WorkoutKit is the composing/scheduling
+framework — the shipped hand-off; the live piece inside our own watch app is HealthKit's workout
+session APIs.) So the fear that motivated "no watch app" never attached to a watch app.
+
+**What is now decided:** a native Cadence watch app is v1.5, not v2. Watch notifications, timers
+on the wrist, and HR for non-cardio are the wants. Mid-run coaching stays v2 — owner: "we are
+nowhere near ready for that."
+
+**Scope settled same day: GPS-free.** Non-cardio sessions + mind timers in our watch app; outdoor
+runs stay on the shipped hand-off, so no GPS code is ever ours (`HKWorkoutRouteBuilder` exists on
+watchOS and we deliberately do not touch it). Owner also confirmed: **write-back to Apple Health
+happens regardless** — in two halves: watch-app sessions save themselves through the live builder
+(our bundle id + plan-id metadata), and phone-only sessions still need A14's iOS
+`HKWorkoutBuilder` bridge so a watchless user's finished session closes their rings too. The
+`recordedByBundleId` dedup shipped 2026-08-29 protects the read path from both.
+
+**The "shell" question, answered from the SDK (WatchOS 26.5 / iOS 26.5 interfaces, 2026-08-29):**
+the owner asked whether our app can be a shell over Apple's workout expertise. Verified:
+
+- `HKWorkoutSession` + `HKLiveWorkoutBuilder` + `HKLiveWorkoutDataSource` all present on watchOS —
+  Apple runs sensors, workout-cadence heart rate, calorimetry, background runtime, battery, and
+  the save. That IS the engine under our shell; it is what every serious third-party watch
+  fitness app is built on.
+- `HKWorkoutSession.h` contains **no reference to WorkoutKit's `WorkoutPlan`** — a third-party
+  session cannot consume our composition. Apple's interval-advancing choreography runs only
+  inside Apple's own Workout app. So in OUR app, the interval clock is ours — which costs
+  nothing new: `expandIntervalPhases` is already the deterministic phase walker the phone player
+  uses; the watch port drives haptics from the same walk while Apple measures.
+- `WorkoutPlan.openInWorkoutApp()` — `@available(watchOS 10.0)`, iOS-unavailable — so the watch
+  app can be the single front door on the wrist and still hand a RUN to Apple's full Workout UI
+  in one tap. Cadence everywhere; Apple appears exactly where their expertise is irreplaceable.
+- `startMirroringToCompanionDeviceWithCompletion` (watchOS 10+) — the session can stream live to
+  the iPhone. Not used in v1.5; it is the natural seam for v2 mid-run coaching.
+
+**What survives regardless:** everything in the 2026-08-29 slice. The composer, the plan-id join
+(`HKWorkoutBuilder`/session metadata carries it either way), the HealthKit read-back, the
+`avgHr` fix and `recordedByBundleId` — same loop whoever runs the workout. A watch app recording
+workouts makes the own-bundle dedup immediately live, and watch sessions writing themselves to
+HealthKit delivers a slice of A14 for free.
+
+**Prerequisites, in order, before watch-app code:**
+1. The phone-side notification gaps ship first under any ruling — nothing consumes an action tap
+   (`pushNotificationActionPerformed` has no listener anywhere) and `interruption-level` /
+   `thread-id` are unset in `push-apns.ts`. On the wrist an actionable notification IS the whole
+   interaction.
+2. An SDK-verification pass, same discipline as A13's original entry — read, don't assert: how
+   the composed spec best drives a session in our own app; whether/how HR reads work during a
+   sit (calm signal only, never a target); WatchConnectivity vs API for getting today's sessions
+   onto the wrist.
+3. A design brief — `DESIGN-PROMPT-watch.md` (session list, timer faces, live HR frame,
+   done-summary). This is the arc's first genuine design engagement; the brand constraints
+   (hearth not scoreboard; count what happened) bind especially hard on a wrist-sized screen.
