@@ -7,7 +7,7 @@
  * the thing that gets quoted in a standup and then optimised against — and the two rates below
  * (silence where a tool was needed, firing where none was) are the ones that name real bugs.
  */
-import { PROVIDER_BUILTINS, type EvalCase } from './eval-tool-selection-cases.ts';
+import { CASES, META_TOOLS, PROVIDER_BUILTINS, type EvalCase } from './eval-tool-selection-cases.ts';
 
 export interface Outcome {
   c: EvalCase;
@@ -204,13 +204,33 @@ export async function dryRun(cases: EvalCase[], known: Set<string>): Promise<voi
   // A renamed or dropped tool would otherwise land in the report as an INVENTED name and read as a
   // hallucination — the cases would be wrong and the model would take the blame. Checked here
   // because --dry is free, so there is no reason to find out mid-run.
-  const live = new Set(defs.map((d) => d.function.name));
-  const gone = [...known].filter((t) => !live.has(t));
-  const fresh = [...live].filter((t) => !known.has(t) && !PROVIDER_BUILTINS.has(t));
-  if (gone.length || fresh.length) {
-    console.log('\n⚠ the case file and the harness disagree about what exists:');
-    if (gone.length) console.log(`   named here, gone from the harness: ${gone.join(', ')}`);
-    if (fresh.length) console.log(`   in the harness, unknown here:      ${fresh.join(', ')}`);
-    console.log('   Fix KNOWN_TOOLS (and probably the cases) before trusting a run.');
+  //
+  // Compare against what the harness will HONOUR, which is what `known` already is: derived from
+  // both tiers (#291). It is NOT `coachToolDefinitions()` — that is Layer 1 alone, because the long
+  // tail is reached through find_tools/use_tool and the dossier reads ride the pack as Broker
+  // prefetches. Diffing against that subset marked all nineteen tail-and-prefetch names "gone" on
+  // every run ever made, above a line telling you not to trust the run — while a live run was
+  // calling `get_journal`, one of the nineteen, perfectly well. A check that can never be silent is
+  // not a check; it buries the drift it exists to catch.
+  //
+  // So it reads the half that is not structural. `known` is derived and cannot rot; `expect`,
+  // `allow`, `forbid` and `args.tool` are hand-written strings, and nothing stops one naming a tool
+  // that has since been renamed or hidden. Read from CASES rather than the selected `cases`, so
+  // `--only` narrows what is RUN without narrowing what is checked.
+  const named = new Set(
+    CASES.flatMap((c) => [...c.expect, ...(c.allow ?? []), ...(c.forbid ?? []), ...(c.args ? [c.args.tool] : [])]),
+  );
+  const gone = [...named].filter((t) => !known.has(t));
+  // META_TOOLS are the discovery path, not a selection — no case should ever name them, so their
+  // absence is the design working rather than a hole in coverage.
+  const meta = new Set<string>(META_TOOLS);
+  const untested = [...known].filter((t) => !named.has(t) && !PROVIDER_BUILTINS.has(t) && !meta.has(t));
+  if (gone.length) {
+    console.log('\n⚠ the case file names tools the harness will not honour:');
+    console.log(`   ${gone.join(', ')}`);
+    console.log('   Each one scores correct behaviour as a miss AND an invention. Fix the cases before running.');
+  }
+  if (untested.length) {
+    console.log(`\n· reachable, but no case exercises it: ${untested.join(', ')}`);
   }
 }
