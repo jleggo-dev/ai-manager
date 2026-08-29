@@ -262,6 +262,91 @@ describe('relayAndAccumulate', () => {
       expect(result.completionTokens).toBe(9 + 14);
     });
 
+    /**
+     * CAPTURED OFF THE WIRE 2026-08-29 (`scripts/capture-turn-frames.ts`), because two separate
+     * readings of this parser failed to explain what production was reporting and a third guess was
+     * not worth making. The frames below are verbatim.
+     *
+     * Upstream emits `message.complete` for BOTH `response.completed` and `response.done`, so one
+     * response arrives twice. Summing every frame made a turn report 30,510 cached tokens against
+     * 24,081 prompt tokens — 127% of the prompt cached — byte-identically across separate runs.
+     */
+    describe('one response counted once, however many frames report it', () => {
+      const frame = (o: Record<string, unknown>): string =>
+        `data: ${JSON.stringify({ type: 'message.complete', text: '', ...o })}\n\n`;
+
+      it('does not count a trailing duplicate that repeats cached tokens beside a zero prompt', async () => {
+        const result = await relayAndAccumulate(
+          streamFromChunks([
+            frame({ inputTokens: 24081, cachedInputTokens: 15255, outputTokens: 139, responseId: 'resp_A' }),
+            frame({ inputTokens: 0, cachedInputTokens: 15255, outputTokens: 0, responseId: 'resp_A' }),
+          ]),
+        );
+
+        expect(result.promptTokens).toBe(24081);
+        expect(result.cachedPromptTokens).toBe(15255);
+      });
+
+      it('does not count a duplicate that repeats the prompt as well', async () => {
+        const result = await relayAndAccumulate(
+          streamFromChunks([
+            frame({ inputTokens: 23419, cachedInputTokens: 15255, outputTokens: 88, responseId: 'resp_B' }),
+            frame({ inputTokens: 23419, outputTokens: 88, responseId: 'resp_B' }),
+          ]),
+        );
+
+        expect(result.promptTokens).toBe(23419);
+        expect(result.completionTokens).toBe(88);
+      });
+
+      /** The MP30 property, restated for distinct responses: real rounds must still add up. */
+      it('still sums genuinely different responses in one turn', async () => {
+        const result = await relayAndAccumulate(
+          streamFromChunks([
+            frame({ inputTokens: 23419, cachedInputTokens: 15255, outputTokens: 88, responseId: 'resp_C' }),
+            frame({ inputTokens: 23419, outputTokens: 88, responseId: 'resp_C' }),
+            frame({ inputTokens: 23602, cachedInputTokens: 15255, outputTokens: 26, responseId: 'resp_D' }),
+          ]),
+        );
+
+        expect(result.promptTokens).toBe(23419 + 23602);
+        expect(result.cachedPromptTokens).toBe(15255 + 15255);
+        expect(result.completionTokens).toBe(88 + 26);
+      });
+
+      /**
+       * The invariant that was missing. Cached tokens are a SUBSET of the prompt — a turn can never
+       * cache more than it sent. Nothing checked it, so an impossible number reported itself for
+       * weeks and read as a 127% cache rate rather than as a bug.
+       */
+      it('never reports more cached tokens than prompt tokens, across all three shapes', async () => {
+        for (const frames of [
+          [
+            frame({ inputTokens: 24081, cachedInputTokens: 15255, outputTokens: 139, responseId: 'r1' }),
+            frame({ inputTokens: 0, cachedInputTokens: 15255, outputTokens: 0, responseId: 'r1' }),
+          ],
+          [
+            frame({ inputTokens: 23419, cachedInputTokens: 15255, outputTokens: 88, responseId: 'r2' }),
+            frame({ inputTokens: 23419, outputTokens: 88, responseId: 'r2' }),
+          ],
+          [frame({ inputTokens: 22671, cachedInputTokens: 15255, outputTokens: 286, responseId: 'r3' })],
+        ]) {
+          const result = await relayAndAccumulate(streamFromChunks(frames));
+          expect(result.cachedPromptTokens ?? 0).toBeLessThanOrEqual(result.promptTokens ?? 0);
+        }
+      });
+
+      /** A first report of zero still has to move the field off `null` — silence and "nothing was
+       *  cached" are different facts with different fixes, per `cachedPromptTokens`'s contract. */
+      it('records a genuine first-report zero rather than leaving it null', async () => {
+        const result = await relayAndAccumulate(
+          streamFromChunks([frame({ inputTokens: 900, cachedInputTokens: 0, outputTokens: 5, responseId: 'resp_E' })]),
+        );
+
+        expect(result.cachedPromptTokens).toBe(0);
+      });
+    });
+
     it('leaves an accumulated total untouched when a later frame carries no usage at all', () => {
       const state = createCoachStreamAccumulateState();
       applySseDataPayload(state, JSON.stringify({ usage: { prompt_tokens: 5000, completion_tokens: 20 } }));

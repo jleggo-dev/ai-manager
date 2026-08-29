@@ -168,6 +168,7 @@ export async function seed(userId: string, token: string): Promise<void> {
   const { insertPlan } = await import('../src/repos/plans.ts');
   const { insertActivities } = await import('../src/repos/activities.ts');
   const { insertEquipment } = await import('../src/repos/equipment.ts');
+  const { upsertWorkoutHistory } = await import('../src/repos/workout-history.ts');
   const { randomUUID } = await import('node:crypto');
 
   await setName(userId, 'Sam');
@@ -237,6 +238,42 @@ export async function seed(userId: string, token: string): Promise<void> {
       values (${activityId}, ${userId}, ${date}, 'done', ${json(r.value)}, ${json(log)})
       on conflict (activity_id, date) do nothing`;
   }
+  /**
+   * DEVICE-RECORDED workouts, which are NOT the same dataset as the reports above.
+   *
+   * `get_recent_logs` returns what Sam wrote down; `get_workout_history` returns what his watch
+   * recorded — the tool descriptions draw that line explicitly, and B6 exists to test that she
+   * knows it. Until 2026-08-29 this table was empty, so `get_workout_history` could only ever
+   * return nothing: B6 asked for "the actual longest run" and the only way to answer was the
+   * prefetched reports. She did exactly that, correctly, and was scored a miss twice.
+   *
+   * So the device list includes runs Sam never logged, and THE LONGEST IS ONE OF THEM (13.2 km,
+   * against 11.4 km in his own reports). Answering from the reports alone is now wrong by a
+   * number, which is what makes the case discriminating instead of decorative — and it is the
+   * realistic shape besides: nobody logs every run.
+   */
+  const deviceRuns: Array<{ daysAgo: number; km: number; min: number }> = [
+    { daysAgo: 3, km: 5, min: 31 }, // also in REPORTS (Easy run) — the same session, two sources
+    { daysAgo: 7, km: 11.4, min: 77 }, // also in REPORTS (Long run)
+    { daysAgo: 11, km: 13.2, min: 88 }, // NEVER logged — the real answer to "longest"
+    { daysAgo: 17, km: 6.8, min: 41 }, // never logged
+    { daysAgo: 24, km: 9.1, min: 58 }, // never logged
+  ];
+  await upsertWorkoutHistory(
+    userId,
+    'healthkit',
+    deviceRuns.map((r) => {
+      const startISO = new Date(daysAgo(r.daysAgo).setUTCHours(7, 30, 0, 0)).toISOString();
+      return {
+        sourceId: `${startISO}|HKWorkoutActivityTypeRunning|${r.min}`,
+        type: 'running',
+        startISO,
+        durationMin: r.min,
+        distanceKm: r.km,
+      };
+    }),
+  );
+
   // A couple of pending days ahead, so the week reads like a week rather than a history.
   for (const a of activities) {
     for (let i = 1; i <= 4; i += 1) {

@@ -232,17 +232,45 @@ const ACTIONS: EvalCase[] = [
   {
     id: 'A14',
     kind: 'action',
-    turn: 'just got back from the ride, downed a big bottle of water, maybe 750ml. felt good out there',
-    expect: ['log_meal'],
-    allow: [...DOSSIER_READS, 'log_session', 'get_recent_logs'],
+    turn: 'just got back from the easy run, downed a big bottle of water, maybe 750ml. felt good out there',
+    expect: ['log_session'],
+    allow: [...DOSSIER_READS, 'get_recent_logs', 'log_meal'],
     args: {
-      tool: 'log_meal',
-      check: (a) => (/water/i.test(str(a.text)) ? null : `text "${String(a.text)}" did not carry "water"`),
+      tool: 'log_session',
+      check: (a) =>
+        /run/i.test(str(a.session)) ? null : `session "${String(a.session)}" is not the run she was told about`,
     },
+    /**
+     * RETARGETED 2026-08-29, after failing twice and being wrong on BOTH counts.
+     *
+     * It expected `log_meal` for 750 ml of water. But water has its own path
+     * (`POST /nutrition/water` — "one pour, ml") that no coach tool reaches, and the owner ruled the
+     * same day that it should stay that way: *"I don't think water needs its own tool… logging water
+     * is a sub-tool of logging nutrition; it probably shouldn't be separate,"* and *"logging water is
+     * really not so important."* The case was asking her to put a zero-calorie "meal" in the food
+     * diary instead of a pour in the water row; declining was the better judgement, scored as a miss.
+     *
+     * The turn ALSO said "the ride" — and this account's plan has no ride (see `ACTIVITIES`: Easy
+     * run, Long run, Grip finisher, Morning sit). `log_session` resolves the named session against
+     * the plan and answers "No session clearly matches" for anything else, so even the session read
+     * of this turn could not have passed. Retargeting without changing the turn would have rebuilt
+     * the same defect one tool over.
+     *
+     * So the turn now names a session that exists, and the case tests something A7 does not: A7 is a
+     * data-rich report ("77 minutes", HR detail) where the session is the whole turn. Here the most
+     * concrete number in the sentence — 750ml — points at nutrition, and the session is the vaguer
+     * half. It asks whether a nutrition distractor pulls her off the thing worth logging. `log_meal`
+     * stays in `allow`: folding the water in is defensible, just not required.
+     *
+     * NOTE for anyone editing a case: a turn that names a session must name one the fixture seeds.
+     * That coupling is invisible from this file and has now cost this case two runs.
+     */
     from:
       'Owner directive 2026-08-19 — nutrition as a callable tool; water is the case the confirm sheet never ' +
       'caught. Reopened 2026-08-28 (MP34) as silence when log_nutrition turned out to be gone; reopened again ' +
-      'now that log_meal exists to call. "the ride" may also earn log_session — both are correct here.',
+      'when log_meal shipped. Retargeted to log_session 2026-08-29 (owner: water is not its own tool and not ' +
+      'important). Turn edited to name a seeded session — "the ride" was never in this plan, so the case ' +
+      'could not have passed either way. Now tests session-vs-nutrition pull; A7 covers the data-rich report.',
   },
   {
     id: 'A15',
@@ -328,7 +356,26 @@ const READS: EvalCase[] = [
     turn: "what's my longest run in the last month? not the average, the actual longest",
     expect: ['get_workout_history'],
     allow: [...DOSSIER_READS, 'get_recent_logs', 'get_goal_progress'],
-    from: 'PLAN.md:871 (2026-08-11) — "where did that number come from?" She quoted a 90-day mean as current form.',
+    /**
+     * MADE ANSWERABLE 2026-08-29. It failed twice, and both times she was right.
+     *
+     * `cadence.workout_history` was never seeded, so `get_workout_history` could only return an
+     * empty list — the tool this case demands had nothing in it. Meanwhile the Broker prefetched
+     * `get_recent_logs`, which held the answer, and she used it: *"Your longest run in the last
+     * month was that long run on August 23 — 11.4 km in 77 minutes. Nothing since has topped it."*
+     * Correct, specific, and explicitly not an average, which is the exact failure this case was
+     * written for. It was scored a miss anyway.
+     *
+     * The fixture now seeds device runs (`eval-tool-selection-world.ts`), and the longest — 13.2 km
+     * — was never logged by hand. So the prefetched reports top out at 11.4 km and answering from
+     * them is wrong BY A NUMBER, while `get_workout_history` has the real one. The case tests the
+     * line the tool descriptions draw ("device records vs their own words", pinned by
+     * `description-audit.test.ts`) instead of asking for a tool that returns nothing.
+     */
+    from:
+      'PLAN.md:871 (2026-08-11) — "where did that number come from?" She quoted a 90-day mean as current form. ' +
+      'Made answerable 2026-08-29: the device table was empty, so the expected tool could not answer and she ' +
+      'correctly used the prefetched reports instead; the fixture now carries an unlogged 13.2 km run.',
   },
   {
     id: 'B7',
@@ -663,3 +710,14 @@ export const KNOWN_TOOLS = new Set([...DOSSIER_READS, ...alwaysOnToolNames(), ..
  * in the report as provider noise, not vanish.
  */
 export const PROVIDER_BUILTINS = new Set(['suggested_actions']);
+
+/**
+ * The discovery path, which is plumbing rather than a selection.
+ *
+ * Most tools are on-demand — absent from the always-on list, reachable only by looking them up
+ * with `find_tools` and invoking them. Counting that step as an unasked-for call penalised correct
+ * behaviour on every on-demand tool: B1 called `find_tools` then `get_journal` (precisely the
+ * designed path) and was failed on precision for it. Never counted as `extra`; a case that really
+ * does want to assert she did not go looking can name them in `forbid`, which is checked first.
+ */
+export const META_TOOLS = ['find_tools', 'use_tool'] as const;

@@ -96,9 +96,17 @@
  * Cost and clock are printed at the end of every run. It cleans up after itself: the auth user and
  * every cadence row it created are deleted on exit, success or failure.
  */
-import { ACTION_TOOLS, CASES, KNOWN_TOOLS, PROVIDER_BUILTINS, type EvalCase } from './eval-tool-selection-cases.ts';
+import {
+  ACTION_TOOLS,
+  CASES,
+  KNOWN_TOOLS,
+  META_TOOLS,
+  PROVIDER_BUILTINS,
+  type EvalCase,
+} from './eval-tool-selection-cases.ts';
 import { dryRun, graderVerdict, header, line, summarize, type Outcome } from './eval-tool-selection-report.ts';
 import { API, missingEnv, setUp, tearDown, type World } from './eval-tool-selection-world.ts';
+import { GET_NUTRITION, NUTRITION_FACADE_COVERS } from '../src/services/retrieval/nutrition-facade.ts';
 
 const argv = process.argv.slice(2);
 const flag = (name: string): string | null => {
@@ -233,14 +241,43 @@ function score(c: EvalCase, obs: Observed, ms: number, prefetched: string[] | nu
   const seen = [...new Set(obs.calls.map((x) => x.name))];
   const builtins = seen.filter((t) => PROVIDER_BUILTINS.has(t));
   const called = seen.filter((t) => !PROVIDER_BUILTINS.has(t));
-  const permitted = new Set([...c.expect, ...(c.allow ?? [])]);
+  /**
+   * `find_tools` and `use_tool` are PLUMBING, not choices, so they never count against a case.
+   *
+   * Most tools are on-demand: they are not in the always-on list, and the only way she can reach
+   * one is to look it up with `find_tools` and invoke it. Scoring that required step as an
+   * unasked-for call meant correct behaviour on any on-demand tool was penalised for working —
+   * B1 ("what have i been writing about lately?") called `find_tools` then `get_journal`, which is
+   * exactly the designed path, and failed on precision for it. A case that genuinely wants to
+   * assert she did NOT go looking can still say so explicitly via `forbid`, which is checked first.
+   */
+  const permitted = new Set([...c.expect, ...(c.allow ?? []), ...META_TOOLS]);
 
   /**
    * A READ she did not call still counts if the Broker fetched it for this turn — the fact
    * reached her either way, which is the thing that matters and the thing HARNESS-V2 calls
    * Layer 0. An ACTION never counts this way: prefetch cannot change anybody's data.
    */
-  const gotByPrefetch = (t: string): boolean => !ACTION_TOOLS.has(t) && (prefetched ?? []).includes(t);
+  /**
+   * A facade is credited by what it COVERS, not only by its own name (fixed 2026-08-29).
+   *
+   * The Broker prefetches the underlying reads — `get_food_log`, `get_recipes` — while a case now
+   * expects the facade `get_nutrition`, so an exact-name match credited neither. B4 ("what did I
+   * actually eat yesterday") was scored as calling nothing at all when the transcript shows her
+   * answering correctly from a prefetched food log: *"I've got your food log for the last few days
+   * pulled up already."* That is the design working — reads are context, actions are hers — and the
+   * scorer was calling it a miss because I mapped the case expectations onto the facade and forgot
+   * to map this.
+   *
+   * Derived from `NUTRITION_FACADE_COVERS` rather than restated here, for the same reason
+   * `KNOWN_TOOLS` is derived: a hand-kept copy is what drifted in the first place.
+   */
+  const covers = (t: string): readonly string[] => (t === GET_NUTRITION.name ? NUTRITION_FACADE_COVERS : []);
+  const gotByPrefetch = (t: string): boolean => {
+    if (ACTION_TOOLS.has(t)) return false;
+    const pre = prefetched ?? [];
+    return pre.includes(t) || covers(t).some((u) => pre.includes(u));
+  };
   const unmet = c.expect.filter((t) => !called.includes(t));
   const viaPrefetch = unmet.filter(gotByPrefetch);
   const missing = unmet.filter((t) => !gotByPrefetch(t));
