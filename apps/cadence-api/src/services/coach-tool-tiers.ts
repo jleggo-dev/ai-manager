@@ -137,6 +137,17 @@ export const ALWAYS_READS = ['get_active_plan'] as const;
  * message, and a roll-forward that silently does not happen is a person who said "just build it"
  * and got nothing.
  *
+ * `log_meal` joined 2026-08-28 (MP21/MP40) on the same evidence, not a guess: it is the shape
+ * `update_constraint`'s 0-of-3 measurement warns against, TWICE OVER. Food gets mentioned in
+ * conversation more often than any other loggable thing — most people eat three or more times a
+ * day — so it is the LEAST affordable of all of them to leave behind a round-trip. And the
+ * scenario this whole parcel exists for says it outright: "during the week the user should be
+ * able to... just tell Cadence in chat that they ate it and it gets logged" (PLAN.md, "Meal prep,
+ * end to end"). An always-on tool she does not call is invisible; a mid-tail one she has to go
+ * find and then follow through on is the exact failure `update_constraint` measured. `preview_meal`
+ * and `research_food` stay in the tail deliberately — they are reads, already free, and neither is
+ * the everyday case this evidence is about.
+ *
  * Run `npm run eval:tools` after changing this list.
  */
 export const ALWAYS_ACTIONS = [
@@ -148,6 +159,7 @@ export const ALWAYS_ACTIONS = [
   'set_macro_targets',
   'open_week_review',
   'build_next_week',
+  'log_meal',
 ] as const;
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
@@ -200,7 +212,10 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     label: 'what they eat, their targets, their recipes, and nutrition facts',
     // `check_food_sources` is the deeper rung under get_nutrition's "lookup" view: same subject,
     // but it asks every database at once and hands back the disagreements instead of one answer.
-    members: ['get_nutrition', 'check_food_sources', 'resolve_portion'],
+    // `preview_meal` reads new words into a priced meal without logging it (log_meal, the write
+    // half, is always-on and not filed here — see ALWAYS_ACTIONS). `research_food` is the
+    // web-grounded rung for a named vendor nothing else has (MP21/MP40/MP27).
+    members: ['get_nutrition', 'check_food_sources', 'resolve_portion', 'preview_meal', 'research_food'],
   },
   { key: 'writing', label: 'what they have written', members: ['get_journal'] },
 ];

@@ -29,6 +29,8 @@ import { FOOD_HEALTH_FUNCTIONS } from './food-health-functions.ts';
 import { CHECK_FOOD_SOURCES } from './food-sources-function.ts';
 import { RESOLVE_PORTION } from './portion-function.ts';
 import { GET_NUTRITION } from './nutrition-facade.ts';
+import { PREVIEW_MEAL } from './food-log-function.ts';
+import { RESEARCH_FOOD } from './food-research-function.ts';
 import { isoRange, type RetrievalFunction } from './types.ts';
 
 // Re-exported so the many existing importers of this module keep working unchanged.
@@ -462,4 +464,9 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
   // One door for every food question (nutrition-facade.ts). The four it dispatches to stay in the
   // registry — the Broker may still prefetch any of them — but `find_tools` lists only this.
   [GET_NUTRITION.name]: GET_NUTRITION,
+  // The Coach's write surface (MP21/MP40/MP27, FOOD-ENGINE.md §7 §8): read-into-a-meal and the
+  // web-grounded rung she can call herself. `log_meal` (the commit half) is an ACTION and lives in
+  // coach-actions.ts, not here — only the two reads join the registry.
+  [PREVIEW_MEAL.name]: PREVIEW_MEAL,
+  [RESEARCH_FOOD.name]: RESEARCH_FOOD,
 };
