@@ -1,7 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { BOOT_CACHE_KEY, bootPlanStage, clearBootCache, persistBootCache, seedBootCache } from './boot-cache.ts';
 import { localTodayIso, queryKeys } from './keys.ts';
-import { readPersistedSession } from '../supabase.ts';
+import { readPersistedSession } from '../persisted-session.ts';
 import { revivePlanSnapshot } from './usePlan.ts';
 
 /**

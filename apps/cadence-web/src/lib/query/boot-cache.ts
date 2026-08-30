@@ -27,7 +27,9 @@
  */
 import type { QueryClient } from '@tanstack/react-query';
 import { getDevAccount, isDevMode } from '../api/http.ts';
-import { readPersistedSession } from '../supabase.ts';
+// From `persisted-session.ts`, NOT `supabase.ts`: importing the latter constructs the auth client,
+// which this barrel's importers would then all inherit — and which throws outright without env.
+import { readPersistedSession } from '../persisted-session.ts';
 import { localTodayIso, queryKeys } from './keys.ts';
 import { revivePlanSnapshot } from './usePlan.ts';
 

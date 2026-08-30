@@ -21,47 +21,8 @@ export const supabase = createClient(url ?? '', anonKey ?? '', {
 export const authConfigured = Boolean(url && anonKey);
 
 /**
- * Where supabase-js keeps the session on this device. Derived, not configured: passing our own
- * `storageKey` to `createClient` would rename the key and sign everyone out on the build that did
- * it. This mirrors the library's own default (`sb-<project-ref>-auth-token`) and is read-only —
- * the client still owns every write.
+ * Re-exported so callers that already hold the auth client keep one import. The function itself
+ * lives in `persisted-session.ts` and touches no client: importing THIS module constructs one, and
+ * the boot paint must not pay that (nor its hard env requirement) just to read a string off disk.
  */
-function sessionStorageKey(): string | null {
-  try {
-    return url ? `sb-${new URL(url).hostname.split('.')[0]}-auth-token` : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The session already on disk, read synchronously — who this device is signed in as, without
- * asking the network.
- *
- * `supabase.auth.getSession()` is the authoritative answer and it stays the one the app runs on.
- * But it is also a PROMISE that awaits a token refresh whenever the access token has aged out (an
- * hour by default — so most launches), and until it settles the app has nothing to render but a
- * skeleton. That is a network round trip standing between a user and pixels that are already on
- * the device.
- *
- * This is for the PAINT, and for nothing else. It never authorizes a request — the token it can
- * see may well be expired, which is precisely why `getSession()` exists — it answers only "is
- * somebody signed in here, and who", so the first frame can be their screen instead of a loading
- * state. Every failure mode (no key, unreadable store, a shape from another library version)
- * returns null, which falls back to exactly the behaviour that shipped before it.
- */
-export function readPersistedSession(): {
-  user?: { id?: string; is_anonymous?: boolean; identities?: { provider?: string }[] | null };
-} | null {
-  try {
-    const key = sessionStorageKey();
-    const raw = key ? window.localStorage.getItem(key) : null;
-    if (!raw) return null;
-    // supabase-js base64-encodes the blob on some paths; both forms decode to the same JSON.
-    const json = raw.startsWith('base64-') ? atob(raw.slice(7)) : raw;
-    const parsed = JSON.parse(json) as { user?: { id?: string } } | null;
-    return parsed?.user?.id ? parsed : null;
-  } catch {
-    return null;
-  }
-}
+export { readPersistedSession } from './persisted-session.ts';
