@@ -17,7 +17,6 @@ import {
   resolveUnit,
 } from '@cadence/shared';
 import { getUser } from '../../repos/users.ts';
-import { listGoalEvents } from '../../repos/goal-events.ts';
 import { listGoals, listGoalsByStatus } from '../../repos/goals.ts';
 import { listEquipment } from '../../repos/equipment.ts';
 import { getActivePlan } from '../../repos/plans.ts';
@@ -257,7 +256,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
       "Numbers on how each goal is going, worked out from what the user has logged — 18 of 100 books read, current weight vs target, days left to a deadline, sessions kept per week — plus trends over time (pace, top lift) and the latest accomplishments recorded by name. Use when they ask how they're doing on a goal or overall. For whether they showed up at all, use get_consistency; for raw totals of one counted thing, use get_practice_totals.",
     domains: ['goals', 'progress'],
     async run(userId) {
-      const [p, events] = await Promise.all([buildProgress(userId), listGoalEvents(userId, 6)]);
+      const p = await buildProgress(userId);
       return {
         cards: p.cards,
         trends: p.trends.map((t) => ({
@@ -267,7 +266,12 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
           first: t.series[0],
           last: t.series[t.series.length - 1],
         })),
-        events: events.map((e) => ({ label: e.label, at: e.at })),
+        // Completions only — the ledger also holds 'note' rows ("Target changed: 100 → 50"),
+        // which are bookkeeping, not accomplishments, and must never render as cheer.
+        events: (p.events ?? [])
+          .filter((e) => e.kind === 'completion')
+          .slice(0, 6)
+          .map((e) => ({ label: e.label, at: e.at })),
       };
     },
     render(r) {
@@ -299,13 +303,23 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
       }
       // The ledger's own words, not only its count. These labels used to be dropped here — she
       // could say "18/100" but never name WHICH — so a list the user had already given could
-      // only be asked for again.
-      for (const e of events ?? []) {
-        const d = new Date(e.at);
-        const when = Number.isNaN(d.getTime())
+      // only be asked for again. The heading says how many ride along, so six lines beside an
+      // "18/100" card never read as the whole eighteen. Dates are relative day-counts, not
+      // calendar days: the server clock is UTC and a local-looking date would be wrong for
+      // anyone west of it by evening.
+      const evs = events ?? [];
+      if (evs.length) lines.push(`Recorded by name (the ${evs.length} most recent):`);
+      for (const e of evs) {
+        const t = Date.parse(e.at);
+        const days = Number.isFinite(t) ? Math.floor((Date.now() - t) / 86_400_000) : NaN;
+        const when = Number.isNaN(days)
           ? ''
-          : ` (${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
-        lines.push(`- recorded: ${e.label}${when}`);
+          : days <= 0
+            ? ' (today)'
+            : days === 1
+              ? ' (yesterday)'
+              : ` (${days} days ago)`;
+        lines.push(`- ${e.label}${when}`);
       }
       return lines.length ? `Goal progress (computed):\n${lines.join('\n')}` : '';
     },

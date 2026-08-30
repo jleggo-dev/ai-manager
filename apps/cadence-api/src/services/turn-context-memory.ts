@@ -52,12 +52,15 @@ const LEAD: Record<ContextFreshness, string> = {
     'ALREADY YOURS, UNCHANGED — repeated only so it stays in view as the conversation grows. ' +
     'You have already seen this and may have already spoken about it. Do NOT summarise, restate ' +
     'or react to it again; simply use it',
-  // Scoped tightly, because the failure mode is her re-presenting all N commitments for a
-  // one-line edit: the block below is the WHOLE current state, but the news is only the delta.
+  // Scoped, because the failure mode is her re-presenting all N commitments for a one-line edit —
+  // but scoped gently, for two reasons the strict form got wrong: the fingerprint hashes the whole
+  // rendered block, so a relative date rolling over ("today" → "yesterday") lands here with no
+  // real change behind it, and a user who ASKS to hear the whole thing must not be refused by a
+  // heading. The delta is hers to speak to; the refusal is only of uninvited recitation.
   changed:
-    'CHANGED since you last saw it — worth acknowledging briefly if it matters to the turn. ' +
-    'Speak ONLY to what differs from the version you saw; the unchanged parts are repeated here ' +
-    'for reference, not for comment — do NOT re-walk or restate them',
+    'CHANGED since you last saw it — briefly acknowledge what actually differs, if it matters to ' +
+    'the turn. The unchanged parts are repeated only for reference: do NOT re-walk or restate ' +
+    'them uninvited — but if they ask to hear something in full, read it back whole',
 };
 
 export interface RenderedPart {
