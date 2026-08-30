@@ -4,3 +4,11 @@ export { fetchWeatherCached, forgetWeather, useDailyCheckinDue } from './useAmbi
 export { invalidateNutritionDay, useInvalidateNutritionDay, useNutritionDay } from './useNutritionDay.ts';
 export { fetchPlanIntoCache, setPlanData, usePlan } from './usePlan.ts';
 export { useProgress } from './useProgress.ts';
+export {
+  useProgressEvents,
+  useProgressBalance,
+  useProgressTotals,
+  useProgressVariety,
+  useProgressStagePath,
+  useProgressCount,
+} from './useProgressExtras.ts';

@@ -285,3 +285,13 @@ export {
   type UserConstraint,
   type UnitsResponse,
 } from './api/me.ts';
+
+export {
+  getProgressEvents,
+  getProgressBalance,
+  getProgressTotals,
+  getProgressVariety,
+  getProgressStagePath,
+  getProgressCount,
+  type Omittable,
+} from './api/progress-extras.ts';

@@ -25,6 +25,17 @@ export const queryKeys = {
   dailyCheckin: {
     all: ['dailyCheckin'] as const,
   },
+  /** The non-temporal Progress Engine reads (routes/progress-extras.ts, W1-5) — one key per
+   *  endpoint × its params, since (unlike `progress`/`plan`) each of these is scoped to a
+   *  window and sometimes a goal, not a single shared view. */
+  progressExtras: {
+    events: (from: string, to: string) => ['progressExtras', 'events', from, to] as const,
+    balance: (kind: string, window: string) => ['progressExtras', 'balance', kind, window] as const,
+    totals: (goalId: string, window: string) => ['progressExtras', 'totals', goalId, window] as const,
+    variety: (window: string, meal?: string) => ['progressExtras', 'variety', window, meal ?? 'dinner'] as const,
+    stagePath: (goalId: string) => ['progressExtras', 'stagePath', goalId] as const,
+    count: (goalId: string) => ['progressExtras', 'count', goalId] as const,
+  },
 } as const;
 
 /**

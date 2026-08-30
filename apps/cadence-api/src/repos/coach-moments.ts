@@ -85,6 +85,19 @@ export async function recentFeedback(userId: string, days = 7): Promise<SessionF
     order by created_at desc`;
 }
 
+/**
+ * Same rows as `recentFeedback`, windowed by an explicit [fromDate, toDate] instead of a
+ * trailing day count — the `balance` widget's binding (Progress Engine W1-5), which re-windows
+ * by the page's Week/Month/All control rather than a fixed lookback.
+ */
+export async function feedbackInRange(userId: string, fromDate: string, toDate: string): Promise<SessionFeedbackRow[]> {
+  return sql<SessionFeedbackRow[]>`
+    select feedback_id, occurrence_id, kind, rpe, felt_state, reason_code, created_at
+    from cadence.session_feedback
+    where user_id = ${userId} and created_at::date >= ${fromDate} and created_at::date <= ${toDate}
+    order by created_at desc`;
+}
+
 export interface DailyCheckinRow {
   date: string;
   mood: MoodValue | null;
