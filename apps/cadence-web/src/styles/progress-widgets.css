@@ -1,0 +1,220 @@
+/* ── Progress Engine widget grammar (docs/cadence/PROGRESS-ENGINE.md) ─────────
+ * Lean classes for the twelve widget kinds. Deliberately a SEPARATE file, not an addition to
+ * styles.css: this is a new subsystem with its own footprint, and styles.css is already large.
+ * Reuses existing global idioms verbatim where they already exist (.dash-h, .dot/.dotrow,
+ * .hist-row family, .prog-big/.prog-unit/.prog-sub, .countbar) — see the widget components for
+ * where those apply. Everything here is new: the card shell (no single global ".card" class
+ * exists — verified against styles.css) and the kind-specific layouts.
+ *
+ * Brand physics, enforced in CSS as much as markup: a missed/empty state never touches
+ * var(--danger); warm dawn tones are reserved for accomplishment rows (best session, shelf
+ * events, dated-session personal bests); a detour band uses --dusk, not a warning color.
+ */
+
+/* Card shell — mirrors the goalcard/consist/prog-card idiom (surface + line-soft border + 16px
+   radius) using the same tokens, without reaching into styles.css. */
+.pw-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  padding: 13px 15px;
+  margin-bottom: 10px;
+}
+
+/* Quiet footer line, used by several kinds under a hairline divider. */
+.pw-footer {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12.5px;
+  color: var(--text-mute);
+}
+
+/* ── rhythm ─────────────────────────────────────────────────────────────── */
+.pw-rhythm {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pw-rhythm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 10px;
+}
+/* rgba(62, 92, 118, .08) == var(--dusk) at 8% — a CSS var can't carry alpha on its own here. */
+.pw-rhythm-row--detour {
+  background: rgba(62, 92, 118, 0.08);
+}
+.pw-rhythm-label {
+  flex: 0 0 96px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-mute);
+}
+.pw-rhythm-badge {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--dusk);
+  white-space: nowrap;
+}
+.pw-rhythm-dots {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+.pw-rhythm-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.pw-rhythm-dot--kept {
+  background: var(--forest);
+}
+.pw-rhythm-dot--missed {
+  background: var(--surface-3);
+}
+.pw-rhythm-dot--upcoming {
+  background: transparent;
+  border: 1.5px dashed var(--line);
+}
+.pw-rhythm-dot--checkin {
+  width: 11px;
+  height: 11px;
+  background: transparent;
+  border: 2px solid var(--sage);
+}
+.pw-rhythm-count {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── trend_vs_target ────────────────────────────────────────────────────── */
+.pw-trend-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.pw-trend-sub {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-mute);
+}
+.pw-trend-svg {
+  display: block;
+  margin-top: 8px;
+}
+
+/* ── dated_sessions ─────────────────────────────────────────────────────── */
+.pw-sessions-svg {
+  display: block;
+  margin-top: 4px;
+}
+.pw-sessions-under {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* ── weekly_bars ────────────────────────────────────────────────────────── */
+.pw-bars-svg {
+  display: block;
+  margin-top: 2px;
+}
+
+/* ── shelf / history reuse .hist-row from styles.css directly — no rules needed here. ────── */
+
+/* ── stage_path ─────────────────────────────────────────────────────────── */
+.pw-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.pw-stage-chip {
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+/* rgba(139, 168, 142, x) == var(--sage) at 16%/32% — same alpha-token caveat as the detour band. */
+.pw-stage-chip--done {
+  background: rgba(139, 168, 142, 0.16);
+  color: var(--forest);
+  border: 1px solid rgba(139, 168, 142, 0.32);
+}
+.pw-stage-chip--current {
+  border: 1.5px solid var(--forest);
+  color: var(--forest);
+  font-weight: 800;
+}
+.pw-stage-chip--ahead {
+  border: 1px solid var(--line-soft);
+  color: var(--text-mute);
+}
+.pw-stage-note {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-mute);
+}
+
+/* ── count_toward ───────────────────────────────────────────────────────── */
+.pw-count-label {
+  font-size: 14.5px;
+  font-weight: 600;
+  margin-bottom: 7px;
+}
+
+/* ── balance ────────────────────────────────────────────────────────────── */
+.pw-balance-label {
+  font-size: 14.5px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* ── total / variety reuse .prog-big/.prog-unit/.prog-sub from styles.css. ────────────────── */
+.pw-variety-line {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+/* ── recap_rail ─────────────────────────────────────────────────────────── */
+.pw-rail {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  margin: 0 -1px;
+}
+.pw-rail-card {
+  flex: 0 0 235px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  padding: 12px 13px;
+}
+.pw-rail-week {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-mute);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.pw-rail-facts {
+  margin-top: 5px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.pw-rail-line {
+  margin-top: 7px;
+  font-size: 13.5px;
+  color: var(--text);
+  line-height: 1.4;
+}
