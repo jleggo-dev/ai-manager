@@ -72,7 +72,7 @@ const ids = await withAim(ACTOR, async () => {
 
   // Clone the COACH's provider/model/mode — the contract must hold on the configuration that
   // actually serves users, not on an easier one.
-  const coach = (await getAiProfile(cadenceConfig.aim.coachProfileId)) as Record<string, unknown>;
+  const coach = await getAiProfile(cadenceConfig.aim.coachProfileId);
   const profile = await createAiProfile({
     name: 'e2e-two-hop-profile',
     slug: `e2e-two-hop-${Date.now()}`,

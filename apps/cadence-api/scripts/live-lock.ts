@@ -1,7 +1,7 @@
 /**
  * Live lock flow (spec §C8.6): seed a confirmed goal + baseline + equipment, then
  * guardrail → synthesize_plan (Coach) → plan_vet (Broker) → commit plan + activities
- * + occurrences, and verify goals flipped to locked. Cleans up the dev user after.
+ * + occurrences, and verify goals flipped to committed. Cleans up the dev user after.
  * Run: node --import tsx apps/cadence-api/scripts/live-lock.ts
  */
 import { insertGoal, listGoalsByStatus } from '../src/repos/goals.ts';
@@ -10,7 +10,7 @@ import { mergeBaseline } from '../src/repos/users.ts';
 import { getActivePlan } from '../src/repos/plans.ts';
 import { listActivities } from '../src/repos/activities.ts';
 import { listOccurrences } from '../src/repos/occurrences.ts';
-import { lockPlan } from '../src/services/lock.ts';
+import { previewLock, confirmLock } from '../src/services/lock.ts';
 import { sql } from '../src/db/sql.ts';
 
 const DEV = '00000000-0000-4000-a000-000000000001';
@@ -20,7 +20,7 @@ async function main() {
     // Seed a confirmed onboarding state
     await insertGoal(DEV, {
       title: 'Run a 10k',
-      category: 'fitness',
+      area: 'movement',
       type: 'milestone',
       measure: { metric: 'distance', target: 10, unit: 'km', direction: 'increase' },
       timeframe: { start: '2026-06-29', end: '2026-09-20' },
@@ -35,15 +35,19 @@ async function main() {
     });
     await mergeBaseline(DEV, {
       age: 41,
-      injuries: [{ id: 'inj_knee_l', area: 'left_knee', condition: 'patellar tendinopathy', plan_around: true }],
-      constraints: ['busy_mornings'],
+      constraints: [
+        { id: 'inj_knee_l', label: 'left knee — patellar tendinopathy', kind: 'physical', plan_around: true },
+        { id: 'busy_mornings', label: 'busy mornings', kind: 'life', plan_around: true },
+      ],
       preferences: { nudge_tone: 'warm' },
     });
-    console.log('✓ seeded: 1 confirmed goal, footwear, baseline (knee injury, plan_around)');
+    console.log('✓ seeded: 1 confirmed goal, footwear, baseline (knee + busy mornings, plan_around)');
 
-    // Lock
-    const result = await lockPlan(DEV);
-    console.log('✓ lockPlan:', JSON.stringify(result));
+    // Lock — preview vets and stashes a pending plan, confirm commits it.
+    const preview = await previewLock(DEV);
+    console.log('✓ previewLock:', preview.status, `${preview.proposal?.activities.length ?? 0} proposed activities`);
+    const result = await confirmLock(DEV);
+    console.log('✓ confirmLock:', JSON.stringify(result));
 
     // Verify
     const plan = await getActivePlan(DEV);
@@ -51,13 +55,13 @@ async function main() {
     const today = new Date().toISOString().slice(0, 10);
     const to = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
     const occ = await listOccurrences(DEV, today, to);
-    const locked = await listGoalsByStatus(DEV, ['locked']);
+    const committed = await listGoalsByStatus(DEV, ['committed']);
     console.log('✓ active plan:', plan?.plan_id, 'v' + plan?.version);
     console.log('✓ activities:', activities.map((a) => `[${a.kind}] ${a.title} — ${a.schedule?.recurrence ?? 'n/a'}`).join(' | '));
     console.log('✓ occurrences (14d):', occ.length);
-    console.log('✓ goals now locked:', locked.map((g) => g.title).join(', ') || '(none)');
+    console.log('✓ goals now committed:', committed.map((g) => g.title).join(', ') || '(none)');
 
-    console.log(result.status === 'locked' ? '\nLIVE LOCK PASS' : `\nLIVE LOCK: ${result.status}`);
+    console.log(result.status === 'committed' ? '\nLIVE LOCK PASS' : `\nLIVE LOCK: ${result.status}`);
   } finally {
     await sql`delete from cadence.occurrences where user_id = ${DEV}`;
     await sql`delete from cadence.activities where user_id = ${DEV}`;

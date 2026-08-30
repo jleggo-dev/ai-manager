@@ -12,6 +12,11 @@
     "noEmit": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["src/**/*.ts"],
+  // scripts/ is checked alongside src/ (same widening backend/tsconfig.json uses for test/).
+  // It holds real operational tooling — the evals, sync-jobs, provision-aim — that imports src/
+  // directly, so it has to be held to the same types: while it sat outside `include`, a plain
+  // type error in a typed argument passed both tsc and eslint and only failed at runtime,
+  // mid-eval, after the run had already created its account.
+  "include": ["src/**/*.ts", "scripts/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

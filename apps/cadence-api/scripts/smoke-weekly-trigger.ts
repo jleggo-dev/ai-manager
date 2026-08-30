@@ -8,11 +8,11 @@
  * Run: node --import tsx apps/cadence-api/scripts/smoke-weekly-trigger.ts
  */
 import { sql } from '../src/db/sql.ts';
-import { cadenceConfig } from '../src/config.ts';
+import { devAccount } from './dev-account.ts';
 
 const BASE = 'http://localhost:3101';
 const H = { 'Content-Type': 'application/json', 'X-Cadence-Dev-User': 'account-1' };
-const U = cadenceConfig.devAccounts['account-1'];
+const U = devAccount('account-1');
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const ok = (l: string, c: boolean) => console.log(`${c ? '✓' : '✗'} ${l}`);
 const iso = (d: Date) => d.toISOString().slice(0, 10);
