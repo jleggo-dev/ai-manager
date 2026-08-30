@@ -49,7 +49,9 @@ export interface EvalCase {
 /** Reads the dossier already carries — never penalised as a false trigger anywhere. */
 import { alwaysOnToolNames, onDemandToolNames } from '../src/services/coach-tool-tiers.ts';
 
-const DOSSIER_READS = [
+// Exported for eval-conversation-replay.ts — a hand-kept copy is what drifts (the lesson this
+// file's own KNOWN_TOOLS comment records), so the replay builds its allow lists on this one.
+export const DOSSIER_READS = [
   'get_identity',
   'get_objectives',
   'get_active_plan',

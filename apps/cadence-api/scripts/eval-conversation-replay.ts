@@ -22,12 +22,29 @@
  * rotate", "you choose the song"), and with repertoire live the rotation belongs to
  * prescribe-session, so a faithful replay of the workaround would assert the bug back in.
  *
- * Scoring is the tool-selection eval's contract (expect / allow / forbid + arg checks), credited
- * via /coach/trace when the Broker prefetched a read. A turn may also declare `judgement: true` —
- * asking a good clarifying question is as correct as acting, so only `forbid` is scored there.
+ * Scoring is the tool-selection eval's contract, with its two hard-won corrections imported
+ * rather than re-learned: `find_tools`/`use_tool` are plumbing and never count against a turn
+ * (an on-demand read is REACHED through them — penalising that is the B1 regression), and
+ * provider frames like `suggested_actions` are stripped, not scored. Reads are also credited
+ * via /coach/trace when the Broker prefetched them; actions never are (prefetch cannot change
+ * anybody's data). A turn may declare `judgement: true` — asking a good clarifying question is
+ * as correct as acting, so `expect` is waived and only forbidden/unexpected calls score.
  */
 import { setTimeout as delay } from 'node:timers/promises';
-import { API, createUser, missingEnv, signIn, tearDown, type World } from './eval-tool-selection-world.ts';
+import type { GoalArea, GoalType } from '@cadence/shared';
+import { ACTION_TOOLS, DOSSIER_READS, META_TOOLS, PROVIDER_BUILTINS } from './eval-tool-selection-cases.ts';
+import {
+  API,
+  createUser,
+  missingEnv,
+  openSession,
+  parseArgs,
+  prefetchedFns,
+  readTurn,
+  signIn,
+  tearDown,
+  type World,
+} from './eval-tool-selection-world.ts';
 
 const TURN_TIMEOUT_MS = 180_000;
 
@@ -37,24 +54,16 @@ interface ReplayTurn {
   expect: string[];
   allow?: string[];
   forbid?: string[];
-  /** True = a clarifying question is as correct as acting; only `forbid` is scored. */
+  /** True = a clarifying question is as correct as acting: `expect` is waived; forbidden and
+   *  unexpected calls still score. */
   judgement?: boolean;
   args?: { tool: string; check: (a: Record<string, unknown>) => string | null };
   why: string;
 }
 
-const DOSSIER = [
-  'get_identity',
-  'get_objectives',
-  'get_active_plan',
-  'get_consistency',
-  'get_constraints',
-  'get_weight',
-  'get_goal_progress',
-  'get_recent_logs',
-  'get_repertoire',
-  'get_practice_totals',
-];
+/** The dossier base plus the reads this conversation legitimately reaches for. Built on the
+ *  exported list — a hand-kept fork is what drifts. */
+const ALLOW_BASE = [...DOSSIER_READS, 'get_goal_progress', 'get_recent_logs', 'get_repertoire', 'get_practice_totals'];
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.toLowerCase() : '');
 
@@ -64,28 +73,31 @@ const TURNS: ReplayTurn[] = [
     id: 'R1',
     turn: 'I want to modify my plan - for now I’d like to remove the meditation pieces and I want to focus more on the piano playing. My weekly piano class is Saturday so I don’t need practice on that day.',
     expect: ['propose_plan_change'],
-    allow: [...DOSSIER, 'update_constraint'],
+    allow: [...ALLOW_BASE, 'update_constraint'],
     why: 'The opening edit. In the real run she needed three calls (invented a "drop" action first); the card must go up.',
   },
   {
     id: 'R2',
     turn: 'I also want to modify the underlying activities for piano practice. My overarching goal is to finish learning Suzuki book 2 and also learn Frankie and Johnnie.',
     expect: ['propose_plan_change'],
-    allow: [...DOSSIER, 'update_goal', 'update_repertoire'],
+    allow: [...ALLOW_BASE, 'update_goal', 'update_repertoire'],
     why: 'A content rework; naming Frankie and Johnnie as new working material may reasonably also be recorded.',
   },
   {
     id: 'R3',
     turn: 'In Suzuki book 2 I’m on melody',
     expect: ['update_repertoire'],
-    allow: [...DOSSIER, 'propose_plan_change'],
+    allow: [...ALLOW_BASE, 'propose_plan_change'],
     args: {
       tool: 'update_repertoire',
       check: (a) => {
         const items = Array.isArray(a.items) ? (a.items as Array<Record<string, unknown>>) : [];
         const melody = items.find((i) => /melody/i.test(str(i.label)));
         if (!melody) return 'no item recording Melody';
-        return str(melody.status) === 'working' ? null : `Melody status "${String(melody.status)}", wanted working`;
+        // An absent status is the tool's own documented default (new items start working) —
+        // scoring the documented minimal call as a miss was this check's first bug.
+        const status = typeof melody.status === 'string' ? str(melody.status) : 'working';
+        return status === 'working' ? null : `Melody status "${status}", wanted working`;
       },
     },
     why: 'A bare fact about where he is. In the real run it went only into plan text; now it is repertoire state.',
@@ -95,14 +107,14 @@ const TURNS: ReplayTurn[] = [
     turn: 'My teacher suggested the following for a 30 minute practice spot\n5 mins site reading\n5 mins skills and chords — add metronome - speed 60\n2-3 mins a piece that I know \n5-10 mins of review \n5-10 mins on new piece - melody',
     expect: [],
     judgement: true,
-    allow: [...DOSSIER, 'propose_plan_change'],
+    allow: [...ALLOW_BASE, 'propose_plan_change'],
     why: 'In the real run she caught the 45-vs-30 mismatch and asked — that was RIGHT. Acting directly is also fine.',
   },
   {
     id: 'R5',
     turn: 'trim piano sessions down to 30 minutes to match',
     expect: ['propose_plan_change'],
-    allow: [...DOSSIER],
+    allow: [...ALLOW_BASE],
     args: {
       tool: 'propose_plan_change',
       check: (a) => {
@@ -118,67 +130,28 @@ const TURNS: ReplayTurn[] = [
     id: 'R6',
     turn: 'Can you select from the pieces I already know and mix and match them? Assume I know the earlier songs from Suzuki book 2 - those are good practice pieces',
     expect: ['get_repertoire'],
-    allow: [...DOSSIER, 'propose_plan_change', 'update_repertoire'],
+    allow: [...ALLOW_BASE, 'propose_plan_change', 'update_repertoire'],
     why: 'THE turn the feature exists for. She must LOOK first; the store is empty, so asking for the list after reading is the ideal shape — asking without reading was the old bug.',
   },
   {
     id: 'R7',
     turn: 'All of them - maybe you can mix and match over the coming weeks: Écossaise by J.N. HummelA Short Story by H. LichnerThe Happy Farmer (from Album for the Young, Op. 68, No. 10) by R. SchumannMinuet in G Major, BWV 822 by J.S. BachMinuet in G Major (from Notebook for Anna Magdalena Bach) by AnonymousMinuet in G Minor, BWV 822 by J.S. BachCradle Song, Op. 13, No. 2 by C.M. von WeberArietta by W.A. MozartMelody by R. Schumann',
     expect: ['update_repertoire'],
-    allow: [...DOSSIER, 'propose_plan_change'],
+    allow: [...ALLOW_BASE, 'propose_plan_change'],
     args: {
       tool: 'update_repertoire',
       check: (a) => {
         const items = Array.isArray(a.items) ? (a.items as Array<Record<string, unknown>>) : [];
         if (items.length < 5) return `only ${items.length} items stored of the nine listed`;
         const learned = items.filter((i) => str(i.status) === 'learned');
-        return learned.length ? `${learned.length} backfilled pieces marked "learned" — that invents accomplishments` : null;
+        return learned.length
+          ? `${learned.length} backfilled pieces marked "learned" — that invents accomplishments`
+          : null;
       },
     },
     why: 'The ruling turn (owner, 2026-08-30): "she should know she has to store it." Nine pieces → known, quietly.',
   },
 ];
-
-interface Observed {
-  calls: Array<{ name?: string; arguments?: string }>;
-  reply: string;
-  model: string | null;
-}
-
-async function readTurn(body: ReadableStream<Uint8Array>): Promise<Observed> {
-  const { createCoachStreamAccumulateState, applySseLine } = await import('../src/services/coach-stream.ts');
-  const { createSseLineBuffer, pushSseChunk } = await import('@ai-admin/core');
-  const state = createCoachStreamAccumulateState();
-  const buf = createSseLineBuffer();
-  const dec = new TextDecoder();
-  const reader = body.getReader();
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    for (const line of pushSseChunk(buf, dec.decode(value, { stream: true }))) applySseLine(state, line);
-  }
-  return { calls: state.functionCalls, reply: state.content, model: state.model };
-}
-
-async function prefetchedFns(token: string): Promise<string[]> {
-  try {
-    const res = await fetch(`${API}/coach/trace`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) return [];
-    const body = (await res.json()) as { turnSelect?: { calls?: Array<{ fn?: string }> } | null };
-    return (body.turnSelect?.calls ?? []).map((c) => String(c.fn)).filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
-const parseArgs = (raw: string | undefined): Record<string, unknown> => {
-  try {
-    const p = raw?.trim() ? (JSON.parse(raw) as unknown) : {};
-    return p && typeof p === 'object' && !Array.isArray(p) ? (p as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-};
 
 /** The pre-conversation world: his committed plan the evening of 2026-08-29, reduced to what the
  *  turns talk about. Titles are load-bearing — the edit tools match commitments by title. */
@@ -200,7 +173,7 @@ async function seedPianoWorld(userId: string): Promise<void> {
     { id: randomUUID(), label: 'tendinitis in left knee', kind: 'physical', status: 'active', plan_around: true },
   ]);
 
-  const goals: Array<{ title: string; area: string; type: string; brief?: string }> = [
+  const goals: Array<{ title: string; area: GoalArea; type: GoalType; brief?: string }> = [
     { title: 'Run a Spartan Ultra Beast', area: 'movement', type: 'milestone' },
     { title: 'Lose weight', area: 'nourishment', type: 'recurring' },
     { title: 'Build mental resilience', area: 'mind', type: 'recurring' },
@@ -208,21 +181,20 @@ async function seedPianoWorld(userId: string): Promise<void> {
       title: 'Practice piano',
       area: 'practice',
       type: 'recurring',
-      brief: 'I do also try to practice piano at least three times a week maybe we can put that in the schedule as well.',
+      brief:
+        'I do also try to practice piano at least three times a week maybe we can put that in the schedule as well.',
     },
   ];
   const goalIdByTitle: Record<string, string> = {};
   for (const g of goals) {
     const row = await insertGoal(userId, {
       title: g.title,
-      area: g.area as never,
-      type: g.type as never,
-      measure: {} as never,
-      timeframe: {} as never,
+      area: g.area,
+      type: g.type,
+      brief: g.brief,
       status: 'committed',
       source: 'captured',
-      ...(g.brief ? { brief: g.brief } : {}),
-    } as never);
+    });
     goalIdByTitle[g.title] = row.goal_id;
   }
 
@@ -238,21 +210,21 @@ async function seedPianoWorld(userId: string): Promise<void> {
       goal_id: goalIdByTitle['Build mental resilience'],
       title: 'Morning meditation sit',
       kind: 'user' as const,
-      schedule: { recurrence: 'FREQ=DAILY', time_of_day: '06:30', duration_min: 10 } as never,
+      schedule: { recurrence: 'FREQ=DAILY', time_of_day: '06:30', duration_min: 10 },
       how_to: null,
     },
     {
       goal_id: goalIdByTitle['Practice piano'],
       title: 'Piano practice',
       kind: 'user' as const,
-      schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=WE,FR,SA', time_of_day: '19:00', duration_min: 45 } as never,
+      schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=WE,FR,SA', time_of_day: '19:00', duration_min: 45 },
       how_to: null,
     },
     {
       goal_id: goalIdByTitle['Run a Spartan Ultra Beast'],
       title: 'Easy run',
       kind: 'user' as const,
-      schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU,TH', duration_min: 40 } as never,
+      schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU,TH', duration_min: 40 },
       how_to: null,
     },
   ]);
@@ -265,6 +237,35 @@ async function seedPianoWorld(userId: string): Promise<void> {
         on conflict (activity_id, date) do nothing`;
     }
   }
+}
+
+/** One turn's verdict, using the shared scorer's corrections (see header). */
+function scoreTurn(
+  t: ReplayTurn,
+  calls: Array<{ name: string; arguments?: string }>,
+  prefetched: string[],
+): { called: string[]; problems: string[] } {
+  const seen = [...new Set(calls.map((c) => c.name).filter(Boolean))];
+  const called = seen.filter((n) => !PROVIDER_BUILTINS.has(n));
+  const permitted = new Set([...t.expect, ...(t.allow ?? []), ...META_TOOLS]);
+  const problems: string[] = [];
+  if (!t.judgement) {
+    for (const e of t.expect) {
+      const credited = called.includes(e) || (!ACTION_TOOLS.has(e) && prefetched.includes(e));
+      if (!credited) problems.push(`missing ${e}`);
+    }
+  }
+  for (const f of t.forbid ?? []) if (called.includes(f)) problems.push(`forbidden ${f} fired`);
+  const extra = called.filter((n) => !permitted.has(n));
+  if (extra.length) problems.push(`unexpected: ${extra.join(', ')}`);
+  if (t.args) {
+    const call = calls.find((c) => c.name === t.args!.tool);
+    if (call) {
+      const problem = t.args.check(parseArgs(call.arguments));
+      if (problem) problems.push(`args: ${problem}`);
+    }
+  }
+  return { called, problems };
 }
 
 async function main(): Promise<void> {
@@ -287,13 +288,7 @@ async function main(): Promise<void> {
     await seedPianoWorld(userId);
     console.log('✓ piano world seeded: 4 goals, meditation daily + piano We/Fr/Sa 45min + easy runs');
 
-    const open = await fetch(`${API}/coach/sessions`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ intent: 'ongoing', healthAvailable: false, healthAnswered: true }),
-    });
-    const { sessionId } = (await open.json()) as { sessionId?: string };
-    if (!open.ok || !sessionId) throw new Error(`open session failed: ${open.status}`);
+    const sessionId = await openSession(token);
     console.log(`✓ one session for all turns — history is the thing under test\n`);
 
     let passed = 0;
@@ -310,24 +305,7 @@ async function main(): Promise<void> {
         continue;
       }
       const obs = await readTurn(res.body);
-      const prefetched = await prefetchedFns(token);
-      const called = obs.calls.map((c) => String(c.name ?? ''));
-      const haveOrPrefetched = new Set([...called, ...prefetched]);
-
-      const problems: string[] = [];
-      if (!t.judgement) for (const e of t.expect) if (!haveOrPrefetched.has(e)) problems.push(`missing ${e}`);
-      const allowed = new Set([...(t.allow ?? []), ...t.expect]);
-      for (const f of t.forbid ?? []) if (called.includes(f)) problems.push(`forbidden ${f} fired`);
-      const extra = called.filter((n) => n && !allowed.has(n));
-      if (extra.length) problems.push(`unexpected: ${extra.join(', ')}`);
-      if (t.args) {
-        const call = obs.calls.find((c) => c.name === t.args!.tool);
-        if (call) {
-          const problem = t.args.check(parseArgs(call.arguments));
-          if (problem) problems.push(`args: ${problem}`);
-        }
-      }
-
+      const { called, problems } = scoreTurn(t, obs.calls, (await prefetchedFns(token)) ?? []);
       const ok = problems.length === 0;
       passed += ok ? 1 : 0;
       console.log(
