@@ -34,7 +34,7 @@ export const CAPABILITIES: CapabilityGroup[] = [
     heading: 'Talking and remembering',
     can: [
       'talk through what you are building and turn it into goals with a why beside each',
-      'remember what you told me — your goals, what you are working around, what you have to work with — so you never repeat yourself',
+      'remember what you told me — your goals, what you are working around, what you have to work with, what you are learning and already know (pieces, katas, poems) — so you never repeat yourself',
       'pressure-test a goal against where you actually are, and right-size it with stepping-stones',
     ],
   },

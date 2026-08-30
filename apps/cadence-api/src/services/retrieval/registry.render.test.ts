@@ -249,6 +249,23 @@ describe('retrieval registry — render / rows', () => {
     expect(RETRIEVAL_FUNCTIONS.get_goal_progress!.rows({ cards, trends })).toBe(5);
   });
 
+  it('get_goal_progress names recorded accomplishments, dated relatively, and says the list is partial', () => {
+    // Relative offsets from now, so the assertion holds in any timezone — the render counts
+    // whole days, never calendar dates (the server clock is UTC; a date would lie westward).
+    const events = [
+      { label: 'Learned Melody (Suzuki Book 2)', at: new Date(Date.now() - 3 * 86_400_000).toISOString() },
+      { label: 'finished Dune', at: 'not-a-date' },
+    ];
+    const text = RETRIEVAL_FUNCTIONS.get_goal_progress!.render({ cards: [], trends: [], events });
+    expect(text).toContain('Recorded by name (the 2 most recent):');
+    expect(text).toContain('- Learned Melody (Suzuki Book 2) (3 days ago)');
+    expect(text).toContain('- finished Dune'); // bad date → label still shown, undated
+    expect(text).not.toContain('Invalid');
+    expect(RETRIEVAL_FUNCTIONS.get_goal_progress!.rows({ cards: [], trends: [], events })).toBe(2);
+    // Older stored results predate the events field — render must not throw on them.
+    expect(RETRIEVAL_FUNCTIONS.get_goal_progress!.render({ cards: [], trends: [] })).toBe('');
+  });
+
   it('get_constraints prefers label and marks plan-around', () => {
     const text = RETRIEVAL_FUNCTIONS.get_constraints!.render([
       { label: 'left knee', plan_around: true },

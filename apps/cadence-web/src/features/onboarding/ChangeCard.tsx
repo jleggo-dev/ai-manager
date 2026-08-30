@@ -26,12 +26,19 @@ import { dismissPendingChange, getPendingChange, getPendingChangeDetail, lockPla
 export function ChangeCard({
   onApplied,
   onShowChanges,
+  onShowPlan,
 }: {
   onApplied?: () => void;
   /** Opens the Changes sheet instead of applying inline — set only when this pending change
    *  carries per-item fields, the signature of a check-in offer. Same idiom as WeekReviewCard's
    *  `onOpen`: the host mounts the real surface, this card only asks for it. */
   onShowChanges?: () => void;
+  /** Opens the full plan sheet — offered ONLY once the change is applied. Before the tap the
+   *  sheet shows the committed week WITHOUT this change (the proposal lives outside the plan
+   *  until Apply), and a door that opens on the untruth would read as the change being rejected.
+   *  After Apply the sheet is exactly "where did it land?" (owner ask, 2026-08-30). Optional
+   *  because the onboarding host has no plan sheet yet. */
+  onShowPlan?: () => void;
 }) {
   const [lines, setLines] = useState<string[] | null>(null);
   const [hasOffers, setHasOffers] = useState(false);
@@ -105,7 +112,13 @@ export function ChangeCard({
           <li key={i}>{l}</li>
         ))}
       </ul>
-      {state === 'applied' ? null : (
+      {state === 'applied' ? (
+        onShowPlan && (
+          <button type="button" className="cfm-more" onClick={onShowPlan}>
+            See your whole week
+          </button>
+        )
+      ) : (
         <>
           {state === 'failed' && <div className="chg-err">That didn&rsquo;t take — try again?</div>}
           <button type="button" className="cfm-build" onClick={() => void apply()} disabled={state === 'applying'}>

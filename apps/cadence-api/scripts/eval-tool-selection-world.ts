@@ -57,7 +57,9 @@ export function missingEnv(): string | null {
   return null;
 }
 
-async function createUser(email: string, password: string): Promise<string> {
+// Exported for eval-conversation-replay.ts, which mints the same kind of throwaway user against
+// a different seeded world.
+export async function createUser(email: string, password: string): Promise<string> {
   const res = await fetch(`${SUPA}/auth/v1/admin/users`, {
     method: 'POST',
     headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' },
@@ -68,7 +70,7 @@ async function createUser(email: string, password: string): Promise<string> {
   return body.id;
 }
 
-async function signIn(email: string, password: string): Promise<string> {
+export async function signIn(email: string, password: string): Promise<string> {
   const res = await fetch(`${SUPA}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: { apikey: ANON, 'Content-Type': 'application/json' },
@@ -317,5 +319,93 @@ export async function tearDown(world: World | null): Promise<void> {
     console.log('cadence rows deleted (cascade)');
   } catch (e) {
     console.error('db cleanup failed — sweep with npm run cleanup:cadence-dev-accounts:', e);
+  }
+}
+
+/* ══ Shared turn plumbing — one copy, two graders ════════════════════════════════════════════
+ *
+ * `readTurn` deliberately reads the stream with the APP's accumulator (`applySseLine` is the
+ * function the coach route's tool loop uses to decide what to fulfill), so a call a grader cannot
+ * see is a call prod would not have run either — the guard against reporting the model's silence
+ * when the fault is ours. Lived in eval-tool-selection.ts until 2026-08-30; moved here when the
+ * conversation replay needed it too, because two hand-kept copies of the accumulator contract is
+ * how one grader keeps passing after coach-stream changes break the other.
+ */
+
+export interface Observed {
+  calls: Array<{ name: string; arguments?: string }>;
+  reply: string;
+  model: string | null;
+  /** Prompt/completion tokens per completed response — index 0 is the round that chose the tools. */
+  rounds: Array<{ prompt: number | null; completion: number | null }>;
+}
+
+/** Per-round token counts, read off the same `message.complete` frame the accumulator uses. */
+function roundTokens(line: string): { prompt: number | null; completion: number | null } | null {
+  if (!line.startsWith('data: ')) return null;
+  try {
+    const p = JSON.parse(line.slice(6).trim()) as Record<string, unknown>;
+    if (p.type !== 'message.complete') return null;
+    const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
+    return {
+      prompt: num(p.inputTokens) ?? num(p.estimatedInputTokens),
+      completion: num(p.outputTokens) ?? num(p.estimatedOutputTokens),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function readTurn(body: ReadableStream<Uint8Array>): Promise<Observed> {
+  const { createCoachStreamAccumulateState, applySseLine } = await import('../src/services/coach-stream.ts');
+  const { createSseLineBuffer, pushSseChunk } = await import('@ai-admin/core');
+  const state = createCoachStreamAccumulateState();
+  const buf = createSseLineBuffer();
+  const dec = new TextDecoder();
+  const reader = body.getReader();
+  const rounds: Observed['rounds'] = [];
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    for (const line of pushSseChunk(buf, dec.decode(value, { stream: true }))) {
+      applySseLine(state, line);
+      const t = roundTokens(line);
+      if (t) rounds.push(t);
+    }
+  }
+  return { calls: state.functionCalls, reply: state.content, model: state.model, rounds };
+}
+
+export async function openSession(token: string): Promise<string> {
+  const res = await fetch(`${API}/coach/sessions`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ intent: 'ongoing', healthAvailable: false, healthAnswered: true }),
+  });
+  const body = (await res.json()) as { sessionId?: string };
+  if (!res.ok || !body.sessionId) throw new Error(`open session failed: ${res.status} ${JSON.stringify(body)}`);
+  return body.sessionId;
+}
+
+/** Best-effort: the X-ray is in-memory per serverless instance, so it can be absent or stale, and
+ *  it is keyed by user not turn — only trust it when turns run one at a time. */
+export async function prefetchedFns(token: string): Promise<string[] | null> {
+  try {
+    const res = await fetch(`${API}/coach/trace`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { turnSelect?: { calls?: Array<{ fn?: string }> } | null };
+    return (body.turnSelect?.calls ?? []).map((c) => String(c.fn)).filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
+export function parseArgs(raw: string | undefined): Record<string, unknown> {
+  if (!raw?.trim()) return {};
+  try {
+    const p = JSON.parse(raw) as unknown;
+    return p && typeof p === 'object' && !Array.isArray(p) ? (p as Record<string, unknown>) : {};
+  } catch {
+    return {};
   }
 }

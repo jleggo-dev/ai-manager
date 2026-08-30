@@ -8709,3 +8709,54 @@ a shared timeout (wide, mechanical — the boot gate was the one that stranded a
 `signInWithIdToken` native Apple sign-in (pre-submission polish; Google stays on the fixed web
 session); the keep-warm ping for the ~1.2s idle wake (unbuilt since 2026-08-20); and the OAuth
 consent-screen branding check (config, not code).
+
+## Repertoire — she stores what you know, and practice draws on it (2026-08-30)
+
+**The conversation that forced it (2026-08-29, ai-admin chat `773f61a1`):** mid-plan-edit the
+owner said *"select from the pieces I already know"* — and she had nowhere to look. He typed nine
+pieces; they froze into ONE `how_to` sentence ("today: A Short Story"), so the "rotation" could
+never rotate, every later tweak re-presented the whole formula as its own diff, and the final
+Wed-Écossaise/Fri-Short-Story promise silently didn't apply (one row, last write wins — `how_to`
+cannot say per-day things). **Owner ruling 2026-08-30:** recording is proactive — as milestones
+complete, and *especially* under a learn-this goal; not necessarily always-listening, but handed
+the list, *"she should know she has to store it."*
+
+**As built (branch `cadence/repertoire`):**
+
+- **`cadence.repertoire`** (migration 0045, applied 2026-08-30): per-item state — `working |
+  known | parked`, `kind` free text ("piece", "kata"), `learned_at`, `last_practiced_at`, `meta`;
+  unique on `(user, lower(label))` so re-mentions upsert; `goal_id` set-null (what you know
+  outlives the goal); in the 0022 pack-touch family; in `DEV_CHILD_TABLES`.
+- **`update_repertoire`** — ALWAYS_ACTIONS (measured 348 tokens/turn; the `update_constraint`
+  0-of-3 lesson says a tail action would not fire). `learned` ≠ `known` is load-bearing: only a
+  real crossing writes a `goal_events` completion — nine backfilled pieces must not become nine
+  accomplishments dated today.
+- **`get_repertoire`** — free tail read, new `practice` category (label "what they practice and
+  already know"; `get_practice_totals` moved in from `training`). Render marks **DUE NEXT** by
+  longest rest (`@cadence/shared` `pickDueNext`/`renderRepertoire`, pure + tested).
+- **The loop closes deterministically:** `prescribe-session` now receives `{{repertoire}}` and
+  names ONE known piece per review slot (**needs `sync-jobs.ts` to go live**); logging a session
+  that names a piece stamps `last_practiced_at` (plain containment, parenthetical-stripped), so
+  the rotation rotates off what HAPPENED, not what was prescribed.
+- **She can finally read the ledger:** `get_goal_progress` now renders recent `goal_events`
+  labels (they were dropped — countable but never nameable). Eval cases A17/A18/B11 pin
+  store-the-list, record-the-crossing, and read-don't-write; drawn from the real session.
+- **Companion PR (`cadence/plan-diff-presentation`):** the `changed` turn-context lead gets the
+  same anti-recitation guard `unchanged` has had since the Apple-Health triple-read; ChangeCard
+  grows "See your whole week" (opens the existing PlanCardSheet) — the card stays delta-only.
+
+**Not done, priced honestly:** per-day activity content (the tool still can't say "Wednesday =
+Écossaise" — the rotation makes that unnecessary for practice, but the edit-engine gap is real);
+`eval:tools` re-run post-deploy (it measures deployed main; A17/A18/B11 land with the merge);
+metronome per-piece tempo still device-local (`meta.tempo_bpm` is its server home when wanted).
+
+**Reviewed before merge (2026-08-30, ten-angle pass + sweep):** 15 findings, 14 fixed same day —
+the load-bearing ones: the write-back now matches real labels ("by Composer"/comma-qualified,
+NFC-normalized, whole-word, goal-scoped), fires from tick-done and from the prescription (not
+just typed logs), and stamps the session's date; an omitted `status` keeps an item's standing;
+`learned` celebrates exactly once; `{{repertoire}}` is scoped per-goal and a failed read renders
+as a fault, never "knows nothing"; repertoire writes invalidate the goal's cached sessions so the
+rotation actually advances across a warmed week; the replay scorer imports the shared scorer's
+corrections (meta-tools are plumbing; provider frames stripped); the ChangeCard door is
+applied-state only (pre-apply it showed the week without the change). One consciously skipped:
+the three-line live-goal resolution duplicated from `update_goal` — extract on next touch.

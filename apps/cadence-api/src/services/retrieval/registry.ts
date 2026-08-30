@@ -32,6 +32,7 @@ import { READ_LABEL } from './label-function.ts';
 import { GET_NUTRITION } from './nutrition-facade.ts';
 import { PREVIEW_MEAL } from './food-log-function.ts';
 import { RESEARCH_FOOD } from './food-research-function.ts';
+import { GET_REPERTOIRE } from './repertoire-function.ts';
 import { isoRange, type RetrievalFunction } from './types.ts';
 
 // Re-exported so the many existing importers of this module keep working unchanged.
@@ -253,7 +254,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_goal_progress: {
     name: 'get_goal_progress',
     description:
-      "Numbers on how each goal is going, worked out from what the user has logged — 18 of 100 books read, current weight vs target, days left to a deadline, sessions kept per week — plus trends over time (pace, top lift). Use when they ask how they're doing on a goal or overall. For whether they showed up at all, use get_consistency; for raw totals of one counted thing, use get_practice_totals.",
+      "Numbers on how each goal is going, worked out from what the user has logged — 18 of 100 books read, current weight vs target, days left to a deadline, sessions kept per week — plus trends over time (pace, top lift) and the latest accomplishments recorded by name. Use when they ask how they're doing on a goal or overall. For whether they showed up at all, use get_consistency; for raw totals of one counted thing, use get_practice_totals.",
     domains: ['goals', 'progress'],
     async run(userId) {
       const p = await buildProgress(userId);
@@ -266,10 +267,16 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
           first: t.series[0],
           last: t.series[t.series.length - 1],
         })),
+        // Completions only — the ledger also holds 'note' rows ("Target changed: 100 → 50"),
+        // which are bookkeeping, not accomplishments, and must never render as cheer.
+        events: (p.events ?? [])
+          .filter((e) => e.kind === 'completion')
+          .slice(0, 6)
+          .map((e) => ({ label: e.label, at: e.at })),
       };
     },
     render(r) {
-      const { cards, trends } = r as {
+      const { cards, trends, events } = r as {
         cards: ProgressCard[];
         trends: Array<{
           title: string;
@@ -278,6 +285,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
           first?: { value: number };
           last?: { value: number };
         }>;
+        events?: Array<{ label: string; at: string }>;
       };
       const lines: string[] = [];
       for (const c of cards) {
@@ -294,11 +302,31 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
         if (t.first && t.last)
           lines.push(`- ${t.title} ${t.label.toLowerCase()}: ${t.first.value} → ${t.last.value} ${t.unit}`);
       }
+      // The ledger's own words, not only its count. These labels used to be dropped here — she
+      // could say "18/100" but never name WHICH — so a list the user had already given could
+      // only be asked for again. The heading says how many ride along, so six lines beside an
+      // "18/100" card never read as the whole eighteen. Dates are relative day-counts, not
+      // calendar days: the server clock is UTC and a local-looking date would be wrong for
+      // anyone west of it by evening.
+      const evs = events ?? [];
+      if (evs.length) lines.push(`Recorded by name (the ${evs.length} most recent):`);
+      for (const e of evs) {
+        const t = Date.parse(e.at);
+        const days = Number.isFinite(t) ? Math.floor((Date.now() - t) / 86_400_000) : NaN;
+        const when = Number.isNaN(days)
+          ? ''
+          : days <= 0
+            ? ' (today)'
+            : days === 1
+              ? ' (yesterday)'
+              : ` (${days} days ago)`;
+        lines.push(`- ${e.label}${when}`);
+      }
       return lines.length ? `Goal progress (computed):\n${lines.join('\n')}` : '';
     },
     rows(r) {
-      const x = r as { cards: unknown[]; trends: unknown[] };
-      return x.cards.length + x.trends.length;
+      const x = r as { cards: unknown[]; trends: unknown[]; events?: unknown[] };
+      return x.cards.length + x.trends.length + (x.events?.length ?? 0);
     },
   },
 
@@ -492,4 +520,7 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
   // coach-actions.ts, not here — only the two reads join the registry.
   [PREVIEW_MEAL.name]: PREVIEW_MEAL,
   [RESEARCH_FOOD.name]: RESEARCH_FOOD,
+  // What they are learning / already know per skills practice — the read half of repertoire
+  // (update_repertoire writes it). Tail category `practice`.
+  [GET_REPERTOIRE.name]: GET_REPERTOIRE,
 };

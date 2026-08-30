@@ -239,5 +239,5 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
     .sort((a, b) => (a.at < b.at ? 1 : -1))
     .slice(0, 40);
 
-  return { cards, trends, history };
+  return { cards, trends, history, events };
 }
