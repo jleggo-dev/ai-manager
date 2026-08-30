@@ -19,13 +19,33 @@ import './styles/food-capture.css';
 // screen's stylesheet.
 import './styles/skeleton.css';
 import { App } from './App.tsx';
-import { createAppQueryClient } from './lib/query/index.ts';
+import { createAppQueryClient, persistBootCache, seedBootCache } from './lib/query/index.ts';
+import { warmApi } from './lib/api.ts';
 import { initNativeAuth } from './lib/native-auth.ts';
 
 // Deep-link listener for OAuth in the Capacitor iOS shell; no-op on web.
 initNativeAuth();
 
+/**
+ * Wake the serverless API now, not after auth. Nothing awaits it — by the time the first real
+ * request has a token, the ~1.3s cold start has been running alongside everything below instead
+ * of in front of it (lib/api/http.ts).
+ */
+warmApi();
+
 const queryClient = createAppQueryClient();
+
+/**
+ * The first frame should be the app, not a wait for one.
+ *
+ * `seedBootCache` runs BEFORE `createRoot` on purpose: it is a synchronous localStorage read, so
+ * last launch's plan, dashboard and food day are in the cache before React renders anything, and
+ * the app's opening paint is a real screen rather than a skeleton standing in for a round trip
+ * that has not been sent yet. Everything seeded is marked stale on arrival and revalidates
+ * immediately — the server is still the truth (lib/query/boot-cache.ts).
+ */
+seedBootCache(queryClient);
+persistBootCache(queryClient);
 
 // Stamp the shell so CSS can key the full-bleed layout off "this is an app" rather than off a
 // width breakpoint. A width query put an iPad — and any device whose layout viewport reported wider

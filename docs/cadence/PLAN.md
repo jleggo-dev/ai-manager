@@ -7703,6 +7703,7 @@ also pays a ~1.2s service wake. No AI is involved anywhere.
 | PERF-05 | Batch/parallelize buildPlanView | M | ~11 round trips → ~3–4 | **shipped** (#264) |
 | PERF-06 | **Skeleton instead of typing dots** on deterministic screens | S (design) | honesty; perceived speed | **shipped** — see below |
 | PERF-07 | Keep Plan/Progress mounted like Coach (`display:none`/`contents`) | M | preserves scroll + skips remount effects | **not built, and no longer needed for the paint** — PERF-01 delivers it; revisit only for scroll position |
+| PERF-09 | **Persist the paint across launches** (`lib/query/boot-cache.ts`) + warm the API at module load | S | App OPEN paints instantly, offline included; cold start overlapped | **shipped** — see below |
 
 Also real but smaller: cache the auth verification, and a keep-warm ping for the service wake
 (still unbuilt — the 1.28s cold start below is what it would remove). Coach-tab behaviour is
@@ -7803,6 +7804,67 @@ failed load (no error branch existed), and LogDidSheet's `.catch(() => setActivi
 *"Nothing in your plan yet"* over a network failure — the 2026-08-19 shape, in a quieter place.
 Both now say what happened. Guarded by `CaptureSheet.test.tsx`, `LogDidSheet.test.tsx`,
 `ProgressView.test.tsx`, `FoodHome.test.tsx`; `?preview=skeletons` renders them all for review.
+### PERF-09, as built (2026-08-30) — the cache had never been asked to outlive a launch
+
+> *"I'm not really sure why there's such crazy latency logging in or switching to the app… It
+> should feel like an app. It should load right away; no blank screen while it loads. If we're
+> pulling data and that's why it's slow, why aren't we caching the latest locally?"* — owner, on
+> device, with a screenshot of the plan skeleton
+
+**He was right that we had already solved this, and right that it had come undone — but neither
+half was a regression.** PERF-01/02 gave `/plan` and `/progress` a shared cache, and a *tab return*
+has painted instantly ever since. A `QueryClient` is memory. Every way into this app on a phone
+starts a fresh one: a cold launch, and — the case that reads as "every single time" — iOS
+reclaiming the WKWebView's content process while the app sits in the background, which reloads the
+bundle from zero on the next glance at it. So the first paint was **always** a round trip away, and
+no amount of server speed could ever have fixed it. PERF-04/05 took `/plan` from 2–3.8s to ~200ms
+and the skeleton stayed, because the skeleton was never the fetch.
+
+Measured on the deployed API the same day: `/health` cold **1.38s**, warm **0.12s**. A single-user
+pre-launch service is idle nearly always, so essentially every launch paid the wake — *serially*,
+behind a Supabase token refresh that `getSession()` awaits whenever the access token has aged out
+(an hour, so most launches), which itself sat in front of `/plan`'s own two auth round trips.
+
+Three changes, and each one removes a different serial link:
+
+1. **`lib/query/boot-cache.ts`** — a synchronous localStorage snapshot of the reads that gate the
+   first screen (plan, progress, today's food), seeded into the client *before* `createRoot`. The
+   generalization of what `coach-transcript-cache.ts` has done for the Coach tab since 2026-08-20,
+   and its doctrine carries over unchanged: **the server is still the truth; this is a paint, not a
+   store.** Every entry is seeded with its ORIGINAL timestamp, so it is already past `staleTime` and
+   revalidates on the first mount.
+2. **The screen machine routes from it** (App.tsx) — a remembered `committed` opens the shell
+   instead of the skeleton, and `authReady` splits paint from fetch, so a returning user's week is
+   on the glass while Supabase is still refreshing their token.
+3. **`warmApi()` at module load** (`lib/api/http.ts`) — `/health` needs no token, so the ~1.3s wake
+   runs *alongside* the bundle parse, the token refresh and the first render instead of after all
+   three. Verified firing at **53ms** after navigation start.
+
+**What it must never do, and what holds it to that.** A snapshot is a *weaker* source than the
+failed request that caused the 2026-08-19 bug, so it must not be able to do what that bug did:
+routing goes only INTO the plan, never out of it — no cached value can send a signed-in owner back
+to "meet Cadence". A failed revalidate leaves the painted week up rather than swapping it for an
+error screen. And it is scoped to a person twice over: registered in `USER_SCOPED_KEYS`, *and*
+every snapshot carries its account id, checked against the session already on disk before a pixel
+is seeded — belt and braces, because the seed happens before auth resolves, which is the entire
+point of it, so "clear on the next boot" lands one boot too late to be the only guarantee.
+
+One nuance worth the code it costs: `/plan` computes `isToday` server-side, so a week cached
+yesterday says TODAY over yesterday's node — and the trail scrolls to it, labels it, and hangs the
+food strip off it. `revivePlanSnapshot` re-derives the flag from each day's own `date`, and refuses
+the snapshot outright when today is not in the cached week at all. A stale paint is fine; a stale
+*fact* is the thing the skeleton rule exists to prevent.
+
+Verified in the browser, not only at the render level (this repo has twice shipped behaviour that
+was correct in its unit test and invisible in the product): with the API **stopped**, a reload
+painted the full trail — header, streak, week, tab bar — with zero successful requests, TODAY on
+the correct day, and no error screen; with it back up, the same snapshot corrected to the server's
+real answer and the snapshot rewrote itself to match.
+
+**Still unbuilt, and still real:** the per-request auth cost (`auth.getUser()` HTTPS + `ensureUser`
+on every authed request, `apps/cadence-api/src/auth/middleware.ts`) and a true keep-warm — Vercel
+Hobby crons fire daily, so the ping above narrows the cold start rather than removing it.
+
 ## The photo said 0 calories: two-stage vision, and the eval that can tell (2026-08-20)
 
 Two photo logs came back empty on 2026-08-20 and were stored as **settled 0-kcal meals**. The

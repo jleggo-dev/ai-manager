@@ -102,3 +102,28 @@ export async function deleteMyData(confirmPhrase: string): Promise<boolean> {
   });
   return res.ok;
 }
+
+/**
+ * Wake the API while the app is still starting.
+ *
+ * The Cadence service is serverless and idles out; the first request after that pays a **measured
+ * 1.28–1.38s** of service wake before any handler runs (PLAN.md's latency table; re-measured
+ * 2026-08-30). For a single-user pre-launch app that idle is the *normal* state, so essentially
+ * every launch paid it — and paid it SERIALLY, because the first request could not be sent until
+ * Supabase had finished refreshing the access token.
+ *
+ * `/health` needs no token, so it can go at module load: the wake then happens *during* the token
+ * refresh, the bundle parse and the first render instead of after all three. Nothing awaits it and
+ * nothing reads its answer — it exists to have already happened.
+ *
+ * This is not the keep-warm ping PLAN.md still lists as unbuilt (that one needs a scheduler, and
+ * Vercel Hobby crons only fire daily). It is the cheaper half: it cannot stop the service going
+ * cold, only stop the user waiting alone while it warms.
+ */
+export function warmApi(): void {
+  try {
+    void fetch(`${BASE}/health`, { signal: timeoutSignal(10_000) }).catch(() => {});
+  } catch {
+    /* no fetch, no network, no matter — this is an optimization with no failure mode */
+  }
+}

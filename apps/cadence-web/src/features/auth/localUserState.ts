@@ -37,6 +37,12 @@ export const USER_SCOPED_KEYS = [
   // before the network answers. The most personal thing on this list by a distance: inheriting it
   // would open one person's coaching conversation in front of the next person to use the phone.
   'cadence.coachTranscript',
+  // The boot paint (lib/query/boot-cache.ts) — last launch's plan, dashboard and food day, kept so
+  // the app opens on a screen instead of a skeleton. Listed here for the same reason the transcript
+  // is: it is one person's week, and a device with two accounts on it must not open the previous
+  // person's. (The snapshot ALSO stamps its owner and refuses to seed on a mismatch — this sweep is
+  // what stops it lingering on disk after the identity has moved on.)
+  'cadence.bootCache',
 ] as const;
 
 function read(key: string): string | null {

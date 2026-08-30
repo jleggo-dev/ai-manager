@@ -1,6 +1,6 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { getPlan, type PlanViewData } from '../api.ts';
-import { queryKeys } from './keys.ts';
+import { localTodayIso, queryKeys } from './keys.ts';
 
 /**
  * `getPlan()` answers `null` for "could not load" — never for "no plan" (lib/api/plan.ts). For
@@ -43,4 +43,30 @@ export function setPlanData(
   updater: (d: PlanViewData | undefined) => PlanViewData | undefined,
 ): void {
   queryClient.setQueryData<PlanViewData>(queryKeys.plan.all, updater);
+}
+
+/**
+ * A snapshotted plan, made safe to paint on the day it is actually being painted on.
+ *
+ * `/plan` computes `isToday` server-side, so a week cached yesterday says TODAY over yesterday's
+ * node — and the trail scrolls to it, labels it, and hangs the food strip off it. Left alone that
+ * is a *wrong fact* on screen for as long as the revalidate takes, which is the one thing the
+ * skeleton rule exists to prevent ("a skeleton draws shapes, never numbers"). Re-deriving the flag
+ * from the day's own `date` costs nothing and makes the stale copy honest.
+ *
+ * Null when today is not in the cached week at all — a plan that far past is not a stale paint,
+ * it is a different week, and PlanView's own skeleton is the truthful screen for the moment it
+ * takes to fetch the real one. Routing survives that refusal separately (boot-cache's `stage`).
+ */
+export function revivePlanSnapshot(data: unknown): PlanViewData | null {
+  const plan = data as PlanViewData | undefined;
+  if (!plan || !Array.isArray(plan.week)) return null;
+  const today = localTodayIso();
+  if (!plan.week.some((d) => d.date === today)) return null;
+  return { ...plan, week: plan.week.map((d) => ({ ...d, isToday: d.date === today })) };
+}
+
+/** Is there a plan on screen already? The app-open gate blanks to a skeleton only when there is not. */
+export function hasCachedPlan(queryClient: QueryClient): boolean {
+  return queryClient.getQueryData(queryKeys.plan.all) !== undefined;
 }
