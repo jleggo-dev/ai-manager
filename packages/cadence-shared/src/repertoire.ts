@@ -20,65 +20,72 @@ export interface RepertoireLike {
   started_at?: string;
 }
 
-const time = (iso?: string | null): number => {
-  if (!iso) return Number.NaN;
-  const t = new Date(iso).getTime();
-  return Number.isNaN(t) ? Number.NaN : t;
-};
+const time = (iso?: string | null): number => (iso ? new Date(iso).getTime() : Number.NaN);
 
-/**
- * The 'known' item resting longest — null when nothing is in the rotation pool.
- * Never-practiced beats practiced; ties break by started_at (oldest first), then label, so the
- * pick is stable run-to-run rather than dependent on row order.
- */
+/** Longest-rest-first: never-practiced beats practiced; ties break by started_at (oldest first),
+ *  then by codepoint label order — locale-independent, so the pick is identical on a dev laptop
+ *  and a UTC server rather than dependent on ICU data or row order. */
+function byRest(a: RepertoireLike, b: RepertoireLike): number {
+  const at = time(a.last_practiced_at);
+  const bt = time(b.last_practiced_at);
+  const aNever = Number.isNaN(at);
+  const bNever = Number.isNaN(bt);
+  if (aNever !== bNever) return aNever ? -1 : 1;
+  if (!aNever && at !== bt) return at - bt;
+  const as = time(a.started_at);
+  const bs = time(b.started_at);
+  if (!Number.isNaN(as) && !Number.isNaN(bs) && as !== bs) return as - bs;
+  return a.label < b.label ? -1 : a.label > b.label ? 1 : 0;
+}
+
+/** The 'known' item resting longest — null when nothing is in the rotation pool. */
 export function pickDueNext(items: RepertoireLike[]): RepertoireLike | null {
-  const pool = items.filter((i) => i.status === 'known');
-  const sorted = [...pool].sort((a, b) => {
-    const at = time(a.last_practiced_at);
-    const bt = time(b.last_practiced_at);
-    const aNever = Number.isNaN(at);
-    const bNever = Number.isNaN(bt);
-    if (aNever !== bNever) return aNever ? -1 : 1;
-    if (!aNever && at !== bt) return at - bt;
-    const as = time(a.started_at);
-    const bs = time(b.started_at);
-    if (!Number.isNaN(as) && !Number.isNaN(bs) && as !== bs) return as - bs;
-    return a.label.localeCompare(b.label);
-  });
+  const sorted = [...items.filter((i) => i.status === 'known')].sort(byRest);
   return sorted[0] ?? null;
 }
 
-const shortDate = (iso?: string | null): string | null => {
-  if (!iso) return null;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+/** "worked today" / "worked 3 days ago" — relative day-counts, never calendar dates: the server
+ *  clock is UTC, and a local-looking date would be wrong for anyone west of it by evening. */
+const practicedNote = (i: RepertoireLike, now: number): string => {
+  const t = time(i.last_practiced_at);
+  if (Number.isNaN(t)) return 'not worked yet while on file';
+  const days = Math.max(0, Math.floor((now - t) / 86_400_000));
+  return days === 0 ? 'worked today' : days === 1 ? 'worked yesterday' : `worked ${days} days ago`;
 };
 
-const practicedNote = (i: RepertoireLike): string => {
-  const d = shortDate(i.last_practiced_at);
-  return d ? `last worked ${d}` : 'not worked yet while on file';
-};
+/** How many items a group may render before it cuts and says so — a two-year repertoire must not
+ *  become a 200-line block in every prescribe prompt and context pack. */
+const GROUP_CAP = 15;
 
 /**
  * The compact text both consumers inject — get_repertoire's render and prescribe-session's
  * {{repertoire}} variable. One renderer so the coach in chat and the coach programming a session
- * read the same facts in the same words. Empty string when there is nothing on file.
+ * read the same facts in the same words. Empty string when there is nothing on file. The known
+ * group is ordered longest-rest first, so a cut can never drop the DUE NEXT item, and a cut
+ * always says how much it dropped (a silent truncation is a quiet lie about completeness).
+ * `now` is injectable for tests; callers omit it.
  */
-export function renderRepertoire(items: RepertoireLike[]): string {
+export function renderRepertoire(items: RepertoireLike[], now = Date.now()): string {
   if (!items.length) return '';
   const due = pickDueNext(items);
-  const group = (status: RepertoireStatus): RepertoireLike[] => items.filter((i) => i.status === status);
   const line = (i: RepertoireLike): string => {
-    const marks = [i.kind, practicedNote(i), due && i === due ? 'DUE NEXT by rotation' : null].filter(Boolean);
+    const marks = [i.kind, practicedNote(i, now), due && i === due ? 'DUE NEXT by rotation' : null].filter(Boolean);
     return `  - ${i.label} (${marks.join('; ')})`;
   };
+  const capped = (group: RepertoireLike[]): string[] => {
+    const shown = group.slice(0, GROUP_CAP).map(line);
+    if (group.length > GROUP_CAP) shown.push(`  …and ${group.length - GROUP_CAP} more on file`);
+    return shown;
+  };
+  const working = items.filter((i) => i.status === 'working');
+  const known = [...items.filter((i) => i.status === 'known')].sort(byRest);
+  const parked = items.filter((i) => i.status === 'parked');
   const sections: string[] = [];
-  const working = group('working');
-  const known = group('known');
-  const parked = group('parked');
-  if (working.length) sections.push(`Working on now:\n${working.map(line).join('\n')}`);
+  if (working.length) sections.push(`Working on now:\n${capped(working).join('\n')}`);
   if (known.length)
-    sections.push(`Known — the rotation pool for review and warm material:\n${known.map(line).join('\n')}`);
+    sections.push(
+      `Known — the rotation pool for review and warm material, longest rest first:\n${capped(known).join('\n')}`,
+    );
   if (parked.length) sections.push(`Set aside for now: ${parked.map((i) => i.label).join('; ')}`);
   return sections.join('\n');
 }

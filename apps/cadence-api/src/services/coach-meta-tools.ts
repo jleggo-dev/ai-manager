@@ -129,7 +129,7 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
   [FIND_TOOLS_NAME]: {
     name: FIND_TOOLS_NAME,
     description:
-      'Look up the other things you can read about this user — recorded workouts, journal, recipes, saved foods, equipment, practice totals, food log and nutrition targets. None are loaded until you ask. Use whenever a question needs detail you were not already given, then call use_tool with what you find. This does NOT change anything; it only tells you what exists and how to call it. Pass {"query": "workouts"} to search by topic.',
+      'Look up the other things you can read about this user — recorded workouts, journal, recipes, saved foods, equipment, what they practice and already know, practice totals, food log and nutrition targets. None are loaded until you ask. Use whenever a question needs detail you were not already given, then call use_tool with what you find. This does NOT change anything; it only tells you what exists and how to call it. Pass {"query": "workouts"} to search by topic.',
     parameters: {
       properties: {
         query: {
