@@ -38,7 +38,16 @@ export {
   type LocalNudgePlan,
 } from './api/notification-prefs.ts';
 
-export { postHealthDigest, getHealthDigest, postWorkoutHistory } from './api/health.ts';
+export {
+  postHealthDigest,
+  getHealthDigest,
+  postWorkoutHistory,
+  getWorkoutHistory,
+  getDatedSessions,
+  type WorkoutHistoryListItem,
+  type DatedSessionListItem,
+  type DatedSessionsListResult,
+} from './api/health.ts';
 
 export {
   prepareCoachFoodAction,
