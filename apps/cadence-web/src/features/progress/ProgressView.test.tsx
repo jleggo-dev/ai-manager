@@ -49,7 +49,7 @@ describe('ProgressView', () => {
     expect(container.querySelector('[aria-busy="true"]')!.textContent).not.toMatch(/\d/);
   });
 
-  it("says so when it has nothing and the load failed — it does not wait forever", () => {
+  it('says so when it has nothing and the load failed — it does not wait forever', () => {
     const { container } = mount({ data: undefined, error: new Error('offline') });
     expect(screen.getByText(/Couldn't load your progress just now/)).toBeTruthy();
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
@@ -69,9 +69,7 @@ describe('ProgressView', () => {
     });
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
     expect(screen.getByText('Progress')).toBeTruthy();
-    const bounds = [...container.querySelectorAll('[data-testid^="bound-"]')].map((n) =>
-      n.getAttribute('data-testid'),
-    );
+    const bounds = [...container.querySelectorAll('[data-testid^="bound-"]')].map((n) => n.getAttribute('data-testid'));
     expect(bounds).toEqual(['bound-w-rhythm', 'bound-w-history']);
   });
 

@@ -33,7 +33,8 @@ export function resolveStagePath(goal: Goal): StagePathPayload | WidgetOmission 
 /** Pure: the same current/target/unit shape services/progress.ts's 'count' card renders. */
 export function resolveCountToward(goal: Goal, current: number): CountTowardPayload | WidgetOmission {
   const target = goal.measure?.target;
-  if (typeof target !== 'number') return omit(`count_toward:${goal.goal_id}`, 'count_toward', 'goal has no numeric target');
+  if (typeof target !== 'number')
+    return omit(`count_toward:${goal.goal_id}`, 'count_toward', 'goal has no numeric target');
   return { current, target, unit: goal.measure?.unit || 'done' };
 }
 

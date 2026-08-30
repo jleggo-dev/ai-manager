@@ -114,7 +114,10 @@ describe('defaultLayout', () => {
       title: 'Read the whole Bible',
       area: 'practice',
       type: 'milestone',
-      milestones: [{ id: 'm1', label: 'Old Testament' }, { id: 'm2', label: 'New Testament' }],
+      milestones: [
+        { id: 'm1', label: 'Old Testament' },
+        { id: 'm2', label: 'New Testament' },
+      ],
     });
     const layout = defaultLayout([meditate, sitMinutes, readBooks, readBible]);
 
@@ -216,7 +219,15 @@ describe('defaultLayout', () => {
     // Weight (trend_vs_target) sits in the weight-goal slot; nourishment engagement (kcal/variety)
     // follows, since a weight goal IS a nourishment-area goal; stage_path sits in the later
     // count/stage-path slot — same goal, two independent, non-colliding widget ids.
-    expect(kinds(layout)).toEqual(['trend_vs_target', 'weekly_bars', 'variety', 'stage_path', 'shelf', 'recap_rail', 'history']);
+    expect(kinds(layout)).toEqual([
+      'trend_vs_target',
+      'weekly_bars',
+      'variety',
+      'stage_path',
+      'shelf',
+      'recap_rail',
+      'history',
+    ]);
     expect(ids(layout)).toEqual([
       'w-goal-weight-4',
       'w-kcal',

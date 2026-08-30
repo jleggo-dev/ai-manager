@@ -69,7 +69,10 @@ export async function getWorkoutHistory(days = 90, limit = 60): Promise<WorkoutH
  * deduped (see services/progress-sessions.ts). Also the data source for the drill-down list
  * screen (SessionListScreen).
  */
-export async function getDatedSessions(activity: string, window: ProgressWindow = 'all'): Promise<DatedSessionsListResult> {
+export async function getDatedSessions(
+  activity: string,
+  window: ProgressWindow = 'all',
+): Promise<DatedSessionsListResult> {
   const res = await fetch(`${BASE}/me/sessions?activity=${encodeURIComponent(activity)}&window=${window}`, {
     headers: headers(),
   });

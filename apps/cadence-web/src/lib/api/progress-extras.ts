@@ -33,7 +33,10 @@ export async function getProgressEvents(from: string, to: string): Promise<Omitt
 }
 
 /** `balance` — felt-state proportion from session_feedback. */
-export async function getProgressBalance(kind: SessionFeedbackKind, window: ProgressWindow): Promise<Omittable<BalancePayload>> {
+export async function getProgressBalance(
+  kind: SessionFeedbackKind,
+  window: ProgressWindow,
+): Promise<Omittable<BalancePayload>> {
   return getExtra(`/progress/balance?kind=${kind}&window=${window}`);
 }
 

@@ -47,7 +47,10 @@ export function TrendVsTargetWidget({ data, caption }: { data: TrendVsTargetPayl
   const smoothed = showsTrend ? ewma(values) : [];
   const ticks = monthTicks(data.series, x);
 
-  const fields = { ...flatFields(data as unknown as Record<string, unknown>), direction: directionWord(data.rate_per_week) };
+  const fields = {
+    ...flatFields(data as unknown as Record<string, unknown>),
+    direction: directionWord(data.rate_per_week),
+  };
   const sub =
     data.confidence === 'low'
       ? 'early days — the line firms up as readings accumulate'
@@ -81,7 +84,14 @@ export function TrendVsTargetWidget({ data, caption }: { data: TrendVsTargetPayl
           strokeWidth={1.3}
           strokeDasharray="4 3"
         />
-        <text x={W - RIGHT} y={y(data.target) - 4} textAnchor="end" fontFamily="var(--mono)" fontSize="10" fill="var(--text-mute)">
+        <text
+          x={W - RIGHT}
+          y={y(data.target) - 4}
+          textAnchor="end"
+          fontFamily="var(--mono)"
+          fontSize="10"
+          fill="var(--text-mute)"
+        >
           target {formatCaptionNumber(data.target)}
         </text>
         {data.series.map((p, i) => (
@@ -101,7 +111,15 @@ export function TrendVsTargetWidget({ data, caption }: { data: TrendVsTargetPayl
           </>
         )}
         {ticks.map((t, i) => (
-          <text key={i} x={t.x} y={H - 4} textAnchor="middle" fontFamily="var(--mono)" fontSize="10" fill="var(--text-mute)">
+          <text
+            key={i}
+            x={t.x}
+            y={H - 4}
+            textAnchor="middle"
+            fontFamily="var(--mono)"
+            fontSize="10"
+            fill="var(--text-mute)"
+          >
             {t.label}
           </text>
         ))}

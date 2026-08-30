@@ -17,7 +17,11 @@ export function resolveShelf(events: GoalEvent[]): ShelfPayload | WidgetOmission
 }
 
 /** Fetch + resolve for one user's window. */
-export async function getShelf(userId: string, fromDate: string, toDate: string): Promise<ShelfPayload | WidgetOmission> {
+export async function getShelf(
+  userId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<ShelfPayload | WidgetOmission> {
   const events = await listGoalEventsInRange(userId, fromDate, toDate);
   return resolveShelf(events);
 }

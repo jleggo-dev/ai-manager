@@ -38,7 +38,10 @@ const isWeightGoal = (g: Goal) => typeof g.measure?.target === 'number' && WEIGH
 
 /** A fixed-target count ("books 21/100") — never a weight goal, whatever area it lives in. */
 const isCountGoal = (g: Goal) =>
-  g.type === 'target' && typeof g.measure?.target === 'number' && !isWeightGoal(g) && COUNTABLE_UNIT.test(g.measure?.unit ?? '');
+  g.type === 'target' &&
+  typeof g.measure?.target === 'number' &&
+  !isWeightGoal(g) &&
+  COUNTABLE_UNIT.test(g.measure?.unit ?? '');
 
 /** Movement, dated, individually-tracked — not the recurring schedule (that's rhythm) or a count/weight goal. */
 const isMovementActivity = (g: Goal) => g.area === 'movement' && !isRecurring(g) && !isWeightGoal(g) && !isCountGoal(g);
@@ -49,7 +52,8 @@ const hasSteppingStones = (g: Goal) => g.type === 'milestone' && (g.milestones?.
 const isMindOrPractice = (g: Goal) => g.area === 'mind' || g.area === 'practice';
 
 /** "Presence, not slope" — a mind/practice goal with a real numeric target that isn't a weight or count goal. */
-const isMindPracticeTotal = (g: Goal) => isMindOrPractice(g) && typeof g.measure?.target === 'number' && !isWeightGoal(g) && !isCountGoal(g);
+const isMindPracticeTotal = (g: Goal) =>
+  isMindOrPractice(g) && typeof g.measure?.target === 'number' && !isWeightGoal(g) && !isCountGoal(g);
 
 const isMovementOrNourishment = (g: Goal) => g.area === 'movement' || g.area === 'nourishment';
 

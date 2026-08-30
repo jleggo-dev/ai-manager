@@ -17,7 +17,9 @@ export function RhythmWidget({ data }: { data: RhythmPayload }) {
       {data.weeks.map((week) => {
         const detour = week.detour;
         const checkins = checkinCount(week.days);
-        const rightCaption = detour ? `${checkins} check-in${checkins === 1 ? '' : 's'}` : `${week.kept} of ${week.scheduled}`;
+        const rightCaption = detour
+          ? `${checkins} check-in${checkins === 1 ? '' : 's'}`
+          : `${week.kept} of ${week.scheduled}`;
         return (
           <div key={week.start} className={`pw-rhythm-row${detour ? ' pw-rhythm-row--detour' : ''}`}>
             <span className="pw-rhythm-label">{week.label}</span>

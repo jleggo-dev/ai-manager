@@ -7,7 +7,11 @@ function row(title: string, value: Record<string, number> | null): LoggedProgres
 
 describe('aggregatePracticeTotals (extracted from get_practice_totals — same math, two callers)', () => {
   it('sums per (title, metric) across rows and counts sessions', () => {
-    const rows = [row('Journaling', { words: 400 }), row('Journaling', { words: 250 }), row('Sitting', { minutes: 20 })];
+    const rows = [
+      row('Journaling', { words: 400 }),
+      row('Journaling', { words: 250 }),
+      row('Sitting', { minutes: 20 }),
+    ];
     expect(aggregatePracticeTotals(rows)).toEqual([
       { title: 'Journaling', metric: 'words', total: 650, sessions: 2 },
       { title: 'Sitting', metric: 'minutes', total: 20, sessions: 1 },
@@ -16,7 +20,9 @@ describe('aggregatePracticeTotals (extracted from get_practice_totals — same m
 
   it('is metric-agnostic — a key this app has never heard of still totals correctly', () => {
     const rows = [row('Piano', { measures_practiced: 12 })];
-    expect(aggregatePracticeTotals(rows)).toEqual([{ title: 'Piano', metric: 'measures_practiced', total: 12, sessions: 1 }]);
+    expect(aggregatePracticeTotals(rows)).toEqual([
+      { title: 'Piano', metric: 'measures_practiced', total: 12, sessions: 1 },
+    ]);
   });
 
   it('ignores non-finite values and null value maps without throwing', () => {

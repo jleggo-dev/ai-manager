@@ -143,7 +143,10 @@ describe('validateComposedLayout', () => {
 
   it('rejects the whole layout when any section fails — never a silent partial', () => {
     const oneBad = {
-      sections: [...GOOD.sections.slice(0, 5), { id: 'w-bad', kind: 'count_toward', title: 'X', source: { goal_id: 'nope' } }],
+      sections: [
+        ...GOOD.sections.slice(0, 5),
+        { id: 'w-bad', kind: 'count_toward', title: 'X', source: { goal_id: 'nope' } },
+      ],
     };
     const v = validateComposedLayout(oneBad, CTX);
     expect(v.ok).toBe(false);
