@@ -193,7 +193,10 @@ export const ALWAYS_ACTIONS = [
 /**
  * The drawer's label (owner ruling 2026-08-30, above): one hook line per on-demand tool, grouped
  * by area, assembled into find_tools' carried description so she always SEES what she could go
- * looking for — "knowing when to pull on the thread is the trick." Hooks are prompts: house voice, present tense, ≤90 chars, and they get the same brand scrutiny as user copy.
+ * looking for — "knowing when to pull on the thread is the trick." Hooks are read by a MODEL:
+ * follow the six style rules in tool-catalog.ts ("HOW TO WRITE THE STRINGS IN THIS FILE", owner
+ * ruling 2026-08-30) — name categories, state rules not sentiments, no metaphor for mechanism.
+ * Plain and literal, ≤90 chars; the house voice is for the user, never for her.
  * coach-drawer-index.test.ts gates exact coverage of onDemandToolNames() — a tail tool without a
  * hook line here fails CI by name.
  */
@@ -203,15 +206,15 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   check_food_sources: 'ask every food database at once about one food, disagreements included',
   resolve_portion: 'what a household measure of a saved food weighs in grams',
   read_label: 'read an attached photo: nutrition panel or front-of-pack',
-  research_food: 'web research on a NAMED product none of the sources know — slow',
+  research_food: 'web research on a NAMED product no database has — slow',
   get_workout_history: 'their recorded workouts from their devices, newest first',
   get_practice_totals: 'running totals of anything they count — words written, minutes sat, pages read',
   get_repertoire: 'what they are learning and already know — pieces, katas, poems — with standing',
-  get_journal: 'recent journal entries, in their own words (private ones never included)',
-  get_goal_progress: 'numbers on how each goal is going, from what they logged',
+  get_journal: 'recent journal entries, verbatim; entries marked private are never included',
+  get_goal_progress: 'per-goal progress numbers computed from what they logged',
   propose_progress_layout: 'propose a redesign of what their Progress page watches — they confirm a card first',
-  get_recent_logs: 'what they wrote down after recent sessions, and how it felt',
-  get_equipment: 'the training gear they own, wear included',
+  get_recent_logs: 'their session notes from recent days: what they did and how it felt',
+  get_equipment: 'training equipment they own, with usage wear for tracked items',
 };
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
