@@ -12,6 +12,7 @@ import {
   useProgressStagePath,
   useProgressTotals,
   useProgressVariety,
+  useRecaps,
 } from '../../lib/query/index.ts';
 import { useGoalEventAdd } from '../today/useGoalEventAdd.ts';
 import { rhythmDates, windowDates } from './windowDates.ts';
@@ -42,7 +43,12 @@ function TrendVsTargetBound({ spec, window }: BoundProps) {
   const card = data?.cards.find((c) => c.kind === 'latest_vs_target');
   if (!card || card.kind !== 'latest_vs_target') return null;
   const { kind: _k, area: _a, title, ...payload } = card;
-  return <WidgetSection spec={{ ...spec, title: spec.title ?? title }} payload={{ kind: 'trend_vs_target', data: payload }} />;
+  return (
+    <WidgetSection
+      spec={{ ...spec, title: spec.title ?? title }}
+      payload={{ kind: 'trend_vs_target', data: payload }}
+    />
+  );
 }
 
 function DatedSessionsBound({ spec, window, onDrill }: BoundProps) {
@@ -140,6 +146,34 @@ function CountTowardBound({ spec }: BoundProps) {
   );
 }
 
+/** "AUG 18" — the rail's own mono-uppercase week label (RecapRailWidget prepends "WEEK OF "
+ *  itself). Same plain-short-date-then-reshape approach WeeklyBarsBound already takes for its own
+ *  server payload; kept local rather than shared since every other short-date helper in this
+ *  codebase is duplicated per file too (WeekReviewSheet.tsx, WeekReviewCard.tsx). */
+function weekOfLabel(weekStartIso: string): string {
+  try {
+    return new Date(`${weekStartIso}T12:00:00`)
+      .toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      .toUpperCase();
+  } catch {
+    return weekStartIso;
+  }
+}
+
+function RecapRailBound({ spec }: BoundProps) {
+  const { data } = useRecaps();
+  if (!data || data.recaps.length === 0) return null;
+  const recaps = data.recaps.map((r) => ({
+    week_of: weekOfLabel(r.week_start),
+    facts_line: r.facts_line,
+    // The frozen RecapRailPayload's `line` is non-nullable; most rows have none yet (honest v1) —
+    // the empty string reads as a blank line in RecapRailWidget rather than the literal "null".
+    line: r.line ?? '',
+    detour: r.detour,
+  }));
+  return <WidgetSection spec={spec} payload={{ kind: 'recap_rail', data: { recaps } }} />;
+}
+
 function HistoryBound({ spec, window }: BoundProps) {
   const { data } = useProgress(window);
   if (!data || data.history.length === 0) return null;
@@ -158,7 +192,7 @@ const BOUND: Partial<Record<WidgetSpec['kind'], (p: BoundProps) => ReactNode>> =
   stage_path: StagePathBound,
   count_toward: CountTowardBound,
   history: HistoryBound,
-  // recap_rail binds in Wave 2 once recaps persist — until then the section quietly stands down.
+  recap_rail: RecapRailBound,
 };
 
 export function BoundWidget(props: BoundProps) {
