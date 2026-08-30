@@ -19,13 +19,13 @@ import { PlanSkeleton } from './features/plan/PlanSkeleton.tsx';
 import { CoachFaceProvider } from './features/coach/CoachFaceProvider.tsx';
 import { setAuthToken, isDevMode, getHealthDigest, postHealthDigest, postWorkoutHistory } from './lib/api.ts';
 import { useQueryClient } from '@tanstack/react-query';
-import { fetchPlanIntoCache } from './lib/query/index.ts';
+import { bootPlanStage, clearBootCache, fetchPlanIntoCache, hasCachedPlan } from './lib/query/index.ts';
 import { syncPlanLocalNotifications } from './lib/local-notifications-sync.ts';
 import { usePushRegistered } from './lib/usePushRegistered.ts';
 import { capabilities } from './lib/capability/index.ts';
 import { maybeRefreshHealthDigest } from './features/onboarding/health-digest.ts';
 import { useForegroundResume } from './lib/useForegroundResume.ts';
-import { supabase } from './lib/supabase.ts';
+import { readPersistedSession, supabase } from './lib/supabase.ts';
 import { screenFromPlanStage } from './screenFromPlanStage.ts';
 
 /**
@@ -73,8 +73,24 @@ const Loading = () => (
  * who signed in first goes straight to their plan — being asked to sign up twice is worse than
  * being asked once at the wrong time.
  */
-function CoachApp({ session }: { session: Session | null }) {
-  const [screen, setScreen] = useState<Screen>('loading');
+function CoachApp({ session, authReady = true }: { session: Session | null; authReady?: boolean }) {
+  const queryClient = useQueryClient();
+  const anonymous = isAnonymousSession(session);
+
+  /**
+   * The screen this device was on last time — read from disk, synchronously, ahead of the first
+   * render (lib/query/boot-cache.ts).
+   *
+   * Only INTO the plan, never out of it. A cached `new`/`in_progress` routing someone to "meet
+   * Cadence" is the 2026-08-19 failure — onboarding restarted at a signed-in owner with a plan on
+   * the server — and a snapshot is a weaker source than the 401 that caused it. So a remembered
+   * `committed` opens the shell (the plan is already in the cache to paint it with), and every
+   * other answer waits for the server exactly as before.
+   */
+  const [screen, setScreen] = useState<Screen>(() => {
+    if (bootPlanStage() !== 'committed') return 'loading';
+    return anonymous ? 'gate' : 'plan';
+  });
   const [dev, setDev] = useState(DEV_MODE);
   /**
    * True only on the session where the first plan was just built — it routes the landing into the
@@ -85,16 +101,20 @@ function CoachApp({ session }: { session: Session | null }) {
    * still invites adjustment — a nudge that fires days later would be worse than none.
    */
   const [justBuilt, setJustBuilt] = useState<false | 'card' | 'fresh'>(false);
-  const anonymous = isAnonymousSession(session);
-
   // Notifications are core functionality, so registration is core setup: from launch, on every
   // screen, retried on resume. The one place that used to ask was the onboarding build screen,
   // which is why device_tokens was empty and no push Cadence ever sent could be delivered.
-  usePushRegistered(screen !== 'loading');
+  usePushRegistered(authReady && screen !== 'loading');
 
-  const queryClient = useQueryClient();
   const loadPlan = () => {
-    setScreen('loading');
+    /**
+     * Blank to the skeleton ONLY when there is genuinely nothing to show. With last launch's plan
+     * seeded into the cache, this fetch is a background revalidate of a screen the user is already
+     * reading — replacing it with a loader would be the app throwing away its own answer to go ask
+     * for the same one, which is the behaviour being fixed, not a smaller version of it.
+     */
+    const painted = hasCachedPlan(queryClient);
+    if (!painted) setScreen('loading');
     /**
      * Through the shared query cache (PERF-02), not a bare getPlan(): routing and PlanView's
      * first paint used to be two sequential /plan round trips — the gate resolved, MainTabs
@@ -120,7 +140,15 @@ function CoachApp({ session }: { session: Session | null }) {
         // not having listened.
         void syncPlanLocalNotifications();
       })
-      .catch(() => setScreen('error'));
+      /**
+       * A failed revalidate must not take a working screen away. With nothing painted this is the
+       * error state as it has always been (never a plan stage — see above); with a plan on screen
+       * the honest response is to leave it there, keep its own "couldn't refresh" affordance in
+       * PlanView, and let the resume hook try again.
+       */
+      .catch(() => {
+        if (!painted) setScreen('error');
+      });
   };
 
   /**
@@ -136,11 +164,19 @@ function CoachApp({ session }: { session: Session | null }) {
   const screenRef = useRef(screen);
   screenRef.current = screen;
   useForegroundResume(() => {
+    if (!authReady) return; // nothing can be fetched yet; the auth effect below will fire it
     if (screenRef.current === 'loading' || screenRef.current === 'error') loadPlan();
     else void queryClient.refetchQueries({ type: 'active', stale: true });
   });
 
+  /**
+   * Keyed on `authReady`, not on mount, because the paint now starts BEFORE auth resolves: a
+   * returning user's screen is on the glass while Supabase is still refreshing their access token
+   * (App, below). Every request in here needs that token, so they wait for it — the split is the
+   * whole idea. Paint from what the device knows; fetch when there is something to fetch with.
+   */
   useEffect(() => {
+    if (!authReady) return;
     loadPlan();
     // Silent Apple Health refresh (iOS shell, permission already granted): keeps the coach's
     // view of recent activity current without re-asking. Throttled + content-diffed inside.
@@ -155,7 +191,7 @@ function CoachApp({ session }: { session: Session | null }) {
     }).catch(() => {});
     // anonymous is fixed for the life of a session object; re-running on it would refetch the plan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authReady]);
 
   /**
    * The way OUT of the sign-up gate, and the reason it needs its own effect.
@@ -335,7 +371,11 @@ export function App() {
     // day, progress) are not theirs to inherit either — same rule as the localStorage sweep, now
     // that the plan cache also routes the app (PERF-02). Same-person resumes keep their cache.
     const syncUser = (userId: string | null) => {
-      if (syncLocalStateToUser(userId)) queryClient.clear();
+      if (!syncLocalStateToUser(userId)) return;
+      queryClient.clear();
+      // The sweep already removed the snapshot's key; this drops the copy boot-cache memoized at
+      // module load, so the next mount cannot route from a stage that belonged to someone else.
+      clearBootCache();
     };
     if (DEV_MODE) return;
     supabase.auth.getSession().then(({ data }) => {
@@ -363,12 +403,33 @@ export function App() {
   const preview = previewScreen(PREVIEW);
   if (preview) return <PhoneFrame>{preview}</PhoneFrame>;
 
-  if (!ready)
+  /**
+   * Auth is still resolving — and for a returning user that is a NETWORK wait, not a disk one:
+   * `getSession()` awaits a token refresh whenever the access token has aged out, which after the
+   * default hour means most launches. Sitting on a skeleton through it is the app waiting for
+   * permission to draw something it already has.
+   *
+   * So: if the device's own copy of the session says somebody is signed in here, mount the app now
+   * and let it paint from the boot cache; `authReady` holds every request until the real token
+   * lands (CoachApp). Same element type in the same position as the ready branch below, so this is
+   * the app starting early, not a screen that gets replaced.
+   *
+   * Three conditions, and each removes a way to be wrong. A persisted session, because without one
+   * the next screen is PreAuth and painting a plan first would be a flash of the wrong thing. NOT
+   * anonymous, because an anonymous account with a committed plan belongs at the sign-up gate and
+   * `session` is null here — the one routing question this path cannot answer for itself. And a
+   * remembered `committed` stage, because there is nothing cached to paint for any other one.
+   */
+  if (!ready) {
+    const persisted = readPersistedSession();
+    const paintable = persisted && !isAnonymousSession(persisted) && bootPlanStage() === 'committed';
+    if (paintable) return <CoachApp session={null} authReady={false} />;
     return (
       <PhoneFrame>
         <Loading />
       </PhoneFrame>
     );
+  }
   if (!DEV_MODE && !session)
     return (
       <PhoneFrame>

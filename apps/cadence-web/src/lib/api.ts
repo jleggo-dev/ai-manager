@@ -14,6 +14,7 @@ export {
   getDevAccount,
   setDevAccount,
   deleteMyData,
+  warmApi,
   type DevAccount,
 } from './api/http.ts';
 

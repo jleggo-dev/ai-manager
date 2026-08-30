@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App.tsx';
-import { createAppQueryClient } from './lib/query/index.ts';
+import { clearBootCache, createAppQueryClient } from './lib/query/index.ts';
 import { screenFromPlanStage } from './screenFromPlanStage.ts';
 
 /**
@@ -45,6 +45,7 @@ vi.mock('./lib/supabase.ts', () => ({
       onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
     },
   },
+  readPersistedSession: () => null,
 }));
 
 vi.mock('./features/onboarding/MeetCadence.tsx', () => ({
@@ -126,5 +127,91 @@ describe('App (dev mode)', () => {
     getPlan.mockResolvedValueOnce(null).mockResolvedValueOnce({ stage: 'committed' });
     renderApp();
     await waitFor(() => expect(screen.getByText('Main tabs')).toBeInTheDocument());
+  });
+});
+
+/**
+ * The boot paint (lib/query/boot-cache.ts) reaching the screen machine. These are the app-level
+ * half of what boot-cache.test.ts asserts about the cache itself: that a remembered plan opens the
+ * shell without waiting, and — the part that matters far more — that a remembered plan can never
+ * open onboarding or take a working screen away.
+ */
+describe('App (opening from the boot cache)', () => {
+  const seedCommittedPlan = () => {
+    const client = createAppQueryClient();
+    client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, retryDelay: 0 } });
+    // Seeded the way seedBootCache does — with the ORIGINAL answer's timestamp, so the entry is
+    // already past staleTime and `fetchQuery` really revalidates. Stamp it `now` and fetchQuery
+    // short-circuits on fresh data, which would make every assertion below about the wrong thing.
+    client.setQueryData(
+      ['plan'],
+      { stage: 'committed', hasPlan: true, activities: [], week: [] },
+      {
+        updatedAt: Date.now() - 60_000,
+      },
+    );
+    return client;
+  };
+  const renderWith = (client: ReturnType<typeof createAppQueryClient>) =>
+    render(
+      <QueryClientProvider client={client}>
+        <App />
+      </QueryClientProvider>,
+    );
+
+  /**
+   * `owner: null` matches this file's mocked `readPersistedSession` — these cases are about App's
+   * screen machine, and boot-cache.test.ts is where ownership itself is asserted. `clearBootCache`
+   * first, because the module memoizes the snapshot it read: without it, case one's answer would
+   * still be the answer four cases later.
+   */
+  const remember = (stage: string | null, owner: string | null = null) =>
+    window.localStorage.setItem(
+      'cadence.bootCache',
+      JSON.stringify({ v: 2, owner, at: Date.now(), stage, entries: [] }),
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearBootCache();
+    remember('committed');
+  });
+
+  it('opens on the plan with no loading state, then revalidates behind it', async () => {
+    // A fetch that never settles: whatever is on screen got there without the network.
+    getPlan.mockImplementation(() => new Promise(() => {}));
+    renderWith(seedCommittedPlan());
+    expect(screen.getByText('Main tabs')).toBeInTheDocument();
+    expect(screen.queryByText('Loading your week.')).not.toBeInTheDocument();
+    await waitFor(() => expect(getPlan).toHaveBeenCalled()); // ...and it still asked
+  });
+
+  /**
+   * The 2026-08-19 shape, from the new direction. A snapshot is a WEAKER source than the failed
+   * request that caused that bug, so it must not be able to do what that bug did.
+   */
+  it('never routes out of the plan on a failed refresh — the cached week stays up', async () => {
+    getPlan.mockResolvedValue(null); // load + silent retry both fail
+    renderWith(seedCommittedPlan());
+    await waitFor(() => expect(getPlan).toHaveBeenCalled());
+    expect(screen.getByText('Main tabs')).toBeInTheDocument();
+    expect(screen.queryByText(/safe on the server/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Meet Cadence')).not.toBeInTheDocument();
+  });
+
+  it('still corrects itself when the server says the plan is gone', async () => {
+    getPlan.mockResolvedValue({ stage: 'new' });
+    renderWith(seedCommittedPlan());
+    await waitFor(() => expect(screen.getByText('Meet Cadence')).toBeInTheDocument());
+  });
+
+  it("shows the skeleton, not a remembered shell, when the snapshot is another account's", async () => {
+    clearBootCache();
+    remember('committed', 'someone-else');
+    getPlan.mockImplementation(() => new Promise(() => {}));
+    const client = createAppQueryClient();
+    renderWith(client);
+    expect(screen.getByText('Loading your week.')).toBeInTheDocument();
+    expect(screen.queryByText('Main tabs')).not.toBeInTheDocument();
   });
 });

@@ -19,3 +19,10 @@ export const supabase = createClient(url ?? '', anonKey ?? '', {
 
 /** True when the Supabase auth env is present — lets the UI show a clear message if it's not set. */
 export const authConfigured = Boolean(url && anonKey);
+
+/**
+ * Re-exported so callers that already hold the auth client keep one import. The function itself
+ * lives in `persisted-session.ts` and touches no client: importing THIS module constructs one, and
+ * the boot paint must not pay that (nor its hard env requirement) just to read a string off disk.
+ */
+export { readPersistedSession } from './persisted-session.ts';
