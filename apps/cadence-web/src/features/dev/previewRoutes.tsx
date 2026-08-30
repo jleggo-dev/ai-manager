@@ -9,6 +9,7 @@ import {
 } from './BreathingPreview.tsx';
 import { FreeWritePreview } from './FreeWritePreview.tsx';
 import { IntervalPreview } from './IntervalPreview.tsx';
+import { MetronomePreview } from './MetronomePreview.tsx';
 import { CoachMomentsPreview } from './CoachMomentsPreview.tsx';
 import { PlanCardPreview } from './PlanCardPreview.tsx';
 import { SkeletonPreview } from './SkeletonPreview.tsx';
@@ -29,6 +30,7 @@ const PREVIEWS: Record<string, () => ReactNode> = {
   journal: () => <JournalPreview />,
   freewrite: () => <FreeWritePreview />,
   interval: () => <IntervalPreview />,
+  metronome: () => <MetronomePreview />,
   coach: () => <CoachMomentsPreview />,
   nowmenu: () => <NowMenuPreview />,
   plancard: () => <PlanCardPreview />,

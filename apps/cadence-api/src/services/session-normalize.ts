@@ -13,6 +13,7 @@ import {
   isBreathPatternId,
   isGroundingGame,
   isMeditateBells,
+  normalizeMetronome,
   patternById,
   type BlockMode,
   type OccurrenceSession,
@@ -74,6 +75,18 @@ export const groundingGameOf = (v: unknown): string | undefined =>
  * interval. An item that says `tool: 'interval'` but names no work length still gets the defaults
  * stored, so a stored session always holds a plan the player can run.
  */
+/**
+ * The metronome fields, bounded. Unlike the interval fields there is no "declared" fallback: an
+ * absent tempo means no metronome, full stop. Defaulting one in would put a click on every step in
+ * the app, which is exactly the thing this feature is not.
+ */
+export const metronomeFieldsOf = (
+  i: Record<string, unknown>,
+): Pick<SessionItem, 'metronome_bpm' | 'metronome_meter'> => {
+  const spec = normalizeMetronome(num(i.metronome_bpm), num(i.metronome_meter));
+  return spec ? { metronome_bpm: spec.bpm, metronome_meter: spec.meter } : {};
+};
+
 export const intervalFieldsOf = (
   i: Record<string, unknown>,
 ): Pick<
@@ -137,6 +150,9 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
             grounding_game: groundingGameOf(i.grounding_game),
             grounding_bank: str(i.grounding_bank, 20),
             ...intervalFieldsOf(i),
+            // Rides along with any tool (see metronome.ts) — absent unless the coach asked for a
+            // pulse, and bounded here so a stored session never holds a tempo nobody can play.
+            ...metronomeFieldsOf(i),
             // Bounded here too, so a stored session never holds an out-of-range sit.
             meditate_interval_min:
               num(i.meditate_interval_min) === undefined

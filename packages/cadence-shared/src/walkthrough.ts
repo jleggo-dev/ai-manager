@@ -23,6 +23,7 @@ import { type GroundingGame, type GroundingSpec, groundingSpec, isGroundingGame 
 import { type JournalBankId, isJournalBankId, journalBank, todaysPhrasing } from './journal.ts';
 import { clampFreeWriteMinutes } from './freewrite.ts';
 import { type IntervalPlan, intervalTotalMinutes, singleSetPlan } from './interval.ts';
+import { type MetronomeSpec, normalizeMetronome } from './metronome.ts';
 
 /* ── The tool catalog ────────────────────────────────────────────────────────────────────────
    Three capture classes (see `stepCaptureMode`):
@@ -92,6 +93,9 @@ export interface WalkthroughStep {
   minutes: number;
   tool: StepTool;
   video_query?: string;
+  /** A pulse to practise to, riding alongside the tool — see metronome.ts. Set only where the
+   *  coach asked for one, which is what keeps a click off the plank and the sit. */
+  metronome?: MetronomeSpec;
   skippable: boolean;
   core?: boolean;
 }
@@ -333,6 +337,9 @@ export function deriveWalkthrough(session: OccurrenceSession | null | undefined)
       if (block.label) step.group = block.label;
       if (item.detail) step.body = item.detail;
       if (item.video_query) step.video_query = item.video_query;
+      // Rides along with whatever tool was inferred above — never replaces it.
+      const metronome = normalizeMetronome(item.metronome_bpm, item.metronome_meter);
+      if (metronome) step.metronome = metronome;
       steps.push(step);
     }
   }

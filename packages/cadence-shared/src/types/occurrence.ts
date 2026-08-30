@@ -92,6 +92,13 @@ export interface SessionItem {
   interval_warmup_sec?: number;
   /** `interval` only — seconds of cool-down after the last round. Absent = none. */
   interval_cooldown_sec?: number;
+  /** ANY tool — a pulse to practise to, in quarter-note bpm. Like `video_query` this rides along
+   *  with whatever tool the step has rather than being one: a scales step is a timer step that
+   *  happens to have a beat. Absent = no metronome, which is the case for almost every step.
+   *  Bounds live in metronome.ts, never in coach output. */
+  metronome_bpm?: number;
+  /** Beats to a bar for the accent (default 4). Ignored unless `metronome_bpm` is set. */
+  metronome_meter?: number;
 }
 
 export interface SessionBlock {
