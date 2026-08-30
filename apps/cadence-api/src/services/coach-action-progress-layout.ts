@@ -23,7 +23,7 @@ import type { CoachActionTool } from './coach-action-types.ts';
 export const PROPOSE_PROGRESS_LAYOUT: CoachActionTool = {
   name: 'propose_progress_layout',
   description:
-    'Propose a new Progress page for them to look at, built from what they just told you progress means to them. Use it the moment they ask their Progress page to watch something different, or tell you in their own words what progress looks like to them ("I don\'t care about a streak, I want to see the pages I have written"). This does NOT change anything on their Progress page today — it puts up a proposal card, and their page stays exactly as it is until they tap to accept it. Pass {"what_they_want": "wants to see pages written, not a daily streak"} — your own compact summary of what they said, in plain words, never a copy of the whole sentence. Say ONE short line that the proposal is up, then STOP: do not describe the sections yourself — the card is about to show them, and you have not composed it.',
+    'Propose a new Progress page for them to look at, built from what they just told you progress means to them. Use it the moment they ask their Progress page to watch something different, or tell you in their own words what progress looks like to them ("I don\'t care about a streak, I want to see the pages I have written"). This does NOT change anything on their Progress page today — it puts up a proposal card, and their page stays exactly as it is until they tap to accept it. Pass {"what_they_want": "wants to see pages written, not a daily streak"}. Say ONE short line that the proposal is up, then STOP: do not describe the sections yourself — the card is about to show them, and you have not composed it.',
   parameters: {
     properties: {
       what_they_want: {

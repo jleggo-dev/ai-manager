@@ -42,7 +42,7 @@ function confirmReceipt(sections: WidgetSpec[]): string {
  * "Your Progress page, rearranged" — the progress talk's preview card (Wave 3, W3-2 client half;
  * docs/cadence/PROGRESS-ENGINE.md "The progress talk").
  *
- * ChangeCard/WeekReviewCard's third sibling: `compose_progress_view` writes a DRAFT layout
+ * ChangeCard/WeekReviewCard's third sibling: `propose_progress_layout` writes a DRAFT layout
  * server-side rather than the composition landing in the chat wire — the chat is pure SSE prose, a
  * tool call never reaches the browser — so this asks the server what is pending and draws nothing
  * when the answer is nothing. A turn that describes the new page loosely, or gets it wrong, still
@@ -58,8 +58,10 @@ export function LayoutProposalCard({ onConfirmed }: { onConfirmed?: (receiptText
   const [state, setState] = useState<'idle' | 'committing' | 'gone' | 'failed'>('idle');
 
   // Nothing pending (never proposed, already committed, dismissed elsewhere) — render nothing
-  // rather than an empty frame promising a page that isn't there.
-  if (!draft || state === 'gone') return null;
+  // rather than an empty frame promising a page that isn't there. The shape guard is insurance,
+  // not policy: the validator gates every write, but a card must never be able to take the whole
+  // Coach tab down over one malformed row.
+  if (!draft?.layout?.sections?.length || state === 'gone') return null;
 
   const sections = draft.layout.sections;
 

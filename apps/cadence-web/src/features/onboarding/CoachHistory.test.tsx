@@ -1,5 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 import { OnboardingChat } from './OnboardingChat.tsx';
+
+// OnboardingChat mounts LayoutProposalCard, whose draft poll is a real useQuery (W3-2) — every
+// render needs a QueryClientProvider now, same wrapper OnboardingChat.test.tsx uses.
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 import { writeCachedTranscript } from './coach-transcript-cache.ts';
 
 const getCurrentCoach = vi.fn();
@@ -18,6 +27,7 @@ vi.mock('../../lib/api.ts', () => ({
   postHealthDigest: vi.fn().mockResolvedValue(true),
   postWorkoutHistory: vi.fn().mockResolvedValue(true),
   getPendingChange: vi.fn().mockResolvedValue(null),
+  getProgressLayoutDraft: vi.fn().mockResolvedValue(null),
   // ChangeCard also reads the per-item detail now (to pick Show me vs inline Apply) — same
   // pre-existing-gap reasoning as getPendingWeekReview just below.
   getPendingChangeDetail: vi.fn().mockResolvedValue({ plan_version: null, items: [] }),
