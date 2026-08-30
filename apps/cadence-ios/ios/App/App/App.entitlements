@@ -21,5 +21,13 @@
 	<array>
 		<string>Default</string>
 	</array>
+
+	<!-- Communication Notifications. Without this, UNNotificationContent.updating(from: intent) in
+	     CadenceCoachIdentityPlugin throws at runtime (caught by a `try?`), so notifications silently
+	     fall back to the plain app icon instead of the coach's portrait — the App ID needs the
+	     matching "Communication Notifications" capability enabled in the Apple Developer portal, or
+	     signing fails the same way aps-environment did before that capability was added. -->
+	<key>com.apple.developer.usernotifications.communication</key>
+	<true/>
 </dict>
 </plist>
