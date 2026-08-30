@@ -51,6 +51,12 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<!-- Required alongside the Communication Notifications entitlement: an app that donates
+	     INSendMessageIntent must declare it here, or the donation/updating(from:) call is refused. -->
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>INSendMessageIntent</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
