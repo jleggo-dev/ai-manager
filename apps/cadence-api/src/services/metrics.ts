@@ -10,6 +10,38 @@ import type { Occurrence, StreakDay, StreakParams, StreakState, StreakView } fro
 export type ConsistencyOccurrence = Pick<Occurrence, 'date' | 'status'>;
 
 /**
+ * The scheduled-days-only denominator, shared: how many of `days` (YYYY-MM-DD strings) had
+ * ANYTHING scheduled at all (`scheduled`), and how many of those were done (`kept`). A date
+ * absent from `occurrences` entirely is a genuine gap — nothing was ever due — and leaves both
+ * counters alone rather than silently counting as a miss (check-in rebuild, step 6; BRAND.md's
+ * no-streak-shame rule). Pure. `rollingConsistency` (trailing N days from today) and the Progress
+ * Engine's rhythm resolver (Monday-start week buckets) both fold their day list through this ONE
+ * function — extracted so the denominator math is never forked between the two callers.
+ */
+export function keptScheduledForDays(
+  occurrences: ConsistencyOccurrence[],
+  days: string[],
+): { kept: number; scheduled: number } {
+  // Normalize each occurrence date to a YYYY-MM-DD string — the DB driver returns `date` columns
+  // as JS Date objects, which would never match the ISO strings we probe the set with.
+  const doneDays = new Set(
+    occurrences.filter((o) => o.status === 'done').map((o) => new Date(o.date).toISOString().slice(0, 10)),
+  );
+  // ANY occurrence on a date — regardless of status — means something was actually due that day.
+  // A date with no entry here never had anything scheduled at all.
+  const scheduledDays = new Set(occurrences.map((o) => new Date(o.date).toISOString().slice(0, 10)));
+  let kept = 0;
+  let scheduled = 0;
+  for (const key of days) {
+    if (scheduledDays.has(key)) {
+      scheduled++;
+      if (doneDays.has(key)) kept++;
+    }
+  }
+  return { kept, scheduled };
+}
+
+/**
  * Rolling-window consistency: how many of the last `windowDays` days had ≥1 completed
  * occurrence, as kept/window (e.g. "5 of 7"). Replaces streaks per BRAND.md — a missed day
  * lowers the ratio, it NEVER resets progress to zero ("hearth, not scoreboard"). Pure.
@@ -29,26 +61,14 @@ export function rollingConsistency(
   today = new Date(),
   windowDays = 7,
 ): { kept: number; window: number } {
-  // Normalize each occurrence date to a YYYY-MM-DD string — the DB driver returns `date` columns
-  // as JS Date objects, which would never match the ISO strings we probe the set with.
-  const doneDays = new Set(
-    occurrences.filter((o) => o.status === 'done').map((o) => new Date(o.date).toISOString().slice(0, 10)),
-  );
-  // ANY occurrence on a date — regardless of status — means something was actually due that day.
-  // A date with no entry here never had anything scheduled at all.
-  const scheduledDays = new Set(occurrences.map((o) => new Date(o.date).toISOString().slice(0, 10)));
-  let kept = 0;
-  let window = 0;
+  const days: string[] = [];
   const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
   for (let i = 0; i < windowDays; i++) {
-    const key = d.toISOString().slice(0, 10);
-    if (scheduledDays.has(key)) {
-      window++;
-      if (doneDays.has(key)) kept++;
-    }
+    days.push(d.toISOString().slice(0, 10));
     d.setUTCDate(d.getUTCDate() - 1);
   }
-  return { kept, window };
+  const { kept, scheduled } = keptScheduledForDays(occurrences, days);
+  return { kept, window: scheduled };
 }
 
 /* ────────────────────────────────────────────────────────────────

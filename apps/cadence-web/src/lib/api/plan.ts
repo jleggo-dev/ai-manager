@@ -3,6 +3,7 @@ import type {
   PendingPlanActivity,
   PendingWeekReview,
   ProgressData,
+  ProgressWindow,
   StreakView,
 } from '@cadence/shared';
 import { BASE, headers, timeoutSignal } from './http.ts';
@@ -445,8 +446,11 @@ export async function dismissPlanPreview(): Promise<void> {
 }
 
 /* ── Progress dashboard ────────────────────────────────────────── */
-export async function getProgress(): Promise<ProgressData> {
-  const res = await fetch(`${BASE}/progress`, { headers: headers() });
+/** `window` omitted keeps the ORIGINAL /progress behavior (backwards compatible — see the API's
+ *  progress-window.ts). 'week' | 'month' | 'all' re-derives series/consistency/history sizing. */
+export async function getProgress(window?: ProgressWindow): Promise<ProgressData> {
+  const q = window ? `?window=${window}` : '';
+  const res = await fetch(`${BASE}/progress${q}`, { headers: headers() });
   if (!res.ok) throw new Error(`progress failed: ${res.status}`);
   return res.json();
 }

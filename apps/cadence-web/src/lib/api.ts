@@ -104,6 +104,13 @@ export {
 } from './api/plan.ts';
 
 export {
+  getProgressHistory,
+  type ProgressHistory,
+  type HistoryOccurrence,
+  type HistoryEpisodeRange,
+} from './api/progress-history.ts';
+
+export {
   getOccurrenceDetail,
   logOccurrence,
   recordWeighIn,

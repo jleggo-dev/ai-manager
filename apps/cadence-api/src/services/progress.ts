@@ -17,6 +17,7 @@ import type {
   ProgressCard,
   ProgressData,
   ProgressTrend,
+  ProgressWindow,
   SeriesPoint,
 } from '@cadence/shared';
 import { listGoalsByStatus } from '../repos/goals.ts';
@@ -28,8 +29,8 @@ import { listNutritionLogs } from '../repos/nutrition.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { paceRead } from './weight-trend.ts';
 import { rollingConsistency } from './metrics.ts';
+import { resolveWindowConfig } from './progress-window.ts';
 
-const WINDOW_DAYS = 90;
 const LB_PER_KG = 2.2046226218;
 const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
@@ -89,8 +90,14 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 const COUNTABLE_UNIT = /book|session|class|workout|chapter|badge|race/i;
 const WEIGHTY_UNIT = /^(kg|kgs|lb|lbs|pound|pounds)$/i;
 
-export async function buildProgress(userId: string): Promise<ProgressData> {
-  const from = iso(Date.now() - WINDOW_DAYS * 86_400_000);
+/**
+ * `window` is optional and OMITTED means the original, pre-window behavior (90d series / 7d
+ * consistency / 40 history rows) — see progress-window.ts's `LEGACY_WINDOW_CONFIG`. Passing
+ * 'week' | 'month' | 'all' re-derives every one of those from the shared mapping instead.
+ */
+export async function buildProgress(userId: string, window?: ProgressWindow): Promise<ProgressData> {
+  const { seriesDays, consistencyDays, historyCap } = resolveWindowConfig(window);
+  const from = iso(Date.now() - seriesDays * 86_400_000);
   // confirmed AND committed: a count goal ("read 100 books") is trackable even if it never
   // produces plan activities, and replan-era goals can sit at confirmed indefinitely.
   const [goals, user, rows, events] = await Promise.all([
@@ -188,20 +195,29 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
       });
     } else if (g.type === 'recurring') {
       const now = new Date();
-      const past = await listOccurrences(userId, iso(Date.now() - 6 * 86_400_000), iso(Date.now()));
-      const { kept, window } = rollingConsistency(past, now, 7);
-      cards.push({ kind: 'consistency', area: g.area, title: g.title, kept, window });
+      const past = await listOccurrences(userId, iso(Date.now() - (consistencyDays - 1) * 86_400_000), iso(Date.now()));
+      // Local name avoids shadowing the `window` PARAMETER above (ProgressWindow | undefined) —
+      // this is rollingConsistency's OWN `{ kept, window }` return shape (kept/scheduled pair).
+      const { kept, window: scheduled } = rollingConsistency(past, now, consistencyDays);
+      cards.push({ kind: 'consistency', area: g.area, title: g.title, kept, window: scheduled });
     }
   }
 
   // Observe-phase food card — appears only when meals are actually logged (stable chrome,
-  // variable content). days_logged doubles as the nutrition module's phase signal.
+  // variable content). days_logged doubles as the nutrition module's phase signal. Same
+  // window-derived trailing days as the recurring-goal consistency above (never a fork).
   const foodDays = summarizeNutrition(
-    await listNutritionLogs(userId, iso(Date.now() - 6 * 86_400_000), iso(Date.now())),
-    7,
+    await listNutritionLogs(userId, iso(Date.now() - (consistencyDays - 1) * 86_400_000), iso(Date.now())),
+    consistencyDays,
   ).days_logged;
   if (foodDays > 0)
-    cards.push({ kind: 'consistency', area: 'nourishment', title: 'Food log', kept: foodDays, window: 7 });
+    cards.push({
+      kind: 'consistency',
+      area: 'nourishment',
+      title: 'Food log',
+      kept: foodDays,
+      window: consistencyDays,
+    });
 
   /* Activity trends — only titles with ≥2 honest points (sparse-but-honest rule) */
   const trends: ProgressTrend[] = [];
@@ -237,7 +253,7 @@ export async function buildProgress(userId: string): Promise<ProgressData> {
     })),
   ]
     .sort((a, b) => (a.at < b.at ? 1 : -1))
-    .slice(0, 40);
+    .slice(0, historyCap);
 
   return { cards, trends, history };
 }
