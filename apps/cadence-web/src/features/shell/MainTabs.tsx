@@ -207,7 +207,14 @@ export function MainTabs({
             </button>
           </>
         </div>
-        {tab === 'progress' && <ProgressView />}
+        {tab === 'progress' && (
+          <ProgressView
+            onCoach={(note) => {
+              setCoachNote(note);
+              setTab('coach');
+            }}
+          />
+        )}
         {tab !== 'coach' && !food && (
           <button className="fab" onClick={() => setLogDidOpen(true)} aria-label="Log something you did">
             ＋

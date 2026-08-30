@@ -29,3 +29,22 @@ export async function countGoalCompletions(userId: string, goalId: string): Prom
     where user_id = ${userId} and goal_id = ${goalId} and kind = 'completion'`;
   return Number(row?.n ?? 0);
 }
+
+/**
+ * Events in [fromDate, toDate], newest first — the `shelf` widget's bests-and-firsts window
+ * (Progress Engine W1-5). Dates compared on `at::date` so a from/to pair of YYYY-MM-DD strings
+ * behaves the same way `listOccurrences`/`listNutritionLogs` already treat their date ranges,
+ * without pulling in a time-of-day edge case at either boundary.
+ */
+export async function listGoalEventsInRange(
+  userId: string,
+  fromDate: string,
+  toDate: string,
+  limit = 200,
+): Promise<GoalEvent[]> {
+  return sql<GoalEvent[]>`
+    select event_id, user_id, goal_id, kind, label, at::text as at, meta
+    from cadence.goal_events
+    where user_id = ${userId} and at::date >= ${fromDate} and at::date <= ${toDate}
+    order by at desc limit ${limit}`;
+}

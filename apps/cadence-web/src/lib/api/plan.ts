@@ -3,7 +3,10 @@ import type {
   PendingPlanActivity,
   PendingWeekReview,
   ProgressData,
+  ProgressWindow,
+  RhythmWeek,
   StreakView,
+  WeeklyBarsPayload,
 } from '@cadence/shared';
 import { BASE, headers, timeoutSignal } from './http.ts';
 
@@ -366,6 +369,12 @@ export interface WeekReviewFacts {
   period: { from: string; to: string };
   days: WeekReviewDay[];
   weigh_in: WeekReviewWeighIn | null;
+  /** Progress Engine parcel W2-2 — additive, contract-shaped twins of `days` above; optional so a
+   *  test fixture built before this field existed still type-checks. See the server's
+   *  week-review-widgets.ts for what each one means; RollupCards.tsx for which is actually
+   *  rendered and why the other stays a data-only addition for now. */
+  rhythm_week?: RhythmWeek;
+  meals_week?: WeeklyBarsPayload;
 }
 
 /**
@@ -374,9 +383,17 @@ export interface WeekReviewFacts {
  * dismissed on another device, a server hiccup) the same way `getPendingChange`/`getPlan` already
  * collapse "couldn't load" and "nothing to load" into one falsy answer: the sheet has one honest
  * fallback message for all of them, not a diagnosis.
+ *
+ * `week` (Progress Engine parcel W2-2, YYYY-MM-DD — any date in the target week) is OPTIONAL and
+ * unused by the sheet itself today (it still always opens the pending pointer's own week); it's
+ * here so this one fetch stays the single client-side entry point for the server's new
+ * `?week=` param, matching "extend the existing facts api fn in place, no new hooks."
  */
-export async function getWeekReviewFacts(): Promise<{ review: PendingWeekReview; facts: WeekReviewFacts } | null> {
-  const res = await fetch(`${BASE}/plan/week-review/facts`, { headers: headers() });
+export async function getWeekReviewFacts(
+  week?: string,
+): Promise<{ review: PendingWeekReview; facts: WeekReviewFacts } | null> {
+  const qs = week ? `?week=${encodeURIComponent(week)}` : '';
+  const res = await fetch(`${BASE}/plan/week-review/facts${qs}`, { headers: headers() });
   if (!res.ok) return null;
   return res.json();
 }
@@ -445,8 +462,11 @@ export async function dismissPlanPreview(): Promise<void> {
 }
 
 /* ── Progress dashboard ────────────────────────────────────────── */
-export async function getProgress(): Promise<ProgressData> {
-  const res = await fetch(`${BASE}/progress`, { headers: headers() });
+/** `window` omitted keeps the ORIGINAL /progress behavior (backwards compatible — see the API's
+ *  progress-window.ts). 'week' | 'month' | 'all' re-derives series/consistency/history sizing. */
+export async function getProgress(window?: ProgressWindow): Promise<ProgressData> {
+  const q = window ? `?window=${window}` : '';
+  const res = await fetch(`${BASE}/progress${q}`, { headers: headers() });
   if (!res.ok) throw new Error(`progress failed: ${res.status}`);
   return res.json();
 }

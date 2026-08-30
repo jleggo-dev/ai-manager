@@ -2,35 +2,46 @@
  * The Week review routes — split out of plan.ts (already at its size gate) rather than grown
  * inside it, the same way coach-food.ts sits beside coach.ts. Mounted under /plan so the URLs read
  * exactly as if they lived there: GET /plan/week-review/pending, POST /plan/week-review/dismiss,
- * GET /plan/week-review/facts, plus the write-back trio below (check-in rebuild, step 5):
- * POST /plan/week-review/session, /meal, /mind-step.
+
+ * GET /plan/week-review/facts[?week=YYYY-MM-DD] (W2-2), the write-back trio (check-in rebuild,
+ * step 5): POST /plan/week-review/session, /meal, /mind-step, and `recap` (Progress Engine W2-1)
+ * below them.
  *
  * The pending/dismiss pair mirrors /plan/pending-change precisely: the coach's `open_week_review`
  * tool (coach-action-week-review.ts) is the only writer of the POINTER, the client polls this GET
  * on a finished turn, and renders a labelled card from whatever it finds — never from the turn's
  * own prose. `facts` is the full week that pointer names — what the review sheet (check-in
- * rebuild, step 4) renders once the card's "Open" is tapped.
+ * rebuild, step 4) renders once the card's "Open" is tapped. Progress Engine parcel W2-2 adds the
+ * optional `week` param (this same screen, scoped to an arbitrary week — see the route's own doc)
+ * without touching that default, pointer-driven behavior.
  *
  * The write-back trio is thin CRUD onto `week-review-write.ts` — no model, never reached via
  * coach-actions.ts. The sheet applies each toggle optimistically and calls one of these behind it;
- * `dismiss` above is what "Confirm my week" calls when the user is done, since nothing about
- * finishing a review needs a write of its own — every correction already landed per-toggle.
+ * `dismiss` is what BOTH "Confirm my week" and the pending card's own "Not now" call today — the
+ * two are indistinguishable to the server there, which is exactly why `recap`, added for W2-1, is
+ * its OWN route rather than folded into dismiss: a card dismissed unopened must never read as a
+ * confirmed week.
  */
 import { Router, type Request, type Response } from 'express';
+import type { PendingWeekReview } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { getUser, setPendingWeekReview } from '../repos/users.ts';
 import { buildWeekReviewFacts } from '../services/week-review-facts.ts';
 import { confirmSession, toggleMealSlot, toggleMindStep } from '../services/week-review-write.ts';
+import { writeRecapForReview } from '../services/recap-write.ts';
+import { addDaysIso, mondayOnOrBefore } from '../services/progress-rhythm.ts';
 import {
   BodyValidationError,
   parseBody,
   weekReviewSessionBodySchema,
   weekReviewMealBodySchema,
   weekReviewMindStepBodySchema,
+  weekReviewRecapBodySchema,
 } from '../validation/body.ts';
 
 const router = Router();
 router.use(requireCadenceUser);
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * GET /plan/week-review/pending — the plan week `open_week_review` last put up, if the user
@@ -63,20 +74,33 @@ router.post('/week-review/dismiss', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /plan/week-review/facts — the full week the pending pointer names, computed
- * (`buildWeekReviewFacts`) for the read-only review sheet (check-in rebuild, step 4). No query
- * params: the pending pointer already IS the window (a parameterized arbitrary range — "last
- * week", a quarter — is DESIGN-check-in.md's coach-tool path, not this screen). A user with
- * nothing pending has no week to open, so 404 rather than guessing a default window that would
- * silently show the wrong one.
+ * GET /plan/week-review/facts[?week=YYYY-MM-DD] — the full week computed (`buildWeekReviewFacts`)
+ * for the read-only review sheet (check-in rebuild, step 4). `week` OMITTED is exactly the
+ * original behavior (backwards compatible): the pending pointer already IS the window, and a user
+ * with nothing pending has no week to open, so 404 rather than guessing a default. `week` given
+ * (Progress Engine parcel W2-2 — this same screen, scoped to an arbitrary week) snaps to that
+ * week's Monday and reads the window directly, bypassing the pending pointer entirely — the
+ * pointer only ever names ONE week (the one `open_week_review` last put up), so an explicit
+ * `week` and "nothing pending" are not in conflict.
  */
 router.get('/week-review/facts', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
+  const weekRaw = req.query.week;
+  if (weekRaw !== undefined && (typeof weekRaw !== 'string' || !ISO_DATE_RE.test(weekRaw))) {
+    return void res.status(400).json({ error: 'week must be YYYY-MM-DD' });
+  }
   try {
-    const review = (await getUser(userId))?.pending_week_review ?? null;
-    if (!review) {
-      res.status(404).json({ error: 'no review pending' });
-      return;
+    let review: PendingWeekReview;
+    if (typeof weekRaw === 'string') {
+      const from = mondayOnOrBefore(weekRaw);
+      review = { from, to: addDaysIso(from, 6), built_at: new Date().toISOString() };
+    } else {
+      const pending = (await getUser(userId))?.pending_week_review ?? null;
+      if (!pending) {
+        res.status(404).json({ error: 'no review pending' });
+        return;
+      }
+      review = pending;
     }
     const facts = await buildWeekReviewFacts(userId, review.from, review.to);
     res.json({ review, facts });
@@ -138,6 +162,32 @@ router.post('/week-review/mind-step', async (req: Request, res: Response) => {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/week-review/mind-step]', err);
     res.status(500).json({ error: 'toggle failed' });
+  }
+});
+
+/**
+ * POST /plan/week-review/recap (Progress Engine W2-1) — the confirm anchor: persists this week's
+ * recap (`cadence.recaps`) so the `recap_rail` widget has it. `dismiss` above is the only route
+ * "Confirm my week" AND the card's own "Not now" both call today — they are indistinguishable to
+ * the server there — so a real confirmation needs its OWN write, never piggybacked on dismiss.
+ * The window is never taken from the body: it's the user's CURRENT `pending_week_review`, same
+ * trust boundary `facts` uses, so a stale card can't write a recap for the wrong (or no) week. Not
+ * yet called by the client — see the parcel report for the one-line wiring another parcel owns.
+ */
+router.post('/week-review/recap', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const { line } = parseBody(weekReviewRecapBodySchema, req.body);
+    const user = await getUser(userId);
+    const review = user?.pending_week_review ?? null;
+    if (!review) return void res.status(404).json({ error: 'no review pending' });
+    const unit: 'kg' | 'lb' = user?.baseline?.weight_unit === 'lbs' ? 'lb' : 'kg';
+    await writeRecapForReview(userId, review, unit, line);
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /plan/week-review/recap]', err);
+    res.status(500).json({ error: 'recap failed' });
   }
 });
 

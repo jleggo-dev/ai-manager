@@ -81,16 +81,20 @@ export async function endActiveEpisode(userId: string, episodeId: string): Promi
 }
 
 /** Episode date-ranges (active OR ended) overlapping [from, to] — feeds the streak's `inEpisode`
- *  shield, so a no-show inside a past disrupted stretch never counts as a slip. */
+ *  shield, so a no-show inside a past disrupted stretch never counts as a slip. `type` rides along
+ *  too (added for the Progress Engine's rhythm resolver, which labels a week's shelter band —
+ *  "travel detour" etc.) without a second query; existing callers that only read start/end are
+ *  unaffected. Ordered oldest-first for determinism when a caller picks "the" overlapping episode. */
 export async function listEpisodeRanges(
   userId: string,
   from: string,
   to: string,
-): Promise<Array<{ start: string; end: string }>> {
-  return sql<Array<{ start: string; end: string }>>`
-    select to_char(start_date, 'YYYY-MM-DD') as start, to_char(end_date, 'YYYY-MM-DD') as end
+): Promise<Array<{ start: string; end: string; type: DisruptedEpisode['type'] }>> {
+  return sql<Array<{ start: string; end: string; type: DisruptedEpisode['type'] }>>`
+    select to_char(start_date, 'YYYY-MM-DD') as start, to_char(end_date, 'YYYY-MM-DD') as end, type
     from cadence.episodes
-    where user_id = ${userId} and start_date <= ${to} and end_date >= ${from}`;
+    where user_id = ${userId} and start_date <= ${to} and end_date >= ${from}
+    order by start_date asc`;
 }
 
 /** Replace the active episode's equipment list (the mid-window revision — see

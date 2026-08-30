@@ -13,17 +13,60 @@ export const queryKeys = {
   plan: {
     all: ['plan'] as const,
   },
-  /** The `/progress` dashboard (PERF-01) — one key, refetched on the ＋1 event path. */
+  /** The `/progress` dashboard (PERF-01) — `all` is the unwindowed default (refetched on the
+   *  ＋1 event path, unchanged); `window` adds the 'week' | 'month' | 'all' variant so each
+   *  window paints from its own cache entry instead of fighting over one key. */
   progress: {
     all: ['progress'] as const,
+    window: (w: 'week' | 'month' | 'all') => ['progress', w] as const,
+  },
+  /** `GET /progress/history?from&to` — the rhythm widget's raw inputs + assembled payload. */
+  progressHistory: {
+    range: (from: string, to: string) => ['progressHistory', from, to] as const,
+  },
+  /** `/me/progress-layout` (the Progress Engine's layout store, W1-4) — the committed layout, or
+   *  the deterministic default when the user has none. Invalidate after a commit (Wave 3). */
+  progressLayout: {
+    all: ['progressLayout'] as const,
+    /** `/me/progress-layout/draft` (Wave 3, W3-2) — the coach's proposed layout, awaiting the
+     *  card's "Set my page this way"/"Not now". A separate key from `all` on purpose: committing
+     *  invalidates `all` (the page repaints), never `draft` itself — the draft is gone by then. */
+    draft: ['progressLayout', 'draft'] as const,
   },
   /** `/me/weather` (PERF-03) — the trail header's one line of sky. */
   weather: {
     all: ['weather'] as const,
   },
+  /** `/me/health-digest` (W1-6) — stored HealthKit summaries; the steps `weekly_bars` widget. */
+  healthDigest: {
+    all: ['healthDigest'] as const,
+  },
+  /** `/me/sessions` (W1-3) — the `dated_sessions` widget + its drill-down list, keyed by the
+   *  activity title + window so each combination caches independently. */
+  datedSessions: {
+    all: ['datedSessions'] as const,
+    scoped: (activity: string, window: string) => ['datedSessions', activity, window] as const,
+  },
   /** `/me/daily-checkin` (PERF-03) — is the one unprompted moment due today. */
   dailyCheckin: {
     all: ['dailyCheckin'] as const,
+  },
+  /** The non-temporal Progress Engine reads (routes/progress-extras.ts, W1-5) — one key per
+   *  endpoint × its params, since (unlike `progress`/`plan`) each of these is scoped to a
+   *  window and sometimes a goal, not a single shared view. */
+  progressExtras: {
+    events: (from: string, to: string) => ['progressExtras', 'events', from, to] as const,
+    balance: (kind: string, window: string) => ['progressExtras', 'balance', kind, window] as const,
+    totals: (goalId: string, window: string) => ['progressExtras', 'totals', goalId, window] as const,
+    variety: (window: string, meal?: string) => ['progressExtras', 'variety', window, meal ?? 'dinner'] as const,
+    stagePath: (goalId: string) => ['progressExtras', 'stagePath', goalId] as const,
+    count: (goalId: string) => ['progressExtras', 'count', goalId] as const,
+  },
+  /** `/me/recaps` (the `recap_rail` widget, Progress Engine W2-1) — weekly check-in recaps,
+   *  persisted at confirm time. Scoped by `limit` so the rail's own default doesn't collide with a
+   *  caller asking for more. */
+  recaps: {
+    scoped: (limit: number) => ['recaps', limit] as const,
   },
 } as const;
 

@@ -11,6 +11,8 @@ import {
   DOSSIER_FUNCTIONS,
   ALWAYS_ACTIONS,
   TURN_FLOOR_FUNCTIONS,
+  DRAWER_HOOKS,
+  TOOL_CATEGORIES,
 } from './coach-tool-tiers.ts';
 
 /**
@@ -28,6 +30,30 @@ import {
  * at all. The shape is what matters more than the arithmetic: a new READ is now free forever,
  * which is the property the owner actually asked for.
  */
+
+/**
+ * The drawer's label (owner ruling 2026-08-30 — coach-tool-tiers.ts, above DRAWER_HOOKS): the
+ * carried find_tools description IS the index of what she could go looking for — the categories
+ * she already knows, each member with its hook — generated, never hand-written. The old
+ * hand-written version listed READ topics only, so a tail ACTION was invisible by the drawer's
+ * own signage; the label she now reads in the same generation that decides is the cheap
+ * experiment against the measured follow-through failure (see the tiers doc — kept distinct
+ * there, honestly). Bounded by coach-drawer-index.test.ts so it stays cheap as the tail grows.
+ */
+function drawerLabel(): string {
+  const sections = TOOL_CATEGORIES.map(
+    ({ label, members }) =>
+      `${label}: ` +
+      members
+        .map((name) => `${name} (${DRAWER_HOOKS[name] ?? ''})${isActionName(name) ? ' [changes their data]' : ''}`)
+        .join('; ') +
+      '.',
+  );
+  return [
+    'The rest of your toolkit, by area — none of it is loaded until you ask. Use this whenever the turn touches one of these areas and you are not already holding the tool for it: pass {"query": "..."} to search, or omit it to list everything, then call use_tool with what you find. Looking does NOT change anything; tools marked [changes their data] follow their own contracts when run.',
+    ...sections,
+  ].join('\n');
+}
 
 /** One line per tool, cheap enough that she can scan the whole tail. Actions are marked, because
  *  the difference between reading something and changing it is the one she must never blur. */
@@ -128,8 +154,7 @@ export interface MetaTool {
 export const COACH_META_TOOLS: Record<string, MetaTool> = {
   [FIND_TOOLS_NAME]: {
     name: FIND_TOOLS_NAME,
-    description:
-      'Look up the other things you can read about this user — recorded workouts, journal, recipes, saved foods, equipment, what they practice and already know, practice totals, food log and nutrition targets. None are loaded until you ask. Use whenever a question needs detail you were not already given, then call use_tool with what you find. This does NOT change anything; it only tells you what exists and how to call it. Pass {"query": "workouts"} to search by topic.',
+    description: drawerLabel(),
     parameters: {
       properties: {
         query: {

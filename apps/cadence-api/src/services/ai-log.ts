@@ -26,7 +26,8 @@ export type AiLogKind =
   | 'parse_fridge_photo'
   | 'generate_recipe'
   | 'generate_meal_plan'
-  | 'discover_recipe';
+  | 'discover_recipe'
+  | 'progress_layout_compose';
 
 /**
  * Durable log of a behind-the-scenes AI call (see migration 0004). Best-effort: a logging

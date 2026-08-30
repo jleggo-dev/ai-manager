@@ -12,6 +12,7 @@ import { IntervalPreview } from './IntervalPreview.tsx';
 import { CoachMomentsPreview } from './CoachMomentsPreview.tsx';
 import { PlanCardPreview } from './PlanCardPreview.tsx';
 import { SkeletonPreview } from './SkeletonPreview.tsx';
+import { WidgetsPreview } from './WidgetsPreview.tsx';
 
 /**
  * `?preview=<tool>` — render ONE component against fixture data, short-circuiting auth and the
@@ -32,6 +33,7 @@ const PREVIEWS: Record<string, () => ReactNode> = {
   nowmenu: () => <NowMenuPreview />,
   plancard: () => <PlanCardPreview />,
   skeletons: () => <SkeletonPreview />,
+  widgets: () => <WidgetsPreview />,
 };
 
 export function previewScreen(name: string | null): ReactNode | null {

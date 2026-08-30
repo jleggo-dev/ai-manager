@@ -38,7 +38,18 @@ export {
   type LocalNudgePlan,
 } from './api/notification-prefs.ts';
 
-export { postHealthDigest, getHealthDigest, postWorkoutHistory } from './api/health.ts';
+export {
+  postHealthDigest,
+  getHealthDigest,
+  postWorkoutHistory,
+  getWorkoutHistory,
+  getDatedSessions,
+  type WorkoutHistoryListItem,
+  type DatedSessionListItem,
+  type DatedSessionsListResult,
+} from './api/health.ts';
+
+export { getProgressLayout } from './api/progress-layout.ts';
 
 export {
   prepareCoachFoodAction,
@@ -102,6 +113,13 @@ export {
   type WeekReviewWeighIn,
   type WeekReviewFacts,
 } from './api/plan.ts';
+
+export {
+  getProgressHistory,
+  type ProgressHistory,
+  type HistoryOccurrence,
+  type HistoryEpisodeRange,
+} from './api/progress-history.ts';
 
 export {
   getOccurrenceDetail,
@@ -285,3 +303,22 @@ export {
   type UserConstraint,
   type UnitsResponse,
 } from './api/me.ts';
+
+export {
+  getProgressEvents,
+  getProgressBalance,
+  getProgressTotals,
+  getProgressVariety,
+  getProgressStagePath,
+  getProgressCount,
+  type Omittable,
+} from './api/progress-extras.ts';
+
+export {
+  getProgressLayoutDraft,
+  commitProgressLayoutDraft,
+  dismissProgressLayoutDraft,
+  type ProgressLayoutDraft,
+} from './api/progress-layout.ts';
+
+export { getRecaps, postWeekReviewRecap, type RecapListItem, type RecapListResult } from './api/recaps.ts';

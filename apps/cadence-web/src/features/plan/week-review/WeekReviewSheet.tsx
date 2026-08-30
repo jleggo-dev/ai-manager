@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { dismissPendingWeekReview } from '../../../lib/api.ts';
+import { dismissPendingWeekReview, postWeekReviewRecap } from '../../../lib/api.ts';
 import { WeekReviewSkeleton } from '../SheetSkeletons.tsx';
 import { useWeekReview } from './useWeekReview.ts';
 import { WeeklyTasksList } from './WeeklyTasksList.tsx';
@@ -60,6 +60,9 @@ export function WeekReviewSheet({
     if (!facts || !initialFacts || confirming) return;
     setConfirming(true);
     const receipt = confirmReceipt(diffWeekReview(initialFacts, facts).summary);
+    // Persist the week's recap BEFORE dismiss clears the pending pointer the recap route reads
+    // (W2-1); swallowed like the dismiss — a lost recap never blocks the confirm moment.
+    await postWeekReviewRecap(receipt).catch(() => {});
     await dismissPendingWeekReview().catch(() => {});
     onClose();
     onConfirmed?.(receipt);

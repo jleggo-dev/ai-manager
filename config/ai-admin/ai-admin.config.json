@@ -2108,6 +2108,134 @@
         ],
         "formattingRules": []
       }
+    },
+    {
+      "slug": "progress-layout-compose",
+      "name": "progress_layout_compose",
+      "ai_profile_id": "<CADENCE_BROKER_PROFILE_UUID>",
+      "description": "Progress Engine composition (Wave 3 — docs/cadence/PROGRESS-ENGINE.md \"The progress talk\"). Goals + current layout + the widget grammar catalog + a data-availability summary + the user's own words for what progress means to them -> a proposed ProgressLayout. Always status=draft; never applied until the user confirms the card.",
+      "config": {
+        "expectedResponseFormat": "json",
+        "expectedSchema": {
+          "fields": {
+            "version": {
+              "type": "number"
+            },
+            "status": {
+              "type": "string"
+            },
+            "sections": {
+              "type": "array",
+              "items": {
+                "fields": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "allowedValues": [
+                      "rhythm",
+                      "trend_vs_target",
+                      "dated_sessions",
+                      "weekly_bars",
+                      "shelf",
+                      "stage_path",
+                      "count_toward",
+                      "balance",
+                      "total",
+                      "variety",
+                      "recap_rail",
+                      "history"
+                    ]
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "object",
+                    "nullable": true,
+                    "fields": {
+                      "measure": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "goal_id": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "activity": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "feedback_kind": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "window": {
+                        "type": "string",
+                        "nullable": true,
+                        "allowedValues": [
+                          "week",
+                          "month",
+                          "all",
+                          "inherit"
+                        ]
+                      }
+                    }
+                  },
+                  "caption": {
+                    "type": "object",
+                    "nullable": true,
+                    "fields": {
+                      "template": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "promptTemplate": "You are Cadence's Progress Engine composer (docs/cadence/PROGRESS-ENGINE.md \"The progress talk\"). The user just told their coach, in their own words, what progress means to them — or asked their Progress page to watch something different. Given the widget grammar catalog, their goals, their current page, and what can actually be bound right now, propose a new page.\n\nReturn exactly:\n{ \"version\": 1, \"status\": \"draft\", \"sections\": [ { \"id\": string, \"kind\": string, \"title\": string, \"source\": object|null, \"caption\": object|null } ] }\n\nRules:\n- kind must be one of the kinds listed in <catalog>. Never invent one.\n- A section's source may only point at a measure, goal, activity, or feedback kind that <availability> says exists right now — never one it does not.\n- Every section needs a warm title that NAMES THE GOAL OR THE THING BEING WATCHED, in the user's own language where you can — never a bare word like \"movement\", \"nourishment\", \"mind\", or \"practice\".\n- ORDER is the whole page, top to bottom, in the order you list the sections.\n- <what_they_want> is the coach's own summary of what the user said progress means to them — let it decide what leads. When their framing is not about a timeline or a trend (a total, a count, a variety, a practice held), put a kind <catalog> marks non-temporal FIRST, not a temporal one.\n- \"history\", if you include it, is ALWAYS the very last section, and at most once.\n- <current_layout> is what is on their screen today — this is a REVISION, not a blank page: keep what still serves them and change only what their words ask you to change, unless they asked to start over.\n- Ground every section in a real goal from <goals> or a real availability fact — never invent one.\n- Output JSON only, no prose, no markdown fences.\n\n<what_they_want>{{what_they_want}}</what_they_want>\n<goals>{{goals}}</goals>\n<current_layout>{{current_layout}}</current_layout>\n<availability>{{availability}}</availability>\n<catalog>{{catalog}}</catalog>",
+        "variables": [
+          {
+            "name": "what_they_want",
+            "required": true
+          },
+          {
+            "name": "goals"
+          },
+          {
+            "name": "current_layout"
+          },
+          {
+            "name": "availability"
+          },
+          {
+            "name": "catalog"
+          }
+        ],
+        "formattingRules": [
+          {
+            "type": "remove-reasoning"
+          },
+          {
+            "type": "trim-to-json"
+          },
+          {
+            "type": "repair-json"
+          },
+          {
+            "type": "require-keys",
+            "options": {
+              "keys": [
+                "sections"
+              ]
+            }
+          }
+        ]
+      }
     }
   ],
   "workflows": [

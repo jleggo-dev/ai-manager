@@ -1,6 +1,22 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { COACH_PICKS_FENCE, OPENING_PICKS, OPENING_PLACEHOLDER, OPENING_QUESTION } from '@cadence/shared';
 import { OnboardingChat } from './OnboardingChat.tsx';
+
+// LayoutProposalCard (the third pending-turn card, mounted unconditionally beside
+// ChangeCard/WeekReviewCard below) reads through `useProgressLayoutDraft`, a real `useQuery` —
+// unlike its siblings' plain fetch-on-mount. Every render needs a QueryClientProvider now; one
+// shared wrapper here keeps all the existing call sites below unchanged, `rerender` included.
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const result = rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return {
+    ...result,
+    rerender: (nextUi: ReactElement) =>
+      result.rerender(<QueryClientProvider client={client}>{nextUi}</QueryClientProvider>),
+  };
+}
 
 const sendCoachMessage = vi.fn();
 const openCoachSession = vi.fn();
@@ -52,6 +68,12 @@ vi.mock('../../lib/api.ts', () => ({
   // open_week_review, and its default answer is "nothing pending" so the card renders nothing.
   getPendingWeekReview: vi.fn().mockResolvedValue(null),
   dismissPendingWeekReview: vi.fn().mockResolvedValue(true),
+  // LayoutProposalCard, third sibling — same reasoning again: it mounts on every finished last
+  // turn and reads the draft through the query hook, so this must exist even in a chat test that
+  // never proposes a layout. Default "nothing pending" so the card renders nothing.
+  getProgressLayoutDraft: vi.fn().mockResolvedValue(null),
+  commitProgressLayoutDraft: vi.fn().mockResolvedValue(true),
+  dismissProgressLayoutDraft: vi.fn().mockResolvedValue(true),
   notifyOnCoachReply: vi.fn().mockResolvedValue(true),
   stopCoachTurn: vi.fn().mockResolvedValue(true),
 }));

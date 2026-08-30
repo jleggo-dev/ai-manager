@@ -21,8 +21,9 @@ import { listGoals, listGoalsByStatus } from '../../repos/goals.ts';
 import { listEquipment } from '../../repos/equipment.ts';
 import { getActivePlan } from '../../repos/plans.ts';
 import { listActivities } from '../../repos/activities.ts';
-import { listLoggedForProgress, listOccurrences, listRecentLogged } from '../../repos/occurrences.ts';
+import { listOccurrences, listRecentLogged } from '../../repos/occurrences.ts';
 import { buildProgress } from '../progress.ts';
+import { computePracticeTotals } from '../practice-totals.ts';
 import { activityHandle, ANYTIME } from '../plan-edit.ts';
 import { describeRecurrence } from '../scheduling.ts';
 import { FOOD_HEALTH_FUNCTIONS } from './food-health-functions.ts';
@@ -466,21 +467,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
       'Running totals of anything the user has counted in their session logs, per activity — words written, minutes meditated, pages read, reps done. Use for "how much have I written this month?" and for practice goals whose progress is a count they log rather than a weight or a pace. Reports up to a dozen totals, most-logged first. For overall goal numbers, use get_goal_progress. Pass {"days": 90} to set the period (default 30, up to 365).',
     domains: ['occurrences', 'progress', 'mind', 'practice'],
     async run(userId, params) {
-      const days = Math.min(365, Math.max(1, Number(params?.days ?? 30)));
-      const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-      const rows = await listLoggedForProgress(userId, from);
-      const totals = new Map<string, { title: string; metric: string; total: number; sessions: number }>();
-      for (const r of rows) {
-        for (const [metric, v] of Object.entries(r.value ?? {})) {
-          if (!Number.isFinite(v)) continue;
-          const key = `${r.title}|${metric}`;
-          const cur = totals.get(key) ?? { title: r.title, metric, total: 0, sessions: 0 };
-          cur.total += v;
-          cur.sessions += 1;
-          totals.set(key, cur);
-        }
-      }
-      return { days, totals: [...totals.values()].sort((a, b) => b.sessions - a.sessions) };
+      return computePracticeTotals(userId, Number(params?.days ?? 30));
     },
     render(r) {
       const { days, totals } = r as {
