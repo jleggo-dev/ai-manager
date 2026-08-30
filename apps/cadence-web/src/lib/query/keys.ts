@@ -17,6 +17,11 @@ export const queryKeys = {
   progress: {
     all: ['progress'] as const,
   },
+  /** `/me/progress-layout` (the Progress Engine's layout store, W1-4) — the committed layout, or
+   *  the deterministic default when the user has none. Invalidate after a commit (Wave 3). */
+  progressLayout: {
+    all: ['progressLayout'] as const,
+  },
   /** `/me/weather` (PERF-03) — the trail header's one line of sky. */
   weather: {
     all: ['weather'] as const,
