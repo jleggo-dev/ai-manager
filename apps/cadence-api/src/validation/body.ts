@@ -428,6 +428,15 @@ export const weekReviewMindStepBodySchema = z.object({
   done: z.boolean({ message: 'done (boolean) required' }),
 });
 
+/** `POST /plan/week-review/recap` (Progress Engine W2-1) — persists the confirmed week's recap.
+ *  The window itself is never taken from the body: the route reads `pending_week_review` off the
+ *  user row, same trust boundary `facts`/`dismiss` already use, so a stale or spoofed range can't
+ *  write a recap for the wrong week. `line` is the only thing the body carries — the coach's/
+ *  receipt's one-sentence conclusion, when the confirm has one (nullable, honest v1). */
+export const weekReviewRecapBodySchema = z.object({
+  line: z.string().min(1).max(500).optional(),
+});
+
 /**
  * The Changes sheet's toggle flips. `index` addresses a position in the STORED pending-change
  * array — stable, since nothing reorders it — so the route validates it in bounds rather than
