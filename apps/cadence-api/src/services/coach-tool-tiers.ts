@@ -160,6 +160,16 @@ export const ALWAYS_ACTIONS = [
   'open_week_review',
   'build_next_week',
   'log_meal',
+  /**
+   * `update_repertoire` joined 2026-08-30 on the owner's ruling from the piano conversation the
+   * night before: when the user hands over what they know ("assume I know the earlier songs from
+   * Suzuki book 2", then nine typed pieces), *she must know she has to store it* — and the trigger
+   * arrives mid-plan-editing with `propose_plan_change` filling her attention, which is exactly
+   * the shape `update_constraint` measured at 0-of-3 from the tail. Definition measured at
+   * ~348 tokens/turn (1,392 chars serialized ÷ 4, the TOOL-HARNESS.md method), inside the
+   * 305–375 band it budgets for an ordinarily-shaped action.
+   */
+  'update_repertoire',
 ] as const;
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
@@ -204,7 +214,14 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
   {
     key: 'training',
     label: 'their training and how it has gone',
-    members: ['get_recent_logs', 'get_goal_progress', 'get_practice_totals'],
+    members: ['get_recent_logs', 'get_goal_progress'],
+  },
+  {
+    key: 'practice',
+    label: 'what they practice and already know',
+    // `get_practice_totals` moved here from `training` when the category was born (2026-08-30):
+    // piano minutes and prayer streaks were always a strained fit under "training".
+    members: ['get_repertoire', 'get_practice_totals'],
   },
   { key: 'body', label: 'what their body and devices recorded', members: ['get_workout_history', 'get_equipment'] },
   {

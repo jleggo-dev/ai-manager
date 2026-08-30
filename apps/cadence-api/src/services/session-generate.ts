@@ -10,7 +10,12 @@
  * Shape cloned from goal-assess.ts: runJobBySlug + parseJson + app-side normalization
  * (expectedSchema is best-effort in the engine — see plan-synthesis.ts normalizeActivity).
  */
-import { renderCoachToolCatalog, type OccurrenceSession, type OccurrenceWeather } from '@cadence/shared';
+import {
+  renderCoachToolCatalog,
+  renderRepertoire,
+  type OccurrenceSession,
+  type OccurrenceWeather,
+} from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { DEFAULT_HORIZON_DAYS } from './plan-horizon.ts';
 import {
@@ -24,6 +29,7 @@ import {
 } from '../repos/occurrences.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
+import { listRepertoire } from '../repos/repertoire.ts';
 import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
 import { coachingPhase, normalizeSession } from './session-normalize.ts';
@@ -63,11 +69,12 @@ const TOOL_CATALOG = renderCoachToolCatalog();
 const inflight = new Map<string, Promise<OccurrenceSession | null>>();
 
 async function generateSession(userId: string, occ: OccurrenceWithActivity): Promise<OccurrenceSession | null> {
-  const [goals, equipment, user, history] = await Promise.all([
+  const [goals, equipment, user, history, repertoire] = await Promise.all([
     listGoalsByStatus(userId, ['committed']),
     listEquipment(userId),
     getUser(userId),
     listRecentLogsByTitle(userId, occ.title, 4),
+    listRepertoire(userId).catch(() => []),
   ]);
   const phase = coachingPhase(history.length);
 
@@ -115,6 +122,10 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
     baseline: JSON.stringify(user?.baseline ?? {}),
     equipment: JSON.stringify(equipment.map((e) => ({ name: e.name, category: e.category }))),
     recent_logs: renderLogLines(history),
+    // What they are learning / already know, with the rotation's DUE NEXT pick computed — the
+    // prescribe coach reads it and names ONE piece for a known/review slot instead of inventing
+    // material or freezing one title into the plan text (the 2026-08-29 piano failure).
+    repertoire: renderRepertoire(repertoire),
     phase,
     sessions_logged: String(history.length),
     occurrence_date: occ.date,

@@ -288,6 +288,54 @@ const ACTIONS: EvalCase[] = [
       'to end") describes. Reopened 2026-08-28 (MP34) as silence when log_nutrition turned out to be gone; ' +
       'reopened again now that log_meal exists to call. No explicit date: "around noon" today means omit it.',
   },
+  /**
+   * A17 and A18 are the two halves of `update_repertoire` (owner ruling 2026-08-30): handed a
+   * list of known material she must STORE it, and a piece finished in front of her is a milestone
+   * she records. Both are adapted from the 2026-08-29 piano session (ai-admin chat 773f61a1) to
+   * guitar, because this seeded world has no piano goal (the A16 lesson) and the tool records
+   * goal-free by design — what someone knows outlives any one goal.
+   */
+  {
+    id: 'A17',
+    kind: 'action',
+    turn: "oh and for my guitar practice — i've got wonderwall, blackbird and horse with no name down solid, those are good ones to rotate through",
+    expect: ['update_repertoire'],
+    allow: [...DOSSIER_READS, 'get_repertoire', 'propose_plan_change'],
+    args: {
+      tool: 'update_repertoire',
+      check: (a) => {
+        const items = Array.isArray(a.items) ? (a.items as Array<Record<string, unknown>>) : [];
+        if (items.length < 3) return `only ${items.length} items recorded of the three named`;
+        // "down solid" is backfill, not news — 'learned' here would invent three accomplishments
+        // dated today and inflate the recap, the exact cheer the brand bans.
+        const learned = items.filter((i) => str(i.status) === 'learned');
+        return learned.length ? `backfilled pieces marked "learned": ${learned.length}` : null;
+      },
+    },
+    from:
+      'Session 773f61a1 (2026-08-29): "Can you select from the pieces I already know?" forced the user to ' +
+      'type nine pieces, and the list froze into one how_to sentence — nothing stored, nothing to read back. ' +
+      'Owner ruling 2026-08-30: "in the conversation i gave it, she should know she has to store it."',
+  },
+  {
+    id: 'A18',
+    kind: 'action',
+    turn: "finally played blackbird start to finish clean today. that one's officially in the bag",
+    expect: ['update_repertoire'],
+    allow: [...DOSSIER_READS, 'log_session', 'get_repertoire'],
+    args: {
+      tool: 'update_repertoire',
+      check: (a) => {
+        const items = Array.isArray(a.items) ? (a.items as Array<Record<string, unknown>>) : [];
+        const hit = items.find((i) => /blackbird/i.test(str(i.label)));
+        if (!hit) return 'no item named blackbird';
+        return str(hit.status) === 'learned' ? null : `status was "${String(hit.status)}", wanted learned — it crossed the line just now`;
+      },
+    },
+    from:
+      'Owner ruling 2026-08-30: "Coach should record and remember as I complete milestones (of course!)" — ' +
+      'the crossing is the moment worth an accomplishment in the goal history, unlike A17\'s quiet backfill.',
+  },
 ];
 
 /* ══ B · LONG-TAIL READS — the ones nothing injects, so a miss is genuinely a miss ═══════════ */
@@ -418,6 +466,20 @@ const READS: EvalCase[] = [
     from:
       'MP27 (2026-08-28), PLAN.md "Meal prep, end to end" — the scenario\'s own line, verbatim in spirit. A ' +
       'named vendor, an explicit "I could not find it", worth the wait for the exact numbers.',
+  },
+  {
+    id: 'B11',
+    kind: 'read',
+    turn: "what should i work on in tonight's practice — something i already know, or push the new stuff?",
+    expect: ['get_repertoire'],
+    allow: [...DOSSIER_READS, 'get_practice_totals', 'get_recent_logs'],
+    // Asking what to practice changes nothing about what they know — writing here would be the
+    // false-trigger half of update_repertoire's contract.
+    forbid: ['update_repertoire'],
+    from:
+      'Session 773f61a1 (2026-08-29) — the read the whole conversation was missing: she had to ask the user ' +
+      'to type what he knew because nothing could read it back. With the store live, "what do i know" turns ' +
+      'are reads, and only new facts about what they know are writes.',
   },
 ];
 

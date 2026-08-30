@@ -44,9 +44,16 @@ describe('coach capability manifest', () => {
    * drill down into a hierarchy she has not been told exists.
    *
    * Keep the ceiling. The next thing that wants in has to cut something or show its own arithmetic.
+   *
+   * 5300 → 5400 (2026-08-30, repertoire): +65 chars/session, already cut to the bone — the
+   * feature adds no capability line of its own (folded into "remember what you told me") and a
+   * five-word category label. The arithmetic: the `practice` category line is what lets
+   * `get_repertoire` live in the FREE tail and still be found; the alternative, an always-on
+   * read, would cost ~100 tokens (~400 chars) per TURN forever. 65 chars a session buying ~400
+   * a turn is the same trade the header calls good, an order of magnitude smaller.
    */
   it('stays small enough to ride every session open', () => {
-    expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(5300);
+    expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(5400);
   });
 
   /**

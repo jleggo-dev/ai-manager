@@ -8,6 +8,7 @@ import type { OccurrenceLog, OccurrenceLogItem } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { getOccurrenceWithActivity, recordOccurrenceLog } from '../repos/occurrences.ts';
 import { insertGoalEvent } from '../repos/goal-events.ts';
+import { touchPracticedFromText } from '../repos/repertoire.ts';
 import { logAi } from './ai-log.ts';
 import { MAX_ITEMS, num, str } from './session-normalize.ts';
 
@@ -145,11 +146,16 @@ export async function logOccurrence(
     }
   }
 
+  // Repertoire write-back: any item of theirs named in the log gets "worked today" stamped, so
+  // the rotation actually rotates off what HAPPENED, not what was prescribed. Best-effort, plain
+  // containment on their own words — a miss costs one stale date; a failure never fails the log.
+  const practiced = await touchPracticedFromText(userId, raw_text).catch(() => [] as string[]);
+
   void logAi(userId, {
     kind: 'parse_session_log',
     input: { occurrenceId, title: occ.title, text: raw_text },
     output: log,
-    meta: { items: items.length, parsed: !!parsed, events },
+    meta: { items: items.length, parsed: !!parsed, events, practiced: practiced.length },
   });
   return { log, summary };
 }
