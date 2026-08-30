@@ -33,7 +33,7 @@ import {
   setShorthand,
 } from './interval.ts';
 import { DEFAULT_SIT_MINUTES, MAX_SIT_MINUTES, MEDITATE_BELL_KINDS } from './meditate.ts';
-import { DEFAULT_METER, MAX_BPM, METERS, MIN_BPM } from './metronome.ts';
+import { DEFAULT_METER, MAX_BPM, MAX_METER, MIN_BPM, MIN_METER } from './metronome.ts';
 import { GROUNDING_GAMES, GROUNDING_NAMES } from './grounding.ts';
 import { JOURNAL_BANKS, bankFamily, type JournalFamily } from './journal.ts';
 
@@ -301,13 +301,13 @@ export function renderCoachToolCatalog(): string {
   );
   lines.push(
     '',
-    'METRONOME — "metronome_bpm" is a field, not a tool: it rides alongside whatever tool the step',
-    'already has, the way video_query does. A scales step is a timer step that happens to have a beat.',
-    `  bounds: ${MIN_BPM}-${MAX_BPM} bpm. "metronome_meter" = beats to the bar (${METERS.join(', ')} usual, default ${DEFAULT_METER});`,
-    '  omit it if you do not know. Set a tempo they can actually play — under the marking for a piece',
-    '  they are still learning.',
-    '  WHEN: practising to a pulse — an instrument, scales, sight-reading, drills at tempo. Nothing else.',
-    '  Omitting it is the right answer almost every time: a click on a plank, a run or a sit is an intrusion.',
+    'METRONOME — an option on a step, not a tool. It adds a click track; the step keeps its own tool.',
+    `  "metronome_bpm" (${MIN_BPM}-${MAX_BPM}) turns it on. Omit it and the step has no metronome.`,
+    `  "metronome_meter" is beats per bar, ${MIN_METER}-${MAX_METER} (default ${DEFAULT_METER}). Omit if unknown.`,
+    '  SET IT for: playing an instrument, scales, sight-reading, or drills done at a fixed tempo.',
+    '  DO NOT SET IT for: strength, cardio, stretching, mobility, meditation, breathing, or journaling.',
+    '  Choose a tempo the person can play accurately. For a piece they are still learning, set it below',
+    '  the tempo marked on the score.',
     '  e.g. {"name": "Hanon no. 1", "tool": "timer", "duration_min": 10, "metronome_bpm": 72}',
   );
   lines.push('', 'GROUNDING GAMES — the only values "grounding_game" accepts:');
