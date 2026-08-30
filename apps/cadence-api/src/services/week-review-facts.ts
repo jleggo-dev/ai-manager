@@ -13,7 +13,15 @@
  * (out of scope for this change); this file is its own join, not a shared one, so the two can evolve
  * independently.
  */
-import type { Activity, GoalArea, OccurrenceLog, OccurrenceSession, OccurrenceStatus } from '@cadence/shared';
+import type {
+  Activity,
+  GoalArea,
+  OccurrenceLog,
+  OccurrenceSession,
+  OccurrenceStatus,
+  RhythmWeek,
+  WeeklyBarsPayload,
+} from '@cadence/shared';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import {
@@ -23,6 +31,7 @@ import {
   type OccurrenceListRow,
 } from '../repos/occurrences.ts';
 import { listGoals } from '../repos/goals.ts';
+import { buildMealsWeek, buildSessionsRhythmWeek } from './week-review-widgets.ts';
 
 /** The three meal slots the review grid shows — deliberately NOT `snack` (DESIGN-check-in.md's
  *  receipt example, "18 of 21 meals", is 3 meals × 7 days; a logged snack still counts on Today,
@@ -88,6 +97,12 @@ export interface WeekReviewFacts {
   period: { from: string; to: string };
   days: WeekReviewDay[];
   weigh_in: WeekReviewWeighIn | null;
+  /** Progress Engine parcel W2-2 — additive, contract-shaped twins of `days` above (not a second
+   *  source of truth: both are derived straight from `days`, never stored separately). Optional so
+   *  an older fixture/test-double `WeekReviewFacts` still type-checks; the real builder below
+   *  always sets both. See week-review-widgets.ts for what each one means and why. */
+  rhythm_week?: RhythmWeek;
+  meals_week?: WeeklyBarsPayload;
 }
 
 /** Same defensive cast `plan-view.ts`'s `iso()` uses: `listOccurrences` declares `date: string`,
@@ -194,9 +209,12 @@ export async function buildWeekReviewFacts(userId: string, from: string, to: str
     }
   }
 
+  const resolvedDays = [...dayByDate.values()];
   return {
     period: { from, to },
-    days: [...dayByDate.values()],
+    days: resolvedDays,
     weigh_in: weighIn ? { occurrence_id: weighIn.occurrence_id, date: weighIn.date, status: weighIn.status } : null,
+    rhythm_week: buildSessionsRhythmWeek(resolvedDays, { from, to }),
+    meals_week: buildMealsWeek(resolvedDays),
   };
 }
