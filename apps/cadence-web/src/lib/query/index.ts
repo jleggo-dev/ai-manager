@@ -7,3 +7,11 @@ export { useProgress } from './useProgress.ts';
 export { useProgressHistory } from './useProgressHistory.ts';
 export { useDatedSessions } from './useDatedSessions.ts';
 export { useProgressLayout } from './useProgressLayout.ts';
+export {
+  useProgressEvents,
+  useProgressBalance,
+  useProgressTotals,
+  useProgressVariety,
+  useProgressStagePath,
+  useProgressCount,
+} from './useProgressExtras.ts';
