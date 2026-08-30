@@ -33,8 +33,7 @@ const time = (iso?: string | null): number => {
  */
 export function pickDueNext(items: RepertoireLike[]): RepertoireLike | null {
   const pool = items.filter((i) => i.status === 'known');
-  if (!pool.length) return null;
-  return [...pool].sort((a, b) => {
+  const sorted = [...pool].sort((a, b) => {
     const at = time(a.last_practiced_at);
     const bt = time(b.last_practiced_at);
     const aNever = Number.isNaN(at);
@@ -45,7 +44,8 @@ export function pickDueNext(items: RepertoireLike[]): RepertoireLike | null {
     const bs = time(b.started_at);
     if (!Number.isNaN(as) && !Number.isNaN(bs) && as !== bs) return as - bs;
     return a.label.localeCompare(b.label);
-  })[0]!;
+  });
+  return sorted[0] ?? null;
 }
 
 const shortDate = (iso?: string | null): string | null => {
