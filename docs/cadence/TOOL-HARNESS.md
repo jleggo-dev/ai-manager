@@ -64,10 +64,16 @@ One question decides it: **does calling it change the user's data?**
 
 | | | |
 |---|---|---|
-| **Changes data, and they'd do it most days** | Always-on action | `ALWAYS_ACTIONS` in `coach-tool-tiers.ts` |
-| **Changes data, weekly or rarer** | On-demand action | goes in a category below |
-| **Only reads, and it's long-tail** | On-demand read | goes in a category below |
+| **Changes data, and they'd do it most days** | Always-on action | `ALWAYS_ACTIONS` in `coach-tool-tiers.ts` — needs an explicit owner ruling recorded there (2026-08-30) |
+| **Changes data, weekly or rarer** | On-demand action | a category below + a hook line in `DRAWER_HOOKS` |
+| **Only reads, and it's long-tail** | On-demand read | a category below + a hook line in `DRAWER_HOOKS` |
 | **Only reads, and it's dossier** | Not a tool — see step 1 | |
+
+**The default is the tail** (owner ruling 2026-08-30): every tail tool contributes a ≤90-char hook
+to `DRAWER_HOOKS`, and find_tools' carried description is generated from the categories + hooks —
+the drawer's label, so she can always see what she could go looking for.
+`coach-drawer-index.test.ts` fails BY NAME on a tail tool without a hook. Promotion to always-on
+is the exception, never the default, and the list should shrink over evidence, not grow.
 
 Adding to **`ALWAYS_ACTIONS` costs real tokens on every message, forever** — and this line quoted
 ~190 since it was written (#223, 2026-08-16) without anyone re-checking it against the actual

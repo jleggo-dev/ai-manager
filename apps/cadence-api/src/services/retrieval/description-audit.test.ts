@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { coachToolDefinitions } from '../coach-tools.ts';
 import { RETRIEVAL_FUNCTIONS } from './registry.ts';
+import { FIND_TOOLS_NAME, META_TOOL_NAMES } from '../coach-tool-tiers.ts';
 
 /**
  * The description audit, made mechanical (owner ruling 2026-08-14: "make sure we aren't using
@@ -132,10 +133,31 @@ describe('harness tool descriptions', () => {
     expect(tooLong, HOW).toEqual([]);
   });
 
+  /** The two meta tools are neither reads nor actions: find_tools' description IS the drawer's
+   *  generated index (owner ruling 2026-08-30 — coach-tool-tiers.ts DRAWER_INDEX), so it gets its
+   *  own, larger bound here instead of the action bound; growth control lives in
+   *  coach-drawer-index.test.ts (per-hook cap + label cap). use_tool stays action-sized. */
+  it('meta tools stay bounded — the index generously, use_tool tightly', () => {
+    const metas = defs.filter((d) => META_TOOL_NAMES.includes(d.function.name as (typeof META_TOOL_NAMES)[number]));
+    expect(metas.length).toBe(2);
+    for (const m of metas) {
+      const cap = m.function.name === FIND_TOOLS_NAME ? 2600 : 800;
+      expect(m.function.description.length, `${m.function.name} over its ${cap}-char bound`).toBeLessThanOrEqual(cap);
+      expect(
+        /take effect immediately|does NOT change anything|Takes effect immediately/i.test(m.function.description),
+        `${m.function.name} must state its commit-or-waits gate`,
+      ).toBe(true);
+    }
+  });
+
   /** Action tools get more room than a read — each carries a safety gate ("only when they have
    *  plainly decided") and says what calling it does to the user's data — but not unlimited. */
   it('action tools are bounded too, and every one states its safety gate', () => {
-    const actions = defs.filter((d) => !RETRIEVAL_FUNCTIONS[d.function.name]);
+    const actions = defs.filter(
+      (d) =>
+        !RETRIEVAL_FUNCTIONS[d.function.name] &&
+        !META_TOOL_NAMES.includes(d.function.name as (typeof META_TOOL_NAMES)[number]),
+    );
     expect(actions.length).toBeGreaterThan(0);
     const tooLong = actions
       .filter((d) => d.function.description.length > 800)

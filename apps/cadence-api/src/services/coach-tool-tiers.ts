@@ -148,13 +148,25 @@ export const ALWAYS_READS = ['get_active_plan'] as const;
  * and `research_food` stay in the tail deliberately — they are reads, already free, and neither is
  * the everyday case this evidence is about.
  *
- * `propose_progress_layout` joined 2026-08-30 (Progress Engine Wave 3, W3-1) on the owner's ruling
- * that reshaping what a person's own coaching page watches is a core capability, not a rare one —
- * the same reasoning `open_week_review` and `build_next_week` were added under, not a new one.
- * docs/cadence/PROGRESS-ENGINE.md's own draft named this as scoped-conversation-only ("Nothing
- * lands in ALWAYS_ACTIONS"); the owner ruling on THIS parcel supersedes that draft.
+ * `propose_progress_layout` sat here for a day (2026-08-30) on a claimed owner ruling that was
+ * never actually made — an agent-written comment asserted it. The ACTUAL owner ruling, same day:
+ * selection accuracy comes from making the DRAWER work, not from promotion — mature harnesses
+ * defer most tools behind a visible index, and very few tools are legitimately always-on. So the
+ * tool moved to the tail, and DRAWER_HOOKS below — assembled into find_tools' carried
+ * description — gives the drawer the label it never had (the old description hand-listed READ
+ * topics only, so a tail action was invisible by the drawer's own signage).
  *
- * Run `npm run eval:tools` after changing this list.
+ * Two failure modes, kept honestly distinct: the update_constraint measurement above showed
+ * DISCOVERY working and FOLLOW-THROUGH failing (found every time, called never — the
+ * continuation seam). The label directly fixes the knowing-to-look half and is the cheap
+ * experiment for the other half: hooks she reads in the SAME generation that decides may prime
+ * the call where a fetched description in a fresh continuation did not. Eval cases A17/A18
+ * measure exactly this, post-deploy. If follow-through still fails with the label in place,
+ * that is evidence about the find→use seam itself — not a mandate to promote by default.
+ * New tools DEFAULT to the tail plus a hook; promotion into this list requires an explicit
+ * owner ruling recorded here, and over evidence this list should shrink, not grow.
+ *
+ * Run `npm run eval:tools` after changing this list (post-deploy — it drives the deployed api).
  */
 export const ALWAYS_ACTIONS = [
   'propose_plan_change',
@@ -166,8 +178,30 @@ export const ALWAYS_ACTIONS = [
   'open_week_review',
   'build_next_week',
   'log_meal',
-  'propose_progress_layout',
 ] as const;
+
+/**
+ * The drawer's label (owner ruling 2026-08-30, above): one hook line per on-demand tool, grouped
+ * by area, assembled into find_tools' carried description so she always SEES what she could go
+ * looking for — "knowing when to pull on the thread is the trick." Hooks are prompts: house voice, present tense, ≤90 chars, and they get the same brand scrutiny as user copy.
+ * coach-drawer-index.test.ts gates exact coverage of onDemandToolNames() — a tail tool without a
+ * hook line here fails CI by name.
+ */
+export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
+  get_nutrition: 'everything about what they eat — log, recipes, targets, trends; name the view you need',
+  preview_meal: 'parse-and-price a described meal WITHOUT logging it',
+  check_food_sources: 'ask every food database at once about one food, disagreements included',
+  resolve_portion: 'what a household measure of a saved food weighs in grams',
+  read_label: 'read an attached photo: nutrition panel or front-of-pack',
+  research_food: 'web research on a NAMED product none of the sources know — slow',
+  get_workout_history: 'their recorded workouts from their devices, newest first',
+  get_practice_totals: 'running totals of anything they count — words written, minutes sat, pages read',
+  get_journal: 'recent journal entries, in their own words (private ones never included)',
+  get_goal_progress: 'numbers on how each goal is going, from what they logged',
+  propose_progress_layout: 'propose a redesign of what their Progress page watches — they confirm a card first',
+  get_recent_logs: 'what they wrote down after recent sessions, and how it felt',
+  get_equipment: 'the training gear they own, wear included',
+};
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
 export function alwaysOnToolNames(): string[] {
@@ -228,6 +262,14 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     members: ['get_nutrition', 'check_food_sources', 'resolve_portion', 'preview_meal', 'research_food', 'read_label'],
   },
   { key: 'writing', label: 'what they have written', members: ['get_journal'] },
+  {
+    key: 'progress',
+    label: 'their Progress page and what it watches',
+    // The drawer's first ACTION (owner ruling 2026-08-30, above ALWAYS_ACTIONS): filed like any
+    // read, marked [changes their data] in the label, and its own contract still gates the write
+    // behind the user's tap on the proposal card.
+    members: ['propose_progress_layout'],
+  },
 ];
 
 /** The categories, one line each — what the manifest names so she knows a drill-down exists. */

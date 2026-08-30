@@ -3,13 +3,11 @@ import { describe, it, expect, vi } from 'vitest';
 /** Failures cite the checklist — the rule is written down and a bare name list does not say so. */
 const HOW = 'see docs/cadence/TOOL-HARNESS.md → "Adding a tool: the checklist"';
 import { searchTools, COACH_META_TOOLS } from './coach-meta-tools.ts';
-import {
-  alwaysOnToolNames,
+import { alwaysOnToolNames,
   onDemandToolNames,
   DOSSIER_FUNCTIONS,
   ALWAYS_ACTIONS,
-  TOOL_CATEGORIES,
-} from './coach-tool-tiers.ts';
+  TOOL_CATEGORIES, DRAWER_HOOKS } from './coach-tool-tiers.ts';
 import { coachToolDefinitions, coachToolNames } from './coach-tools.ts';
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 import { coachActionNames } from './coach-actions.ts';
@@ -52,10 +50,10 @@ describe('what she carries', () => {
   });
 
   it('carries far fewer definitions than the eighteen reads it replaced', () => {
-    // 13 as of 2026-08-30 (Progress Engine W3-1 added `propose_progress_layout` to ALWAYS_ACTIONS)
-    // — still far under the 18 reads this tiering replaced, and under the 24-tool total from
-    // before the split. Bump this deliberately, one at a time, rather than loosening it to
-    // something that stops noticing growth.
+    // 12 as of 2026-08-30 (propose_progress_layout was carried for a day, then moved to the tail
+    // under the drawer-label ruling — coach-tool-tiers.ts) — far under the 18 reads this tiering
+    // replaced. Bump deliberately, one at a time, rather than loosening it to something that
+    // stops noticing growth.
     expect(coachToolDefinitions().length).toBeLessThan(14);
   });
 
@@ -132,18 +130,29 @@ describe('find_tools', () => {
   });
 
   /**
-   * The tail is READS only now. Four actions were demoted into it for ~1,400 tokens a turn and the
-   * measurement went against it: `log_session` (always-on) was called 4 of 4 times, while
-   * `update_constraint` (behind find_tools) was found 3 of 3 and called 0. Being chosen is what an
-   * action is, so an action she has to go and find is an action that does not happen.
-   *
-   * The marking stays in `catalogLine` — a future demotion would need it, and the honesty of
-   * "[changes their data]" should not depend on nobody ever demoting an action again.
+   * Tail actions are allowed again — with a label this time. The 2026-08 measurement (found 3 of
+   * 3, called 0) demoted actions from the tail; the 2026-08-30 owner ruling reinstated them
+   * PROVIDED the drawer's carried label names them (DRAWER_HOOKS), on the reasoning that the
+   * earlier failure was measured against an unlabeled drawer — and A17/A18 in the tool eval now
+   * measure whether the label closes the follow-through gap. The "[changes their data]" mark
+   * survives in both the label and catalogLine.
    */
-  it('keeps every action out of the tail — an action she has to find is one she does not call', () => {
+  it('keeps the dossier out of the tail, and every tail ACTION labeled and marked', () => {
+    // The old form of this test asserted NO actions in the tail — the doctrine the owner
+    // overturned 2026-08-30 (coach-tool-tiers.ts, above ALWAYS_ACTIONS): tail actions are
+    // allowed, PROVIDED the drawer's label carries them (a hook in DRAWER_HOOKS) and the
+    // [changes their data] mark survives. Dossier facts still never appear as tools.
     const tail = new Set(onDemandToolNames());
     for (const d of DOSSIER_FUNCTIONS) expect(tail.has(d)).toBe(false);
-    for (const a of coachActionNames()) expect(tail.has(a), `${a} must be always-on — ${HOW}`).toBe(false);
+    const always = new Set<string>(ALWAYS_ACTIONS);
+    for (const a of coachActionNames()) {
+      if (always.has(a)) {
+        expect(tail.has(a), `${a} is always-on and must not also be in the tail`).toBe(false);
+      } else {
+        expect(tail.has(a), `${a} is neither always-on nor in the tail — unreachable; ${HOW}`).toBe(true);
+        expect(DRAWER_HOOKS[a], `${a} is a tail action with no hook in the drawer's label — ${HOW}`).toBeTruthy();
+      }
+    }
   });
 
   it('still fills the tail with the long-tail reads, which stay free', () => {

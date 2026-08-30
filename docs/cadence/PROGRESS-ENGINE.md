@@ -98,9 +98,12 @@ Follows the food-module segmentation — same coach persona, different context a
 - Launched from the Progress screen (the quiet dashed "Want this page to watch something
   different?" row, and from drill-downs with the viewing context carried as the note). Uses the
   existing `coachNote`/`autoSend` bridges.
-- Composition tools (`compose_progress_view`, adjust/commit) are declared **only in this scoped
-  context**. Nothing lands in `ALWAYS_ACTIONS`. The main chat gets one cheap door: she points at
-  the progress talk (the `log_nutrition`-withdrawal precedent).
+- The composition action (`propose_progress_layout`) lives in the **on-demand tail** behind the
+  drawer's generated label (owner ruling 2026-08-30): find_tools' carried description is an index
+  of every tail tool's hook line, grouped by the categories she already knows, so she can see what
+  she could go looking for. Nothing lands in `ALWAYS_ACTIONS` — new tools default to the tail plus
+  a hook, and promotion requires an explicit owner ruling in coach-tool-tiers.ts. Eval cases
+  A17/A18/C17 measure the labeled drawer post-deploy.
 - Context pack: current/default layout, the grammar's kinds + what this user's data can bind, the
   user's goals. Composition runs through an AI Admin job with **strict json_schema → gpt-class
   models only** (primary AND failover catalog-verified; Devs.ai silently removes model ids).
