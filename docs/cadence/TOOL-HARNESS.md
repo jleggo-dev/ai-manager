@@ -96,6 +96,12 @@ capability manifest names it automatically.
 
 ### 3. Write the description (CI-enforced)
 
+- **Write for a model, not a person** (owner ruling 2026-08-30): follow the six style rules in
+  `tool-catalog.ts` → "HOW TO WRITE THE STRINGS IN THIS FILE" — name categories instead of
+  illustrating them, state rules not frequencies or sentiments, no metaphor for mechanism, cut
+  what cannot change a choice, keep the concrete traps, check the size. They apply equally to
+  descriptions, `DRAWER_HOOKS` lines, job `promptTemplate`s, and the capability manifest. The
+  house voice is for the user and the docs, never for her.
 - **3–4 sentences.** Anthropic: *"by far the most important factor in tool performance."*
 - Say **when to Use it** — the literal word, and say when to use something else instead.
 - **Teach every parameter in the prose**, with a quoted worked example: `{"days": 30}`. The Broker

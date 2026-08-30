@@ -50,7 +50,7 @@ function drawerLabel(): string {
       '.',
   );
   return [
-    'The rest of your toolkit, by area — none of it is loaded until you ask. Use this whenever the turn touches one of these areas and you are not already holding the tool for it: pass {"query": "..."} to search, or omit it to list everything, then call use_tool with what you find. Looking does NOT change anything; tools marked [changes their data] follow their own contracts when run.',
+    'The rest of your toolkit, by area — none of it is loaded until you ask. Use this when the message concerns one of these areas and you are not already holding the tool for it: pass {"query": "..."} to search, or omit it to list everything, then call use_tool with what you find. Looking does NOT change anything; tools marked [changes their data] follow their own contracts when run.',
     ...sections,
   ].join('\n');
 }
