@@ -453,3 +453,8 @@ export const pendingChangeTogglesBodySchema = z.object({
     .min(1, { message: 'toggles must name at least one row' })
     .max(50),
 });
+
+/** `POST /me/progress-layout/commit` and `/dismiss` — which draft, by the id the GET returned. */
+export const progressLayoutDraftIdBodySchema = z.object({
+  draft_id: z.string().min(1, { message: 'draft_id is required' }),
+});

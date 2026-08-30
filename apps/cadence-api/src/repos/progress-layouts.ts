@@ -37,6 +37,38 @@ export async function insertDraft(userId: string, layout: ProgressLayout): Promi
   return row;
 }
 
+/** The newest still-live draft (not committed, not superseded) — what
+ *  `GET /me/progress-layout/draft` polls for, the same "did the coach put up a card" pattern
+ *  `setPendingWeekReview`/`pending_plan` use elsewhere. Null when there is nothing to confirm. */
+export async function getLatestDraft(userId: string): Promise<ProgressLayoutRow | null> {
+  const [row] = await sql<ProgressLayoutRow[]>`
+    select ${COLS} from cadence.progress_layouts
+    where user_id = ${userId} and status = 'draft'
+    order by created_at desc
+    limit 1`;
+  return row ?? null;
+}
+
+/** One specific draft, by id — commit/dismiss look it up first so the route can answer 404
+ *  (unknown id, or one already committed/dismissed) before touching anything. */
+export async function getDraftById(userId: string, draftId: string): Promise<ProgressLayoutRow | null> {
+  const [row] = await sql<ProgressLayoutRow[]>`
+    select ${COLS} from cadence.progress_layouts
+    where user_id = ${userId} and id = ${draftId} and status = 'draft'
+    limit 1`;
+  return row ?? null;
+}
+
+/** Mark a draft superseded WITHOUT committing it — the user's "not now" on a proposal card. Null
+ *  when the id is unknown or the row is no longer a live draft (already committed/dismissed). */
+export async function dismissDraft(userId: string, draftId: string): Promise<ProgressLayoutRow | null> {
+  const [row] = await sql<ProgressLayoutRow[]>`
+    update cadence.progress_layouts set status = 'superseded'
+    where user_id = ${userId} and id = ${draftId} and status = 'draft'
+    returning ${COLS}`;
+  return row ?? null;
+}
+
 /**
  * Promote a draft to committed. Supersedes any previously committed row for this user in the SAME
  * transaction (same shape as supersedeActivePlans + insertPlan in repos/plans.ts) — a crash between

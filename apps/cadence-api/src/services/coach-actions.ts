@@ -17,6 +17,7 @@ import { UPDATE_CONSTRAINT } from './coach-action-constraint.ts';
 import { OPEN_WEEK_REVIEW } from './coach-action-week-review.ts';
 import { BUILD_NEXT_WEEK } from './coach-action-build-week.ts';
 import { LOG_MEAL } from './coach-action-log-meal.ts';
+import { PROPOSE_PROGRESS_LAYOUT } from './coach-action-progress-layout.ts';
 
 /** Today, YYYY-MM-DD — stamped on a target change so the weekly review throttle can see it. */
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -485,6 +486,8 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   build_next_week: BUILD_NEXT_WEEK,
 
   log_meal: LOG_MEAL,
+
+  propose_progress_layout: PROPOSE_PROGRESS_LAYOUT,
 
   log_session: {
     name: 'log_session',
