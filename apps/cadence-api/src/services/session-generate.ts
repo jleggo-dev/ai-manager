@@ -10,7 +10,12 @@
  * Shape cloned from goal-assess.ts: runJobBySlug + parseJson + app-side normalization
  * (expectedSchema is best-effort in the engine — see plan-synthesis.ts normalizeActivity).
  */
-import { renderCoachToolCatalog, type OccurrenceSession, type OccurrenceWeather } from '@cadence/shared';
+import {
+  renderCoachToolCatalog,
+  renderRepertoire,
+  type OccurrenceSession,
+  type OccurrenceWeather,
+} from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { DEFAULT_HORIZON_DAYS } from './plan-horizon.ts';
 import {
@@ -24,6 +29,7 @@ import {
 } from '../repos/occurrences.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
+import { listRepertoire } from '../repos/repertoire.ts';
 import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
 import { coachingPhase, normalizeSession } from './session-normalize.ts';
@@ -63,11 +69,17 @@ const TOOL_CATALOG = renderCoachToolCatalog();
 const inflight = new Map<string, Promise<OccurrenceSession | null>>();
 
 async function generateSession(userId: string, occ: OccurrenceWithActivity): Promise<OccurrenceSession | null> {
-  const [goals, equipment, user, history] = await Promise.all([
+  const [goals, equipment, user, history, repertoire] = await Promise.all([
     listGoalsByStatus(userId, ['committed']),
     listEquipment(userId),
     getUser(userId),
     listRecentLogsByTitle(userId, occ.title, 4),
+    // null, not [] — a read that broke must not render as "knows nothing" (the crash that read
+    // as an empty record for weeks is exactly this shape; CLAUDE.md's guard rule).
+    listRepertoire(userId).catch((e): null => {
+      console.error('[prescribe] repertoire read failed:', e);
+      return null;
+    }),
   ]);
   const phase = coachingPhase(history.length);
 
@@ -115,6 +127,22 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
     baseline: JSON.stringify(user?.baseline ?? {}),
     equipment: JSON.stringify(equipment.map((e) => ({ name: e.name, category: e.category }))),
     recent_logs: renderLogLines(history),
+    // What they are learning / already know FOR THIS SESSION'S GOAL, with the rotation's DUE
+    // NEXT computed over that scope — the prescribe coach names ONE piece for a review slot
+    // instead of inventing material or freezing a title into plan text (the 2026-08-29 piano
+    // failure). Scoped because the prompt promises "for this practice": a karate kata must not
+    // come up DUE NEXT in a piano session, and the piano book must not ride every run's prompt.
+    // Unlinked items reach practice-area goals only. A failed read says so — never "empty".
+    repertoire:
+      repertoire === null
+        ? 'Could not be read just now — a fault on our side, NOT an empty record. Do not assume they know nothing, and do not invent items.'
+        : renderRepertoire(
+            repertoire.filter(
+              (i) =>
+                i.goal_id === occ.goal_id ||
+                (i.goal_id == null && goals.find((g) => g.goal_id === occ.goal_id)?.area === 'practice'),
+            ),
+          ),
     phase,
     sessions_logged: String(history.length),
     occurrence_date: occ.date,

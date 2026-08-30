@@ -32,6 +32,7 @@ import { READ_LABEL } from './label-function.ts';
 import { GET_NUTRITION } from './nutrition-facade.ts';
 import { PREVIEW_MEAL } from './food-log-function.ts';
 import { RESEARCH_FOOD } from './food-research-function.ts';
+import { GET_REPERTOIRE } from './repertoire-function.ts';
 import { isoRange, type RetrievalFunction } from './types.ts';
 
 // Re-exported so the many existing importers of this module keep working unchanged.
@@ -519,4 +520,7 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
   // coach-actions.ts, not here — only the two reads join the registry.
   [PREVIEW_MEAL.name]: PREVIEW_MEAL,
   [RESEARCH_FOOD.name]: RESEARCH_FOOD,
+  // What they are learning / already know per skills practice — the read half of repertoire
+  // (update_repertoire writes it). Tail category `practice`.
+  [GET_REPERTOIRE.name]: GET_REPERTOIRE,
 };

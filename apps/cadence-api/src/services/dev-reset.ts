@@ -52,6 +52,7 @@ export const DEV_CHILD_TABLES = [
   'occurrences',
   'plans',
   'recipes',
+  'repertoire',
   'session_feedback',
   'water_logs',
   'workout_history',
