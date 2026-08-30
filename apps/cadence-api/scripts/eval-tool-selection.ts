@@ -105,7 +105,18 @@ import {
   type EvalCase,
 } from './eval-tool-selection-cases.ts';
 import { dryRun, graderVerdict, header, line, summarize, type Outcome } from './eval-tool-selection-report.ts';
-import { API, missingEnv, setUp, tearDown, type World } from './eval-tool-selection-world.ts';
+import {
+  API,
+  missingEnv,
+  openSession,
+  parseArgs,
+  prefetchedFns,
+  readTurn,
+  setUp,
+  tearDown,
+  type Observed,
+  type World,
+} from './eval-tool-selection-world.ts';
 import { GET_NUTRITION, NUTRITION_FACADE_COVERS } from '../src/services/retrieval/nutrition-facade.ts';
 
 const argv = process.argv.slice(2);
@@ -148,94 +159,16 @@ function selected(): EvalCase[] {
   return out;
 }
 
-/* ══ observing one turn ══════════════════════════════════════════════════════════════════════ */
+/* ══ observing one turn ══════════════════════════════════════════════════════════════════════
+ * `readTurn` / `openSession` / `prefetchedFns` / `parseArgs` moved to eval-tool-selection-world.ts
+ * (2026-08-30) so this runner and eval-conversation-replay.ts read the stream with ONE copy of
+ * the accumulator contract — two hand-kept copies is how one grader keeps passing after a
+ * coach-stream change breaks the other. The X-ray gate stays here: the trace is only
+ * attributable to a turn when exactly one is in flight, and SERIAL is this runner's knowledge. */
 
-interface Observed {
-  calls: Array<{ name: string; arguments?: string }>;
-  reply: string;
-  model: string | null;
-  /** Prompt/completion tokens per completed response — index 0 is the round that chose the tools. */
-  rounds: Array<{ prompt: number | null; completion: number | null }>;
-}
-
-/** Per-round token counts, read off the same `message.complete` frame the accumulator uses. */
-function roundTokens(line: string): { prompt: number | null; completion: number | null } | null {
-  if (!line.startsWith('data: ')) return null;
-  try {
-    const p = JSON.parse(line.slice(6).trim()) as Record<string, unknown>;
-    if (p.type !== 'message.complete') return null;
-    const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
-    return {
-      prompt: num(p.inputTokens) ?? num(p.estimatedInputTokens),
-      completion: num(p.outputTokens) ?? num(p.estimatedOutputTokens),
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Read the turn with the APP's accumulator, deliberately. `applySseLine` is the function the coach
- * route's tool loop uses to decide what to fulfill, so a call this cannot see is a call that would
- * not have run in production either — which removes the most dangerous class of grader bug, the
- * one that reports the model's silence when the fault is ours.
- */
-async function readTurn(body: ReadableStream<Uint8Array>): Promise<Observed> {
-  const { createCoachStreamAccumulateState, applySseLine } = await import('../src/services/coach-stream.ts');
-  const { createSseLineBuffer, pushSseChunk } = await import('@ai-admin/core');
-  const state = createCoachStreamAccumulateState();
-  const buf = createSseLineBuffer();
-  const dec = new TextDecoder();
-  const reader = body.getReader();
-  const rounds: Observed['rounds'] = [];
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    for (const line of pushSseChunk(buf, dec.decode(value, { stream: true }))) {
-      applySseLine(state, line);
-      const t = roundTokens(line);
-      if (t) rounds.push(t);
-    }
-  }
-  return { calls: state.functionCalls, reply: state.content, model: state.model, rounds };
-}
-
-async function openSession(token: string): Promise<string> {
-  const res = await fetch(`${API}/coach/sessions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ intent: 'ongoing', healthAvailable: false, healthAnswered: true }),
-  });
-  const body = (await res.json()) as { sessionId?: string };
-  if (!res.ok || !body.sessionId) throw new Error(`open session failed: ${res.status} ${JSON.stringify(body)}`);
-  return body.sessionId;
-}
-
-/** Best-effort: the X-ray is in-memory per serverless instance, so it can be absent or stale. Only
- *  read when running one case at a time, since the trace is keyed by user and not by turn. */
-async function prefetchedFns(token: string): Promise<string[] | null> {
-  if (!SERIAL) return null;
-  try {
-    const res = await fetch(`${API}/coach/trace`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) return null;
-    const body = (await res.json()) as { turnSelect?: { calls?: Array<{ fn?: string }> } | null };
-    return (body.turnSelect?.calls ?? []).map((c) => String(c.fn)).filter(Boolean);
-  } catch {
-    return null;
-  }
-}
+const tracedFns = async (token: string): Promise<string[] | null> => (SERIAL ? prefetchedFns(token) : null);
 
 /* ══ scoring ═════════════════════════════════════════════════════════════════════════════════ */
-
-function parseArgs(raw: string | undefined): Record<string, unknown> {
-  if (!raw?.trim()) return {};
-  try {
-    const p = JSON.parse(raw) as unknown;
-    return p && typeof p === 'object' && !Array.isArray(p) ? (p as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
 
 function score(c: EvalCase, obs: Observed, ms: number, prefetched: string[] | null): Outcome {
   const seen = [...new Set(obs.calls.map((x) => x.name))];
@@ -333,7 +266,7 @@ async function runCase(world: World, c: EvalCase): Promise<Outcome> {
     });
     if (!res.ok || !res.body) throw new Error(`turn failed: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
     const obs = await readTurn(res.body);
-    return score(c, obs, Date.now() - t0, await prefetchedFns(world.token));
+    return score(c, obs, Date.now() - t0, await tracedFns(world.token));
   } catch (e) {
     return {
       c,
