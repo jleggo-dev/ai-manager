@@ -1,76 +1,98 @@
 import { sql, json } from '../db/sql.ts';
 import type { RepertoireItem, RepertoireStatus } from '@cadence/shared';
 
-/** Timestamps cast to text — postgres.js returns timestamptz as a JS Date otherwise, and the
- *  shared type (plus the rotation math and every renderer) expects ISO strings. */
+// Timestamps cast to text — postgres.js Date-object trap (same as recipes/foods/nutrition): the
+// shared type, the rotation math and every renderer expect ISO strings. A FUNCTION, not a
+// module-level fragment: suites that mock db/sql import this module transitively, and a fragment
+// built at import time calls the mock before it is callable (plan-fanout.test.ts found this).
+const cols = () => sql`
+  item_id, user_id, goal_id, label, status, kind, meta,
+  started_at::text as started_at, learned_at::text as learned_at,
+  last_practiced_at::text as last_practiced_at`;
+
+/** Labels are stored NFC-normalized: iOS text paths routinely emit NFD ("École" as E + combining
+ *  accent), and the unique index compares bytes — without this, the exact "Écossaise" the feature
+ *  was built around could exist twice. */
+const nfc = (s: string): string => s.normalize('NFC').trim();
+
+/** Bounded: a render caps what it shows, but the query should not ship a pathological table. */
 export async function listRepertoire(userId: string): Promise<RepertoireItem[]> {
   return sql<RepertoireItem[]>`
-    select item_id, user_id, goal_id, label, status, kind, meta,
-           started_at::text as started_at, learned_at::text as learned_at,
-           last_practiced_at::text as last_practiced_at
-    from cadence.repertoire
-    where user_id = ${userId} order by status, lower(label)`;
+    select ${cols()} from cadence.repertoire
+    where user_id = ${userId} order by status, lower(label) limit 300`;
 }
 
 /**
  * One row per thing they can name: upsert on (user, lower(label)), so re-mentioning a piece
- * updates its standing instead of duplicating it. A move onto 'known' stamps learned_at ONLY
- * when asked (`markLearned` — it crossed the line in front of us); backfilled items they
- * already knew get no fake anniversary, and an existing learned_at is never overwritten.
+ * updates its standing instead of duplicating it. Two guards are load-bearing:
+ *
+ *  - **An omitted `status` keeps the existing one.** A bare re-mention ("played Blackbird again")
+ *    must never demote a known piece out of the rotation pool; only a new row defaults to
+ *    'working'. Every column here coalesces for the same reason.
+ *  - **`learnedNow` reports whether THIS call stamped `learned_at`.** An already-learned piece
+ *    re-mentioned as learned keeps its original date and reports false, so the caller writes the
+ *    accomplishment to the goal history exactly once — never once per mention.
  */
 export async function upsertRepertoireItem(
   userId: string,
   item: {
     label: string;
-    status: RepertoireStatus;
+    status?: RepertoireStatus;
     goal_id?: string | null;
     kind?: string | null;
     meta?: Record<string, unknown> | null;
     markLearned?: boolean;
   },
-): Promise<RepertoireItem> {
+): Promise<{ item: RepertoireItem; learnedNow: boolean }> {
   const learnedAt = item.markLearned ? new Date().toISOString() : null;
-  const [row] = await sql<RepertoireItem[]>`
+  const [row] = await sql<(RepertoireItem & { learned_now: boolean | null })[]>`
     insert into cadence.repertoire (user_id, goal_id, label, status, kind, meta, learned_at)
     values (
-      ${userId}, ${item.goal_id ?? null}, ${item.label}, ${item.status},
+      ${userId}, ${item.goal_id ?? null}, ${nfc(item.label)}, ${item.status ?? 'working'},
       ${item.kind ?? null}, ${item.meta ? json(item.meta) : null}, ${learnedAt}
     )
     on conflict (user_id, lower(label)) do update set
-      status = excluded.status,
+      status = coalesce(${item.status ?? null}::text, cadence.repertoire.status),
       goal_id = coalesce(excluded.goal_id, cadence.repertoire.goal_id),
       kind = coalesce(excluded.kind, cadence.repertoire.kind),
       meta = coalesce(excluded.meta, cadence.repertoire.meta),
       learned_at = coalesce(cadence.repertoire.learned_at, excluded.learned_at),
       updated_at = now()
-    returning item_id, user_id, goal_id, label, status, kind, meta,
-              started_at::text as started_at, learned_at::text as learned_at,
-              last_practiced_at::text as last_practiced_at`;
+    returning ${cols()},
+      (${item.markLearned ?? false} and learned_at = ${learnedAt}::timestamptz) as learned_now`;
   if (!row) throw new Error('upsertRepertoireItem: no row returned');
-  return row;
+  const { learned_now, ...rest } = row;
+  return { item: rest as RepertoireItem, learnedNow: learned_now === true };
+}
+
+/** Stamp "they worked this" on the given rows. `at` lets a log recorded days later stamp the
+ *  session's own date instead of today's — the rotation orders by when practice HAPPENED. Never
+ *  moves a stamp backwards: re-logging an old session must not resurface a freshly-played piece. */
+export async function stampPracticed(userId: string, itemIds: string[], at?: string): Promise<void> {
+  if (!itemIds.length) return;
+  await sql`
+    update cadence.repertoire
+    set last_practiced_at = greatest(coalesce(last_practiced_at, 'epoch'::timestamptz),
+                                     coalesce(${at ?? null}::timestamptz, now())),
+        updated_at = now()
+    where user_id = ${userId} and item_id = any(${itemIds})`;
 }
 
 /**
- * Stamp "they worked this today" on any item whose label appears in the text — the write-back
- * that makes the rotation rotate. Case-insensitive containment, and deliberately dumb rather
- * than fuzzy: a miss costs one stale date, a false hit corrupts the rotation. Labels shorter
- * than 4 characters never match ("Air" would hit half of English). Returns the labels touched.
+ * Drop the cached session prescriptions a repertoire change makes stale. Sessions are generated
+ * once and cached on the occurrence (`setOccurrenceSessionIfEmpty`), so without this a week
+ * warmed in one burst names the same DUE NEXT piece all week, and occurrences warmed before a
+ * repertoire write never see it at all. Scoped to the goal's own pending, future, user-kind rows
+ * — each cleared row costs one regeneration on next open, bounded by that goal's week.
  */
-export async function touchPracticedFromText(userId: string, text: string): Promise<string[]> {
-  if (!text.trim()) return [];
-  const items = await listRepertoire(userId);
-  const hay = text.toLowerCase();
-  const touched = items.filter((i) => {
-    const full = i.label.toLowerCase().trim();
-    // "A Short Story (Lichner)" must match a log that says "ran through A Short Story" — the
-    // stored label carries a qualifier the user's own words never will, so the core (label with
-    // parentheticals stripped) is a needle too.
-    const core = full.replace(/\s*\([^)]*\)/g, '').trim();
-    return [full, core].some((needle) => needle.length >= 4 && hay.includes(needle));
-  });
-  if (!touched.length) return [];
-  await sql`
-    update cadence.repertoire set last_practiced_at = now(), updated_at = now()
-    where user_id = ${userId} and item_id = any(${touched.map((i) => i.item_id)})`;
-  return touched.map((i) => i.label);
+export async function clearPendingSessionsForGoal(userId: string, goalId: string): Promise<number> {
+  const rows = await sql<{ occurrence_id: string }[]>`
+    update cadence.occurrences o
+    set session = null
+    from cadence.activities a
+    where o.activity_id = a.activity_id
+      and o.user_id = ${userId} and a.goal_id = ${goalId} and a.kind = 'user'
+      and o.status = 'pending' and o.date >= current_date and o.session is not null
+    returning o.occurrence_id`;
+  return rows.length;
 }

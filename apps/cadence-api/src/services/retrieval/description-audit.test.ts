@@ -54,6 +54,7 @@ const BANNED: Array<{ re: RegExp; why: string }> = [
 const TIEBREAK_PAIRS: Array<[string, string]> = [
   ['get_workout_history', 'get_recent_logs'], // device records vs their own words
   ['get_practice_totals', 'get_goal_progress'], // one counted thing vs overall numbers
+  ['get_repertoire', 'get_practice_totals'], // what they know vs how much they practiced
 ];
 
 /** Every failure here points at the checklist, because the rule broken is written down there and

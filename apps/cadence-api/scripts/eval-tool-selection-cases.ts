@@ -329,12 +329,14 @@ const ACTIONS: EvalCase[] = [
         const items = Array.isArray(a.items) ? (a.items as Array<Record<string, unknown>>) : [];
         const hit = items.find((i) => /blackbird/i.test(str(i.label)));
         if (!hit) return 'no item named blackbird';
-        return str(hit.status) === 'learned' ? null : `status was "${String(hit.status)}", wanted learned — it crossed the line just now`;
+        return str(hit.status) === 'learned'
+          ? null
+          : `status was "${String(hit.status)}", wanted learned — it crossed the line just now`;
       },
     },
     from:
       'Owner ruling 2026-08-30: "Coach should record and remember as I complete milestones (of course!)" — ' +
-      'the crossing is the moment worth an accomplishment in the goal history, unlike A17\'s quiet backfill.',
+      "the crossing is the moment worth an accomplishment in the goal history, unlike A17's quiet backfill.",
   },
 ];
 
@@ -740,6 +742,7 @@ export const ACTION_TOOLS = new Set([
   'correct_log',
   'set_macro_targets',
   'log_meal',
+  'update_repertoire',
 ]);
 
 /**

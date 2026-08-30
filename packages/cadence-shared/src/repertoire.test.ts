@@ -7,12 +7,14 @@ const item = (label: string, over: Partial<RepertoireLike> = {}): RepertoireLike
   ...over,
 });
 
+const daysAgo = (n: number): string => new Date(Date.now() - n * 86_400_000).toISOString();
+
 describe('pickDueNext', () => {
   it('picks the known item resting longest', () => {
     const items = [
-      item('A Short Story', { last_practiced_at: '2026-08-28T00:00:00Z' }),
-      item('Écossaise', { last_practiced_at: '2026-08-10T00:00:00Z' }),
-      item('Minuet in G', { last_practiced_at: '2026-08-20T00:00:00Z' }),
+      item('A Short Story', { last_practiced_at: daysAgo(1) }),
+      item('Écossaise', { last_practiced_at: daysAgo(19) }),
+      item('Minuet in G', { last_practiced_at: daysAgo(9) }),
     ];
     expect(pickDueNext(items)?.label).toBe('Écossaise');
   });
@@ -42,21 +44,35 @@ describe('pickDueNext', () => {
 });
 
 describe('renderRepertoire', () => {
-  it('groups by status, marks the due item, and dates the rest', () => {
-    // Midday timestamps — a midnight-UTC instant renders as the previous calendar day in any
-    // western timezone, and the assertion is about grouping, not about that.
-    const text = renderRepertoire([
-      item('Melody', { status: 'working', kind: 'piece', last_practiced_at: '2026-08-27T16:00:00Z' }),
-      item('Écossaise', { kind: 'piece', last_practiced_at: '2026-08-10T12:00:00Z' }),
-      item('A Short Story', { kind: 'piece', last_practiced_at: '2026-08-28T16:00:00Z' }),
-      item('Cradle Song', { status: 'parked' }),
-    ]);
+  it('groups by status, marks the due item, and dates by relative day-count', () => {
+    const now = Date.now();
+    const text = renderRepertoire(
+      [
+        item('Melody', { status: 'working', kind: 'piece', last_practiced_at: daysAgo(1) }),
+        item('Écossaise', { kind: 'piece', last_practiced_at: daysAgo(20) }),
+        item('A Short Story', { kind: 'piece', last_practiced_at: daysAgo(0.2) }),
+        item('Cradle Song', { status: 'parked' }),
+      ],
+      now,
+    );
     expect(text).toContain('Working on now:');
-    expect(text).toContain('- Melody (piece; last worked Aug 27)');
+    expect(text).toContain('- Melody (piece; worked yesterday)');
     expect(text).toContain('rotation pool');
-    expect(text).toContain('- Écossaise (piece; last worked Aug 10; DUE NEXT by rotation)');
-    expect(text).not.toContain('A Short Story (piece; last worked Aug 28; DUE NEXT');
+    expect(text).toContain('- Écossaise (piece; worked 20 days ago; DUE NEXT by rotation)');
+    expect(text).toContain('- A Short Story (piece; worked today)');
     expect(text).toContain('Set aside for now: Cradle Song');
+  });
+
+  it('orders the known pool longest-rest first and a cut never drops the due item', () => {
+    const many = Array.from({ length: 20 }, (_, i) =>
+      item(`Piece ${String(i).padStart(2, '0')}`, { last_practiced_at: daysAgo(i) }),
+    );
+    const text = renderRepertoire(many);
+    // Piece 19 rests longest → due, and must lead the list despite 20 > cap.
+    const lines = text.split('\n');
+    expect(lines[1]).toContain('Piece 19');
+    expect(lines[1]).toContain('DUE NEXT by rotation');
+    expect(text).toContain('…and 5 more on file'); // 20 known, cap 15 — the cut says so
   });
 
   it('renders empty for an empty list, so callers can omit the section cleanly', () => {

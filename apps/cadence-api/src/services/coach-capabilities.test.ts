@@ -45,12 +45,13 @@ describe('coach capability manifest', () => {
    *
    * Keep the ceiling. The next thing that wants in has to cut something or show its own arithmetic.
    *
-   * 5300 → 5400 (2026-08-30, repertoire): +65 chars/session, already cut to the bone — the
-   * feature adds no capability line of its own (folded into "remember what you told me") and a
-   * five-word category label. The arithmetic: the `practice` category line is what lets
-   * `get_repertoire` live in the FREE tail and still be found; the alternative, an always-on
-   * read, would cost ~100 tokens (~400 chars) per TURN forever. 65 chars a session buying ~400
-   * a turn is the same trade the header calls good, an order of magnitude smaller.
+   * 5300 → 5400 (2026-08-30, repertoire): +111 chars/session, measured — 63 for the fold into
+   * "remember what you told me" (no capability line of its own) and 48 for the `practice`
+   * category line riding categoryLines(). Renders at 5365, so real headroom under 5400 is 35
+   * chars. The arithmetic that buys it: the category line is what lets `get_repertoire` live in
+   * the FREE tail and still be found; the alternative, an always-on read, would cost ~100 tokens
+   * (~400 chars) per TURN forever. 111 chars a session buying ~400 a turn is the same trade the
+   * header calls good, an order of magnitude smaller.
    */
   it('stays small enough to ride every session open', () => {
     expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(5400);
@@ -64,7 +65,7 @@ describe('coach capability manifest', () => {
     const out = renderCapabilities({ healthAvailable: true });
     expect(out).toContain('find_tools');
     expect(out).toMatch(/LOOK before answering/);
-    for (const key of ['training', 'body', 'food', 'writing', 'changes']) expect(out).toContain(key);
+    for (const key of ['training', 'practice', 'body', 'food', 'writing', 'changes']) expect(out).toContain(key);
   });
 
   /** Looking and saying "no" beats not looking, and beats implying you did something you did not. */

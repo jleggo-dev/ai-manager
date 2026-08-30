@@ -202,7 +202,7 @@ export const isActionName = (name: string): boolean => !!COACH_ACTION_TOOLS[name
  *
  * Owner: *"it's about giving the coach the categories — this is about hierarchy and her having the
  * context to drill down."* That is the whole mechanism. A flat list makes her guess a search term
- * for something she may not know exists; five named categories mean the manifest can say what KINDS
+ * for something she may not know exists; a handful of named categories mean the manifest can say what KINDS
  * of thing are reachable, and she narrows from there. Knowing "there is a category for their food"
  * is enough to go looking, which is the behaviour the demotion depends on.
  *

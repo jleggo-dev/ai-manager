@@ -8,7 +8,7 @@ import type { OccurrenceLog, OccurrenceLogItem } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { getOccurrenceWithActivity, recordOccurrenceLog } from '../repos/occurrences.ts';
 import { insertGoalEvent } from '../repos/goal-events.ts';
-import { touchPracticedFromText } from '../repos/repertoire.ts';
+import { sessionTexts, touchPracticedFromText } from './repertoire-practice.ts';
 import { logAi } from './ai-log.ts';
 import { MAX_ITEMS, num, str } from './session-normalize.ts';
 
@@ -146,16 +146,25 @@ export async function logOccurrence(
     }
   }
 
-  // Repertoire write-back: any item of theirs named in the log gets "worked today" stamped, so
-  // the rotation actually rotates off what HAPPENED, not what was prescribed. Best-effort, plain
-  // containment on their own words — a miss costs one stale date; a failure never fails the log.
-  const practiced = await touchPracticedFromText(userId, raw_text).catch(() => [] as string[]);
+  // Repertoire write-back: any scoped item named in the log — or in the prescription they just
+  // reported doing ("done, felt good" names no piece; the session it answers does) — gets its
+  // practice stamped AT THE SESSION'S DATE, so the rotation rotates off what happened, when it
+  // happened. Best-effort: a failure never fails the log, but it logs as an error, never as
+  // "matched nothing" — those are different facts.
+  const practiced = await touchPracticedFromText(
+    userId,
+    [raw_text, summary, ...items.map((i) => i.name), ...sessionTexts(occ.session)],
+    { goalId: occ.goal_id ?? null, at: `${occ.date}T12:00:00Z` },
+  ).catch((e): null => {
+    console.error('[repertoire-touch]', e);
+    return null;
+  });
 
   void logAi(userId, {
     kind: 'parse_session_log',
     input: { occurrenceId, title: occ.title, text: raw_text },
     output: log,
-    meta: { items: items.length, parsed: !!parsed, events, practiced: practiced.length },
+    meta: { items: items.length, parsed: !!parsed, events, practiced: practiced === null ? 'error' : practiced.length },
   });
   return { log, summary };
 }

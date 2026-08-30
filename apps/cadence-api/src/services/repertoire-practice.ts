@@ -1,0 +1,95 @@
+import type { OccurrenceSession, RepertoireItem } from '@cadence/shared';
+import { clearPendingSessionsForGoal, listRepertoire, stampPracticed } from '../repos/repertoire.ts';
+import { normTitle } from './goal-identity.ts';
+
+/**
+ * The practice write-back — the deterministic rung that makes the rotation rotate.
+ *
+ * Matching is precision-first, because the two costs are asymmetric (the repo comment's own
+ * rule): a miss leaves one stale date and the next log gets another chance; a false hit pushes a
+ * piece to the back of the rotation where nothing ever corrects it. Hence:
+ *
+ *  - **Scoped by goal.** Only items linked to the session's goal (or linked to no goal at all)
+ *    can match — "had a melody stuck in my head" on a run log must not stamp the piano piece
+ *    "Melody", and it can't: Melody rides the piano goal, the run doesn't.
+ *  - **Whole words on normalized text.** Both sides go through NFC + `normTitle` (the same
+ *    normalizer goal matching trusts), and needles match only at word boundaries — an item
+ *    called "Rain" does not match "training".
+ *  - **The label's CORE matches too.** Stored labels carry qualifiers the user's own words never
+ *    will — "A Short Story (Lichner)", "Écossaise by J.N. Hummel", "Minuet in G Major, BWV 822"
+ *    — so a second needle strips parentheticals, a trailing "by …", and anything after a comma.
+ *  - **Parked items never stamp** — they are out of the rotation by definition.
+ */
+const needles = (label: string): string[] => {
+  const full = normTitle(label.normalize('NFC'));
+  const core = normTitle(
+    label
+      .normalize('NFC')
+      .replace(/\s*\([^)]*\)/g, '')
+      .replace(/\s+by\s+.+$/i, '')
+      .replace(/,.*$/, ''),
+  );
+  return [...new Set([full, core])].filter((n) => n.length >= 4);
+};
+
+const containsWord = (hay: string, needle: string): boolean => ` ${hay} `.includes(` ${needle} `);
+
+export interface TouchOptions {
+  /** The session's goal — items linked to a DIFFERENT goal can never match. */
+  goalId?: string | null;
+  /** When practice HAPPENED (the occurrence's date), not when it was written up. */
+  at?: string;
+}
+
+/** Stamp any scoped repertoire item named in the texts; returns the labels touched. Also drops
+ *  the touched goals' cached future sessions, so tomorrow's prescription sees today's rotation. */
+export async function touchPracticedFromText(
+  userId: string,
+  texts: Array<string | null | undefined>,
+  opts: TouchOptions = {},
+): Promise<string[]> {
+  const body = texts.filter((t): t is string => !!t?.trim()).join('\n');
+  if (!body) return [];
+  const items = await listRepertoire(userId);
+  const scoped = items.filter(
+    (i) => i.status !== 'parked' && (i.goal_id == null || i.goal_id === (opts.goalId ?? null)),
+  );
+  if (!scoped.length) return [];
+  const hay = normTitle(body.normalize('NFC'));
+  const touched = scoped.filter((i) => needles(i.label).some((n) => containsWord(hay, n)));
+  if (!touched.length) return [];
+  await stampPracticed(
+    userId,
+    touched.map((i) => i.item_id),
+    opts.at,
+  );
+  await invalidateSessionsFor(userId, touched);
+  return touched.map((i) => i.label);
+}
+
+/** The names a cached prescription carries — what "they ticked it done" tells us was played. */
+export function sessionTexts(session: OccurrenceSession | null | undefined): string[] {
+  if (!session) return [];
+  const out: string[] = [];
+  for (const block of session.blocks ?? []) {
+    for (const it of block.items ?? []) {
+      if (it.name) out.push(it.name);
+      if (it.detail) out.push(it.detail);
+    }
+  }
+  return out;
+}
+
+/** Best-effort, fire-and-forget-safe: stale cached sessions for the goals whose rotation just
+ *  moved. Distinct goals only; unlinked items invalidate nothing (no goal to scope to). */
+export async function invalidateSessionsFor(
+  userId: string,
+  items: Array<Pick<RepertoireItem, 'goal_id'>>,
+): Promise<void> {
+  const goalIds = [...new Set(items.map((i) => i.goal_id).filter((g): g is string => !!g))];
+  for (const goalId of goalIds) {
+    await clearPendingSessionsForGoal(userId, goalId).catch((e) =>
+      console.error('[repertoire] session invalidation failed (continuing):', e),
+    );
+  }
+}

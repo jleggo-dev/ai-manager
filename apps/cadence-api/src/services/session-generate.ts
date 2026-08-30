@@ -74,7 +74,12 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
     listEquipment(userId),
     getUser(userId),
     listRecentLogsByTitle(userId, occ.title, 4),
-    listRepertoire(userId).catch(() => []),
+    // null, not [] — a read that broke must not render as "knows nothing" (the crash that read
+    // as an empty record for weeks is exactly this shape; CLAUDE.md's guard rule).
+    listRepertoire(userId).catch((e): null => {
+      console.error('[prescribe] repertoire read failed:', e);
+      return null;
+    }),
   ]);
   const phase = coachingPhase(history.length);
 
@@ -122,10 +127,22 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
     baseline: JSON.stringify(user?.baseline ?? {}),
     equipment: JSON.stringify(equipment.map((e) => ({ name: e.name, category: e.category }))),
     recent_logs: renderLogLines(history),
-    // What they are learning / already know, with the rotation's DUE NEXT pick computed — the
-    // prescribe coach reads it and names ONE piece for a known/review slot instead of inventing
-    // material or freezing one title into the plan text (the 2026-08-29 piano failure).
-    repertoire: renderRepertoire(repertoire),
+    // What they are learning / already know FOR THIS SESSION'S GOAL, with the rotation's DUE
+    // NEXT computed over that scope — the prescribe coach names ONE piece for a review slot
+    // instead of inventing material or freezing a title into plan text (the 2026-08-29 piano
+    // failure). Scoped because the prompt promises "for this practice": a karate kata must not
+    // come up DUE NEXT in a piano session, and the piano book must not ride every run's prompt.
+    // Unlinked items reach practice-area goals only. A failed read says so — never "empty".
+    repertoire:
+      repertoire === null
+        ? 'Could not be read just now — a fault on our side, NOT an empty record. Do not assume they know nothing, and do not invent items.'
+        : renderRepertoire(
+            repertoire.filter(
+              (i) =>
+                i.goal_id === occ.goal_id ||
+                (i.goal_id == null && goals.find((g) => g.goal_id === occ.goal_id)?.area === 'practice'),
+            ),
+          ),
     phase,
     sessions_logged: String(history.length),
     occurrence_date: occ.date,
