@@ -301,18 +301,13 @@ export function renderCoachToolCatalog(): string {
   );
   lines.push(
     '',
-    'METRONOME — "metronome_bpm" is not a tool and does not replace one. It rides ALONGSIDE whatever',
-    'tool the step already has, the way video_query does: a scales step is a timer step that happens',
-    'to have a beat, and a practice-log step is a journal step that happens to have one. Set it and a',
-    'metronome appears on that step, already at the tempo you named, which they can then change.',
-    `  bounds: ${MIN_BPM}-${MAX_BPM} bpm. "metronome_meter" is beats to the bar for the accent`,
-    `  (${METERS.join(', ')} are the usual; default ${DEFAULT_METER}). Leave the meter out if you don't know it.`,
-    '  WHEN: someone is practising to a pulse — an instrument, scales, sight-reading, drills at tempo,',
-    '  a metronome they told you they use. It is the ONLY reason to set it.',
-    '  WHEN NOT: everything else. A pulse is furniture on a plank, a run, or a sit, and a click during',
-    '  quiet practice is an intrusion. No field, no metronome — and that is the right answer almost',
-    '  every time. Pick a tempo they can actually play: for learning a new piece that is slower than',
-    '  the marking, and going back to a slower tempo is progress, not a step backwards.',
+    'METRONOME — "metronome_bpm" is a field, not a tool: it rides alongside whatever tool the step',
+    'already has, the way video_query does. A scales step is a timer step that happens to have a beat.',
+    `  bounds: ${MIN_BPM}-${MAX_BPM} bpm. "metronome_meter" = beats to the bar (${METERS.join(', ')} usual, default ${DEFAULT_METER});`,
+    '  omit it if you do not know. Set a tempo they can actually play — under the marking for a piece',
+    '  they are still learning.',
+    '  WHEN: practising to a pulse — an instrument, scales, sight-reading, drills at tempo. Nothing else.',
+    '  Omitting it is the right answer almost every time: a click on a plank, a run or a sit is an intrusion.',
     '  e.g. {"name": "Hanon no. 1", "tool": "timer", "duration_min": 10, "metronome_bpm": 72}',
   );
   lines.push('', 'GROUNDING GAMES — the only values "grounding_game" accepts:');
