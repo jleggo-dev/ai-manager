@@ -13,9 +13,16 @@ export const queryKeys = {
   plan: {
     all: ['plan'] as const,
   },
-  /** The `/progress` dashboard (PERF-01) — one key, refetched on the ＋1 event path. */
+  /** The `/progress` dashboard (PERF-01) — `all` is the unwindowed default (refetched on the
+   *  ＋1 event path, unchanged); `window` adds the 'week' | 'month' | 'all' variant so each
+   *  window paints from its own cache entry instead of fighting over one key. */
   progress: {
     all: ['progress'] as const,
+    window: (w: 'week' | 'month' | 'all') => ['progress', w] as const,
+  },
+  /** `GET /progress/history?from&to` — the rhythm widget's raw inputs + assembled payload. */
+  progressHistory: {
+    range: (from: string, to: string) => ['progressHistory', from, to] as const,
   },
   /** `/me/weather` (PERF-03) — the trail header's one line of sky. */
   weather: {
