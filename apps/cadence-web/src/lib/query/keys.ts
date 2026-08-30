@@ -33,6 +33,10 @@ export const queryKeys = {
   weather: {
     all: ['weather'] as const,
   },
+  /** `/me/health-digest` (W1-6) — stored HealthKit summaries; the steps `weekly_bars` widget. */
+  healthDigest: {
+    all: ['healthDigest'] as const,
+  },
   /** `/me/sessions` (W1-3) — the `dated_sessions` widget + its drill-down list, keyed by the
    *  activity title + window so each combination caches independently. */
   datedSessions: {
