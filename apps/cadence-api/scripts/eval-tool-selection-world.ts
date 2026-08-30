@@ -57,7 +57,9 @@ export function missingEnv(): string | null {
   return null;
 }
 
-async function createUser(email: string, password: string): Promise<string> {
+// Exported for eval-conversation-replay.ts, which mints the same kind of throwaway user against
+// a different seeded world.
+export async function createUser(email: string, password: string): Promise<string> {
   const res = await fetch(`${SUPA}/auth/v1/admin/users`, {
     method: 'POST',
     headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' },
@@ -68,7 +70,7 @@ async function createUser(email: string, password: string): Promise<string> {
   return body.id;
 }
 
-async function signIn(email: string, password: string): Promise<string> {
+export async function signIn(email: string, password: string): Promise<string> {
   const res = await fetch(`${SUPA}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: { apikey: ANON, 'Content-Type': 'application/json' },
