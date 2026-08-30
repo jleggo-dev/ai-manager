@@ -166,9 +166,7 @@ function RecapRailBound({ spec }: BoundProps) {
   const recaps = data.recaps.map((r) => ({
     week_of: weekOfLabel(r.week_start),
     facts_line: r.facts_line,
-    // The frozen RecapRailPayload's `line` is non-nullable; most rows have none yet (honest v1) —
-    // the empty string reads as a blank line in RecapRailWidget rather than the literal "null".
-    line: r.line ?? '',
+    line: r.line,
     detour: r.detour,
   }));
   return <WidgetSection spec={spec} payload={{ kind: 'recap_rail', data: { recaps } }} />;

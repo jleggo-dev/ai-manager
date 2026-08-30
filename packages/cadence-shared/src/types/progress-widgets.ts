@@ -164,7 +164,10 @@ export interface VarietyPayload {
 }
 
 export interface RecapRailPayload {
-  recaps: { week_of: string; facts_line: string; line: string; detour?: boolean }[];
+  /** `line` is the coach's/receipt's one-sentence conclusion — nullable on purpose (honest v1:
+   *  rows persisted before anything writes conclusions back simply have none, and "no line yet"
+   *  must stay distinguishable from an empty one; the renderer skips it when absent). */
+  recaps: { week_of: string; facts_line: string; line?: string | null; detour?: boolean }[];
 }
 
 export interface HistoryPayload {

@@ -314,4 +314,4 @@ export {
   type Omittable,
 } from './api/progress-extras.ts';
 
-export { getRecaps, type RecapListItem, type RecapListResult } from './api/recaps.ts';
+export { getRecaps, postWeekReviewRecap, type RecapListItem, type RecapListResult } from './api/recaps.ts';

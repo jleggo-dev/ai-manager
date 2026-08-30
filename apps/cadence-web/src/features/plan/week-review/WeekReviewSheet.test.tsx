@@ -5,6 +5,7 @@ import { WeekReviewSheet } from './WeekReviewSheet.tsx';
 
 const getWeekReviewFacts = vi.fn();
 const dismissPendingWeekReview = vi.fn();
+const postWeekReviewRecap = vi.fn();
 const confirmWeekReviewSession = vi.fn();
 const toggleWeekReviewMeal = vi.fn();
 const toggleWeekReviewMindStep = vi.fn();
@@ -12,6 +13,7 @@ const toggleWeekReviewMindStep = vi.fn();
 vi.mock('../../../lib/api.ts', () => ({
   getWeekReviewFacts: (...a: unknown[]) => getWeekReviewFacts(...a),
   dismissPendingWeekReview: (...a: unknown[]) => dismissPendingWeekReview(...a),
+  postWeekReviewRecap: (...a: unknown[]) => postWeekReviewRecap(...a),
   confirmWeekReviewSession: (...a: unknown[]) => confirmWeekReviewSession(...a),
   toggleWeekReviewMeal: (...a: unknown[]) => toggleWeekReviewMeal(...a),
   toggleWeekReviewMindStep: (...a: unknown[]) => toggleWeekReviewMindStep(...a),
@@ -42,6 +44,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   getWeekReviewFacts.mockResolvedValue({ review: REVIEW, facts: FACTS });
   dismissPendingWeekReview.mockResolvedValue(true);
+  postWeekReviewRecap.mockResolvedValue(true);
   confirmWeekReviewSession.mockResolvedValue(true);
   toggleWeekReviewMeal.mockResolvedValue(true);
   toggleWeekReviewMindStep.mockResolvedValue(true);
@@ -169,6 +172,11 @@ describe('WeekReviewSheet', () => {
       await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
       expect(dismissPendingWeekReview).toHaveBeenCalledTimes(1);
       expect(onConfirmed).toHaveBeenCalledWith(ZERO_CORRECTIONS_RECEIPT);
+      // The recap write reads the pending pointer that dismiss clears — order is load-bearing (W2-1).
+      expect(postWeekReviewRecap).toHaveBeenCalledWith(ZERO_CORRECTIONS_RECEIPT);
+      expect(postWeekReviewRecap.mock.invocationCallOrder[0]).toBeLessThan(
+        dismissPendingWeekReview.mock.invocationCallOrder[0]!,
+      );
     });
 
     it('still closes and hands off the receipt even when the dismiss write fails', async () => {

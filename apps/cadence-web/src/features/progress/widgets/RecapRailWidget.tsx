@@ -13,7 +13,7 @@ export function RecapRailWidget({ data }: { data: RecapRailPayload }) {
         <div className="pw-rail-card" key={`${r.week_of}-${i}`}>
           <div className="pw-rail-week">WEEK OF {r.week_of}</div>
           <div className="pw-rail-facts">{r.facts_line}</div>
-          <div className="pw-rail-line">{r.line}</div>
+          {r.line ? <div className="pw-rail-line">{r.line}</div> : null}
         </div>
       ))}
     </div>

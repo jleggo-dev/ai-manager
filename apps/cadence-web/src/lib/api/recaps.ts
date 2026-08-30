@@ -17,6 +17,21 @@ export interface RecapListResult {
   recaps: RecapListItem[];
 }
 
+/**
+ * `POST /plan/week-review/recap` — the confirm anchor's write (Progress Engine W2-1). The server
+ * takes the week from the user's OWN `pending_week_review` pointer, never from here, so this must
+ * be called BEFORE `dismissPendingWeekReview` clears that pointer. Failure is swallowed by the
+ * caller the same way the dismiss's is: a lost recap never blocks the confirm moment.
+ */
+export async function postWeekReviewRecap(line?: string): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/week-review/recap`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(line ? { line } : {}),
+  });
+  return res.ok;
+}
+
 /** The `recap_rail` widget's data. Rows persist at week-review confirm time; this is a plain read. */
 export async function getRecaps(limit = 8): Promise<RecapListResult> {
   const res = await fetch(`${BASE}/me/recaps?limit=${limit}`, { headers: headers() });
