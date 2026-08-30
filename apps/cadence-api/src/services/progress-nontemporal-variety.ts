@@ -23,7 +23,11 @@ const MEAL_NOUN: Record<MealKind, string> = {
 };
 
 /** Pure: fold already-fetched (windowed) logs into one meal's distinct-food count. */
-export function resolveVariety(logs: NutritionLog[], meal: MealKind, windowLabel: string): VarietyPayload | WidgetOmission {
+export function resolveVariety(
+  logs: NutritionLog[],
+  meal: MealKind,
+  windowLabel: string,
+): VarietyPayload | WidgetOmission {
   const slice = logs.filter((l) => l.meal === meal);
   if (slice.length === 0) return omit(`variety:${meal}`, 'variety', `no ${meal} logs in this window`);
   const foods = new Set<string>();

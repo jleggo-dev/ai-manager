@@ -33,7 +33,9 @@ describe('resolveTotal', () => {
 
   it('matches by the goal measure unit against the totals metric key (words -> words)', () => {
     const totals = [total({ metric: 'words', total: 3200 }), total({ title: 'Sitting', metric: 'minutes', total: 40 })];
-    expect(resolveTotal(goal({ measure: { metric: 'words', target: 0, unit: 'words' } }), totals, 'this month')).toEqual({
+    expect(
+      resolveTotal(goal({ measure: { metric: 'words', target: 0, unit: 'words' } }), totals, 'this month'),
+    ).toEqual({
       value: 3200,
       unit: 'words',
       window_label: 'this month',

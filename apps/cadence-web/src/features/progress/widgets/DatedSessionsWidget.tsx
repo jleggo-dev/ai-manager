@@ -62,7 +62,15 @@ export function DatedSessionsWidget({ data }: { data: DatedSessionsPayload }) {
           );
         })}
         {ticks.map((t, i) => (
-          <text key={i} x={t.x} y={H - 4} textAnchor="middle" fontFamily="var(--mono)" fontSize="10" fill="var(--text-mute)">
+          <text
+            key={i}
+            x={t.x}
+            y={H - 4}
+            textAnchor="middle"
+            fontFamily="var(--mono)"
+            fontSize="10"
+            fill="var(--text-mute)"
+          >
             {t.label}
           </text>
         ))}

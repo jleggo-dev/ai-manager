@@ -45,7 +45,9 @@ function TalkRow({ onCoach }: { onCoach?: (note: string) => void }) {
       }
     >
       <b style={{ fontWeight: 600 }}>Want this page to watch something different?</b>
-      <span style={{ display: 'block', marginTop: 2 }}>tell me what progress means to you — we&rsquo;ll shape it together</span>
+      <span style={{ display: 'block', marginTop: 2 }}>
+        tell me what progress means to you — we&rsquo;ll shape it together
+      </span>
     </button>
   );
 }

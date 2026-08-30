@@ -22,7 +22,9 @@ describe('resolveShelf', () => {
   });
 
   it('caps at 8, keeping the most recent', () => {
-    const events = Array.from({ length: 12 }, (_, i) => event(`2026-08-${String(i + 1).padStart(2, '0')}`, `event ${i}`));
+    const events = Array.from({ length: 12 }, (_, i) =>
+      event(`2026-08-${String(i + 1).padStart(2, '0')}`, `event ${i}`),
+    );
     const result = resolveShelf(events);
     expect('events' in result && result.events).toHaveLength(8);
     expect('events' in result && result.events[0]).toEqual({ label: 'event 11', at: '2026-08-12' });

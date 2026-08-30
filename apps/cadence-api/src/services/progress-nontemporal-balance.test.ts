@@ -17,7 +17,11 @@ function row(kind: 'movement' | 'mind', patch: Partial<SessionFeedbackRow> = {})
 
 describe('resolveBalance', () => {
   it('omits with evidence when there are no answered sessions of that kind', () => {
-    expect(resolveBalance([], 'mind')).toEqual({ id: 'balance:mind', kind: 'balance', reason: 'no answered mind sessions in this window' });
+    expect(resolveBalance([], 'mind')).toEqual({
+      id: 'balance:mind',
+      kind: 'balance',
+      reason: 'no answered mind sessions in this window',
+    });
   });
 
   it('mind: counts calmer as positive, out of every answered mind row', () => {
@@ -32,7 +36,12 @@ describe('resolveBalance', () => {
 
   it('movement: counts just_right as positive', () => {
     const rows = [row('movement', { rpe: 'just_right' }), row('movement', { rpe: 'too_hard' })];
-    expect(resolveBalance(rows, 'movement')).toEqual({ positive_label: 'Felt right', positive: 1, total: 2, noun: 'sessions' });
+    expect(resolveBalance(rows, 'movement')).toEqual({
+      positive_label: 'Felt right',
+      positive: 1,
+      total: 2,
+      noun: 'sessions',
+    });
   });
 
   it('never exposes a complement/negative-series field — count what happened only', () => {

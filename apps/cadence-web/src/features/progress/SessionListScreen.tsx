@@ -27,14 +27,18 @@ export function SessionListScreen({ activity, onBack }: { activity: string; onBa
       </div>
 
       <div className="scrollbody">
-        {error && !data && <div className="wiz-empty">{"Couldn't load these sessions just now — try again shortly."}</div>}
+        {error && !data && (
+          <div className="wiz-empty">{"Couldn't load these sessions just now — try again shortly."}</div>
+        )}
         {data && data.sessions.length === 0 && (
           <div className="wiz-empty">Nothing logged for {activity} yet — it will show up here once you do.</div>
         )}
         {data?.sessions
           .slice()
           .reverse() // newest first for reading; the payload itself stays ascending (the contract)
-          .map((s, i) => <SessionRow key={`${s.date}-${i}`} session={s} />)}
+          .map((s, i) => (
+            <SessionRow key={`${s.date}-${i}`} session={s} />
+          ))}
       </div>
     </div>
   );
@@ -43,7 +47,8 @@ export function SessionListScreen({ activity, onBack }: { activity: string; onBa
 function subtitle(data: { total: number; last_4_weeks: number; usual_hr?: number | null }): string {
   const parts = [`${data.total} logged`, `${data.last_4_weeks} in the last 4 weeks`];
   // "absent HR simply absent" — never a 0 bpm reading, never shown until there's enough of them.
-  if (typeof data.usual_hr === 'number' && data.usual_hr > 0) parts.push(`usually around ${Math.round(data.usual_hr)} bpm`);
+  if (typeof data.usual_hr === 'number' && data.usual_hr > 0)
+    parts.push(`usually around ${Math.round(data.usual_hr)} bpm`);
   return parts.join(' · ');
 }
 

@@ -3,11 +3,14 @@ import { describe, it, expect, vi } from 'vitest';
 /** Failures cite the checklist — the rule is written down and a bare name list does not say so. */
 const HOW = 'see docs/cadence/TOOL-HARNESS.md → "Adding a tool: the checklist"';
 import { searchTools, COACH_META_TOOLS } from './coach-meta-tools.ts';
-import { alwaysOnToolNames,
+import {
+  alwaysOnToolNames,
   onDemandToolNames,
   DOSSIER_FUNCTIONS,
   ALWAYS_ACTIONS,
-  TOOL_CATEGORIES, DRAWER_HOOKS } from './coach-tool-tiers.ts';
+  TOOL_CATEGORIES,
+  DRAWER_HOOKS,
+} from './coach-tool-tiers.ts';
 import { coachToolDefinitions, coachToolNames } from './coach-tools.ts';
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
 import { coachActionNames } from './coach-actions.ts';

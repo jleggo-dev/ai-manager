@@ -49,7 +49,15 @@ describe('buildRhythmWeeks (pure — no DB)', () => {
     const week = payload.weeks[0]!;
     expect(week.start).toBe('2026-07-13');
     expect(week.label).toBe('Jul 13–19');
-    expect(week.days.map((d) => d.state)).toEqual(['kept', 'missed', 'upcoming', 'upcoming', 'unscheduled', 'checkin', 'unscheduled']);
+    expect(week.days.map((d) => d.state)).toEqual([
+      'kept',
+      'missed',
+      'upcoming',
+      'upcoming',
+      'unscheduled',
+      'checkin',
+      'unscheduled',
+    ]);
     expect(week.days.map((d) => d.date)).toEqual([
       '2026-07-13',
       '2026-07-14',

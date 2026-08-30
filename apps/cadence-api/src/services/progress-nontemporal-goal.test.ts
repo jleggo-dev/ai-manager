@@ -49,7 +49,10 @@ describe('resolveStagePath', () => {
   });
 
   it('orders by target_date even when given out of order; undated milestones sort first', () => {
-    const milestones = [milestone('m2', 'later', { target_date: '2026-09-01' }), milestone('m1', 'earlier', { target_date: '2026-08-01' })];
+    const milestones = [
+      milestone('m2', 'later', { target_date: '2026-09-01' }),
+      milestone('m1', 'earlier', { target_date: '2026-08-01' }),
+    ];
     const result = resolveStagePath(goal({ milestones }));
     expect('stages' in result && result.stages.map((s) => s.label)).toEqual(['earlier', 'later']);
   });
@@ -70,7 +73,7 @@ describe('resolveCountToward', () => {
     });
   });
 
-  it('mirrors services/progress.ts\'s count card: current from the caller, target/unit from measure', () => {
+  it("mirrors services/progress.ts's count card: current from the caller, target/unit from measure", () => {
     expect(resolveCountToward(goal({ measure: { metric: 'books', target: 100, unit: 'books' } }), 21)).toEqual({
       current: 21,
       target: 100,
