@@ -148,6 +148,12 @@ export const ALWAYS_READS = ['get_active_plan'] as const;
  * and `research_food` stay in the tail deliberately — they are reads, already free, and neither is
  * the everyday case this evidence is about.
  *
+ * `propose_progress_layout` joined 2026-08-30 (Progress Engine Wave 3, W3-1) on the owner's ruling
+ * that reshaping what a person's own coaching page watches is a core capability, not a rare one —
+ * the same reasoning `open_week_review` and `build_next_week` were added under, not a new one.
+ * docs/cadence/PROGRESS-ENGINE.md's own draft named this as scoped-conversation-only ("Nothing
+ * lands in ALWAYS_ACTIONS"); the owner ruling on THIS parcel supersedes that draft.
+ *
  * Run `npm run eval:tools` after changing this list.
  */
 export const ALWAYS_ACTIONS = [
@@ -160,6 +166,7 @@ export const ALWAYS_ACTIONS = [
   'open_week_review',
   'build_next_week',
   'log_meal',
+  'propose_progress_layout',
 ] as const;
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
