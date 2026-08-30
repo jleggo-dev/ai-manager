@@ -288,6 +288,35 @@ const ACTIONS: EvalCase[] = [
       'to end") describes. Reopened 2026-08-28 (MP34) as silence when log_nutrition turned out to be gone; ' +
       'reopened again now that log_meal exists to call. No explicit date: "around noon" today means omit it.',
   },
+  {
+    id: 'A17',
+    kind: 'action',
+    turn:
+      "honestly i don't care about charts of my runs. progress to me is pages written and mornings i " +
+      'actually sat. can the progress page show me that instead?',
+    expect: ['propose_progress_layout'],
+    allow: [...DOSSIER_READS, 'get_goal_progress'],
+    args: {
+      tool: 'propose_progress_layout',
+      check: (a) => {
+        const w = str(a.what_they_want);
+        if (!w) return 'what_they_want was empty — the tool is useless without her summary';
+        if (w.length > 200) return `what_they_want ran ${w.length} chars — a compact summary, not a transcript`;
+        return null;
+      },
+    },
+    from: 'docs/cadence/PROGRESS-ENGINE.md "The progress talk" (2026-08-30, Wave 3) — the composing turn.',
+  },
+  {
+    id: 'A18',
+    kind: 'action',
+    turn: 'i want this page to watch my writing streaks-wise no wait not streaks — just the words, week by week',
+    expect: ['propose_progress_layout'],
+    allow: [...DOSSIER_READS, 'get_goal_progress'],
+    from:
+      'docs/cadence/PROGRESS-ENGINE.md "The progress talk" (2026-08-30, Wave 3) — the page-door phrasing, ' +
+      'self-corrected mid-sentence the way people actually talk; "this page" is the Progress tab they came from.',
+  },
 ];
 
 /* ══ B · LONG-TAIL READS — the ones nothing injects, so a miss is genuinely a miss ═══════════ */
@@ -605,6 +634,18 @@ const SILENCE: EvalCase[] = [
       '"my wife had", not the object. log_meal could price "salmon" correctly without any trouble and would ' +
       'still be wrong to write it to his day — a model that reads for whose meal this is, not just whether ' +
       'the sentence contains food, is what this case actually checks.',
+  },
+  {
+    id: 'C17',
+    kind: 'silence',
+    turn: "how's my progress looking this month?",
+    expect: [],
+    allow: [...DOSSIER_READS, 'get_goal_progress', 'get_recent_logs'],
+    forbid: ['propose_progress_layout'],
+    from:
+      'docs/cadence/PROGRESS-ENGINE.md "The progress talk" (2026-08-30, Wave 3) — asking to SEE progress ' +
+      'is not asking to change what the page watches; the Progress tab already answers this, and a proposal ' +
+      'card landing on a status question would be the over-trigger this tool must never have.',
   },
 ];
 
