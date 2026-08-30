@@ -48,6 +48,11 @@ export const CAPABILITIES: CapabilityGroup[] = [
       'give you a weekly check-in on how you showed up, and flag what I am noticing',
       'pull your week up on your screen to look back on, any time you ask',
       'build your next week from the same rhythm the moment you say the word',
+      // The Progress Engine's talk (Wave 3). Missing from this list for a day, and the eval showed
+      // what the doc comment above predicts: she told a user "that's not something I can control
+      // from here" WHILE holding the drawer label for it — the manifest's omission outranked the
+      // tool description. The manifest and the drawer must name the same abilities.
+      'reshape what your Progress page watches — I propose, you confirm, nothing changes until you do',
     ],
   },
   {

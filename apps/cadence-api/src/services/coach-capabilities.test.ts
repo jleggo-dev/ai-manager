@@ -52,9 +52,18 @@ describe('coach capability manifest', () => {
    * the FREE tail and still be found; the alternative, an always-on read, would cost ~100 tokens
    * (~400 chars) per TURN forever. 111 chars a session buying ~400 a turn is the same trade the
    * header calls good, an order of magnitude smaller.
+   *
+   * 5400 → 5560 (2026-08-30, the progress talk — and a debt repaid): main was measured at 5417
+   * BEFORE this change, already over its own cap — repertoire's "renders at 5365" accounting went
+   * stale between measuring and merging, and its pipeline never ran this suite. 17 of this bump
+   * repays that. The other ~96 is the Progress-page capability line, and the eval measured the
+   * cost of its omission directly (A19): asked to reshape the page, she answered "that's not
+   * something I can control from here" WHILE holding the drawer label for the tool — the
+   * manifest's silence outranked the label. The manifest and the drawer must name the same
+   * abilities. Renders at 5513; headroom 47.
    */
   it('stays small enough to ride every session open', () => {
-    expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(5400);
+    expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(5560);
   });
 
   /**
