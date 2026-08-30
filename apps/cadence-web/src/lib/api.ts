@@ -314,4 +314,11 @@ export {
   type Omittable,
 } from './api/progress-extras.ts';
 
+export {
+  getProgressLayoutDraft,
+  commitProgressLayoutDraft,
+  dismissProgressLayoutDraft,
+  type ProgressLayoutDraft,
+} from './api/progress-layout.ts';
+
 export { getRecaps, postWeekReviewRecap, type RecapListItem, type RecapListResult } from './api/recaps.ts';

@@ -28,6 +28,10 @@ export const queryKeys = {
    *  the deterministic default when the user has none. Invalidate after a commit (Wave 3). */
   progressLayout: {
     all: ['progressLayout'] as const,
+    /** `/me/progress-layout/draft` (Wave 3, W3-2) — the coach's proposed layout, awaiting the
+     *  card's "Set my page this way"/"Not now". A separate key from `all` on purpose: committing
+     *  invalidates `all` (the page repaints), never `draft` itself — the draft is gone by then. */
+    draft: ['progressLayout', 'draft'] as const,
   },
   /** `/me/weather` (PERF-03) — the trail header's one line of sky. */
   weather: {
