@@ -194,4 +194,20 @@ describe('buildWeekReviewFacts', () => {
     const facts = await buildWeekReviewFacts('u1', FROM, TO);
     expect(facts.days.flatMap((d) => d.sessions)).toEqual([]);
   });
+
+  // Progress Engine parcel W2-2: the additive, contract-shaped twins of `days` — the widget-shaping
+  // math itself lives in week-review-widgets.test.ts (pure, exhaustive); this just asserts the
+  // builder actually attaches both fields to what it returns.
+  it('attaches rhythm_week and meals_week, built from the SAME days it returns', async () => {
+    vi.mocked(listActivities).mockResolvedValue([
+      activity({ activity_id: 'a1', kind: 'user', title: 'Easy run', schedule: {} }),
+    ] as never);
+    vi.mocked(listOccurrences).mockResolvedValue([
+      occ({ occurrence_id: 'o1', activity_id: 'a1', date: '2026-08-24', status: 'done' }),
+    ] as never);
+
+    const facts = await buildWeekReviewFacts('u1', FROM, TO);
+    expect(facts.rhythm_week).toMatchObject({ start: FROM, kept: 1, scheduled: 1 });
+    expect(facts.meals_week?.weeks).toHaveLength(facts.days.length);
+  });
 });

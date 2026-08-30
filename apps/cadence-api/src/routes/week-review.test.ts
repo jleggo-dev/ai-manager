@@ -125,6 +125,32 @@ describe('GET /plan/week-review/facts', () => {
     const r = await call('GET', '/plan/week-review/facts');
     expect(r.status).toBe(500);
   });
+
+  // Progress Engine parcel W2-2: `?week=` reads an explicit window instead of the pending
+  // pointer — additive, and never reached when the param is absent (every test above this one
+  // still exercises the untouched pointer-driven path).
+  describe('?week= (Progress Engine parcel W2-2)', () => {
+    it('builds the requested week directly, bypassing the pending pointer entirely', async () => {
+      getUser.mockResolvedValue({ pending_week_review: null }); // nothing pending — must not 404
+      const r = await call('GET', '/plan/week-review/facts?week=2026-08-24');
+      expect(r.status).toBe(200);
+      expect(buildWeekReviewFacts).toHaveBeenCalledWith('u1', '2026-08-24', '2026-08-30');
+      const body = r.body as { review: { from: string; to: string } };
+      expect(body.review).toMatchObject({ from: '2026-08-24', to: '2026-08-30' });
+    });
+
+    it('snaps a mid-week date back to its Monday', async () => {
+      const r = await call('GET', '/plan/week-review/facts?week=2026-08-27'); // a Thursday
+      expect(r.status).toBe(200);
+      expect(buildWeekReviewFacts).toHaveBeenCalledWith('u1', '2026-08-24', '2026-08-30');
+    });
+
+    it('400s a malformed week rather than guessing', async () => {
+      const r = await call('GET', '/plan/week-review/facts?week=08-24-2026');
+      expect(r.status).toBe(400);
+      expect(buildWeekReviewFacts).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('POST /plan/week-review/session', () => {
