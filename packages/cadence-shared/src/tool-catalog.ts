@@ -19,6 +19,34 @@
  *
  * NOT here on purpose: `measure` (the weigh-in), `rings`, and `insight` are app-attached surfaces,
  * not things the coach emits — they live only in walkthrough.ts's `StepTool`.
+ *
+ * ── HOW TO WRITE THE STRINGS IN THIS FILE (owner ruling 2026-08-30) ─────────────────────────────
+ *
+ * Every `summary`, `notWhen` and rendered line below is read by a MODEL, not by a person. Cadence's
+ * house voice — the warm, image-led register of BRAND.md and PLAN.md — is a defect here: it makes
+ * the model infer a rule instead of reading one. The rules:
+ *
+ *   1. **Name categories; do not illustrate them.** "a click on a plank, a run or a sit is an
+ *      intrusion" made the model work out which step kinds that image covered. "DO NOT SET IT for:
+ *      strength, cardio, stretching, mobility, meditation, breathing, or journaling" does not.
+ *   2. **State rules, not frequencies or sentiments.** "omitting it is the right answer almost
+ *      every time" is a statistic about past sessions; "omit it and the step has no metronome" is
+ *      an instruction.
+ *   3. **No metaphor for mechanism.** "the clock is furniture", "the connective tissue of a
+ *      session", "rides alongside" — say what the field or tool literally does instead.
+ *   4. **Cut description that cannot change a choice.** The coach picks a tool; how the player
+ *      feels to use ("one press of start and nobody looks at their phone") never enters that
+ *      decision and costs tokens in every prescribe-session call.
+ *   5. **Keep concrete examples and the exact traps.** Plain is not the same as vague. The
+ *      specific collisions ("a minute to settle in" has a duration but is `read`) are the most
+ *      valuable text in this file — they were each written after a real misfire.
+ *   6. **Size check:** compare a new entry against INTERVALS (~760 chars for a whole tool with
+ *      five fields). The metronome once shipped at 1,170 chars for two numbers.
+ *
+ * Load-bearing format constraint: `renderToolCatalogBrief()` takes each `summary` UP TO its first
+ * em-dash or semicolon as the chat coach's one-liner. So every summary must open with a short,
+ * self-contained clause, then a dash, then the authoring detail. Moving that dash changes what the
+ * chat coach says out loud.
  */
 
 import type { BlockMode, SessionItem, SessionItemTool } from './types/occurrence.ts';
@@ -66,9 +94,17 @@ export type ToolClass = 'guided' | 'capture';
 
 export interface CoachToolSpec {
   class: ToolClass;
-  /** One line: what the tool is and when to pick it — the coach reads this to choose. */
+  /**
+   * What the tool is and when to pick it — the coach reads this to choose. MUST open with a short
+   * self-contained clause followed by an em-dash: `renderToolCatalogBrief` cuts there for the chat
+   * coach's one-liner. Plain and literal after the dash too — see the style rules at the top.
+   */
   summary: string;
-  /** The judgment quantities can't carry — the trap to avoid (e.g. duration ≠ timer). */
+  /**
+   * The judgment the field list cannot carry: which OTHER tool a near-miss actually belongs to
+   * (e.g. duration ≠ timer). Name the competing tool explicitly — this text exists to resolve
+   * collisions, so "that is grounding" beats any description of how the step feels.
+   */
   notWhen?: string;
   /** Which item fields to fill for this tool. */
   reads: ItemField[];
@@ -84,7 +120,7 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   read: {
     class: 'guided',
     summary:
-      'a cue to read and follow, capturing nothing — the connective tissue INSIDE a session (settle in, set up, transition) and THE DEFAULT when nothing interactive fits',
+      'a cue to read and follow, capturing nothing — use it for steps that set up or move between other steps (settle in, set up the bar, move to the mat), and as THE DEFAULT when no other tool fits',
     reads: ['detail'],
     example: { name: 'Settle in', tool: 'read', detail: 'Find a comfortable seat, shoulders soft' },
   },
@@ -94,19 +130,18 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
     // now warns against: it taught timer-for-meditate, and by analogy timer-for-any-short-mind-
     // practice, which is how a 5-min noticing practice kept getting a bare clock (probe, 2 of 3
     // runs 2026-08-04) instead of the grounding flow that IS the practice.
-    summary:
-      'the passage of time itself IS the task — a held or timed physical effort you watch a clock for (a 1-min plank, a 20-min zone-2 run, a wall sit)',
+    summary: 'one physical effort held or sustained for a set time — a 1-min plank, a 20-min zone-2 run, a wall sit',
     notWhen:
-      'do NOT pick timer just because a step has a duration — "a minute to settle in" has a duration but is read. A timer is ONE continuous stretch: work that alternates with rest and repeats (sprints, HIIT, EMOM, Tabata) is interval, and a bare timer there makes the person do the counting the app was built to do. And a MIND practice with a duration is almost never a timer: silent sitting is meditate, and a noticing or attention practice ("notice five things", a noticing walk, being more present) is grounding — there the noticing is the task and the clock is furniture',
+      'do NOT pick timer just because a step has a duration: "a minute to settle in" has a duration but is read. A timer is ONE continuous stretch — work that alternates with rest and repeats (sprints, HIIT, EMOM, Tabata) is interval. A MIND practice with a duration is almost never a timer: silent sitting is meditate; a noticing or attention practice ("notice five things", a noticing walk, being more present) is grounding',
     reads: ['duration_min'],
     example: { name: 'Forearm plank', tool: 'timer', duration_min: 1 },
   },
   interval: {
     class: 'guided',
     summary:
-      'work and recover, alternating, on a clock that runs the whole thing hands-free — sprints, a HIIT finisher, EMOM, Tabata, hill repeats, a rowing pyramid. One press of start and the app hands over between phases with a chime and a colour change, so nobody has to look at the phone mid-effort. Set interval_work_sec and interval_rounds; add interval_recover_sec for a breather (leave it out for EMOM, where the rest is whatever is left of the minute)',
+      'work and rest alternating for a number of rounds, run hands-free by the app — sprints, a HIIT finisher, EMOM, Tabata, hill repeats, a rowing pyramid. Set interval_work_sec and interval_rounds; add interval_recover_sec for rest between rounds (omit it for EMOM, where the rest is the remainder of the minute)',
     notWhen:
-      'ONE effort with no repeat is a timer, not an interval — an interval is the alternation. Different MOVEMENTS each round (burpees, then squats, then a plank) is a circuit block, not this: interval rounds are the same work repeated. Do not also send duration_min — the length is the arithmetic of the numbers you set, and a second figure just contradicts the ring. Warm-up and cool-down are optional and sit OUTSIDE the rounds; leave them out when the session already has its own warm-up block',
+      'ONE effort with no repeat is a timer, not an interval. Different MOVEMENTS each round (burpees, then squats, then a plank) is a circuit block — interval rounds repeat the SAME work. Do NOT also send duration_min: the length is computed from the numbers you set, and a second figure contradicts it. Warm-up and cool-down are optional and sit OUTSIDE the rounds; omit them when the session already has its own warm-up block',
     reads: [
       'interval_work_sec',
       'interval_recover_sec',
@@ -145,14 +180,14 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
     summary:
       'silent sitting for a set time — a daily practice, a quiet few minutes after effort, or a step inside a longer session. Set duration_min; bells mark the start and end (and optionally an interval) so they can close their eyes',
     notWhen:
-      'meditate leaves someone alone with a clock — if you want each breath paced, that is breathing; if you want words in their ear, that is not built yet',
+      'meditate gives silence and bells only — if each breath should be paced, that is breathing; spoken guided audio is not built yet, so do not describe one',
     reads: ['duration_min', 'meditate_bells', 'meditate_interval_min', 'detail'],
     example: { name: 'Sit quietly', tool: 'meditate', duration_min: 10, meditate_bells: 'start_end' },
   },
   grounding: {
     class: 'guided',
     summary:
-      'a short tap-forward flow that gives busy attention something ordinary to do. Good in the moment, and equally good as a daily noticing practice or a step inside a longer session — senses and object are attention practices in their own right, while letters and countback are more purely distraction. Pick the game with grounding_game',
+      'a short tap-forward attention exercise — use it in the moment, as a daily noticing practice, or as a step inside a longer session. senses and object are attention practices; letters and countback are distraction. Pick the game with grounding_game',
     notWhen:
       'nothing here is ever scored or checked — never frame it as a test, and never promise it will make a feeling go away',
     reads: ['grounding_game', 'grounding_bank', 'detail'],
@@ -161,9 +196,9 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   feeling_log: {
     class: 'capture',
     summary:
-      "a 20-second check-in: ONE word for how they're doing and how much room it's taking, with an optional line. The mind side's weigh-in — use it while you're still learning someone's patterns, or when checking in would help",
+      "a 20-second check-in — ONE word for how they're doing and how much room it's taking, plus an optional line. Use it while you are still learning someone's patterns, or when a check-in would help",
     notWhen:
-      'a word and a size, never sentences — writing that deserves rereading is journal, not this. Do NOT schedule it every day forever: ask while you are learning their patterns, then stop. And never follow one capture step straight with another — two questions back to back is one too many',
+      'a word and a size, never sentences — writing meant to be reread is journal. Do NOT schedule it every day indefinitely: ask while you are learning their patterns, then stop. Never place two capture steps in a row',
     reads: ['detail'],
     example: { name: 'How are you doing?', tool: 'feeling_log' },
   },
@@ -183,9 +218,9 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   journal: {
     class: 'capture',
     summary:
-      "real WRITING, kept where they can reread it — the tool for any writing practice, not only reflection: free-writing a scene, a first-thing morning brain-dump, a studio log, a language learner's paragraph, lectio divina, working a problem out on the page. Name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own prompt in detail — your sentence always wins, and for craft work it usually should. Add duration_min for a TIMED free-write (a quiet clock; writing continuously IS the practice)",
+      "real WRITING, kept where they can reread it — use it for any writing practice, not only reflection: free-writing a scene, a first-thing morning brain-dump, a studio log, a language learner's paragraph, lectio divina, working a problem out on the page. Name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own prompt in detail — your own sentence always wins, and for craft work it usually should. Add duration_min for a TIMED free-write",
     notWhen:
-      'sentences, never a yes/no, a number, or a single mood word — one word about how they are doing is feeling_log. Never promise to analyse what they write. The banks are a floor, not a menu: match the bank FAMILY to the practice (a novelist gets craft, never gratitude), and when you can write a prompt better fitted to this person and this week, write it',
+      'sentences, never a yes/no, a number, or a single mood word — one word about how they are doing is feeling_log. Never promise to analyse what they write. Treat the banks as a fallback: match the bank FAMILY to the practice (a novelist gets craft, never gratitude), and write your own prompt whenever you can fit it better to this person and this week',
     reads: ['journal_bank', 'detail', 'duration_min'],
     example: { name: 'Three good things', tool: 'journal', journal_bank: 'three_good_things' },
   },
@@ -289,15 +324,15 @@ export function renderCoachToolCatalog(): string {
   }
   lines.push(
     '',
-    'INTERVALS — "interval" is five numbers, all seconds except the round count. There is no shape',
-    'to name and no mode to pick: the familiar ones are just numbers, and anything between them is',
-    'equally legal. Say what this person should actually do.',
+    'INTERVALS — "interval" is five numbers, all seconds except the round count. The named shapes',
+    'below are only common combinations; any values within the bounds are equally valid. Set the',
+    'numbers this person should actually do.',
   );
   for (const t of INTERVAL_TEMPLATES) lines.push(`  • ${t.label} = ${setShorthand(t)} — ${t.summary}`);
   lines.push(
     `  bounds: work ${MIN_WORK_SEC}-${MAX_WORK_SEC}s, recover 0-${MAX_WORK_SEC}s (0 = EMOM), rounds 1-${MAX_ROUNDS},`,
-    `  warm-up/cool-down 0-900s each. The whole run is capped at ${Math.round(MAX_INTERVAL_SEC / 60)} min — ask for`,
-    '  what you mean and the app trims rounds to fit rather than refusing.',
+    `  warm-up/cool-down 0-900s each. The whole run is capped at ${Math.round(MAX_INTERVAL_SEC / 60)} min; over that,`,
+    '  the app trims rounds to fit rather than refusing, so set the numbers you mean.',
   );
   lines.push(
     '',
@@ -321,9 +356,9 @@ export function renderCoachToolCatalog(): string {
   );
   lines.push(
     '',
-    'BREATH PATTERNS — the only values "breath_pattern" accepts. Choose by what the moment needs;',
-    'an unlisted name is replaced with coherent. Round counts are capped for safety, so ask for what',
-    'you mean and the app will keep it safe.',
+    'BREATH PATTERNS — the only values "breath_pattern" accepts. An unlisted name is replaced with',
+    'coherent. Round counts are capped for safety; a higher count is clamped rather than refused, so',
+    'set the number you mean.',
   );
   for (const p of BREATH_PATTERNS) {
     const counts = patternCounts(p);
