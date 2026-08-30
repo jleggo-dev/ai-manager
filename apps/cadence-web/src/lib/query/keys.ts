@@ -28,6 +28,12 @@ export const queryKeys = {
   weather: {
     all: ['weather'] as const,
   },
+  /** `/me/sessions` (W1-3) — the `dated_sessions` widget + its drill-down list, keyed by the
+   *  activity title + window so each combination caches independently. */
+  datedSessions: {
+    all: ['datedSessions'] as const,
+    scoped: (activity: string, window: string) => ['datedSessions', activity, window] as const,
+  },
   /** `/me/daily-checkin` (PERF-03) — is the one unprompted moment due today. */
   dailyCheckin: {
     all: ['dailyCheckin'] as const,
