@@ -28,6 +28,7 @@ import { CapturedPills } from './CapturedPills.tsx';
 import { ConfirmCard } from './ConfirmCard.tsx';
 import { ChangeCard } from './ChangeCard.tsx';
 import { WeekReviewCard } from './WeekReviewCard.tsx';
+import { LayoutProposalCard } from './LayoutProposalCard.tsx';
 
 /**
  * What the app tells Cadence the moment someone shares their Apple Health history. Without it she
@@ -395,6 +396,18 @@ export function OnboardingChat({
                        * nothing when the answer is nothing. Safe to mount unconditionally beside it.
                        */}
                       {last && !streaming && <WeekReviewCard key={`wkr${i}`} onOpen={onOpenWeekReview} />}
+                      {/**
+                       * Third sibling, same contract: `compose_progress_view` writes a DRAFT
+                       * layout, never a tag, so this asks the server what is pending and renders
+                       * nothing when the answer is nothing. Confirming inside the card is the
+                       * whole page's consent moment — nothing further to bridge upward, so unlike
+                       * WeekReviewCard's `onOpen` this needs no host wiring; the receipt just rides
+                       * `sendText`, the same visible-send primitive `autoSend` itself is built on,
+                       * straight from this surface instead of bubbling through MainTabs.
+                       */}
+                      {last && !streaming && (
+                        <LayoutProposalCard key={`lpc${i}`} onConfirmed={(receipt) => void sendText(receipt)} />
+                      )}
                       {/**
                        * Her block says WHAT, never how. The only thing left for it to declare is
                        * `build` — the build card is an act, not a shape, and nothing durable is
