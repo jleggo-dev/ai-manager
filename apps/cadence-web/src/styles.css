@@ -219,6 +219,14 @@ html[data-native] #root {
   height: 100%;
   overflow: hidden;
 }
+/* Keep flick-scroll inside chat/lists — don't chain it up to the document. Duplicated from the
+   max-width:480px block below: width-keying alone misses iPads, which is why data-native exists. */
+html[data-native] .chat,
+html[data-native] .scrollbody,
+html[data-native] .welcome,
+html[data-native] .sheet-body {
+  overscroll-behavior: contain;
+}
 
 @media (max-width: 480px) {
   html {
@@ -994,7 +1002,7 @@ html[data-native] #root {
 }
 .set-targets-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 .set-target {
@@ -2929,20 +2937,6 @@ textarea.wiz-title {
 }
 
 /* ── Settings ────────────────────────────────────────────────── */
-.gear {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--text-dim);
-  border: 1px solid var(--line-soft);
-  background: var(--surface);
-}
-.gear:hover {
-  color: var(--forest);
-  border-color: var(--forest);
-}
 .set-row {
   width: 100%;
   text-align: left;
@@ -3625,6 +3619,8 @@ textarea.wiz-title {
 }
 .sheet-body {
   overflow-y: auto;
+  overflow-x: hidden;
+  touch-action: pan-y;
   min-height: 0;
   scrollbar-width: thin;
   scrollbar-color: var(--surface-3) transparent;

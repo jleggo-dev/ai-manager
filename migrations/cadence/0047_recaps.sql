@@ -1,4 +1,4 @@
--- 0046 — the Progress Engine's recap store (docs/cadence/PROGRESS-ENGINE.md "Check-in
+-- 0047 — the Progress Engine's recap store (docs/cadence/PROGRESS-ENGINE.md "Check-in
 -- unification"): confirming a week review writes a compact recap artifact here, so the
 -- `recap_rail` widget has something to read without re-deriving it from occurrences every time.
 --

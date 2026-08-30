@@ -1,4 +1,4 @@
--- 0045 — the Progress Engine's layout store (docs/cadence/PROGRESS-ENGINE.md "The layout model").
+-- 0046 — the Progress Engine's layout store (docs/cadence/PROGRESS-ENGINE.md "The layout model").
 --
 -- A layout is an ORDERED list of widget specs the coach composes (WHAT to show); deterministic
 -- code renders it (HOW). Lifecycle mirrors cadence.plans: draft → committed, superseded lineage —

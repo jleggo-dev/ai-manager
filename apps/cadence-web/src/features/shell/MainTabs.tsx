@@ -198,6 +198,7 @@ export function MainTabs({
               onPlanChanged={() => setPlanReload((k) => k + 1)}
               onOpenWeekReview={() => setWeekReviewOpen(true)}
               onShowChanges={() => setWeekChangesOpen(true)}
+              onShowPlan={() => setPlanCardOpen(true)}
               autoSend={autoSend}
             />
             {/* The deterministic way back to the crafted plan UI from inside the conversation. */}

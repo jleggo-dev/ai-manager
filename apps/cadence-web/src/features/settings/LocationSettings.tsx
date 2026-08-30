@@ -139,13 +139,7 @@ export function LocationSettings() {
           placeholder="City (optional fallback)"
           onChange={(e) => setCity(e.target.value)}
         />
-        <button
-          type="button"
-          className="set-row"
-          style={{ flex: '0 0 auto' }}
-          disabled={busy || !city.trim()}
-          onClick={saveCityFallback}
-        >
+        <button type="button" className="diet-add-btn" disabled={busy || !city.trim()} onClick={saveCityFallback}>
           Use city
         </button>
       </div>

@@ -38,6 +38,10 @@ const PHRASES: Record<string, string> = {
   update_constraint: 'updating what we work around',
   correct_log: 'fixing that record',
   set_macro_targets: 'setting your targets',
+  // A WRITE narrated as a lookup is the exact failure this file exists to prevent — she is
+  // recording what you know, and the line must say so.
+  update_repertoire: 'writing down what you know',
+  get_repertoire: 'checking what you already know',
   // find_tools genuinely IS a search — reading the menu, not the meal.
   find_tools: 'looking up what I can check',
   // use_tool is never the real answer: see resolveActivityNames, which unwraps it to its target.

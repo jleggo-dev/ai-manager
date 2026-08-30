@@ -160,7 +160,7 @@ export const ALWAYS_READS = ['get_active_plan'] as const;
  * DISCOVERY working and FOLLOW-THROUGH failing (found every time, called never — the
  * continuation seam). The label directly fixes the knowing-to-look half and is the cheap
  * experiment for the other half: hooks she reads in the SAME generation that decides may prime
- * the call where a fetched description in a fresh continuation did not. Eval cases A17/A18
+ * the call where a fetched description in a fresh continuation did not. Eval cases A19/A20
  * measure exactly this, post-deploy. If follow-through still fails with the label in place,
  * that is evidence about the find→use seam itself — not a mandate to promote by default.
  * New tools DEFAULT to the tail plus a hook; promotion into this list requires an explicit
@@ -178,6 +178,16 @@ export const ALWAYS_ACTIONS = [
   'open_week_review',
   'build_next_week',
   'log_meal',
+  /**
+   * `update_repertoire` joined 2026-08-30 on the owner's ruling from the piano conversation the
+   * night before: when the user hands over what they know ("assume I know the earlier songs from
+   * Suzuki book 2", then nine typed pieces), *she must know she has to store it* — and the trigger
+   * arrives mid-plan-editing with `propose_plan_change` filling her attention, which is exactly
+   * the shape `update_constraint` measured at 0-of-3 from the tail. Definition measured at
+   * ~348 tokens/turn (1,392 chars serialized ÷ 4, the TOOL-HARNESS.md method), inside the
+   * 305–375 band it budgets for an ordinarily-shaped action.
+   */
+  'update_repertoire',
 ] as const;
 
 /**
@@ -196,6 +206,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   research_food: 'web research on a NAMED product none of the sources know — slow',
   get_workout_history: 'their recorded workouts from their devices, newest first',
   get_practice_totals: 'running totals of anything they count — words written, minutes sat, pages read',
+  get_repertoire: 'what they are learning and already know — pieces, katas, poems — with standing',
   get_journal: 'recent journal entries, in their own words (private ones never included)',
   get_goal_progress: 'numbers on how each goal is going, from what they logged',
   propose_progress_layout: 'propose a redesign of what their Progress page watches — they confirm a card first',
@@ -233,7 +244,7 @@ export const isActionName = (name: string): boolean => !!COACH_ACTION_TOOLS[name
  *
  * Owner: *"it's about giving the coach the categories — this is about hierarchy and her having the
  * context to drill down."* That is the whole mechanism. A flat list makes her guess a search term
- * for something she may not know exists; five named categories mean the manifest can say what KINDS
+ * for something she may not know exists; a handful of named categories mean the manifest can say what KINDS
  * of thing are reachable, and she narrows from there. Knowing "there is a category for their food"
  * is enough to go looking, which is the behaviour the demotion depends on.
  *
@@ -245,7 +256,14 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
   {
     key: 'training',
     label: 'their training and how it has gone',
-    members: ['get_recent_logs', 'get_goal_progress', 'get_practice_totals'],
+    members: ['get_recent_logs', 'get_goal_progress'],
+  },
+  {
+    key: 'practice',
+    label: 'what they practice and already know',
+    // `get_practice_totals` moved here from `training` when the category was born (2026-08-30):
+    // piano minutes and prayer streaks were always a strained fit under "training".
+    members: ['get_repertoire', 'get_practice_totals'],
   },
   { key: 'body', label: 'what their body and devices recorded', members: ['get_workout_history', 'get_equipment'] },
   {

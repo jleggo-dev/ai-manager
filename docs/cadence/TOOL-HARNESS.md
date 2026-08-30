@@ -160,6 +160,7 @@ old commit:
 | 2026-08-26 | (deployed main) | 70.4% | 76.0% | 73.1% | 24/36 | 0/11 | 6/25 (A7 A13 A14 A15 A16 B3) | 20,654 median |
 | 2026-08-27 | (deployed main, identical code) | 70.0% | 84.0% | 76.4% | 24/36 | 2/11 (C6 C8) | 4/25 (A13 A14 A15 B6) | 20,703 median |
 | 2026-08-28 | `open_week_review` + `build_next_week` live (#280) | 71.0% | 88.0% | 78.6% | 27/36 | **0/11** | 2/25 (A14 A15) | 22,473 median |
+| 2026-08-30 | `update_repertoire` joins ALWAYS_ACTIONS (348 tok/turn measured) + `practice` category + cases A17/A18/B11 — **run PENDING post-deploy**; write the numbers over this line | — | — | — | — | — | — | — |
 
 **Two things those rows taught, the second the hard way:**
 

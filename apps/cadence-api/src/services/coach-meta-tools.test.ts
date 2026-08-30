@@ -50,8 +50,11 @@ describe('what she carries', () => {
   });
 
   it('carries far fewer definitions than the eighteen reads it replaced', () => {
-    // 12 as of 2026-08-30 (propose_progress_layout was carried for a day, then moved to the tail
-    // under the drawer-label ruling — coach-tool-tiers.ts) — far under the 18 reads this tiering
+    // 13 as of 2026-08-30: `update_repertoire` joined ALWAYS_ACTIONS (owner ruling from the
+    // piano conversation — handed a list of known pieces she must store it, and the trigger
+    // arrives mid-plan-edit, the exact shape the tail measured at 0-of-3), while
+    // `propose_progress_layout` was carried for a day and moved to the TAIL under the same-day
+    // drawer-label ruling (coach-tool-tiers.ts). Still far under the 18 reads this tiering
     // replaced. Bump deliberately, one at a time, rather than loosening it to something that
     // stops noticing growth.
     expect(coachToolDefinitions().length).toBeLessThan(14);
@@ -133,7 +136,7 @@ describe('find_tools', () => {
    * Tail actions are allowed again — with a label this time. The 2026-08 measurement (found 3 of
    * 3, called 0) demoted actions from the tail; the 2026-08-30 owner ruling reinstated them
    * PROVIDED the drawer's carried label names them (DRAWER_HOOKS), on the reasoning that the
-   * earlier failure was measured against an unlabeled drawer — and A17/A18 in the tool eval now
+   * earlier failure was measured against an unlabeled drawer — and A19/A20 in the tool eval now
    * measure whether the label closes the follow-through gap. The "[changes their data]" mark
    * survives in both the label and catalogLine.
    */

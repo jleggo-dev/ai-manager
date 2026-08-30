@@ -7,6 +7,7 @@ import { assessIfDue } from '../services/situation.ts';
 import { getOccurrenceDetail, prefetchImminentSessions } from '../services/session-generate.ts';
 import { runInBackground } from '../services/background.ts';
 import { logOccurrence } from '../services/session-log.ts';
+import { sessionTexts, touchPracticedFromText } from '../services/repertoire-practice.ts';
 import { logAdhocActivity, logPlannedActivity } from '../services/adhoc-log.ts';
 import { enterEpisode, endEpisode, reviseEpisodeEquipment, postponeEpisodeStart } from '../services/episode.ts';
 import { equipmentFromGymPhotos } from '../services/gym-photo.ts';
@@ -412,6 +413,22 @@ router.post('/occurrences/:id', async (req: Request, res: Response) => {
   try {
     const { status } = parseBody(occurrenceStatusBodySchema, req.body);
     await setOccurrenceStatus(userId, req.params.id as string, status);
+    // Ticking done with no write-up still advances the practice rotation: the cached
+    // prescription names what was played, and most check-offs never get a text log at all.
+    // Survives the response via waitUntil — `void promise` dies with the frozen instance (#300).
+    if (status === 'done') {
+      runInBackground(
+        'repertoire-touch',
+        getOccurrenceWithActivity(userId, req.params.id as string).then((occ) =>
+          occ?.session
+            ? touchPracticedFromText(userId, sessionTexts(occ.session), {
+                goalId: occ.goal_id ?? null,
+                at: `${occ.date}T12:00:00Z`,
+              })
+            : null,
+        ),
+      );
+    }
     res.json({ ok: true });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });

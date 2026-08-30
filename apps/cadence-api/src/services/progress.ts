@@ -255,5 +255,5 @@ export async function buildProgress(userId: string, window?: ProgressWindow): Pr
     .sort((a, b) => (a.at < b.at ? 1 : -1))
     .slice(0, historyCap);
 
-  return { cards, trends, history };
+  return { cards, trends, history, events };
 }

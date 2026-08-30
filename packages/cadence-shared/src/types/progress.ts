@@ -65,6 +65,10 @@ export interface ProgressData {
   cards: ProgressCard[];
   trends: ProgressTrend[];
   history: HistoryEntry[];
+  /** The raw ledger rows behind `history`'s event entries (newest first, bounded) — kept whole so
+   *  readers can filter by kind; `history` merges and truncates, which loses that. Optional
+   *  because older stored copies of this shape predate the field. */
+  events?: GoalEvent[];
 }
 
 /** A countable, dated accomplishment ("finished Dune") — powers count-goal progress (20/100)

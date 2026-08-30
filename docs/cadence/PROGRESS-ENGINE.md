@@ -103,7 +103,7 @@ Follows the food-module segmentation — same coach persona, different context a
   of every tail tool's hook line, grouped by the categories she already knows, so she can see what
   she could go looking for. Nothing lands in `ALWAYS_ACTIONS` — new tools default to the tail plus
   a hook, and promotion requires an explicit owner ruling in coach-tool-tiers.ts. Eval cases
-  A17/A18/C17 measure the labeled drawer post-deploy.
+  A19/A20/C17 measure the labeled drawer post-deploy.
 - Context pack: current/default layout, the grammar's kinds + what this user's data can bind, the
   user's goals. Composition runs through an AI Admin job with **strict json_schema → gpt-class
   models only** (primary AND failover catalog-verified; Devs.ai silently removes model ids).

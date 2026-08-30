@@ -54,6 +54,7 @@ export const DEV_CHILD_TABLES = [
   'progress_layouts',
   'recaps',
   'recipes',
+  'repertoire',
   'session_feedback',
   'water_logs',
   'workout_history',
