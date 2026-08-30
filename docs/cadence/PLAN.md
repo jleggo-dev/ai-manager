@@ -8749,3 +8749,14 @@ the list, *"she should know she has to store it."*
 Écossaise" — the rotation makes that unnecessary for practice, but the edit-engine gap is real);
 `eval:tools` re-run post-deploy (it measures deployed main; A17/A18/B11 land with the merge);
 metronome per-piece tempo still device-local (`meta.tempo_bpm` is its server home when wanted).
+
+**Reviewed before merge (2026-08-30, ten-angle pass + sweep):** 15 findings, 14 fixed same day —
+the load-bearing ones: the write-back now matches real labels ("by Composer"/comma-qualified,
+NFC-normalized, whole-word, goal-scoped), fires from tick-done and from the prescription (not
+just typed logs), and stamps the session's date; an omitted `status` keeps an item's standing;
+`learned` celebrates exactly once; `{{repertoire}}` is scoped per-goal and a failed read renders
+as a fault, never "knows nothing"; repertoire writes invalidate the goal's cached sessions so the
+rotation actually advances across a warmed week; the replay scorer imports the shared scorer's
+corrections (meta-tools are plumbing; provider frames stripped); the ChangeCard door is
+applied-state only (pre-apply it showed the week without the change). One consciously skipped:
+the three-line live-goal resolution duplicated from `update_goal` — extract on next touch.
