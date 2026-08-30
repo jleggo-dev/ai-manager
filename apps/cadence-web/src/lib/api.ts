@@ -49,6 +49,8 @@ export {
   type DatedSessionsListResult,
 } from './api/health.ts';
 
+export { getProgressLayout } from './api/progress-layout.ts';
+
 export {
   prepareCoachFoodAction,
   type CoachFoodAction,
