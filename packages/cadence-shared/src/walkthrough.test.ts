@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { OccurrenceSession, SessionItem } from './types/occurrence.ts';
-import { deriveWalkthrough, condense, inferTool, stepCaptureMode } from './walkthrough.ts';
+import { deriveWalkthrough, condense, inferTool, stepCaptureMode, type WalkthroughStep } from './walkthrough.ts';
 
 /** The redesign's canonical example: "Easy run (zone 2)" — 4 steps, 30 min total, condenses to 13. */
 const runSession: OccurrenceSession = {
@@ -278,5 +278,45 @@ describe('journal steps always open with a usable question', () => {
     const t = step({});
     expect(t?.tool.kind === 'journal' && t.tool.prompt).toBe('What do you want to write?');
     expect(t?.tool.kind === 'journal' && t.tool.prompt).not.toMatch(/how it went|workout|session|training/i);
+  });
+});
+
+describe('the metronome rides along', () => {
+  // The whole design in one assertion: attaching a pulse must not change what the step IS. Before
+  // this test the failure mode to fear was a metronome that looked like a tool and quietly replaced
+  // the timer it was meant to accompany — the same class of bug the inferTool cases above pin.
+  const piano = (extra: Record<string, unknown>) =>
+    deriveWalkthrough({
+      blocks: [{ label: 'Practice', items: [{ name: 'Hanon no. 1', duration_min: 10, ...extra }] }],
+      note: '',
+      generated_at: '2026-08-29T00:00:00.000Z',
+      version: 1,
+    }).steps[0] as WalkthroughStep;
+
+  it('attaches the pulse WITHOUT displacing the tool', () => {
+    const step = piano({ metronome_bpm: 72, metronome_meter: 3 });
+    expect(step.tool.kind).toBe('timer'); // still a timer step, now with a beat
+    expect(step.metronome).toEqual({ bpm: 72, meter: 3 });
+  });
+
+  it('is absent on every step the coach did not ask for one on', () => {
+    expect(piano({}).metronome).toBeUndefined();
+    expect(piano({ metronome_meter: 4 }).metronome).toBeUndefined(); // a meter alone is not a pulse
+  });
+
+  it('defaults the meter but never the tempo', () => {
+    expect(piano({ metronome_bpm: 60 }).metronome).toEqual({ bpm: 60, meter: 4 });
+  });
+
+  it('clamps a tempo nobody can play rather than dropping the step', () => {
+    const step = piano({ metronome_bpm: 900, metronome_meter: 99 });
+    expect(step.metronome).toEqual({ bpm: 240, meter: 12 });
+    expect(step.title).toBe('Hanon no. 1');
+  });
+
+  it('rides along with a journal step too — a practice log can have a beat', () => {
+    const step = piano({ journal_bank: 'free_write', metronome_bpm: 88 });
+    expect(step.tool.kind).toBe('journal');
+    expect(step.metronome?.bpm).toBe(88);
   });
 });

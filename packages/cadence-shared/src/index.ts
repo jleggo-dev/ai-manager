@@ -41,6 +41,7 @@ export * from './breathing.ts';
 export * from './interval.ts';
 export * from './workout-plan.ts';
 export * from './meditate.ts';
+export * from './metronome.ts';
 export * from './grounding.ts';
 export * from './feelings.ts';
 export * from './now-menu.ts';

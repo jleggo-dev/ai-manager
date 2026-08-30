@@ -33,6 +33,7 @@ import {
   setShorthand,
 } from './interval.ts';
 import { DEFAULT_SIT_MINUTES, MAX_SIT_MINUTES, MEDITATE_BELL_KINDS } from './meditate.ts';
+import { DEFAULT_METER, MAX_BPM, METERS, MIN_BPM } from './metronome.ts';
 import { GROUNDING_GAMES, GROUNDING_NAMES } from './grounding.ts';
 import { JOURNAL_BANKS, bankFamily, type JournalFamily } from './journal.ts';
 
@@ -55,7 +56,9 @@ export type ItemField =
   | 'interval_recover_sec'
   | 'interval_rounds'
   | 'interval_warmup_sec'
-  | 'interval_cooldown_sec';
+  | 'interval_cooldown_sec'
+  | 'metronome_bpm'
+  | 'metronome_meter';
 
 /** Capture class (mirrors `stepCaptureMode`): `guided` = do it, log records only that it happened;
  *  `capture` = the person emits data that BECOMES the log. */
@@ -295,6 +298,22 @@ export function renderCoachToolCatalog(): string {
     `  bounds: work ${MIN_WORK_SEC}-${MAX_WORK_SEC}s, recover 0-${MAX_WORK_SEC}s (0 = EMOM), rounds 1-${MAX_ROUNDS},`,
     `  warm-up/cool-down 0-900s each. The whole run is capped at ${Math.round(MAX_INTERVAL_SEC / 60)} min — ask for`,
     '  what you mean and the app trims rounds to fit rather than refusing.',
+  );
+  lines.push(
+    '',
+    'METRONOME — "metronome_bpm" is not a tool and does not replace one. It rides ALONGSIDE whatever',
+    'tool the step already has, the way video_query does: a scales step is a timer step that happens',
+    'to have a beat, and a practice-log step is a journal step that happens to have one. Set it and a',
+    'metronome appears on that step, already at the tempo you named, which they can then change.',
+    `  bounds: ${MIN_BPM}-${MAX_BPM} bpm. "metronome_meter" is beats to the bar for the accent`,
+    `  (${METERS.join(', ')} are the usual; default ${DEFAULT_METER}). Leave the meter out if you don't know it.`,
+    '  WHEN: someone is practising to a pulse — an instrument, scales, sight-reading, drills at tempo,',
+    '  a metronome they told you they use. It is the ONLY reason to set it.',
+    '  WHEN NOT: everything else. A pulse is furniture on a plank, a run, or a sit, and a click during',
+    '  quiet practice is an intrusion. No field, no metronome — and that is the right answer almost',
+    '  every time. Pick a tempo they can actually play: for learning a new piece that is slower than',
+    '  the marking, and going back to a slower tempo is progress, not a step backwards.',
+    '  e.g. {"name": "Hanon no. 1", "tool": "timer", "duration_min": 10, "metronome_bpm": 72}',
   );
   lines.push('', 'GROUNDING GAMES — the only values "grounding_game" accepts:');
   for (const g of GROUNDING_GAMES) lines.push(`  • ${g} — ${GROUNDING_NAMES[g]}`);

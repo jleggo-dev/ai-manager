@@ -255,3 +255,37 @@ describe('effort keeps its full length through normalize', () => {
     expect(s!.blocks[0]!.items[0]!.duration_min).toBe(45);
   });
 });
+
+describe('the metronome survives normalize, bounded', () => {
+  const one = (item: Record<string, unknown>) =>
+    normalizeSession({ blocks: [{ label: 'Practice', items: [{ name: 'Scales', ...item }] }] })!.blocks[0]!.items[0]!;
+
+  it('keeps a tempo the coach asked for', () => {
+    expect(one({ tool: 'timer', duration_min: 10, metronome_bpm: 72, metronome_meter: 3 })).toMatchObject({
+      metronome_bpm: 72,
+      metronome_meter: 3,
+    });
+  });
+
+  it('bounds a tempo nobody can play instead of storing it', () => {
+    expect(one({ metronome_bpm: 5000 }).metronome_bpm).toBe(240);
+    expect(one({ metronome_bpm: 1 }).metronome_bpm).toBe(30);
+  });
+
+  it('never invents one — no field, no pulse, which is almost every step in the app', () => {
+    const plain = one({ tool: 'timer', duration_min: 10 });
+    expect(plain.metronome_bpm).toBeUndefined();
+    expect(plain.metronome_meter).toBeUndefined();
+  });
+
+  it('ignores a meter with no tempo behind it', () => {
+    expect(one({ metronome_meter: 4 }).metronome_bpm).toBeUndefined();
+    expect(one({ metronome_meter: 4 }).metronome_meter).toBeUndefined();
+  });
+
+  it('shrugs off a non-numeric tempo rather than dropping the item', () => {
+    const item = one({ metronome_bpm: 'allegro' });
+    expect(item.name).toBe('Scales');
+    expect(item.metronome_bpm).toBeUndefined();
+  });
+});

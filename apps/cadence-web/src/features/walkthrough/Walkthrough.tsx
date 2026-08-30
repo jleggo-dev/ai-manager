@@ -9,6 +9,7 @@ import { StepMeditate } from './tools/StepMeditate.tsx';
 import { StepGrounding } from './tools/StepGrounding.tsx';
 import { StepFeelingLog } from './tools/StepFeelingLog.tsx';
 import { StepCheckoff, StepJournal } from './tools/SimpleTools.tsx';
+import { Metronome } from './tools/Metronome.tsx';
 import { TONE } from './tools/tone.ts';
 import { Recap } from './Recap.tsx';
 import { AllSteps } from './AllSteps.tsx';
@@ -196,6 +197,15 @@ export function Walkthrough({
           <>
             <StepHeader step={step} />
             <div style={{ marginTop: 18 }}>{renderTool(step, logs, setLog, next, steps[idx + 1]?.title)}</div>
+            {/* The metronome rides ALONGSIDE the tool rather than being one, so it is attached here
+                — once, under whatever card the step rendered — instead of inside each tool that
+                might want it. Circuits and intervals are the two that own their whole body and so
+                sit outside this branch; neither is a step anyone practises an instrument to. */}
+            {step.metronome && (
+              <div style={{ marginTop: 12 }}>
+                <Metronome key={step.id} spec={step.metronome} title={step.title} />
+              </div>
+            )}
           </>
         )}
       </div>
