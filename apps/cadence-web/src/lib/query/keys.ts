@@ -58,6 +58,12 @@ export const queryKeys = {
     stagePath: (goalId: string) => ['progressExtras', 'stagePath', goalId] as const,
     count: (goalId: string) => ['progressExtras', 'count', goalId] as const,
   },
+  /** `/me/recaps` (the `recap_rail` widget, Progress Engine W2-1) — weekly check-in recaps,
+   *  persisted at confirm time. Scoped by `limit` so the rail's own default doesn't collide with a
+   *  caller asking for more. */
+  recaps: {
+    scoped: (limit: number) => ['recaps', limit] as const,
+  },
 } as const;
 
 /**
