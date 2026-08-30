@@ -100,6 +100,7 @@ export function OnboardingChat({
   onPlanChanged,
   onOpenWeekReview,
   onShowChanges,
+  onShowPlan,
   autoSend = null,
 }: {
   /**
@@ -126,6 +127,9 @@ export function OnboardingChat({
   /** ChangeCard's "Show me" tap, offered only when the pending change carries per-item fields
    *  (a check-in offer) — the host mounts the Changes sheet, same idiom as onOpenWeekReview. */
   onShowChanges?: () => void;
+  /** ChangeCard's "See your whole week" tap — the host opens the full plan sheet. The card shows
+   *  only the delta; this is the door to everything it lands in. */
+  onShowPlan?: () => void;
   /**
    * A canned message the host wants SENT, visibly — a real user bubble and a real coach turn,
    * unlike `sessionNote`'s invisible nudge. Today's one caller is the end-of-trail card's "Start
@@ -387,7 +391,12 @@ export function OnboardingChat({
                        * refetches; gated on `!streaming` so it reads AFTER the tool has run.
                        */}
                       {last && !streaming && (
-                        <ChangeCard key={`chg${i}`} onApplied={onPlanChanged} onShowChanges={onShowChanges} />
+                        <ChangeCard
+                          key={`chg${i}`}
+                          onApplied={onPlanChanged}
+                          onShowChanges={onShowChanges}
+                          onShowPlan={onShowPlan}
+                        />
                       )}
                       {/**
                        * Same contract as ChangeCard, one paragraph up: `open_week_review` writes a

@@ -17,6 +17,7 @@ import {
   resolveUnit,
 } from '@cadence/shared';
 import { getUser } from '../../repos/users.ts';
+import { listGoalEvents } from '../../repos/goal-events.ts';
 import { listGoals, listGoalsByStatus } from '../../repos/goals.ts';
 import { listEquipment } from '../../repos/equipment.ts';
 import { getActivePlan } from '../../repos/plans.ts';
@@ -253,10 +254,10 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_goal_progress: {
     name: 'get_goal_progress',
     description:
-      "Numbers on how each goal is going, worked out from what the user has logged — 18 of 100 books read, current weight vs target, days left to a deadline, sessions kept per week — plus trends over time (pace, top lift). Use when they ask how they're doing on a goal or overall. For whether they showed up at all, use get_consistency; for raw totals of one counted thing, use get_practice_totals.",
+      "Numbers on how each goal is going, worked out from what the user has logged — 18 of 100 books read, current weight vs target, days left to a deadline, sessions kept per week — plus trends over time (pace, top lift) and the latest accomplishments recorded by name. Use when they ask how they're doing on a goal or overall. For whether they showed up at all, use get_consistency; for raw totals of one counted thing, use get_practice_totals.",
     domains: ['goals', 'progress'],
     async run(userId) {
-      const p = await buildProgress(userId);
+      const [p, events] = await Promise.all([buildProgress(userId), listGoalEvents(userId, 6)]);
       return {
         cards: p.cards,
         trends: p.trends.map((t) => ({
@@ -266,10 +267,11 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
           first: t.series[0],
           last: t.series[t.series.length - 1],
         })),
+        events: events.map((e) => ({ label: e.label, at: e.at })),
       };
     },
     render(r) {
-      const { cards, trends } = r as {
+      const { cards, trends, events } = r as {
         cards: ProgressCard[];
         trends: Array<{
           title: string;
@@ -278,6 +280,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
           first?: { value: number };
           last?: { value: number };
         }>;
+        events?: Array<{ label: string; at: string }>;
       };
       const lines: string[] = [];
       for (const c of cards) {
@@ -294,11 +297,21 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
         if (t.first && t.last)
           lines.push(`- ${t.title} ${t.label.toLowerCase()}: ${t.first.value} → ${t.last.value} ${t.unit}`);
       }
+      // The ledger's own words, not only its count. These labels used to be dropped here — she
+      // could say "18/100" but never name WHICH — so a list the user had already given could
+      // only be asked for again.
+      for (const e of events ?? []) {
+        const d = new Date(e.at);
+        const when = Number.isNaN(d.getTime())
+          ? ''
+          : ` (${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+        lines.push(`- recorded: ${e.label}${when}`);
+      }
       return lines.length ? `Goal progress (computed):\n${lines.join('\n')}` : '';
     },
     rows(r) {
-      const x = r as { cards: unknown[]; trends: unknown[] };
-      return x.cards.length + x.trends.length;
+      const x = r as { cards: unknown[]; trends: unknown[]; events?: unknown[] };
+      return x.cards.length + x.trends.length + (x.events?.length ?? 0);
     },
   },
 

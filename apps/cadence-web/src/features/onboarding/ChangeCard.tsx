@@ -26,12 +26,17 @@ import { dismissPendingChange, getPendingChange, getPendingChangeDetail, lockPla
 export function ChangeCard({
   onApplied,
   onShowChanges,
+  onShowPlan,
 }: {
   onApplied?: () => void;
   /** Opens the Changes sheet instead of applying inline — set only when this pending change
    *  carries per-item fields, the signature of a check-in offer. Same idiom as WeekReviewCard's
    *  `onOpen`: the host mounts the real surface, this card only asks for it. */
   onShowChanges?: () => void;
+  /** Opens the full plan sheet. The card shows only the change; this is the "and where does it
+   *  land?" door, right where the question arises (owner, 2026-08-30). Optional because the
+   *  onboarding host has no plan sheet yet. */
+  onShowPlan?: () => void;
 }) {
   const [lines, setLines] = useState<string[] | null>(null);
   const [hasOffers, setHasOffers] = useState(false);
@@ -93,6 +98,11 @@ export function ChangeCard({
         <button type="button" className="cfm-more" onClick={() => void dismiss()}>
           Not now
         </button>
+        {onShowPlan && (
+          <button type="button" className="cfm-more" onClick={onShowPlan}>
+            See your whole week
+          </button>
+        )}
       </div>
     );
   }
@@ -115,6 +125,11 @@ export function ChangeCard({
             Not now
           </button>
         </>
+      )}
+      {onShowPlan && (
+        <button type="button" className="cfm-more" onClick={onShowPlan}>
+          See your whole week
+        </button>
       )}
     </div>
   );

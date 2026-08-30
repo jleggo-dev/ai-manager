@@ -249,6 +249,20 @@ describe('retrieval registry — render / rows', () => {
     expect(RETRIEVAL_FUNCTIONS.get_goal_progress!.rows({ cards, trends })).toBe(5);
   });
 
+  it('get_goal_progress names recorded accomplishments, dated, and tolerates their absence', () => {
+    const events = [
+      { label: 'Learned Melody (Suzuki Book 2)', at: '2026-08-29T22:00:00Z' },
+      { label: 'finished Dune', at: 'not-a-date' },
+    ];
+    const text = RETRIEVAL_FUNCTIONS.get_goal_progress!.render({ cards: [], trends: [], events });
+    expect(text).toContain('recorded: Learned Melody (Suzuki Book 2) (Aug 29)');
+    expect(text).toContain('recorded: finished Dune'); // bad date → label still shown, undated
+    expect(text).not.toContain('Invalid');
+    expect(RETRIEVAL_FUNCTIONS.get_goal_progress!.rows({ cards: [], trends: [], events })).toBe(2);
+    // Older stored results predate the events field — render must not throw on them.
+    expect(RETRIEVAL_FUNCTIONS.get_goal_progress!.render({ cards: [], trends: [] })).toBe('');
+  });
+
   it('get_constraints prefers label and marks plan-around', () => {
     const text = RETRIEVAL_FUNCTIONS.get_constraints!.render([
       { label: 'left knee', plan_around: true },
