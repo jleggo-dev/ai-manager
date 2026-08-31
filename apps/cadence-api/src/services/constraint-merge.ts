@@ -1,5 +1,6 @@
 import type { Constraint } from '@cadence/shared';
 import { normTitle, sameGoalTitle } from './goal-identity.ts';
+import { factTokens, factTokensContained } from './fact-tokens.ts';
 
 /**
  * Merging what the Broker just heard into what we already knew about someone's constraints.
@@ -38,21 +39,19 @@ import { normTitle, sameGoalTitle } from './goal-identity.ts';
  * complaints that get refined as someone talks, and the single most common shape is exactly the
  * one it rejects — "knee" on Monday becoming "left knee — patellar tendinopathy" on Friday.
  *
- * So constraints additionally accept single-word containment, floored at four characters to keep
- * articles and scraps out. The asymmetry of costs justifies it: a false SPLIT accumulates
- * duplicate constraints forever (the bug being fixed), while a false MERGE keeps the fuller label
- * of two closely-worded complaints. Multi-word labels still need every word present, so "knee
- * pain" and "back pain" stay two things.
+ * So constraints additionally accept containment over `factTokens` — stopwords dropped, plurals
+ * and number words folded — with single-token matches floored at four characters to keep scraps
+ * out. Raw-word containment was not enough: on 2026-08-31 the owner's file carried FOUR rows of
+ * one Wednesday fact and two of one piano class, split by nothing but "Saturdays"/"Saturday" and
+ * "at work"/"work on". The asymmetry of costs justifies the folding: a false SPLIT accumulates
+ * duplicate constraints forever (the bug being fixed, twice now), while a false MERGE keeps the
+ * fuller label of two closely-worded complaints. Multi-word labels still need every significant
+ * word present, so "knee pain" and "back pain" stay two things.
  */
 export function sameConstraint(a: string, b: string): boolean {
   if (sameGoalTitle(a, b)) return true;
-  const na = normTitle(a);
-  const nb = normTitle(b);
-  if (!na || !nb) return false;
-  const [shorter, longer] = na.length <= nb.length ? [na, nb] : [nb, na];
-  if (shorter.length < 4) return false;
-  const pool = new Set(longer.split(' '));
-  return shorter.split(' ').every((w) => pool.has(w));
+  if (!normTitle(a) || !normTitle(b)) return false;
+  return factTokensContained(factTokens(a), factTokens(b));
 }
 
 export function mergeConstraints(existing: Constraint[], incoming: Constraint[]): Constraint[] {

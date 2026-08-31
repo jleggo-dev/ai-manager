@@ -280,7 +280,10 @@ function CoachApp({ session, authReady = true }: { session: Session | null; auth
   );
 
   return (
-    <CoachFaceProvider>
+    // Gated like every other fetch on the paint-before-auth path: a face read fired before the
+    // token exists is a guaranteed 401, and a 401 read as "hasn't picked" is how portraits
+    // reverted to the mark (see CoachFaceProvider).
+    <CoachFaceProvider authReady={authReady}>
       {dev ? (
         <div className="devroot">
           {phone}

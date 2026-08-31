@@ -25,6 +25,7 @@ import { listOccurrences, listRecentLogged } from '../../repos/occurrences.ts';
 import { buildProgress } from '../progress.ts';
 import { computePracticeTotals } from '../practice-totals.ts';
 import { activityHandle, ANYTIME } from '../plan-edit.ts';
+import { readDensity } from '../plan-density.ts';
 import { describeRecurrence } from '../scheduling.ts';
 import { FOOD_HEALTH_FUNCTIONS } from './food-health-functions.ts';
 import { CHECK_FOOD_SOURCES } from './food-sources-function.ts';
@@ -180,7 +181,17 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
       // week, and she re-litigates a decision they already made with her.
       const steer = typeof plan.steer === 'string' ? plan.steer.trim() : '';
       const changed = steer ? `\nThey asked for this version themselves${changedWhen(plan)}: "${steer}"` : '';
-      return `Current plan v${String(plan.version)} (${activities.length} commitments):\n${lines.join('\n')}${changed}`;
+      /**
+       * The week AS A WEEK. The per-commitment lines above are recurrence rules, and rebalancing
+       * from them means mentally transposing every rule into a day grid on every turn —
+       * `readDensity` has always computed exactly that grid, but only synthesis ever saw it
+       * (2026-08-31: "she can't see the week as a week"). One line, same arithmetic.
+       */
+      const d = readDensity(activities as Parameters<typeof readDensity>[0]);
+      const dayNames = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+      const shape = d.perDay.map((n, i) => `${dayNames[i]} ${n || '—'}`).join(' · ');
+      const density = `\nWeek shape (their own items per day): ${shape}`;
+      return `Current plan v${String(plan.version)} (${activities.length} commitments):\n${lines.join('\n')}${density}${changed}`;
     },
     rows(r) {
       return (r as { activities: unknown[] }).activities.length;

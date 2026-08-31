@@ -1,10 +1,11 @@
 /**
- * API-06 — resilience-contract tests for buildContextPack's 3-way Broker fallback.
+ * API-06 — resilience-contract tests for buildContextPack.
  *
- * Modes (persisted audit trail; historical `broker-*` prefix kept on purpose):
- *   - broker-curated  — pack-select AND pack-summarize both succeed
- *   - broker-partial  — exactly one of the two Broker steps succeeds
- *   - deterministic   — both fail → intent selection + renderResults
+ * Modes since 2026-08-31 (persisted audit trail; historical `broker-` prefix kept on purpose):
+ *   - broker-select  — pack-select chose the functions; the app rendered the words
+ *   - deterministic  — select failed → intent selection + renderResults
+ * There is deliberately NO summarize step any more (see context-pack.ts header): the body is
+ * each function's own render(), and these tests pin that no pack-summarize job is ever invoked.
  *
  * AI seam + catalog + persist/trace/log are mocked so CI runs without Cadence DB / AIM secrets.
  * Retrieval registry is stubbed so executeCalls never hits Postgres.
@@ -65,10 +66,6 @@ function selectOk(calls: Array<{ fn: string; params?: Record<string, unknown> }>
   return { formatted: JSON.stringify({ calls, reason }) };
 }
 
-function summarizeOk(text: string) {
-  return { formatted: text };
-}
-
 describe('API-06 — buildContextPack 3-way fallback', () => {
   beforeEach(() => {
     stubs.runJobBySlug.mockReset();
@@ -78,60 +75,30 @@ describe('API-06 — buildContextPack 3-way fallback', () => {
     stubs.logAi.mockClear();
   });
 
-  it('mode=broker-curated when select and summarize both succeed', async () => {
+  it('mode=broker-select when select succeeds — body is the deterministic render, summarize never runs', async () => {
     stubs.runJobBySlug.mockImplementation(async (_uid: string, slug: string) => {
       if (slug === 'pack-select')
         return selectOk([{ fn: 'get_identity' }, { fn: 'get_objectives' }], 'need identity + goals');
-      if (slug === 'pack-summarize') return summarizeOk('Ada is training for a 5k.');
       throw new Error(`unexpected slug ${slug}`);
     });
 
     const pack = await buildContextPack(USER, 'ongoing');
 
-    expect(pack.mode).toBe('broker-curated');
+    expect(pack.mode).toBe('broker-select');
     expect(pack.selectReason).toBe('need identity + goals');
-    expect(pack.rendered).toContain('broker-curated');
-    expect(pack.rendered).toContain('Ada is training for a 5k.');
+    expect(pack.rendered).toContain('broker-select');
+    // The body is render() output word for word — no model prose stands between data and coach.
+    expect(pack.rendered).toContain('Name: Ada');
     expect(pack.id).toBe('pack-id');
     expect(stubs.insertContextPack).toHaveBeenCalledOnce();
-    expect(stubs.insertContextPack.mock.calls[0]?.[0]?.sections?.mode).toBe('broker-curated');
+    expect(stubs.insertContextPack.mock.calls[0]?.[0]?.sections?.mode).toBe('broker-select');
+    // The 2026-08-31 contract: pack-summarize is GONE — it once asserted "no linked equipment"
+    // about a domain it was never handed.
+    const slugs = stubs.runJobBySlug.mock.calls.map((c) => c[1]);
+    expect(slugs).not.toContain('pack-summarize');
   });
 
-  it('mode=broker-partial when select succeeds but summarize fails', async () => {
-    stubs.runJobBySlug.mockImplementation(async (_uid: string, slug: string) => {
-      if (slug === 'pack-select') return selectOk([{ fn: 'get_identity' }], 'identity only');
-      if (slug === 'pack-summarize') throw new Error('summarize boom');
-      throw new Error(`unexpected slug ${slug}`);
-    });
-
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const pack = await buildContextPack(USER, 'ongoing');
-    spy.mockRestore();
-
-    expect(pack.mode).toBe('broker-partial');
-    expect(pack.selectReason).toBe('identity only');
-    expect(pack.rendered).toContain('broker-partial');
-    // Deterministic render of identity still lands in the pack.
-    expect(pack.rendered).toContain('Name: Ada');
-  });
-
-  it('mode=broker-partial when select fails but summarize succeeds', async () => {
-    stubs.runJobBySlug.mockImplementation(async (_uid: string, slug: string) => {
-      if (slug === 'pack-select') throw new Error('select boom');
-      if (slug === 'pack-summarize') return summarizeOk('Deterministic fns, broker prose.');
-      throw new Error(`unexpected slug ${slug}`);
-    });
-
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const pack = await buildContextPack(USER, 'ongoing');
-    spy.mockRestore();
-
-    expect(pack.mode).toBe('broker-partial');
-    expect(pack.selectReason).toBe('(deterministic selection)');
-    expect(pack.rendered).toContain('Deterministic fns, broker prose.');
-  });
-
-  it('mode=deterministic when both Broker steps fail', async () => {
+  it('mode=deterministic when select fails', async () => {
     stubs.runJobBySlug.mockImplementation(async () => {
       throw new Error('broker down');
     });
@@ -149,10 +116,9 @@ describe('API-06 — buildContextPack 3-way fallback', () => {
     expect(pack.provenance.some((p) => p.fn === 'get_constraints')).toBe(true);
   });
 
-  it('treats empty/unknown select calls as select failure → deterministic path when summarize also fails', async () => {
+  it('treats empty/unknown select calls as select failure → deterministic path', async () => {
     stubs.runJobBySlug.mockImplementation(async (_uid: string, slug: string) => {
       if (slug === 'pack-select') return { formatted: JSON.stringify({ calls: [{ fn: 'ghost' }], reason: 'bad' }) };
-      if (slug === 'pack-summarize') return { formatted: '   ' }; // empty → summarize null
       throw new Error(`unexpected slug ${slug}`);
     });
 
@@ -161,10 +127,9 @@ describe('API-06 — buildContextPack 3-way fallback', () => {
     expect(pack.selectReason).toBe('(deterministic selection)');
   });
 
-  it('always appends mandatory get_identity + get_constraints even if Broker omitted them', async () => {
+  it('always appends the mandatory fns — equipment included — even if the Broker omitted them', async () => {
     stubs.runJobBySlug.mockImplementation(async (_uid: string, slug: string) => {
       if (slug === 'pack-select') return selectOk([{ fn: 'get_objectives' }], 'objectives only');
-      if (slug === 'pack-summarize') return summarizeOk('summary');
       throw new Error(`unexpected slug ${slug}`);
     });
 
@@ -173,6 +138,10 @@ describe('API-06 — buildContextPack 3-way fallback', () => {
     expect(fns).toContain('get_objectives');
     expect(fns).toContain('get_identity');
     expect(fns).toContain('get_constraints');
+    // 2026-08-31: the select chose a list without equipment and the coach denied the user's
+    // dumbbells for a session. Owned items are ~30 tokens; their absence broke "never makes
+    // you repeat yourself".
+    expect(fns).toContain('get_equipment');
   });
 });
 

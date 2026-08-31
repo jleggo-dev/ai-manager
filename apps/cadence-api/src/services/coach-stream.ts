@@ -13,6 +13,19 @@ import { createSseLineBuffer, pushSseChunk, extractFunctionCallsFromOutput } fro
 /** Accumulated bookkeeping from one coach turn stream. */
 export interface CoachStreamResult {
   content: string;
+  /**
+   * The turn's text split at generation boundaries — one entry per model response that produced
+   * prose (a round before a tool call, the answer after it, a nudge's correction). `content` is
+   * the raw glue of all of them and exists for compatibility; anything user-facing should join
+   * these with a blank line instead. Empty when the turn never crossed a boundary — the caller
+   * falls back to `content`.
+   *
+   * Why this exists: one accumulator across rounds concatenated four drafts of an answer into a
+   * single paragraph ("…Tuesday's bike instead?Good catch — that solves two problems…",
+   * 2026-08-31) and made a second cadence-picks block reachable in one turn. The transcript keeps
+   * the structure; rendering flattens it, never the other way around.
+   */
+  segments: string[];
   promptTokens: number | null;
   completionTokens: number | null;
   /**
@@ -66,6 +79,10 @@ export interface RelayAndAccumulateOptions {
 /** Mutable accumulate state — shared by the stream loop and per-line parser. */
 export interface CoachStreamAccumulateState {
   content: string;
+  /** Completed generation texts — see `CoachStreamResult.segments`. */
+  segments: string[];
+  /** Where in `content` the CURRENT (unfinished) segment begins. Advanced by `endCoachSegment`. */
+  segmentMark: number;
   promptTokens: number | null;
   completionTokens: number | null;
   /** Provider-reported cache hits on the prompt, summed across rounds. See `CoachStreamResult`. */
@@ -84,6 +101,8 @@ export interface CoachStreamAccumulateState {
 export function createCoachStreamAccumulateState(): CoachStreamAccumulateState {
   return {
     content: '',
+    segments: [],
+    segmentMark: 0,
     promptTokens: null,
     completionTokens: null,
     cachedPromptTokens: null,
@@ -171,6 +190,32 @@ function contribute(
   else return;
   entry[field] = value;
   ledger.set(responseId, entry);
+}
+
+/**
+ * Close the segment being accumulated: everything `content` gained since the last boundary
+ * becomes one entry in `state.segments`, and (when a writer is given) a `{"cadence":"segment"}`
+ * frame tells the client to close its bubble too. A boundary with no new text is a no-op — the
+ * client must never be told to open a bubble nothing will fill.
+ *
+ * Called by the tool loop wherever one generation ends and another may begin: after a round that
+ * will continue into a tool exchange, and before each nudge. The final flush at turn end passes
+ * no writer — `[DONE]` already closes the client's last bubble.
+ */
+export function endCoachSegment(
+  state: CoachStreamAccumulateState,
+  writeChunk?: (chunk: string) => boolean | void,
+): void {
+  const text = state.content.slice(state.segmentMark).trim();
+  state.segmentMark = state.content.length;
+  if (!text) return;
+  state.segments.push(text);
+  if (!writeChunk) return;
+  try {
+    writeChunk('data: {"cadence":"segment"}\n\n');
+  } catch {
+    /* client gone; the segment record still stands */
+  }
 }
 
 export function applySseDataPayload(state: CoachStreamAccumulateState, data: string): void {

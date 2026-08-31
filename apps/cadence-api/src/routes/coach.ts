@@ -446,7 +446,8 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     // to AI Admin after the stream (the in-process path must do this bookkeeping itself).
     const t0 = Date.now();
     const {
-      content,
+      content: rawContent,
+      segments,
       promptTokens,
       cachedPromptTokens,
       completionTokens,
@@ -495,6 +496,14 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
         },
       },
     );
+    /**
+     * The turn's canonical text: its generations joined with a blank line, so a round's last
+     * sentence and a continuation's first can never fuse into one word ("…instead?Good catch",
+     * 2026-08-31). `segments` is empty only when the relay produced no boundary at all — the
+     * plain no-tools turn — where the raw accumulate is already a single generation.
+     */
+    const content = segments.length ? segments.join('\n\n') : rawContent;
+
     /**
      * AWAITED, and that is the whole fix for the backgrounded phone.
      *

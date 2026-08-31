@@ -9,14 +9,26 @@ import { BASE, headers } from './http.ts';
  * these are worth an error state in front of someone who just opened the app.
  */
 
-/** GET /me/coach-face — null means "hasn't picked", which renders the brand mark. */
-export async function getCoachFace(): Promise<CoachFaceId | null> {
+/**
+ * What a face read actually said. `{ ok: true, faceId: null }` is a real answer — "hasn't
+ * picked", which renders the brand mark. `{ ok: false }` is NOT an answer: the request failed
+ * (a 401 before auth resolved, a 500, a dead socket) and the stored pick is simply unknown.
+ *
+ * The two used to be the same `null`, and that equivalence is how a portrait "reverted": the
+ * paint-before-auth boot (#311) fired this read without a bearer token, the 401 came back as
+ * "hasn't picked", and `useEnsureCoachFace` could then persist a RANDOM face over the real one.
+ * Failure must never be readable as a choice.
+ */
+export type CoachFaceRead = { ok: true; faceId: CoachFaceId | null } | { ok: false };
+
+/** GET /me/coach-face — see CoachFaceRead for why failure and "hasn't picked" are kept apart. */
+export async function getCoachFace(): Promise<CoachFaceRead> {
   try {
     const res = await fetch(`${BASE}/me/coach-face`, { headers: headers() });
-    if (!res.ok) return null;
-    return ((await res.json()) as { face_id: CoachFaceId | null }).face_id ?? null;
+    if (!res.ok) return { ok: false };
+    return { ok: true, faceId: ((await res.json()) as { face_id: CoachFaceId | null }).face_id ?? null };
   } catch {
-    return null;
+    return { ok: false };
   }
 }
 

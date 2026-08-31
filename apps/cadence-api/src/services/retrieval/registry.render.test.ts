@@ -85,6 +85,29 @@ describe('retrieval registry — render / rows', () => {
     expect(RETRIEVAL_FUNCTIONS.get_active_plan!.render({ plan: null, activities: [] })).toBe('');
   });
 
+  /**
+   * The week AS A WEEK (2026-08-31): rebalancing from per-commitment recurrence rules meant
+   * mentally transposing them into a day grid every turn. One line, readDensity's arithmetic —
+   * system items excluded, an empty day an em dash.
+   */
+  it('renders the week shape as items per day, counting only their own items', () => {
+    const text = planRender([
+      commitment({ schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO,WE', time_of_day: '07:00' } }),
+      commitment({
+        commitment_id: '9c9b20e1-1111-2222-3333-444455556666',
+        title: 'Mobility',
+        schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=MO', time_of_day: '06:00' },
+      }),
+      commitment({
+        commitment_id: 'aaab30f2-1111-2222-3333-444455556666',
+        kind: 'system',
+        title: 'Weigh-in',
+        schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=SU', time_of_day: '08:00' },
+      }),
+    ]);
+    expect(text).toContain('Week shape (their own items per day): Mo 2 · Tu — · We 1 · Th — · Fr — · Sa — · Su —');
+  });
+
   it('a timed commitment reads day, clock time, the effort, and the time to set aside', () => {
     const text = planRender(
       [commitment({ schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU', time_of_day: '07:00', duration_min: 40 } })],

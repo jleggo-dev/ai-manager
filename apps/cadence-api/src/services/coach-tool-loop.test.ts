@@ -84,6 +84,60 @@ describe('relayCoachTurnWithTools', () => {
     expect(writes.filter((w) => w.includes('[DONE]'))).toHaveLength(1);
   });
 
+  /**
+   * The turn's structure survives: each generation is its own segment, a `{"cadence":"segment"}`
+   * frame closes the client's bubble between them, and nothing is ever glued. One accumulator
+   * across rounds is how "…Tuesday's bike instead?Good catch — that solves two problems…"
+   * reached a phone as one paragraph (2026-08-31).
+   */
+  it('keeps each generation as its own segment and tells the client where the seam is', async () => {
+    const { writes, writeChunk } = collectWrites();
+    const execute = vi.fn(async (calls: Array<{ toolCallId: string; name: string }>) =>
+      calls.map((c) => ({ toolCallId: c.toolCallId, output: 'Weight: 88.5 kg' })),
+    );
+    const submit = vi.fn(async () => stream([delta('You are at 88.5 kg.'), complete('r2'), DONE]));
+    const result = await relayCoachTurnWithTools(
+      'u1',
+      stream([delta('Let me check your file… '), complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
+      { toolNames: new Set(['get_weight']), execute, submit },
+      { writeChunk },
+    );
+    expect(result.segments).toEqual(['Let me check your file…', 'You are at 88.5 kg.']);
+    const seams = writes.filter((w) => w.includes('"cadence":"segment"'));
+    expect(seams).toHaveLength(1);
+    // The seam closes round one's bubble before round two's text arrives.
+    const seamAt = writes.findIndex((w) => w.includes('"cadence":"segment"'));
+    const round2At = writes.findIndex((w) => w.includes('88.5 kg.'));
+    expect(seamAt).toBeGreaterThan(-1);
+    expect(seamAt).toBeLessThan(round2At);
+  });
+
+  it('a round with no text leaves no empty segment and no seam frame', async () => {
+    const { writes, writeChunk } = collectWrites();
+    const execute = vi.fn(async (calls: Array<{ toolCallId: string; name: string }>) =>
+      calls.map((c) => ({ toolCallId: c.toolCallId, output: 'ok' })),
+    );
+    const submit = vi.fn(async () => stream([delta('Done — noted.'), complete('r2'), DONE]));
+    const result = await relayCoachTurnWithTools(
+      'u1',
+      stream([complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
+      { toolNames: new Set(['get_weight']), execute, submit },
+      { writeChunk },
+    );
+    expect(result.segments).toEqual(['Done — noted.']);
+    expect(writes.filter((w) => w.includes('"cadence":"segment"'))).toHaveLength(0);
+  });
+
+  it('a plain turn still records its one generation as one segment', async () => {
+    const result = await relayCoachTurnWithTools(
+      'u1',
+      stream([delta('Hello'), delta(' there'), DONE, complete('r1'), DONE]),
+      { toolNames: new Set(['get_weight']), execute: vi.fn(), submit: vi.fn() },
+      {},
+    );
+    expect(result.segments).toEqual(['Hello there']);
+  });
+
   it('a call whose name is not ours is left alone', async () => {
     const execute = vi.fn();
     const submit = vi.fn();

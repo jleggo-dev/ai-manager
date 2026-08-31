@@ -2,6 +2,7 @@ import { resolveActivityNames, type CoachActivityFrame } from '@cadence/shared';
 import { logAi } from './ai-log.ts';
 import {
   createCoachStreamAccumulateState,
+  endCoachSegment,
   relayAndAccumulate,
   type CoachStreamAccumulateState,
   type CoachStreamResult,
@@ -171,6 +172,8 @@ async function nudgeDanglingLookup(
    */
   let result: CoachStreamResult | null = null;
   try {
+    // The nudge's reply is a new generation: close the bubble the turn was filling first.
+    endCoachSegment(state, options.writeChunk);
     const body = await deps.nudge(
       '<note>You called find_tools and then answered without calling any of the tools it gave you, ' +
         'so NOTHING was actually done. If the user asked you to change something, call that tool now ' +
@@ -188,7 +191,10 @@ async function nudgeDanglingLookup(
         exchangeCalls.push(...late);
         exchangeOutputs.push(...outputs);
         const after = await deps.submit(state.currentResponseId, [...exchangeOutputs], [...exchangeCalls], revealed);
-        if (after) result = await relayAndAccumulate(after, { ...options, state, suppressDone: true });
+        if (after) {
+          endCoachSegment(state, options.writeChunk);
+          result = await relayAndAccumulate(after, { ...options, state, suppressDone: true });
+        }
       }
     }
   } catch (e) {
@@ -358,6 +364,9 @@ export async function relayCoachTurnWithTools(
       console.warn('[coach-tools] continuation failed — ending the turn with what streamed:', e);
       break;
     }
+    // The continuation is a new generation, not more of the last one: close the bubble. Rounds
+    // glued into one string is how four drafts of an answer became one paragraph (2026-08-31).
+    endCoachSegment(state, options.writeChunk);
     toolRounds++;
   }
 
@@ -373,6 +382,10 @@ export async function relayCoachTurnWithTools(
   // Whatever happened above, a turn that ran tools may not end in silence.
   const spoke = await nudgeSilentTurn(userId, deps, options, state);
   if (spoke) result = spoke;
+
+  // Flush the last generation into the segment record. No frame — [DONE] closes the client's
+  // final bubble; this is only the transcript keeping its structure.
+  endCoachSegment(state);
 
   // The one real terminal, whatever happened above — the client is waiting on it.
   try {

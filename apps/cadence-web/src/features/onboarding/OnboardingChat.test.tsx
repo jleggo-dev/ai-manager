@@ -46,7 +46,7 @@ vi.mock('../../lib/api.ts', () => ({
   openCoachSession: (...args: unknown[]) => openCoachSession(...args),
   sendCoachMessage: (...args: unknown[]) => sendCoachMessage(...args),
   prepareCoachFoodAction: vi.fn().mockResolvedValue({ status: 'ok', action: null }),
-  getCoachFace: vi.fn().mockResolvedValue(null),
+  getCoachFace: vi.fn().mockResolvedValue({ ok: true, faceId: null }),
   setCoachFace: vi.fn().mockResolvedValue(null),
   // Chat-open health refresh (jsdom health capability is unavailable, so these stay unhit —
   // defined only so the mount effect can import them).

@@ -152,6 +152,8 @@ describe('relayAndAccumulate', () => {
     const result = await relayAndAccumulate(null);
     expect(result).toEqual({
       content: '',
+      segments: [],
+      segmentMark: 0,
       promptTokens: null,
       cachedPromptTokens: null,
       completionTokens: null,

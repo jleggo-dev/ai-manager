@@ -13,6 +13,7 @@ import {
 import { geocodeCity } from './weather/weather.ts';
 import { logAi } from './ai-log.ts';
 import { normalizeBaseline, normalizeTimezone } from './capture-normalize.ts';
+import { sameEquipmentName } from './fact-tokens.ts';
 import { extractCity } from './capture-location.ts';
 import { persistCapturedGoals } from './capture-goals.ts';
 import type { GoalScreenResult } from './goal-screen.ts';
@@ -111,27 +112,32 @@ export async function runCaptureExtract(
    * Removal stays an explicit act and belongs to the review wizard, which still deletes wholesale
    * on purpose — when someone rejects a row there, they mean it.
    *
-   * Matched case-insensitively on name, which is how the same item restated ("Treadmill" after
-   * "treadmill") updates in place instead of arriving as a twin. Unknown categories are coerced to
-   * 'other', never dropped.
+   * Matched on `factTokens` (case, plurals, number words, stopwords folded) — exact-lowercase
+   * matching minted "two 50lb dumbbells" beside "2x50lb dumbbells" and "Suzuki book" beside
+   * "Suzuki Book 2" in one morning (2026-08-31). Equality of token sets, or containment when the
+   * shorter name has TWO OR MORE tokens: "Suzuki book" folds into "Suzuki Book 2", while a lone
+   * "bike" can never swallow the "bike trainer" — different machines. Unknown categories are
+   * coerced to 'other', never dropped.
    */
   const namedEquip = out.equipment.filter((e) => e.name);
   let equipment = 0;
   if (namedEquip.length) {
     const existing = await listEquipment(userId);
-    const known = new Map(existing.map((e) => [e.name.trim().toLowerCase(), e]));
     for (const e of namedEquip) {
       let category = e.category;
       if (!category || !EQUIP_CATEGORIES.includes(category)) {
         coerced.push(`equipment category "${String(e.category ?? '(empty)')}" → other`);
         category = 'other';
       }
-      const match = known.get(String(e.name).trim().toLowerCase());
+      const match = existing.find((k) => sameEquipmentName(k.name, String(e.name)));
       if (match) {
         // The newest telling wins the details, as with constraints — but the row survives.
         await updateEquipment(userId, match.equipment_id, { ...e, category });
       } else {
-        await insertEquipment(userId, { ...e, category });
+        const inserted = await insertEquipment(userId, { ...e, category });
+        // Visible to the REST of this capture: the model restating one new item twice in a
+        // single extraction must still land as one row.
+        existing.push(inserted);
       }
       equipment++;
     }
