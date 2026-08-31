@@ -19,6 +19,8 @@ vi.mock('../../lib/api.ts', () => ({
   postProgressPhoto: (...a: unknown[]) => postProgressPhoto(...a),
   getProgressPhotoPair: (...a: unknown[]) => getProgressPhotoPair(...a),
   putProgressPhotosEnabled: vi.fn(),
+  // The stamp's unit read (integration) — null soft-fails to kg, which is what these fixtures assert.
+  getUnits: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../plan/occurrence/format.ts', () => ({
@@ -52,7 +54,7 @@ describe('PhotosScreen', () => {
     getProgressPhotos.mockResolvedValue(list());
     const { container } = renderWithClient(<PhotosScreen onBack={() => {}} />);
 
-    expect(await screen.findByText('Jul 1 · 82.3 kg')).toBeInTheDocument();
+    expect(await screen.findByText('Jul 1 · 82.3kg')).toBeInTheDocument();
     expect(container.querySelectorAll('.apg-cell')).toHaveLength(2);
     // Oldest first, same order the server sends — the screen never reorders.
     const dates = [...container.querySelectorAll('.apg-cell img')].map((img) => img.getAttribute('alt'));
@@ -89,14 +91,14 @@ describe('PhotosScreen', () => {
     renderWithClient(<PhotosScreen onBack={() => {}} />);
 
     expect(await screen.findByText('Time for this month’s photo')).toBeInTheDocument();
-    expect(screen.getByText('Jul 1 · 82.3 kg')).toBeInTheDocument();
+    expect(screen.getByText('Jul 1 · 82.3kg')).toBeInTheDocument();
   });
 
   it('stays quiet when next_due is still in the future', async () => {
     getProgressPhotos.mockResolvedValue(list()); // next_due 2099
     renderWithClient(<PhotosScreen onBack={() => {}} />);
 
-    await screen.findByText('Jul 1 · 82.3 kg');
+    await screen.findByText('Jul 1 · 82.3kg');
     expect(screen.queryByText('Time for this month’s photo')).not.toBeInTheDocument();
   });
 

@@ -304,7 +304,7 @@ function CoachApp({ session, authReady = true }: { session: Session | null; auth
           </button>
         </>
       )}
-      {/* Real-auth sign-out / password / start-over live in the in-app Settings sheet now. */}
+      {/* Real-auth sign-out / password / start-over live in the in-app Settings room now. */}
     </CoachFaceProvider>
   );
 }

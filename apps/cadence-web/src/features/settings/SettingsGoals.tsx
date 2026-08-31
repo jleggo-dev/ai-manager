@@ -4,13 +4,13 @@
  * editable here — that stays a conversation with the coach, reached through the dashed door at the
  * bottom. Standalone: fetches its own data via getReview() and takes only onBack/onCoach.
  *
- * Rename/retire ride the SR-1 seam (goalApi.shim.ts) — see that file for why retiring a goal
- * doesn't yet round-trip against a real server route.
+ * Rename/retire ride SR-1's goal-lifecycle api (lib/api/review.ts): retire sets status 'parked'
+ * (reversible through the coach); Progress keeps everything a parked goal built.
  */
 import { useEffect, useState } from 'react';
 import type { Goal, GoalType } from '@cadence/shared';
 import { getReview } from '../../lib/api.ts';
-import { renameGoal, retireGoal } from './goalApi.shim.ts';
+import { renameGoal, retireGoal } from '../../lib/api.ts';
 import '../../styles/settings-editors.css';
 
 /** The mono meta line's opening word — how each goal TYPE reads as a measurement kind. Only one

@@ -5,7 +5,6 @@ import { ProgressView } from '../progress/ProgressView.tsx';
 import { SettingsRoom } from '../settings/SettingsRoom.tsx';
 import { AdjustSheet } from '../plan/AdjustSheet.tsx';
 import { LogDidSheet } from '../plan/LogDidSheet.tsx';
-import { ReviewScreen } from '../review/ReviewScreen.tsx';
 import { PlanCardSheet } from '../gate/PlanCardSheet.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { FoodHome } from '../nutrition/FoodHome.tsx';
@@ -54,7 +53,7 @@ const GearIcon = () => (
  * The signed-in shell once a plan is committed: header (wordmark + Settings gear), the active
  * tab's content, and the bottom tab bar — all INSIDE `.app`, so the absolutely-positioned
  * sheets (session/adjust/settings) naturally cover the tab bar with their scrim. The redesign's
- * nav is Today / Week / Coach / Progress (+ Settings) — food has no tab of its own; today's
+ * nav is Plan / Coach / Progress / Settings (Settings opens the full-screen room, not a sheet) — food has no tab of its own; today's
  * nutrition lives on the trail's food strip → the "Today's food" sheet, and the deeper menus /
  * recipes / shop moved into that sheet and the coach. Today and Week share one PlanView instance
  * (kept mounted across the toggle) so switching between them never refetches the plan.
@@ -86,8 +85,6 @@ export function MainTabs({
    * deletes it at integration).
    */
   const [settingsRoomOpen, setSettingsRoomOpen] = useState(false);
-  const [manage, setManage] = useState(false);
-  const [offerAdjust, setOfferAdjust] = useState(false);
   /**
    * The coach's build card, tapped in the Coach tab. Same sheet as "review my whole plan", because
    * that is exactly what a rebuild is here — the only difference is that whatever she captured in
@@ -122,22 +119,6 @@ export function MainTabs({
    */
   const [food, setFood] = useState<null | 'home' | 'shop'>(null);
 
-  if (manage) {
-    return (
-      <ReviewScreen
-        mode="manage"
-        onBack={() => {
-          setManage(false);
-          setPlanReload((k) => k + 1); // the wizard may have changed the plan; the cached week must revalidate
-          setOfferAdjust(true); // changed or not, offer the refit; "Not now" is one tap
-        }}
-        onLocked={() => {
-          setManage(false);
-          setPlanReload((k) => k + 1);
-        }}
-      />
-    );
-  }
 
   return (
     <>
@@ -286,18 +267,6 @@ export function MainTabs({
           </>
         )}
         {planCardOpen && <PlanCardSheet onClose={() => setPlanCardOpen(false)} />}
-        {offerAdjust && (
-          <AdjustSheet
-            onClose={() => setOfferAdjust(false)}
-            onCommitted={() => {
-              setOfferAdjust(false);
-              // The refit landed from MainTabs' own sheet, so PlanView underneath never heard —
-              // same signal the rebuild path already sends (before the query cache this relied on
-              // the next tab flip's remount to notice).
-              setPlanReload((k) => k + 1);
-            }}
-          />
-        )}
         {rebuild && (
           <AdjustSheet
             mode="rebalance"

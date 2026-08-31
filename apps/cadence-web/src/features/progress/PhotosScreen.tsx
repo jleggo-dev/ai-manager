@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import type { ProgressPhotoSlot } from '@cadence/shared';
+import { useEffect, useState } from 'react';
+import { displayWeightUnit, formatWeight, type ProgressPhotoSlot, type WeightUnit } from '@cadence/shared';
 import type { ProgressPhotoList } from '../../lib/api.ts';
 import { useProgressPhotoPair, useProgressPhotos, useUploadProgressPhoto } from '../../lib/query/index.ts';
+import { getUnits } from '../../lib/api.ts';
 import { localTodayIso } from '../../lib/query/keys.ts';
 import { downscalePhoto } from '../plan/occurrence/format.ts';
 import '../../styles/progress-widgets.css';
@@ -23,11 +24,11 @@ function slotDate(dateIso: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-/** "Jan 5 · 86.0 kg" — date, plus the user's own nearest weigh-in when one existed. Absent weight
- *  shows the date alone; never a zero, never invented. */
-function caption(slot: ProgressPhotoSlot): string {
+/** "Jan 5 · 86.0 kg" (or "· 189.6 lb") — date, plus the user's own nearest weigh-in when one
+ *  existed, in THEIR unit. Absent weight shows the date alone; never a zero, never invented. */
+function caption(slot: ProgressPhotoSlot, unit: WeightUnit): string {
   const date = slotDate(slot.date);
-  return slot.weight_kg === null ? date : `${date} · ${slot.weight_kg.toFixed(1)} kg`;
+  return slot.weight_kg === null ? date : `${date} · ${formatWeight(slot.weight_kg, unit)}`;
 }
 
 /** "3 photos" / "1 photo" / "none yet" — facts only, no framing either way. */
@@ -41,13 +42,23 @@ function photoDue(list: ProgressPhotoList, today: string): boolean {
   return list.next_due === null || list.next_due <= today;
 }
 
-function PhotoCell({ slot }: { slot: ProgressPhotoSlot }) {
+function PhotoCell({ slot, unit }: { slot: ProgressPhotoSlot; unit: WeightUnit }) {
   return (
     <div className="apg-cell">
       <img className="apg-img" src={slot.url} alt={`Progress photo, ${slotDate(slot.date)}`} loading="lazy" />
-      <div className="pw-photos-cap">{caption(slot)}</div>
+      <div className="pw-photos-cap">{caption(slot, unit)}</div>
     </div>
   );
+}
+
+/** The stamp speaks the user's own unit (resolved server-side — never re-derived here); a failed
+ *  read falls back to kg rather than blocking the photos. */
+function useBodyWeightUnit(): WeightUnit {
+  const [unit, setUnit] = useState<WeightUnit>('kg');
+  useEffect(() => {
+    void getUnits().then((r) => setUnit(displayWeightUnit(r?.resolved?.body_weight)));
+  }, []);
+  return unit;
 }
 
 function DueCard({
@@ -89,6 +100,7 @@ function DueCard({
 export function PhotosScreen({ onBack }: { onBack: () => void }) {
   const { data, error } = useProgressPhotos();
   const upload = useUploadProgressPhoto();
+  const unit = useBodyWeightUnit();
   const [captureErr, setCaptureErr] = useState('');
 
   async function pickPhoto(file: File | null | undefined) {
@@ -126,7 +138,7 @@ export function PhotosScreen({ onBack }: { onBack: () => void }) {
             {data.photos.length > 0 && (
               <div className="apg-grid">
                 {data.photos.map((slot, i) => (
-                  <PhotoCell key={`${slot.date}-${i}`} slot={slot} />
+                  <PhotoCell key={`${slot.date}-${i}`} slot={slot} unit={unit} />
                 ))}
               </div>
             )}

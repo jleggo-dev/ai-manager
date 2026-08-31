@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({
-  getDietaryProfile: vi.fn(async () => ({ status: 'ok', profile: { allergies: [], diet: null, dislikes: [], notes: null } })),
+  getDietaryProfile: vi.fn(async () => ({ status: 'ok', profile: { allergies: [] as string[], diet: null, dislikes: [] as string[], notes: null } })),
   saveDietaryProfile: vi.fn(),
   setMacroTargets: vi.fn(async () => ({})),
 }));

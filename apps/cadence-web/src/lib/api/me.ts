@@ -12,7 +12,7 @@ export interface UserConstraint {
 /**
  * The list, or nothing — never whatever shape the wire happened to carry. On 2026-08-31 a bad
  * server-side write turned the stored constraints into a JSON string; this read passed it
- * straight through, `items.map` threw inside the Settings sheet, and the error boundary took the
+ * straight through, `items.map` threw inside the Settings surface, and the error boundary took the
  * WHOLE app down at boot ("Something broke while starting"). A screen must never inherit a crash
  * from a shape it can floor to empty.
  */

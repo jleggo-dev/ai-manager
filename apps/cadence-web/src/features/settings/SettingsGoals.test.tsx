@@ -2,10 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({ getReview: vi.fn() }));
-vi.mock('../../lib/api.ts', () => api);
-
 const goalApi = vi.hoisted(() => ({ renameGoal: vi.fn(), retireGoal: vi.fn(), restoreGoal: vi.fn() }));
-vi.mock('./goalApi.shim.ts', () => goalApi);
+vi.mock('../../lib/api.ts', () => ({ ...api, ...goalApi }));
 
 const { SettingsGoals } = await import('./SettingsGoals.tsx');
 
@@ -96,6 +94,6 @@ describe('SettingsGoals', () => {
 
     fireEvent.click(await screen.findByText('Want a goal to mean something different?'));
     expect(onCoach).toHaveBeenCalledTimes(1);
-    expect(onCoach.mock.calls[0][0]).toMatch(/mean something different/);
+    expect(onCoach.mock.calls[0]![0]).toMatch(/mean something different/);
   });
 });
