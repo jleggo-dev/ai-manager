@@ -11,7 +11,7 @@
  * group survives (stable id), the rest are deleted. Nothing here invents data — it only folds
  * retellings of one fact into one row, the same rule every future write now applies.
  */
-import { sql } from '../src/db/sql.ts';
+import { json, sql } from '../src/db/sql.ts';
 import { mergeConstraints } from '../src/services/constraint-merge.ts';
 import { sameEquipmentName } from '../src/services/fact-tokens.ts';
 import type { Constraint } from '@cadence/shared';
@@ -44,8 +44,11 @@ async function dedupConstraints(): Promise<void> {
     }
     for (const a of after) console.log(`  keeps:  "${a.label}"${a.status ? ` (${a.status})` : ''}`);
     if (APPLY) {
+      // `json()`, never a pre-stringified param: the client encodes params itself, and stringifying
+      // first double-encoded this very write on 2026-08-31 — constraints landed as a jsonb STRING
+      // and the phone crashed at boot mapping it (see scripts/repair-constraints-shape.ts).
       await sql`
-        update cadence.users set baseline = jsonb_set(baseline, '{constraints}', ${JSON.stringify(after)}::jsonb)
+        update cadence.users set baseline = jsonb_set(baseline, '{constraints}', ${json(after)})
         where id = ${u.id}`;
       console.log('  written');
     }
