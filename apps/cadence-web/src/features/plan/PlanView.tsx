@@ -13,39 +13,20 @@ import { PlanSkeleton } from './PlanSkeleton.tsx';
 import { DetourBar } from './DetourBar.tsx';
 import { DetourStateSheet } from './DetourStateSheet.tsx';
 import { DetourSetup, type DetourChoice } from './DetourSetup.tsx';
+import { DoorSheet } from './DoorSheet.tsx';
+import { DetourDayCards } from './DetourDayCards.tsx';
 import { isWeeklyCheckin } from './occurrence/format.ts';
 import { EndOfTrail } from './EndOfTrailCard.tsx';
 import { HorizonEndCap } from './HorizonEndCap.tsx';
-import { endEpisode, checkin, type PlanOccurrence, type ActiveEpisode, enterEpisode } from '../../lib/api.ts';
-import { useDetourGear } from './useDetourGear.ts';
+import { endEpisode, checkin, type PlanOccurrence, enterEpisode } from '../../lib/api.ts';
 import { useProposalAccept } from './useProposalAccept.ts';
 import { useQueryClient } from '@tanstack/react-query';
 import { setPlanData, usePlan, useWatchLogInbox, useWatchPortraitSync, useWatchSync } from '../../lib/query/index.ts';
 import { useCoachFace } from '../coach/coachFaceContext.ts';
 
-/** Warm label for a detour type — the coach names the disruption plainly (BRAND.md). */
-/** Local calendar day — the detour card's clock is the user's day, not UTC. */
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/** One-tap answers for the arrival card; DetourSetup keeps its own copy for the entry sheet. */
-const ARRIVAL_GEAR = ['Hotel gym', 'Dumbbells', 'Treadmill', 'Resistance band', 'Pool', 'Just my shoes'];
-
 /** Detour failure line — plain, and never silent (PLAN-CHANGES.md Phase 0). The gear one lives
- *  with its handlers in useDetourGear.ts. */
+ *  with its handlers in useDetourGear.ts (consumed by DetourDayCards). */
 const DETOUR_FAIL = "That didn't take — try again in a moment.";
-
-function detourLabel(type: ActiveEpisode['type']): string {
-  return {
-    travel: 'traveling',
-    illness: 'under the weather',
-    injury: 'working around an injury',
-    recovery: 'recovering',
-    custom: 'a full stretch',
-  }[type];
-}
 
 /**
  * The Today / Week surface — rendered inside MainTabs' .app shell (no header of its own). `view`
@@ -119,7 +100,8 @@ export function PlanView({
   const [captureOcc, setCaptureOcc] = useState<{ id: string; title: string; time_of_day?: string } | null>(null);
   const [cookOcc, setCookOcc] = useState<string | null>(null); // cook walkthrough (menu-derived cook task)
   const [detourSheet, setDetourSheet] = useState(false); // the live detour's state sheet
-  const [detourEntry, setDetourEntry] = useState(false); // "Life happened?" — the self-declare door
+  const [doorOpen, setDoorOpen] = useState(false); // the door's fork: temporary plan vs. a tweak
+  const [detourEntry, setDetourEntry] = useState(false); // the detour setup (type, window, gear)
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSteer, setAdjustSteer] = useState(''); // pre-filled request (nutrition baseline → Adjust)
   const [adjustMode, setAdjustMode] = useState<'adjust' | 'rebalance'>('adjust');
@@ -150,12 +132,6 @@ export function PlanView({
       setAdjustOpen(true);
     },
     recoveryPaused: adjustOpen,
-  });
-
-  // The detour-day gear answers (photos, arrival chips, "not yet") — see useDetourGear.ts.
-  const { gymBusy, gymSaw, arrivalGear, setArrivalGear, sendGym, confirmArrivalGear, notArrivedYet } = useDetourGear({
-    refresh,
-    bump,
   });
 
   /**
@@ -302,16 +278,11 @@ export function PlanView({
         )}
         {/* The detour DOOR, in the bar's own slot (owner ruling 2026-08-31, settled on device):
             door and live-state share one home at the top of the page, mutually exclusive by
-            condition. The felt statement is the user's own words; the setup sheet it opens does
-            the "take a detour" framing. */}
+            condition. The felt statement is the user's own words; the tap opens the FORK
+            (DoorSheet) — "plan isn't working" can mean a time-bound temporary plan (detour) OR
+            a regular tweak (Adjust), and the door must not assume which (owner, same day). */}
         {!data.activeEpisode && (
-          <button
-            className="detour-bar detour-door"
-            onClick={() => {
-              setDetourError(null);
-              setDetourEntry(true);
-            }}
-          >
+          <button className="detour-bar detour-door" onClick={() => setDoorOpen(true)}>
             <span className="detour-bar-dot" aria-hidden />
             <span className="detour-bar-line">&ldquo;My plan isn&rsquo;t working — I&rsquo;m too busy&rdquo;</span>
             <span className="detour-bar-chev" aria-hidden>
@@ -319,91 +290,18 @@ export function PlanView({
             </span>
           </button>
         )}
-        {data.activeEpisode && todayIso() >= data.activeEpisode.start && !data.activeEpisode.gearKnown && (
-          <div className="detour">
-            <div className="detour-t">
-              <b>Detour day — {detourLabel(data.activeEpisode.type)}</b>
-              <span>Have you arrived? Tell me what you&apos;ve got and I&apos;ll shape the days around it.</span>
-            </div>
-            <div className="detour-chips">
-              {ARRIVAL_GEAR.map((g) => (
-                <button
-                  key={g}
-                  className={`detour-chip ${arrivalGear.includes(g) ? 'on' : ''}`}
-                  aria-pressed={arrivalGear.includes(g)}
-                  onClick={() => setArrivalGear((a) => (a.includes(g) ? a.filter((x) => x !== g) : [...a, g]))}
-                >
-                  {g}
-                </button>
-              ))}
-            </div>
-            <div className="detour-actions">
-              {arrivalGear.length > 0 && (
-                <button className="adjust-pill" disabled={gymBusy} onClick={() => void confirmArrivalGear(false)}>
-                  {gymBusy ? 'Working…' : "That's what I've got"}
-                </button>
-              )}
-              <label className="adjust-pill" title="Snap the gym — I'll work out what's there">
-                {gymBusy ? 'Looking…' : '📷 Snap the gym'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  multiple
-                  hidden
-                  disabled={gymBusy}
-                  onChange={(e) => {
-                    void sendGym(e.target.files);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-              <button className="adjust-pill" disabled={gymBusy} onClick={() => void confirmArrivalGear(true)}>
-                No gym here
-              </button>
-              <button className="detour-end" onClick={() => void notArrivedYet()}>
-                Not yet
-              </button>
-            </div>
-            {gymSaw && <div className="detour-saw">{gymSaw}</div>}
-          </div>
-        )}
-        {data.activeEpisode && todayIso() >= data.activeEpisode.start && data.activeEpisode.gearKnown && (
-          <div className="detour">
-            <div className="detour-t">
-              <b>On a detour — {detourLabel(data.activeEpisode.type)}</b>
-              <span>
-                Your plan&apos;s on hold so a rough stretch never breaks your rhythm. Do what you can — checking in
-                keeps your streak alive.
-              </span>
-            </div>
-            <div className="detour-actions">
-              <button className="adjust-pill" onClick={checkInNow}>
-                Check in
-              </button>
-              {/* The equipment answer as pictures — parsed into names, the week re-drafts. */}
-              <label className="adjust-pill" title="Snap the gym — I'll rework the week around what's there">
-                {gymBusy ? 'Looking…' : '📷 Snap the gym'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  multiple
-                  hidden
-                  disabled={gymBusy}
-                  onChange={(e) => {
-                    void sendGym(e.target.files);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-              <button className="detour-end" disabled={detourEndBusy} onClick={endDetour}>
-                {detourEndBusy ? 'One moment…' : "I'm back"}
-              </button>
-            </div>
-            {/* One line, one slot: the photo verdict or the resume failure — whichever is live. */}
-            {(gymSaw || detourEndError) && <div className="detour-saw">{gymSaw || detourEndError}</div>}
-          </div>
+        {data.activeEpisode && (
+          <DetourDayCards
+            episode={data.activeEpisode}
+            onCheckIn={checkInNow}
+            onEnd={() => void endDetour()}
+            endBusy={detourEndBusy}
+            endError={detourEndError}
+            onChanged={() => {
+              refresh();
+              bump();
+            }}
+          />
         )}
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
@@ -516,20 +414,46 @@ export function PlanView({
           Pre- and post-activity are user-initiated and mutually exclusive by construction; the
           check-in is the only one that arrives uninvited, so it is the one that yields — it
           mounts (and only then asks the server whether it's due) once nothing else is open. */}
-      {!checkinSettled && !sheetOcc && !startOcc && !captureOcc && !cookOcc && !adjustOpen && (
-        <DailyCheckIn
-          // A pick's preformed steer is a small ask — exactly what the coach's triage exists for
-          // (Phase 2). It goes to her as a visible send, in the pick's own user-voice words; she
-          // makes the change or puts up a card. No sheet, no direct synthesis.
-          onAdjust={(steer) => {
-            setCheckinSettled(true);
-            onSteerCoach(steer);
+      {!checkinSettled &&
+        !sheetOcc &&
+        !startOcc &&
+        !captureOcc &&
+        !cookOcc &&
+        !adjustOpen &&
+        !doorOpen &&
+        !detourEntry && (
+          <DailyCheckIn
+            // A pick's preformed steer is a small ask — exactly what the coach's triage exists for
+            // (Phase 2). It goes to her as a visible send, in the pick's own user-voice words; she
+            // makes the change or puts up a card. No sheet, no direct synthesis.
+            onAdjust={(steer) => {
+              setCheckinSettled(true);
+              onSteerCoach(steer);
+            }}
+            onCoach={() => {
+              setCheckinSettled(true);
+              onCoach();
+            }}
+            onClose={() => setCheckinSettled(true)}
+          />
+        )}
+      {doorOpen && (
+        <DoorSheet
+          onTempPlan={() => {
+            setDoorOpen(false);
+            setDetourError(null);
+            setDetourEntry(true);
           }}
-          onCoach={() => {
-            setCheckinSettled(true);
-            onCoach();
+          // Phase-2-compliant as designed: the Adjust sheet's compose branch itself hands typed
+          // words to the coach as a visible send now, so the fork's "regular tweak" door opens a
+          // compose surface, never a direct pipeline.
+          onAdjust={() => {
+            setDoorOpen(false);
+            setAdjustSteer('');
+            setAdjustMode('adjust');
+            setAdjustOpen(true);
           }}
-          onClose={() => setCheckinSettled(true)}
+          onClose={() => setDoorOpen(false)}
         />
       )}
       {detourEntry && (
