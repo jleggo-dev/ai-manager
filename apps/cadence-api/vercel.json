@@ -5,7 +5,8 @@
     "api": {
       "root": ".",
       "framework": "express",
-      "installCommand": "npm install --prefix ../.."
+      "installCommand": "npm install --prefix ../..",
+      "maxDuration": 800
     }
   },
   "rewrites": [
