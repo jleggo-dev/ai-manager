@@ -36,6 +36,25 @@ export async function assessGoal(goalId: string): Promise<GoalAssessment | null>
 export async function deleteGoal(goalId: string): Promise<void> {
   await fetch(`${BASE}/review/goals/${goalId}`, { method: 'DELETE', headers: headers() });
 }
+/** Settings Room: rename a goal's title in place. */
+export async function renameGoal(goalId: string, title: string): Promise<boolean> {
+  const res = await fetch(`${BASE}/review/goals/${goalId}`, {
+    method: 'PATCH',
+    headers: headers(),
+    body: JSON.stringify({ title }),
+  });
+  return res.ok;
+}
+/** Settings Room: retire a goal — it stops shaping the plan from Monday; Progress keeps it. */
+export async function retireGoal(goalId: string): Promise<boolean> {
+  const res = await fetch(`${BASE}/review/goals/${goalId}/retire`, { method: 'POST', headers: headers() });
+  return res.ok;
+}
+/** Bring a retired goal back. Plumbing for the coach's own restore path. */
+export async function restoreGoal(goalId: string): Promise<boolean> {
+  const res = await fetch(`${BASE}/review/goals/${goalId}/restore`, { method: 'POST', headers: headers() });
+  return res.ok;
+}
 /** `confirm: true` (Settings manage mode) inserts as CONFIRMED — replan-visible + capture-immune. */
 export async function addGoal(fields: Partial<Goal> & { confirm?: boolean }): Promise<Goal> {
   const res = await fetch(`${BASE}/review/goals`, { method: 'POST', headers: headers(), body: JSON.stringify(fields) });

@@ -20,7 +20,7 @@ import type {
   ProgressWindow,
   SeriesPoint,
 } from '@cadence/shared';
-import { listGoalsByStatus } from '../repos/goals.ts';
+import { listGoalsByStatus, PROGRESS_GOAL_STATUSES } from '../repos/goals.ts';
 import { getUser } from '../repos/users.ts';
 import { listLoggedForProgress } from '../repos/occurrences.ts';
 import { countGoalCompletions, listGoalEvents } from '../repos/goal-events.ts';
@@ -98,10 +98,11 @@ const WEIGHTY_UNIT = /^(kg|kgs|lb|lbs|pound|pounds)$/i;
 export async function buildProgress(userId: string, window?: ProgressWindow): Promise<ProgressData> {
   const { seriesDays, consistencyDays, historyCap } = resolveWindowConfig(window);
   const from = iso(Date.now() - seriesDays * 86_400_000);
-  // confirmed AND committed: a count goal ("read 100 books") is trackable even if it never
-  // produces plan activities, and replan-era goals can sit at confirmed indefinitely.
+  // PROGRESS_GOAL_STATUSES: confirmed AND committed (a count goal is trackable even before it
+  // produces plan activities, and replan-era goals can sit at confirmed indefinitely) PLUS
+  // parked — a retired goal stops shaping the plan but everything it already built stays here.
   const [goals, user, rows, events] = await Promise.all([
-    listGoalsByStatus(userId, ['confirmed', 'committed']),
+    listGoalsByStatus(userId, PROGRESS_GOAL_STATUSES),
     getUser(userId),
     listLoggedForProgress(userId, from),
     listGoalEvents(userId, 30),

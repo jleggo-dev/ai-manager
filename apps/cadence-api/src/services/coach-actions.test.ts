@@ -8,6 +8,8 @@ const commitActivities = vi.fn();
 const listGoals = vi.fn();
 const updateGoal = vi.fn();
 const setGoalStatus = vi.fn();
+const retireGoal = vi.fn();
+const restoreGoal = vi.fn();
 const insertGoalEvent = vi.fn();
 const listLoggedForCorrection = vi.fn();
 const correctOccurrenceLog = vi.fn();
@@ -25,6 +27,8 @@ vi.mock('../repos/goals.ts', () => ({
   listGoals: (...a: unknown[]) => listGoals(...a),
   updateGoal: (...a: unknown[]) => updateGoal(...a),
   setGoalStatus: (...a: unknown[]) => setGoalStatus(...a),
+  retireGoal: (...a: unknown[]) => retireGoal(...a),
+  restoreGoal: (...a: unknown[]) => restoreGoal(...a),
 }));
 vi.mock('../repos/goal-events.ts', () => ({ insertGoalEvent: (...a: unknown[]) => insertGoalEvent(...a) }));
 vi.mock('../repos/occurrences.ts', () => ({
@@ -320,6 +324,7 @@ describe('update_goal', () => {
       },
       { goal_id: 'g2', title: 'Run a 10k', status: 'committed', measure: {}, timeframe: {} },
       { goal_id: 'g3', title: 'Old thing', status: 'abandoned', measure: {}, timeframe: {} },
+      { goal_id: 'g4', title: 'Obstacle race', status: 'parked', measure: {}, timeframe: {} },
     ]);
   });
 
@@ -395,6 +400,43 @@ describe('update_goal', () => {
     const out = await update.run('u1', { goal: 'Read 100 books', action: 'retarget' });
     expect(updateGoal).not.toHaveBeenCalled();
     expect(out).toMatch(/No new target/);
+  });
+
+  it('retires a goal and leaves a trail — it stops shaping the plan, Progress keeps it', async () => {
+    retireGoal.mockResolvedValue({ goal_id: 'g1', status: 'parked' });
+    const out = await update.run('u1', { goal: 'Read 100 books', action: 'retire' });
+    expect(retireGoal).toHaveBeenCalledWith('u1', 'g1');
+    expect(insertGoalEvent.mock.calls[0]![1].label).toBe('Set aside: Read 100 books');
+    expect(out).toMatch(/set aside/i);
+    expect(out).toMatch(/stays in Progress/);
+    expect(out).toMatch(/without any suggestion they failed/);
+  });
+
+  it('restores a parked goal — matched even though get_objectives would not list it', async () => {
+    restoreGoal.mockResolvedValue({ goal_id: 'g4', status: 'committed' });
+    const out = await update.run('u1', { goal: 'Obstacle race', action: 'restore' });
+    expect(restoreGoal).toHaveBeenCalledWith('u1', 'g4');
+    expect(insertGoalEvent.mock.calls[0]![1].label).toBe('Brought back: Obstacle race');
+    expect(out).toMatch(/is back/);
+  });
+
+  it('refuses to retire a goal that is already set aside', async () => {
+    const out = await update.run('u1', { goal: 'Obstacle race', action: 'retire' });
+    expect(retireGoal).not.toHaveBeenCalled();
+    expect(out).toMatch(/already set aside/);
+  });
+
+  it('refuses to restore a goal that was never set aside', async () => {
+    const out = await update.run('u1', { goal: 'Run a 10k', action: 'restore' });
+    expect(restoreGoal).not.toHaveBeenCalled();
+    expect(out).toMatch(/not set aside/);
+  });
+
+  it('says so plainly, without touching the goal, when the repo finds nothing to update', async () => {
+    retireGoal.mockResolvedValue(null);
+    const out = await update.run('u1', { goal: 'Read 100 books', action: 'retire' });
+    expect(insertGoalEvent).not.toHaveBeenCalled();
+    expect(out).toMatch(/Could not retire/);
   });
 });
 
