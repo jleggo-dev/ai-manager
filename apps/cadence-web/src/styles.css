@@ -2927,12 +2927,6 @@ textarea.wiz-title {
   padding: 13px 15px;
   margin-bottom: 10px;
 }
-.prog-title {
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 15px;
-  margin-bottom: 4px;
-}
 .prog-big {
   font-family: var(--display);
   font-weight: 800;
@@ -2945,32 +2939,10 @@ textarea.wiz-title {
   color: var(--text-dim);
   letter-spacing: 0;
 }
-.prog-dir {
-  font-size: 17.5px;
-  color: var(--forest);
-}
 .prog-sub {
   font-size: 12.5px;
   color: var(--text-mute);
   margin-top: 2px;
-}
-/* A23 §2c — the trend line under the headline. Quieter than the goal line beneath it: it is
-   context for the big number, not a second fact competing with it. */
-.prog-quiet {
-  opacity: 0.72;
-  font-variant-numeric: tabular-nums;
-}
-
-.prog-trend-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.spark {
-  flex: 0 0 auto;
-  display: block;
-  margin-top: 6px;
 }
 .countbar {
   height: 7px;
@@ -3210,31 +3182,6 @@ textarea.wiz-title {
   display: grid;
   place-items: center;
 }
-.ring-n {
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 19.5px;
-  letter-spacing: -0.02em;
-  color: var(--text);
-}
-.ring-n i {
-  font-style: normal;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-mute);
-}
-.dash-ringcard {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.dash-ringcard-t {
-  min-width: 0;
-}
-.dash-ringcard-t .prog-sub {
-  margin-top: 3px;
-}
-
 /* Dot rows — kept days filled, the rest neutral (never red). */
 .dotrow {
   display: flex;
