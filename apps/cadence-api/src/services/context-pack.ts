@@ -1,38 +1,43 @@
 /**
  * Context pack builder (MEMORY-ARCHITECTURE.md §4.3–4.4).
  *
- * P2 as revised 2026-08-31: the Broker SELECTS, the app RENDERS.
- *   1. pack-select : reads the catalog (functions + data stats) → chooses which retrieval
- *                    functions to call. The app validates the choice against the registry
- *                    and EXECUTES them (the semantic layer; the model never touches the DB).
- *                    Falls back to the deterministic per-intent list if the Broker fails.
- *   2. render      : each function's own render() — deterministic, word for word what the
- *                    data says.
+ * P2 as revised 2026-08-31 (second pass, same day): fully deterministic — no model in the
+ * session-open path.
+ *   1. select : INTENT_SELECTION[intent] (fallback: ongoing) + the MANDATORY floor. Always.
+ *   2. render : each function's own render() — deterministic, word for word what the data says.
  *
- * There used to be a step 2½ — a pack-summarize job that rewrote the executed results into
- * prose — and it is deliberately GONE. On 2026-08-31 it asserted "No linked equipment or
- * tracked measures … noted" about a domain it had never been handed (equipment was not in the
- * selection), and in the same pack it dropped the consistency figure while find_tools was
- * telling the coach she "already had" it. A summarizer between structured facts and the model
- * can invent absences and lose numbers; the render() strings are the facts, cost no job call,
- * and are the same strings the per-turn path hashes for its freshness markers. Facts small
- * enough to inject verbatim are injected verbatim — selection controls size, not compression.
+ * Two Broker jobs used to stand in this file, and both are deliberately GONE:
  *
- * The pack is persisted with provenance (which functions ran, the select reason, the mode)
- * and injected as the end-of-prefix context turn.
+ *   - pack-summarize (removed earlier on 2026-08-31): rewrote the executed results into prose.
+ *     It asserted "No linked equipment or tracked measures … noted" about a domain it had never
+ *     been handed, and in the same pack dropped the consistency figure while find_tools was
+ *     telling the coach she "already had" it. A summarizer between structured facts and the
+ *     model can invent absences and lose numbers. Facts small enough to inject verbatim are
+ *     injected verbatim — selection controls size, not compression.
+ *
+ *   - pack-select (removed later on 2026-08-31): read the catalog and chose which retrieval
+ *     functions to run, with the deterministic lists below as its fallback. Its record: it
+ *     omitted weight (2026-08-14 — the coach asked someone their weight fifteen minutes after
+ *     the Broker captured it) and equipment (2026-08-31 — the coach denied the owner's
+ *     dumbbells). Each omission was patched by widening MANDATORY, until the lists + floor
+ *     carried everything load-bearing and the job was choosing nothing the fallback didn't —
+ *     for the price of a model call at every session open. So selection went deterministic.
+ *     The Broker's remaining role is capture, itself being phased down.
+ *
+ * The pack is persisted with provenance (which functions ran, the reason, the mode) and
+ * injected as the end-of-prefix context turn.
  */
 import type { CoachIntent, CoachTopic } from './coach-context.ts';
 import { intentFraming, onboardingReadiness, planGapNote, targetlessGoalNote } from './coach-context.ts';
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
-import { validateCalls, executeCalls, type FnCall } from './retrieval/select-and-run.ts';
-import { renderCatalogDoc } from './retrieval/catalog.ts';
+import { executeCalls, type FnCall } from './retrieval/select-and-run.ts';
 import { ctxMarker } from './turn-context-memory.ts';
-import { runJobBySlug } from '../ai/aim.ts';
 import { getFreshContextPack, insertContextPack, type ProvenanceEntry } from '../repos/context-pack.ts';
 import { updateTrace } from './dev-trace.ts';
 import { logAi } from './ai-log.ts';
 
-/** Deterministic fallback selection per intent (used only if the Broker select fails). */
+/** THE selection, per intent (fallback: ongoing). Since 2026-08-31 no model chooses — these
+ *  lists plus the MANDATORY floor are the whole select step. */
 const INTENT_SELECTION: Record<CoachIntent, string[]> = {
   onboarding: ['get_identity', 'get_objectives', 'get_constraints', 'get_equipment', 'get_health_history'],
   initial: ['get_identity', 'get_objectives', 'get_active_plan', 'get_constraints', 'get_dietary_profile'],
@@ -62,11 +67,11 @@ const INTENT_SELECTION: Record<CoachIntent, string[]> = {
 };
 
 /**
- * Functions ALWAYS retrieved, regardless of the Broker's selection. Identity and constraints are
- * safety-critical; weight joined them 2026-08-14 after the pack-select pass CHOSE a list without
- * it and the coach asked someone their weight fifteen minutes after the Broker captured it. Body
- * facts cost ~20 tokens and their absence costs the product's core promise ("never makes you
- * repeat yourself") — that is not a trade a model gets to optimize.
+ * Functions ALWAYS retrieved, whatever the per-intent list says. Identity and constraints are
+ * safety-critical; weight joined them 2026-08-14 after the (since-removed) pack-select pass CHOSE
+ * a list without it and the coach asked someone their weight fifteen minutes after the Broker
+ * captured it. Body facts cost ~20 tokens and their absence costs the product's core promise
+ * ("never makes you repeat yourself") — that is not a trade a model gets to optimize.
  *
  * Equipment joined 2026-08-31 for the weight story replayed: the select chose an ongoing list
  * without it, and the coach spent a session unaware of the dumbbells the user had told her about
@@ -85,21 +90,6 @@ export interface ContextPack {
   selectReason: string;
   builtAt: string;
   expiresAt: string;
-}
-
-/** Step 1: Broker chooses functions from the catalog. Returns null on any failure. */
-async function brokerSelect(userId: string, intent: CoachIntent): Promise<{ calls: FnCall[]; reason: string } | null> {
-  try {
-    const catalog = await renderCatalogDoc(userId);
-    const res = await runJobBySlug(userId, 'pack-select', { intent, catalog });
-    const parsed = JSON.parse(res.formatted ?? res.raw ?? '{}') as { calls?: unknown; reason?: unknown };
-    const calls = validateCalls(parsed.calls);
-    if (!calls.length) return null;
-    return { calls, reason: typeof parsed.reason === 'string' ? parsed.reason : '' };
-  } catch (e) {
-    console.error('[pack-select] failed, falling back to deterministic selection:', e);
-    return null;
-  }
 }
 
 /** Deterministic render of executed results — the pack body (see the file header for why no
@@ -163,15 +153,11 @@ export async function buildContextPack(
   const ttlDays = TTL_DAYS[intent] ?? 7;
   const expiresAt = new Date(now.getTime() + ttlDays * 86_400_000).toISOString();
 
-  // 1. SELECT — Broker, with deterministic fallback.
-  const sel = await brokerSelect(userId, intent);
-  const usedScribeSelect = sel !== null;
-  const calls: FnCall[] =
-    sel?.calls ?? (INTENT_SELECTION[intent] ?? INTENT_SELECTION.ongoing).map((fn) => ({ fn, params: {} }));
-  // Safety net: always retrieve identity + constraints even if the Broker didn't pick them.
+  // 1. SELECT — deterministic: the per-intent list + the MANDATORY floor (file header, 2026-08-31).
+  const calls: FnCall[] = (INTENT_SELECTION[intent] ?? INTENT_SELECTION.ongoing).map((fn) => ({ fn, params: {} }));
   const have = new Set(calls.map((c) => c.fn));
   for (const m of MANDATORY) if (!have.has(m) && RETRIEVAL_FUNCTIONS[m]) calls.push({ fn: m, params: {} });
-  const selectReason = sel?.reason || '(deterministic selection)';
+  const selectReason = '(deterministic selection)';
 
   // 2. EXECUTE — the semantic layer, governed app-side (model never runs queries).
   const { results, provenance } = await executeCalls(userId, calls, {
@@ -196,10 +182,10 @@ export async function buildContextPack(
   const summary = renderResults(results);
 
   // 4. Compose + persist (provenance + mode + reason are the audit trail).
-  // Mode string values keep the historical `broker-*` prefix (persisted audit trail); DevTrace
-  // field names use the canonical Broker name (CROSS-01 / BRAND.md). 'broker-select' is the
-  // post-2026-08-31 vocabulary: the Broker chose the functions, the app rendered the words.
-  const mode = usedScribeSelect ? 'broker-select' : 'deterministic';
+  // 'deterministic' is the only build mode since 2026-08-31. Older persisted rows carry the
+  // `broker-*` era modes ('broker-curated', 'broker-partial', 'broker-select') — kept as-is in
+  // the DB; meta.mode on the ai_log rows says which era a row belongs to.
+  const mode = 'deterministic';
   const header = `[context built ${builtAt.slice(0, 10)} · ${mode} · fns: ${provenance.map((p) => p.fn).join(', ') || 'none'}${selectReason ? ` · why: ${selectReason}` : ''}]`;
   /**
    * Freshness markers for everything this pack already put in front of her.
@@ -227,12 +213,17 @@ export async function buildContextPack(
   // Dev X-ray: record what was pulled + how it was curated (no effect on the coaching path).
   updateTrace(userId, {
     context: { mode, selectReason, provenance, data: results, rendered },
-    brokerSelect: sel ? { calls: sel.calls, reason: sel.reason } : null,
+    brokerSelect: null,
     brokerSummarize: null,
   });
-  // Durable log: the Broker's select, and the rendered body (same kind as before so the X-ray's
-  // history reads through the 2026-08-31 change; meta.mode says which era a row belongs to).
-  void logAi(userId, { kind: 'pack_select', input: { intent }, output: sel ?? { fallback: true }, meta: { mode } });
+  // Durable log: same kinds as the Broker era so the X-ray's history reads through the
+  // 2026-08-31 changes; output.deterministic + meta.mode say which era a row belongs to.
+  void logAi(userId, {
+    kind: 'pack_select',
+    input: { intent },
+    output: { deterministic: true, fns: calls.map((c) => c.fn) },
+    meta: { mode },
+  });
   void logAi(userId, { kind: 'pack_summarize', output: { summary }, meta: { mode } });
 
   const id = await insertContextPack({

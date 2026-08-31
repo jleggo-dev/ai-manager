@@ -12,6 +12,8 @@ const insertEquipment = vi.fn();
 const listEquipment = vi.fn();
 const updateEquipment = vi.fn();
 const mergeBaseline = vi.fn();
+const mergeCapturedConstraints = vi.fn();
+const getActivePlan = vi.fn();
 const getUser = vi.fn(
   async (_id: string) => ({ baseline: { weight_kg: 80 }, home_location: null, timezone: null }) as unknown,
 );
@@ -44,12 +46,17 @@ vi.mock('../repos/equipment.ts', () => ({
 }));
 vi.mock('../repos/users.ts', () => ({
   mergeBaseline: (...a: unknown[]) => mergeBaseline(...a),
+  mergeCapturedConstraints: (...a: unknown[]) => mergeCapturedConstraints(...a),
   setName: (...a: unknown[]) => setName(...a),
   setTimezoneIfUnset: (...a: unknown[]) => setTimezoneIfUnset(...a),
   // The goal screen reads baseline weight to price a loss rate; no home_location, so the
   // geocode branch stays off. Mockable because the weight-start guard reads the STORED record.
   getUser: (id: string) => getUser(id),
   setHomeLocation: async () => {},
+}));
+// The one-writer-per-fact gate reads the onboarding boundary from here (see capture.ts).
+vi.mock('../repos/plans.ts', () => ({
+  getActivePlan: (...a: unknown[]) => getActivePlan(...a),
 }));
 vi.mock('./ai-log.ts', () => ({
   logAi: (...a: unknown[]) => logAi(...a),
@@ -70,6 +77,8 @@ describe('runCaptureExtract', () => {
     listEquipment.mockResolvedValue([]);
     updateEquipment.mockResolvedValue(undefined);
     mergeBaseline.mockResolvedValue(undefined);
+    mergeCapturedConstraints.mockResolvedValue(undefined);
+    getActivePlan.mockResolvedValue(null); // no plan → onboarding-ish → capture still writes
     setName.mockResolvedValue(undefined);
     setTimezoneIfUnset.mockResolvedValue(undefined);
     logAi.mockResolvedValue(undefined);
@@ -231,6 +240,8 @@ describe('equipment survives a conversation that only mentions one thing', () =>
     insertEquipment.mockResolvedValue({ equipment_id: 'eNew' });
     updateEquipment.mockResolvedValue(undefined);
     mergeBaseline.mockResolvedValue(undefined);
+    // The merge-not-replace rule is exercised where capture still writes: before a plan exists.
+    getActivePlan.mockResolvedValue(null);
     setName.mockResolvedValue(undefined);
     setTimezoneIfUnset.mockResolvedValue(undefined);
     logAi.mockResolvedValue(undefined);
@@ -289,6 +300,7 @@ describe('a weight said in chat', () => {
     insertGoal.mockResolvedValue({ goal_id: 'g1' });
     listEquipment.mockResolvedValue([]);
     mergeBaseline.mockResolvedValue(undefined);
+    getActivePlan.mockResolvedValue(null);
     setName.mockResolvedValue(undefined);
     setTimezoneIfUnset.mockResolvedValue(undefined);
     logAi.mockResolvedValue(undefined);
@@ -324,5 +336,103 @@ describe('a weight said in chat', () => {
     const patch = mergeBaseline.mock.calls[0]?.[1] as { weight_kg?: { current: number; start: number } };
     expect(patch.weight_kg?.current).toBe(85);
     expect(patch.weight_kg?.start).toBe(85); // first time IS the beginning
+  });
+});
+
+/**
+ * ONE WRITER PER FACT (owner ruling, 2026-08-31) — Broker phase-out, Phase 1.
+ *
+ * The coach's update_equipment tool wrote the owner's verified "workout ball (big one for abs)",
+ * and minutes later capture re-extracted the same conversation and wrote "stability ball" beside
+ * it — its own unverified rename of a fact that already had an author. Earlier it minted duplicate
+ * constraints the same way. So in an ongoing session (proxied by an ACTIVE plan — the same
+ * "onboarding graduation" boundary getFirstPlanCommitAt and screenFromPlanStage stand on, because
+ * session intent is never persisted) capture stops writing equipment and constraints. Onboarding
+ * keeps them: the wizard-as-chat runs on ambient extraction before tools are in play.
+ */
+describe('one writer per fact — the coach owns equipment and constraints once a plan is active', () => {
+  const extraction = {
+    goals: [{ title: 'Run more', area: 'movement', type: 'recurring' }],
+    equipment: [
+      { name: 'workout ball (big one for abs)', category: 'accessory' },
+      { name: 'pull-up bar', category: 'strength' },
+    ],
+    baseline_updates: {
+      weight: { value: 85, unit: 'kg' },
+      constraints: [{ label: 'left knee — meniscus', kind: 'physical', plan_around: true }],
+    },
+    confidence: 'high',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    listGoalsByStatus.mockResolvedValue([]);
+    insertGoal.mockResolvedValue({ goal_id: 'g1' });
+    // Echo the row back like the real repo — the merge pushes it into `existing` and re-matches.
+    insertEquipment.mockImplementation(async (_u: unknown, e: Record<string, unknown>) => ({
+      equipment_id: 'e1',
+      ...e,
+    }));
+    listEquipment.mockResolvedValue([]);
+    updateEquipment.mockResolvedValue(undefined);
+    mergeBaseline.mockResolvedValue(undefined);
+    mergeCapturedConstraints.mockResolvedValue(undefined);
+    getUser.mockResolvedValue({ baseline: {}, home_location: null, timezone: null } as unknown);
+    setName.mockResolvedValue(undefined);
+    setTimezoneIfUnset.mockResolvedValue(undefined);
+    logAi.mockResolvedValue(undefined);
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify(extraction) });
+  });
+
+  it('with an active plan: skips equipment + constraints, still writes goals + baseline, logs the skips', async () => {
+    getActivePlan.mockResolvedValue({ plan_id: 'p1', status: 'active' });
+
+    const out = await runCaptureExtract(USER, { conversation_window: 'we set up the workout ball' });
+
+    // The coach-owned domains are untouched — no insert, no update, not even the read.
+    expect(insertEquipment).not.toHaveBeenCalled();
+    expect(updateEquipment).not.toHaveBeenCalled();
+    expect(listEquipment).not.toHaveBeenCalled();
+    expect(mergeCapturedConstraints).not.toHaveBeenCalled();
+    expect(out.persisted.equipment).toBe(0);
+
+    // Everything capture still owns lands exactly as before.
+    expect(insertGoal).toHaveBeenCalledTimes(1);
+    const patch = mergeBaseline.mock.calls[0]?.[1] as { weight_kg?: { current: number }; constraints?: unknown };
+    expect(patch.weight_kg?.current).toBe(85);
+    expect(patch.constraints).toBeUndefined(); // never smuggled back in through the shallow merge
+    expect(out.persisted.goals).toBe(1);
+    expect(out.persisted.baseline).toBe(true);
+
+    // Not silent: the audit trail records what the gate withheld — Phase 3 reads these numbers.
+    const meta = (logAi.mock.calls[0]?.[1] as { meta: Record<string, unknown> }).meta;
+    expect(meta.skippedEquipment).toBe(2);
+    expect(meta.skippedConstraints).toBe(1);
+    expect(meta.skipReason).toBe('coach-owned domain (ongoing session)');
+  });
+
+  it('with no plan (onboarding): writes both domains exactly as before, no skip keys in the log', async () => {
+    getActivePlan.mockResolvedValue(null);
+
+    const out = await runCaptureExtract(USER, { conversation_window: 'I have a workout ball' });
+
+    expect(insertEquipment).toHaveBeenCalledTimes(2);
+    expect(mergeCapturedConstraints).toHaveBeenCalledTimes(1);
+    expect((mergeCapturedConstraints.mock.calls[0]?.[1] as unknown[]).length).toBe(1);
+    expect(out.persisted.equipment).toBe(2);
+
+    const meta = (logAi.mock.calls[0]?.[1] as { meta: Record<string, unknown> }).meta;
+    expect(meta.skippedEquipment).toBeUndefined();
+    expect(meta.skipReason).toBeUndefined();
+  });
+
+  it('never looks the plan up when the extraction has nothing in a coach-owned domain', async () => {
+    runJobBySlug.mockResolvedValue({
+      formatted: JSON.stringify({ goals: [], equipment: [], baseline_updates: {}, confidence: 'low' }),
+    });
+
+    await runCaptureExtract(USER, { conversation_window: 'nothing much today' });
+    // Capture runs on EVERY turn — the gate's read must stay free when there is nothing to gate.
+    expect(getActivePlan).not.toHaveBeenCalled();
   });
 });

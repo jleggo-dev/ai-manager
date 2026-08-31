@@ -2,6 +2,7 @@ import { runJobBySlug } from '../ai/aim.ts';
 import type { CaptureExtractResult, Constraint, EquipmentCategory } from '@cadence/shared';
 import { insertEquipment, listEquipment, updateEquipment } from '../repos/equipment.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
+import { getActivePlan } from '../repos/plans.ts';
 import {
   getUser,
   mergeBaseline,
@@ -94,6 +95,46 @@ export async function runCaptureExtract(
   const screened: CaptureResult['screened'] = goalOutcome.screened;
   const goals = goalOutcome.persisted;
 
+  // Constraints leave the wholesale patch and go through their own MERGE. `mergeBaseline` is a
+  // shallow jsonb merge, so including them here replaced the entire stored list with whatever
+  // this one conversation happened to mention — silently deleting a knee recorded weeks ago. See
+  // constraint-merge.ts; Settings still replaces wholesale, because a delete there is deliberate.
+  const normBaseline = normalizeBaseline((out.baseline_updates ?? {}) as Record<string, unknown>);
+  const { constraints: capturedConstraints, ...restBaseline } = normBaseline as Record<string, unknown> & {
+    constraints?: Constraint[];
+  };
+  const namedEquip = out.equipment.filter((e) => e.name);
+
+  /**
+   * ONE WRITER PER FACT (owner ruling, 2026-08-31): once the coach owns a domain, capture stops
+   * writing it. Broker phase-out, Phase 1.
+   *
+   * The coach has verified write tools for equipment and constraints (update_equipment,
+   * update_constraint) — she reads the wording back and the user confirms before anything lands.
+   * Capture re-extracts from the whole window every turn and writes UNVERIFIED restatements
+   * beside those verified rows: on 2026-08-31 it re-wrote the owner's "workout ball (big one for
+   * abs)" as "stability ball" minutes after update_equipment had already written the row he
+   * approved, and it minted duplicate constraints the same way earlier. Two writers, one fact —
+   * the merge guards below can only stop deletion, not a second author.
+   *
+   * ONBOARDING keeps ambient capture: the wizard-as-chat is built on it — the user just talks,
+   * capture fills the dossier, no tools in play yet. So the gate needs the session's intent, and
+   * honestly it can't have it: intent exists only in the POST /coach/sessions body
+   * (routes/coach.ts) and is never persisted — cadence.conversations has no intent column, and
+   * context_pack rows cache per user+intent without naming a session. So the gate stands on the
+   * proxy this codebase already treats as the onboarding boundary: an ACTIVE plan.
+   * getFirstPlanCommitAt (repos/plans.ts) calls that moment "onboarding graduation", plan-view
+   * routes screens on it, and the client picks its session intent from the same stage
+   * (screenFromPlanStage.ts). Active plan → past onboarding → capture keeps its hands off these
+   * two domains. No plan → onboarding-ish → capture keeps writing. Goals, baseline, name,
+   * timezone and location stay capture's everywhere.
+   *
+   * Nothing vanishes silently: skipped counts land in the capture ai_log meta below, and that
+   * evidence is what decides Phase 3 (whether capture retires entirely).
+   */
+  const coachOwned =
+    (namedEquip.length > 0 || (capturedConstraints?.length ?? 0) > 0) && (await getActivePlan(userId)) !== null;
+
   /**
    * Equipment MERGES. It used to replace, and it silently ate nineteen items down to one.
    *
@@ -103,7 +144,7 @@ export async function runCaptureExtract(
    * machine, both bikes, the kettlebell set, the TRX and everything else with it. Owner: *"I had a
    * ton of equipment listed in Cadence, but it looks like it disappeared somehow."*
    *
-   * This is the SAME bug, in the same function, as the constraints one described immediately below
+   * This is the SAME bug, in the same function, as the constraints one described just above
    * — capture runs over the whole conversation every turn, so anything it "replaces" is replaced by
    * whatever today happened to mention. Constraints were moved to a merge and equipment was left
    * behind. Rule 1 of constraint-merge.ts applies here word for word: **nothing is ever dropped by
@@ -119,9 +160,8 @@ export async function runCaptureExtract(
    * "bike" can never swallow the "bike trainer" — different machines. Unknown categories are
    * coerced to 'other', never dropped.
    */
-  const namedEquip = out.equipment.filter((e) => e.name);
   let equipment = 0;
-  if (namedEquip.length) {
+  if (namedEquip.length && !coachOwned) {
     const existing = await listEquipment(userId);
     for (const e of namedEquip) {
       let category = e.category;
@@ -144,14 +184,6 @@ export async function runCaptureExtract(
   }
 
   let baseline = false;
-  const normBaseline = normalizeBaseline((out.baseline_updates ?? {}) as Record<string, unknown>);
-  // Constraints leave the wholesale patch and go through their own MERGE. `mergeBaseline` is a
-  // shallow jsonb merge, so including them here replaced the entire stored list with whatever
-  // this one conversation happened to mention — silently deleting a knee recorded weeks ago. See
-  // constraint-merge.ts; Settings still replaces wholesale, because a delete there is deliberate.
-  const { constraints: capturedConstraints, ...restBaseline } = normBaseline as Record<string, unknown> & {
-    constraints?: Constraint[];
-  };
 
   /**
    * A weight said in chat updates where they ARE, never where they STARTED.
@@ -179,7 +211,7 @@ export async function runCaptureExtract(
     await mergeBaseline(userId, restBaseline as unknown as Parameters<typeof mergeBaseline>[1]);
     baseline = true;
   }
-  if (capturedConstraints?.length) {
+  if (capturedConstraints?.length && !coachOwned) {
     await mergeCapturedConstraints(userId, capturedConstraints);
     baseline = true;
   }
@@ -214,6 +246,14 @@ export async function runCaptureExtract(
   if (coerced.length) console.warn('[capture] coerced out-of-enum values:', coerced.join(' | '));
   const flagged = screened.filter((s) => s.result.verdict !== 'ok');
   if (flagged.length) console.warn('[capture] goal screen fired:', flagged.map((f) => f.result.code).join(', '));
+  // What the gate withheld, on the record — the Phase 3 retirement call reads THESE numbers.
+  const skipped = coachOwned
+    ? {
+        skippedEquipment: namedEquip.length,
+        skippedConstraints: capturedConstraints?.length ?? 0,
+        skipReason: 'coach-owned domain (ongoing session)',
+      }
+    : null;
   await logAi(userId, {
     kind: 'capture',
     input: { window: variables.conversation_window },
@@ -223,6 +263,7 @@ export async function runCaptureExtract(
       confidence: out.confidence,
       ...(coerced.length ? { coerced } : {}),
       ...(flagged.length ? { screened: flagged } : {}),
+      ...(skipped ?? {}),
     },
   });
   return { ...out, persisted, screened };
