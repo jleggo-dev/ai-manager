@@ -26,6 +26,7 @@ import {
   sendDetourEquipment,
   enterEpisode,
   postponeDetour,
+  getPendingReplan,
 } from '../../lib/api.ts';
 import { useQueryClient } from '@tanstack/react-query';
 import { setPlanData, usePlan, useWatchLogInbox, useWatchPortraitSync, useWatchSync } from '../../lib/query/index.ts';
@@ -123,6 +124,30 @@ export function PlanView({
   useEffect(() => {
     if (reloadSignal) void refetch();
   }, [reloadSignal, refetch]);
+
+  /**
+   * A week the coach drew must find its way to the screen. `rebalance_week` (and any server-side
+   * path) stores a pending proposal and pushes — but until this ran, the ONLY in-app surface was
+   * a live Adjust flow the user had started themselves: a finished 16-activity rebalance sat
+   * invisible in pending_plan while its owner asked where it was (2026-08-31). On mount, ask; if
+   * one is waiting, open the review sheet on it. Suggest-never-auto-apply is untouched — the
+   * sheet still ends in their Apply.
+   */
+  useEffect(() => {
+    let alive = true;
+    void getPendingReplan()
+      .then(({ proposal }) => {
+        if (!alive || !proposal) return;
+        setAdjustMode('rebalance');
+        setAdjustOpen(true);
+      })
+      .catch(() => {
+        /* best-effort; the push and the coach can both still route them here */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const refresh = () => void refetch();
   const bump = () => setReloadKey((k) => k + 1);

@@ -28,6 +28,31 @@ beforeEach(() => {
 describe('useReplanPreview', () => {
   const opts = { steer: () => 'stop protecting my elbow', adoptCaptured: false };
 
+  /**
+   * Pending first, always (2026-08-31): a finished 16-activity rebalance sat invisible in
+   * pending_plan because only a live Adjust flow ever looked. The hook now asks on mount, and
+   * autoStart spends a synthesis only when the server holds nothing.
+   */
+  it('surfaces a server-side pending proposal on mount, without being started', async () => {
+    getPendingReplan.mockResolvedValue({ proposal: PROPOSAL });
+    const { result } = renderHook(() => useReplanPreview(opts));
+    await waitFor(() => expect(result.current.proposal).toEqual(PROPOSAL));
+    expect(previewReplan).not.toHaveBeenCalled();
+  });
+
+  it('autoStart shows a waiting proposal instead of synthesizing over it', async () => {
+    getPendingReplan.mockResolvedValue({ proposal: PROPOSAL });
+    const { result } = renderHook(() => useReplanPreview({ ...opts, autoStart: true }));
+    await waitFor(() => expect(result.current.proposal).toEqual(PROPOSAL));
+    expect(previewReplan).not.toHaveBeenCalled();
+  });
+
+  it('autoStart synthesizes when nothing is pending', async () => {
+    const { result } = renderHook(() => useReplanPreview({ ...opts, autoStart: true }));
+    await waitFor(() => expect(result.current.proposal).toEqual(PROPOSAL));
+    expect(previewReplan).toHaveBeenCalledTimes(1);
+  });
+
   it('hands back the proposal on the happy path, and passes the steer through verbatim', async () => {
     const { result } = renderHook(() => useReplanPreview(opts));
     void result.current.start();

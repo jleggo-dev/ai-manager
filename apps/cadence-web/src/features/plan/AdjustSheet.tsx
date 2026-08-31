@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { replan, dismissReplanPreview } from '../../lib/api.ts';
 import { Orb } from '../../components/Orb.tsx';
 import { SteerBox } from './SteerBox.tsx';
@@ -46,14 +46,11 @@ export function AdjustSheet({
   const [steer, setSteer] = useState(initialSteer ?? '');
   const [committing, setCommitting] = useState(false);
   const [msg, setMsg] = useState('');
-  const preview = useReplanPreview({ steer: () => steer, adoptCaptured });
+  // Rebalance opens straight into a whole-plan preview — the review IS the action, no steer
+  // needed. The hook checks for a server-side pending proposal FIRST either way, so a week the
+  // coach already drew is shown, never re-synthesized over (2026-08-31).
+  const preview = useReplanPreview({ steer: () => steer, adoptCaptured, autoStart: mode === 'rebalance' });
   const busy = preview.busy || committing;
-
-  // Rebalance opens straight into a whole-plan preview — the review IS the action, no steer needed.
-  useEffect(() => {
-    if (mode === 'rebalance') void preview.start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   async function doConfirm() {
     if (busy) return;
