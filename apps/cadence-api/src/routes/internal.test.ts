@@ -19,12 +19,6 @@ const runTick = vi.fn(async (..._a: unknown[]): Promise<TickShape> => ({
 let SECRET = 'right-secret';
 
 vi.mock('../services/notify/tick.ts', () => ({ runTick: (...a: unknown[]) => runTick(...a) }));
-// Mocked at the service seam so this file's minimal config mock never has to satisfy the
-// synthesis pipeline's own imports (aim.ts reads config at module load).
-const runSteeredRebalance = vi.fn(async (..._a: unknown[]) => ({ status: 'proposed' }));
-vi.mock('../services/rebalance-run.ts', () => ({
-  runSteeredRebalance: (...a: unknown[]) => runSteeredRebalance(...a),
-}));
 vi.mock('../config.ts', () => ({
   cadenceConfig: {
     get cronSecret() {
@@ -104,44 +98,5 @@ describe('POST /internal/notifications/tick', () => {
     const r = await post({ authorization: 'Bearer right-secret' });
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ ok: true, sent: 1, errors: ['producer x: boom'] });
-  });
-});
-
-/** Same gate, second door: the coach's dispatched rebalance (see rebalance-run.ts). */
-describe('POST /internal/plan/rebalance', () => {
-  async function postRebalance(
-    headers: Record<string, string> = {},
-    body?: unknown,
-  ): Promise<{ status: number; body: unknown }> {
-    const server = app().listen(0);
-    const port = (server.address() as { port: number }).port;
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/internal/plan/rebalance`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...headers },
-        body: JSON.stringify(body ?? {}),
-      });
-      return { status: res.status, body: await res.json().catch(() => null) };
-    } finally {
-      server.close();
-    }
-  }
-
-  it('runs the rebalance with a correct secret and a full body', async () => {
-    const r = await postRebalance({ authorization: 'Bearer right-secret' }, { userId: 'u1', steer: 'more cardio' });
-    expect(r.status).toBe(200);
-    expect(runSteeredRebalance).toHaveBeenCalledWith('u1', 'more cardio');
-  });
-
-  it('rejects a wrong secret without touching the synthesis', async () => {
-    const r = await postRebalance({ authorization: 'Bearer wrong' }, { userId: 'u1', steer: 'more cardio' });
-    expect(r.status).toBe(401);
-    expect(runSteeredRebalance).not.toHaveBeenCalled();
-  });
-
-  it('400s a body with no steer', async () => {
-    const r = await postRebalance({ authorization: 'Bearer right-secret' }, { userId: 'u1' });
-    expect(r.status).toBe(400);
-    expect(runSteeredRebalance).not.toHaveBeenCalled();
   });
 });

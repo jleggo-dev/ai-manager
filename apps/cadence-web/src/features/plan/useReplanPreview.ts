@@ -53,11 +53,21 @@ export function waitingNote(elapsedMs: number, checking: boolean): string {
 export function useReplanPreview({
   steer,
   adoptCaptured,
+  autoStart = false,
   recoverEveryMs = RECOVER_EVERY_MS,
   recoverWindowMs = RECOVER_WINDOW_MS,
 }: {
   steer: () => string;
   adoptCaptured: boolean;
+  /**
+   * Start a synthesis on mount (the rebalance card's shape: review IS the action) — but PENDING
+   * FIRST, always: a proposal may already be waiting server-side, put there by the coach's own
+   * dispatch or a previous visit, and synthesizing over it would both clobber the week she drew
+   * and spend minutes of model time to replace something already in hand (2026-08-31: a finished
+   * 16-activity rebalance sat invisible in pending_plan because nothing outside a live Adjust
+   * flow ever looked).
+   */
+  autoStart?: boolean;
   /** Test seams — real timings make the poll path untestable. */
   recoverEveryMs?: number;
   recoverWindowMs?: number;
@@ -78,6 +88,28 @@ export function useReplanPreview({
     setProposal(p);
     setPhase('idle');
   }
+
+  /**
+   * Pending first, on mount. Whatever opened this sheet, a proposal already stored server-side is
+   * the answer — show it. Only when there is none does `autoStart` spend a synthesis.
+   */
+  useEffect(() => {
+    let alive = true;
+    void getPendingReplan()
+      .then(({ proposal: p }) => {
+        if (!alive || settled.current) return;
+        if (p) return settle(p);
+        if (autoStart) void start();
+      })
+      .catch(() => {
+        // The check is best-effort; the flow it protects still works without it.
+        if (alive && autoStart && !settled.current) void start();
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The elapsed counter is the difference between "frozen" and "working" on a screen with no
   // other movement — it is doing honest work, not decoration.

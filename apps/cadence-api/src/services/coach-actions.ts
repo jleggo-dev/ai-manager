@@ -15,7 +15,6 @@ import { sanitizeTargets } from './nutrition-day.ts';
 import type { CoachActionTool } from './coach-action-types.ts';
 import { UPDATE_CONSTRAINT } from './coach-action-constraint.ts';
 import { UPDATE_EQUIPMENT } from './coach-action-equipment.ts';
-import { REBALANCE_WEEK } from './coach-action-rebalance.ts';
 import { OPEN_WEEK_REVIEW } from './coach-action-week-review.ts';
 import { BUILD_NEXT_WEEK } from './coach-action-build-week.ts';
 import { LOG_MEAL } from './coach-action-log-meal.ts';
@@ -26,6 +25,7 @@ import { UPDATE_REPERTOIRE } from './coach-action-repertoire.ts';
 const today = (): string => new Date().toISOString().slice(0, 10);
 import { expandRecurrence } from './scheduling.ts';
 import { applyPlanEdits, matchActivity, type PlanEdit } from './plan-edit.ts';
+import { planEditEvidence } from './plan-edit-evidence.ts';
 import { PLAN_EDIT_ACTIONS, EDIT_SCHEMA } from './plan-edit-schema.ts';
 
 /**
@@ -115,7 +115,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   propose_plan_change: {
     name: 'propose_plan_change',
     description:
-      'Propose a plan change — move, retime, resize, drop, add, or rework what one CONTAINS. Does NOT change anything — the card needs a tap, and you must never say it is done before that. Use it the moment they name a change, however small — always put up the card. Read get_active_plan first — edits address commitments BY its printed handles; one edit can carry several. Give an edit a "reason" (one line, shown under that swap) and mark a take-it-or-leave-it add "optional": true — it starts unchecked. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45, "reason": "..."}]}. Calling again ADDS to the card; if it holds a mistake, never add a fix beside it — redo with "start_over": true, ONLY the corrected edits. A whole rebuild is the build card.',
+      'Propose a plan change — move, retime, resize, drop, add, or rework what one CONTAINS. Does NOT change anything — the card needs a tap; never say it is done before that. Use it for any change they name; read get_active_plan first — edits address commitments BY its printed handles. A whole week is reshaped by SEVERAL edits in one call: settle the shape with the user, then ONE call carrying the full slate; the return reports the proposed week\'s shape and clashes to check before you say it is up. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45, "reason": "..."}]}. Calling again ADDS to the card; on a mistake never add a fix beside it — redo with "start_over": true, ONLY the corrected edits. A whole rebuild is the build card.',
     parameters: {
       properties: {
         edits: EDIT_SCHEMA,
@@ -296,6 +296,14 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         // her here instead and left off it.
         ...(noops.length ? ['Already the case, so not on the card:', ...noops.map((n) => `- ${n}`)] : []),
         ...ignoredLines,
+        /**
+         * The week those edits ADD UP TO — evidence, never a veto (owner 2026-08-31: the coach is
+         * the planner; guards report, she adjudicates). Before this, the return was diff lines
+         * only, and on 2026-08-31 a proposed Wednesday quietly held hill intervals + an early run
+         * + mobility against that day's own one-workout constraint — no tool ever noticed,
+         * because nothing showed her the week her edits added up to.
+         */
+        ...planEditEvidence(next, me?.baseline?.constraints),
         'Say in one line what you have put up and that it is theirs to apply. Do NOT claim it is done or scheduled — it is not, until they tap it.',
         unknownNote,
       ]
@@ -490,10 +498,6 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
 
   open_week_review: OPEN_WEEK_REVIEW,
   build_next_week: BUILD_NEXT_WEEK,
-  // Tail tier (the drawer): the pick protocol's THREE SIZES rule names it in every session, which
-  // is the same-generation "knowing" the 0-of-3 measurement says actually fires behaviour;
-  // promotion to ALWAYS_ACTIONS stays an owner ruling (coach-tool-tiers.ts).
-  rebalance_week: REBALANCE_WEEK,
 
   log_meal: LOG_MEAL,
 

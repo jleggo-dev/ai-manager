@@ -50,9 +50,9 @@ export const CAPABILITIES: CapabilityGroup[] = [
       'set up a detour for travel, illness, or a rough stretch — your plan pauses, it never resets',
       'prescribe a specific session for today, and log what you actually did when you tell me',
       'change ONE thing in the plan without rebuilding it — move, retime, resize, drop or add a session, or swap what one contains (dead hangs instead of farmers carries)',
-      // The middle size (2026-08-31): between one edit and a from-scratch rebuild. Missing from
-      // this manifest was half of why "balance my week" got answered with per-session shuffling.
-      'rebalance your whole week around what you tell me — I draw it up, you apply it when it looks right',
+      // Whole-week reshaping is the coach's own edit slate through propose_plan_change (owner
+      // ruling 2026-08-31: the coach IS the planner) — no background synthesis, no waiting.
+      'rebalance your whole week right here in the conversation — we settle the shape, I put the whole new week on one card, you apply it',
       'give you a weekly check-in on how you showed up, and flag what I am noticing',
       'pull your week up on your screen to look back on, any time you ask',
       'build your next week from the same rhythm the moment you say the word',

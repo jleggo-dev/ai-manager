@@ -204,13 +204,27 @@ export async function previewReplan(steer?: string): Promise<ReplanPreview> {
 export async function dismissReplanPreview(): Promise<void> {
   await fetch(`${BASE}/plan/replan/preview/dismiss`, { method: 'POST', headers: headers() });
 }
-/** The stored pending proposal, if the server finished a preview our fetch didn't live to see. */
+/**
+ * The stored pending proposal, if the server finished a preview our fetch didn't live to see.
+ *
+ * `ok` keeps failure and "nothing pending" apart (additive — existing callers read `proposal`
+ * unchanged). The paint-before-auth boot fires mount-time reads before the bearer token exists,
+ * and a 401 swallowed into `proposal: null` made a finished rebalance invisible until the owner
+ * happened to leave the screen and come back (2026-08-31, the avatar lesson relearned): a failed
+ * read is UNKNOWN, and an unknown is worth retrying — an empty answer is not.
+ */
 export async function getPendingReplan(): Promise<{
+  ok: boolean;
   proposal: { activities: PendingPlanActivity[]; note: string; rationale?: string } | null;
 }> {
-  const res = await fetch(`${BASE}/plan/replan/pending`, { headers: headers() });
-  if (!res.ok) return { proposal: null };
-  return res.json();
+  try {
+    const res = await fetch(`${BASE}/plan/replan/pending`, { headers: headers() });
+    if (!res.ok) return { ok: false, proposal: null };
+    const body = (await res.json()) as { proposal: { activities: PendingPlanActivity[]; note: string } | null };
+    return { ok: true, proposal: body.proposal ?? null };
+  } catch {
+    return { ok: false, proposal: null };
+  }
 }
 
 /**

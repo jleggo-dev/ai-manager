@@ -9311,3 +9311,53 @@ it must land as AI Admin work (its own tests, its own docs), not as a Cadence si
 in-process coach stream cannot be rehearsed against production keys from dev (the same
 constraint that shaped #232), so M4 ships behind a per-profile pointer with the owner's scratch
 account pointed at Anthropic first, the owner's real account last.
+
+## Coach-authored weeks — the planner is the coach, and the synthesizer retires (owner, 2026-08-31)
+
+**Owner ruling (the day's last and largest):** *"Let's choose the best long-term solution and
+build it out now."* The chosen end-state is the completion of the governing inversion: **there is
+no background synthesis for changing a week.** The conversation where the shape is settled IS the
+synthesis — the coach emits an edit slate through `propose_plan_change`, the deterministic edit
+engine executes it, guards return EVIDENCE with the result, and she adjudicates before telling
+the user the card is up. Details stay where they already lived: the day-of prescription layer.
+
+**Why, measured the same day:** the steered whole-week synthesis ran 1503 seconds for the owner's
+real week — past the 300s ceiling that killed it four times, past the 344s HTTP/1.1 idle cut,
+past even the 800s Pro function limit it would meet in production. It was not slow; it was the
+last Broker-era organ — a pipeline that calls models, with the coach reduced to writing a steer
+paragraph FOR ANOTHER MODEL and waiting. The rebalance it finally produced reached the owner only
+through a locally-run process and a same-day surfacing fix. A week reshaped as an edit slate is
+one conversation-sized call, survives every ceiling by never approaching one, and cannot quietly
+restructure what nobody asked about.
+
+**As built (branch `feat/coach-authored-weeks`):**
+
+- **`plan-edit-evidence.ts`** — pure guard module riding every `propose_plan_change` return:
+  the PROPOSED week's day-grid (readDensity over the resulting activity set — the same arithmetic
+  synthesis kept to itself), per-slot time collisions, and the user's plan_around constraint
+  labels said back verbatim ("their file says they work around: … — check the proposed week
+  against these" — the line that would have caught three workouts on the one-workout Wednesday).
+  Evidence, never a blocker: the card still goes up; she reads before she speaks.
+- **The tool's description teaches the slate:** several edits in one call is how a week is
+  reshaped; settle WHAT with the user, then ONE call; read the return before saying the card is
+  up. (Trimmed inside the 800-char action bound; reason/optional teaching lives on in the schema
+  field prose.)
+- **The protocol collapses to ONE INSTRUMENT** for changing an existing week — any size, one
+  call, one card, one Apply; `"build": true` remains only for the first-ever week. The
+  `rebalance_week` tool, its dispatch service, and its internal route — built that morning —
+  are deleted the same day, which is the correct fate for scaffolding. (`rebalance_week` stays
+  in AiLogKind as historical; logged rows reference it.)
+- **A week the coach draws now reaches the screen:** the Plan view surfaces a server-side
+  pending proposal on mount (retrying through the paint-before-auth race — a failed read is
+  UNKNOWN, not "nothing pending"; the avatar lesson relearned within twelve hours), and
+  `useReplanPreview` checks pending FIRST everywhere, so a tapped card can never re-synthesize
+  over a week already drawn.
+- **Retained scope, priced honestly:** the first-ever build (nothing exists to edit) and the
+  app's own Adjust button keep the previewReplan synthesis for now — once per user and
+  user-held respectively. If the button's 1503s-class runs recur, its fate is the same slate.
+
+**Owed after merge:** `eval:tools` (the always-on `propose_plan_change` description changed —
+owner's call, ~700K tokens, and it drives the deployed api so it runs post-deploy); a `cap run`
+(this branch carries client changes); replay of the owner's "balance my week" conversation as the
+acceptance test — the same request that took 25 minutes and five failures should now be one call
+and one card.

@@ -216,7 +216,6 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_recent_logs: 'their session notes from recent days: what they did and how it felt',
   get_equipment: 'training equipment they own, with usage wear for tracked items',
   update_equipment: 'ACTION: add, remove, or rename equipment on their file — corrections included',
-  rebalance_week: 'ACTION: redraw the whole week around a steer you write — preview card, they apply',
 };
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
@@ -298,14 +297,6 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // read, marked [changes their data] in the label, and its own contract still gates the write
     // behind the user's tap on the proposal card.
     members: ['propose_progress_layout'],
-  },
-  {
-    key: 'plan',
-    label: 'reshaping their whole week',
-    // The middle size of plan change (2026-08-31): a steered whole-week redraw. Its own category
-    // because "balance my week" is an intent people say in those words, and the drawer's signage
-    // should answer it in one hop. The write still waits for their tap on the preview card.
-    members: ['rebalance_week'],
   },
 ];
 

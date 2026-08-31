@@ -211,6 +211,65 @@ describe('propose_plan_change', () => {
     expect(d).toMatch(/does NOT change anything/i);
     expect(d).toMatch(/build card/);
     expect(d).toMatch(/get_active_plan/);
+    // Owner 2026-08-31 (the coach IS the planner): a whole week is one call carrying the slate,
+    // and the return is where she checks the shape before telling the user it is up.
+    expect(d).toMatch(/ONE call carrying the full slate/);
+    expect(d).toMatch(/reports the proposed week's shape/);
+  });
+
+  /**
+   * The evidence report (owner ruling 2026-08-31: guards return evidence, she adjudicates). The
+   * scar: the owner's proposed week stacked hill intervals + an early run on a Wednesday whose own
+   * constraint said ONE workout, no afternoons — and the return, being only diff lines, could not
+   * show her the week she had just proposed.
+   */
+  it('returns the proposed week as evidence — shape, collisions, and the constraint check-list', async () => {
+    listActivities.mockResolvedValue([
+      {
+        activity_id: 'a1',
+        commitment_id: 'aaaaaaaa-1111-4111-8111-111111111111',
+        plan_id: 'p1',
+        title: 'Easy run',
+        kind: 'user',
+        schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TH', duration_min: 40, time_of_day: '07:00' },
+        completion_source: 'self_report',
+        goal_id: 'g1',
+      },
+      {
+        activity_id: 'a2',
+        commitment_id: 'bbbbbbbb-1111-4111-8111-111111111111',
+        plan_id: 'p1',
+        title: 'Hill intervals',
+        kind: 'user',
+        schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=WE', duration_min: 30, time_of_day: '07:00' },
+        completion_source: 'self_report',
+        goal_id: 'g1',
+      },
+    ]);
+    getUser.mockResolvedValue({
+      pending_plan: null,
+      baseline: {
+        constraints: [
+          { id: 'c1', label: 'Wednesdays: one workout, no afternoons', plan_around: true },
+          // Eased — the plan no longer bends for it, so the check-list must not carry it.
+          { id: 'c2', label: 'left knee — patellar tendinopathy', plan_around: false },
+        ],
+      },
+    });
+
+    const out = await propose.run('u1', {
+      edits: [{ action: 'move', activities: ['aaaaaaaa'], days: ['wednesday'] }],
+    });
+
+    expect(out).toMatch(
+      /Proposed week shape \(their own items per day\): Mo — · Tu — · We 2 · Th — · Fr — · Sa — · Su —/,
+    );
+    expect(out).toMatch(/Time collision: "Easy run" and "Hill intervals" both land on Wed at 07:00\./);
+    expect(out).toMatch(/work around: Wednesdays: one workout, no afternoons — check the proposed week against these/);
+    expect(out).not.toMatch(/left knee/);
+    // Evidence, never a blocker: the card still went up for the user to judge too.
+    expect(setPendingPlan).toHaveBeenCalledTimes(1);
+    expect(out).toMatch(/Apply button/);
   });
 
   /**

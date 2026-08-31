@@ -26,6 +26,7 @@ import {
   sendDetourEquipment,
   enterEpisode,
   postponeDetour,
+  getPendingReplan,
 } from '../../lib/api.ts';
 import { useQueryClient } from '@tanstack/react-query';
 import { setPlanData, usePlan, useWatchLogInbox, useWatchPortraitSync, useWatchSync } from '../../lib/query/index.ts';
@@ -123,6 +124,43 @@ export function PlanView({
   useEffect(() => {
     if (reloadSignal) void refetch();
   }, [reloadSignal, refetch]);
+
+  /**
+   * A week the coach drew must find its way to the screen. Any server-side path (historically
+   * the retired rebalance_week dispatch; today a script or future proactive flow) stores a
+   * pending proposal and pushes — but until this ran, the ONLY in-app surface was
+   * a live Adjust flow the user had started themselves: a finished 16-activity rebalance sat
+   * invisible in pending_plan while its owner asked where it was (2026-08-31). On mount, ask; if
+   * one is waiting, open the review sheet on it. Suggest-never-auto-apply is untouched — the
+   * sheet still ends in their Apply.
+   */
+  useEffect(() => {
+    let alive = true;
+    /**
+     * Retries, because the first mount races auth (paint-before-auth, #311): the tokenless read
+     * 401s, and a failed read is UNKNOWN — treating it as "nothing pending" hid a finished
+     * rebalance until the owner left the screen and came back (2026-08-31). A real "nothing
+     * pending" answer stops the loop on the first try.
+     */
+    const delays = [0, 2000, 5000, 12000];
+    void (async () => {
+      for (const ms of delays) {
+        if (ms) await new Promise((r) => setTimeout(r, ms));
+        if (!alive) return;
+        const { ok, proposal } = await getPendingReplan();
+        if (!alive) return;
+        if (proposal) {
+          setAdjustMode('rebalance');
+          setAdjustOpen(true);
+          return;
+        }
+        if (ok) return; // a genuine "nothing pending" — done
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const refresh = () => void refetch();
   const bump = () => setReloadKey((k) => k + 1);
