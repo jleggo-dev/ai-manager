@@ -115,6 +115,21 @@ function sourceReasons(
     if (!availability.has_food_usage) return [`${at}: no food log usage on file yet — cannot bind`];
     return [];
   }
+  if (kind === 'felt_week') {
+    if (!availability.has_felt) return [`${at}: no daily check-in moods in the last four weeks — cannot bind`];
+    return [];
+  }
+  if (kind === 'repertoire') {
+    if (!availability.has_repertoire) return [`${at}: no repertoire on file yet — cannot bind`];
+    const goalId = source?.goal_id;
+    if (goalId && !goalIds.includes(goalId)) {
+      return [`${at}: goal_id "${goalId}" is not one of the goals it was shown`];
+    }
+    if (goalId && !availability.repertoire_goal_ids.includes(goalId)) {
+      return [`${at}: no repertoire items for goal "${goalId}" — leave source.goal_id off to show everything`];
+    }
+    return [];
+  }
   // rhythm, shelf, recap_rail, history: no source-existence gate — see the parcel report for why.
   return [];
 }

@@ -16,20 +16,22 @@ import type { GoalArea } from './baseline.ts';
 import type { HistoryEntry, SeriesPoint } from './progress.ts';
 
 /* Temporal kinds read differently at different windows; non-temporal kinds
- * (shelf, stage_path, count_toward, balance, total, variety) are collections,
- * proportions and presence — progress that is not a slope. A layout is ordered
- * sections, never an imposed timeline. */
+ * (shelf, stage_path, count_toward, balance, total, variety, repertoire) are
+ * collections, proportions and presence — progress that is not a slope. A
+ * layout is ordered sections, never an imposed timeline. */
 export const WIDGET_KINDS = [
   'rhythm',
   'trend_vs_target',
   'dated_sessions',
   'weekly_bars',
+  'felt_week',
   'shelf',
   'stage_path',
   'count_toward',
   'balance',
   'total',
   'variety',
+  'repertoire',
   'recap_rail',
   'history',
 ] as const;
@@ -133,6 +135,15 @@ export interface WeeklyBarsPayload {
   latest?: number | null;
 }
 
+/** Four side-by-side weeks colored by how the daily check-ins felt (mood, 1–5). `value` is that
+ *  week's mean over the days that had a mood noted; null = NO day did — an unread week, drawn as
+ *  an outline, never a zero. Always the trailing four weeks: the card honestly ignores the page's
+ *  window control. */
+export interface FeltWeekPayload {
+  /** Oldest → newest; `days` = how many days that week had a mood noted. */
+  weeks: { label: string; value: number | null; days: number }[];
+}
+
 export interface ShelfPayload {
   events: { label: string; at: string }[]; // bests & firsts — a collection, no axis
 }
@@ -169,6 +180,30 @@ export interface VarietyPayload {
   window_label: string;
 }
 
+/** One repertoire item's standing, as the card shows it. Derived from RepertoireItem:
+ *  known → 'learned'; working + practiced → 'in_progress'; working, never practiced →
+ *  'not_started' (the coach proposed it, they haven't picked it up). Parked items are
+ *  deliberately set aside and never appear here. */
+export interface RepertoireCardItem {
+  label: string;
+  state: 'learned' | 'in_progress' | 'not_started';
+  /** 'YYYY-MM' — the month it crossed to learned in front of us. null for items they already
+   *  knew when they told us (backfilled): learned, honestly, but with no date to show. */
+  learned_month?: string | null;
+  /** Whole weeks since they started working it (min 1) — in-progress items only. */
+  weeks_in?: number | null;
+}
+
+/** "Measured in pieces, not minutes" — the list of what they're learning or already have.
+ *  `learned`/`in_progress` count the WHOLE repertoire; `items` may be capped for the card. */
+export interface RepertoirePayload {
+  items: RepertoireCardItem[];
+  learned: number;
+  in_progress: number;
+  /** Plural word for what these are ('pieces', 'katas') — 'items' when the kind is unknown. */
+  noun: string;
+}
+
 export interface RecapRailPayload {
   /** `line` is the coach's/receipt's one-sentence conclusion — nullable on purpose (honest v1:
    *  rows persisted before anything writes conclusions back simply have none, and "no line yet"
@@ -185,12 +220,14 @@ export type WidgetPayload =
   | { kind: 'trend_vs_target'; data: TrendVsTargetPayload }
   | { kind: 'dated_sessions'; data: DatedSessionsPayload }
   | { kind: 'weekly_bars'; data: WeeklyBarsPayload }
+  | { kind: 'felt_week'; data: FeltWeekPayload }
   | { kind: 'shelf'; data: ShelfPayload }
   | { kind: 'stage_path'; data: StagePathPayload }
   | { kind: 'count_toward'; data: CountTowardPayload }
   | { kind: 'balance'; data: BalancePayload }
   | { kind: 'total'; data: TotalPayload }
   | { kind: 'variety'; data: VarietyPayload }
+  | { kind: 'repertoire'; data: RepertoirePayload }
   | { kind: 'recap_rail'; data: RecapRailPayload }
   | { kind: 'history'; data: HistoryPayload };
 

@@ -13,12 +13,17 @@
 import { getUser } from '../repos/users.ts';
 import { listWeighInSeries, listLoggedForProgress } from '../repos/occurrences.ts';
 import { listWorkoutHistory } from '../repos/workout-history.ts';
-import { feedbackInRange } from '../repos/coach-moments.ts';
+import { feedbackInRange, recentMoods } from '../repos/coach-moments.ts';
 import { listNutritionLogs } from '../repos/nutrition.ts';
+import { listRepertoireGoalIds } from '../repos/repertoire.ts';
 
 /** Existence, not a display window — generous enough that a real habit reads as available without
  *  scanning a user's entire history on every compose call. */
 const AVAILABILITY_DAYS = 180;
+
+/** `felt_week` shows exactly the trailing four weeks, so its existence check matches that window
+ *  instead of the generous general one — a mood noted five months ago cannot color it. */
+const FELT_DAYS = 28;
 
 const iso = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
@@ -27,6 +32,12 @@ export interface ProgressAvailability {
   has_workout_history: boolean;
   has_feedback: { mind: boolean; movement: boolean };
   has_food_usage: boolean;
+  /** Any daily check-in mood in the trailing four weeks — what `felt_week` draws on. */
+  has_felt: boolean;
+  /** Any repertoire item still in play (not parked), attached to a goal or not. */
+  has_repertoire: boolean;
+  /** Goal ids with at least one in-play repertoire item — what `repertoire.source.goal_id` may name. */
+  repertoire_goal_ids: string[];
   /** Activity TITLES with at least one logged session — what `dated_sessions.source.activity` may name. */
   activities: string[];
 }
@@ -39,7 +50,7 @@ export async function buildAvailability(userId: string): Promise<ProgressAvailab
   const from = iso(Date.now() - AVAILABILITY_DAYS * 86_400_000);
   const today = iso(Date.now());
 
-  const [user, weighIns, loggedRows, workouts, feedback, foodLogs] = await Promise.all([
+  const [user, weighIns, loggedRows, workouts, feedback, foodLogs, repertoireGoalIds, moods] = await Promise.all([
     getUser(userId),
     listWeighInSeries(userId, AVAILABILITY_DAYS),
     listLoggedForProgress(userId, from),
@@ -47,6 +58,8 @@ export async function buildAvailability(userId: string): Promise<ProgressAvailab
     listWorkoutHistory(userId, AVAILABILITY_DAYS, 1),
     feedbackInRange(userId, from, today),
     listNutritionLogs(userId, from, today),
+    listRepertoireGoalIds(userId),
+    recentMoods(userId, FELT_DAYS),
   ]);
 
   return {
@@ -59,6 +72,9 @@ export async function buildAvailability(userId: string): Promise<ProgressAvailab
       movement: feedback.some((f) => f.kind === 'movement'),
     },
     has_food_usage: foodLogs.length > 0,
+    has_felt: moods.length > 0,
+    has_repertoire: repertoireGoalIds.length > 0,
+    repertoire_goal_ids: repertoireGoalIds.filter((id): id is string => id !== null),
     activities: [...new Set(loggedRows.map((r) => r.title))],
   };
 }

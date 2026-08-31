@@ -312,6 +312,8 @@ export {
   getProgressVariety,
   getProgressStagePath,
   getProgressCount,
+  getProgressRepertoire,
+  getProgressFeltWeeks,
   type Omittable,
 } from './api/progress-extras.ts';
 

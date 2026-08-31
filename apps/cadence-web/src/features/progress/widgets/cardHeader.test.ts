@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WidgetSpec } from '@cadence/shared';
-import { deadlineTag } from './cardHeader.ts';
+import { deadlineTag, headerTag } from './cardHeader.ts';
 
 const spec = (over: Partial<WidgetSpec>): WidgetSpec => ({ id: 'w', kind: 'stage_path', ...over });
 const NOW = new Date('2026-08-31T10:00:00');
@@ -17,5 +17,20 @@ describe('deadlineTag', () => {
     expect(deadlineTag(spec({ deadline: '2026-08-30' }), 'stage_path', NOW)).toBe('');
     expect(deadlineTag(spec({ deadline: '2026-10-04' }), 'trend_vs_target', NOW)).toBe('');
     expect(deadlineTag(spec({}), 'stage_path', NOW)).toBe('');
+  });
+});
+
+describe('headerTag', () => {
+  it('names the repertoire counts from the payload, never a stored sentence', () => {
+    expect(
+      headerTag({
+        kind: 'repertoire',
+        data: { items: [], learned: 2, in_progress: 1, noun: 'pieces' },
+      }),
+    ).toBe('repertoire · 2 learned · 1 in progress');
+  });
+
+  it('names the felt measure and its source', () => {
+    expect(headerTag({ kind: 'felt_week', data: { weeks: [] } })).toBe('felt · from your daily notes');
   });
 });

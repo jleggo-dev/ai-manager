@@ -20,14 +20,21 @@ const WEIGHTY_UNIT = /^(kg|kgs|lb|lbs|pound|pounds)$/i;
 const COUNTABLE_UNIT = /book|session|class|workout|chapter|badge|race/i;
 
 /**
- * Reserved for future composer inputs (e.g. a feature flag gating an in-progress widget kind, or
- * context the coach's composition tools need that a bare goal list doesn't carry). No field is
- * read today; kept in the signature so adding one later isn't a breaking change for callers.
+ * Facts the composer needs that a bare goal list doesn't carry — data-existence signals the
+ * caller reads once (the route, or composeProgressLayout via `buildAvailability`) and hands in,
+ * keeping this function pure. Every field is optional: an old caller passing nothing simply gets
+ * no data-gated sections, never an error.
  */
-export type DefaultLayoutOptions = Record<string, unknown>;
+export interface DefaultLayoutOptions {
+  /** Goal ids with at least one in-play repertoire item — gates the per-goal repertoire card. */
+  repertoire_goal_ids?: readonly string[];
+  /** Any daily check-in mood in the trailing four weeks — gates the felt_week card. */
+  has_felt?: boolean;
+}
 
 const goalWidgetId = (g: Goal) => `w-goal-${g.goal_id}`;
 const stageWidgetId = (g: Goal) => `w-goal-${g.goal_id}-stage`;
+const repertoireWidgetId = (g: Goal) => `w-goal-${g.goal_id}-repertoire`;
 
 /**
  * The goal facts a card wears (chip family color, the "34 days out" tag) — read off the goal row
@@ -150,6 +157,25 @@ function deriveBalance(goals: Goal[]): WidgetSpec | null {
     : null;
 }
 
+/**
+ * How the days felt, week by week — for mind-area goals, and only when the daily check-in has
+ * actually been read lately (the caller passes that fact). ALONGSIDE `balance`, never replacing
+ * it: the two bind different sources (daily check-in moods vs answered session feedback), and
+ * either can exist without the other. With exactly one mind goal the card is that goal's and
+ * wears its facts; with more it stays a shared card named for the measure.
+ */
+function deriveFeltWeek(goals: Goal[], hasFelt: boolean): WidgetSpec | null {
+  const mindGoals = goals.filter((g) => g.area === 'mind');
+  if (!hasFelt || mindGoals.length === 0) return null;
+  const single = mindGoals.length === 1 ? mindGoals[0]! : null;
+  return {
+    id: 'w-felt',
+    kind: 'felt_week',
+    title: single ? single.title : 'How your days felt',
+    ...(single ? goalFacts(single) : {}),
+  };
+}
+
 function deriveTotals(goals: Goal[]): WidgetSpec[] {
   return goals.filter(isMindPracticeTotal).map((g) => ({
     id: goalWidgetId(g),
@@ -158,6 +184,21 @@ function deriveTotals(goals: Goal[]): WidgetSpec[] {
     source: { goal_id: g.goal_id },
     ...goalFacts(g),
   }));
+}
+
+/** One repertoire card per practice-area goal that actually has repertoire items — "measured in
+ *  pieces, not minutes" is that goal's native shape, so it only derives where the store says
+ *  there is something to show. */
+function deriveRepertoire(goals: Goal[], repertoireGoalIds: readonly string[]): WidgetSpec[] {
+  return goals
+    .filter((g) => g.area === 'practice' && repertoireGoalIds.includes(g.goal_id))
+    .map((g) => ({
+      id: repertoireWidgetId(g),
+      kind: 'repertoire' as const,
+      title: g.title,
+      source: { goal_id: g.goal_id },
+      ...goalFacts(g),
+    }));
 }
 
 function deriveShelf(goals: Goal[]): WidgetSpec | null {
@@ -174,21 +215,24 @@ const HISTORY: WidgetSpec = { id: 'w-history', kind: 'history', title: 'Your his
  * order, whichever path a user takes.
  *
  * Fitness-first path (any movement or nourishment goal exists): rhythm → weight →
- * movement activities → steps → nourishment (kcal + variety) → count/stage-path →
- * balance/total → shelf.
+ * movement activities → steps → nourishment (kcal + variety) → count/stage-path/repertoire →
+ * balance/felt → total → shelf.
  *
  * Practice-led path (no movement/nourishment goals — mind/practice only, or no goals at all):
- * shelf → balance → total → count/stage-path, with NO time-axis kind above that block; rhythm
- * still appears, but only AFTER it, and only if a recurring goal exists.
+ * repertoire → shelf → balance/felt → total → count/stage-path, with NO time-axis kind above that
+ * block; rhythm still appears, but only AFTER it, and only if a recurring goal exists. Repertoire
+ * leads: for a skills-based practice, the list of what they know IS the progression record.
  */
-export function defaultLayout(goals: Goal[], _opts: DefaultLayoutOptions = {}): ProgressLayout {
+export function defaultLayout(goals: Goal[], opts: DefaultLayoutOptions = {}): ProgressLayout {
   const fitnessLed = goals.some(isMovementOrNourishment);
 
   const rhythm = deriveRhythm(goals);
   const balance = deriveBalance(goals);
+  const felt = deriveFeltWeek(goals, opts.has_felt ?? false);
   const shelf = deriveShelf(goals);
   const countWidgets = deriveCountToward(goals);
   const stageWidgets = deriveStagePath(goals);
+  const repertoireWidgets = deriveRepertoire(goals, opts.repertoire_goal_ids ?? []);
   const totals = deriveTotals(goals);
   const steps = deriveMovementEngagement(goals);
 
@@ -201,13 +245,17 @@ export function defaultLayout(goals: Goal[], _opts: DefaultLayoutOptions = {}): 
         ...deriveNourishmentEngagement(goals),
         ...countWidgets,
         ...stageWidgets,
+        ...repertoireWidgets,
         ...(balance ? [balance] : []),
+        ...(felt ? [felt] : []),
         ...totals,
         ...(shelf ? [shelf] : []),
       ]
     : [
+        ...repertoireWidgets,
         ...(shelf ? [shelf] : []),
         ...(balance ? [balance] : []),
+        ...(felt ? [felt] : []),
         ...totals,
         ...countWidgets,
         ...stageWidgets,

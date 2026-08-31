@@ -61,6 +61,10 @@ export const queryKeys = {
     variety: (window: string, meal?: string) => ['progressExtras', 'variety', window, meal ?? 'dinner'] as const,
     stagePath: (goalId: string) => ['progressExtras', 'stagePath', goalId] as const,
     count: (goalId: string) => ['progressExtras', 'count', goalId] as const,
+    /** '' = unscoped (everything they keep); a goal id scopes to that goal's items. */
+    repertoire: (goalId: string) => ['progressExtras', 'repertoire', goalId] as const,
+    /** Always the trailing four weeks — no window/goal variants to key on. */
+    feltWeeks: ['progressExtras', 'feltWeeks'] as const,
   },
   /** `/me/recaps` (the `recap_rail` widget, Progress Engine W2-1) — weekly check-in recaps,
    *  persisted at confirm time. Scoped by `limit` so the rail's own default doesn't collide with a

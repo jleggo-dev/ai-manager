@@ -121,6 +121,17 @@ export const FITNESS_FIXTURES: Record<WidgetKind, WidgetPayload> = {
       ],
     },
   },
+  felt_week: {
+    kind: 'felt_week',
+    data: {
+      weeks: [
+        { label: 'Aug 3', value: 2.8, days: 5 },
+        { label: 'Aug 10', value: null, days: 0 },
+        { label: 'Aug 17', value: 3.6, days: 6 },
+        { label: 'Aug 24', value: 4.3, days: 7 },
+      ],
+    },
+  },
   shelf: {
     kind: 'shelf',
     data: {
@@ -158,6 +169,20 @@ export const FITNESS_FIXTURES: Record<WidgetKind, WidgetPayload> = {
   variety: {
     kind: 'variety',
     data: { count: 5, noun: 'different routes', window_label: 'this month' },
+  },
+  repertoire: {
+    kind: 'repertoire',
+    data: {
+      items: [
+        { label: 'Freestyle flip turn', state: 'learned', learned_month: null },
+        { label: 'Breaststroke', state: 'learned', learned_month: '2026-05' },
+        { label: 'Butterfly', state: 'in_progress', weeks_in: 4 },
+        { label: 'Open-water sighting', state: 'not_started' },
+      ],
+      learned: 2,
+      in_progress: 1,
+      noun: 'skills',
+    },
   },
   recap_rail: {
     kind: 'recap_rail',
@@ -280,6 +305,17 @@ export const PRACTICE_FIXTURES: Record<WidgetKind, WidgetPayload> = {
       ],
     },
   },
+  felt_week: {
+    kind: 'felt_week',
+    data: {
+      weeks: [
+        { label: 'Aug 3', value: 2.2, days: 4 },
+        { label: 'Aug 10', value: 3.1, days: 7 },
+        { label: 'Aug 17', value: null, days: 0 },
+        { label: 'Aug 24', value: 4.6, days: 6 },
+      ],
+    },
+  },
   shelf: {
     kind: 'shelf',
     data: {
@@ -316,6 +352,20 @@ export const PRACTICE_FIXTURES: Record<WidgetKind, WidgetPayload> = {
   variety: {
     kind: 'variety',
     data: { count: 6, noun: 'different techniques practiced', window_label: 'this month' },
+  },
+  repertoire: {
+    kind: 'repertoire',
+    data: {
+      items: [
+        { label: 'Gymnopédie №1', state: 'learned', learned_month: '2026-03' },
+        { label: "Comptine d'un autre été", state: 'learned', learned_month: '2026-06' },
+        { label: 'Clair de lune', state: 'in_progress', weeks_in: 6 },
+        { label: 'River Flows in You', state: 'not_started' },
+      ],
+      learned: 2,
+      in_progress: 1,
+      noun: 'pieces',
+    },
   },
   recap_rail: {
     kind: 'recap_rail',

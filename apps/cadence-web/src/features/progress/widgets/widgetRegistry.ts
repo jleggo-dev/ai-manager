@@ -4,12 +4,14 @@ import { RhythmWidget } from './RhythmWidget.tsx';
 import { TrendVsTargetWidget } from './TrendVsTargetWidget.tsx';
 import { DatedSessionsWidget } from './DatedSessionsWidget.tsx';
 import { WeeklyBarsWidget } from './WeeklyBarsWidget.tsx';
+import { FeltWeeksWidget } from './FeltWeeksWidget.tsx';
 import { ShelfWidget } from './ShelfWidget.tsx';
 import { StagePathWidget } from './StagePathWidget.tsx';
 import { CountTowardWidget } from './CountTowardWidget.tsx';
 import { BalanceWidget } from './BalanceWidget.tsx';
 import { TotalWidget } from './TotalWidget.tsx';
 import { VarietyWidget } from './VarietyWidget.tsx';
+import { RepertoireWidget } from './RepertoireWidget.tsx';
 import { RecapRailWidget } from './RecapRailWidget.tsx';
 import { HistoryWidget } from './HistoryWidget.tsx';
 
@@ -40,6 +42,8 @@ const renderDatedSessions: Renderer = (payload) =>
   payload.kind === 'dated_sessions' ? createElement(DatedSessionsWidget, { data: payload.data }) : null;
 const renderWeeklyBars: Renderer = (payload) =>
   payload.kind === 'weekly_bars' ? createElement(WeeklyBarsWidget, { data: payload.data }) : null;
+const renderFeltWeek: Renderer = (payload) =>
+  payload.kind === 'felt_week' ? createElement(FeltWeeksWidget, { data: payload.data }) : null;
 const renderShelf: Renderer = (payload) =>
   payload.kind === 'shelf' ? createElement(ShelfWidget, { data: payload.data }) : null;
 const renderStagePath: Renderer = (payload) =>
@@ -52,6 +56,8 @@ const renderTotal: Renderer = (payload) =>
   payload.kind === 'total' ? createElement(TotalWidget, { data: payload.data }) : null;
 const renderVariety: Renderer = (payload) =>
   payload.kind === 'variety' ? createElement(VarietyWidget, { data: payload.data }) : null;
+const renderRepertoire: Renderer = (payload) =>
+  payload.kind === 'repertoire' ? createElement(RepertoireWidget, { data: payload.data }) : null;
 const renderRecapRail: Renderer = (payload) =>
   payload.kind === 'recap_rail' ? createElement(RecapRailWidget, { data: payload.data }) : null;
 const renderHistory: Renderer = (payload) =>
@@ -62,12 +68,14 @@ export const WIDGET_REGISTRY: Record<WidgetKind, Renderer> = {
   trend_vs_target: renderTrendVsTarget,
   dated_sessions: renderDatedSessions,
   weekly_bars: renderWeeklyBars,
+  felt_week: renderFeltWeek,
   shelf: renderShelf,
   stage_path: renderStagePath,
   count_toward: renderCountToward,
   balance: renderBalance,
   total: renderTotal,
   variety: renderVariety,
+  repertoire: renderRepertoire,
   recap_rail: renderRecapRail,
   history: renderHistory,
 };

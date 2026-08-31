@@ -330,6 +330,38 @@
   margin-top: 2px;
 }
 
+/* ── felt_week — four side-by-side week bars, each colored by that week's average daily note
+   (design 1a "Calmer evenings"). The fill color is data (the indigo ramp lives in the renderer);
+   an UNREAD week is a hairline outline — never a filled "zero", never a warning color. ──────── */
+.pw-felt {
+  display: flex;
+  gap: 5px;
+}
+.pw-felt-week {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.pw-felt-bar {
+  width: 100%;
+  height: 22px;
+  border-radius: 7px;
+}
+.pw-felt-bar--unread {
+  background: transparent;
+  border: 1px solid var(--line-soft);
+}
+.pw-felt-label {
+  font-size: 8.5px;
+  font-weight: 800;
+  color: var(--text-mute);
+}
+.pw-felt-label--latest {
+  color: var(--text-dim);
+}
+
 /* ── shelf — bests & firsts as check-circle rows (design 1a repertoire card). Everything the
    payload carries is done, so every mark is filled + warm; no invented ring/grey states. ──── */
 .pw-shelf {
@@ -471,6 +503,62 @@
 .pw-variety-line {
   font-size: 13px;
   font-weight: 700;
+}
+
+/* ── repertoire — the piece list (design 1a piano card). Three standings, three marks: learned is
+   a filled plum check circle, in progress a hollow plum ring, not started a dashed grey circle.
+   Plum is the practice family's color; a not-started row is quiet, never a warning. ──────────── */
+.pw-rep {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pw-rep-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pw-rep-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 8px;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+}
+.pw-rep-mark--learned {
+  background: oklch(48% 0.06 320);
+  color: #fff;
+}
+.pw-rep-mark--in_progress {
+  background: var(--surface);
+  border: 2px solid oklch(48% 0.06 320);
+}
+.pw-rep-mark--not_started {
+  background: var(--surface);
+  border: 1.5px dashed var(--line);
+}
+.pw-rep-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+.pw-rep-label--quiet {
+  color: var(--text-mute);
+}
+.pw-rep-standing {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-mute);
+}
+.pw-rep-standing--working {
+  font-weight: 800;
+  color: oklch(48% 0.06 320);
 }
 
 /* ── recap_rail ─────────────────────────────────────────────────────────── */

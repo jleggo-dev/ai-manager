@@ -16,6 +16,8 @@ export {
   useProgressVariety,
   useProgressStagePath,
   useProgressCount,
+  useProgressRepertoire,
+  useProgressFeltWeeks,
 } from './useProgressExtras.ts';
 export { useRecaps } from './useRecaps.ts';
 export { planSignature, useWatchSync } from './useWatchSync.ts';

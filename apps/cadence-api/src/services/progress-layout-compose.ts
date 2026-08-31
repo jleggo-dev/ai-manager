@@ -57,7 +57,12 @@ export async function composeProgressLayout(
 ): Promise<ComposeProgressLayoutResult> {
   const goals = await listGoalsByStatus(userId, ['confirmed', 'committed']);
   const [committed, availability] = await Promise.all([getCommitted(userId), buildAvailability(userId)]);
-  const currentLayout = committed?.layout ?? defaultLayout(goals);
+  const currentLayout =
+    committed?.layout ??
+    defaultLayout(goals, {
+      repertoire_goal_ids: availability.repertoire_goal_ids,
+      has_felt: availability.has_felt,
+    });
   const goalIds = goals.map((g) => g.goal_id);
 
   const res = await runJobBySlug(userId, 'progress-layout-compose', {

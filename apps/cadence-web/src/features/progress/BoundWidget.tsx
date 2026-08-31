@@ -9,7 +9,9 @@ import {
   useProgressBalance,
   useProgressCount,
   useProgressEvents,
+  useProgressFeltWeeks,
   useProgressHistory,
+  useProgressRepertoire,
   useProgressStagePath,
   useProgressTotals,
   useProgressVariety,
@@ -112,6 +114,22 @@ function VarietyBound({ spec, window }: BoundProps) {
   return <WidgetSection spec={spec} payload={{ kind: 'variety', data }} />;
 }
 
+function FeltWeeksBound({ spec }: BoundProps) {
+  // Always the trailing four weeks — felt has no honest re-window, so the page's control does
+  // not reach this card. The mood IS the daily mind check-in, so the mind family is honest here.
+  const { data } = useProgressFeltWeeks();
+  if (!data || 'omission' in data || data.weeks.every((w) => w.value === null)) return null;
+  return <WidgetSection spec={spec} payload={{ kind: 'felt_week', data }} family="mind" />;
+}
+
+function RepertoireBound({ spec }: BoundProps) {
+  // Unscoped (no goal_id) is a real mode: everything they keep. The repertoire has no time axis,
+  // so the page's window control honestly does not reach this card.
+  const { data } = useProgressRepertoire(spec.source?.goal_id);
+  if (!data || 'omission' in data || data.items.length === 0) return null;
+  return <WidgetSection spec={spec} payload={{ kind: 'repertoire', data }} family="practice" />;
+}
+
 function StagePathBound({ spec }: BoundProps) {
   const { data } = useProgressStagePath(spec.source?.goal_id ?? '');
   if (!spec.source?.goal_id || !data || 'omission' in data) return null;
@@ -185,10 +203,12 @@ const BOUND: Partial<Record<WidgetSpec['kind'], (p: BoundProps) => ReactNode>> =
   trend_vs_target: TrendVsTargetBound,
   dated_sessions: DatedSessionsBound,
   weekly_bars: WeeklyBarsBound,
+  felt_week: FeltWeeksBound,
   shelf: ShelfBound,
   balance: BalanceBound,
   total: TotalBound,
   variety: VarietyBound,
+  repertoire: RepertoireBound,
   stage_path: StagePathBound,
   count_toward: CountTowardBound,
   history: HistoryBound,

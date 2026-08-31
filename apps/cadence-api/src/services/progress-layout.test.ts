@@ -191,6 +191,54 @@ describe('defaultLayout', () => {
     ]);
   });
 
+  it('a practice goal with repertoire items leads its page with the repertoire card; without items (or without the fact passed) none derives', () => {
+    const piano = goal({ goal_id: 'piano-1', title: 'Learn the piano', area: 'practice', type: 'milestone' });
+    const withItems = defaultLayout([piano], { repertoire_goal_ids: ['piano-1'] });
+    expect(kinds(withItems)).toEqual(['repertoire', 'shelf', 'balance', 'recap_rail', 'history']);
+    const card = withItems.sections[0]!;
+    expect(card.id).toBe('w-goal-piano-1-repertoire');
+    expect(card.title).toBe('Learn the piano');
+    expect(card.source).toEqual({ goal_id: 'piano-1' });
+    expect(card.area).toBe('practice');
+
+    const without = ['shelf', 'balance', 'recap_rail', 'history'];
+    expect(kinds(defaultLayout([piano], { repertoire_goal_ids: [] }))).toEqual(without);
+    expect(kinds(defaultLayout([piano]))).toEqual(without);
+  });
+
+  it('on the fitness-led path a practice goal with items still gets its repertoire card, in the goal-scoped block', () => {
+    const runSchedule = goal({ goal_id: 'run-sched-3', title: 'Runs', area: 'movement', type: 'recurring' });
+    const piano = goal({ goal_id: 'piano-2', title: 'Learn the piano', area: 'practice', type: 'milestone' });
+    const layout = defaultLayout([runSchedule, piano], { repertoire_goal_ids: ['piano-2'] });
+    expect(kinds(layout)).toEqual(['rhythm', 'weekly_bars', 'repertoire', 'balance', 'shelf', 'recap_rail', 'history']);
+  });
+
+  it('a mind goal plus felt data gets felt_week ALONGSIDE balance — different sources, both honest', () => {
+    const calm = goal({ goal_id: 'calm-1', title: 'Calmer evenings', area: 'mind', type: 'recurring' });
+    const layout = defaultLayout([calm], { has_felt: true });
+    expect(kinds(layout)).toEqual(['shelf', 'balance', 'felt_week', 'rhythm', 'recap_rail', 'history']);
+    const felt = layout.sections.find((s) => s.kind === 'felt_week')!;
+    // One mind goal: the card is that goal's, and wears its area for the chip.
+    expect(felt).toMatchObject({ id: 'w-felt', title: 'Calmer evenings', area: 'mind' });
+    expect(felt.source).toBeUndefined();
+
+    // No felt data (or the fact not passed): no felt_week — absent data never derives a card.
+    expect(kinds(defaultLayout([calm], { has_felt: false }))).not.toContain('felt_week');
+    expect(kinds(defaultLayout([calm]))).not.toContain('felt_week');
+    // Practice-only goals don't reach for the daily mood either.
+    const readBooks = goal({ goal_id: 'rb', title: 'Read 100 books', area: 'practice', type: 'target' });
+    expect(kinds(defaultLayout([readBooks], { has_felt: true }))).not.toContain('felt_week');
+  });
+
+  it('two mind goals share one felt_week card with a measure-named title and no stamped area', () => {
+    const calm = goal({ goal_id: 'calm-2', title: 'Calmer evenings', area: 'mind', type: 'recurring' });
+    const sleep = goal({ goal_id: 'sleep-1', title: 'Sleep by eleven', area: 'mind', type: 'recurring' });
+    const layout = defaultLayout([calm, sleep], { has_felt: true });
+    const felt = layout.sections.find((s) => s.kind === 'felt_week')!;
+    expect(felt.title).toBe('How your days felt');
+    expect(felt.area).toBeUndefined();
+  });
+
   it('a movement goal with a countable unit (e.g. "10 races") is count_toward, not dated_sessions — no id collision', () => {
     const races = goal({
       goal_id: 'races-1',

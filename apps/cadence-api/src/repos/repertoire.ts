@@ -23,6 +23,18 @@ export async function listRepertoire(userId: string): Promise<RepertoireItem[]> 
 }
 
 /**
+ * The distinct goal ids that have at least one item still in play (not parked) — plus null when
+ * unattached items exist. Feeds the Progress page's availability/derivation ("does this goal have
+ * a repertoire card to show") without shipping the whole table for that yes/no.
+ */
+export async function listRepertoireGoalIds(userId: string): Promise<(string | null)[]> {
+  const rows = await sql<{ goal_id: string | null }[]>`
+    select distinct goal_id from cadence.repertoire
+    where user_id = ${userId} and status <> 'parked'`;
+  return rows.map((r) => r.goal_id);
+}
+
+/**
  * One row per thing they can name: upsert on (user, lower(label)), so re-mentioning a piece
  * updates its standing instead of duplicating it. Two guards are load-bearing:
  *

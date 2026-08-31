@@ -2,6 +2,8 @@ import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getCommitted, getLatestDraft, getDraftById, commitDraft, dismissDraft } from '../repos/progress-layouts.ts';
+import { listRepertoireGoalIds } from '../repos/repertoire.ts';
+import { recentMoods } from '../repos/coach-moments.ts';
 import { defaultLayout } from '../services/progress-layout.ts';
 import { BodyValidationError, parseBody, progressLayoutDraftIdBodySchema } from '../validation/body.ts';
 
@@ -20,8 +22,19 @@ router.get('/progress-layout', async (req: Request, res: Response) => {
     if (committed) return void res.json(committed.layout);
     // Same goal statuses buildProgress uses: confirmed AND committed — a count goal is trackable
     // even before it produces plan activities, and replan-era goals can sit at confirmed indefinitely.
-    const goals = await listGoalsByStatus(userId, ['confirmed', 'committed']);
-    res.json(defaultLayout(goals));
+    // Data presence rides along: the data-gated cards (repertoire, felt_week) only derive where
+    // something exists to show. 28 days of moods = felt_week's own four-week window.
+    const [goals, repertoireGoalIds, moods] = await Promise.all([
+      listGoalsByStatus(userId, ['confirmed', 'committed']),
+      listRepertoireGoalIds(userId),
+      recentMoods(userId, 28),
+    ]);
+    res.json(
+      defaultLayout(goals, {
+        repertoire_goal_ids: repertoireGoalIds.filter((id): id is string => id !== null),
+        has_felt: moods.length > 0,
+      }),
+    );
   } catch (err) {
     console.error('[GET /me/progress-layout]', err);
     res.status(500).json({ error: 'failed to build progress layout' });

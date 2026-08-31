@@ -29,12 +29,14 @@ const KIND_GLYPH: Record<WidgetKind, GlyphName> = {
   trend_vs_target: 'gauge',
   dated_sessions: 'route',
   weekly_bars: 'route',
+  felt_week: 'wind',
   shelf: 'star',
   stage_path: 'mountain',
   count_toward: 'book',
   balance: 'wind',
   total: 'gauge',
   variety: 'route',
+  repertoire: 'note',
   recap_rail: 'bubble',
   history: 'pen',
 };
@@ -76,6 +78,8 @@ export function headerTag(payload: WidgetPayload): string {
       return `sessions · ${payload.data.total} logged`;
     case 'weekly_bars':
       return `weekly · ${payload.data.unit}`;
+    case 'felt_week':
+      return 'felt · from your daily notes';
     case 'shelf':
       return 'bests & firsts';
     case 'stage_path': {
@@ -90,6 +94,8 @@ export function headerTag(payload: WidgetPayload): string {
       return `total · ${payload.data.window_label}`;
     case 'variety':
       return `variety · ${payload.data.window_label}`;
+    case 'repertoire':
+      return `repertoire · ${payload.data.learned} learned · ${payload.data.in_progress} in progress`;
     case 'recap_rail':
       return 'weekly check-ins';
     case 'history':
