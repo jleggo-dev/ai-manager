@@ -3537,6 +3537,11 @@ textarea.wiz-title {
   flex-direction: column;
   padding: 10px 18px 18px;
   animation: sheet-up 0.22s ease-out;
+  /* Sheets are vertical surfaces, whole. .sheet-body clamped x years before the HEAD did, so a
+     long title span (an email, a dev-account tag) could still pan the entire sheet sideways —
+     observed on Settings, on device, 2026-08-31. Anything inside that truly needs an x-scroll
+     owns its own overflow-x: auto and still gets it. */
+  overflow-x: hidden;
 }
 /* A sheet whose job is COMPOSING — the "Custom — let's talk" ask — earns the height a review
  * sheet doesn't. At 78% with the keyboard up there were two usable lines to write the most
