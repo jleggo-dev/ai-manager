@@ -1,7 +1,7 @@
 import { retitleForTarget } from './goal-retitle.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
-import { listGoals, listGoalsByStatus, updateGoal, setGoalStatus } from '../repos/goals.ts';
+import { listGoals, listGoalsByStatus, updateGoal, setGoalStatus, retireGoal, restoreGoal } from '../repos/goals.ts';
 import { insertGoalEvent } from '../repos/goal-events.ts';
 import {
   correctOccurrenceLog,
@@ -315,15 +315,15 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   update_goal: {
     name: 'update_goal',
     description:
-      'Change one of the user\'s goals: lower or raise the number they are aiming at, move the date, mark it finished, or stop working on it. Use when they have plainly decided one of those in words — never on your own read that a goal looks too hard, and never to tidy up. This DOES take effect immediately: a goal is one fact you can say out loud, so your sentence confirming it is the confirmation, and every change is written to the goal\'s own history. Read get_objectives first and name the goal exactly as listed. Pass {"goal": "Read 100 books", "action": "retarget", "target": 50, "unit": "books"}, or {"goal": "Run a 10k", "action": "redate", "date": "2026-11-01"}.',
+      'Change one of the user\'s goals: lower or raise the number they are aiming at, move the date, mark it finished, set it aside, bring a set-aside one back, or stop working on it. Use when they have plainly decided one of those in words — never on your own read that a goal looks too hard, and never to tidy up. This DOES take effect immediately: a goal is one fact you can say out loud, so your sentence confirming it is the confirmation, and every change is written to the goal\'s own history. Read get_objectives first and name the goal exactly as listed — a set-aside goal will not be listed there, so use the name they just said. Pass {"goal": "Read 100 books", "action": "retarget", "target": 50, "unit": "books"}, or {"goal": "Obstacle race", "action": "retire"}.',
     parameters: {
       properties: {
         goal: { type: 'string', description: 'Which goal, by its title exactly as get_objectives lists it.' },
         action: {
           type: 'string',
-          enum: ['retarget', 'redate', 'complete', 'stop'],
+          enum: ['retarget', 'redate', 'complete', 'stop', 'retire', 'restore'],
           description:
-            'retarget = change the number they are aiming at; redate = change the date they are aiming for; complete = they finished it; stop = they are no longer working on it.',
+            'retarget = change the number they are aiming at; redate = change the date they are aiming for; complete = they finished it; stop = they are no longer working on it; retire = set it aside so it stops shaping the plan; restore = bring a set-aside goal back into the plan.',
         },
         target: { type: 'number', description: 'The new number. Required for retarget.' },
         unit: {
@@ -358,6 +358,26 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         return action === 'complete'
           ? `Marked "${goal.title}" finished. Say so warmly — this is a thing they did, and it is worth a sentence, not a checkbox.`
           : `Stopped "${goal.title}". Say it plainly and without any suggestion they failed; the sessions that served it stay in their plan until the plan is rebuilt, so offer that if it now looks empty.`;
+      }
+
+      if (action === 'retire' || action === 'restore') {
+        if (action === 'retire' && goal.status === 'parked') {
+          return `"${goal.title}" is already set aside. Say so plainly — nothing changed.`;
+        }
+        if (action === 'restore' && goal.status !== 'parked') {
+          return `"${goal.title}" is not set aside, so there is nothing to bring back.`;
+        }
+        const updated =
+          action === 'retire' ? await retireGoal(userId, goal.goal_id) : await restoreGoal(userId, goal.goal_id);
+        if (!updated) return `Could not ${action} "${goal.title}" — try again.`;
+        await insertGoalEvent(userId, {
+          goal_id: goal.goal_id,
+          kind: 'note',
+          label: action === 'retire' ? `Set aside: ${goal.title}` : `Brought back: ${goal.title}`,
+        }).catch(() => null);
+        return action === 'retire'
+          ? `"${goal.title}" is set aside. Say it plainly and without any suggestion they failed — it will not shape next week's plan, but everything it already built stays in Progress. If their week now looks empty, offer to rebuild it.`
+          : `"${goal.title}" is back. Say so warmly — it will shape the plan again from the next build, so offer to rebuild if they want it woven in now.`;
       }
 
       if (action === 'retarget') {

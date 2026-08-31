@@ -1,6 +1,17 @@
 import { sql, json } from '../db/sql.ts';
 import type { Goal, GoalStatus } from '@cadence/shared';
 
+/**
+ * The goal statuses Progress draws from (services/progress.ts, routes/progress-layout.ts's
+ * default layout) — deliberately WIDER than what feeds a plan build. A retired ('parked') goal
+ * stops shaping the week from its next build (see lock.ts/replan.ts, which pass their own
+ * narrower lists and never include 'parked'), but "everything it built — the 5k, the grip work —
+ * stays in Progress" (Settings Room SR-1 copy): its cards and history keep reading exactly as
+ * they did the moment before it was set aside. Named and shared so the two call sites that must
+ * agree on this can't drift apart the way a repeated comment would let them.
+ */
+export const PROGRESS_GOAL_STATUSES: GoalStatus[] = ['confirmed', 'committed', 'parked'];
+
 export async function listGoals(userId: string): Promise<Goal[]> {
   return sql<Goal[]>`select * from cadence.goals where user_id = ${userId}`;
 }
@@ -63,4 +74,37 @@ export async function setGoalStatus(userId: string, goalId: string, status: Goal
   await sql`
     update cadence.goals set status = ${status}, updated_at = now()
     where user_id = ${userId} and goal_id = ${goalId}`;
+}
+
+/**
+ * Retire a goal (Settings' "Retire", or the coach's own update_goal action): parks it and
+ * remembers what it was, so a restore can put it back exactly where it left off. A no-op
+ * (returns null) on a goal that's already parked or doesn't belong to this user — retiring twice
+ * must never overwrite a real prior_status with 'parked'.
+ */
+export async function retireGoal(userId: string, goalId: string): Promise<Goal | null> {
+  const [row] = await sql<Goal[]>`
+    update cadence.goals set
+      prior_status = status,
+      status = 'parked',
+      updated_at = now()
+    where user_id = ${userId} and goal_id = ${goalId} and status <> 'parked'
+    returning *`;
+  return row ?? null;
+}
+
+/**
+ * Bring a retired goal back. Restores whatever status it held before parking; falls back to
+ * 'confirmed' for a goal parked before prior_status existed. A no-op (returns null) on a goal
+ * that isn't currently parked or doesn't belong to this user.
+ */
+export async function restoreGoal(userId: string, goalId: string): Promise<Goal | null> {
+  const [row] = await sql<Goal[]>`
+    update cadence.goals set
+      status = coalesce(prior_status, 'confirmed'),
+      prior_status = null,
+      updated_at = now()
+    where user_id = ${userId} and goal_id = ${goalId} and status = 'parked'
+    returning *`;
+  return row ?? null;
 }
