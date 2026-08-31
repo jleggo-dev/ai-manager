@@ -39,7 +39,7 @@ export const CAPABILITIES: CapabilityGroup[] = [
       // above): update_equipment landed 2026-08-31 after she searched the drawer seven times for
       // an equipment write that did not exist and told the owner a correction was made when
       // nothing could make it.
-      'fix what is on file about your gear the moment you tell me — rename it, add something new, drop what you no longer have',
+      'fix your gear on file the moment you tell me — rename, add, or drop it',
       'pressure-test a goal against where you actually are, and right-size it with stepping-stones',
     ],
   },
@@ -50,6 +50,9 @@ export const CAPABILITIES: CapabilityGroup[] = [
       'set up a detour for travel, illness, or a rough stretch — your plan pauses, it never resets',
       'prescribe a specific session for today, and log what you actually did when you tell me',
       'change ONE thing in the plan without rebuilding it — move, retime, resize, drop or add a session, or swap what one contains (dead hangs instead of farmers carries)',
+      // The middle size (2026-08-31): between one edit and a from-scratch rebuild. Missing from
+      // this manifest was half of why "balance my week" got answered with per-session shuffling.
+      'rebalance your whole week around what you tell me — I draw it up, you apply it when it looks right',
       'give you a weekly check-in on how you showed up, and flag what I am noticing',
       'pull your week up on your screen to look back on, any time you ask',
       'build your next week from the same rhythm the moment you say the word',

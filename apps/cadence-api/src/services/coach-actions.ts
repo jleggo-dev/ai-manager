@@ -15,6 +15,7 @@ import { sanitizeTargets } from './nutrition-day.ts';
 import type { CoachActionTool } from './coach-action-types.ts';
 import { UPDATE_CONSTRAINT } from './coach-action-constraint.ts';
 import { UPDATE_EQUIPMENT } from './coach-action-equipment.ts';
+import { REBALANCE_WEEK } from './coach-action-rebalance.ts';
 import { OPEN_WEEK_REVIEW } from './coach-action-week-review.ts';
 import { BUILD_NEXT_WEEK } from './coach-action-build-week.ts';
 import { LOG_MEAL } from './coach-action-log-meal.ts';
@@ -489,6 +490,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
 
   open_week_review: OPEN_WEEK_REVIEW,
   build_next_week: BUILD_NEXT_WEEK,
+  // Tail tier (the drawer): the pick protocol's THREE SIZES rule names it in every session, which
+  // is the same-generation "knowing" the 0-of-3 measurement says actually fires behaviour;
+  // promotion to ALWAYS_ACTIONS stays an owner ruling (coach-tool-tiers.ts).
+  rebalance_week: REBALANCE_WEEK,
 
   log_meal: LOG_MEAL,
 
