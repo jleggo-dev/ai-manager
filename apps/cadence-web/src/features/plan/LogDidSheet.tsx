@@ -79,7 +79,7 @@ export function LogDidSheet({ onClose, onLogged }: { onClose: () => void; onLogg
               <div className="ld-empty">Nothing in your plan yet — jot it below.</div>
             ) : (
               activities.map((a) => {
-                const cat = categoryOf(a.title);
+                const cat = categoryOf(a.title, a.area);
                 const meta = [a.cadence, a.time_of_day].filter(Boolean).join(' · ');
                 return (
                   <button

@@ -10,7 +10,7 @@ import {
 import { getNowMenu } from '../../lib/api.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
 import { JournalWrite } from '../journal/JournalWrite.tsx';
-import { ICON, type Category } from '../today/category.ts';
+import { ICON, categoryOfArea, type Category } from '../today/category.ts';
 
 /**
  * "Do something now" — the present-tense half of the ＋ sheet (REQ10 §6, REQ9 §3.1).
@@ -169,12 +169,6 @@ function sessionFor(item: NowMenuItem): OccurrenceSession {
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 
-/** The pillar's two glyphs already ship: mind takes the mindset sun, practice the reflection moon
- *  (a 7am intention and a 10pm wind-down are different intentions, and the trail reads better for
- *  it). Body areas keep their own. */
-function areaIcon(area: NowMenuItem['area']): Category {
-  if (area === 'nourishment') return 'nutrition';
-  if (area === 'mind') return 'mindset';
-  if (area === 'practice') return 'reflection';
-  return 'movement';
-}
+/** One mapping for every surface — categoryOfArea (category.ts). Practice stopped borrowing the
+ *  reflection moon when it got its own family and glyph (2026-08-31). */
+const areaIcon = (area: NowMenuItem['area']): Category => categoryOfArea(area);

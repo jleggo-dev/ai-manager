@@ -22,6 +22,9 @@ export interface PlanViewOccurrence {
   status: OccurrenceStatus;
   time_of_day?: string;
   steps?: number; // prescribed-item count from a cached session (drives the trail's step ring)
+  /** The linked goal's area — the trail's icon family speaks the goal's own language rather than
+   *  guessing from the title (piano wore the exercise glyph for want of this, 2026-08-31). */
+  area?: 'movement' | 'nourishment' | 'mind' | 'practice';
 }
 export interface PlanViewDay {
   date: string; // YYYY-MM-DD
@@ -236,6 +239,9 @@ export async function buildPlanView(
     listOccurrences(userId, pastFrom, pastTo),
   ]);
   const stepCounts = new Map(stepRows.map((r) => [r.occurrence_id, r.steps]));
+  // Hoisted above the occurrence loop (2026-08-31): occurrences carry their goal's area now, so
+  // the trail's icon family comes from the goal itself instead of a title guess.
+  const goalById = new Map(goalsList.map((g) => [g.goal_id, g]));
   for (const o of occ) {
     const day = dayByDate.get(iso(o.date));
     const a = actById.get(o.activity_id);
@@ -248,6 +254,7 @@ export async function buildPlanView(
         status: o.status,
         time_of_day: a.schedule?.time_of_day,
         steps: stepCounts.get(o.occurrence_id),
+        ...(a.goal_id && goalById.get(a.goal_id)?.area ? { area: goalById.get(a.goal_id)!.area } : {}),
       });
     }
   }
@@ -258,9 +265,6 @@ export async function buildPlanView(
   // Rolling-window consistency over the LAST 7 days (days with ≥1 completion) — `past` was
   // fetched in the batch above.
   const { kept, window } = rollingConsistency(past, now, 7);
-
-  // Resolve goal links so the card can group "Toward <goal>" and colour by area without a second fetch.
-  const goalById = new Map(goalsList.map((g) => [g.goal_id, g]));
 
   return {
     hasPlan: true,

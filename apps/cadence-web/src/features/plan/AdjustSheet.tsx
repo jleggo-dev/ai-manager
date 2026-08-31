@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { replan, dismissReplanPreview } from '../../lib/api.ts';
+import { markWeekApplied } from '../../lib/applied-week-note.ts';
 import { Orb } from '../../components/Orb.tsx';
 import { SteerBox } from './SteerBox.tsx';
 import { useReplanPreview } from './useReplanPreview.ts';
@@ -59,6 +60,9 @@ export function AdjustSheet({
     try {
       const r = await replan();
       if (r.status === 'committed') {
+        // She opens the next chat visit with one line about the week they just applied
+        // (owner pick "B", 2026-08-31) — see lib/applied-week-note.ts.
+        markWeekApplied();
         onCommitted(r.note?.trim() || 'Updated your plan to fit how this stretch has been going.');
         onClose();
         return;

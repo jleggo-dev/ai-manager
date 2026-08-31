@@ -165,7 +165,9 @@ function TrailNode({
   /** Set on the one node the trail opens scrolled to — see `useLandOnNow`. */
   nodeRef?: RefObject<HTMLButtonElement>;
 }) {
-  const cat = categoryOf(occ.title);
+  // The goal's AREA is authoritative when present (piano wore the exercise glyph for want of
+  // it, 2026-08-31); the title regex is only the fallback for rows without one.
+  const cat = categoryOf(occ.title, occ.area);
   const ramp = RAMP[Math.round((n < 2 ? 0 : i / (n - 1)) * 5)]!;
   const done = occ.status === 'done';
   const touched = done || occ.status === 'skipped';

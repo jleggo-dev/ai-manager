@@ -6007,6 +6007,11 @@ textarea.wiz-title {
 .ld-ic-reflection {
   background: linear-gradient(168deg, oklch(66% 0.13 268), oklch(54% 0.14 266));
 }
+/* The fifth family (2026-08-31): piano and every practice like it — a warm plum between
+   mindset's gold and reflection's indigo, so a practice row reads as its own thing. */
+.ld-ic-practice {
+  background: linear-gradient(168deg, oklch(70% 0.13 330), oklch(58% 0.14 328));
+}
 .ld-row-t {
   flex: 1;
   min-width: 0;
