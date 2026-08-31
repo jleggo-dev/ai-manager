@@ -3,6 +3,14 @@ import type { Workout } from '../../lib/capability/index.ts';
 /** Pure helpers for the Apple Health import (kept out of the component file for fast refresh). */
 
 /**
+ * Set client-side after a successful HealthKit permission grant. There is no persisted
+ * "connected" flag on the server to read — asking again would mean re-firing the permission
+ * sheet just to check, which is exactly the silent-request behaviour this screen refuses to do
+ * elsewhere. The Settings Room's summary row reads this instead of asking HealthKit.
+ */
+export const HEALTH_CONNECTED_KEY = 'cadence.healthConnected';
+
+/**
  * "HKWorkoutActivityTypeTraditionalStrengthTraining" → "strength training".
  *
  * Never returns blank. HealthKit hands back an empty activity type for some workouts, and the

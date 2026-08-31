@@ -318,7 +318,12 @@ export {
   type Omittable,
 } from './api/progress-extras.ts';
 
-export { getProgressPhotoPair } from './api/progress-photos.ts';
+export {
+  getProgressPhotoPair,
+  getProgressPhotosStatus,
+  setProgressPhotosEnabled,
+  type ProgressPhotosStatus,
+} from './api/progress-photos.ts';
 
 export {
   getProgressLayoutDraft,

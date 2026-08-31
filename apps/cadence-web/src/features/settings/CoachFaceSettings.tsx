@@ -8,10 +8,15 @@ import { useCoachFace } from '../coach/coachFaceContext.ts';
  * The promise in the sub-line is literal, not reassurance: `PUT /me/coach-face` writes one text
  * column and touches nothing else. Tapping the picked face again clears it and returns Cadence
  * to the mark, so "no face" stays reachable after onboarding instead of being a one-time door.
+ *
+ * `startOpen` (Settings Room, SR-3): the room reaches this component through its own "Change the
+ * coach's face" door, so a second tap to reveal the grid would be a redundant step behind a
+ * step. Defaults to false so the original SettingsSheet mount — a self-toggling row — is
+ * unaffected.
  */
-export function CoachFaceSettings() {
+export function CoachFaceSettings({ startOpen = false }: { startOpen?: boolean } = {}) {
   const { faceId, face, setFaceId } = useCoachFace();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
 
   return (
     <div className="set-block">

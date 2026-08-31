@@ -68,3 +68,40 @@ export async function putProgressPhotosEnabled(enabled: boolean): Promise<{ enab
     return null;
   }
 }
+
+/** What the Settings Room's toggle row needs — the opt-in state and enough to say why it matters. */
+export interface ProgressPhotosStatus {
+  enabled: boolean;
+  count: number;
+  next_due: string | null;
+}
+
+/** GET /progress/photos — soft-fails to "off" so a lagging API never blocks the toggle row.
+ *  (The photos SCREEN uses `getProgressPhotos` above instead: it throws, so the screen can show
+ *  a real error state — two consumers, two deliberate failure contracts.) */
+export async function getProgressPhotosStatus(): Promise<ProgressPhotosStatus> {
+  try {
+    const res = await fetch(`${BASE}/progress/photos`, { headers: headers() });
+    if (!res.ok) return { enabled: false, count: 0, next_due: null };
+    const body = (await res.json()) as Partial<ProgressPhotosStatus>;
+    return { enabled: body.enabled === true, count: body.count ?? 0, next_due: body.next_due ?? null };
+  } catch {
+    return { enabled: false, count: 0, next_due: null };
+  }
+}
+
+/** PUT /progress/photos/enabled — flips the opt-in switch; returns what the server actually stored. */
+export async function setProgressPhotosEnabled(enabled: boolean): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE}/progress/photos/enabled`, {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({ enabled }),
+    });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { enabled?: boolean };
+    return body.enabled === true;
+  } catch {
+    return false;
+  }
+}
