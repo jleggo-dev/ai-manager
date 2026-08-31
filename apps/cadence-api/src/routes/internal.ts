@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { cadenceConfig } from '../config.ts';
 import { runTick } from '../services/notify/tick.ts';
+import { runSteeredRebalance } from '../services/rebalance-run.ts';
 
 /**
  * Machine-to-machine endpoints. NOT mounted under the user auth middleware — the caller is a
@@ -67,6 +68,32 @@ router.post('/notifications/tick', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[POST /internal/notifications/tick]', err);
     res.status(500).json({ error: 'tick failed' });
+  }
+});
+
+/**
+ * POST /internal/plan/rebalance — run one steered week rebalance to completion, in THIS
+ * invocation. The caller is the coach's `rebalance_week` tool making a self-request: a chat
+ * turn's invocation cannot carry a minutes-long synthesis (it froze mid-flight on 2026-08-31 and
+ * the user got silence), but a request of its own can — the same lifetime the app's Adjust
+ * button flow has always had. Outcomes are never silent: runSteeredRebalance logs every result
+ * and pushes on failure, so a retried or double-fired dispatch is at worst a second preview of
+ * the same steer.
+ */
+router.post('/plan/rebalance', async (req: Request, res: Response) => {
+  if (!requireCronSecret(req, res)) return;
+  const userId = typeof req.body?.userId === 'string' ? req.body.userId : '';
+  const steer = typeof req.body?.steer === 'string' ? req.body.steer.trim() : '';
+  if (!userId || !steer) {
+    res.status(400).json({ error: 'userId and steer (strings) required' });
+    return;
+  }
+  try {
+    const r = await runSteeredRebalance(userId, steer);
+    res.json(r);
+  } catch (err) {
+    console.error('[POST /internal/plan/rebalance]', err);
+    res.status(500).json({ error: 'rebalance failed' });
   }
 });
 

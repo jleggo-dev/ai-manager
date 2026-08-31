@@ -1,6 +1,5 @@
 import { getUser } from '../repos/users.ts';
-import { previewReplan } from './replan.ts';
-import { runInBackground } from './background.ts';
+import { dispatchRebalance } from './rebalance-run.ts';
 import type { CoachActionTool } from './coach-action-types.ts';
 
 /**
@@ -14,10 +13,13 @@ import type { CoachActionTool } from './coach-action-types.ts';
  * Apply button, pending recovery, and ready-push — had been driving the app's "Adjust my plan"
  * button all along. This tool is that same machinery, reachable from the conversation.
  *
- * Fire-and-forget by necessity: synthesis is measured in MINUTES (271s for four goals —
- * scripts/probe-replan-preview.ts), and a turn cannot hold a tool round open that long. The
- * work rides `runInBackground`; the user gets the same push and preview card the button flow
- * sends, and the return text tells the coach exactly what she may and may not claim.
+ * Dispatched, not carried: synthesis is measured in MINUTES (271s for four goals —
+ * scripts/probe-replan-preview.ts), and a chat turn's invocation can neither hold a tool round
+ * open that long nor keep background work alive that long — the first live run (2026-08-31,
+ * 11:41) froze mid-synthesis and the user got silence. `dispatchRebalance` hands the work an
+ * invocation of its own (a self-request to /internal/plan/rebalance on Vercel; in-process
+ * locally), and every outcome is logged and pushed — see rebalance-run.ts. The return text
+ * tells the coach exactly what she may and may not claim.
  */
 export const REBALANCE_WEEK: CoachActionTool = {
   name: 'rebalance_week',
@@ -56,7 +58,7 @@ export const REBALANCE_WEEK: CoachActionTool = {
       );
     }
 
-    runInBackground('rebalance_week', previewReplan(userId, steer));
+    dispatchRebalance(userId, steer);
 
     return (
       'Started — the new week is being drawn up around your steer. It takes a few MINUTES: they will get a ' +
