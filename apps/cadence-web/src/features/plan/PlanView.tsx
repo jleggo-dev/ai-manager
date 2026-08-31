@@ -126,8 +126,9 @@ export function PlanView({
   }, [reloadSignal, refetch]);
 
   /**
-   * A week the coach drew must find its way to the screen. `rebalance_week` (and any server-side
-   * path) stores a pending proposal and pushes — but until this ran, the ONLY in-app surface was
+   * A week the coach drew must find its way to the screen. Any server-side path (historically
+   * the retired rebalance_week dispatch; today a script or future proactive flow) stores a
+   * pending proposal and pushes — but until this ran, the ONLY in-app surface was
    * a live Adjust flow the user had started themselves: a finished 16-activity rebalance sat
    * invisible in pending_plan while its owner asked where it was (2026-08-31). On mount, ask; if
    * one is waiting, open the review sheet on it. Suggest-never-auto-apply is untouched — the
@@ -135,15 +136,27 @@ export function PlanView({
    */
   useEffect(() => {
     let alive = true;
-    void getPendingReplan()
-      .then(({ proposal }) => {
-        if (!alive || !proposal) return;
-        setAdjustMode('rebalance');
-        setAdjustOpen(true);
-      })
-      .catch(() => {
-        /* best-effort; the push and the coach can both still route them here */
-      });
+    /**
+     * Retries, because the first mount races auth (paint-before-auth, #311): the tokenless read
+     * 401s, and a failed read is UNKNOWN — treating it as "nothing pending" hid a finished
+     * rebalance until the owner left the screen and came back (2026-08-31). A real "nothing
+     * pending" answer stops the loop on the first try.
+     */
+    const delays = [0, 2000, 5000, 12000];
+    void (async () => {
+      for (const ms of delays) {
+        if (ms) await new Promise((r) => setTimeout(r, ms));
+        if (!alive) return;
+        const { ok, proposal } = await getPendingReplan();
+        if (!alive) return;
+        if (proposal) {
+          setAdjustMode('rebalance');
+          setAdjustOpen(true);
+          return;
+        }
+        if (ok) return; // a genuine "nothing pending" — done
+      }
+    })();
     return () => {
       alive = false;
     };
