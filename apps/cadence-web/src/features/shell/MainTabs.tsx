@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { PlanView } from '../plan/PlanView.tsx';
 import { OnboardingChat } from '../onboarding/OnboardingChat.tsx';
 import { ProgressView } from '../progress/ProgressView.tsx';
-import { SettingsSheet } from '../settings/SettingsSheet.tsx';
+import { SettingsRoom } from '../settings/SettingsRoom.tsx';
 import { AdjustSheet } from '../plan/AdjustSheet.tsx';
 import { LogDidSheet } from '../plan/LogDidSheet.tsx';
 import { ReviewScreen } from '../review/ReviewScreen.tsx';
@@ -79,7 +79,13 @@ export function MainTabs({
   const [guide, setGuide] = useState<boolean>(!!discussPlan);
   /** The plan card as a sheet over the chat — the "toggle back to the conversation" surface. */
   const [planCardOpen, setPlanCardOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  /**
+   * The Settings Room (SR-3) — a full screen, same idiom as `food` below: it replaces whichever
+   * tab's content is showing while the tab bar stays put, and closing it returns to that tab.
+   * Replaced the SettingsSheet mount (now unreachable UI, kept mounted-out but intact — the lead
+   * deletes it at integration).
+   */
+  const [settingsRoomOpen, setSettingsRoomOpen] = useState(false);
   const [manage, setManage] = useState(false);
   const [offerAdjust, setOfferAdjust] = useState(false);
   /**
@@ -136,7 +142,7 @@ export function MainTabs({
   return (
     <>
       <div className="app">
-        {tab === 'plan' && !food && (
+        {tab === 'plan' && !food && !settingsRoomOpen && (
           <PlanView
             onCoach={(note) => {
               if (note) setCoachNote(note);
@@ -152,7 +158,7 @@ export function MainTabs({
             }}
           />
         )}
-        {tab === 'plan' && food && (
+        {tab === 'plan' && food && !settingsRoomOpen && (
           <FoodHome
             initialSub={food === 'shop' ? 'shop' : null}
             onBack={() => setFood(null)}
@@ -162,6 +168,17 @@ export function MainTabs({
               setTab('coach');
             }}
             onLogged={() => setPlanReload((k) => k + 1)}
+          />
+        )}
+        {settingsRoomOpen && (
+          <SettingsRoom
+            email={email}
+            onBack={() => setSettingsRoomOpen(false)}
+            onCoach={(note) => {
+              setCoachNote(note);
+              setSettingsRoomOpen(false);
+              setTab('coach');
+            }}
           />
         )}
         {/**
@@ -186,7 +203,7 @@ export function MainTabs({
             tab bar pushed off, the app apparently frozen (owner, 2026-08-16). `display: contents`
             removes the wrapper from layout entirely, so the chat stays a direct flex child exactly
             as it was before it was wrapped. */}
-        <div style={{ display: tab === 'coach' ? 'contents' : 'none' }}>
+        <div style={{ display: tab === 'coach' && !settingsRoomOpen ? 'contents' : 'none' }}>
           <>
             <OnboardingChat
               intent="ongoing"
@@ -207,7 +224,7 @@ export function MainTabs({
             </button>
           </>
         </div>
-        {tab === 'progress' && (
+        {tab === 'progress' && !settingsRoomOpen && (
           <ProgressView
             onCoach={(note) => {
               setCoachNote(note);
@@ -215,7 +232,7 @@ export function MainTabs({
             }}
           />
         )}
-        {tab !== 'coach' && !food && (
+        {tab !== 'coach' && !food && !settingsRoomOpen && (
           <button className="fab" onClick={() => setLogDidOpen(true)} aria-label="Log something you did">
             ＋
           </button>
@@ -245,7 +262,7 @@ export function MainTabs({
             <ProgressIcon />
             <span>Progress</span>
           </button>
-          <button className="tab" onClick={() => setSettingsOpen(true)} aria-label="Settings">
+          <button className="tab" onClick={() => setSettingsRoomOpen(true)} aria-label="Settings">
             <GearIcon />
             <span>Settings</span>
           </button>
@@ -269,9 +286,6 @@ export function MainTabs({
           </>
         )}
         {planCardOpen && <PlanCardSheet onClose={() => setPlanCardOpen(false)} />}
-        {settingsOpen && (
-          <SettingsSheet email={email} onClose={() => setSettingsOpen(false)} onManage={() => setManage(true)} />
-        )}
         {offerAdjust && (
           <AdjustSheet
             onClose={() => setOfferAdjust(false)}
