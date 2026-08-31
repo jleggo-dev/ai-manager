@@ -1,6 +1,6 @@
 import type { WidgetPayload, WidgetSpec } from '@cadence/shared';
 import { WIDGET_REGISTRY } from './widgetRegistry.ts';
-import { headerGlyphPath, headerTag, type WidgetFamily } from './cardHeader.ts';
+import { deadlineTag, familyOfArea, headerGlyphPath, headerTag, type WidgetFamily } from './cardHeader.ts';
 import '../../../styles/progress-widgets.css';
 
 /**
@@ -23,6 +23,9 @@ export function WidgetSection({
   family?: WidgetFamily;
 }) {
   const render = WIDGET_REGISTRY[payload.kind];
+  // The layout's own stamped area (server-written from the goal row) beats the binding's guess;
+  // the binding's honest family beats neutral. Never a guess beyond those two.
+  const chipFamily: WidgetFamily = spec.area ? familyOfArea(spec.area) : (family ?? 'neutral');
   if (payload.kind === 'history') {
     return (
       <div>
@@ -39,14 +42,17 @@ export function WidgetSection({
     <div className="pw-card">
       {spec.title && (
         <div className="pw-head">
-          <span className={`pw-glyph pw-glyph--${family ?? 'neutral'}`} aria-hidden>
+          <span className={`pw-glyph pw-glyph--${chipFamily}`} aria-hidden>
             <svg viewBox="0 0 24 24" width="16" height="16">
               <path d={headerGlyphPath(payload.kind)} fill="currentColor" />
             </svg>
           </span>
           <span className="pw-head-t">
             <b>{spec.title}</b>
-            <span className="pw-head-tag">{headerTag(payload)}</span>
+            <span className="pw-head-tag">
+              {headerTag(payload)}
+              {deadlineTag(spec, payload.kind)}
+            </span>
           </span>
           <span className="pw-head-chev" aria-hidden>
             ›

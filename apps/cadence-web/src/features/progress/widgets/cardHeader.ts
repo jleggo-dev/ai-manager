@@ -1,4 +1,4 @@
-import type { GoalArea, WidgetKind, WidgetPayload } from '@cadence/shared';
+import type { GoalArea, WidgetKind, WidgetPayload, WidgetSpec } from '@cadence/shared';
 import { GLYPH, type GlyphName } from '../../today/glyphs.ts';
 import { formatCaptionNumber } from './caption.ts';
 
@@ -41,6 +41,27 @@ const KIND_GLYPH: Record<WidgetKind, GlyphName> = {
 
 export function headerGlyphPath(kind: WidgetKind): string {
   return GLYPH[KIND_GLYPH[kind]];
+}
+
+/** Kinds whose card is one goal's — the only place the deadline countdown belongs. */
+const GOAL_SCOPED: ReadonlySet<WidgetKind> = new Set(['stage_path', 'count_toward']);
+
+/**
+ * "· Oct 4 · 34 days out" — appended to a goal-scoped card's tag when the layout carries the
+ * goal's deadline (stamped server-side from the goal row). A deadline that has passed appends
+ * nothing: the tab counts what happened, and an overdue tag would be a scoreboard.
+ */
+export function deadlineTag(spec: WidgetSpec, kind: WidgetKind, now = new Date()): string {
+  if (!spec.deadline || !GOAL_SCOPED.has(kind)) return '';
+  const end = new Date(`${spec.deadline}T12:00:00`);
+  if (Number.isNaN(end.getTime())) return '';
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round(
+    (new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime() - today.getTime()) / 86400000,
+  );
+  if (days < 0) return '';
+  const date = end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return days === 0 ? ` · ${date} · today` : ` · ${date} · ${days} ${days === 1 ? 'day' : 'days'} out`;
 }
 
 /** The mono-caps measure line under the title. Every fact here comes from the payload the

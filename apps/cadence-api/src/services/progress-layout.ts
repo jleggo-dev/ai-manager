@@ -29,6 +29,33 @@ export type DefaultLayoutOptions = Record<string, unknown>;
 const goalWidgetId = (g: Goal) => `w-goal-${g.goal_id}`;
 const stageWidgetId = (g: Goal) => `w-goal-${g.goal_id}-stage`;
 
+/**
+ * The goal facts a card wears (chip family color, the "34 days out" tag) — read off the goal row
+ * itself, the one writer for these fields. The composing model never sets them; see
+ * `stampGoalFacts` for the coach-composed path.
+ */
+const goalFacts = (g: Goal): Pick<WidgetSpec, 'area' | 'deadline'> => ({
+  ...(g.area ? { area: g.area } : {}),
+  ...(g.timeframe?.end ? { deadline: g.timeframe.end } : {}),
+});
+
+/**
+ * Stamp goal facts onto a composed layout's goal-linked sections (matched by `source.goal_id`).
+ * Runs AFTER validation on the coach-composed path, deterministically overwriting anything the
+ * model may have written into these fields — the model picks the sections, the goal rows supply
+ * the facts.
+ */
+export function stampGoalFacts(layout: ProgressLayout, goals: Goal[]): ProgressLayout {
+  const byId = new Map(goals.map((g) => [g.goal_id, g]));
+  return {
+    ...layout,
+    sections: layout.sections.map((s) => {
+      const g = s.source?.goal_id ? byId.get(s.source.goal_id) : undefined;
+      return g ? { ...s, ...goalFacts(g) } : s;
+    }),
+  };
+}
+
 /* ── Goal classification (the composer's only "judgement calls") ─────────────────────────── */
 
 const isRecurring = (g: Goal) => g.type === 'recurring';
@@ -64,15 +91,23 @@ function deriveRhythm(goals: Goal[]): WidgetSpec | null {
 }
 
 function deriveWeightGoals(goals: Goal[]): WidgetSpec[] {
-  return goals
-    .filter(isWeightGoal)
-    .map((g) => ({ id: goalWidgetId(g), kind: 'trend_vs_target', title: g.title, source: { measure: 'weight' } }));
+  return goals.filter(isWeightGoal).map((g) => ({
+    id: goalWidgetId(g),
+    kind: 'trend_vs_target' as const,
+    title: g.title,
+    source: { measure: 'weight' },
+    ...goalFacts(g),
+  }));
 }
 
 function deriveMovementActivities(goals: Goal[]): WidgetSpec[] {
-  return goals
-    .filter(isMovementActivity)
-    .map((g) => ({ id: goalWidgetId(g), kind: 'dated_sessions', title: g.title, source: { activity: g.title } }));
+  return goals.filter(isMovementActivity).map((g) => ({
+    id: goalWidgetId(g),
+    kind: 'dated_sessions' as const,
+    title: g.title,
+    source: { activity: g.title },
+    ...goalFacts(g),
+  }));
 }
 
 function deriveMovementEngagement(goals: Goal[]): WidgetSpec | null {
@@ -90,15 +125,23 @@ function deriveNourishmentEngagement(goals: Goal[]): WidgetSpec[] {
 }
 
 function deriveCountToward(goals: Goal[]): WidgetSpec[] {
-  return goals
-    .filter(isCountGoal)
-    .map((g) => ({ id: goalWidgetId(g), kind: 'count_toward', title: g.title, source: { goal_id: g.goal_id } }));
+  return goals.filter(isCountGoal).map((g) => ({
+    id: goalWidgetId(g),
+    kind: 'count_toward' as const,
+    title: g.title,
+    source: { goal_id: g.goal_id },
+    ...goalFacts(g),
+  }));
 }
 
 function deriveStagePath(goals: Goal[]): WidgetSpec[] {
-  return goals
-    .filter(hasSteppingStones)
-    .map((g) => ({ id: stageWidgetId(g), kind: 'stage_path', title: g.title, source: { goal_id: g.goal_id } }));
+  return goals.filter(hasSteppingStones).map((g) => ({
+    id: stageWidgetId(g),
+    kind: 'stage_path' as const,
+    title: g.title,
+    source: { goal_id: g.goal_id },
+    ...goalFacts(g),
+  }));
 }
 
 function deriveBalance(goals: Goal[]): WidgetSpec | null {
@@ -108,9 +151,13 @@ function deriveBalance(goals: Goal[]): WidgetSpec | null {
 }
 
 function deriveTotals(goals: Goal[]): WidgetSpec[] {
-  return goals
-    .filter(isMindPracticeTotal)
-    .map((g) => ({ id: goalWidgetId(g), kind: 'total', title: g.title, source: { goal_id: g.goal_id } }));
+  return goals.filter(isMindPracticeTotal).map((g) => ({
+    id: goalWidgetId(g),
+    kind: 'total' as const,
+    title: g.title,
+    source: { goal_id: g.goal_id },
+    ...goalFacts(g),
+  }));
 }
 
 function deriveShelf(goals: Goal[]): WidgetSpec | null {

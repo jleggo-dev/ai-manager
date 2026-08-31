@@ -12,6 +12,7 @@
  * treat it as frozen during a wave — if it blocks you, report, don't edit.
  */
 
+import type { GoalArea } from './baseline.ts';
 import type { HistoryEntry, SeriesPoint } from './progress.ts';
 
 /* Temporal kinds read differently at different windows; non-temporal kinds
@@ -65,6 +66,11 @@ export interface WidgetSpec {
   title?: string;
   source?: WidgetSource;
   caption?: WidgetCaption;
+  /** The linked goal's area — stamped by the SERVER from the goal row itself (one writer per
+   *  fact; the composing model never sets it). Drives the card chip's family color. */
+  area?: GoalArea;
+  /** The linked goal's end date (YYYY-MM-DD), same provenance — drives the "34 days out" tag. */
+  deadline?: string;
 }
 
 /** The page composition. The DEFAULT layout is computed deterministically from

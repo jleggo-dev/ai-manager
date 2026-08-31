@@ -13,7 +13,7 @@ import type { ProgressLayout } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getCommitted, insertDraft } from '../repos/progress-layouts.ts';
-import { defaultLayout } from './progress-layout.ts';
+import { defaultLayout, stampGoalFacts } from './progress-layout.ts';
 import { widgetCatalog } from './progress-layout-catalog.ts';
 import { buildAvailability } from './progress-layout-availability.ts';
 import { validateComposedLayout } from './progress-layout-validate.ts';
@@ -82,6 +82,8 @@ export async function composeProgressLayout(
 
   if (!result.ok) return { ok: false, reasons: result.reasons };
 
-  const row = await insertDraft(userId, result.layout);
+  // The model picked the sections; the goal rows supply the facts (area, deadline) — stamped
+  // here so a committed layout carries them the same way the deterministic default does.
+  const row = await insertDraft(userId, stampGoalFacts(result.layout, goals));
   return { ok: true, draft_id: row.id, layout: row.layout };
 }

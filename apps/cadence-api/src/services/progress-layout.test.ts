@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Goal } from '@cadence/shared';
-import { defaultLayout } from './progress-layout.ts';
+import { defaultLayout, stampGoalFacts } from './progress-layout.ts';
 
 /** Minimal, explicit Goal fixture — every test spells out goal_id/title/area/type so assertions
  *  read directly off the fixture, and a non-numeric default target so a goal is inert to every
@@ -237,5 +237,49 @@ describe('defaultLayout', () => {
       'w-recap',
       'w-history',
     ]);
+  });
+});
+
+describe('goal facts on specs (owner design "Cadence Progress": chip family + deadline tag)', () => {
+  it('per-goal sections carry the goal area and deadline; cross-goal sections carry neither', () => {
+    const race = goal({
+      goal_id: 'race-1',
+      title: 'Obstacle race',
+      area: 'movement',
+      type: 'milestone',
+      timeframe: { end: '2026-10-04' },
+      milestones: [{ id: 'm1', label: '5k without stopping' }],
+    });
+    const layout = defaultLayout([race]);
+    const stage = layout.sections.find((s) => s.kind === 'stage_path')!;
+    expect(stage.area).toBe('movement');
+    expect(stage.deadline).toBe('2026-10-04');
+    const shelf = layout.sections.find((s) => s.kind === 'shelf')!;
+    expect(shelf.area).toBeUndefined();
+    expect(shelf.deadline).toBeUndefined();
+  });
+
+  it('stampGoalFacts overwrites model-written facts on goal-linked sections and leaves the rest', () => {
+    const race = goal({
+      goal_id: 'race-1',
+      title: 'Obstacle race',
+      area: 'movement',
+      type: 'milestone',
+      timeframe: { end: '2026-10-04' },
+    });
+    const stamped = stampGoalFacts(
+      {
+        version: 1,
+        status: 'draft',
+        sections: [
+          // The model wrote a wrong area — the goal row wins.
+          { id: 'a', kind: 'stage_path', source: { goal_id: 'race-1' }, area: 'practice' },
+          { id: 'b', kind: 'shelf' },
+        ],
+      },
+      [race],
+    );
+    expect(stamped.sections[0]).toMatchObject({ area: 'movement', deadline: '2026-10-04' });
+    expect(stamped.sections[1]!.area).toBeUndefined();
   });
 });
