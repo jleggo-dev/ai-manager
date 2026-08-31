@@ -8,8 +8,8 @@ export type AiLogKind =
   | 'pack_summarize'
   | 'context_select'
   | 'coach_tool'
-  // The steered whole-week redraw's OUTCOME — logged so a background synthesis can never die
-  // silently again (2026-08-31; see rebalance-run.ts).
+  // HISTORICAL — the retired background whole-week redraw (built and retired 2026-08-31; the
+  // coach reshapes a week through propose_plan_change now). Kept because logged rows reference it.
   | 'rebalance_week'
   | 'synthesize_plan'
   | 'assess_goal'
