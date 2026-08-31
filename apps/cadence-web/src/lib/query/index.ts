@@ -18,4 +18,7 @@ export {
   useProgressCount,
 } from './useProgressExtras.ts';
 export { useRecaps } from './useRecaps.ts';
+export { planSignature, useWatchSync } from './useWatchSync.ts';
+export { drainWatchLogs, useWatchLogInbox } from './useWatchLogInbox.ts';
+export { useWatchPortraitSync } from './useWatchPortraitSync.ts';
 export { useProgressLayoutDraft } from './useProgressLayout.ts';

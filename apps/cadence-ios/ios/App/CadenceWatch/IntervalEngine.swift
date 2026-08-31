@@ -79,14 +79,36 @@ enum IntervalEngine {
             }
             for r in 1...set.rounds {
                 globalRound += 1
-                phases.append(IntervalPhase(kind: .work, label: "Push", seconds: set.workSec, round: r, globalRound: globalRound))
+                // Labels are the ENGINE's output, not this port's choice — interval.ts says "Work"
+                // and "Recover", the phone player renders them verbatim (StepInterval.tsx), and the
+                // watch showing different words for the same phase was a real drift the parity
+                // check caught. Renaming them is a product decision in interval.ts, flowing to both.
+                phases.append(IntervalPhase(kind: .work, label: "Work", seconds: set.workSec, round: r, globalRound: globalRound))
                 if set.recoverSec > 0 {
-                    phases.append(IntervalPhase(kind: .recover, label: "Breathe", seconds: set.recoverSec, round: r, globalRound: globalRound))
+                    phases.append(IntervalPhase(kind: .recover, label: "Recover", seconds: set.recoverSec, round: r, globalRound: globalRound))
                 }
             }
         }
         if p.cooldownSec > 0 { phases.append(IntervalPhase(kind: .neutral, label: "Cool-down", seconds: p.cooldownSec)) }
         return phases
+    }
+
+    /**
+     How many rounds have fully ended by `elapsed` — a round ends when the last phase carrying its
+     number ends. Keyed on `globalRound`, never `round`: per-set numbering restarts at 1, so keying
+     on that would collapse set 2's round 1 onto set 1's and undercount the whole run.
+
+     interval.ts's `roundsCompleted`, verbatim in Swift. This is what makes "stopping early keeps
+     the rounds you did" a fact rather than a promise.
+     */
+    static func roundsCompleted(_ phases: [IntervalPhase], elapsed: Double) -> Int {
+        var endsAt: [Int: Double] = [:]
+        var acc = 0.0
+        for phase in phases {
+            acc += Double(max(0, phase.seconds))
+            if let round = phase.globalRound { endsAt[round] = acc }
+        }
+        return endsAt.values.filter { elapsed >= $0 }.count
     }
 
     static func totalRounds(_ plan: IntervalPlan) -> Int {

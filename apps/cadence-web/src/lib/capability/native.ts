@@ -10,6 +10,7 @@ import { readDailySteps } from './health-steps.ts';
 import { recordedDistanceKm } from './workout-distance.ts';
 import { webCapabilities } from './web.ts';
 import { nativeWorkoutPlan } from './workout-plan-native.ts';
+import { nativeWatchSync } from './watch-sync-native.ts';
 
 /**
  * The local Swift plugin that donates the coach's portrait (ios/App/App/CadenceCoachIdentity).
@@ -353,5 +354,6 @@ export const nativeCapabilities: Capabilities = {
     },
   },
   workoutPlan: nativeWorkoutPlan,
+  watchSync: nativeWatchSync,
   dictation: webCapabilities.dictation,
 };

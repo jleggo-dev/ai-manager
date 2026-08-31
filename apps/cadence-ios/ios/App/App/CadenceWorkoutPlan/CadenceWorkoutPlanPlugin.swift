@@ -267,32 +267,20 @@ public class CadenceWorkoutPlanPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    /** Names arrive in WorkoutKit's own vocabulary (`WorkoutActivity` in workout-plan.ts maps
-     *  1:1), so an unknown name is a version-skew bug — `.other` keeps the session schedulable
-     *  while the skew is fixed rather than losing the workout over a label. */
+    /**
+     Name → HealthKit type, via the GENERATED map (`Shared/WorkoutActivityMap.swift`).
+
+     The table used to live here by hand, in eleven cases, and again in the watch target — three
+     copies of one mapping. It is now generated from `packages/cadence-shared/src/workout-activities.ts`
+     and compiled into both targets, so the phone and the watch cannot disagree about what a
+     session is.
+     */
     private static func activityType(_ name: String?) -> HKWorkoutActivityType {
-        switch name {
-        case "running": return .running
-        case "walking": return .walking
-        case "hiking": return .hiking
-        case "cycling": return .cycling
-        case "swimming": return .swimming
-        case "rowing": return .rowing
-        case "highIntensityIntervalTraining": return .highIntensityIntervalTraining
-        case "functionalStrengthTraining": return .functionalStrengthTraining
-        case "traditionalStrengthTraining": return .traditionalStrengthTraining
-        case "coreTraining": return .coreTraining
-        case "yoga": return .yoga
-        default: return .other
-        }
+        HKWorkoutActivityType.fromCadenceName(name ?? "")
     }
 
     private static func locationType(_ name: String?) -> HKWorkoutSessionLocationType {
-        switch name {
-        case "outdoor": return .outdoor
-        case "indoor": return .indoor
-        default: return .unknown
-        }
+        HKWorkoutSessionLocationType.fromCadenceName(name ?? "")
     }
 
     // MARK: - Dates

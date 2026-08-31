@@ -12,10 +12,14 @@ import WatchKit
  */
 struct IntervalPlayerView: View {
     let session: WatchSession
-    @StateObject private var workout = WorkoutController()
+    @EnvironmentObject private var workout: WorkoutController
     @State private var startDate: Date? = nil
     @State private var pausedElapsed: Double = 0
     @State private var lastHapticIndex = -1
+    @State private var finished = false
+    @Environment(\.dismiss) private var dismiss
+    /** Always-On. The brief for face 11: dim ring, numeral in the DONE stop, no HR. */
+    @Environment(\.isLuminanceReduced) private var alwaysOn
 
     private var phases: [IntervalPhase] {
         IntervalEngine.expand(session.interval?.plan
@@ -23,15 +27,41 @@ struct IntervalPlayerView: View {
     }
 
     var body: some View {
-        TabView {
-            playerFace
-            controlsFace
+        Group {
+            if finished {
+                DoneView(session: session, facts: facts, onFinish: submit)
+            } else {
+                TabView {
+                    playerFace
+                    controlsFace
+                }
+                .tabViewStyle(.page)
+            }
         }
-        .tabViewStyle(.page)
-        .navigationBarBackButtonHidden(startDate != nil)
+        .navigationBarBackButtonHidden(startDate != nil && !finished)
         .onAppear { workout.requestAuthorization() }
         .onDisappear { workout.end() }
         .background(Color.black)
+    }
+
+    /**
+     The three facts the Done face shows — rounds DONE, time moved, average heart rate.
+
+     Rounds completed is counted from the phases actually walked, so stopping early keeps the
+     rounds you did. That is the controls page's written promise, and this is where it has to be
+     true rather than merely stated.
+     */
+    private var facts: [DoneFact] {
+        let elapsed = currentElapsed(at: Date())
+        let done = IntervalEngine.roundsCompleted(phases, elapsed: elapsed)
+        var out: [DoneFact] = [
+            DoneFact(label: "rounds", value: "\(done)"),
+            DoneFact(label: "moved", value: String(format: "%d:%02d", Int(elapsed) / 60, Int(elapsed) % 60)),
+        ]
+        if let bpm = workout.averageHeartRate {
+            out.append(DoneFact(label: "avg bpm", value: "\(bpm)"))
+        }
+        return out
     }
 
     private var playerFace: some View {
@@ -39,41 +69,56 @@ struct IntervalPlayerView: View {
             let elapsed = currentElapsed(at: timeline.date)
             let at = IntervalEngine.position(in: phases, elapsed: elapsed)
             let phase = phases.indices.contains(at.index) ? phases[at.index] : nil
-            let fill = Theme.phaseFill(phase?.kind ?? .neutral)
+            // The done stop when dimmed, exactly as face 11 specifies — a phase colour at full
+            // brightness on an always-on screen both costs battery and overstates how live it is.
+            let kind = phase?.kind ?? .neutral
+            let fill = alwaysOn ? Theme.phaseDone(kind) : Theme.phaseFill(kind)
 
             VStack(spacing: 4) {
                 if let round = phase?.globalRound {
                     Text("Round \(round) of \(IntervalEngine.totalRounds(session.interval?.plan ?? IntervalPlan(warmupSec: 0, sets: [], restBetweenSetsSec: 0, cooldownSec: 0)))")
-                        .font(.footnote.weight(.bold)).foregroundStyle(Theme.linen)
+                        .font(Theme.display(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.linen)
                 }
                 ZStack {
                     WedgeRing(phases: phases, index: at.index, progress: at.progress, lineWidth: 8)
                     VStack(spacing: 0) {
                         Text(phase?.label ?? "Ready")
-                            .font(.caption.weight(.heavy)).foregroundStyle(fill)
+                            .font(Theme.display(13, .extrabold, relativeTo: .caption)).foregroundStyle(fill)
                         Text(clockText(at.remaining, elapsed: elapsed))
-                            .font(.system(size: 44, weight: .heavy, design: .default))
-                            .monospacedDigit()
+                            .font(Theme.mono(44))
                             .foregroundStyle(startDate == nil ? Theme.linen : fill)
                     }
                 }
                 HStack {
-                    if let bpm = workout.heartRate {
+                    if let bpm = workout.heartRate, !alwaysOn {
                         Text("\(bpm)")
-                            .font(.system(.body, design: .monospaced).weight(.bold))
+                            .font(Theme.mono(16))
                             .foregroundStyle(Theme.linen)
-                        Text("bpm").font(.caption2.weight(.bold)).foregroundStyle(Theme.textMute)
+                        Text("bpm").font(Theme.display(11, .bold, relativeTo: .caption2)).foregroundStyle(Theme.textMute)
                     }
                     Spacer()
-                    Text(startDate == nil ? "tap to start" : "tap to pause")
-                        .font(.caption2).foregroundStyle(Theme.textMute)
+                    if !alwaysOn {
+                        Text(startDate == nil ? "tap to start" : "tap to pause")
+                            .font(Theme.display(11, .regular, relativeTo: .caption2))
+                            .foregroundStyle(Theme.textMute)
+                    }
                 }
             }
             .padding(.horizontal, 6)
+            .dimmedWhenAlwaysOn(alwaysOn)
             .contentShape(Rectangle())
             .onTapGesture(perform: toggle)
             .onChange(of: at.index) { _, newIndex in
                 handover(to: newIndex)
+            }
+            .onChange(of: at.done) { _, isDone in
+                // The walk finished on its own. End the workout and show what happened — the
+                // player never sits on a finished clock waiting to be dismissed.
+                if isDone && startDate != nil {
+                    workout.end()
+                    startDate = nil
+                    finished = true
+                }
             }
         }
     }
@@ -90,9 +135,11 @@ struct IntervalPlayerView: View {
             }
             controlButton("End", system: "stop.fill", tint: Theme.sun) {
                 workout.end()
+                startDate = nil
+                finished = true
             }
             Text("Stopping early keeps the rounds you did.")
-                .font(.caption2).foregroundStyle(Theme.textMute)
+                .font(Theme.display(11, .regular, relativeTo: .caption2)).foregroundStyle(Theme.textMute)
                 .multilineTextAlignment(.center)
         }
         .padding(.horizontal, 4)
@@ -103,7 +150,7 @@ struct IntervalPlayerView: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: system)
-                Text(label).font(.caption2.weight(.bold))
+                Text(label).font(Theme.display(11, .bold, relativeTo: .caption2))
             }
             .frame(maxWidth: .infinity, minHeight: 56)
         }
@@ -143,6 +190,28 @@ struct IntervalPlayerView: View {
         }
         pausedElapsed = acc
         if startDate != nil { startDate = Date() }
+    }
+
+    /**
+     Send what happened, then leave.
+
+     Rounds are the ones actually COMPLETED, from `roundsCompleted` — which is what makes the
+     controls page's promise ("stopping early keeps the rounds you did") true in the record and
+     not only on the screen. Before this the Done button did nothing at all.
+     */
+    private func submit(_ felt: FeltAnswer?, _ note: String) {
+        let elapsed = currentElapsed(at: Date())
+        var log = WatchSessionLog(
+            occurrenceId: session.occurrenceId,
+            finishedAt: ISO8601DateFormatter().string(from: Date()),
+            kind: session.kind.rawValue
+        )
+        log.rounds = IntervalEngine.roundsCompleted(phases, elapsed: elapsed)
+        log.elapsedSec = Int(elapsed)
+        log.felt = felt?.rawValue
+        log.note = note.isEmpty ? nil : note
+        WatchLogSender.shared.send(log)
+        dismiss()
     }
 
     private func handover(to index: Int) {

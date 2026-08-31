@@ -5,12 +5,14 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "description": "Cadence domain types (spec §5) + Broker job contract shapes (spec §C4). Shared by @cadence/api and @cadence/web.",
+  "description": "Cadence domain types (spec \u00a75) + Broker job contract shapes (spec \u00a7C4). Shared by @cadence/api and @cadence/web.",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
-    "lint:fix": "eslint . --fix --max-warnings 0"
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "gen:interval-parity": "tsx scripts/gen-interval-parity.ts",
+    "gen:workout-activities": "tsx scripts/gen-workout-activities.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

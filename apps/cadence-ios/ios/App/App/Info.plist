@@ -42,7 +42,7 @@
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Cadence doesn't write to Apple Health today. If that ever changes, it will only save what you asked it to.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Cadence uses your rough location for local weather and to notice when you're traveling, so the plan can bend with you. It never tracks where you go.</string>
+	<string>Cadence uses your rough location for local weather and to notice when you're traveling, so the plan can bend with you. It's checked while you have the app open, never followed in the background.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Cadence uses the microphone when you tap the mic, so you can talk to your coach instead of typing. It only listens while you have it on, and you see what it heard before anything is sent.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

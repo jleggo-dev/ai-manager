@@ -68,6 +68,17 @@ export const webCapabilities: Capabilities = {
     listScheduled: async () => [],
     remove: async () => 0,
   },
+  // A browser has no watch on the other end. Same contract as workoutPlan: unavailable means
+  // callers skip the push entirely rather than building a payload nobody receives.
+  watchSync: {
+    isAvailable: () => false,
+    getState: async () => ({ supported: false, paired: false, installed: false }),
+    push: async () => false,
+    pendingLogs: async () => [],
+    ackLogs: async () => {},
+    onLogReceived: () => () => {},
+    pushPortrait: async () => false,
+  },
   dictation: {
     isAvailable: () => getSpeechRecognitionCtor() !== null,
     createSession: () => {

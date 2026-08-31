@@ -47,7 +47,9 @@
     "ci": "npm run typecheck && npm run format:check && npm run lint && npm test",
     "prepush": "npm run typecheck && npm run format:check && npm run lint && npm run build --workspaces --if-present && npm run vercel:build:frontend && npm test",
     "test:eslint-nearest-config": "node scripts/assert-eslint-nearest-config.mjs",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "check:interval-parity": "bash scripts/check-interval-parity.sh",
+    "check:workout-activities": "bash scripts/check-workout-activities.sh"
   },
   "lint-staged": {
     "{backend,apps/cadence-api}/{src,test}/**/*.ts": [
@@ -67,6 +69,8 @@
     ]
   },
   "devDependencies": {
+    "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
+    "@expo-google-fonts/space-mono": "^0.4.2",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "prettier": "^3.8.3",
