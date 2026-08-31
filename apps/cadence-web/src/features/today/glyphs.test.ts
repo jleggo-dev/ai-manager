@@ -15,8 +15,10 @@ describe('glyphOf', () => {
   });
 
   it('each movement kind gets its own object — no more one glyph for every workout', () => {
-    expect(glyphOf('Morning joint mobility').d).toBe(GLYPH.axis);
-    expect(glyphOf('Obstacle strength').d).toBe(GLYPH.dumbbell);
+    expect(glyphOf('Morning joint mobility').d).toBe(GLYPH.dumbbell);
+    // The owner's REAL title — 'prehab' in the parenthetical used to steal the match from
+    // 'strength' and hand it the retired axis cross.
+    expect(glyphOf('Obstacle strength - pull, carry, grip (elbow-modified + prehab)').d).toBe(GLYPH.dumbbell);
     expect(glyphOf('Hill intervals').d).toBe(GLYPH.mountain);
     expect(glyphOf('Easy cross-train').d).toBe(GLYPH.bike);
     expect(glyphOf('Easy run').d).toBe(GLYPH.runner);
