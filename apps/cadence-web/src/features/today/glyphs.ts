@@ -22,21 +22,34 @@ export const GLYPH = {
   moon: 'M20 13.5A8 8 0 019 4.2a1 1 0 00-1.3-1.1A9.5 9.5 0 1021 15a1 1 0 00-1-1.5z',
   /** Material "air" — three wind lines, for breathing ("breath or wind", owner 2026-08-31). */
   wind: 'M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3zM19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.33 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5zm-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5h-2c0 1.93 1.57 3.5 3.5 3.5s3.5-1.57 3.5-3.5-1.57-3.5-3.5-3.5z',
-  /** Bowl with steam (design project) — a meal, no botany to misread as two apples. */
+  /** Bowl with steam (design project) — now hydration/water only: as the every-meal glyph it
+   *  read as "an abstract basket" (owner, 2026-08-31 device round). */
   bowl: 'M4 12h16a8 8 0 01-8 8 8 8 0 01-8-8zm4-3a4 4 0 018 0h-2a2 2 0 00-4 0H8z',
+  /** Material "restaurant" — fork & knife, the meal glyph the owner asked for by name. The
+   *  design project drew this pair too (stroke skeleton on the Redesign canvas); Material's
+   *  filled cut is the same idea already proven at small sizes. */
+  fork: 'M16 6v8h3v8h2V2c-2.76 0-5 2.24-5 4zm-5 3H9V2H7v7H5V2H3v7c0 2.21 1.79 4 4 4v9h2v-9c2.21 0 4-1.79 4-4V2h-2v7z',
   /** Material "speed" — a gauge, for weigh-ins and measurements. */
   gauge:
     'M20.38 8.57l-1.23 1.85a8 8 0 01-.22 7.58H5.07A8 8 0 0115.58 6.85l1.85-1.23A10 10 0 003.35 19a2 2 0 001.72 1h13.85a2 2 0 001.74-1 10 10 0 00-.28-10.43zM10.59 15.41a2 2 0 002.83 0l5.66-8.49-8.49 5.66a2 2 0 000 2.83z',
-  /** Dumbbell (design project) — bar, plates, caps, every coordinate a rect. */
-  dumbbell: 'M3 10h2v4H3zM19 10h2v4h-2zM6 8h2v8H6zM16 8h2v8h-2zM8 11h8v2H8z',
+  /** Dumbbell — every coordinate still a rect, but three distinct WEIGHTS now (plates 12 tall,
+   *  caps 6, bar 2): the first cut's five same-weight rects collapsed into a plus sign on the
+   *  36px discs (owner, 2026-08-31 device round — "plus signs for workouts"). Silhouette
+   *  hierarchy is what makes a dumbbell read at a glance, not anatomical detail. */
+  dumbbell: 'M2.5 9h1.5v6H2.5zM20 9h1.5v6H20zM5 6h3v12H5zM16 6h3v12h-3zM8 11h8v2H8z',
   /** Mountain range (design project) — hills, intervals, climbs. */
   mountain: 'M3 18l6-9 4 5 5-8 3 12H3z',
   /** Material "pedal_bike" — a bicycle with no rider, for rides / rows / cross-training. */
   bike: 'M18.18 10l-1.7-4.68A2.008 2.008 0 0014.6 4H12v2h2.6l1.46 4h-4.81l-.36-1H12V7H7v2h1.75l1.82 5H9.9c-.44-2.23-2.31-3.88-4.65-3.99C2.45 9.87 0 12.2 0 15c0 2.8 2.2 5 5 5 2.46 0 4.45-1.69 4.9-4h4.2c.44 2.23 2.31 3.88 4.65 3.99 2.8.13 5.25-2.19 5.25-5 0-2.8-2.2-5-5-5h-.82zM7.82 16c-.4 1.17-1.49 2-2.82 2-1.68 0-3-1.32-3-3s1.32-3 3-3c1.33 0 2.42.83 2.82 2H5v2h2.82zm6.28-2h-1.4l-.73-2H15c-.44.58-.76 1.25-.9 2zm4.9 4c-1.68 0-3-1.32-3-3 0-.93.41-1.73 1.05-2.28l.96 2.64 1.88-.68-.97-2.67c.03 0 .06-.01.08-.01 1.68 0 3 1.32 3 3s-1.32 3-3 3z',
-  /** Material "route" — a winding path between two waypoints: a run or walk is ground you cover
-   *  (the anatomical runner is retired: owner, "I really don't like the man missing a leg"). */
+  /** Material "route" — a winding path between two waypoints. Walks, hikes and rucks keep it:
+   *  a trail suits ground you cover slowly. Runs moved to `runner` (below) same day. */
   route:
     'M19 15.18V7c0-2.21-1.79-4-4-4s-4 1.79-4 4v10c0 1.1-.9 2-2 2s-2-.9-2-2v-5.18c1.16-.41 2-1.51 2-2.82 0-1.66-1.34-3-3-3s-3 1.34-3 3c0 1.31.84 2.41 2 2.82V17c0 2.21 1.79 4 4 4s4-1.79 4-4V7c0-1.1.9-2 2-2s2 .9 2 2v8.18c-1.16.41-2 1.51-2 2.82 0 1.66 1.34 3 3 3s3-1.34 3-3c0-1.31-.84-2.41-2-2.82z',
+  /** Material "directions_run" — a running person, both legs unambiguous. The first runner was
+   *  retired as "the man missing a leg" (owner, 2026-08-31 morning); by evening the verdict on
+   *  its replacement was "a running person is better" — so the person returns, drawn whole. */
+  runner:
+    'M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z',
   /** Joint axis — four spokes around a hub, for mobility / stretching / prehab. Rects + one
    *  circle; the gap between spoke and hub is arithmetic (spokes end 1.5 units out). */
   axis: 'M11 4h2v4h-2zM11 16h2v4h-2zM4 11h4v2H4zM16 11h4v2h-4zM12 9.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z',
@@ -62,8 +75,8 @@ export type GlyphName = keyof typeof GLYPH;
 /** Family defaults, for titles no specific rule recognises. */
 const FAMILY_DEFAULT: Record<Category, GlyphName> = {
   mindset: 'sun',
-  movement: 'route',
-  nutrition: 'bowl',
+  movement: 'runner',
+  nutrition: 'fork',
   reflection: 'moon',
   practice: 'note',
 };
@@ -79,7 +92,8 @@ const RULES: Array<[RegExp, GlyphName]> = [
   [/mobility|stretch|yoga|prehab|foam|joint/, 'axis'],
   [/hill|interval|sprint|stairs|climb/, 'mountain'],
   [/bike|cycl|\brow\b|rowing|swim|elliptical|cross.?train|spin\b/, 'bike'],
-  [/\brun\b|running|jog|walk|hike|ruck/, 'route'],
+  [/\brun\b|running|jog/, 'runner'],
+  [/walk|hike|ruck/, 'route'],
   [/strength|lift|weights|gym|obstacle|deadlift|squat|press|pull.?up|carry|grip/, 'dumbbell'],
   [/read|study|language|vocab/, 'book'],
   [/writ|draw|sketch|paint/, 'pen'],
@@ -94,8 +108,8 @@ const RULES: Array<[RegExp, GlyphName]> = [
 export function glyphOf(title: string, area?: 'movement' | 'nourishment' | 'mind' | 'practice'): Glyph {
   const cat = categoryOf(title, area);
   const t = title.toLowerCase();
-  if (isFoodTitle(title) || /meal|breakfast|lunch|dinner|snack|nutrition|hydrat|water/.test(t))
-    return { d: GLYPH.bowl, cat };
+  if (/hydrat|water/.test(t)) return { d: GLYPH.bowl, cat };
+  if (isFoodTitle(title) || /meal|breakfast|lunch|dinner|snack|nutrition/.test(t)) return { d: GLYPH.fork, cat };
   for (const [re, name] of RULES) if (re.test(t)) return { d: GLYPH[name], cat };
   return { d: GLYPH[FAMILY_DEFAULT[cat]], cat };
 }

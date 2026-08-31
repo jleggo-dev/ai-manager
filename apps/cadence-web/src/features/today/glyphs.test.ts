@@ -19,7 +19,8 @@ describe('glyphOf', () => {
     expect(glyphOf('Obstacle strength').d).toBe(GLYPH.dumbbell);
     expect(glyphOf('Hill intervals').d).toBe(GLYPH.mountain);
     expect(glyphOf('Easy cross-train').d).toBe(GLYPH.bike);
-    expect(glyphOf('Easy run').d).toBe(GLYPH.route);
+    expect(glyphOf('Easy run').d).toBe(GLYPH.runner);
+    expect(glyphOf('Evening walk').d).toBe(GLYPH.route);
   });
 
   it('the goal area stays authoritative for the FAMILY while the title picks the glyph', () => {
@@ -32,9 +33,28 @@ describe('glyphOf', () => {
   it('weigh-ins, check-ins, meals and studies each read as what they are', () => {
     expect(glyphOf('Weekly weigh-in').d).toBe(GLYPH.gauge);
     expect(glyphOf('Weekly check-in').d).toBe(GLYPH.bubble);
-    expect(glyphOf('Log breakfast').d).toBe(GLYPH.bowl);
+    expect(glyphOf('Log breakfast').d).toBe(GLYPH.fork);
     expect(glyphOf('Spanish study').d).toBe(GLYPH.book);
     expect(glyphOf('Piano practice').d).toBe(GLYPH.note);
+  });
+});
+
+describe('the 2026-08-31 evening device round', () => {
+  it('meals wear the fork & knife; water keeps the bowl', () => {
+    expect(glyphOf('Log dinner').d).toBe(GLYPH.fork);
+    expect(glyphOf('Water check').d).toBe(GLYPH.bowl);
+  });
+
+  it('runs wear a whole running person; walks keep the trail', () => {
+    expect(glyphOf('Long run').d).toBe(GLYPH.runner);
+    expect(glyphOf('Sunday hike').d).toBe(GLYPH.route);
+  });
+
+  it('the dumbbell is three weights of rect — plates taller than caps, bar thinnest', () => {
+    // The plus-sign read came from five same-weight rects; assert the hierarchy that prevents it.
+    const heights = [...GLYPH.dumbbell.matchAll(/v(\d+(?:\.\d+)?)/g)].map((m) => Number(m[1]));
+    expect(new Set(heights).size).toBeGreaterThanOrEqual(3);
+    expect(Math.max(...heights)).toBeGreaterThanOrEqual(12);
   });
 });
 
