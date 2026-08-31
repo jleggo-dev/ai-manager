@@ -34,6 +34,8 @@ interface BoundProps {
   window: ProgressWindow;
   /** dated_sessions drill-down: open the full session list for an activity. */
   onDrill?: (activity: string) => void;
+  /** photo_pair drill-down: open the "All photos" screen. */
+  onOpenPhotos?: () => void;
 }
 
 function RhythmBound({ spec, window }: BoundProps) {
@@ -141,12 +143,21 @@ function ThenNowBound({ spec }: BoundProps) {
   return <WidgetSection spec={spec} payload={{ kind: 'then_now', data }} />;
 }
 
-function PhotoPairBound({ spec }: BoundProps) {
+function PhotoPairBound({ spec, onOpenPhotos }: BoundProps) {
   // Opt-in end to end: off (the default) or nothing added yet comes back as an omission and the
   // card renders nothing. Dates and weights only — no window, no goal slice, no judgment.
   const { data } = useProgressPhotoPair();
   if (!data || 'omission' in data) return null;
-  return <WidgetSection spec={spec} payload={{ kind: 'photo_pair', data }} />;
+  return (
+    <div>
+      <WidgetSection spec={spec} payload={{ kind: 'photo_pair', data }} />
+      {onOpenPhotos && data.count > 2 && (
+        <button className="prog-addbtn" onClick={onOpenPhotos}>
+          all photos ›
+        </button>
+      )}
+    </div>
+  );
 }
 
 function StagePathBound({ spec }: BoundProps) {

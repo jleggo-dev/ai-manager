@@ -28,9 +28,9 @@ function Slot({ slot, alt, single }: { slot: ProgressPhotoSlot; alt: string; sin
  * `photo_pair` — the earliest and latest progress photos side by side (owner design 1a, "PHOTOS ·
  * every 4 weeks · optional"). Dates and weights only: nothing here compares, scores, or judges
  * the two pictures — that they sit side by side IS the whole reading, and it belongs to the user.
- * One photo renders one slot plus an honest line, never the same picture twice. "All photos" is
- * display-only until the drill screen lands (a later parcel) — rendered disabled, only when there
- * is more than the pair to see.
+ * One photo renders one slot plus an honest line, never the same picture twice. The "all photos"
+ * drill lives at the BOUND layer (BoundWidget's PhotoPairBound), the same seam every other widget
+ * drill uses — this component stays display-only.
  */
 export function PhotoPairWidget({ data }: { data: PhotoPairPayload }) {
   return (
@@ -43,11 +43,6 @@ export function PhotoPairWidget({ data }: { data: PhotoPairPayload }) {
       {data.next_due && (
         <div className="pw-photos-due">
           <span className="pw-photos-due-t">Next photo due {slotDate(data.next_due)}</span>
-          {data.count > 2 && (
-            <button type="button" className="pw-photos-all" disabled aria-disabled="true">
-              All photos ›
-            </button>
-          )}
         </div>
       )}
     </div>
