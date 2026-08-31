@@ -38,6 +38,7 @@ const INTAKE_SCRIPT: string[] = [
 
 const RULES: string[] = [
   `Put the block at the very END of the turn, fenced as \`\`\`${COACH_PICKS_FENCE}\`\`\`, containing ONE JSON object and nothing else.`,
+  'AT MOST ONE BLOCK PER REPLY — never two. When you speak both before and after a tool call, only your FINAL text may carry a block; anything you said earlier in the turn carries none.',
   'Never mention the block, the picks, or "options" in your prose — the user sees buttons, not a format.',
   'SAY IT LIKE A PERSON. The notes below describe what to find out, not the words to use — they are shorthand for you, and reading them aloud produces clipped, odd questions nobody says out loud ("When in your day is there room?", "How long on a typical day?"). Ask the way you would across a table: "What does your day usually look like?", "What sort of time do we have to work with?"',
   'Ask ONE question per turn. Two or three sentences at most before the block.',

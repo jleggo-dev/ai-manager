@@ -23,8 +23,9 @@ export function useEnsureCoachFace(enabled: boolean): void {
   const { face, ready, setFaceId } = useCoachFace();
 
   useEffect(() => {
-    // `ready` matters: `face` is null both for "hasn't picked" and "still loading", and drawing on
-    // the second would overwrite a portrait they chose weeks ago.
+    // `ready` matters: `face` is null for "hasn't picked", "still loading" AND "the read failed"
+    // (CoachFaceProvider only sets ready on a read that genuinely answered), and drawing on either
+    // of the last two would overwrite a portrait they chose weeks ago with a random one.
     if (!enabled || !ready || face) return;
     const drawn = PICKABLE_COACH_FACES[Math.floor(Math.random() * PICKABLE_COACH_FACES.length)];
     if (drawn) void setFaceId(drawn.id);

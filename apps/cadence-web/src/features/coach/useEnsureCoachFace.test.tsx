@@ -21,7 +21,7 @@ beforeEach(() => {
 
 describe('useEnsureCoachFace', () => {
   it('draws and persists a face when onboarding finds none', async () => {
-    getCoachFace.mockResolvedValue(null);
+    getCoachFace.mockResolvedValue({ ok: true, faceId: null });
     renderHook(() => useEnsureCoachFace(true), { wrapper });
 
     await waitFor(() => expect(setCoachFace).toHaveBeenCalledTimes(1));
@@ -29,7 +29,7 @@ describe('useEnsureCoachFace', () => {
   });
 
   it('leaves an already-chosen portrait alone', async () => {
-    getCoachFace.mockResolvedValue('mindful-guide-feminine-2');
+    getCoachFace.mockResolvedValue({ ok: true, faceId: 'mindful-guide-feminine-2' });
     renderHook(() => useEnsureCoachFace(true), { wrapper });
 
     await waitFor(() => expect(getCoachFace).toHaveBeenCalled());
@@ -41,7 +41,7 @@ describe('useEnsureCoachFace', () => {
    * portrait on their next visit. Only the first conversation draws.
    */
   it('never draws when disabled, even with no face set', async () => {
-    getCoachFace.mockResolvedValue(null);
+    getCoachFace.mockResolvedValue({ ok: true, faceId: null });
     renderHook(() => useEnsureCoachFace(false), { wrapper });
 
     await waitFor(() => expect(getCoachFace).toHaveBeenCalled());
@@ -53,15 +53,41 @@ describe('useEnsureCoachFace', () => {
    * overwrite a portrait chosen weeks ago — so nothing may happen before the load settles.
    */
   it('waits for the load to settle before deciding there is no face', async () => {
-    let resolve: ((v: string | null) => void) | null = null;
-    getCoachFace.mockReturnValue(new Promise<string | null>((r) => (resolve = r)));
+    let resolve: ((v: { ok: boolean; faceId?: string | null }) => void) | null = null;
+    getCoachFace.mockReturnValue(new Promise((r) => (resolve = r)));
     renderHook(() => useEnsureCoachFace(true), { wrapper });
 
     await Promise.resolve();
     expect(setCoachFace).not.toHaveBeenCalled();
 
-    resolve!('rhythm-keeper-neutral');
+    resolve!({ ok: true, faceId: 'rhythm-keeper-neutral' });
     await waitFor(() => expect(getCoachFace).toHaveBeenCalled());
     expect(setCoachFace).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A FAILED read is "unknown", not "hasn't picked" — the stored pick may be fine behind a 401
+   * fired before auth resolved (#311's paint-before-auth boot) or a blip. Drawing here is how a
+   * user's real portrait got overwritten with a random one, permanently, server-side.
+   */
+  it('never draws over a failed read', async () => {
+    getCoachFace.mockResolvedValue({ ok: false });
+    renderHook(() => useEnsureCoachFace(true), { wrapper });
+
+    await waitFor(() => expect(getCoachFace).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(setCoachFace).not.toHaveBeenCalled();
+  });
+
+  /** The paint-before-auth mount must not fire a doomed, tokenless read at all. */
+  it('does not read until authReady', async () => {
+    getCoachFace.mockResolvedValue({ ok: true, faceId: null });
+    const gated = ({ children }: { children: ReactNode }) => (
+      <CoachFaceProvider authReady={false}>{children}</CoachFaceProvider>
+    );
+    renderHook(() => useEnsureCoachFace(false), { wrapper: gated });
+
+    await Promise.resolve();
+    expect(getCoachFace).not.toHaveBeenCalled();
   });
 });

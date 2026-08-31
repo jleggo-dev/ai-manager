@@ -87,6 +87,44 @@ function withDelta(turns: CoachTurn[], delta: string): CoachTurn[] {
   return [...turns.slice(0, -1), { ...last, text: last.text + delta }];
 }
 
+/**
+ * The server said one generation ended (a tool round, a nudge) — close the bubble being filled
+ * and open a fresh one for what follows. Only when there is something to close: a break on an
+ * empty bubble would stack blanks. Applied lazily, on the first delta AFTER the frame, so a
+ * generation that turns out to have no text never leaves an empty bubble behind.
+ */
+function withSegmentBreak(turns: CoachTurn[]): CoachTurn[] {
+  const last = turns[turns.length - 1];
+  if (!last || last.role !== 'coach' || !last.text.trim()) return turns;
+  return [...turns, { role: 'coach', text: '' }];
+}
+
+/**
+ * The three writers a streaming turn hands to the transport, built OVER the raw `setTurns` (a
+ * useState setter, stable for the component's life). Outside the hook because they are wiring,
+ * not behaviour — and because the hook body sits against the 150-line ceiling (CLAUDE.md: extract
+ * before a function grows). `pendingBreak` lives in this closure: a segment frame arrived and the
+ * NEXT delta must open a new bubble (see withSegmentBreak for why it waits for the delta).
+ */
+function makeStreamWriters(setTurns: (up: (t: CoachTurn[]) => CoachTurn[]) => void) {
+  let pendingBreak = false;
+  return {
+    /** Every turn starts bubble-continuous; a leftover break from a dropped stream must not leak. */
+    resetSegmentBreak: () => {
+      pendingBreak = false;
+    },
+    noteSegment: () => {
+      pendingBreak = true;
+    },
+    applyStreamDelta: (delta: string) => {
+      const broke = pendingBreak;
+      pendingBreak = false;
+      setTurns((t) => withDelta(broke ? withSegmentBreak(t) : t, delta));
+    },
+    fillLastCoach: (text: string) => setTurns((t) => withLastCoachFilled(t, text)),
+  };
+}
+
 export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs = {}) {
   const wait = delay ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const [input, setInput] = useState('');
@@ -133,8 +171,9 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     });
   }
 
-  const fillLastCoach = (text: string) => setTurns((t) => withLastCoachFilled(t, text));
-  const applyStreamDelta = (delta: string) => setTurns((t) => withDelta(t, delta));
+  const { resetSegmentBreak, noteSegment, applyStreamDelta, fillLastCoach } = useRef(
+    makeStreamWriters(setTurns),
+  ).current;
 
   /**
    * One turn, streamed. `echo: false` is the app speaking on the user's behalf — her reply is
@@ -194,12 +233,14 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       }
       abort.current = new AbortController();
       stopped.current = false;
+      resetSegmentBreak();
       const { completed } = await sendCoachMessage(
         sessionId.current,
         text,
         applyStreamDelta,
         abort.current.signal,
         noteActivity,
+        noteSegment,
       );
       if (!completed && !stopped.current && !healer.recovered.current && !(await recoverFromServer())) {
         if (echo) fillLastCoach('⚠️ Connection dropped — send again to continue.');

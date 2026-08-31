@@ -98,3 +98,12 @@ export interface CoachActivityFrame {
   cadence: 'tool';
   names: string[];
 }
+
+/**
+ * The server finished one generation of the turn (a tool round, a nudge) and text from another
+ * may follow. The client closes the bubble it is filling and opens a fresh one on the next
+ * delta — one bubble per thing she said, never two answers glued into one paragraph.
+ */
+export interface CoachSegmentFrame {
+  cadence: 'segment';
+}

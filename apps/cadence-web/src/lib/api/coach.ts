@@ -146,6 +146,8 @@ export async function sendCoachMessage(
   signal?: AbortSignal,
   /** Called when she has just run a tool, so the screen can say what is happening. */
   onActivity?: (names: string[]) => void,
+  /** Called between the turn's generations — the current bubble is done; the next delta opens a new one. */
+  onSegment?: () => void,
 ): Promise<{ completed: boolean; responseId: string | null }> {
   const res = await fetch(`${BASE}/coach/sessions/${sessionId}/messages`, {
     method: 'POST',
@@ -161,7 +163,8 @@ export async function sendCoachMessage(
     const { value, done } = await reader.read();
     if (done) break; // stream ended without [DONE] → interrupted
     const chunk = decoder.decode(value, { stream: true });
-    if (pushCoachSseChunk(state, chunk, onDelta, onActivity)) return { completed: true, responseId: state.responseId };
+    if (pushCoachSseChunk(state, chunk, onDelta, onActivity, onSegment))
+      return { completed: true, responseId: state.responseId };
   }
   return { completed: false, responseId: state.responseId };
 }

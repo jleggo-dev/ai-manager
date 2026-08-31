@@ -48,6 +48,42 @@ describe('parseCoachTurn', () => {
     const raw = '``` ' + COACH_PICKS_FENCE + '\n' + JSON.stringify(GOALS) + '\n```';
     expect(parseCoachTurn(raw).picks?.options).toHaveLength(3);
   });
+
+  /**
+   * A turn that ran tools can carry text from more than one generation, each ending in its own
+   * block. Extracting only the first painted the second as raw JSON on the phone (2026-08-31) —
+   * every block is stripped, and the LAST valid one is the turn's pick set.
+   */
+  it('strips every block in a multi-block turn and keeps the last as the live picks', () => {
+    const first: CoachPicks = { multi: false, options: [{ label: 'Morning' }, { label: 'Evening' }] };
+    const second: CoachPicks = { multi: false, options: [{ label: 'Tuesday' }, { label: 'Friday' }] };
+    const raw = `When works best?\n\n${block(JSON.stringify(first))}\nActually — which day?\n\n${block(JSON.stringify(second))}`;
+    const out = parseCoachTurn(raw);
+    expect(out.text).toBe('When works best?\nActually — which day?');
+    expect(out.text).not.toContain('```');
+    expect(out.picks?.options.map((o) => o.label)).toEqual(['Tuesday', 'Friday']);
+  });
+
+  it('keeps an earlier valid block when the last one is malformed', () => {
+    const raw = `Pick one.\n${block(JSON.stringify(GOALS))}\n${block('{not json')}`;
+    const out = parseCoachTurn(raw);
+    expect(out.text).toBe('Pick one.');
+    expect(out.picks?.options).toHaveLength(3);
+  });
+
+  it('withholds a half-streamed SECOND block instead of streaming raw JSON', () => {
+    const raw = `Pick one.\n${block(JSON.stringify(GOALS))}\nAnd also —\n\`\`\`${COACH_PICKS_FENCE}\n{"multi":false,"opt`;
+    const out = parseCoachTurn(raw);
+    expect(out.text).toBe('Pick one.\nAnd also —');
+    expect(out.text).not.toContain('{"multi"');
+  });
+
+  it('handles a build card following an answer widget — the build card wins', () => {
+    const raw = `Ready?\n${block(JSON.stringify(GOALS))}\n${block('{"build":true,"progress":0.9}')}`;
+    const out = parseCoachTurn(raw);
+    expect(out.text).toBe('Ready?');
+    expect(out.picks?.build).toBe(true);
+  });
 });
 
 describe('coercePicks', () => {

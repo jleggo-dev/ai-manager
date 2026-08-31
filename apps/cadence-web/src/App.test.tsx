@@ -34,7 +34,7 @@ vi.mock('./lib/api.ts', () => ({
   postHealthDigest: vi.fn(async () => true),
   postWorkoutHistory: vi.fn(async () => true),
   // App now wraps the screen machine in CoachFaceProvider, which reads the picked portrait.
-  getCoachFace: vi.fn(async () => null),
+  getCoachFace: vi.fn(async () => ({ ok: true, faceId: null })),
   setCoachFace: vi.fn(async () => null),
 }));
 

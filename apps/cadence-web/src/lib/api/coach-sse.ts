@@ -31,6 +31,7 @@ export function applyCoachSseData(
   data: string,
   onDelta: (text: string) => void,
   onActivity?: (names: string[]) => void,
+  onSegment?: () => void,
 ): boolean {
   if (data === '[DONE]') {
     state.completed = true;
@@ -53,6 +54,13 @@ export function applyCoachSseData(
       onActivity?.(p.names.filter((n): n is string => typeof n === 'string'));
       return false;
     }
+    // One generation of the turn ended (a tool round, a nudge) and another may follow: the
+    // current bubble is finished. Text after this belongs in a bubble of its own — never glued
+    // onto the last sentence of this one.
+    if (p.cadence === 'segment') {
+      onSegment?.();
+      return false;
+    }
     const choices = p.choices as Array<{ delta?: { content?: unknown } }> | undefined;
     const delta = choices?.[0]?.delta?.content;
     if (typeof delta === 'string' && delta) onDelta(delta);
@@ -68,9 +76,10 @@ export function applyCoachSseLine(
   line: string,
   onDelta: (text: string) => void,
   onActivity?: (names: string[]) => void,
+  onSegment?: () => void,
 ): boolean {
   if (!line.startsWith('data: ')) return false;
-  return applyCoachSseData(state, line.slice(6).trim(), onDelta, onActivity);
+  return applyCoachSseData(state, line.slice(6).trim(), onDelta, onActivity, onSegment);
 }
 
 /**
@@ -82,12 +91,13 @@ export function pushCoachSseChunk(
   chunk: string,
   onDelta: (text: string) => void,
   onActivity?: (names: string[]) => void,
+  onSegment?: () => void,
 ): boolean {
   state.buffer += chunk;
   const lines = state.buffer.split('\n');
   state.buffer = lines.pop() ?? '';
   for (const line of lines) {
-    if (applyCoachSseLine(state, line, onDelta, onActivity)) return true;
+    if (applyCoachSseLine(state, line, onDelta, onActivity, onSegment)) return true;
   }
   return state.completed;
 }

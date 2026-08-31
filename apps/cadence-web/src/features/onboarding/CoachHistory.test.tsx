@@ -21,7 +21,7 @@ vi.mock('../../lib/api.ts', () => ({
   openCoachSession: vi.fn().mockResolvedValue({ sessionId: 'new' }),
   sendCoachMessage: vi.fn().mockResolvedValue({ completed: true, responseId: null }),
   prepareCoachFoodAction: vi.fn().mockResolvedValue({ status: 'ok', action: null }),
-  getCoachFace: vi.fn().mockResolvedValue(null),
+  getCoachFace: vi.fn().mockResolvedValue({ ok: true, faceId: null }),
   setCoachFace: vi.fn().mockResolvedValue(null),
   getHealthDigest: vi.fn().mockResolvedValue({ digest: null, created_at: null }),
   postHealthDigest: vi.fn().mockResolvedValue(true),

@@ -149,27 +149,43 @@ export interface ParsedCoachTurn {
 /**
  * Split a coach turn into its prose and its pick set.
  *
- * Stream-safe by construction: an opening fence with no closing fence yet means the block is
- * still arriving, so everything from the fence on is withheld and `picks` stays null. Without
- * that the user watches raw JSON type itself out mid-sentence.
+ * Consumes EVERY block, not just the first. A turn that ran tools can carry text from more than
+ * one generation, and each may end in its own block; extracting one and letting the rest fall
+ * through painted a whole block as raw JSON on the phone (2026-08-31). So all blocks are
+ * stripped from the prose, and the LAST valid one is the turn's pick set — later text supersedes
+ * earlier text the same way it does for the words around it.
+ *
+ * Stream-safe by construction: an opening fence with no closing fence yet means that block is
+ * still arriving, so everything from that fence on is withheld. Without that the user watches
+ * raw JSON type itself out mid-sentence.
  */
 export function parseCoachTurn(raw: string): ParsedCoachTurn {
-  const open = raw.match(OPEN_FENCE);
-  if (open?.index === undefined) return { text: raw, picks: null };
-  const before = raw.slice(0, open.index);
-  const rest = raw.slice(open.index + open[0].length);
-  const close = rest.indexOf('```');
-  // Still streaming: hold the tail back rather than paint a fence and a JSON fragment.
-  if (close === -1) return { text: before.trimEnd(), picks: null };
-  const body = rest.slice(0, close);
-  const after = rest.slice(close + 3);
-  const text = `${before.trimEnd()}${after.trimEnd() ? `\n${after.trim()}` : ''}`.trim();
+  const parts: string[] = [];
   let picks: CoachPicks | null = null;
-  try {
-    picks = coercePicks(JSON.parse(body));
-  } catch {
-    // Malformed JSON: the prose still asks the question, so drop the block and carry on.
+  let rest = raw;
+  for (;;) {
+    const open = rest.match(OPEN_FENCE);
+    if (open?.index === undefined) {
+      parts.push(rest);
+      break;
+    }
+    parts.push(rest.slice(0, open.index));
+    const afterOpen = rest.slice(open.index + open[0].length);
+    const close = afterOpen.indexOf('```');
+    // Still streaming: hold the tail back rather than paint a fence and a JSON fragment.
+    if (close === -1) break;
+    try {
+      const parsed = coercePicks(JSON.parse(afterOpen.slice(0, close)));
+      if (parsed) picks = parsed;
+    } catch {
+      // Malformed JSON: the prose still asks the question, so drop the block and carry on.
+    }
+    rest = afterOpen.slice(close + 3);
   }
+  const text = parts
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .join('\n');
   return { text, picks };
 }
 

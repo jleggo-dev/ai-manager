@@ -51,7 +51,10 @@ async function faceAsBase64(art: string): Promise<string | null> {
 export async function donateCoachIdentity(): Promise<boolean> {
   try {
     if (!capabilities.coachIdentity.isAvailable()) return false;
-    const face = coachFace(await getCoachFace());
+    const read = await getCoachFace();
+    // A failed read is "unknown", not "unchosen" — donate nothing rather than the wrong identity.
+    if (!read.ok) return false;
+    const face = coachFace(read.faceId);
     // No face chosen is a real answer, not a missing one: the user gets the app icon, which is the
     // honest thing to show when they have not picked a portrait rather than assigning them one.
     if (!face?.art) return false;

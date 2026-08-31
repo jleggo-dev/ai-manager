@@ -83,4 +83,24 @@ describe('coach-sse parser', () => {
     expect(result.deltas).toEqual(['cut']);
     expect(result.completed).toBe(false);
   });
+
+  /** The seam between two generations of one turn: never content, always the onSegment signal. */
+  it('routes a segment frame to onSegment and never into the prose', () => {
+    const state = createCoachSseParseState();
+    const deltas: string[] = [];
+    let segments = 0;
+    const push = (chunk: string) =>
+      pushCoachSseChunk(
+        state,
+        chunk,
+        (t) => deltas.push(t),
+        undefined,
+        () => segments++,
+      );
+    push('data: {"choices":[{"delta":{"content":"First answer."}}]}\n');
+    push('data: {"cadence":"segment"}\n\n');
+    push('data: {"choices":[{"delta":{"content":"Second answer."}}]}\n');
+    expect(deltas).toEqual(['First answer.', 'Second answer.']);
+    expect(segments).toBe(1);
+  });
 });
