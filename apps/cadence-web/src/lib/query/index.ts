@@ -26,3 +26,4 @@ export { planSignature, useWatchSync } from './useWatchSync.ts';
 export { drainWatchLogs, useWatchLogInbox } from './useWatchLogInbox.ts';
 export { useWatchPortraitSync } from './useWatchPortraitSync.ts';
 export { useProgressLayoutDraft } from './useProgressLayout.ts';
+export { useProgressPhotos, useUploadProgressPhoto, useSetProgressPhotosEnabled } from './useProgressPhotos.ts';

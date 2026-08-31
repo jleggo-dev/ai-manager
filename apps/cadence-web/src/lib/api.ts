@@ -330,3 +330,11 @@ export {
 export { getRecaps, postWeekReviewRecap, type RecapListItem, type RecapListResult } from './api/recaps.ts';
 
 export { getWatchWeek, postWatchLog } from './api/watch.ts';
+
+export {
+  getProgressPhotos,
+  postProgressPhoto,
+  putProgressPhotosEnabled,
+  type ProgressPhotoList,
+  type StoredProgressPhoto,
+} from './api/progress-photos.ts';
