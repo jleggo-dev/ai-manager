@@ -10,7 +10,12 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 
 const useProgressLayout = vi.fn();
-vi.mock('../../lib/query/index.ts', () => ({ useProgressLayout: () => useProgressLayout() }));
+// usePlan feeds only the header subline + streak line — undefined here keeps both absent, which
+// is exactly the page's no-plan-cache state (a missing datum renders as absent, never zero).
+vi.mock('../../lib/query/index.ts', () => ({
+  useProgressLayout: () => useProgressLayout(),
+  usePlan: () => ({ data: undefined }),
+}));
 vi.mock('../journal/JournalStore.tsx', () => ({ JournalStore: () => <div>journal-store</div> }));
 vi.mock('./BoundWidget.tsx', () => ({
   BoundWidget: ({ spec }: { spec: { id: string } }) => <div data-testid={`bound-${spec.id}`} />,

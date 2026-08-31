@@ -49,6 +49,9 @@ export const GLYPH = {
   pen: 'M3 17.25V21h3.75L17.81 10.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.996.996 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z',
   /** Material "chat_bubble" — the weekly check-in is a conversation with her. */
   bubble: 'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z',
+  /** Material "star" — bests and firsts (a shelf of accomplishments is not a music practice;
+   *  the note glyph it briefly wore was the piano-as-exercise mistake all over again). */
+  star: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
 } as const;
 
 export type GlyphName = keyof typeof GLYPH;

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ProgressWindow } from '@cadence/shared';
 import { JournalStore } from '../journal/JournalStore.tsx';
-import { useProgressLayout } from '../../lib/query/index.ts';
+import { useProgressLayout, usePlan } from '../../lib/query/index.ts';
 import { BoundWidget } from './BoundWidget.tsx';
 import { SessionListScreen } from './SessionListScreen.tsx';
 import { WindowSeg } from './WindowSeg.tsx';
@@ -16,6 +16,37 @@ import { ProgressSkeleton } from './ProgressSkeleton.tsx';
  * LLM anywhere on this surface, and the Week/Month/All control is a database read, never a
  * model call.
  */
+
+/**
+ * One quiet line (owner design 1a): flame chip, "N-day streak · longest was M", mono XP at the
+ * right. Reads the shared /plan query cache (PERF-01) — the same numbers PlanView's TrailHeader
+ * shows, including the `doneCount * 10` XP stopgap, so the two screens can never disagree. No
+ * streak on file (or a current of 0) renders as absent — never a zero.
+ */
+function StreakLine() {
+  const { data } = usePlan();
+  const streak = data?.streak;
+  if (!data?.hasPlan || !streak || streak.current < 1) return null;
+  const doneCount = data.week.reduce((n, d) => n + d.occurrences.filter((o) => o.status === 'done').length, 0);
+  const xp = doneCount * 10; // stopgap XP until the REQ8 points finalize is wired (same as PlanView)
+  const longest = streak.longest > streak.current ? `longest was ${streak.longest}` : 'your longest yet';
+  return (
+    <div className="pw-streak">
+      <span className="pw-streak-flame" aria-hidden>
+        <svg viewBox="0 0 24 24" width="13" height="13">
+          <path
+            fill="currentColor"
+            d="M12 3s4.5 3.6 4.5 8.2c0 1.4-.4 2.4-1 3.2.2-1.6-.4-3.2-1.6-4.2.3 3-1.4 4.3-2.4 5.6-.7.9-1 1.7-1 2.6 0 1.6 1.3 3 3 3-3.3 0-6-2.4-6-5.6C7.5 10.4 12 8.4 12 3Z"
+          />
+        </svg>
+      </span>
+      <span className="pw-streak-t">
+        {streak.current}-day streak · {longest}
+      </span>
+      <span className="pw-streak-xp">{xp.toLocaleString()} XP</span>
+    </div>
+  );
+}
 
 /** The journal's home (Journal v2 §3): one quiet row — words in, words back; never analyzed. */
 function JournalRow({ onOpen }: { onOpen: () => void }) {
@@ -57,6 +88,8 @@ export function ProgressView({ onCoach }: { onCoach?: (note: string) => void }) 
   const [window, setWindow] = useState<ProgressWindow>('month');
   const [drill, setDrill] = useState<string | null>(null);
   const { data: layout, error } = useProgressLayout();
+  // Shared /plan cache (PERF-01) — the header subline and StreakLine read it, never a new endpoint.
+  const { data: plan } = usePlan();
 
   if (drill) return <SessionListScreen activity={drill} onBack={() => setDrill(null)} />;
 
@@ -72,12 +105,18 @@ export function ProgressView({ onCoach }: { onCoach?: (note: string) => void }) 
 
   return (
     <div className="scrollbody">
-      <div className="screen-title" style={{ marginTop: 10 }}>
-        Progress
-      </div>
-      <div style={{ margin: '12px 0 4px' }}>
+      <div className="pw-pagehead">
+        <div className="pw-pagehead-t">
+          <div className="pw-pagetitle">Progress</div>
+          {plan?.hasPlan && plan.consistency.window > 0 && (
+            <div className="pw-pagesub">
+              showed up {plan.consistency.kept} of {plan.consistency.window} this week
+            </div>
+          )}
+        </div>
         <WindowSeg value={window} onChange={setWindow} />
       </div>
+      <StreakLine />
       {/* Present before the layout resolves; words don't wait for data. */}
       <JournalRow onOpen={() => setJournalOpen(true)} />
       {journalOpen && <JournalStore onClose={() => setJournalOpen(false)} />}

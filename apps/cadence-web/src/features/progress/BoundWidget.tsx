@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { HealthDigestStepsWeek, ProgressWindow, WidgetSpec } from '@cadence/shared';
 import { WidgetSection } from './widgets/registry.tsx';
+import { familyOfArea } from './widgets/cardHeader.ts';
 import {
   useDatedSessions,
   useHealthDigest,
@@ -42,11 +43,12 @@ function TrendVsTargetBound({ spec, window }: BoundProps) {
   const { data } = useProgress(window);
   const card = data?.cards.find((c) => c.kind === 'latest_vs_target');
   if (!card || card.kind !== 'latest_vs_target') return null;
-  const { kind: _k, area: _a, title, ...payload } = card;
+  const { kind: _k, area, title, ...payload } = card;
   return (
     <WidgetSection
       spec={{ ...spec, title: spec.title ?? title }}
       payload={{ kind: 'trend_vs_target', data: payload }}
+      family={familyOfArea(area)}
     />
   );
 }
@@ -95,7 +97,7 @@ function BalanceBound({ spec, window }: BoundProps) {
   const kind = spec.source?.feedback_kind === 'movement' ? 'movement' : 'mind';
   const { data } = useProgressBalance(kind, window);
   if (!data || 'omission' in data || data.total === 0) return null;
-  return <WidgetSection spec={spec} payload={{ kind: 'balance', data }} />;
+  return <WidgetSection spec={spec} payload={{ kind: 'balance', data }} family={kind} />;
 }
 
 function TotalBound({ spec, window }: BoundProps) {
