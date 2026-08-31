@@ -9,7 +9,8 @@
     },
     "backend": {
       "entrypoint": "backend",
-      "routePrefix": "/_/backend"
+      "routePrefix": "/_/backend",
+      "maxDuration": 800
     }
   },
   "crons": [
