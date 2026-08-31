@@ -9361,3 +9361,43 @@ owner's call, ~700K tokens, and it drives the deployed api so it runs post-deplo
 (this branch carries client changes); replay of the owner's "balance my week" conversation as the
 acceptance test — the same request that took 25 minutes and five failures should now be one call
 and one card.
+
+## 2026-08-31 (evening) — the design wave: one week grammar, a goals-first Progress tab, four new capabilities
+
+The owner's design project became the working spec ("their design is great — build the
+capabilities"). Everything below is on `fix/ui-testing-round` (PR #326), all gates green,
+migration 0048 applied to the live DB.
+
+- **One week grammar everywhere** (`ProposedWeek` + `weekGroups`, `wk-` classes): the
+  rebalance/adjust preview, the sign-up gate, and the chat's "See your whole week" all render
+  the same day-grouped module — Every day first, per-day minute totals, glyph chips, NEW tags
+  only where lineage exists, whys as first-appearance marginalia, MY ADDITION at consent
+  moments. The gate's dot-strip and flat reasons list are deleted.
+- **Activity-level glyphs** (`glyphs.ts`, 16 verified paths): wind for breathing (the
+  practice-word ordering bug is regression-tested), route for runs (the one-legged runner is
+  retired), pen for journals, star for bests, camera for photos. Verified at chip size before
+  every ship — twice that step caught a wrong read.
+- **Progress tab = design 1a**: cards open with glyph chip + title + a mono line naming the
+  MEASURE; gate track for milestones, number+delta+sparkline for trends, quiet streak line;
+  the log demoted to "this week". `WidgetSpec` now carries `area` + `deadline`, stamped by the
+  SERVER from the goal row on both layout paths — the composing model never writes them.
+- **Four new widget kinds**, each through the full parity seam (types → resolver with
+  omission-evidence → routes → catalog/availability/validator → default layout → hooks →
+  renderer → fixtures → tests): `repertoire` (binds the existing store; "coach's pick · not
+  started" for proposed-untouched items), `felt_week` (daily check-in moods by week, unread =
+  outline, alongside balance — different sources), `then_now` (before/after pairs mined
+  honestly: pace, parsed loads within one unit, holds, sits; <2 pairs omits the card),
+  `photo_pair` (opt-in default-off, weight-stamped ±3 days or unstamped, never scored;
+  migration `0048_progress_photos.sql` + private bucket).
+- **The design loop has a return channel**: a capabilities brief (what binds today, cheap vs
+  real work, questions) went back to the design project and the redraw answered every question
+  — windows adopted week/month/all, felt intensity settled on daily notes, "up next" became
+  "coach's pick".
+
+**Owed from this wave:** photos client UI (upload/enable in Settings + the All-photos screen —
+routes are live); design 1b (goal drill-down: milestone cleared-dates migration, per-goal
+kept/missed squares, goal-scoped YOU-SAID quotes) and 1c (reflection = week-review restyle +
+context chips feeding the coach); `photo_due` nudge kind (a tier-contract decision, not a
+patch); the watch's set logger sends no load — loaded-lift pairs need phone-side logs until it
+does; Settings overhaul + the two stale-screen chips (dead July code; food converges on the
+Kitchen tab).
