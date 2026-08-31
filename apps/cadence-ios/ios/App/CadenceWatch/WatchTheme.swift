@@ -6,9 +6,10 @@ import SwiftUI
  comments are approximate). Ground is TRUE BLACK by owner ruling 2026-08-29 — the hearth
  lives in the light, never in browned tints.
 
- TODO(fonts): Plus Jakarta Sans on watchOS needs the ttf embedded; the repo loads it from
- Google Fonts only, so W1 ships the system face and the swap is a build-phase chore, not a
- design question.
+ Typefaces are the locked brand pair (BRAND.md): Plus Jakarta Sans for everything, Space Mono for
+ DATA VALUES ONLY — a heart-rate number, a `3 × 8 · 24 kg` spec, a countdown. The bundled faces
+ are registered at launch by `WatchFonts`; every helper below falls back to the system face on its
+ own, so a registration failure costs typography and never a screen.
  */
 enum Theme {
     // styles.css tokens
@@ -50,5 +51,42 @@ enum Theme {
     }
     static func phaseTrack(_ kind: IntervalPhaseKind) -> Color {
         phaseFill(kind).opacity(0.22)
+    }
+
+    // MARK: - Type
+
+    /**
+     The brand faces, sized against a system text style.
+
+     `relativeTo:` is the load-bearing argument: it keeps Dynamic Type working, so someone who has
+     turned text up still gets bigger text instead of a fixed size that ignores them. A wrist is
+     already the smallest screen we ship — a face that cannot scale is an accessibility defect, not
+     a styling preference.
+
+     Names are the PostScript names read out of the bundled files with CoreText, not guessed.
+     */
+    static func display(_ size: CGFloat, _ weight: JakartaWeight = .bold,
+                        relativeTo style: Font.TextStyle = .body) -> Font {
+        .custom(weight.postScriptName, size: size, relativeTo: style)
+    }
+
+    /** Space Mono — DATA VALUES ONLY. A word set in it is a bug, not a style choice. */
+    static func mono(_ size: CGFloat, bold: Bool = true,
+                     relativeTo style: Font.TextStyle = .body) -> Font {
+        .custom(bold ? "SpaceMono-Bold" : "SpaceMono-Regular", size: size, relativeTo: style)
+    }
+
+    enum JakartaWeight {
+        case regular, medium, semibold, bold, extrabold
+
+        var postScriptName: String {
+            switch self {
+            case .regular: return "PlusJakartaSans-Regular"
+            case .medium: return "PlusJakartaSans-Medium"
+            case .semibold: return "PlusJakartaSans-SemiBold"
+            case .bold: return "PlusJakartaSans-Bold"
+            case .extrabold: return "PlusJakartaSans-ExtraBold"
+            }
+        }
     }
 }

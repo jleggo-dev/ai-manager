@@ -8592,9 +8592,15 @@ session APIs.) So the fear that motivated "no watch app" never attached to a wat
 on the wrist, and HR for non-cardio are the wants. Mid-run coaching stays v2 — owner: "we are
 nowhere near ready for that."
 
-**Scope settled same day: GPS-free.** Non-cardio sessions + mind timers in our watch app; outdoor
-runs stay on the shipped hand-off, so no GPS code is ever ours (`HKWorkoutRouteBuilder` exists on
-watchOS and we deliberately do not touch it). Owner also confirmed: **write-back to Apple Health
+**Scope settled same day: GPS-free — REVERSED 2026-08-30, see "Native activity tracking inside our own app" below.** Its
+original text: non-cardio sessions + mind timers in our watch app; outdoor runs stay on the shipped
+hand-off, so no GPS code is ever ours (`HKWorkoutRouteBuilder` exists on watchOS and we
+deliberately do not touch it). **Correction of the record (owner, 2026-08-30):** "settled" reads
+here as a joint call, and it was not one — the GPS-free scoping was the ASSISTANT's, offered out of
+low confidence about balancing battery against GPS tracks, and the owner took it as an expertise
+limitation rather than a preference. Owner, 2026-08-30: *"I am fine with it tracking where you go —
+the call on that was originally yours, because you weren't confident about balancing battery life
+vs gps tracks."* The constraint is lifted. Owner also confirmed: **write-back to Apple Health
 happens regardless** — in two halves: watch-app sessions save themselves through the live builder
 (our bundle id + plan-id metadata), and phone-only sessions still need A14's iOS
 `HKWorkoutBuilder` bridge so a watchless user's finished session closes their rings too. The
@@ -8677,6 +8683,409 @@ amend → up next); wrist-side `openInWorkoutApp` for the run row; Done face (fe
 **Known debts:** Plus Jakarta Sans needs the ttf embedded (system face ships W1, recorded in
 WatchTheme); IntervalEngine has no Swift tests yet (the TS original is the tested source of
 truth — a parity test comparing expansions is the right shape); no app icon asset catalog yet.
+
+## W2 — watch sync, plus the four remaining watch faces (2026-08-30)
+
+W1 shipped a watch app that ran on `SampleWeek` — nine files, compiling and running, but showing
+every user the same hardcoded "Morning intervals". W2 replaces that stub data with the user's real
+committed week, and builds the four watch faces that needed real data to exist. Owner scoped it as
+one arc rather than five PRs.
+
+### 1. The sync (prerequisite for everything else)
+
+- **The projection** (`packages/cadence-shared/src/watch-week.ts`, 47 tests) — `buildWatchWeek`.
+  All judgement, in TypeScript, the same division of labour `workout-plan.ts` set: which of the
+  four faces opens a session, what its row says, how deep the detail rides, what is shed to fit.
+  Kind order is the design: interval wins first (the flat five are unambiguous), an all-mind
+  session is a sit **before** the hand-off words are consulted (so "walking meditation" opens the
+  sit, not Apple's Workout app), distance hands off, everything else is a strength timer — which
+  is also the honest fallback, being the one face that degrades to a list of names without lying.
+- **Detail rides for today + tomorrow only** (`WATCH_DETAIL_DAYS = 2`, owner-confirmed). Further
+  days are rows: named, classified, and explicitly `detailed: false` so the wrist knows it must
+  not offer to start them. A dead affordance is worse on a wrist than anywhere.
+- **A byte budget, not just count caps** (`WATCH_MAX_PAYLOAD_BYTES = 48_000`). The count caps
+  bound the shape; only bytes bound what the transport accepts, and
+  `updateApplicationContext` past its ceiling delivers NOTHING. `fitToBudget` sheds detail from the
+  far end first — tomorrow before today, a day's tail before its first session — and never sheds a
+  row, so an impossible week loses playability rather than losing days. **Found by its own test**:
+  the first cut measured 105KB at full bound with count caps alone.
+- **The endpoint** — `GET /plan/watch` (`apps/cadence-api/src/routes/plan-watch.ts`, its own file;
+  `plan.ts` is at the size gate). Reuses `buildPlanView` so the wrist and the phone agree on what
+  the week is *and whose "today" it is*, then one bounded second read
+  (`listOccurrenceSessionLogs`) for the detail window only.
+- **The seam** — `WatchSyncCapability` (getState / push), native impl, web no-op. The payload
+  crosses as a JSON **string**: application context accepts only property-list types, and a
+  marshalled JS object arrives with `NSNull`s that would throw the whole context away.
+- **The plugin** (`ios/App/App/CadenceWatchSync/`) — `WCSession` + `updateApplicationContext`,
+  chosen over `sendMessage` (needs a live counterpart) and `transferUserInfo` (queues every week
+  ever sent). Activation is asynchronous, so callers queue on `whenActivated` and are drained
+  once — answering `isPaired` before activation would report "no watch" to a phone that has one.
+- **The receiver** (`CadenceWatch/WatchStore.swift`) — decodes, republishes, and **persists**.
+  The disk copy is load-bearing for the same reason the phone's boot cache is: application context
+  arrives when the system chooses, so without it the first paint of every launch is an empty week,
+  which on a wrist reads as broken. A payload from a newer phone is refused whole rather than
+  half-decoded — partial data on a wrist is worse than old data, because nobody can tell which
+  fields are missing. `isSample` is surfaced on the week face ("Not synced yet"): sample data must
+  never pass for a plan.
+- **The trigger** (`useWatchSync`) — pushes on the plan's *identity* changing, never on a timer.
+  A failed push deliberately does not mark the signature delivered, so pairing a watch later syncs
+  on the next plan change rather than never.
+
+### 2. The four remaining faces
+
+- **Your week (07)** — seven day rows, segmented rings (one wedge per session, done in sage), rest
+  days as quiet dusk circles. The footer counts against what has come **due**, not against the
+  whole week: "2 of 9" on a Tuesday is a scoreboard telling someone they are behind on work
+  nobody has asked for yet.
+- **Strength timer (03) + set-log (09)** — `StrengthPlan` flattens blocks into the sequence a
+  wrist actually walks (circuit rotates, straight does not). Set dots, elapsed, HR, "up next",
+  **Set done**; one swipe away, the crown amends reps with "planned 8" kept as a whisper and the
+  button labelled with the number it will record. Amending has to be easier than lying, or the
+  plan never learns.
+- **Done (05)** — one warm line, three facts, Easy / Right / Hard, the mic (watchOS `TextField`
+  opens Apple's own dictation), "Saved to Health" as a whisper, one exit. No score, no comparison;
+  the rings closing are Apple's moment. Both players now end here — including **End**, which is
+  what makes "stopping early keeps the rounds you did" true rather than merely written:
+  `roundsCompleted` was ported from `interval.ts` to count what was actually walked.
+- **The sit (04)** — and the most important thing about it is what it does NOT do: **no heart
+  rate, and no `HKWorkoutSession` at all.** The simplest way to keep "never a target, never a
+  grade" is to never start the machinery that would measure it. The "came back" tap counts
+  noticing, which is the practice, never a tally of failure.
+- **Hand-off (13)** — `WorkoutPlan.openInWorkoutApp()` (watchOS-only, which is why the wrist can
+  be the single front door and still put Apple's full running UI one tap away). The composed spec
+  rides in the payload from `composeWorkoutPlan` — the same tested composer the phone's hand-off
+  row uses — and `WorkoutSpec.swift` decodes it. **No composed workout means no button**, and the
+  face says so; `detailed` for a run now means "we actually have the thing you would open".
+
+### 3. The return leg — what the watch records actually reaching the plan
+
+W2's first pass drew the whole honesty contract and wired none of it. The Done face asked how it
+felt and dropped the answer; the set-log's crown amended a rep count that went nowhere; the
+interval player's Done button was an empty closure. The watch had no send path at all — the only
+mention of `transferUserInfo` in the codebase was a comment explaining why it was not used for the
+push.
+
+- **`transferUserInfo`, not application context** (`WatchLog.swift`). Context is one latest-state
+  slot that coalesces, so logging two sessions before the phone is reachable would discard the
+  first. This queues each and delivers in order.
+- **Two outboxes, because delivery is at-least-once.** The watch holds a log on disk until
+  WatchConnectivity accepts it; the phone holds it until the web layer confirms the API stored it.
+  `didReceiveUserInfo` fires on the NATIVE app, which is routinely awake when the webview is not —
+  without the phone-side outbox a session logged on a wrist would be announced to nobody.
+- **Idempotent on the watch's own `finishedAt`** (`services/watch-log.ts`). A lost acknowledgement
+  means the same finished session arrives twice; without the key, a redelivery would count as a
+  second session AND bill a second parse of the same note.
+- **Structure, not prose** (`packages/cadence-shared/src/watch-log.ts`, 22 tests). The watch knows
+  the numbers, so it sends them. Writing them into a sentence for the server to parse back out
+  would be slower, lossier and billed. The one free-text field is the dictated note, which goes to
+  the coach's ordinary parse — deliberately AFTER the structured write, so it reconciles against it
+  through the revision path `logOccurrence` already had rather than a merge invented here.
+- **One delegate.** `WatchStore` holds the single `WCSession` delegate slot and drives both
+  directions. `WatchLogSender` deliberately is not a delegate: a second assignment would silently
+  replace the first and the watch would stop receiving plans. Caught before it compiled.
+- **The sit writes a `mindfulSession`**, never a workout — and still starts no `HKWorkoutSession`,
+  which is the surest way to keep "no heart rate on the sit, ever": the machinery that would
+  measure it is never started.
+
+### 4. Interval engine parity, enforced rather than asserted
+
+`IntervalEngine.swift` was marked KEEP IN LOCKSTEP with `interval.ts`, which until now was a comment.
+Both are now pinned to one artifact — `packages/cadence-shared/interval-parity.json`, nine cases
+covering EMOM's absent recovery phase, multi-set rest placement, every clamp and trim-to-fit, and
+`roundsCompleted` at five elapsed marks. TypeScript asserts it still produces the fixture; a plain
+Swift executable asserts the port produces the same one (`npm run check:interval-parity` — no test
+target, no simulator, because the engine imports only Foundation).
+
+**It caught a real drift on its first run.** The Swift port had renamed the phase labels to
+"Push"/"Breathe" where `interval.ts` says "Work"/"Recover" — and the phone renders `phase.label`
+verbatim (`StepInterval.tsx:320`), so the same session showed different words on the two devices.
+Fixed in the port: labels are engine output, and renaming them is a product decision in
+`interval.ts` that would flow to both.
+
+### 5. The brand typefaces on the watch (owner approved 2026-08-30)
+
+W1 shipped the system face because the repo had no font binaries at all — it loads Plus Jakarta
+Sans from Google Fonts by URL, which a watch app cannot do. Two findings worth recording, because
+both cost a build to learn:
+
+- **`@fontsource/*` ships only `.woff`/`.woff2`.** CoreText on iOS and watchOS reads `.ttf`/`.otf`
+  and nothing else, so the obvious package cannot do this job. `@expo-google-fonts/*` ships real
+  TTFs and is what landed — seven files, 676KB (Jakarta 400/500/600/700/800, Space Mono 400/700).
+- **Xcode has no `INFOPLIST_KEY_UIAppFonts`.** Setting one is silently dropped — verified by
+  inspecting the built `Info.plist`, not assumed. The watch target generates its Info.plist, so
+  the choice was hand-maintaining a full one (re-declaring `WKApplication`, the companion bundle
+  id and both HealthKit usage strings) or registering at launch. `WatchFonts.register()` uses
+  `CTFontManagerRegisterFontsForURL` with `.process` scope; a failure is silent and `Theme` falls
+  back to the system face, so a missing font costs typography and never a screen.
+
+`Theme.display(_:_:relativeTo:)` and `Theme.mono(_:bold:relativeTo:)` carry the faces. The
+`relativeTo:` argument is load-bearing: it keeps Dynamic Type working, and on the smallest screen
+we ship a face that cannot scale is an accessibility defect rather than a styling preference.
+Space Mono is confined to data values by the brief — a word set in it is a bug. PostScript names
+were read out of the bundled files with CoreText rather than guessed.
+
+### 6. A user-facing promise corrected (owner, 2026-08-30)
+
+The watch's `NSHealthShareUsageDescription` read *"It never tracks where you go."* — a location
+promise inside a health permission string, and one that native activity tracking would falsify.
+Now: *"Reads your heart rate and workouts while a session is running, so the coach can see how it
+went."* The phone's `NSLocationWhenInUseUsageDescription` carried the same clause; it now describes
+the permission actually held — *"checked while you have the app open, never followed in the
+background"* — which is true today and stays true when a watch-side route is added.
+
+### 7. The activity vocabulary — eleven types to eighty-two (owner, 2026-08-30)
+
+Owner: *"ideally we actually have support for all the activities you'd find in apple fitness + our
+own"*. This was not only a gap for what comes next — it was a **live defect in shipped code**: the
+composer knew eleven activities, so a Pilates, dance, boxing, elliptical, jump-rope or rowing-machine
+session composed to `.other` and reached Apple's Workout app as an unnamed workout.
+
+**One catalog, three consumers.** `packages/cadence-shared/src/workout-activities.ts` holds all 82
+activities (every `HKWorkoutActivityType` except `swimBikeRun` and `transition`, which are
+multisport machinery rather than a prescribed session). It carries, per activity: the cues that
+infer it, where it happens, and whether the wrist hands it to Apple or runs it in our frame. From
+it are derived the `WorkoutActivity` union, the inference table, the watch's hand-off decision, and
+the Swift map.
+
+**The Swift is GENERATED and compiled into BOTH targets.** The name→`HKWorkoutActivityType` table
+previously existed by hand in three places. `npm run gen:workout-activities` emits
+`App/Shared/WorkoutActivityMap.swift`; `npm run check:workout-activities` fails if it is stale
+(verified by deliberately drifting it). HealthKit's Swift case names are the constant with a
+lowercased first letter — exactly how the catalog names them — so the emitted switch is an identity
+mapping **the compiler checks**, which is the "fails loudly in Swift" property the old hand-written
+comment claimed but did not have.
+
+**Three things the work surfaced, each caught by a check rather than by review:**
+
+- **`inferActivity` matched substrings, not words.** "Th-row-ing drills" contained "row", so a
+  med-ball session composed to ROWING and was handed to Apple as one. Shipped behaviour until now.
+  Cues are anchored at a word boundary and precompiled; the longest cue still wins, so "rowing
+  machine" beats "row" and "cross country ski" beats "ski".
+- **The catalog first asserted locations it could not know.** A test failure caught it: the
+  pre-existing ruling is that "strength, HIIT and core are usually indoors, but *usually* is not
+  knowledge" — WorkoutKit treats location as a real dimension and guessing makes a garage session
+  illegal for a goal shape it should support. Only definitional locations are asserted now
+  (a machine is a place; over-ground is outdoor); swimming and rowing are `unknown`, because pool
+  or open water, erg or boat, is a fact about the session and not about the sport.
+- **`underwaterDiving` is iOS 17**, above the App target's iOS 15 floor — the compiler refused the
+  build. The catalog now carries `since` for cases newer than our floors and the generator emits
+  `if #available`, falling back to `.other` on an OS that genuinely lacks the case.
+
+**The watch's hand-off decision now comes from the same table.** `watchSessionKind` had its own
+parallel word list; it asks `activityHandsOff(inferActivity(text))` instead, so "which face opens
+this" and "what does it compose to" are one answer rather than two that drift. An activity we
+cannot classify is never handed off — our player degrades to a timer and a list of names, which is
+worse than Apple's but is not a dead end.
+
+### 8. Native activity tracking in our own app (owner, 2026-08-30)
+
+Owner: *"now build the native run app"*, after lifting the GPS constraint. Runs, rides, swims,
+rows and the rest are now measured by US — Apple's Workout app is offered as an alternative on the
+controls page rather than being the destination.
+
+**Apple's engine is still underneath, and that is the point.** `HKWorkoutSession` +
+`HKLiveWorkoutBuilder` run the sensors, the GPS duty cycle, the calorimetry, background runtime and
+the save to Health. `HKLiveWorkoutDataSource` populates its collected types from the workout
+CONFIGURATION, so setting `.running` + `.outdoor` yields distance, pace, heart rate and energy with
+no CoreLocation code at all. What is ours is the frame — and one genuinely new subsystem.
+
+**`RouteRecorder` is the only real GPS work.** `HKWorkoutRouteBuilder` does not collect locations;
+the caller feeds it `CLLocation`s, so this is the single file in the app that touches CoreLocation.
+Two things read from the SDK rather than assumed, the second after a first pass got it wrong:
+
+- The route builder must come from `workoutBuilder.seriesBuilder(for: .workoutRoute())`, which is
+  what associates the finished route with the finished workout.
+- **`finishRoute` must never be called** when using a workout builder. The header is explicit: "If
+  you are using this route builder with a workout builder, you should never call this method. The
+  route will be finished when you finish the workout builder." The first implementation called it
+  with a fabricated `HKWorkout`; corrected to simply stop feeding fixes.
+
+Fixes are filtered before storage — non-positive or >50m horizontal accuracy, or a stale timestamp,
+is dropped. A bad fix does not merely draw a wrong line; it inflates distance permanently. The
+route is strictly additive throughout: refused permission or no fix costs a map and nothing else.
+
+**A naming correction, per the plain-language ruling.** The wrist kind was `run`, which routed a
+CYCLING session into a view called `HandoffView` — exactly the ambiguity the ruling is about. The
+catalog's `wrist: 'ours' | 'handoff'` named which app opens a session; it now says what the session
+IS: `style: 'guided' | 'tracked'`. Guided means our choreography is the value (the interval ring,
+the set-log's crown, a sit). Tracked means measurement is (distance, pace, heart rate, a route).
+The watch kind is `tracked`, and the row's subtitle no longer reads "opens Workout" because we do
+not.
+
+**One defect caught while wiring it.** `TrackedSessionView` first read the activity off the
+composed WorkoutKit spec — which exists only when the prescription composed. An "Evening run" with
+no prescription would have tracked as `.other` with no route: a run filed in Health as an unnamed
+workout, the precise defect the wider vocabulary had just fixed. `activity` and `location` are now
+carried on EVERY session in the payload, inferred from the same table the composer uses.
+
+A tracked session is always startable (`detailed: true`) even on a day whose prescriptions did not
+ride along — our live session measures, it does not follow a script, so it needs the occurrence id
+and nothing more.
+
+**The permission.** `INFOPLIST_KEY_NSLocationWhenInUseUsageDescription` on the watch target — this
+key IS supported (unlike `UIAppFonts`), verified by reading it back out of the built plist:
+*"Records the route of a run or ride you start here, so the map and the distance are yours. Only
+while a session is running."* Requested only when a route is actually about to be recorded, which
+is outdoor sessions alone; an indoor row or a treadmill run has no line to draw and takes no
+permission.
+
+### 9. Session survival, Always-On, and water lock (2026-08-30)
+
+Three gaps found by auditing the built app against the design brief and the SDK. All three were
+verified absent from the codebase first, and all three are failures the user could not work around.
+
+**Workout recovery — the one that loses data.** watchOS jettisons apps under memory pressure, and
+the likeliest moment is precisely what native tracking just added: a long outdoor session with the
+screen off. HealthKit keeps the session alive across that (`recoverActiveWorkoutSessionWithCompletion:`,
+watchOS 5+, "Recovers an active workout session after a client crash") — but a session nobody
+re-attaches is never ended, never saved, and never reaches the plan. An hour-long run, gone.
+`recoverIfInterrupted()` runs once at launch and does nothing in the ordinary case.
+
+Two details that make recovery actually work rather than appear to:
+
+- **The occurrence id is now stamped at START, not only at end.** A recovered session has nothing
+  but its builder's metadata to say whose it is; stamping on the way out meant a recovered run
+  could reach Health but never be matched back to the plan. It is re-stamped at the end anyway —
+  metadata merges.
+- **The data source is re-attached on recovery.** It does not come back with the session. Without
+  it the session runs on and collects NOTHING, which looks like a working recovery and silently
+  records an empty workout.
+
+The route is deliberately not resumed: its builder went with the process, and restarting location
+would append a straight line across whatever happened while the app was gone.
+
+**One controller for the app.** Recovery forced a latent bug into the open: each face created its
+own `WorkoutController`, so a recovered session could not arrive in the object a face was reading —
+and two faces could each start a session when only one can be active. The controller is now owned
+by `CadenceWatchApp` and shared through the environment.
+
+**Always-On (face 11).** `isLuminanceReduced` appeared nowhere, so the app treated the dimmed
+screen as if it were live — and a live session is dimmed for most of its duration. Now, per the
+brief: heart rate comes off, the numeral moves to the phase's DONE stop, the face dims. Seconds
+also come off, which the brief does not say but the mechanism requires:
+`PeriodicTimelineSchedule` throttles to about once a minute in low-frequency mode, so a seconds
+digit would sit frozen and WRONG for up to 59 seconds. Whole minutes are stale by less than the
+rounding. `AlwaysOn.swift` holds the shared modifier and clock so all three live faces agree.
+
+**Water lock.** Swimming became a tracked activity with the wider vocabulary, and without
+`enableWaterLock()` water taps the screen continuously through a swim. Enabled when a swimming
+session begins — the header is explicit that only a foreground app in an ACTIVE workout may enable
+it, which is why it sits after `beginCollection` rather than at the tap.
+
+### 10. The coach's chosen portrait, and face 10 (2026-08-30)
+
+**The portrait the user actually picked now reaches the wrist.** W1 bundled a stand-in; the brief
+always said the chosen face "arrives with the WatchConnectivity sync", and that only became cheap
+once the sync existed.
+
+Sent by `transferFile`, deliberately not application context: the portraits are 20-30KB JPEGs, and
+base64 in the week's dictionary would spend most of its 48KB byte budget carrying a picture that
+changes approximately never — and would couple a portrait to a plan sync, so a failed image could
+cost today's sessions. `transferFile` runs independently and in the background. Pushed on face
+CHANGE only (`useWatchPortraitSync`), never on a timer.
+
+One bug worth recording, because the first cut had it and the second comment contradicted the
+code: **the bytes must be read inside `session(_:didReceive:)`, synchronously.** WatchConnectivity
+reclaims `file.fileURL` the moment that delegate method returns, so hopping to another actor with
+the URL and reading it there is a race that silently loses the portrait. `adoptPortrait` now takes
+`Data`, not a URL. (The Swift selector is `didReceive:`, not `didReceiveFile:` — the compiler
+caught that one.)
+
+The fallback order is deliberate: chosen portrait → bundled stand-in → sage circle. The middle rung
+matters, because a stand-in is a real picture of a coach — a watch that has not synced shows a
+different face rather than a broken one.
+
+**Face 10 — hands full — is built and verified on screen.** A timed hold (dead hang, plank, wall
+sit) whose entire requirement is the brief's own sentence: *"Nothing needs a touch."* A "Get set"
+pre-roll, a chime to start on, a countdown, and an end that arrives by itself with a second chime.
+
+The pre-roll is not decoration. Without it the clock starts the instant you tap, while you are
+still reaching for the bar, and every hold reads short. A step is a hold when it carries a duration
+and no reps (`StrengthStep.isTimedHold`); reps that happen to be paced are not a hold, and still
+get the set-log.
+
+**The phases are driven by `Task.sleep`, NOT by the `TimelineView` tick** — the load-bearing
+decision on this face. `PeriodicTimelineSchedule` throttles to roughly once a minute when the wrist
+is down, and a hold is precisely when the wrist is down; advancing from the render tick would let
+the start chime land up to a minute late. On a face whose whole promise is hands-free, a late chime
+is the feature failing. The timeline now only draws digits, as lazily as watchOS likes.
+
+Double-tap skips via `handGestureShortcut(.primaryAction)` behind `#available(watchOS 11)`. It is
+Series 9 / Ultra 2 hardware and silently does nothing elsewhere, which is exactly why no copy on
+screen mentions it — the button is there for everyone, and a promise the wrist cannot keep is worse
+than an undiscovered shortcut.
+
+**Simulator verification (access granted this session).** Walked and screenshot-confirmed: Today
+(portrait, brand faces, the tracked row's sage location glyph), session detail (Space Mono confined
+to data values, Jakarta on names), face 10 through BOTH phases — "Get set" pre-roll advancing to
+"Hold" on its own with the countdown running — the native tracked session's live and controls
+pages, and Your week (segmented rings, rest-day crescent, "showed up 0 of 4 so far", and the
+"Not synced yet" line that stops sample data passing for a plan).
+
+### Status and what is owed
+
+**COMPILED + SIMULATOR-VERIFIED, NOT DEVICE-VERIFIED.** `xcodebuild -scheme App` builds phone and
+watch; the watch app runs in the watchOS 26.5 simulator and the Today face was screenshot-verified
+against the canvas (portrait, weekday, true black, sage play glyphs, sun hand-off arrow, system
+clock untouched). The other faces compile and are wired but were not driven — simulator input
+access was not granted this session.
+
+Owed: the **device round** (checklist in `CadenceWatchSync/README.md` — the real phone↔watch
+transfer in both directions, a real GPS route, and a real kill-and-recover are the things no build
+can prove). Face 10 and the portrait sync are DONE (see below). Still unbuilt: the two phone-side notification
+gaps the plan lists as prerequisites — nothing consumes an action
+tap, and `interruption-level`/`thread-id` are unset in `push-apns.ts`. Complications, the Smart
+Stack, custom notification layouts and mid-run coaching remain v2.
+
+## Native activity tracking inside our own app (running, cycling, etc.) — GPS approved (owner, 2026-08-30)
+
+Owner: *"I also think there's a native run app that we kind of want too, right? Ideally we have
+everything in our own app, so you don't have to leave."* And on the constraint that had ruled it
+out: *"I am fine with it tracking where you go — the call on that was originally yours, because
+you weren't confident about balancing battery life vs gps tracks."*
+
+**Two things in the record were wrong, and correcting both points the same way.** A13's original
+entry rejected **v0 — phone-based tracking** on GPS/battery expertise; the 2026-08-29 revisit noted
+that fear never attached to a *watch* app, because on watchOS the sensor and power balancing are
+Apple's. What the revisit then did anyway was scope the watch app GPS-free — and that scoping was
+the assistant's own caution, recorded as though it were settled jointly. It was not. With the
+constraint lifted, the remaining question is only what a native run actually costs.
+
+**Answered from the SDK (WatchOS 26.5 headers, 2026-08-30 — read, don't assert):**
+
+- **There is no `FitnessKit`.** The frameworks present are `HealthKit`, `HealthKitUI`,
+  `WorkoutKit`, `_WorkoutKit_SwiftUI`.
+- **WorkoutKit cannot run our player.** It composes and schedules — that IS the shipped hand-off.
+  The already-recorded finding stands: `HKWorkoutSession.h` contains no reference to
+  `WorkoutPlan`, so a third-party session cannot consume our composition. A run inside our app is
+  HealthKit's session APIs, not WorkoutKit's.
+- **Live distance, pace, HR and calories are close to free.** `HKLiveWorkoutDataSource`
+  "automatically collect[s] samples" and its `typesToCollect` is "populated with default types for
+  the workout configuration" (header, verbatim). Configuring the session `.running` + `.outdoor`
+  is most of the difference from what `WorkoutController.swift` already runs today at
+  `.highIntensityIntervalTraining` + `.indoor`. **No CoreLocation code is needed for any of it** —
+  Apple runs the GPS duty cycle inside the session.
+- **The route trace is the only real GPS work.** `HKWorkoutRouteBuilder` does not collect
+  locations; the caller feeds it `CLLocation`s via `insertRouteData:`. That is where a
+  `CLLocationManager`, a background mode and the filtering become ours. Integration path is
+  `builder.seriesBuilderForType(HKSeriesType.workoutRoute())` — the header explicitly says NOT to
+  construct the route builder standalone when a workout builder already exists, which ours does.
+
+So the cost splits cleanly, and the expensive half is optional:
+
+| | Effort | Needs CoreLocation |
+|---|---|---|
+| Run in our app — live distance, pace, HR, splits, our chimes | moderate, mostly UI | **no** |
+| The route line on a map | the real GPS work | yes |
+
+**A user-facing promise has to change first.** The shipped watch Info.plist string reads *"It never
+tracks where you go."* An outdoor running session uses GPS for distance even with no route
+recorded, so that copy is wrong the moment this ships — a brand and trust decision, and it belongs
+to the owner rather than to the build.
+
+**Sequencing (assistant recommendation, 2026-08-30): after W2, not inside it.** The run app sits ON
+the sync slice — the sync is what puts a run session on the wrist to be run, and W2's Done face is
+what closes one. Built first it would write both twice. Not scoped further until W2 lands.
 
 ## The warm that never ran — fire-and-forget is dead on Vercel (owner device round, 2026-08-29)
 

@@ -20,6 +20,7 @@
  */
 
 import { clampIntervalPlan, singleSetPlan, type IntervalPlan } from './interval.ts';
+import { WORKOUT_ACTIVITIES, type WorkoutActivityName } from './workout-activities.ts';
 import type { OccurrenceSession, SessionItem } from './types/occurrence.ts';
 
 /* ── The spec the bridge decodes ──────────────────────────────────────────────────────────── */
@@ -27,23 +28,12 @@ import type { OccurrenceSession, SessionItem } from './types/occurrence.ts';
 /**
  * The activity, in WorkoutKit's vocabulary rather than ours.
  *
- * Deliberately short. Every name here maps 1:1 onto an `HKWorkoutActivityType` case the Swift side
- * switches on, so adding one is a two-file change and a missing one fails loudly in Swift instead
- * of silently becoming `.other`. Mind practices are absent on purpose — see `MINDFUL_TOOLS`.
+ * Derived from `workout-activities.ts`, which is also what generates the Swift map — so the union,
+ * the inference table and both native switches cannot drift apart. It was eleven names until
+ * 2026-08-30; a Pilates, dance, boxing or elliptical session composed to `.other` and reached
+ * Apple as an unnamed workout. Mind practices are absent on purpose — see `MINDFUL_TOOLS`.
  */
-export type WorkoutActivity =
-  | 'running'
-  | 'walking'
-  | 'hiking'
-  | 'cycling'
-  | 'swimming'
-  | 'rowing'
-  | 'highIntensityIntervalTraining'
-  | 'functionalStrengthTraining'
-  | 'traditionalStrengthTraining'
-  | 'coreTraining'
-  | 'yoga'
-  | 'other';
+export type WorkoutActivity = WorkoutActivityName;
 
 /** Where the work happens. WorkoutKit asks, because an outdoor run and a treadmill run are
  *  different workouts to it — different goals are legal, and only one of them uses GPS. */
@@ -133,51 +123,44 @@ const INERT_TOOLS = new Set(['read', 'checkoff', 'photo']);
 /** Longest match wins, so "trail run" reads as running and "rowing machine" as rowing. Order
  *  within a tier does not matter; the table is scanned whole and the longest key that hits is
  *  taken, which keeps "row" from stealing "rowing machine". */
-const ACTIVITY_WORDS: ReadonlyArray<readonly [string, WorkoutActivity]> = [
-  ['run', 'running'],
-  ['jog', 'running'],
-  ['sprint', 'running'],
-  ['tempo', 'running'],
-  ['walk', 'walking'],
-  ['ruck', 'hiking'],
-  ['hike', 'hiking'],
-  ['bike', 'cycling'],
-  ['cycl', 'cycling'],
-  ['spin', 'cycling'],
-  ['swim', 'swimming'],
-  ['row', 'rowing'],
-  ['erg', 'rowing'],
-  ['hiit', 'highIntensityIntervalTraining'],
-  ['tabata', 'highIntensityIntervalTraining'],
-  ['emom', 'highIntensityIntervalTraining'],
-  ['circuit', 'functionalStrengthTraining'],
-  ['kettlebell', 'functionalStrengthTraining'],
-  ['deadlift', 'traditionalStrengthTraining'],
-  ['squat', 'traditionalStrengthTraining'],
-  ['bench', 'traditionalStrengthTraining'],
-  ['press', 'traditionalStrengthTraining'],
-  ['curl', 'traditionalStrengthTraining'],
-  ['lift', 'traditionalStrengthTraining'],
-  ['strength', 'traditionalStrengthTraining'],
-  ['plank', 'coreTraining'],
-  ['core', 'coreTraining'],
-  ['abs', 'coreTraining'],
-  ['yoga', 'yoga'],
-];
+/**
+ * The inference table, precompiled.
+ *
+ * Each cue is anchored at a WORD BOUNDARY and matches as a prefix, so "run" finds "running" and
+ * "runs" but not "th-run-…"; the boundary is the whole point. Plain substring matching was the
+ * shipped behaviour until 2026-08-30 and it was wrong in a way nobody would notice from the
+ * outside: "Throwing drills" contains "row", so a med-ball session composed to ROWING and was
+ * handed to Apple as one.
+ *
+ * Compiled once at module load rather than per call — the table is a few hundred cues now, and
+ * `inferActivity` runs for every session in a week projection.
+ */
+const ACTIVITY_WORDS: ReadonlyArray<readonly [RegExp, WorkoutActivity, number]> = WORKOUT_ACTIVITIES.flatMap((a) =>
+  a.words.map((w) => [new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), a.name, w.length] as const),
+);
 
 /** Words that mean the work does not happen outside, whatever the activity is. */
 const INDOOR_WORDS = ['treadmill', 'indoor', 'stationary', 'gym', 'machine', 'erg', 'pool'];
 
-/** Activities that happen outside unless something says otherwise. */
-const OUTDOOR_BY_DEFAULT = new Set<WorkoutActivity>(['running', 'walking', 'hiking', 'cycling']);
+/** Where each activity happens unless the text says otherwise — the catalog's own answer. */
+const LOCATION_BY_ACTIVITY = new Map<string, WorkoutLocation>(WORKOUT_ACTIVITIES.map((a) => [a.name, a.location]));
 
-function inferActivity(text: string): WorkoutActivity {
+/**
+ * The activity a piece of text describes, or `other`.
+ *
+ * Exported because `watch-week.ts` classifies wrist sessions from the SAME table: which face opens
+ * a session and which activity it composes to are two answers to one question, and deriving them
+ * separately is how they drift.
+ */
+export function inferActivity(text: string): WorkoutActivity {
   let best: WorkoutActivity = 'other';
   let bestLen = 0;
-  for (const [word, activity] of ACTIVITY_WORDS) {
-    if (word.length > bestLen && text.includes(word)) {
+  // Longest cue wins, so "rowing machine" beats "row" and "cross country ski" beats "ski". The
+  // table is scanned whole rather than short-circuited for exactly that reason.
+  for (const [pattern, activity, length] of ACTIVITY_WORDS) {
+    if (length > bestLen && pattern.test(text)) {
       best = activity;
-      bestLen = word.length;
+      bestLen = length;
     }
   }
   return best;
@@ -185,7 +168,8 @@ function inferActivity(text: string): WorkoutActivity {
 
 function inferLocation(text: string, activity: WorkoutActivity): WorkoutLocation {
   if (INDOOR_WORDS.some((w) => text.includes(w))) return 'indoor';
-  if (OUTDOOR_BY_DEFAULT.has(activity)) return 'outdoor';
+  const known = LOCATION_BY_ACTIVITY.get(activity);
+  if (known && known !== 'unknown') return known;
   // Strength, HIIT and core are usually indoors, but "usually" is not knowledge — and WorkoutKit
   // treats location as a real dimension of what is legal. `unknown` lets the bridge pass
   // `.unknown`, which is WorkoutKit's own answer for "do not care".

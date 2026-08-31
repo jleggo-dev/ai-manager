@@ -323,3 +323,5 @@ export {
 } from './api/progress-layout.ts';
 
 export { getRecaps, postWeekReviewRecap, type RecapListItem, type RecapListResult } from './api/recaps.ts';
+
+export { getWatchWeek, postWatchLog } from './api/watch.ts';

@@ -1,0 +1,1114 @@
+{
+  "cases": [
+    {
+      "name": "hiit 40/20 x6",
+      "plan": {
+        "warmupSec": 0,
+        "sets": [
+          {
+            "workSec": 40,
+            "recoverSec": 20,
+            "rounds": 6
+          }
+        ],
+        "restBetweenSetsSec": 60,
+        "cooldownSec": 0
+      },
+      "totalSeconds": 360,
+      "totalRounds": 6,
+      "phases": [
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 40,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 20,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 40,
+          "round": 2,
+          "globalRound": 2
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 20,
+          "round": 2,
+          "globalRound": 2
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 40,
+          "round": 3,
+          "globalRound": 3
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 20,
+          "round": 3,
+          "globalRound": 3
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 40,
+          "round": 4,
+          "globalRound": 4
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 20,
+          "round": 4,
+          "globalRound": 4
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 40,
+          "round": 5,
+          "globalRound": 5
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 20,
+          "round": 5,
+          "globalRound": 5
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 40,
+          "round": 6,
+          "globalRound": 6
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 20,
+          "round": 6,
+          "globalRound": 6
+        }
+      ],
+      "roundsAt": [
+        {
+          "elapsed": 0,
+          "rounds": 0
+        },
+        {
+          "elapsed": 120,
+          "rounds": 2
+        },
+        {
+          "elapsed": 240,
+          "rounds": 4
+        },
+        {
+          "elapsed": 360,
+          "rounds": 6
+        },
+        {
+          "elapsed": 390,
+          "rounds": 6
+        }
+      ]
+    },
+    {
+      "name": "tabata 20/10 x8",
+      "plan": {
+        "warmupSec": 0,
+        "sets": [
+          {
+            "workSec": 20,
+            "recoverSec": 10,
+            "rounds": 8
+          }
+        ],
+        "restBetweenSetsSec": 60,
+        "cooldownSec": 0
+      },
+      "totalSeconds": 240,
+      "totalRounds": 8,
+      "phases": [
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 20,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 10,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 20,
+          "round": 2,
+          "globalRound": 2
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 10,
+          "round": 2,
+          "globalRound": 2
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 20,
+          "round": 3,
+          "globalRound": 3
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 10,
+          "round": 3,
+          "globalRound": 3
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 20,
+          "round": 4,
+          "globalRound": 4
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 10,
+          "round": 4,
+          "globalRound": 4
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 20,
+          "round": 5,
+          "globalRound": 5
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 10,
+          "round": 5,
+          "globalRound": 5
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 20,
+          "round": 6,
+          "globalRound": 6
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 10,
+          "round": 6,
+          "globalRound": 6
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 20,
+          "round": 7,
+          "globalRound": 7
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 10,
+          "round": 7,
+          "globalRound": 7
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 20,
+          "round": 8,
+          "globalRound": 8
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 10,
+          "round": 8,
+          "globalRound": 8
+        }
+      ],
+      "roundsAt": [
+        {
+          "elapsed": 0,
+          "rounds": 0
+        },
+        {
+          "elapsed": 80,
+          "rounds": 2
+        },
+        {
+          "elapsed": 160,
+          "rounds": 5
+        },
+        {
+          "elapsed": 240,
+          "rounds": 8
+        },
+        {
+          "elapsed": 270,
+          "rounds": 8
+        }
+      ]
+    },
+    {
+      "name": "emom 60/0 x10",
+      "plan": {
+        "warmupSec": 0,
+        "sets": [
+          {
+            "workSec": 60,
+            "recoverSec": 0,
+            "rounds": 10
+          }
+        ],
+        "restBetweenSetsSec": 60,
+        "cooldownSec": 0
+      },
+      "totalSeconds": 600,
+      "totalRounds": 10,
+      "phases": [
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 60,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 60,
+          "round": 2,
+          "globalRound": 2
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 60,
+          "round": 3,
+          "globalRound": 3
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 60,
+          "round": 4,
+          "globalRound": 4
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 60,
+          "round": 5,
+          "globalRound": 5
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 60,
+          "round": 6,
+          "globalRound": 6
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 60,
+          "round": 7,
+          "globalRound": 7
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 60,
+          "round": 8,
+          "globalRound": 8
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 60,
+          "round": 9,
+          "globalRound": 9
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 60,
+          "round": 10,
+          "globalRound": 10
+        }
+      ],
+      "roundsAt": [
+        {
+          "elapsed": 0,
+          "rounds": 0
+        },
+        {
+          "elapsed": 200,
+          "rounds": 3
+        },
+        {
+          "elapsed": 400,
+          "rounds": 6
+        },
+        {
+          "elapsed": 600,
+          "rounds": 10
+        },
+        {
+          "elapsed": 630,
+          "rounds": 10
+        }
+      ]
+    },
+    {
+      "name": "warmup + cooldown",
+      "plan": {
+        "warmupSec": 300,
+        "sets": [
+          {
+            "workSec": 45,
+            "recoverSec": 15,
+            "rounds": 5
+          }
+        ],
+        "restBetweenSetsSec": 60,
+        "cooldownSec": 180
+      },
+      "totalSeconds": 780,
+      "totalRounds": 5,
+      "phases": [
+        {
+          "kind": "neutral",
+          "label": "Warm-up",
+          "seconds": 300,
+          "round": null,
+          "globalRound": null
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 45,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 45,
+          "round": 2,
+          "globalRound": 2
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 2,
+          "globalRound": 2
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 45,
+          "round": 3,
+          "globalRound": 3
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 3,
+          "globalRound": 3
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 45,
+          "round": 4,
+          "globalRound": 4
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 4,
+          "globalRound": 4
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 45,
+          "round": 5,
+          "globalRound": 5
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 5,
+          "globalRound": 5
+        },
+        {
+          "kind": "neutral",
+          "label": "Cool-down",
+          "seconds": 180,
+          "round": null,
+          "globalRound": null
+        }
+      ],
+      "roundsAt": [
+        {
+          "elapsed": 0,
+          "rounds": 0
+        },
+        {
+          "elapsed": 260,
+          "rounds": 0
+        },
+        {
+          "elapsed": 520,
+          "rounds": 3
+        },
+        {
+          "elapsed": 780,
+          "rounds": 5
+        },
+        {
+          "elapsed": 810,
+          "rounds": 5
+        }
+      ]
+    },
+    {
+      "name": "two sets with rest",
+      "plan": {
+        "warmupSec": 60,
+        "sets": [
+          {
+            "workSec": 30,
+            "recoverSec": 30,
+            "rounds": 4
+          },
+          {
+            "workSec": 20,
+            "recoverSec": 40,
+            "rounds": 3
+          }
+        ],
+        "restBetweenSetsSec": 90,
+        "cooldownSec": 60
+      },
+      "totalSeconds": 630,
+      "totalRounds": 7,
+      "phases": [
+        {
+          "kind": "neutral",
+          "label": "Warm-up",
+          "seconds": 60,
+          "round": null,
+          "globalRound": null
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 30,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 2,
+          "globalRound": 2
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 30,
+          "round": 2,
+          "globalRound": 2
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 3,
+          "globalRound": 3
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 30,
+          "round": 3,
+          "globalRound": 3
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 4,
+          "globalRound": 4
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 30,
+          "round": 4,
+          "globalRound": 4
+        },
+        {
+          "kind": "neutral",
+          "label": "Rest",
+          "seconds": 90,
+          "round": null,
+          "globalRound": null
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 20,
+          "round": 1,
+          "globalRound": 5
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 40,
+          "round": 1,
+          "globalRound": 5
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 20,
+          "round": 2,
+          "globalRound": 6
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 40,
+          "round": 2,
+          "globalRound": 6
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 20,
+          "round": 3,
+          "globalRound": 7
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 40,
+          "round": 3,
+          "globalRound": 7
+        },
+        {
+          "kind": "neutral",
+          "label": "Cool-down",
+          "seconds": 60,
+          "round": null,
+          "globalRound": null
+        }
+      ],
+      "roundsAt": [
+        {
+          "elapsed": 0,
+          "rounds": 0
+        },
+        {
+          "elapsed": 210,
+          "rounds": 2
+        },
+        {
+          "elapsed": 420,
+          "rounds": 4
+        },
+        {
+          "elapsed": 630,
+          "rounds": 7
+        },
+        {
+          "elapsed": 660,
+          "rounds": 7
+        }
+      ]
+    },
+    {
+      "name": "four sets",
+      "plan": {
+        "warmupSec": 0,
+        "sets": [
+          {
+            "workSec": 30,
+            "recoverSec": 15,
+            "rounds": 3
+          },
+          {
+            "workSec": 30,
+            "recoverSec": 15,
+            "rounds": 3
+          },
+          {
+            "workSec": 30,
+            "recoverSec": 15,
+            "rounds": 3
+          },
+          {
+            "workSec": 30,
+            "recoverSec": 15,
+            "rounds": 3
+          }
+        ],
+        "restBetweenSetsSec": 45,
+        "cooldownSec": 0
+      },
+      "totalSeconds": 675,
+      "totalRounds": 12,
+      "phases": [
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 2,
+          "globalRound": 2
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 2,
+          "globalRound": 2
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 3,
+          "globalRound": 3
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 3,
+          "globalRound": 3
+        },
+        {
+          "kind": "neutral",
+          "label": "Rest",
+          "seconds": 45,
+          "round": null,
+          "globalRound": null
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 1,
+          "globalRound": 4
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 1,
+          "globalRound": 4
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 2,
+          "globalRound": 5
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 2,
+          "globalRound": 5
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 3,
+          "globalRound": 6
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 3,
+          "globalRound": 6
+        },
+        {
+          "kind": "neutral",
+          "label": "Rest",
+          "seconds": 45,
+          "round": null,
+          "globalRound": null
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 1,
+          "globalRound": 7
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 1,
+          "globalRound": 7
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 2,
+          "globalRound": 8
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 2,
+          "globalRound": 8
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 3,
+          "globalRound": 9
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 3,
+          "globalRound": 9
+        },
+        {
+          "kind": "neutral",
+          "label": "Rest",
+          "seconds": 45,
+          "round": null,
+          "globalRound": null
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 1,
+          "globalRound": 10
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 1,
+          "globalRound": 10
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 2,
+          "globalRound": 11
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 2,
+          "globalRound": 11
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 30,
+          "round": 3,
+          "globalRound": 12
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 15,
+          "round": 3,
+          "globalRound": 12
+        }
+      ],
+      "roundsAt": [
+        {
+          "elapsed": 0,
+          "rounds": 0
+        },
+        {
+          "elapsed": 225,
+          "rounds": 4
+        },
+        {
+          "elapsed": 450,
+          "rounds": 8
+        },
+        {
+          "elapsed": 675,
+          "rounds": 12
+        },
+        {
+          "elapsed": 705,
+          "rounds": 12
+        }
+      ]
+    },
+    {
+      "name": "over every bound",
+      "plan": {
+        "warmupSec": 900,
+        "sets": [
+          {
+            "workSec": 600,
+            "recoverSec": 600,
+            "rounds": 1
+          }
+        ],
+        "restBetweenSetsSec": 900,
+        "cooldownSec": 900
+      },
+      "totalSeconds": 3000,
+      "totalRounds": 1,
+      "phases": [
+        {
+          "kind": "neutral",
+          "label": "Warm-up",
+          "seconds": 900,
+          "round": null,
+          "globalRound": null
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 600,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 600,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "neutral",
+          "label": "Cool-down",
+          "seconds": 900,
+          "round": null,
+          "globalRound": null
+        }
+      ],
+      "roundsAt": [
+        {
+          "elapsed": 0,
+          "rounds": 0
+        },
+        {
+          "elapsed": 1000,
+          "rounds": 0
+        },
+        {
+          "elapsed": 2000,
+          "rounds": 0
+        },
+        {
+          "elapsed": 3000,
+          "rounds": 1
+        },
+        {
+          "elapsed": 3030,
+          "rounds": 1
+        }
+      ]
+    },
+    {
+      "name": "under every bound",
+      "plan": {
+        "warmupSec": 0,
+        "sets": [
+          {
+            "workSec": 5,
+            "recoverSec": 0,
+            "rounds": 1
+          }
+        ],
+        "restBetweenSetsSec": 0,
+        "cooldownSec": 0
+      },
+      "totalSeconds": 5,
+      "totalRounds": 1,
+      "phases": [
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 5,
+          "round": 1,
+          "globalRound": 1
+        }
+      ],
+      "roundsAt": [
+        {
+          "elapsed": 0,
+          "rounds": 0
+        },
+        {
+          "elapsed": 1,
+          "rounds": 0
+        },
+        {
+          "elapsed": 3,
+          "rounds": 0
+        },
+        {
+          "elapsed": 5,
+          "rounds": 1
+        },
+        {
+          "elapsed": 35,
+          "rounds": 1
+        }
+      ]
+    },
+    {
+      "name": "zero warmup and cooldown",
+      "plan": {
+        "warmupSec": 0,
+        "sets": [
+          {
+            "workSec": 25,
+            "recoverSec": 35,
+            "rounds": 2
+          }
+        ],
+        "restBetweenSetsSec": 0,
+        "cooldownSec": 0
+      },
+      "totalSeconds": 120,
+      "totalRounds": 2,
+      "phases": [
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 25,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 35,
+          "round": 1,
+          "globalRound": 1
+        },
+        {
+          "kind": "work",
+          "label": "Work",
+          "seconds": 25,
+          "round": 2,
+          "globalRound": 2
+        },
+        {
+          "kind": "recover",
+          "label": "Recover",
+          "seconds": 35,
+          "round": 2,
+          "globalRound": 2
+        }
+      ],
+      "roundsAt": [
+        {
+          "elapsed": 0,
+          "rounds": 0
+        },
+        {
+          "elapsed": 40,
+          "rounds": 0
+        },
+        {
+          "elapsed": 80,
+          "rounds": 1
+        },
+        {
+          "elapsed": 120,
+          "rounds": 2
+        },
+        {
+          "elapsed": 150,
+          "rounds": 2
+        }
+      ]
+    }
+  ]
+}

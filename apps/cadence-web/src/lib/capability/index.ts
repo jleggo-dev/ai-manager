@@ -148,6 +148,67 @@ export interface WorkoutPlanCapability {
   remove(id: string, dateISO?: string): Promise<number>;
 }
 
+/** What the phone can say about the watch app on the other end of WatchConnectivity. */
+export interface WatchSyncState {
+  /** WatchConnectivity exists and this device supports a session at all (iPhone, not iPad). */
+  supported: boolean;
+  /** A watch is paired to this phone. */
+  paired: boolean;
+  /** OUR watch app is installed on it. Nothing is worth sending when this is false. */
+  installed: boolean;
+}
+
+/**
+ * The committed week, pushed to our own watch app (W2 — the sync slice).
+ *
+ * Distinct from `workoutPlan`, which schedules into APPLE's Workout app and is about one session.
+ * This carries our whole projected week to our own app, so the wrist can show the plan and run
+ * the sessions a wrist is good at.
+ *
+ * `push` takes the finished payload from `buildWatchWeek` and hands it to
+ * `updateApplicationContext` — a single latest-state slot, which is exactly the right shape for
+ * "here is the week": it coalesces (only the newest matters), it survives the watch being off,
+ * and it does not queue a backlog of stale weeks behind a watch that was in a drawer.
+ */
+export interface WatchSyncCapability {
+  isAvailable(): boolean;
+  /** One round-trip gate. Every failure answers no, so a caller never sends into a void. */
+  getState(): Promise<WatchSyncState>;
+  /** Push the week. Answers whether WatchConnectivity accepted it — never throws. */
+  push(payload: WatchWeekPayload): Promise<boolean>;
+  /**
+   * Sessions finished on the watch, waiting to be sent to the API.
+   *
+   * An outbox rather than a callback, because WatchConnectivity delivers to the NATIVE app: a log
+   * can arrive while the webview is not running at all. The phone holds them until the web layer
+   * has actually stored each one and acknowledges it by id — so an app killed mid-POST retries on
+   * next launch instead of dropping what somebody did.
+   */
+  pendingLogs(): Promise<WatchPendingLog[]>;
+  /** Forget logs the API has accepted. Anything unacknowledged is delivered again. */
+  ackLogs(ids: string[]): Promise<void>;
+  /** Fires when a log arrives while the app IS running, so the inbox drains without polling. */
+  onLogReceived(handler: () => void): () => void;
+  /**
+   * Send the coach's chosen portrait to the watch.
+   *
+   * A FILE transfer, not application context: the portraits are 20-30KB JPEGs, and base64 in the
+   * week's context would eat most of its byte budget to carry a picture that changes almost never.
+   * `transferFile` is built for this — background delivery, generous limits, and independent of
+   * the week, so a portrait cannot cost a plan sync.
+   *
+   * `faceId` rides along so the watch can ignore a portrait it already has.
+   */
+  pushPortrait(faceId: string, jpegBase64: string): Promise<boolean>;
+}
+
+/** One queued watch log. `payload` is the raw JSON the watch sent — asserted server-side by
+ *  `normalizeWatchLog`, never trusted here. */
+export interface WatchPendingLog {
+  id: string;
+  payload: unknown;
+}
+
 export interface Capabilities {
   health: HealthCapability;
   push: PushCapability;
@@ -156,9 +217,10 @@ export interface Capabilities {
   location: LocationCapability;
   dictation: DictationCapability;
   workoutPlan: WorkoutPlanCapability;
+  watchSync: WatchSyncCapability;
 }
 
-import type { LocalNotificationSpec, WorkoutPlanSpec } from '@cadence/shared';
+import type { LocalNotificationSpec, WatchWeekPayload, WorkoutPlanSpec } from '@cadence/shared';
 import { Capacitor } from '@capacitor/core';
 import { webCapabilities } from './web.ts';
 import { nativeCapabilities } from './native.ts';

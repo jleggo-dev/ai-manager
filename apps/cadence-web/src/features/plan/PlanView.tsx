@@ -28,7 +28,8 @@ import {
   postponeDetour,
 } from '../../lib/api.ts';
 import { useQueryClient } from '@tanstack/react-query';
-import { setPlanData, usePlan } from '../../lib/query/index.ts';
+import { setPlanData, usePlan, useWatchLogInbox, useWatchPortraitSync, useWatchSync } from '../../lib/query/index.ts';
+import { useCoachFace } from '../coach/coachFaceContext.ts';
 
 /** Warm label for a detour type — the coach names the disruption plainly (BRAND.md). */
 /** Local calendar day — the detour card's clock is the user's day, not UTC. */
@@ -87,6 +88,16 @@ export function PlanView({
    */
   const queryClient = useQueryClient();
   const { data, error, refetch } = usePlan();
+  // The wrist's copy of the week, kept current from the same cached plan this view paints.
+  // A no-op everywhere but a native shell with our watch app actually installed.
+  useWatchSync(data);
+  // The other direction: sessions finished on the watch, delivered to the API. Also a no-op
+  // everywhere but a native shell.
+  useWatchLogInbox();
+  // And the coach's chosen portrait, so the wrist shows the face they picked rather than the
+  // bundled stand-in. Sent on change only — a portrait changes approximately never.
+  const { faceId: coachFaceId } = useCoachFace();
+  useWatchPortraitSync(coachFaceId);
   const [note, setNote] = useState('');
   const [proposalBusy, setProposalBusy] = useState(false);
   const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)

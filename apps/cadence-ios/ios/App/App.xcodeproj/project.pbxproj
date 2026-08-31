@@ -26,8 +26,33 @@
 		CAD0C0DE2FE1001600EA8C5F /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000600EA8C5F /* TodayView.swift */; };
 		CAD0C0DE2FE1001700EA8C5F /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000700EA8C5F /* SessionDetailView.swift */; };
 		CAD0C0DE2FE1001800EA8C5F /* IntervalPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000800EA8C5F /* IntervalPlayerView.swift */; };
+		CAD0C0DE2FE1005A00EA8C5F /* WatchLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004A00EA8C5F /* WatchLog.swift */; };
+		CAD0C0DE2FE1005B00EA8C5F /* WatchFonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004B00EA8C5F /* WatchFonts.swift */; };
+		CAD0C0DE2FE1005C00EA8C5F /* RouteRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004C00EA8C5F /* RouteRecorder.swift */; };
+		CAD0C0DE2FE1005D00EA8C5F /* TrackedSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004D00EA8C5F /* TrackedSessionView.swift */; };
+		CAD0C0DE2FE1005E00EA8C5F /* AlwaysOn.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004E00EA8C5F /* AlwaysOn.swift */; };
+		CAD0C0DE2FE1005F00EA8C5F /* HoldView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004F00EA8C5F /* HoldView.swift */; };
+		CAD0C0DE2FE1005100EA8C5F /* WatchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004100EA8C5F /* WatchStore.swift */; };
+		CAD0C0DE2FE1005200EA8C5F /* WorkoutSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004200EA8C5F /* WorkoutSpec.swift */; };
+		CAD0C0DE2FE1005300EA8C5F /* HandoffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004300EA8C5F /* HandoffView.swift */; };
+		CAD0C0DE2FE1005400EA8C5F /* WeekView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004400EA8C5F /* WeekView.swift */; };
+		CAD0C0DE2FE1005500EA8C5F /* SitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004500EA8C5F /* SitView.swift */; };
+		CAD0C0DE2FE1005600EA8C5F /* StrengthPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004600EA8C5F /* StrengthPlan.swift */; };
+		CAD0C0DE2FE1005700EA8C5F /* StrengthTimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004700EA8C5F /* StrengthTimerView.swift */; };
+		CAD0C0DE2FE1005800EA8C5F /* SetLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004800EA8C5F /* SetLogView.swift */; };
+		CAD0C0DE2FE1005900EA8C5F /* DoneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1004900EA8C5F /* DoneView.swift */; };
+		CAD0C0DE2FE0000800EA8C5F /* WorkoutActivityMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE0000700EA8C5F /* WorkoutActivityMap.swift */; };
+		CAD0C0DE2FE0000900EA8C5F /* WorkoutActivityMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE0000700EA8C5F /* WorkoutActivityMap.swift */; };
+		CAD0C0DE2FE0000600EA8C5F /* CadenceWatchSyncPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE0000500EA8C5F /* CadenceWatchSyncPlugin.swift */; };
 		CAD0C0DE2FE1001900EA8C5F /* WorkoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000900EA8C5F /* WorkoutController.swift */; };
 		CAD0C0DE2FE1002B00EA8C5F /* CadenceWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1002100EA8C5F /* CadenceWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CAD0C0DE2FE1016000EA8C5F /* PlusJakartaSans_400Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1006000EA8C5F /* PlusJakartaSans_400Regular.ttf */; };
+		CAD0C0DE2FE1016100EA8C5F /* PlusJakartaSans_500Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1006100EA8C5F /* PlusJakartaSans_500Medium.ttf */; };
+		CAD0C0DE2FE1016200EA8C5F /* PlusJakartaSans_600SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1006200EA8C5F /* PlusJakartaSans_600SemiBold.ttf */; };
+		CAD0C0DE2FE1016300EA8C5F /* PlusJakartaSans_700Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1006300EA8C5F /* PlusJakartaSans_700Bold.ttf */; };
+		CAD0C0DE2FE1016400EA8C5F /* PlusJakartaSans_800ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1006400EA8C5F /* PlusJakartaSans_800ExtraBold.ttf */; };
+		CAD0C0DE2FE1016500EA8C5F /* SpaceMono_400Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1006500EA8C5F /* SpaceMono_400Regular.ttf */; };
+		CAD0C0DE2FE1016600EA8C5F /* SpaceMono_700Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1006600EA8C5F /* SpaceMono_700Bold.ttf */; };
 		CAD0C0DE2FE1003000EA8C5F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1002E00EA8C5F /* Assets.xcassets */; };
 		CAD0C0DE2FE1003100EA8C5F /* coach.jpg in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1002F00EA8C5F /* coach.jpg */; };
 		CAD0C0DE2FE1003300EA8C5F /* CadenceAuthSessionPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1003200EA8C5F /* CadenceAuthSessionPlugin.swift */; };
@@ -55,9 +80,33 @@
 		CAD0C0DE2FE1000600EA8C5F /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		CAD0C0DE2FE1000700EA8C5F /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
 		CAD0C0DE2FE1000800EA8C5F /* IntervalPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntervalPlayerView.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004A00EA8C5F /* WatchLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLog.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004B00EA8C5F /* WatchFonts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchFonts.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004C00EA8C5F /* RouteRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteRecorder.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004D00EA8C5F /* TrackedSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackedSessionView.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004E00EA8C5F /* AlwaysOn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlwaysOn.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004F00EA8C5F /* HoldView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldView.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004100EA8C5F /* WatchStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchStore.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004200EA8C5F /* WorkoutSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutSpec.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004300EA8C5F /* HandoffView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffView.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004400EA8C5F /* WeekView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekView.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004500EA8C5F /* SitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SitView.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004600EA8C5F /* StrengthPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrengthPlan.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004700EA8C5F /* StrengthTimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrengthTimerView.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004800EA8C5F /* SetLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetLogView.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE1004900EA8C5F /* DoneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoneView.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE0000700EA8C5F /* WorkoutActivityMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkoutActivityMap.swift; path = Shared/WorkoutActivityMap.swift; sourceTree = SOURCE_ROOT; };
+		CAD0C0DE2FE0000500EA8C5F /* CadenceWatchSyncPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CadenceWatchSyncPlugin.swift; path = CadenceWatchSync/CadenceWatchSyncPlugin.swift; sourceTree = "<group>"; };
 		CAD0C0DE2FE1000900EA8C5F /* WorkoutController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutController.swift; sourceTree = "<group>"; };
 		CAD0C0DE2FE1002000EA8C5F /* CadenceWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CadenceWatch.entitlements; sourceTree = "<group>"; };
 		CAD0C0DE2FE1002100EA8C5F /* CadenceWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CadenceWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CAD0C0DE2FE1006000EA8C5F /* PlusJakartaSans_400Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = PlusJakartaSans_400Regular.ttf; path = Fonts/PlusJakartaSans_400Regular.ttf; sourceTree = "<group>"; };
+		CAD0C0DE2FE1006100EA8C5F /* PlusJakartaSans_500Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = PlusJakartaSans_500Medium.ttf; path = Fonts/PlusJakartaSans_500Medium.ttf; sourceTree = "<group>"; };
+		CAD0C0DE2FE1006200EA8C5F /* PlusJakartaSans_600SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = PlusJakartaSans_600SemiBold.ttf; path = Fonts/PlusJakartaSans_600SemiBold.ttf; sourceTree = "<group>"; };
+		CAD0C0DE2FE1006300EA8C5F /* PlusJakartaSans_700Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = PlusJakartaSans_700Bold.ttf; path = Fonts/PlusJakartaSans_700Bold.ttf; sourceTree = "<group>"; };
+		CAD0C0DE2FE1006400EA8C5F /* PlusJakartaSans_800ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = PlusJakartaSans_800ExtraBold.ttf; path = Fonts/PlusJakartaSans_800ExtraBold.ttf; sourceTree = "<group>"; };
+		CAD0C0DE2FE1006500EA8C5F /* SpaceMono_400Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = SpaceMono_400Regular.ttf; path = Fonts/SpaceMono_400Regular.ttf; sourceTree = "<group>"; };
+		CAD0C0DE2FE1006600EA8C5F /* SpaceMono_700Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = SpaceMono_700Bold.ttf; path = Fonts/SpaceMono_700Bold.ttf; sourceTree = "<group>"; };
 		CAD0C0DE2FE1002E00EA8C5F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CAD0C0DE2FE1002F00EA8C5F /* coach.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = coach.jpg; sourceTree = "<group>"; };
 		CAD0C0DE2FE1003200EA8C5F /* CadenceAuthSessionPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CadenceAuthSessionPlugin.swift; path = CadenceAuthSession/CadenceAuthSessionPlugin.swift; sourceTree = "<group>"; };
@@ -131,6 +180,8 @@
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				CAD0C0DE2FE0000100EA8C5F /* CadenceCoachIdentityPlugin.swift */,
 				CAD0C0DE2FE0000300EA8C5F /* CadenceWorkoutPlanPlugin.swift */,
+				CAD0C0DE2FE0000500EA8C5F /* CadenceWatchSyncPlugin.swift */,
+				CAD0C0DE2FE0000700EA8C5F /* WorkoutActivityMap.swift */,
 				CAD0C0DE2FE1003200EA8C5F /* CadenceAuthSessionPlugin.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
@@ -156,9 +207,31 @@
 				CAD0C0DE2FE1000700EA8C5F /* SessionDetailView.swift */,
 				CAD0C0DE2FE1000800EA8C5F /* IntervalPlayerView.swift */,
 				CAD0C0DE2FE1000900EA8C5F /* WorkoutController.swift */,
+				CAD0C0DE2FE1004100EA8C5F /* WatchStore.swift */,
+				CAD0C0DE2FE1004F00EA8C5F /* HoldView.swift */,
+				CAD0C0DE2FE1004E00EA8C5F /* AlwaysOn.swift */,
+				CAD0C0DE2FE1004C00EA8C5F /* RouteRecorder.swift */,
+				CAD0C0DE2FE1004D00EA8C5F /* TrackedSessionView.swift */,
+				CAD0C0DE2FE1004B00EA8C5F /* WatchFonts.swift */,
+				CAD0C0DE2FE1004A00EA8C5F /* WatchLog.swift */,
+				CAD0C0DE2FE1004200EA8C5F /* WorkoutSpec.swift */,
+				CAD0C0DE2FE1004300EA8C5F /* HandoffView.swift */,
+				CAD0C0DE2FE1004400EA8C5F /* WeekView.swift */,
+				CAD0C0DE2FE1004500EA8C5F /* SitView.swift */,
+				CAD0C0DE2FE1004600EA8C5F /* StrengthPlan.swift */,
+				CAD0C0DE2FE1004700EA8C5F /* StrengthTimerView.swift */,
+				CAD0C0DE2FE1004800EA8C5F /* SetLogView.swift */,
+				CAD0C0DE2FE1004900EA8C5F /* DoneView.swift */,
 				CAD0C0DE2FE1002000EA8C5F /* CadenceWatch.entitlements */,
 				CAD0C0DE2FE1002E00EA8C5F /* Assets.xcassets */,
 				CAD0C0DE2FE1002F00EA8C5F /* coach.jpg */,
+				CAD0C0DE2FE1006000EA8C5F /* PlusJakartaSans_400Regular.ttf */,
+				CAD0C0DE2FE1006100EA8C5F /* PlusJakartaSans_500Medium.ttf */,
+				CAD0C0DE2FE1006200EA8C5F /* PlusJakartaSans_600SemiBold.ttf */,
+				CAD0C0DE2FE1006300EA8C5F /* PlusJakartaSans_700Bold.ttf */,
+				CAD0C0DE2FE1006400EA8C5F /* PlusJakartaSans_800ExtraBold.ttf */,
+				CAD0C0DE2FE1006500EA8C5F /* SpaceMono_400Regular.ttf */,
+				CAD0C0DE2FE1006600EA8C5F /* SpaceMono_700Bold.ttf */,
 			);
 			path = CadenceWatch;
 			sourceTree = "<group>";
@@ -263,6 +336,13 @@
 			files = (
 				CAD0C0DE2FE1003000EA8C5F /* Assets.xcassets in Resources */,
 				CAD0C0DE2FE1003100EA8C5F /* coach.jpg in Resources */,
+				CAD0C0DE2FE1016000EA8C5F /* PlusJakartaSans_400Regular.ttf in Resources */,
+				CAD0C0DE2FE1016100EA8C5F /* PlusJakartaSans_500Medium.ttf in Resources */,
+				CAD0C0DE2FE1016200EA8C5F /* PlusJakartaSans_600SemiBold.ttf in Resources */,
+				CAD0C0DE2FE1016300EA8C5F /* PlusJakartaSans_700Bold.ttf in Resources */,
+				CAD0C0DE2FE1016400EA8C5F /* PlusJakartaSans_800ExtraBold.ttf in Resources */,
+				CAD0C0DE2FE1016500EA8C5F /* SpaceMono_400Regular.ttf in Resources */,
+				CAD0C0DE2FE1016600EA8C5F /* SpaceMono_700Bold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -277,6 +357,8 @@
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				CAD0C0DE2FE0000200EA8C5F /* CadenceCoachIdentityPlugin.swift in Sources */,
 				CAD0C0DE2FE0000400EA8C5F /* CadenceWorkoutPlanPlugin.swift in Sources */,
+				CAD0C0DE2FE0000600EA8C5F /* CadenceWatchSyncPlugin.swift in Sources */,
+				CAD0C0DE2FE0000800EA8C5F /* WorkoutActivityMap.swift in Sources */,
 				CAD0C0DE2FE1003300EA8C5F /* CadenceAuthSessionPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -294,6 +376,22 @@
 				CAD0C0DE2FE1001700EA8C5F /* SessionDetailView.swift in Sources */,
 				CAD0C0DE2FE1001800EA8C5F /* IntervalPlayerView.swift in Sources */,
 				CAD0C0DE2FE1001900EA8C5F /* WorkoutController.swift in Sources */,
+				CAD0C0DE2FE1005100EA8C5F /* WatchStore.swift in Sources */,
+				CAD0C0DE2FE1005F00EA8C5F /* HoldView.swift in Sources */,
+				CAD0C0DE2FE1005E00EA8C5F /* AlwaysOn.swift in Sources */,
+				CAD0C0DE2FE1005C00EA8C5F /* RouteRecorder.swift in Sources */,
+				CAD0C0DE2FE1005D00EA8C5F /* TrackedSessionView.swift in Sources */,
+				CAD0C0DE2FE1005B00EA8C5F /* WatchFonts.swift in Sources */,
+				CAD0C0DE2FE1005A00EA8C5F /* WatchLog.swift in Sources */,
+				CAD0C0DE2FE1005200EA8C5F /* WorkoutSpec.swift in Sources */,
+				CAD0C0DE2FE0000900EA8C5F /* WorkoutActivityMap.swift in Sources */,
+				CAD0C0DE2FE1005300EA8C5F /* HandoffView.swift in Sources */,
+				CAD0C0DE2FE1005400EA8C5F /* WeekView.swift in Sources */,
+				CAD0C0DE2FE1005500EA8C5F /* SitView.swift in Sources */,
+				CAD0C0DE2FE1005600EA8C5F /* StrengthPlan.swift in Sources */,
+				CAD0C0DE2FE1005700EA8C5F /* StrengthTimerView.swift in Sources */,
+				CAD0C0DE2FE1005800EA8C5F /* SetLogView.swift in Sources */,
+				CAD0C0DE2FE1005900EA8C5F /* DoneView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -495,8 +593,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Cadence;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads your heart rate during a session so the coach can see how it went. It never tracks where you go.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads your heart rate and workouts while a session is running, so the coach can see how it went.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Saves the sessions you finish here to Apple Health, so your rings close.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Records the route of a run or ride you start here, so the map and the distance are yours. Only while a session is running.";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = builders.cadence.app;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -526,8 +625,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Cadence;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads your heart rate during a session so the coach can see how it went. It never tracks where you go.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads your heart rate and workouts while a session is running, so the coach can see how it went.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Saves the sessions you finish here to Apple Health, so your rings close.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Records the route of a run or ride you start here, so the map and the distance are yours. Only while a session is running.";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = builders.cadence.app;
 				LD_RUNPATH_SEARCH_PATHS = (
