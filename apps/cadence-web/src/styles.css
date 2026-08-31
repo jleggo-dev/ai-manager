@@ -2236,39 +2236,11 @@ textarea.wiz-title {
 .horizon-endcap-ask:hover {
   border-color: var(--forest);
 }
-/* Manual detour entry (Req 4) — a self-declare path when no proposal exists. The trigger now
-   leads with the felt statement, in the user's own voice (owner, 2026-08-31); placement is
-   pending the design round. */
-.detour-entry {
-  margin: 2px 0 14px;
-}
-.detour-trigger {
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: 1px dashed var(--line-soft);
-  color: var(--text-dim);
-  border-radius: 12px;
-  padding: 9px 13px;
-  font: inherit;
-  font-size: 13.5px;
-  cursor: pointer;
-}
-.detour-trigger b {
-  display: block;
-  font-weight: 700;
-  color: var(--text);
-}
-.detour-trigger span {
-  display: block;
-  margin-top: 2px;
-}
-.detour-trigger:hover {
-  border-color: var(--forest);
-  color: var(--forest);
-}
-.detour-trigger:hover b {
-  color: var(--forest);
+/* The detour DOOR (Req 4, placement per Option A — owner trialing 2026-08-31): the self-declare
+   path borrows the DetourBar's glass line and slot, so door and live-state share one home at the
+   top of the page. Only the dot differs — dawn, not forest: an invitation, not a live state. */
+.detour-door .detour-bar-dot {
+  background: var(--dawn-3);
 }
 .detour-pick {
   display: flex;

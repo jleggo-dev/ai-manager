@@ -358,6 +358,19 @@ export function PlanView({
         {data.activeEpisode && (
           <DetourBar episode={data.activeEpisode} dark={false} onOpen={() => setDetourSheet(true)} />
         )}
+        {/* The detour DOOR, in the bar's own slot (Option A — owner trialing on device,
+            2026-08-31): door and live-state share one home at the top of the page, mutually
+            exclusive by condition. The felt statement is the user's own words; the setup sheet
+            it opens does the "take a detour" framing. */}
+        {!data.activeEpisode && (
+          <button className="detour-bar detour-door" onClick={() => setDetourEntry(true)}>
+            <span className="detour-bar-dot" aria-hidden />
+            <span className="detour-bar-line">&ldquo;My plan isn&rsquo;t working — I&rsquo;m too busy&rdquo;</span>
+            <span className="detour-bar-chev" aria-hidden>
+              ›
+            </span>
+          </button>
+        )}
         {data.activeEpisode && todayIso() >= data.activeEpisode.start && !data.activeEpisode.gearKnown && (
           <div className="detour">
             <div className="detour-t">
@@ -470,15 +483,6 @@ export function PlanView({
             canAskAhead={data.week.length <= 7}
             onPlanAhead={onPlanAhead}
           />
-        )}
-
-        {/* Placement + final copy pending the design round (owner, 2026-08-31) — the felt
-            statement replaced "Life happened?" so the door is the words someone would say. */}
-        {!data.activeEpisode && (
-          <button className="detour-trigger" onClick={() => setDetourEntry(true)}>
-            <b>&ldquo;My plan isn&rsquo;t working — I&rsquo;m too busy&rdquo;</b>
-            <span>Life happens. Let&rsquo;s take a detour.</span>
-          </button>
         )}
       </div>
       {sheetOcc && (
