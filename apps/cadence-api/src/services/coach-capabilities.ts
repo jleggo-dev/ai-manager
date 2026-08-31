@@ -35,6 +35,11 @@ export const CAPABILITIES: CapabilityGroup[] = [
     can: [
       'talk through what you are building and turn it into goals with a why beside each',
       'remember what you told me — your goals, what you are working around, what you have to work with, what you are learning and already know (pieces, katas, poems) — so you never repeat yourself',
+      // The manifest and the drawer must name the same abilities (the Progress Engine lesson,
+      // above): update_equipment landed 2026-08-31 after she searched the drawer seven times for
+      // an equipment write that did not exist and told the owner a correction was made when
+      // nothing could make it.
+      'fix what is on file about your gear the moment you tell me — rename it, add something new, drop what you no longer have',
       'pressure-test a goal against where you actually are, and right-size it with stepping-stones',
     ],
   },

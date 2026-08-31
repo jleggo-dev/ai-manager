@@ -6,6 +6,7 @@ import {
   renameCapturedConstraint,
 } from '../repos/users.ts';
 import { sameConstraint } from './constraint-merge.ts';
+import { factTokens } from './fact-tokens.ts';
 import type { CoachActionTool } from './coach-action-types.ts';
 
 /**
@@ -149,6 +150,31 @@ export const UPDATE_CONSTRAINT: CoachActionTool = {
         ? `"${row.label}" is active again and verified: the plan should work around it. Say so, and offer to change the week if it currently ignores it.`
         : `"${row.label}" did not save as active. Do NOT say it is done; say you could not save it just now.`;
     }
-    return `Noted and verified: they work around "${row.label}". Say it back in one line so they can correct you if you have it wrong.`;
+    /**
+     * A guard reports evidence; she adjudicates (CLAUDE.md). The merge already folds a retelling
+     * onto its row, so what reaches here as NEW is genuinely unmatched — but "genuinely unmatched"
+     * and "a different fact" are not the same thing ("Wednesday - limit to one workout" beside
+     * "Wednesday work schedule — can only do one workout" survived every string rule, 2026-08-31).
+     * Name the nearest neighbour instead of deciding, and let her ask.
+     */
+    const near = !existing ? nearMiss(after, row.label ?? label) : null;
+    return `Noted and verified: they work around "${row.label}". Say it back in one line so they can correct you if you have it wrong.${
+      near
+        ? ` One thing to check: this sits close to "${near}", already on their file — if those are one fact, use reword to fold them into one telling and remove the other.`
+        : ''
+    }`;
   },
 };
+
+/** Another stored label sharing 2+ significant tokens with the one just written — evidence of a
+ *  possible twin the containment rule could not merge, for the coach to raise, not act on. */
+function nearMiss(rows: Array<{ label?: string }>, written: string): string | null {
+  const mine = new Set(factTokens(written));
+  for (const r of rows) {
+    const label = r.label ?? '';
+    if (!label || label === written) continue;
+    const overlap = factTokens(label).filter((t) => mine.has(t));
+    if (new Set(overlap).size >= 2) return label;
+  }
+  return null;
+}

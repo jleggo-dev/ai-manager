@@ -94,4 +94,41 @@ describe('mergeConstraints', () => {
     mergeConstraints(original, [c({ label: 'knee', status: 'quiet' })]);
     expect(JSON.stringify(original)).toBe(snapshot);
   });
+
+  /**
+   * The 2026-08-31 duplicates, verbatim from the owner's file: raw-word containment could not
+   * see through a plural or a moved stopword, and one Wednesday became four rows.
+   */
+  describe('the tellings that actually duplicated (2026-08-31)', () => {
+    it('a plural does not split the piano class', () => {
+      const merged = mergeConstraints(
+        [c({ label: 'Weekly piano class on Saturdays' })],
+        [c({ label: 'Saturday piano class' })],
+      );
+      expect(merged).toHaveLength(1);
+      expect(merged[0]!.label).toBe('Weekly piano class on Saturdays');
+    });
+
+    it('moved stopwords do not split the Wednesday fact', () => {
+      const merged = mergeConstraints(
+        [c({ label: 'Wednesday afternoons — at work' })],
+        [c({ label: 'work on Wednesday afternoons' })],
+      );
+      expect(merged).toHaveLength(1);
+    });
+
+    it('a fuller retelling lands on the existing row and keeps the longer label', () => {
+      const merged = mergeConstraints(
+        [c({ label: 'Wednesday afternoons — at work' })],
+        [c({ label: 'Wednesday work schedule — can only do one workout, no afternoon workout' })],
+      );
+      expect(merged).toHaveLength(1);
+      expect(merged[0]!.label).toBe('Wednesday work schedule — can only do one workout, no afternoon workout');
+    });
+
+    it('different complaints still stay two things', () => {
+      const merged = mergeConstraints([c({ label: 'knee pain' })], [c({ label: 'back pain' })]);
+      expect(merged).toHaveLength(2);
+    });
+  });
 });

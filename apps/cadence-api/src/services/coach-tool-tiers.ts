@@ -215,6 +215,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   propose_progress_layout: 'propose a redesign of what their Progress page watches — they confirm a card first',
   get_recent_logs: 'their session notes from recent days: what they did and how it felt',
   get_equipment: 'training equipment they own, with usage wear for tracked items',
+  update_equipment: 'ACTION: add, remove, or rename equipment on their file — corrections included',
 };
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
@@ -268,7 +269,13 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // piano minutes and prayer streaks were always a strained fit under "training".
     members: ['get_repertoire', 'get_practice_totals'],
   },
-  { key: 'body', label: 'what their body and devices recorded', members: ['get_workout_history', 'get_equipment'] },
+  {
+    key: 'body',
+    label: 'what their body and devices recorded',
+    // `update_equipment` filed beside its read half: the drawer's second ACTION (2026-08-31 —
+    // the coach searched this drawer seven times for an equipment write that did not exist).
+    members: ['get_workout_history', 'get_equipment', 'update_equipment'],
+  },
   {
     key: 'food',
     label: 'what they eat, their targets, their recipes, and nutrition facts',
