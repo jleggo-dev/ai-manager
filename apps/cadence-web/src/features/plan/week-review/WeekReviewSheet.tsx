@@ -23,7 +23,7 @@ function shortDate(iso: string): string {
  * 4), now with a real write-back (step 5): every toggle in `DayDrillIn`/`WeeklyTasksList` writes
  * through `useWeekReview`, and the footer button finalizes the review.
  *
- * A thin dispatcher over domain panels, same shape OccurrenceSheet.tsx already uses: this file
+ * A thin dispatcher over domain panels: this file
  * owns the sheet chrome, the load state, which day (if any) is drilled into, and the confirm
  * footer; every panel below it is a renderer of `WeekReviewFacts` plus whatever toggle callbacks
  * it needs. `useWeekReview` owns the one fetch AND every write — nothing here talks to the

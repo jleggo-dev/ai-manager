@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { OccurrenceSheet } from './OccurrenceSheet.tsx';
 import { StartSheet } from './StartSheet.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
 import { CookSheet } from './CookSheet.tsx';
@@ -92,7 +91,6 @@ export function PlanView({
   // bundled stand-in. Sent on change only — a portrait changes approximately never.
   const { faceId: coachFaceId } = useCoachFace();
   useWatchPortraitSync(coachFaceId);
-  const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)
   const [startOcc, setStartOcc] = useState<{ id: string; title: string } | null>(null); // redesign start sheet (stepped task)
   // The capture sheet, WITH what the trail already knew when it was tapped. Storing only the id
   // meant the sheet had to re-learn the row's own title from the server before it could draw its
@@ -226,7 +224,7 @@ export function PlanView({
   const horizonReached = restEmpty || !!data.weekState?.checkin_due;
 
   // Trail node tap → routed by task shape: captures (weigh-in, meals) open the minimal CaptureSheet;
-  // coach sessions open the StartSheet walkthrough. (The Week view keeps its own OccurrenceSheet.)
+  // coach sessions open the StartSheet walkthrough.
   const openTask = (occ: PlanOccurrence) => {
     switch (taskOpener(occ)) {
       case 'task':
@@ -332,25 +330,6 @@ export function PlanView({
           />
         )}
       </div>
-      {sheetOcc && (
-        <OccurrenceSheet
-          occurrenceId={sheetOcc}
-          onClose={() => setSheetOcc(null)}
-          onLogged={() => {
-            refresh();
-            bump();
-          }}
-          onProposeChange={(steer) => {
-            // Baseline → Adjust bridge: the suggestion opens the compose sheet prefilled, so the
-            // user sees — and can edit — the words before they go to the coach as their own
-            // message (the suggestion is coach-authored; it only becomes theirs by their say-so).
-            setSheetOcc(null);
-            setAdjustSteer(steer);
-            setAdjustMode('adjust');
-            setAdjustOpen(true);
-          }}
-        />
-      )}
       {startOcc && (
         <StartSheet
           occurrenceId={startOcc.id}
@@ -415,7 +394,6 @@ export function PlanView({
           check-in is the only one that arrives uninvited, so it is the one that yields — it
           mounts (and only then asks the server whether it's due) once nothing else is open. */}
       {!checkinSettled &&
-        !sheetOcc &&
         !startOcc &&
         !captureOcc &&
         !cookOcc &&
