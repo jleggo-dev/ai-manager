@@ -7,6 +7,9 @@ import {
   getProgressVariety,
   getProgressStagePath,
   getProgressCount,
+  getProgressRepertoire,
+  getProgressFeltWeeks,
+  getProgressThenNow,
 } from '../api.ts';
 import { queryKeys } from './keys.ts';
 
@@ -56,4 +59,22 @@ export function useProgressCount(goalId: string) {
     queryFn: () => getProgressCount(goalId),
     enabled: Boolean(goalId),
   });
+}
+
+/** `repertoire` — what they're learning or already have; no goalId means everything they keep. */
+export function useProgressRepertoire(goalId?: string) {
+  return useQuery({
+    queryKey: queryKeys.progressExtras.repertoire(goalId ?? ''),
+    queryFn: () => getProgressRepertoire(goalId),
+  });
+}
+
+/** `felt_week` — the last four weeks colored by daily check-in mood. */
+export function useProgressFeltWeeks() {
+  return useQuery({ queryKey: queryKeys.progressExtras.feltWeeks, queryFn: getProgressFeltWeeks });
+}
+
+/** `then_now` — plain before/after pairs since the start. */
+export function useProgressThenNow() {
+  return useQuery({ queryKey: queryKeys.progressExtras.thenNow, queryFn: getProgressThenNow });
 }

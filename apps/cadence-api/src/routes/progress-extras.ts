@@ -13,6 +13,9 @@ import { getBalance } from '../services/progress-nontemporal-balance.ts';
 import { getTotal } from '../services/progress-nontemporal-total.ts';
 import { getVariety } from '../services/progress-nontemporal-variety.ts';
 import { getStagePath, getCountToward } from '../services/progress-nontemporal-goal.ts';
+import { getRepertoireCard } from '../services/progress-nontemporal-repertoire.ts';
+import { getFeltWeeks } from '../services/progress-felt-weeks.ts';
+import { getThenNow } from '../services/progress-then-now.ts';
 import { resolveWindowRange } from '../services/window-range.ts';
 
 const router = Router();
@@ -106,6 +109,51 @@ router.get('/stage-path', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /progress/stage-path]', err);
     res.status(500).json({ error: 'failed to load stage path' });
+  }
+});
+
+/** GET /progress/repertoire?goal_id= — `repertoire`: what they're learning or already have.
+ *  `goal_id` is optional: present scopes to that goal's items, absent shows everything they keep.
+ *  The card ignores the page's window control honestly — a repertoire has no time axis. */
+router.get('/repertoire', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const goalId = req.query.goal_id;
+  if (goalId !== undefined && (typeof goalId !== 'string' || !goalId)) {
+    return void res.status(400).json({ error: 'goal_id, when given, must be a non-empty string' });
+  }
+  try {
+    const result = await getRepertoireCard(userId, typeof goalId === 'string' ? goalId : null);
+    res.json('reason' in result ? { omission: result } : result);
+  } catch (err) {
+    console.error('[GET /progress/repertoire]', err);
+    res.status(500).json({ error: 'failed to load repertoire' });
+  }
+});
+
+/** GET /progress/felt-weeks — `felt_week`: the last four weeks colored by daily check-in mood.
+ *  No params: felt has no re-window (always four weeks) and no per-goal slice. */
+router.get('/felt-weeks', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const result = await getFeltWeeks(userId);
+    res.json('reason' in result ? { omission: result } : result);
+  } catch (err) {
+    console.error('[GET /progress/felt-weeks]', err);
+    res.status(500).json({ error: 'failed to load felt weeks' });
+  }
+});
+
+/** GET /progress/then-now — `then_now`: plain before/after pairs mined from the whole session
+ *  feed. No params: "then" is the start and "now" is the last four weeks — the card has no honest
+ *  re-window and no per-goal slice. */
+router.get('/then-now', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const result = await getThenNow(userId);
+    res.json('reason' in result ? { omission: result } : result);
+  } catch (err) {
+    console.error('[GET /progress/then-now]', err);
+    res.status(500).json({ error: 'failed to load then and now' });
   }
 });
 

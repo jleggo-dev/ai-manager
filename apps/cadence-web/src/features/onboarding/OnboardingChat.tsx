@@ -11,6 +11,7 @@ import {
 } from './health-digest.ts';
 import { getHealthDigest, postHealthDigest, postWorkoutHistory } from '../../lib/api.ts';
 import { capabilities } from '../../lib/capability/index.ts';
+import { consumeWeekApplied } from '../../lib/applied-week-note.ts';
 import { OPENING_PICKS, OPENING_PLACEHOLDER, OPENING_QUESTION } from '@cadence/shared';
 import { useEnsureCoachFace } from '../coach/useEnsureCoachFace.ts';
 import { useStickToBottom } from './useStickToBottom.ts';
@@ -218,6 +219,26 @@ export function OnboardingChat({
     // `restored` is the arm signal; streaming is a guard, not a trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionNote, restored]);
+
+  /**
+   * The week they applied greets them here (owner pick "B", 2026-08-31): tapping Apply on a
+   * week the coach drew leaves a flag, and her next chat opening acknowledges it in one line —
+   * the conversation's own record of what happened on the Plan tab, in her voice, without a
+   * system line in the transcript. Same shape as the sessionNote above; ongoing only (an
+   * onboarding thread has no applied week to speak of).
+   */
+  const appliedWeekFired = useRef(false);
+  useEffect(() => {
+    if (intent !== 'ongoing' || !restored || streaming || appliedWeekFired.current) return;
+    if (!consumeWeekApplied()) return;
+    appliedWeekFired.current = true;
+    void nudge(
+      'They just applied the new week you drew on the Plan tab. Open with ONE warm line ' +
+        'acknowledging it and naming what starts it off — do not re-list the week, and do not ' +
+        'ask a question unless they do.',
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, restored]);
 
   /**
    * The visible check-in bridge (check-in rebuild, step 4). Keyed, not booleaned, because this

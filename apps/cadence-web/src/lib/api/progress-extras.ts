@@ -8,11 +8,14 @@
 import type {
   BalancePayload,
   CountTowardPayload,
+  FeltWeekPayload,
   MealKind,
   ProgressWindow,
+  RepertoirePayload,
   SessionFeedbackKind,
   ShelfPayload,
   StagePathPayload,
+  ThenNowPayload,
   TotalPayload,
   VarietyPayload,
   WidgetOmission,
@@ -59,4 +62,22 @@ export async function getProgressStagePath(goalId: string): Promise<Omittable<St
 /** `count_toward` — n of target from a count-measure goal. */
 export async function getProgressCount(goalId: string): Promise<Omittable<CountTowardPayload>> {
   return getExtra(`/progress/count?goal_id=${encodeURIComponent(goalId)}`);
+}
+
+/** `felt_week` — the last four weeks colored by daily check-in mood. No params: always four
+ *  weeks, no per-goal slice. */
+export async function getProgressFeltWeeks(): Promise<Omittable<FeltWeekPayload>> {
+  return getExtra('/progress/felt-weeks');
+}
+
+/** `then_now` — plain before/after pairs mined from the whole session feed. No params: "then" is
+ *  the start and "now" is the last four weeks, whatever the page's window says. */
+export async function getProgressThenNow(): Promise<Omittable<ThenNowPayload>> {
+  return getExtra('/progress/then-now');
+}
+
+/** `repertoire` — what they're learning or already have; `goalId` scopes to one goal's items. */
+export async function getProgressRepertoire(goalId?: string): Promise<Omittable<RepertoirePayload>> {
+  const goalParam = goalId ? `?goal_id=${encodeURIComponent(goalId)}` : '';
+  return getExtra(`/progress/repertoire${goalParam}`);
 }

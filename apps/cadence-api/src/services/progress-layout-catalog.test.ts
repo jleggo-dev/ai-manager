@@ -29,9 +29,21 @@ describe('widgetCatalog', () => {
   });
 
   it("matches docs/cadence/PROGRESS-ENGINE.md's own grouping", () => {
-    expect([...TEMPORAL_KINDS].sort()).toEqual(['dated_sessions', 'rhythm', 'trend_vs_target', 'weekly_bars'].sort());
+    expect([...TEMPORAL_KINDS].sort()).toEqual(
+      ['dated_sessions', 'felt_week', 'rhythm', 'trend_vs_target', 'weekly_bars'].sort(),
+    );
     expect([...NON_TEMPORAL_KINDS].sort()).toEqual(
-      ['balance', 'count_toward', 'shelf', 'stage_path', 'total', 'variety'].sort(),
+      [
+        'balance',
+        'count_toward',
+        'photo_pair',
+        'repertoire',
+        'shelf',
+        'stage_path',
+        'then_now',
+        'total',
+        'variety',
+      ].sort(),
     );
     expect([...PAGE_LEVEL_KINDS].sort()).toEqual(['history', 'recap_rail'].sort());
   });

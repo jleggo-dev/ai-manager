@@ -19,6 +19,8 @@ export interface PlanOccurrence {
   status: 'pending' | 'done' | 'skipped' | 'missed' | 'paused';
   time_of_day?: string;
   steps?: number; // prescribed-step count (from a cached session) — the trail's step ring
+  /** The linked goal's area — the icon family's source of truth (title regex is the fallback). */
+  area?: 'movement' | 'nourishment' | 'mind' | 'practice';
 }
 
 /** The "you're on a detour" summary (Req 4) — set while a disrupted episode is active. */

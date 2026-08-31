@@ -16,7 +16,11 @@ export {
   useProgressVariety,
   useProgressStagePath,
   useProgressCount,
+  useProgressRepertoire,
+  useProgressFeltWeeks,
+  useProgressThenNow,
 } from './useProgressExtras.ts';
+export { useProgressPhotoPair } from './useProgressPhotos.ts';
 export { useRecaps } from './useRecaps.ts';
 export { planSignature, useWatchSync } from './useWatchSync.ts';
 export { drainWatchLogs, useWatchLogInbox } from './useWatchLogInbox.ts';

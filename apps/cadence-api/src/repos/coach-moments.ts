@@ -115,6 +115,19 @@ export async function getDailyCheckin(userId: string, date: string): Promise<Dai
 }
 
 /**
+ * Every check-in row in [fromDate, toDate] (inclusive), oldest first — the `felt_week` widget's
+ * binding. Rows with a null mood (dismissed, or answered without one) come back too: the caller
+ * is the one that decides "no mood noted" means an unread day, never a zero.
+ */
+export async function listDailyCheckins(userId: string, fromDate: string, toDate: string): Promise<DailyCheckinRow[]> {
+  return sql<DailyCheckinRow[]>`
+    select date::text, mood, adjustment, dismissed_at
+    from cadence.daily_checkins
+    where user_id = ${userId} and date >= ${fromDate} and date <= ${toDate}
+    order by date`;
+}
+
+/**
  * Record (or update) today's check-in. Both fields are optional and independently settable —
  * someone may set a mood, scroll away, and come back to take an adjustment, and neither answer
  * should clear the other.

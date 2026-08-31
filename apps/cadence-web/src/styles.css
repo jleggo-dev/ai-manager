@@ -3537,6 +3537,11 @@ textarea.wiz-title {
   flex-direction: column;
   padding: 10px 18px 18px;
   animation: sheet-up 0.22s ease-out;
+  /* Sheets are vertical surfaces, whole. .sheet-body clamped x years before the HEAD did, so a
+     long title span (an email, a dev-account tag) could still pan the entire sheet sideways —
+     observed on Settings, on device, 2026-08-31. Anything inside that truly needs an x-scroll
+     owns its own overflow-x: auto and still gets it. */
+  overflow-x: hidden;
 }
 /* A sheet whose job is COMPOSING — the "Custom — let's talk" ask — earns the height a review
  * sheet doesn't. At 78% with the keyboard up there were two usable lines to write the most
@@ -4398,7 +4403,6 @@ textarea.wiz-title {
   color: oklch(52% 0.16 25);
   margin-bottom: 6px;
   text-align: center;
-
 }
 
 /* ── Visual Today: the sky-trail (REQ8 redesign — docs/cadence/design/redesign-today-trail) ── */
@@ -6001,6 +6005,11 @@ textarea.wiz-title {
 }
 .ld-ic-reflection {
   background: linear-gradient(168deg, oklch(66% 0.13 268), oklch(54% 0.14 266));
+}
+/* The fifth family (2026-08-31): piano and every practice like it — a warm plum between
+   mindset's gold and reflection's indigo, so a practice row reads as its own thing. */
+.ld-ic-practice {
+  background: linear-gradient(168deg, oklch(70% 0.13 330), oklch(58% 0.14 328));
 }
 .ld-row-t {
   flex: 1;
@@ -9191,4 +9200,219 @@ textarea.wiz-title {
   font-weight: 600;
   font-style: italic;
   color: oklch(62% 0.02 150);
+}
+
+/* ── Proposed week — the plan as a WEEK, not a bag of pills (owner design "Cadence Plan
+   Rebalance" screen 1a, 2026-08-31). Day groups with minute totals; rows typed by glyph chip;
+   the accept buttons live below the scroll so the week can be long and the choice never moves. */
+.sheet-week {
+  max-height: 96%;
+  min-height: 90%;
+}
+.sheet-body.wk-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: hidden;
+}
+.wk-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 1px 10px;
+}
+.wk-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 12px 13px;
+  box-shadow: 0 2px 0 var(--line-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.wk-day {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.wk-day-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+.wk-day-name {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+.wk-day-daily .wk-day-name {
+  color: oklch(46% 0.06 70);
+}
+.wk-day-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+.wk-day-min {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #b0aa98;
+}
+.wk-card {
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: 0 2px 0 var(--line-soft);
+}
+.wk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+}
+.wk-row + .wk-row {
+  border-top: 1px solid #f3eee1;
+}
+.wk-row-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.wk-row-t b {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+}
+.wk-row-t span {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-mute);
+  margin-top: 1px;
+}
+.wk-tag {
+  flex: none;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: var(--sun);
+  background: oklch(95% 0.03 45);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.wk-chip {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.wk-chip-movement {
+  background: oklch(94% 0.03 152);
+  color: var(--forest);
+}
+.wk-chip-nutrition {
+  background: oklch(95% 0.05 85);
+  color: oklch(55% 0.12 70);
+}
+.wk-chip-mindset,
+.wk-chip-reflection {
+  background: oklch(93% 0.03 262);
+  color: var(--dusk);
+}
+.wk-chip-practice {
+  background: oklch(94% 0.02 320);
+  color: oklch(48% 0.06 320);
+}
+.wk-actions {
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+}
+.wk-actions .proposal-accept {
+  width: 100%;
+  background: var(--forest);
+  border-radius: 14px;
+  padding: 13px;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: 0 3px 0 oklch(26% 0.05 152);
+}
+.wk-actions .proposal-dismiss {
+  width: 100%;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 11px;
+  font-size: 13px;
+  font-weight: 700;
+}
+/* The module itself is scroll-free (hosts own the scroll: the Adjust sheet's .wk-scroll, the
+   gate's .gate2-scroll, the plan sheet's body). */
+.wk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wk-row-btn {
+  width: 100%;
+  text-align: left;
+}
+/* A commitment's why, on its first appearance — marginalia in her voice (the plan card's grow-why
+   idiom, carried into the shared week module). The cut sentence sells continuation. */
+.wk-why {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 3px;
+}
+.wk-why-cut {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-style: italic;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.wk-why i,
+.wk-why-open i {
+  flex: none;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+  color: oklch(46% 0.08 152);
+}
+.wk-why-open {
+  display: block;
+  margin-top: 6px;
+  background: var(--ink);
+  border-radius: 10px;
+  padding: 8px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  font-style: italic;
+  color: oklch(36% 0.03 150);
+  line-height: 1.5;
+  white-space: normal;
+}
+/* "MY ADDITION" — she proposed this herself; dashed like the old suggested dot ("not yours yet"). */
+.wk-tag-add {
+  background: transparent;
+  border: 1.5px dashed oklch(55% 0.06 250);
+  color: oklch(45% 0.06 250);
 }

@@ -99,6 +99,18 @@ export const readPhotoBodySchema = z.object({
     .optional(),
 });
 
+/** POST /progress/photos — one opt-in progress photo; `taken_on` defaults to today server-side. */
+export const progressPhotoBodySchema = z.object({
+  photo: z.string().refine((s) => s.startsWith('data:image/'), { message: 'photo must be a data:image URL' }),
+  taken_on: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'taken_on must be YYYY-MM-DD')
+    .optional(),
+});
+
+/** PUT /progress/photos/enabled — the opt-in switch, both directions. */
+export const progressPhotosEnabledBodySchema = z.object({ enabled: z.boolean() });
+
 export const logFromReadingBodySchema = z.object({
   photo_ref: z.string().min(1, 'photo_ref is required').max(400),
   reading: z.string().max(20000),

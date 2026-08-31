@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { HealthDigestStepsWeek, ProgressWindow, WidgetSpec } from '@cadence/shared';
 import { WidgetSection } from './widgets/registry.tsx';
+import { familyOfArea } from './widgets/cardHeader.ts';
 import {
   useDatedSessions,
   useHealthDigest,
@@ -8,8 +9,12 @@ import {
   useProgressBalance,
   useProgressCount,
   useProgressEvents,
+  useProgressFeltWeeks,
   useProgressHistory,
+  useProgressRepertoire,
+  useProgressPhotoPair,
   useProgressStagePath,
+  useProgressThenNow,
   useProgressTotals,
   useProgressVariety,
   useRecaps,
@@ -42,11 +47,12 @@ function TrendVsTargetBound({ spec, window }: BoundProps) {
   const { data } = useProgress(window);
   const card = data?.cards.find((c) => c.kind === 'latest_vs_target');
   if (!card || card.kind !== 'latest_vs_target') return null;
-  const { kind: _k, area: _a, title, ...payload } = card;
+  const { kind: _k, area, title, ...payload } = card;
   return (
     <WidgetSection
       spec={{ ...spec, title: spec.title ?? title }}
       payload={{ kind: 'trend_vs_target', data: payload }}
+      family={familyOfArea(area)}
     />
   );
 }
@@ -95,7 +101,7 @@ function BalanceBound({ spec, window }: BoundProps) {
   const kind = spec.source?.feedback_kind === 'movement' ? 'movement' : 'mind';
   const { data } = useProgressBalance(kind, window);
   if (!data || 'omission' in data || data.total === 0) return null;
-  return <WidgetSection spec={spec} payload={{ kind: 'balance', data }} />;
+  return <WidgetSection spec={spec} payload={{ kind: 'balance', data }} family={kind} />;
 }
 
 function TotalBound({ spec, window }: BoundProps) {
@@ -108,6 +114,39 @@ function VarietyBound({ spec, window }: BoundProps) {
   const { data } = useProgressVariety(window);
   if (!data || 'omission' in data || data.count === 0) return null;
   return <WidgetSection spec={spec} payload={{ kind: 'variety', data }} />;
+}
+
+function FeltWeeksBound({ spec }: BoundProps) {
+  // Always the trailing four weeks — felt has no honest re-window, so the page's control does
+  // not reach this card. The mood IS the daily mind check-in, so the mind family is honest here.
+  const { data } = useProgressFeltWeeks();
+  if (!data || 'omission' in data || data.weeks.every((w) => w.value === null)) return null;
+  return <WidgetSection spec={spec} payload={{ kind: 'felt_week', data }} family="mind" />;
+}
+
+function RepertoireBound({ spec }: BoundProps) {
+  // Unscoped (no goal_id) is a real mode: everything they keep. The repertoire has no time axis,
+  // so the page's window control honestly does not reach this card.
+  const { data } = useProgressRepertoire(spec.source?.goal_id);
+  if (!data || 'omission' in data || data.items.length === 0) return null;
+  return <WidgetSection spec={spec} payload={{ kind: 'repertoire', data }} family="practice" />;
+}
+
+function ThenNowBound({ spec }: BoundProps) {
+  // "Then" is the start and "now" is the last four weeks — the card has no honest re-window, so
+  // the page's control does not reach it. Cross-goal, so the chip stays neutral unless the layout
+  // stamped an area.
+  const { data } = useProgressThenNow();
+  if (!data || 'omission' in data || data.pairs.length === 0) return null;
+  return <WidgetSection spec={spec} payload={{ kind: 'then_now', data }} />;
+}
+
+function PhotoPairBound({ spec }: BoundProps) {
+  // Opt-in end to end: off (the default) or nothing added yet comes back as an omission and the
+  // card renders nothing. Dates and weights only — no window, no goal slice, no judgment.
+  const { data } = useProgressPhotoPair();
+  if (!data || 'omission' in data) return null;
+  return <WidgetSection spec={spec} payload={{ kind: 'photo_pair', data }} />;
 }
 
 function StagePathBound({ spec }: BoundProps) {
@@ -183,10 +222,14 @@ const BOUND: Partial<Record<WidgetSpec['kind'], (p: BoundProps) => ReactNode>> =
   trend_vs_target: TrendVsTargetBound,
   dated_sessions: DatedSessionsBound,
   weekly_bars: WeeklyBarsBound,
+  felt_week: FeltWeeksBound,
   shelf: ShelfBound,
   balance: BalanceBound,
   total: TotalBound,
   variety: VarietyBound,
+  repertoire: RepertoireBound,
+  then_now: ThenNowBound,
+  photo_pair: PhotoPairBound,
   stage_path: StagePathBound,
   count_toward: CountTowardBound,
   history: HistoryBound,

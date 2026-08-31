@@ -1,24 +1,198 @@
 /* ── Progress Engine widget grammar (docs/cadence/PROGRESS-ENGINE.md) ─────────
- * Lean classes for the twelve widget kinds. Deliberately a SEPARATE file, not an addition to
- * styles.css: this is a new subsystem with its own footprint, and styles.css is already large.
- * Reuses existing global idioms verbatim where they already exist (.dash-h, .dot/.dotrow,
- * .hist-row family, .prog-big/.prog-unit/.prog-sub, .countbar) — see the widget components for
- * where those apply. Everything here is new: the card shell (no single global ".card" class
- * exists — verified against styles.css) and the kind-specific layouts.
+ * Lean classes for the twelve widget kinds, plus the page's own chrome (header, window pills,
+ * streak line) restyled to the owner design "Cadence Progress" 1a. Deliberately a SEPARATE file,
+ * not an addition to styles.css: this is a new subsystem with its own footprint, and styles.css
+ * is already large. Reuses existing global idioms verbatim where they still fit (.dot/.dotrow,
+ * .hist-row family, .prog-unit/.prog-sub, .countbar) — see the widget components for where those
+ * apply. Everything here is new: the card shell + glyph-chip header grammar (cardHeader.ts owns
+ * the maps) and the kind-specific layouts.
  *
  * Brand physics, enforced in CSS as much as markup: a missed/empty state never touches
  * var(--danger); warm dawn tones are reserved for accomplishment rows (best session, shelf
  * events, dated-session personal bests); a detour band uses --dusk, not a warning color.
  */
 
-/* Card shell — mirrors the goalcard/consist/prog-card idiom (surface + line-soft border + 16px
-   radius) using the same tokens, without reaching into styles.css. */
+/* ── Page header (owner design 1a): title + mono subline, window pills at the right. ─────── */
+.pw-pagehead {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin: 14px 0 4px;
+}
+.pw-pagehead-t {
+  flex: 1;
+  min-width: 0;
+}
+.pw-pagetitle {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.pw-pagesub {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  margin-top: 2px;
+}
+
+/* The Week/Month/All pills — active is a white lifted pill, the rest transparent. Progress-only
+   (.pw-), so the Today tab's full-width .seg toggle keeps its own look. */
+.pw-seg {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--surface-2);
+  border-radius: 999px;
+}
+.pw-seg-btn {
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-mute);
+}
+.pw-seg-on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(44, 40, 32, 0.12);
+}
+
+/* ── One quiet streak line: flame chip, the count, mono XP. ──────────────────────────────── */
+.pw-streak {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 13px;
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: 0 2px 0 var(--line-soft);
+  margin: 10px 0 2px;
+}
+.pw-streak-flame {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  /* The dawn family at chip strength — a warm setting for the flame, accomplishment-only. */
+  background: rgba(244, 184, 150, 0.35);
+  color: var(--sun);
+  display: grid;
+  place-items: center;
+}
+.pw-streak-t {
+  flex: 1;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.pw-streak-xp {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--text-mute);
+}
+
+/* Card shell — white card, soft 2px underline shadow (the design's 0 2px 0 #eae2d0), 16 radius. */
 .pw-card {
   background: var(--surface);
-  border: 1px solid var(--line-soft);
   border-radius: 16px;
-  padding: 13px 15px;
-  margin-bottom: 10px;
+  box-shadow: 0 2px 0 var(--line-soft);
+  padding: 13px 14px;
+  margin-bottom: 12px;
+}
+
+/* Card header row: 30px glyph chip in the family pastel, title over the mono measure tag, a
+   muted chevron at the right. Family colors are the design's pastels; neutral is for cards whose
+   spec/payload names no honest area. */
+.pw-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 11px;
+}
+.pw-glyph {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+}
+.pw-glyph--movement {
+  background: oklch(94% 0.03 152);
+  color: var(--forest);
+}
+.pw-glyph--nutrition {
+  background: oklch(95% 0.05 85);
+  color: oklch(55% 0.12 70);
+}
+.pw-glyph--mind {
+  background: oklch(93% 0.03 262);
+  color: var(--dusk);
+}
+.pw-glyph--practice {
+  background: oklch(94% 0.02 320);
+  color: oklch(48% 0.06 320);
+}
+.pw-glyph--neutral {
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+.pw-head-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pw-head-t b {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--text);
+}
+.pw-head-tag {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  margin-top: 1px;
+}
+.pw-head-chev {
+  flex: none;
+  font-size: 14px;
+  color: var(--text-mute);
+}
+
+/* Hairline section label (the demoted log's "this week" header — same grammar as the plan
+   sheet's day headers). */
+.pw-sect {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  margin: 4px 0 10px;
+}
+.pw-sect span {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  white-space: nowrap;
+}
+.pw-sect::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
 }
 
 /* Quiet footer line, used by several kinds under a hairline divider. */
@@ -97,20 +271,46 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── trend_vs_target ────────────────────────────────────────────────────── */
+/* ── trend_vs_target — big number + delta beside a small sparkline (design 1a). ─────────── */
+.pw-trend-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
 .pw-trend-headline {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 4px;
 }
-.pw-trend-sub {
-  margin-top: 2px;
-  font-size: 12.5px;
+.pw-trend-big {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.pw-trend-delta {
+  margin-top: 3px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--forest);
+  white-space: nowrap;
+}
+/* Moving away from target is merely muted — information, never var(--danger). */
+.pw-trend-delta--drift {
   color: var(--text-mute);
 }
-.pw-trend-svg {
+.pw-trend-spark {
   display: block;
+  flex: none;
+}
+.pw-trend-sub {
   margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text-mute);
 }
 
 /* ── dated_sessions ─────────────────────────────────────────────────────── */
@@ -130,59 +330,368 @@
   margin-top: 2px;
 }
 
-/* ── shelf / history reuse .hist-row from styles.css directly — no rules needed here. ────── */
-
-/* ── stage_path ─────────────────────────────────────────────────────────── */
-.pw-stages {
+/* ── felt_week — four side-by-side week bars, each colored by that week's average daily note
+   (design 1a "Calmer evenings"). The fill color is data (the indigo ramp lives in the renderer);
+   an UNREAD week is a hairline outline — never a filled "zero", never a warning color. ──────── */
+.pw-felt {
   display: flex;
-  flex-wrap: wrap;
+  gap: 5px;
+}
+.pw-felt-week {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.pw-felt-bar {
+  width: 100%;
+  height: 22px;
+  border-radius: 7px;
+}
+.pw-felt-bar--unread {
+  background: transparent;
+  border: 1px solid var(--line-soft);
+}
+.pw-felt-label {
+  font-size: 8.5px;
+  font-weight: 800;
+  color: var(--text-mute);
+}
+.pw-felt-label--latest {
+  color: var(--text-dim);
+}
+
+/* ── shelf — bests & firsts as check-circle rows (design 1a repertoire card). Everything the
+   payload carries is done, so every mark is filled + warm; no invented ring/grey states. ──── */
+.pw-shelf {
+  display: flex;
+  flex-direction: column;
   gap: 7px;
 }
-.pw-stage-chip {
-  padding: 5px 11px;
-  border-radius: 999px;
+.pw-shelf-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pw-shelf-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--dawn-3);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+}
+.pw-shelf-label {
+  flex: 1;
+  min-width: 0;
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--text);
 }
-/* rgba(139, 168, 142, x) == var(--sage) at 16%/32% — same alpha-token caveat as the detour band. */
-.pw-stage-chip--done {
-  background: rgba(139, 168, 142, 0.16);
-  color: var(--forest);
-  border: 1px solid rgba(139, 168, 142, 0.32);
-}
-.pw-stage-chip--current {
-  border: 1.5px solid var(--forest);
-  color: var(--forest);
-  font-weight: 800;
-}
-.pw-stage-chip--ahead {
-  border: 1px solid var(--line-soft);
+.pw-shelf-date {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
   color: var(--text-mute);
+}
+
+/* ── history — the demoted log's rows: .hist-row/.hist-dot/.hist-date come from styles.css;
+   only the inline "Title — detail" body is new. ─────────────────────────────────────────── */
+.pw-log-t {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.pw-log-t b {
+  font-weight: 700;
+  color: var(--text);
+}
+.pw-log-t span {
+  font-weight: 600;
+  color: var(--text-mute);
+}
+
+/* ── stage_path — the gate track (design 1a race card): circles joined by thin connectors,
+   labels under each node. A connector is forest only when BOTH its ends are done. ────────── */
+.pw-gates {
+  display: flex;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding: 2px 2px 0;
+}
+.pw-gate {
+  flex: none;
+  width: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.pw-gate-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 900;
+}
+.pw-gate--done .pw-gate-dot {
+  background: var(--forest);
+  color: #fff;
+}
+/* The current gate wears --sun — the working edge the design points at, not a warning. */
+.pw-gate--current .pw-gate-dot {
+  background: var(--surface);
+  border: 2.5px solid var(--sun);
+}
+.pw-gate--ahead .pw-gate-dot {
+  background: var(--surface-2);
+}
+.pw-gate-label {
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--text-dim);
+}
+.pw-gate--current .pw-gate-label {
+  color: var(--sun);
+}
+.pw-gate--ahead .pw-gate-label {
+  color: var(--text-mute);
+}
+.pw-gate-line {
+  flex: 1 1 12px;
+  min-width: 10px;
+  height: 2px;
+  margin-top: 8px;
+  background: var(--line-soft);
+}
+.pw-gate-line--cleared {
+  background: var(--forest);
 }
 .pw-stage-note {
   margin-top: 8px;
-  font-size: 12.5px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
   color: var(--text-mute);
 }
 
-/* ── count_toward ───────────────────────────────────────────────────────── */
+/* ── count_toward — sized under the 13.5px card title, not over it. ─────── */
 .pw-count-label {
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   margin-bottom: 7px;
 }
 
 /* ── balance ────────────────────────────────────────────────────────────── */
 .pw-balance-label {
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   margin-bottom: 6px;
 }
 
 /* ── total / variety reuse .prog-big/.prog-unit/.prog-sub from styles.css. ────────────────── */
 .pw-variety-line {
-  font-size: 14.5px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── repertoire — the piece list (design 1a piano card). Three standings, three marks: learned is
+   a filled plum check circle, in progress a hollow plum ring, not started a dashed grey circle.
+   Plum is the practice family's color; a not-started row is quiet, never a warning. ──────────── */
+.pw-rep {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pw-rep-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pw-rep-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 8px;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+}
+.pw-rep-mark--learned {
+  background: oklch(48% 0.06 320);
+  color: #fff;
+}
+.pw-rep-mark--in_progress {
+  background: var(--surface);
+  border: 2px solid oklch(48% 0.06 320);
+}
+.pw-rep-mark--not_started {
+  background: var(--surface);
+  border: 1.5px dashed var(--line);
+}
+.pw-rep-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+.pw-rep-label--quiet {
+  color: var(--text-mute);
+}
+.pw-rep-standing {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-mute);
+}
+.pw-rep-standing--working {
+  font-weight: 800;
+  color: oklch(48% 0.06 320);
+}
+
+/* ── then_now — plain before/after rows (design 1a "THEN → NOW"): a family dot, the label, then
+   "20 lb → 50 lb" with the early end muted and the recent end strong. The weighting marks which
+   end is CURRENT, never which is better — no judgment color in either direction. ─────────────── */
+.pw-tn {
+  display: flex;
+  flex-direction: column;
+}
+.pw-tn-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+}
+.pw-tn-row + .pw-tn-row {
+  border-top: 1px solid var(--line-soft);
+}
+.pw-tn-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.pw-tn-dot--movement {
+  background: var(--forest);
+}
+.pw-tn-dot--mind {
+  background: var(--dusk);
+}
+.pw-tn-dot--nourishment {
+  background: oklch(55% 0.12 70);
+}
+.pw-tn-dot--practice {
+  background: oklch(48% 0.06 320);
+}
+.pw-tn-dot--none {
+  background: var(--surface-3);
+}
+.pw-tn-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--text);
+}
+.pw-tn-ends {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.pw-tn-then {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-mute);
+}
+.pw-tn-arrow {
+  font-size: 10px;
+  color: var(--text-mute);
+}
+.pw-tn-now {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── photo_pair — two photo slots side by side (design 1a "PHOTOS"): image, then a mono
+   date · weight caption. Dates and weights only — no delta, no judgment color, ever. The dashed
+   due row is an invitation shape (same idiom as an upcoming rhythm dot), not a warning. ──────── */
+.pw-photos {
+  display: flex;
+  gap: 9px;
+}
+.pw-photos-slot {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+/* A lone photo keeps the pair's slot width — the empty half is where the next one will sit. */
+.pw-photos-slot--single {
+  flex: 0 0 calc(50% - 5px);
+}
+.pw-photos-img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: var(--surface-2);
+  display: block;
+}
+.pw-photos-cap {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  text-align: center;
+}
+.pw-photos-note {
+  margin-top: 8px;
+  font-size: 11px;
   font-weight: 600;
+  color: var(--text-mute);
+}
+.pw-photos-due {
+  margin-top: 9px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+}
+.pw-photos-due-t {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-mute);
+}
+/* Display-only until the drill screen lands: link-colored so it reads as the destination it will
+   become, disabled so it promises nothing today. */
+.pw-photos-all {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--forest);
+  opacity: 0.6;
 }
 
 /* ── recap_rail ─────────────────────────────────────────────────────────── */
@@ -196,8 +705,8 @@
 .pw-rail-card {
   flex: 0 0 235px;
   background: var(--surface);
-  border: 1px solid var(--line-soft);
   border-radius: 14px;
+  box-shadow: 0 2px 0 var(--line-soft);
   padding: 12px 13px;
 }
 .pw-rail-week {

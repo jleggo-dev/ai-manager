@@ -115,6 +115,31 @@ function sourceReasons(
     if (!availability.has_food_usage) return [`${at}: no food log usage on file yet — cannot bind`];
     return [];
   }
+  if (kind === 'felt_week') {
+    if (!availability.has_felt) return [`${at}: no daily check-in moods in the last four weeks — cannot bind`];
+    return [];
+  }
+  if (kind === 'repertoire') {
+    if (!availability.has_repertoire) return [`${at}: no repertoire on file yet — cannot bind`];
+    const goalId = source?.goal_id;
+    if (goalId && !goalIds.includes(goalId)) {
+      return [`${at}: goal_id "${goalId}" is not one of the goals it was shown`];
+    }
+    if (goalId && !availability.repertoire_goal_ids.includes(goalId)) {
+      return [`${at}: no repertoire items for goal "${goalId}" — leave source.goal_id off to show everything`];
+    }
+    return [];
+  }
+  if (kind === 'then_now') {
+    if (!availability.has_then_now) return [`${at}: no logged sessions on file yet — cannot bind`];
+    return [];
+  }
+  if (kind === 'photo_pair') {
+    if (!availability.has_photos) {
+      return [`${at}: progress photos are off or none have been added — opt-in, cannot bind`];
+    }
+    return [];
+  }
   // rhythm, shelf, recap_rail, history: no source-existence gate — see the parcel report for why.
   return [];
 }

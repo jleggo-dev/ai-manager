@@ -1,4 +1,4 @@
-import { Orb } from '../../components/Orb.tsx';
+import { CoachFace } from '../../components/CoachFace.tsx';
 import type { PlanViewData } from '../../lib/api.ts';
 
 type Proposal = NonNullable<PlanViewData['pendingProposal']>;
@@ -38,7 +38,10 @@ export function PlanProposalBanner({
 
   return (
     <div className="plan-proposal">
-      <Orb />
+      {/* Her face, not the mark: the reason line is the coach's own suggestion in her voice, and
+          this banner can share a screen with PlanAdjustNote below — one speaker, one face
+          (CoachFace.tsx: no screen shows both). */}
+      <CoachFace size={28} ring={false} />
       <div className="plan-proposal-t">
         <b>{title}</b>
         <span>{proposal.reason}</span>
@@ -64,13 +67,22 @@ export function PlanProposalBanner({
   );
 }
 
-/** Short note after a coach-driven plan adjust. */
+/**
+ * Short note after a plan adjust lands — HER note, so HER face and HER voice.
+ *
+ * This carried the Orb and a third-person header ("Your coach adjusted your plan") until the
+ * owner met it on device (2026-08-31): the body is the coach speaking ("You said you're ready to
+ * jump back in…"), and CoachFace.tsx's own rule says the face goes wherever Cadence speaks in
+ * the first person — the mark is for where the PRODUCT speaks. The header now speaks as her too,
+ * and works for both routes here: a week she drew that the user applied, and a coach-driven
+ * commit.
+ */
 export function PlanAdjustNote({ note, onDismiss }: { note: string; onDismiss: () => void }) {
   return (
     <div className="plan-note">
-      <Orb />
+      <CoachFace size={28} ring={false} />
       <div className="plan-note-t">
-        <b>Your coach adjusted your plan</b>
+        <b>Here&rsquo;s what I changed</b>
         <span>{note}</span>
       </div>
       <button className="plan-note-x" onClick={onDismiss} aria-label="Dismiss">

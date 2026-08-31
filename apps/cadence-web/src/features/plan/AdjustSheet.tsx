@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { replan, dismissReplanPreview } from '../../lib/api.ts';
+import { markWeekApplied } from '../../lib/applied-week-note.ts';
 import { Orb } from '../../components/Orb.tsx';
 import { SteerBox } from './SteerBox.tsx';
+import { ProposedWeek } from './ProposedWeek.tsx';
 import { useReplanPreview } from './useReplanPreview.ts';
 
 /**
@@ -59,6 +61,9 @@ export function AdjustSheet({
     try {
       const r = await replan();
       if (r.status === 'committed') {
+        // She opens the next chat visit with one line about the week they just applied
+        // (owner pick "B", 2026-08-31) — see lib/applied-week-note.ts.
+        markWeekApplied();
         onCommitted(r.note?.trim() || 'Updated your plan to fit how this stretch has been going.');
         onClose();
         return;
@@ -85,14 +90,18 @@ export function AdjustSheet({
   return (
     <>
       <div className="sheet-scrim" onClick={busy ? undefined : onClose} aria-hidden />
-      <div className={`sheet${composing ? ' sheet-compose' : ''}`} role="dialog" aria-label="Adjust my plan">
+      <div
+        className={`sheet${composing ? ' sheet-compose' : ''}${p ? ' sheet-week' : ''}`}
+        role="dialog"
+        aria-label="Adjust my plan"
+      >
         <div className="sheet-grab" aria-hidden />
         <div className="sheet-head">
           <div className="sheet-title">
             <b>
               {p
                 ? mode === 'rebalance'
-                  ? "Here's your rebalanced plan"
+                  ? 'Your rebalanced week'
                   : "Here's the adjustment I'd make"
                 : mode === 'rebalance'
                   ? 'Rebalancing your plan'
@@ -100,7 +109,7 @@ export function AdjustSheet({
             </b>
             <span>
               {p
-                ? ''
+                ? 'Proposed — nothing saves yet.'
                 : mode === 'rebalance'
                   ? 'Reviewing every goal so your whole week stays balanced.'
                   : 'Committed, not locked — it bends to fit how you’re doing.'}
@@ -140,27 +149,17 @@ export function AdjustSheet({
             )}
           </div>
         ) : (
-          <div className="sheet-body">
-            {p.note && (
-              <div className="sess-note">
-                <Orb />
-                <span>{p.note}</span>
-              </div>
-            )}
-            <div className="proposal-levers" style={{ marginTop: 10 }}>
-              {p.activities.map((a, i) => (
-                <span className="lever-chip" key={i}>
-                  {a.title} · {a.cadence}
-                </span>
-              ))}
+          <div className="sheet-body wk-body">
+            <div className="wk-scroll">
+              <ProposedWeek activities={p.activities} note={p.note} />
             </div>
             {msg && <div className="auth-error">{msg}</div>}
-            <div className="proposal-actions">
+            <div className="proposal-actions wk-actions">
               <button className="proposal-accept" onClick={doConfirm} disabled={busy}>
-                {committing ? 'Setting it…' : 'Yes, adjust it'}
+                {committing ? 'Setting it…' : 'Make this my week'}
               </button>
               <button className="proposal-dismiss" onClick={doDismiss} disabled={busy}>
-                Not now
+                Not now — keep my current plan
               </button>
             </div>
           </div>
