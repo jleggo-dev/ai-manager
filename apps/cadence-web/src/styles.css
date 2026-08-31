@@ -9209,14 +9209,14 @@ textarea.wiz-title {
   max-height: 96%;
   min-height: 90%;
 }
-.sheet-body.pw-body {
+.sheet-body.wk-body {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   overflow-y: hidden;
 }
-.pw-scroll {
+.wk-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -9225,7 +9225,7 @@ textarea.wiz-title {
   gap: 14px;
   padding: 2px 1px 10px;
 }
-.pw-note {
+.wk-note {
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -9238,69 +9238,69 @@ textarea.wiz-title {
   line-height: 1.5;
   color: var(--text-dim);
 }
-.pw-day {
+.wk-day {
   display: flex;
   flex-direction: column;
   gap: 7px;
 }
-.pw-day-head {
+.wk-day-head {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 4px;
 }
-.pw-day-name {
+.wk-day-name {
   font-family: var(--mono);
   font-size: 9.5px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-mute);
 }
-.pw-day-daily .pw-day-name {
+.wk-day-daily .wk-day-name {
   color: oklch(46% 0.06 70);
 }
-.pw-day-rule {
+.wk-day-rule {
   flex: 1;
   height: 1px;
   background: var(--line-soft);
 }
-.pw-day-min {
+.wk-day-min {
   font-size: 9.5px;
   font-weight: 700;
   color: #b0aa98;
 }
-.pw-card {
+.wk-card {
   background: var(--surface);
   border-radius: 16px;
   box-shadow: 0 2px 0 var(--line-soft);
 }
-.pw-row {
+.wk-row {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 11px 13px;
 }
-.pw-row + .pw-row {
+.wk-row + .wk-row {
   border-top: 1px solid #f3eee1;
 }
-.pw-row-t {
+.wk-row-t {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
-.pw-row-t b {
+.wk-row-t b {
   font-size: 13px;
   font-weight: 800;
   color: var(--text);
 }
-.pw-row-t span {
+.wk-row-t span {
   font-size: 10.5px;
   font-weight: 600;
   color: var(--text-mute);
   margin-top: 1px;
 }
-.pw-tag {
+.wk-tag {
   flex: none;
   font-size: 9px;
   font-weight: 900;
@@ -9310,7 +9310,7 @@ textarea.wiz-title {
   border-radius: 999px;
   padding: 3px 8px;
 }
-.pw-chip {
+.wk-chip {
   width: 30px;
   height: 30px;
   border-radius: 10px;
@@ -9319,29 +9319,29 @@ textarea.wiz-title {
   justify-content: center;
   flex: none;
 }
-.pw-chip-movement {
+.wk-chip-movement {
   background: oklch(94% 0.03 152);
   color: var(--forest);
 }
-.pw-chip-nutrition {
+.wk-chip-nutrition {
   background: oklch(95% 0.05 85);
   color: oklch(55% 0.12 70);
 }
-.pw-chip-mindset,
-.pw-chip-reflection {
+.wk-chip-mindset,
+.wk-chip-reflection {
   background: oklch(93% 0.03 262);
   color: var(--dusk);
 }
-.pw-chip-practice {
+.wk-chip-practice {
   background: oklch(94% 0.02 320);
   color: oklch(48% 0.06 320);
 }
-.pw-actions {
+.wk-actions {
   flex-direction: column;
   gap: 8px;
   padding-top: 12px;
 }
-.pw-actions .proposal-accept {
+.wk-actions .proposal-accept {
   width: 100%;
   background: var(--forest);
   border-radius: 14px;
@@ -9350,7 +9350,7 @@ textarea.wiz-title {
   font-weight: 800;
   box-shadow: 0 3px 0 oklch(26% 0.05 152);
 }
-.pw-actions .proposal-dismiss {
+.wk-actions .proposal-dismiss {
   width: 100%;
   background: var(--surface);
   border: 1.5px solid var(--line);
@@ -9359,26 +9359,26 @@ textarea.wiz-title {
   font-size: 13px;
   font-weight: 700;
 }
-/* The module itself is scroll-free (hosts own the scroll: the Adjust sheet's .pw-scroll, the
+/* The module itself is scroll-free (hosts own the scroll: the Adjust sheet's .wk-scroll, the
    gate's .gate2-scroll, the plan sheet's body). */
-.pw-list {
+.wk-list {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
-.pw-row-btn {
+.wk-row-btn {
   width: 100%;
   text-align: left;
 }
 /* A commitment's why, on its first appearance — marginalia in her voice (the plan card's grow-why
    idiom, carried into the shared week module). The cut sentence sells continuation. */
-.pw-why {
+.wk-why {
   display: flex;
   align-items: baseline;
   gap: 6px;
   margin-top: 3px;
 }
-.pw-why-cut {
+.wk-why-cut {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -9389,15 +9389,15 @@ textarea.wiz-title {
   font-weight: 600;
   color: var(--text-dim);
 }
-.pw-why i,
-.pw-why-open i {
+.wk-why i,
+.wk-why-open i {
   flex: none;
   font-style: normal;
   font-size: 11px;
   font-weight: 800;
   color: oklch(46% 0.08 152);
 }
-.pw-why-open {
+.wk-why-open {
   display: block;
   margin-top: 6px;
   background: var(--ink);
@@ -9411,7 +9411,7 @@ textarea.wiz-title {
   white-space: normal;
 }
 /* "MY ADDITION" — she proposed this herself; dashed like the old suggested dot ("not yours yet"). */
-.pw-tag-add {
+.wk-tag-add {
   background: transparent;
   border: 1.5px dashed oklch(55% 0.06 250);
   color: oklch(45% 0.06 250);

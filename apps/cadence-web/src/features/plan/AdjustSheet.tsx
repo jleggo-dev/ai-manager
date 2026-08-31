@@ -149,12 +149,12 @@ export function AdjustSheet({
             )}
           </div>
         ) : (
-          <div className="sheet-body pw-body">
-            <div className="pw-scroll">
+          <div className="sheet-body wk-body">
+            <div className="wk-scroll">
               <ProposedWeek activities={p.activities} note={p.note} />
             </div>
             {msg && <div className="auth-error">{msg}</div>}
-            <div className="proposal-actions pw-actions">
+            <div className="proposal-actions wk-actions">
               <button className="proposal-accept" onClick={doConfirm} disabled={busy}>
                 {committing ? 'Setting it…' : 'Make this my week'}
               </button>

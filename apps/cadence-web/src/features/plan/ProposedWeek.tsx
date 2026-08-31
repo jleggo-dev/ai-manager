@@ -27,21 +27,21 @@ export function ProposedWeek({ activities, note }: { activities: WeekRowLike[]; 
   const tagNew = activities.some((a) => a.commitment_id);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   return (
-    <div className="pw-list">
+    <div className="wk-list">
       {note && (
-        <div className="pw-note">
+        <div className="wk-note">
           <CoachFace size={28} ring={false} />
           <span>{note}</span>
         </div>
       )}
       {groups.map((g) => (
-        <section className={`pw-day pw-day-${g.kind}`} key={g.label}>
-          <div className="pw-day-head">
-            <span className="pw-day-name">{g.label}</span>
-            <span className="pw-day-rule" aria-hidden />
-            {g.minutes > 0 && <span className="pw-day-min">~{g.minutes} min</span>}
+        <section className={`wk-day wk-day-${g.kind}`} key={g.label}>
+          <div className="wk-day-head">
+            <span className="wk-day-name">{g.label}</span>
+            <span className="wk-day-rule" aria-hidden />
+            {g.minutes > 0 && <span className="wk-day-min">~{g.minutes} min</span>}
           </div>
-          <div className="pw-card">
+          <div className="wk-card">
             {g.rows.map(({ a, first }, i) => (
               <Row
                 key={`${rowKey(a)}-${i}`}
@@ -79,33 +79,33 @@ function Row({
   const expandable = withWhy && !!a.why;
   const body = (
     <>
-      <span className={`pw-chip pw-chip-${cat}`} aria-hidden>
+      <span className={`wk-chip wk-chip-${cat}`} aria-hidden>
         <svg viewBox="0 0 24 24" width="16" height="16">
           <path d={d} fill="currentColor" />
         </svg>
       </span>
-      <span className="pw-row-t">
+      <span className="wk-row-t">
         <b>{a.title}</b>
         {rowMeta(a, kind) && <span>{rowMeta(a, kind)}</span>}
         {expandable &&
           (open ? (
-            <span className="pw-why-open">
+            <span className="wk-why-open">
               &ldquo;{a.why}&rdquo; <i aria-hidden>▴</i>
             </span>
           ) : (
-            <span className="pw-why">
-              <span className="pw-why-cut">&ldquo;{a.why}</span>
+            <span className="wk-why">
+              <span className="wk-why-cut">&ldquo;{a.why}</span>
               <i aria-hidden>more</i>
             </span>
           ))}
       </span>
-      {withWhy && a.suggested && <span className="pw-tag pw-tag-add">MY ADDITION</span>}
-      {isNew && <span className="pw-tag">NEW</span>}
+      {withWhy && a.suggested && <span className="wk-tag wk-tag-add">MY ADDITION</span>}
+      {isNew && <span className="wk-tag">NEW</span>}
     </>
   );
-  if (!expandable) return <div className="pw-row">{body}</div>;
+  if (!expandable) return <div className="wk-row">{body}</div>;
   return (
-    <button type="button" className="pw-row pw-row-btn" onClick={onToggle} aria-expanded={open}>
+    <button type="button" className="wk-row wk-row-btn" onClick={onToggle} aria-expanded={open}>
       {body}
     </button>
   );
