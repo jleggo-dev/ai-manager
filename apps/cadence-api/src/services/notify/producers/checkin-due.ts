@@ -9,7 +9,7 @@ import { addDays, inMorningWindow } from './clock.ts';
  *
  * `computeWeekState` (plan-view.ts) already names this exact fact for the in-app "check in"
  * affordance: `checkin_due` flips true at `generated_at + horizon_days` (the plan's own week
- * length, 0049 — 7 unless the coach granted an extension). This producer reads the SAME fact the
+ * length, 0050 — 7 unless the coach granted an extension). This producer reads the SAME fact the
  * SAME way (see the candidate query's own comment for the bound), so the push and the screen can
  * never quietly disagree about which day it started being true.
  *

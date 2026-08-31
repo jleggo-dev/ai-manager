@@ -294,7 +294,7 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
   {
     key: 'plan',
     label: 'their plan and how far ahead it runs',
-    // Born with `extend_horizon` (0049): the week-length grant fits no existing category — it is
+    // Born with `extend_horizon` (0050): the week-length grant fits no existing category — it is
     // not training content, not progress-page chrome. `build_next_week`/`propose_plan_change`
     // stay always-on and are deliberately not filed here (see ALWAYS_ACTIONS).
     members: ['extend_horizon'],

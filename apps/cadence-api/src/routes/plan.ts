@@ -55,7 +55,7 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     // The client's own zone, used only when the user has none stored. The screen's idea of
     // "today" must be the person's, not the server's (see buildPlanView). Day count omitted on
-    // purpose: the plan's own horizon governs (7, or what the coach granted — 0049).
+    // purpose: the plan's own horizon governs (7, or what the coach granted — 0050).
     const view = await buildPlanView(userId, undefined, tzHint(req));
     // Through runInBackground, NOT `void`: on Vercel the instance freezes at res.json and a
     // bare fire-and-forget dies mid-flight — this backstop had never actually run in prod.

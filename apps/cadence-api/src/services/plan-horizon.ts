@@ -15,7 +15,7 @@ import { localMinutes } from './notify/policy.ts';
  */
 export const DEFAULT_HORIZON_DAYS = 7;
 
-/** The most a week may be stretched to (0049) — past this it's a different plan, not a longer
+/** The most a week may be stretched to (0050) — past this it's a different plan, not a longer
  *  week, and the conversation should go through a re-plan instead. */
 export const MAX_HORIZON_DAYS = 28;
 
@@ -104,7 +104,7 @@ export type ExtendHorizonResult =
   | { status: 'extended'; horizonDays: number; endsOn: string; materialized: number };
 
 /**
- * Stretch the ACTIVE plan's week to `days` counted from the day it began (0049) — the user's
+ * Stretch the ACTIVE plan's week to `days` counted from the day it began (0050) — the user's
  * "can we plan two weeks ahead?" ask, granted by the coach. Two effects, both from facts the
  * plan already owns: `horizon_days` moves (so `computeWeekState`'s `ends_on`/`checkin_due` and
  * the weekly_checkin push move with it), and `ensureHorizon` tops up the newly-in-range days

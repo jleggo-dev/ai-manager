@@ -1,5 +1,5 @@
 /**
- * `extendHorizon` (0049) — the guardrails, with the repos mocked so nothing touches the shared
+ * `extendHorizon` (0050) — the guardrails, with the repos mocked so nothing touches the shared
  * DB. What matters here: extend-only (never shorten), the cap, and the top-up being anchored to
  * the WEEK'S start rather than today — the overshoot bug this math exists to avoid.
  */
@@ -74,7 +74,7 @@ describe('extendHorizon', () => {
     expect(r.horizonDays).toBe(MAX_HORIZON_DAYS);
   });
 
-  it('a plan already older than 7 that never has a horizon_days column still extends (pre-0049 row)', async () => {
+  it('a plan already older than 7 that never has a horizon_days column still extends (pre-0050 row)', async () => {
     getActivePlan.mockResolvedValue(plan(1, { horizon_days: undefined }));
     const r = await extendHorizon('u1', 14);
     expect(r.status).toBe('extended');

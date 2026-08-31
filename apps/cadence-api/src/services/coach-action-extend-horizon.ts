@@ -8,7 +8,7 @@ import type { CoachActionTool } from './coach-action-types.ts';
  * that's materialized, and its edge is the check-in moment) — so this is an exception the user
  * asks for, never a default the app drifts back into. The trail's end-cap sends the ask through
  * the conversation visibly, and she grants it here; the grant lives on the plan row
- * (`horizon_days`, 0049), so the screen, the check-in flag, and the weekly push all move
+ * (`horizon_days`, 0050), so the screen, the check-in flag, and the weekly push all move
  * together.
  *
  * Thin by contract, like build_next_week: `extendHorizon` (plan-horizon.ts) owns the guard, the

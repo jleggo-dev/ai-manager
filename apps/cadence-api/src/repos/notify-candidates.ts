@@ -96,7 +96,7 @@ export interface CheckinDueCandidate {
   user_id: string;
   timezone: string | null;
   generated_at: string;
-  /** The plan's own week length (0049) — 7 unless the coach granted an extension. */
+  /** The plan's own week length (0050) — 7 unless the coach granted an extension. */
   horizon_days: number;
 }
 
@@ -106,7 +106,7 @@ export interface CheckinDueCandidate {
  * The bound is the SAME fact `computeWeekState` (plan-view.ts) reports to the app as
  * `checkin_due` — `generated_at + horizon_days <= now()` — read the same way, so the push
  * and the in-app affordance can never disagree about which day it started being true. The bound
- * is the plan's OWN `horizon_days` column (0049): 7 by default, further out when the coach
+ * is the plan's OWN `horizon_days` column (0050): 7 by default, further out when the coach
  * granted a "plan two weeks ahead" ask — an extended week must not be nudged to check in on
  * day 7 of 14.
  *

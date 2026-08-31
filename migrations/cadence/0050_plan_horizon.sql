@@ -1,4 +1,4 @@
--- 0049 — per-plan horizon (owner, 2026-08-31): the week's view span stays 7 days by default
+-- 0050 — per-plan horizon (owner, 2026-08-31): the week's view span stays 7 days by default
 -- (check-in rebuild step 6 — "the horizon IS the view window"), but the user can now ASK the
 -- coach to run a week longer ("can we plan two weeks ahead?"), and the grant has to be a fact
 -- the plan itself remembers: `computeWeekState` derives `ends_on`/`checkin_due` from it, and the
@@ -6,6 +6,9 @@
 -- the week ran out.
 --
 -- Purely additive. House style from 0044/0045/0048: `if not exists` guards, no down-migration.
+-- Renumbered 0049 → 0050 (PR #331's goal_prior_status migration claimed 0049 first); the live
+-- Supabase ledger entry for THIS migration is still named `0049_plan_horizon` — it was applied
+-- before the collision surfaced, and ledger names don't rename. Idempotent either way.
 alter table cadence.plans
   add column if not exists horizon_days integer not null default 7;
 

@@ -190,7 +190,7 @@ describe('computeWeekState (the week ends where the horizon does — step 6)', (
     expect(state?.ends_on).toBe('2026-08-08');
   });
 
-  /** The plan's own horizon governs (0049) — a granted "two weeks ahead" moves the end with it. */
+  /** The plan's own horizon governs (0050) — a granted "two weeks ahead" moves the end with it. */
   it("honours the plan's own horizon_days: a 14-day week is not due at day 8", () => {
     const generated_at = new Date(Date.now() - 8 * 86_400_000).toISOString();
     const state = computeWeekState({ generated_at, horizon_days: 14 });
