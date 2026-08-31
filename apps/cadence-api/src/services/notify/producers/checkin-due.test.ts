@@ -19,6 +19,7 @@ const row = (generatedAt: string, over: Record<string, unknown> = {}) => ({
   user_id: 'u1',
   timezone: 'Europe/London',
   generated_at: generatedAt,
+  horizon_days: 7,
   ...over,
 });
 
@@ -46,6 +47,12 @@ describe('checkin_due — the target', () => {
     // the target may either.
     const [again] = await checkinDueProducer.produce(new Date('2026-08-17T08:00:00Z'));
     expect(again?.target).toBe(first?.target);
+  });
+
+  it("targets the plan's OWN horizon, not a hardcoded 7 — an extended week is nudged at ITS end (0050)", async () => {
+    listCandidates.mockResolvedValue([row('2026-08-03', { horizon_days: 14 })]);
+    const [req] = await checkinDueProducer.produce(new Date('2026-08-17T08:00:00Z'));
+    expect(req?.target).toBe('2026-08-17');
   });
 
   it('gives a later plan (a different generated_at) its own target', async () => {

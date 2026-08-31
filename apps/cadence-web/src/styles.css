@@ -2207,25 +2207,40 @@ textarea.wiz-title {
 .detour-end:hover {
   color: var(--text-dim);
 }
-/* Manual "Life happened? Take a detour" entry (Req 4) — a self-declare path when no proposal exists. */
-.detour-entry {
-  margin: 2px 0 14px;
+/* The horizon end-cap — mid-week, the trail's edge names the check-in and carries the visible
+   "plan two weeks ahead" ask. Deliberately quiet: a marker, never a card. */
+.horizon-endcap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  padding: 14px 20px 4px;
 }
-.detour-trigger {
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: 1px dashed var(--line-soft);
+.horizon-endcap-line {
+  margin: 0;
   color: var(--text-dim);
-  border-radius: 12px;
-  padding: 9px 13px;
-  font: inherit;
   font-size: 13.5px;
+  text-align: center;
+}
+.horizon-endcap-ask {
+  background: none;
+  border: 1px solid var(--line-soft);
+  color: var(--forest);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
 }
-.detour-trigger:hover {
+.horizon-endcap-ask:hover {
   border-color: var(--forest);
-  color: var(--forest);
+}
+/* The detour DOOR (Req 4, placement per Option A — owner trialing 2026-08-31): the self-declare
+   path borrows the DetourBar's glass line and slot, so door and live-state share one home at the
+   top of the page. Only the dot differs — dawn, not forest: an invitation, not a live state. */
+.detour-door .detour-bar-dot {
+  background: var(--dawn-3);
 }
 .detour-pick {
   display: flex;

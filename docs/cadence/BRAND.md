@@ -103,7 +103,7 @@ allowed to differ — that's the pattern working, not an inconsistency.
 | Lock the plan | `plan.status: draft → committed` (+ `committed_at`) | **Set your rhythm** | "lock" is a cell door; contradicts bend-don't-break |
 | Review captured items | `notes` table concept; review step | **Confirm what it heard** | "captured" is surveillance language — banned user-facing |
 | Adherence | `consistency` | **Consistency — how you showed up this week** | "adherence" is pharmacy compliance language |
-| Disruptions | `detours` (cause + duration) | **Life happened? Let's take a detour** | cause is always named plainly (say "grief", never euphemize) |
+| Disruptions | `detours` (cause + duration) | **"My plan isn't working — I'm too busy"** (the door: one glass line at the top of the plan screen, the felt statement in the user's voice — owner 2026-08-31, Option A on device trial; the setup sheet keeps the "take a detour" framing) | cause is always named plainly (say "grief", never euphemize) |
 | Weekly readout | `recap` | **Your weekly check-in** | two-way: report, then ask how the week went |
 | Context pack | `memory_pack` | **What Cadence remembers about you** | the moat, surfaced as the trust screen |
 | Broker (capture AI) | `Broker` — the Scribe rename is **reverted** (owner ruling 2026-08-04) | never surfaced; UI describes the behaviour ("Cadence takes notes while you talk") without ever naming the entity | a hidden entity needs no display name. "Internal name that leaks safely" solved a problem that doesn't exist: to the user there is only the coach, and the Broker is the technical way we deliver that. Do not reintroduce "Scribe" |

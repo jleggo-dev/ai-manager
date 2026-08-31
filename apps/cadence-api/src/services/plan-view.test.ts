@@ -189,4 +189,19 @@ describe('computeWeekState (the week ends where the horizon does — step 6)', (
     const state = computeWeekState({ generated_at: '2026-08-01T12:00:00.000Z' });
     expect(state?.ends_on).toBe('2026-08-08');
   });
+
+  /** The plan's own horizon governs (0050) — a granted "two weeks ahead" moves the end with it. */
+  it("honours the plan's own horizon_days: a 14-day week is not due at day 8", () => {
+    const generated_at = new Date(Date.now() - 8 * 86_400_000).toISOString();
+    const state = computeWeekState({ generated_at, horizon_days: 14 });
+    expect(state?.checkin_due).toBe(false);
+  });
+
+  it('a 14-day week ends 14 days after generated_at, and is due there', () => {
+    expect(computeWeekState({ generated_at: '2026-08-01T12:00:00.000Z', horizon_days: 14 })?.ends_on).toBe(
+      '2026-08-15',
+    );
+    const generated_at = new Date(Date.now() - 14 * 86_400_000).toISOString();
+    expect(computeWeekState({ generated_at, horizon_days: 14 })?.checkin_due).toBe(true);
+  });
 });

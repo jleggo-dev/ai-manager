@@ -96,16 +96,19 @@ export interface CheckinDueCandidate {
   user_id: string;
   timezone: string | null;
   generated_at: string;
+  /** The plan's own week length (0050) — 7 unless the coach granted an extension. */
+  horizon_days: number;
 }
 
 /**
  * Users whose ACTIVE plan's week has already run out.
  *
  * The bound is the SAME fact `computeWeekState` (plan-view.ts) reports to the app as
- * `checkin_due` — `generated_at + DEFAULT_HORIZON_DAYS <= now()` — read the same way, so the push
- * and the in-app affordance can never disagree about which day it started being true. Hardcoded
- * as 7 days rather than the constant because a query can't share a TS import; if
- * `DEFAULT_HORIZON_DAYS` ever moves, this bound has to move with it by hand.
+ * `checkin_due` — `generated_at + horizon_days <= now()` — read the same way, so the push
+ * and the in-app affordance can never disagree about which day it started being true. The bound
+ * is the plan's OWN `horizon_days` column (0050): 7 by default, further out when the coach
+ * granted a "plan two weeks ahead" ask — an extended week must not be nudged to check in on
+ * day 7 of 14.
  *
  * No upper bound, unlike `listReEntryCandidates`'s day-9 ceiling — there is nothing here to decay
  * away from. An ignored check-in never supersedes the active plan, so `generated_at` (and the
@@ -115,12 +118,13 @@ export interface CheckinDueCandidate {
  */
 export async function listCheckinDueCandidates(): Promise<CheckinDueCandidate[]> {
   return sql<CheckinDueCandidate[]>`
-    select u.id as user_id, u.timezone, to_char(pl.generated_at, 'YYYY-MM-DD') as generated_at
+    select u.id as user_id, u.timezone, to_char(pl.generated_at, 'YYYY-MM-DD') as generated_at,
+      pl.horizon_days
     from cadence.notification_prefs p
     join cadence.users u on u.id = p.user_id
     join cadence.plans pl on pl.user_id = u.id and pl.status = 'active'
     where p.enabled
-      and pl.generated_at <= now() - interval '7 days'`;
+      and pl.generated_at <= now() - make_interval(days => pl.horizon_days)`;
 }
 
 export interface WeatherMoveCandidate {

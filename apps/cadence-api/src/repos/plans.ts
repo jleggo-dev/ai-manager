@@ -29,6 +29,12 @@ export async function supersedeActivePlans(userId: string, db: SqlExecutor = sql
   await db`update cadence.plans set status = 'superseded' where user_id = ${userId} and status = 'active'`;
 }
 
+/** Set how many days a plan's week runs (0050) — written only by `extendHorizon`, which owns the
+ *  guardrails; a fresh commit just takes the column default of 7. */
+export async function setPlanHorizon(planId: string, horizonDays: number, db: SqlExecutor = sql): Promise<void> {
+  await db`update cadence.plans set horizon_days = ${horizonDays} where plan_id = ${planId}`;
+}
+
 /**
  * When the user's FIRST plan was committed (min generated_at, any status — superseded rows are
  * kept forever, so this is stable). Drives the coach-session "onboarding graduation" staleness

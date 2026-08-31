@@ -216,6 +216,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_recent_logs: 'their session notes from recent days: what they did and how it felt',
   get_equipment: 'training equipment they own, with usage wear for tracked items',
   update_equipment: 'ACTION: add, remove, or rename equipment on their file — corrections included',
+  extend_horizon: 'ACTION: run the current week longer — "plan two weeks ahead" — check-in moves with it',
 };
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
@@ -290,6 +291,14 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     members: ['get_nutrition', 'check_food_sources', 'resolve_portion', 'preview_meal', 'research_food', 'read_label'],
   },
   { key: 'writing', label: 'what they have written', members: ['get_journal'] },
+  {
+    key: 'plan',
+    label: 'their plan and how far ahead it runs',
+    // Born with `extend_horizon` (0050): the week-length grant fits no existing category — it is
+    // not training content, not progress-page chrome. `build_next_week`/`propose_plan_change`
+    // stay always-on and are deliberately not filed here (see ALWAYS_ACTIONS).
+    members: ['extend_horizon'],
+  },
   {
     key: 'progress',
     label: 'their Progress page and what it watches',

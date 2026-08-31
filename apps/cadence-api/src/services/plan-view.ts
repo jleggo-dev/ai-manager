@@ -109,10 +109,11 @@ export interface WeekState {
   ends_on: string;
   checkin_due: boolean;
 }
-export function computeWeekState(plan: Pick<Plan, 'generated_at'> | null): WeekState | null {
+export function computeWeekState(plan: Pick<Plan, 'generated_at' | 'horizon_days'> | null): WeekState | null {
   if (!plan) return null;
   const generatedMs = new Date(plan.generated_at).getTime();
-  const dueMs = generatedMs + DEFAULT_HORIZON_DAYS * 86_400_000;
+  // The plan's OWN horizon (0050) — 7 unless the user asked the coach to extend this week.
+  const dueMs = generatedMs + (plan.horizon_days ?? DEFAULT_HORIZON_DAYS) * 86_400_000;
   return { ends_on: iso(new Date(dueMs)), checkin_due: Date.now() >= dueMs };
 }
 
@@ -131,7 +132,9 @@ export function computeWeekState(plan: Pick<Plan, 'generated_at'> | null): WeekS
  */
 export async function buildPlanView(
   userId: string,
-  weekDays = 7,
+  /** How many days to render. Omit (undefined) for the plan's own horizon — 7 unless the user
+   *  asked the coach to extend the week (0050). The watch passes its own small cap explicitly. */
+  weekDays?: number,
   /** The caller's own zone, used only when the user has none stored — 94 of 96 rows today. */
   tzHint?: string | null,
 ): Promise<PlanView> {
@@ -182,7 +185,7 @@ export async function buildPlanView(
       stage,
       activities: [],
       week: [],
-      consistency: { kept: 0, window: weekDays },
+      consistency: { kept: 0, window: weekDays ?? DEFAULT_HORIZON_DAYS },
       streak,
       activeEpisode,
       pendingProposal: null,
@@ -212,7 +215,10 @@ export async function buildPlanView(
   const now = new Date();
   const base = planDayBase(now, timezone, tzHint);
   const days: PlanViewDay[] = [];
-  for (let i = 0; i < weekDays; i++) {
+  // The view spans the plan's own horizon unless the caller (the watch) capped it — so an
+  // extended week actually SHOWS its second week instead of rendering 7 days of a 14-day plan.
+  const viewDays = weekDays ?? plan.horizon_days ?? DEFAULT_HORIZON_DAYS;
+  for (let i = 0; i < viewDays; i++) {
     const d = new Date(base + i * 86_400_000);
     days.push({
       date: iso(d),
