@@ -1,6 +1,7 @@
 import { resolveActivityNames, type CoachActivityFrame } from '@cadence/shared';
 import { logAi } from './ai-log.ts';
 import {
+  coachTextSoFar,
   createCoachStreamAccumulateState,
   endCoachSegment,
   relayAndAccumulate,
@@ -74,6 +75,8 @@ export interface CoachToolLoopDeps {
     calls: CoachToolCall[],
     /** Definitions `find_tools` revealed, declared on the continuation so she can call them BY NAME. */
     revealed?: unknown[],
+    /** What she has already said this turn — rides the continuation so it CONTINUES (M0). */
+    assistantTextSoFar?: string,
   ) => Promise<ReadableStream<Uint8Array> | null>;
   /** Which real definitions a round's calls revealed. */
   revealedBy?: (calls: CoachToolCall[]) => unknown[];
@@ -172,13 +175,20 @@ async function nudgeDanglingLookup(
    */
   let result: CoachStreamResult | null = null;
   try {
+    // The nudge goes out BEFORE the segment closes so the quote below still sees the turn's text.
+    const saidSoFar = coachTextSoFar(state);
     // The nudge's reply is a new generation: close the bubble the turn was filling first.
     endCoachSegment(state, options.writeChunk);
+    // Same continuity the continuation now gets (M0): a nudge that cannot see what she already
+    // said produces a full re-answer, and re-answers are the glue this turn's fixes exist to end.
+    const said = saidSoFar
+      ? `What you have said to the user so far this turn: «${saidSoFar.slice(0, 1500)}». Do not repeat it. `
+      : '';
     const body = await deps.nudge(
       '<note>You called find_tools and then answered without calling any of the tools it gave you, ' +
         'so NOTHING was actually done. If the user asked you to change something, call that tool now ' +
         'by its own name. If you already told them it was done, correct that plainly in one line once ' +
-        'it really is. Do not mention this note.</note>',
+        `it really is. ${said}Do not mention this note.</note>`,
     );
     if (!body) return null;
     result = await relayAndAccumulate(body, { ...options, state, suppressDone: true });
@@ -190,7 +200,13 @@ async function nudgeDanglingLookup(
       if (outputs.length) {
         exchangeCalls.push(...late);
         exchangeOutputs.push(...outputs);
-        const after = await deps.submit(state.currentResponseId, [...exchangeOutputs], [...exchangeCalls], revealed);
+        const after = await deps.submit(
+          state.currentResponseId,
+          [...exchangeOutputs],
+          [...exchangeCalls],
+          revealed,
+          coachTextSoFar(state),
+        );
         if (after) {
           endCoachSegment(state, options.writeChunk);
           result = await relayAndAccumulate(after, { ...options, state, suppressDone: true });
@@ -359,7 +375,13 @@ export async function relayCoachTurnWithTools(
     exchangeOutputs.push(...outputs);
 
     try {
-      body = await deps.submit(state.currentResponseId, [...exchangeOutputs], [...exchangeCalls], revealed);
+      body = await deps.submit(
+        state.currentResponseId,
+        [...exchangeOutputs],
+        [...exchangeCalls],
+        revealed,
+        coachTextSoFar(state),
+      );
     } catch (e) {
       console.warn('[coach-tools] continuation failed — ending the turn with what streamed:', e);
       break;

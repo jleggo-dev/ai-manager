@@ -72,12 +72,14 @@ describe('relayCoachTurnWithTools', () => {
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute.mock.calls[0]![0]).toEqual([{ toolCallId: 't1', name: 'get_weight', arguments: '{}' }]);
     // The call rides beside its result (#232); fourth argument is what find_tools revealed —
-    // empty here, nothing was looked up.
+    // empty here, nothing was looked up. Fifth (M0, 2026-08-31): everything she said before the
+    // call, so the continuation CONTINUES her words instead of regenerating the turn.
     expect(submit).toHaveBeenCalledWith(
       'r1',
       [{ toolCallId: 't1', output: 'Weight: 88.5 kg' }],
       [{ toolCallId: 't1', name: 'get_weight', arguments: '{}' }],
       [],
+      'Let me check your file…',
     );
     expect(result.content).toBe('Let me check your file… You are at 88.5 kg.');
     expect(result.toolRounds).toBe(1);
@@ -482,7 +484,7 @@ describe('what find_tools reveals becomes callable by name', () => {
       },
       {},
     );
-    expect(submit).toHaveBeenCalledWith('r1', expect.anything(), expect.anything(), [revealedDef]);
+    expect(submit).toHaveBeenCalledWith('r1', expect.anything(), expect.anything(), [revealedDef], expect.any(String));
   });
 
   /** A tool found on round one must still be callable on round three. */
@@ -526,7 +528,7 @@ describe('what find_tools reveals becomes callable by name', () => {
       },
       {},
     );
-    expect(submit).toHaveBeenCalledWith('r1', expect.anything(), expect.anything(), []);
+    expect(submit).toHaveBeenCalledWith('r1', expect.anything(), expect.anything(), [], expect.any(String));
   });
 });
 

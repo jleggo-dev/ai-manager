@@ -248,6 +248,18 @@ export interface SubmitV2ToolOutputsOptions {
    * be able to see what round one asked and learned.
    */
   calls?: Array<{ toolCallId: string; name: string; arguments?: string | Record<string, unknown> }>;
+  /**
+   * Everything the assistant has already SAID this turn, across rounds — carried into the rebuilt
+   * history as an ordinary assistant message so the continuation reads its own words and
+   * continues them.
+   *
+   * The missing half of #232, found 2026-08-31: the self-contained rebuild carried the history
+   * and the tool exchange but never the assistant's mid-turn prose (it is not persisted until the
+   * turn ends), so every continuation was a FRESH generation of the same prompt — it re-answered
+   * from scratch, re-decided, sometimes re-called the same tool, and four stitched drafts of one
+   * answer reached a phone as one paragraph. The model cannot continue words it has never seen.
+   */
+  assistantTextSoFar?: string;
 }
 
 /** The dialect wants the model's own JSON string; AI Admin's own tool-call rows carry it parsed. */
@@ -301,6 +313,10 @@ export async function submitV2ToolOutputs(
   if (exchange.every((e) => e.name)) {
     try {
       const messages = await buildSessionChatMessages(sessionId, session);
+      // Her own words so far this turn ride as a plain assistant message — the least exotic
+      // shape the dialect accepts — so the continuation continues instead of re-answering.
+      const said = options.assistantTextSoFar?.trim();
+      if (said) messages.push({ role: 'assistant', content: said });
       const sseResponse = await client.continueWithToolResults(
         modelId,
         messages,
