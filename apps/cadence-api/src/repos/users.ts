@@ -50,7 +50,37 @@ export interface CadenceUserRow {
 
 export async function getUser(userId: string): Promise<CadenceUserRow | null> {
   const [row] = await sql<CadenceUserRow[]>`select * from cadence.users where id = ${userId}`;
+  if (row?.baseline) healConstraintsShape(row.baseline as unknown as Record<string, unknown>, userId);
   return row ?? null;
+}
+
+/**
+ * Self-healing read for a shape that once bricked a phone. On 2026-08-31 a maintenance script
+ * passed pre-stringified JSON where the sql client expects `json()`, and `baseline.constraints`
+ * landed as a jsonb STRING whose text was the correct array. Every consumer trusted the shape:
+ * the phone crashed AT BOOT mapping it, and the coach turn 500'd building context — one bad write
+ * took out both surfaces. The stored row was repaired (scripts/repair-constraints-shape.ts), and
+ * this makes the read shrug off a recurrence instead of letting it cascade: a parseable string is
+ * quietly unwrapped, anything else non-array becomes an empty list, and either case is logged —
+ * never thrown, because "constraints unreadable" must degrade to "none on file", not to no app.
+ */
+export function healConstraintsShape(baseline: Record<string, unknown>, userId: string): void {
+  const c = baseline.constraints;
+  if (c === undefined || Array.isArray(c)) return;
+  if (typeof c === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(c);
+      if (Array.isArray(parsed)) {
+        baseline.constraints = parsed;
+        console.warn(`[users] constraints for ${userId} stored as a JSON string — unwrapped on read`);
+        return;
+      }
+    } catch {
+      /* falls through to the empty-list floor */
+    }
+  }
+  baseline.constraints = [];
+  console.warn(`[users] constraints for ${userId} had a non-array shape — read as none on file`);
 }
 
 /**
@@ -105,6 +135,9 @@ export async function mergeCapturedConstraints(userId: string, incoming: Constra
   await sql.begin(async (tx) => {
     const rows = await tx<{ baseline: Baseline | null }[]>`
       select baseline from cadence.users where id = ${userId} for update`;
+    // Heal-on-read here too: this path maps over the list inside a transaction, and a bad
+    // stored shape must degrade, never throw mid-write (see healConstraintsShape).
+    if (rows[0]?.baseline) healConstraintsShape(rows[0].baseline as unknown as Record<string, unknown>, userId);
     const existing = (rows[0]?.baseline?.constraints ?? []) as Constraint[];
     const merged = mergeConstraints(existing, incoming);
     await tx`
@@ -128,6 +161,9 @@ export async function removeCapturedConstraint(userId: string, label: string): P
   await sql.begin(async (tx) => {
     const rows = await tx<{ baseline: Baseline | null }[]>`
       select baseline from cadence.users where id = ${userId} for update`;
+    // Heal-on-read here too: this path maps over the list inside a transaction, and a bad
+    // stored shape must degrade, never throw mid-write (see healConstraintsShape).
+    if (rows[0]?.baseline) healConstraintsShape(rows[0].baseline as unknown as Record<string, unknown>, userId);
     const existing = (rows[0]?.baseline?.constraints ?? []) as Constraint[];
     const kept = existing.filter((c) => !sameConstraint(c.label ?? '', label));
     if (kept.length === existing.length) return;
@@ -168,6 +204,9 @@ export async function renameCapturedConstraint(
   await sql.begin(async (tx) => {
     const rows = await tx<{ baseline: Baseline | null }[]>`
       select baseline from cadence.users where id = ${userId} for update`;
+    // Heal-on-read here too: this path maps over the list inside a transaction, and a bad
+    // stored shape must degrade, never throw mid-write (see healConstraintsShape).
+    if (rows[0]?.baseline) healConstraintsShape(rows[0].baseline as unknown as Record<string, unknown>, userId);
     const existing = (rows[0]?.baseline?.constraints ?? []) as Constraint[];
     const at = existing.findIndex((c) => sameConstraint(c.label ?? '', fromLabel));
     if (at === -1) return;

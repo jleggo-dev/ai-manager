@@ -9,10 +9,19 @@ export interface UserConstraint {
   status?: string;
   plan_around?: boolean;
 }
+/**
+ * The list, or nothing — never whatever shape the wire happened to carry. On 2026-08-31 a bad
+ * server-side write turned the stored constraints into a JSON string; this read passed it
+ * straight through, `items.map` threw inside the Settings sheet, and the error boundary took the
+ * WHOLE app down at boot ("Something broke while starting"). A screen must never inherit a crash
+ * from a shape it can floor to empty.
+ */
+const asConstraintList = (v: unknown): UserConstraint[] => (Array.isArray(v) ? (v as UserConstraint[]) : []);
+
 export async function getConstraints(): Promise<UserConstraint[]> {
   const res = await fetch(`${BASE}/me/constraints`, { headers: headers() });
   if (!res.ok) return [];
-  return ((await res.json()) as { constraints: UserConstraint[] }).constraints ?? [];
+  return asConstraintList(((await res.json()) as { constraints?: unknown }).constraints);
 }
 
 /**
@@ -26,7 +35,7 @@ export async function renameConstraint(id: string, label: string): Promise<UserC
     body: JSON.stringify({ label }),
   });
   if (!res.ok) return null;
-  return ((await res.json()) as { constraints: UserConstraint[] }).constraints ?? [];
+  return asConstraintList(((await res.json()) as { constraints?: unknown }).constraints);
 }
 
 /** Remove one. Returns the surviving list so the screen never guesses at the new state. */
@@ -36,7 +45,7 @@ export async function removeConstraint(id: string): Promise<UserConstraint[] | n
     headers: headers(),
   });
   if (!res.ok) return null;
-  return ((await res.json()) as { constraints: UserConstraint[] }).constraints ?? [];
+  return asConstraintList(((await res.json()) as { constraints?: unknown }).constraints);
 }
 
 export interface UnitsResponse {
