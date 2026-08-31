@@ -239,6 +239,44 @@ describe('defaultLayout', () => {
     expect(felt.area).toBeUndefined();
   });
 
+  it('with logged sessions on file, then_now sits below the goal cards, above the page furniture — on both paths', () => {
+    const runSchedule = goal({ goal_id: 'run-tn', title: 'Runs', area: 'movement', type: 'recurring' });
+    const fitness = defaultLayout([runSchedule], { has_then_now: true });
+    expect(kinds(fitness)).toEqual(['rhythm', 'weekly_bars', 'shelf', 'then_now', 'recap_rail', 'history']);
+    const card = fitness.sections.find((s) => s.kind === 'then_now')!;
+    // Cross-goal: no source, no stamped goal facts.
+    expect(card).toEqual({ id: 'w-then-now', kind: 'then_now', title: 'Then → now' });
+
+    const calm = goal({ goal_id: 'calm-tn', title: 'Calmer evenings', area: 'mind', type: 'recurring' });
+    const practice = defaultLayout([calm], { has_then_now: true });
+    expect(kinds(practice)).toEqual(['shelf', 'balance', 'rhythm', 'then_now', 'recap_rail', 'history']);
+
+    // No logged sessions (or the fact not passed): no card — absent data never derives one.
+    expect(kinds(defaultLayout([runSchedule], { has_then_now: false }))).not.toContain('then_now');
+    expect(kinds(defaultLayout([runSchedule]))).not.toContain('then_now');
+  });
+
+  it('photo_pair derives only for an opted-in user with photos, after the then_now slot', () => {
+    const runSchedule = goal({ goal_id: 'run-pp', title: 'Runs', area: 'movement', type: 'recurring' });
+    const layout = defaultLayout([runSchedule], { has_then_now: true, has_photos: true });
+    expect(kinds(layout)).toEqual([
+      'rhythm',
+      'weekly_bars',
+      'shelf',
+      'then_now',
+      'photo_pair',
+      'recap_rail',
+      'history',
+    ]);
+    const card = layout.sections.find((s) => s.kind === 'photo_pair')!;
+    // Cross-goal and opt-in: no source, no stamped goal facts.
+    expect(card).toEqual({ id: 'w-photos', kind: 'photo_pair', title: 'Your photos' });
+
+    // Off (the default), or on with nothing added yet: no card.
+    expect(kinds(defaultLayout([runSchedule], { has_photos: false }))).not.toContain('photo_pair');
+    expect(kinds(defaultLayout([runSchedule]))).not.toContain('photo_pair');
+  });
+
   it('a movement goal with a countable unit (e.g. "10 races") is count_toward, not dated_sessions — no id collision', () => {
     const races = goal({
       goal_id: 'races-1',

@@ -46,6 +46,10 @@ export interface CadenceUserRow {
   // haven't, which every surface renders as the brand mark. Never read by prompts or planning:
   // a face is a picture, not a personality (packages/cadence-shared/src/coach-face.ts).
   coach_face_id?: string | null;
+  // Present once migration 0048 is applied. Opt-in for the every-4-weeks progress photos —
+  // null/undefined means never asked, which every reader treats as OFF. Photos are dated and
+  // weight-stamped, never scored.
+  progress_photos_enabled?: boolean | null;
 }
 
 export async function getUser(userId: string): Promise<CadenceUserRow | null> {
@@ -274,6 +278,18 @@ export async function setPointsState(userId: string, state: PointsState): Promis
  */
 export async function setCoachFaceId(userId: string, faceId: string | null): Promise<void> {
   await sql`update cadence.users set coach_face_id = ${faceId}, updated_at = now() where id = ${userId}`;
+}
+
+/**
+ * Turn the every-4-weeks progress photos on or off. Off is the resting state and turning them off
+ * is a supported choice, not an error — the card and every photo route simply return nothing
+ * again. Stored rows and photos are left in place: opting out silences the feature, it does not
+ * delete a record only the user should decide to delete.
+ */
+export async function setProgressPhotosEnabled(userId: string, enabled: boolean): Promise<void> {
+  await sql`
+    update cadence.users set progress_photos_enabled = ${enabled}, updated_at = now()
+    where id = ${userId}`;
 }
 
 /** Read dietary profile jsonb (Req 5). Null only if the user row is missing. */

@@ -130,6 +130,16 @@ function sourceReasons(
     }
     return [];
   }
+  if (kind === 'then_now') {
+    if (!availability.has_then_now) return [`${at}: no logged sessions on file yet — cannot bind`];
+    return [];
+  }
+  if (kind === 'photo_pair') {
+    if (!availability.has_photos) {
+      return [`${at}: progress photos are off or none have been added — opt-in, cannot bind`];
+    }
+    return [];
+  }
   // rhythm, shelf, recap_rail, history: no source-existence gate — see the parcel report for why.
   return [];
 }

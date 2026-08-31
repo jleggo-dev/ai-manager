@@ -19,6 +19,8 @@ const KIND_LABEL: Record<WidgetKind, string> = {
   total: 'Total',
   variety: 'Variety',
   repertoire: 'Your repertoire',
+  then_now: 'Then and now',
+  photo_pair: 'Your photos',
   recap_rail: 'Your weekly check-ins',
   history: 'History',
 };

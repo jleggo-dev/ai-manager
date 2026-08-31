@@ -9,6 +9,7 @@ import {
   getProgressCount,
   getProgressRepertoire,
   getProgressFeltWeeks,
+  getProgressThenNow,
 } from '../api.ts';
 import { queryKeys } from './keys.ts';
 
@@ -71,4 +72,9 @@ export function useProgressRepertoire(goalId?: string) {
 /** `felt_week` — the last four weeks colored by daily check-in mood. */
 export function useProgressFeltWeeks() {
   return useQuery({ queryKey: queryKeys.progressExtras.feltWeeks, queryFn: getProgressFeltWeeks });
+}
+
+/** `then_now` — plain before/after pairs since the start. */
+export function useProgressThenNow() {
+  return useQuery({ queryKey: queryKeys.progressExtras.thenNow, queryFn: getProgressThenNow });
 }

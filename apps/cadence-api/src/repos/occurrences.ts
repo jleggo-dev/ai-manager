@@ -316,6 +316,7 @@ export async function listLoggedForProgress(
     date: string;
     title: string;
     kind: Activity['kind'];
+    category: string | null;
     value: Record<string, number> | null;
     log: OccurrenceLog | null;
   }>
@@ -325,11 +326,12 @@ export async function listLoggedForProgress(
       date: string;
       title: string;
       kind: Activity['kind'];
+      category: string | null;
       value: Record<string, number> | null;
       log: OccurrenceLog | null;
     }>
   >`
-    select to_char(o.date, 'YYYY-MM-DD') as date, a.title, a.kind, o.value, o.log
+    select to_char(o.date, 'YYYY-MM-DD') as date, a.title, a.kind, a.category, o.value, o.log
     from cadence.occurrences o
     join cadence.activities a on a.activity_id = o.activity_id
     where o.user_id = ${userId} and o.status = 'done' and o.date >= ${fromDate}

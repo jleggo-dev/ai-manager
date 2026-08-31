@@ -52,6 +52,9 @@ export const GLYPH = {
   /** Material "star" — bests and firsts (a shelf of accomplishments is not a music practice;
    *  the note glyph it briefly wore was the piano-as-exercise mistake all over again). */
   star: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
+  /** Material "photo_camera" — the every-4-weeks progress photos. */
+  camera:
+    'M12 12m-3.2 0a3.2 3.2 0 106.4 0 3.2 3.2 0 10-6.4 0M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z',
 } as const;
 
 export type GlyphName = keyof typeof GLYPH;

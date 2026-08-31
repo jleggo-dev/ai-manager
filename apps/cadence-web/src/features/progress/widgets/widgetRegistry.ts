@@ -12,6 +12,8 @@ import { BalanceWidget } from './BalanceWidget.tsx';
 import { TotalWidget } from './TotalWidget.tsx';
 import { VarietyWidget } from './VarietyWidget.tsx';
 import { RepertoireWidget } from './RepertoireWidget.tsx';
+import { ThenNowWidget } from './ThenNowWidget.tsx';
+import { PhotoPairWidget } from './PhotoPairWidget.tsx';
 import { RecapRailWidget } from './RecapRailWidget.tsx';
 import { HistoryWidget } from './HistoryWidget.tsx';
 
@@ -58,6 +60,10 @@ const renderVariety: Renderer = (payload) =>
   payload.kind === 'variety' ? createElement(VarietyWidget, { data: payload.data }) : null;
 const renderRepertoire: Renderer = (payload) =>
   payload.kind === 'repertoire' ? createElement(RepertoireWidget, { data: payload.data }) : null;
+const renderThenNow: Renderer = (payload) =>
+  payload.kind === 'then_now' ? createElement(ThenNowWidget, { data: payload.data }) : null;
+const renderPhotoPair: Renderer = (payload) =>
+  payload.kind === 'photo_pair' ? createElement(PhotoPairWidget, { data: payload.data }) : null;
 const renderRecapRail: Renderer = (payload) =>
   payload.kind === 'recap_rail' ? createElement(RecapRailWidget, { data: payload.data }) : null;
 const renderHistory: Renderer = (payload) =>
@@ -76,6 +82,8 @@ export const WIDGET_REGISTRY: Record<WidgetKind, Renderer> = {
   total: renderTotal,
   variety: renderVariety,
   repertoire: renderRepertoire,
+  then_now: renderThenNow,
+  photo_pair: renderPhotoPair,
   recap_rail: renderRecapRail,
   history: renderHistory,
 };

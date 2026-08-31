@@ -14,6 +14,7 @@ import weekRoutes from './routes/week.ts';
 import reviewRoutes from './routes/review.ts';
 import progressRoutes from './routes/progress.ts';
 import progressExtrasRoutes from './routes/progress-extras.ts';
+import progressPhotosRoutes from './routes/progress-photos.ts';
 import nutritionRoutes from './routes/nutrition.ts';
 import dietaryProfileRoutes from './routes/dietary-profile.ts';
 import foodsRoutes from './routes/foods.ts';
@@ -48,6 +49,7 @@ export function createApp() {
   app.use('/review', reviewRoutes);
   app.use('/progress', progressRoutes);
   app.use('/progress', progressExtrasRoutes);
+  app.use('/progress', progressPhotosRoutes);
   app.use('/journal', journalRoutes);
   app.use('/nutrition', nutritionRoutes);
   app.use('/nutrition', dietaryProfileRoutes);

@@ -30,6 +30,11 @@ export interface DefaultLayoutOptions {
   repertoire_goal_ids?: readonly string[];
   /** Any daily check-in mood in the trailing four weeks — gates the felt_week card. */
   has_felt?: boolean;
+  /** Any done, logged session at all — gates the then_now card (whether two honest pairs bind is
+   *  the resolver's own judgment; the page omits the card with evidence when they don't). */
+  has_then_now?: boolean;
+  /** Progress photos are ON (opt-in) and at least one exists — gates the photo_pair card. */
+  has_photos?: boolean;
 }
 
 const goalWidgetId = (g: Goal) => `w-goal-${g.goal_id}`;
@@ -208,6 +213,14 @@ function deriveShelf(goals: Goal[]): WidgetSpec | null {
 const RECAP_RAIL: WidgetSpec = { id: 'w-recap', kind: 'recap_rail', title: 'Your weekly check-in' };
 const HISTORY: WidgetSpec = { id: 'w-history', kind: 'history', title: 'Your history' };
 
+/** Cross-goal, data-gated (the caller passes the existence fact): plain before/after pairs, below
+ *  the goal cards on either path — the design's own placement ("THEN → NOW" under the goals). */
+const THEN_NOW: WidgetSpec = { id: 'w-then-now', kind: 'then_now', title: 'Then → now' };
+
+/** Opt-in and data-gated the same way: the photo pair sits after the shelf/then_now block —
+ *  the design's own placement ("PHOTOS" under "THEN → NOW"). */
+const PHOTO_PAIR: WidgetSpec = { id: 'w-photos', kind: 'photo_pair', title: 'Your photos' };
+
 /* ── Assembly ──────────────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -261,6 +274,11 @@ export function defaultLayout(goals: Goal[], opts: DefaultLayoutOptions = {}): P
         ...stageWidgets,
         ...(rhythm ? [rhythm] : []),
       ];
+
+  // Below the goal cards on either path, above the page furniture — the design's own placement:
+  // THEN → NOW, then PHOTOS.
+  if (opts.has_then_now) sections.push(THEN_NOW);
+  if (opts.has_photos) sections.push(PHOTO_PAIR);
 
   sections.push(RECAP_RAIL, HISTORY);
 

@@ -33,4 +33,9 @@ describe('headerTag', () => {
   it('names the felt measure and its source', () => {
     expect(headerTag({ kind: 'felt_week', data: { weeks: [] } })).toBe('felt · from your daily notes');
   });
+
+  it('dates the then_now card from the payload, and drops an unreadable date rather than inventing one', () => {
+    expect(headerTag({ kind: 'then_now', data: { since: '2026-01-05', pairs: [] } })).toBe('then → now · since Jan 5');
+    expect(headerTag({ kind: 'then_now', data: { since: 'not-a-date', pairs: [] } })).toBe('then → now');
+  });
 });

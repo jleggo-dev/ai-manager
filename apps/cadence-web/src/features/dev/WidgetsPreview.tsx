@@ -16,6 +16,8 @@ const FITNESS_TITLES: Record<WidgetKind, string> = {
   total: 'Time moved',
   variety: 'Routes run',
   repertoire: 'Swim skills',
+  then_now: 'Then → now',
+  photo_pair: 'Your photos',
   recap_rail: 'Your weekly check-ins',
   history: 'History',
 };
@@ -33,6 +35,8 @@ const PRACTICE_TITLES: Record<WidgetKind, string> = {
   total: 'Time sat',
   variety: 'Techniques tried',
   repertoire: 'Piano repertoire',
+  then_now: 'Then → now',
+  photo_pair: 'Your photos',
   recap_rail: 'Your weekly check-ins',
   history: 'History',
 };

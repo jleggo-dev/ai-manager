@@ -65,6 +65,13 @@ export const queryKeys = {
     repertoire: (goalId: string) => ['progressExtras', 'repertoire', goalId] as const,
     /** Always the trailing four weeks — no window/goal variants to key on. */
     feltWeeks: ['progressExtras', 'feltWeeks'] as const,
+    /** Start-to-now pairs — no window/goal variants to key on either. */
+    thenNow: ['progressExtras', 'thenNow'] as const,
+  },
+  /** `/progress/photo-pair` (routes/progress-photos.ts) — the opt-in photo pair. Invalidate after
+   *  an upload or an enable/disable once those surfaces land. */
+  progressPhotos: {
+    pair: ['progressPhotos', 'pair'] as const,
   },
   /** `/me/recaps` (the `recap_rail` widget, Progress Engine W2-1) — weekly check-in recaps,
    *  persisted at confirm time. Scoped by `limit` so the rail's own default doesn't collide with a

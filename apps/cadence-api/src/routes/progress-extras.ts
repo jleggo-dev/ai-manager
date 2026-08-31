@@ -15,6 +15,7 @@ import { getVariety } from '../services/progress-nontemporal-variety.ts';
 import { getStagePath, getCountToward } from '../services/progress-nontemporal-goal.ts';
 import { getRepertoireCard } from '../services/progress-nontemporal-repertoire.ts';
 import { getFeltWeeks } from '../services/progress-felt-weeks.ts';
+import { getThenNow } from '../services/progress-then-now.ts';
 import { resolveWindowRange } from '../services/window-range.ts';
 
 const router = Router();
@@ -139,6 +140,20 @@ router.get('/felt-weeks', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /progress/felt-weeks]', err);
     res.status(500).json({ error: 'failed to load felt weeks' });
+  }
+});
+
+/** GET /progress/then-now — `then_now`: plain before/after pairs mined from the whole session
+ *  feed. No params: "then" is the start and "now" is the last four weeks — the card has no honest
+ *  re-window and no per-goal slice. */
+router.get('/then-now', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const result = await getThenNow(userId);
+    res.json('reason' in result ? { omission: result } : result);
+  } catch (err) {
+    console.error('[GET /progress/then-now]', err);
+    res.status(500).json({ error: 'failed to load then and now' });
   }
 });
 

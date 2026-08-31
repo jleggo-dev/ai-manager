@@ -561,6 +561,139 @@
   color: oklch(48% 0.06 320);
 }
 
+/* ── then_now — plain before/after rows (design 1a "THEN → NOW"): a family dot, the label, then
+   "20 lb → 50 lb" with the early end muted and the recent end strong. The weighting marks which
+   end is CURRENT, never which is better — no judgment color in either direction. ─────────────── */
+.pw-tn {
+  display: flex;
+  flex-direction: column;
+}
+.pw-tn-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+}
+.pw-tn-row + .pw-tn-row {
+  border-top: 1px solid var(--line-soft);
+}
+.pw-tn-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.pw-tn-dot--movement {
+  background: var(--forest);
+}
+.pw-tn-dot--mind {
+  background: var(--dusk);
+}
+.pw-tn-dot--nourishment {
+  background: oklch(55% 0.12 70);
+}
+.pw-tn-dot--practice {
+  background: oklch(48% 0.06 320);
+}
+.pw-tn-dot--none {
+  background: var(--surface-3);
+}
+.pw-tn-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--text);
+}
+.pw-tn-ends {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.pw-tn-then {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-mute);
+}
+.pw-tn-arrow {
+  font-size: 10px;
+  color: var(--text-mute);
+}
+.pw-tn-now {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── photo_pair — two photo slots side by side (design 1a "PHOTOS"): image, then a mono
+   date · weight caption. Dates and weights only — no delta, no judgment color, ever. The dashed
+   due row is an invitation shape (same idiom as an upcoming rhythm dot), not a warning. ──────── */
+.pw-photos {
+  display: flex;
+  gap: 9px;
+}
+.pw-photos-slot {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+/* A lone photo keeps the pair's slot width — the empty half is where the next one will sit. */
+.pw-photos-slot--single {
+  flex: 0 0 calc(50% - 5px);
+}
+.pw-photos-img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: var(--surface-2);
+  display: block;
+}
+.pw-photos-cap {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  text-align: center;
+}
+.pw-photos-note {
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-mute);
+}
+.pw-photos-due {
+  margin-top: 9px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+}
+.pw-photos-due-t {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-mute);
+}
+/* Display-only until the drill screen lands: link-colored so it reads as the destination it will
+   become, disabled so it promises nothing today. */
+.pw-photos-all {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--forest);
+  opacity: 0.6;
+}
+
 /* ── recap_rail ─────────────────────────────────────────────────────────── */
 .pw-rail {
   display: flex;

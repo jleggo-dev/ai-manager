@@ -1,5 +1,11 @@
 import type { WidgetKind, WidgetPayload } from '@cadence/shared';
 
+/** Tiny inline placeholder "photos" (solid-color SVGs, 3:4) so the photo_pair fixtures need no
+ *  network and no binary asset — real slots carry short-lived signed URLs. */
+function placeholderPhoto(fill: string): string {
+  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='40'%3E%3Crect width='30' height='40' fill='%23${fill}'/%3E%3C/svg%3E`;
+}
+
 /**
  * Realistic fixture payloads for every WIDGET_KINDS entry, in two flavours: FITNESS_FIXTURES (a
  * movement/nourishment-led user — runs, weigh-ins, steps) and PRACTICE_FIXTURES (a mind/practice
@@ -184,6 +190,27 @@ export const FITNESS_FIXTURES: Record<WidgetKind, WidgetPayload> = {
       noun: 'skills',
     },
   },
+  then_now: {
+    kind: 'then_now',
+    data: {
+      since: '2026-01-05',
+      pairs: [
+        { label: 'Farmer carry', then: '20 lb', now: '50 lb', area: 'movement' },
+        { label: 'Easy run pace', then: '7:50 /km', now: '6:38 /km', area: 'movement' },
+        { label: 'Grip hang', then: '12 s', now: '64 s', area: 'movement' },
+        { label: 'Longest sit', then: '3 min', now: '12 min', area: 'mind' },
+      ],
+    },
+  },
+  photo_pair: {
+    kind: 'photo_pair',
+    data: {
+      first: { date: '2026-01-05', weight_kg: 86.0, url: placeholderPhoto('d9d2c0') },
+      latest: { date: '2026-08-24', weight_kg: 82.4, url: placeholderPhoto('cbc2ab') },
+      next_due: '2026-09-21',
+      count: 8,
+    },
+  },
   recap_rail: {
     kind: 'recap_rail',
     data: {
@@ -365,6 +392,26 @@ export const PRACTICE_FIXTURES: Record<WidgetKind, WidgetPayload> = {
       learned: 2,
       in_progress: 1,
       noun: 'pieces',
+    },
+  },
+  then_now: {
+    kind: 'then_now',
+    data: {
+      since: '2026-02-02',
+      pairs: [
+        { label: 'Longest sit', then: '3 min', now: '32 min', area: 'mind' },
+        { label: 'Box breathing', then: '90 s', now: '150 s', area: 'mind' },
+      ],
+    },
+  },
+  photo_pair: {
+    kind: 'photo_pair',
+    data: {
+      // One photo, no weigh-in near it: a first slot, an honest line, and no invented weight.
+      first: { date: '2026-08-24', weight_kg: null, url: placeholderPhoto('d9d2c0') },
+      latest: null,
+      next_due: '2026-09-21',
+      count: 1,
     },
   },
   recap_rail: {

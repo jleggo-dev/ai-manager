@@ -37,6 +37,8 @@ const GROUP: Record<WidgetKind, WidgetGroup> = {
   total: 'non_temporal',
   variety: 'non_temporal',
   repertoire: 'non_temporal',
+  then_now: 'non_temporal',
+  photo_pair: 'non_temporal',
   recap_rail: 'page_level',
   history: 'page_level',
 };
@@ -54,6 +56,8 @@ const SHOWS: Record<WidgetKind, string> = {
   total: 'a running total over a window ("340 minutes sat", "31,200 words")',
   variety: 'how many distinct things happened in a window ("14 different dinners")',
   repertoire: 'the pieces or material they keep, each marked learned, in progress, or not started',
+  then_now: 'plain before/after rows — an early measured value and a recent one for the same exercise, pace, or sit',
+  photo_pair: 'the earliest and latest progress photos side by side, dated and weight-stamped, never scored',
   recap_rail: 'the weekly check-in cards',
   history: 'a plain dated feed of everything logged',
 };
@@ -71,6 +75,9 @@ const SOURCE_HINT: Record<WidgetKind, string> = {
   total: 'source.goal_id — one of the goals listed',
   variety: 'no source needed',
   repertoire: 'source.goal_id — optional: set it to scope to one goal, omit it to show every item they keep',
+  then_now: 'no source needed — reads every logged session; only offer it when session logs exist',
+  photo_pair:
+    'no source needed — OPT-IN: only offer it when the user has turned progress photos on and added at least one',
   recap_rail: 'no source needed',
   history: 'no source needed',
 };

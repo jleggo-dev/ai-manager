@@ -12,7 +12,9 @@ import {
   useProgressFeltWeeks,
   useProgressHistory,
   useProgressRepertoire,
+  useProgressPhotoPair,
   useProgressStagePath,
+  useProgressThenNow,
   useProgressTotals,
   useProgressVariety,
   useRecaps,
@@ -130,6 +132,23 @@ function RepertoireBound({ spec }: BoundProps) {
   return <WidgetSection spec={spec} payload={{ kind: 'repertoire', data }} family="practice" />;
 }
 
+function ThenNowBound({ spec }: BoundProps) {
+  // "Then" is the start and "now" is the last four weeks — the card has no honest re-window, so
+  // the page's control does not reach it. Cross-goal, so the chip stays neutral unless the layout
+  // stamped an area.
+  const { data } = useProgressThenNow();
+  if (!data || 'omission' in data || data.pairs.length === 0) return null;
+  return <WidgetSection spec={spec} payload={{ kind: 'then_now', data }} />;
+}
+
+function PhotoPairBound({ spec }: BoundProps) {
+  // Opt-in end to end: off (the default) or nothing added yet comes back as an omission and the
+  // card renders nothing. Dates and weights only — no window, no goal slice, no judgment.
+  const { data } = useProgressPhotoPair();
+  if (!data || 'omission' in data) return null;
+  return <WidgetSection spec={spec} payload={{ kind: 'photo_pair', data }} />;
+}
+
 function StagePathBound({ spec }: BoundProps) {
   const { data } = useProgressStagePath(spec.source?.goal_id ?? '');
   if (!spec.source?.goal_id || !data || 'omission' in data) return null;
@@ -209,6 +228,8 @@ const BOUND: Partial<Record<WidgetSpec['kind'], (p: BoundProps) => ReactNode>> =
   total: TotalBound,
   variety: VarietyBound,
   repertoire: RepertoireBound,
+  then_now: ThenNowBound,
+  photo_pair: PhotoPairBound,
   stage_path: StagePathBound,
   count_toward: CountTowardBound,
   history: HistoryBound,

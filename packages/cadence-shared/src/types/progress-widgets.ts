@@ -32,6 +32,8 @@ export const WIDGET_KINDS = [
   'total',
   'variety',
   'repertoire',
+  'then_now',
+  'photo_pair',
   'recap_rail',
   'history',
 ] as const;
@@ -204,6 +206,47 @@ export interface RepertoirePayload {
   noun: string;
 }
 
+/** One plain before/after fact: an early measured value and a recent one for the same thing
+ *  ("Farmer carry", "Easy run pace", "Longest sit"). Both ends are DISPLAY STRINGS computed
+ *  server-side from real log entries — units render once, consistently, and the client never
+ *  re-derives a number. `area` is the source's own family (movement for lifts/pace, mind for
+ *  sits) when honestly known — it colors the row dot, never judges the direction. */
+export interface ThenNowPair {
+  label: string;
+  then: string;
+  now: string;
+  area?: GoalArea;
+}
+
+/** "Then → now, since Jan 5" (owner design "Cadence Progress" 1a): rows of plain before/after
+ *  pairs mined from the logs. `since` is the YYYY-MM-DD of the earliest "then" end. A pair only
+ *  exists when BOTH ends were actually recorded and they differ — never a fabricated improvement;
+ *  fewer than two honest pairs and the whole card is omitted with evidence. */
+export interface ThenNowPayload {
+  since: string;
+  pairs: ThenNowPair[];
+}
+
+/** One progress photo as the card shows it: a signed (short-lived) URL, its date, and the user's
+ *  own nearest weigh-in within ±3 days of that date — null when none exists, never invented. */
+export interface ProgressPhotoSlot {
+  date: string; // YYYY-MM-DD (taken_on)
+  weight_kg: number | null;
+  url: string;
+}
+
+/** "PHOTOS · every 4 weeks · optional" (owner design 1a): the earliest and latest photos side by
+ *  side, dated and weight-stamped, never scored — no comparison or judgment copy anywhere.
+ *  `latest` is null while only one photo exists (the card shows the first slot and says so
+ *  honestly). `next_due` = last taken_on + 28 days. Opt-in: the whole card exists only for users
+ *  who turned progress photos on. */
+export interface PhotoPairPayload {
+  first: ProgressPhotoSlot;
+  latest: ProgressPhotoSlot | null;
+  next_due: string | null;
+  count: number;
+}
+
 export interface RecapRailPayload {
   /** `line` is the coach's/receipt's one-sentence conclusion — nullable on purpose (honest v1:
    *  rows persisted before anything writes conclusions back simply have none, and "no line yet"
@@ -228,6 +271,8 @@ export type WidgetPayload =
   | { kind: 'total'; data: TotalPayload }
   | { kind: 'variety'; data: VarietyPayload }
   | { kind: 'repertoire'; data: RepertoirePayload }
+  | { kind: 'then_now'; data: ThenNowPayload }
+  | { kind: 'photo_pair'; data: PhotoPairPayload }
   | { kind: 'recap_rail'; data: RecapRailPayload }
   | { kind: 'history'; data: HistoryPayload };
 

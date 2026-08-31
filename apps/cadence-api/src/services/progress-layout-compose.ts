@@ -62,6 +62,8 @@ export async function composeProgressLayout(
     defaultLayout(goals, {
       repertoire_goal_ids: availability.repertoire_goal_ids,
       has_felt: availability.has_felt,
+      has_then_now: availability.has_then_now,
+      has_photos: availability.has_photos,
     });
   const goalIds = goals.map((g) => g.goal_id);
 

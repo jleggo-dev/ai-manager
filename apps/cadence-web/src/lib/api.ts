@@ -314,8 +314,11 @@ export {
   getProgressCount,
   getProgressRepertoire,
   getProgressFeltWeeks,
+  getProgressThenNow,
   type Omittable,
 } from './api/progress-extras.ts';
+
+export { getProgressPhotoPair } from './api/progress-photos.ts';
 
 export {
   getProgressLayoutDraft,

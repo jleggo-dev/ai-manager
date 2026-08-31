@@ -33,7 +33,17 @@ describe('widgetCatalog', () => {
       ['dated_sessions', 'felt_week', 'rhythm', 'trend_vs_target', 'weekly_bars'].sort(),
     );
     expect([...NON_TEMPORAL_KINDS].sort()).toEqual(
-      ['balance', 'count_toward', 'repertoire', 'shelf', 'stage_path', 'total', 'variety'].sort(),
+      [
+        'balance',
+        'count_toward',
+        'photo_pair',
+        'repertoire',
+        'shelf',
+        'stage_path',
+        'then_now',
+        'total',
+        'variety',
+      ].sort(),
     );
     expect([...PAGE_LEVEL_KINDS].sort()).toEqual(['history', 'recap_rail'].sort());
   });

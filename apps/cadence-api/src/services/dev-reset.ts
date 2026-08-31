@@ -1,6 +1,7 @@
 import { sql, json } from '../db/sql.ts';
 import { ensureUser } from '../repos/users.ts';
 import { purgeMealPhotos } from './meal-photos.ts';
+import { purgeProgressPhotos } from './progress-photos.ts';
 import { initialStreakState } from './metrics.ts';
 import { EMPTY_DIETARY_PROFILE } from '@cadence/shared';
 
@@ -52,6 +53,7 @@ export const DEV_CHILD_TABLES = [
   'occurrences',
   'plans',
   'progress_layouts',
+  'progress_photos',
   'recaps',
   'recipes',
   'repertoire',
@@ -84,11 +86,20 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * Built by hand because the simple protocol carries no parameters — so both halves are validated
  * rather than trusted: table names come from our own `as const` array and are re-checked here, and
  * the caller's id must be a UUID (`resetUserData` throws otherwise, below).
+ *
+ * Each delete rides in a DO block that skips `undefined_table`: the guard test reads this list
+ * from the MIGRATIONS, and a parcel's table legitimately exists in the migrations before its SQL
+ * has been applied to the database (0048 shipped exactly that way — reviewed and applied by the
+ * owner after the code lands). During that gap the table has no rows to delete, and one missing
+ * relation must not abort the whole wipe mid-transaction. Any other error still fails loudly.
  */
 const CHILD_DELETES = (() => {
   const bad = DEV_CHILD_TABLES.filter((t) => !/^[a-z_]+$/.test(t));
   if (bad.length) throw new Error(`DEV_CHILD_TABLES holds non-identifier names: ${bad.join(', ')}`);
-  return DEV_CHILD_TABLES.map((t) => `delete from cadence.${t} where user_id = '%ID%';`).join('\n');
+  return DEV_CHILD_TABLES.map(
+    (t) =>
+      `do $$ begin delete from cadence.${t} where user_id = '%ID%'; exception when undefined_table then null; end $$;`,
+  ).join('\n');
 })();
 
 /** Wipe all cadence data for a user; keep the users row but reset name + baseline. */
@@ -102,6 +113,12 @@ export async function resetUserData(userId: string): Promise<void> {
     await purgeMealPhotos(userId);
   } catch (e) {
     console.warn('[reset] meal-photo purge failed (continuing):', e);
+  }
+  // Progress photos live in their own Storage bucket — same promise, same best-effort stance.
+  try {
+    await purgeProgressPhotos(userId);
+  } catch (e) {
+    console.warn('[reset] progress-photo purge failed (continuing):', e);
   }
   // One round trip for every child table. `foods` rides along: it keys on owner_user_id, and the
   // shared/global rows (owner null) stay.

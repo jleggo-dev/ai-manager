@@ -37,6 +37,8 @@ const KIND_GLYPH: Record<WidgetKind, GlyphName> = {
   total: 'gauge',
   variety: 'route',
   repertoire: 'note',
+  then_now: 'gauge',
+  photo_pair: 'camera',
   recap_rail: 'bubble',
   history: 'pen',
 };
@@ -96,6 +98,13 @@ export function headerTag(payload: WidgetPayload): string {
       return `variety · ${payload.data.window_label}`;
     case 'repertoire':
       return `repertoire · ${payload.data.learned} learned · ${payload.data.in_progress} in progress`;
+    case 'then_now': {
+      const since = new Date(`${payload.data.since}T12:00:00`);
+      if (Number.isNaN(since.getTime())) return 'then → now';
+      return `then → now · since ${since.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+    }
+    case 'photo_pair':
+      return 'photos · every 4 weeks · optional';
     case 'recap_rail':
       return 'weekly check-ins';
     case 'history':
