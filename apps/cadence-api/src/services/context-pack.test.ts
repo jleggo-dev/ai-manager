@@ -1,14 +1,16 @@
 /**
- * API-06 — resilience-contract tests for buildContextPack.
+ * API-06 — contract tests for buildContextPack.
  *
- * Modes since 2026-08-31 (persisted audit trail; historical `broker-` prefix kept on purpose):
- *   - broker-select  — pack-select chose the functions; the app rendered the words
- *   - deterministic  — select failed → intent selection + renderResults
- * There is deliberately NO summarize step any more (see context-pack.ts header): the body is
- * each function's own render(), and these tests pin that no pack-summarize job is ever invoked.
+ * Since 2026-08-31 (second pass) the build path is fully deterministic:
+ *   - deterministic — INTENT_SELECTION[intent] + the MANDATORY floor; the body is each
+ *                     function's own render()
+ *   - pack-reuse    — a fresh persisted pack served as-is (P3); inserts nothing
+ * There is deliberately NO model call anywhere in this path any more (context-pack.ts header):
+ * pack-summarize invented an absence it never checked, and pack-select omitted weight
+ * (2026-08-14) and equipment (2026-08-31). These tests pin that runJobBySlug is never invoked.
  *
- * AI seam + catalog + persist/trace/log are mocked so CI runs without Cadence DB / AIM secrets.
- * Retrieval registry is stubbed so executeCalls never hits Postgres.
+ * Persist/trace/log are mocked so CI runs without Cadence DB / AIM secrets; the retrieval
+ * registry is stubbed so executeCalls never hits Postgres.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -25,9 +27,8 @@ const stubs = vi.hoisted(() => {
   });
   return {
     runJobBySlug: vi.fn(),
-    renderCatalogDoc: vi.fn(async () => 'catalog-doc'),
     insertContextPack: vi.fn(async (_p: { sections?: { mode?: string } }) => 'pack-id'),
-    // Default MISS so every pre-P3 test runs the build path untouched; reuse tests opt in per-test.
+    // Default MISS so every build-path test runs the build untouched; reuse tests opt in per-test.
     getFreshContextPack: vi.fn(async (): Promise<unknown> => null),
     updateTrace: vi.fn(),
     logAi: vi.fn(),
@@ -43,8 +44,9 @@ const stubs = vi.hoisted(() => {
   };
 });
 
+// context-pack.ts no longer imports the AI seam at all; this mock stands guard so that if a
+// model call ever creeps back into the module graph, the never-called assertions below fail.
 vi.mock('../ai/aim.ts', () => ({ runJobBySlug: stubs.runJobBySlug }));
-vi.mock('./retrieval/catalog.ts', () => ({ renderCatalogDoc: stubs.renderCatalogDoc }));
 vi.mock('../repos/context-pack.ts', () => ({
   insertContextPack: stubs.insertContextPack,
   getFreshContextPack: stubs.getFreshContextPack,
@@ -62,86 +64,59 @@ vi.mock('./coach-context.ts', () => ({
 
 import { buildContextPack } from './context-pack.ts';
 
-function selectOk(calls: Array<{ fn: string; params?: Record<string, unknown> }>, reason = 'broker pick') {
-  return { formatted: JSON.stringify({ calls, reason }) };
-}
-
-describe('API-06 — buildContextPack 3-way fallback', () => {
+describe('API-06 — deterministic build path', () => {
   beforeEach(() => {
     stubs.runJobBySlug.mockReset();
-    stubs.renderCatalogDoc.mockClear();
     stubs.insertContextPack.mockClear();
     stubs.updateTrace.mockClear();
     stubs.logAi.mockClear();
   });
 
-  it('mode=broker-select when select succeeds — body is the deterministic render, summarize never runs', async () => {
-    stubs.runJobBySlug.mockImplementation(async (_uid: string, slug: string) => {
-      if (slug === 'pack-select')
-        return selectOk([{ fn: 'get_identity' }, { fn: 'get_objectives' }], 'need identity + goals');
-      throw new Error(`unexpected slug ${slug}`);
-    });
-
+  it('built packs are mode=deterministic — body is render() output, zero model calls', async () => {
     const pack = await buildContextPack(USER, 'ongoing');
-
-    expect(pack.mode).toBe('broker-select');
-    expect(pack.selectReason).toBe('need identity + goals');
-    expect(pack.rendered).toContain('broker-select');
-    // The body is render() output word for word — no model prose stands between data and coach.
-    expect(pack.rendered).toContain('Name: Ada');
-    expect(pack.id).toBe('pack-id');
-    expect(stubs.insertContextPack).toHaveBeenCalledOnce();
-    expect(stubs.insertContextPack.mock.calls[0]?.[0]?.sections?.mode).toBe('broker-select');
-    // The 2026-08-31 contract: pack-summarize is GONE — it once asserted "no linked equipment"
-    // about a domain it was never handed.
-    const slugs = stubs.runJobBySlug.mock.calls.map((c) => c[1]);
-    expect(slugs).not.toContain('pack-summarize');
-  });
-
-  it('mode=deterministic when select fails', async () => {
-    stubs.runJobBySlug.mockImplementation(async () => {
-      throw new Error('broker down');
-    });
-
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const pack = await buildContextPack(USER, 'ongoing');
-    spy.mockRestore();
 
     expect(pack.mode).toBe('deterministic');
     expect(pack.selectReason).toBe('(deterministic selection)');
     expect(pack.rendered).toContain('deterministic');
+    // The body is render() output word for word — no model prose stands between data and coach.
     expect(pack.rendered).toContain('Name: Ada');
-    // Intent fallback still executed mandatory + ongoing selection against the stub registry.
-    expect(pack.provenance.some((p) => p.fn === 'get_identity')).toBe(true);
-    expect(pack.provenance.some((p) => p.fn === 'get_constraints')).toBe(true);
+    expect(pack.id).toBe('pack-id');
+    expect(stubs.insertContextPack).toHaveBeenCalledOnce();
+    expect(stubs.insertContextPack.mock.calls[0]?.[0]?.sections?.mode).toBe('deterministic');
+    // The 2026-08-31 contract: no pack-select, no pack-summarize, no job of any kind.
+    expect(stubs.runJobBySlug).not.toHaveBeenCalled();
   });
 
-  it('treats empty/unknown select calls as select failure → deterministic path', async () => {
-    stubs.runJobBySlug.mockImplementation(async (_uid: string, slug: string) => {
-      if (slug === 'pack-select') return { formatted: JSON.stringify({ calls: [{ fn: 'ghost' }], reason: 'bad' }) };
-      throw new Error(`unexpected slug ${slug}`);
-    });
-
-    const pack = await buildContextPack(USER, 'ongoing');
-    expect(pack.mode).toBe('deterministic');
-    expect(pack.selectReason).toBe('(deterministic selection)');
-  });
-
-  it('always appends the mandatory fns — equipment included — even if the Broker omitted them', async () => {
-    stubs.runJobBySlug.mockImplementation(async (_uid: string, slug: string) => {
-      if (slug === 'pack-select') return selectOk([{ fn: 'get_objectives' }], 'objectives only');
-      throw new Error(`unexpected slug ${slug}`);
-    });
-
+  it('mandatory fns always execute — identity, constraints, weight, equipment', async () => {
     const pack = await buildContextPack(USER, 'ongoing');
     const fns = pack.provenance.map((p) => p.fn);
-    expect(fns).toContain('get_objectives');
+    // The floor that pack-select twice failed to hold: weight (2026-08-14), equipment
+    // (2026-08-31 — the coach denied the user's dumbbells for a session).
     expect(fns).toContain('get_identity');
     expect(fns).toContain('get_constraints');
-    // 2026-08-31: the select chose a list without equipment and the coach denied the user's
-    // dumbbells for a session. Owned items are ~30 tokens; their absence broke "never makes
-    // you repeat yourself".
+    expect(fns).toContain('get_weight');
     expect(fns).toContain('get_equipment');
+    // Plus the per-intent list itself.
+    expect(fns).toContain('get_objectives');
+  });
+
+  it('every intent gets the mandatory floor, even lists that never named them', async () => {
+    // The onboarding list carries no get_weight; the floor appends it anyway.
+    const pack = await buildContextPack(USER, 'onboarding');
+    const fns = pack.provenance.map((p) => p.fn);
+    expect(fns).toContain('get_weight');
+    expect(fns).toContain('get_constraints');
+    expect(stubs.runJobBySlug).not.toHaveBeenCalled();
+  });
+
+  it('pack_select is still logged for audit continuity — now recording the deterministic pick', async () => {
+    await buildContextPack(USER, 'ongoing');
+    const call = stubs.logAi.mock.calls.find((c) => (c[1] as { kind?: string })?.kind === 'pack_select');
+    expect(call).toBeDefined();
+    const entry = call?.[1] as { output?: { deterministic?: boolean; fns?: string[] }; meta?: { mode?: string } };
+    expect(entry.output?.deterministic).toBe(true);
+    expect(entry.output?.fns).toContain('get_equipment');
+    expect(entry.meta?.mode).toBe('deterministic');
   });
 });
 
