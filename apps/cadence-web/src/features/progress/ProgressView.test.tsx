@@ -21,6 +21,10 @@ vi.mock('./BoundWidget.tsx', () => ({
   BoundWidget: ({ spec }: { spec: { id: string } }) => <div data-testid={`bound-${spec.id}`} />,
 }));
 vi.mock('./SessionListScreen.tsx', () => ({ SessionListScreen: () => <div>session-list</div> }));
+vi.mock('./PhotosScreen.tsx', () => ({
+  PhotosScreen: () => <div>photos-screen</div>,
+  PhotosRow: () => <div data-testid="photos-row" />,
+}));
 vi.mock('./WindowSeg.tsx', () => ({ WindowSeg: () => <div>window-seg</div> }));
 
 const { ProgressView } = await import('./ProgressView.tsx');

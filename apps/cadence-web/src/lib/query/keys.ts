@@ -68,10 +68,12 @@ export const queryKeys = {
     /** Start-to-now pairs — no window/goal variants to key on either. */
     thenNow: ['progressExtras', 'thenNow'] as const,
   },
-  /** `/progress/photo-pair` (routes/progress-photos.ts) — the opt-in photo pair. Invalidate after
-   *  an upload or an enable/disable once those surfaces land. */
+  /** `/progress/photo-pair` + `/progress/photos` (routes/progress-photos.ts) — the opt-in photo
+   *  pair (the card) and the full list (SR-5's "All photos" screen). An upload or an enable/
+   *  disable invalidates both: either can change what the card AND the screen would show. */
   progressPhotos: {
     pair: ['progressPhotos', 'pair'] as const,
+    all: ['progressPhotos', 'all'] as const,
   },
   /** `/me/recaps` (the `recap_rail` widget, Progress Engine W2-1) — weekly check-in recaps,
    *  persisted at confirm time. Scoped by `limit` so the rail's own default doesn't collide with a

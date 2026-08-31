@@ -1,7 +1,15 @@
 import { Router, type Request, type Response } from 'express';
 import type { Baseline, Goal } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
-import { listGoalsByStatus, setGoalStatus, insertGoal, updateGoal, deleteGoal } from '../repos/goals.ts';
+import {
+  listGoalsByStatus,
+  setGoalStatus,
+  insertGoal,
+  updateGoal,
+  deleteGoal,
+  retireGoal,
+  restoreGoal,
+} from '../repos/goals.ts';
 import { listEquipment, insertEquipment, updateEquipment, deleteEquipment } from '../repos/equipment.ts';
 import { getUser, mergeBaseline, setName } from '../repos/users.ts';
 import { evaluateGuardrail } from '../services/goal-guardrail.ts';
@@ -83,6 +91,39 @@ router.patch('/goals/:id', async (req: Request, res: Response) => {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[PATCH /review/goals]', err);
     res.status(500).json({ error: 'update failed' });
+  }
+});
+
+/**
+ * POST /review/goals/:id/retire — Settings' "Retire": parks the goal. It stops shaping the plan
+ * from the next build (lock.ts/replan.ts never draw on 'parked'); everything it already built —
+ * sessions logged, milestones hit — stays exactly as readable in Progress (progress.ts draws on
+ * 'parked' on purpose). Reversible only through the coach (update_goal's 'restore' action) —
+ * Settings itself never shows a retired goal again, by design.
+ */
+router.post('/goals/:id/retire', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const goal = await retireGoal(userId, req.params.id as string);
+    if (!goal) return void res.status(404).json({ error: 'goal not found or already retired' });
+    res.json({ ok: true, goal });
+  } catch (err) {
+    console.error('[POST /review/goals/:id/retire]', err);
+    res.status(500).json({ error: 'retire failed' });
+  }
+});
+
+/** POST /review/goals/:id/restore — bring a retired goal back to whatever it was before. Plumbing
+ *  for the coach's restore path and any future UI; Settings' own flow never calls this today. */
+router.post('/goals/:id/restore', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const goal = await restoreGoal(userId, req.params.id as string);
+    if (!goal) return void res.status(404).json({ error: 'goal not found or not retired' });
+    res.json({ ok: true, goal });
+  } catch (err) {
+    console.error('[POST /review/goals/:id/restore]', err);
+    res.status(500).json({ error: 'restore failed' });
   }
 });
 

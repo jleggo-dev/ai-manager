@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
-import { listGoalsByStatus } from '../repos/goals.ts';
+import { listGoalsByStatus, PROGRESS_GOAL_STATUSES } from '../repos/goals.ts';
 import { getCommitted, getLatestDraft, getDraftById, commitDraft, dismissDraft } from '../repos/progress-layouts.ts';
 import { listRepertoireGoalIds } from '../repos/repertoire.ts';
 import { recentMoods } from '../repos/coach-moments.ts';
@@ -22,12 +22,13 @@ router.get('/progress-layout', async (req: Request, res: Response) => {
   try {
     const committed = await getCommitted(userId);
     if (committed) return void res.json(committed.layout);
-    // Same goal statuses buildProgress uses: confirmed AND committed — a count goal is trackable
-    // even before it produces plan activities, and replan-era goals can sit at confirmed indefinitely.
-    // Data presence rides along: the data-gated cards (repertoire, felt_week) only derive where
-    // something exists to show. 28 days of moods = felt_week's own four-week window.
+    // Same goal statuses buildProgress uses (PROGRESS_GOAL_STATUSES) — confirmed AND committed,
+    // PLUS parked: a retired goal's card still belongs on the default layout, since Progress
+    // keeps everything it already built. Data presence rides along: the data-gated cards
+    // (repertoire, felt_week) only derive where something exists to show. 28 days of moods =
+    // felt_week's own four-week window.
     const [goals, repertoireGoalIds, moods, lastDone, hasPhotos] = await Promise.all([
-      listGoalsByStatus(userId, ['confirmed', 'committed']),
+      listGoalsByStatus(userId, PROGRESS_GOAL_STATUSES),
       listRepertoireGoalIds(userId),
       recentMoods(userId, 28),
       getLastDoneOccurrenceDate(userId),

@@ -4,6 +4,7 @@ import { JournalStore } from '../journal/JournalStore.tsx';
 import { useProgressLayout, usePlan } from '../../lib/query/index.ts';
 import { BoundWidget } from './BoundWidget.tsx';
 import { SessionListScreen } from './SessionListScreen.tsx';
+import { PhotosRow, PhotosScreen } from './PhotosScreen.tsx';
 import { WindowSeg } from './WindowSeg.tsx';
 import { ProgressSkeleton } from './ProgressSkeleton.tsx';
 
@@ -87,11 +88,14 @@ export function ProgressView({ onCoach }: { onCoach?: (note: string) => void }) 
   const [journalOpen, setJournalOpen] = useState(false);
   const [window, setWindow] = useState<ProgressWindow>('month');
   const [drill, setDrill] = useState<string | null>(null);
+  const [photosOpen, setPhotosOpen] = useState(false);
   const { data: layout, error } = useProgressLayout();
   // Shared /plan cache (PERF-01) — the header subline and StreakLine read it, never a new endpoint.
   const { data: plan } = usePlan();
 
   if (drill) return <SessionListScreen activity={drill} onBack={() => setDrill(null)} />;
+  // "All photos live in Progress" (Settings Room design, 1e) — the settings toggle points here.
+  if (photosOpen) return <PhotosScreen onBack={() => setPhotosOpen(false)} />;
 
   if (error && !layout) {
     return (
@@ -129,6 +133,7 @@ export function ProgressView({ onCoach }: { onCoach?: (note: string) => void }) 
       ) : (
         layout.sections.map((spec) => <BoundWidget key={spec.id} spec={spec} window={window} onDrill={setDrill} />)
       )}
+      <PhotosRow onOpen={() => setPhotosOpen(true)} />
       <TalkRow onCoach={onCoach} />
     </div>
   );

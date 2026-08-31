@@ -59,6 +59,13 @@ export interface Goal {
   timeframe: Timeframe;
   milestones?: GoalMilestone[]; // stepping-stones toward the goal (coach-proposed, user-editable)
   status: GoalStatus;
+  /**
+   * What `status` was the moment before this goal was parked — so restoring it (from Settings'
+   * "Retire" or the coach's own restore) puts it back where it left off instead of guessing.
+   * Null/undefined whenever status isn't 'parked', and for any goal parked before this field
+   * existed (restore then falls back to 'confirmed').
+   */
+  prior_status?: GoalStatus | null;
   linked_equipment: string[];
   source: 'captured' | 'manual';
   confidence?: number; // Broker extraction confidence

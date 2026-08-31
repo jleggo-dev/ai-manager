@@ -253,6 +253,9 @@ export {
   getReview,
   confirmGoals,
   updateGoal,
+  renameGoal,
+  retireGoal,
+  restoreGoal,
   assessGoal,
   deleteGoal,
   addGoal,
@@ -318,7 +321,12 @@ export {
   type Omittable,
 } from './api/progress-extras.ts';
 
-export { getProgressPhotoPair } from './api/progress-photos.ts';
+export {
+  getProgressPhotoPair,
+  getProgressPhotosStatus,
+  setProgressPhotosEnabled,
+  type ProgressPhotosStatus,
+} from './api/progress-photos.ts';
 
 export {
   getProgressLayoutDraft,
@@ -330,3 +338,11 @@ export {
 export { getRecaps, postWeekReviewRecap, type RecapListItem, type RecapListResult } from './api/recaps.ts';
 
 export { getWatchWeek, postWatchLog } from './api/watch.ts';
+
+export {
+  getProgressPhotos,
+  postProgressPhoto,
+  putProgressPhotosEnabled,
+  type ProgressPhotoList,
+  type StoredProgressPhoto,
+} from './api/progress-photos.ts';
