@@ -465,11 +465,14 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
         // The SAME tools the turn opened with. Without them the continuation is declared with an
         // empty toolbox, which is why she called find_tools and then "ignored" use_tool for a day
         // — she could not call it (chat-messaging.ts, submitV2ToolOutputs).
-        submit: async (respId, outputs, calls, revealed) =>
+        submit: async (respId, outputs, calls, revealed, assistantTextSoFar) =>
           (
             await submitCoachToolOutputs(userId, sessionId, respId, outputs, {
               extraTools: [...coachToolDefinitions(), ...((revealed ?? []) as unknown[])],
               calls,
+              // Her words so far this turn — the continuation continues them instead of
+              // re-answering (M0; the missing half of #232).
+              ...(assistantTextSoFar ? { assistantTextSoFar } : {}),
             })
           ).response.body,
         // What find_tools just revealed becomes REAL, callable-by-name definitions on the next

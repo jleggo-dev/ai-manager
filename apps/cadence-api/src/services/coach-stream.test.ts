@@ -3,7 +3,12 @@
  * Covers both upstream frame shapes and the R1 TCP chunk-split regression.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { applySseDataPayload, createCoachStreamAccumulateState, relayAndAccumulate } from './coach-stream.ts';
+import {
+  applySseDataPayload,
+  coachTextSoFar,
+  createCoachStreamAccumulateState,
+  relayAndAccumulate,
+} from './coach-stream.ts';
 
 /** Build a ReadableStream from UTF-8 text chunks (simulates TCP framing). */
 function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
@@ -146,6 +151,27 @@ describe('relayAndAccumulate', () => {
     expect(writeChunk).not.toHaveBeenCalled();
     expect(result.clientDropped).toBe(true);
     expect(result.content).toBe('x');
+  });
+
+  /** M0 (2026-08-31): the text a continuation must carry — closed segments plus the open tail. */
+  describe('coachTextSoFar', () => {
+    it('joins closed segments and the in-flight tail with blank lines', () => {
+      const state = createCoachStreamAccumulateState();
+      state.content = 'Let me check your file… And here is more.';
+      state.segments = ['Let me check your file…'];
+      state.segmentMark = 'Let me check your file… '.length;
+      expect(coachTextSoFar(state)).toBe('Let me check your file…\n\nAnd here is more.');
+    });
+
+    it('is empty for a turn that has said nothing', () => {
+      expect(coachTextSoFar(createCoachStreamAccumulateState())).toBe('');
+    });
+
+    it('carries an unclosed first generation alone', () => {
+      const state = createCoachStreamAccumulateState();
+      state.content = 'Only the tail so far';
+      expect(coachTextSoFar(state)).toBe('Only the tail so far');
+    });
   });
 
   it('returns empty accumulate when body is null', async () => {

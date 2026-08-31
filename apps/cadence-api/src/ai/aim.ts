@@ -204,6 +204,8 @@ export function submitCoachToolOutputs(
     extraTools?: unknown[];
     /** What she asked, per output — the continuation replays the call beside its result (#232). */
     calls?: Array<{ toolCallId: string; name: string; arguments?: string }>;
+    /** What she has said this turn — rides the rebuilt history so the continuation CONTINUES (M0). */
+    assistantTextSoFar?: string;
   } = {},
 ) {
   return withAim(cadenceUserId, () => submitV2ToolOutputs(sessionId, responseId, outputs, options));

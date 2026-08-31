@@ -218,6 +218,18 @@ export function endCoachSegment(
   }
 }
 
+/**
+ * Everything the assistant has said this turn so far — the closed segments plus whatever the
+ * current generation has streamed since the last boundary, joined the same way the persisted
+ * reply is. Carried into every continuation as an assistant message (M0, 2026-08-31): a
+ * continuation that has never seen its own words re-answers from scratch, and that fresh
+ * generation was the root of the four-drafts-in-one-bubble replies.
+ */
+export function coachTextSoFar(state: CoachStreamAccumulateState): string {
+  const tail = state.content.slice(state.segmentMark).trim();
+  return [...state.segments, ...(tail ? [tail] : [])].join('\n\n');
+}
+
 export function applySseDataPayload(state: CoachStreamAccumulateState, data: string): void {
   if (data === '[DONE]') return;
   try {
