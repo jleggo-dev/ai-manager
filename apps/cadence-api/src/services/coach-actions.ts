@@ -17,6 +17,7 @@ import { UPDATE_CONSTRAINT } from './coach-action-constraint.ts';
 import { UPDATE_EQUIPMENT } from './coach-action-equipment.ts';
 import { OPEN_WEEK_REVIEW } from './coach-action-week-review.ts';
 import { BUILD_NEXT_WEEK } from './coach-action-build-week.ts';
+import { EXTEND_HORIZON } from './coach-action-extend-horizon.ts';
 import { LOG_MEAL } from './coach-action-log-meal.ts';
 import { PROPOSE_PROGRESS_LAYOUT } from './coach-action-progress-layout.ts';
 import { UPDATE_REPERTOIRE } from './coach-action-repertoire.ts';
@@ -498,6 +499,9 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
 
   open_week_review: OPEN_WEEK_REVIEW,
   build_next_week: BUILD_NEXT_WEEK,
+  // Tail tier (the drawer), not ALWAYS_ACTIONS: extending a week is an occasional, explicit ask
+  // — the end-cap's visible send names it in the same words as its DRAWER_HOOKS line.
+  extend_horizon: EXTEND_HORIZON,
 
   log_meal: LOG_MEAL,
 

@@ -17,6 +17,11 @@ export interface Plan {
    *  (0034) — "you're being overly protective of my elbow". Null for the first lock and for the
    *  automated weekly re-plan, which nobody steered. */
   steer?: string | null;
+  /** How many days this plan's week runs (0049) — 7 unless the user asked the coach to extend it
+   *  ("can we plan two weeks ahead?"). `computeWeekState` and the weekly_checkin push both derive
+   *  the week's end from it. Optional only for rows read before the migration; the column
+   *  defaults to 7. */
+  horizon_days?: number;
 }
 
 export interface ActivitySchedule {

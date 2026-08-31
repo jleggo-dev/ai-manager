@@ -2207,7 +2207,38 @@ textarea.wiz-title {
 .detour-end:hover {
   color: var(--text-dim);
 }
-/* Manual "Life happened? Take a detour" entry (Req 4) — a self-declare path when no proposal exists. */
+/* The horizon end-cap — mid-week, the trail's edge names the check-in and carries the visible
+   "plan two weeks ahead" ask. Deliberately quiet: a marker, never a card. */
+.horizon-endcap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  padding: 14px 20px 4px;
+}
+.horizon-endcap-line {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13.5px;
+  text-align: center;
+}
+.horizon-endcap-ask {
+  background: none;
+  border: 1px solid var(--line-soft);
+  color: var(--forest);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.horizon-endcap-ask:hover {
+  border-color: var(--forest);
+}
+/* Manual detour entry (Req 4) — a self-declare path when no proposal exists. The trigger now
+   leads with the felt statement, in the user's own voice (owner, 2026-08-31); placement is
+   pending the design round. */
 .detour-entry {
   margin: 2px 0 14px;
 }
@@ -2223,8 +2254,20 @@ textarea.wiz-title {
   font-size: 13.5px;
   cursor: pointer;
 }
+.detour-trigger b {
+  display: block;
+  font-weight: 700;
+  color: var(--text);
+}
+.detour-trigger span {
+  display: block;
+  margin-top: 2px;
+}
 .detour-trigger:hover {
   border-color: var(--forest);
+  color: var(--forest);
+}
+.detour-trigger:hover b {
   color: var(--forest);
 }
 .detour-pick {

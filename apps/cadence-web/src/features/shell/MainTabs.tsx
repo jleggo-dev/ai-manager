@@ -150,6 +150,12 @@ export function MainTabs({
               setTab('coach');
               setAutoSend({ text: 'Start my check-in', key: Date.now() });
             }}
+            // The horizon end-cap's ask rides the same visible bridge — she grants (or talks
+            // through) the longer week herself via extend_horizon; the app only asks.
+            onPlanAhead={() => {
+              setTab('coach');
+              setAutoSend({ text: 'Can we plan two weeks ahead?', key: Date.now() });
+            }}
           />
         )}
         {tab === 'plan' && food && (

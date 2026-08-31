@@ -1,4 +1,4 @@
-import { getActivePlan } from '../repos/plans.ts';
+import { getActivePlan, setPlanHorizon } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import { getUser } from '../repos/users.ts';
 import { upsertOccurrences, type NewOccurrence } from '../repos/occurrences.ts';
@@ -14,6 +14,10 @@ import { localMinutes } from './notify/policy.ts';
  * check-in moment (docs/cadence/DESIGN-check-in.md, plan-view.ts's `computeWeekState`).
  */
 export const DEFAULT_HORIZON_DAYS = 7;
+
+/** The most a week may be stretched to (0049) — past this it's a different plan, not a longer
+ *  week, and the conversation should go through a re-plan instead. */
+export const MAX_HORIZON_DAYS = 28;
 
 /** "06:30" → 390. Anything that isn't a clock time (a word like "morning", or nothing at all)
  *  returns null and is never treated as past — we only skip what we can actually place. */
@@ -91,4 +95,40 @@ export async function ensureHorizon(
   }
   await upsertOccurrences(occ);
   return occ.length;
+}
+
+export type ExtendHorizonResult =
+  | { status: 'no_plan' }
+  /** Already at (or past) the asked-for length — nothing moved. `endsOn` is the standing end. */
+  | { status: 'unchanged'; horizonDays: number; endsOn: string }
+  | { status: 'extended'; horizonDays: number; endsOn: string; materialized: number };
+
+/**
+ * Stretch the ACTIVE plan's week to `days` counted from the day it began (0049) — the user's
+ * "can we plan two weeks ahead?" ask, granted by the coach. Two effects, both from facts the
+ * plan already owns: `horizon_days` moves (so `computeWeekState`'s `ends_on`/`checkin_due` and
+ * the weekly_checkin push move with it), and `ensureHorizon` tops up the newly-in-range days
+ * with the SAME rhythm — no redesign, the existing recurrences simply keep walking.
+ *
+ * Extends only — asking for fewer days than the week already runs is reported back as
+ * `unchanged`, never applied: shortening a week is the check-in conversation's job, not a
+ * side effect of a mis-phrased extend. The cap is `MAX_HORIZON_DAYS`.
+ */
+export async function extendHorizon(userId: string, days: number): Promise<ExtendHorizonResult> {
+  const plan = await getActivePlan(userId);
+  if (!plan) return { status: 'no_plan' };
+
+  const asked = Math.min(Math.max(Math.trunc(days), 1), MAX_HORIZON_DAYS);
+  const current = plan.horizon_days ?? DEFAULT_HORIZON_DAYS;
+  const generatedMs = new Date(plan.generated_at).getTime();
+  const endsOn = (h: number) => new Date(generatedMs + h * 86_400_000).toISOString().slice(0, 10);
+  if (asked <= current) return { status: 'unchanged', horizonDays: current, endsOn: endsOn(current) };
+
+  await setPlanHorizon(plan.plan_id, asked);
+  // ensureHorizon counts from TODAY; the grant is anchored to the week's start. Convert so the
+  // materialized span ends at generated_at + asked, mid-week or not — never today + asked, which
+  // would quietly overshoot the very edge the check-in is timed to.
+  const fromToday = Math.ceil((generatedMs + asked * 86_400_000 - Date.now()) / 86_400_000);
+  const materialized = fromToday > 0 ? await ensureHorizon(userId, fromToday) : 0;
+  return { status: 'extended', horizonDays: asked, endsOn: endsOn(asked), materialized };
 }

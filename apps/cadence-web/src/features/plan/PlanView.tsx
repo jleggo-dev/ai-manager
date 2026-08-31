@@ -15,6 +15,7 @@ import { DetourStateSheet } from './DetourStateSheet.tsx';
 import { DetourSetup, type DetourChoice } from './DetourSetup.tsx';
 import { downscalePhoto, isWeeklyCheckin } from './occurrence/format.ts';
 import { EndOfTrail } from './EndOfTrailCard.tsx';
+import { HorizonEndCap } from './HorizonEndCap.tsx';
 import {
   endEpisode,
   checkin,
@@ -66,6 +67,7 @@ export function PlanView({
   onOpenFood,
   reloadSignal,
   onStartCheckIn,
+  onPlanAhead,
 }: {
   /** Switch to the coach. `note` is app-authored context she reads and the user never sees. */
   onCoach: (note?: string) => void;
@@ -79,6 +81,12 @@ export function PlanView({
    * to its `autoSend` bridge instead. `onCoach` keeps its other callers unchanged.
    */
   onStartCheckIn: () => void;
+  /**
+   * The horizon end-cap's "Can we plan two weeks ahead?" — the same visible-send bridge as
+   * `onStartCheckIn`, its own prop for the same reason: the approved shape is words the user
+   * said, and the coach grants (or talks through) the extension herself via `extend_horizon`.
+   */
+  onPlanAhead: () => void;
 }) {
   /**
    * The plan comes from the shared query cache (PERF-01), not per-mount state. Tab switches
@@ -315,6 +323,9 @@ export function PlanView({
   // content). OR'd with the server's `checkin_due` in the render below — either can fire this on
   // its own, and this half needs nothing but the week already on screen to work.
   const restEmpty = data.week.slice(1).every((d) => d.occurrences.filter((o) => !isWeeklyCheckin(o)).length === 0);
+  // One name for "the horizon has been reached" — the end-of-trail card and the mid-week end-cap
+  // key off the same fact so exactly one of them can ever be on screen.
+  const horizonReached = restEmpty || !!data.weekState?.checkin_due;
 
   // Trail node tap → routed by task shape: captures (weigh-in, meals) open the minimal CaptureSheet;
   // coach sessions open the StartSheet walkthrough. (The Week view keeps its own OccurrenceSheet.)
@@ -437,7 +448,7 @@ export function PlanView({
         <TodayTrail plan={data} onOpen={openTask} onOpenFood={() => onOpenFood()} onCoach={onCoach} />
 
         <EndOfTrail
-          show={restEmpty || !!data.weekState?.checkin_due}
+          show={horizonReached}
           version={data.version}
           endsOn={data.weekState?.ends_on}
           // "Start check-in" — the sentence, not a mode (DESIGN-check-in.md), but a VISIBLE one:
@@ -450,9 +461,23 @@ export function PlanView({
           }}
         />
 
+        {/* Mid-week the horizon is a marker, not a card: the check-in is named where it will
+            land, and seeing further is an ask to the coach. Quiet during a detour — the paused
+            week's end is not the moment to plan two ahead. */}
+        {!horizonReached && !data.activeEpisode && (
+          <HorizonEndCap
+            endsOn={data.weekState?.ends_on}
+            canAskAhead={data.week.length <= 7}
+            onPlanAhead={onPlanAhead}
+          />
+        )}
+
+        {/* Placement + final copy pending the design round (owner, 2026-08-31) — the felt
+            statement replaced "Life happened?" so the door is the words someone would say. */}
         {!data.activeEpisode && (
           <button className="detour-trigger" onClick={() => setDetourEntry(true)}>
-            Life happened? Take a detour
+            <b>&ldquo;My plan isn&rsquo;t working — I&rsquo;m too busy&rdquo;</b>
+            <span>Life happens. Let&rsquo;s take a detour.</span>
           </button>
         )}
       </div>
