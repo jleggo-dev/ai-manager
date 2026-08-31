@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { capabilities, type Workout } from '../../lib/capability/index.ts';
 import { logAdhoc } from '../../lib/api.ts';
-import { humanizeWorkout, workoutLogText } from './health-import.ts';
+import { HEALTH_CONNECTED_KEY, humanizeWorkout, workoutLogText } from './health-import.ts';
 
 const RECENT_DAYS = 7;
 
@@ -29,6 +29,11 @@ export function AppleHealthSettings() {
     setMsg('');
     try {
       await capabilities.health.requestPermissions(['workouts']);
+      try {
+        window.localStorage.setItem(HEALTH_CONNECTED_KEY, '1');
+      } catch {
+        /* no localStorage, no matter — the summary row just falls back to "not yet connected" */
+      }
       const since = new Date(Date.now() - RECENT_DAYS * 86_400_000).toISOString();
       const recent = await capabilities.health.getWorkouts(since);
       setWorkouts(recent);
