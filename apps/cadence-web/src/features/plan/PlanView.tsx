@@ -300,10 +300,10 @@ export function PlanView({
             }}
           />
         )}
-        {/* The detour DOOR, in the bar's own slot (Option A — owner trialing on device,
-            2026-08-31): door and live-state share one home at the top of the page, mutually
-            exclusive by condition. The felt statement is the user's own words; the setup sheet
-            it opens does the "take a detour" framing. */}
+        {/* The detour DOOR, in the bar's own slot (owner ruling 2026-08-31, settled on device):
+            door and live-state share one home at the top of the page, mutually exclusive by
+            condition. The felt statement is the user's own words; the setup sheet it opens does
+            the "take a detour" framing. */}
         {!data.activeEpisode && (
           <button
             className="detour-bar detour-door"
