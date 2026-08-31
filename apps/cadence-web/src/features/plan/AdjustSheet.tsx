@@ -150,7 +150,9 @@ export function AdjustSheet({
           </div>
         ) : (
           <div className="sheet-body pw-body">
-            <ProposedWeek activities={p.activities} note={p.note} />
+            <div className="pw-scroll">
+              <ProposedWeek activities={p.activities} note={p.note} />
+            </div>
             {msg && <div className="auth-error">{msg}</div>}
             <div className="proposal-actions pw-actions">
               <button className="proposal-accept" onClick={doConfirm} disabled={busy}>

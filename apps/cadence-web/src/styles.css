@@ -4403,7 +4403,6 @@ textarea.wiz-title {
   color: oklch(52% 0.16 25);
   margin-bottom: 6px;
   text-align: center;
-
 }
 
 /* ── Visual Today: the sky-trail (REQ8 redesign — docs/cadence/design/redesign-today-trail) ── */
@@ -9359,4 +9358,61 @@ textarea.wiz-title {
   padding: 11px;
   font-size: 13px;
   font-weight: 700;
+}
+/* The module itself is scroll-free (hosts own the scroll: the Adjust sheet's .pw-scroll, the
+   gate's .gate2-scroll, the plan sheet's body). */
+.pw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pw-row-btn {
+  width: 100%;
+  text-align: left;
+}
+/* A commitment's why, on its first appearance — marginalia in her voice (the plan card's grow-why
+   idiom, carried into the shared week module). The cut sentence sells continuation. */
+.pw-why {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 3px;
+}
+.pw-why-cut {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-style: italic;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.pw-why i,
+.pw-why-open i {
+  flex: none;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+  color: oklch(46% 0.08 152);
+}
+.pw-why-open {
+  display: block;
+  margin-top: 6px;
+  background: var(--ink);
+  border-radius: 10px;
+  padding: 8px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  font-style: italic;
+  color: oklch(36% 0.03 150);
+  line-height: 1.5;
+  white-space: normal;
+}
+/* "MY ADDITION" — she proposed this herself; dashed like the old suggested dot ("not yours yet"). */
+.pw-tag-add {
+  background: transparent;
+  border: 1.5px dashed oklch(55% 0.06 250);
+  color: oklch(45% 0.06 250);
 }

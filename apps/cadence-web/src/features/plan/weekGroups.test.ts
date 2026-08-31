@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PendingPlanActivity } from '@cadence/shared';
-import { groupWeek } from './weekGroups.ts';
+import { groupWeek, rowMeta, type WeekRowLike } from './weekGroups.ts';
 
 const act = (over: Partial<PendingPlanActivity>): PendingPlanActivity => ({
   title: 'x',
@@ -40,6 +40,50 @@ describe('groupWeek', () => {
       act({ title: 'Box breathing practice', recurrence: 'FREQ=WEEKLY;BYDAY=MO' }),
       act({ title: 'Easy run', recurrence: 'FREQ=WEEKLY;BYDAY=MO' }),
     ]);
-    expect(groups[0]!.rows.map((r) => r.title)).toEqual(['Easy run', 'Box breathing practice', 'Piano practice']);
+    expect(groups[0]!.rows.map((r) => r.a.title)).toEqual(['Easy run', 'Box breathing practice', 'Piano practice']);
+  });
+
+  it('marks only the FIRST appearance of a commitment — the why lands once, not four times', () => {
+    const groups = groupWeek([
+      act({ title: 'Morning joint mobility', recurrence: 'FREQ=WEEKLY;BYDAY=MO,WE,FR', commitment_id: 'c1' }),
+      act({ title: 'Easy run', recurrence: 'FREQ=WEEKLY;BYDAY=WE', commitment_id: 'c2' }),
+    ]);
+    const flat = groups.flatMap((g) => g.rows.map((r) => ({ title: r.a.title, day: g.label, first: r.first })));
+    expect(flat).toEqual([
+      { title: 'Morning joint mobility', day: 'Monday', first: true },
+      { title: 'Morning joint mobility', day: 'Wednesday', first: false },
+      { title: 'Easy run', day: 'Wednesday', first: true },
+      { title: 'Morning joint mobility', day: 'Friday', first: false },
+    ]);
+  });
+});
+
+describe('rowMeta', () => {
+  const row = (over: Partial<WeekRowLike>): WeekRowLike => ({
+    title: 'x',
+    cadence: 'Mon, Wed, Fri',
+    recurrence: 'FREQ=WEEKLY;BYDAY=MO,WE,FR',
+    ...over,
+  });
+
+  it('scheduled rows say time · minutes; floating rows lead with the cadence', () => {
+    expect(rowMeta(row({ time_of_day: 'morning', duration_min: 45 }), 'day')).toBe('morning · 45 min');
+    expect(rowMeta(row({ cadence: 'Twice a week', duration_min: 45 }), 'floating')).toBe('Twice a week · 45 min');
+  });
+
+  /**
+   * The consent row carries both numbers (owner ruling 2026-08-17): the effort they named, and
+   * what to keep free for it. Deciding whether you can afford a rhythm needs the second one.
+   */
+  it('shows the effort AND the time to set aside, when there is warm-up to allow for', () => {
+    expect(rowMeta(row({ duration_min: 45, area: 'movement' }), 'day')).toBe('45 min (allow 55)');
+  });
+
+  it('keeps a meditation at its full length and budgets the settling time separately', () => {
+    expect(rowMeta(row({ duration_min: 20, area: 'mind' }), 'day')).toBe('20 min (allow 25)');
+  });
+
+  it('stays a single number when the effort is the whole session', () => {
+    expect(rowMeta(row({ duration_min: 15, area: 'nourishment' }), 'day')).toBe('15 min');
   });
 });
