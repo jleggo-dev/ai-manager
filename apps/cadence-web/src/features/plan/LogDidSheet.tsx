@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { logDid, logAdhoc, type PlanActivity } from '../../lib/api.ts';
-import { categoryOf, ICON } from '../today/category.ts';
+import { glyphOf } from '../today/glyphs.ts';
 import { DoNowSection } from './DoNowSection.tsx';
 import { SheetRowsSkeleton } from './SheetSkeletons.tsx';
 import { usePlan } from '../../lib/query/index.ts';
@@ -79,7 +79,7 @@ export function LogDidSheet({ onClose, onLogged }: { onClose: () => void; onLogg
               <div className="ld-empty">Nothing in your plan yet — jot it below.</div>
             ) : (
               activities.map((a) => {
-                const cat = categoryOf(a.title, a.area);
+                const { d, cat } = glyphOf(a.title, a.area);
                 const meta = [a.cadence, a.time_of_day].filter(Boolean).join(' · ');
                 return (
                   <button
@@ -91,7 +91,7 @@ export function LogDidSheet({ onClose, onLogged }: { onClose: () => void; onLogg
                   >
                     <span className={`ld-ic ld-ic-${cat}`} aria-hidden>
                       <svg viewBox="0 0 24 24" width="20" height="20">
-                        <path d={ICON[cat]} fill="#fff" />
+                        <path d={d} fill="#fff" />
                       </svg>
                     </span>
                     <span className="ld-row-t">

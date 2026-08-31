@@ -10,7 +10,8 @@ import {
 import { getNowMenu } from '../../lib/api.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
 import { JournalWrite } from '../journal/JournalWrite.tsx';
-import { ICON, categoryOfArea, type Category } from '../today/category.ts';
+import { categoryOfArea, type Category } from '../today/category.ts';
+import { glyphOf } from '../today/glyphs.ts';
 
 /**
  * "Do something now" — the present-tense half of the ＋ sheet (REQ10 §6, REQ9 §3.1).
@@ -99,7 +100,7 @@ export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLog
         <button className={`dn-pin ld-ic-${areaIcon(pinned.area)}`} onClick={() => setPlaying(pinned)}>
           <span className="dn-pin-ic" aria-hidden>
             <svg viewBox="0 0 24 24" width="23" height="23">
-              <path d={ICON[areaIcon(pinned.area)]} fill="#fff" />
+              <path d={glyphOf(pinned.label, pinned.area).d} fill="#fff" />
             </svg>
           </span>
           <span className="dn-pin-t">
@@ -116,7 +117,7 @@ export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLog
             <button key={item.id} className="dn-row" onClick={() => setPlaying(item)} aria-label={item.label}>
               <span className={`dn-ic ld-ic-${areaIcon(item.area)}`} aria-hidden>
                 <svg viewBox="0 0 24 24" width="15" height="15">
-                  <path d={ICON[areaIcon(item.area)]} fill="#fff" />
+                  <path d={glyphOf(item.label, item.area).d} fill="#fff" />
                 </svg>
               </span>
               <span className="dn-row-t">

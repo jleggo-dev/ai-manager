@@ -2,7 +2,7 @@ import { type CSSProperties, type RefObject } from 'react';
 import { type PlanViewData, type PlanDay, type PlanOccurrence } from '../../lib/api.ts';
 import { isWeeklyCheckin } from '../plan/occurrence/format.ts';
 import { TrailFoodStrip } from '../nutrition/TrailFoodStrip.tsx';
-import { categoryOf, ICON } from './category.ts';
+import { glyphOf } from './glyphs.ts';
 import { currentNodeIndex, useLandOnNow } from './useLandOnNow.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
 
@@ -165,9 +165,9 @@ function TrailNode({
   /** Set on the one node the trail opens scrolled to — see `useLandOnNow`. */
   nodeRef?: RefObject<HTMLButtonElement>;
 }) {
-  // The goal's AREA is authoritative when present (piano wore the exercise glyph for want of
-  // it, 2026-08-31); the title regex is only the fallback for rows without one.
-  const cat = categoryOf(occ.title, occ.area);
+  // The goal's AREA is authoritative for the family when present (piano wore the exercise glyph
+  // for want of it, 2026-08-31); the title picks the specific glyph within it (glyphs.ts).
+  const glyph = glyphOf(occ.title, occ.area);
   const ramp = RAMP[Math.round((n < 2 ? 0 : i / (n - 1)) * 5)]!;
   const done = occ.status === 'done';
   const touched = done || occ.status === 'skipped';
@@ -207,7 +207,7 @@ function TrailNode({
       )}
       <span className={`trail-disc${done ? ' is-done' : ''}`} style={discStyle}>
         <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden>
-          <path d={ICON[cat]} fill="#fff" />
+          <path d={glyph.d} fill="#fff" />
         </svg>
         {done && (
           <span className="trail-check" aria-hidden>

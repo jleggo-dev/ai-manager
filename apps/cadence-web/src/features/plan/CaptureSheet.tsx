@@ -3,11 +3,7 @@ import { isFoodRow } from './occurrence/format.ts';
 import { MealCapturePanel } from './occurrence/MealCapturePanel.tsx';
 import { WeighInPanel } from './occurrence/WeighInPanel.tsx';
 import { MealCaptureSkeleton, WeighInSkeleton } from './SheetSkeletons.tsx';
-import { ICON } from '../today/category.ts';
-
-/** A bathroom-scale glyph for the weigh-in capture (there's no scale in the four trail categories). */
-const SCALE =
-  'M5 4.5h14A1.5 1.5 0 0 1 20.5 6v12a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18V6A1.5 1.5 0 0 1 5 4.5zm7 3a1 1 0 0 0-.72 1.7l.72.72 2-2.24A1 1 0 0 0 12 7.5zM7.5 7a.6.6 0 100 1.2A.6.6 0 007.5 7zm9 0a.6.6 0 100 1.2A.6.6 0 0016.5 7z';
+import { GLYPH } from '../today/glyphs.ts';
 
 /**
  * The **capture sheet** (REQ8 task shapes) — a weigh-in or a meal is one data entry, so it opens
@@ -63,7 +59,7 @@ export function CaptureSheet({
               <div className="ss-head">
                 <div className={`ss-disc ss-disc-${isWeigh ? 'weigh' : 'meal'}`} aria-hidden>
                   <svg viewBox="0 0 24 24" width="24" height="24">
-                    <path d={isWeigh ? SCALE : ICON.nutrition} fill="#fff" />
+                    <path d={isWeigh ? GLYPH.gauge : GLYPH.bowl} fill="#fff" />
                   </svg>
                 </div>
                 <div className="ss-headt">

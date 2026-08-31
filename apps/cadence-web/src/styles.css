@@ -9202,3 +9202,161 @@ textarea.wiz-title {
   font-style: italic;
   color: oklch(62% 0.02 150);
 }
+
+/* ── Proposed week — the plan as a WEEK, not a bag of pills (owner design "Cadence Plan
+   Rebalance" screen 1a, 2026-08-31). Day groups with minute totals; rows typed by glyph chip;
+   the accept buttons live below the scroll so the week can be long and the choice never moves. */
+.sheet-week {
+  max-height: 96%;
+  min-height: 90%;
+}
+.sheet-body.pw-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: hidden;
+}
+.pw-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 1px 10px;
+}
+.pw-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 12px 13px;
+  box-shadow: 0 2px 0 var(--line-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.pw-day {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.pw-day-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+.pw-day-name {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+.pw-day-daily .pw-day-name {
+  color: oklch(46% 0.06 70);
+}
+.pw-day-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+.pw-day-min {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #b0aa98;
+}
+.pw-card {
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: 0 2px 0 var(--line-soft);
+}
+.pw-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+}
+.pw-row + .pw-row {
+  border-top: 1px solid #f3eee1;
+}
+.pw-row-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pw-row-t b {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+}
+.pw-row-t span {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-mute);
+  margin-top: 1px;
+}
+.pw-tag {
+  flex: none;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: var(--sun);
+  background: oklch(95% 0.03 45);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.pw-chip {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.pw-chip-movement {
+  background: oklch(94% 0.03 152);
+  color: var(--forest);
+}
+.pw-chip-nutrition {
+  background: oklch(95% 0.05 85);
+  color: oklch(55% 0.12 70);
+}
+.pw-chip-mindset,
+.pw-chip-reflection {
+  background: oklch(93% 0.03 262);
+  color: var(--dusk);
+}
+.pw-chip-practice {
+  background: oklch(94% 0.02 320);
+  color: oklch(48% 0.06 320);
+}
+.pw-actions {
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+}
+.pw-actions .proposal-accept {
+  width: 100%;
+  background: var(--forest);
+  border-radius: 14px;
+  padding: 13px;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: 0 3px 0 oklch(26% 0.05 152);
+}
+.pw-actions .proposal-dismiss {
+  width: 100%;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 11px;
+  font-size: 13px;
+  font-weight: 700;
+}
