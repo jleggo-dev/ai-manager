@@ -50,9 +50,6 @@ export const GLYPH = {
    *  its replacement was "a running person is better" — so the person returns, drawn whole. */
   runner:
     'M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z',
-  /** Joint axis — four spokes around a hub, for mobility / stretching / prehab. Rects + one
-   *  circle; the gap between spoke and hub is arithmetic (spokes end 1.5 units out). */
-  axis: 'M11 4h2v4h-2zM11 16h2v4h-2zM4 11h4v2H4zM16 11h4v2h-4zM12 9.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z',
   /** Eighth note (design project) — music practice. */
   note: 'M9 4h9v3.2l-6.5 1V16a3.2 3.2 0 11-2.5-3.1V4z',
   /** Material "book" — reading, study, languages. */
@@ -89,7 +86,13 @@ const RULES: Array<[RegExp, GlyphName]> = [
   [/journal|diary/, 'pen'],
   [/wind.?down|sleep|bedtime|night.?routine/, 'moon'],
   [/check.?in/, 'bubble'],
-  [/mobility|stretch|yoga|prehab|foam|joint/, 'axis'],
+  // The four-spoke "axis" that lived here retired the same way the plus-sign dumbbell did —
+  // spokes around a hub at 36px is a cross ("cross/star/sun thing", owner 2026-08-31 late round).
+  // Mobility work is strength-adjacent floor work; the dumbbell reads honestly for it. Keeping
+  // this rule ABOVE strength no longer matters for outcome (both are dumbbell now), but the
+  // ordering bug it hid is worth recording: "Obstacle strength … (elbow-modified + prehab)"
+  // matched `prehab` here and never reached the strength rule at all.
+  [/mobility|stretch|yoga|prehab|foam|joint/, 'dumbbell'],
   [/hill|interval|sprint|stairs|climb/, 'mountain'],
   [/bike|cycl|\brow\b|rowing|swim|elliptical|cross.?train|spin\b/, 'bike'],
   [/\brun\b|running|jog/, 'runner'],
