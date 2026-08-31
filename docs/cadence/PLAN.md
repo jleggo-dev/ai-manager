@@ -9231,3 +9231,70 @@ rotation actually advances across a warmed week; the replay scorer imports the s
 corrections (meta-tools are plumbing; provider frames stripped); the ChangeCard door is
 applied-state only (pre-apply it showed the week without the change). One consciously skipped:
 the three-line live-goal resolution duplicated from `update_goal` — extract on next touch.
+
+## Claude direct — the Anthropic provider, with Devs.ai kept as the alternate (owner, 2026-08-31)
+
+**Owner ruling:** with the Broker phasing out (#320), migrate Cadence's AI to the Anthropic API
+directly — and keep Devs.ai as an ALTERNATE provider inside AI Admin, both supported. AI Admin
+itself stays, unambiguously: it is the audit spine and our other product, and its provider layer
+is the designed swap point — `ai_profiles` already carries `failover_provider_id` +
+`failover_external_ai_id`, so cross-provider failover (Anthropic primary, Devs.ai failover, or
+per-profile the other way) is schema-supported today. "Support both" is a profile pointer, not an
+architecture.
+
+**Why, with dates.** One session (2026-08-31) supplied the whole case: the glued four-draft
+replies and repeated tool calls trace to Devs.ai's intra-turn continuation being a FRESH
+generation — the threaded shape was measured broken 2026-08-17 (function_call_output accepted
+with 200, never joined; rounds re-billed identical 12,772-token inputs), and the self-contained
+rebuild (#232) cannot carry the assistant's own mid-turn text because the dialect has no
+assistant-with-tool-calls message shape, so every round re-answers from scratch. Add: silent
+model catalog removals; cache economics that could never be answered (threading built and PARKED
+2026-08-09 because the discount was invisible); the ~2.2× schema penalty steering job/model
+pairings; stray "profile toolJob" calls the tool loop had to learn to filter; and synthesize_plan
+blowing a 300s function ceiling through the relay. Chat-level RESUME (thread mode, #250) works on
+Devs.ai and stays available — it is the intra-turn tool continuation that is structurally broken
+there and structurally native on the Anthropic API (assistant `tool_use` + user `tool_result`;
+the model continues its own turn instead of regenerating it).
+
+**The shape:** an `anthropic` provider type in the engine (beside `devs-ai-v2`), speaking
+`@anthropic-ai/sdk` (TypeScript), keys server-side via the existing encrypted provider
+credentials — never client-side, the aim_sk rules verbatim. The streaming adapter emits the SAME
+internal SSE frame dialect the coach relay already parses, so cadence-api and the client change
+nothing; Wave 1's segment machinery already abstracted the frame layer. Model ids pinned exactly
+(`claude-sonnet-5`, `claude-haiku-4-5`, `claude-opus-5` where warranted — never date-suffixed);
+structured jobs use native strict tools / `output_config.format`, which ends the
+keep-schema-jobs-on-gpt-class constraint.
+
+**Parcels, in order — each gated on the replay eval plus timing probes, per-profile switchable,
+Devs.ai as the failover while confidence builds:**
+
+- **M1 — the adapter.** Non-streaming `runJob` path first; usage mapped honestly, including
+  `cache_read_input_tokens` / `cache_creation_input_tokens` — the cost diagnostics finally get
+  first-party numbers. A parity harness runs the same job on both providers and diffs output,
+  latency, and cost.
+- **M2 — jobs cutover.** `synthesize-plan` first (it is the one blowing the clock — measure what
+  the relay hop was costing), then plan-vet, prescribe-session, the food schema jobs, and
+  capture-extract for as long as it lives. Profile by profile; failover stays on Devs.ai.
+- **M3 — the two web-tool jobs.** `research-food` and `discover-recipe` are the ONLY consumers of
+  a Devs.ai-native tool (verified 2026-08-31; python usage: zero). They move to the Anthropic
+  server-side web search tool (`web_search_20260209`, supported on Sonnet 5) with domain
+  filtering as needed.
+- **M4 — the coach stream, last and best-rehearsed.** Streaming adapter behind the engine edge;
+  TRUE intra-turn continuations (echo the assistant's text + tool_use, return tool_result) —
+  expected to retire the fresh-generation pathology at the root, with the segment machinery
+  retained as display polish and belt-and-braces. Prompt caching with explicit `cache_control`
+  breakpoints on the persona/tools prefix, verified via `usage.cache_read_input_tokens` — the
+  question Devs.ai could never answer becomes a dashboard number. Note: Sonnet 5 does not take
+  mid-conversation system-role messages, so the hash-gated block re-hand mechanism stays exactly
+  as is.
+- **M5 — settle the defaults.** After M2–M4 have real usage: which provider is default per
+  profile, Devs.ai relegated to alternate/failover, an honest cost comparison from first-party
+  usage fields. Decommissioning Devs.ai is NOT assumed — that is a later owner call, and nothing
+  in M1–M4 forecloses keeping it forever as the failover.
+
+**Not done, priced honestly:** the engine's provider seam lives in backend/ + packages/core — an
+AI Admin change serving its flagship consumer, which is the dogfooding working as intended, but
+it must land as AI Admin work (its own tests, its own docs), not as a Cadence side-effect. The
+in-process coach stream cannot be rehearsed against production keys from dev (the same
+constraint that shaped #232), so M4 ships behind a per-profile pointer with the owner's scratch
+account pointed at Anthropic first, the owner's real account last.
