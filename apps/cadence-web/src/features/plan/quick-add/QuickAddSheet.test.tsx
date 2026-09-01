@@ -28,6 +28,13 @@ const getNowMenu = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 // stays invisible in every test that isn't specifically about it; its own thresholds/rendering
 // are QuickAddPill.test.tsx's job.
 const getRoutines = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
+// The pill's play-then-credit path (useRoutinePlay, wired in the sheet at integration): session
+// fetch + the credit write. Defaults are the happy path; the failure test overrides per-case.
+const getRoutineSession = vi.fn(async (..._a: unknown[]): Promise<{ ok: boolean; session: unknown }> => ({
+  ok: true,
+  session: { blocks: [{ label: '', items: [{ name: 'warm-up' }] }], note: '', generated_at: '', version: 1 },
+}));
+const logDid = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
 vi.mock('../../../lib/api.ts', () => ({
   logAdhoc: (...a: unknown[]) => logAdhoc(...a),
   logWater: (...a: unknown[]) => logWater(...a),
@@ -36,6 +43,19 @@ vi.mock('../../../lib/api.ts', () => ({
   getProgressPhotosStatus: (...a: unknown[]) => getProgressPhotosStatus(...a),
   getNowMenu: (...a: unknown[]) => getNowMenu(...a),
   getRoutines: (...a: unknown[]) => getRoutines(...a),
+  getRoutineSession: (...a: unknown[]) => getRoutineSession(...a),
+  logDid: (...a: unknown[]) => logDid(...a),
+}));
+// The real player is its own well-tested surface — here it's a stub with the two controls the
+// play-then-credit contract cares about, so the sheet test can press "finish" and assert the wire.
+vi.mock('../../walkthrough/Walkthrough.tsx', () => ({
+  Walkthrough: ({ title, onComplete, onClose }: { title: string; onComplete: () => void; onClose: () => void }) => (
+    <div>
+      <b>{`playing: ${title}`}</b>
+      <button onClick={onComplete}>finish-walkthrough</button>
+      <button onClick={onClose}>close-walkthrough</button>
+    </div>
+  ),
 }));
 // False by default — DoNowSection's real onPinnedChange logic (fires once its own menu resolves)
 // is DoNowSection.test.tsx's job; here it's a one-flag stand-in the suppression test below flips.
@@ -288,6 +308,42 @@ describe('QuickAddSheet', () => {
     mount({ plan: basePlan([activity()]), day: null });
     await waitFor(() => expect(getRoutines).toHaveBeenCalled());
     expect(screen.queryByLabelText('Easy 5k')).toBeNull();
+    await settled();
+  });
+
+  /** The integration wiring itself, pressed end to end: pill → session fetch → player → finish →
+   *  credit the routine's activity, then the sheet's "log it, then close" contract — in order. */
+  it('pressing the pill plays the routine and finishing credits it, then logs and closes', async () => {
+    const calls: string[] = [];
+    getRoutines.mockResolvedValue([routine()]);
+    logDid.mockImplementation(async (..._a: unknown[]) => {
+      calls.push('logDid');
+      return { ok: true };
+    });
+    mount(
+      { plan: basePlan([activity()]), day: null },
+      { onLogged: () => calls.push('onLogged'), onClose: () => calls.push('onClose') },
+    );
+
+    fireEvent.click(await screen.findByLabelText('Easy 5k'));
+    await waitFor(() => expect(getRoutineSession).toHaveBeenCalledWith('c1'));
+    fireEvent.click(await screen.findByText('finish-walkthrough'));
+
+    await waitFor(() => expect(calls).toEqual(['logDid', 'onLogged', 'onClose']));
+    expect(logDid).toHaveBeenCalledWith('a1');
+    await settled();
+  });
+
+  it('a failed session fetch on the pill shows the honest line and logs nothing', async () => {
+    getRoutines.mockResolvedValue([routine()]);
+    getRoutineSession.mockResolvedValueOnce({ ok: false, session: null });
+    const onClose = vi.fn();
+    mount({ plan: basePlan([activity()]), day: null }, { onClose });
+
+    fireEvent.click(await screen.findByLabelText('Easy 5k'));
+    expect(await screen.findByText(/Couldn't open that one just now/)).toBeTruthy();
+    expect(logDid).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
     await settled();
   });
 });

@@ -7,6 +7,7 @@ import { deriveQuickAddRows, type QuickAddArea } from './quickAddRows.ts';
 import { AreaQuickRow, MealQuickRow, PhotoQuickRow, WaterQuickRow, WeightQuickRow } from './QuickAddRowViews.tsx';
 import { QuickAddPill } from './QuickAddPill.tsx';
 import { QuickAddTense } from './QuickAddTense.tsx';
+import { useRoutinePlay } from './useRoutinePlay.tsx';
 
 /** Screen 1's noun, carried to screen 2 (Activity Builder 2A) — everything QuickAddTense needs to
  *  know which area it's logging into and what to call the thing. */
@@ -82,6 +83,13 @@ export function QuickAddSheet({
     onClose();
   }
 
+  /** The pill's play-then-credit — the same hook QuickAddTense uses for its routine rows, given
+   *  the same "log it, then close" wrapper, so a pill run and a shelf run are one behavior. */
+  const pillPlay = useRoutinePlay(() => {
+    onLogged();
+    onClose();
+  });
+
   const planLoading = plan === undefined && !error;
   const rows = deriveQuickAddRows({ plan: plan ?? null, day: day ?? null, photosEnabled });
 
@@ -91,7 +99,9 @@ export function QuickAddSheet({
       <div className="sheet ld" role="dialog" aria-label="Quick add">
         <div className="sheet-grab" aria-hidden />
 
-        {screen ? (
+        {pillPlay.node ? (
+          pillPlay.node
+        ) : screen ? (
           <QuickAddTense
             area={screen.area}
             noun={screen.noun}
@@ -124,12 +134,8 @@ export function QuickAddSheet({
             {/* The express lane (Activity Builder W2-B): the user's most-used routine, above the
                 derived rows below. Renders nothing on its own — no candidate, a failed read, or
                 the coach's own pinned item (hasPin) all fall through to nothing here. */}
-            <QuickAddPill
-              suppressed={hasPin}
-              onPlay={() => {
-                // wired at integration to useRoutinePlay (parcel/routines-shelf)
-              }}
-            />
+            <QuickAddPill suppressed={hasPin} onPlay={pillPlay.play} />
+            {pillPlay.error && <div className="ld-empty">{pillPlay.error.text}</div>}
 
             {planLoading ? (
               // The plan's rows aren't derivable yet — shapes, never invented rows (components/Skeleton.tsx).
