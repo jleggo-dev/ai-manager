@@ -6,6 +6,7 @@
 import { listGoalsByStatus, setGoalStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
 import { getUser, setPendingPlan } from '../repos/users.ts';
+import { getActivePlan } from '../repos/plans.ts';
 import { evaluateGuardrail } from './goal-guardrail.ts';
 import { observedHealthForPlanning } from './observed-health.ts';
 import { DEFAULT_HORIZON_DAYS } from './plan-horizon.ts';
@@ -79,11 +80,21 @@ export async function previewLock(userId: string): Promise<PlanFlowResult> {
 
 /**
  * Second half: commit the user's stored pending_plan (flip confirmed goals → committed, clear
- * the preview). Self-sufficient — if no preview is on file (a direct call, a smoke script, or
- * any caller that skips the preview step), runs previewLock first so this never errors just
- * because preview wasn't called; it only ever commits a plan that's actually been vetted.
+ * the preview). Self-sufficient at GENESIS only — with no active plan yet (onboarding, a direct
+ * call, a smoke script), a missing preview runs previewLock inline first so this never errors
+ * just because preview wasn't called; it only ever commits a plan that's actually been vetted.
  */
 export async function confirmLock(userId: string, occurrenceDays = DEFAULT_HORIZON_DAYS): Promise<PlanFlowResult> {
+  // With an ACTIVE plan, a missing pending_plan is the change-card race (the card was applied,
+  // dismissed, or expired between screens) — and the old inline fallback answered it by silently
+  // rebuilding the whole week: minutes of synthesis, a bulldozed plan, behind a button that
+  // promised one small change. Refuse instead; the coach can put the card back up in seconds.
+  // Onboarding (no active plan) keeps the fallback: there is nothing to bulldoze yet.
+  const pending = (await getUser(userId))?.pending_plan;
+  if (!pending && (await getActivePlan(userId))) {
+    return { status: 'vetoed', violations: ['That change card expired — ask me again and I will put it back up.'] };
+  }
+
   const result = await confirmPendingPlan(
     userId,
     () => previewLock(userId),

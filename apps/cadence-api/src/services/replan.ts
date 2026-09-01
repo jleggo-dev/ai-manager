@@ -11,6 +11,7 @@ import { describeRecurrence } from './scheduling.ts';
 import { observedHealthForPlanning, PLAN_COUNTS_NOTE } from './observed-health.ts';
 import { type CommitResult, type PlanFlowResult } from './plan-synthesis.ts';
 import { planSynthesize, planSynthesizeVetCommit } from './plan-fanout.ts';
+import type { PlanRun } from '../repos/users.ts';
 import { confirmPendingPlan } from './plan-commit-flow.ts';
 import { sendPlanReadyPush } from './plan-ready-push.ts';
 import type { Goal } from '@cadence/shared';
@@ -104,16 +105,27 @@ async function gatherReplanInputs(userId: string): Promise<ReplanInputs | null> 
  * The MANUAL "Adjust my plan" button uses previewReplan/confirmReplan below instead, because
  * clicking that button has no prior consent moment of its own.
  */
-export async function replanPlan(userId: string, steer?: string): Promise<CommitResult> {
+export async function replanPlan(
+  userId: string,
+  steer?: string,
+  // Narrates the run for the plan_run record (services/plan-run.ts) — a callback, not an import,
+  // so this stays callable without any run machinery (smoke scripts, a direct call).
+  onStage?: (stage: NonNullable<PlanRun['stage']>) => void,
+): Promise<CommitResult> {
+  onStage?.('reading');
   const inputs = await gatherReplanInputs(userId);
   if (!inputs) return { status: 'vetoed', violations: ['No active goals to re-plan.'] };
 
   // `steer` lets a caller frame the synthesis (e.g. the Req 4 re-baseline: reassess from scratch
   // after a long break). Undefined for a plain adaptive re-plan.
+  onStage?.('drafting');
   const result = await planSynthesizeVetCommit(userId, {
     ...inputs,
     userSteer: steer,
     goalIds: inputs.goals.map((g) => g.goal_id),
+    // 'saving' fires between synthesis succeeding and the commit landing — the last stage the
+    // client sees before the record clears and the new plan version answers for itself.
+    onSaving: onStage ? () => onStage('saving') : undefined,
   });
   // Whatever prompted this re-plan (the manual button, or accepting a coach's proposal) is
   // resolved now — clear any pending proposal so a stale banner can't linger.
@@ -135,15 +147,23 @@ export const REBASELINE_STEER =
  * services/lock.ts — a user is only ever in one situation or the other: no active plan yet, or
  * one to evolve) and returns it for display. confirmReplan applies it; dismissReplan discards it.
  */
-export async function previewReplan(userId: string, steer?: string): Promise<PlanFlowResult> {
+export async function previewReplan(
+  userId: string,
+  steer?: string,
+  // Narrates the run for the plan_run record (services/plan-run.ts) — see replanPlan.
+  onStage?: (stage: NonNullable<PlanRun['stage']>) => void,
+): Promise<PlanFlowResult> {
+  onStage?.('reading');
   const inputs = await gatherReplanInputs(userId);
   if (!inputs) return { status: 'vetoed', violations: ['No active goals to re-plan.'] };
 
   // steer = the user's own requested change in their own words ("one run day isn't enough").
   // Only flows through the preview; confirm commits the previewed pending_plan that embodies it.
+  onStage?.('drafting');
   const s = await planSynthesize(userId, { ...inputs, userSteer: steer });
   if (s.status === 'vetoed') return { status: 'vetoed', violations: s.violations };
 
+  onStage?.('saving');
   const goalIds = inputs.goals.map((g) => g.goal_id);
   const note = s.note ?? '';
   const createdAt = new Date().toISOString();
@@ -174,14 +194,17 @@ export async function previewReplan(userId: string, steer?: string): Promise<Pla
 }
 
 /**
- * Second half: commit the stored pending_plan (clear it + any pending proposal). Self-sufficient
- * — runs previewReplan first if there's nothing on file, so this never errors just because
- * preview wasn't called.
+ * Second half: commit the stored pending_plan (clear it + any pending proposal). When nothing is
+ * on file the confirm now REFUSES instead of quietly re-running the preview inline: that fallback
+ * meant a race (the preview dismissed or expired between screens) turned "apply my small edit"
+ * into a full blocking rebuild the user never asked for — minutes of synthesis behind a button
+ * that promised seconds. The closure returns the veto and confirmPendingPlan surfaces it as-is;
+ * the flow's shared spine (plan-commit-flow.ts) is unchanged.
  */
 export async function confirmReplan(userId: string): Promise<PlanFlowResult> {
   return confirmPendingPlan(
     userId,
-    () => previewReplan(userId),
+    async () => ({ status: 'vetoed', violations: ['That adjustment expired — run the preview again.'] }),
     async () => {
       // Re-plan's post-commit: clear both the preview and any lingering weekly proposal banner.
       await setPendingPlan(userId, null);

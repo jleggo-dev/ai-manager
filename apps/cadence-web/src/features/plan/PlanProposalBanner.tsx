@@ -7,11 +7,18 @@ type Proposal = NonNullable<PlanViewData['pendingProposal']>;
 export function PlanProposalBanner({
   proposal,
   busy,
+  working = false,
   onAccept,
   onDismiss,
 }: {
   proposal: Proposal;
   busy: boolean;
+  /**
+   * The accepted rework is running server-side (accept answered 202 — PLAN-CHANGES.md Phase 0):
+   * the buttons give way to one working line. The run survives the app closing, so the line says
+   * so; a push lands on success or failure either way.
+   */
+  working?: boolean;
   onAccept: () => void;
   onDismiss: () => void;
 }) {
@@ -54,14 +61,21 @@ export function PlanProposalBanner({
             ))}
           </div>
         )}
-        <div className="proposal-actions">
-          <button className="proposal-accept" onClick={onAccept} disabled={busy}>
-            {acceptLabel}
-          </button>
-          <button className="proposal-dismiss" onClick={onDismiss} disabled={busy}>
-            Not now
-          </button>
-        </div>
+        {working ? (
+          // Inherits `.plan-proposal-t span` — her dim one-liner voice; no new CSS needed.
+          <span role="status" style={{ marginTop: 8 }}>
+            Reworking your week — you can leave the app, I&rsquo;ll let you know when it&rsquo;s set.
+          </span>
+        ) : (
+          <div className="proposal-actions">
+            <button className="proposal-accept" onClick={onAccept} disabled={busy}>
+              {acceptLabel}
+            </button>
+            <button className="proposal-dismiss" onClick={onDismiss} disabled={busy}>
+              Not now
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -12,12 +12,15 @@ import { barLine } from './detour-bar-line.ts';
 export function DetourStateSheet({
   episode,
   busy,
+  error,
   onCheckIn,
   onResume,
   onClose,
 }: {
   episode: ActiveEpisode;
   busy: boolean;
+  /** A resume that didn't land, said out loud — the sheet stays open for the retry. */
+  error?: string;
   onCheckIn: () => void;
   onResume: () => void;
   onClose: () => void;
@@ -55,6 +58,11 @@ export function DetourStateSheet({
             {busy ? 'One moment…' : "I'm back — resume my plan"}
           </button>
         </div>
+        {error && !busy && (
+          <div className="detour-saw" role="alert">
+            {error}
+          </div>
+        )}
       </div>
     </>
   );

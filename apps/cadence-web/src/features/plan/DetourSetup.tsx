@@ -45,9 +45,12 @@ export interface DetourChoice {
 export function DetourSetup({
   onEnter,
   onCancel,
+  error,
 }: {
   onEnter: (choice: DetourChoice) => Promise<void> | void;
   onCancel: () => void;
+  /** A failed entry, said out loud — the sheet stays open so the tap can be tried again. */
+  error?: string;
 }) {
   const [type, setType] = useState<ActiveEpisode['type'] | null>(null);
   const [days, setDays] = useState(7);
@@ -64,7 +67,13 @@ export function DetourSetup({
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    await onEnter({ type, days, available_equipment: [...gear, ...extra].map((name) => ({ name })) });
+    try {
+      await onEnter({ type, days, available_equipment: [...gear, ...extra].map((name) => ({ name })) });
+    } finally {
+      // A failed entry keeps this sheet mounted — the button has to come back to life for the
+      // retry. On success the parent unmounts us and this set is a harmless no-op.
+      setBusy(false);
+    }
   }
 
   return (
@@ -131,6 +140,11 @@ export function DetourSetup({
               Cancel
             </button>
           </div>
+          {error && !busy && (
+            <div className="detour-saw" role="alert">
+              {error}
+            </div>
+          )}
         </>
       )}
 

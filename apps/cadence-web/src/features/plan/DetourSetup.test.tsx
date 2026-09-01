@@ -33,4 +33,18 @@ describe('the detour check-in collects what a re-plan needs', () => {
     await act(async () => screen.getByText('Start the detour').click());
     expect(onEnter).toHaveBeenCalledWith({ type: 'illness', days: 7, available_equipment: [] });
   });
+
+  /** A failed entry used to close the sheet like a success (PLAN-CHANGES.md Phase 0): now the
+   *  parent keeps it open with an error line, so the button must come back to life for the retry. */
+  it('failure keeps the sheet usable — the line shows and the button revives', async () => {
+    const onEnter = vi.fn().mockResolvedValue(undefined); // the parent resolves, then hands back `error`
+    const { rerender } = render(<DetourSetup onEnter={onEnter} onCancel={vi.fn()} />);
+    await act(async () => screen.getByText('Unwell').click());
+    await act(async () => screen.getByText('Start the detour').click());
+
+    rerender(<DetourSetup onEnter={onEnter} onCancel={vi.fn()} error="That didn't take — try again in a moment." />);
+    expect(screen.getByRole('alert').textContent).toMatch(/didn't take/);
+    const go = screen.getByText('Start the detour') as HTMLButtonElement;
+    expect(go.disabled).toBe(false);
+  });
 });

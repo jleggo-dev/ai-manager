@@ -20,6 +20,8 @@ import {
   deleteTempOccurrencesOn,
 } from '../repos/occurrences.ts';
 import { normalizeTempActivity, computeTempOccurrenceDates } from './episode-overlay.ts';
+import { prefetchImminentSessions } from './session-generate.ts';
+import { runInBackground } from './background.ts';
 
 const DAY = 86_400_000;
 const DEFAULT_EPISODE_DAYS = 7;
@@ -146,6 +148,12 @@ export async function enterEpisode(
       })),
     );
     await insertTempOccurrences(rows);
+    // Detour sessions were the one cohort nobody warmed: commits kick the prefetch, but this path
+    // inserted its temp occurrences and stopped, so every detour tap was a cold ~34s generation —
+    // and a detour is exactly when the user is most likely to open tomorrow blind. The temp rows
+    // are user-kind and pending, so the standard warm-up covers them. Never awaited: entering a
+    // detour must not wait on a coach call.
+    runInBackground('detour-warm', prefetchImminentSessions(userId));
   }
 
   return { episode, note };
@@ -209,6 +217,9 @@ export async function reviseEpisodeEquipment(
       })),
     );
     await insertTempOccurrences(rows);
+    // Same warm-up as enterEpisode: the replaced days are fresh cold rows, and the person standing
+    // in the hotel gym is about to open one of them. Never awaited in the request path.
+    runInBackground('detour-warm', prefetchImminentSessions(userId));
   }
   return { revised: true, reason: 'revised', note };
 }

@@ -50,6 +50,73 @@ export interface CadenceUserRow {
   // null/undefined means never asked, which every reader treats as OFF. Photos are dated and
   // weight-stamped, never scored.
   progress_photos_enabled?: boolean | null;
+  // Present once migration 0051 is applied. The one plan-synthesis run in flight for this user
+  // (or how the last one failed) — claimed before starting, cleared on success. See PlanRun.
+  plan_run?: PlanRun | null;
+}
+
+/**
+ * The durable record of a plan-synthesis run (migration 0051). A rebuild takes minutes and used
+ * to live only inside one HTTP request: when the request died, the work either vanished or
+ * finished with nobody listening, and a repeat tap started a second full synthesis. This record
+ * is the run's home outside any request — claimed before starting (so a second tap joins instead
+ * of re-firing), stage-stamped while running, marked failed with a message the client can show,
+ * and cleared entirely on success (the artifact — pending_plan or the new plan version — is the
+ * success signal; a lingering success record would just be a second thing to keep consistent).
+ */
+export interface PlanRun {
+  kind: 'replan_preview' | 'proposal_accept';
+  status: 'running' | 'failed';
+  stage?: 'reading' | 'drafting' | 'saving';
+  started_at: string;
+  error?: string;
+}
+
+/**
+ * After this many minutes a 'running' record is presumed dead and claimable. Background work on
+ * this platform cannot outlive its invocation, so a run that old has no process behind it — but
+ * the record can't clear itself. Read by claimPlanRun's SQL and readPlanRun's derivation
+ * (services/plan-run.ts); both must agree or a run could look claimable while still shown as
+ * running (or the reverse).
+ */
+export const PLAN_RUN_STALE_MINUTES = 15;
+
+/** Store (or clear, with null) the plan-run record. Plain replace — use claimPlanRun to START a
+ *  run; this is for settling one (failed) or clearing one (success / dismiss). */
+export async function setPlanRun(userId: string, run: PlanRun | null): Promise<void> {
+  await sql`update cadence.users set plan_run = ${run ? json(run) : null} where id = ${userId}`;
+}
+
+/**
+ * Claim the right to start a plan-synthesis run — atomically, in the database, because the whole
+ * point is that two concurrent taps must not both win. The conditional update succeeds only when
+ * no run is on file, the last one failed, or a 'running' record is old enough to be presumed dead
+ * (PLAN_RUN_STALE_MINUTES). Two racing claims serialize on the row: the second sees the first's
+ * fresh 'running' record and matches zero rows. Returns whether THIS caller got the claim.
+ */
+export async function claimPlanRun(userId: string, run: PlanRun): Promise<boolean> {
+  const rows = await sql<{ id: string }[]>`
+    update cadence.users
+       set plan_run = ${json(run)}, updated_at = now()
+     where id = ${userId}
+       and (plan_run is null
+            or plan_run->>'status' = 'failed'
+            or (plan_run->>'started_at')::timestamptz < now() - make_interval(mins => ${PLAN_RUN_STALE_MINUTES}))
+    returning id`;
+  return rows.length > 0;
+}
+
+/**
+ * Stamp which stage the running synthesis is in ('reading' | 'drafting' | 'saving') so the client
+ * can say more than "working". Guarded on status='running': a run that already settled (failed,
+ * or cleared on success) must not be resurrected by a stage write that lost the race — jsonb_set
+ * on a null column is a no-op anyway, and the status guard covers the failed case.
+ */
+export async function setPlanRunStage(userId: string, stage: NonNullable<PlanRun['stage']>): Promise<void> {
+  await sql`
+    update cadence.users
+       set plan_run = jsonb_set(plan_run, '{stage}', ${json(stage)})
+     where id = ${userId} and plan_run->>'status' = 'running'`;
 }
 
 export async function getUser(userId: string): Promise<CadenceUserRow | null> {

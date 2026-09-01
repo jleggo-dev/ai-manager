@@ -16,7 +16,28 @@ import type { Activity, Goal } from '@cadence/shared';
  * goal is drafted in ITS OWN focused call — coverage by construction — then ONE reduce call (the
  * same synthesize_plan job, primed with the drafts) reconciles them into a coherent week. All calls
  * stay logged AI Admin jobs; orchestration is app-side, matching how planning already works.
+ *
+ * GENESIS-ONLY (Phase 0, docs/cadence/PLAN-CHANGES.md). Fan-out exists because a first plan has
+ * nothing to anchor on — that is where goals got dropped. An EVOLVE call is handed the current
+ * plan, which already covers every goal, so coverage holds by construction and fanning out just
+ * multiplies a minutes-long call by the goal count (the 2026-08-31 incident: four concurrent
+ * drafts, all dead at undici's 300s ceiling). shouldFanout is the one gate.
  */
+
+/** How many per-goal drafts run at once. Each is a real provider call minutes long; an unbounded
+ *  Promise.all over goals is how the gemini family got rate-limited all at once on 2026-08-20
+ *  (same reasoning as prefetchImminentSessions' cap, services/session-generate.ts). */
+const DRAFT_CONCURRENCY = 3;
+
+/**
+ * Fan-out only for a FIRST plan with goals to coordinate: the kill switch is on, there are ≥2
+ * goals (a lone goal has nothing to reconcile), and there is no current plan to evolve from.
+ * Exported so the gate is testable apart from the synthesis it guards.
+ */
+export function shouldFanout(opts: SynthesizeOpts): boolean {
+  const evolving = Array.isArray(opts.currentPlan) && opts.currentPlan.length > 0;
+  return cadenceConfig.aim.planFanout && opts.goals.length >= 2 && !evolving;
+}
 
 /** One per-goal DRAFT: synthesize in isolation so the goal gets full focus (it may over-scope — the
  *  reduce reconciles). Stamps each draft with its source goal's title so coverage can attribute it. */
@@ -32,10 +53,18 @@ async function draftPerGoal(userId: string, goal: Goal, opts: SynthesizeOpts): P
  * — a deterministic backstop, no extra model call.
  */
 export async function synthesizeFanoutAndVet(userId: string, opts: SynthesizeOpts): Promise<SynthesizeResult> {
-  // 1. Fan-out — draft every goal concurrently, keyed by goal for the coverage backstop.
-  const drafts = await Promise.all(
-    opts.goals.map((goal) => draftPerGoal(userId, goal, opts).then((activities) => ({ goal, activities }))),
-  );
+  // 1. Fan-out — draft the goals concurrently in bounded batches (DRAFT_CONCURRENCY), keyed by
+  // goal for the coverage backstop. Bounded, not all-at-once: see the constant.
+  const drafts: { goal: Goal; activities: Partial<Activity>[] }[] = [];
+  for (let i = 0; i < opts.goals.length; i += DRAFT_CONCURRENCY) {
+    drafts.push(
+      ...(await Promise.all(
+        opts.goals
+          .slice(i, i + DRAFT_CONCURRENCY)
+          .map((goal) => draftPerGoal(userId, goal, opts).then((activities) => ({ goal, activities }))),
+      )),
+    );
+  }
   const allDrafts = drafts.flatMap((d) => d.activities);
   if (allDrafts.length === 0) return { status: 'vetoed', violations: ['fan-out produced no draft activities'] };
 
@@ -52,12 +81,12 @@ export async function synthesizeFanoutAndVet(userId: string, opts: SynthesizeOpt
 }
 
 /**
- * The planning entry point every flow calls. Fan-out → reduce when enabled AND there are ≥2 goals to
- * coordinate (a lone goal has nothing to reconcile — the single call is cheaper and identical);
- * otherwise the single call. Same signature/return as synthesizeAndVet, so lock/replan are drop-in.
+ * The planning entry point every flow calls. Fan-out → reduce only when shouldFanout says so
+ * (genesis, ≥2 goals, switch on); otherwise — every evolve included — the single call. Same
+ * signature/return as synthesizeAndVet, so lock/replan are drop-in.
  */
 export async function planSynthesize(userId: string, opts: SynthesizeOpts): Promise<SynthesizeResult> {
-  if (cadenceConfig.aim.planFanout && opts.goals.length >= 2) return synthesizeFanoutAndVet(userId, opts);
+  if (shouldFanout(opts)) return synthesizeFanoutAndVet(userId, opts);
   return synthesizeAndVet(userId, opts);
 }
 
@@ -69,10 +98,14 @@ export async function planSynthesize(userId: string, opts: SynthesizeOpts): Prom
  */
 export async function planSynthesizeVetCommit(
   userId: string,
-  opts: SynthesizeOpts & { goalIds: string[]; occurrenceDays?: number },
+  // `onSaving` marks the moment synthesis has succeeded and the commit is about to land — the
+  // plan_run record's 'saving' stage (services/plan-run.ts). A callback because this function is
+  // the only place that moment exists; the caller cannot see between the two halves.
+  opts: SynthesizeOpts & { goalIds: string[]; occurrenceDays?: number; onSaving?: () => void },
 ): Promise<CommitResult> {
   const s = await planSynthesize(userId, opts);
   if (s.status === 'vetoed') return { status: 'vetoed', violations: s.violations };
+  opts.onSaving?.();
   return commitActivities(userId, {
     activities: s.activities!,
     note: s.note ?? '',

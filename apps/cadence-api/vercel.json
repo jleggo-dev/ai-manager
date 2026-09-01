@@ -8,7 +8,10 @@
       "installCommand": "npm install --prefix ../.."
     }
   },
-  "rewrites": [
-    { "source": "/(.*)", "destination": { "service": "api" } }
-  ]
+  "functions": {
+    "src/index.ts": {
+      "maxDuration": 800
+    }
+  },
+  "rewrites": [{ "source": "/(.*)", "destination": { "service": "api" } }]
 }

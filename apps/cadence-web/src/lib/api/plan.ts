@@ -185,29 +185,57 @@ export async function replan(): Promise<{
 }
 
 /**
- * Preview what "Adjust my plan" would build — synthesized + vetted but not committed. The banner
- * (`reason` + `suggested_levers`) already shows the "why" before the user ever sees this button;
- * previewPlan() + dismissPlanPreview() on the manual button is a separate, un-gated action, so
- * IT gets its own preview step here.
+ * Start the "Adjust my plan" synthesis. It runs server-side behind a durable run record and
+ * SURVIVES this client leaving: the endpoint answers 202 `{running: true}` the moment the run is
+ * recorded (`joined: true` when the tap landed on a run already in flight — same thing, keep
+ * polling). The verdict — proposal, or failure in the server's words — always arrives via
+ * `getPendingReplan()`; this call never carries one.
+ *
+ * `res.ok` is checked deliberately: a 500 used to parse straight into the vetoed branch, which
+ * dressed a recoverable failure as a terminal "Try again" after 4½ minutes of waiting
+ * (2026-08-31). `invalid` marks a definite 400 — the request itself was malformed, so no run
+ * exists and polling for one would be waiting for nothing.
  */
 export interface ReplanPreview {
-  status: 'proposed' | 'vetoed';
-  proposal?: { activities: PendingPlanActivity[]; note: string };
-  violations?: string[];
+  ok: boolean;
+  running?: boolean;
+  joined?: boolean;
+  invalid?: boolean;
+  /** The 400's own words, when it sent any. */
+  error?: string;
 }
 export async function previewReplan(steer?: string): Promise<ReplanPreview> {
-  const res = await fetch(`${BASE}/plan/replan/preview`, {
-    method: 'POST',
-    headers: headers(),
-    body: JSON.stringify({ steer: steer?.trim() || undefined }),
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${BASE}/plan/replan/preview`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ steer: steer?.trim() || undefined }),
+    });
+    if (res.status === 400) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      return { ok: false, invalid: true, error: body?.error };
+    }
+    if (!res.ok) return { ok: false };
+    const body = (await res.json()) as { running?: boolean; joined?: boolean };
+    return { ok: true, running: !!body.running, joined: !!body.joined };
+  } catch {
+    // Thrown fetch = network-level UNKNOWN — the caller polls pending rather than concluding.
+    return { ok: false };
+  }
 }
 export async function dismissReplanPreview(): Promise<void> {
   await fetch(`${BASE}/plan/replan/preview/dismiss`, { method: 'POST', headers: headers() });
 }
+/** The live run's stage report, verbatim from the server's durable run record. */
+export interface ReplanRun {
+  stage: 'reading' | 'drafting' | 'saving';
+  startedAt: string;
+}
+
 /**
- * The stored pending proposal, if the server finished a preview our fetch didn't live to see.
+ * The replan run's whole story, read from the server: exactly one of a finished `proposal`, a
+ * `running` record (with the stage she is actually in), a `failed` record (worth showing — the
+ * run can be reclaimed with a fresh preview POST), or none of the three (nothing on file).
  *
  * `ok` keeps failure and "nothing pending" apart (additive — existing callers read `proposal`
  * unchanged). The paint-before-auth boot fires mount-time reads before the bearer token exists,
@@ -218,12 +246,18 @@ export async function dismissReplanPreview(): Promise<void> {
 export async function getPendingReplan(): Promise<{
   ok: boolean;
   proposal: { activities: PendingPlanActivity[]; note: string; rationale?: string } | null;
+  running?: ReplanRun;
+  failed?: { message: string };
 }> {
   try {
     const res = await fetch(`${BASE}/plan/replan/pending`, { headers: headers() });
     if (!res.ok) return { ok: false, proposal: null };
-    const body = (await res.json()) as { proposal: { activities: PendingPlanActivity[]; note: string } | null };
-    return { ok: true, proposal: body.proposal ?? null };
+    const body = (await res.json()) as {
+      proposal: { activities: PendingPlanActivity[]; note: string; rationale?: string } | null;
+      running?: ReplanRun;
+      failed?: { message: string };
+    };
+    return { ok: true, proposal: body.proposal ?? null, running: body.running, failed: body.failed };
   } catch {
     return { ok: false, proposal: null };
   }
