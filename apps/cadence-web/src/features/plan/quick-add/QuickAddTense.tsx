@@ -135,7 +135,7 @@ export function QuickAddTense({
       </div>
 
       <div className="ld2-sec">
-        <b>I went for one</b> <span>log it — fastest path</span>
+        <b>I went for one</b> <span>log it — it counts</span>
         <div className="ld2-chips">
           {DURATION_CHIPS.map((m) => (
             <button key={m} className="ld2-chip" disabled={busy} onClick={() => void logMinutes(m)}>
@@ -204,7 +204,7 @@ export function QuickAddTense({
           row, the section simply isn't here. */}
       {items && items.length > 0 && (
         <div className="ld2-sec">
-          <b>Take me on one</b> <span>the coach&rsquo;s present-tense menu, scoped to {noun.toLowerCase()}</span>
+          <b>Take me on one</b> <span>from your coach — for right now</span>
           <div className="ld-list">
             {items.map((item) => {
               const glyph = glyphOf(item.label, item.area);
