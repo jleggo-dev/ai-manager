@@ -3,17 +3,24 @@
  * every wire asserted): family → seeds → exact session, the palette inserting the right kind,
  * card edits changing the session JSON, reorder/duplicate/delete, the footer total, Save calling
  * `createUserRoutine` with the EXACT composed payload, a failed save keeping the draft, Run it
- * now/Done handing the routine to `onSaved`, and the cancel-with-edits confirm.
+ * now/Done handing the routine to `onSaved`, the cancel-with-edits confirm, and — update mode
+ * (`updateRoutineId`, added post-merge for Settings' "Edit steps" door) — Save calling
+ * `updateUserRoutine` instead, never `createUserRoutine`.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
-import { inferTool } from '@cadence/shared';
+import { inferTool, type OccurrenceSession } from '@cadence/shared';
 import type { UserRoutine } from '../../lib/api/user-routines.ts';
 
 const createUserRoutine = vi.fn(async (..._a: unknown[]) => null as UserRoutine | null);
+const updateUserRoutine = vi.fn(async (..._a: unknown[]) => null as UserRoutine | null);
 vi.mock('../../lib/api/user-routines.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/api/user-routines.ts')>();
-  return { ...actual, createUserRoutine: (...a: unknown[]) => createUserRoutine(...a) };
+  return {
+    ...actual,
+    createUserRoutine: (...a: unknown[]) => createUserRoutine(...a),
+    updateUserRoutine: (...a: unknown[]) => updateUserRoutine(...a),
+  };
 });
 
 const { ActivityBuilder } = await import('./ActivityBuilder.tsx');
@@ -237,5 +244,122 @@ describe('ActivityBuilder — cancel', () => {
     fireEvent.click(screen.getByText('Cancel'));
     fireEvent.click(screen.getByText('Discard'));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* ── Update mode (`updateRoutineId`) — editing an EXISTING routine in place, for Settings' "Edit
+   steps" door. Added post-merge: a gap in the original brief meant the builder only knew how to
+   create, so wiring it as-is to that door would have silently duplicated instead of updated. ── */
+const editSession: OccurrenceSession = {
+  blocks: [{ label: 'Study', items: [{ name: 'Study', tool: 'timer', duration_min: 20 }] }],
+  note: '',
+  generated_at: '2026-08-01T00:00:00.000Z',
+  version: 1,
+};
+
+const updatedRoutine: UserRoutine = { ...savedRoutine, routine_id: 'r9', name: 'Study block' };
+
+describe('ActivityBuilder — update mode', () => {
+  it('skips type-first entirely and opens straight into the builder', () => {
+    render(
+      <ActivityBuilder
+        initial={{ name: 'Study block', session: editSession }}
+        updateRoutineId="r9"
+        onSaved={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.queryByText('What are you building?')).toBeNull();
+    expect(screen.getByLabelText('Activity name')).toHaveValue('Study block');
+    expect(screen.getByDisplayValue('Study')).toBeTruthy();
+  });
+
+  it('the dev assertion throws when updateRoutineId is set with no initial.session', () => {
+    expect(() => render(<ActivityBuilder updateRoutineId="r9" onSaved={() => {}} onClose={() => {}} />)).toThrowError(
+      /updateRoutineId requires initial\.session/,
+    );
+  });
+
+  it('the Save button reads "Save changes"', () => {
+    render(
+      <ActivityBuilder
+        initial={{ name: 'Study block', session: editSession }}
+        updateRoutineId="r9"
+        onSaved={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText('Save changes')).toBeTruthy();
+  });
+
+  it('Save calls updateUserRoutine with the exact id and {name, session} — never createUserRoutine', async () => {
+    render(
+      <ActivityBuilder
+        initial={{ name: 'Study block', session: editSession }}
+        updateRoutineId="r9"
+        onSaved={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Step name'), { target: { value: 'Study, longer' } });
+    updateUserRoutine.mockResolvedValue(updatedRoutine);
+    fireEvent.click(screen.getByText('Save changes'));
+    await waitFor(() => expect(updateUserRoutine).toHaveBeenCalledTimes(1));
+    expect(updateUserRoutine).toHaveBeenCalledWith('r9', {
+      name: 'Study block',
+      session: {
+        blocks: [{ label: 'Study, longer', items: [{ name: 'Study, longer', tool: 'timer', duration_min: 20 }] }],
+        note: '',
+        generated_at: expect.any(String),
+        version: 1,
+      },
+    });
+    expect(createUserRoutine).not.toHaveBeenCalled();
+  });
+
+  it('on success, the saved moment reads the update-honest line and Run it now hands the UPDATED routine to onSaved', async () => {
+    const onSaved = vi.fn();
+    render(
+      <ActivityBuilder
+        initial={{ name: 'Study block', session: editSession }}
+        updateRoutineId="r9"
+        onSaved={onSaved}
+        onClose={() => {}}
+      />,
+    );
+    updateUserRoutine.mockResolvedValue(updatedRoutine);
+    fireEvent.click(screen.getByText('Save changes'));
+    await screen.findByText('Saved — future runs follow the new steps.');
+    fireEvent.click(screen.getByText('Run it now'));
+    expect(onSaved).toHaveBeenCalledWith(updatedRoutine);
+  });
+
+  it('on failure (null), keeps the draft and re-enables Save — the same honest handling as create', async () => {
+    render(
+      <ActivityBuilder
+        initial={{ name: 'Study block', session: editSession }}
+        updateRoutineId="r9"
+        onSaved={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    updateUserRoutine.mockResolvedValue(null);
+    fireEvent.click(screen.getByText('Save changes'));
+    await screen.findByText(/Couldn.t save/);
+    expect(screen.getByLabelText('Step name')).toHaveValue('Study');
+    expect(screen.getByText('Save changes')).not.toBeDisabled();
+  });
+
+  it('the type phase never renders in update mode, even with cards cleared out', () => {
+    render(
+      <ActivityBuilder
+        initial={{ name: 'Study block', session: { blocks: [], note: '', generated_at: '', version: 1 } }}
+        updateRoutineId="r9"
+        onSaved={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.queryByText('What are you building?')).toBeNull();
+    expect(screen.getByText('Save changes')).toBeTruthy();
   });
 });

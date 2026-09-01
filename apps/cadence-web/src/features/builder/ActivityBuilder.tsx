@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { createUserRoutine, type UserRoutine, type UserRoutineProvenance } from '../../lib/api/user-routines.ts';
+import {
+  createUserRoutine,
+  updateUserRoutine,
+  type UserRoutine,
+  type UserRoutineProvenance,
+} from '../../lib/api/user-routines.ts';
 import type { OccurrenceSession, SessionItem } from '@cadence/shared';
 import {
   addCircuitExercise,
@@ -35,9 +40,18 @@ import { SavedMoment } from './SavedMoment.tsx';
  * Phases: `type` (design B — shown only when there's no session yet) → `builder` (design 1B — the
  * step-card stack) → `saved` (design E, trimmed). Editing an existing routine, or a from-Cadence /
  * from-Recap copy, skips straight to `builder` via `initial.session`.
+ *
+ * **Update mode** (`updateRoutineId`, added post-merge for Settings' "Edit steps" door — a gap in
+ * the original brief: the builder only knew how to create, so wiring it as-is would have silently
+ * duplicated instead of updating). When set, this is the SAME surface editing an EXISTING routine
+ * in place: type-first never shows (there is nothing to pick a family for), Save calls
+ * `updateUserRoutine` instead of `createUserRoutine`, and the save moment's copy says so. The
+ * contract's patch shape carries no `provenance` — it is fixed at creation — so update never sends
+ * one, matching `updateUserRoutine`'s own signature.
  */
 export function ActivityBuilder({
   initial,
+  updateRoutineId,
   onSaved,
   onClose,
 }: {
@@ -54,10 +68,17 @@ export function ActivityBuilder({
      */
     area?: UserRoutine['area'];
   };
+  /** Present = editing this routine in place rather than building a new one. Requires
+   *  `initial.session` (asserted in dev — there's nothing to edit without one). */
+  updateRoutineId?: string;
   onSaved: (routine: UserRoutine) => void;
   onClose: () => void;
 }) {
-  const [phase, setPhase] = useState<'type' | 'builder' | 'saved'>(initial?.session ? 'builder' : 'type');
+  const isUpdate = !!updateRoutineId;
+  if (import.meta.env.DEV && isUpdate && !initial?.session) {
+    throw new Error('ActivityBuilder: updateRoutineId requires initial.session — nothing to edit without one.');
+  }
+  const [phase, setPhase] = useState<'type' | 'builder' | 'saved'>(initial?.session || isUpdate ? 'builder' : 'type');
   const [family, setFamily] = useState<BuilderFamily | null>(null);
   const [cards, setCards] = useState<BuilderCard[]>(() => cardsFromSession(initial?.session));
   const [name, setName] = useState(initial?.name ?? '');
@@ -95,12 +116,17 @@ export function ActivityBuilder({
     setSaving(true);
     setSaveError(null);
     const session = sessionFromCards(cards);
-    const result = await createUserRoutine({
-      name: name.trim() || 'Untitled activity',
-      area,
-      session,
-      provenance: initial?.provenance ?? { kind: 'blank' },
-    });
+    const trimmedName = name.trim() || 'Untitled activity';
+    // Update never sends `provenance` — the contract's patch shape has none; it's fixed at
+    // creation and this call can't change it.
+    const result = updateRoutineId
+      ? await updateUserRoutine(updateRoutineId, { name: trimmedName, session })
+      : await createUserRoutine({
+          name: trimmedName,
+          area,
+          session,
+          provenance: initial?.provenance ?? { kind: 'blank' },
+        });
     setSaving(false);
     if (!result) {
       setSaveError('Couldn’t save — try again. Your steps are still here.');
@@ -110,7 +136,7 @@ export function ActivityBuilder({
     setPhase('saved');
   }
 
-  if (phase === 'type') {
+  if (phase === 'type' && !isUpdate) {
     return (
       <TypeFirstEntry
         family={family}
@@ -127,6 +153,7 @@ export function ActivityBuilder({
     return (
       <SavedMoment
         name={savedRoutine.name}
+        isUpdate={isUpdate}
         onRunNow={() => onSaved(savedRoutine)}
         onDone={() => onSaved(savedRoutine)}
       />
@@ -142,7 +169,7 @@ export function ActivityBuilder({
           Cancel
         </button>
         <button type="button" className="ab-save" onClick={() => void handleSave()} disabled={saving}>
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? 'Saving…' : isUpdate ? 'Save changes' : 'Save'}
         </button>
       </div>
       <div className="ab-body">

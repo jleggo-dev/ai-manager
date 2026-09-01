@@ -25,4 +25,13 @@ describe('SavedMoment', () => {
     fireEvent.click(screen.getByText('Done'));
     expect(onDone).toHaveBeenCalledTimes(1);
   });
+
+  it('isUpdate swaps the subtitle for the update-honest line, never the library/sheet claim', () => {
+    render(<SavedMoment name="Piano practice" isUpdate onRunNow={() => {}} onDone={() => {}} />);
+    expect(screen.getByText('Saved — future runs follow the new steps.')).toBeTruthy();
+    expect(screen.queryByText('It’s in Your activities and on the ＋ sheet.')).toBeNull();
+    // Run it now/Done still fire — the doors don't change, only the copy above them.
+    expect(screen.getByText('Run it now')).toBeTruthy();
+    expect(screen.getByText('Done')).toBeTruthy();
+  });
 });
