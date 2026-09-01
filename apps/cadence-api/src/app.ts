@@ -23,6 +23,7 @@ import foodsRoutes from './routes/foods.ts';
 import recipesRoutes from './routes/recipes.ts';
 import mealPlansRoutes from './routes/meal-plans.ts';
 import meRoutes from './routes/me.ts';
+import meRoutinesRoutes from './routes/me-routines.ts';
 import healthDigestRoutes from './routes/health-digest.ts';
 import workoutHistoryRoutes from './routes/workout-history.ts';
 import progressLayoutRoutes from './routes/progress-layout.ts';
@@ -61,6 +62,7 @@ export function createApp() {
   app.use('/nutrition/recipes', recipesRoutes);
   app.use('/nutrition/meal-plans', mealPlansRoutes);
   app.use('/me', meRoutes);
+  app.use('/me', meRoutinesRoutes);
   app.use('/me', healthDigestRoutes);
   app.use('/me', workoutHistoryRoutes);
   app.use('/me', progressLayoutRoutes);

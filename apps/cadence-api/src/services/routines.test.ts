@@ -24,7 +24,10 @@ vi.mock('../repos/goals.ts', () => ({ listGoals: (...a: unknown[]) => listGoals(
 // The real Set, not a stand-in — a wrong drift here (e.g. missing 'episode') would silently let a
 // temp detour option slip into someone's routine library, so this borrows the actual values
 // rather than re-typing them.
-vi.mock('../repos/activities.ts', () => ({ NON_PLAN_CATEGORIES: new Set(['adhoc', 'episode', 'menu']) }));
+vi.mock('../repos/activities.ts', () => ({
+  NON_PLAN_CATEGORIES: new Set(['adhoc', 'episode', 'menu']),
+  USER_BUILT_CATEGORY: 'user_built',
+}));
 
 import { listRoutines, latestVersionByCommitment, parseAreaParam, getRoutineSession } from './routines.ts';
 
@@ -172,6 +175,15 @@ describe('listRoutines', () => {
     ]);
     const routines = await listRoutines(USER);
     expect(routines.map((r) => r.commitment_id)).toEqual(['c3']);
+  });
+
+  it("excludes user-built routines (Activity Builder wave 3) — those are GET /me/routines' list, not this one", async () => {
+    listUserActivityVersions.mockResolvedValue([
+      actRow({ commitment_id: 'c1', title: 'Piano practice (yours)', category: 'user_built' }),
+      actRow({ commitment_id: 'c2', title: 'Easy 5k (from Cadence)', category: null }),
+    ]);
+    const routines = await listRoutines(USER);
+    expect(routines.map((r) => r.commitment_id)).toEqual(['c2']);
   });
 
   it('defaults finishes to 0 and last_done to null for a lineage never finished', async () => {
