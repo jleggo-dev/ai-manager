@@ -4,7 +4,7 @@
  * (an off-by-one in the 5-row cap, an accidental re-sort) without a component in the way.
  */
 import { describe, it, expect } from 'vitest';
-import { browseAllCount, playableRoutines, routineMeta, shelfRoutines } from './routineShelf.ts';
+import { browseAllCount, fillShelfSlots, playableRoutines, routineMeta } from './routineShelf.ts';
 import type { PlanRoutine } from '../../../lib/api.ts';
 
 const routine = (over: Partial<PlanRoutine> = {}): PlanRoutine => ({
@@ -35,7 +35,7 @@ describe('playableRoutines', () => {
   });
 });
 
-describe('shelfRoutines', () => {
+describe('fillShelfSlots', () => {
   const three = [
     routine({ commitment_id: 'c1', finishes: 11 }),
     routine({ commitment_id: 'c2', finishes: 6 }),
@@ -43,39 +43,42 @@ describe('shelfRoutines', () => {
   ];
 
   it("slices to the top 2 in the API's own order — never re-sorts", () => {
-    expect(shelfRoutines(three, 0).map((r) => r.commitment_id)).toEqual(['c1', 'c2']);
+    expect(fillShelfSlots(three, 5).map((r) => r.commitment_id)).toEqual(['c1', 'c2']);
   });
 
-  it('now-menu rows claim their slots first — 3 now-menu rows leave room for only 2 routines', () => {
-    expect(shelfRoutines(three, 3).map((r) => r.commitment_id)).toEqual(['c1', 'c2']);
+  it('spends only as many slots as are left — 1 remaining leaves exactly 1 shown', () => {
+    expect(fillShelfSlots(three, 1).map((r) => r.commitment_id)).toEqual(['c1']);
   });
 
-  it('never exceeds the shared 5-row cap: 4 now-menu rows leave exactly 1 slot', () => {
-    expect(shelfRoutines(three, 4).map((r) => r.commitment_id)).toEqual(['c1']);
+  it('zero slots remaining leaves nothing shown', () => {
+    expect(fillShelfSlots(three, 0)).toEqual([]);
   });
 
-  it('a full now-menu (5 rows) leaves no room at all', () => {
-    expect(shelfRoutines(three, 5)).toEqual([]);
+  it('a negative remainder (an earlier tier over-claimed) still floors at zero, never throws', () => {
+    expect(fillShelfSlots(three, -2)).toEqual([]);
   });
 
-  it('more now-menu rows than the cap still floors at zero, never a negative slice', () => {
-    expect(shelfRoutines(three, 9)).toEqual([]);
+  it('works over ANY tier, not just PlanRoutine — the caller supplies the type', () => {
+    expect(fillShelfSlots(['a', 'b', 'c'], 5)).toEqual(['a', 'b']);
   });
 });
 
 describe('browseAllCount', () => {
-  const three = [routine({ commitment_id: 'c1' }), routine({ commitment_id: 'c2' }), routine({ commitment_id: 'c3' })];
-
   it('names the FULL playable count, not just the hidden remainder', () => {
-    expect(browseAllCount(three, three.slice(0, 2))).toBe(3);
+    expect(browseAllCount(3, 2)).toBe(3);
   });
 
-  it('is null once every playable routine is already shown — nothing left to browse', () => {
-    expect(browseAllCount(three, three)).toBeNull();
+  it('is null once every playable routine, across every tier, is already shown', () => {
+    expect(browseAllCount(3, 3)).toBeNull();
   });
 
   it('is null for an empty shelf with nothing playable at all', () => {
-    expect(browseAllCount([], [])).toBeNull();
+    expect(browseAllCount(0, 0)).toBeNull();
+  });
+
+  it('sums across tiers — the caller adds coach + user counts before calling this', () => {
+    // 2 coach + 3 user playable, only 2 + 1 shown: 5 total, 3 shown, 2 still hidden.
+    expect(browseAllCount(2 + 3, 2 + 1)).toBe(5);
   });
 });
 

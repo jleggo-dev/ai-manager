@@ -1,13 +1,24 @@
 import { useEffect, useState } from 'react';
 import { deriveWalkthrough, nowMenuMeta, type NowMenuItem } from '@cadence/shared';
-import { getNowMenu, getRoutines, logAdhoc, type PlanRoutine } from '../../../lib/api.ts';
+import {
+  getNowMenu,
+  getRoutines,
+  listUserRoutines,
+  logAdhoc,
+  logUserRoutineRun,
+  type PlanRoutine,
+  type UserRoutine,
+} from '../../../lib/api.ts';
 import { Walkthrough } from '../../walkthrough/Walkthrough.tsx';
 import { sessionFor } from '../nowMenuSession.ts';
 import { categoryOfArea } from '../../today/category.ts';
 import { glyphOf, GLYPH } from '../../today/glyphs.ts';
 import type { QuickAddArea } from './quickAddRows.ts';
 import { useRoutinePlay } from './useRoutinePlay.tsx';
-import { browseAllCount, playableRoutines, routineMeta, shelfRoutines } from './routineShelf.ts';
+import { browseAllCount, fillShelfSlots, playableRoutines, routineMeta, SHELF_ROW_CAP } from './routineShelf.ts';
+import { playableUserRoutines, userRoutineMeta } from './userRoutineShelf.ts';
+import type { BuilderSeed } from './builderSeed.ts';
+import { StartFromScreen } from './StartFromScreen.tsx';
 
 const DURATION_CHIPS = [15, 30, 45] as const;
 
@@ -36,10 +47,12 @@ function steerSeed(area: QuickAddArea, noun: string): string {
 /**
  * Screen 2 — "the tense" (Activity Builder 2A). Reached by tapping a screen-1 noun row: past
  * ("I went for one") above present ("Take me on one"), because logging is the fastest path and
- * the coach's own present-tense menu is the honest second choice, not the first.
+ * the coach's own present-tense menu is the honest second choice, not the first. "Take me on one"
+ * now lists three tiers in order — the coach's now-menu tools, her routines, then the user's own
+ * ("Yours") — sharing the Now Door's one 5-row cap; "Build my own" is the screen's last door, into
+ * `StartFromScreen.tsx`'s three starting-point shelves (Activity Builder wave 3).
  *
- * No "Build my own" here — the builder doesn't exist yet (TURN 1 of the design), and a dead row
- * beats no row not at all. No Apple Health pull — that's device-gated, a later parcel.
+ * No Apple Health pull — that's device-gated, a later parcel.
  */
 export function QuickAddTense({
   area,
@@ -48,6 +61,7 @@ export function QuickAddTense({
   onBack,
   onLogged,
   onSteer,
+  onBuild,
 }: {
   area: QuickAddArea;
   noun: string;
@@ -61,6 +75,10 @@ export function QuickAddTense({
    *  the same way PlanView's `onSteerCoach` is. Row hidden without it, same pattern `onOpenFood`
    *  uses on screen 1: a door with nowhere to open is not drawn. */
   onSteer?: (text: string) => void;
+  /** Opens the Activity Builder full-screen, seeded (or not — "Blank") from `StartFromScreen`'s
+   *  pick — wired at the shell (MainTabs) the same way `onSteer` is. "Build my own" and the whole
+   *  Start-from screen are hidden without it: no door without a house. */
+  onBuild?: (seed?: BuilderSeed) => void;
 }) {
   const [custom, setCustom] = useState('');
   const [freeText, setFreeText] = useState('');
@@ -71,8 +89,15 @@ export function QuickAddTense({
   // null = not loaded yet (or the read failed) — same no-claim `getRoutines` already draws between
   // "couldn't load" and "you have none"; `playableRoutines` below collapses both to no rows shown.
   const [routines, setRoutines] = useState<PlanRoutine[] | null>(null);
-  // "Browse all N ›" swaps this section, in place, for the full playable-routines list.
+  // Same no-claim reading of `listUserRoutines` — it carries every area, filtered to this one at
+  // render time (the endpoint itself has no `?area=`, unlike `getRoutines`).
+  const [userRoutines, setUserRoutines] = useState<UserRoutine[] | null>(null);
+  // "Browse all N ›" swaps this section, in place, for the full playable-routines list (both
+  // tiers). "Build my own" swaps the WHOLE screen for `StartFromScreen` — a bigger, separate
+  // concern, so it gets its own flag rather than living inside the routines section's toggle.
   const [browsingRoutines, setBrowsingRoutines] = useState(false);
+  const [buildingFrom, setBuildingFrom] = useState(false);
+  const [playingUserRoutine, setPlayingUserRoutine] = useState<UserRoutine | null>(null);
   const routinePlay = useRoutinePlay(onLogged);
 
   useEffect(() => {
@@ -100,6 +125,16 @@ export function QuickAddTense({
       alive = false;
     };
   }, [area]);
+
+  useEffect(() => {
+    let alive = true;
+    listUserRoutines().then((rows) => {
+      if (alive) setUserRoutines(rows);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   async function logMinutes(minutes: number) {
     if (!Number.isFinite(minutes) || minutes <= 0 || busy) return;
@@ -141,14 +176,64 @@ export function QuickAddTense({
     );
   }
 
-  // A routine's own walkthrough (useRoutinePlay) overlays the same way — one active player at a
-  // time, so this return replaces everything else here too.
+  // A coach routine's own walkthrough (useRoutinePlay) overlays the same way — one active player
+  // at a time, so this return replaces everything else here too.
   if (routinePlay.node) return <>{routinePlay.node}</>;
 
-  const playable = playableRoutines(routines);
+  // A "Yours" row plays straight from the session already in hand — no fetch, unlike a coach
+  // routine, so there is no busy/error state to carry here, just the same overlay-and-credit shape.
+  if (playingUserRoutine) {
+    return (
+      <Walkthrough
+        walkthrough={deriveWalkthrough(playingUserRoutine.session)}
+        title={playingUserRoutine.name}
+        onClose={() => setPlayingUserRoutine(null)}
+        onComplete={() => {
+          const routineId = playingUserRoutine.routine_id;
+          setPlayingUserRoutine(null);
+          // logUserRoutineRun, THEN onLogged — same order every completed path here follows.
+          void (async () => {
+            try {
+              await logUserRoutineRun(routineId);
+            } finally {
+              onLogged();
+            }
+          })();
+        }}
+      />
+    );
+  }
+
+  const playableCoach = playableRoutines(routines);
+  const userForArea = userRoutines?.filter((r) => r.area === area) ?? null;
+  const playableUser = playableUserRoutines(userForArea);
+
+  // "Build my own" opens a bigger, separate screen (three whole shelves) rather than swapping
+  // just the routines section the way "Browse all" does — so it gets its own full-body return,
+  // same shape as `playing`/`routinePlay.node` above.
+  if (buildingFrom && onBuild) {
+    return (
+      <StartFromScreen
+        area={area}
+        coachRoutines={playableCoach}
+        userRoutines={playableUser}
+        onBack={() => setBuildingFrom(false)}
+        onBuild={(seed) => {
+          setBuildingFrom(false);
+          onBuild(seed);
+        }}
+      />
+    );
+  }
+
+  // Three tiers share the Now Door's one 5-row cap, in listed order: now-menu items claim their
+  // slots first (unlimited — they're the coach's own present-tense picks), then coach routines,
+  // then the user's own. Each of the latter two is ALSO capped per tier (`fillShelfSlots`), so a
+  // person with 20 saved routines still only ever sees the top 2 here — Browse all reaches the rest.
   const nowMenuCount = items?.length ?? 0;
-  const shownRoutines = shelfRoutines(playable, nowMenuCount);
-  const browseCount = browseAllCount(playable, shownRoutines);
+  const shownCoach = fillShelfSlots(playableCoach, Math.max(0, SHELF_ROW_CAP - nowMenuCount));
+  const shownUser = fillShelfSlots(playableUser, Math.max(0, SHELF_ROW_CAP - nowMenuCount - shownCoach.length));
+  const browseCount = browseAllCount(playableCoach.length + playableUser.length, shownCoach.length + shownUser.length);
 
   return (
     <>
@@ -228,11 +313,13 @@ export function QuickAddTense({
         )}
       </div>
 
-      {/* Zero now-menu items AND zero playable routines is a real state (DoNowSection's own
-          rule) — no heading, no dead row, the section simply isn't here. Browsing mode has its
+      {/* Zero now-menu items AND zero playable routines (either tier) is a real state (DoNowSection's
+          own rule) — no heading, no dead row, the section simply isn't here. Browsing mode has its
           own non-empty guard: it only ever opens from "Browse all", which is never drawn unless
-          `playable` already has rows. */}
-      {(browsingRoutines ? playable.length > 0 : nowMenuCount > 0 || shownRoutines.length > 0) && (
+          either tier already has rows. */}
+      {(browsingRoutines
+        ? playableCoach.length + playableUser.length > 0
+        : nowMenuCount > 0 || shownCoach.length > 0 || shownUser.length > 0) && (
         <div className="ld2-sec">
           {browsingRoutines ? (
             <button
@@ -269,7 +356,7 @@ export function QuickAddTense({
                   </button>
                 );
               })}
-            {(browsingRoutines ? playable : shownRoutines).map((routine) => (
+            {(browsingRoutines ? playableCoach : shownCoach).map((routine) => (
               <RoutineRow
                 key={routine.commitment_id}
                 routine={routine}
@@ -281,6 +368,14 @@ export function QuickAddTense({
                 onPlay={() => routinePlay.play(routine)}
               />
             ))}
+            {(browsingRoutines ? playableUser : shownUser).map((routine) => (
+              <UserRoutineRow
+                key={routine.routine_id}
+                routine={routine}
+                area={area}
+                onPlay={() => setPlayingUserRoutine(routine)}
+              />
+            ))}
           </div>
           {!browsingRoutines && browseCount != null && (
             <button className="ld2-browse-all" onClick={() => setBrowsingRoutines(true)}>
@@ -288,6 +383,27 @@ export function QuickAddTense({
             </button>
           )}
         </div>
+      )}
+
+      {/* "Build my own" (Activity Builder wave 3) — the screen's last door, drawn in the dashed
+          not-yet-real register so it never competes with a row that already logs or plays
+          something real. Hidden entirely without a house to open it into (same rule `onSteer`
+          follows above): MainTabs is the only host that wires `onBuild` today. */}
+      {onBuild && (
+        <button className="ld-build-row" onClick={() => setBuildingFrom(true)} aria-label="Build my own">
+          <span className={`ld-ic ld-ic-${categoryOfArea(area)}`} aria-hidden>
+            <svg viewBox="0 0 24 24" width="20" height="20">
+              <path d={GLYPH.pen} fill="#fff" />
+            </svg>
+          </span>
+          <span className="ld-row-t">
+            <b>Build my own</b>
+            <span>start from one of these, or from scratch</span>
+          </span>
+          <span className="ld-plus" aria-hidden>
+            ›
+          </span>
+        </button>
       )}
     </>
   );
@@ -322,6 +438,32 @@ function RoutineRow({
       <span className="ld-row-t">
         <b>{routine.title}</b>
         <span>{errorText ?? routineMeta(routine)}</span>
+      </span>
+      <span className="ld-plus" aria-hidden>
+        ›
+      </span>
+    </button>
+  );
+}
+
+/** A user-built routine's own row — same grammar as `RoutineRow`, but no busy/error state: playing
+ *  one needs no fetch (the session is already in hand from `listUserRoutines`), so there is
+ *  nothing here that can fail. The "yours" word leads the meta line — a quiet chip, not a
+ *  separate line, the same one-line-of-facts shape every row in this sheet already wears. */
+function UserRoutineRow({ routine, area, onPlay }: { routine: UserRoutine; area: QuickAddArea; onPlay: () => void }) {
+  const routineArea = routine.area ?? area;
+  const glyph = glyphOf(routine.name, routineArea);
+  const meta = ['yours', userRoutineMeta(routine)].filter((p): p is string => !!p).join(' · ');
+  return (
+    <button className="ld-row" onClick={onPlay} aria-label={routine.name}>
+      <span className={`ld-ic ld-ic-${categoryOfArea(routineArea)}`} aria-hidden>
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <path d={glyph.d} fill="#fff" />
+        </svg>
+      </span>
+      <span className="ld-row-t">
+        <b>{routine.name}</b>
+        <span>{meta}</span>
       </span>
       <span className="ld-plus" aria-hidden>
         ›

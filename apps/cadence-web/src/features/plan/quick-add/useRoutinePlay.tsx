@@ -40,13 +40,15 @@ export interface UseRoutinePlayResult {
 }
 
 /** `ok: false` — the fetch itself failed (network, non-OK). Never dressed as "nothing to play":
- *  the row says try again, not that the routine is gone. */
-const FETCH_FAILED = "Couldn't open that one just now — try again in a moment.";
+ *  the row says try again, not that the routine is gone. Exported so the Start-from screen
+ *  (StartFromScreen.tsx) can show the exact same line on its own `getRoutineSession` read for a
+ *  "From Cadence" pick, rather than a copy-pasted duplicate that could drift from this one. */
+export const FETCH_FAILED = "Couldn't open that one just now — try again in a moment.";
 /** `ok: true, session: null` — the listing said this routine had steps, but the cached session
  *  behind them is gone by the time of the tap (replaced by a newer prescribe_session run
  *  elsewhere). A real gap, not a mistake the user made, so the line stays plain and carries no
  *  blame — it never says "your session expired" or anything else that reads as their fault. */
-const SESSION_GONE = 'Nothing to play there right now — try again in a moment.';
+export const SESSION_GONE = 'Nothing to play there right now — try again in a moment.';
 
 export function useRoutinePlay(onLogged: () => void): UseRoutinePlayResult {
   const [busyId, setBusyId] = useState<string | null>(null);

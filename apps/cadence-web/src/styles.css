@@ -6227,6 +6227,24 @@ textarea.wiz-title {
   cursor: pointer;
 }
 
+/* "Build my own" (Activity Builder wave 3, 2026-09-01) — the tense screen's last door, drawn in
+   the dashed not-yet-real register: `.ld-row`'s own box model, transparent instead of filled, a
+   dashed border instead of solid, so it never competes visually with a row that already logs or
+   plays something real. */
+.ld-build-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1.5px dashed oklch(84% 0.03 85);
+  border-radius: 14px;
+  padding: 10px 12px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
 /* The "came back" tap (REQ9 §4.2). One ripple, then nothing — the screen after a return is
    identical to the screen before it, because that is what returning means. */
 @keyframes cadence-ripple {
