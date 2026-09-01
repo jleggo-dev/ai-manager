@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { coachToolDefinitions } from '../coach-tools.ts';
 import { RETRIEVAL_FUNCTIONS } from './registry.ts';
-import { FIND_TOOLS_NAME, META_TOOL_NAMES } from '../coach-tool-tiers.ts';
+import { DRAWER_LABEL_MAX, FIND_TOOLS_NAME, META_TOOL_NAMES, labelBudgetReport } from '../coach-tool-tiers.ts';
 
 /**
  * The description audit, made mechanical (owner ruling 2026-08-14: "make sure we aren't using
@@ -147,8 +147,10 @@ describe('harness tool descriptions', () => {
     const metas = defs.filter((d) => META_TOOL_NAMES.includes(d.function.name as (typeof META_TOOL_NAMES)[number]));
     expect(metas.length).toBe(2);
     for (const m of metas) {
-      const cap = m.function.name === FIND_TOOLS_NAME ? 2600 : 800;
-      expect(m.function.description.length, `${m.function.name} over its ${cap}-char bound`).toBeLessThanOrEqual(cap);
+      const isIndex = m.function.name === FIND_TOOLS_NAME;
+      const cap = isIndex ? DRAWER_LABEL_MAX : 800;
+      const why = isIndex ? labelBudgetReport(m.function.description) : `${m.function.name} over its ${cap}-char bound`;
+      expect(m.function.description.length, why).toBeLessThanOrEqual(cap);
       expect(
         /take effect immediately|does NOT change anything|Takes effect immediately/i.test(m.function.description),
         `${m.function.name} must state its commit-or-waits gate`,
