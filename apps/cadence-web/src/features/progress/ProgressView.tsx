@@ -131,7 +131,15 @@ export function ProgressView({ onCoach }: { onCoach?: (note: string) => void }) 
           Nothing to show yet — as you log things with me, whatever we count together gathers here.
         </div>
       ) : (
-        layout.sections.map((spec) => <BoundWidget key={spec.id} spec={spec} window={window} onDrill={setDrill} onOpenPhotos={() => setPhotosOpen(true)} />)
+        layout.sections.map((spec) => (
+          <BoundWidget
+            key={spec.id}
+            spec={spec}
+            window={window}
+            onDrill={setDrill}
+            onOpenPhotos={() => setPhotosOpen(true)}
+          />
+        ))
       )}
       <PhotosRow onOpen={() => setPhotosOpen(true)} />
       <TalkRow onCoach={onCoach} />

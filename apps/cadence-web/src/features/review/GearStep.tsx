@@ -39,7 +39,9 @@ export function GearStep({ equipment, setEquip }: Props) {
   return (
     <div className="wiz-list">
       <div className="screen-sub">
-        {"What you're working with — a barbell, a journal, running shoes. Remove anything that's gone, add what's missing."}
+        {
+          "What you're working with — a barbell, a journal, running shoes. Remove anything that's gone, add what's missing."
+        }
       </div>
       {equipment.length === 0 && <div className="wiz-empty">No tools noted yet.</div>}
       {equipment.length > 0 && (
@@ -76,7 +78,9 @@ export function GearStep({ equipment, setEquip }: Props) {
         </button>
       </div>
       <div className="se-note">
-        {'You don’t file these under anything — that’s my job. “Kettlebell” and “the park pull-up bar” both just go on the list.'}
+        {
+          'You don’t file these under anything — that’s my job. “Kettlebell” and “the park pull-up bar” both just go on the list.'
+        }
       </div>
     </div>
   );

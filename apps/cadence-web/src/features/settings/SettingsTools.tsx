@@ -74,7 +74,9 @@ export function SettingsTools({ onBack }: { onBack: () => void; onCoach?: (note:
       <div className="fh-body">
         <div className="se-kicker">Tools · yours to edit</div>
         <div className="se-intro">
-          {"Workout equipment, books, kitchen appliances — list the tools that drive your success. Remove anything that's gone."}
+          {
+            "Workout equipment, books, kitchen appliances — list the tools that drive your success. Remove anything that's gone."
+          }
         </div>
 
         <div className="se-card">
@@ -125,7 +127,9 @@ export function SettingsTools({ onBack }: { onBack: () => void; onCoach?: (note:
         <GymPhotoCard />
 
         <div className="se-footer">
-          {"You don't file these under anything — that's my job. \"Kettlebell\" and \"the park pull-up bar\" both just go on the list."}
+          {
+            'You don\'t file these under anything — that\'s my job. "Kettlebell" and "the park pull-up bar" both just go on the list.'
+          }
         </div>
       </div>
     </div>

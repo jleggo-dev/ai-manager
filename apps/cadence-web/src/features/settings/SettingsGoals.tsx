@@ -152,7 +152,12 @@ export function SettingsGoals({ onBack, onCoach }: { onBack: () => void; onCoach
       </div>
 
       {retiring && (
-        <RetireConfirm goal={retiring} busy={busy} onKeep={() => setRetiring(null)} onRetire={() => void doRetire(retiring)} />
+        <RetireConfirm
+          goal={retiring}
+          busy={busy}
+          onKeep={() => setRetiring(null)}
+          onRetire={() => void doRetire(retiring)}
+        />
       )}
     </div>
   );
@@ -239,11 +244,16 @@ function RetireConfirm({
 }) {
   return (
     <div className="se-confirm-scrim" onClick={busy ? undefined : onKeep}>
-      <div className="se-confirm-card" role="dialog" aria-label={`Retire ${g.title}`} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="se-confirm-card"
+        role="dialog"
+        aria-label={`Retire ${g.title}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="se-confirm-t">Retire &quot;{g.title}&quot;?</div>
         <div className="se-confirm-body">
-          It stops shaping your weeks from Monday. Everything it built stays in Progress. If you change your mind,
-          tell Cadence and she&apos;ll bring it back.
+          It stops shaping your weeks from Monday. Everything it built stays in Progress. If you change your mind, tell
+          Cadence and she&apos;ll bring it back.
         </div>
         <div className="se-confirm-actions">
           <button className="se-keep-btn" disabled={busy} onClick={onKeep}>

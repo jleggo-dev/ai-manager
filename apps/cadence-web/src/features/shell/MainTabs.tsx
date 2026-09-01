@@ -119,7 +119,6 @@ export function MainTabs({
    */
   const [food, setFood] = useState<null | 'home' | 'shop'>(null);
 
-
   return (
     <>
       <div className="app">

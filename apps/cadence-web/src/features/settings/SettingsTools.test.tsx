@@ -66,7 +66,7 @@ describe('SettingsTools', () => {
     expect(onBack).toHaveBeenCalled();
   });
 
-  it("outside a detour, the gym photo card says so honestly instead of blaming the photo", async () => {
+  it('outside a detour, the gym photo card says so honestly instead of blaming the photo', async () => {
     api.getReview.mockResolvedValueOnce({ equipment: [] });
     api.sendGymPhotos.mockResolvedValueOnce({ ok: false });
     render(<SettingsTools onBack={() => {}} />);

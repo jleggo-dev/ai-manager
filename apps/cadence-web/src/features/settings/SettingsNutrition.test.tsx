@@ -2,7 +2,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({
-  getDietaryProfile: vi.fn(async () => ({ status: 'ok', profile: { allergies: [] as string[], diet: null, dislikes: [] as string[], notes: null } })),
+  getDietaryProfile: vi.fn(async () => ({
+    status: 'ok',
+    profile: { allergies: [] as string[], diet: null, dislikes: [] as string[], notes: null },
+  })),
   saveDietaryProfile: vi.fn(),
   setMacroTargets: vi.fn(async () => ({})),
 }));
@@ -108,11 +111,13 @@ describe('SettingsNutrition — allergies & preferences', () => {
     render(<SettingsNutrition onBack={() => {}} />);
 
     fireEvent.click(await screen.findByLabelText('Remove peanuts'));
-    await waitFor(() => expect(api.saveDietaryProfile).toHaveBeenCalledWith({
-      allergies: [],
-      diet: null,
-      dislikes: [],
-      notes: null,
-    }));
+    await waitFor(() =>
+      expect(api.saveDietaryProfile).toHaveBeenCalledWith({
+        allergies: [],
+        diet: null,
+        dislikes: [],
+        notes: null,
+      }),
+    );
   });
 });
