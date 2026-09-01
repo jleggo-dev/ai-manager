@@ -38,6 +38,7 @@ function actRow(over: Partial<ActivityVersionRow> = {}): ActivityVersionRow {
     plan_id: 'plan-active',
     plan_version: 3,
     plan_status: 'active',
+    kind: 'user',
     ...over,
   };
 }
@@ -181,5 +182,58 @@ describe('listRoutines', () => {
     listUserActivityVersions.mockResolvedValue([actRow({ commitment_id: 'c1', goal_id: null })]);
     const routines = await listRoutines(USER);
     expect(routines[0]?.area).toBeUndefined();
+  });
+
+  /**
+   * 2026-09-01 fix: `kind` (like `category`) can change between plan versions — real dev data has
+   * commitment "Log breakfast" as `user` in a superseded v1 and `system` in the active v2. The
+   * lineage's CURRENT identity must decide, never an older version's — in EITHER direction.
+   */
+  describe('a lineage whose kind changes between plan versions', () => {
+    it('is NOT emitted when the LATEST version is system-kind, even though an older version was user-kind', async () => {
+      listUserActivityVersions.mockResolvedValue([
+        actRow({
+          commitment_id: 'c1',
+          title: 'Log breakfast',
+          plan_version: 1,
+          plan_status: 'superseded',
+          kind: 'user',
+        }),
+        actRow({ commitment_id: 'c1', title: 'Log breakfast', plan_version: 2, plan_status: 'active', kind: 'system' }),
+      ]);
+      listLineageFinishCounts.mockResolvedValue([{ commitment_id: 'c1', finishes: 40, last_done: '2026-08-31' }]);
+      const routines = await listRoutines(USER);
+      // A high finish count must not smuggle a capture task into the ranking — it simply isn't a
+      // routine, however many times it accrued as one under an earlier version's kind.
+      expect(routines).toEqual([]);
+    });
+
+    it('IS emitted with on_plan: true, its current schedule, and v1-era finishes counted, when the LATEST version is user-kind', async () => {
+      listUserActivityVersions.mockResolvedValue([
+        actRow({
+          commitment_id: 'c1',
+          title: 'Piano practice',
+          plan_version: 1,
+          plan_status: 'superseded',
+          kind: 'system',
+        }),
+        actRow({
+          commitment_id: 'c1',
+          title: 'Piano practice',
+          plan_version: 2,
+          plan_status: 'active',
+          kind: 'user',
+          schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU,TH', duration_min: 25 },
+        }),
+      ]);
+      // Finishes accrued while an EARLIER version was system-kind still belong to the lineage.
+      listLineageFinishCounts.mockResolvedValue([{ commitment_id: 'c1', finishes: 3, last_done: '2026-08-20' }]);
+      const routines = await listRoutines(USER);
+      expect(routines).toHaveLength(1);
+      expect(routines[0]?.on_plan).toBe(true);
+      expect(routines[0]?.cadence).toBeTruthy();
+      expect(routines[0]?.duration_min).toBe(25);
+      expect(routines[0]?.finishes).toBe(3);
+    });
   });
 });

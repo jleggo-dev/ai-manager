@@ -3,8 +3,9 @@ import { requireCadenceUser } from '../auth/middleware.ts';
 import { listRoutines, parseAreaParam } from '../services/routines.ts';
 
 /**
- * GET /plan/routines — the user's coach-built routines: user-kind plan activities grouped by
- * `commitment_id` LINEAGE across every plan version, the read side of Activity Builder A3 ("the
+ * GET /plan/routines — the user's coach-built routines: plan activities grouped by
+ * `commitment_id` LINEAGE across every plan version (a lineage counts only when its LATEST
+ * version is `kind = 'user'` — see services/routines.ts), the read side of Activity Builder A3 ("the
  * coach's sessions as the template library" — design-request-v2/activity-builder.txt, §"2A ·
  * Build — start from"). Its own file rather than another handler on `plan.ts`: plan.ts is already
  * close to the size gate, and this is a distinct read shape (grouped by lineage across every plan
