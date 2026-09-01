@@ -5,11 +5,7 @@
     "api": {
       "root": ".",
       "framework": "express",
-      "installCommand": "npm install --prefix ../.."
-    }
-  },
-  "functions": {
-    "src/index.ts": {
+      "installCommand": "npm install --prefix ../..",
       "maxDuration": 800
     }
   },
