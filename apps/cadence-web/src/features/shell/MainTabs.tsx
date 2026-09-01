@@ -326,6 +326,12 @@ export function MainTabs({
               setTab('plan');
               setFood('log');
             }}
+            // Screen 2's "Tell me instead" (Activity Builder 2A) — the same visible bridge
+            // PlanView's `onSteerCoach` rides: a real user bubble, not a whispered note.
+            onSteer={(steer) => {
+              setTab('coach');
+              setAutoSend({ text: steer, key: Date.now() });
+            }}
           />
         )}
       </div>

@@ -19,12 +19,16 @@ vi.mock('../../../lib/query/index.ts', () => ({
 const logAdhoc = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
 const logWater = vi.fn(async (..._a: unknown[]) => 750);
 const getProgressPhotosStatus = vi.fn(async (..._a: unknown[]) => ({ enabled: false, count: 0, next_due: null }));
+// Screen 2 (QuickAddTense) fetches the now-menu on mount too — empty by default so "Take me on
+// one" never renders here; its own filtering/rendering is QuickAddTense.test.tsx's job.
+const getNowMenu = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 vi.mock('../../../lib/api.ts', () => ({
   logAdhoc: (...a: unknown[]) => logAdhoc(...a),
   logWater: (...a: unknown[]) => logWater(...a),
   recordWeighInToday: vi.fn(async () => ({ weight_kg: 88 })),
   getUnits: vi.fn(async () => null),
   getProgressPhotosStatus: (...a: unknown[]) => getProgressPhotosStatus(...a),
+  getNowMenu: (...a: unknown[]) => getNowMenu(...a),
 }));
 vi.mock('../DoNowSection.tsx', () => ({ DoNowSection: () => null }));
 
@@ -50,7 +54,12 @@ const basePlan = (activities: unknown[] = []) => ({
 
 function mount(
   state: { plan?: unknown; planError?: Error | null; day?: unknown },
-  props: Partial<{ onClose: () => void; onLogged: () => void; onOpenFood: () => void }> = {},
+  props: Partial<{
+    onClose: () => void;
+    onLogged: () => void;
+    onOpenFood: () => void;
+    onSteer: (text: string) => void;
+  }> = {},
 ) {
   usePlan.mockReturnValue({ data: state.plan, error: state.planError ?? null });
   useNutritionDay.mockReturnValue({ data: state.day });
@@ -68,14 +77,30 @@ afterEach(() => {
 });
 
 describe('QuickAddSheet', () => {
-  it('never lists the plan’s own activities — the trail owns their buttons', async () => {
-    mount({ plan: basePlan([activity()]), day: null });
+  it('never shows a movement activity’s own title — it would read as a second, different button', async () => {
+    // A lone "Easy run" is a task NAME that already sits on the trail with its own button
+    // (code review, 2026-09-01): the quick-add row must wear the TYPE of the thing instead, and
+    // the literal title must not appear anywhere in the sheet.
+    mount({ plan: basePlan([activity({ title: 'Easy run' })]), day: null });
+    expect(screen.getByLabelText('A run')).toBeTruthy();
     expect(screen.queryByText('Easy run')).toBeNull();
-    expect(screen.getByText('Add a workout')).toBeTruthy();
     await settled();
   });
 
-  it('derives rows from what’s tracked: water, meal, practice-with-goal', async () => {
+  it('never turns two movement activities into two rows — one area, one generic noun', async () => {
+    // Two distinct titles (mapping to two distinct TYPES) in the same area: nothing to single
+    // out, so the row wears the area's own floor rather than either activity's name.
+    mount({
+      plan: basePlan([activity({ title: 'Easy run' }), activity({ activity_id: 'a2', title: 'Strength' })]),
+      day: null,
+    });
+    expect(screen.queryByText('Easy run')).toBeNull();
+    expect(screen.queryByText('Strength')).toBeNull();
+    expect(screen.getByText('A workout')).toBeTruthy();
+    await settled();
+  });
+
+  it('derives rows from what’s tracked: water, meal, a noun named after the practice activity', async () => {
     mount(
       {
         plan: basePlan([activity({ area: 'practice', title: 'Piano practice', goal_title: 'Learn piano' })]),
@@ -86,7 +111,8 @@ describe('QuickAddSheet', () => {
     expect(screen.getByText('A glass of water')).toBeTruthy();
     expect(screen.getByText('0.5 L today')).toBeTruthy();
     expect(screen.getByText('Log a meal')).toBeTruthy();
-    expect(screen.getByText('Add a practice')).toBeTruthy();
+    // "Piano practice" strips its generic suffix — the row is named after the thing, not the verb.
+    expect(screen.getByText('Piano')).toBeTruthy();
     expect(screen.getByText('toward Learn piano')).toBeTruthy();
     await settled();
   });
@@ -97,16 +123,64 @@ describe('QuickAddSheet', () => {
     await waitFor(() => expect(logWater).toHaveBeenCalledWith(250));
   });
 
-  it('an area add expands to a line of text and logs off-plan, tagged with its area', async () => {
+  it('tapping a noun row opens screen 2 — it never logs anything by itself', async () => {
+    mount({ plan: basePlan([activity()]), day: null });
+    fireEvent.click(screen.getByLabelText('A run'));
+    expect(screen.getByText('I went for one')).toBeTruthy();
+    expect(logAdhoc).not.toHaveBeenCalled();
+    await settled();
+  });
+
+  it('screen 2’s back affordance returns to the noun list', async () => {
+    mount({ plan: basePlan([activity()]), day: null });
+    fireEvent.click(screen.getByLabelText('A run'));
+    fireEvent.click(screen.getByLabelText('Back'));
+    expect(screen.getByLabelText('A run')).toBeTruthy();
+    await settled();
+  });
+
+  it('a duration chip on screen 2 composes the log text, then closes the sheet and tells the host', async () => {
     const onLogged = vi.fn();
     const onClose = vi.fn();
     mount({ plan: basePlan([activity()]), day: null }, { onLogged, onClose });
-    fireEvent.click(screen.getByLabelText('Add a workout'));
-    fireEvent.change(screen.getByPlaceholderText(/What did you do/), { target: { value: 'hotel gym, 30 min' } });
-    fireEvent.click(screen.getByText('Add it'));
-    await waitFor(() => expect(logAdhoc).toHaveBeenCalledWith('hotel gym, 30 min', undefined, 'movement'));
+    fireEvent.click(screen.getByLabelText('A run'));
+    fireEvent.click(screen.getByText('30 min'));
+    await waitFor(() => expect(logAdhoc).toHaveBeenCalledWith('Run — 30 min', undefined, 'movement'));
     expect(onLogged).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('screen 2’s free-typed line still logs off-plan, tagged with its area', async () => {
+    const onLogged = vi.fn();
+    mount({ plan: basePlan([activity()]), day: null }, { onLogged });
+    fireEvent.click(screen.getByLabelText('A run'));
+    fireEvent.change(screen.getByPlaceholderText(/ran 5k/), { target: { value: 'hotel gym, 30 min' } });
+    fireEvent.click(screen.getByText('Log'));
+    await waitFor(() => expect(logAdhoc).toHaveBeenCalledWith('hotel gym, 30 min', undefined, 'movement'));
+    expect(onLogged).toHaveBeenCalled();
+  });
+
+  it('"Tell me instead" hands the coach a seed and closes the sheet, when the host wired a door', async () => {
+    const onSteer = vi.fn();
+    const onClose = vi.fn();
+    mount(
+      {
+        plan: basePlan([activity({ area: 'practice', title: 'Piano practice', goal_title: 'Learn piano' })]),
+        day: null,
+      },
+      { onSteer, onClose },
+    );
+    fireEvent.click(screen.getByLabelText('Piano'));
+    fireEvent.click(screen.getByLabelText('Tell me instead'));
+    expect(onSteer).toHaveBeenCalledWith('I want to log some piano time');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('hides "Tell me instead" on screen 2 when the host has no door for it', async () => {
+    mount({ plan: basePlan([activity()]), day: null });
+    fireEvent.click(screen.getByLabelText('A run'));
+    expect(screen.queryByLabelText('Tell me instead')).toBeNull();
+    await settled();
   });
 
   it('the meal row is a door to the food module, and only exists when the host has one', async () => {

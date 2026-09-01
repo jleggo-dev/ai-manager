@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { displayWeightUnit } from '@cadence/shared';
-import { getUnits, logAdhoc, logWater, recordWeighInToday } from '../../../lib/api.ts';
+import { getUnits, logWater, recordWeighInToday } from '../../../lib/api.ts';
 import { useInvalidateNutritionDay, useUploadProgressPhoto } from '../../../lib/query/index.ts';
 import { GLYPH } from '../../today/glyphs.ts';
 import { GLASS_ML } from '../../nutrition/WaterRow.tsx';
@@ -8,10 +8,11 @@ import { downscalePhoto } from '../occurrence/format.ts';
 import type { QuickAddArea } from './quickAddRows.ts';
 
 /**
- * The quick-add sheet's rows — one component per kind of capture, all wearing the sheet's own
- * `.ld-row` chrome. Which rows exist at all is quickAddRows.ts's decision; these only know how
- * to take the thing once offered: a pour is one tap, a weight is a number, an off-plan add is a
- * line of text, a photo is the camera. Nothing here ticks a plan task — the trail owns those.
+ * The quick-add sheet's screen-1 rows — one component per kind of capture, all wearing the
+ * sheet's own `.ld-row` chrome. Which rows exist at all is quickAddRows.ts's decision; these only
+ * know how to take the thing once offered: a pour is one tap, a weight is a number, a movement or
+ * practice noun hands off to screen 2 (QuickAddTense.tsx), a photo is the camera. Nothing here
+ * ticks a plan task — the trail owns those.
  */
 
 function RowIcon({ cat, d }: { cat: string; d: string }) {
@@ -150,79 +151,40 @@ export function WeightQuickRow({ open, onToggle }: { open: boolean; onToggle: ()
   );
 }
 
-const AREA_COPY: Record<QuickAddArea, { label: string; placeholder: string; glyph: string }> = {
-  movement: { label: 'Add a workout', placeholder: 'What did you do? — "ran 5k, felt easy"', glyph: GLYPH.dumbbell },
-  practice: { label: 'Add a practice', placeholder: 'What did you practice?', glyph: GLYPH.note },
-};
+const AREA_GLYPH: Record<QuickAddArea, string> = { movement: GLYPH.dumbbell, practice: GLYPH.note };
 
 /**
- * An off-plan add for an area the plan shows they work in. Deliberately NOT a tap on a plan
- * activity: it lands in that area's own off-plan bucket (lib/api logAdhoc `area`), so it counts
+ * Screen 1's noun row for an area the plan shows they work in (Activity Builder 2A) — "Piano", not
+ * "Add a practice": `noun` is `quickAddRows.ts`'s derivation, this component only wears it. A tap
+ * doesn't log anything itself; it hands off to screen 2 ("the tense" — `onSelect`), which is where
+ * past/present actually happen. Deliberately NOT a tap on a plan activity: whatever gets logged
+ * from screen 2 lands in that area's own off-plan bucket (lib/api `logAdhoc` `area`), so it counts
  * toward consistency + the streak without touching anything the trail already has a button for.
  */
 export function AreaQuickRow({
   area,
+  noun,
   toward,
-  open,
-  onToggle,
-  onLogged,
+  onSelect,
 }: {
   area: QuickAddArea;
+  noun: string;
   toward?: string;
-  open: boolean;
-  onToggle: () => void;
-  onLogged: () => void;
+  onSelect: () => void;
 }) {
-  const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState('');
-  const copy = AREA_COPY[area];
-
-  async function log() {
-    const t = text.trim();
-    if (!t || busy) return;
-    setBusy(true);
-    setNote('');
-    const { ok } = await logAdhoc(t, undefined, area);
-    setBusy(false);
-    if (ok) onLogged();
-    else setNote("That didn't save — try again in a moment.");
-  }
-
   return (
-    <>
-      <button className="ld-row" onClick={onToggle} aria-label={copy.label} aria-expanded={open}>
-        <RowIcon cat={area} d={copy.glyph} />
-        <span className="ld-row-t">
-          <b>{copy.label}</b>
-          <span>{toward ? `toward ${toward}` : 'counts toward your week'}</span>
-        </span>
-        <span className="ld-plus" aria-hidden>
-          ＋
-        </span>
-      </button>
-      {open && (
-        <>
-          <div className="ld-free" style={{ marginTop: 0 }}>
-            <input
-              className="ld-input"
-              autoFocus
-              placeholder={copy.placeholder}
-              value={text}
-              disabled={busy}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void log();
-              }}
-            />
-            <button className="ld-log" disabled={busy || !text.trim()} onClick={() => void log()}>
-              Add it
-            </button>
-          </div>
-          {note && <div className="ld-empty">{note}</div>}
-        </>
-      )}
-    </>
+    <button className="ld-row" onClick={onSelect} aria-label={noun}>
+      <RowIcon cat={area} d={AREA_GLYPH[area]} />
+      <span className="ld-row-t">
+        <b>{noun}</b>
+        <span>{toward ? `toward ${toward}` : 'counts toward your week'}</span>
+      </span>
+      {/* A chevron, not the plus every other row wears — this tap opens a screen, it doesn't log
+          anything by itself. */}
+      <span className="ld-plus" aria-hidden>
+        ›
+      </span>
+    </button>
   );
 }
 
