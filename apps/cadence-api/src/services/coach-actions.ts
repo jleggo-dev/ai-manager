@@ -21,6 +21,7 @@ import { EXTEND_HORIZON } from './coach-action-extend-horizon.ts';
 import { LOG_MEAL } from './coach-action-log-meal.ts';
 import { PROPOSE_PROGRESS_LAYOUT } from './coach-action-progress-layout.ts';
 import { UPDATE_REPERTOIRE } from './coach-action-repertoire.ts';
+import { REVISE_SESSION } from './coach-action-revise-session.ts';
 
 /** Today, YYYY-MM-DD — stamped on a target change so the weekly review throttle can see it. */
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -519,6 +520,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
 
   open_week_review: OPEN_WEEK_REVIEW,
   build_next_week: BUILD_NEXT_WEEK,
+  // Tail tier (the drawer), not ALWAYS_ACTIONS — new tools default to the tail plus a hook
+  // (owner ruling 2026-08-30, coach-tool-tiers.ts); promotion needs its own ruling and an
+  // eval:tools run. Rung 1 of PLAN-CHANGES.md: rebuild ONE session's contents from their words.
+  revise_session: REVISE_SESSION,
   // Tail tier (the drawer), not ALWAYS_ACTIONS: extending a week is an occasional, explicit ask
   // — the end-cap's visible send names it in the same words as its DRAWER_HOOKS line.
   extend_horizon: EXTEND_HORIZON,

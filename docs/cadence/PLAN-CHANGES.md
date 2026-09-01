@@ -134,7 +134,17 @@ stage-level events are the honest v1 and land most of the felt difference.
 
 > Status: Phase 0 built 2026-08-31 (five parallel parcels: plan_run machinery + routes, aim-remote
 > transport, detour warming, Adjust-flow client, PlanView/banner/detour client). Migration 0051
-> applied to prod the same day. Phases 1–4 are owed.
+> applied to prod the same day. Merged as #334.
+>
+> Phase 1 built 2026-09-01 (three parcels: diff-output evolve via the new `evolve-plan` job with
+> full-synthesis fallback on every dead end; `revise_session` drawer tool + `user_steer` on
+> prescribe-session; diff-aware commit invalidation with anchor-parity gate and
+> `CADENCE_COMMIT_DIFF=0` kill switch). Jobs synced live. **Measured on the owner's real 4-goal,
+> 16-activity plan via scripts/probe-evolve-plan.ts:** the incident ask ("add chest and abs") =
+> **47s, 1 edit, no fallback** (was 7+ min and failed); a whole-week rebalance steer = **263s,
+> 4 edits, no fallback** (was 271s best-case single run, 2h45m with the retry storms). The
+> remaining rung-3 gap to the 2-minute budget is model deliberation through the relay — the
+> benchmark item below — not output volume. Phases 2–4 owed.
 
 - **Phase 0 — delivery correctness (nothing may silently die):** explicit timeout in `aim.ts`
   sized above the job layer's worst case; synthesis runs move behind a durable `plan_run` record

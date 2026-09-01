@@ -20,14 +20,19 @@ vi.mock('../repos/occurrences.ts', () => ({
   listOccurrences: vi.fn().mockResolvedValue([]),
   listRecentLogsByTitle: vi.fn().mockResolvedValue([]),
   getAnchorSessionByTitle: vi.fn().mockResolvedValue(null),
-  setOccurrenceSessionIfEmpty: vi.fn().mockResolvedValue(true),
   setOccurrenceWeatherIfEmpty: vi.fn().mockResolvedValue(true),
+}));
+vi.mock('../repos/occurrence-sessions.ts', () => ({
+  clearOccurrenceSession: vi.fn().mockResolvedValue(true),
+  setOccurrenceSessionIfEmpty: vi.fn().mockResolvedValue(true),
 }));
 
 import { runJobBySlug } from '../ai/aim.ts';
-import { getOccurrenceWithActivity } from '../repos/occurrences.ts';
+import { listGoalsByStatus } from '../repos/goals.ts';
+import { getOccurrenceWithActivity, listRecentLogsByTitle } from '../repos/occurrences.ts';
+import { clearOccurrenceSession, setOccurrenceSessionIfEmpty } from '../repos/occurrence-sessions.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
-import { getOccurrenceDetail, prefetchImminentSessions } from './session-generate.ts';
+import { getOccurrenceDetail, prefetchImminentSessions, reviseSession } from './session-generate.ts';
 
 const GOOD = JSON.stringify({
   blocks: [{ label: 'Practice', items: [{ name: 'Settle', tool: 'breathing', breath_pattern: 'box' }] }],
@@ -201,5 +206,164 @@ describe('prefetchImminentSessions', () => {
 
     await expect(prefetchImminentSessions('u1')).resolves.toBeUndefined();
     expect(runJobBySlug).toHaveBeenCalledTimes(5);
+  });
+});
+
+/**
+ * Rung 1 of the plan-change ladder (docs/cadence/PLAN-CHANGES.md): "add chest and abs to today's
+ * workout" is one prescription with the user's words as steer, never a plan re-synthesis. The
+ * contract under test: clear BEFORE generate (the write is compare-and-set on empty), the steer
+ * reaches the job, the single-flight map is shared with first-open generation, and the same gates
+ * hold (user-kind, still pending, today or later).
+ */
+describe('reviseSession', () => {
+  beforeEach(() => {
+    // Counts accumulate across tests (no clearMocks in config) — start each test from zero.
+    vi.mocked(clearOccurrenceSession).mockClear().mockResolvedValue(true);
+    vi.mocked(setOccurrenceSessionIfEmpty).mockClear().mockResolvedValue(true);
+  });
+
+  it('clears the stored session BEFORE generating — the write only lands into empty', async () => {
+    const order: string[] = [];
+    vi.mocked(clearOccurrenceSession).mockImplementation((async () => {
+      order.push('clear');
+      return true;
+    }) as never);
+    vi.mocked(runJobBySlug).mockImplementation((async () => {
+      order.push('generate');
+      return { raw: GOOD };
+    }) as never);
+
+    const result = await reviseSession('u1', 'o1', 'add chest and abs');
+    expect(order).toEqual(['clear', 'generate']);
+    expect(result.status).toBe('revised');
+    expect(setOccurrenceSessionIfEmpty).toHaveBeenCalledWith('u1', 'o1', expect.objectContaining({ note: 'ok' }));
+  });
+
+  it('hands the steer to the job, in their words', async () => {
+    vi.mocked(runJobBySlug).mockResolvedValue({ raw: GOOD } as never);
+    await reviseSession('u1', 'o1', '  add chest and abs  ');
+    expect(runJobBySlug).toHaveBeenCalledWith(
+      'u1',
+      'prescribe-session',
+      expect.objectContaining({ user_steer: 'add chest and abs' }),
+    );
+  });
+
+  it('leaves every existing caller unsteered — a first-open generation sends an empty steer', async () => {
+    vi.mocked(runJobBySlug).mockResolvedValue({ raw: GOOD } as never);
+    await getOccurrenceDetail('u1', 'o1');
+    expect(runJobBySlug).toHaveBeenCalledWith('u1', 'prescribe-session', expect.objectContaining({ user_steer: '' }));
+  });
+
+  it('goes to the coach call even for a goal in template mode — arithmetic cannot hear the steer', async () => {
+    vi.mocked(listGoalsByStatus).mockResolvedValueOnce([
+      { goal_id: 'g1', plan_mode: 'deterministic', title: 'Get strong', area: 'movement' },
+    ] as never);
+    vi.mocked(listRecentLogsByTitle).mockResolvedValueOnce([
+      { date: '2026-08-20', log: { summary: 'done', items: [] } },
+    ] as never);
+    vi.mocked(getOccurrenceWithActivity).mockResolvedValue({
+      ...pendingOccurrence(),
+      goal_id: 'g1',
+      target: { scheme: 'linear' },
+    } as never);
+    vi.mocked(runJobBySlug).mockResolvedValue({ raw: GOOD } as never);
+
+    const result = await reviseSession('u1', 'o1', 'add chest and abs');
+    expect(result.status).toBe('revised');
+    expect(runJobBySlug).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares the single-flight map — a tap racing the revise joins the steered generation', async () => {
+    let release: (v: { raw: string }) => void = () => {};
+    vi.mocked(runJobBySlug).mockReturnValue(new Promise((r) => (release = r)) as never);
+
+    const revising = reviseSession('u1', 'o1', 'add chest and abs');
+    await vi.waitFor(() => expect(runJobBySlug).toHaveBeenCalledTimes(1));
+    const tapped = getOccurrenceDetail('u1', 'o1');
+
+    release({ raw: GOOD });
+    const [revised, detail] = await Promise.all([revising, tapped]);
+    expect(runJobBySlug).toHaveBeenCalledTimes(1); // one coach call, both callers served
+    expect(revised.status).toBe('revised');
+    expect(detail?.session?.note).toBe('ok');
+  });
+
+  it('waits out a generation already in flight instead of clearing under it', async () => {
+    const order: string[] = [];
+    let release: (v: { raw: string }) => void = () => {};
+    vi.mocked(runJobBySlug)
+      .mockReturnValueOnce(
+        new Promise((r) => {
+          release = (v) => {
+            order.push('first-generation-landed');
+            r(v);
+          };
+        }) as never,
+      )
+      .mockImplementationOnce((async () => {
+        order.push('steered-generation');
+        return { raw: GOOD };
+      }) as never);
+    vi.mocked(clearOccurrenceSession).mockImplementation((async () => {
+      order.push('clear');
+      return true;
+    }) as never);
+
+    const opening = getOccurrenceDetail('u1', 'o1'); // a first-open generation, mid-flight
+    await vi.waitFor(() => expect(runJobBySlug).toHaveBeenCalledTimes(1));
+    const revising = reviseSession('u1', 'o1', 'add chest and abs');
+
+    release({ raw: GOOD });
+    await Promise.all([opening, revising]);
+    expect(order).toEqual(['first-generation-landed', 'clear', 'steered-generation']);
+  });
+
+  it('enforces the same gates as first-open generation, spending nothing on refused rows', async () => {
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const cases = [
+      { occ: null, status: 'not_found' },
+      { occ: { ...pendingOccurrence(), kind: 'system' }, status: 'not_revisable', reason: 'system_row' },
+      { occ: { ...pendingOccurrence(), status: 'done' }, status: 'not_revisable', reason: 'not_pending' },
+      { occ: { ...pendingOccurrence(), date: yesterday }, status: 'not_revisable', reason: 'past' },
+    ] as const;
+    for (const c of cases) {
+      vi.mocked(getOccurrenceWithActivity).mockResolvedValueOnce(c.occ as never);
+      const result = await reviseSession('u1', 'o1', 'add chest and abs');
+      expect(result.status).toBe(c.status);
+      if ('reason' in c && result.status === 'not_revisable') expect(result.reason).toBe(c.reason);
+    }
+    expect(clearOccurrenceSession).not.toHaveBeenCalled();
+    expect(runJobBySlug).not.toHaveBeenCalled();
+  });
+
+  it('a clear refused in SQL (logged done under the race) reports, never generates into a wall', async () => {
+    vi.mocked(clearOccurrenceSession).mockResolvedValueOnce(false);
+    vi.mocked(getOccurrenceWithActivity)
+      .mockResolvedValueOnce(pendingOccurrence() as never) // the gate read
+      .mockResolvedValueOnce({ ...pendingOccurrence(), status: 'done' } as never); // the re-read
+    const result = await reviseSession('u1', 'o1', 'add chest and abs');
+    expect(result.status).toBe('not_revisable');
+    expect(runJobBySlug).not.toHaveBeenCalled();
+  });
+
+  it('an unusable rebuild says failed and writes nothing', async () => {
+    vi.mocked(runJobBySlug).mockResolvedValue({ raw: 'not json' } as never);
+    const result = await reviseSession('u1', 'o1', 'add chest and abs');
+    expect(result.status).toBe('failed');
+    expect(setOccurrenceSessionIfEmpty).not.toHaveBeenCalled();
+  });
+
+  it('a lost write race returns what actually landed, one consistent session', async () => {
+    vi.mocked(runJobBySlug).mockResolvedValue({ raw: GOOD } as never);
+    vi.mocked(setOccurrenceSessionIfEmpty).mockResolvedValueOnce(false);
+    const landed = { blocks: [], note: 'what landed', generated_at: 'x', version: 1 };
+    vi.mocked(getOccurrenceWithActivity)
+      .mockResolvedValueOnce(pendingOccurrence() as never)
+      .mockResolvedValueOnce({ ...pendingOccurrence(), session: landed } as never);
+    const result = await reviseSession('u1', 'o1', 'add chest and abs');
+    expect(result.status).toBe('revised');
+    if (result.status === 'revised') expect(result.session.note).toBe('what landed');
   });
 });

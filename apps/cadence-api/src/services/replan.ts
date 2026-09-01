@@ -9,8 +9,10 @@ import { summarizeNutrition } from './nutrition-summarize.ts';
 import { rollingConsistency } from './metrics.ts';
 import { describeRecurrence } from './scheduling.ts';
 import { observedHealthForPlanning, PLAN_COUNTS_NOTE } from './observed-health.ts';
-import { type CommitResult, type PlanFlowResult } from './plan-synthesis.ts';
+import { commitActivities, type CommitResult, type PlanFlowResult } from './plan-synthesis.ts';
 import { planSynthesize, planSynthesizeVetCommit } from './plan-fanout.ts';
+import { planEvolve } from './plan-evolve.ts';
+import { resolveToggledActivities } from './plan-partial-apply.ts';
 import type { PlanRun } from '../repos/users.ts';
 import { confirmPendingPlan } from './plan-commit-flow.ts';
 import { sendPlanReadyPush } from './plan-ready-push.ts';
@@ -68,12 +70,16 @@ interface ReplanInputs {
   goals: Goal[];
   baseline: unknown;
   equipment: unknown[];
-  currentPlan: unknown;
+  /** One entry per active-plan activity; empty when there is no active plan. Its length is what
+   *  routes a re-plan to the diff path (planEvolve) vs genesis synthesis (planSynthesize). */
+  currentPlan: unknown[];
   recentActivity: unknown;
 }
 
-/** Shared input-gathering for both replanPlan and previewReplan — null when there's nothing to re-plan. */
-async function gatherReplanInputs(userId: string): Promise<ReplanInputs | null> {
+/** Shared input-gathering for both replanPlan and previewReplan — null when there's nothing to
+ *  re-plan. Exported for scripts/probe-evolve-plan.ts, which probes the evolve job with a real
+ *  plan without writing pending_plan or pinging anyone. */
+export async function gatherReplanInputs(userId: string): Promise<ReplanInputs | null> {
   const goals = await listGoalsByStatus(userId, ['committed', 'confirmed']);
   if (goals.length === 0) return null;
 
@@ -119,18 +125,48 @@ export async function replanPlan(
   // `steer` lets a caller frame the synthesis (e.g. the Req 4 re-baseline: reassess from scratch
   // after a long break). Undefined for a plain adaptive re-plan.
   onStage?.('drafting');
-  const result = await planSynthesizeVetCommit(userId, {
-    ...inputs,
-    userSteer: steer,
-    goalIds: inputs.goals.map((g) => g.goal_id),
-    // 'saving' fires between synthesis succeeding and the commit landing — the last stage the
-    // client sees before the record clears and the new plan version answers for itself.
-    onSaving: onStage ? () => onStage('saving') : undefined,
-  });
+  // A current plan takes the diff path — planEvolve returns edits applied in code instead of a
+  // re-emitted week (PLAN-CHANGES.md Phase 1) — then commits through the same commitActivities.
+  // With nothing to evolve, genesis synthesis runs exactly as before.
+  const result = inputs.currentPlan.length
+    ? await evolveAndCommit(userId, inputs, steer, onStage)
+    : await planSynthesizeVetCommit(userId, {
+        ...inputs,
+        userSteer: steer,
+        goalIds: inputs.goals.map((g) => g.goal_id),
+        // 'saving' fires between synthesis succeeding and the commit landing — the last stage the
+        // client sees before the record clears and the new plan version answers for itself.
+        onSaving: onStage ? () => onStage('saving') : undefined,
+      });
   // Whatever prompted this re-plan (the manual button, or accepting a coach's proposal) is
   // resolved now — clear any pending proposal so a stale banner can't linger.
   if (result.status === 'committed') await setPendingProposal(userId, null);
   return result;
+}
+
+/**
+ * The evolve half of replanPlan: planEvolve → commit, mirroring planSynthesizeVetCommit's spine
+ * (plan-fanout.ts) with the diff-output path in the synthesis seat.
+ */
+async function evolveAndCommit(
+  userId: string,
+  inputs: ReplanInputs,
+  steer: string | undefined,
+  onStage?: (stage: NonNullable<PlanRun['stage']>) => void,
+): Promise<CommitResult> {
+  const s = await planEvolve(userId, { ...inputs, userSteer: steer });
+  if (s.status === 'vetoed') return { status: 'vetoed', violations: s.violations };
+  onStage?.('saving');
+  // An edit the model marked take-it-or-leave-it (enabled false) has no toggle moment in this
+  // one-shot flow — resolve it the way the preview funnel does (plan-partial-apply.ts): keep the
+  // committed version, or drop a declined add, rather than committing an offer nobody accepted.
+  const activities = await resolveToggledActivities(userId, s.activities!);
+  return commitActivities(userId, {
+    activities,
+    note: s.note ?? '',
+    rationale: s.rationale,
+    goalIds: inputs.goals.map((g) => g.goal_id),
+  });
 }
 
 /**
@@ -160,7 +196,10 @@ export async function previewReplan(
   // steer = the user's own requested change in their own words ("one run day isn't enough").
   // Only flows through the preview; confirm commits the previewed pending_plan that embodies it.
   onStage?.('drafting');
-  const s = await planSynthesize(userId, { ...inputs, userSteer: steer });
+  // A current plan takes the diff path (planEvolve — PLAN-CHANGES.md Phase 1); with nothing to
+  // diff against, genesis synthesis runs. Same result contract either way.
+  const synthesize = inputs.currentPlan.length ? planEvolve : planSynthesize;
+  const s = await synthesize(userId, { ...inputs, userSteer: steer });
   if (s.status === 'vetoed') return { status: 'vetoed', violations: s.violations };
 
   onStage?.('saving');
