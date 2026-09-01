@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import type { OccurrenceStatus, StreakDay } from '@cadence/shared';
 import {
   rollingConsistency,
+  planEngagementCounts,
   type ConsistencyOccurrence,
+  type EngagementOccurrence,
   advanceStreak,
   classifyDay,
   computeStreakView,
@@ -236,5 +238,64 @@ describe('computeStreakView (today is provisional)', () => {
     expect(computeStreakView(rescued, day('2026-07-07')).savedByFreeze).toBe(true);
     expect(computeStreakView(rescued, day('2026-07-09')).savedByFreeze).toBe(false);
     expect(computeStreakView(built, day('2026-07-06')).savedByFreeze).toBe(false); // never rescued
+  });
+});
+
+/**
+ * planEngagementCounts — the ONE derivation behind both the missed-session tripwire
+ * (situation.ts) and the re-plan's recent_activity (replan.ts). Before it was shared, replan
+ * counted `status === 'missed'` literally (nothing ever writes that status, so the counter was
+ * structurally zero) and counted system rows in done/scheduled, so a person who no-showed 12 of 14
+ * sessions reached the planning model as done 2 / missed 0 / scheduled 14.
+ */
+describe('planEngagementCounts', () => {
+  const eng = (date: string, kind: 'user' | 'system', status: OccurrenceStatus): EngagementOccurrence => ({
+    date,
+    kind,
+    status,
+  });
+
+  it('counts a past-due pending USER session as missed', () => {
+    const counts = planEngagementCounts([eng('2026-07-14', 'user', 'pending')], TODAY);
+    expect(counts.missed).toBe(1);
+    expect(counts.scheduled).toBe(1);
+  });
+
+  it('never counts a past-due pending SYSTEM row as missed — an untapped meal card is not a no-show', () => {
+    const mealCards = ['2026-07-12', '2026-07-13', '2026-07-14'].map((d) => eng(d, 'system', 'pending'));
+    const counts = planEngagementCounts(mealCards, TODAY);
+    expect(counts.missed).toBe(0);
+    // System rows are out of the plan-engagement account entirely: the food signal travels as
+    // food_log, and counting it here inflated `scheduled` for every nutrition user.
+    expect(counts.scheduled).toBe(0);
+  });
+
+  it("today's still-pending session is not a miss yet — it has until the day ends", () => {
+    expect(planEngagementCounts([eng('2026-07-15', 'user', 'pending')], TODAY).missed).toBe(0);
+  });
+
+  it('a detour-shelved (paused) session is not a miss — it was taken off the board on purpose', () => {
+    expect(planEngagementCounts([eng('2026-07-13', 'user', 'paused')], TODAY).missed).toBe(0);
+  });
+
+  it('keeps done and skipped to effortful work, and reads a real slump honestly', () => {
+    const occurrences: EngagementOccurrence[] = [
+      eng('2026-07-13', 'user', 'done'),
+      eng('2026-07-14', 'user', 'skipped'),
+      ...['2026-07-08', '2026-07-09', '2026-07-10', '2026-07-11', '2026-07-12'].map((d) => eng(d, 'user', 'pending')),
+      // The noise that used to drown all of it: four per-meal tasks a day, none tapped.
+      ...['2026-07-08', '2026-07-09', '2026-07-10'].flatMap((d) => [0, 1, 2, 3].map(() => eng(d, 'system', 'pending'))),
+      eng('2026-07-11', 'system', 'done'),
+    ];
+    expect(planEngagementCounts(occurrences, TODAY)).toEqual({ done: 1, skipped: 1, missed: 5, scheduled: 7 });
+  });
+
+  it('normalizes Date-valued rows the driver hands back', () => {
+    const row = {
+      date: new Date(Date.UTC(2026, 6, 14)) as unknown as string,
+      kind: 'user' as const,
+      status: 'pending' as OccurrenceStatus,
+    };
+    expect(planEngagementCounts([row], TODAY).missed).toBe(1);
   });
 });
