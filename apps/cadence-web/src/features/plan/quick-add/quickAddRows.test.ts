@@ -200,7 +200,16 @@ describe('deriveQuickAddRows', () => {
     expect(kinds(deriveQuickAddRows({ plan: null, day: null, photosEnabled: true }))).toEqual(['photo']);
   });
 
-  it('keeps a stable order: water, meal, weight, adds, photo', () => {
+  it('offers "Calming techniques" only when the coach actually composed now-menu items', () => {
+    // Omitted is the same no-claim as `false` — an older/failed fetch never invents the row.
+    expect(kinds(deriveQuickAddRows({ plan: null, day: null, photosEnabled: false }))).toEqual([]);
+    expect(kinds(deriveQuickAddRows({ plan: null, day: null, photosEnabled: false, hasCalming: false }))).toEqual([]);
+    expect(kinds(deriveQuickAddRows({ plan: null, day: null, photosEnabled: false, hasCalming: true }))).toEqual([
+      'calming',
+    ]);
+  });
+
+  it('keeps a stable order: water, meal, weight, adds, calming, photo', () => {
     const rows = deriveQuickAddRows({
       plan: plan({
         activities: [
@@ -211,7 +220,8 @@ describe('deriveQuickAddRows', () => {
       }),
       day: nutrition({ has_recent_water: true, has_recent_food: true }),
       photosEnabled: true,
+      hasCalming: true,
     });
-    expect(kinds(rows)).toEqual(['water', 'meal', 'weight', 'add', 'add', 'photo']);
+    expect(kinds(rows)).toEqual(['water', 'meal', 'weight', 'add', 'add', 'calming', 'photo']);
   });
 });

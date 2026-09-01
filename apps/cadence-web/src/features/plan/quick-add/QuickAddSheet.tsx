@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { getProgressPhotosStatus, logAdhoc } from '../../../lib/api.ts';
+import type { NowMenuItem } from '@cadence/shared';
+import { getNowMenu, getProgressPhotosStatus, logAdhoc } from '../../../lib/api.ts';
 import { useNutritionDay, usePlan } from '../../../lib/query/index.ts';
 import { DoNowSection } from '../DoNowSection.tsx';
 import { SheetRowsSkeleton } from '../SheetSkeletons.tsx';
+import { GLYPH } from '../../today/glyphs.ts';
 import { deriveQuickAddRows, type QuickAddArea } from './quickAddRows.ts';
 import { AreaQuickRow, MealQuickRow, PhotoQuickRow, WaterQuickRow, WeightQuickRow } from './QuickAddRowViews.tsx';
 import { QuickAddPill } from './QuickAddPill.tsx';
@@ -15,20 +17,27 @@ import type { BuilderSeed } from './builderSeed.ts';
 type TenseScreen = { area: QuickAddArea; noun: string; toward?: string };
 
 /**
- * The ＋ sheet: "do something now" (the coach's present-tense menu), then **quick add** — captures
- * derived from what the user already tracks (owner, 2026-09-01), and a free-text line for
- * everything else. It replaced the "log something you did" list of the plan's own activities:
- * those rows duplicated the trail's buttons, and the menu offered nothing for the things people
- * actually reach for a ＋ to do — a glass of water, an extra workout, a weight on an off day.
- * deriveQuickAddRows (quickAddRows.ts) owns which rows exist; the two rules live there.
+ * The ＋ sheet: **quick add** — captures derived from what the user already tracks (owner,
+ * 2026-09-01) — plus a free-text line for everything else. It replaced the "log something you
+ * did" list of the plan's own activities: those rows duplicated the trail's buttons, and the menu
+ * offered nothing for the things people actually reach for a ＋ to do — a glass of water, an extra
+ * workout, a weight on an off day. deriveQuickAddRows (quickAddRows.ts) owns which rows exist.
  *
  * Noun-first (Activity Builder 2A, 2026-09-01): a movement/practice row is the thing itself —
  * "Piano", not "Add a practice" — and tapping it swaps this whole body for `screen`, "the tense"
  * (QuickAddTense.tsx): log it, tell the coach, or take the coach's present-tense menu scoped to
  * that noun. Water, meal, weight and photo stay one-step, unchanged.
  *
+ * The coach's present-tense menu itself (device-test ruling, 2026-09-01) is no longer a top-level
+ * section: it used to mount DoNowSection above "Quick add" and pop the whole layout down once its
+ * own fetch resolved — a squish bug under a thumb mid-tap — and a menu of mind tools nobody
+ * prescribed FOR THIS USER broke the sheet's law regardless of the bug. It's now fetched once here
+ * (`nowItems`, same alive-guard idiom as the photos-status effect) and demoted to one ordinary
+ * row, "Calming techniques", that opens `calmingOpen`'s sub-screen — DoNowSection is purely
+ * presentational now, fed `nowItems` wherever it's shown.
+ *
  * The plan comes from the shared cache (PERF-03) and the nutrition day from its shared query —
- * this sheet adds one light fetch of its own (the photos opt-in), which soft-fails to "off": a
+ * every extra fetch this sheet makes of its own (photos opt-in, now-menu) soft-fails to empty: a
  * blip hides a row, it never invents one.
  */
 export function QuickAddSheet({
@@ -59,10 +68,11 @@ export function QuickAddSheet({
    *  cleared by its back affordance. Replaces the whole sheet body while it's set — the coach's
    *  present-tense menu and the free line belong to screen 1, not the noun's own screen. */
   const [screen, setScreen] = useState<TenseScreen | null>(null);
-  /** Does DoNowSection currently have a pinned "do something now" item? The coach's own pick
-   *  outranks the express-lane pill's usage-stats shortcut (Now Door's promotion hierarchy) — see
-   *  QuickAddPill's `suppressed` prop below. */
-  const [hasPin, setHasPin] = useState(false);
+  /** Screen 1 → the "Calming techniques" sub-screen (device-test ruling, 2026-09-01): set by
+   *  tapping the row below, cleared by its back affordance. A top-level section of mind tools the
+   *  coach didn't prescribe FOR THIS USER broke the sheet's law, so it demoted to one row like
+   *  everything else — the sub-screen is just `nowItems` handed to DoNowSection as its content. */
+  const [calmingOpen, setCalmingOpen] = useState(false);
 
   /**
    * A failed plan read is UNKNOWN, never an empty plan (the 2026-08-19 rule): `usePlan` throws on
@@ -80,6 +90,35 @@ export function QuickAddSheet({
       alive = false;
     };
   }, []);
+
+  /**
+   * The now-menu, fetched once here instead of inside DoNowSection (device-test bug, 2026-09-01):
+   * DoNowSection used to fetch it itself and pop its own pinned-item/rows chrome in above "Quick
+   * add" once the fetch resolved, squishing the section down to barely usable under a thumb
+   * mid-tap. Lifting the fetch means screen 1 renders its final layout on the first frame;
+   * DoNowSection is now purely presentational, fed `nowItems` wherever it's shown (the Calming
+   * sub-screen, below). A failed fetch = empty = no claim, same as the photos-status effect above.
+   */
+  const [nowItems, setNowItems] = useState<NowMenuItem[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getNowMenu()
+      .then((menuRows) => {
+        // Activity rows need a deep-link into that task's own flow, which doesn't exist yet — they
+        // are dropped rather than rendered as something that wouldn't work under a thumb (the same
+        // filter DoNowSection applied itself before this fetch moved up here).
+        if (alive) setNowItems(menuRows.filter((r) => r.action.kind === 'tool'));
+      })
+      .catch(() => {
+        if (alive) setNowItems([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  /** The coach's own pinned "do something now" item outranks the express-lane pill's usage-stats
+   *  shortcut (Now Door's promotion hierarchy) — see QuickAddPill's `suppressed` prop below. */
+  const hasPin = nowItems.some((i) => i.pinned);
 
   /**
    * The free line checks `ok` the way screen 2's paths always did — the sweep (W2-C, 2026-09-01)
@@ -110,7 +149,12 @@ export function QuickAddSheet({
   });
 
   const planLoading = plan === undefined && !error;
-  const rows = deriveQuickAddRows({ plan: plan ?? null, day: day ?? null, photosEnabled });
+  const rows = deriveQuickAddRows({
+    plan: plan ?? null,
+    day: day ?? null,
+    photosEnabled,
+    hasCalming: nowItems.length > 0,
+  });
 
   return (
     <>
@@ -145,13 +189,25 @@ export function QuickAddSheet({
               })
             }
           />
+        ) : calmingOpen ? (
+          <>
+            {/* Same in-sheet swap the tense screen uses, and the same `.ld2-back` grammar — back
+                returns to screen 1, never closes the sheet itself. */}
+            <div className="ld2-back">
+              <button onClick={() => setCalmingOpen(false)} aria-label="Back">
+                ‹
+              </button>
+              <div>
+                <b>Calming techniques</b>
+              </div>
+            </div>
+            {/* DoNowSection's own onClose/onLogged contract is unchanged — playing an item through
+                to completion still logs and closes the WHOLE sheet, exactly as it did when this
+                was a top-level section. */}
+            <DoNowSection items={nowItems} onClose={onClose} onLogged={onLogged} />
+          </>
         ) : (
           <>
-            {/* Present tense first — the past is patient. Renders nothing at all when the coach
-                has nothing to offer, so the quick-add section simply sits where it always did. */}
-            <DoNowSection onClose={onClose} onLogged={onLogged} onPinnedChange={setHasPin} />
-            <div className="ld-split" aria-hidden />
-
             <div className="ld-head">
               <b>Quick add</b>
               <span>Log what just happened — it counts, scheduled or not.</span>
@@ -203,6 +259,31 @@ export function QuickAddSheet({
                               toward={row.toward}
                               onSelect={() => setScreen({ area: row.area, noun: row.noun, toward: row.toward })}
                             />
+                          );
+                        case 'calming':
+                          // One master row like everything else (device-test ruling, 2026-09-01) —
+                          // the `.ld-row` grammar every row above it wears, opening the items as a
+                          // sub-screen rather than a top-level section of its own.
+                          return (
+                            <button
+                              key="calming"
+                              className="ld-row"
+                              onClick={() => setCalmingOpen(true)}
+                              aria-label="Calming techniques"
+                            >
+                              <span className="ld-ic ld-ic-mindset" aria-hidden>
+                                <svg viewBox="0 0 24 24" width="20" height="20">
+                                  <path d={GLYPH.sun} fill="#fff" />
+                                </svg>
+                              </span>
+                              <span className="ld-row-t">
+                                <b>Calming techniques</b>
+                                <span>from your coach — for right now</span>
+                              </span>
+                              <span className="ld-plus" aria-hidden>
+                                ›
+                              </span>
+                            </button>
                           );
                         case 'photo':
                           return <PhotoQuickRow key="photo" />;

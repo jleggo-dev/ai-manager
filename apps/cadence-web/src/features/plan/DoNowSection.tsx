@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { deriveWalkthrough, journalBank, journalOpener, nowMenuMeta, type NowMenuItem } from '@cadence/shared';
-import { getNowMenu } from '../../lib/api.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
 import { JournalWrite } from '../journal/JournalWrite.tsx';
 import { categoryOfArea, type Category } from '../today/category.ts';
@@ -8,55 +7,34 @@ import { glyphOf } from '../today/glyphs.ts';
 import { sessionFor } from './nowMenuSession.ts';
 
 /**
- * "Do something now" — the present-tense half of the ＋ sheet (REQ10 §6, REQ9 §3.1).
+ * "Do something now" — the CONTENT of the ＋ sheet's "Calming techniques" sub-screen (device-test
+ * ruling, 2026-09-01), not a section of the sheet's first screen. A top-level menu of mind tools
+ * the coach hadn't actually prescribed FOR THIS USER broke the sheet's law, so it demoted to one
+ * ordinary row like everything else — tapping it opens these items here.
  *
- * Sits ABOVE the quick-add section because the past is patient: a log can wait a tap, and
- * someone who needs three minutes cannot. The ＋ itself stays neutral and unchanged — the shell
- * law is that nothing pillar-flavoured ships in the frame, so the pillar colour appears only here,
- * inside the sheet, on rows that genuinely are mind items.
+ * Purely presentational now: `items` is fetched once by the ＋ sheet itself (QuickAddSheet.tsx,
+ * lifted there the same day) and handed down as a prop, so this component owns none of the
+ * loading state that used to pop the sheet's own layout around underneath a person's thumb while
+ * the fetch was in flight (the squish bug the same device test caught). The playing/walkthrough/
+ * journal machinery and the pinned-item treatment are otherwise unchanged — the pillar colour
+ * still appears only here, on rows that genuinely are mind items.
  *
- * The section **hides itself entirely when the menu is empty**, which is a real state rather than
- * a failure: a person the coach has nothing to offer right now should see the log section alone,
- * not an apology.
+ * Still **renders nothing at all on an empty list** — a real state, not a failure: nothing the
+ * coach has composed should read as an apology rather than simply not being there.
  */
 export function DoNowSection({
+  items,
   onClose,
   onLogged,
-  onPinnedChange,
 }: {
+  /** The now-menu's tool items, already filtered by the ＋ sheet the same way this component used
+   *  to filter them itself. Empty renders nothing (below) — the same "no claim" reading a failed
+   *  or not-yet-resolved fetch gets upstream. */
+  items: NowMenuItem[];
   onClose: () => void;
   onLogged: () => void;
-  /** Fires once the now-menu resolves, true iff it carries a pinned item — the ＋ sheet's own
-   *  express-lane pill (QuickAddPill, Activity Builder W2-B) stands down when it's true, because
-   *  the coach's own pinned prescription outranks a usage-stats shortcut (Now Door's promotion
-   *  hierarchy). Optional and additive: every existing caller is unaffected. */
-  onPinnedChange?: (hasPin: boolean) => void;
 }) {
-  const [items, setItems] = useState<NowMenuItem[] | null>(null);
   const [playing, setPlaying] = useState<NowMenuItem | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    getNowMenu()
-      .then((rows) => {
-        // Activity rows need a deep-link into that task's own flow, which doesn't exist yet — they
-        // are dropped rather than rendered as something that wouldn't work under a thumb.
-        if (alive) setItems(rows.filter((r) => r.action.kind === 'tool'));
-      })
-      .catch(() => {
-        if (alive) setItems([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    // Nothing resolved yet — the caller learns the real answer once the menu settles below, not a
-    // guess in between.
-    if (items === null) return;
-    onPinnedChange?.(items.some((i) => i.pinned));
-  }, [items, onPinnedChange]);
 
   // Journal rows open the real writing page (full-screen, the store behind it) — the walkthrough's
   // journal step is for sessions; a menu-launched entry belongs to the module.
@@ -99,8 +77,8 @@ export function DoNowSection({
     );
   }
 
-  // Nothing yet, or nothing to offer: render no heading at all rather than an empty shell.
-  if (items === null || items.length === 0) return null;
+  // Nothing to offer: render no heading at all rather than an empty shell.
+  if (items.length === 0) return null;
 
   const pinned = items.find((i) => i.pinned);
   const rest = items.filter((i) => !i.pinned);

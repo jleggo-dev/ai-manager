@@ -2,7 +2,7 @@ import type { NutritionDayData, PlanViewData } from '../../../lib/api.ts';
 
 /**
  * What the ＋ sheet offers — derived from what the user ALREADY tracks, never a menu of
- * hypotheticals (owner, 2026-09-01). Two rules, both enforced here:
+ * hypotheticals (owner, 2026-09-01). Three rules, all enforced here:
  *
  *   1. A row appears only when its tracking signal is live: water needs a pour in the trailing
  *      window, a meal needs recent food, a weight needs a weigh-in on the plan, a workout needs a
@@ -11,6 +11,11 @@ import type { NutritionDayData, PlanViewData } from '../../../lib/api.ts';
  *   2. Nothing the plan already gives a button for: the old sheet listed every plan activity to
  *      tick, which duplicated the trail's own rows. The weight row applies the same rule per-day —
  *      on a day the trail carries a weigh-in of its own, quick add stands down.
+ *   3. The coach's present-tense menu earns its own row, "Calming techniques", only when she
+ *      actually composed items for THIS user (device-test ruling, 2026-09-01) — a top-level
+ *      section of mind tools nobody prescribed broke the sheet's law the same way an untracked
+ *      hypothetical would. `hasCalming` is the sheet's own already-fetched signal, handed in the
+ *      same no-claim way as `photosEnabled`.
  *
  * Pure derivation, no fetching: the sheet hands in whatever it holds, and every absent input is a
  * no-claim (no row), never a hint.
@@ -26,6 +31,10 @@ export type QuickAddRow =
    *  area has exactly one, so "Piano · toward Learn piano" can say what it feeds. `noun` is the
    *  row's own label (see `nounForArea` below): the thing itself, never a generic verb phrase. */
   | { kind: 'add'; area: QuickAddArea; toward?: string; noun: string }
+  /** The coach's present-tense menu, demoted to one master row like everything else (device-test
+   *  ruling, 2026-09-01) rather than a top-level section: tapping it opens the items as a
+   *  sub-screen (DoNowSection.tsx, now purely presentational). */
+  | { kind: 'calming' }
   | { kind: 'photo' };
 
 /** Same reading CaptureSheet uses — a weigh row is named, not flagged. */
@@ -112,8 +121,11 @@ export function deriveQuickAddRows(input: {
   plan: PlanViewData | null;
   day: NutritionDayData | null;
   photosEnabled: boolean;
+  /** Does the coach's fetched now-menu carry at least one tool item? Optional — an omitted or
+   *  false value is a no-claim, same as every other gate in this function. */
+  hasCalming?: boolean;
 }): QuickAddRow[] {
-  const { plan, day, photosEnabled } = input;
+  const { plan, day, photosEnabled, hasCalming } = input;
   const rows: QuickAddRow[] = [];
 
   if (day?.has_recent_water === true) rows.push({ kind: 'water' });
@@ -139,6 +151,7 @@ export function deriveQuickAddRows(input: {
     }
   }
 
+  if (hasCalming) rows.push({ kind: 'calming' });
   if (photosEnabled) rows.push({ kind: 'photo' });
   return rows;
 }

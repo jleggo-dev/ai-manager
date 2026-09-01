@@ -22,6 +22,9 @@ const logWater = vi.fn(async (..._a: unknown[]) => 750);
 const recordWeighInToday = vi.fn(async (..._a: unknown[]) => ({ weight_kg: 88 }));
 const getUnits = vi.fn(async (..._a: unknown[]) => null as unknown);
 const getProgressPhotosStatus = vi.fn(async (..._a: unknown[]) => ({ enabled: false, count: 0, next_due: null }));
+// The sheet's own lifted now-menu fetch (device-test fix, 2026-09-01) — drives the "Calming
+// techniques" row and the pill's pinned-item suppression. Empty by default so neither is ever in
+// play here; every test in this file is about its own button, not the calming sub-screen.
 const getNowMenu = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 vi.mock('../../../lib/api.ts', () => ({
   logAdhoc: (...a: unknown[]) => logAdhoc(...a),
@@ -40,7 +43,9 @@ vi.mock('../../../lib/api.ts', () => ({
 const downscalePhoto = vi.fn(async (..._a: unknown[]) => 'data:image/jpeg;base64,AAA');
 vi.mock('../occurrence/format.ts', () => ({ downscalePhoto: (...a: unknown[]) => downscalePhoto(...a) }));
 
-vi.mock('../DoNowSection.tsx', () => ({ DoNowSection: () => null }));
+// DoNowSection is no longer mocked here: since the device-test fix it's only ever instantiated
+// inside the "Calming techniques" sub-screen, which nothing in this file opens (`getNowMenu`
+// resolves empty above), so it never renders regardless — mocking it would be dead weight.
 
 const { QuickAddSheet } = await import('./QuickAddSheet.tsx');
 

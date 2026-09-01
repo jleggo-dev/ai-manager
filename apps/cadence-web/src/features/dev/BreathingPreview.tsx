@@ -10,6 +10,7 @@ import {
   type GroundingGame,
   groundingSpec,
   journalToMarkdown,
+  type NowMenuItem,
 } from '@cadence/shared';
 import { StepBreathing } from '../walkthrough/tools/StepBreathing.tsx';
 import { StepMeditate } from '../walkthrough/tools/StepMeditate.tsx';
@@ -201,7 +202,7 @@ export function GroundingPreview() {
   );
 }
 
-const NOW_MENU_FIXTURE = [
+const NOW_MENU_FIXTURE: NowMenuItem[] = [
   {
     id: 'n1',
     label: 'Three long exhales',
@@ -236,32 +237,10 @@ const NOW_MENU_FIXTURE = [
   },
 ];
 
-/** The "Do something now" section against a stubbed menu, so the sheet's chrome can be judged
- *  without the api running. Stubs the network, not the component — what renders here is the real
- *  DoNowSection with real rows. */
+/** The "Calming techniques" sub-screen against a fixture menu, so its chrome can be judged without
+ *  the api running. DoNowSection is purely presentational since the device-test fix (2026-09-01) —
+ *  no network stub needed any more, the fixture is just handed straight in as `items`. */
 export function NowMenuPreview() {
-  // The api can't compose a real menu on this machine (the engine needs credentials we don't
-  // have), and the service correctly soft-fails to an empty list — which would render nothing to
-  // look at. So the preview stubs the ENDPOINT and leaves the component untouched: what renders
-  // below is the real DoNowSection, fetching over the real client, against a fixture.
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    const orig = window.fetch;
-    window.fetch = ((u: RequestInfo | URL, o?: RequestInit) =>
-      String(u).includes('/me/now-menu')
-        ? Promise.resolve(
-            new Response(JSON.stringify({ items: NOW_MENU_FIXTURE }), {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' },
-            }),
-          )
-        : orig(u, o)) as typeof window.fetch;
-    setReady(true);
-    return () => {
-      window.fetch = orig;
-    };
-  }, []);
-  if (!ready) return null;
   return (
     <div style={{ padding: 0, background: 'oklch(96% 0.015 95)', minHeight: 600 }}>
       <div
@@ -274,16 +253,11 @@ export function NowMenuPreview() {
           padding: 16,
         }}
       >
-        ＋ sheet · dev preview
+        ＋ sheet · Calming techniques · dev preview
       </div>
       <div className="sheet ld" style={{ position: 'static', transform: 'none' }}>
         <div className="sheet-grab" aria-hidden />
-        <DoNowSection onClose={() => undefined} onLogged={() => undefined} />
-        <div className="ld-split" aria-hidden />
-        <div className="ld-head">
-          <b>Log something you did</b>
-          <span>Tap what you did — it counts even if it wasn&apos;t scheduled for today.</span>
-        </div>
+        <DoNowSection items={NOW_MENU_FIXTURE} onClose={() => undefined} onLogged={() => undefined} />
       </div>
     </div>
   );
