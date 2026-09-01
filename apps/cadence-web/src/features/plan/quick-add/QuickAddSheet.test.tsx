@@ -19,9 +19,11 @@ vi.mock('../../../lib/query/index.ts', () => ({
 const logAdhoc = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
 const logWater = vi.fn(async (..._a: unknown[]) => 750);
 const getProgressPhotosStatus = vi.fn(async (..._a: unknown[]) => ({ enabled: false, count: 0, next_due: null }));
-// Screen 2 (QuickAddTense) fetches the now-menu on mount too — empty by default so "Take me on
-// one" never renders here; its own filtering/rendering is QuickAddTense.test.tsx's job.
+// Screen 2 (QuickAddTense) fetches the now-menu AND the routines shelf on mount too — both empty
+// by default so "Take me on one" never renders here; its own filtering/rendering (now-menu rows,
+// routine rows, "Browse all") is QuickAddTense.test.tsx's job.
 const getNowMenu = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
+const getRoutines = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 vi.mock('../../../lib/api.ts', () => ({
   logAdhoc: (...a: unknown[]) => logAdhoc(...a),
   logWater: (...a: unknown[]) => logWater(...a),
@@ -29,6 +31,7 @@ vi.mock('../../../lib/api.ts', () => ({
   getUnits: vi.fn(async () => null),
   getProgressPhotosStatus: (...a: unknown[]) => getProgressPhotosStatus(...a),
   getNowMenu: (...a: unknown[]) => getNowMenu(...a),
+  getRoutines: (...a: unknown[]) => getRoutines(...a),
 }));
 vi.mock('../DoNowSection.tsx', () => ({ DoNowSection: () => null }));
 

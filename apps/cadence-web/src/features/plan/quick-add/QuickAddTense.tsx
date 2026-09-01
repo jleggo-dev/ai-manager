@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { deriveWalkthrough, nowMenuMeta, type NowMenuItem } from '@cadence/shared';
-import { getNowMenu, logAdhoc } from '../../../lib/api.ts';
+import { getNowMenu, getRoutines, logAdhoc, type PlanRoutine } from '../../../lib/api.ts';
 import { Walkthrough } from '../../walkthrough/Walkthrough.tsx';
 import { sessionFor } from '../nowMenuSession.ts';
 import { categoryOfArea } from '../../today/category.ts';
 import { glyphOf, GLYPH } from '../../today/glyphs.ts';
 import type { QuickAddArea } from './quickAddRows.ts';
+import { useRoutinePlay } from './useRoutinePlay.tsx';
+import { browseAllCount, playableRoutines, routineMeta, shelfRoutines } from './routineShelf.ts';
 
 const DURATION_CHIPS = [15, 30, 45] as const;
 
@@ -66,6 +68,12 @@ export function QuickAddTense({
   const [note, setNote] = useState('');
   const [items, setItems] = useState<NowMenuItem[] | null>(null);
   const [playing, setPlaying] = useState<NowMenuItem | null>(null);
+  // null = not loaded yet (or the read failed) — same no-claim `getRoutines` already draws between
+  // "couldn't load" and "you have none"; `playableRoutines` below collapses both to no rows shown.
+  const [routines, setRoutines] = useState<PlanRoutine[] | null>(null);
+  // "Browse all N ›" swaps this section, in place, for the full playable-routines list.
+  const [browsingRoutines, setBrowsingRoutines] = useState(false);
+  const routinePlay = useRoutinePlay(onLogged);
 
   useEffect(() => {
     let alive = true;
@@ -77,6 +85,17 @@ export function QuickAddTense({
       .catch(() => {
         if (alive) setItems([]);
       });
+    return () => {
+      alive = false;
+    };
+  }, [area]);
+
+  useEffect(() => {
+    let alive = true;
+    setBrowsingRoutines(false);
+    getRoutines(area).then((rows) => {
+      if (alive) setRoutines(rows);
+    });
     return () => {
       alive = false;
     };
@@ -121,6 +140,15 @@ export function QuickAddTense({
       />
     );
   }
+
+  // A routine's own walkthrough (useRoutinePlay) overlays the same way — one active player at a
+  // time, so this return replaces everything else here too.
+  if (routinePlay.node) return <>{routinePlay.node}</>;
+
+  const playable = playableRoutines(routines);
+  const nowMenuCount = items?.length ?? 0;
+  const shownRoutines = shelfRoutines(playable, nowMenuCount);
+  const browseCount = browseAllCount(playable, shownRoutines);
 
   return (
     <>
@@ -200,35 +228,104 @@ export function QuickAddTense({
         )}
       </div>
 
-      {/* Zero matching items is a real state (DoNowSection's own rule) — no heading, no dead
-          row, the section simply isn't here. */}
-      {items && items.length > 0 && (
+      {/* Zero now-menu items AND zero playable routines is a real state (DoNowSection's own
+          rule) — no heading, no dead row, the section simply isn't here. Browsing mode has its
+          own non-empty guard: it only ever opens from "Browse all", which is never drawn unless
+          `playable` already has rows. */}
+      {(browsingRoutines ? playable.length > 0 : nowMenuCount > 0 || shownRoutines.length > 0) && (
         <div className="ld2-sec">
-          <b>Take me on one</b> <span>from your coach — for right now</span>
+          {browsingRoutines ? (
+            <button
+              className="ld2-sec-back"
+              onClick={() => setBrowsingRoutines(false)}
+              aria-label="Back to Take me on one"
+            >
+              ‹ Take me on one
+            </button>
+          ) : (
+            <>
+              <b>Take me on one</b> <span>from your coach — for right now</span>
+            </>
+          )}
           <div className="ld-list">
-            {items.map((item) => {
-              const glyph = glyphOf(item.label, item.area);
-              const meta = nowMenuMeta(item.action);
-              return (
-                <button key={item.id} className="ld-row" onClick={() => setPlaying(item)} aria-label={item.label}>
-                  <span className={`ld-ic ld-ic-${categoryOfArea(item.area)}`} aria-hidden>
-                    <svg viewBox="0 0 24 24" width="20" height="20">
-                      <path d={glyph.d} fill="#fff" />
-                    </svg>
-                  </span>
-                  <span className="ld-row-t">
-                    <b>{item.label}</b>
-                    {meta && <span>{meta}</span>}
-                  </span>
-                  <span className="ld-plus" aria-hidden>
-                    ›
-                  </span>
-                </button>
-              );
-            })}
+            {!browsingRoutines &&
+              items?.map((item) => {
+                const glyph = glyphOf(item.label, item.area);
+                const meta = nowMenuMeta(item.action);
+                return (
+                  <button key={item.id} className="ld-row" onClick={() => setPlaying(item)} aria-label={item.label}>
+                    <span className={`ld-ic ld-ic-${categoryOfArea(item.area)}`} aria-hidden>
+                      <svg viewBox="0 0 24 24" width="20" height="20">
+                        <path d={glyph.d} fill="#fff" />
+                      </svg>
+                    </span>
+                    <span className="ld-row-t">
+                      <b>{item.label}</b>
+                      {meta && <span>{meta}</span>}
+                    </span>
+                    <span className="ld-plus" aria-hidden>
+                      ›
+                    </span>
+                  </button>
+                );
+              })}
+            {(browsingRoutines ? playable : shownRoutines).map((routine) => (
+              <RoutineRow
+                key={routine.commitment_id}
+                routine={routine}
+                area={area}
+                busy={routinePlay.busyId === routine.commitment_id}
+                errorText={
+                  routinePlay.error?.commitmentId === routine.commitment_id ? routinePlay.error.text : undefined
+                }
+                onPlay={() => routinePlay.play(routine)}
+              />
+            ))}
           </div>
+          {!browsingRoutines && browseCount != null && (
+            <button className="ld2-browse-all" onClick={() => setBrowsingRoutines(true)}>
+              Browse all {browseCount} ›
+            </button>
+          )}
         </div>
       )}
     </>
+  );
+}
+
+/** One routine row — shared by the shelf's top-2 slice and the "Browse all" full list, so the two
+ *  views can never drift in what a row looks like or does. `errorText` swaps in for the meta line
+ *  the same way `PhotoQuickRow`'s save-state text does (QuickAddRowViews.tsx): the row's own
+ *  honest line lives exactly where its ordinary meta would, never a separate block bolted on. */
+function RoutineRow({
+  routine,
+  area,
+  busy,
+  errorText,
+  onPlay,
+}: {
+  routine: PlanRoutine;
+  area: QuickAddArea;
+  busy: boolean;
+  errorText?: string;
+  onPlay: () => void;
+}) {
+  const routineArea = routine.area ?? area;
+  const glyph = glyphOf(routine.title, routineArea);
+  return (
+    <button className="ld-row" onClick={onPlay} disabled={busy} aria-label={routine.title}>
+      <span className={`ld-ic ld-ic-${categoryOfArea(routineArea)}`} aria-hidden>
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <path d={glyph.d} fill="#fff" />
+        </svg>
+      </span>
+      <span className="ld-row-t">
+        <b>{routine.title}</b>
+        <span>{errorText ?? routineMeta(routine)}</span>
+      </span>
+      <span className="ld-plus" aria-hidden>
+        ›
+      </span>
+    </button>
   );
 }
