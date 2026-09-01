@@ -2236,11 +2236,54 @@ textarea.wiz-title {
 .horizon-endcap-ask:hover {
   border-color: var(--forest);
 }
-/* The detour DOOR (Req 4, placement per Option A — owner trialing 2026-08-31): the self-declare
-   path borrows the DetourBar's glass line and slot, so door and live-state share one home at the
+/* The detour DOOR (Req 4 — owner ruling 2026-08-31, settled on device): the self-declare path
+   borrows the DetourBar's glass line and slot, so door and live-state share one home at the
    top of the page. Only the dot differs — dawn, not forest: an invitation, not a live state. */
 .detour-door .detour-bar-dot {
   background: var(--dawn-3);
+}
+/* The fork behind the door (owner, 2026-08-31): two fixes, one question, one tap either way. */
+.door-sheet {
+  gap: 10px;
+}
+.door-sheet-h {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 2px 6px;
+}
+.door-sheet-h b {
+  font-family: var(--display);
+  font-size: 15px;
+}
+.door-sheet-h span {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.door-choice {
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.door-choice:hover {
+  border-color: var(--forest);
+}
+.door-choice b {
+  font-size: 14px;
+  color: var(--text);
+}
+.door-choice span {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.35;
 }
 .detour-pick {
   display: flex;
