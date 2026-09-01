@@ -5,7 +5,16 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ProgressCard } from '@cadence/shared';
 
-vi.mock('../../repos/users.ts', () => ({ getUser: vi.fn() }));
+// plan-run.ts (readPlanRun, imported for get_active_plan's rebuild line) pulls the run machinery's
+// repo seams and the ready push along; both are mocked so this file stays env-free fixtures-only.
+vi.mock('../../repos/users.ts', () => ({
+  getUser: vi.fn(),
+  claimPlanRun: vi.fn(),
+  setPlanRun: vi.fn(),
+  setPlanRunStage: vi.fn(),
+  PLAN_RUN_STALE_MINUTES: 15,
+}));
+vi.mock('../plan-ready-push.ts', () => ({ sendPlanReadyPush: vi.fn() }));
 vi.mock('../../repos/goals.ts', () => ({ listGoalsByStatus: vi.fn(), listGoals: vi.fn() }));
 vi.mock('../../repos/equipment.ts', () => ({ listEquipment: vi.fn() }));
 vi.mock('../../repos/plans.ts', () => ({ getActivePlan: vi.fn() }));
@@ -30,6 +39,7 @@ import { searchFoodsWithUsda } from '../food-sources/usda-enrich.ts';
 import { getActivePlan } from '../../repos/plans.ts';
 import { listActivities } from '../../repos/activities.ts';
 import { listGoals } from '../../repos/goals.ts';
+import { getUser } from '../../repos/users.ts';
 
 describe('retrieval registry — render / rows', () => {
   it('get_identity asks for a name when missing', () => {
@@ -229,6 +239,50 @@ describe('retrieval registry — render / rows', () => {
     });
     expect(listActivities).not.toHaveBeenCalled();
     expect(listGoals).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The rebuild rider (docs/cadence/PLAN-CHANGES.md Phase 2). A background week-rebuild is
+   * invisible from chat without it — "how's the new week coming?" lands here, not on the sheet
+   * that started the run — and a failed run she cannot see is a failure nobody offers to retry.
+   * One line, and ONLY when a run record exists: this read is floor context on every message.
+   */
+  it('get_active_plan appends the in-flight rebuild line, with age and stage', () => {
+    const text = RETRIEVAL_FUNCTIONS.get_active_plan!.render({
+      plan: { version: 2 },
+      activities: [],
+      areaByGoal: {},
+      planRun: { status: 'running', stage: 'drafting', startedAt: new Date(Date.now() - 3 * 60_000).toISOString() },
+    });
+    expect(text).toContain('A week rebuild is in flight (started 3 min ago, stage: drafting)');
+    expect(text).toContain('the card lands on their plan when it finishes');
+  });
+
+  it('get_active_plan names the failed rebuild and its retry door', () => {
+    const text = RETRIEVAL_FUNCTIONS.get_active_plan!.render({
+      plan: { version: 2 },
+      activities: [],
+      areaByGoal: {},
+      planRun: { status: 'failed', error: 'Too many goals at once — trim the list and try again.' },
+    });
+    expect(text).toContain(
+      'The last week rebuild failed: Too many goals at once — trim the list and try again. — start_replan can retry it.',
+    );
+  });
+
+  it('get_active_plan says nothing about rebuilds when no run exists — the common turn pays nothing', () => {
+    expect(planRender([])).not.toContain('rebuild');
+  });
+
+  it('get_active_plan.run derives the rebuild state from the user row, so render needs no clock of its own', async () => {
+    vi.mocked(getActivePlan).mockResolvedValue({ plan_id: 'p1', version: 3 } as never);
+    vi.mocked(listActivities).mockResolvedValue([] as never);
+    vi.mocked(listGoals).mockResolvedValue([] as never);
+    vi.mocked(getUser).mockResolvedValue({
+      plan_run: { kind: 'replan_preview', status: 'running', stage: 'saving', started_at: new Date().toISOString() },
+    } as never);
+    const result = await RETRIEVAL_FUNCTIONS.get_active_plan!.run('u1');
+    expect(RETRIEVAL_FUNCTIONS.get_active_plan!.render(result)).toContain('stage: saving');
   });
 
   it('get_consistency omits when nothing scheduled', () => {

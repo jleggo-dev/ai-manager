@@ -136,6 +136,15 @@ export function MainTabs({
               setTab('coach');
               setAutoSend({ text: 'Start my check-in', key: Date.now() });
             }}
+            // Typed and preformed plan steers (the Adjust sheet's compose box, the daily
+            // check-in's picks) ride the same visible bridge, VERBATIM — the words shown as the
+            // user's are exactly the user's. The coach triages the size of the ask (Phase 2,
+            // PLAN-CHANGES.md); only her explicit build card below (`rebuild`) still opens the
+            // direct-pipeline sheet.
+            onSteerCoach={(steer) => {
+              setTab('coach');
+              setAutoSend({ text: steer, key: Date.now() });
+            }}
             // The horizon end-cap's ask rides the same visible bridge — she grants (or talks
             // through) the longer week herself via extend_horizon; the app only asks.
             onPlanAhead={() => {

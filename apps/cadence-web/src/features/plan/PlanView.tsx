@@ -13,19 +13,11 @@ import { PlanSkeleton } from './PlanSkeleton.tsx';
 import { DetourBar } from './DetourBar.tsx';
 import { DetourStateSheet } from './DetourStateSheet.tsx';
 import { DetourSetup, type DetourChoice } from './DetourSetup.tsx';
-import { downscalePhoto, isWeeklyCheckin } from './occurrence/format.ts';
+import { isWeeklyCheckin } from './occurrence/format.ts';
 import { EndOfTrail } from './EndOfTrailCard.tsx';
 import { HorizonEndCap } from './HorizonEndCap.tsx';
-import {
-  endEpisode,
-  checkin,
-  type PlanOccurrence,
-  type ActiveEpisode,
-  sendGymPhotos,
-  sendDetourEquipment,
-  enterEpisode,
-  postponeDetour,
-} from '../../lib/api.ts';
+import { endEpisode, checkin, type PlanOccurrence, type ActiveEpisode, enterEpisode } from '../../lib/api.ts';
+import { useDetourGear } from './useDetourGear.ts';
 import { useProposalAccept } from './useProposalAccept.ts';
 import { useQueryClient } from '@tanstack/react-query';
 import { setPlanData, usePlan, useWatchLogInbox, useWatchPortraitSync, useWatchSync } from '../../lib/query/index.ts';
@@ -41,8 +33,8 @@ function todayIso(): string {
 /** One-tap answers for the arrival card; DetourSetup keeps its own copy for the entry sheet. */
 const ARRIVAL_GEAR = ['Hotel gym', 'Dumbbells', 'Treadmill', 'Resistance band', 'Pool', 'Just my shoes'];
 
-/** Detour failure lines — plain, and never silent (PLAN-CHANGES.md Phase 0). */
-const GEAR_FAIL = "Couldn't rework the week around that just now — try again in a moment.";
+/** Detour failure line — plain, and never silent (PLAN-CHANGES.md Phase 0). The gear one lives
+ *  with its handlers in useDetourGear.ts. */
 const DETOUR_FAIL = "That didn't take — try again in a moment.";
 
 function detourLabel(type: ActiveEpisode['type']): string {
@@ -60,12 +52,15 @@ function detourLabel(type: ActiveEpisode['type']): string {
  * is controlled by the bottom nav (Today and Week are now sibling tabs, not a top segment):
  *   • Today → the Visual Today sky-trail (nodes, coach note, and the food strip → the Food home).
  *   • Week  → the rolling week list with per-day check-off.
- * Both share the coach proposal banner, the session sheets, and "Adjust my plan" (a slim pill
- * that pops the AdjustSheet: steer → preview → confirm) — suggest-never-auto-apply as always.
+ * Both share the coach proposal banner, the session sheets, and the AdjustSheet. Since Phase 2
+ * (PLAN-CHANGES.md) typed and preformed steers go to the COACH as a visible send (`onSteerCoach`)
+ * — she triages the size of the ask — while the explicit whole-week rebalance keeps the sheet's
+ * direct preview → confirm run. Suggest-never-auto-apply as always.
  * `reloadKey` bumps when a log/meal/adjust lands so the dashboard's aux fetches refresh.
  */
 export function PlanView({
   onCoach,
+  onSteerCoach,
   onOpenFood,
   reloadSignal,
   onStartCheckIn,
@@ -73,6 +68,13 @@ export function PlanView({
 }: {
   /** Switch to the coach. `note` is app-authored context she reads and the user never sees. */
   onCoach: (note?: string) => void;
+  /**
+   * Hand a plan steer to the coach as a VISIBLE send — the same autoSend bridge as
+   * `onStartCheckIn`, but carrying the steer's words verbatim as the user's own message. This is
+   * Phase 2 routing (PLAN-CHANGES.md): typed and preformed steers go to the coach, who triages
+   * the size of the ask; only the explicit whole-week rebalance stays on the direct pipeline.
+   */
+  onSteerCoach: (steer: string) => void;
   /** Open the Food home (MainTabs swaps this view for it); 'shop' lands on the shopping list. */
   onOpenFood: (sub?: 'shop') => void;
   reloadSignal?: number;
@@ -150,66 +152,11 @@ export function PlanView({
     recoveryPaused: adjustOpen,
   });
 
-  // The gym photos → equipment revision (PLAN §424). Several angles are ONE answer: files
-  // accumulate here and send as one request; the banner shows what the model saw.
-  const [gymBusy, setGymBusy] = useState(false);
-  const [gymSaw, setGymSaw] = useState<string | null>(null);
-  async function sendGym(files: FileList | null) {
-    if (!files?.length || gymBusy) return;
-    setGymBusy(true);
-    setGymSaw(null);
-    try {
-      const photos = await Promise.all([...files].slice(0, 4).map((f) => downscalePhoto(f)));
-      const r = await sendGymPhotos(photos);
-      if (r.ok && r.saw) {
-        setGymSaw(
-          r.saw.length
-            ? `I can see: ${r.saw.join(', ')}.${r.revised ? ' Reworking your week around it.' : ''}`
-            : 'Looks like a bare room — keeping things equipment-free.',
-        );
-        if (r.revised) {
-          refresh();
-          bump();
-        }
-      } else {
-        setGymSaw("Couldn't read that photo — try another angle?");
-      }
-    } catch {
-      setGymSaw("Couldn't read that photo — try another angle?");
-    } finally {
-      setGymBusy(false);
-    }
-  }
-
-  // Arrival-day answers (owner, 2026-08-04): the card asks once, on the scheduled start.
-  const [arrivalGear, setArrivalGear] = useState<string[]>([]);
-  async function confirmArrivalGear(explicitNone: boolean) {
-    if (gymBusy) return;
-    setGymBusy(true);
-    try {
-      const list = explicitNone ? [] : arrivalGear.map((name) => ({ name }));
-      const r = await sendDetourEquipment(list);
-      if (r.ok) {
-        setGymSaw(
-          explicitNone ? 'Equipment-free it is — reworking your days.' : 'Got it — reworking your days around that.',
-        );
-        refresh();
-        bump();
-      } else {
-        // {ok:false} used to show NOTHING — a failed rework read exactly like a landed one.
-        setGymSaw(GEAR_FAIL);
-      }
-    } catch {
-      setGymSaw(GEAR_FAIL);
-    } finally {
-      setGymBusy(false);
-    }
-  }
-  async function notArrivedYet() {
-    await postponeDetour().catch(() => {});
-    refresh(); // today's sessions come back; the card returns tomorrow
-    bump();
-  }
+  // The detour-day gear answers (photos, arrival chips, "not yet") — see useDetourGear.ts.
+  const { gymBusy, gymSaw, arrivalGear, setArrivalGear, sendGym, confirmArrivalGear, notArrivedYet } = useDetourGear({
+    refresh,
+    bump,
+  });
 
   /**
    * Starting a detour, restored. This wiring left with the week panel when the 2a redesign deleted
@@ -484,7 +431,9 @@ export function PlanView({
             bump();
           }}
           onProposeChange={(steer) => {
-            // Baseline → Adjust bridge: the suggested change rides the normal steer→preview→confirm flow.
+            // Baseline → Adjust bridge: the suggestion opens the compose sheet prefilled, so the
+            // user sees — and can edit — the words before they go to the coach as their own
+            // message (the suggestion is coach-authored; it only becomes theirs by their say-so).
             setSheetOcc(null);
             setAdjustSteer(steer);
             setAdjustMode('adjust');
@@ -501,9 +450,9 @@ export function PlanView({
             refresh();
             bump();
           }}
-          // "Custom — let's talk" rides the SAME steer→preview→confirm flow as every other plan
-          // change, pre-seeded with this activity. A session Cadence redesigned in conversation
-          // still has to be shown before it lands.
+          // "Custom — let's talk" opens the SAME compose sheet as every other typed plan change,
+          // pre-seeded with this activity ("About today's X: "). The finished sentence goes to
+          // the coach, who triages the size of the ask (Phase 2).
           onCustom={(steer) => {
             setStartOcc(null);
             setAdjustSteer(steer);
@@ -557,11 +506,12 @@ export function PlanView({
           mounts (and only then asks the server whether it's due) once nothing else is open. */}
       {!checkinSettled && !sheetOcc && !startOcc && !captureOcc && !cookOcc && !adjustOpen && (
         <DailyCheckIn
+          // A pick's preformed steer is a small ask — exactly what the coach's triage exists for
+          // (Phase 2). It goes to her as a visible send, in the pick's own user-voice words; she
+          // makes the change or puts up a card. No sheet, no direct synthesis.
           onAdjust={(steer) => {
             setCheckinSettled(true);
-            setAdjustSteer(steer);
-            setAdjustMode('adjust');
-            setAdjustOpen(true);
+            onSteerCoach(steer);
           }}
           onCoach={() => {
             setCheckinSettled(true);
@@ -594,6 +544,13 @@ export function PlanView({
           initialSteer={adjustSteer}
           mode={adjustMode}
           onClose={() => setAdjustOpen(false)}
+          // The compose branch's submit (adjust mode only): close the sheet and hand the words to
+          // the coach as a visible send. Rebalance mode never calls this — its explicit
+          // whole-week run stays on the direct pipeline (Phase 2 routing).
+          onSteerToCoach={(steer) => {
+            setAdjustOpen(false);
+            onSteerCoach(steer);
+          }}
           onCommitted={(n) => {
             setNote(n);
             refresh();

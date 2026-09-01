@@ -13,9 +13,10 @@ import { useDailyCheckinDue } from '../../lib/query/index.ts';
  * it turns on the user's timezone and on whether yesterday actually had a plan).
  *
  * The adjustment offers never mutate the week here. Picking one records the intent and hands the
- * matching steer to the ordinary suggest→preview→confirm flow, so the user still sees the
- * proposed week before anything moves — the one property that keeps a daily nudge from becoming
- * a thing that quietly rearranges your life while you're half awake.
+ * matching steer to the COACH — sent visibly, in the pick's own user-voice words, for her to
+ * triage (Phase 2, PLAN-CHANGES.md). A change still shows up as her card or her words before
+ * anything moves — the one property that keeps a daily nudge from becoming a thing that quietly
+ * rearranges your life while you're half awake.
  *
  * It asks how yesterday FELT and does not narrate what happened in it. Cadence could recite the
  * day back, but a recap the user didn't ask for, delivered before they've had coffee, reads as a
@@ -26,7 +27,7 @@ export function DailyCheckIn({
   onCoach,
   onClose,
 }: {
-  /** Hand a steer to the normal adjust flow. */
+  /** Hand the pick's steer to the coach (PlanView routes it as a visible send — Phase 2). */
   onAdjust: (steer: string) => void;
   onCoach: () => void;
   onClose: () => void;
@@ -51,8 +52,8 @@ export function DailyCheckIn({
     setPicked(code);
     setReply(opt.reply);
     void sendDailyCheckin({ adjustment: code });
-    // "Keep as is" is the end of the conversation. The other two are the START of one — they open
-    // the preview, because an adjustment the user never saw isn't one they agreed to.
+    // "Keep as is" is the end of the conversation. The other two are the START of one — the steer
+    // goes to the coach, because an adjustment the user never saw isn't one they agreed to.
     if (opt.steer) {
       setTimeout(() => onAdjust(opt.steer), 600);
     }

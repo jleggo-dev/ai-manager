@@ -50,7 +50,7 @@ const ultraRunner: HealthDigest = {
   },
 };
 
-const row = (digest: HealthDigest, createdAt: string): StoredHealthDigest => ({ digest, createdAt });
+const row = (digest: HealthDigest, createdAt: string | Date): StoredHealthDigest => ({ digest, createdAt });
 const NOW = Date.parse('2026-08-10T09:00:00Z');
 
 describe('toObservedHealth', () => {
@@ -185,6 +185,25 @@ describe('toObservedHealth', () => {
     expect(o.daily_steps?.avg_per_day).toBe(16_100);
     expect(o.trains).toEqual([]);
     expect(o.most_recent_workout).toBeNull();
+  });
+});
+
+describe('toObservedHealth with Date-typed created_at', () => {
+  // postgres.js returns timestamptz columns as Date objects while the hand-written row generics
+  // say string. This file threw on exactly that (2026-09-01, found by a live probe) and the
+  // catch in observedHealthForPlanning turned it into observed_health quietly missing from every
+  // plan synthesis — the "planned for as though nobody had ever seen him move" failure. Dates in,
+  // no throw, correct days out.
+  it('survives Date rows and still dates the payload and its trend', () => {
+    const rows = [
+      row(ultraRunner, new Date('2026-08-10T05:00:00Z')),
+      row(ultraRunner, new Date('2026-08-03T05:00:00Z')),
+      row(ultraRunner, new Date('2026-07-27T05:00:00Z')),
+    ];
+    const o = toObservedHealth(rows, NOW)!;
+    expect(o.as_of).toBe('2026-08-10');
+    expect(o.trend?.length).toBe(2);
+    expect(o.trend?.[0]?.as_of).toBe('2026-07-27');
   });
 });
 

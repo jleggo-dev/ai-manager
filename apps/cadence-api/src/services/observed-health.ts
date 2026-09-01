@@ -26,6 +26,7 @@
  */
 import type { HealthDigest } from '@cadence/shared';
 import { listHealthDigests, type StoredHealthDigest } from '../repos/health-digests.ts';
+import { isoDay } from './iso-day.ts';
 
 const DAY_MS = 86_400_000;
 /** How far back the trend reaches, in sampled points (one per calendar week). */
@@ -34,7 +35,11 @@ const MAX_TREND_POINTS = 6;
 const SERIES_ROWS = 60;
 const MAX_MODALITIES = 8;
 
-const day = (iso: string): string => iso.slice(0, 10);
+// isoDay, not a local `.slice` — postgres.js hands `created_at` back as a Date while the row type
+// says string, and this file threw on exactly that (2026-09-01, live probe), silently starving
+// plan synthesis of observed_health for anyone with real digests. Same lesson isoDay itself
+// records from 2026-08-16; this was the holdout.
+const day = (iso: string | Date): string => isoDay(iso);
 const round1 = (n: number): number => Math.round(n * 10) / 10;
 
 /** One previous best and the day it was set. Both halves matter — see the digest's own comment. */
@@ -194,7 +199,7 @@ function trendFromSeries(rows: StoredHealthDigest[]): ObservedHealth['trend'] {
   const seen = new Set<string>();
   const points: NonNullable<ObservedHealth['trend']> = [];
   for (const row of rows.slice(1)) {
-    const t = Date.parse(row.createdAt);
+    const t = new Date(row.createdAt).getTime(); // string or Date — see `day` above
     if (!Number.isFinite(t)) continue;
     // ISO-ish week key: the Monday of the row's week.
     const d = new Date(t);

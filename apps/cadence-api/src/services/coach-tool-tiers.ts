@@ -218,6 +218,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   update_equipment: 'ACTION: add, remove, or rename equipment on their file — corrections included',
   extend_horizon: 'ACTION: run the current week longer — "plan two weeks ahead" — check-in moves with it',
   revise_session: 'ACTION: rebuild one upcoming session\'s contents from their words — "add chest and abs"',
+  start_replan: 'ACTION: rebuild the WHOLE week around their words — background, takes minutes',
 };
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
@@ -301,7 +302,11 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // `revise_session` (PLAN-CHANGES.md rung 1, 2026-08-31): the drawer's third ACTION — rebuild
     // what is INSIDE one upcoming session from the user's words, one prescription instead of the
     // full re-synthesis the incident fell through to.
-    members: ['extend_horizon', 'revise_session'],
+    // `start_replan` (PLAN-CHANGES.md rung 3, Phase 2): the whole-week rebuild as a background
+    // run — the same plan_run spine as the Adjust sheet (replan-start.ts). Filed beside the other
+    // plan surgery so drilling into "plan" shows the whole ladder: one session, the week's shape,
+    // the week rebuilt.
+    members: ['extend_horizon', 'revise_session', 'start_replan'],
   },
   {
     key: 'progress',

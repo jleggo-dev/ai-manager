@@ -211,9 +211,12 @@ describe('propose_plan_change', () => {
     const def = coachActionDefinitions().find((d) => d.function.name === 'propose_plan_change')!;
     expect((def.function.parameters as { required?: string[] }).required).toEqual(['edits']);
     const d = def.function.description;
-    // The tiebreak against the rebuild card, and the honesty about what calling it does.
+    // The tiebreak against the full rebuild, and the honesty about what calling it does. The
+    // rebuild's referent changed with Phase 2 (docs/cadence/PLAN-CHANGES.md): the coach now has
+    // her own door — start_replan — so the description points there, not at a card only the app
+    // could offer.
     expect(d).toMatch(/does NOT change anything/i);
-    expect(d).toMatch(/build card/);
+    expect(d).toMatch(/start_replan/);
     expect(d).toMatch(/get_active_plan/);
     // Owner 2026-08-31 (the coach IS the planner): a whole week is one call carrying the slate,
     // and the return is where she checks the shape before telling the user it is up.

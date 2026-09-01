@@ -7,33 +7,43 @@ import { ProposedWeek } from './ProposedWeek.tsx';
 import { useReplanPreview } from './useReplanPreview.ts';
 
 /**
- * "Adjust my plan" as a pop-up sheet (was a persistent bottom bar). Same suggest-never-
- * auto-apply flow: steer (optional, in the user's own words) → preview the coach's proposed
- * week → confirm or "Not now". The sheet owns the whole lifecycle; the parent just refreshes
- * on commit. Voice input on the steer box (SteerBox).
+ * "Adjust my plan" as a pop-up sheet (was a persistent bottom bar). Voice input on the steer box
+ * (SteerBox). Two modes, two roads (PLAN-CHANGES.md Phase 2 — route by blast radius):
  *
- * The synthesis behind "See the adjustment" runs server-side as a durable background run — see
- * useReplanPreview, which owns the polling, the real stage line, and the honest copy. This file is
- * the surface only, and because the run survives the client, closing the sheet mid-run is safe:
- * the × and the scrim stay live, and the finished week comes back via push + the plan view's
- * mount-time pending check. It gets the taller `sheet-compose` treatment while composing, because
- * the ask is the whole point of the screen and it was being typed into two fixed lines at the
- * bottom of a 78%-height sheet (owner, 2026-08-15: "There's more real-estate here that we can
- * use").
+ * `mode='adjust'` is a compose surface: the steer, in the user's own words, goes to the COACH —
+ * `onSteerToCoach` closes the sheet and sends it as a visible chat message, verbatim. She triages
+ * the size of the ask (a deterministic change card, one session redone, or a full rebuild she
+ * starts herself). It used to fire the whole-week synthesis pipeline no matter how small the ask —
+ * "add chest and abs" cost a full rebuild. The compose branch never synthesizes anything now; it
+ * gets the taller `sheet-compose` treatment because the ask is the whole point of the screen
+ * (owner, 2026-08-15: "There's more real-estate here that we can use").
  *
- * `mode='rebalance'` is the "review my whole plan" action: no steer box — it opens straight into a
- * no-steer preview (which, with fan-out enabled, runs the holistic reduce over every goal) so the
- * user just reviews and confirms the rebalanced week.
+ * `mode='rebalance'` is the "review my whole plan" action — an explicit whole-week ask, so it
+ * needs no triage: no steer box, it opens straight into a no-steer synthesis preview → confirm or
+ * "Not now". That run lives server-side as a durable background run — see useReplanPreview, which
+ * owns the polling, the real stage line, and the honest copy. Because the run survives the client,
+ * closing the sheet mid-run is safe: the × and the scrim stay live, and the finished week comes
+ * back via push + the plan view's mount-time pending check.
+ *
+ * Either mode, the mount-time pending check runs first: a proposal the coach already drew is
+ * SHOWN (confirm/dismiss unchanged), a live run is joined — never synthesized over.
  */
 export function AdjustSheet({
   onClose,
   onCommitted,
+  onSteerToCoach,
   initialSteer,
   mode = 'adjust',
   adoptCaptured = false,
 }: {
   onClose: () => void;
   onCommitted: (note: string) => void;
+  /**
+   * Hand the composed steer to the coach as a VISIBLE chat message — the user's words, verbatim,
+   * never rewritten or prefixed. The host closes the sheet and switches to the Coach tab.
+   * Required in `mode='adjust'` (the compose branch's only submit); rebalance never calls it.
+   */
+  onSteerToCoach?: (steer: string) => void;
   initialSteer?: string; // pre-filled request (e.g. the nutrition baseline's suggested change)
   mode?: 'adjust' | 'rebalance';
   /**
@@ -53,7 +63,9 @@ export function AdjustSheet({
   const [msg, setMsg] = useState('');
   // Rebalance opens straight into a whole-plan preview — the review IS the action, no steer
   // needed. The hook checks for a server-side pending proposal FIRST either way, so a week the
-  // coach already drew is shown, never re-synthesized over (2026-08-31).
+  // coach already drew is shown, never re-synthesized over (2026-08-31). Adjust mode keeps the
+  // hook for exactly that mount check (and to join a live run); it never calls start() anymore —
+  // typed steers go to the coach via onSteerToCoach (Phase 2).
   const preview = useReplanPreview({ steer: () => steer, adoptCaptured, autoStart: mode === 'rebalance' });
   const busy = preview.busy || committing;
 
@@ -147,7 +159,11 @@ export function AdjustSheet({
               </div>
             ) : (
               <>
-                <div className="logbox-label">Anything specific you want changed?</div>
+                {/* The hand-off is said up front, in her I-voice, so landing in the chat is never
+                    a surprise — and the message that appears there is theirs, word for word. */}
+                <div className="logbox-label">
+                  {"Tell me what should change — I'll rework it or put up a card you can approve."}
+                </div>
                 <SteerBox
                   value={steer}
                   onChange={setSteer}
@@ -158,11 +174,18 @@ export function AdjustSheet({
                 {preview.error && <div className="auth-error">{preview.error}</div>}
               </>
             )}
-            {!preview.busy && (
-              <button className="lockbtn" onClick={() => void preview.start()}>
-                {preview.error ? 'Try again' : 'See the adjustment →'}
-              </button>
-            )}
+            {!preview.busy &&
+              (mode === 'rebalance' ? (
+                <button className="lockbtn" onClick={() => void preview.start()}>
+                  {preview.error ? 'Try again' : 'See the adjustment →'}
+                </button>
+              ) : (
+                // The compose branch's only submit: the words go to the coach, never to the
+                // synthesis pipeline. Disabled while empty — there is no such thing as a blank ask.
+                <button className="lockbtn" disabled={!steer.trim()} onClick={() => onSteerToCoach?.(steer.trim())}>
+                  Send it over →
+                </button>
+              ))}
           </div>
         ) : (
           <div className="sheet-body wk-body">

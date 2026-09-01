@@ -56,6 +56,11 @@ const TIEBREAK_PAIRS: Array<[string, string]> = [
   ['get_workout_history', 'get_recent_logs'], // device records vs their own words
   ['get_practice_totals', 'get_goal_progress'], // one counted thing vs overall numbers
   ['get_repertoire', 'get_practice_totals'], // what they know vs how much they practiced
+  // Named commitment edits (seconds, instant card) vs the whole week reshaped (minutes, background
+  // run). The 2026-08-31 incident IS this ambiguity mis-resolved — a five-exercise tweak routed
+  // into a full re-synthesis — so the always-on side must carry the tiebreak (PLAN-CHANGES.md
+  // Phase 2; start_replan lives in the tail, invisible to this file's byName lookup).
+  ['propose_plan_change', 'start_replan'],
 ];
 
 /** Every failure here points at the checklist, because the rule broken is written down there and

@@ -22,6 +22,7 @@ import { LOG_MEAL } from './coach-action-log-meal.ts';
 import { PROPOSE_PROGRESS_LAYOUT } from './coach-action-progress-layout.ts';
 import { UPDATE_REPERTOIRE } from './coach-action-repertoire.ts';
 import { REVISE_SESSION } from './coach-action-revise-session.ts';
+import { START_REPLAN } from './coach-action-start-replan.ts';
 
 /** Today, YYYY-MM-DD — stamped on a target change so the weekly review throttle can see it. */
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -117,7 +118,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   propose_plan_change: {
     name: 'propose_plan_change',
     description:
-      'Propose a plan change — move, retime, resize, drop, add, or rework what one CONTAINS. Does NOT change anything — the card needs a tap; never say it is done before that. Use it for any change they name; read get_active_plan first — edits address commitments BY its printed handles. A whole week is reshaped by SEVERAL edits in one call: settle the shape with the user, then ONE call carrying the full slate; the return reports the proposed week\'s shape and clashes to check before you say it is up. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45, "reason": "..."}]}. Calling again ADDS to the card; on a mistake never add a fix beside it — redo with "start_over": true, ONLY the corrected edits. A whole rebuild is the build card.',
+      'Propose a plan change — move, retime, resize, drop, add, or rework what one CONTAINS. Does NOT change anything — the card needs a tap; never say it is done before that. Use it for any change they name; read get_active_plan first — edits address commitments BY its printed handles. A whole week is reshaped by SEVERAL edits in one call: settle the shape with the user, then ONE call carrying the full slate; the return reports the proposed week\'s shape and clashes to check before you say it is up. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45, "reason": "..."}]}. Calling again ADDS to the card; on a mistake never add a fix beside it — redo with "start_over": true, ONLY the corrected edits. A full rebuild from their words is start_replan.',
     parameters: {
       properties: {
         edits: EDIT_SCHEMA,
@@ -524,6 +525,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   // (owner ruling 2026-08-30, coach-tool-tiers.ts); promotion needs its own ruling and an
   // eval:tools run. Rung 1 of PLAN-CHANGES.md: rebuild ONE session's contents from their words.
   revise_session: REVISE_SESSION,
+  // Tail tier, same ruling. Rung 3 of PLAN-CHANGES.md (Phase 2): the door onto the background
+  // whole-week rebuild — the same plan_run spine the Adjust sheet uses (replan-start.ts), so a
+  // rebuild asked for in chat and one tapped on the sheet are one mechanism, never two.
+  start_replan: START_REPLAN,
   // Tail tier (the drawer), not ALWAYS_ACTIONS: extending a week is an occasional, explicit ask
   // — the end-cap's visible send names it in the same words as its DRAWER_HOOKS line.
   extend_horizon: EXTEND_HORIZON,
