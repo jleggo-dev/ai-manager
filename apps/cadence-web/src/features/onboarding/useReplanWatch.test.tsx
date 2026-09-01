@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { useReplanWatch, REPLAN_WATCH_LINES } from './useReplanWatch.ts';
 
 const getPendingReplan = vi.fn();
@@ -12,16 +12,25 @@ const RUNNING = { ok: true, proposal: null, running: { stage: 'drafting', starte
 const FOUND = { ok: true, proposal: { activities: [], note: 'Redrawn.' } };
 const FAILED = { ok: true, proposal: null, failed: { message: 'The drafting stalled.' } };
 
+// The whole file runs on fake timers: the hook's poll loop and done-linger are timer-driven, and on
+// a real clock the short-lived phases race the test's own scheduling (they slipped past waitFor
+// under load). Here the clock only moves when a test advances it, so every phase holds until read.
+const POLL_MS = 5;
+const LINGER_MS = 300;
+
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers();
   getPendingReplan.mockResolvedValue(NONE);
+});
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function mount() {
-  // doneLingerMs must outlast waitFor's ~50ms polling interval, or the done state slips between
-  // checks — a fact about the test clock, not the machine under test (see useReplanPreview.test).
   return renderHook(
-    ({ streaming }: { streaming: boolean }) => useReplanWatch({ streaming, pollEveryMs: 5, doneLingerMs: 300 }),
+    ({ streaming }: { streaming: boolean }) =>
+      useReplanWatch({ streaming, pollEveryMs: POLL_MS, doneLingerMs: LINGER_MS }),
     { initialProps: { streaming: false } },
   );
 }
@@ -30,6 +39,13 @@ function mount() {
 async function turn(rerender: (p: { streaming: boolean }) => void) {
   await act(async () => rerender({ streaming: true }));
   await act(async () => rerender({ streaming: false }));
+}
+
+/** Advance the fake clock inside act, so the async check a fired timer kicks off settles too. */
+async function advance(ms: number) {
+  await act(async () => {
+    vi.advanceTimersByTime(ms);
+  });
 }
 
 /**
@@ -43,9 +59,9 @@ describe('useReplanWatch', () => {
     expect(getPendingReplan).not.toHaveBeenCalled(); // never on mount — the post-turn check is the gate
 
     await turn(rerender);
-    await waitFor(() => expect(getPendingReplan).toHaveBeenCalledTimes(1));
-    // Give a would-be poll loop time to betray itself.
-    await act(async () => await new Promise((r) => setTimeout(r, 20)));
+    expect(getPendingReplan).toHaveBeenCalledTimes(1);
+    // Give a would-be poll loop several intervals to betray itself.
+    await advance(POLL_MS * 4);
     expect(getPendingReplan).toHaveBeenCalledTimes(1);
     expect(result.current.phase).toBe('idle');
     expect(result.current.line).toBeNull();
@@ -55,14 +71,19 @@ describe('useReplanWatch', () => {
     getPendingReplan.mockResolvedValueOnce(RUNNING).mockResolvedValueOnce(RUNNING).mockResolvedValue(FOUND);
     const { result, rerender } = mount();
 
-    await turn(rerender);
-    await waitFor(() => expect(result.current.phase).toBe('running'));
+    await turn(rerender); // the post-turn check finds the run
+    expect(result.current.phase).toBe('running');
     expect(result.current.line).toBe(REPLAN_WATCH_LINES.running);
 
-    await waitFor(() => expect(result.current.phase).toBe('done'));
+    await advance(POLL_MS); // next poll: still running — the chip holds
+    expect(result.current.phase).toBe('running');
+
+    await advance(POLL_MS); // next poll: the proposal is up
+    expect(result.current.phase).toBe('done');
     expect(result.current.line).toBe(REPLAN_WATCH_LINES.done);
 
-    await waitFor(() => expect(result.current.phase).toBe('idle'));
+    await advance(LINGER_MS); // the done line has had its say
+    expect(result.current.phase).toBe('idle');
     expect(result.current.line).toBeNull();
   });
 
@@ -71,7 +92,8 @@ describe('useReplanWatch', () => {
     const { result, rerender } = mount();
 
     await turn(rerender);
-    await waitFor(() => expect(result.current.phase).toBe('done'));
+    await advance(POLL_MS); // the record has moved on
+    expect(result.current.phase).toBe('done');
     expect(result.current.line).toBe(REPLAN_WATCH_LINES.done);
   });
 
@@ -80,11 +102,12 @@ describe('useReplanWatch', () => {
     const { result, rerender } = mount();
 
     await turn(rerender);
-    await waitFor(() => expect(result.current.phase).toBe('failed'));
+    await advance(POLL_MS); // the verdict lands
+    expect(result.current.phase).toBe('failed');
     expect(result.current.line).toBe(REPLAN_WATCH_LINES.failed);
 
     // It does not time out on its own — "say the word" needs the invitation still on screen…
-    await act(async () => await new Promise((r) => setTimeout(r, 40)));
+    await advance(60_000);
     expect(result.current.phase).toBe('failed');
 
     // …and the next turn beginning is what retires it.
@@ -101,8 +124,13 @@ describe('useReplanWatch', () => {
     const { result, rerender } = mount();
 
     await turn(rerender);
-    await waitFor(() => expect(result.current.phase).toBe('running'));
-    await waitFor(() => expect(result.current.phase).toBe('done'));
+    expect(result.current.phase).toBe('running');
+
+    await advance(POLL_MS); // the READ fails — the chip holds instead of guessing
+    expect(result.current.phase).toBe('running');
+
+    await advance(POLL_MS);
+    expect(result.current.phase).toBe('done');
   });
 
   /**
@@ -114,7 +142,7 @@ describe('useReplanWatch', () => {
     const { result, rerender } = mount();
 
     await turn(rerender);
-    await waitFor(() => expect(getPendingReplan).toHaveBeenCalledTimes(1));
+    expect(getPendingReplan).toHaveBeenCalledTimes(1);
     expect(result.current.phase).toBe('idle');
     expect(result.current.line).toBeNull();
   });
