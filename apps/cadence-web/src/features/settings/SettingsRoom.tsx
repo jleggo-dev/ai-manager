@@ -7,6 +7,7 @@ import {
   isDevMode,
   type ReviewData,
   type UserConstraint,
+  type UserRoutine,
 } from '../../lib/api.ts';
 import { supabase } from '../../lib/supabase.ts';
 import { AppleHealthSettings } from './AppleHealthSettings.tsx';
@@ -19,10 +20,12 @@ import { SettingsNutrition } from './SettingsNutrition.tsx';
 import { SettingsSubScreen } from './SettingsSubScreen.tsx';
 import { SettingsTools } from './SettingsTools.tsx';
 import { SettingsYouGroup } from './SettingsYouGroup.tsx';
+import { SettingsYourActivities } from './SettingsYourActivities.tsx';
 import { buildRoomSubLine, weeksSinceCreation } from './settingsRoomWeek.ts';
 import { UnitSettings } from './UnitSettings.tsx';
 
-type RoomScreen = 'root' | 'coachFace' | 'goals' | 'tools' | 'nutrition' | 'units' | 'notifications' | 'health';
+type RoomScreen =
+  'root' | 'coachFace' | 'goals' | 'activities' | 'tools' | 'nutrition' | 'units' | 'notifications' | 'health';
 
 /**
  * Settings, as a full-screen room (design owner-approved 2026-08-31) — replacing the bottom
@@ -42,12 +45,18 @@ export function SettingsRoom({
   email,
   onBack,
   onCoach,
+  onEditRoutine,
 }: {
   email: string | null;
   onBack: () => void;
   /** App-authored context for the next coach turn — threaded down to the goals/tools/nutrition
    *  doors, whose screens can hand the conversation to the coach the same way `FoodHome` does. */
   onCoach?: (note: string) => void;
+  /** Activity Builder wave 3 seam: opens the steps editor (a parallel parcel — the builder,
+   *  W3-2) for one of the user's built routines, from the "Edit steps" menu item in Your
+   *  activities. Absent in this parcel's own mounts/tests — the item simply doesn't render, and
+   *  this file never imports the builder itself. Wired by the integration orchestrator. */
+  onEditRoutine?: (routine: UserRoutine) => void;
 }) {
   const [screen, setScreen] = useState<RoomScreen>('root');
   const [review, setReview] = useState<ReviewData | null>(null);
@@ -85,6 +94,9 @@ export function SettingsRoom({
     );
   }
   if (screen === 'goals') return <SettingsGoals onBack={goRoot} onCoach={onCoach} />;
+  if (screen === 'activities') {
+    return <SettingsYourActivities onBack={goRoot} onEditRoutine={onEditRoutine} />;
+  }
   if (screen === 'tools') return <SettingsTools onBack={goRoot} onCoach={onCoach} />;
   if (screen === 'nutrition') return <SettingsNutrition onBack={goRoot} onCoach={onCoach} />;
   if (screen === 'units') {
@@ -133,6 +145,7 @@ export function SettingsRoom({
           review={review}
           constraints={constraints}
           onOpenGoals={() => setScreen('goals')}
+          onOpenActivities={() => setScreen('activities')}
           onOpenTools={() => setScreen('tools')}
           onOpenNutrition={() => setScreen('nutrition')}
         />
