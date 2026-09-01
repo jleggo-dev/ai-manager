@@ -9562,3 +9562,611 @@ textarea.wiz-title {
   border: 1.5px dashed oklch(55% 0.06 250);
   color: oklch(45% 0.06 250);
 }
+
+/* ══ Activity Builder (parcel W3-2, 2026-09-01) — the full-screen surface where a person builds
+   their own activity from the coach's own step tools (`features/builder/ActivityBuilder.tsx`).
+   Three phases share the `.ab` shell: type-first entry (design B), the step-card builder (design
+   1B), the palette overlay (design C) and the saved moment (design E, trimmed) each get their own
+   block below. Family/tool-chip colours are lifted from the drawn design's own swatches, not
+   invented here — see builderSeeds.ts / builderCatalog.ts for where each oklch value came from. ── */
+.ab {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink);
+  position: relative;
+}
+.ab-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px 8px;
+}
+.ab-back {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.06);
+  font-size: 16px;
+  font-weight: 900;
+  color: oklch(45% 0.02 150);
+  cursor: pointer;
+}
+.ab-title {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  color: oklch(27% 0.02 150);
+  flex: 1;
+}
+.ab-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 16px 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Type-first entry (design B): family grid, then one family's starting points ── */
+.ab-type-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 2px 2px;
+}
+.ab-type-h1 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 21px;
+  color: oklch(26% 0.03 150);
+}
+.ab-type-sub {
+  font-size: 12.5px;
+  color: oklch(52% 0.02 120);
+}
+.ab-seed-sub {
+  padding: 0 2px;
+}
+.ab-family-list,
+.ab-seed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ab-family-row,
+.ab-seed-row {
+  background: var(--surface);
+  border: 1px solid oklch(90% 0.02 85);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.ab-dot {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 50%;
+}
+.ab-dot-lg {
+  width: 14px;
+  height: 14px;
+}
+.ab-family-t,
+.ab-seed-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ab-family-t b,
+.ab-seed-t b {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: oklch(28% 0.02 150);
+}
+.ab-family-t span,
+.ab-seed-t span {
+  font-size: 11.5px;
+  color: oklch(55% 0.02 120);
+}
+.ab-chev {
+  font-size: 18px;
+  color: oklch(62% 0.02 120);
+  flex: none;
+}
+.ab-blank-row {
+  border: none;
+  background: transparent;
+  text-align: center;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: oklch(48% 0.02 120);
+  cursor: pointer;
+}
+
+/* ── The builder (design 1B): Cancel/Save header, name row, step-card stack, footer ── */
+.ab-bhead {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 4px;
+}
+.ab-cancel {
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 700;
+  color: oklch(48% 0.02 120);
+  cursor: pointer;
+  padding: 6px;
+}
+.ab-save {
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 900;
+  color: oklch(45% 0.09 152);
+  cursor: pointer;
+  padding: 6px;
+}
+.ab-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ab-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px;
+}
+.ab-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 21px;
+  color: oklch(26% 0.03 150);
+  border: none;
+  border-bottom: 2px solid oklch(88% 0.02 85);
+  padding-bottom: 4px;
+  background: transparent;
+  outline: none;
+}
+.ab-save-error {
+  background: oklch(96% 0.03 40);
+  border: 1px solid oklch(85% 0.06 40);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: oklch(42% 0.1 40);
+}
+.ab-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ab-card {
+  background: var(--surface);
+  border: 1px solid oklch(90% 0.02 85);
+  border-radius: 16px;
+  padding: 13px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.ab-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ab-chip {
+  flex: none;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.ab-card-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: oklch(28% 0.02 150);
+  border: none;
+  background: transparent;
+  outline: none;
+}
+.ab-card-reorder {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  gap: 1px;
+}
+.ab-card-reorder button {
+  border: none;
+  background: transparent;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  color: oklch(58% 0.02 120);
+  cursor: pointer;
+}
+.ab-card-reorder button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.ab-card-menu-wrap {
+  position: relative;
+  flex: none;
+}
+.ab-card-menu-btn {
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  color: oklch(62% 0.02 120);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.ab-card-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 5;
+  background: var(--surface);
+  border: 1px solid oklch(90% 0.02 85);
+  border-radius: 12px;
+  box-shadow: 0 10px 26px oklch(25% 0.05 265 / 0.16);
+  padding: 4px 0;
+  min-width: 130px;
+  display: flex;
+  flex-direction: column;
+}
+.ab-card-menu button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: oklch(28% 0.02 150);
+  cursor: pointer;
+}
+.ab-card-menu-danger {
+  color: oklch(52% 0.12 40) !important;
+}
+
+/* ── Tool-specific card fields (plain inputs — never a wheel widget) ── */
+.ab-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.ab-field-l {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: oklch(55% 0.02 120);
+}
+.ab-field-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ab-field-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ab-in {
+  border: 1px solid oklch(90% 0.015 95);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: oklch(30% 0.02 150);
+  outline: none;
+  width: 100%;
+  background: var(--surface);
+}
+.ab-in-num {
+  max-width: 90px;
+}
+.ab-in-small {
+  max-width: 64px;
+}
+.ab-textarea {
+  max-width: none;
+  resize: vertical;
+}
+.ab-fixed-note {
+  font-size: 12px;
+  color: oklch(55% 0.02 120);
+  font-style: italic;
+}
+
+/* ── Circuit card — rounds + a short exercise list ── */
+.ab-circuit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ab-circuit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ab-circuit-ex {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ab-circuit-ex .ab-in {
+  width: auto;
+  flex: 1;
+}
+.ab-circuit-rm {
+  flex: none;
+  border: none;
+  background: oklch(95% 0.012 85);
+  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  font-size: 14px;
+  font-weight: 800;
+  color: oklch(48% 0.02 120);
+  cursor: pointer;
+}
+.ab-circuit-rm:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.ab-circuit-add {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: oklch(45% 0.09 152);
+  cursor: pointer;
+  padding: 4px 2px;
+}
+
+/* ── Add step + footer ── */
+.ab-add-step {
+  border: 1.5px dashed oklch(84% 0.03 85);
+  background: transparent;
+  border-radius: 14px;
+  padding: 12px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: oklch(45% 0.02 150);
+  cursor: pointer;
+}
+.ab-footer {
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: oklch(50% 0.02 120);
+  padding: 2px 0 6px;
+}
+
+/* ── The tool palette overlay (design C) ── */
+.ab-palette-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+}
+.ab-palette-scrim {
+  position: absolute;
+  inset: 0;
+  background: oklch(22% 0.03 262 / 0.42);
+}
+.ab-palette {
+  position: relative;
+  width: 100%;
+  max-height: 82vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -14px 34px oklch(25% 0.05 265 / 0.18);
+  padding: 14px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.ab-palette-grab {
+  width: 38px;
+  height: 4px;
+  border-radius: 2px;
+  background: oklch(87% 0.02 85);
+  align-self: center;
+}
+.ab-palette-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: oklch(30% 0.02 150);
+}
+.ab-palette-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.ab-palette-label {
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: oklch(55% 0.02 120);
+}
+.ab-palette-label-capture {
+  color: oklch(42% 0.07 300);
+}
+.ab-palette-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.ab-palette-row {
+  background: oklch(97.5% 0.012 85);
+  border: 1px solid oklch(91% 0.015 85);
+  border-radius: 12px;
+  padding: 10px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  cursor: pointer;
+}
+.ab-palette-row-capture {
+  background: oklch(97% 0.012 300);
+  border-color: oklch(92% 0.02 300);
+}
+.ab-palette-row b {
+  font-size: 13px;
+  font-weight: 800;
+  color: oklch(28% 0.02 150);
+}
+.ab-palette-row span {
+  font-size: 10.5px;
+  color: oklch(52% 0.02 120);
+}
+.ab-palette-row-capture span {
+  color: oklch(50% 0.04 300);
+}
+.ab-palette-note {
+  border-top: 1px solid oklch(92% 0.012 85);
+  padding-top: 10px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: oklch(50% 0.02 120);
+}
+
+/* ── Cancel-with-edits confirm (light — no typed ritual) ── */
+.ab-confirm-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: oklch(22% 0.03 262 / 0.42);
+  padding: 20px;
+}
+.ab-confirm {
+  width: 100%;
+  max-width: 340px;
+  background: var(--surface);
+  border-radius: 18px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 14px 34px oklch(25% 0.05 265 / 0.2);
+}
+.ab-confirm-t {
+  font-size: 15px;
+  font-weight: 800;
+  color: oklch(28% 0.02 150);
+}
+.ab-confirm-sub {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: oklch(45% 0.02 150);
+}
+.ab-confirm-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ab-confirm-row button {
+  flex: 1;
+  text-align: center;
+  padding: 10px;
+  border-radius: 12px;
+  border: none;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  background: oklch(95% 0.012 85);
+  color: oklch(40% 0.02 150);
+}
+.ab-confirm-danger {
+  background: oklch(52% 0.12 40) !important;
+  color: #fff !important;
+}
+
+/* ── After save (design E, trimmed): run it now, or leave it saved ── */
+.ab-saved {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface);
+  padding: 14px 18px 28px;
+}
+.ab-saved-grab {
+  width: 38px;
+  height: 4px;
+  border-radius: 2px;
+  background: oklch(87% 0.02 85);
+  align-self: center;
+  margin-bottom: 4px;
+}
+.ab-saved-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ab-saved-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: oklch(30% 0.02 150);
+}
+.ab-saved-sub {
+  font-size: 12px;
+  color: oklch(52% 0.02 120);
+}
+.ab-saved-run {
+  border: none;
+  border-radius: 16px;
+  padding: 14px 15px;
+  font-size: 14.5px;
+  font-weight: 900;
+  text-align: center;
+  color: oklch(24% 0.04 60);
+  background: linear-gradient(168deg, oklch(87% 0.11 62) 0%, oklch(78% 0.14 57) 62%);
+  cursor: pointer;
+}
+.ab-saved-done {
+  border: 1px solid oklch(90% 0.02 85);
+  border-radius: 16px;
+  padding: 12px 15px;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  color: oklch(40% 0.02 150);
+  background: transparent;
+  cursor: pointer;
+}
