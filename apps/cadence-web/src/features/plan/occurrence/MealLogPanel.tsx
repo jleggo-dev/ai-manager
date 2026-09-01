@@ -1,3 +1,4 @@
+import { MEAL_KINDS } from '@cadence/shared';
 import { MicButton } from '../../../components/MicButton.tsx';
 import type { MealKind, OccurrenceDetail } from '../../../lib/api.ts';
 import { leftLine, macroLine } from './format.ts';
@@ -163,12 +164,11 @@ export function MealLogPanel({
           onChange={(e) => meal.setMealKind(e.target.value as MealKind)}
           disabled={meal.mealBusy}
         >
-          <option value="breakfast">breakfast</option>
-          <option value="lunch">lunch</option>
-          <option value="dinner">dinner</option>
-          <option value="snack">snack</option>
-          <option value="drink">drink</option>
-          <option value="other">other</option>
+          {MEAL_KINDS.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
         </select>
         {!meal.mealPhoto && (
           <button

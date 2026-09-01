@@ -1,24 +1,18 @@
-import type { MealPlanItem, MicronutrientKey, MicroTargetOverride } from '@cadence/shared';
+import type { Macros, MealKind, MealPlanItem, MicronutrientKey, MicroTargetOverride } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /* ── Nutrition (Observe phase) ─────────────────────────────────── */
-export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | 'other';
-/** Mirrors `Macros` in @cadence/shared — macros plus the micronutrients a day can now total. */
-export interface MealMacros {
-  kcal?: number;
-  protein_g?: number;
-  carbs_g?: number;
-  fat_g?: number;
-  fiber_g?: number;
-  sodium_mg?: number;
-  iron_mg?: number;
-  zinc_mg?: number;
-  vitamin_c_mg?: number;
-  calcium_mg?: number;
-  potassium_mg?: number;
-  vitamin_b12_ug?: number;
-  source?: 'ai' | 'user';
-}
+
+/**
+ * Both of these are the canonical shared types under the names the web app already imports
+ * everywhere — aliases, never copies. They used to be written out again here, and both mirrors had
+ * already fallen behind: `MealMacros.source` still offered only 'ai' | 'user' after the ledger and
+ * research provenances landed, so a recipe priced from the food ledger reached the client with no
+ * provenance at all. A second declaration of a type the shared package owns cannot be kept honest
+ * by the compiler, so there isn't one.
+ */
+export type { MealKind };
+export type MealMacros = Macros;
 export interface Meal {
   log_id: string;
   date: string;

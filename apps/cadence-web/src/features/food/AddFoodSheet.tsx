@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { macrosForLog, type Food } from '@cadence/shared';
+import { isStoreFoodSource, macrosForLog, MEAL_KINDS, type Food } from '@cadence/shared';
 import { FoodMacroCard } from './FoodMacroCard.tsx';
 import { compoundLabel } from './servingPicker.ts';
 import { UnitSheet } from './UnitSheet.tsx';
 import type { MealKind } from '../../lib/api.ts';
-
-const MEALS: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -63,7 +61,7 @@ export function AddFoodSheet({
         <div className="fd-name">
           <b>{food.name}</b>
           <span>
-            {[food.brand, food.source === 'usda' || food.source === 'off' ? 'from the food list' : 'your saved food']
+            {[food.brand, isStoreFoodSource(food.source) ? 'from the food list' : 'your saved food']
               .filter(Boolean)
               .join(' · ')}
           </span>
@@ -114,7 +112,7 @@ export function AddFoodSheet({
             aria-label="Meal"
             onChange={(e) => setSlot(e.target.value as MealKind)}
           >
-            {MEALS.map((m) => (
+            {MEAL_KINDS.map((m) => (
               <option key={m} value={m}>
                 {m}
               </option>

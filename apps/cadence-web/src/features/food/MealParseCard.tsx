@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { MEAL_KINDS } from '@cadence/shared';
 import { logPreviewedMeal, type MealKind, type MealPreview, type PlateAdvice } from '../../lib/api.ts';
 import { useInvalidateNutritionDay } from '../../lib/query/index.ts';
 import { mealForNow } from '../plan/occurrence/format.ts';
@@ -7,8 +8,6 @@ import { MealAmountRows } from './MealAmountRows.tsx';
 import { MealVendorAsk } from './MealVendorAsk.tsx';
 import { MealItemEdit } from './MealItemEdit.tsx';
 import { useMealAmounts } from './useMealAmounts.ts';
-
-const MEAL_KINDS: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
 
 const countLine = (n: number): string =>
   n === 1 ? 'One thing' : n === 2 ? 'Two things' : n === 3 ? 'Three things' : `${n} things`;

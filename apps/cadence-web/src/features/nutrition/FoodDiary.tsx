@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { MEAL_KINDS } from '@cadence/shared';
 import type { Meal, MealKind, NutritionDayData } from '../../lib/api.ts';
 import { FoodDiaryItems } from './FoodDiaryItems.tsx';
 import { MealItemSheet } from './MealItemSheet.tsx';
@@ -6,17 +7,25 @@ import { diaryRows, mealName, type DiaryRow } from './foodDiaryRows.ts';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
 
-/** The four standing slots, in eating order; drinks and one-offs get their own row only when present. */
-const SLOTS: Array<{ kind: MealKind; label: string }> = [
-  { kind: 'breakfast', label: 'Breakfast' },
-  { kind: 'lunch', label: 'Lunch' },
-  { kind: 'dinner', label: 'Dinner' },
-  { kind: 'snack', label: 'Snacks' },
-];
-const EXTRA: Array<{ kind: MealKind; label: string }> = [
-  { kind: 'drink', label: 'Drinks' },
-  { kind: 'other', label: 'Other' },
-];
+/** Every slot needs a name, and `Record<MealKind, …>` is what makes the compiler say so. */
+const MEAL_LABELS: Record<MealKind, string> = {
+  breakfast: 'Breakfast',
+  lunch: 'Lunch',
+  dinner: 'Dinner',
+  snack: 'Snacks',
+  drink: 'Drinks',
+  other: 'Other',
+};
+
+/** The four standing slots, in eating order. */
+const STANDING: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+const labelled = (kind: MealKind): { kind: MealKind; label: string } => ({ kind, label: MEAL_LABELS[kind] });
+
+const SLOTS = STANDING.map(labelled);
+/** Everything else — drinks and one-offs today — gets a row only when it has something in it.
+ *  Derived rather than listed, so a slot added later shows up here instead of vanishing. */
+const EXTRA = MEAL_KINDS.filter((k) => !STANDING.includes(k)).map(labelled);
 
 function slotSum(meals: Meal[]): { kcal: number; protein: number; items: number; provisional: boolean } {
   let kcal = 0;

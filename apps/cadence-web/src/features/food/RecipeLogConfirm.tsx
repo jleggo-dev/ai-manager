@@ -3,12 +3,10 @@
  */
 import { useState } from 'react';
 import type { DietaryProfile, Recipe } from '@cadence/shared';
-import { assessDietarySafety } from '@cadence/shared';
+import { assessDietarySafety, MEAL_KINDS } from '@cadence/shared';
 import { logMealFromRecipe, recipeMacroHint, type Meal, type MealKind } from '../../lib/api.ts';
 import { useInvalidateNutritionDay } from '../../lib/query/index.ts';
 import { mealForNow } from '../plan/occurrence/format.ts';
-
-const MEAL_KINDS: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
 
 function scaleMacros(recipe: Recipe, servings: number) {
   const m = recipe.macros_per_serving;

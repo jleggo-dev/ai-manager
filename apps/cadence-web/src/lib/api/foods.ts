@@ -17,6 +17,7 @@
 
 import {
   EMPTY_DIETARY_PROFILE,
+  isFoodSource,
   sanitizeDietaryProfile,
   type DietaryProfile,
   type Food,
@@ -200,15 +201,7 @@ function parseCandidate(raw: unknown): FoodCandidate | null {
   const base_unit = raw.base_unit;
   if (base_unit !== 'g' && base_unit !== 'ml' && base_unit !== 'item') return null;
   const source = raw.source;
-  if (
-    source !== 'llm' &&
-    source !== 'label_photo' &&
-    source !== 'manual' &&
-    source !== 'chat' &&
-    source !== 'usda' &&
-    source !== 'off'
-  )
-    return null;
+  if (!isFoodSource(source)) return null;
   if (!isRecord(raw.macros_per_base) || !Array.isArray(raw.servings) || raw.servings.length === 0) return null;
   const servings: FoodServing[] = [];
   for (const s of raw.servings) {
