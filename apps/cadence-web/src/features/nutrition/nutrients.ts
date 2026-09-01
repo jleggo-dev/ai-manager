@@ -1,4 +1,11 @@
-import { MICRONUTRIENT_KEYS, microStatus, micronutrientTargets, type MicronutrientTarget } from '@cadence/shared';
+import {
+  MICRONUTRIENT_KEYS,
+  microStatus,
+  resolveMicronutrientTargets,
+  type MicronutrientKey,
+  type MicronutrientTarget,
+  type MicroTargetOverride,
+} from '@cadence/shared';
 import type { Meal, MealMacros } from '../../lib/api.ts';
 
 /**
@@ -44,6 +51,8 @@ export interface NutrientReading {
   /** The unit these two texts are in, which is not always the reference intake's own. */
   unit: string;
   why: string;
+  /** True when this number is one they were told outside the app, not the published figure. */
+  overridden: boolean;
 }
 
 export interface NutrientsView {
@@ -131,6 +140,7 @@ function reading(t: MicronutrientTarget, eaten: number | undefined): NutrientRea
     targetText: num(t.amount * d.scale, d.dp),
     unit: d.unit,
     why: t.why,
+    overridden: t.origin === 'override',
   };
 }
 
@@ -143,11 +153,22 @@ const AIMING_MAX = 3;
  * Reference intakes come from the published adult table with no age or sex applied: the web has
  * neither on hand, and `micronutrientTargets` answers an empty argument with the more cautious
  * figure of each pair by design. The copy must therefore not claim to be personalised.
+ *
+ * `overrides` is the exception, and it rides in on `day.targets.micro_targets` — a number this
+ * person was given outside the app (owner ruling 2026-09-01). It is passed through rather than
+ * looked up so this screen and the coach's own micro lines read the SAME figure: two surfaces
+ * quoting different targets for the same nutrient is the failure this whole change came out of.
  */
-export function buildNutrientsView(totals: MealMacros, meals: Meal[]): NutrientsView {
+export function buildNutrientsView(
+  totals: MealMacros,
+  meals: Meal[],
+  overrides?: Partial<Record<MicronutrientKey, MicroTargetOverride>> | null,
+): NutrientsView {
   const counted = countMeasured(meals);
   const unmeasured = !hasMicros(totals);
-  const readings = micronutrientTargets({}).map((t) => reading(t, amountOf(totals, t.key as keyof MealMacros)));
+  const readings = resolveMicronutrientTargets({}, overrides).map((t) =>
+    reading(t, amountOf(totals, t.key as keyof MealMacros)),
+  );
 
   const ceiling = readings.find((r) => r.direction === 'ceiling') ?? null;
   const floors = readings.filter((r) => r.direction === 'floor');
@@ -170,7 +191,12 @@ export function buildNutrientsView(totals: MealMacros, meals: Meal[]): Nutrients
 export function countedLine(view: NutrientsView): string {
   const { measured, total } = view.counted;
   if (total === 0) return 'Nothing logged yet, so there is nothing to count from.';
-  const source = 'Reference intakes are the published adult figures; sodium is the only ceiling.';
+  // Never claim every figure is the published one when it is not — an override is exactly the
+  // number this person cares most about, and quietly filing it under "published" erases that.
+  const anyOverride = [...view.aiming, ...view.also, ...(view.ceiling ? [view.ceiling] : [])].some((r) => r.overridden);
+  const source = anyOverride
+    ? 'Reference intakes are the published adult figures, except the ones you asked me to use instead; sodium is the only ceiling.'
+    : 'Reference intakes are the published adult figures; sodium is the only ceiling.';
   if (measured === 0) {
     return (
       `None of today's ${total} ${total === 1 ? 'item' : 'items'} carry mineral data — what you logged ` +

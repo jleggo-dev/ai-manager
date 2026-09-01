@@ -12,6 +12,7 @@ import {
   sanitizeDietaryProfile,
   formatWeight,
   formatWeightRate,
+  resolveMicronutrientTargets,
   type WeightUnit,
   resolveUnit,
 } from '@cadence/shared';
@@ -275,8 +276,22 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
       ]);
       const targets = user?.macro_targets ?? null;
       const currentKg = user?.baseline?.weight_kg?.current;
+      // Only the ones standing in for a published figure. She can WRITE these (set_micro_target),
+      // so she has to be able to read them back — a tool that can set a number the file never
+      // shows her is how a coach ends up contradicting her own record.
+      const microOverrides = resolveMicronutrientTargets(
+        { sex: user?.baseline?.sex ?? null, age: user?.baseline?.age ?? null },
+        targets?.micro_targets ?? null,
+      ).filter((t) => t.origin === 'override');
       return {
         targets: targets && Object.keys(targets).length ? targets : null,
+        micro_overrides: microOverrides.map((t) => ({
+          label: t.label,
+          amount: t.amount,
+          unit: t.unit,
+          direction: t.direction,
+          why: t.set_because ?? '',
+        })),
         eaten: day.totals,
         left: day.left,
         // Carried so the render converts rather than instructing her to (see the trend block).
@@ -295,11 +310,13 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
         last_reviewed,
         trend,
         unit = 'kg',
+        micro_overrides = [],
       } = r as {
         targets: Record<string, number | string | null> | null;
         eaten: Record<string, number>;
         left: Record<string, number> | null;
         last_reviewed: string | null;
+        micro_overrides?: Array<{ label: string; amount: number; unit: string; direction: string; why: string }>;
         trend: {
           actual_kg_per_week: number;
           safe_kg_per_week: number;
@@ -329,6 +346,11 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
         }
       }
       if (eaten?.kcal != null) lines.push(`Eaten today: ${Math.round(eaten.kcal)} kcal`);
+      for (const m of micro_overrides) {
+        // Named one per line, with its source, because the source is the whole reason it stands.
+        const verb = m.direction === 'ceiling' ? 'stay under' : 'reach';
+        lines.push(`${m.label}: ${verb} ${m.amount}${m.unit} a day instead of the published figure — ${m.why}`);
+      }
       if (trend) {
         /**
          * In their unit, converted here.

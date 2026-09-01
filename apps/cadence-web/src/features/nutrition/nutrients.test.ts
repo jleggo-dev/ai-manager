@@ -127,3 +127,35 @@ describe('hasMicros', () => {
     expect(hasMicros(undefined)).toBe(false);
   });
 });
+
+describe('the numbers a doctor gave them (owner ruling 2026-09-01)', () => {
+  /** What `day.targets.micro_targets` carries once the coach has recorded a doctor's instruction. */
+  const doctorSaid2000 = {
+    vitamin_c_mg: { amount: 2000, why: 'her doctor asked for 2000mg a day', set_at: '2026-09-01' },
+  };
+
+  it('quotes the override instead of the published figure', () => {
+    // 120mg of vitamin C clears the published 90 comfortably and would sit silently in "also".
+    // Against the 2,000 she was told, it is the day's biggest shortfall.
+    const v = buildNutrientsView(RICH, [meal({ macros: RICH })], doctorSaid2000);
+    const vitC = [...v.aiming, ...v.also].find((r) => r.key === 'vitamin_c_mg');
+
+    expect(vitC?.targetText).toBe('2,000');
+    expect(vitC?.overridden).toBe(true);
+    expect(v.aiming.map((r) => r.key)).toContain('vitamin_c_mg');
+  });
+
+  it('leaves every other intake published, and says so', () => {
+    const v = buildNutrientsView(RICH, [meal({ macros: RICH })], doctorSaid2000);
+
+    expect([...v.aiming, ...v.also].filter((r) => r.overridden).map((r) => r.key)).toEqual(['vitamin_c_mg']);
+    expect(countedLine(v)).toMatch(/except the ones you asked me to use instead/);
+  });
+
+  it('claims nothing but the published figures when there is no override', () => {
+    const v = buildNutrientsView(RICH, [meal({ macros: RICH })]);
+
+    expect([...v.aiming, ...v.also].some((r) => r.overridden)).toBe(false);
+    expect(countedLine(v)).not.toMatch(/asked me to use/);
+  });
+});

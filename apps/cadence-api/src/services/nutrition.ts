@@ -8,6 +8,7 @@
  * a parse failure NEVER loses the user's words (raw row still inserted, items empty).
  */
 import {
+  resolveMicronutrientTargets,
   type Macros,
   type MacroTargets,
   type MealKind,
@@ -504,7 +505,11 @@ export async function getNutritionInsight(userId: string, date?: string): Promis
   const windowDays = 7;
   const to = today();
   const from = new Date(Date.now() - (windowDays - 1) * 86_400_000).toISOString().slice(0, 10);
-  const [day, recent] = await Promise.all([getNutritionDay(userId, date), listNutritionLogs(userId, from, to)]);
+  const [day, recent, user] = await Promise.all([
+    getNutritionDay(userId, date),
+    listNutritionLogs(userId, from, to),
+    getUser(userId),
+  ]);
   const summary = summarizeNutrition(recent, windowDays);
   // MacroTargets allows null fields; insight builder only needs positive macro numbers.
   const targets: Macros | null = day.targets
@@ -530,6 +535,14 @@ export async function getNutritionInsight(userId: string, date?: string): Promis
     console.warn('[nutrition] micro rollup skipped:', err instanceof Error ? err.message : err);
   }
 
+  // The floors the micro lines speak against: the published intakes for their sex and age, with
+  // any number their doctor gave them standing in (owner ruling 2026-09-01). Resolved here, where
+  // the user record is, so nutrition-insight-micro stays pure and holds no floor of its own.
+  const microTargets = resolveMicronutrientTargets(
+    { sex: user?.baseline?.sex ?? null, age: user?.baseline?.age ?? null },
+    user?.macro_targets?.micro_targets ?? null,
+  );
+
   return buildNutritionInsight(
     {
       date: day.date,
@@ -544,6 +557,7 @@ export async function getNutritionInsight(userId: string, date?: string): Promis
     summary,
     recent,
     microRollup,
+    microTargets,
   );
 }
 

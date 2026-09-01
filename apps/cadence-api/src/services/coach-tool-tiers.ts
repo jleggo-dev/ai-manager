@@ -206,6 +206,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   check_food_sources: 'ask every food database at once about one food, disagreements included',
   resolve_portion: 'what a household measure of a saved food weighs in grams',
   read_label: 'read an attached photo: nutrition panel or front-of-pack',
+  set_micro_target: "ACTION: a doctor's nutrient target, over the reference",
   research_food: 'web research on a NAMED product no database has — slow',
   get_workout_history: 'their recorded workouts from their devices, newest first',
   get_practice_totals: 'running totals of anything they count — words written, minutes sat, pages read',
@@ -291,7 +292,18 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // `read_label` (MP13/MP14) is only relevant on a turn carrying a photo, which is why it is a
     // read in this tail rather than an ALWAYS_ACTIONS entry — a permanent slot would cost
     // 305–375 tokens on every message forever for something most turns have no photo to use it on.
-    members: ['get_nutrition', 'check_food_sources', 'resolve_portion', 'preview_meal', 'research_food', 'read_label'],
+    // `set_micro_target` is the drawer's fourth ACTION (2026-09-01): the published reference
+    // intakes apply to everyone automatically, and this is the only way a number they were given
+    // outside the app — a doctor's, a prescription's — stands in for one.
+    members: [
+      'get_nutrition',
+      'check_food_sources',
+      'resolve_portion',
+      'preview_meal',
+      'research_food',
+      'read_label',
+      'set_micro_target',
+    ],
   },
   { key: 'writing', label: 'what they have written', members: ['get_journal'] },
   {

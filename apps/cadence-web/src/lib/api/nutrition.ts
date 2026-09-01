@@ -1,4 +1,4 @@
-import type { MealPlanItem } from '@cadence/shared';
+import type { MealPlanItem, MicronutrientKey, MicroTargetOverride } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /* ── Nutrition (Observe phase) ─────────────────────────────────── */
@@ -40,7 +40,8 @@ export interface NutritionDayData {
   provisional_totals: MealMacros;
   confirmed_count: number;
   provisional_count: number;
-  targets: MealMacros | null;
+  /** The stored blob, so `micro_targets` (reference-intake overrides) reaches the Nutrients screen. */
+  targets: (MealMacros & { micro_targets?: Partial<Record<MicronutrientKey, MicroTargetOverride>> }) | null;
   left: MealMacros | null; // per targets incl. eat-back
   burn_kcal: number; // estimated exercise burn from today's done workouts
   eatback_kcal: number; // the eaten-back share added to the kcal allowance

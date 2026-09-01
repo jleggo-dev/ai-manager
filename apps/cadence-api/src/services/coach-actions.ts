@@ -19,6 +19,7 @@ import { OPEN_WEEK_REVIEW } from './coach-action-week-review.ts';
 import { BUILD_NEXT_WEEK } from './coach-action-build-week.ts';
 import { EXTEND_HORIZON } from './coach-action-extend-horizon.ts';
 import { LOG_MEAL } from './coach-action-log-meal.ts';
+import { SET_MICRO_TARGET } from './coach-action-micro-target.ts';
 import { PROPOSE_PROGRESS_LAYOUT } from './coach-action-progress-layout.ts';
 import { UPDATE_REPERTOIRE } from './coach-action-repertoire.ts';
 import { REVISE_SESSION } from './coach-action-revise-session.ts';
@@ -534,6 +535,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   extend_horizon: EXTEND_HORIZON,
 
   log_meal: LOG_MEAL,
+  // Tail tier (the drawer), not ALWAYS_ACTIONS: a doctor's number arrives once and then holds for
+  // months, which is the checklist's "changes data, weekly or rarer" row. Owner ruling 2026-09-01
+  // — the reference intakes stay a lookup, and this is the one path that may stand in for them.
+  set_micro_target: SET_MICRO_TARGET,
 
   propose_progress_layout: PROPOSE_PROGRESS_LAYOUT,
   update_repertoire: UPDATE_REPERTOIRE,
