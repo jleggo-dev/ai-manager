@@ -48,7 +48,10 @@ vi.mock('../config.ts', () => ({
 vi.mock('./tripwires.ts', () => ({
   detectTripwires: (...a: unknown[]) => detectTripwires(...a),
 }));
-vi.mock('./metrics.ts', () => ({
+// Partial: rollingConsistency is stubbed so the consistency-dip tests can drive it directly, but
+// planEngagementCounts is the REAL derivation — the missedCount tests below exist to pin it.
+vi.mock('./metrics.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./metrics.ts')>()),
   rollingConsistency: (...a: unknown[]) => rollingConsistency(...a),
 }));
 vi.mock('./weather/weather.ts', () => ({

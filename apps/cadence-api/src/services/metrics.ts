@@ -1,4 +1,4 @@
-import type { Occurrence, StreakDay, StreakParams, StreakState, StreakView } from '@cadence/shared';
+import type { Activity, Occurrence, StreakDay, StreakParams, StreakState, StreakView } from '@cadence/shared';
 
 /**
  * Deterministic metrics computed from the store (spec §B3) — the numbers the
@@ -69,6 +69,57 @@ export function rollingConsistency(
   }
   const { kept, scheduled } = keptScheduledForDays(occurrences, days);
   return { kept, window: scheduled };
+}
+
+/** What `planEngagementCounts` reads — `listOccurrences` carries `kind` for exactly this reason. */
+export type EngagementOccurrence = ConsistencyOccurrence & { kind: Activity['kind'] };
+
+/** How the person engaged with the plan over a window. `scheduled` is the total, so the three
+ *  outcome buckets never sum to it: today's and future rows are still open, and detour-shelved
+ *  ('paused') rows were deliberately taken off the board rather than dropped. */
+export interface PlanEngagement {
+  done: number;
+  skipped: number;
+  missed: number;
+  scheduled: number;
+}
+
+/**
+ * Plan-engagement counts over a window of occurrences, shared by the tripwire snapshot
+ * (situation.ts) and the re-plan's `recent_activity` (replan.ts) so the two can never drift.
+ * Pure.
+ *
+ * TWO rules, and both were learned the hard way:
+ *
+ * (1) **`missed` is DERIVED.** Nothing in the app ever writes status 'missed' — the client status
+ * endpoint accepts pending|done|skipped and the scheduler only inserts 'pending' — so counting the
+ * literal status yields a structural zero, which reads to a planning model as "they missed
+ * nothing" rather than "we are not telling you". A miss is therefore past-due and still pending.
+ * A 'paused' row (an episode shelved it) is NOT a miss: it was taken off the board on purpose.
+ *
+ * (2) **EFFORTFUL work only** (`kind === 'user'`) — the same line `pauseUserOccurrencesInWindow`
+ * draws, where system tracking rows keep running while the effortful ones pause. The food log
+ * alone is four per-meal system tasks a day, i.e. up to 56 past-due-pending rows in a 14-day
+ * window, which once made the missed-session tripwire fire for every nutrition user after one
+ * forgetful day — and permanently, by design, for anyone who skips a meal (16:8). An untapped food
+ * card is not a missed session: count what happened, never what broke (BRAND.md). The same noise
+ * inflates `scheduled`/`done` for the re-planner, where the food signal already travels separately
+ * as `food_log`.
+ */
+export function planEngagementCounts(occurrences: EngagementOccurrence[], today = new Date()): PlanEngagement {
+  const todayIso = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
+    .toISOString()
+    .slice(0, 10);
+  // Normalize like keptScheduledForDays: the DB driver hands back `date` columns as Date objects.
+  const day = (d: ConsistencyOccurrence['date']): string => new Date(d).toISOString().slice(0, 10);
+  const effortful = occurrences.filter((o) => o.kind === 'user');
+  const count = (s: ConsistencyOccurrence['status']): number => effortful.filter((o) => o.status === s).length;
+  return {
+    done: count('done'),
+    skipped: count('skipped'),
+    missed: effortful.filter((o) => o.status === 'pending' && day(o.date) < todayIso).length,
+    scheduled: effortful.length,
+  };
 }
 
 /* ────────────────────────────────────────────────────────────────

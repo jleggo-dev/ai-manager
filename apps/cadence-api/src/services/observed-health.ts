@@ -121,11 +121,18 @@ const WHAT_THIS_IS =
  * breaking the prompt. This line does the labelling instead, and it earns its place: done/skipped/
  * missed count Cadence's scheduled sessions and nothing else, so a person who trains constantly
  * and ignores our schedule looks identical to one who has stopped moving.
+ *
+ * It also says what `missed` MEANS, because the app never writes that status — `planEngagementCounts`
+ * derives it from past-due, still-pending sessions — and an undefined counter invites the model to
+ * read it as a deliberate no-show.
  */
 export const PLAN_COUNTS_NOTE =
   "done / skipped / missed / scheduled and consistency_last_7_days count occurrences of CADENCE's " +
   'own plan — how they engaged with what we asked of them. They are NOT a record of everything ' +
-  'this person did. observed_health is that record; where the two disagree, both are true.';
+  'this person did. observed_health is that record; where the two disagree, both are true. ' +
+  "These four counts cover the sessions we asked them to DO; the app's own tracking tasks (meal " +
+  'logs, weigh-ins) are not in them, and the food signal is reported separately as food_log. ' +
+  'missed means scheduled, now past due, and never marked done — it is not a statement about why.';
 
 const STEPS_WHAT_THIS_IS =
   'Everyday movement outside recorded workouts. A high step count with few workouts means an active ' +

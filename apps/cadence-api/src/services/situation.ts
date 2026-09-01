@@ -5,7 +5,7 @@ import { listGoalsByStatus } from '../repos/goals.ts';
 import { listOccurrences, getLastDoneOccurrenceDate } from '../repos/occurrences.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
 import { getLastCheckInDate } from '../repos/check-ins.ts';
-import { rollingConsistency } from './metrics.ts';
+import { rollingConsistency, planEngagementCounts } from './metrics.ts';
 import { detectTripwires, type TripwireSnapshot } from './tripwires.ts';
 import { runJobBySlug } from '../ai/aim.ts';
 import { getWeatherForUser } from './weather/weather.ts';
@@ -79,17 +79,12 @@ async function buildSnapshot(userId: string): Promise<TripwireSnapshot> {
 
   const last7 = rollingConsistency(occ, now, 7);
   const prev7 = rollingConsistency(occ, new Date(base - 7 * 86_400_000), 7);
-  // Nothing ever writes status 'missed', so "missed" is DERIVED: past-due and still pending. That
-  // derivation is only honest for EFFORTFUL work (kind 'user') — the same line
-  // `pauseUserOccurrencesInWindow` draws, where system tracking rows keep running while the
-  // effortful ones pause. The food log alone is four per-meal system tasks a day, i.e. up to 56
-  // past-due-pending rows in this 14-day window against a default threshold of 3, so counting
-  // system rows made the tripwire fire for every nutrition user after one forgetful day — and
-  // permanently, by design, for anyone who deliberately skips a meal (16:8). An untapped food card
-  // is not a missed session: count what happened, never what broke (BRAND.md).
-  const missedCount = occ.filter(
-    (o) => o.kind === 'user' && o.status === 'pending' && iso(o.date) < iso(new Date(base)),
-  ).length;
+  // Nothing ever writes status 'missed', so "missed" is DERIVED: past-due, still pending, and
+  // EFFORTFUL only (kind 'user') — counting the food log's per-meal system rows once made this
+  // tripwire fire for every nutrition user after one forgetful day. Both rules, and why they cost
+  // what they cost, live in `planEngagementCounts`; the re-planner's `recent_activity` reads the
+  // same function so the two accounts of "how it's going" can never disagree.
+  const missedCount = planEngagementCounts(occ, now).missed;
 
   const weather = await getWeatherForUser(userId).catch(() => null);
   const homeTzOff = timezoneOffsetMin(user?.timezone, now);

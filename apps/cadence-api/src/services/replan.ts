@@ -6,7 +6,7 @@ import { listActivities } from '../repos/activities.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
 import { listNutritionLogs } from '../repos/nutrition.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
-import { rollingConsistency } from './metrics.ts';
+import { rollingConsistency, planEngagementCounts } from './metrics.ts';
 import { describeRecurrence } from './scheduling.ts';
 import { observedHealthForPlanning, PLAN_COUNTS_NOTE } from './observed-health.ts';
 import { commitActivities, type CommitResult, type PlanFlowResult } from './plan-synthesis.ts';
@@ -31,6 +31,13 @@ const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10)
  * The occurrence keys stay at the TOP level on purpose: the synthesize_plan template already names
  * `food_log` and reasons about the size of this object, and re-nesting them to look tidier would
  * quietly break prompt language this change does not own. PLAN_COUNTS_NOTE labels them in place.
+ *
+ * done/skipped/missed/scheduled come from `planEngagementCounts`, the same function the tripwire
+ * snapshot reads. Counting statuses here directly is what this call used to do, and it lied twice:
+ * nothing ever writes status 'missed' (so the one counter whose job is to say "this week was too
+ * heavy" was structurally zero, and the model read that zero as fact), and every count included the
+ * food log's per-meal system rows. The food signal reaches the model as `food_log` — it must not
+ * also masquerade as sessions kept or missed.
  */
 async function recentActivity(userId: string, days = 14) {
   const now = new Date();
@@ -38,7 +45,7 @@ async function recentActivity(userId: string, days = 14) {
   const from = iso(new Date(base - (days - 1) * 86_400_000));
   const to = iso(new Date(base));
   const occ = await listOccurrences(userId, from, to);
-  const count = (s: string) => occ.filter((o) => o.status === s).length;
+  const engagement = planEngagementCounts(occ, now);
   const { kept, window } = rollingConsistency(occ, now, 7);
   // Observe-phase food signal: days_logged is the nutrition module's phase gate — synthesis
   // holds off on eating changes below ~7 logged days, then introduces ONE at a time.
@@ -48,10 +55,8 @@ async function recentActivity(userId: string, days = 14) {
     window_days: days,
     what_these_counts_mean: PLAN_COUNTS_NOTE,
     consistency_last_7_days: `${kept} of ${window} days`,
-    done: count('done'),
-    skipped: count('skipped'),
-    missed: count('missed'),
-    scheduled: occ.length,
+    // done, skipped, missed, scheduled — spread so the key order the prompt reads stays fixed.
+    ...engagement,
     ...(nutrition.meals_logged
       ? {
           food_log: {
