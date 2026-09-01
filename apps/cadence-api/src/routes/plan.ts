@@ -212,8 +212,8 @@ router.get('/occurrences/:id/insight', async (req: Request, res: Response) => {
 router.post('/occurrences/adhoc', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
-    const { text, date } = parseBody(adhocLogBodySchema, req.body);
-    const r = await logAdhocActivity(userId, text, date);
+    const { text, date, area } = parseBody(adhocLogBodySchema, req.body);
+    const r = await logAdhocActivity(userId, text, date, area);
     if (!r) return void res.status(409).json({ error: 'no active plan (or date out of range)' });
     res.json(r);
   } catch (err) {

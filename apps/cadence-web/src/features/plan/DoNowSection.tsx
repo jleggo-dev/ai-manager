@@ -16,7 +16,7 @@ import { glyphOf } from '../today/glyphs.ts';
 /**
  * "Do something now" — the present-tense half of the ＋ sheet (REQ10 §6, REQ9 §3.1).
  *
- * Sits ABOVE "Log something you did" because the past is patient: a log can wait a tap, and
+ * Sits ABOVE the quick-add section because the past is patient: a log can wait a tap, and
  * someone who needs three minutes cannot. The ＋ itself stays neutral and unchanged — the shell
  * law is that nothing pillar-flavoured ships in the frame, so the pillar colour appears only here,
  * inside the sheet, on rows that genuinely are mind items.

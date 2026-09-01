@@ -54,11 +54,14 @@ function dayLabel(isoDate: string): string {
  */
 export function FoodHome({
   initialSub = null,
+  initialLogMeal = false,
   onBack,
   onCoach,
   onLogged,
 }: {
   initialSub?: FoodHomeSub;
+  /** Open straight into the Log screen (the quick-add sheet's meal row) — closing it lands on Day. */
+  initialLogMeal?: boolean;
   onBack: () => void;
   /** Hand the conversation to the coach with app-authored context she reads and the user never sees. */
   onCoach: (note: string) => void;
@@ -69,7 +72,7 @@ export function FoodHome({
   const [tab, setTab] = useState<'day' | 'week' | 'kitchen'>('day');
   const [nutrients, setNutrients] = useState(false);
   /** The full-screen Log (05b), opened by "Log a meal" or an empty meal slot. */
-  const [logMeal, setLogMeal] = useState<MealKind | 'any' | null>(null);
+  const [logMeal, setLogMeal] = useState<MealKind | 'any' | null>(initialLogMeal ? 'any' : null);
   // `isPending` is react-query's "no answer yet, first fetch in flight" — it is what tells FoodDay
   // to hold bars where the numbers go instead of settled zeroes (PERF-06). The header, the day
   // dots, the tabs and every door below paint immediately either way: none of them read the day.

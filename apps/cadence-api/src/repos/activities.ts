@@ -44,16 +44,21 @@ export async function deleteActivitiesByCategory(userId: string, planId: string,
  * activity with an empty schedule (never materialized by ensureHorizon). Idempotent per (user,
  * plan); a rare double-submit could create two, which is harmless (both are valid buckets).
  */
-export async function getOrCreateAdhocActivity(userId: string, planId: string): Promise<Activity> {
+export async function getOrCreateAdhocActivity(userId: string, planId: string, title = 'Off-plan'): Promise<Activity> {
+  // One bucket per TITLE, not one per plan: the (activity_id, date) unique index means one entry
+  // per bucket per day, so an area-flavoured quick add ("Off-plan workout") must not share a
+  // bucket with the generic line or a same-day practice — sharing made the second REPLACE the
+  // first. Pre-existing generic buckets keep matching: their title is the default.
   const [existing] = await sql<Activity[]>`
     select * from cadence.activities
     where user_id = ${userId} and plan_id = ${planId} and kind = 'system' and category = ${ADHOC_CATEGORY}
+      and title = ${title}
     limit 1`;
   if (existing) return existing;
   // Empty recurrence ⇒ ensureHorizon never materializes it (it only expands non-empty recurrences),
   // so the bucket exists solely to carry on-demand ad-hoc occurrences.
   const [row] = await insertActivities(userId, planId, [
-    { title: 'Off-plan', kind: 'system', category: ADHOC_CATEGORY, schedule: { recurrence: '' } },
+    { title, kind: 'system', category: ADHOC_CATEGORY, schedule: { recurrence: '' } },
   ]);
   if (!row) throw new Error('getOrCreateAdhocActivity: insert failed');
   return row;

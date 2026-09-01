@@ -22,7 +22,7 @@ import {
   deleteNutritionLog,
   countNutritionDays,
 } from '../repos/nutrition.ts';
-import { sumWaterMl } from '../repos/water.ts';
+import { countWaterDays, sumWaterMl } from '../repos/water.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getUser, setMacroTargets } from '../repos/users.ts';
 import {
@@ -349,6 +349,10 @@ export interface NutritionDay extends DayTotals {
   has_recent_food: boolean;
   /** The day's water, ml (0037). Zero is an honest number — water has no provisional state. */
   water_ml: number;
+  /** Any pour in the trailing 14 days — the quick-add sheet's water-row gate, same window and
+   *  same reasoning as `has_recent_food`: offer the tap to someone already tracking water, never
+   *  grow a water row on someone who has never poured one. */
+  has_recent_water: boolean;
 }
 
 /** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. `left`
@@ -411,6 +415,13 @@ export async function getNutritionDay(userId: string, date?: string): Promise<Nu
     }
   }
 
+  // Same shortcut shape: today's pour already on the table answers it for free.
+  let has_recent_water = water_ml > 0;
+  if (!has_recent_water) {
+    const from = new Date(Date.parse(`${d}T00:00:00Z`) - 13 * 86_400_000).toISOString().slice(0, 10);
+    has_recent_water = (await countWaterDays(userId, from, d)) > 0;
+  }
+
   return {
     date: d,
     meals,
@@ -423,6 +434,7 @@ export async function getNutritionDay(userId: string, date?: string): Promise<Nu
     targets_wait,
     has_recent_food,
     water_ml,
+    has_recent_water,
   };
 }
 

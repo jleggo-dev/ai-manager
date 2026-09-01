@@ -30,3 +30,12 @@ export async function sumWaterMl(userId: string, date: string): Promise<number> 
      where user_id = ${userId} and date = ${date}`;
   return row?.total ?? 0;
 }
+
+/** Distinct days with any pour in [from, to] — the "is water being tracked at all?" count. */
+export async function countWaterDays(userId: string, from: string, to: string): Promise<number> {
+  const [row] = await sql<{ days: number }[]>`
+    select count(distinct date)::int as days
+      from cadence.water_logs
+     where user_id = ${userId} and date between ${from} and ${to}`;
+  return row?.days ?? 0;
+}

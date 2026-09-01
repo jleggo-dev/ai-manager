@@ -114,12 +114,14 @@ export async function setOccurrence(id: string, status: 'pending' | 'done' | 'sk
 }
 
 /** Log something you did that wasn't on the plan (Req 4) → a done occurrence for the day, so it
- *  counts toward consistency + the streak. `date` optional (YYYY-MM-DD), defaults to today. */
-export async function logAdhoc(text: string, date?: string): Promise<{ ok: boolean }> {
+ *  counts toward consistency + the streak. `date` optional (YYYY-MM-DD), defaults to today.
+ *  `area` (quick add) routes it to that area's own off-plan bucket so a same-day workout and
+ *  practice don't replace each other. */
+export async function logAdhoc(text: string, date?: string, area?: 'movement' | 'practice'): Promise<{ ok: boolean }> {
   const res = await fetch(`${BASE}/plan/occurrences/adhoc`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ text, date }),
+    body: JSON.stringify({ text, date, area }),
   });
   return { ok: res.ok };
 }

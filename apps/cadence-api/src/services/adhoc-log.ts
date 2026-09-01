@@ -24,21 +24,32 @@ export function resolveAdhocDate(date: string | undefined, nowMs: number): strin
   return date;
 }
 
+/** The quick-add sheet's area-flavoured adds. Each area gets its OWN bucket activity so a workout
+ *  and a practice logged the same day both survive the (activity_id, date) unique index; within
+ *  one area the one-entry-per-day replace rule still holds. Titles are what the trail node shows. */
+export type AdhocArea = 'movement' | 'practice';
+const ADHOC_TITLES: Record<AdhocArea, string> = {
+  movement: 'Off-plan workout',
+  practice: 'Off-plan practice',
+};
+
 /**
  * Log an OFF-PLAN activity the user just did ("did a hotel yoga class", "walked 5k") — the
  * honest-logging half of Req 4. It lands as a `done` occurrence on the day (default today), so it
  * counts toward consistency + the streak exactly like a scheduled session. Attaches to the
- * per-plan "Off-plan" bucket activity and reuses the normal parse-session-log path (logOccurrence),
- * so "ran 2km, felt easy" is parsed into items/metrics the same way a scheduled log is.
+ * per-plan "Off-plan" bucket activity (or the area's own bucket, when the quick add named one) and
+ * reuses the normal parse-session-log path (logOccurrence), so "ran 2km, felt easy" is parsed into
+ * items/metrics the same way a scheduled log is.
  *
  * Returns null when there's no committed plan to hang it on, or the date is out of range (route →
- * 409). v1: one off-plan entry per day (the unique (activity_id, date) index) — a second same-day
- * call REPLACES that day's off-plan log rather than appending; richer narrative belongs in coach chat.
+ * 409). v1: one off-plan entry per bucket per day (the unique (activity_id, date) index) — a second
+ * same-day call REPLACES that bucket's log rather than appending; richer narrative belongs in coach chat.
  */
 export async function logAdhocActivity(
   userId: string,
   text: string,
   date?: string,
+  area?: AdhocArea,
 ): Promise<{ log: OccurrenceLog; summary: string } | null> {
   const dateIso = resolveAdhocDate(date, Date.now());
   if (!dateIso) return null;
@@ -46,7 +57,7 @@ export async function logAdhocActivity(
   const plan = await getActivePlan(userId);
   if (!plan) return null;
 
-  const activity = await getOrCreateAdhocActivity(userId, plan.plan_id);
+  const activity = await getOrCreateAdhocActivity(userId, plan.plan_id, area && ADHOC_TITLES[area]);
   const occurrenceId = await getOrInsertOccurrenceId(activity.activity_id, userId, dateIso);
   return logOccurrence(userId, occurrenceId, text);
 }
