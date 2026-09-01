@@ -1,0 +1,109 @@
+/* ════════════════════════════════════════════════════════════════
+   Settings Room — "Your activities" (Activity Builder wave 3, SR-4's sibling door). Reuses
+   settings-editors.css's row / kebab / rename / confirm grammar wholesale (same family of
+   surface, per the design brief's own instruction: "on Settings' own row grammar — it sits
+   beside the goals section, which already does rename/retire this way"). This file only adds
+   what goals never needed — the schedule sheet's day/time chips and its own action buttons.
+   ════════════════════════════════════════════════════════════════ */
+
+.sa-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 10px 0 4px;
+}
+
+.sa-chip-label {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  margin-bottom: 7px;
+}
+
+.sa-day-row,
+.sa-tod-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sa-chip {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sa-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sa-chip.sa-active {
+  border-color: var(--forest);
+  background: rgba(44, 85, 69, 0.1);
+  color: var(--forest);
+}
+
+.sa-current {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.45;
+  margin-top: -2px;
+}
+
+.sa-sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.sa-primary-btn {
+  border: none;
+  border-radius: 11px;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--forest);
+  cursor: pointer;
+}
+
+.sa-primary-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sa-unschedule-btn {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 11px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  cursor: pointer;
+}
+
+.sa-unschedule-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sa-cancel-btn {
+  border: none;
+  background: none;
+  color: var(--text-mute);
+  font-size: 12.5px;
+  padding: 6px;
+  cursor: pointer;
+  text-align: center;
+}

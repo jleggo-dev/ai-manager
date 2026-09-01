@@ -473,3 +473,49 @@ export const pendingChangeTogglesBodySchema = z.object({
 export const progressLayoutDraftIdBodySchema = z.object({
   draft_id: z.string().min(1, { message: 'draft_id is required' }),
 });
+
+/* ── User-built routines (Activity Builder wave 3, /me/routines) ────────────────────────────── */
+
+const userRoutineProvenanceSchema = z.object({
+  kind: z.enum(['blank', 'from_cadence', 'from_recap'], {
+    message: 'provenance.kind must be blank|from_cadence|from_recap',
+  }),
+  source_commitment_id: z.string().optional(),
+});
+
+/**
+ * A structurally-sound OccurrenceSession — just enough to reject outright garbage before it
+ * reaches services/session-normalize.ts's `normalizeSession`, which owns the REAL bounds (block/
+ * item caps, tool whitelist, string/URL sanitizing) shared verbatim with the coach's own
+ * prescribe-session output (One palette — nothing here is a parallel, looser rulebook).
+ */
+const userRoutineSessionBodySchema = z
+  .object({
+    blocks: z.array(z.record(z.string(), z.unknown())).min(1, { message: 'session needs at least one step' }),
+  })
+  .passthrough();
+
+export const createUserRoutineBodySchema = z.object({
+  name: z.string().trim().min(1, { message: 'name is required' }).max(120),
+  area: goalAreaSchema.optional(),
+  session: userRoutineSessionBodySchema,
+  provenance: userRoutineProvenanceSchema,
+});
+
+export const updateUserRoutineBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    session: userRoutineSessionBodySchema.optional(),
+  })
+  .refine((v) => v.name !== undefined || v.session !== undefined, { message: 'nothing to update' });
+
+export const userRoutineDaySchema = z.enum(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], {
+  message: 'days must be mon|tue|wed|thu|fri|sat|sun',
+});
+
+/** "Put it on the plan" — day chips + a time-of-day, written straight onto the companion
+ *  activity's schedule (services/user-routines.ts's `toRRule` encoding). */
+export const scheduleUserRoutineBodySchema = z.object({
+  days: z.array(userRoutineDaySchema).min(1, { message: 'at least one day is required' }).max(7),
+  time_of_day: z.enum(['morning', 'evening', 'anytime']).optional(),
+});

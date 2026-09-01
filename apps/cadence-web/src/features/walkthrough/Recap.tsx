@@ -1,5 +1,6 @@
 import type { WalkthroughStep } from '@cadence/shared';
 import { type StepLog, type StepLogs, stepFraction, logLine, recapSummary } from './state.ts';
+import { SaveAsYours } from './SaveAsYours.tsx';
 import { StatusDisc } from './wt-parts.tsx';
 import { TONE } from './tools/tone.ts';
 import { overlay, closeBtn, greenBtn, recapCard, sectionLabel, skipAction } from './wt-styles.ts';
@@ -169,6 +170,8 @@ export function Recap({
             </div>
           </div>
         )}
+
+        <SaveAsYours steps={steps} title={title} />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>

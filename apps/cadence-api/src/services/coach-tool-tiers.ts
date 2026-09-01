@@ -210,6 +210,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_workout_history: 'their recorded workouts from their devices, newest first',
   get_practice_totals: 'running totals of anything they count — words written, minutes sat, pages read',
   get_repertoire: 'what they are learning and already know — pieces, katas, poems — with standing',
+  get_user_built_activities: 'activities the user built themselves — steps, runs, and plan placement',
   get_journal: 'recent journal entries, verbatim; entries marked private are never included',
   get_goal_progress: 'per-goal progress numbers computed from what they logged',
   propose_progress_layout: 'propose a redesign of what their Progress page watches — they confirm a card first',
@@ -306,7 +307,10 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // run — the same plan_run spine as the Adjust sheet (replan-start.ts). Filed beside the other
     // plan surgery so drilling into "plan" shows the whole ladder: one session, the week's shape,
     // the week rebuilt.
-    members: ['extend_horizon', 'revise_session', 'start_replan'],
+    // `get_user_built_activities` (Activity Builder wave 3): the user's OWN routines — session-
+    // shaped and schedulable, so they live beside the plan surgery. Rides the ongoing context
+    // pack too (renders '' when none exist); this filing is for the turns where she goes looking.
+    members: ['extend_horizon', 'revise_session', 'start_replan', 'get_user_built_activities'],
   },
   {
     key: 'progress',

@@ -23,12 +23,16 @@ export function SettingsYouGroup({
   review,
   constraints,
   onOpenGoals,
+  onOpenActivities,
   onOpenTools,
   onOpenNutrition,
 }: {
   review: ReviewData | null;
   constraints: UserConstraint[] | null;
   onOpenGoals: () => void;
+  /** Activity Builder wave 3 (SR beside SR-4's goals door): "Your activities" — manage what
+   *  you've built. */
+  onOpenActivities: () => void;
   onOpenTools: () => void;
   onOpenNutrition: () => void;
 }) {
@@ -43,6 +47,15 @@ export function SettingsYouGroup({
         <span className="room-row-text">
           <b>Your goals</b>
           <span>Rename or retire a goal{onPlan != null ? ` · ${onPlan} on the plan` : ''}</span>
+        </span>
+        <i className="room-chevron" aria-hidden>
+          ›
+        </i>
+      </button>
+      <button type="button" className="room-row" onClick={onOpenActivities}>
+        <span className="room-row-text">
+          <b>Your activities</b>
+          <span>{"Run, rename, duplicate, or delete what you've built"}</span>
         </span>
         <i className="room-chevron" aria-hidden>
           ›

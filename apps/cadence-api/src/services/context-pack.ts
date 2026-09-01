@@ -55,6 +55,10 @@ const INTENT_SELECTION: Record<CoachIntent, string[]> = {
     // What they own — absent from this list on 2026-08-31, which is half of how the coach came
     // to deny the owner's dumbbells (the other half was the summarizer asserting the absence).
     'get_equipment',
+    // What they BUILT (Activity Builder, owner ruling 2026-09-01): informed, never approving —
+    // a coach who has to be told the user built something is the dumbbells failure again.
+    // Renders '' when nothing is built, so the default user pays nothing for this line.
+    'get_user_built_activities',
   ],
   disrupted: [
     'get_identity',
