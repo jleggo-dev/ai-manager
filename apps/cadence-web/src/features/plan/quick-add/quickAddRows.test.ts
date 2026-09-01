@@ -82,10 +82,10 @@ describe('deriveQuickAddRows', () => {
         activity({ activity_id: 'a2', area: 'movement', goal_title: 'Get stronger' }),
       ],
     });
-    // Both activities share the factory's default title ('Easy run') — one distinct title, so the
-    // noun still resolves, independent of the (now absent) toward line.
+    // Both activities share the factory's default title ('Easy run'), which maps to the same
+    // TYPE noun either way — the toward line drops, the noun still resolves.
     expect(deriveQuickAddRows({ plan: p, day: null, photosEnabled: false })).toEqual([
-      { kind: 'add', area: 'movement', toward: undefined, noun: 'Easy run' },
+      { kind: 'add', area: 'movement', toward: undefined, noun: 'A run' },
     ]);
   });
 
@@ -97,28 +97,54 @@ describe('deriveQuickAddRows', () => {
         photosEnabled: false,
       })[0];
 
-    it('strips a generic trailing word off a single distinctive title', () => {
-      expect(rowFor('practice', ['Piano practice'])).toEqual({
-        kind: 'add',
-        area: 'practice',
-        toward: undefined,
-        noun: 'Piano',
+    describe('practice — the title itself is the noun', () => {
+      it('strips a generic trailing word off a single distinctive title', () => {
+        expect(rowFor('practice', ['Piano practice'])).toEqual({
+          kind: 'add',
+          area: 'practice',
+          toward: undefined,
+          noun: 'Piano',
+        });
+        // Repeated suffixes strip one at a time, so a doubled-up title still lands on the name.
+        expect(rowFor('practice', ['Evening practice session'])).toMatchObject({ noun: 'Evening' });
       });
-      // Repeated suffixes strip one at a time, so a doubled-up title still lands on the name.
-      expect(rowFor('practice', ['Evening practice session'])).toMatchObject({ noun: 'Evening' });
+
+      it('falls back to the area floor when the title IS the generic word', () => {
+        expect(rowFor('practice', ['Practice'])).toMatchObject({ noun: 'A practice' });
+      });
+
+      it('falls back to the area floor when more than one distinct title is in play', () => {
+        expect(rowFor('practice', ['Piano practice', 'Guitar practice'])).toMatchObject({ noun: 'A practice' });
+      });
     });
 
-    it('falls back to the area floor when the title IS the generic word', () => {
-      expect(rowFor('practice', ['Practice'])).toMatchObject({ noun: 'A practice' });
-      expect(rowFor('movement', ['Session'])).toMatchObject({ noun: 'A workout' });
-    });
+    // Code review, 2026-09-01: a movement title is a task NAME that already sits on the trail
+    // with its own button — showing it verbatim here would be a second, differently-behaving row
+    // wearing the plan's own name. The noun must be the TYPE of the thing, never the task's title.
+    describe('movement — the TYPE of the thing is the noun, never the task’s own name', () => {
+      it('never shows a movement activity’s own title — a lone "Easy run" yields "A run"', () => {
+        const row = rowFor('movement', ['Easy run']);
+        expect(row).toMatchObject({ noun: 'A run' });
+        expect(row).not.toMatchObject({ noun: 'Easy run' });
+      });
 
-    it('falls back to the area floor when more than one distinct title is in play', () => {
-      expect(rowFor('movement', ['Easy run', 'Strength'])).toMatchObject({ noun: 'A workout' });
-    });
+      it('maps each word family to its own type noun, and anything unrecognised to the floor', () => {
+        expect(rowFor('movement', ['Morning walk'])).toMatchObject({ noun: 'A walk' });
+        expect(rowFor('movement', ['Evening ride'])).toMatchObject({ noun: 'A ride' });
+        expect(rowFor('movement', ['Lap swim'])).toMatchObject({ noun: 'A swim' });
+        expect(rowFor('movement', ['Erg row'])).toMatchObject({ noun: 'A row' });
+        expect(rowFor('movement', ['Strength day'])).toMatchObject({ noun: 'A workout' });
+        expect(rowFor('movement', ['Hotel HIIT'])).toMatchObject({ noun: 'A workout' });
+      });
 
-    it('keeps a title with no generic suffix as its own noun', () => {
-      expect(rowFor('movement', ['Easy run'])).toMatchObject({ noun: 'Easy run' });
+      it('keeps the type noun when differently-titled activities share one type', () => {
+        expect(rowFor('movement', ['Easy run', 'Speed run'])).toMatchObject({ noun: 'A run' });
+      });
+
+      it('falls back to the area floor when more than one distinct TYPE is in play', () => {
+        expect(rowFor('movement', ['Easy run', 'Strength day'])).toMatchObject({ noun: 'A workout' });
+        expect(rowFor('movement', ['Session'])).toMatchObject({ noun: 'A workout' });
+      });
     });
   });
 

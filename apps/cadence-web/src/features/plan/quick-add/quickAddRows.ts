@@ -36,7 +36,8 @@ const isWeighTitle = (t: string) => /weigh/i.test(t);
  *  noun at all. Stripped one at a time so "Practice session" still yields something. */
 const GENERIC_SUFFIX_WORDS = new Set(['practice', 'session']);
 
-/** The generic floor for an area — what the row says when no single activity owns it. */
+/** The generic floor for an area — what the row says when no single activity (practice) or type
+ *  (movement) owns it. */
 const AREA_FALLBACK: Record<QuickAddArea, string> = { movement: 'A workout', practice: 'A practice' };
 
 /**
@@ -57,16 +58,54 @@ function stripGenericSuffix(title: string): string | null {
 }
 
 /**
- * The row's own name for an area — "Piano" for a lone "Piano practice" activity, but the generic
- * "A workout" / "A practice" the moment there's more than one distinct activity in play (nothing
- * to single out) or the title strips down to nothing distinctive. Never a per-activity row (that
- * gate lives in the loop below, unchanged) — one noun stands for the whole area.
+ * Movement titles ("Easy run", "Hotel HIIT") are task names — they already sit on the trail
+ * wearing that exact name on their own button, so showing one verbatim here would be a SECOND row
+ * with the SAME name doing a DIFFERENT thing (an off-plan extra, not completing the task). The
+ * design's own screen-1 examples agree: movement nouns are the TYPE of the thing ("A run", "A
+ * workout"), never the task's own name. Word families borrowed from glyphs.ts's own run/walk/
+ * ride/swim/row rules, so the sheet's nouns and the trail's glyphs never disagree about a title.
+ */
+const MOVEMENT_TYPE_RULES: Array<[RegExp, string]> = [
+  [/\brun\b|running|jog/, 'A run'],
+  [/walk|hike|ruck/, 'A walk'],
+  [/\bride\b|riding|cycl|bike|spin\b/, 'A ride'],
+  [/swim/, 'A swim'],
+  [/\brow\b|rowing/, 'A row'],
+  [/lift|strength/, 'A workout'],
+];
+
+function movementTypeNoun(title: string): string {
+  const t = title.toLowerCase();
+  for (const [re, noun] of MOVEMENT_TYPE_RULES) if (re.test(t)) return noun;
+  return AREA_FALLBACK.movement;
+}
+
+/**
+ * The row's own name for an area — split by what a title IS there:
+ *
+ *   - **Practice** titles carry the instrument/craft itself ("Piano practice" → "Piano") — that
+ *     IS the noun the design wants, so a lone distinct title becomes the row's name, its generic
+ *     suffix stripped. More than one distinct title (nothing to single out) falls back to the
+ *     area's floor, "A practice".
+ *   - **Movement** titles are task names that collide with the trail's own button (see
+ *     `MOVEMENT_TYPE_RULES` above) — the raw title never becomes the noun. Every activity's title
+ *     maps to a TYPE noun instead; one distinct type across all of them names the row, more than
+ *     one falls back to "A workout".
+ *
+ * Never a per-activity row either way (that gate lives in the loop below, unchanged) — one noun
+ * stands for the whole area.
  */
 function nounForArea(area: QuickAddArea, activities: { title: string }[]): string {
-  const fallback = AREA_FALLBACK[area];
-  const [only, ...rest] = [...new Set(activities.map((a) => a.title.trim()).filter(Boolean))];
-  if (!only || rest.length > 0) return fallback;
-  return stripGenericSuffix(only) ?? fallback;
+  const titles = activities.map((a) => a.title.trim()).filter(Boolean);
+
+  if (area === 'movement') {
+    const [onlyType, ...restTypes] = [...new Set(titles.map(movementTypeNoun))];
+    return onlyType && restTypes.length === 0 ? onlyType : AREA_FALLBACK.movement;
+  }
+
+  const [onlyTitle, ...restTitles] = [...new Set(titles)];
+  if (!onlyTitle || restTitles.length > 0) return AREA_FALLBACK.practice;
+  return stripGenericSuffix(onlyTitle) ?? AREA_FALLBACK.practice;
 }
 
 export function deriveQuickAddRows(input: {

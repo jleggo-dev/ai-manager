@@ -77,9 +77,19 @@ afterEach(() => {
 });
 
 describe('QuickAddSheet', () => {
+  it('never shows a movement activity’s own title — it would read as a second, different button', async () => {
+    // A lone "Easy run" is a task NAME that already sits on the trail with its own button
+    // (code review, 2026-09-01): the quick-add row must wear the TYPE of the thing instead, and
+    // the literal title must not appear anywhere in the sheet.
+    mount({ plan: basePlan([activity({ title: 'Easy run' })]), day: null });
+    expect(screen.getByLabelText('A run')).toBeTruthy();
+    expect(screen.queryByText('Easy run')).toBeNull();
+    await settled();
+  });
+
   it('never turns two movement activities into two rows — one area, one generic noun', async () => {
-    // Two distinct titles in the same area: nothing to single out, so the row wears the area's
-    // own floor rather than either activity's name (quickAddRows.ts's fallback rule).
+    // Two distinct titles (mapping to two distinct TYPES) in the same area: nothing to single
+    // out, so the row wears the area's own floor rather than either activity's name.
     mount({
       plan: basePlan([activity({ title: 'Easy run' }), activity({ activity_id: 'a2', title: 'Strength' })]),
       day: null,
@@ -115,7 +125,7 @@ describe('QuickAddSheet', () => {
 
   it('tapping a noun row opens screen 2 — it never logs anything by itself', async () => {
     mount({ plan: basePlan([activity()]), day: null });
-    fireEvent.click(screen.getByLabelText('Easy run'));
+    fireEvent.click(screen.getByLabelText('A run'));
     expect(screen.getByText('I went for one')).toBeTruthy();
     expect(logAdhoc).not.toHaveBeenCalled();
     await settled();
@@ -123,9 +133,9 @@ describe('QuickAddSheet', () => {
 
   it('screen 2’s back affordance returns to the noun list', async () => {
     mount({ plan: basePlan([activity()]), day: null });
-    fireEvent.click(screen.getByLabelText('Easy run'));
+    fireEvent.click(screen.getByLabelText('A run'));
     fireEvent.click(screen.getByLabelText('Back'));
-    expect(screen.getByLabelText('Easy run')).toBeTruthy();
+    expect(screen.getByLabelText('A run')).toBeTruthy();
     await settled();
   });
 
@@ -133,9 +143,9 @@ describe('QuickAddSheet', () => {
     const onLogged = vi.fn();
     const onClose = vi.fn();
     mount({ plan: basePlan([activity()]), day: null }, { onLogged, onClose });
-    fireEvent.click(screen.getByLabelText('Easy run'));
+    fireEvent.click(screen.getByLabelText('A run'));
     fireEvent.click(screen.getByText('30 min'));
-    await waitFor(() => expect(logAdhoc).toHaveBeenCalledWith('Easy run — 30 min', undefined, 'movement'));
+    await waitFor(() => expect(logAdhoc).toHaveBeenCalledWith('Run — 30 min', undefined, 'movement'));
     expect(onLogged).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
   });
@@ -143,7 +153,7 @@ describe('QuickAddSheet', () => {
   it('screen 2’s free-typed line still logs off-plan, tagged with its area', async () => {
     const onLogged = vi.fn();
     mount({ plan: basePlan([activity()]), day: null }, { onLogged });
-    fireEvent.click(screen.getByLabelText('Easy run'));
+    fireEvent.click(screen.getByLabelText('A run'));
     fireEvent.change(screen.getByPlaceholderText(/ran 5k/), { target: { value: 'hotel gym, 30 min' } });
     fireEvent.click(screen.getByText('Log'));
     await waitFor(() => expect(logAdhoc).toHaveBeenCalledWith('hotel gym, 30 min', undefined, 'movement'));
@@ -168,7 +178,7 @@ describe('QuickAddSheet', () => {
 
   it('hides "Tell me instead" on screen 2 when the host has no door for it', async () => {
     mount({ plan: basePlan([activity()]), day: null });
-    fireEvent.click(screen.getByLabelText('Easy run'));
+    fireEvent.click(screen.getByLabelText('A run'));
     expect(screen.queryByLabelText('Tell me instead')).toBeNull();
     await settled();
   });
