@@ -22,7 +22,8 @@ export async function latestHealthDigest(
 
 export interface StoredHealthDigest {
   digest: HealthDigest;
-  createdAt: string;
+  /** postgres.js returns timestamptz as a Date at runtime — the type now says so (see iso-day.ts). */
+  createdAt: string | Date;
 }
 
 /**

@@ -1,5 +1,5 @@
 /**
- * The golden set for the tool-selection eval — 44 turns, every one of them sourced from something
+ * The golden set for the tool-selection eval — 54 turns, every one of them sourced from something
  * that actually happened. See `eval-tool-selection.ts` for how they are run and scored.
  *
  * THE VOICE IS THE POINT. Every turn here is lowercase, hedged, half-punctuated and often about
@@ -390,6 +390,48 @@ const ACTIONS: EvalCase[] = [
     from:
       'docs/cadence/PLAN-CHANGES.md "The incident" (2026-08-31, production logs) — the verbatim ask. It had ' +
       'no home, fell through to a 4-goal full re-synthesis, and died undelivered at the transport timeout.',
+  },
+  {
+    id: 'A22',
+    kind: 'action',
+    turn:
+      "this week just isn't working. can you redo the whole thing — keep the long run but rebalance " +
+      'everything else around more recovery',
+    expect: ['start_replan'],
+    allow: [...DOSSIER_READS, 'get_recent_logs', 'get_workout_history'],
+    // The other side of A21's line: a whole-week reshape must reach the background rebuild, not be
+    // squeezed through the deterministic editor or answered with a carry-forward of the same week.
+    forbid: ['propose_plan_change', 'build_next_week', 'revise_session'],
+    args: {
+      tool: 'start_replan',
+      check: (a) => {
+        const s = str(a.steer);
+        if (!s) return 'steer was empty — the rebuild is shaped by their words or it is shaped by nothing';
+        if (!/recovery|long run/.test(s)) return `steer "${s}" carried neither the recovery ask nor the long-run keep`;
+        return null;
+      },
+    },
+    from:
+      'docs/cadence/PLAN-CHANGES.md Phase 2 (2026-08-31) — the rung-3 ask the deleted rebalance tool left ' +
+      'homeless: with no door of her own, the coach could only send the user to the Adjust button, and the ' +
+      'morning rebalance re-fired synthesis 8 times over 2h45m with nobody able to see it from chat.',
+  },
+  {
+    id: 'A23',
+    kind: 'action',
+    turn:
+      'can you swap the intervals to wednesday and make the friday spin 30 minutes? everything else can ' +
+      'stay as it is',
+    expect: ['propose_plan_change'],
+    allow: [...DOSSIER_READS, 'get_recent_logs'],
+    // The triage line drawn the other way: two NAMED commitment edits with "everything else stays"
+    // is rung 0 — a minutes-long background rebuild landing on it would be the proportionality
+    // failure the ladder exists to prevent, and the session-content tool has no session to open.
+    forbid: ['start_replan', 'revise_session'],
+    from:
+      'docs/cadence/PLAN-CHANGES.md Phase 2 (2026-08-31), the owner directive at its head: "latency must ' +
+      'be proportional to the size of the ask" — the incident was a small edit routed into a full ' +
+      're-synthesis, so start_replan ships with the small ask asserted AGAINST it from day one.',
   },
 ];
 
@@ -803,13 +845,14 @@ const CANARIES: EvalCase[] = [
 export const CASES: EvalCase[] = [...CANARIES, ...ACTIONS, ...READS, ...SILENCE];
 
 /**
- * The seven that change the user's data. Load-bearing for scoring, not decoration: a READ she did
+ * The tools that change the user's data. Load-bearing for scoring, not decoration: a READ she did
  * not call may have been handed to her by the Broker's prefetch and the run credits that, whereas
  * an action has no second path — nothing but the call can satisfy it.
  *
  * `log_meal` joined 2026-08-28 (MP21/MP40) — the tool that used to not exist, which is why A14/A15
  * spent a stretch as silence cases. `preview_meal` and `research_food` are reads and belong in
- * `KNOWN_TOOLS` below, not here.
+ * `KNOWN_TOOLS` below, not here. `revise_session` and `start_replan` (PLAN-CHANGES.md rungs 1 and
+ * 3, 2026-08-31) are tail actions but actions all the same — no prefetch can ever satisfy A21/A22.
  */
 export const ACTION_TOOLS = new Set([
   'propose_plan_change',
@@ -820,6 +863,8 @@ export const ACTION_TOOLS = new Set([
   'set_macro_targets',
   'log_meal',
   'update_repertoire',
+  'revise_session',
+  'start_replan',
 ]);
 
 /**

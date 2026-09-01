@@ -21,6 +21,9 @@ vi.mock('../../repos/journal-entries.ts', () => ({ listForCoach: (...a: unknown[
  */
 vi.mock('../../db/sql.ts', () => ({ sql: vi.fn(), json: vi.fn() }));
 vi.mock('../food-sources/usda-enrich.ts', () => ({ searchFoodsWithUsda: vi.fn() }));
+// Third path to config.ts (added with get_active_plan's rebuild line): registry → plan-run.ts →
+// plan-ready-push.ts → push-apns.ts → config.ts. Severed at the push seam for the same reason.
+vi.mock('../plan-ready-push.ts', () => ({ sendPlanReadyPush: vi.fn() }));
 
 const { RETRIEVAL_FUNCTIONS } = await import('./registry.ts');
 const fn = RETRIEVAL_FUNCTIONS.get_journal!;

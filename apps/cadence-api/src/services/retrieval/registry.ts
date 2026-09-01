@@ -26,6 +26,7 @@ import { buildProgress } from '../progress.ts';
 import { computePracticeTotals } from '../practice-totals.ts';
 import { activityHandle, ANYTIME } from '../plan-edit.ts';
 import { readDensity } from '../plan-density.ts';
+import { readPlanRun, type PlanRunState } from '../plan-run.ts';
 import { describeRecurrence } from '../scheduling.ts';
 import { FOOD_HEALTH_FUNCTIONS } from './food-health-functions.ts';
 import { CHECK_FOOD_SOURCES } from './food-sources-function.ts';
@@ -94,6 +95,22 @@ function commitmentWhen(schedule: unknown, area: GoalArea | undefined): string {
   return `${days} · ${time}${effort}`;
 }
 
+/**
+ * One line about the background week-rebuild, when there is one (PLAN-CHANGES.md Phase 2). The
+ * plan read is floor context on EVERY message, so this is a single line, and only when a run
+ * record exists at all — the common case costs nothing. Without it she cannot answer "how's the
+ * new week coming?" (the run is invisible from chat), and a failed run she cannot see is a
+ * failure nobody offers to retry.
+ */
+function planRunLine(run: PlanRunState | undefined): string {
+  if (!run) return '';
+  if (run.status === 'failed') {
+    return `\nThe last week rebuild failed: ${run.error} — start_replan can retry it.`;
+  }
+  const min = Math.max(0, Math.floor((Date.now() - Date.parse(run.startedAt)) / 60_000));
+  return `\nA week rebuild is in flight (started ${min} min ago, stage: ${run.stage}) — the card lands on their plan when it finishes.`;
+}
+
 /** The dossier core: who they are, what they're for, what the plan says, how it's going. */
 const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_identity: {
@@ -153,16 +170,23 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
        * only to resolve each commitment's AREA — the thing that turns the stored effort into the
        * time to set aside. plan-view.ts resolves it the same way, for the same reason.
        */
-      const [activities, goals] = await Promise.all([listActivities(plan.plan_id), listGoals(userId)]);
+      const [activities, goals, user] = await Promise.all([
+        listActivities(plan.plan_id),
+        listGoals(userId),
+        // For the plan_run rider only — a background rebuild she cannot see is one she cannot
+        // speak about, and "how's it going?" lands in chat, not on the sheet that started it.
+        getUser(userId),
+      ]);
       const areaByGoal: Record<string, GoalArea> = {};
       for (const g of goals) if (g.area) areaByGoal[g.goal_id] = g.area;
-      return { plan, activities, areaByGoal };
+      return { plan, activities, areaByGoal, planRun: readPlanRun(user) };
     },
     render(r) {
-      const { plan, activities, areaByGoal } = r as {
+      const { plan, activities, areaByGoal, planRun } = r as {
         plan: Record<string, unknown> | null;
         activities: Array<Record<string, unknown>>;
         areaByGoal?: Record<string, GoalArea>;
+        planRun?: PlanRunState;
       };
       if (!plan) return '';
       /**
@@ -191,7 +215,7 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
       const dayNames = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
       const shape = d.perDay.map((n, i) => `${dayNames[i]} ${n || '—'}`).join(' · ');
       const density = `\nWeek shape (their own items per day): ${shape}`;
-      return `Current plan v${String(plan.version)} (${activities.length} commitments):\n${lines.join('\n')}${density}${changed}`;
+      return `Current plan v${String(plan.version)} (${activities.length} commitments):\n${lines.join('\n')}${density}${changed}${planRunLine(planRun)}`;
     },
     rows(r) {
       return (r as { activities: unknown[] }).activities.length;

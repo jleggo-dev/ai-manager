@@ -8,7 +8,8 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
-import { replanPlan, previewReplan, confirmReplan, dismissReplan, REBASELINE_STEER } from '../services/replan.ts';
+import { replanPlan, confirmReplan, dismissReplan, REBASELINE_STEER } from '../services/replan.ts';
+import { startReplanRun } from '../services/replan-start.ts';
 import { launchPlanRun, planRunStage, readPlanRun } from '../services/plan-run.ts';
 import { sendPlanReadyPush } from '../services/plan-ready-push.ts';
 import { enterEpisode } from '../services/episode.ts';
@@ -25,14 +26,14 @@ router.use(requireCadenceUser);
  * and a repeat tap started a second full synthesis. Always 202: {running:true} when this tap
  * started the run, plus joined:true when a fresh run was already in flight (the tap joins it —
  * never re-fires). The client polls GET /plan/replan/pending for the outcome. 400 invalid body.
+ * The launch itself lives in services/replan-start.ts — the coach's start_replan tool is the
+ * second door onto the same run, and the two must not drift.
  */
 router.post('/replan/preview', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
     const { steer } = parseBody(replanSteerBodySchema, req.body);
-    const outcome = await launchPlanRun(userId, 'replan_preview', () =>
-      previewReplan(userId, steer, (stage) => planRunStage(userId, stage)),
-    );
+    const outcome = await startReplanRun(userId, steer);
     res.status(202).json(outcome === 'joined' ? { running: true, joined: true } : { running: true });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
