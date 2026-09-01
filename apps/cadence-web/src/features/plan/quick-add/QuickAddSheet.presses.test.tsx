@@ -30,6 +30,11 @@ vi.mock('../../../lib/api.ts', () => ({
   getUnits: (...a: unknown[]) => getUnits(...a),
   getProgressPhotosStatus: (...a: unknown[]) => getProgressPhotosStatus(...a),
   getNowMenu: (...a: unknown[]) => getNowMenu(...a),
+  // Wave 2 (pill + shelf) landed under this sweep: the sheet reads routines and can play one.
+  // Empty/never-called defaults keep every press test here about its own button.
+  getRoutines: async () => [],
+  getRoutineSession: async () => ({ ok: true, session: null }),
+  logDid: async () => ({ ok: true }),
 }));
 
 const downscalePhoto = vi.fn(async (..._a: unknown[]) => 'data:image/jpeg;base64,AAA');
@@ -102,12 +107,9 @@ describe('QuickAddSheet — scrim and the free line', () => {
     await waitFor(() => expect(logAdhoc).toHaveBeenCalledWith('walked the dog'));
   });
 
-  // BUG: the screen-1 free line calls onLogged()+onClose() unconditionally after logAdhoc resolves
-  // — it never reads `ok`, so a server-side failure (ok: false, not a rejection) is reported to the
-  // person as a success and the sheet closes, unlike screen 2's logMinutes/logFree which check `ok`
-  // and keep the sheet open with a note. This is the exact "pressing a button did not actually log"
-  // shape the owner flagged.
-  it.skip('a failed free-line log (ok: false) keeps the sheet open and shows a note, not a silent close', async () => {
+  // Found by this sweep as a BUG (the free line swallowed ok:false and closed as if it saved) and
+  // fixed at integration the same day — the free line now checks `ok` exactly like screen 2's paths.
+  it('a failed free-line log (ok: false) keeps the sheet open and shows a note, not a silent close', async () => {
     logAdhoc.mockResolvedValueOnce({ ok: false });
     const onLogged = vi.fn();
     const onClose = vi.fn();

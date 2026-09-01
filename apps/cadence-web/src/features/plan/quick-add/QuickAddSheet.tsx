@@ -46,6 +46,8 @@ export function QuickAddSheet({
 }) {
   const [busy, setBusy] = useState(false); // the free line's in-flight guard
   const [text, setText] = useState('');
+  /** The free line's honest-failure note — set only when a log came back not-saved. */
+  const [freeNote, setFreeNote] = useState('');
   /** At most one row expanded at a time — a sheet of open forms is a form, not a quick add. */
   const [open, setOpen] = useState<'weight' | null>(null);
   /** Screen 1 → screen 2 (Activity Builder 2A): set by tapping a movement/practice noun row,
@@ -74,11 +76,23 @@ export function QuickAddSheet({
     };
   }, []);
 
+  /**
+   * The free line checks `ok` the way screen 2's paths always did — the sweep (W2-C, 2026-09-01)
+   * caught this one still swallowing a server-side `ok: false` and closing as if it saved, the
+   * exact pressing-a-button-didn't-log shape the owner flagged. A failure keeps the sheet open
+   * and says so; only a real save closes.
+   */
   async function freeLog() {
     const t = text.trim();
     if (!t || busy) return;
     setBusy(true);
-    await logAdhoc(t).catch(() => {});
+    setFreeNote('');
+    const { ok } = await logAdhoc(t).catch(() => ({ ok: false }));
+    setBusy(false);
+    if (!ok) {
+      setFreeNote("That didn't save — try again in a moment.");
+      return;
+    }
     onLogged();
     onClose();
   }
@@ -205,6 +219,7 @@ export function QuickAddSheet({
                 Log
               </button>
             </div>
+            {freeNote && <div className="ld-empty">{freeNote}</div>}
           </>
         )}
       </div>

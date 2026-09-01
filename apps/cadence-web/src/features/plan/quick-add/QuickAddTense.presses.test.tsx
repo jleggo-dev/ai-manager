@@ -13,6 +13,10 @@ const getNowMenu = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 vi.mock('../../../lib/api.ts', () => ({
   logAdhoc: (...a: unknown[]) => logAdhoc(...a),
   getNowMenu: (...a: unknown[]) => getNowMenu(...a),
+  // Wave 2 (routines shelf) landed under this sweep: the tense screen reads routines too.
+  getRoutines: async () => [],
+  getRoutineSession: async () => ({ ok: true, session: null }),
+  logDid: async () => ({ ok: true }),
 }));
 
 vi.mock('../../walkthrough/Walkthrough.tsx', () => ({
