@@ -5,6 +5,7 @@ import {
   listUserActivityVersions,
   listLineageFinishCounts,
   listLineageLatestSessions,
+  getLatestSessionForCommitment,
   type ActivityVersionRow,
 } from '../repos/routines.ts';
 import { describeRecurrence } from './scheduling.ts';
@@ -17,6 +18,10 @@ import { describeRecurrence } from './scheduling.ts';
  */
 export interface Routine {
   commitment_id: string;
+  /** The lineage's CURRENT activity id (the latest version's row) — what `logDid`/
+   *  `POST /plan/activities/:id/did` credits when the shelf's play-then-credit flow runs one. Not
+   *  stable across a replan the way `commitment_id` is; always read fresh from this row. */
+  activity_id: string;
   title: string;
   /** The linked goal's area — absent when the commitment carries no goal link, same as
    *  PlanViewActivity/PlanActivity elsewhere (plan-view.ts). */
@@ -117,6 +122,7 @@ export async function listRoutines(userId: string, area?: GoalArea): Promise<Rou
     const finish = finishByCommitment.get(commitmentId);
     routines.push({
       commitment_id: commitmentId,
+      activity_id: row.activity_id,
       title: row.title,
       ...(rowArea ? { area: rowArea } : {}),
       ...(onPlan
@@ -136,4 +142,15 @@ export async function listRoutines(userId: string, area?: GoalArea): Promise<Rou
     return bd < ad ? -1 : bd > ad ? 1 : 0;
   });
   return routines;
+}
+
+/**
+ * GET /plan/routines/:commitmentId/session's data: the full latest cached session for ONE
+ * lineage — the player's whole prescription, where the list route's `steps` are names only. Null
+ * covers BOTH "never cached" and "not this user's commitment" — see
+ * `getLatestSessionForCommitment` in repos/routines.ts, which owns the reasoning (the ownership
+ * check IS the query, so there's nothing to leak between the two cases).
+ */
+export async function getRoutineSession(userId: string, commitmentId: string): Promise<OccurrenceSession | null> {
+  return getLatestSessionForCommitment(userId, commitmentId);
 }

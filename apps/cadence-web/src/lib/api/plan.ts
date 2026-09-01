@@ -1,4 +1,5 @@
 import type {
+  OccurrenceSession,
   OccurrenceStatus,
   PendingPlanActivity,
   PendingWeekReview,
@@ -595,6 +596,9 @@ export async function buildNextWeek(): Promise<WeekBuildResult> {
  *  same JSON, not a shared type, the same way `PlanActivity`/`PlanDay` above mirror `/plan`. */
 export interface PlanRoutine {
   commitment_id: string;
+  /** The lineage's CURRENT activity id — what `logDid` credits (POST /plan/activities/:id/did),
+   *  the shelf's play-then-credit flow. Not stable across a replan the way `commitment_id` is. */
+  activity_id: string;
   title: string;
   /** The linked goal's area; absent when the commitment carries no goal link. */
   area?: 'movement' | 'nourishment' | 'mind' | 'practice';
@@ -632,4 +636,21 @@ export async function getRoutines(
   if (!res?.ok) return null;
   const body = (await res.json()) as { routines: PlanRoutine[] };
   return body.routines;
+}
+
+/**
+ * The full latest cached session for ONE routine — the list's `steps` are names only, so the
+ * shelf's player fetches this on open. `ok: false` marks a failed read (network error or non-OK)
+ * so the caller can tell "I couldn't load it" apart from "nothing written yet" (`ok: true,
+ * session: null`) — the same distinction `getPendingReplan`'s `ok` flag draws.
+ */
+export async function getRoutineSession(
+  commitmentId: string,
+): Promise<{ ok: boolean; session: OccurrenceSession | null }> {
+  const res = await fetch(`${BASE}/plan/routines/${encodeURIComponent(commitmentId)}/session`, {
+    headers: headers(),
+  }).catch(() => null);
+  if (!res?.ok) return { ok: false, session: null };
+  const body = (await res.json()) as { session: OccurrenceSession | null };
+  return { ok: true, session: body.session ?? null };
 }

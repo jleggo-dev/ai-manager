@@ -7,9 +7,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 
 const listRoutines = vi.fn();
+const getRoutineSession = vi.fn();
 
 vi.mock('../services/routines.ts', () => ({
   listRoutines: (...a: unknown[]) => listRoutines(...a),
+  getRoutineSession: (...a: unknown[]) => getRoutineSession(...a),
   parseAreaParam: (v: unknown) =>
     v === 'movement' || v === 'nourishment' || v === 'mind' || v === 'practice' ? v : undefined,
 }));
@@ -46,6 +48,7 @@ async function call(path: string): Promise<{ status: number; body: unknown }> {
 beforeEach(() => {
   vi.clearAllMocks();
   listRoutines.mockResolvedValue([]);
+  getRoutineSession.mockResolvedValue(null);
 });
 
 describe('GET /plan/routines', () => {
@@ -75,6 +78,46 @@ describe('GET /plan/routines', () => {
   it('answers 500 rather than a half-built list when the read fails', async () => {
     listRoutines.mockRejectedValue(new Error('db down'));
     const { status } = await call('/plan/routines');
+    expect(status).toBe(500);
+  });
+});
+
+describe('GET /plan/routines/:commitmentId/session', () => {
+  const SESSION = {
+    blocks: [{ label: 'Main', items: [{ name: 'Warm-up' }] }],
+    note: '',
+    generated_at: '2026-08-01T00:00:00Z',
+    version: 1,
+  };
+
+  it('returns the newest cached session for the lineage', async () => {
+    getRoutineSession.mockResolvedValue(SESSION);
+    const { status, body } = await call('/plan/routines/c1/session');
+    expect(status).toBe(200);
+    expect(body).toEqual({ session: SESSION });
+    expect(getRoutineSession).toHaveBeenCalledWith('u1', 'c1');
+  });
+
+  it('returns { session: null } for a lineage that has never had a session cached', async () => {
+    getRoutineSession.mockResolvedValue(null);
+    const { status, body } = await call('/plan/routines/c1/session');
+    expect(status).toBe(200);
+    expect(body).toEqual({ session: null });
+  });
+
+  it('returns { session: null } — not 404 — for a commitment id belonging to nobody or another user', async () => {
+    // The service's user_id-scoped query already can't return a foreign row; the route makes no
+    // separate ownership check, so this is the SAME response as "never cached" — nothing to leak.
+    getRoutineSession.mockResolvedValue(null);
+    const { status, body } = await call('/plan/routines/not-mine/session');
+    expect(status).toBe(200);
+    expect(body).toEqual({ session: null });
+    expect(getRoutineSession).toHaveBeenCalledWith('u1', 'not-mine');
+  });
+
+  it('answers 500 rather than a half-built response when the read fails', async () => {
+    getRoutineSession.mockRejectedValue(new Error('db down'));
+    const { status } = await call('/plan/routines/c1/session');
     expect(status).toBe(500);
   });
 });

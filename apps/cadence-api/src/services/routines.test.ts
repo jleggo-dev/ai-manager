@@ -11,12 +11,14 @@ import type { ActivityVersionRow, LineageFinishRow, LineageSessionRow } from '..
 const listUserActivityVersions = vi.fn();
 const listLineageFinishCounts = vi.fn();
 const listLineageLatestSessions = vi.fn();
+const getLatestSessionForCommitment = vi.fn();
 const listGoals = vi.fn();
 
 vi.mock('../repos/routines.ts', () => ({
   listUserActivityVersions: (...a: unknown[]) => listUserActivityVersions(...a),
   listLineageFinishCounts: (...a: unknown[]) => listLineageFinishCounts(...a),
   listLineageLatestSessions: (...a: unknown[]) => listLineageLatestSessions(...a),
+  getLatestSessionForCommitment: (...a: unknown[]) => getLatestSessionForCommitment(...a),
 }));
 vi.mock('../repos/goals.ts', () => ({ listGoals: (...a: unknown[]) => listGoals(...a) }));
 // The real Set, not a stand-in — a wrong drift here (e.g. missing 'episode') would silently let a
@@ -24,13 +26,14 @@ vi.mock('../repos/goals.ts', () => ({ listGoals: (...a: unknown[]) => listGoals(
 // rather than re-typing them.
 vi.mock('../repos/activities.ts', () => ({ NON_PLAN_CATEGORIES: new Set(['adhoc', 'episode', 'menu']) }));
 
-import { listRoutines, latestVersionByCommitment, parseAreaParam } from './routines.ts';
+import { listRoutines, latestVersionByCommitment, parseAreaParam, getRoutineSession } from './routines.ts';
 
 const USER = '00000000-0000-4000-a000-00000000c101';
 
 function actRow(over: Partial<ActivityVersionRow> = {}): ActivityVersionRow {
   return {
     commitment_id: 'c1',
+    activity_id: 'act-1',
     title: 'Easy 5k',
     goal_id: 'g1',
     schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU,TH', duration_min: 30 },
@@ -62,6 +65,7 @@ beforeEach(() => {
   listUserActivityVersions.mockResolvedValue([]);
   listLineageFinishCounts.mockResolvedValue([]);
   listLineageLatestSessions.mockResolvedValue([]);
+  getLatestSessionForCommitment.mockResolvedValue(null);
   listGoals.mockResolvedValue([
     { goal_id: 'g1', area: 'movement' },
     { goal_id: 'g2', area: 'practice' },
@@ -184,6 +188,15 @@ describe('listRoutines', () => {
     expect(routines[0]?.area).toBeUndefined();
   });
 
+  it("carries the LATEST version's activity_id — not an older version's — the id logDid credits", async () => {
+    listUserActivityVersions.mockResolvedValue([
+      actRow({ commitment_id: 'c1', activity_id: 'act-old', plan_version: 1, plan_status: 'superseded' }),
+      actRow({ commitment_id: 'c1', activity_id: 'act-new', plan_version: 2, plan_status: 'active' }),
+    ]);
+    const routines = await listRoutines(USER);
+    expect(routines[0]?.activity_id).toBe('act-new');
+  });
+
   /**
    * 2026-09-01 fix: `kind` (like `category`) can change between plan versions — real dev data has
    * commitment "Log breakfast" as `user` in a superseded v1 and `system` in the active v2. The
@@ -235,5 +248,27 @@ describe('listRoutines', () => {
       expect(routines[0]?.duration_min).toBe(25);
       expect(routines[0]?.finishes).toBe(3);
     });
+  });
+});
+
+describe('getRoutineSession', () => {
+  it("returns the repo's session for a lineage that has one", async () => {
+    const s = session(['Warm-up', 'Main set']);
+    getLatestSessionForCommitment.mockResolvedValue(s);
+    const result = await getRoutineSession(USER, 'c1');
+    expect(result).toBe(s);
+    expect(getLatestSessionForCommitment).toHaveBeenCalledWith(USER, 'c1');
+  });
+
+  it('returns null for a lineage that has never had a session cached', async () => {
+    getLatestSessionForCommitment.mockResolvedValue(null);
+    expect(await getRoutineSession(USER, 'c1')).toBeNull();
+  });
+
+  it("returns null for a commitment id that isn't this user's — same value as 'never cached', by design", async () => {
+    // The repo query scopes by user_id, so a foreign commitment_id comes back exactly like an
+    // unwritten one: null. There is nothing here to distinguish the two, on purpose (no leak).
+    getLatestSessionForCommitment.mockResolvedValue(null);
+    expect(await getRoutineSession(USER, 'someone-elses-commitment')).toBeNull();
   });
 });

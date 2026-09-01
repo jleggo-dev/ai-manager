@@ -96,6 +96,7 @@ export {
   addGoalEvent,
   buildNextWeek,
   getRoutines,
+  getRoutineSession,
   type PlanRoutine,
   type PlanOccurrence,
   type PlanDay,
