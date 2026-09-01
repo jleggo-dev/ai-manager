@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
-import { listRoutines, parseAreaParam } from '../services/routines.ts';
+import { listRoutines, parseAreaParam, getRoutineSession } from '../services/routines.ts';
 
 /**
  * GET /plan/routines — the user's coach-built routines: plan activities grouped by
@@ -26,6 +26,24 @@ router.get('/routines', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /plan/routines]', err);
     res.status(500).json({ error: 'failed to load routines' });
+  }
+});
+
+/**
+ * GET /plan/routines/:commitmentId/session — the full latest cached session for ONE lineage (the
+ * list route's `steps` are names only; the shelf's player needs the whole prescription). Always
+ * 200 with `{ session: OccurrenceSession | null }`: null covers both "never cached" and "not this
+ * user's commitment" — `getRoutineSession` already scopes by `user_id`, so there's no separate
+ * ownership check and nothing distinguishable to leak between the two.
+ */
+router.get('/routines/:commitmentId/session', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const session = await getRoutineSession(userId, req.params.commitmentId as string);
+    res.json({ session });
+  } catch (err) {
+    console.error('[GET /plan/routines/:commitmentId/session]', err);
+    res.status(500).json({ error: 'failed to load session' });
   }
 });
 

@@ -24,6 +24,10 @@ import type { ActivitySchedule, OccurrenceSession } from '@cadence/shared';
 
 export interface ActivityVersionRow {
   commitment_id: string;
+  /** THIS row's own activity_id (a replan mints a fresh one per version — commitment_id is the
+   *  stable handle, this isn't). services/routines.ts carries only the LATEST row's activity_id
+   *  onto the Routine as `activity_id` — the id `logDid`/`POST /plan/activities/:id/did` credits. */
+  activity_id: string;
   title: string;
   goal_id: string | null;
   schedule: ActivitySchedule;
@@ -49,7 +53,7 @@ export interface ActivityVersionRow {
  */
 export async function listUserActivityVersions(userId: string): Promise<ActivityVersionRow[]> {
   return sql<ActivityVersionRow[]>`
-    select a.commitment_id, a.title, a.goal_id, a.schedule, a.category, a.kind,
+    select a.commitment_id, a.activity_id, a.title, a.goal_id, a.schedule, a.category, a.kind,
            a.plan_id, p.version as plan_version, p.status as plan_status
     from cadence.activities a
     join cadence.plans p on p.plan_id = a.plan_id
@@ -102,4 +106,25 @@ export async function listLineageLatestSessions(userId: string): Promise<Lineage
     join cadence.activities a on a.activity_id = o.activity_id
     where a.user_id = ${userId} and o.session is not null
     order by a.commitment_id, o.date desc`;
+}
+
+/**
+ * The full latest cached session for ONE commitment lineage — GET /plan/routines/:commitmentId/
+ * session, the player's full prescription (the list route's `steps` are names only). Null covers
+ * BOTH "this lineage has never had a session cached" and "this commitment isn't this user's": the
+ * `a.user_id = userId` predicate already guarantees a foreign commitment_id returns zero rows, so
+ * there's no separate ownership check and nothing distinguishable to leak between the two cases.
+ */
+export async function getLatestSessionForCommitment(
+  userId: string,
+  commitmentId: string,
+): Promise<OccurrenceSession | null> {
+  const [row] = await sql<Array<{ session: OccurrenceSession }>>`
+    select o.session
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where a.user_id = ${userId} and a.commitment_id = ${commitmentId} and o.session is not null
+    order by o.date desc
+    limit 1`;
+  return row?.session ?? null;
 }
