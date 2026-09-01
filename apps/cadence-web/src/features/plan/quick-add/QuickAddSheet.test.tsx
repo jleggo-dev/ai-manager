@@ -20,8 +20,9 @@ vi.mock('../../../lib/query/index.ts', () => ({
 const logAdhoc = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
 const logWater = vi.fn(async (..._a: unknown[]) => 750);
 const getProgressPhotosStatus = vi.fn(async (..._a: unknown[]) => ({ enabled: false, count: 0, next_due: null }));
-// Screen 2 (QuickAddTense) fetches the now-menu on mount too — empty by default so "Take me on
-// one" never renders here; its own filtering/rendering is QuickAddTense.test.tsx's job.
+// Screen 2 (QuickAddTense) fetches the now-menu AND the routines shelf on mount too — both empty
+// by default so "Take me on one" never renders here; its own filtering/rendering (now-menu rows,
+// routine rows, "Browse all") is QuickAddTense.test.tsx's job.
 const getNowMenu = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 // The express-lane pill's own read (QuickAddPill, Activity Builder W2-B) — empty by default so it
 // stays invisible in every test that isn't specifically about it; its own thresholds/rendering
