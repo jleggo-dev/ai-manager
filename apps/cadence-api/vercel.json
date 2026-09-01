@@ -6,7 +6,7 @@
       "root": ".",
       "framework": "express",
       "installCommand": "npm install --prefix ../..",
-      "maxDuration": 800
+      "functions": { "**": { "maxDuration": "max" } }
     }
   },
   "rewrites": [{ "source": "/(.*)", "destination": { "service": "api" } }]
