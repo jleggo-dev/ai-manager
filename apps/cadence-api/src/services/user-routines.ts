@@ -182,14 +182,20 @@ export async function updateUserRoutine(
 
 /**
  * Delete the routine row. History SURVIVES — the companion activity and every occurrence it ever
- * logged stay exactly as they are — but its recurrence reverts to '' so nothing new materializes
- * for a routine that no longer exists to run. Not-found is `false`, same as everywhere else.
+ * logged stay exactly as they are — but its recurrence reverts to '' AND its future PENDING
+ * occurrences are removed, the same slot cleanup `unscheduleUserRoutine` does. The design's own
+ * delete-confirm copy is the spec: "The N sessions you logged with it stay in your history. If
+ * it's on the plan, those slots open up." — a scheduled routine's still-to-come days must actually
+ * open up, not sit on the trail as ghost tasks for a routine that no longer exists to run.
+ * Not-found is `false`, same as everywhere else.
  */
 export async function deleteUserRoutine(userId: string, routineId: string): Promise<boolean> {
   const routine = await getUserRoutineRow(userId, routineId);
   if (!routine) return false;
   if (routine.activity_id) {
     await updateCompanionActivity(userId, routine.activity_id, { schedule: { recurrence: '' } });
+    const today = new Date().toISOString().slice(0, 10);
+    await deleteFutureCompanionOccurrences(userId, routine.activity_id, today);
   }
   return deleteUserRoutineRow(userId, routineId);
 }

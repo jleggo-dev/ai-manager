@@ -236,19 +236,28 @@ describe('deleteUserRoutine', () => {
     expect(deleteUserRoutineRow).not.toHaveBeenCalled();
   });
 
-  it("reverts the companion recurrence to '' before deleting, when a companion exists", async () => {
+  /**
+   * "The N sessions you logged with it stay in your history. If it's on the plan, those slots
+   * open up." — the design's own delete-confirm copy. A scheduled routine's future slots must
+   * actually open up (removed), not sit on the trail as ghost tasks for a routine that no longer
+   * exists to run — confirmed empirically against the dev database (schedule -> delete left 2
+   * future pending occurrences behind before this fix).
+   */
+  it("a SCHEDULED routine (companion exists): reverts the recurrence to '' AND removes future pending occurrences", async () => {
     getUserRoutineRow.mockResolvedValue(routineRow({ activity_id: 'act-1' }));
     deleteUserRoutineRow.mockResolvedValue(true);
     expect(await deleteUserRoutine(USER, ROUTINE_ID)).toBe(true);
     expect(updateCompanionActivity).toHaveBeenCalledWith(USER, 'act-1', { schedule: { recurrence: '' } });
+    expect(deleteFutureCompanionOccurrences).toHaveBeenCalledWith(USER, 'act-1', '2026-09-01');
     expect(deleteUserRoutineRow).toHaveBeenCalledWith(USER, ROUTINE_ID);
   });
 
-  it('skips the companion revert entirely for a routine that was never run or scheduled', async () => {
+  it('an UNSCHEDULED/never-minted routine (no companion): no companion writes at all', async () => {
     getUserRoutineRow.mockResolvedValue(routineRow({ activity_id: null }));
     deleteUserRoutineRow.mockResolvedValue(true);
     await deleteUserRoutine(USER, ROUTINE_ID);
     expect(updateCompanionActivity).not.toHaveBeenCalled();
+    expect(deleteFutureCompanionOccurrences).not.toHaveBeenCalled();
   });
 });
 
