@@ -45,12 +45,17 @@ describe('pickDueNext', () => {
 
 describe('renderRepertoire', () => {
   it('groups by status, marks the due item, and dates by relative day-count', () => {
+    // One clock for the fixtures AND the render. The file's `daysAgo` calls Date.now() itself, a
+    // few instructions after `now` is captured — same millisecond on a fast machine, but any
+    // ≥1ms hiccup between the two reads makes floor(20d − ε) land on 19 and this test fail. It
+    // did, on a busy CI runner (2026-09-01); exact day-counts must derive from the injected now.
     const now = Date.now();
+    const at = (n: number): string => new Date(now - n * 86_400_000).toISOString();
     const text = renderRepertoire(
       [
-        item('Melody', { status: 'working', kind: 'piece', last_practiced_at: daysAgo(1) }),
-        item('Écossaise', { kind: 'piece', last_practiced_at: daysAgo(20) }),
-        item('A Short Story', { kind: 'piece', last_practiced_at: daysAgo(0.2) }),
+        item('Melody', { status: 'working', kind: 'piece', last_practiced_at: at(1) }),
+        item('Écossaise', { kind: 'piece', last_practiced_at: at(20) }),
+        item('A Short Story', { kind: 'piece', last_practiced_at: at(0.2) }),
         item('Cradle Song', { status: 'parked' }),
       ],
       now,

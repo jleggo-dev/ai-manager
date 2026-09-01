@@ -21,7 +21,8 @@ export function QuickAddPill({
   onPlay,
 }: {
   /** The coach's own pinned "do something now" item outranks a usage-stats shortcut (Now Door's
-   *  hierarchy) — true whenever DoNowSection currently has one, via its `onPinnedChange`. */
+   *  hierarchy) — true whenever the sheet's own now-menu fetch (QuickAddSheet.tsx) carries a
+   *  pinned item. */
   suppressed: boolean;
   /** Wired at integration to `useRoutinePlay` (parcel/routines-shelf) — this component only knows
    *  THAT a tap should play the routine, never HOW. */

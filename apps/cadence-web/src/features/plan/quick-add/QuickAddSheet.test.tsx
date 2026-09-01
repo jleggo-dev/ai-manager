@@ -4,7 +4,6 @@
  * hold — a failed plan read is never dressed as an empty one, the free line reads nothing from
  * the server so it works in every state, and loading shows shapes, never typing dots.
  */
-import { useEffect } from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
@@ -20,9 +19,13 @@ vi.mock('../../../lib/query/index.ts', () => ({
 const logAdhoc = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
 const logWater = vi.fn(async (..._a: unknown[]) => 750);
 const getProgressPhotosStatus = vi.fn(async (..._a: unknown[]) => ({ enabled: false, count: 0, next_due: null }));
-// Screen 2 (QuickAddTense) fetches the now-menu AND the routines shelf on mount too — both empty
-// by default so "Take me on one" never renders here; its own filtering/rendering (now-menu rows,
-// routine rows, "Browse all") is QuickAddTense.test.tsx's job.
+// The sheet's own lifted fetch (device-test fix, 2026-09-01 — DoNowSection used to fetch this
+// itself and pop the layout when it resolved): drives BOTH the pill's suppression (a pinned item)
+// and the "Calming techniques" row (any tool item at all). Screen 2 (QuickAddTense) reads the same
+// endpoint again, scoped to its own area, for "Take me on one" — empty by default so neither ever
+// renders here unless a test says so; QuickAddTense's own filtering/rendering is
+// QuickAddTense.test.tsx's job, and DoNowSection's rendering (unmocked below) is exercised directly
+// by the calming-row tests at the end of this file.
 const getNowMenu = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 // The express-lane pill's own read (QuickAddPill, Activity Builder W2-B) — empty by default so it
 // stays invisible in every test that isn't specifically about it; its own thresholds/rendering
@@ -68,17 +71,10 @@ vi.mock('../../walkthrough/Walkthrough.tsx', () => ({
     </div>
   ),
 }));
-// False by default — DoNowSection's real onPinnedChange logic (fires once its own menu resolves)
-// is DoNowSection.test.tsx's job; here it's a one-flag stand-in the suppression test below flips.
-let doNowPinned = false;
-vi.mock('../DoNowSection.tsx', () => ({
-  DoNowSection: ({ onPinnedChange }: { onPinnedChange?: (hasPin: boolean) => void }) => {
-    useEffect(() => {
-      onPinnedChange?.(doNowPinned);
-    }, [onPinnedChange]);
-    return null;
-  },
-}));
+// DoNowSection is intentionally UNMOCKED here (unlike QuickAddSheet.presses.test.tsx, which never
+// opens the calming sub-screen): it's now purely presentational, and the calming-row tests at the
+// end of this file need its real pinned-item/rows rendering and its real Walkthrough hookup (the
+// player itself is the stub above) to press "row → sub-screen → item → finish" end to end.
 
 const { QuickAddSheet } = await import('./QuickAddSheet.tsx');
 
@@ -103,6 +99,17 @@ const routine = (over: Record<string, unknown> = {}) => ({
   finishes: 11,
   last_done: '2026-08-30',
   on_plan: true,
+  ...over,
+});
+
+// A now-menu tool item (@cadence/shared's NowMenuItem) — the "Calming techniques" row's own
+// signal, and DoNowSection's content once that row is pressed. Only used by the calming-row tests
+// at the end of this file.
+const nowMenuItem = (over: Record<string, unknown> = {}) => ({
+  id: 'n1',
+  label: 'Three long exhales',
+  area: 'mind',
+  action: { kind: 'tool', tool: 'breathing', params: {} },
   ...over,
 });
 
@@ -137,7 +144,6 @@ const settled = () => waitFor(() => expect(getProgressPhotosStatus).toHaveBeenCa
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  doNowPinned = false;
 });
 
 describe('QuickAddSheet', () => {
@@ -332,9 +338,9 @@ describe('QuickAddSheet', () => {
     await settled();
   });
 
-  it("stands down when DoNowSection's own pinned item is present — her pick outranks a usage-stats shortcut", async () => {
+  it("stands down when the coach's own pinned now-menu item is present — her pick outranks a usage-stats shortcut", async () => {
     getRoutines.mockResolvedValue([routine()]);
-    doNowPinned = true;
+    getNowMenu.mockResolvedValueOnce([nowMenuItem({ pinned: true })]);
     mount({ plan: basePlan([activity()]), day: null });
     await waitFor(() => expect(getRoutines).toHaveBeenCalled());
     expect(screen.queryByLabelText('Easy 5k')).toBeNull();
@@ -374,6 +380,79 @@ describe('QuickAddSheet', () => {
     expect(await screen.findByText(/Couldn't open that one just now/)).toBeTruthy();
     expect(logDid).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+    await settled();
+  });
+
+  /** The demotion itself (device-test ruling, 2026-09-01): a menu of mind tools the coach composed
+   *  is ONE labelled row on screen 1, never a top-level section — no item's own label leaks out. */
+  it('a present-tense menu demotes to the "Calming techniques" row — no item label at top level', async () => {
+    getNowMenu.mockResolvedValueOnce([nowMenuItem(), nowMenuItem({ id: 'n2', label: 'A short sit' })]);
+    mount({ plan: basePlan(), day: null });
+    expect(await screen.findByLabelText('Calming techniques')).toBeTruthy();
+    expect(screen.getByText('from your coach — for right now')).toBeTruthy();
+    expect(screen.queryByText('Three long exhales')).toBeNull();
+    expect(screen.queryByText('A short sit')).toBeNull();
+    await settled();
+  });
+
+  it('drops an activity-kind now-menu item before it ever reaches the row or the sub-screen', async () => {
+    // The tool-kind filter moved up here from DoNowSection (device-test fix, 2026-09-01) — an
+    // activity row needs a deep-link into that task's own flow, which doesn't exist yet.
+    getNowMenu.mockResolvedValueOnce([
+      { id: 'a1', label: 'Deleted task', area: 'movement', action: { kind: 'activity', activityId: 'x' } },
+    ]);
+    mount({ plan: basePlan(), day: null });
+    await waitFor(() => expect(getNowMenu).toHaveBeenCalled());
+    // No tool items survived the filter — the row itself never appears, the same "no claim"
+    // reading an empty menu gets.
+    expect(screen.queryByLabelText('Calming techniques')).toBeNull();
+    await settled();
+  });
+
+  it('shows no "Calming techniques" row on an empty menu, or on a failed fetch', async () => {
+    mount({ plan: basePlan(), day: null }); // getNowMenu defaults to [] — the empty-menu case
+    await waitFor(() => expect(getNowMenu).toHaveBeenCalled());
+    expect(screen.queryByLabelText('Calming techniques')).toBeNull();
+    cleanup();
+
+    getNowMenu.mockRejectedValueOnce(new Error('offline'));
+    mount({ plan: basePlan(), day: null });
+    await waitFor(() => expect(getNowMenu).toHaveBeenCalled());
+    expect(screen.queryByLabelText('Calming techniques')).toBeNull();
+    await settled();
+  });
+
+  it('pressing the row opens the sub-screen with the coach’s items', async () => {
+    getNowMenu.mockResolvedValueOnce([nowMenuItem(), nowMenuItem({ id: 'n2', label: 'A short sit' })]);
+    mount({ plan: basePlan(), day: null });
+    fireEvent.click(await screen.findByLabelText('Calming techniques'));
+    expect(screen.getByLabelText('Back')).toBeTruthy();
+    expect(screen.getByText('Three long exhales')).toBeTruthy();
+    expect(screen.getByText('A short sit')).toBeTruthy();
+    await settled();
+  });
+
+  it('pressing an item plays it, and finishing logs then closes the whole sheet — unchanged contract', async () => {
+    const onLogged = vi.fn();
+    const onClose = vi.fn();
+    getNowMenu.mockResolvedValueOnce([nowMenuItem()]);
+    mount({ plan: basePlan(), day: null }, { onLogged, onClose });
+    fireEvent.click(await screen.findByLabelText('Calming techniques'));
+    fireEvent.click(screen.getByLabelText('Three long exhales'));
+    expect(screen.getByText('playing: Three long exhales')).toBeTruthy();
+    fireEvent.click(screen.getByText('finish-walkthrough'));
+    expect(onLogged).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+    await settled();
+  });
+
+  it('back returns to screen 1, with the row and everything else intact', async () => {
+    getNowMenu.mockResolvedValueOnce([nowMenuItem()]);
+    mount({ plan: basePlan([activity()]), day: null });
+    fireEvent.click(await screen.findByLabelText('Calming techniques'));
+    fireEvent.click(screen.getByLabelText('Back'));
+    expect(screen.getByLabelText('Calming techniques')).toBeTruthy();
+    expect(screen.getByLabelText('A run')).toBeTruthy();
     await settled();
   });
 });
