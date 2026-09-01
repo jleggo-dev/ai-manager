@@ -208,6 +208,13 @@ export function MainTabs({
               setTab('plan');
               setPlanReload((k) => k + 1);
             }}
+            // "Ask the coach to look at it" — the same VISIBLE send every other steer uses; her
+            // context pack already carries the routine's steps, so the words are the whole payload.
+            onAskReview={(text) => {
+              setBuilding({ open: false });
+              setTab('coach');
+              setAutoSend({ text, key: Date.now() });
+            }}
           />
         )}
         {/**

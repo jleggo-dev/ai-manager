@@ -54,6 +54,7 @@ export function ActivityBuilder({
   updateRoutineId,
   onSaved,
   onClose,
+  onAskReview,
 }: {
   initial?: {
     name?: string;
@@ -73,6 +74,11 @@ export function ActivityBuilder({
   updateRoutineId?: string;
   onSaved: (routine: UserRoutine) => void;
   onClose: () => void;
+  /** The save moment's "Ask the coach to look at it" (owner ruling 2026-09-01) — hands the ask,
+   *  in the user's own visible words, to whatever steer bridge the host wires. The door hides
+   *  itself without one. Her context pack already carries the routine's steps, so the ask needs
+   *  no payload beyond the name. */
+  onAskReview?: (text: string) => void;
 }) {
   const isUpdate = !!updateRoutineId;
   if (import.meta.env.DEV && isUpdate && !initial?.session) {
@@ -156,6 +162,7 @@ export function ActivityBuilder({
         isUpdate={isUpdate}
         onRunNow={() => onSaved(savedRoutine)}
         onDone={() => onSaved(savedRoutine)}
+        onAskReview={onAskReview && (() => onAskReview(`Can you look over my activity "${savedRoutine.name}"?`))}
       />
     );
   }

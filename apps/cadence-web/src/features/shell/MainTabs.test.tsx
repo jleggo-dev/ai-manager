@@ -50,13 +50,18 @@ vi.mock('../builder/ActivityBuilder.tsx', () => ({
     initial,
     onSaved,
     onClose,
+    onAskReview,
   }: {
     initial?: unknown;
     onSaved: (routine: unknown) => void;
     onClose: () => void;
+    onAskReview?: (text: string) => void;
   }) => (
     <div>
       <div data-testid="builder-seed">{JSON.stringify(initial ?? null)}</div>
+      {onAskReview && (
+        <button onClick={() => onAskReview('Can you look over my activity "Hotel HIIT"?')}>builder-ask-review</button>
+      )}
       <button onClick={() => onSaved({ routine_id: 'r1' })}>builder-save</button>
       <button onClick={onClose}>builder-close</button>
     </div>
@@ -117,6 +122,19 @@ describe('MainTabs — hosting the Activity Builder', () => {
     expect(screen.queryByTestId('builder-seed')).toBeNull();
     expect(screen.getByText('steer-to-coach')).toBeTruthy(); // PlanView is back
     expect(screen.getByTestId('plan-reload').textContent).toBe('1');
+  });
+
+  it('"Ask the coach to look at it" closes the builder and sends the ask VISIBLY (W3-5)', () => {
+    render(<MainTabs email={null} />);
+    fireEvent.click(screen.getByLabelText('Quick add'));
+    fireEvent.click(screen.getByText('quick-add-build'));
+
+    fireEvent.click(screen.getByText('builder-ask-review'));
+
+    // The builder is gone and the conversation holds the user's own words — the same visible
+    // autoSend bridge every other steer uses, never a whispered note.
+    expect(screen.queryByTestId('builder-seed')).toBeNull();
+    expect(screen.getByTestId('auto-send').textContent).toBe('Can you look over my activity "Hotel HIIT"?');
   });
 
   it('Cancel (onClose) also lands back on the plan tab, WITHOUT bumping the reload', () => {

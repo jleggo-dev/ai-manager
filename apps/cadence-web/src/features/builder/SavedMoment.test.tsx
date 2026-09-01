@@ -35,3 +35,17 @@ describe('SavedMoment', () => {
     expect(screen.getByText('Done')).toBeTruthy();
   });
 });
+
+describe('SavedMoment — the ask-the-coach door (W3-5)', () => {
+  it('presses through to onAskReview', () => {
+    const onAskReview = vi.fn();
+    render(<SavedMoment name="Hotel HIIT" onRunNow={() => {}} onDone={() => {}} onAskReview={onAskReview} />);
+    fireEvent.click(screen.getByText('Ask the coach to look at it'));
+    expect(onAskReview).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides without a host to carry the ask — a door with nowhere to open is not drawn', () => {
+    render(<SavedMoment name="Hotel HIIT" onRunNow={() => {}} onDone={() => {}} />);
+    expect(screen.queryByText('Ask the coach to look at it')).toBeNull();
+  });
+});

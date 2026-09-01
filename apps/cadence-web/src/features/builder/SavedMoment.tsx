@@ -14,11 +14,16 @@ export function SavedMoment({
   isUpdate = false,
   onRunNow,
   onDone,
+  onAskReview,
 }: {
   name: string;
   isUpdate?: boolean;
   onRunNow: () => void;
   onDone: () => void;
+  /** "Ask the coach to look at it" (owner ruling 2026-09-01: she's told what you built, never
+   *  approves it — a review happens when YOU ask). Hidden without a host that can carry the ask
+   *  into the conversation, same rule every other door follows. */
+  onAskReview?: () => void;
 }) {
   return (
     <div className="ab-saved" role="region" aria-label="Saved">
@@ -35,6 +40,11 @@ export function SavedMoment({
       <button type="button" className="ab-saved-done" onClick={onDone}>
         Done
       </button>
+      {onAskReview && (
+        <button type="button" className="ab-saved-ask" onClick={onAskReview}>
+          Ask the coach to look at it
+        </button>
+      )}
     </div>
   );
 }
