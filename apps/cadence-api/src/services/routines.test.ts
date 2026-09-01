@@ -1,0 +1,185 @@
+/**
+ * GET /plan/routines' data layer (Activity Builder A3 — "the coach's sessions as the template
+ * library"): a `commitment_id` LINEAGE survives across plan versions the way `activity_id` never
+ * does, so the cases worth pinning are the ones where getting the grouping wrong would either
+ * duplicate a routine (one per plan version instead of one per lineage) or silently drop the ones
+ * the user isn't doing this week. Everything is mocked, so this never reaches db/sql.ts.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ActivityVersionRow, LineageFinishRow, LineageSessionRow } from '../repos/routines.ts';
+
+const listUserActivityVersions = vi.fn();
+const listLineageFinishCounts = vi.fn();
+const listLineageLatestSessions = vi.fn();
+const listGoals = vi.fn();
+
+vi.mock('../repos/routines.ts', () => ({
+  listUserActivityVersions: (...a: unknown[]) => listUserActivityVersions(...a),
+  listLineageFinishCounts: (...a: unknown[]) => listLineageFinishCounts(...a),
+  listLineageLatestSessions: (...a: unknown[]) => listLineageLatestSessions(...a),
+}));
+vi.mock('../repos/goals.ts', () => ({ listGoals: (...a: unknown[]) => listGoals(...a) }));
+// The real Set, not a stand-in — a wrong drift here (e.g. missing 'episode') would silently let a
+// temp detour option slip into someone's routine library, so this borrows the actual values
+// rather than re-typing them.
+vi.mock('../repos/activities.ts', () => ({ NON_PLAN_CATEGORIES: new Set(['adhoc', 'episode', 'menu']) }));
+
+import { listRoutines, latestVersionByCommitment, parseAreaParam } from './routines.ts';
+
+const USER = '00000000-0000-4000-a000-00000000c101';
+
+function actRow(over: Partial<ActivityVersionRow> = {}): ActivityVersionRow {
+  return {
+    commitment_id: 'c1',
+    title: 'Easy 5k',
+    goal_id: 'g1',
+    schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU,TH', duration_min: 30 },
+    category: null,
+    plan_id: 'plan-active',
+    plan_version: 3,
+    plan_status: 'active',
+    ...over,
+  };
+}
+
+function session(itemNames: string[]): {
+  blocks: { label: string; items: { name: string }[] }[];
+  note: string;
+  generated_at: string;
+  version: number;
+} {
+  return {
+    blocks: [{ label: 'Main', items: itemNames.map((name) => ({ name })) }],
+    note: '',
+    generated_at: '2026-08-01T00:00:00Z',
+    version: 1,
+  };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  listUserActivityVersions.mockResolvedValue([]);
+  listLineageFinishCounts.mockResolvedValue([]);
+  listLineageLatestSessions.mockResolvedValue([]);
+  listGoals.mockResolvedValue([
+    { goal_id: 'g1', area: 'movement' },
+    { goal_id: 'g2', area: 'practice' },
+  ]);
+});
+
+describe('latestVersionByCommitment', () => {
+  it('picks the highest plan_version per commitment, regardless of input order', () => {
+    const rows: ActivityVersionRow[] = [
+      actRow({ commitment_id: 'c1', title: 'Easy 5k v1', plan_version: 1 }),
+      actRow({ commitment_id: 'c1', title: 'Easy 5k v3', plan_version: 3 }),
+      actRow({ commitment_id: 'c1', title: 'Easy 5k v2', plan_version: 2 }),
+    ];
+    const out = latestVersionByCommitment(rows);
+    expect(out.get('c1')?.title).toBe('Easy 5k v3');
+  });
+});
+
+describe('parseAreaParam', () => {
+  it('accepts a valid area', () => expect(parseAreaParam('mind')).toBe('mind'));
+  it('treats an unrecognized value as no filter', () => expect(parseAreaParam('cardio')).toBeUndefined());
+  it('treats an absent/undefined value as no filter', () => expect(parseAreaParam(undefined)).toBeUndefined());
+});
+
+describe('listRoutines', () => {
+  it('groups activity rows across plan versions by commitment_id — one routine per lineage, using the newest version', async () => {
+    listUserActivityVersions.mockResolvedValue([
+      actRow({ commitment_id: 'c1', title: 'Easy 5k — old name', plan_version: 1, plan_status: 'superseded' }),
+      actRow({ commitment_id: 'c1', title: 'Easy 5k', plan_version: 2, plan_status: 'active' }),
+    ]);
+    const routines = await listRoutines(USER);
+    expect(routines).toHaveLength(1);
+    expect(routines[0]?.title).toBe('Easy 5k');
+  });
+
+  it('ranks by finishes desc, then last_done desc', async () => {
+    listUserActivityVersions.mockResolvedValue([
+      actRow({ commitment_id: 'c1', title: 'Fewer finishes, newer' }),
+      actRow({ commitment_id: 'c2', title: 'Most finishes' }),
+      actRow({ commitment_id: 'c3', title: 'Tied finishes, older' }),
+      actRow({ commitment_id: 'c4', title: 'Tied finishes, newer' }),
+    ]);
+    listLineageFinishCounts.mockResolvedValue([
+      { commitment_id: 'c1', finishes: 2, last_done: '2026-08-30' },
+      { commitment_id: 'c2', finishes: 11, last_done: '2026-08-01' },
+      { commitment_id: 'c3', finishes: 5, last_done: '2026-07-01' },
+      { commitment_id: 'c4', finishes: 5, last_done: '2026-08-15' },
+    ] satisfies LineageFinishRow[]);
+    const routines = await listRoutines(USER);
+    expect(routines.map((r) => r.commitment_id)).toEqual(['c2', 'c4', 'c3', 'c1']);
+  });
+
+  it('reports an honest empty steps array when no session has ever been cached for the lineage', async () => {
+    listUserActivityVersions.mockResolvedValue([actRow({ commitment_id: 'c1' })]);
+    listLineageLatestSessions.mockResolvedValue([]);
+    const routines = await listRoutines(USER);
+    expect(routines[0]?.steps).toEqual([]);
+  });
+
+  it('reads steps from the most recent cached session, flattened to item names', async () => {
+    listUserActivityVersions.mockResolvedValue([actRow({ commitment_id: 'c1' })]);
+    listLineageLatestSessions.mockResolvedValue([
+      { commitment_id: 'c1', session: session(['Warm-up', 'Main set', 'Cool-down']) },
+    ] satisfies LineageSessionRow[]);
+    const routines = await listRoutines(USER);
+    expect(routines[0]?.steps).toEqual(['Warm-up', 'Main set', 'Cool-down']);
+  });
+
+  it('filters to the requested area, using the linked goal — not the title', async () => {
+    listUserActivityVersions.mockResolvedValue([
+      actRow({ commitment_id: 'c1', title: 'Easy 5k', goal_id: 'g1' }), // movement
+      actRow({ commitment_id: 'c2', title: 'Scales — C, G, D', goal_id: 'g2' }), // practice
+    ]);
+    const movement = await listRoutines(USER, 'movement');
+    expect(movement.map((r) => r.commitment_id)).toEqual(['c1']);
+    const practice = await listRoutines(USER, 'practice');
+    expect(practice.map((r) => r.commitment_id)).toEqual(['c2']);
+  });
+
+  it('includes a lineage that is NOT on the active plan, marked on_plan: false with no current schedule', async () => {
+    listUserActivityVersions.mockResolvedValue([
+      actRow({
+        commitment_id: 'c1',
+        title: 'Hotel HIIT',
+        plan_id: 'plan-old',
+        plan_version: 1,
+        plan_status: 'superseded',
+      }),
+    ]);
+    listLineageFinishCounts.mockResolvedValue([{ commitment_id: 'c1', finishes: 4, last_done: '2026-08-10' }]);
+    const routines = await listRoutines(USER);
+    expect(routines).toHaveLength(1);
+    expect(routines[0]?.on_plan).toBe(false);
+    expect(routines[0]?.finishes).toBe(4);
+    expect(routines[0]?.cadence).toBeUndefined();
+    expect(routines[0]?.duration_min).toBeUndefined();
+  });
+
+  it('excludes off-plan bucket categories (adhoc/episode/menu) even when kind is user', async () => {
+    listUserActivityVersions.mockResolvedValue([
+      actRow({ commitment_id: 'c1', title: 'Off-plan workout', category: 'adhoc' }),
+      actRow({ commitment_id: 'c2', title: 'Do what you can', category: 'episode' }),
+      actRow({ commitment_id: 'c3', title: 'Real routine', category: null }),
+    ]);
+    const routines = await listRoutines(USER);
+    expect(routines.map((r) => r.commitment_id)).toEqual(['c3']);
+  });
+
+  it('defaults finishes to 0 and last_done to null for a lineage never finished', async () => {
+    listUserActivityVersions.mockResolvedValue([actRow({ commitment_id: 'c1' })]);
+    listLineageFinishCounts.mockResolvedValue([]);
+    const routines = await listRoutines(USER);
+    expect(routines[0]?.finishes).toBe(0);
+    expect(routines[0]?.last_done).toBeNull();
+  });
+
+  it('omits area when the commitment carries no goal link', async () => {
+    listUserActivityVersions.mockResolvedValue([actRow({ commitment_id: 'c1', goal_id: null })]);
+    const routines = await listRoutines(USER);
+    expect(routines[0]?.area).toBeUndefined();
+  });
+});
