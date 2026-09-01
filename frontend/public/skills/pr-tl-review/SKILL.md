@@ -70,8 +70,7 @@ Flag **should-fix** unless user-visible latency or cost impact is clear (**block
 
 Require green **product** PR checks (`CI gate` + jobs that ran). A failing non-skipped product
 job is a **blocker** unless intentionally skipped/quarantined with a documented reason and human
-action item. **Vercel Hobby build rate-limit** is **not** a blocker and must not prompt Hobby
-setting changes. Docs-only PRs with all product jobs skipped are fine to merge as docs — do not
+action item. Docs-only PRs with all product jobs skipped are fine to merge as docs — do not
 call that “app verified.” Report-only CI does **not** mean ignore product red.
 
 ## Maintainability

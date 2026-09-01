@@ -145,8 +145,10 @@ worktrees (worktree traps: borrow deps but re-point `@cadence/*`, copy `backend/
 `preview_start` runs main's code). **Parcel boundaries = full call path** — each parcel owns
 server + client + tests for its feature, scoped by what must be true for it to work, not by where
 the code lives. Every parcel: CI green (lint size gates, tests), brand-physics checklist, Fable
-review before merge. **Merges land in waves** (Vercel Hobby build cap); `npm run
-cleanup:test-data` after each wave. DB tests isolate by `zzq` names, never by deleting shared rows.
+review before merge. Merge as PRs go green (the Vercel Hobby build cap that forced wave-merging
+is gone — paid plan since 2026-09-01; backend-e2e PRs still wait for `main`'s `CI gate` between
+merges); `npm run cleanup:test-data` after a merged batch. DB tests isolate by `zzq` names,
+never by deleting shared rows.
 
 ### Wave 1 — the page, deterministic (5 parcels in parallel, then 1 integration)
 
