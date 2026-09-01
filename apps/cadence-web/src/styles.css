@@ -6011,6 +6011,14 @@ textarea.wiz-title {
   opacity: 0.6;
   cursor: default;
 }
+/* The express-lane shortcut (Activity Builder W2-B, Now Door §4d's promotion rule) — same row
+   chrome as every quick-add row below it, with the faint lift a promoted item earns. The pillar
+   tone stays confined to the puck (.ld-ic-*, unchanged); this only marks the row itself as first
+   among equals, never a second color. */
+.qa-pill {
+  border-color: oklch(85% 0.02 85);
+  box-shadow: 0 2px 0 oklch(91% 0.015 85);
+}
 .ld-ic {
   width: 40px;
   height: 40px;
