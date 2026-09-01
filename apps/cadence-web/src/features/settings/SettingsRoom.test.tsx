@@ -95,6 +95,55 @@ const PREFS = {
   maxPerDay: 1,
 };
 
+// The edit-steps round trip (W3-5 integration wiring): the list and the builder are each their
+// own well-tested surface — here they are stubs with exactly the controls the ROOM's wiring
+// contract cares about: the list hands a routine to onEditRoutine; the builder receives update
+// props and hands back onSaved/onClose.
+const EDIT_FIXTURE = {
+  routine_id: 'r-edit-1',
+  name: 'Hotel HIIT',
+  area: 'movement',
+  session: {
+    blocks: [{ label: '', items: [{ name: 'Work', duration_min: 8 }] }],
+    note: '',
+    generated_at: 'x',
+    version: 1,
+  },
+  provenance: { kind: 'blank' },
+  created_at: 'x',
+  updated_at: 'x',
+  runs: 2,
+  last_run: null,
+  schedule: null,
+};
+vi.mock('./SettingsYourActivities.tsx', () => ({
+  SettingsYourActivities: ({ onEditRoutine }: { onEditRoutine?: (r: unknown) => void }) => (
+    <div>
+      <span>your-activities-list</span>
+      {onEditRoutine && <button onClick={() => onEditRoutine(EDIT_FIXTURE)}>edit-steps</button>}
+    </div>
+  ),
+}));
+vi.mock('../builder/ActivityBuilder.tsx', () => ({
+  ActivityBuilder: ({
+    updateRoutineId,
+    initial,
+    onSaved,
+    onClose,
+  }: {
+    updateRoutineId?: string;
+    initial?: { name?: string };
+    onSaved: (r: unknown) => void;
+    onClose: () => void;
+  }) => (
+    <div>
+      <span>{`builder-editing:${updateRoutineId}:${initial?.name}`}</span>
+      <button onClick={() => onSaved(EDIT_FIXTURE)}>builder-save</button>
+      <button onClick={onClose}>builder-close</button>
+    </div>
+  ),
+}));
+
 function renderRoom(email: string | null = 'you@example.com') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -236,5 +285,27 @@ describe('SettingsRoom — the Erase gate', () => {
 
     await waitFor(() => expect(api.deleteMyData).toHaveBeenCalledWith('start over'));
     expect(reload).toHaveBeenCalled();
+  });
+});
+
+describe('SettingsRoom — the edit-steps door hosts the builder in update mode', () => {
+  it('edit press mounts the builder with the routine, save returns to the list', async () => {
+    renderRoom();
+    fireEvent.click(await screen.findByRole('button', { name: /Your activities/ }));
+    fireEvent.click(await screen.findByText('edit-steps'));
+    // The exact wiring contract: update mode with THIS routine's id, seeded with its name.
+    expect(await screen.findByText('builder-editing:r-edit-1:Hotel HIIT')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('builder-save'));
+    // Back on the (remounted) list — a fresh fetch, so the edit is read back, never patched by hand.
+    expect(await screen.findByText('your-activities-list')).toBeInTheDocument();
+  });
+
+  it('closing the builder without saving also returns to the list', async () => {
+    renderRoom();
+    fireEvent.click(await screen.findByRole('button', { name: /Your activities/ }));
+    fireEvent.click(await screen.findByText('edit-steps'));
+    fireEvent.click(await screen.findByText('builder-close'));
+    expect(await screen.findByText('your-activities-list')).toBeInTheDocument();
   });
 });

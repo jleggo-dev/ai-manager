@@ -10,6 +10,7 @@ import {
   type UserRoutine,
 } from '../../lib/api.ts';
 import { supabase } from '../../lib/supabase.ts';
+import { ActivityBuilder } from '../builder/ActivityBuilder.tsx';
 import { AppleHealthSettings } from './AppleHealthSettings.tsx';
 import { CoachFaceSettings } from './CoachFaceSettings.tsx';
 import { NotificationSettings } from './NotificationSettings.tsx';
@@ -45,20 +46,18 @@ export function SettingsRoom({
   email,
   onBack,
   onCoach,
-  onEditRoutine,
 }: {
   email: string | null;
   onBack: () => void;
   /** App-authored context for the next coach turn — threaded down to the goals/tools/nutrition
    *  doors, whose screens can hand the conversation to the coach the same way `FoodHome` does. */
   onCoach?: (note: string) => void;
-  /** Activity Builder wave 3 seam: opens the steps editor (a parallel parcel — the builder,
-   *  W3-2) for one of the user's built routines, from the "Edit steps" menu item in Your
-   *  activities. Absent in this parcel's own mounts/tests — the item simply doesn't render, and
-   *  this file never imports the builder itself. Wired by the integration orchestrator. */
-  onEditRoutine?: (routine: UserRoutine) => void;
 }) {
   const [screen, setScreen] = useState<RoomScreen>('root');
+  /** "Edit steps" (Your activities) — the builder mounts INSIDE the room, same full-screen idiom
+   *  as every other door here, so editing never leaves Settings and MainTabs never learns about
+   *  it. Update mode: saving writes the routine in place (updateRoutineId), never a copy. */
+  const [editing, setEditing] = useState<UserRoutine | null>(null);
   const [review, setReview] = useState<ReviewData | null>(null);
   const [constraints, setConstraints] = useState<UserConstraint[] | null>(null);
   const [weekN, setWeekN] = useState<number | null>(null);
@@ -95,7 +94,22 @@ export function SettingsRoom({
   }
   if (screen === 'goals') return <SettingsGoals onBack={goRoot} onCoach={onCoach} />;
   if (screen === 'activities') {
-    return <SettingsYourActivities onBack={goRoot} onEditRoutine={onEditRoutine} />;
+    if (editing) {
+      return (
+        <ActivityBuilder
+          initial={{
+            name: editing.name,
+            session: editing.session,
+            provenance: editing.provenance,
+            area: editing.area,
+          }}
+          updateRoutineId={editing.routine_id}
+          onSaved={() => setEditing(null)}
+          onClose={() => setEditing(null)}
+        />
+      );
+    }
+    return <SettingsYourActivities onBack={goRoot} onEditRoutine={setEditing} />;
   }
   if (screen === 'tools') return <SettingsTools onBack={goRoot} onCoach={onCoach} />;
   if (screen === 'nutrition') return <SettingsNutrition onBack={goRoot} onCoach={onCoach} />;
