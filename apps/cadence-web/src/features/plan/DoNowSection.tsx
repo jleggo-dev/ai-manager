@@ -19,7 +19,19 @@ import { sessionFor } from './nowMenuSession.ts';
  * a failure: a person the coach has nothing to offer right now should see the log section alone,
  * not an apology.
  */
-export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLogged: () => void }) {
+export function DoNowSection({
+  onClose,
+  onLogged,
+  onPinnedChange,
+}: {
+  onClose: () => void;
+  onLogged: () => void;
+  /** Fires once the now-menu resolves, true iff it carries a pinned item — the ＋ sheet's own
+   *  express-lane pill (QuickAddPill, Activity Builder W2-B) stands down when it's true, because
+   *  the coach's own pinned prescription outranks a usage-stats shortcut (Now Door's promotion
+   *  hierarchy). Optional and additive: every existing caller is unaffected. */
+  onPinnedChange?: (hasPin: boolean) => void;
+}) {
   const [items, setItems] = useState<NowMenuItem[] | null>(null);
   const [playing, setPlaying] = useState<NowMenuItem | null>(null);
 
@@ -38,6 +50,13 @@ export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLog
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    // Nothing resolved yet — the caller learns the real answer once the menu settles below, not a
+    // guess in between.
+    if (items === null) return;
+    onPinnedChange?.(items.some((i) => i.pinned));
+  }, [items, onPinnedChange]);
 
   // Journal rows open the real writing page (full-screen, the store behind it) — the walkthrough's
   // journal step is for sessions; a menu-launched entry belongs to the module.

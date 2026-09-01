@@ -5,6 +5,7 @@ import { DoNowSection } from '../DoNowSection.tsx';
 import { SheetRowsSkeleton } from '../SheetSkeletons.tsx';
 import { deriveQuickAddRows, type QuickAddArea } from './quickAddRows.ts';
 import { AreaQuickRow, MealQuickRow, PhotoQuickRow, WaterQuickRow, WeightQuickRow } from './QuickAddRowViews.tsx';
+import { QuickAddPill } from './QuickAddPill.tsx';
 import { QuickAddTense } from './QuickAddTense.tsx';
 
 /** Screen 1's noun, carried to screen 2 (Activity Builder 2A) — everything QuickAddTense needs to
@@ -50,6 +51,10 @@ export function QuickAddSheet({
    *  cleared by its back affordance. Replaces the whole sheet body while it's set — the coach's
    *  present-tense menu and the free line belong to screen 1, not the noun's own screen. */
   const [screen, setScreen] = useState<TenseScreen | null>(null);
+  /** Does DoNowSection currently have a pinned "do something now" item? The coach's own pick
+   *  outranks the express-lane pill's usage-stats shortcut (Now Door's promotion hierarchy) — see
+   *  QuickAddPill's `suppressed` prop below. */
+  const [hasPin, setHasPin] = useState(false);
 
   /**
    * A failed plan read is UNKNOWN, never an empty plan (the 2026-08-19 rule): `usePlan` throws on
@@ -108,13 +113,23 @@ export function QuickAddSheet({
           <>
             {/* Present tense first — the past is patient. Renders nothing at all when the coach
                 has nothing to offer, so the quick-add section simply sits where it always did. */}
-            <DoNowSection onClose={onClose} onLogged={onLogged} />
+            <DoNowSection onClose={onClose} onLogged={onLogged} onPinnedChange={setHasPin} />
             <div className="ld-split" aria-hidden />
 
             <div className="ld-head">
               <b>Quick add</b>
               <span>Log what just happened — it counts, scheduled or not.</span>
             </div>
+
+            {/* The express lane (Activity Builder W2-B): the user's most-used routine, above the
+                derived rows below. Renders nothing on its own — no candidate, a failed read, or
+                the coach's own pinned item (hasPin) all fall through to nothing here. */}
+            <QuickAddPill
+              suppressed={hasPin}
+              onPlay={() => {
+                // wired at integration to useRoutinePlay (parcel/routines-shelf)
+              }}
+            />
 
             {planLoading ? (
               // The plan's rows aren't derivable yet — shapes, never invented rows (components/Skeleton.tsx).

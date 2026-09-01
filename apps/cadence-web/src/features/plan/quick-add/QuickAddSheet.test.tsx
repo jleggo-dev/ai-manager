@@ -4,6 +4,7 @@
  * hold — a failed plan read is never dressed as an empty one, the free line reads nothing from
  * the server so it works in every state, and loading shows shapes, never typing dots.
  */
+import { useEffect } from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
@@ -22,6 +23,10 @@ const getProgressPhotosStatus = vi.fn(async (..._a: unknown[]) => ({ enabled: fa
 // Screen 2 (QuickAddTense) fetches the now-menu on mount too — empty by default so "Take me on
 // one" never renders here; its own filtering/rendering is QuickAddTense.test.tsx's job.
 const getNowMenu = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
+// The express-lane pill's own read (QuickAddPill, Activity Builder W2-B) — empty by default so it
+// stays invisible in every test that isn't specifically about it; its own thresholds/rendering
+// are QuickAddPill.test.tsx's job.
+const getRoutines = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 vi.mock('../../../lib/api.ts', () => ({
   logAdhoc: (...a: unknown[]) => logAdhoc(...a),
   logWater: (...a: unknown[]) => logWater(...a),
@@ -29,8 +34,19 @@ vi.mock('../../../lib/api.ts', () => ({
   getUnits: vi.fn(async () => null),
   getProgressPhotosStatus: (...a: unknown[]) => getProgressPhotosStatus(...a),
   getNowMenu: (...a: unknown[]) => getNowMenu(...a),
+  getRoutines: (...a: unknown[]) => getRoutines(...a),
 }));
-vi.mock('../DoNowSection.tsx', () => ({ DoNowSection: () => null }));
+// False by default — DoNowSection's real onPinnedChange logic (fires once its own menu resolves)
+// is DoNowSection.test.tsx's job; here it's a one-flag stand-in the suppression test below flips.
+let doNowPinned = false;
+vi.mock('../DoNowSection.tsx', () => ({
+  DoNowSection: ({ onPinnedChange }: { onPinnedChange?: (hasPin: boolean) => void }) => {
+    useEffect(() => {
+      onPinnedChange?.(doNowPinned);
+    }, [onPinnedChange]);
+    return null;
+  },
+}));
 
 const { QuickAddSheet } = await import('./QuickAddSheet.tsx');
 
@@ -41,6 +57,20 @@ const activity = (over: Record<string, unknown> = {}) => ({
   cadence: 'weekly',
   recurrence: '',
   area: 'movement',
+  ...over,
+});
+
+// A routine eligible for the express-lane pill (QuickAddPill) — finishes past its floor, steps
+// non-empty. Only used by the two sheet-level pill tests at the end of this file.
+const routine = (over: Record<string, unknown> = {}) => ({
+  commitment_id: 'c1',
+  activity_id: 'a1',
+  title: 'Easy 5k',
+  area: 'movement',
+  steps: ['warm-up', 'zone 2', 'stretch'],
+  finishes: 11,
+  last_done: '2026-08-30',
+  on_plan: true,
   ...over,
 });
 
@@ -74,6 +104,7 @@ const settled = () => waitFor(() => expect(getProgressPhotosStatus).toHaveBeenCa
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  doNowPinned = false;
 });
 
 describe('QuickAddSheet', () => {
@@ -237,5 +268,25 @@ describe('QuickAddSheet', () => {
       await settled();
       cleanup();
     }
+  });
+
+  it('the express-lane pill renders above the derived quick-add rows', async () => {
+    getRoutines.mockResolvedValue([routine()]);
+    mount({ plan: basePlan([activity()]), day: null });
+    const pill = await screen.findByLabelText('Easy 5k');
+    const derivedRow = screen.getByLabelText('A run');
+    // DOCUMENT_POSITION_FOLLOWING on derivedRow (relative to pill) means the pill comes first in
+    // document order — "above" the rows it's meant to sit over.
+    expect(pill.compareDocumentPosition(derivedRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await settled();
+  });
+
+  it("stands down when DoNowSection's own pinned item is present — her pick outranks a usage-stats shortcut", async () => {
+    getRoutines.mockResolvedValue([routine()]);
+    doNowPinned = true;
+    mount({ plan: basePlan([activity()]), day: null });
+    await waitFor(() => expect(getRoutines).toHaveBeenCalled());
+    expect(screen.queryByLabelText('Easy 5k')).toBeNull();
+    await settled();
   });
 });
