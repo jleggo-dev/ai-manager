@@ -23,6 +23,7 @@ const openCoachSession = vi.fn();
 const getReview = vi.fn();
 const getPendingChange = vi.fn();
 const getCurrentCoach = vi.fn();
+const getPendingReplan = vi.fn();
 
 // Written the way a session that opened before the protocol changed still writes it — `layout` and
 // all. Those sessions keep the instructions they were born with, so the field has to parse as
@@ -76,6 +77,10 @@ vi.mock('../../lib/api.ts', () => ({
   dismissProgressLayoutDraft: vi.fn().mockResolvedValue(true),
   notifyOnCoachReply: vi.fn().mockResolvedValue(true),
   stopCoachTurn: vi.fn().mockResolvedValue(true),
+  // The background-work chip (useReplanWatch) makes one check of this after every coach turn
+  // ends — the gate that keeps ordinary turns chip-free — so it must exist in every chat test.
+  // Default answer: nothing pending, so nothing renders.
+  getPendingReplan: (...args: unknown[]) => getPendingReplan(...args),
 }));
 
 // The Web Speech API isn't in jsdom; stub the mic so its empty-field state is deterministic
@@ -88,6 +93,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   getCurrentCoach.mockResolvedValue({ sessionId: null, messages: [] });
   getPendingChange.mockResolvedValue(null);
+  getPendingReplan.mockResolvedValue({ ok: true, proposal: null });
   getReview.mockResolvedValue({ goals: [] });
   openCoachSession.mockResolvedValue({ sessionId: 'test-session' });
   sendCoachMessage.mockImplementation(async (_id: string, _text: string, onDelta: (d: string) => void) => {
@@ -352,6 +358,51 @@ describe('OnboardingChat', () => {
 
     expect(await screen.findByText('Sounds good.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /apply/i })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The background-work chip (Phase 3, audit gap 5): a rebuild the coach kicks off outlives her
+ * turn, and until now nothing on screen said so once the dots went away. The chip's full state
+ * machine is pinned in useReplanWatch.test.tsx; these pin the surface — where it renders, and
+ * that it is a status line rather than a control.
+ */
+describe('the background-work chip', () => {
+  it('appears above the composer after a turn that left a rebuild running — and never blocks input', async () => {
+    getPendingReplan.mockResolvedValue({
+      ok: true,
+      proposal: null,
+      running: { stage: 'drafting', startedAt: new Date().toISOString() },
+    });
+    sendCoachMessage.mockImplementation(async (_id: string, _t: string, onDelta: (d: string) => void) => {
+      onDelta('On it — I am redrawing the week now.');
+      return { completed: true, responseId: null };
+    });
+
+    render(<OnboardingChat chrome="none" intent="ongoing" />);
+    await screen.findByText(/good to see you/);
+    fireEvent.change(screen.getByPlaceholderText('Message your coach…'), { target: { value: 'rebuild my week' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByText(/Your week is being redrawn/)).toBeInTheDocument();
+    // A status line, never a modal: the field under it stays theirs.
+    expect(screen.getByPlaceholderText('Message your coach…')).toBeEnabled();
+  });
+
+  it('never appears on an ordinary turn', async () => {
+    sendCoachMessage.mockImplementation(async (_id: string, _t: string, onDelta: (d: string) => void) => {
+      onDelta('Sounds good.');
+      return { completed: true, responseId: null };
+    });
+
+    render(<OnboardingChat chrome="none" intent="ongoing" />);
+    await screen.findByText(/good to see you/);
+    fireEvent.change(screen.getByPlaceholderText('Message your coach…'), { target: { value: 'hello' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await screen.findByText('Sounds good.');
+    await waitFor(() => expect(getPendingReplan).toHaveBeenCalled());
+    expect(screen.queryByText(/being redrawn/)).not.toBeInTheDocument();
   });
 });
 

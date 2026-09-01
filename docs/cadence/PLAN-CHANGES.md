@@ -145,6 +145,11 @@ stage-level events are the honest v1 and land most of the felt difference.
 > 4 edits, no fallback** (was 271s best-case single run, 2h45m with the retry storms). The
 > remaining rung-3 gap to the 2-minute budget is model deliberation through the relay — the
 > benchmark item below — not output volume. Phases 2–4 owed.
+>
+> Phase 4 (measurement) built 2026-09-01: `scripts/probe-plan-latency.ts` asserts the budgets
+> against live runs, `scripts/report-plan-latency.ts` prints the standing weekly picture from
+> `ai_log`, and `scripts/bench-evolve-models.ts` measured the rebalance rung model-by-model.
+> Details, commands, and the benchmark's findings in "Measuring" below.
 
 - **Phase 0 — delivery correctness (nothing may silently die):** explicit timeout in `aim.ts`
   sized above the job layer's worst case; synthesis runs move behind a durable `plan_run` record
@@ -171,13 +176,155 @@ stage-level events are the honest v1 and land most of the felt difference.
 
 ## Latency budgets (acceptance)
 
-| Scenario | Today (measured) | Budget after |
-|---|---|---|
-| Session-content tweak | 7+ min, failed | < 45s foreground |
-| Small plan edit (chat or sheet) | 20s chat / 8+ min sheet | < 30s everywhere |
-| Whole-week rebalance | 8 min–2h45m, silent failures | < 2 min background, live progress, push |
-| Detour | (being measured) | < 2 min background, live progress |
-| First lock (genesis, fan-out allowed) | minutes, opaque | background + progress from day one |
+"Before" is the incident baseline (2026-08-31 production logs); "measured" is the Phase-1 result
+on the owner's real 4-goal, 16-activity plan (2026-09-01, `probe-evolve-plan.ts` /
+`probe-plan-latency.ts` — server-side wall clock of the evolve pipeline, so client tap-to-visible
+adds a little on top). The probe column says which rows `scripts/probe-plan-latency.ts` asserts
+today, at what threshold.
+
+| Scenario | Before the fix suite | Measured after Phase 1 | Budget | Probe asserts |
+|---|---|---|---|---|
+| Session-content tweak | 7+ min, failed | rides the evolve small-steer path or `revise_session` (~34s prescribe-session) | < 45s foreground | via the small_steer row below |
+| Small plan edit (chat or sheet) | 20s chat / 8+ min sheet | **47s, 1 edit, no fallback** (evolve small steer) | < 30s everywhere | `small_steer` < 60s (60 = 47 + relay variance headroom; tighten toward 30 as Phase 2 routing lands) |
+| Whole-week rebalance | 8 min–2h45m, silent failures | **263s, 4 edits, no fallback** (evolve rebalance steer) | < 2 min background, live progress, push | `rebalance_steer` < 300s FOR NOW — the 120s target waits on the model/relay work (benchmark below) |
+| Detour | (being measured) | (being measured) | < 2 min background, live progress | not yet (write path — needs a scratch account, not the owner's) |
+| First lock (genesis, fan-out allowed) | minutes, opaque | unchanged (fan-out is genesis-only by design) | background + progress from day one | not asserted (`probe-replan-preview.ts` exercises the fan-out shape on a scratch account) |
 
 No budget is met by hiding the wait: budgets count from tap to *the change visible on the plan*,
 with progress the whole way.
+
+## Measuring
+
+Two standing commands, both in `apps/cadence-api/scripts/`. One asserts, one reports.
+
+### Assert the budgets: `probe-plan-latency.ts` (live, paid, NOT CI)
+
+```
+USER_ID=<uuid> node --import tsx apps/cadence-api/scripts/probe-plan-latency.ts
+SCENARIOS=small_steer …            # run a subset (spend control)
+SMALL_STEER="…" REBALANCE_STEER="…"  # probe a different ask against the same budgets
+```
+
+Runs the read-only evolve scenarios (`planEvolve` writes nothing but `ai_log` rows — no
+`pending_plan`, no push, safe against the owner's live account), asserts each against the budget
+table above, prints one verdict line per scenario, exits non-zero on any bust. The budget
+constants sit at the top of the script and defer to the table above.
+
+Deliberately **not** wired into CI: every run is a real model call on a live relay — paid, and
+with minutes of variance the relay owns (a same-shaped run measured 56s once and 242s another
+time). Run it after touching the evolve path, the evolve-plan job prompt, or the aim transport,
+and before/after any model move.
+
+### Read the picture: `report-plan-latency.ts` (free, read-only)
+
+```
+node --import tsx apps/cadence-api/scripts/report-plan-latency.ts     # last 7 days
+DAYS=30 node --import tsx apps/cadence-api/scripts/report-plan-latency.ts
+```
+
+The standing weekly query over `cadence.ai_log`: per kind, runs started / finished, p50/p95 of
+`meta.ms`, the evolve path's fallback rate and reasons (`meta.fell_back` / `meta.why` — Phase 1's
+hit-rate measurement), the synthesize fan-out split by `meta.phase` (draft/reduce/single), and
+coach-turn `meta.ms` + `toolRounds` where rows carry them. "Started without a recorded ending" is
+the silent-death signal Phase 0 exists for — recent starts are normal in-flight residue, a
+growing gap is not.
+
+### What the instrumentation writes (the contract the report reads)
+
+- `evolve_plan` / `synthesize_plan`: a row on the way in (`output.started`), a row on the way
+  out — always with `meta.ms`, including failures and vet vetoes. Evolve exits carry
+  `meta.path` (`edits` | `fallback`), `meta.fell_back` + `meta.why`, `meta.edits_applied`;
+  synthesize exits carry `meta.phase` and `meta.ok`.
+- `coach`: one row per turn; `meta.ms` and `meta.toolRounds` ride the turn metrics (Phase 2/3
+  chat work), so slow turns and tool-loop depth are visible in the same report.
+- Commit visibility: `commitActivities` returns `occurrencesSurvived` / `occurrencesWiped` — the
+  diff-aware invalidation's own measurement of how much re-warm work a commit actually caused.
+- Per-model-call depth lives on the **AI Admin side**: `diagnostic_logs` (the AI Admin Supabase
+  project, not Cadence's) records `llm_timing` and `total_duration_ms` per execution, plus which
+  model answered and the failover leg if one ran. When `ai_log` says a run was slow,
+  `diagnostic_logs` says which call inside it was slow. It is a different database — query it
+  from the AI Admin admin UI or its own tooling, not from these scripts.
+
+### The rebalance rung's remaining gap: model benchmark
+
+`bench-evolve-models.ts` exists because Phase 1 left rung 3 at 263s against a 120s budget, and
+the residue is model deliberation, not the size of the asked-for output (an edit list is ~1.5K
+tokens of JSON — but see the completion counts below: a model that thinks out loud bills its
+thinking as completion tokens too).
+
+How a per-run model override is reached (investigated 2026-09-01): the engine's `executeJob`
+accepts `modelOverride` (and disables failover with it — a clean single-model run), but that is
+the **in-process** path, which needs `CREDENTIAL_ENCRYPTION_KEY` — dev machines hold no such key
+by design, and the deployment's HTTP `/test` route drops the field. So the benchmark does what
+`probe-tool-loop.ts` pioneered: clone the real evolve-plan job config onto an `e2e-`named job,
+point it at per-model e2e profiles (same provider + runtime options, no failover columns), run
+each through the deployment's `/test` — the same `executeJobById` path production takes — and
+delete the e2e rows on exit. Same real inputs (the owner's plan), same steer as the
+`rebalance_steer` probe scenario, one run per model, hard-capped at 8 runs per invocation.
+
+```
+DRY=1 node --import tsx apps/cadence-api/scripts/bench-evolve-models.ts   # plan, no spend
+USER_ID=<uuid> node --import tsx apps/cadence-api/scripts/bench-evolve-models.ts
+MODELS=claude-sonnet-5,gpt-5.4-mini …                                     # shortlist re-runs
+```
+
+**Results, 2026-09-01** — owner's real plan (4 goals, 16 activities), the rebalance steer, one
+run per model, via the deployment (`engine` = the engine's own `durationMs`; `compl` = completion
+tokens; `applied` = edits that survived the `applyPlanEdits` dry-run):
+
+| Model | Wall | Engine | Prompt | Compl | Edits | Applied | Note |
+|---|---|---|---|---|---|---|---|
+| claude-sonnet-5 (current primary) | 289.4s | 288.9s | 15,340 | **25,370** | 4 | 4 | sensible edits, plain note |
+| anthropic-claude-4-5-sonnet (failover) | 112.4s | 112.0s | 11,777 | 5,751 | 3 | 3 | sensible edits, plain note |
+| gpt-5.4-mini | **16.3s** | 15.9s | 9,724 | **1,609** | 3 | 3 | sensible edits, plain note |
+| gemini-3.6-flash | 84.6s | 84.3s | 0 | 0 | 0 | 0 | UNPARSEABLE output (would have fallen back) |
+
+What the numbers say (n=1 per model — a pointer, not a verdict):
+
+- **The gap is completion-token burn, and it is model-specific.** claude-sonnet-5 spent 25K
+  completion tokens producing 4 edits — deliberation billed and streamed as completion — which is
+  the whole 289s at the relay's 40–50 tok/s. The diff prompt did its job (Phase 1); the *model*
+  chooses to think out loud anyway.
+- The current **failover** (claude-4-5-sonnet) already meets the 120s budget on this ask: 112s,
+  3 clean edits, 5.7K completion tokens.
+- **gpt-5.4-mini is the standout pointer**: 16s, 1.6K completion tokens, every edit composed and
+  applied, note in the house's plain register. That is rung-2 latency for a rung-3 ask.
+- gemini-3.6-flash returned something `parseJson` could not read (and no usage at all) — in
+  production `planEvolve` would have logged `fell_back: unparseable` and paid old-path latency.
+  Consistent with keeping gemini off this job even though evolve-plan carries no strict schema.
+
+**Ruling — APPLIED 2026-09-01.** Owner: a faster model may run evolve, on condition it is always
+briefed with the full goals/plan/constraints context (now CI-gated by
+`plan-evolve.prompt-safety.test.ts`) and stays safe. Confirming runs (second round, same day):
+
+| Model | Small steer | Rebalance | Quality read |
+|---|---|---|---|
+| gpt-5.4-mini | 4.9s (1/1) | 15.4s (3/3) | applies cleanly, but one rebalance note read as trimming Monday against a "Monday too light" steer |
+| claude-4-5-sonnet | 29.5s (1/1) | 66.1s (6/6) | on-ask in every run |
+
+Chosen: **`cadence-evolve` profile (broker precedent), primary `anthropic-claude-4-5-sonnet`,
+failover `claude-sonnet-5`** — same family the owner picked for quality, meets every budget, and
+the failover is the quality gold standard rather than a second fast model (a failover's job is
+rescue, not speed). Provisioned via `scripts/provision-evolve-profile.ts` + `sync-jobs.ts`
+(`<CADENCE_EVOLVE_PROFILE_UUID>` token); live-confirmed: a fresh small steer ran the new primary
+at 49s engine time with `failover_used: false`, against 286s for the sonnet-5 run before it.
+gpt-5.4-mini stays the documented aggressive candidate — rung-2 latency for a rung-3 ask — pending
+a real edit-quality eval (the vet catches rule violations, not misread asks). The probe's
+rebalance assertion tightens from 300s to **120s**.
+
+### Probe run of record (2026-09-01)
+
+First full run of `probe-plan-latency.ts` against the owner's live plan, same day as the
+benchmark:
+
+```
+PASS  small_steer      26.5s  (budget 60s)  · status=proposed · path=edits fell_back=false edits_applied=1
+PASS  rebalance_steer  290.9s (budget 300s) · status=proposed · path=edits fell_back=false edits_applied=4
+```
+
+Both under budget, neither fell back — and the pair of rebalance measurements a day apart
+(263s, then 291s) is the relay variance the probe's headroom exists for. The small ask came in
+under even the 30s everywhere-budget this time (26.5s vs 47s the day before): same variance,
+friendlier direction. (The run itself printed `path=?` on the small row — the probe read
+`ai_log` before planEvolve's fire-and-forget exit write landed; the fields above are verified
+from the rows, and the probe now polls briefly so later runs print them directly.)

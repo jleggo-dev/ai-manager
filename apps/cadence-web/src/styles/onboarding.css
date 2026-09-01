@@ -286,6 +286,37 @@
   flex: 0 0 auto;
 }
 
+/* ── Background-work chip — a rebuild is running while the conversation moves on ──── */
+/* Same stacking fix as `.cappills` below: relative + pointer-events so it paints above the
+   composer's scrim. A slim status line, never a control — the field under it stays usable. */
+.replan-chip {
+  position: relative;
+  pointer-events: auto;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  box-shadow: 0 6px 18px -10px rgba(44, 40, 32, 0.3);
+}
+.replan-chip::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--forest, oklch(42% 0.07 152));
+  flex: 0 0 auto;
+}
+.replan-chip.is-failed::before {
+  background: oklch(55% 0.13 45);
+}
+
 /* ── The Broker's live captures ────────────────────────────────────────────────────── */
 /* `position: relative` so the captures paint ABOVE the composer's scrim pseudo-element, which is
    absolutely positioned and would otherwise sit over anything static in the same stack. */

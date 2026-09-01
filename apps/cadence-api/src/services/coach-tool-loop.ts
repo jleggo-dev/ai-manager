@@ -1,4 +1,4 @@
-import { resolveActivityNames, type CoachActivityFrame } from '@cadence/shared';
+import { resolveActivityNames, type CoachActivityFrame, type CoachToolStartFrame } from '@cadence/shared';
 import { logAi } from './ai-log.ts';
 import {
   coachTextSoFar,
@@ -320,6 +320,32 @@ export async function relayCoachTurnWithTools(
       break;
     }
 
+    /**
+     * Tell the user something is happening, while it happens — the FIRST of two frames per round.
+     *
+     * Owner: *"they usually tell me when they're calling a tool. This would help us diagnose and it
+     * would also tell the user something is happening (or happened)."* For a long time only the
+     * "happened" half existed: the sole activity frame was written AFTER execution, so the slowest
+     * part of every round — the tool actually running — showed nothing. This `tool_start` frame is
+     * written the moment the calls are parsed, before any of them run: it claims only "doing this
+     * now", which is true even of a call that goes on to fail. The post-execution `tool` frame
+     * below stays as the confirmation — "this finished" — and older clients that only know that
+     * frame keep working unchanged (unknown cadence values fall through their parsers).
+     *
+     * `cadence` frames, not content deltas, so the parser can tell them from her prose and they can
+     * never end up inside the reply.
+     */
+    try {
+      // Announce only what will actually RUN — a repeat served from `served` does no work and must
+      // not claim any. Unwrapped: a `use_tool` call names the META tool on the wire, and printing
+      // that gave every read the same "looking something up"; resolveActivityNames looks through
+      // to the real target. The post frame gets the identical treatment.
+      const startFrame: CoachToolStartFrame = { cadence: 'tool_start', names: resolveActivityNames(fresh) };
+      options.writeChunk?.(`data: ${JSON.stringify(startFrame)}\n\n`);
+    } catch {
+      /* client gone; the turn continues server-side regardless */
+    }
+
     let outputs: CoachToolOutput[] = [];
     try {
       outputs = await deps.execute(fresh);
@@ -342,22 +368,13 @@ export async function relayCoachTurnWithTools(
     if (!outputs.length) break;
 
     /**
-     * Tell the user something is happening, while it happens.
-     *
-     * Owner: *"they usually tell me when they're calling a tool. This would help us diagnose and it
-     * would also tell the user something is happening (or happened)."* Every failure this week was
-     * invisible work — she said a session was logged and none was, said a constraint was removed
-     * and it was not. "Writing that down…" followed by silence is a question the user can ask.
-     *
-     * A `cadence` frame, not a content delta, so the parser can tell it from her prose and it can
-     * never end up inside the reply. Written AFTER execution rather than before, because a call
-     * that fails instantly should not leave a claim on screen that it happened.
+     * The SECOND frame of the round: confirmation. Written after execution on purpose — this one
+     * claims the work HAPPENED, and a call that failed must not leave that claim on screen (a
+     * thrown execute breaks out above and this line never runs). The new client reads it as
+     * completion for the `tool_start` above; older clients still render it as the activity line
+     * they have always shown. Same names, same resolution, as the start frame.
      */
     try {
-      // What actually RAN — a repeat served from `served` did no work and must not claim any.
-      // Unwrapped: a `use_tool` call names the META tool on the wire, and printing that gave every
-      // read the same "looking something up" — the phrase table's specificity thrown away one layer
-      // before the screen. resolveActivityNames looks through to what actually ran.
       const frame: CoachActivityFrame = { cadence: 'tool', names: resolveActivityNames(fresh) };
       options.writeChunk?.(`data: ${JSON.stringify(frame)}\n\n`);
     } catch {

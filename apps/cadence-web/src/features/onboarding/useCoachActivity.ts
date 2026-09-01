@@ -18,12 +18,28 @@ import { coachActivityLine } from '@cadence/shared';
  * `clear` is not optional politeness. A stale "writing that down…" outliving its turn is the same
  * false claim this exists to prevent, so the turn's every ending path calls it.
  */
+
+/**
+ * The turn's opening stage, from the server's `stage` frame — sent once per turn, right after the
+ * stream opens and BEFORE any model work. Same voice as the tool phrases (lowercase participle, no
+ * pronoun) because it renders in exactly the same slot. Only stages the server actually reports
+ * get a line; an unknown name shows nothing rather than something false.
+ */
+const STAGE_LINES: Record<string, string> = {
+  reading: 'reading your file',
+};
+
 export function useCoachActivity() {
   const [activity, setActivity] = useState('');
 
   /** Names arrive from the server's `cadence` SSE frame; the phrasing is shared (BRAND: behaviour, never the entity). */
   const noteActivity = useCallback((names: string[]) => setActivity(coachActivityLine(names)), []);
+  /** The pre-first-token stretch gets words too — "reading your file" while she is, instead of bare dots. */
+  const noteStage = useCallback((name: string) => {
+    const line = STAGE_LINES[name];
+    if (line) setActivity(line);
+  }, []);
   const clearActivity = useCallback(() => setActivity(''), []);
 
-  return { activity, noteActivity, clearActivity };
+  return { activity, noteActivity, noteStage, clearActivity };
 }

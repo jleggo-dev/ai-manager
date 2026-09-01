@@ -277,6 +277,18 @@ export function PlanView({
             onDismiss={dismissProp}
           />
         )}
+        {/* The run line (Phase 3, PLAN-CHANGES.md): a background rebuild used to be invisible
+            from this screen — only the Adjust sheet or the banner knew. `working` IS the Phase 0
+            recovery watch already following the run (useProposalAccept: pending checked on mount
+            and on foreground resume, polled until it resolves); this line just says so. It stops
+            itself the way the watch does — proposal recovered (the sheet opens), failure (the
+            note speaks), or the commit landing — and yields to the banner, which owns the louder
+            copy while a proposal is up. */}
+        {working && !data.pendingProposal && (
+          <div className="plan-runline" role="status">
+            Your week is being redrawn — I&rsquo;ll let you know when it&rsquo;s ready.
+          </div>
+        )}
         {/* One line of glass, never a card (2a): it announces, the sheet does the work. */}
         {data.activeEpisode && (
           <DetourBar

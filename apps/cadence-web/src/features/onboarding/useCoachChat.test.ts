@@ -408,6 +408,101 @@ describe('sendText', () => {
   });
 });
 
+/**
+ * Phase 3 (PLAN-CHANGES.md, "an LLM in a harness"): the pre-first-token stretch and a running
+ * tool both get words on screen WHILE they happen. The server's `stage` frame arrives right after
+ * the stream opens; `tool_start` arrives when she decides to run tools, before they execute. Both
+ * drive the same activity line, and her own words arriving is what retires it.
+ */
+describe('the stage line and live tool lines', () => {
+  type Emit = {
+    onDelta: (d: string) => void;
+    onActivity: (n: string[]) => void;
+    onToolStart: (n: string[]) => void;
+    onStage: (n: string) => void;
+    done: () => void;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCurrentCoach.mockResolvedValue({ sessionId: null, messages: [], stale: false });
+    getReview.mockResolvedValue({ goals: [] });
+    openCoachSession.mockResolvedValue({ sessionId: 'sess-new' });
+    prepareCoachFoodAction.mockResolvedValue({ status: 'ok', action: null });
+  });
+
+  /** A held-open stream whose frames the test fires by hand, in the server's real order. */
+  async function openTurn() {
+    let emit: Emit | null = null;
+    sendCoachMessage.mockImplementation(
+      (
+        _id: string,
+        _t: string,
+        onDelta: (d: string) => void,
+        _sig: AbortSignal | undefined,
+        onActivity: (n: string[]) => void,
+        _onSeg: () => void,
+        onToolStart: (n: string[]) => void,
+        onStage: (n: string) => void,
+      ) =>
+        new Promise((resolve) => {
+          emit = {
+            onDelta,
+            onActivity,
+            onToolStart,
+            onStage,
+            done: () => resolve({ completed: true, responseId: null }),
+          };
+        }),
+    );
+    const { result } = renderHook(() => useCoachChat());
+    await waitFor(() => expect(result.current.restored).toBe(true));
+    act(() => result.current.setInput('hello'));
+    act(() => void result.current.send());
+    await waitFor(() => expect(sendCoachMessage).toHaveBeenCalled());
+    return { result, emit: emit! };
+  }
+
+  it('the stage frame puts "reading your file" on the pending bubble, and the first token retires it', async () => {
+    const { result, emit } = await openTurn();
+
+    act(() => emit.onStage('reading'));
+    expect(result.current.activity).toBe('reading your file');
+    // Nothing streamed yet — the line is the whole answer to "is anything happening".
+    expect(result.current.turns.at(-1)).toEqual({ role: 'coach', text: '' });
+
+    act(() => emit.onDelta('Here is'));
+    expect(result.current.activity).toBe('');
+    expect(result.current.turns.at(-1)?.text).toBe('Here is');
+
+    await act(async () => emit.done());
+  });
+
+  it('tool_start shows the line WHILE the tool runs — before any post-execution frame', async () => {
+    const { result, emit } = await openTurn();
+
+    act(() => emit.onToolStart(['get_active_plan']));
+    expect(result.current.activity).toBe('looking at your plan');
+
+    // The post frame ("these just finished") keeps the line up…
+    act(() => emit.onActivity(['get_active_plan']));
+    expect(result.current.activity).toBe('looking at your plan');
+
+    // …until her next words arrive.
+    act(() => emit.onDelta('Your week looks solid.'));
+    expect(result.current.activity).toBe('');
+
+    await act(async () => emit.done());
+  });
+
+  it('an unknown stage name shows nothing rather than a wrong line', async () => {
+    const { result, emit } = await openTurn();
+    act(() => emit.onStage('daydreaming'));
+    expect(result.current.activity).toBe('');
+    await act(async () => emit.done());
+  });
+});
+
 describe('the food surface during onboarding', () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -147,6 +147,40 @@ describe('buildPlanView', () => {
   });
 
   /**
+   * Gap 4 (PLAN-CHANGES.md): the wire used to carry only `steps`, so an occurrence whose session
+   * hadn't been written yet was indistinguishable from an ordinary one — the ~34s wait was
+   * discovered by tapping. `session_ready` is derived from the step-count read already in hand
+   * (it only returns rows whose `session` is non-null), user-kind rows only: a system row (weigh-
+   * in, meal log) never gets a session, so "not ready" there would be a permanent false alarm.
+   */
+  it('says which user occurrences still wait on their session, and stays silent on system rows', async () => {
+    const { planDayBase } = await import('./plan-day.ts');
+    const today = new Date(planDayBase(new Date(), 'America/Toronto', null)).toISOString().slice(0, 10);
+    q.listActivities.mockImplementation(
+      slow([
+        { activity_id: 'a1', kind: 'user', title: 'Easy run', schedule: {} },
+        { activity_id: 'a2', kind: 'user', title: 'Strength', schedule: {} },
+        { activity_id: 'a3', kind: 'system', title: 'Weigh-in', schedule: {} },
+      ]),
+    );
+    q.listOccurrences.mockImplementation(
+      slow([
+        { occurrence_id: 'o1', activity_id: 'a1', date: today, status: 'pending' },
+        { occurrence_id: 'o2', activity_id: 'a2', date: today, status: 'pending' },
+        { occurrence_id: 'o3', activity_id: 'a3', date: today, status: 'pending' },
+      ]),
+    );
+    // Only o1 has a written session — the step-count query returns nothing for NULL sessions.
+    q.listSessionStepCounts.mockImplementation(slow([{ occurrence_id: 'o1', steps: 3 }]));
+
+    const view = await buildPlanView(USER, 7, 'America/Toronto');
+    const byId = new Map(view.week.flatMap((d) => d.occurrences).map((o) => [o.occurrence_id, o]));
+    expect(byId.get('o1')?.session_ready).toBe(true);
+    expect(byId.get('o2')?.session_ready).toBe(false);
+    expect(byId.get('o3') && 'session_ready' in byId.get('o3')!).toBe(false);
+  });
+
+  /**
    * Week state (check-in rebuild, step 6) — the pure half is tested directly below; this just
    * pins that `buildPlanView` actually wires `computeWeekState`'s result onto the payload.
    */

@@ -22,6 +22,12 @@ export interface PlanViewOccurrence {
   status: OccurrenceStatus;
   time_of_day?: string;
   steps?: number; // prescribed-item count from a cached session (drives the trail's step ring)
+  /** Is this row's session already written? Present on user-kind rows only. `false` is the trail's
+   *  honest hint that a tap starts the ~30-60s write (Gap 4, PLAN-CHANGES.md — the wire used to
+   *  carry only `steps`, so a cold session rendered as an ordinary disc and the wait was
+   *  discovered by tapping). Derived from the step-count read already in hand — that query only
+   *  returns rows whose `session` is non-null — so this costs no new query. */
+  session_ready?: boolean;
   /** The linked goal's area — the trail's icon family speaks the goal's own language rather than
    *  guessing from the title (piano wore the exercise glyph for want of this, 2026-08-31). */
   area?: 'movement' | 'nourishment' | 'mind' | 'practice';
@@ -260,6 +266,9 @@ export async function buildPlanView(
         status: o.status,
         time_of_day: a.schedule?.time_of_day,
         steps: stepCounts.get(o.occurrence_id),
+        // User rows only: system rows (weigh-ins, meal logs) never get a session, so "not ready"
+        // would be a permanent false alarm on them.
+        ...(a.kind === 'user' ? { session_ready: stepCounts.has(o.occurrence_id) } : {}),
         ...(a.goal_id && goalById.get(a.goal_id)?.area ? { area: goalById.get(a.goal_id)!.area } : {}),
       });
     }

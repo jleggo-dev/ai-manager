@@ -100,13 +100,13 @@ function withSegmentBreak(turns: CoachTurn[]): CoachTurn[] {
 }
 
 /**
- * The three writers a streaming turn hands to the transport, built OVER the raw `setTurns` (a
+ * The writers a streaming turn hands to the transport, built OVER the raw `setTurns` (a
  * useState setter, stable for the component's life). Outside the hook because they are wiring,
  * not behaviour — and because the hook body sits against the 150-line ceiling (CLAUDE.md: extract
  * before a function grows). `pendingBreak` lives in this closure: a segment frame arrived and the
  * NEXT delta must open a new bubble (see withSegmentBreak for why it waits for the delta).
  */
-function makeStreamWriters(setTurns: (up: (t: CoachTurn[]) => CoachTurn[]) => void) {
+function makeStreamWriters(setTurns: (up: (t: CoachTurn[]) => CoachTurn[]) => void, clearActivity: () => void) {
   let pendingBreak = false;
   return {
     /** Every turn starts bubble-continuous; a leftover break from a dropped stream must not leak. */
@@ -117,11 +117,26 @@ function makeStreamWriters(setTurns: (up: (t: CoachTurn[]) => CoachTurn[]) => vo
       pendingBreak = true;
     },
     applyStreamDelta: (delta: string) => {
+      // Her words arriving is what retires the activity line: the stage line ("reading your
+      // file") yields to the first token, and a finished tool round's line yields to whatever
+      // she says about it. Without this, the line sat under the whole reply as a claim about
+      // the past.
+      clearActivity();
       const broke = pendingBreak;
       pendingBreak = false;
       setTurns((t) => withDelta(broke ? withSegmentBreak(t) : t, delta));
     },
     fillLastCoach: (text: string) => setTurns((t) => withLastCoachFilled(t, text)),
+    /**
+     * A failed APP-initiated turn (echo=false — a nudge, not something they typed) must retract
+     * its pending bubble rather than error at them: "send again to continue" about a message they
+     * never sent reads as the app malfunctioning, which it is — but it should fail quietly.
+     */
+    retractPendingNote: () =>
+      setTurns((t) => {
+        const last = t[t.length - 1];
+        return last?.role === 'coach' && !last.text ? t.slice(0, -1) : t;
+      }),
   };
 }
 
@@ -130,7 +145,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   // What she is doing right now, in words (useCoachActivity) — shown beside the typing dots.
-  const { activity, noteActivity, clearActivity } = useCoachActivity();
+  const { activity, noteActivity, noteStage, clearActivity } = useCoachActivity();
   const [capturedGoals, setCapturedGoals] = useState<CapturedGoal[]>([]);
   const [foodAction, setFoodAction] = useState<CoachFoodAction | null>(null);
   const sessionId = useRef<string | null>(null);
@@ -171,8 +186,8 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     });
   }
 
-  const { resetSegmentBreak, noteSegment, applyStreamDelta, fillLastCoach } = useRef(
-    makeStreamWriters(setTurns),
+  const { resetSegmentBreak, noteSegment, applyStreamDelta, fillLastCoach, retractPendingNote } = useRef(
+    makeStreamWriters(setTurns, clearActivity),
   ).current;
 
   /**
@@ -207,14 +222,6 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
         .catch(() => {
           /* soft-fail — chat still works */
         });
-    // A failed APP-initiated turn (echo=false — a nudge, not something they typed) must retract
-    // its pending bubble rather than error at them: "send again to continue" about a message they
-    // never sent reads as the app malfunctioning, which it is — but it should fail quietly.
-    const retractPendingNote = () =>
-      setTurns((t) => {
-        const last = t[t.length - 1];
-        return last?.role === 'coach' && !last.text ? t.slice(0, -1) : t;
-      });
     let ok = true;
     try {
       if (!sessionId.current) {
@@ -241,6 +248,9 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
         abort.current.signal,
         noteActivity,
         noteSegment,
+        // tool_start: the SAME line, just at the honest moment — while the tool runs, not after.
+        noteActivity,
+        noteStage,
       );
       if (!completed && !stopped.current && !healer.recovered.current && !(await recoverFromServer())) {
         if (echo) fillLastCoach('⚠️ Connection dropped — send again to continue.');

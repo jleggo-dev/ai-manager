@@ -19,6 +19,7 @@ import { useAnchorOnPrepend } from './useAnchorOnPrepend.ts';
 import { useFloatingInset } from './useFloatingInset.ts';
 import { useCoachChat } from './useCoachChat.ts';
 import { useCoachHistory } from './useCoachHistory.ts';
+import { useReplanWatch } from './useReplanWatch.ts';
 import { chatProgress, livePicks, viewTurns } from './coachTurns.ts';
 import { ChatTurn } from './ChatTurn.tsx';
 import { EarlierThread } from './EarlierThread.tsx';
@@ -160,6 +161,13 @@ export function OnboardingChat({
     clearFoodAction,
     sessionId,
   } = useCoachChat({ intent });
+
+  /**
+   * The background-work chip (useReplanWatch): after each coach turn ends, one quiet check for a
+   * week rebuild she kicked off — and a persistent line above the composer while one runs, so the
+   * work she started does not go silent the moment her dots do.
+   */
+  const replanWatch = useReplanWatch({ streaming });
 
   /**
    * Everything said before the conversation on screen — loaded only when asked for, one
@@ -494,19 +502,28 @@ export function OnboardingChat({
         rootRef={floatRef}
         onStop={stop}
         above={
-          chrome === 'onboarding' ? (
-            <CapturedPills
-              goals={capturedGoals}
-              onFix={(g) => {
-                // A COMPLETE sentence, like a quick pick composes. The first version drafted a
-                // dangling "About "X" — ", which the send arrow happily lit up for: someone sent
-                // the fragment, and the coach — given a turn with no content — simply re-asked
-                // her live question. Trailing space so carrying on types a new sentence.
-                stickNow();
-                setInput(`About "${g.title}" — that's not quite right. `);
-              }}
-            />
-          ) : null
+          <>
+            {/* The rebuild's ongoing indicator — a status line, never a control: it rides above
+                the field and the field stays yours. Renders nothing at all when idle. */}
+            {replanWatch.line && (
+              <div className={`replan-chip${replanWatch.phase === 'failed' ? ' is-failed' : ''}`} role="status">
+                {replanWatch.line}
+              </div>
+            )}
+            {chrome === 'onboarding' ? (
+              <CapturedPills
+                goals={capturedGoals}
+                onFix={(g) => {
+                  // A COMPLETE sentence, like a quick pick composes. The first version drafted a
+                  // dangling "About "X" — ", which the send arrow happily lit up for: someone sent
+                  // the fragment, and the coach — given a turn with no content — simply re-asked
+                  // her live question. Trailing space so carrying on types a new sentence.
+                  stickNow();
+                  setInput(`About "${g.title}" — that's not quite right. `);
+                }}
+              />
+            ) : null}
+          </>
         }
       />
 

@@ -60,6 +60,8 @@ export {
   resolveActivityNames,
   type CoachActivityFrame,
   type CoachSegmentFrame,
+  type CoachStageFrame,
+  type CoachToolStartFrame,
 } from './coach-activity.ts';
 export * from './meal-read-progress.ts';
 export * from './session-prep-progress.ts';

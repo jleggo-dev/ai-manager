@@ -19,6 +19,10 @@ export interface PlanOccurrence {
   status: 'pending' | 'done' | 'skipped' | 'missed' | 'paused';
   time_of_day?: string;
   steps?: number; // prescribed-step count (from a cached session) — the trail's step ring
+  /** Present on user-kind rows: is the session already written? `false` means a tap starts the
+   *  ~30-60s write — the trail draws its quiet "still being written" ring (Gap 4). Absent from
+   *  older servers and from system rows, and absence must stay a no-claim, never a hint. */
+  session_ready?: boolean;
   /** The linked goal's area — the icon family's source of truth (title regex is the fallback). */
   area?: 'movement' | 'nourishment' | 'mind' | 'practice';
 }

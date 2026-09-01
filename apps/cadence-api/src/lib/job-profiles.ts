@@ -18,6 +18,10 @@ export interface ProfileIds {
   brokerId: string;
   /** Absent until scripts/provision-research-profile.ts has run — only jobs that USE the token need it. */
   researchId?: string | null;
+  /** Absent until scripts/provision-evolve-profile.ts has run — the plan-adjustment tier
+   *  (owner ruling 2026-09-01: evolve runs a faster model than genesis; see the profile's
+   *  description in ai-admin.config.json for the benchmark behind it). */
+  evolveId?: string | null;
 }
 
 /** `<ANYTHING_IN_ANGLE_BRACKETS>` — the config's un-resolved placeholder form. */
@@ -38,7 +42,17 @@ export function resolveProfileToken(token: string, ids: ProfileIds): string {
     }
     return ids.researchId;
   }
-  throw new Error(`Unknown ai_profile_id placeholder ${token} — expected COACH, BROKER or RESEARCH profile tokens`);
+  if (token.includes('EVOLVE')) {
+    if (!ids.evolveId) {
+      throw new Error(
+        `${token} used but no cadence-evolve profile exists — run scripts/provision-evolve-profile.ts first`,
+      );
+    }
+    return ids.evolveId;
+  }
+  throw new Error(
+    `Unknown ai_profile_id placeholder ${token} — expected COACH, BROKER, RESEARCH or EVOLVE profile tokens`,
+  );
 }
 
 /** Resolve placeholders in place; pinned (explicit-UUID) jobs are returned untouched. */

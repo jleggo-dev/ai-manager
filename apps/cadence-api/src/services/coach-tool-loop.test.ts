@@ -341,6 +341,87 @@ describe('relayCoachTurnWithTools', () => {
 });
 
 /**
+ * The two-frame tool protocol (Phase 3 of the plan-change fix suite). For a long time the only
+ * activity frame was written AFTER a tool executed, so the slowest part of every round — the tool
+ * actually running — showed nothing. Now `tool_start` announces the round the moment the calls are
+ * parsed, and the unchanged post-execution `tool` frame confirms it. The relative order is the
+ * whole contract, so these tests plant a marker inside `execute` and assert against the write log.
+ */
+describe('the two-frame tool protocol', () => {
+  const startOf = (writes: string[]) => writes.findIndex((w) => w.includes('"cadence":"tool_start"'));
+  // `"cadence":"tool"` with its closing quote cannot match inside `"cadence":"tool_start"`.
+  const doneOf = (writes: string[]) => writes.findIndex((w) => w.includes('"cadence":"tool"'));
+
+  it('announces before execution, confirms after — in that order on the wire', async () => {
+    const { writes, writeChunk } = collectWrites();
+    const execute = vi.fn(async (calls: Array<{ toolCallId: string }>) => {
+      writes.push('EXECUTE');
+      return calls.map((c) => ({ toolCallId: c.toolCallId, output: 'Weight: 88.5 kg' }));
+    });
+    const submit = vi.fn(async () => stream([delta('You are at 88.5 kg.'), complete('r2'), DONE]));
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([delta('Let me check… '), complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
+      { toolNames: new Set(['get_weight']), execute, submit },
+      { writeChunk },
+    );
+    const executedAt = writes.indexOf('EXECUTE');
+    expect(startOf(writes)).toBeGreaterThan(-1);
+    expect(startOf(writes)).toBeLessThan(executedAt);
+    expect(executedAt).toBeLessThan(doneOf(writes));
+    // One round, one announcement, one confirmation.
+    expect(writes.filter((w) => w.includes('"cadence":"tool_start"'))).toHaveLength(1);
+    expect(writes.filter((w) => w.includes('"cadence":"tool"'))).toHaveLength(1);
+  });
+
+  it('both frames see through use_tool to the tool it is actually running', async () => {
+    const { writes, writeChunk } = collectWrites();
+    const execute = vi.fn(async (calls: Array<{ toolCallId: string }>) =>
+      calls.map((c) => ({ toolCallId: c.toolCallId, output: 'x' })),
+    );
+    const submit = vi.fn(async () => stream([delta('done'), complete('r2'), DONE]));
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([complete('r1', [{ id: 't1', name: 'use_tool', args: '{"name":"get_nutrition"}' }]), DONE]),
+      { toolNames: new Set(['use_tool']), execute, submit },
+      { writeChunk },
+    );
+    expect(writes[startOf(writes)]).toContain('{"cadence":"tool_start","names":["get_nutrition"]}');
+    expect(writes[doneOf(writes)]).toContain('{"cadence":"tool","names":["get_nutrition"]}');
+  });
+
+  /** The announcement claims "doing this now" — true even of a call that fails. The confirmation
+   *  claims it HAPPENED, so a failed execution must leave the start frame and never the post one. */
+  it('a failed execution leaves the announcement on the wire but never a confirmation', async () => {
+    const { writes, writeChunk } = collectWrites();
+    const execute = vi.fn(async () => {
+      throw new Error('registry down');
+    });
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([delta('One sec… '), complete('r1', [{ id: 't1', name: 'get_weight' }]), DONE]),
+      { toolNames: new Set(['get_weight']), execute, submit: vi.fn() },
+      { writeChunk },
+    );
+    expect(startOf(writes)).toBeGreaterThan(-1);
+    expect(doneOf(writes)).toBe(-1);
+    expect(writes.filter((w) => w.includes('[DONE]'))).toHaveLength(1);
+  });
+
+  it('a plain turn with no tool calls writes neither frame', async () => {
+    const { writes, writeChunk } = collectWrites();
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([delta('Hello'), DONE, complete('r1'), DONE]),
+      { toolNames: new Set(['get_weight']), execute: vi.fn(), submit: vi.fn() },
+      { writeChunk },
+    );
+    expect(startOf(writes)).toBe(-1);
+    expect(doneOf(writes)).toBe(-1);
+  });
+});
+
+/**
  * The dangling lookup: she calls `find_tools`, gets the instructions, and then answers as if she
  * had used them. It happened on 2026-08-16 — she told the owner a constraint was removed and
  * nothing had been. `find_tools` already ends with "call use_tool now" and she ignored it, which

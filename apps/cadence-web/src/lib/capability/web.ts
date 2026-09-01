@@ -27,6 +27,9 @@ export const webCapabilities: Capabilities = {
   push: {
     isAvailable: () => false,
     register: async () => null,
+    // No APNs in a browser, so nothing ever arrives — the no-op unsubscribe keeps App.tsx's
+    // wiring branch-free (subscribe everywhere, fire only where pushes exist).
+    onNotification: () => () => {},
   },
   location: {
     isAvailable: () => 'geolocation' in navigator,

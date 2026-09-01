@@ -105,6 +105,46 @@ describe('TodayTrail step ring', () => {
 });
 
 /**
+ * The warming hint (Gap 4, PLAN-CHANGES.md): an occurrence whose session hasn't been written yet
+ * used to render as an ordinary disc, so the ~30-60s wait was discovered by tapping. The honest
+ * hint before the tap is a dashed ring in the step ring's own slot — quiet, no copy, no spinner —
+ * plus the accessible "still being written". These pin the applicability edges: pending
+ * coach-programmed sessions only, and an absent field (older server) stays a no-claim.
+ */
+describe('TodayTrail warming hint', () => {
+  const warming = (c: HTMLElement) => c.querySelector('.trail-ring.is-warming');
+  const label = (c: HTMLElement) => c.querySelector('button.trail-node')?.getAttribute('aria-label');
+
+  it('draws the dashed ring and says so accessibly while the session is still being written', () => {
+    const { container } = draw(occ({ steps: undefined, session_ready: false }));
+    expect(warming(container)).not.toBeNull();
+    expect(warming(container)?.querySelector('circle')?.getAttribute('stroke-dasharray')).toBe('2 5');
+    expect(label(container)).toBe('Easy run — still being written');
+  });
+
+  it('drops the hint once the session exists — the step ring takes over', () => {
+    const { container } = draw(occ({ session_ready: true }));
+    expect(warming(container)).toBeNull();
+    expect(container.querySelector('.trail-ring')).not.toBeNull(); // steps: 4 → the ordinary ring
+    expect(label(container)).toBe('Easy run');
+  });
+
+  it('stays silent when an older server sends no field — absence is a no-claim, never a hint', () => {
+    const { container } = draw(occ({ steps: undefined }));
+    expect(warming(container)).toBeNull();
+    expect(label(container)).toBe('Easy run');
+  });
+
+  it('never marks a row whose tap starts no write: captures, and sessions already touched', () => {
+    // A weigh-in opens the capture sheet, not a session — no wait to warn about.
+    expect(warming(draw(occ({ title: 'Weigh-in', steps: undefined, session_ready: false })).container)).toBeNull();
+    // Done/skipped rows are past tense; the hint is only for a tap that would start the write.
+    expect(warming(draw(occ({ status: 'done', steps: undefined, session_ready: false })).container)).toBeNull();
+    expect(warming(draw(occ({ status: 'skipped', steps: undefined, session_ready: false })).container)).toBeNull();
+  });
+});
+
+/**
  * Food on the trail (Food Journey 01/3B): the strip sits full-width at the top of today — under
  * the day label, above the nodes — because the 134px coach bay could never hold three macro bars.
  * Still IN the day per the 2a ruling, still the one door to the Food home, and still absent
