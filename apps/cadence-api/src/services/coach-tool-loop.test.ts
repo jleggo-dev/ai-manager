@@ -522,6 +522,54 @@ describe('a lookup that never became a call', () => {
     expect(d.nudge).not.toHaveBeenCalled();
   });
 
+  /**
+   * The consent-seeking stop (2026-08-31, the prehab turn): she looked the tool up and then
+   * ASKED — "Want me to drop the standalone mobility from Monday?" — which is confirm-before-
+   * committing working. The nudge fired anyway, told her nothing was done, and pushed her into
+   * `propose_plan_change` with empty edits plus an apology. A turn whose words end in a question
+   * is waiting on the user, not dangling.
+   */
+  it('does not nudge when her words so far end in a question to the user', async () => {
+    const d = deps(null);
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([
+        delta('Want me to drop the standalone mobility from Monday?'),
+        complete('r1', [{ id: 't1', name: 'find_tools' }]),
+        DONE,
+      ]),
+      { ...d, execute: vi.fn().mockResolvedValue([{ toolCallId: 't1', output: 'propose_plan_change: …' }]) },
+      {},
+    );
+    expect(d.nudge).not.toHaveBeenCalled();
+  });
+
+  it('still nudges when the question mark is only mid-text and the turn ends declarative', async () => {
+    const d = deps(stream([delta('Doing it now.'), complete('r2'), DONE]));
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([
+        delta('Odd pairing, right? Removed the standalone mobility for you.'),
+        complete('r1', [{ id: 't1', name: 'find_tools' }]),
+        DONE,
+      ]),
+      { ...d, execute: vi.fn().mockResolvedValue([{ toolCallId: 't1', output: 'x' }]) },
+      {},
+    );
+    expect(d.nudge).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores closing quotes and emphasis after the question mark', async () => {
+    const d = deps(null);
+    await relayCoachTurnWithTools(
+      'u1',
+      stream([delta('Here is the trade. Shall I make it?”'), complete('r1', [{ id: 't1', name: 'find_tools' }]), DONE]),
+      { ...d, execute: vi.fn().mockResolvedValue([{ toolCallId: 't1', output: 'x' }]) },
+      {},
+    );
+    expect(d.nudge).not.toHaveBeenCalled();
+  });
+
   /** The turn already has an answer; a failed nudge must never cost her that. */
   it('keeps the reply when the nudge itself fails', async () => {
     const d = deps(null);
