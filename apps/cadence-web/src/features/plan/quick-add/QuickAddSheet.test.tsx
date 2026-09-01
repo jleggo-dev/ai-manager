@@ -39,6 +39,10 @@ const logDid = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
 // `getRoutines`: its own rendering is QuickAddTense.test.tsx's job.
 const listUserRoutines = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 const logUserRoutineRun = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
+// The Apple Health pull's own read — same empty-by-default treatment; its own filter/rendering is
+// QuickAddTense.test.tsx's job. Real `getWorkoutHistory` throws on failure, but the mock default
+// here just resolves empty, same as every other "nothing to offer" default in this file.
+const getWorkoutHistory = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 vi.mock('../../../lib/api.ts', () => ({
   logAdhoc: (...a: unknown[]) => logAdhoc(...a),
   logWater: (...a: unknown[]) => logWater(...a),
@@ -51,6 +55,7 @@ vi.mock('../../../lib/api.ts', () => ({
   logDid: (...a: unknown[]) => logDid(...a),
   listUserRoutines: (...a: unknown[]) => listUserRoutines(...a),
   logUserRoutineRun: (...a: unknown[]) => logUserRoutineRun(...a),
+  getWorkoutHistory: (...a: unknown[]) => getWorkoutHistory(...a),
 }));
 // The real player is its own well-tested surface — here it's a stub with the two controls the
 // play-then-credit contract cares about, so the sheet test can press "finish" and assert the wire.

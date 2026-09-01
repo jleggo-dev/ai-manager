@@ -17,6 +17,10 @@ const logDid = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
 // The "Yours" tier's own two calls (Activity Builder wave 3) — same no-claim default as `getRoutines`.
 const listUserRoutines = vi.fn(async (..._a: unknown[]) => [] as unknown[] | null);
 const logUserRoutineRun = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
+// The Apple Health pull's own read — THROWS on failure (unlike everything else mocked here), so
+// the default has to be a resolved empty array, not a rejected one, or every test that doesn't
+// care about it would have to swallow an unhandled rejection.
+const getWorkoutHistory = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 vi.mock('../../../lib/api.ts', () => ({
   logAdhoc: (...a: unknown[]) => logAdhoc(...a),
   getNowMenu: (...a: unknown[]) => getNowMenu(...a),
@@ -25,6 +29,7 @@ vi.mock('../../../lib/api.ts', () => ({
   logDid: (...a: unknown[]) => logDid(...a),
   listUserRoutines: (...a: unknown[]) => listUserRoutines(...a),
   logUserRoutineRun: (...a: unknown[]) => logUserRoutineRun(...a),
+  getWorkoutHistory: (...a: unknown[]) => getWorkoutHistory(...a),
 }));
 
 // The walkthrough itself belongs to another agent's parcel — this test only needs to know
@@ -439,5 +444,131 @@ describe('QuickAddTense — Build my own', () => {
     fireEvent.click(screen.getByText('Blank'));
     expect(onBuild).toHaveBeenCalledWith(undefined);
     expect(await screen.findByLabelText('Build my own')).toBeTruthy();
+  });
+});
+
+/**
+ * "Pull from Apple Health" — the log door's fastest source (design 2A screen 2). No device work:
+ * the phone already syncs into workout_history, read via `getWorkoutHistory`. Movement-only; the
+ * filter itself (device source, today, type-matched) is healthPull.test.ts's job — these pin the
+ * WIRING: the exact composed text reaching `logAdhoc`, the shared busy/note guard, and the one
+ * quirk this read alone has — it THROWS on failure instead of resolving `ok: false`.
+ */
+describe('QuickAddTense — Pull from Apple Health', () => {
+  const YESTERDAY = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const workout = (over: Record<string, unknown> = {}) => ({
+    source: 'healthkit',
+    type: 'run',
+    startedAt: new Date().toISOString(), // "now" is always today, wherever/whenever this runs
+    durationMin: 32,
+    distanceKm: 4.8,
+    avgHr: null,
+    ...over,
+  });
+
+  beforeEach(() => {
+    getNowMenu.mockResolvedValue([]);
+    getRoutines.mockResolvedValue([]);
+    listUserRoutines.mockResolvedValue([]);
+    getWorkoutHistory.mockResolvedValue([]);
+  });
+
+  it('a row press composes the exact text, logs under the area, then closes', async () => {
+    getWorkoutHistory.mockResolvedValue([workout()]);
+    const onLogged = vi.fn();
+    mount({ area: 'movement', noun: 'A run', onLogged });
+    fireEvent.click(await screen.findByLabelText('Pull from Apple Health'));
+    await waitFor(() =>
+      expect(logAdhoc).toHaveBeenCalledWith('Run — 4.8 km · 32 min (from Apple Health)', undefined, 'movement'),
+    );
+    expect(onLogged).toHaveBeenCalled();
+  });
+
+  it('omits an absent fact cleanly — no distance recorded means no invented number', async () => {
+    getWorkoutHistory.mockResolvedValue([workout({ distanceKm: null })]);
+    mount({ area: 'movement', noun: 'A run' });
+    fireEvent.click(await screen.findByLabelText('Pull from Apple Health'));
+    await waitFor(() =>
+      expect(logAdhoc).toHaveBeenCalledWith('Run — 32 min (from Apple Health)', undefined, 'movement'),
+    );
+  });
+
+  it('a strava row wears "Pull from Strava" — never the wrong brand', async () => {
+    getWorkoutHistory.mockResolvedValue([workout({ source: 'strava' })]);
+    mount({ area: 'movement', noun: 'A run' });
+    expect(await screen.findByLabelText('Pull from Strava')).toBeTruthy();
+    expect(screen.queryByLabelText('Pull from Apple Health')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Pull from Strava'));
+    await waitFor(() =>
+      expect(logAdhoc).toHaveBeenCalledWith('Run — 4.8 km · 32 min (from Strava)', undefined, 'movement'),
+    );
+  });
+
+  it("a cadence-sourced row never renders — that's a session already logged here", async () => {
+    getWorkoutHistory.mockResolvedValue([workout({ source: 'cadence' })]);
+    mount({ area: 'movement', noun: 'A run' });
+    await waitFor(() => expect(getWorkoutHistory).toHaveBeenCalled());
+    expect(screen.queryByLabelText(/Pull from/)).toBeNull();
+  });
+
+  it("yesterday's workout never renders", async () => {
+    getWorkoutHistory.mockResolvedValue([workout({ startedAt: YESTERDAY })]);
+    mount({ area: 'movement', noun: 'A run' });
+    await waitFor(() => expect(getWorkoutHistory).toHaveBeenCalled());
+    expect(screen.queryByLabelText(/Pull from/)).toBeNull();
+  });
+
+  it('a wrong-type workout never renders under a specific noun, but does under "A workout"', async () => {
+    getWorkoutHistory.mockResolvedValue([workout({ type: 'ride' })]);
+    mount({ area: 'movement', noun: 'A run' });
+    await waitFor(() => expect(getWorkoutHistory).toHaveBeenCalled());
+    expect(screen.queryByLabelText(/Pull from/)).toBeNull();
+
+    cleanup();
+    getWorkoutHistory.mockResolvedValue([workout({ type: 'ride' })]);
+    mount({ area: 'movement', noun: 'A workout' });
+    expect(await screen.findByLabelText('Pull from Apple Health')).toBeTruthy();
+  });
+
+  it('a fetch that throws leaves no rows and everything else intact', async () => {
+    getWorkoutHistory.mockRejectedValue(new Error('boom'));
+    mount({ area: 'movement', noun: 'A run' });
+    await waitFor(() => expect(getWorkoutHistory).toHaveBeenCalled());
+    expect(screen.queryByLabelText(/Pull from/)).toBeNull();
+    // The rest of the screen is untouched by the throw.
+    expect(screen.getByText('30 min')).toBeTruthy();
+  });
+
+  it('ok: false shows the same honest note the chips show', async () => {
+    getWorkoutHistory.mockResolvedValue([workout()]);
+    logAdhoc.mockResolvedValue({ ok: false });
+    mount({ area: 'movement', noun: 'A run' });
+    fireEvent.click(await screen.findByLabelText('Pull from Apple Health'));
+    expect(await screen.findByText("That didn't save — try again in a moment.")).toBeTruthy();
+  });
+
+  it('the shared busy guard blocks a second press while the first is still in flight', async () => {
+    getWorkoutHistory.mockResolvedValue([workout()]);
+    let resolveLog!: (v: { ok: boolean }) => void;
+    logAdhoc.mockReturnValue(
+      new Promise((resolve) => {
+        resolveLog = resolve;
+      }),
+    );
+    mount({ area: 'movement', noun: 'A run' });
+    const row = await screen.findByLabelText('Pull from Apple Health');
+    fireEvent.click(row);
+    expect(row).toBeDisabled(); // busy — the row itself goes inert, same as every other tap here
+    fireEvent.click(row); // still in flight — must not fire a second call
+    expect(logAdhoc).toHaveBeenCalledTimes(1);
+    resolveLog({ ok: true }); // let the pending write settle so nothing dangles past the test
+    await waitFor(() => expect(logAdhoc).toHaveBeenCalledTimes(1));
+  });
+
+  it('a practice noun never calls getWorkoutHistory — no device data to offer a piano practice', async () => {
+    mount({ area: 'practice', noun: 'Piano' });
+    await waitFor(() => expect(getNowMenu).toHaveBeenCalled());
+    expect(getWorkoutHistory).not.toHaveBeenCalled();
   });
 });

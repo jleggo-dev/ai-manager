@@ -3,11 +3,13 @@ import { deriveWalkthrough, nowMenuMeta, type NowMenuItem } from '@cadence/share
 import {
   getNowMenu,
   getRoutines,
+  getWorkoutHistory,
   listUserRoutines,
   logAdhoc,
   logUserRoutineRun,
   type PlanRoutine,
   type UserRoutine,
+  type WorkoutHistoryListItem,
 } from '../../../lib/api.ts';
 import { Walkthrough } from '../../walkthrough/Walkthrough.tsx';
 import { sessionFor } from '../nowMenuSession.ts';
@@ -15,12 +17,18 @@ import { categoryOfArea } from '../../today/category.ts';
 import { glyphOf, GLYPH } from '../../today/glyphs.ts';
 import type { QuickAddArea } from './quickAddRows.ts';
 import { useRoutinePlay } from './useRoutinePlay.tsx';
-import { browseAllCount, fillShelfSlots, playableRoutines, routineMeta, SHELF_ROW_CAP } from './routineShelf.ts';
-import { playableUserRoutines, userRoutineMeta } from './userRoutineShelf.ts';
+import { browseAllCount, fillShelfSlots, playableRoutines, SHELF_ROW_CAP } from './routineShelf.ts';
+import { playableUserRoutines } from './userRoutineShelf.ts';
 import type { BuilderSeed } from './builderSeed.ts';
 import { StartFromScreen } from './StartFromScreen.tsx';
+import { healthPullFacts, healthPullSourceLabel, pullableWorkouts } from './healthPull.ts';
+import { HealthPullRow } from './HealthPullRow.tsx';
+import { RoutineRow, UserRoutineRow } from './RoutineRows.tsx';
 
 const DURATION_CHIPS = [15, 30, 45] as const;
+/** `getWorkoutHistory(days, limit)` — one day (today only matters here) is enough window; 8 rows
+ *  is generous headroom for a busy day before the noun/date filter (healthPull.ts) narrows it. */
+const HEALTH_PULL_WINDOW = { days: 1, limit: 8 } as const;
 
 /** "A workout" → "Workout"; "Piano" → "Piano" — the article a fallback noun wears reads fine as a
  *  row label but not as the subject of a logged sentence. */
@@ -29,10 +37,18 @@ function bareNoun(noun: string): string {
   return stripped ? stripped.charAt(0).toUpperCase() + stripped.slice(1) : noun;
 }
 
-/** "Piano — 30 min", "Workout — 45 min" — deterministic, so the same noun always reads the same
- *  way in the log regardless of which chip (or the custom field) produced it. */
-function composeLogText(noun: string, minutes: number): string {
-  return `${bareNoun(noun)} — ${minutes} min`;
+/**
+ * "Piano — 30 min", "Run — 4.8 km · 32 min (from Apple Health)" — one composer for every logged
+ * sentence this screen produces, so the same noun always reads the same way regardless of which
+ * door produced it (a chip, the custom field, or a pulled workout). `facts` are already-formatted
+ * clauses — never invented here, the caller decides what's real (healthPull.ts's
+ * `healthPullFacts` for a pulled row, a single minutes string for a chip). `source` adds the
+ * trailing provenance parenthetical only a pulled workout carries.
+ */
+function composeLogText(noun: string, facts: string[], source?: string): string {
+  const factsPart = facts.length > 0 ? ` — ${facts.join(' · ')}` : '';
+  const sourcePart = source ? ` (from ${source})` : '';
+  return `${bareNoun(noun)}${factsPart}${sourcePart}`;
 }
 
 /** The seed sentence "Tell me instead" hands the coach — a plain opener, never a finished claim;
@@ -50,9 +66,10 @@ function steerSeed(area: QuickAddArea, noun: string): string {
  * the coach's own present-tense menu is the honest second choice, not the first. "Take me on one"
  * now lists three tiers in order — the coach's now-menu tools, her routines, then the user's own
  * ("Yours") — sharing the Now Door's one 5-row cap; "Build my own" is the screen's last door, into
- * `StartFromScreen.tsx`'s three starting-point shelves (Activity Builder wave 3).
- *
- * No Apple Health pull — that's device-gated, a later parcel.
+ * `StartFromScreen.tsx`'s three starting-point shelves (Activity Builder wave 3). For a MOVEMENT
+ * noun, "I went for one" leads with up to 2 "Pull from Apple Health/Strava" rows — today's synced
+ * workouts (healthPull.ts), the fastest of the log door's sources; practice never fetches or shows
+ * them (no device data to offer a piano practice).
  */
 export function QuickAddTense({
   area,
@@ -98,6 +115,9 @@ export function QuickAddTense({
   const [browsingRoutines, setBrowsingRoutines] = useState(false);
   const [buildingFrom, setBuildingFrom] = useState(false);
   const [playingUserRoutine, setPlayingUserRoutine] = useState<UserRoutine | null>(null);
+  // null = not fetched (or the read failed/threw) — movement-only; practice leaves this null
+  // forever, never even calling `getWorkoutHistory` (no device data to offer a piano practice).
+  const [healthRows, setHealthRows] = useState<WorkoutHistoryListItem[] | null>(null);
   const routinePlay = useRoutinePlay(onLogged);
 
   useEffect(() => {
@@ -136,11 +156,41 @@ export function QuickAddTense({
     };
   }, []);
 
+  useEffect(() => {
+    if (area !== 'movement') return; // practice never calls getWorkoutHistory
+    let alive = true;
+    getWorkoutHistory(HEALTH_PULL_WINDOW.days, HEALTH_PULL_WINDOW.limit)
+      .then((rows) => {
+        if (alive) setHealthRows(rows);
+      })
+      .catch(() => {
+        // Throws on failure (unlike most reads in this file) — a throw just means there's nothing
+        // to offer here, the same no-claim absence an empty result would be. Never an error state.
+        if (alive) setHealthRows([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [area]);
+
   async function logMinutes(minutes: number) {
     if (!Number.isFinite(minutes) || minutes <= 0 || busy) return;
     setBusy(true);
     setNote('');
-    const { ok } = await logAdhoc(composeLogText(noun, Math.round(minutes)), undefined, area);
+    const { ok } = await logAdhoc(composeLogText(noun, [`${Math.round(minutes)} min`]), undefined, area);
+    setBusy(false);
+    if (ok) onLogged();
+    else setNote("That didn't save — try again in a moment.");
+  }
+
+  // Same door, same wire: a pulled workout logs through the exact `logAdhoc` path every other
+  // action on this screen uses, sharing the ONE `busy` guard and the ONE honest failure note.
+  async function logHealthRow(row: WorkoutHistoryListItem) {
+    if (busy) return;
+    setBusy(true);
+    setNote('');
+    const text = composeLogText(noun, healthPullFacts(row), healthPullSourceLabel(row.source));
+    const { ok } = await logAdhoc(text, undefined, area);
     setBusy(false);
     if (ok) onLogged();
     else setNote("That didn't save — try again in a moment.");
@@ -226,6 +276,10 @@ export function QuickAddTense({
     );
   }
 
+  // Fastest-first (design 2A): up to 2 of today's synced workouts, movement-only. `healthRows`
+  // stays null for practice (the fetch effect never runs it) so this is always [] there too.
+  const pulledRows = healthRows ? pullableWorkouts(healthRows, noun).slice(0, 2) : [];
+
   // Three tiers share the Now Door's one 5-row cap, in listed order: now-menu items claim their
   // slots first (unlimited — they're the coach's own present-tense picks), then coach routines,
   // then the user's own. Each of the latter two is ALSO capped per tier (`fillShelfSlots`), so a
@@ -249,6 +303,20 @@ export function QuickAddTense({
 
       <div className="ld2-sec">
         <b>I went for one</b> <span>log it — it counts</span>
+        {/* The fastest source, first (design 2A): today's synced workouts, movement-only. Absent
+            for practice, an empty read, or a device that's never synced — a no-claim, not a gap. */}
+        {pulledRows.length > 0 && (
+          <div className="ld-list" style={{ margin: '10px 0' }}>
+            {pulledRows.map((row) => (
+              <HealthPullRow
+                key={`${row.source}-${row.startedAt}`}
+                row={row}
+                busy={busy}
+                onPull={() => void logHealthRow(row)}
+              />
+            ))}
+          </div>
+        )}
         <div className="ld2-chips">
           {DURATION_CHIPS.map((m) => (
             <button key={m} className="ld2-chip" disabled={busy} onClick={() => void logMinutes(m)}>
@@ -406,68 +474,5 @@ export function QuickAddTense({
         </button>
       )}
     </>
-  );
-}
-
-/** One routine row — shared by the shelf's top-2 slice and the "Browse all" full list, so the two
- *  views can never drift in what a row looks like or does. `errorText` swaps in for the meta line
- *  the same way `PhotoQuickRow`'s save-state text does (QuickAddRowViews.tsx): the row's own
- *  honest line lives exactly where its ordinary meta would, never a separate block bolted on. */
-function RoutineRow({
-  routine,
-  area,
-  busy,
-  errorText,
-  onPlay,
-}: {
-  routine: PlanRoutine;
-  area: QuickAddArea;
-  busy: boolean;
-  errorText?: string;
-  onPlay: () => void;
-}) {
-  const routineArea = routine.area ?? area;
-  const glyph = glyphOf(routine.title, routineArea);
-  return (
-    <button className="ld-row" onClick={onPlay} disabled={busy} aria-label={routine.title}>
-      <span className={`ld-ic ld-ic-${categoryOfArea(routineArea)}`} aria-hidden>
-        <svg viewBox="0 0 24 24" width="20" height="20">
-          <path d={glyph.d} fill="#fff" />
-        </svg>
-      </span>
-      <span className="ld-row-t">
-        <b>{routine.title}</b>
-        <span>{errorText ?? routineMeta(routine)}</span>
-      </span>
-      <span className="ld-plus" aria-hidden>
-        ›
-      </span>
-    </button>
-  );
-}
-
-/** A user-built routine's own row — same grammar as `RoutineRow`, but no busy/error state: playing
- *  one needs no fetch (the session is already in hand from `listUserRoutines`), so there is
- *  nothing here that can fail. The "yours" word leads the meta line — a quiet chip, not a
- *  separate line, the same one-line-of-facts shape every row in this sheet already wears. */
-function UserRoutineRow({ routine, area, onPlay }: { routine: UserRoutine; area: QuickAddArea; onPlay: () => void }) {
-  const routineArea = routine.area ?? area;
-  const glyph = glyphOf(routine.name, routineArea);
-  const meta = ['yours', userRoutineMeta(routine)].filter((p): p is string => !!p).join(' · ');
-  return (
-    <button className="ld-row" onClick={onPlay} aria-label={routine.name}>
-      <span className={`ld-ic ld-ic-${categoryOfArea(routineArea)}`} aria-hidden>
-        <svg viewBox="0 0 24 24" width="20" height="20">
-          <path d={glyph.d} fill="#fff" />
-        </svg>
-      </span>
-      <span className="ld-row-t">
-        <b>{routine.name}</b>
-        <span>{meta}</span>
-      </span>
-      <span className="ld-plus" aria-hidden>
-        ›
-      </span>
-    </button>
   );
 }

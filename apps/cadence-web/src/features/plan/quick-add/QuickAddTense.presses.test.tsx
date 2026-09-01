@@ -20,6 +20,9 @@ vi.mock('../../../lib/api.ts', () => ({
   // Wave 3 (Build my own): the tense screen also reads the user's own routines on mount.
   listUserRoutines: async () => [],
   logUserRoutineRun: async () => ({ ok: true }),
+  // The Apple Health pull: the tense screen also reads today's synced workouts on mount, for a
+  // movement noun. Empty by default; it THROWS on a real failure, unlike everything else here.
+  getWorkoutHistory: async () => [],
 }));
 
 vi.mock('../../walkthrough/Walkthrough.tsx', () => ({
