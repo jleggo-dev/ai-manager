@@ -1,17 +1,11 @@
 import { useEffect, useState } from 'react';
-import {
-  deriveWalkthrough,
-  journalBank,
-  journalOpener,
-  nowMenuMeta,
-  type NowMenuItem,
-  type OccurrenceSession,
-} from '@cadence/shared';
+import { deriveWalkthrough, journalBank, journalOpener, nowMenuMeta, type NowMenuItem } from '@cadence/shared';
 import { getNowMenu } from '../../lib/api.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
 import { JournalWrite } from '../journal/JournalWrite.tsx';
 import { categoryOfArea, type Category } from '../today/category.ts';
 import { glyphOf } from '../today/glyphs.ts';
+import { sessionFor } from './nowMenuSession.ts';
 
 /**
  * "Do something now" — the present-tense half of the ＋ sheet (REQ10 §6, REQ9 §3.1).
@@ -133,42 +127,6 @@ export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLog
     </div>
   );
 }
-
-/** A one-item session so a menu row plays through the same walkthrough a scheduled task uses —
- *  same renderers, same logging, same partial-credit rules. Nothing about the tool knows it was
- *  launched from a menu rather than the trail. */
-function sessionFor(item: NowMenuItem): OccurrenceSession {
-  const params = item.action.kind === 'tool' ? item.action.params : {};
-  return {
-    blocks: [
-      {
-        label: '',
-        items: [
-          {
-            name: item.label,
-            tool: item.action.kind === 'tool' ? item.action.tool : undefined,
-            breath_pattern: str(params.breath_pattern),
-            breath_cycles: num(params.breath_cycles),
-            duration_min: num(params.duration_min),
-            meditate_bells: str(params.meditate_bells),
-            grounding_game: str(params.grounding_game),
-            interval_work_sec: num(params.interval_work_sec),
-            interval_recover_sec: num(params.interval_recover_sec),
-            interval_rounds: num(params.interval_rounds),
-            interval_warmup_sec: num(params.interval_warmup_sec),
-            interval_cooldown_sec: num(params.interval_cooldown_sec),
-          },
-        ],
-      },
-    ],
-    note: '',
-    generated_at: new Date().toISOString(),
-    version: 1,
-  };
-}
-
-const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
-const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 
 /** One mapping for every surface — categoryOfArea (category.ts). Practice stopped borrowing the
  *  reflection moon when it got its own family and glyph (2026-08-31). */

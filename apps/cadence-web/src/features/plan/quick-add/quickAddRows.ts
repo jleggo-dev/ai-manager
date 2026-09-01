@@ -23,12 +23,51 @@ export type QuickAddRow =
   | { kind: 'meal' }
   | { kind: 'weight' }
   /** An off-plan add for an area the plan shows they work in — `toward` names the goal when the
-   *  area has exactly one, so "Add a practice · toward Learn piano" can say what it feeds. */
-  | { kind: 'add'; area: QuickAddArea; toward?: string }
+   *  area has exactly one, so "Piano · toward Learn piano" can say what it feeds. `noun` is the
+   *  row's own label (see `nounForArea` below): the thing itself, never a generic verb phrase. */
+  | { kind: 'add'; area: QuickAddArea; toward?: string; noun: string }
   | { kind: 'photo' };
 
 /** Same reading CaptureSheet uses — a weigh row is named, not flagged. */
 const isWeighTitle = (t: string) => /weigh/i.test(t);
+
+/** Trailing words a title wears for the trail's own grammar but that add nothing once the row is
+ *  named on its own screen — "Piano practice" is a person's piano, "Evening session" is nobody's
+ *  noun at all. Stripped one at a time so "Practice session" still yields something. */
+const GENERIC_SUFFIX_WORDS = new Set(['practice', 'session']);
+
+/** The generic floor for an area — what the row says when no single activity owns it. */
+const AREA_FALLBACK: Record<QuickAddArea, string> = { movement: 'A workout', practice: 'A practice' };
+
+/**
+ * Strips a trailing generic word (repeatedly, so "Evening practice session" still lands on
+ * "Evening"), and reports `null` when doing so leaves nothing distinctive — a title that IS just
+ * "Practice" is not a noun, it's the same fallback the area already offers.
+ */
+function stripGenericSuffix(title: string): string | null {
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  let last = words[words.length - 1];
+  while (words.length > 1 && last !== undefined && GENERIC_SUFFIX_WORDS.has(last.toLowerCase())) {
+    words.pop();
+    last = words[words.length - 1];
+  }
+  if (words.length === 0 || last === undefined) return null;
+  if (words.length === 1 && GENERIC_SUFFIX_WORDS.has(last.toLowerCase())) return null;
+  return words.join(' ');
+}
+
+/**
+ * The row's own name for an area — "Piano" for a lone "Piano practice" activity, but the generic
+ * "A workout" / "A practice" the moment there's more than one distinct activity in play (nothing
+ * to single out) or the title strips down to nothing distinctive. Never a per-activity row (that
+ * gate lives in the loop below, unchanged) — one noun stands for the whole area.
+ */
+function nounForArea(area: QuickAddArea, activities: { title: string }[]): string {
+  const fallback = AREA_FALLBACK[area];
+  const [only, ...rest] = [...new Set(activities.map((a) => a.title.trim()).filter(Boolean))];
+  if (!only || rest.length > 0) return fallback;
+  return stripGenericSuffix(only) ?? fallback;
+}
 
 export function deriveQuickAddRows(input: {
   plan: PlanViewData | null;
@@ -52,7 +91,12 @@ export function deriveQuickAddRows(input: {
       const inArea = plan.activities.filter((a) => a.kind === 'user' && a.area === area);
       if (inArea.length === 0) continue;
       const goals = [...new Set(inArea.map((a) => a.goal_title).filter((t): t is string => !!t))];
-      rows.push({ kind: 'add', area, toward: goals.length === 1 ? goals[0] : undefined });
+      rows.push({
+        kind: 'add',
+        area,
+        toward: goals.length === 1 ? goals[0] : undefined,
+        noun: nounForArea(area, inArea),
+      });
     }
   }
 

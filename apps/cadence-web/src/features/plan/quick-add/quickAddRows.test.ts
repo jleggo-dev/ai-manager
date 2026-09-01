@@ -67,9 +67,11 @@ describe('deriveQuickAddRows', () => {
       ],
     });
     const rows = deriveQuickAddRows({ plan: p, day: null, photosEnabled: false });
+    // Two distinct movement titles → nothing to single out, the area keeps its generic noun.
+    // One distinct practice title → the noun is the activity's own name, suffix stripped.
     expect(rows).toEqual([
-      { kind: 'add', area: 'movement', toward: 'Run a 10k' },
-      { kind: 'add', area: 'practice', toward: 'Learn piano' },
+      { kind: 'add', area: 'movement', toward: 'Run a 10k', noun: 'A workout' },
+      { kind: 'add', area: 'practice', toward: 'Learn piano', noun: 'Piano' },
     ]);
   });
 
@@ -80,9 +82,44 @@ describe('deriveQuickAddRows', () => {
         activity({ activity_id: 'a2', area: 'movement', goal_title: 'Get stronger' }),
       ],
     });
+    // Both activities share the factory's default title ('Easy run') — one distinct title, so the
+    // noun still resolves, independent of the (now absent) toward line.
     expect(deriveQuickAddRows({ plan: p, day: null, photosEnabled: false })).toEqual([
-      { kind: 'add', area: 'movement', toward: undefined },
+      { kind: 'add', area: 'movement', toward: undefined, noun: 'Easy run' },
     ]);
+  });
+
+  describe('the noun a movement/practice row wears', () => {
+    const rowFor = (area: 'movement' | 'practice', titles: string[]) =>
+      deriveQuickAddRows({
+        plan: plan({ activities: titles.map((title, i) => activity({ activity_id: `a${i}`, area, title })) }),
+        day: null,
+        photosEnabled: false,
+      })[0];
+
+    it('strips a generic trailing word off a single distinctive title', () => {
+      expect(rowFor('practice', ['Piano practice'])).toEqual({
+        kind: 'add',
+        area: 'practice',
+        toward: undefined,
+        noun: 'Piano',
+      });
+      // Repeated suffixes strip one at a time, so a doubled-up title still lands on the name.
+      expect(rowFor('practice', ['Evening practice session'])).toMatchObject({ noun: 'Evening' });
+    });
+
+    it('falls back to the area floor when the title IS the generic word', () => {
+      expect(rowFor('practice', ['Practice'])).toMatchObject({ noun: 'A practice' });
+      expect(rowFor('movement', ['Session'])).toMatchObject({ noun: 'A workout' });
+    });
+
+    it('falls back to the area floor when more than one distinct title is in play', () => {
+      expect(rowFor('movement', ['Easy run', 'Strength'])).toMatchObject({ noun: 'A workout' });
+    });
+
+    it('keeps a title with no generic suffix as its own noun', () => {
+      expect(rowFor('movement', ['Easy run'])).toMatchObject({ noun: 'Easy run' });
+    });
   });
 
   it('ignores system rows and untracked areas when deriving the add rows', () => {
