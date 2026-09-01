@@ -216,26 +216,47 @@ export async function setOccurrenceWeatherIfEmpty(
   return res.count > 0;
 }
 
+// The session-cache writes (set-if-empty, clear-for-revise) and the revision's upcoming list live
+// in occurrence-sessions.ts — split out when this file crossed the 500-line gate (2026-08-31).
+
 /**
- * Cache a generated session ONLY if none exists yet (`session is null` guard) — with lazy
- * generate-on-open, two racing requests both generate; the first write wins and the loser
- * re-reads, so the user never sees the session swap. Returns whether THIS write won.
+ * Diff-aware commit invalidation (PLAN-CHANGES.md, Phase 1): move an UNCHANGED activity's future
+ * pending occurrences onto the new plan version's row instead of letting the commit wipe them.
+ * Runs inside commitActivities' transaction BEFORE deleteFuturePendingOccurrences — once
+ * re-pointed, the rows belong to the new plan's activity and are out of the wipe's scope, and
+ * their session/status/log/steps ride along untouched (occurrence_id is stable too, so a client
+ * holding one keeps a working handle). ensureHorizon's on-conflict (activity_id, date) upsert
+ * then counts them as already materialized rather than duplicating them.
+ *
+ * Bounded to [fromDate, toDate] — the NEW horizon — so a previously-extended plan's rows beyond
+ * the incoming week still fall to the wipe, exactly as they always did. `status = 'pending'`
+ * mirrors the wipe's scope: paused (episode-shelved) rows are outside both, as before. The
+ * unique (activity_id, date) index cannot collide here — the new activity was inserted in this
+ * same transaction and owns no occurrences yet. Returns the count re-pointed.
  */
-export async function setOccurrenceSessionIfEmpty(
-  userId: string,
-  occurrenceId: string,
-  session: OccurrenceSession,
-): Promise<boolean> {
-  const res = await sql`
-    update cadence.occurrences set session = ${json(session)}
-    where user_id = ${userId} and occurrence_id = ${occurrenceId} and session is null`;
-  return res.count > 0;
+export async function repointFuturePendingOccurrences(
+  oldActivityId: string,
+  newActivityId: string,
+  fromDate: string,
+  toDate: string,
+  db: SqlExecutor = sql, // the sql.begin() tx handle when called inside commitActivities' transaction
+): Promise<number> {
+  const res = await db`
+    update cadence.occurrences
+    set activity_id = ${newActivityId}
+    where activity_id = ${oldActivityId}
+      and date >= ${fromDate}
+      and date <= ${toDate}
+      and status = 'pending'`;
+  return res.count;
 }
 
 /**
  * Remove a superseded plan's still-pending FUTURE occurrences when a new plan version commits —
  * they're replaced by the new plan's schedule. Past + done/skipped occurrences are kept (that's
- * the user's history, and it feeds consistency). Returns the number removed.
+ * the user's history, and it feeds consistency). Runs AFTER repointFuturePendingOccurrences has
+ * moved any unchanged activities' rows onto the new version, so what it deletes is only the
+ * changed/removed remainder. Returns the number removed.
  */
 export async function deleteFuturePendingOccurrences(
   planId: string,

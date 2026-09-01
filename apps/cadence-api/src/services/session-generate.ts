@@ -23,10 +23,10 @@ import {
   listOccurrences,
   listRecentLogsByTitle,
   getAnchorSessionByTitle,
-  setOccurrenceSessionIfEmpty,
   setOccurrenceWeatherIfEmpty,
   type OccurrenceWithActivity,
 } from '../repos/occurrences.ts';
+import { clearOccurrenceSession, setOccurrenceSessionIfEmpty } from '../repos/occurrence-sessions.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
 import { listRepertoire } from '../repos/repertoire.ts';
@@ -68,7 +68,17 @@ const TOOL_CATALOG = renderCoachToolCatalog();
 // Per-process only — does not dedupe across instances in a multi-instance deploy.
 const inflight = new Map<string, Promise<OccurrenceSession | null>>();
 
-async function generateSession(userId: string, occ: OccurrenceWithActivity): Promise<OccurrenceSession | null> {
+/**
+ * `steer` is the person's own words about what THIS session should hold ("add chest and abs") —
+ * empty on every first-open/prefetch generation, set only by `reviseSession` below. It rides the
+ * job's <user_steer> variable, where the prompt's STEER rule makes it the primary driver of the
+ * session's contents (never overriding safety or constraints).
+ */
+async function generateSession(
+  userId: string,
+  occ: OccurrenceWithActivity,
+  steer = '',
+): Promise<OccurrenceSession | null> {
   const [goals, equipment, user, history, repertoire] = await Promise.all([
     listGoalsByStatus(userId, ['committed']),
     listEquipment(userId),
@@ -87,9 +97,11 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
   // user set to 'deterministic', with a scheme on the activity, compute the session from the eval
   // template — no coach call, instant and predictable. The eval itself (0 logged) and every coach-mode
   // or non-fitness activity fall through to prescribe-session below.
+  // A steer skips this branch: the template arithmetic cannot hear "add chest and abs", so a
+  // revision always goes to the coach call below, even for a goal set to deterministic mode.
   const goalMode = goals.find((g) => g.goal_id === occ.goal_id)?.plan_mode;
   const scheme = occ.target?.scheme;
-  if (goalMode === 'deterministic' && scheme && history.length >= 1) {
+  if (goalMode === 'deterministic' && scheme && history.length >= 1 && !steer) {
     const anchor = await getAnchorSessionByTitle(userId, occ.title);
     if (anchor?.session) {
       const weekIndex = weekIndexBetween(anchor.date, occ.date);
@@ -146,6 +158,9 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
     phase,
     sessions_logged: String(history.length),
     occurrence_date: occ.date,
+    // Empty on ordinary generations — the template ignores an empty tag, so every existing
+    // caller's prompt is byte-compatible with what it was before the steer existed.
+    user_steer: steer,
     weather: weatherLine,
     tool_catalog: TOOL_CATALOG,
   };
@@ -163,7 +178,7 @@ async function generateSession(userId: string, occ: OccurrenceWithActivity): Pro
   }
   void logAi(userId, {
     kind: 'prescribe_session',
-    input: { occurrenceId: occ.occurrence_id, title: occ.title, date: occ.date },
+    input: { occurrenceId: occ.occurrence_id, title: occ.title, date: occ.date, ...(steer ? { steer } : {}) },
     output: session,
     meta: { blocks: session?.blocks.length ?? 0, ok: !!session, phase, sessions_logged: history.length, attempts },
   });
@@ -224,6 +239,71 @@ export async function getOccurrenceDetail(
     return (await getOccurrenceWithActivity(userId, occurrenceId)) ?? { ...occ, session };
   }
   return { ...occ, session };
+}
+
+/** What a revision came to — words for each outcome live with the caller (the coach tool). */
+export type ReviseSessionResult =
+  | { status: 'not_found' }
+  | { status: 'not_revisable'; reason: 'system_row' | 'not_pending' | 'past'; occ: OccurrenceWithActivity }
+  | { status: 'failed'; occ: OccurrenceWithActivity }
+  | { status: 'revised'; occ: OccurrenceWithActivity; session: OccurrenceSession };
+
+/**
+ * Rung 1 of the plan-change ladder (docs/cadence/PLAN-CHANGES.md): "add chest and abs to today's
+ * workout" is a SESSION-CONTENT ask — one prescription (~34s), never a plan re-synthesis. Rebuild
+ * ONE occurrence's session with the person's words folded in as the steer.
+ *
+ * Order matters and is the whole trick: `setOccurrenceSessionIfEmpty` is compare-and-set on
+ * EMPTY, so the stored session is cleared FIRST and the rebuilt one lands through the same guarded
+ * write every other writer uses. Same gates as first-open generation (user-kind, still pending,
+ * today or later — UTC, matching ensureHorizon's convention), and the same single-flight map: a
+ * generation already running for this occurrence is awaited out before the clear, and the rebuild
+ * registers under the same key, so a tap racing the revise joins the steered generation instead
+ * of spending a second coach call.
+ */
+export async function reviseSession(userId: string, occurrenceId: string, steer: string): Promise<ReviseSessionResult> {
+  const occ = await getOccurrenceWithActivity(userId, occurrenceId);
+  if (!occ) return { status: 'not_found' };
+  if (occ.kind !== 'user') return { status: 'not_revisable', reason: 'system_row', occ };
+  if (occ.status !== 'pending') return { status: 'not_revisable', reason: 'not_pending', occ };
+  const utcToday = new Date().toISOString().slice(0, 10);
+  if (occ.date < utcToday) return { status: 'not_revisable', reason: 'past', occ };
+
+  // A first-open or prefetch generation mid-flight would race the clear below — let it finish
+  // (or fail) first. The rebuild replaces whatever it cached anyway.
+  const standing = inflight.get(occurrenceId);
+  if (standing) await standing.catch((): null => null);
+
+  const p = (async (): Promise<OccurrenceSession | null> => {
+    // The clear re-checks pending in SQL: a session logged done between the gate above and here
+    // is history now, and the rebuild refuses rather than wiping the record of what was asked.
+    const cleared = await clearOccurrenceSession(userId, occurrenceId);
+    if (!cleared) return null;
+    return generateSession(userId, occ, steer.trim());
+  })().finally(() => inflight.delete(occurrenceId));
+  inflight.set(occurrenceId, p);
+  const session = await p;
+
+  if (!session) {
+    // Either the clear refused (row gone / no longer pending) or the generation came back
+    // unusable. Re-read once so the caller can say which — and note the honest cost of the second
+    // case: the old session is gone, and the next open draws a fresh one without the steer.
+    const now = await getOccurrenceWithActivity(userId, occurrenceId);
+    if (!now) return { status: 'not_found' };
+    if (now.status !== 'pending') return { status: 'not_revisable', reason: 'not_pending', occ: now };
+    return { status: 'failed', occ: now };
+  }
+
+  const won = await setOccurrenceSessionIfEmpty(userId, occurrenceId, session);
+  if (!won) {
+    // Lost the write race — return what actually landed so the coach speaks to one consistent
+    // session, exactly as getOccurrenceDetail does.
+    const landed = await getOccurrenceWithActivity(userId, occurrenceId);
+    return landed?.session
+      ? { status: 'revised', occ: landed, session: landed.session }
+      : { status: 'failed', occ: landed ?? occ };
+  }
+  return { status: 'revised', occ: { ...occ, session }, session };
 }
 
 /** How many session generations may be in flight at once. See prefetchImminentSessions. */

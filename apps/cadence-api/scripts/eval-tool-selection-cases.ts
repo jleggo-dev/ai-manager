@@ -369,6 +369,28 @@ const ACTIONS: EvalCase[] = [
       'docs/cadence/PROGRESS-ENGINE.md "The progress talk" (2026-08-30, Wave 3) — the page-door phrasing, ' +
       'self-corrected mid-sentence the way people actually talk; "this page" is the Progress tab they came from.',
   },
+  {
+    id: 'A21',
+    kind: 'action',
+    turn: "can you add some chest and abs to today's workout?",
+    expect: ['revise_session'],
+    allow: [...DOSSIER_READS, 'get_recent_logs', 'get_workout_history'],
+    // The routing this tool exists for: a session-content ask must never fall through to the
+    // plan-structure tools — that fall-through is the incident itself.
+    forbid: ['propose_plan_change', 'build_next_week'],
+    args: {
+      tool: 'revise_session',
+      check: (a) => {
+        const s = str(a.steer);
+        if (!s) return 'steer was empty — the rebuild is nothing without their words';
+        if (!/chest|abs/.test(s)) return `steer "${s}" carried neither chest nor abs`;
+        return null;
+      },
+    },
+    from:
+      'docs/cadence/PLAN-CHANGES.md "The incident" (2026-08-31, production logs) — the verbatim ask. It had ' +
+      'no home, fell through to a 4-goal full re-synthesis, and died undelivered at the transport timeout.',
+  },
 ];
 
 /* ══ B · LONG-TAIL READS — the ones nothing injects, so a miss is genuinely a miss ═══════════ */
@@ -712,6 +734,18 @@ const SILENCE: EvalCase[] = [
       'docs/cadence/PROGRESS-ENGINE.md "The progress talk" (2026-08-30, Wave 3) — asking to SEE progress ' +
       'is not asking to change what the page watches; the Progress tab already answers this, and a proposal ' +
       'card landing on a status question would be the over-trigger this tool must never have.',
+  },
+  {
+    id: 'C18',
+    kind: 'silence',
+    turn: "should tomorrow's run have some hills in it or is that pushing it?",
+    expect: [],
+    allow: [...DOSSIER_READS, 'get_recent_logs', 'get_workout_history'],
+    forbid: ['revise_session', 'propose_plan_change'],
+    from:
+      "C6's shape applied to rung 1 (docs/cadence/PLAN-CHANGES.md, 2026-08-31) — a question about what a " +
+      'session could hold is not a decision to rebuild it: "can you add chest and abs" decides, "should it ' +
+      'have hills" asks. Takes-effect-immediately makes the over-trigger cost real here.',
   },
 ];
 

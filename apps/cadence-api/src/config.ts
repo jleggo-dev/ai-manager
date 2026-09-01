@@ -99,6 +99,15 @@ export const cadenceConfig = {
   },
 
   /**
+   * Diff-aware commit invalidation (plan-commit-diff.ts, PLAN-CHANGES.md Phase 1): on a plan
+   * commit, future pending occurrences of activities the new version leaves unchanged survive
+   * with their cached sessions instead of being wiped and re-authored (~34s per session — a
+   * one-activity edit used to re-author the entire week). Set CADENCE_COMMIT_DIFF=0 to restore
+   * the old wipe-everything commit — the prod kill switch if survivors ever misbehave.
+   */
+  commitDiff: process.env.CADENCE_COMMIT_DIFF !== '0',
+
+  /**
    * APNs (native-shell push) — token-based auth with a .p8 key. All server-only; the key comes
    * from the Apple Developer portal (Keys → new key with APNs enabled). Optional until push
    * ships: apnsConfigured() gates every send, so an unset block just means "push off".

@@ -217,6 +217,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_equipment: 'training equipment they own, with usage wear for tracked items',
   update_equipment: 'ACTION: add, remove, or rename equipment on their file — corrections included',
   extend_horizon: 'ACTION: run the current week longer — "plan two weeks ahead" — check-in moves with it',
+  revise_session: 'ACTION: rebuild one upcoming session\'s contents from their words — "add chest and abs"',
 };
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
@@ -293,11 +294,14 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
   { key: 'writing', label: 'what they have written', members: ['get_journal'] },
   {
     key: 'plan',
-    label: 'their plan and how far ahead it runs',
+    label: 'their plan, what one session holds, and how far ahead it runs',
     // Born with `extend_horizon` (0050): the week-length grant fits no existing category — it is
     // not training content, not progress-page chrome. `build_next_week`/`propose_plan_change`
     // stay always-on and are deliberately not filed here (see ALWAYS_ACTIONS).
-    members: ['extend_horizon'],
+    // `revise_session` (PLAN-CHANGES.md rung 1, 2026-08-31): the drawer's third ACTION — rebuild
+    // what is INSIDE one upcoming session from the user's words, one prescription instead of the
+    // full re-synthesis the incident fell through to.
+    members: ['extend_horizon', 'revise_session'],
   },
   {
     key: 'progress',

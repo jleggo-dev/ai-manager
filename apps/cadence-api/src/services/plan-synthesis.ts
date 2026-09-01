@@ -4,8 +4,10 @@ import { sql } from '../db/sql.ts';
 import { weatherVarsForUser } from './weather/weather.ts';
 import { getActivePlan, supersedeActivePlans, insertPlan } from '../repos/plans.ts';
 import { insertActivities, listActivities } from '../repos/activities.ts';
-import { deleteFuturePendingOccurrences } from '../repos/occurrences.ts';
+import { deleteFuturePendingOccurrences, repointFuturePendingOccurrences } from '../repos/occurrences.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
+import { cadenceConfig } from '../config.ts';
+import { diffCommittedActivities } from './plan-commit-diff.ts';
 import { DEFAULT_HORIZON_DAYS, ensureHorizon } from './plan-horizon.ts';
 import { prefetchImminentSessions } from './session-generate.ts';
 import { runInBackground } from './background.ts';
@@ -29,7 +31,7 @@ export function normalizeActivity(a: Partial<Activity>): Partial<Activity> {
   };
 }
 
-function parseJson(text: string): Record<string, unknown> | null {
+export function parseJson(text: string): Record<string, unknown> | null {
   try {
     return JSON.parse(text) as Record<string, unknown>;
   } catch {
@@ -43,6 +45,11 @@ export interface CommitResult {
   version?: number;
   activities?: number;
   occurrences?: number;
+  /** Diff-aware invalidation receipts (PLAN-CHANGES.md Phase 1): how many future pending
+   *  occurrences kept their rows — cached sessions included — vs. took the wipe. A
+   *  byte-identical recommit (build_next_week's roll-forward) should read survived=N, wiped=0. */
+  occurrencesSurvived?: number;
+  occurrencesWiped?: number;
   note?: string;
   violations?: string[];
 }
@@ -201,15 +208,16 @@ function shapeActivity(a: Partial<Activity>, goals: Goal[]): PendingPlanActivity
   };
 }
 
-interface VetShapeResult {
+export interface VetShapeResult {
   status: 'proposed' | 'vetoed';
   activities?: PendingPlanActivity[];
   missing?: Goal[];
   violations?: string[];
 }
 
-/** plan_vet (Broker, flags verified:false rather than fabricating) → shape → coverage split. */
-async function vetAndShape(
+/** plan_vet (Broker, flags verified:false rather than fabricating) → shape → coverage split.
+ *  Exported for plan-evolve.ts, which runs the same vet gate over a week composed from edits. */
+export async function vetAndShape(
   userId: string,
   normalized: Partial<Activity>[],
   opts: SynthesizeOpts,
@@ -395,14 +403,16 @@ export async function commitActivities(
   }));
 
   const today = new Date().toISOString().slice(0, 10);
-  // Atomic (API-01): supersede → insert the new version → insert its activities → clear the old
-  // plan's stale future occurrences must be all-or-nothing. Before this, a crash between
-  // supersedeActivePlans and insertPlan left the user with NO active plan at all; sql.begin()
-  // rolls the whole set back on any failure, so a commit either fully lands or not at all.
-  const { plan, version, activityCount } = await sql.begin(async (tx) => {
+  // Atomic (API-01): supersede → insert the new version → insert its activities → re-point the
+  // unchanged activities' surviving occurrences → clear the old plan's stale future occurrences
+  // must be all-or-nothing. Before this, a crash between supersedeActivePlans and insertPlan left
+  // the user with NO active plan at all; sql.begin() rolls the whole set back on any failure, so
+  // a commit either fully lands or not at all.
+  const { plan, version, activityCount, survived, wiped } = await sql.begin(async (tx) => {
     const old = await getActivePlan(userId, tx);
     const v = (old?.version ?? 0) + 1;
-    if (old) inheritCommitmentIds(proposed, await listActivities(old.plan_id, tx));
+    const oldActivities = old ? await listActivities(old.plan_id, tx) : [];
+    if (old) inheritCommitmentIds(proposed, oldActivities);
     await supersedeActivePlans(userId, tx);
     const p = await insertPlan(
       userId,
@@ -416,13 +426,41 @@ export async function commitActivities(
       tx,
     );
     const acts = await insertActivities(userId, p.plan_id, proposed, tx);
-    if (old) await deleteFuturePendingOccurrences(old.plan_id, today, tx);
-    return { plan: p, version: v, activityCount: acts.length };
+    // Diff-aware invalidation (PLAN-CHANGES.md Phase 1): activities the new version leaves
+    // unchanged in every session-affecting way keep their future pending occurrences — re-pointed
+    // at the new rows BEFORE the wipe below, which moves them out of its old-plan scope with
+    // their cached sessions intact. Only changed/removed activities pay the wipe-and-re-author
+    // cost. plan-commit-diff.ts owns the fingerprint AND the same-dates-under-the-new-anchor
+    // check; CADENCE_COMMIT_DIFF=0 restores the old wipe-everything commit without a deploy.
+    let survivedCount = 0;
+    if (old && cadenceConfig.commitDiff) {
+      const horizonEnd = new Date(Date.now() + occurrenceDays * 86_400_000).toISOString().slice(0, 10);
+      const diff = diffCommittedActivities(oldActivities, acts, {
+        from: today,
+        to: horizonEnd,
+        oldAnchor: new Date(old.generated_at).toISOString().slice(0, 10),
+        newAnchor: new Date(p.generated_at).toISOString().slice(0, 10),
+      });
+      for (const s of diff.survivors) {
+        survivedCount += await repointFuturePendingOccurrences(s.oldActivityId, s.newActivityId, today, horizonEnd, tx);
+      }
+    }
+    const wipedCount = old ? await deleteFuturePendingOccurrences(old.plan_id, today, tx) : 0;
+    return { plan: p, version: v, activityCount: acts.length, survived: survivedCount, wiped: wipedCount };
   });
+
+  // The receipt that proves proportional invalidation: survived rows kept their sessions, wiped
+  // ones come back cold (~34s each to re-author). A byte-identical recommit should read wiped=0.
+  console.log(
+    `[plan] commit v${version}: occurrences survived=${survived} wiped=${wiped}` +
+      (cadenceConfig.commitDiff ? '' : ' (diff OFF via CADENCE_COMMIT_DIFF=0)'),
+  );
 
   // ensureHorizon is a separate, idempotent top-up (safe to re-run) — deliberately OUTSIDE the
   // transaction so materializing the rolling horizon can't hold the commit's write locks open.
-  // `keepElapsedToday`: the step above deleted today's pending rows, so today has to be rebuilt in
+  // Surviving re-pointed rows already sit on (new activity_id, date), so the on-conflict upsert
+  // counts them as materialized and only the wiped remainder is recreated. `keepElapsedToday`:
+  // the wipe deleted the CHANGED activities' today rows, so their today has to be rebuilt in
   // FULL — including slots whose hour has passed. Without it, committing in the afternoon deletes
   // the morning off the day the user is looking at (see plan-horizon.ts).
   const occurrences = await ensureHorizon(userId, occurrenceDays, { keepElapsedToday: true });
@@ -432,7 +470,9 @@ export async function commitActivities(
   // committing must not wait on a coach call, but starting the warm-up here instead of on the next
   // GET /plan gives it a head start before the user can plausibly reach the plan screen and tap.
   // Deliberately the default window (the visible week), NOT occurrenceDays — days beyond the view
-  // are materialized-but-invisible, and warming them doubles provider spend for nothing.
+  // are materialized-but-invisible, and warming them doubles provider spend for nothing. With
+  // diff-aware invalidation, survivors still carry their sessions (has_session), so this pass
+  // only finds the genuinely-cold rows — the changed/removed activities' re-materialized days.
   runInBackground('commit-prefetch', prefetchImminentSessions(userId));
 
   return {
@@ -441,6 +481,8 @@ export async function commitActivities(
     version,
     activities: activityCount,
     occurrences,
+    occurrencesSurvived: survived,
+    occurrencesWiped: wiped,
     note: opts.note,
   };
 }

@@ -12,6 +12,9 @@ export type AiLogKind =
   // coach reshapes a week through propose_plan_change now). Kept because logged rows reference it.
   | 'rebalance_week'
   | 'synthesize_plan'
+  // The diff-output evolve path (PLAN-CHANGES.md Phase 1): evolve-plan returns edits against the
+  // current plan; rows record which path ran (edits vs fallback) — the measurement Phase 1 rides on.
+  | 'evolve_plan'
   | 'assess_goal'
   | 'prescribe_session'
   | 'parse_session_log'
