@@ -10,6 +10,8 @@ import { CoachFace } from '../../components/CoachFace.tsx';
 import { FoodHome } from '../nutrition/FoodHome.tsx';
 import { WeekReviewSheet } from '../plan/week-review/WeekReviewSheet.tsx';
 import { WeekChangesSheet } from '../plan/week-changes/WeekChangesSheet.tsx';
+import { ActivityBuilder } from '../builder/ActivityBuilder.tsx';
+import type { BuilderSeed } from '../plan/quick-add/builderSeed.ts';
 
 /**
  * Today and Week were separate TABS sharing one PlanView, and the owner's device verdict
@@ -119,11 +121,19 @@ export function MainTabs({
    * 'log' opens straight into the Log screen (the quick-add sheet's meal row).
    */
   const [food, setFood] = useState<null | 'home' | 'shop' | 'log'>(null);
+  /**
+   * The Activity Builder (Activity Builder wave 3) — a full screen that replaces the Plan tab's
+   * content while the tab bar stays, the exact same escape `food` above uses. `seed` is undefined
+   * for a bare "＋ New activity" / "Blank" open, set for a "Build my own" pick from the ＋ sheet's
+   * Start-from screen (QuickAddTense → QuickAddSheet → here). `open: false` means "not building";
+   * the seed only matters while it's true, so there is nothing to reset when it closes.
+   */
+  const [building, setBuilding] = useState<{ open: boolean; seed?: BuilderSeed }>({ open: false });
 
   return (
     <>
       <div className="app">
-        {tab === 'plan' && !food && !settingsRoomOpen && (
+        {tab === 'plan' && !food && !settingsRoomOpen && !building.open && (
           <PlanView
             onCoach={(note) => {
               if (note) setCoachNote(note);
@@ -154,7 +164,7 @@ export function MainTabs({
             }}
           />
         )}
-        {tab === 'plan' && food && !settingsRoomOpen && (
+        {tab === 'plan' && food && !settingsRoomOpen && !building.open && (
           <FoodHome
             initialSub={food === 'shop' ? 'shop' : null}
             initialLogMeal={food === 'log'}
@@ -167,7 +177,7 @@ export function MainTabs({
             onLogged={() => setPlanReload((k) => k + 1)}
           />
         )}
-        {settingsRoomOpen && (
+        {settingsRoomOpen && !building.open && (
           <SettingsRoom
             email={email}
             onBack={() => setSettingsRoomOpen(false)}
@@ -175,6 +185,35 @@ export function MainTabs({
               setCoachNote(note);
               setSettingsRoomOpen(false);
               setTab('coach');
+            }}
+          />
+        )}
+        {/**
+         * The Activity Builder (Activity Builder wave 3) — reached from the ＋ sheet's "Build my
+         * own" (QuickAddTense's Start-from screen, via QuickAddSheet's `onBuild`) or, later, a
+         * Settings "＋ New activity" row. Same full-screen escape `FoodHome`/`SettingsRoom` use:
+         * it replaces whichever tab's content was showing, the tab bar stays. `onClose` and
+         * `onSaved` both return to the plan tab — Save is the only door that ALSO counts as
+         * "something happened" (a fresh routine on the plan/library), so only it bumps the reload.
+         */}
+        {building.open && (
+          <ActivityBuilder
+            initial={building.seed}
+            onClose={() => {
+              setBuilding({ open: false });
+              setTab('plan');
+            }}
+            onSaved={() => {
+              setBuilding({ open: false });
+              setTab('plan');
+              setPlanReload((k) => k + 1);
+            }}
+            // "Ask the coach to look at it" — the same VISIBLE send every other steer uses; her
+            // context pack already carries the routine's steps, so the words are the whole payload.
+            onAskReview={(text) => {
+              setBuilding({ open: false });
+              setTab('coach');
+              setAutoSend({ text, key: Date.now() });
             }}
           />
         )}
@@ -200,7 +239,7 @@ export function MainTabs({
             tab bar pushed off, the app apparently frozen (owner, 2026-08-16). `display: contents`
             removes the wrapper from layout entirely, so the chat stays a direct flex child exactly
             as it was before it was wrapped. */}
-        <div style={{ display: tab === 'coach' && !settingsRoomOpen ? 'contents' : 'none' }}>
+        <div style={{ display: tab === 'coach' && !settingsRoomOpen && !building.open ? 'contents' : 'none' }}>
           <>
             <OnboardingChat
               intent="ongoing"
@@ -221,7 +260,7 @@ export function MainTabs({
             </button>
           </>
         </div>
-        {tab === 'progress' && !settingsRoomOpen && (
+        {tab === 'progress' && !settingsRoomOpen && !building.open && (
           <ProgressView
             onCoach={(note) => {
               setCoachNote(note);
@@ -229,7 +268,7 @@ export function MainTabs({
             }}
           />
         )}
-        {tab !== 'coach' && !food && !settingsRoomOpen && (
+        {tab !== 'coach' && !food && !settingsRoomOpen && !building.open && (
           <button className="fab" onClick={() => setLogDidOpen(true)} aria-label="Quick add">
             ＋
           </button>
@@ -325,6 +364,19 @@ export function MainTabs({
               setLogDidOpen(false);
               setTab('plan');
               setFood('log');
+            }}
+            // Screen 2's "Tell me instead" (Activity Builder 2A) — the same visible bridge
+            // PlanView's `onSteerCoach` rides: a real user bubble, not a whispered note.
+            onSteer={(steer) => {
+              setTab('coach');
+              setAutoSend({ text: steer, key: Date.now() });
+            }}
+            // "Build my own", from screen 2's Start-from shelves (Activity Builder wave 3) — the
+            // sheet already closed itself before calling this (QuickAddSheet.tsx), so all that's
+            // left is opening the builder on the plan tab.
+            onBuild={(seed) => {
+              setTab('plan');
+              setBuilding({ open: true, seed });
             }}
           />
         )}

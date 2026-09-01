@@ -23,6 +23,16 @@ export const MENU_TASK_CATEGORY = 'menu';
 /** Off-plan + episode-temp + menu-derived activities are excluded from the committed-rhythm list. */
 export const NON_PLAN_CATEGORIES = new Set<string>([ADHOC_CATEGORY, EPISODE_CATEGORY, MENU_TASK_CATEGORY]);
 
+/**
+ * Marks the companion activity a user-built routine mints once it's run or scheduled (Activity
+ * Builder wave 3 — repos/user-routines.ts, services/user-routines.ts). Deliberately NOT in
+ * NON_PLAN_CATEGORIES: unlike the buckets above, a scheduled user routine IS a plan commitment —
+ * it belongs in Today/Week, counts toward consistency and the streak, exactly like a coach-built
+ * one. GET /plan/routines (services/routines.ts) excludes it on its own, one line, because THAT
+ * list is specifically the "From Cadence" shelf — GET /me/routines is where user-built ones live.
+ */
+export const USER_BUILT_CATEGORY = 'user_built';
+
 /** Delete a plan's activities of one category, and their occurrences first (no FK-cascade assumed).
  *  Backs the idempotent re-save of menu-derived shop/cook tasks. */
 export async function deleteActivitiesByCategory(userId: string, planId: string, category: string): Promise<void> {

@@ -67,9 +67,11 @@ describe('deriveQuickAddRows', () => {
       ],
     });
     const rows = deriveQuickAddRows({ plan: p, day: null, photosEnabled: false });
+    // Two distinct movement titles → nothing to single out, the area keeps its generic noun.
+    // One distinct practice title → the noun is the activity's own name, suffix stripped.
     expect(rows).toEqual([
-      { kind: 'add', area: 'movement', toward: 'Run a 10k' },
-      { kind: 'add', area: 'practice', toward: 'Learn piano' },
+      { kind: 'add', area: 'movement', toward: 'Run a 10k', noun: 'A workout' },
+      { kind: 'add', area: 'practice', toward: 'Learn piano', noun: 'Piano' },
     ]);
   });
 
@@ -80,9 +82,70 @@ describe('deriveQuickAddRows', () => {
         activity({ activity_id: 'a2', area: 'movement', goal_title: 'Get stronger' }),
       ],
     });
+    // Both activities share the factory's default title ('Easy run'), which maps to the same
+    // TYPE noun either way — the toward line drops, the noun still resolves.
     expect(deriveQuickAddRows({ plan: p, day: null, photosEnabled: false })).toEqual([
-      { kind: 'add', area: 'movement', toward: undefined },
+      { kind: 'add', area: 'movement', toward: undefined, noun: 'A run' },
     ]);
+  });
+
+  describe('the noun a movement/practice row wears', () => {
+    const rowFor = (area: 'movement' | 'practice', titles: string[]) =>
+      deriveQuickAddRows({
+        plan: plan({ activities: titles.map((title, i) => activity({ activity_id: `a${i}`, area, title })) }),
+        day: null,
+        photosEnabled: false,
+      })[0];
+
+    describe('practice — the title itself is the noun', () => {
+      it('strips a generic trailing word off a single distinctive title', () => {
+        expect(rowFor('practice', ['Piano practice'])).toEqual({
+          kind: 'add',
+          area: 'practice',
+          toward: undefined,
+          noun: 'Piano',
+        });
+        // Repeated suffixes strip one at a time, so a doubled-up title still lands on the name.
+        expect(rowFor('practice', ['Evening practice session'])).toMatchObject({ noun: 'Evening' });
+      });
+
+      it('falls back to the area floor when the title IS the generic word', () => {
+        expect(rowFor('practice', ['Practice'])).toMatchObject({ noun: 'A practice' });
+      });
+
+      it('falls back to the area floor when more than one distinct title is in play', () => {
+        expect(rowFor('practice', ['Piano practice', 'Guitar practice'])).toMatchObject({ noun: 'A practice' });
+      });
+    });
+
+    // Code review, 2026-09-01: a movement title is a task NAME that already sits on the trail
+    // with its own button — showing it verbatim here would be a second, differently-behaving row
+    // wearing the plan's own name. The noun must be the TYPE of the thing, never the task's title.
+    describe('movement — the TYPE of the thing is the noun, never the task’s own name', () => {
+      it('never shows a movement activity’s own title — a lone "Easy run" yields "A run"', () => {
+        const row = rowFor('movement', ['Easy run']);
+        expect(row).toMatchObject({ noun: 'A run' });
+        expect(row).not.toMatchObject({ noun: 'Easy run' });
+      });
+
+      it('maps each word family to its own type noun, and anything unrecognised to the floor', () => {
+        expect(rowFor('movement', ['Morning walk'])).toMatchObject({ noun: 'A walk' });
+        expect(rowFor('movement', ['Evening ride'])).toMatchObject({ noun: 'A ride' });
+        expect(rowFor('movement', ['Lap swim'])).toMatchObject({ noun: 'A swim' });
+        expect(rowFor('movement', ['Erg row'])).toMatchObject({ noun: 'A row' });
+        expect(rowFor('movement', ['Strength day'])).toMatchObject({ noun: 'A workout' });
+        expect(rowFor('movement', ['Hotel HIIT'])).toMatchObject({ noun: 'A workout' });
+      });
+
+      it('keeps the type noun when differently-titled activities share one type', () => {
+        expect(rowFor('movement', ['Easy run', 'Speed run'])).toMatchObject({ noun: 'A run' });
+      });
+
+      it('falls back to the area floor when more than one distinct TYPE is in play', () => {
+        expect(rowFor('movement', ['Easy run', 'Strength day'])).toMatchObject({ noun: 'A workout' });
+        expect(rowFor('movement', ['Session'])).toMatchObject({ noun: 'A workout' });
+      });
+    });
   });
 
   it('ignores system rows and untracked areas when deriving the add rows', () => {

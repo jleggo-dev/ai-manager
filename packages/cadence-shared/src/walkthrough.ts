@@ -234,14 +234,25 @@ function breathingTool(item: SessionItem): StepTool {
   return { kind: 'breathing', pattern, cycles: clampCycles(pattern, item.breath_cycles) };
 }
 
+/** A measure tool from the item's metric/unit (REQ8 Activity Builder — see the field comments on
+ *  `SessionItem`). Not reachable via `item.tool`: `measure` is deliberately excluded from
+ *  `SessionItemTool` (tool-catalog.ts), so this is the ONLY path to a measure step. Metric falls
+ *  back to the item's own name rather than a generic word, so a step titled "Body weight" with no
+ *  `measure_metric` still labels its number sensibly; an absent unit stays an empty string, never
+ *  the word "undefined". */
+function measureTool(item: SessionItem): StepTool {
+  return { kind: 'measure', metric: item.measure_metric?.trim() || item.name, unit: item.measure_unit?.trim() ?? '' };
+}
+
 /**
  * Resolve the tool for one prescribed item. The coach's EXPLICIT `item.tool` wins — it carries the
  * judgment quantities can't (a 1-min plank is a `timer`; a 1-min "find a seat" is a `read`). Only
  * when the coach left it unset do we infer — and **tool-specific fields outrank quantities**,
  * because they are unambiguous where quantities never were: `journal_bank` can only mean journal,
  * `grounding_game` only grounding, `meditate_bells` only meditate, `breath_pattern` only breathing,
- * `interval_work_sec` only intervals. Quantities come after: sets → **reps**, duration → **timer**,
- * distance → **checkoff**, else **read**. The catalog's preamble tells the coach `tool: null` is safe; this ordering is what
+ * `interval_work_sec` only intervals, `measure_metric`/`measure_unit` only measure (the one pair
+ * with no `item.tool` route at all — see `measureTool`). Quantities come after: sets → **reps**,
+ * duration → **timer**, distance → **checkoff**, else **read**. The catalog's preamble tells the coach `tool: null` is safe; this ordering is what
  * makes that sentence true — before it, a journal item with a duration and no tag silently became
  * a bare timer, and a bank with no duration became `read` (the widget vanished entirely).
  *
@@ -257,6 +268,9 @@ export function inferTool(item: SessionItem): StepTool {
   if (isGroundingGame(item.grounding_game)) return groundingTool(item);
   if (isMeditateBells(item.meditate_bells)) return meditateTool(item);
   if (isBreathPatternId(item.breath_pattern)) return breathingTool(item);
+  if ((item.measure_metric && item.measure_metric.trim()) || (item.measure_unit && item.measure_unit.trim())) {
+    return measureTool(item);
+  }
   if (typeof item.sets === 'number' && item.sets > 0) return repsTool(item);
   if (typeof item.duration_min === 'number' && item.duration_min > 0) {
     return { kind: 'timer', seconds: Math.round(item.duration_min * 60), chime: true };

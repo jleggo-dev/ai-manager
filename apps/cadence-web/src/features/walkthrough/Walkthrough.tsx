@@ -8,6 +8,7 @@ import { StepBreathing } from './tools/StepBreathing.tsx';
 import { StepMeditate } from './tools/StepMeditate.tsx';
 import { StepGrounding } from './tools/StepGrounding.tsx';
 import { StepFeelingLog } from './tools/StepFeelingLog.tsx';
+import { StepMeasure } from './tools/StepMeasure.tsx';
 import { StepCheckoff, StepJournal } from './tools/SimpleTools.tsx';
 import { Metronome } from './tools/Metronome.tsx';
 import { TONE } from './tools/tone.ts';
@@ -326,6 +327,15 @@ function renderTool(
       return <StepGrounding spec={t.spec} onLog={(l) => setLog(step.id, l)} onDone={onAdvance} />;
     case 'feeling_log':
       return <StepFeelingLog onLog={(l) => setLog(step.id, l)} onDone={onAdvance} />;
+    case 'measure':
+      return (
+        <StepMeasure
+          metric={t.metric}
+          unit={t.unit}
+          log={log?.kind === 'measure' ? log : undefined}
+          onLog={(l) => setLog(step.id, l)}
+        />
+      );
     case 'journal': {
       const jl = log?.kind === 'journal' ? log : null;
       return (
@@ -359,8 +369,8 @@ function renderTool(
       return (
         <StepCheckoff
           label={t.kind === 'checkoff' ? t.label : undefined}
-          done={!!log}
-          onDone={() => setLog(step.id, { kind: 'done' })}
+          log={log?.kind === 'done' ? log : undefined}
+          onLog={(l) => setLog(step.id, l)}
         />
       );
   }

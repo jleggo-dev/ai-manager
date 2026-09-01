@@ -26,6 +26,19 @@ export {
   stopCoachTurn,
   notifyOnCoachReply,
 } from './api/coach.ts';
+export {
+  listUserRoutines,
+  createUserRoutine,
+  updateUserRoutine,
+  deleteUserRoutine,
+  logUserRoutineRun,
+  scheduleUserRoutine,
+  unscheduleUserRoutine,
+  type UserRoutine,
+  type UserRoutineProvenance,
+  type UserRoutineSchedule,
+  type UserRoutineDay,
+} from './api/user-routines.ts';
 export type { ArchivedConversation, CurrentCoach } from './api/coach.ts';
 
 export { registerPushToken, removePushToken } from './api/devices.ts';
@@ -95,6 +108,9 @@ export {
   getProgress,
   addGoalEvent,
   buildNextWeek,
+  getRoutines,
+  getRoutineSession,
+  type PlanRoutine,
   type PlanOccurrence,
   type PlanDay,
   type PlanActivity,

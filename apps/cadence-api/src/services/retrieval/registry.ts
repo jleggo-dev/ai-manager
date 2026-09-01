@@ -36,6 +36,7 @@ import { GET_NUTRITION } from './nutrition-facade.ts';
 import { PREVIEW_MEAL } from './food-log-function.ts';
 import { RESEARCH_FOOD } from './food-research-function.ts';
 import { GET_REPERTOIRE } from './repertoire-function.ts';
+import { GET_USER_BUILT_ACTIVITIES } from './user-built-function.ts';
 import { isoRange, type RetrievalFunction } from './types.ts';
 
 // Re-exported so the many existing importers of this module keep working unchanged.
@@ -545,4 +546,7 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
   // What they are learning / already know per skills practice — the read half of repertoire
   // (update_repertoire writes it). Tail category `practice`.
   [GET_REPERTOIRE.name]: GET_REPERTOIRE,
+  // What the user built in the Activity Builder — awareness, never approval (owner 2026-09-01):
+  // she is told what exists, never rewrites its steps, and answers review asks from it.
+  [GET_USER_BUILT_ACTIVITIES.name]: GET_USER_BUILT_ACTIVITIES,
 };

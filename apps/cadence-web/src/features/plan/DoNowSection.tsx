@@ -1,17 +1,11 @@
 import { useEffect, useState } from 'react';
-import {
-  deriveWalkthrough,
-  journalBank,
-  journalOpener,
-  nowMenuMeta,
-  type NowMenuItem,
-  type OccurrenceSession,
-} from '@cadence/shared';
+import { deriveWalkthrough, journalBank, journalOpener, nowMenuMeta, type NowMenuItem } from '@cadence/shared';
 import { getNowMenu } from '../../lib/api.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
 import { JournalWrite } from '../journal/JournalWrite.tsx';
 import { categoryOfArea, type Category } from '../today/category.ts';
 import { glyphOf } from '../today/glyphs.ts';
+import { sessionFor } from './nowMenuSession.ts';
 
 /**
  * "Do something now" — the present-tense half of the ＋ sheet (REQ10 §6, REQ9 §3.1).
@@ -25,7 +19,19 @@ import { glyphOf } from '../today/glyphs.ts';
  * a failure: a person the coach has nothing to offer right now should see the log section alone,
  * not an apology.
  */
-export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLogged: () => void }) {
+export function DoNowSection({
+  onClose,
+  onLogged,
+  onPinnedChange,
+}: {
+  onClose: () => void;
+  onLogged: () => void;
+  /** Fires once the now-menu resolves, true iff it carries a pinned item — the ＋ sheet's own
+   *  express-lane pill (QuickAddPill, Activity Builder W2-B) stands down when it's true, because
+   *  the coach's own pinned prescription outranks a usage-stats shortcut (Now Door's promotion
+   *  hierarchy). Optional and additive: every existing caller is unaffected. */
+  onPinnedChange?: (hasPin: boolean) => void;
+}) {
   const [items, setItems] = useState<NowMenuItem[] | null>(null);
   const [playing, setPlaying] = useState<NowMenuItem | null>(null);
 
@@ -44,6 +50,13 @@ export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLog
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    // Nothing resolved yet — the caller learns the real answer once the menu settles below, not a
+    // guess in between.
+    if (items === null) return;
+    onPinnedChange?.(items.some((i) => i.pinned));
+  }, [items, onPinnedChange]);
 
   // Journal rows open the real writing page (full-screen, the store behind it) — the walkthrough's
   // journal step is for sessions; a menu-launched entry belongs to the module.
@@ -133,42 +146,6 @@ export function DoNowSection({ onClose, onLogged }: { onClose: () => void; onLog
     </div>
   );
 }
-
-/** A one-item session so a menu row plays through the same walkthrough a scheduled task uses —
- *  same renderers, same logging, same partial-credit rules. Nothing about the tool knows it was
- *  launched from a menu rather than the trail. */
-function sessionFor(item: NowMenuItem): OccurrenceSession {
-  const params = item.action.kind === 'tool' ? item.action.params : {};
-  return {
-    blocks: [
-      {
-        label: '',
-        items: [
-          {
-            name: item.label,
-            tool: item.action.kind === 'tool' ? item.action.tool : undefined,
-            breath_pattern: str(params.breath_pattern),
-            breath_cycles: num(params.breath_cycles),
-            duration_min: num(params.duration_min),
-            meditate_bells: str(params.meditate_bells),
-            grounding_game: str(params.grounding_game),
-            interval_work_sec: num(params.interval_work_sec),
-            interval_recover_sec: num(params.interval_recover_sec),
-            interval_rounds: num(params.interval_rounds),
-            interval_warmup_sec: num(params.interval_warmup_sec),
-            interval_cooldown_sec: num(params.interval_cooldown_sec),
-          },
-        ],
-      },
-    ],
-    note: '',
-    generated_at: new Date().toISOString(),
-    version: 1,
-  };
-}
-
-const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
-const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 
 /** One mapping for every surface — categoryOfArea (category.ts). Practice stopped borrowing the
  *  reflection moon when it got its own family and glyph (2026-08-31). */

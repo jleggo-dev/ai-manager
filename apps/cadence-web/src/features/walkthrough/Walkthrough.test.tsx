@@ -46,3 +46,34 @@ describe('Walkthrough v2 — browse / do / commit', () => {
     expect(screen.getByText('Close without logging')).toBeInTheDocument();
   });
 });
+
+/** A one-step measure walkthrough — end-to-end proof the shell dispatches `measure` to its own
+ *  renderer (Walkthrough.tsx's switch) rather than falling through to the checkoff default, which
+ *  is what happened before this parcel wired the case in. */
+const measureWt: WalkthroughData = {
+  total_min: 1,
+  steps: [
+    {
+      id: 's1',
+      title: 'Weigh in',
+      minutes: 1,
+      tool: { kind: 'measure', metric: 'Weight', unit: 'kg' },
+      skippable: true,
+    },
+  ],
+};
+
+describe('Walkthrough — measure step end to end', () => {
+  it('renders the number entry (not a plain checkoff button), logs it, and the recap shows it verbatim', () => {
+    render(<Walkthrough walkthrough={measureWt} title="Weigh-in" onClose={() => {}} onComplete={() => {}} />);
+
+    expect(screen.getByText('Weight')).toBeInTheDocument();
+    expect(screen.queryByText('Log this done')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Weight'), { target: { value: '82.4' } });
+    fireEvent.click(screen.getByText('Log this'));
+
+    fireEvent.click(screen.getByLabelText('Next step')); // → recap
+    expect(screen.getByText('82.4 kg')).toBeInTheDocument();
+  });
+});

@@ -1,4 +1,5 @@
 import type {
+  OccurrenceSession,
   OccurrenceStatus,
   PendingPlanActivity,
   PendingWeekReview,
@@ -588,4 +589,68 @@ export interface WeekBuildResult {
 export async function buildNextWeek(): Promise<WeekBuildResult> {
   const res = await fetch(`${BASE}/plan/week/build`, { method: 'POST', headers: headers() });
   return res.json();
+}
+
+/* ── Routines (Activity Builder A3 — "the coach's sessions as the template library") ──────── */
+/** Mirrors the API's `Routine` shape (services/routines.ts) — the client's own reading of the
+ *  same JSON, not a shared type, the same way `PlanActivity`/`PlanDay` above mirror `/plan`. */
+export interface PlanRoutine {
+  commitment_id: string;
+  /** The lineage's CURRENT activity id — what `logDid` credits (POST /plan/activities/:id/did),
+   *  the shelf's play-then-credit flow. Not stable across a replan the way `commitment_id` is. */
+  activity_id: string;
+  title: string;
+  /** The linked goal's area; absent when the commitment carries no goal link. */
+  area?: 'movement' | 'nourishment' | 'mind' | 'practice';
+  /** Humanized cadence + effort minutes from the CURRENT schedule — present only when this
+   *  lineage is on the active plan today; an off-plan routine has no "current" schedule. */
+  cadence?: string;
+  duration_min?: number;
+  /** Step names from the most recently prescribed session for this lineage — an honest empty
+   *  ([]) when no session has ever been cached for it, never invented. */
+  steps: string[];
+  /** Count of `done` occurrences across every plan version this lineage has ever had — the
+   *  ranking signal ("by how often you finished them, the honest signal, not recency"). */
+  finishes: number;
+  last_done: string | null;
+  /** Is this lineage part of the CURRENTLY active plan? False for a routine from weeks ago the
+   *  user hasn't been asked to do since — still theirs, so still listed. */
+  on_plan: boolean;
+}
+
+/**
+ * The user's coach-built routines — plan activities grouped by `commitment_id` lineage across
+ * every plan version they've ever ridden (a lineage counts only when its LATEST version is a
+ * user-kind commitment, not an older one), the data behind the Build sheet's "Start from" shelves
+ * ("From Cadence", "Yours", ranked by finishes). `area` narrows to one family, matching the noun
+ * the ＋ sheet's screen 1 was entered on.
+ *
+ * `null` on a failed read (never an empty array) — the same distinction `getPlan` draws: "I
+ * couldn't load your routines" and "you have none yet" must not share a value.
+ */
+export async function getRoutines(
+  area?: 'movement' | 'nourishment' | 'mind' | 'practice',
+): Promise<PlanRoutine[] | null> {
+  const qs = area ? `?area=${encodeURIComponent(area)}` : '';
+  const res = await fetch(`${BASE}/plan/routines${qs}`, { headers: headers() }).catch(() => null);
+  if (!res?.ok) return null;
+  const body = (await res.json()) as { routines: PlanRoutine[] };
+  return body.routines;
+}
+
+/**
+ * The full latest cached session for ONE routine — the list's `steps` are names only, so the
+ * shelf's player fetches this on open. `ok: false` marks a failed read (network error or non-OK)
+ * so the caller can tell "I couldn't load it" apart from "nothing written yet" (`ok: true,
+ * session: null`) — the same distinction `getPendingReplan`'s `ok` flag draws.
+ */
+export async function getRoutineSession(
+  commitmentId: string,
+): Promise<{ ok: boolean; session: OccurrenceSession | null }> {
+  const res = await fetch(`${BASE}/plan/routines/${encodeURIComponent(commitmentId)}/session`, {
+    headers: headers(),
+  }).catch(() => null);
+  if (!res?.ok) return { ok: false, session: null };
+  const body = (await res.json()) as { session: OccurrenceSession | null };
+  return { ok: true, session: body.session ?? null };
 }

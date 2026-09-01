@@ -90,6 +90,48 @@ describe('inferTool', () => {
   });
 });
 
+describe('measure — the one tool with no item.tool route', () => {
+  // `measure` is deliberately excluded from `SessionItemTool` (tool-catalog.ts): the coach never
+  // emits it, so `measure_metric`/`measure_unit` are the ONLY way an item becomes a measure step —
+  // there is no `tool: 'measure'` to test alongside the others above.
+  it('infers from metric + unit together', () => {
+    expect(inferTool({ name: 'Weigh in', measure_metric: 'Weight', measure_unit: 'kg' })).toEqual({
+      kind: 'measure',
+      metric: 'Weight',
+      unit: 'kg',
+    });
+  });
+
+  it('a unit alone is enough to infer measure, even with a duration on the item', () => {
+    expect(inferTool({ name: 'Body weight', measure_unit: 'lb', duration_min: 2 }).kind).toBe('measure');
+  });
+
+  it('degrades honestly: no metric falls back to the item name, no unit is an empty string (never "undefined")', () => {
+    expect(inferTool({ name: 'Wingspan', measure_unit: 'cm' })).toEqual({
+      kind: 'measure',
+      metric: 'Wingspan',
+      unit: 'cm',
+    });
+    expect(inferTool({ name: 'Reach', measure_metric: 'Reach' })).toEqual({
+      kind: 'measure',
+      metric: 'Reach',
+      unit: '',
+    });
+  });
+
+  it('measure-specific fields outrank the quantity fallback chain (sets/duration/distance)', () => {
+    expect(inferTool({ name: 'Post-run weigh-in', measure_unit: 'kg', sets: 3, duration_min: 5 }).kind).toBe('measure');
+  });
+
+  it('blank strings are not a signal — falls through to read, same as any other absent field', () => {
+    expect(inferTool({ name: 'Nothing here', measure_metric: '  ', measure_unit: '' })).toEqual({ kind: 'read' });
+  });
+
+  it('captures structured data, like reps/photo/journal', () => {
+    expect(stepCaptureMode({ kind: 'measure', metric: 'Weight', unit: 'kg' })).toBe('structured');
+  });
+});
+
 describe('deriveWalkthrough', () => {
   const w = deriveWalkthrough(runSession);
 
@@ -131,6 +173,15 @@ describe('deriveWalkthrough', () => {
 
   it('is deterministic — same session projects to an identical walkthrough', () => {
     expect(deriveWalkthrough(runSession)).toEqual(deriveWalkthrough(runSession));
+  });
+
+  it('projects a measure item end to end (a client-built activity, not a coach one)', () => {
+    const w = deriveWalkthrough({
+      ...runSession,
+      blocks: [{ label: 'Weigh-in', items: [{ name: 'Body weight', measure_metric: 'Weight', measure_unit: 'kg' }] }],
+    });
+    expect(w.steps[0]?.tool).toEqual({ kind: 'measure', metric: 'Weight', unit: 'kg' });
+    expect(w.steps[0]?.minutes).toBe(1); // the measure floor — no duration on a numeric entry
   });
 });
 

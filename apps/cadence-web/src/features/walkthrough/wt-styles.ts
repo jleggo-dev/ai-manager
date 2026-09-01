@@ -14,6 +14,9 @@ export function targetChip(step: WalkthroughStep): string {
   }
   if (t.kind === 'timer') return `${Math.round(t.seconds / 60) || 1} min`;
   if (t.kind === 'checkoff') return t.label ?? '';
+  // The unit IS the prescription here — there's no target number, just what to type it in.
+  // Absent unit degrades honestly: the chip disappears rather than showing a blank label.
+  if (t.kind === 'measure') return t.unit;
   return '';
 }
 
@@ -25,6 +28,7 @@ export function toolNoun(step: WalkthroughStep): string {
   if (t.kind === 'timer') return `Timer · ${Math.round(t.seconds / 60) || 1} min`;
   if (t.kind === 'reps') return `${t.sets} × ${t.reps ?? ''}`.trim();
   if (t.kind === 'journal') return 'Journal · one line for the coach';
+  if (t.kind === 'measure') return t.unit ? `Measure · ${t.unit}` : 'Measure';
   return step.body ?? '';
 }
 
