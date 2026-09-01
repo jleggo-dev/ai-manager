@@ -95,6 +95,8 @@ export {
   getProgress,
   addGoalEvent,
   buildNextWeek,
+  getRoutines,
+  type PlanRoutine,
   type PlanOccurrence,
   type PlanDay,
   type PlanActivity,
