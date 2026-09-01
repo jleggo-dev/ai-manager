@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { microStatus, micronutrientTargets, MICRONUTRIENT_KEYS } from './micronutrient-targets.ts';
+import {
+  microStatus,
+  microTargetRange,
+  micronutrientTargets,
+  resolveMicronutrientTargets,
+  sanitizeMicroTargetAmount,
+  MICRONUTRIENT_KEYS,
+} from './micronutrient-targets.ts';
 
 function find(ts: ReturnType<typeof micronutrientTargets>, key: string) {
   const hit = ts.find((t) => t.key === key);
@@ -77,5 +84,79 @@ describe('microStatus', () => {
 
   it('caps a wild outlier so one bad row cannot blow up a bar', () => {
     expect(microStatus(iron, 100_000).pct).toBe(999);
+  });
+});
+
+describe('overrides — a number they were given outside the app (owner ruling 2026-09-01)', () => {
+  const doctorSaid2000 = {
+    vitamin_c_mg: { amount: 2000, why: 'her doctor asked for 2000mg a day', set_at: '2026-09-01' },
+  } as const;
+
+  it('stands in for the published figure, and says it did', () => {
+    const t = find(resolveMicronutrientTargets({ sex: 'female', age: 30 }, doctorSaid2000), 'vitamin_c_mg');
+
+    expect(t.amount).toBe(2000);
+    expect(t.origin).toBe('override');
+    expect(t.set_because).toBe('her doctor asked for 2000mg a day');
+  });
+
+  it('leaves every other nutrient on the reference table', () => {
+    const all = resolveMicronutrientTargets({ sex: 'female', age: 30 }, doctorSaid2000);
+
+    expect(find(all, 'iron_mg').amount).toBe(18);
+    expect(find(all, 'iron_mg').origin).toBe('reference');
+    expect(all.filter((t) => t.origin === 'override')).toHaveLength(1);
+  });
+
+  it('accepts the upper limit exactly and refuses a step past it', () => {
+    // 2,000mg IS the published safe upper limit for vitamin C, so the owner's own example must
+    // land — a bound that rejected it would be the wrong bound.
+    expect(sanitizeMicroTargetAmount('vitamin_c_mg', 2000)).toBe(2000);
+    expect(sanitizeMicroTargetAmount('vitamin_c_mg', 2001)).toBeNull();
+    expect(sanitizeMicroTargetAmount('iron_mg', 45)).toBe(45);
+    expect(sanitizeMicroTargetAmount('iron_mg', 46)).toBeNull();
+  });
+
+  it('refuses rather than clamps, so a dose nobody chose can never look deliberate', () => {
+    expect(sanitizeMicroTargetAmount('zinc_mg', 400)).toBeNull();
+    expect(sanitizeMicroTargetAmount('zinc_mg', 0)).toBeNull();
+    expect(sanitizeMicroTargetAmount('iron_mg', Number.NaN)).toBeNull();
+    expect(sanitizeMicroTargetAmount('vitamin_c_mg', 'lots' as unknown as number)).toBeNull();
+  });
+
+  it('keeps B12 to a decimal place — its whole reference intake is 2.4µg', () => {
+    expect(sanitizeMicroTargetAmount('vitamin_b12_ug', 2.44)).toBe(2.4);
+    expect(sanitizeMicroTargetAmount('calcium_mg', 1204.6)).toBe(1205);
+  });
+
+  it('drops a stored override that falls outside the window instead of honouring it', () => {
+    // Re-checked on the way OUT, not trusted because it was stored: a blob written by a path that
+    // skipped the tool, or under looser bounds, falls back to the published figure.
+    const t = find(
+      resolveMicronutrientTargets(
+        { sex: 'male', age: 40 },
+        { iron_mg: { amount: 900, why: 'written by something that never checked', set_at: '2026-01-01' } },
+      ),
+      'iron_mg',
+    );
+
+    expect(t.amount).toBe(8);
+    expect(t.origin).toBe('reference');
+  });
+
+  it('covers exactly the keys the table publishes', () => {
+    expect([...MICRONUTRIENT_KEYS].sort()).toEqual(
+      [
+        'calcium_mg',
+        'fiber_g',
+        'iron_mg',
+        'potassium_mg',
+        'sodium_mg',
+        'vitamin_b12_ug',
+        'vitamin_c_mg',
+        'zinc_mg',
+      ].sort(),
+    );
+    for (const key of MICRONUTRIENT_KEYS) expect(microTargetRange(key)).not.toBeNull();
   });
 });

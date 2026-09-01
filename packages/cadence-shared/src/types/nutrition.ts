@@ -39,6 +39,36 @@ export interface Macros {
   source?: 'ai' | 'user' | 'ledger' | 'research';
 }
 
+/**
+ * The micronutrients that have a published reference intake behind them — the keys
+ * `micronutrientTargets` covers and the only ones a target may be set for.
+ *
+ * Declared here rather than derived from that table so `MacroTargets` can name it without
+ * importing it; the table asserts it covers exactly these, so the two cannot drift.
+ */
+export type MicronutrientKey =
+  'fiber_g' | 'sodium_mg' | 'iron_mg' | 'zinc_mg' | 'vitamin_c_mg' | 'calcium_mg' | 'potassium_mg' | 'vitamin_b12_ug';
+
+/**
+ * A micronutrient number that came from OUTSIDE the reference table — a doctor's instruction, a
+ * prescription, a blood result — standing in for the published figure for this one person.
+ *
+ * The reference intakes are a fact about human biology and stay a lookup (see
+ * `micronutrient-targets.ts`). This is the other case, and the owner ruled it in on 2026-09-01:
+ * *"we rely on CNF, but we allow the coach to modify/override it if needed — ex. a user says
+ * 'my doctor wants me to get 2000mg of Vitamin C a day'"*. The coach is not inventing a number
+ * here, she is recording one she was told, which is why `why` is required and not decorative:
+ * a target nobody can attribute later is one nobody can revisit.
+ */
+export interface MicroTargetOverride {
+  /** In the nutrient's own unit — the same unit the reference table reports it in. */
+  amount: number;
+  /** Where the number came from, in their words. Required. */
+  why: string;
+  /** ISO date it was set. */
+  set_at: string;
+}
+
 export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | 'other';
 
 export interface NutritionLog {
@@ -96,6 +126,13 @@ export interface MacroTargets {
    * last 12 by `setTargets`.
    */
   adjustments?: { date: string; from: number; to: number }[];
+  /**
+   * Per-nutrient overrides of the published reference intakes, set by the coach when the user
+   * reports a number from outside the app. Absent for almost everyone — the reference table is
+   * the answer unless somebody was told otherwise. Rides in `macro_targets` because it is the
+   * same jsonb blob, merged and never clobbered, so no column and no migration.
+   */
+  micro_targets?: Partial<Record<MicronutrientKey, MicroTargetOverride>>;
 }
 
 export interface Recipe {

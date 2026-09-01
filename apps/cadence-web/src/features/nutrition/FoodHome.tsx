@@ -158,6 +158,7 @@ export function FoodHome({
         dayTotals={day?.totals ?? {}}
         dayMeals={day?.meals ?? []}
         week={{ avg: week.avg, meals: recent, days: week.avgDays }}
+        microTargets={day?.targets?.micro_targets}
         onBack={() => setNutrients(false)}
         onCoach={onCoach}
       />

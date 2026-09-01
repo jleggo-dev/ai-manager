@@ -37,10 +37,10 @@ const foodServingSchema = z.object({
  *
  * `source` is read downstream as provenance, not a label — `food-source-report.ts`'s
  * `candidateNotes` skips its "estimated, not measured" caveat for anything that isn't `llm`/
- * `research`, and `nutrition-insight-micro.ts`'s `REAL_MICRO_SOURCES` feeds a food's micronutrient
- * values straight into coaching insights when its `source` is `usda`/`off`/`label_photo`/
- * `fatsecret`. A client that could claim `source: 'cnf'` or `'fatsecret'` here could hand-carry
- * fabricated micronutrient numbers past both checks as if they were lab-analysed. If a real
+ * `research`, and `nutrition-insight-micro.ts`'s `MICRO_TRUSTED_SOURCE` feeds a food's
+ * micronutrient values straight into coaching insights when its `source` is `usda`/`cnf`/`off`/
+ * `label_photo`/`fatsecret`. A client that could claim `source: 'cnf'` or `'fatsecret'` here could
+ * hand-carry fabricated micronutrient numbers past both checks as if they were lab-analysed. If a real
  * `fatsecret`/`cnf`/`research` need for this route ever exists, it needs its own server-side
  * assertion (see `import-off` / `usda/import`'s pattern of never trusting `source` from the body)
  * — not a wider enum here.

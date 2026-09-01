@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Meal, MealMacros } from '../../lib/api.ts';
+import type { MicronutrientKey, MicroTargetOverride } from '@cadence/shared';
 import { CeilingBar, FloorBar, MiniFloorBar } from './NutrientBar.tsx';
 import { buildNutrientsView, countedLine, readingLabel, readingText, type NutrientReading } from './nutrients.ts';
 
@@ -67,12 +68,17 @@ export function NutrientsPanel({
   dayTotals,
   dayMeals,
   week,
+  microTargets,
   onBack,
   onCoach,
 }: {
   dateLabel: string;
   dayTotals: MealMacros;
   dayMeals: Meal[];
+  /** Reference-intake overrides from their file, so this screen quotes the same numbers the coach
+   *  does. Absent for almost everyone — the published figures are the answer unless a doctor said
+   *  otherwise. */
+  microTargets?: Partial<Record<MicronutrientKey, MicroTargetOverride>> | null;
   /** The week's per-day AVERAGE (a daily reference intake only means anything against a day) plus
    *  the meals behind it. Null while recent meals are still in flight. */
   week: { avg: MealMacros | null; meals: Meal[]; days: number } | null;
@@ -81,7 +87,11 @@ export function NutrientsPanel({
 }) {
   const [scope, setScope] = useState<'day' | 'week'>('day');
   const weekly = scope === 'week';
-  const view = buildNutrientsView(weekly ? (week?.avg ?? {}) : dayTotals, weekly ? (week?.meals ?? []) : dayMeals);
+  const view = buildNutrientsView(
+    weekly ? (week?.avg ?? {}) : dayTotals,
+    weekly ? (week?.meals ?? []) : dayMeals,
+    microTargets,
+  );
 
   return (
     <div className="nu" role="region" aria-label="Nutrients">

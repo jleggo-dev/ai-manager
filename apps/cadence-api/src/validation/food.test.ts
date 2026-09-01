@@ -61,8 +61,8 @@ describe('createFoodBodySchema', () => {
     // server-side (upsertFatSecretFood raw SQL, the CNF bulk import, food-research.ts +
     // insertFood from background enrichment), all bypassing this schema entirely. Downstream code
     // reads `source` as provenance (food-source-report.ts's candidateNotes, and
-    // nutrition-insight-micro.ts's REAL_MICRO_SOURCES, which feeds a food's micros straight into
-    // coaching insights for a trusted source) — so a client that could assert one of these here
+    // nutrition-insight-micro.ts's MICRO_TRUSTED_SOURCE, which feeds a food's micros straight into
+    // coaching insights for a trusted source — `cnf` among them) — so a client asserting one here
     // could hand-carry fabricated micronutrients past both as if they were lab-analysed. Widening
     // this enum to match the full FoodSource union is the bug, not the fix — see the comment on
     // foodSourceSchema before reopening this.

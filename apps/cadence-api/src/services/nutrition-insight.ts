@@ -1,4 +1,4 @@
-import type { Macros, MealKind, NutritionLog, NutritionSummary } from '@cadence/shared';
+import type { Macros, MealKind, MicronutrientTarget, NutritionLog, NutritionSummary } from '@cadence/shared';
 import { microInsights, type MicroInsightRollup } from './nutrition-insight-micro.ts';
 
 /**
@@ -7,7 +7,8 @@ import { microInsights, type MicroInsightRollup } from './nutrition-insight-micr
  * Pure: no DB, no LLM. Callers pass the already-built day rollup from `getNutritionDay`
  * (totals / left / targets) — we never re-sum meals into day totals. Numbers are only
  * narrated when grounded in that read or in the Observe summary / recent logs.
- * Micro insights need a precomputed rollup from real-data foods (see nutrition-insight-micro).
+ * Micro insights need a precomputed rollup from real-data foods AND this person's resolved
+ * reference intakes (see nutrition-insight-micro) — this file never holds a floor of its own.
  *
  * Brand: coach speaks as "I"; observe, never judge; count what happened; no scoreboard.
  */
@@ -327,6 +328,8 @@ export function buildNutritionInsight(
   summary: NutritionSummary,
   recent: Array<Pick<NutritionLog, 'meal' | 'macros' | 'provisional' | 'date' | 'flags' | 'items'>> = [],
   microRollup: MicroInsightRollup | null = null,
+  /** Resolved reference intakes (+ any override) for this person — no targets, no micro lines. */
+  microTargets: MicronutrientTarget[] = [],
 ): NutritionInsightPack {
   const { status, status_line } = statusForDay(day);
   const drill = buildDrill(day, summary);
@@ -335,7 +338,7 @@ export function buildNutritionInsight(
     ...macroInsights(day),
     ...patternInsights(summary, recent),
     ...varietyInsights(summary, recent),
-    ...(microRollup ? microInsights(microRollup) : []),
+    ...(microRollup ? microInsights(microRollup, microTargets) : []),
   ];
 
   let primary: NutritionInsightItem | null = candidates[0] ?? null;
