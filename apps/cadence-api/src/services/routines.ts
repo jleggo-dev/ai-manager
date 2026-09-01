@@ -1,6 +1,6 @@
 import { isGoalArea, type GoalArea, type OccurrenceSession } from '@cadence/shared';
 import { listGoals } from '../repos/goals.ts';
-import { NON_PLAN_CATEGORIES } from '../repos/activities.ts';
+import { NON_PLAN_CATEGORIES, USER_BUILT_CATEGORY } from '../repos/activities.ts';
 import {
   listUserActivityVersions,
   listLineageFinishCounts,
@@ -116,6 +116,9 @@ export async function listRoutines(userId: string, area?: GoalArea): Promise<Rou
     // committed-rhythm list applies (plan-view.ts) is checked on the latest row too.
     if (row.kind !== 'user') continue;
     if (row.category && NON_PLAN_CATEGORIES.has(row.category)) continue;
+    // User-built routines (Activity Builder wave 3) get their OWN list — GET /me/routines. This
+    // one is specifically the "From Cadence" shelf: what the coach built, not what the user did.
+    if (row.category === USER_BUILT_CATEGORY) continue;
     const rowArea = row.goal_id ? goalById.get(row.goal_id)?.area : undefined;
     if (area && rowArea !== area) continue;
     const onPlan = row.plan_status === 'active';

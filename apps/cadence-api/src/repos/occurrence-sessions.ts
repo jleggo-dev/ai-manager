@@ -41,6 +41,26 @@ export async function clearOccurrenceSession(userId: string, occurrenceId: strin
 }
 
 /**
+ * Unconditionally write a session onto an occurrence — the run-and-record path for a user-built
+ * routine (Activity Builder wave 3, POST /me/routines/:id/run): unlike
+ * `setOccurrenceSessionIfEmpty`'s write-once cache discipline (built for the racy generate-on-open
+ * path), a run's session IS the record of what was actually played, and a same-day re-run must
+ * overwrite it with whatever the routine currently holds — not silently keep whichever session
+ * landed there first. Returns whether a row was written (false only if the occurrence vanished or
+ * isn't this user's).
+ */
+export async function setOccurrenceSession(
+  userId: string,
+  occurrenceId: string,
+  session: OccurrenceSession,
+): Promise<boolean> {
+  const res = await sql`
+    update cadence.occurrences set session = ${json(session)}
+    where user_id = ${userId} and occurrence_id = ${occurrenceId}`;
+  return res.count > 0;
+}
+
+/**
  * Upcoming still-to-do sessions WITH their ids — what a session revision aims at. The mirror of
  * `listRecentForLogging` (occurrences.ts): that one is ceilinged at today because you cannot log
  * the future; this one FLOORS at today because you cannot rebuild the past. Soonest first, so an
