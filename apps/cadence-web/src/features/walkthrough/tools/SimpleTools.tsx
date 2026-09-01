@@ -1,16 +1,41 @@
 import { useState, type CSSProperties } from 'react';
 import { freeWriteDoneLine, freeWriteProgress, timeLeftLabel } from '@cadence/shared';
+import type { StepLog } from '../state.ts';
 import { TONE } from './tone.ts';
 import { MicButton } from '../../../components/MicButton.tsx';
 import { useWriteTimer } from '../../journal/useWriteTimer.ts';
 import { playChime } from './chime.ts';
 
-/** checkoff / read — one tone button that logs "done" (the browse/do/commit "do"). */
-export function StepCheckoff({ label, done, onDone }: { label?: string; done: boolean; onDone: () => void }) {
+type DoneLog = Extract<StepLog, { kind: 'done' }>;
+
+/**
+ * checkoff / read — one deliberate tone button that logs "done" (the browse/do/commit "do"). The
+ * note field is optional and free — "a distance, an errand" rarely needs one, so it never blocks
+ * the single tap; whatever's typed rides along in the same log write rather than needing a second
+ * action.
+ */
+export function StepCheckoff({ label, log, onLog }: { label?: string; log?: DoneLog; onLog: (l: DoneLog) => void }) {
+  const [note, setNote] = useState('');
+  const done = !!log;
   return (
     <div style={card}>
       {label && <div style={{ fontSize: 30, fontWeight: 800, color: TONE.deep, textAlign: 'center' }}>{label}</div>}
-      <button style={{ ...logBtn, opacity: done ? 0.62 : 1 }} onClick={onDone} disabled={done}>
+      {done ? (
+        log.note && <div style={savedNote}>{log.note}</div>
+      ) : (
+        <input
+          style={noteInput}
+          placeholder="anything to add? (optional)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={200}
+        />
+      )}
+      <button
+        style={{ ...logBtn, opacity: done ? 0.62 : 1 }}
+        onClick={() => onLog({ kind: 'done', ...(note.trim() ? { note: note.trim() } : {}) })}
+        disabled={done}
+      >
         {done ? '✓ Logged' : 'Log this done'}
       </button>
     </div>
@@ -114,4 +139,22 @@ const logBtn: CSSProperties = {
   cursor: 'pointer',
   background: `linear-gradient(180deg, ${TONE.fillA} 0%, ${TONE.fillB} 46%)`,
   boxShadow: `0 5px 0 ${TONE.deep}`,
+};
+const noteInput: CSSProperties = {
+  border: '1px solid oklch(90% 0.015 95)',
+  borderRadius: 12,
+  padding: '12px 13px',
+  fontSize: 13,
+  fontFamily: 'inherit',
+  color: 'oklch(30% 0.02 150)',
+  outline: 'none',
+};
+const savedNote: CSSProperties = {
+  fontSize: 12.5,
+  lineHeight: 1.45,
+  color: 'oklch(45% 0.02 150)',
+  background: 'oklch(97% 0.012 85)',
+  border: '1px solid oklch(91% 0.015 85)',
+  borderRadius: 12,
+  padding: '10px 12px',
 };

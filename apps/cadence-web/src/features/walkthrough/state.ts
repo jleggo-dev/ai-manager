@@ -41,6 +41,10 @@ export type StepLog =
   // until Finish — and carry their own key, because a session is a perfectly ordinary place to
   // write something you don't want the coach to read.
   | { kind: 'journal'; note: string; secret: boolean; bank: string | null; prompt: string | null }
+  // A measure step's one number, kept as the exact string typed (never reparsed/rounded — the
+  // honest-log rule) plus the unit/metric it was entered under, so the log line and any later
+  // reader can render it without looking the step back up.
+  | { kind: 'measure'; value: string; unit: string; metric: string }
   | { kind: 'done'; note?: string }; // checkoff / read / journal (journal carries the note)
 
 export type StepLogs = Record<string, StepLog>;
@@ -70,6 +74,9 @@ export function stepFraction(step: WalkthroughStep, log?: StepLog): number {
       return 1;
     case 'journal':
       return log.note.trim() ? 1 : 0;
+    // One number, one shot — there is no partial reading, only logged or not.
+    case 'measure':
+      return log.value.trim() ? 1 : 0;
     case 'done':
       return log.note != null || log.kind === 'done' ? 1 : 0;
   }
@@ -127,6 +134,10 @@ export function logLine(step: WalkthroughStep, log: StepLog): string {
     // receipt, and an entry someone marked secret must not leak through it.
     case 'journal':
       return log.secret ? 'kept, secret' : 'kept';
+    // Verbatim — the number the person typed, never reparsed or rounded. `unit` is dropped when
+    // absent rather than leaving a trailing space.
+    case 'measure':
+      return log.unit ? `${log.value} ${log.unit}` : log.value;
     case 'timer': {
       const m = Math.floor(log.elapsedSec / 60);
       const s = log.elapsedSec % 60;
