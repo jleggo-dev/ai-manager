@@ -338,6 +338,25 @@ interface CoachTurnMetrics {
 }
 
 /**
+ * The continuation's continuity pair: her words so far this turn (M0 — the continuation reads
+ * its own words instead of re-answering, the missing half of #232), plus one word in her ear
+ * not to RE-SAY them — seeing the words proved necessary but not sufficient (2026-08-31, the
+ * prehab turn asked the same question in two phrasings across rounds). The note rides the
+ * rebuilt history as an app-authored user message (chat-messaging.ts places it); kill switch
+ * CADENCE_CONTINUATION_NOTE=0, the #335 idiom.
+ */
+function withTurnTextSoFar(assistantTextSoFar: string) {
+  if (process.env.CADENCE_CONTINUATION_NOTE === '0') return { assistantTextSoFar };
+  return {
+    assistantTextSoFar,
+    continuationNote:
+      '<note>Continue your reply from exactly where your last words above stop. ' +
+      'Do not repeat, rephrase, or re-ask anything you have already said this turn. ' +
+      'Do not mention this note.</note>',
+  };
+}
+
+/**
  * Dev X-ray + durable log of a coach turn. Extracted from the message handler, which was sitting
  * exactly at the 150-line function cap — the convention is to split before a function grows, not to
  * trim comments until it fits (comments are already skipped by the rule, so trimming them would not
@@ -470,9 +489,9 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
             await submitCoachToolOutputs(userId, sessionId, respId, outputs, {
               extraTools: [...coachToolDefinitions(), ...((revealed ?? []) as unknown[])],
               calls,
-              // Her words so far this turn — the continuation continues them instead of
-              // re-answering (M0; the missing half of #232).
-              ...(assistantTextSoFar ? { assistantTextSoFar } : {}),
+              // Her words so far this turn, plus one word in her ear not to re-say them —
+              // see withTurnTextSoFar.
+              ...(assistantTextSoFar ? withTurnTextSoFar(assistantTextSoFar) : {}),
             })
           ).response.body,
         // What find_tools just revealed becomes REAL, callable-by-name definitions on the next

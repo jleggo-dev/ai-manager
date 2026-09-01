@@ -206,6 +206,8 @@ export function submitCoachToolOutputs(
     calls?: Array<{ toolCallId: string; name: string; arguments?: string }>;
     /** What she has said this turn — rides the rebuilt history so the continuation CONTINUES (M0). */
     assistantTextSoFar?: string;
+    /** App-authored "continue, don't re-say" note placed after her words (chat-messaging.ts). */
+    continuationNote?: string;
   } = {},
 ) {
   return withAim(cadenceUserId, () => submitV2ToolOutputs(sessionId, responseId, outputs, options));

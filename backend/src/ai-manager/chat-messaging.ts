@@ -260,6 +260,14 @@ export interface SubmitV2ToolOutputsOptions {
    * answer reached a phone as one paragraph. The model cannot continue words it has never seen.
    */
   assistantTextSoFar?: string;
+  /**
+   * An app-authored instruction appended AFTER `assistantTextSoFar` in the rebuilt history, as an
+   * ordinary user-role message. The caller supplies the text and the policy; this layer only
+   * places it. Added 2026-08-31: `assistantTextSoFar` lets the continuation SEE its own words,
+   * but a fresh generation still sometimes re-asks them in new phrasing — the note says continue,
+   * don't re-say. Only meaningful alongside `assistantTextSoFar`; ignored without it.
+   */
+  continuationNote?: string;
 }
 
 /** The dialect wants the model's own JSON string; AI Admin's own tool-call rows carry it parsed. */
@@ -316,7 +324,10 @@ export async function submitV2ToolOutputs(
       // Her own words so far this turn ride as a plain assistant message — the least exotic
       // shape the dialect accepts — so the continuation continues instead of re-answering.
       const said = options.assistantTextSoFar?.trim();
-      if (said) messages.push({ role: 'assistant', content: said });
+      if (said) {
+        messages.push({ role: 'assistant', content: said });
+        if (options.continuationNote) messages.push({ role: 'user', content: options.continuationNote });
+      }
       const sseResponse = await client.continueWithToolResults(
         modelId,
         messages,

@@ -135,6 +135,25 @@ function revealedNames(revealed: unknown[]): string[] {
  * suspected — *"we give her an indicator it didn't work so she tries again"* — so a by-name call of
  * anything the lookup revealed is follow-through, and only a lookup with no call after it is not.
  */
+/**
+ * She ended what she has said so far with a question TO THE USER — a consent-seeking stop.
+ *
+ * Under confirm-before-committing, a lookup with no call after it is the CORRECT state here: the
+ * next step is the user's answer, not a tool call. Measured on the owner's account (2026-08-31,
+ * 23:26): she asked "Want me to make that change?", the dangling-lookup nudge told her "NOTHING
+ * was actually done… call that tool now", and she obeyed it into `propose_plan_change` with empty
+ * edits plus an apology the user never needed — the harness pushing her off her own protocol,
+ * the #231 shape one level up. A trailing question mark is the machine-checkable fact that she is
+ * waiting on the user, so the nudge stands down.
+ */
+function endsAwaitingAnswer(text: string): boolean {
+  return text
+    .trim()
+    .replace(/[»"”’)\]*_]+$/u, '')
+    .trimEnd()
+    .endsWith('?');
+}
+
 async function nudgeDanglingLookup(
   userId: string,
   deps: CoachToolLoopDeps,
@@ -152,6 +171,18 @@ async function nudgeDanglingLookup(
   const called = new Set(state.functionCalls.map((c) => c.name));
   if (!called.has(FIND_TOOLS_NAME) || !deps.nudge) return null;
   if (called.has(USE_TOOL_NAME) || revealedNames(revealed).some((n) => called.has(n))) return null;
+
+  if (endsAwaitingAnswer(coachTextSoFar(state))) {
+    // Evidence, not silence: the skip is logged so a real dangling lookup hiding behind a
+    // question is still visible in the record.
+    void logAi(userId, {
+      kind: 'coach_tool',
+      input: { calls: [...called].map((name) => ({ name, arguments: null })) },
+      output: { results: [] },
+      meta: { count: 0, names: [...called], danglingLookup: true, skipped: 'awaiting-user-answer' },
+    }).catch(() => {});
+    return null;
+  }
 
   void logAi(userId, {
     kind: 'coach_tool',
