@@ -19,7 +19,7 @@ import { PlanSkeleton } from './features/plan/PlanSkeleton.tsx';
 import { CoachFaceProvider } from './features/coach/CoachFaceProvider.tsx';
 import { setAuthToken, isDevMode, getHealthDigest, postHealthDigest, postWorkoutHistory } from './lib/api.ts';
 import { useQueryClient } from '@tanstack/react-query';
-import { bootPlanStage, clearBootCache, fetchPlanIntoCache, hasCachedPlan } from './lib/query/index.ts';
+import { bootPlanStage, clearBootCache, fetchPlanIntoCache, hasCachedPlan, queryKeys } from './lib/query/index.ts';
 import { syncPlanLocalNotifications } from './lib/local-notifications-sync.ts';
 import { usePushRegistered } from './lib/usePushRegistered.ts';
 import { capabilities } from './lib/capability/index.ts';
@@ -105,6 +105,29 @@ function CoachApp({ session, authReady = true }: { session: Session | null; auth
   // screen, retried on resume. The one place that used to ask was the onboarding build screen,
   // which is why device_tokens was empty and no push Cadence ever sent could be delivered.
   usePushRegistered(authReady && screen !== 'loading');
+
+  /**
+   * A push landing means finished work is waiting server-side (Gap 6, PLAN-CHANGES.md): the
+   * plan-ready pushes (`replan_ready` / `replan_committed` / `checkin_replan_ready`) used to
+   * arrive as pure text with no listeners — received in the foreground they changed nothing, and
+   * a tap just foregrounded the app. Both arrival doors funnel here (capability seam — the web
+   * build's push capability never fires, the same guard the registration path uses): drop the
+   * plan cache so the week repaints wherever it's on screen, then ring the resume doorbell —
+   * useAppResume/useForegroundResume both listen on `document`, so everything built to heal on a
+   * real return heals now, the pending-replan re-check that surfaces a waiting proposal included
+   * (useProposalAccept's own resume door; its in-flight guards already absorb the double-fire a
+   * tapped push produces alongside the real foreground event). Deliberately payload-blind: a
+   * push with no `kind`/`target` (older server) triggers the exact same refresh.
+   */
+  useEffect(() => {
+    if (!capabilities.push.isAvailable()) return;
+    return capabilities.push.onNotification(() => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.plan.all });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    // capabilities is module-static; queryClient is provider-stable for the app's life.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadPlan = () => {
     /**

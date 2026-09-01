@@ -32,6 +32,8 @@ export function applyCoachSseData(
   onDelta: (text: string) => void,
   onActivity?: (names: string[]) => void,
   onSegment?: () => void,
+  onToolStart?: (names: string[]) => void,
+  onStage?: (name: string) => void,
 ): boolean {
   if (data === '[DONE]') {
     state.completed = true;
@@ -52,6 +54,25 @@ export function applyCoachSseData(
      */
     if (p.cadence === 'tool' && Array.isArray(p.names)) {
       onActivity?.(p.names.filter((n): n is string => typeof n === 'string'));
+      return false;
+    }
+    /**
+     * Same frame family, earlier moment: she has just DECIDED to run these tools and they have not
+     * executed yet. The `tool` frame above only ever arrived after the work was done, so a slow
+     * tool showed bare dots for its whole run — this is the frame that lets the screen say what is
+     * happening WHILE it happens. Same name vocabulary as `tool`.
+     */
+    if (p.cadence === 'tool_start' && Array.isArray(p.names)) {
+      onToolStart?.(p.names.filter((n): n is string => typeof n === 'string'));
+      return false;
+    }
+    /**
+     * Once per turn, immediately after the stream opens and before any model work — the server
+     * saying "I have your message and I am reading the file". It exists to cover the pre-first-token
+     * stretch, which used to be bare dots for however long the model deliberated.
+     */
+    if (p.cadence === 'stage' && typeof p.name === 'string') {
+      onStage?.(p.name);
       return false;
     }
     // One generation of the turn ended (a tool round, a nudge) and another may follow: the
@@ -77,9 +98,11 @@ export function applyCoachSseLine(
   onDelta: (text: string) => void,
   onActivity?: (names: string[]) => void,
   onSegment?: () => void,
+  onToolStart?: (names: string[]) => void,
+  onStage?: (name: string) => void,
 ): boolean {
   if (!line.startsWith('data: ')) return false;
-  return applyCoachSseData(state, line.slice(6).trim(), onDelta, onActivity, onSegment);
+  return applyCoachSseData(state, line.slice(6).trim(), onDelta, onActivity, onSegment, onToolStart, onStage);
 }
 
 /**
@@ -92,12 +115,14 @@ export function pushCoachSseChunk(
   onDelta: (text: string) => void,
   onActivity?: (names: string[]) => void,
   onSegment?: () => void,
+  onToolStart?: (names: string[]) => void,
+  onStage?: (name: string) => void,
 ): boolean {
   state.buffer += chunk;
   const lines = state.buffer.split('\n');
   state.buffer = lines.pop() ?? '';
   for (const line of lines) {
-    if (applyCoachSseLine(state, line, onDelta, onActivity, onSegment)) return true;
+    if (applyCoachSseLine(state, line, onDelta, onActivity, onSegment, onToolStart, onStage)) return true;
   }
   return state.completed;
 }

@@ -10,6 +10,19 @@ describe('capability seam — platform selection', () => {
   });
 });
 
+describe('capability seam — push notifications on web', () => {
+  it('reports unavailable and hands back an inert unsubscribe — no APNs, nothing ever fires', () => {
+    // The guard App.tsx's push-arrival wiring relies on (Gap 6): the web build subscribes
+    // through the same seam and must get a listener that never fires and a teardown that
+    // never throws — not a crash for want of a Capacitor plugin.
+    expect(capabilities.push.isAvailable()).toBe(false);
+    const handler = vi.fn();
+    const unsubscribe = capabilities.push.onNotification(handler);
+    expect(handler).not.toHaveBeenCalled();
+    expect(() => unsubscribe()).not.toThrow();
+  });
+});
+
 describe('capability seam — dictation', () => {
   it('reports unavailable and returns null sessions when SpeechRecognition is missing', () => {
     const w = window as unknown as {

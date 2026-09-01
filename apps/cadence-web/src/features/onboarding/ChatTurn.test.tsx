@@ -25,6 +25,17 @@ describe('the activity line', () => {
     expect(screen.getByText(/reading your journal/)).toBeInTheDocument();
   });
 
+  /**
+   * The pre-first-token stretch (Phase 3): the server's `stage` frame lands before any model work,
+   * so the pending bubble says what is happening instead of showing bare dots. One set of dots —
+   * the line's own — never a second bare set stacked above it.
+   */
+  it('shows dots + the stage line while pending, with a single set of dots', () => {
+    render(<ChatTurn role="coach" text="" pending activity="reading your file" />);
+    expect(screen.getByText(/reading your file/)).toBeInTheDocument();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  });
+
   it('shows nothing when there is no activity, which is most of the time', () => {
     render(<ChatTurn role="coach" text="All done." />);
     expect(screen.getByText('All done.')).toBeInTheDocument();

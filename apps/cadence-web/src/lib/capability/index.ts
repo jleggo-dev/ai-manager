@@ -49,6 +49,14 @@ export interface HealthCapability {
 export interface PushCapability {
   isAvailable(): boolean;
   register(): Promise<string | null>; // returns device token
+  /**
+   * Fires when a push arrives with the app in the foreground, AND when one is tapped from the
+   * shade — both mean "the server finished something; go look" (Gap 6, PLAN-CHANGES.md: the
+   * plan-ready push used to be a dead end). `data` is the push's custom payload (`kind`/`target`
+   * on plan-ready pushes) and may be empty — older servers send none, and the handler must
+   * refresh the same way regardless. Returns an unsubscribe. Web: never fires (no APNs there).
+   */
+  onNotification(handler: (data: Record<string, unknown>) => void): () => void;
 }
 
 export interface LocationCapability {

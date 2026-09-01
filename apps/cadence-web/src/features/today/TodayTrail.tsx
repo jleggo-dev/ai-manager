@@ -1,6 +1,7 @@
 import { type CSSProperties, type RefObject } from 'react';
 import { type PlanViewData, type PlanDay, type PlanOccurrence } from '../../lib/api.ts';
 import { isWeeklyCheckin } from '../plan/occurrence/format.ts';
+import { taskOpener } from '../plan/taskShape.ts';
 import { TrailFoodStrip } from '../nutrition/TrailFoodStrip.tsx';
 import { glyphOf } from './glyphs.ts';
 import { currentNodeIndex, useLandOnNow } from './useLandOnNow.ts';
@@ -170,6 +171,17 @@ function TrailNode({
   const glyph = glyphOf(occ.title, occ.area);
   const ramp = RAMP[Math.round((n < 2 ? 0 : i / (n - 1)) * 5)]!;
   const done = occ.status === 'done';
+  /**
+   * The session hasn't been written yet (Gap 4, PLAN-CHANGES.md): this disc used to render like
+   * any other, so the ~30-60s write was discovered by tapping. The hint is a dashed ring in the
+   * step ring's own slot — the ring is the trail's session voice, and a sketched one says "still
+   * being drawn" without a word or a spinner; the sheet narrates the wait on tap as it always
+   * has. Only rows whose tap actually starts the write get it (`taskOpener === 'task'` — captures
+   * and food tasks never have a session), only while pending, and never on an older server that
+   * doesn't send the field (absence is a no-claim). Mutually exclusive with the step ring by
+   * construction: `steps` comes from the session, so a missing session can't have any.
+   */
+  const warming = occ.session_ready === false && occ.status === 'pending' && taskOpener(occ) === 'task';
   const touched = done || occ.status === 'skipped';
   const light = touched ? ramp.light : ramp.mL;
   const main = touched ? ramp.main : ramp.mM;
@@ -187,8 +199,24 @@ function TrailNode({
       className="trail-node"
       style={{ transform: `translateX(${crescentX(i, n, d)}px)` }}
       onClick={() => onOpen(occ)}
-      aria-label={occ.title}
+      aria-label={warming ? `${occ.title} — still being written` : occ.title}
     >
+      {warming && (
+        <svg className="trail-ring is-warming" width="104" height="104" viewBox="0 0 104 104" aria-hidden>
+          <circle
+            cx="52"
+            cy="52"
+            r="47"
+            fill="none"
+            pathLength={100}
+            stroke={ringStroke(false, ramp.dark)}
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeDasharray="2 5"
+            transform="rotate(-90 52 52)"
+          />
+        </svg>
+      )}
       {occ.steps != null && occ.steps > 1 && (
         <svg className="trail-ring" width="104" height="104" viewBox="0 0 104 104" aria-hidden>
           <circle

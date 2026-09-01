@@ -16,6 +16,20 @@
       "failover_external_ai_id": "anthropic-claude-4-5-sonnet"
     },
     {
+      "slug": "cadence-evolve",
+      "name": "Cadence Evolve",
+      "description": "Plan ADJUSTMENTS only (the evolve-plan job). Owner ruling 2026-09-01: evolve may run a faster model than genesis because the current plan anchors it, the edit grammar + vet + full-synthesis fallback net it, and the user approves via card — but it is briefed with the full goals/baseline/constraints context regardless (CI-gated by plan-evolve.prompt-safety.test.ts). anthropic-claude-4-5-sonnet PRIMARY on purpose: benchmarked 2026-09-01 (scripts/bench-evolve-models.ts) at 29.5s small-steer / 66-112s rebalance with on-ask edits, vs claude-sonnet-5 at 47s / 263-289s (~23K tokens of billed deliberation around a 2K edit list). sonnet-5 stays as the quality failover. gpt-5.4-mini measured 5-16s but once mis-read the ask - documented in PLAN-CHANGES.md as the aggressive candidate pending a quality eval. Model ids must stay catalog-valid (scripts/list-v2-models.ts).",
+      "provider_id": "<DEVS_AI_PROVIDER_UUID>",
+      "external_ai_id": "anthropic-claude-4-5-sonnet",
+      "profile_type": "model",
+      "mode": "completion",
+      "runtime_options": {
+        "temperature": 0.7
+      },
+      "failover_provider_id": "<DEVS_AI_PROVIDER_UUID>",
+      "failover_external_ai_id": "claude-sonnet-5"
+    },
+    {
       "slug": "cadence-broker",
       "name": "Cadence Broker",
       "description": "Cheap/fast completion model for the Broker jobs: extraction, vetting, situational assessment, pack-select. Low temperature for determinism. On gpt-class models because strict native json_schema is ~free there (~2.2x slower on gemini via the v2 shim). Live provider pointing via apps/cadence-api/scripts/set-broker-v2.ts.",
@@ -740,7 +754,7 @@
     {
       "slug": "evolve-plan",
       "name": "evolve_plan",
-      "ai_profile_id": "<CADENCE_COACH_PROFILE_UUID>",
+      "ai_profile_id": "<CADENCE_EVOLVE_PROFILE_UUID>",
       "description": "Coach plan adjustment (evolve): current plan + steer -> EDITS in the plan-edit grammar, composed and vetted app-side. Output stays small on purpose — latency rides completion tokens (docs/cadence/PLAN-CHANGES.md Phase 1).",
       "config": {
         "expectedResponseFormat": "json",

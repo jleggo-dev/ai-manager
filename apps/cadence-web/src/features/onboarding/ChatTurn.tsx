@@ -43,7 +43,9 @@ export function ChatTurn({
       <div className="ct-row">
         <CoachFace size={44} className="ct-face" />
         <div className="ct-bubble">
-          {pending ? <TypingDots /> : text}
+          {/* While pending WITH an activity line ("reading your file…"), the line's own dots carry
+              the animation — bare dots here as well would put two sets in one empty bubble. */}
+          {pending ? !activity && <TypingDots /> : text}
           {/**
            * The activity line sits OUTSIDE the pending branch, and that placement is the whole fix.
            *

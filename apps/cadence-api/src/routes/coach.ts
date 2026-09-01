@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import type { CoachStageFrame } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import {
   AimError,
@@ -335,6 +336,18 @@ interface CoachTurnMetrics {
   completionTokens: number | null;
   responseId: string | null;
   clientDropped: boolean;
+  /**
+   * Wall-clock for the turn as the user felt it: route entry to the terminal [DONE] — the
+   * pre-first-token stretch (context select, floor reads), every tool round, and the streamed
+   * reply. NOT started at the relay call, which would silently exclude the 5–15s of pre-work
+   * that is precisely the stretch worth measuring. Post-stream bookkeeping (persist, push) is
+   * excluded: the user never waits on it.
+   */
+  ms: number;
+  /** How many tool rounds the loop ran — 0 for a plain answer. Until now this was measured by
+   *  the loop and then dropped on the floor here, so "how often does she use tools" was
+   *  unanswerable from `ai_log`. */
+  toolRounds: number;
 }
 
 /**
@@ -371,11 +384,74 @@ async function recordCoachTurn(
 }
 
 /**
+ * Ambient capture on the FULL conversation (§6.1) — not just the last message — so goals aren't
+ * fragmented per-turn. Result recorded for the X-ray. The detour capture rides the SAME window:
+ * the conversational door into disrupted mode (REQ4 path #2) — a deterministic keyword gate
+ * inside decides whether its job runs at all, and it enters an episode only on the user's
+ * explicit yes to the coach's offer. Never throws — every branch swallows its own failure.
+ */
+async function runAmbientCapture(userId: string, sessionId: string, message: string): Promise<void> {
+  await captureWindow(userId, sessionId, message)
+    .then(async (window) => {
+      await Promise.allSettled([
+        runCaptureExtract(userId, { conversation_window: window })
+          .then(async (r) => {
+            updateTrace(userId, { capture: r });
+            // Deterministic scope/safety screen fired on something they just said. Hand the coach
+            // the note so the pushback happens in the conversation — a card quietly missing from
+            // Review is exactly the "start over" feeling the brand promises never to cause.
+            const notes = renderScreenNotes(r.screened);
+            if (notes) {
+              await injectCoachContext(userId, sessionId, notes, {
+                source: 'goal-screen',
+                version: 1,
+              }).catch((e) => console.error('[goal-screen inject]', e));
+            }
+          })
+          .catch((e) => console.error('[capture_extract]', e)),
+        runDetourCapture(userId, window)
+          .then((o) => {
+            if (o.ran) console.log('[capture_detour]', o.reason);
+          })
+          .catch((e) => console.error('[capture_detour]', e)),
+      ]);
+    })
+    .catch((e) => console.error('[capture_window]', e));
+}
+
+/**
+ * Open the turn's SSE stream and put the first honest thing on it.
+ *
+ * The stage frame goes out before ANY pre-work: the client renders it as a pre-first-token line
+ * ("reading your file…"). The stretch from here to the first token — block refresh, context
+ * select, floor reads, the upstream request — routinely runs 5–15 seconds, and until this frame
+ * it was bare typing dots (PLAN-CHANGES.md, Phase 3: no plan-changing flow may show a bare
+ * spinner). Once per turn; older clients ignore unknown cadence values, so it costs them nothing.
+ */
+function openTurnStream(res: Response): void {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  (res as Response & { flushHeaders?: () => void }).flushHeaders?.();
+  try {
+    const stage: CoachStageFrame = { cadence: 'stage', name: 'reading' };
+    res.write(`data: ${JSON.stringify(stage)}\n\n`);
+  } catch {
+    /* client already gone; the turn proceeds and persists server-side regardless */
+  }
+}
+
+/**
  * POST /coach/sessions/:id/messages — send a message; stream the Coach reply (SSE).
  * `assembleTurn` is the just-in-time injection hook (§4.3); ambient capture (Broker)
  * fires in parallel (§6.1). 409-safe: client disables send until it sees [DONE].
  */
 router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
+  // The turn's clock starts HERE, at route entry — not down at the relay call. Everything between
+  // this line and the first token (block refresh, photo attach, assembleTurn's context select, the
+  // upstream request) is time the user spends watching typing dots, and a clock that starts after
+  // all of it would report the turn's slowest stretch as free.
+  const t0 = Date.now();
   const userId = req.cadenceUserId!;
   const message: unknown = req.body?.message;
   if (typeof message !== 'string' || !message.trim()) {
@@ -387,10 +463,7 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
   // photo must not sink an otherwise-valid text message once we are already streaming SSE.
   const photo: string | null = typeof req.body?.photo === 'string' ? req.body.photo : null;
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  (res as Response & { flushHeaders?: () => void }).flushHeaders?.();
+  openTurnStream(res);
 
   // Drop-resilient streaming: if the client disconnects mid-turn we keep draining the
   // upstream so the reply still completes + persists (the UI recovers it via /coach/current).
@@ -444,7 +517,9 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     // Relay upstream SSE bytes verbatim (upstream emits its own `data: [DONE]`) while
     // accumulating the assistant content + usage, so we can log the turn + diagnostics
     // to AI Admin after the stream (the in-process path must do this bookkeeping itself).
-    const t0 = Date.now();
+    // `streamStart` clocks only the relay (recordCoachReply's durationMs has always meant
+    // that); the whole turn's clock is `t0`, up at route entry.
+    const streamStart = Date.now();
     const {
       content: rawContent,
       segments,
@@ -456,6 +531,7 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       currentResponseId,
       firstTokenMs,
       clientDropped,
+      toolRounds,
     } = await relayCoachTurnWithTools(
       userId,
       response.body,
@@ -507,6 +583,10 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
      */
     const content = segments.length ? segments.join('\n\n') : rawContent;
 
+    // The turn as the user felt it, snapshotted the moment the terminal [DONE] is on the wire —
+    // before persistence and notification bookkeeping, which nobody waits on.
+    const turnMs = Date.now() - t0;
+
     /**
      * AWAITED, and that is the whole fix for the backgrounded phone.
      *
@@ -531,7 +611,7 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
         content,
         currentResponseId,
         diagnosticSession,
-        metrics: { promptTokens, completionTokens, durationMs: Date.now() - t0, firstTokenMs },
+        metrics: { promptTokens, completionTokens, durationMs: Date.now() - streamStart, firstTokenMs },
         model,
         promptContent: resolvedMessage ?? message,
         message,
@@ -593,45 +673,18 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       completionTokens,
       responseId,
       clientDropped,
+      ms: turnMs,
+      toolRounds,
     });
 
-    // Ambient capture on the FULL conversation (§6.1) — not just the last message — so goals
-    // aren't fragmented per-turn. Result recorded for the X-ray. The detour capture rides the
-    // SAME window: the conversational door into disrupted mode (REQ4 path #2) — a deterministic
-    // keyword gate inside decides whether its job runs at all, and it enters an episode only on
-    // the user's explicit yes to the coach's offer.
+    // Ambient capture (what it does: see runAmbientCapture above).
     //
     // Awaited for the same reason the reply is (above): this is where what someone told you
     // becomes something you remember, and a promise left running past the handler is a promise
     // the platform may never finish. It costs nobody any wait — the response is already ended —
     // only invocation time, which is the correct thing to spend to keep "never make you repeat
     // yourself" true.
-    await captureWindow(userId, req.params.id as string, message)
-      .then(async (window) => {
-        await Promise.allSettled([
-          runCaptureExtract(userId, { conversation_window: window })
-            .then(async (r) => {
-              updateTrace(userId, { capture: r });
-              // Deterministic scope/safety screen fired on something they just said. Hand the coach
-              // the note so the pushback happens in the conversation — a card quietly missing from
-              // Review is exactly the "start over" feeling the brand promises never to cause.
-              const notes = renderScreenNotes(r.screened);
-              if (notes) {
-                await injectCoachContext(userId, req.params.id as string, notes, {
-                  source: 'goal-screen',
-                  version: 1,
-                }).catch((e) => console.error('[goal-screen inject]', e));
-              }
-            })
-            .catch((e) => console.error('[capture_extract]', e)),
-          runDetourCapture(userId, window)
-            .then((o) => {
-              if (o.ran) console.log('[capture_detour]', o.reason);
-            })
-            .catch((e) => console.error('[capture_detour]', e)),
-        ]);
-      })
-      .catch((e) => console.error('[capture_window]', e));
+    await runAmbientCapture(userId, req.params.id as string, message);
   } catch (err) {
     const aim = AimError.fromUnknown(err);
     console.error('[POST /coach/sessions/:id/messages]', aim.kind, aim.message);

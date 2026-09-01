@@ -38,7 +38,11 @@ export async function sendPlanReadyPush(
       if (id) await settleNotification(id, 'skipped', 'not_configured');
       return;
     }
-    const results = await sendPushToUser(userId, title, body);
+    // `kind` + `target` ride IN the payload too (Gap 6, PLAN-CHANGES.md): a plan-ready push used
+    // to arrive as pure text, so the app had nothing to refresh with — received in the foreground
+    // it changed nothing, and a tap just foregrounded. The client funnels both arrival doors into
+    // one refresh (App.tsx); older app builds ignore the extras, so this is purely additive.
+    const results = await sendPushToUser(userId, title, body, { extra: { kind, target } });
     const delivered = results.filter((r) => r.status === 200).length;
     if (!id) return;
     if (delivered > 0) return void (await settleNotification(id, 'sent', `${delivered}/${results.length} device(s)`));

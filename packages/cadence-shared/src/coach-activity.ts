@@ -93,10 +93,41 @@ export function coachActivityLine(names: string[]): string {
   return first ?? FALLBACK;
 }
 
-/** The SSE frame the server writes so the client can show it. Not a content delta. */
+/**
+ * The SSE frame the server writes AFTER a round of tool calls has executed — the confirmation
+ * half of the two-frame protocol (see `CoachToolStartFrame`). Not a content delta. Kept exactly
+ * as it has always been: older clients render this one, and they must keep working unchanged.
+ */
 export interface CoachActivityFrame {
   cadence: 'tool';
   names: string[];
+}
+
+/**
+ * Written the moment the model's tool calls are PARSED, before any of them run — the
+ * announcement half of the two-frame protocol. Tool execution is the slowest part of most
+ * rounds, and until this frame existed the screen showed nothing for all of it: the only
+ * activity frame was the post-execution one above, so "working out the change" appeared AFTER
+ * the change was worked out. Now the start frame says what she is doing; the `tool` frame says
+ * what just finished. Same names treatment as the post frame (`resolveActivityNames`, so
+ * `use_tool` is unwrapped server-side). Older clients ignore unknown cadence values, so this is
+ * backward-compatible by construction.
+ */
+export interface CoachToolStartFrame {
+  cadence: 'tool_start';
+  names: string[];
+}
+
+/**
+ * A named stage of the turn, written before any tokens exist. Today there is one: `reading` —
+ * emitted once per turn, right after the SSE headers flush and before any of the pre-work
+ * (context select, floor reads) that used to be 5–15 seconds of bare typing dots. The name is
+ * an open union so a future stage rides the same frame without a client release: an unknown
+ * name still tells the client SOMETHING is happening, which is the whole point.
+ */
+export interface CoachStageFrame {
+  cadence: 'stage';
+  name: 'reading' | (string & {});
 }
 
 /**

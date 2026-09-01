@@ -253,6 +253,28 @@ export const nativeCapabilities: Capabilities = {
         void PushNotifications.register();
       });
     },
+    /**
+     * The other half of registering (Gap 6, PLAN-CHANGES.md): a delivered push used to be a dead
+     * end — no receive listener, no tap listener, so a "your week is ready" arrived and nothing
+     * refreshed; tapping just foregrounded the app. Both doors live here beside the registration
+     * listeners above and funnel into ONE handler (wired from App.tsx): `pushNotificationReceived`
+     * is the foreground arrival, `pushNotificationActionPerformed` is the tap. The payload rides
+     * along (`kind`/`target` on plan-ready pushes) but the handler must not require it — a push
+     * from an older server carries none and still means "go look".
+     */
+    onNotification: (handler) => {
+      const handles = [
+        PushNotifications.addListener('pushNotificationReceived', (n) =>
+          handler((n.data ?? {}) as Record<string, unknown>),
+        ),
+        PushNotifications.addListener('pushNotificationActionPerformed', (a) =>
+          handler((a.notification.data ?? {}) as Record<string, unknown>),
+        ),
+      ];
+      return () => {
+        for (const h of handles) void h.then((x) => x.remove()).catch(() => {});
+      };
+    },
   },
   /**
    * On-device plan reminders. No server, no APNs, no network — and exact, because iOS owns the

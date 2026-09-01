@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { coachActivityLine, resolveActivityNames, ALL_PHRASE_KEYS } from './coach-activity.ts';
+// Frame types come through the package barrel on purpose: the server and the web client both
+// import them from '@cadence/shared', so this is the export path that has to compile.
+import type { CoachActivityFrame, CoachSegmentFrame, CoachStageFrame, CoachToolStartFrame } from './index.ts';
 
 /**
  * Owner: *"they usually tell me when they're calling a tool. This would help us diagnose and it
@@ -100,5 +103,43 @@ describe('voice', () => {
       // Present participle: every line is something being done right now.
       expect(coachActivityLine([name]), name).toMatch(/ing\b/);
     }
+  });
+});
+
+/**
+ * The wire contract for the two Phase-3 frames (PLAN-CHANGES.md: chat emits tool frames before
+ * execution as well as after, and the pre-first-token stretch gets a stage line). The server
+ * writers and the web parser are built in separate files against these exact strings, so the
+ * serialized shape is pinned here — a drifted field name would ship a frame nobody renders.
+ */
+describe('activity frames on the wire', () => {
+  it('the stage frame is exactly what the route writes after the headers flush', () => {
+    const stage: CoachStageFrame = { cadence: 'stage', name: 'reading' };
+    expect(JSON.stringify(stage)).toBe('{"cadence":"stage","name":"reading"}');
+  });
+
+  it('a stage name nobody has invented yet still typechecks — the union is open on purpose', () => {
+    const future: CoachStageFrame = { cadence: 'stage', name: 'drafting' };
+    expect(future.name).toBe('drafting');
+  });
+
+  it('tool_start and tool carry the same shape: announcement, then confirmation', () => {
+    const start: CoachToolStartFrame = { cadence: 'tool_start', names: ['get_active_plan'] };
+    const done: CoachActivityFrame = { cadence: 'tool', names: ['get_active_plan'] };
+    expect(JSON.stringify(start)).toBe('{"cadence":"tool_start","names":["get_active_plan"]}');
+    expect(JSON.stringify(done)).toBe('{"cadence":"tool","names":["get_active_plan"]}');
+  });
+
+  it('every frame kind is told apart by its cadence value alone', () => {
+    // The client switches on `cadence` and falls through on anything unknown — so the four
+    // discriminants must stay distinct, and `tool_start` must never be mistaken for `tool`.
+    const seg: CoachSegmentFrame = { cadence: 'segment' };
+    const cadences = [
+      seg.cadence,
+      ({ cadence: 'tool', names: [] } as CoachActivityFrame).cadence,
+      ({ cadence: 'tool_start', names: [] } as CoachToolStartFrame).cadence,
+      ({ cadence: 'stage', name: 'reading' } as CoachStageFrame).cadence,
+    ];
+    expect(new Set(cadences).size).toBe(cadences.length);
   });
 });
