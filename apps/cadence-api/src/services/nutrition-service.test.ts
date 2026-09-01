@@ -348,4 +348,16 @@ d('API-04 — nutrition service (DB)', () => {
     expect(r.water_ml).toBe(750);
     expect((await getNutritionDay(USER, today())).water_ml).toBe(750);
   });
+
+  /** `has_recent_water` is the quick-add water row's gate — same 14-day window as food: an old
+   *  pour keeps the row for someone tracking water; no pours at all never grows one. */
+  it('getNutritionDay reports has_recent_water=false with no pours, true from an old pour', async () => {
+    const { logWater } = await import('./water.ts');
+    expect((await getNutritionDay(USER, today())).has_recent_water).toBe(false);
+
+    await logWater(USER, 250, daysAgo(3));
+    const day = await getNutritionDay(USER, today());
+    expect(day.water_ml).toBe(0); // nothing today — the trailing window is what says "tracking"
+    expect(day.has_recent_water).toBe(true);
+  });
 });

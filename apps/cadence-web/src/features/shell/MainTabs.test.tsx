@@ -26,7 +26,7 @@ vi.mock('../settings/SettingsRoom.tsx', () => ({ SettingsRoom: () => null }));
 vi.mock('../plan/AdjustSheet.tsx', () => ({
   AdjustSheet: ({ mode }: { mode?: string }) => <div data-testid="adjust-sheet">{mode}</div>,
 }));
-vi.mock('../plan/LogDidSheet.tsx', () => ({ LogDidSheet: () => null }));
+vi.mock('../plan/quick-add/QuickAddSheet.tsx', () => ({ QuickAddSheet: () => null }));
 vi.mock('../gate/PlanCardSheet.tsx', () => ({ PlanCardSheet: () => null }));
 vi.mock('../../components/CoachFace.tsx', () => ({ CoachFace: () => null }));
 vi.mock('../nutrition/FoodHome.tsx', () => ({ FoodHome: () => null }));

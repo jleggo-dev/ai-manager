@@ -51,6 +51,9 @@ export interface NutritionDayData {
   has_recent_food?: boolean;
   /** The day's water in ml (0037). Zero is an honest number — water has no provisional state. */
   water_ml?: number;
+  /** Any pour in the trailing 14 days — the quick-add water row's gate. Absent from older
+   *  servers, and absence must stay a no-claim (no row), never a hint. */
+  has_recent_water?: boolean;
 }
 
 /** One day's meals + deterministic totals (confirmed vs provisional) + targets/left when set. */

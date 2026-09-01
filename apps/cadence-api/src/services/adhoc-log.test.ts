@@ -65,7 +65,8 @@ describe('logAdhocActivity', () => {
 
   it('lands the off-plan log as a done occurrence on today, via the normal log path', async () => {
     const r = await logAdhocActivity(USER, 'did yoga');
-    expect(getOrCreateAdhocActivity).toHaveBeenCalledWith(USER, 'p1');
+    // No area named → no title override: the repo's default keeps the generic 'Off-plan' bucket.
+    expect(getOrCreateAdhocActivity).toHaveBeenCalledWith(USER, 'p1', undefined);
     expect(getOrInsertOccurrenceId).toHaveBeenCalledWith('a1', USER, '2026-07-15');
     expect(logOccurrence).toHaveBeenCalledWith(USER, 'occ1', 'did yoga');
     expect(r?.summary).toBe('yoga');
@@ -74,5 +75,14 @@ describe('logAdhocActivity', () => {
   it('honors an explicit valid past date', async () => {
     await logAdhocActivity(USER, 'walked 5k', '2026-07-12');
     expect(getOrInsertOccurrenceId).toHaveBeenCalledWith('a1', USER, '2026-07-12');
+  });
+
+  /** Area-flavoured quick adds get their OWN bucket (by title) so a same-day workout and practice
+   *  don't replace each other under the (activity_id, date) unique index. */
+  it('routes an area add to that area’s own bucket title', async () => {
+    await logAdhocActivity(USER, 'bench + rows', undefined, 'movement');
+    expect(getOrCreateAdhocActivity).toHaveBeenCalledWith(USER, 'p1', 'Off-plan workout');
+    await logAdhocActivity(USER, 'scales, 20 min', undefined, 'practice');
+    expect(getOrCreateAdhocActivity).toHaveBeenCalledWith(USER, 'p1', 'Off-plan practice');
   });
 });

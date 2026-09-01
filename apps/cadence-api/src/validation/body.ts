@@ -243,13 +243,16 @@ export const adhocLogBodySchema = z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' })
       .optional(),
+    // The quick-add sheet's area-flavoured adds — routes the log to that area's own off-plan
+    // bucket (adhoc-log.ts ADHOC_TITLES) instead of the generic one.
+    area: z.enum(['movement', 'practice']).optional(),
   })
   .superRefine((val, ctx) => {
     if (!val.text.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'text required' });
     }
   })
-  .transform((val) => ({ text: val.text.trim(), date: val.date }));
+  .transform((val) => ({ text: val.text.trim(), date: val.date, area: val.area }));
 
 /** "Log something you did" against a planned activity — text is OPTIONAL (defaults server-side to
  *  "Did {title}"); the activity is named by the path param, so the body only carries the optional

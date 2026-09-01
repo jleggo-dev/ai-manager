@@ -4,7 +4,7 @@ import { OnboardingChat } from '../onboarding/OnboardingChat.tsx';
 import { ProgressView } from '../progress/ProgressView.tsx';
 import { SettingsRoom } from '../settings/SettingsRoom.tsx';
 import { AdjustSheet } from '../plan/AdjustSheet.tsx';
-import { LogDidSheet } from '../plan/LogDidSheet.tsx';
+import { QuickAddSheet } from '../plan/quick-add/QuickAddSheet.tsx';
 import { PlanCardSheet } from '../gate/PlanCardSheet.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { FoodHome } from '../nutrition/FoodHome.tsx';
@@ -115,9 +115,10 @@ export function MainTabs({
    * The Food home (Food Journey 02) — a full screen that replaces the Plan tab's content while
    * the tab bar stays, the same escape ReviewScreen uses minus the bar. It lives HERE rather
    * than inside PlanView so the ＋ FAB knows to stand down and the coach hand-off is one hop.
-   * 'shop' opens straight to the shopping list (a shop trail task is a door to that sub-view).
+   * 'shop' opens straight to the shopping list (a shop trail task is a door to that sub-view);
+   * 'log' opens straight into the Log screen (the quick-add sheet's meal row).
    */
-  const [food, setFood] = useState<null | 'home' | 'shop'>(null);
+  const [food, setFood] = useState<null | 'home' | 'shop' | 'log'>(null);
 
   return (
     <>
@@ -156,6 +157,7 @@ export function MainTabs({
         {tab === 'plan' && food && !settingsRoomOpen && (
           <FoodHome
             initialSub={food === 'shop' ? 'shop' : null}
+            initialLogMeal={food === 'log'}
             onBack={() => setFood(null)}
             onCoach={(note) => {
               setCoachNote(note);
@@ -228,7 +230,7 @@ export function MainTabs({
           />
         )}
         {tab !== 'coach' && !food && !settingsRoomOpen && (
-          <button className="fab" onClick={() => setLogDidOpen(true)} aria-label="Log something you did">
+          <button className="fab" onClick={() => setLogDidOpen(true)} aria-label="Quick add">
             ＋
           </button>
         )}
@@ -312,11 +314,17 @@ export function MainTabs({
           <WeekChangesSheet onClose={() => setWeekChangesOpen(false)} onApplied={() => setPlanReload((k) => k + 1)} />
         )}
         {logDidOpen && (
-          <LogDidSheet
+          <QuickAddSheet
             onClose={() => setLogDidOpen(false)}
             onLogged={() => {
               setTab('plan'); // land back on the plan so the just-logged node shows done
               setPlanReload((k) => k + 1);
+            }}
+            // The meal row's door — straight into the food module's Log screen (05b).
+            onOpenFood={() => {
+              setLogDidOpen(false);
+              setTab('plan');
+              setFood('log');
             }}
           />
         )}
