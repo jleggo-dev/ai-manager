@@ -4,109 +4,170 @@ import { confirmGoals, previewReplan, getPendingReplan } from '../../lib/api.ts'
 import { useAppResume } from '../../lib/useAppResume.ts';
 
 export type ReplanProposal = { activities: PendingPlanActivity[]; note: string };
-export type ReplanPhase = 'idle' | 'thinking' | 'checking' | 'failed';
+export type ReplanPhase = 'idle' | 'thinking' | 'failed';
+/** The run's real stage, reported by the server's durable run record — never guessed here. */
+export type ReplanStage = 'reading' | 'drafting' | 'saving';
 
 /**
  * Asking for an adjustment, and getting one back — however long that takes and wherever the
  * person goes in the meantime.
  *
- * **This takes about four and a half minutes.** Measured, not guessed: 271s for four goals
- * (`apps/cadence-api/scripts/probe-replan-preview.ts`), because the server fans out one
- * synthesize_plan draft per goal, reduces them into a coherent week, and vets the result — and it
- * grows with every goal added. The sheet used to show one unchanging "Looking at your options…"
- * for the whole of it and nothing else, so the owner's verdict was the only one available:
- * *"It says it's working on options … it never replies — I can't tell if it's working or not."*
- * It was working. Nobody watches a phone for four minutes on faith.
+ * The synthesis no longer rides on any request this client holds open. `POST /plan/replan/preview`
+ * answers 202 the moment the run is recorded; the run itself is durable server-side and SURVIVES
+ * the app being closed, backgrounded, or the phone going in a pocket. So this hook has exactly one
+ * delivery path: poll `GET /plan/replan/pending` until the server hands down a verdict —
+ * a finished proposal, or a failure in the server's own words. While it waits, the server also
+ * reports which stage the run is actually in (reading → drafting → saving), so the waiting copy
+ * states facts instead of guessing from the clock — the old sheet showed one unchanging line for
+ * 271 measured seconds, and the owner's verdict was the only one available: *"It says it's
+ * working on options … it never replies — I can't tell if it's working or not."*
  *
- * So the wait is now told the truth about itself, and made survivable three ways over — each
- * covering a gap the others don't, the same three as the first-lock build (useBuildPlan):
- *  - the fetch resolving, which is the happy path and still the fastest;
- *  - a poll behind a REJECTED fetch — with an EIGHT-minute window, because the old three-minute
- *    one expired ninety seconds before the pipeline could possibly finish, so recovery was
- *    impossible even in principle;
- *  - `useAppResume`, the one that matters on a real phone: a fetch killed by iOS suspension may
- *    never reject at all, and a suspended webview's poll timer isn't running either.
- * The server also persists the proposal the instant synthesis finishes and pushes "your adjusted
- * week is ready", so the work is never riding on this tab staying alive.
+ * `useAppResume` stays: a suspended webview's poll timer isn't running, so coming back triggers
+ * an immediate extra tick instead of waiting out a sleep that never slept.
  */
 
-/** Recovery window. Longer than the measured pipeline plus headroom for a slow model day. */
-const RECOVER_WINDOW_MS = 8 * 60_000;
-const RECOVER_EVERY_MS = 5_000;
+/** How often to ask the server for the verdict. */
+const POLL_EVERY_MS = 4_000;
+/**
+ * How long to keep asking before conceding. Far past any healthy run — but a run CAN legitimately
+ * retry server-side, and if it finishes after we stop looking, the push and the plan view's
+ * mount-time pending check still deliver it.
+ */
+const POLL_CEILING_MS = 20 * 60_000;
 /** How often the elapsed counter re-renders the waiting copy. */
 const TICK_MS = 1_000;
 
 /**
- * What she says while she works, by how long she has been working. True statements only, and the
- * point of the later ones is permission: at a minute in, the honest thing to say is "this takes a
- * few minutes, go do something else, I'll ping you".
+ * What she says while she works — keyed to the run's REAL stage. `null` covers the beat between
+ * the tap and the first stage report; a run always begins by reading, so the reading line is the
+ * honest cover for it.
  */
-export function waitingNote(elapsedMs: number, checking: boolean): string {
-  if (checking) return 'Checking whether it finished while you were away…';
-  const s = elapsedMs / 1000;
-  if (s < 20) return 'Reading back through your goals and how this stretch has gone…';
-  if (s < 60) return 'Working out what to change and what to leave alone…';
-  if (s < 150) return 'Fitting it all into a week that actually holds together. This takes a few minutes.';
-  return 'Still going — almost there. You can leave the app; I’ll let you know the moment it’s ready.';
+export function waitingNote(stage: ReplanStage | null): string {
+  if (stage === 'drafting') return 'Drafting the changes — this is the long part…';
+  if (stage === 'saving') return 'Writing it down…';
+  return 'Reading back through your goals and your week…';
 }
 
 export function useReplanPreview({
   steer,
   adoptCaptured,
   autoStart = false,
-  recoverEveryMs = RECOVER_EVERY_MS,
-  recoverWindowMs = RECOVER_WINDOW_MS,
+  pollEveryMs = POLL_EVERY_MS,
+  pollCeilingMs = POLL_CEILING_MS,
 }: {
   steer: () => string;
   adoptCaptured: boolean;
   /**
-   * Start a synthesis on mount (the rebalance card's shape: review IS the action) — but PENDING
-   * FIRST, always: a proposal may already be waiting server-side, put there by the coach's own
-   * dispatch or a previous visit, and synthesizing over it would both clobber the week she drew
-   * and spend minutes of model time to replace something already in hand (2026-08-31: a finished
-   * 16-activity rebalance sat invisible in pending_plan because nothing outside a live Adjust
-   * flow ever looked).
+   * Start a synthesis on mount (the rebalance card's shape: review IS the action) — but only when
+   * the mount-time pending check SUCCEEDED and found nothing at all. A proposal already waiting is
+   * shown; a run already in flight is joined; and a FAILED check is UNKNOWN — firing a fresh
+   * synthesis over a proposal we merely could not read (the paint-before-auth 401, a network
+   * blip) would clobber a finished week and spend minutes of model time replacing it.
    */
   autoStart?: boolean;
   /** Test seams — real timings make the poll path untestable. */
-  recoverEveryMs?: number;
-  recoverWindowMs?: number;
+  pollEveryMs?: number;
+  pollCeilingMs?: number;
 }) {
   const [phase, setPhase] = useState<ReplanPhase>('idle');
   const [proposal, setProposal] = useState<ReplanProposal | null>(null);
+  const [stage, setStage] = useState<ReplanStage | null>(null);
   const [error, setError] = useState('');
   const [elapsedMs, setElapsedMs] = useState(0);
-  /** Set the moment a proposal is in hand, so the fetch and the resume check can only land once. */
-  const settled = useRef(false);
+  /** Set the moment THIS run concludes (proposal or failure), so late poll answers and resume
+   *  checks can only land once. Reset by start(). */
+  const concluded = useRef(false);
+  /** One poll loop at a time, no matter which door opened it. */
+  const polling = useRef(false);
+  /** Unmount stops the loop — the run is server-durable, so nothing is lost by leaving. */
+  const alive = useRef(true);
   const startedAt = useRef(0);
 
-  const running = phase === 'thinking' || phase === 'checking';
+  const running = phase === 'thinking';
+
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   function settle(p: ReplanProposal) {
-    if (settled.current) return;
-    settled.current = true;
+    if (concluded.current) return;
+    concluded.current = true;
     setProposal(p);
+    setStage(null);
     setPhase('idle');
   }
 
+  function fail(message: string) {
+    if (concluded.current) return;
+    concluded.current = true;
+    setStage(null);
+    setError(message);
+    setPhase('failed');
+  }
+
+  /** Adopt the server's record: its stage, and its clock — so the elapsed counter shows the run's
+   *  real age, which matters when we join a run someone (or something) else started. */
+  function adoptRun(run: { stage: ReplanStage; startedAt: string }) {
+    setStage(run.stage);
+    const t = Date.parse(run.startedAt);
+    if (Number.isFinite(t) && t < Date.now()) {
+      startedAt.current = t;
+      setElapsedMs(Date.now() - t);
+    }
+  }
+
   /**
-   * Pending first, on mount. Whatever opened this sheet, a proposal already stored server-side is
-   * the answer — show it. Only when there is none does `autoStart` spend a synthesis.
+   * The one delivery path. The run is durable server-side, so the client's only job is to keep
+   * asking until there is a verdict: proposal → show it; failed → say so in the server's words.
+   * Anything else — a network blip, a plain-null read racing the run record's creation — is not
+   * a verdict, so ask again. Only the ceiling gets out without one.
+   */
+  async function poll(): Promise<void> {
+    if (polling.current) return;
+    polling.current = true;
+    try {
+      const deadline = Date.now() + pollCeilingMs;
+      while (alive.current && !concluded.current && Date.now() < deadline) {
+        const r = await getPendingReplan();
+        if (!alive.current || concluded.current) return;
+        if (r.proposal) return settle(r.proposal);
+        if (r.ok && r.failed) return fail(r.failed.message);
+        if (r.ok && r.running) adoptRun(r.running);
+        await new Promise((res) => setTimeout(res, pollEveryMs));
+      }
+      if (alive.current && !concluded.current) {
+        fail('Something hiccuped on my end — try again in a moment.');
+      }
+    } finally {
+      polling.current = false;
+    }
+  }
+
+  /**
+   * Pending first, on mount. Whatever opened this sheet, the server's record is the answer: a
+   * stored proposal is shown, a live run is joined (poll it — never a second POST), a failed run
+   * is reported in its own words with Try again waiting. Only a successful check that found
+   * nothing at all lets autoStart spend a synthesis (see the autoStart doc above).
    */
   useEffect(() => {
-    let alive = true;
-    void getPendingReplan()
-      .then(({ proposal: p }) => {
-        if (!alive || settled.current) return;
-        if (p) return settle(p);
-        if (autoStart) void start();
-      })
-      .catch(() => {
-        // The check is best-effort; the flow it protects still works without it.
-        if (alive && autoStart && !settled.current) void start();
-      });
+    let live = true;
+    void getPendingReplan().then((r) => {
+      if (!live || concluded.current) return;
+      if (r.proposal) return settle(r.proposal);
+      if (r.ok && r.failed) return fail(r.failed.message);
+      if (r.ok && r.running) {
+        adoptRun(r.running);
+        setPhase('thinking');
+        void poll();
+        return;
+      }
+      if (r.ok && autoStart) void start();
+    });
     return () => {
-      alive = false;
+      live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -120,54 +181,39 @@ export function useReplanPreview({
   }, [running]);
 
   /**
-   * Coming back is itself evidence worth acting on. Someone who left during a four-minute
-   * synthesis has quite likely returned to a finished proposal — it is persisted server-side the
-   * instant it exists — and until this ran, nothing looked for it.
+   * Coming back is just another poll tick — but an immediate one: a suspended webview's timers
+   * weren't running, and someone who left mid-run has quite likely returned to a verdict.
    */
   useAppResume(() => {
-    if (settled.current || !running) return;
-    void getPendingReplan()
-      .then(({ proposal: p }) => {
-        if (p) settle(p);
-      })
-      .catch(() => {
-        /* offline on resume — the poll loop and the next resume both still cover this */
-      });
+    if (concluded.current || !running) return;
+    void getPendingReplan().then((r) => {
+      if (concluded.current) return;
+      if (r.proposal) settle(r.proposal);
+      else if (r.ok && r.failed) fail(r.failed.message);
+      else if (r.ok && r.running) adoptRun(r.running);
+    });
   }, running);
 
   async function start(): Promise<void> {
     if (running) return;
-    settled.current = false;
+    concluded.current = false;
     startedAt.current = Date.now();
     setElapsedMs(0);
     setError('');
+    setStage(null);
     setPhase('thinking');
-    try {
-      // Before synthesis, not after: a captured-but-unconfirmed goal is invisible to the re-plan.
-      if (adoptCaptured) await confirmGoals().catch(() => undefined);
-      const r = await previewReplan(steer());
-      if (r.status === 'proposed' && r.proposal) return settle(r.proposal);
-      setError(r.violations?.join('; ') || "I couldn't put together an adjustment just now — try again in a bit.");
-      setPhase('failed');
-    } catch {
-      // The FETCH died — on a phone, usually the app being backgrounded while the server kept
-      // synthesizing. The proposal is persisted the moment it finishes, so poll for THAT before
-      // reporting a failure that may not have happened (and before paying for a second synthesis).
-      setPhase('checking');
-      const deadline = Date.now() + recoverWindowMs;
-      while (Date.now() < deadline && !settled.current) {
-        try {
-          const { proposal: p } = await getPendingReplan();
-          if (p) return settle(p);
-        } catch {
-          /* offline blip — keep polling */
-        }
-        await new Promise((res) => setTimeout(res, recoverEveryMs));
-      }
-      if (settled.current) return;
-      setError('Something hiccuped on my end — try again in a moment.');
-      setPhase('failed');
+    // Before synthesis, not after: a captured-but-unconfirmed goal is invisible to the re-plan.
+    if (adoptCaptured) await confirmGoals().catch(() => undefined);
+    const r = await previewReplan(steer());
+    if (!alive.current || concluded.current) return;
+    if (r.invalid) {
+      // A definite 400: the request never became a run, so there is nothing to poll for.
+      return fail(r.error || "I couldn't make sense of that request — try wording it differently.");
     }
+    // Everything else polls — including a POST that failed outright: the ask may have landed
+    // server-side even though the 202 never made it back, and the run outlives this client either
+    // way. `joined: true` is the same story from the other side: a run was already going.
+    await poll();
   }
 
   return {
@@ -175,8 +221,10 @@ export function useReplanPreview({
     busy: running,
     proposal,
     error,
-    /** Live copy for the waiting state — moves, and tells the truth about the wait. */
-    note: waitingNote(elapsedMs, phase === 'checking'),
+    /** The run's real stage, verbatim from the server — null before the first stage report. */
+    stage,
+    /** Live copy for the waiting state — what she is actually doing, not a guess from the clock. */
+    note: waitingNote(stage),
     elapsedMs,
     start,
     /** Drop a proposal locally (the commit failed and it is no longer valid to show). */

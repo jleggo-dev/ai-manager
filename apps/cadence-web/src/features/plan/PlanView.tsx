@@ -19,16 +19,14 @@ import { HorizonEndCap } from './HorizonEndCap.tsx';
 import {
   endEpisode,
   checkin,
-  acceptProposal,
-  dismissProposal,
   type PlanOccurrence,
   type ActiveEpisode,
   sendGymPhotos,
   sendDetourEquipment,
   enterEpisode,
   postponeDetour,
-  getPendingReplan,
 } from '../../lib/api.ts';
+import { useProposalAccept } from './useProposalAccept.ts';
 import { useQueryClient } from '@tanstack/react-query';
 import { setPlanData, usePlan, useWatchLogInbox, useWatchPortraitSync, useWatchSync } from '../../lib/query/index.ts';
 import { useCoachFace } from '../coach/coachFaceContext.ts';
@@ -42,6 +40,10 @@ function todayIso(): string {
 
 /** One-tap answers for the arrival card; DetourSetup keeps its own copy for the entry sheet. */
 const ARRIVAL_GEAR = ['Hotel gym', 'Dumbbells', 'Treadmill', 'Resistance band', 'Pool', 'Just my shoes'];
+
+/** Detour failure lines — plain, and never silent (PLAN-CHANGES.md Phase 0). */
+const GEAR_FAIL = "Couldn't rework the week around that just now — try again in a moment.";
+const DETOUR_FAIL = "That didn't take — try again in a moment.";
 
 function detourLabel(type: ActiveEpisode['type']): string {
   return {
@@ -107,8 +109,6 @@ export function PlanView({
   // bundled stand-in. Sent on change only — a portrait changes approximately never.
   const { faceId: coachFaceId } = useCoachFace();
   useWatchPortraitSync(coachFaceId);
-  const [note, setNote] = useState('');
-  const [proposalBusy, setProposalBusy] = useState(false);
   const [sheetOcc, setSheetOcc] = useState<string | null>(null); // open session sheet (occurrence id)
   const [startOcc, setStartOcc] = useState<{ id: string; title: string } | null>(null); // redesign start sheet (stepped task)
   // The capture sheet, WITH what the trail already knew when it was tapped. Storing only the id
@@ -133,74 +133,22 @@ export function PlanView({
     if (reloadSignal) void refetch();
   }, [reloadSignal, refetch]);
 
-  /**
-   * A week the coach drew must find its way to the screen. Any server-side path (historically
-   * the retired rebalance_week dispatch; today a script or future proactive flow) stores a
-   * pending proposal and pushes — but until this ran, the ONLY in-app surface was
-   * a live Adjust flow the user had started themselves: a finished 16-activity rebalance sat
-   * invisible in pending_plan while its owner asked where it was (2026-08-31). On mount, ask; if
-   * one is waiting, open the review sheet on it. Suggest-never-auto-apply is untouched — the
-   * sheet still ends in their Apply.
-   */
-  useEffect(() => {
-    let alive = true;
-    /**
-     * Retries, because the first mount races auth (paint-before-auth, #311): the tokenless read
-     * 401s, and a failed read is UNKNOWN — treating it as "nothing pending" hid a finished
-     * rebalance until the owner left the screen and came back (2026-08-31). A real "nothing
-     * pending" answer stops the loop on the first try.
-     */
-    const delays = [0, 2000, 5000, 12000];
-    void (async () => {
-      for (const ms of delays) {
-        if (ms) await new Promise((r) => setTimeout(r, ms));
-        if (!alive) return;
-        const { ok, proposal } = await getPendingReplan();
-        if (!alive) return;
-        if (proposal) {
-          setAdjustMode('rebalance');
-          setAdjustOpen(true);
-          return;
-        }
-        if (ok) return; // a genuine "nothing pending" — done
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
-
   const refresh = () => void refetch();
   const bump = () => setReloadKey((k) => k + 1);
 
-  async function acceptProp() {
-    if (proposalBusy) return;
-    setProposalBusy(true);
-    setNote('');
-    try {
-      const r = await acceptProposal();
-      setPlanData(queryClient, (d) => (d ? { ...d, pendingProposal: null } : d));
-      if (r.status === 'committed') {
-        setNote(r.note?.trim() || 'Updated your plan to fit how this stretch has been going.');
-        await refetch();
-        bump();
-      } else if (r.status === 'entered_disrupted') {
-        await refetch(); // the detour banner + paused overlay appear — that's the feedback
-        bump();
-      } else {
-        setNote("I couldn't adjust it just now — give it another try in a bit.");
-      }
-    } catch {
-      setNote('Something hiccuped on my end — try again in a moment.');
-    } finally {
-      setProposalBusy(false);
-    }
-  }
-
-  function dismissProp() {
-    setPlanData(queryClient, (d) => (d ? { ...d, pendingProposal: null } : d));
-    dismissProposal().catch(() => {});
-  }
+  // The proposal banner's accept lifecycle + this screen's pending-replan recovery (mount AND
+  // foreground resume) — the whole story lives in useProposalAccept.ts, including the Phase 0
+  // background-run watch (accept answers 202 and the commit happens server-side).
+  const { note, setNote, proposalBusy, working, acceptProp, dismissProp } = useProposalAccept({
+    refetch,
+    bump,
+    clearProposal: () => setPlanData(queryClient, (d) => (d ? { ...d, pendingProposal: null } : d)),
+    onRecoveredProposal: () => {
+      setAdjustMode('rebalance');
+      setAdjustOpen(true);
+    },
+    recoveryPaused: adjustOpen,
+  });
 
   // The gym photos → equipment revision (PLAN §424). Several angles are ONE answer: files
   // accumulate here and send as one request; the banner shows what the model saw.
@@ -247,7 +195,12 @@ export function PlanView({
         );
         refresh();
         bump();
+      } else {
+        // {ok:false} used to show NOTHING — a failed rework read exactly like a landed one.
+        setGymSaw(GEAR_FAIL);
       }
+    } catch {
+      setGymSaw(GEAR_FAIL);
     } finally {
       setGymBusy(false);
     }
@@ -263,19 +216,41 @@ export function PlanView({
    * it, which took the only door with it (A22); the design's answer is a self-declare line at the
    * end of the day plus the bar for what follows. The window and the gear travel with it — the
    * coach cannot draft a detour without both.
+   *
+   * A failure keeps the sheet OPEN with a line: the old `.catch(() => {})` closed it either way,
+   * so a failed entry was indistinguishable from a started detour (PLAN-CHANGES.md Phase 0).
    */
+  const [detourError, setDetourError] = useState<string | null>(null);
   async function enterDetour(choice: DetourChoice) {
-    await enterEpisode(choice.type, {
+    setDetourError(null);
+    const r = await enterEpisode(choice.type, {
       days: choice.days,
       available_equipment: choice.available_equipment,
-    }).catch(() => {});
+    }).catch(() => ({ ok: false }));
+    if (!r.ok) {
+      setDetourError(DETOUR_FAIL);
+      return;
+    }
     setDetourEntry(false);
     refresh();
     bump();
   }
 
+  // Ending one gets a real busy flag (the sheet's 'One moment…' used to hang off gymBusy, which
+  // this never set) and an honest failure line; the state sheet stays open until the end lands.
+  const [detourEndBusy, setDetourEndBusy] = useState(false);
+  const [detourEndError, setDetourEndError] = useState<string | null>(null);
   async function endDetour() {
-    await endEpisode().catch(() => {});
+    if (detourEndBusy) return;
+    setDetourEndBusy(true);
+    setDetourEndError(null);
+    const r = await endEpisode().catch(() => ({ ok: false }));
+    setDetourEndBusy(false);
+    if (!r.ok) {
+      setDetourEndError(DETOUR_FAIL);
+      return;
+    }
+    setDetourSheet(false);
     refresh(); // base plan resumes; the banner clears
     bump();
   }
@@ -350,20 +325,34 @@ export function PlanView({
           <PlanProposalBanner
             proposal={data.pendingProposal}
             busy={proposalBusy}
+            working={working}
             onAccept={acceptProp}
             onDismiss={dismissProp}
           />
         )}
         {/* One line of glass, never a card (2a): it announces, the sheet does the work. */}
         {data.activeEpisode && (
-          <DetourBar episode={data.activeEpisode} dark={false} onOpen={() => setDetourSheet(true)} />
+          <DetourBar
+            episode={data.activeEpisode}
+            dark={false}
+            onOpen={() => {
+              setDetourEndError(null); // a stale failure line must not greet the reopened sheet
+              setDetourSheet(true);
+            }}
+          />
         )}
         {/* The detour DOOR, in the bar's own slot (Option A — owner trialing on device,
             2026-08-31): door and live-state share one home at the top of the page, mutually
             exclusive by condition. The felt statement is the user's own words; the setup sheet
             it opens does the "take a detour" framing. */}
         {!data.activeEpisode && (
-          <button className="detour-bar detour-door" onClick={() => setDetourEntry(true)}>
+          <button
+            className="detour-bar detour-door"
+            onClick={() => {
+              setDetourError(null);
+              setDetourEntry(true);
+            }}
+          >
             <span className="detour-bar-dot" aria-hidden />
             <span className="detour-bar-line">&ldquo;My plan isn&rsquo;t working — I&rsquo;m too busy&rdquo;</span>
             <span className="detour-bar-chev" aria-hidden>
@@ -449,11 +438,12 @@ export function PlanView({
                   }}
                 />
               </label>
-              <button className="detour-end" onClick={endDetour}>
-                I&apos;m back
+              <button className="detour-end" disabled={detourEndBusy} onClick={endDetour}>
+                {detourEndBusy ? 'One moment…' : "I'm back"}
               </button>
             </div>
-            {gymSaw && <div className="detour-saw">{gymSaw}</div>}
+            {/* One line, one slot: the photo verdict or the resume failure — whichever is live. */}
+            {(gymSaw || detourEndError) && <div className="detour-saw">{gymSaw || detourEndError}</div>}
           </div>
         )}
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
@@ -580,19 +570,22 @@ export function PlanView({
           onClose={() => setCheckinSettled(true)}
         />
       )}
-      {detourEntry && <DetourSetup onEnter={enterDetour} onCancel={() => setDetourEntry(false)} />}
+      {detourEntry && (
+        <DetourSetup error={detourError ?? undefined} onEnter={enterDetour} onCancel={() => setDetourEntry(false)} />
+      )}
       {detourSheet && data.activeEpisode && (
         <DetourStateSheet
           episode={data.activeEpisode}
-          busy={gymBusy}
+          busy={detourEndBusy}
+          error={detourEndError ?? undefined}
           onCheckIn={() => {
             setDetourSheet(false);
             onCoach('<note>They opened their detour and tapped Check in. Ask how it is going where they are.</note>');
           }}
-          onResume={() => {
-            setDetourSheet(false);
-            void endDetour();
-          }}
+          // The sheet stays up while the end runs — 'One moment…' has somewhere to render, and a
+          // failure keeps the sheet (with its line) instead of vanishing into apparent success.
+          // endDetour closes it itself when the resume lands.
+          onResume={() => void endDetour()}
           onClose={() => setDetourSheet(false)}
         />
       )}

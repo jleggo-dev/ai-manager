@@ -13,6 +13,7 @@ const deleteFutureTempOccurrences = vi.fn();
 const getUser = vi.fn();
 const setPendingProposal = vi.fn();
 const runJobBySlug = vi.fn();
+const prefetchImminentSessions = vi.fn();
 
 vi.mock('../repos/plans.ts', () => ({ getActivePlan: (...a: unknown[]) => getActivePlan(...a) }));
 vi.mock('../repos/users.ts', () => ({
@@ -36,6 +37,13 @@ vi.mock('../repos/occurrences.ts', () => ({
   deleteFutureTempOccurrences: (...a: unknown[]) => deleteFutureTempOccurrences(...a),
 }));
 vi.mock('../ai/aim.ts', () => ({ runJobBySlug: (...a: unknown[]) => runJobBySlug(...a) }));
+// The detour warm-up is fire-and-forget; mock the pair so entering an episode neither loads the
+// real session generator (whose repo imports this file's occurrences mock doesn't provide) nor
+// leaves a stray promise behind.
+vi.mock('./session-generate.ts', () => ({
+  prefetchImminentSessions: (...a: unknown[]) => prefetchImminentSessions(...a),
+}));
+vi.mock('./background.ts', () => ({ runInBackground: () => undefined }));
 
 import { enterEpisode, endEpisode } from './episode.ts';
 
@@ -89,6 +97,8 @@ describe('enterEpisode', () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((row) => row.episode_id === 'e1' && row.activity_id === 'ta1')).toBe(true);
     expect(r?.episode.episode_id).toBe('e1');
+    // The temp rows are cold — the warm-up must be kicked, or every detour tap is a ~34s wait.
+    expect(prefetchImminentSessions).toHaveBeenCalledWith(USER);
   });
 
   it('still enters (base paused, no options) when the disrupted_plan job fails', async () => {

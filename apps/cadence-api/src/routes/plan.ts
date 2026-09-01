@@ -1,7 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { previewLock, confirmLock, dismissLock } from '../services/lock.ts';
-import { replanPlan, previewReplan, confirmReplan, dismissReplan, REBASELINE_STEER } from '../services/replan.ts';
 import { buildPlanView } from '../services/plan-view.ts';
 import { assessIfDue } from '../services/situation.ts';
 import { getOccurrenceDetail, prefetchImminentSessions } from '../services/session-generate.ts';
@@ -13,13 +12,12 @@ import { enterEpisode, endEpisode, reviseEpisodeEquipment, postponeEpisodeStart 
 import { equipmentFromGymPhotos } from '../services/gym-photo.ts';
 import { recordWeighIn, recordWeighInToday } from '../services/weigh-in.ts';
 import { getSessionInsight } from '../services/session-insight.ts';
-import { setPendingProposal, setPendingPlan, getUser } from '../repos/users.ts';
+import { setPendingPlan, getUser } from '../repos/users.ts';
 import { setOccurrenceStatus, getOccurrenceWithActivity } from '../repos/occurrences.ts';
 import { recordCheckIn } from '../repos/check-ins.ts';
 import {
   BodyValidationError,
   parseBody,
-  replanSteerBodySchema,
   occurrenceLogBodySchema,
   adhocLogBodySchema,
   didLogBodySchema,
@@ -68,113 +66,9 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * POST /plan/replan/preview — the manual "Adjust my plan" button's first step: synthesize_plan
- * (evolving the current plan to fit recent activity) → plan_vet. Stores pending_plan; commits
- * NOTHING. The button previously committed directly with no consent moment of its own (unlike
- * the weekly proposal banner, which already shows a reason before Accept) — this closes that gap.
- * 200 proposed · 422 vetoed (no active goals / vet failed).
- */
-router.post('/replan/preview', async (req: Request, res: Response) => {
-  const userId = req.cadenceUserId!;
-  try {
-    const { steer } = parseBody(replanSteerBodySchema, req.body);
-    const r = await previewReplan(userId, steer);
-    res.status(r.status === 'proposed' ? 200 : 422).json(r);
-  } catch (err) {
-    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
-    console.error('[POST /plan/replan/preview]', err);
-    res.status(500).json({ error: 'preview failed' });
-  }
-});
-
-/**
- * GET /plan/replan/pending — the stored pending proposal, if one is on file. The recovery half of
- * the leave-safe rebuild: previewReplan persists its vetted result as `pending_plan` the moment
- * synthesis finishes, so a phone whose fetch died mid-preview (backgrounded, signal lost) polls
- * THIS on return instead of paying for a second synthesis — or worse, reporting a failure for a
- * proposal that is sitting right there. 200 { proposal } · 200 { proposal: null } when none.
- */
-router.get('/replan/pending', async (req: Request, res: Response) => {
-  const userId = req.cadenceUserId!;
-  try {
-    const pending = (await getUser(userId))?.pending_plan;
-    res.json(
-      pending
-        ? { proposal: { activities: pending.activities, note: pending.note, rationale: pending.rationale } }
-        : { proposal: null },
-    );
-  } catch (err) {
-    console.error('[GET /plan/replan/pending]', err);
-    res.status(500).json({ error: 'failed to read pending proposal' });
-  }
-});
-
-/** POST /plan/replan/preview/dismiss — discard the previewed adjustment; nothing changes. */
-router.post('/replan/preview/dismiss', async (req: Request, res: Response) => {
-  const userId = req.cadenceUserId!;
-  try {
-    await dismissReplan(userId);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('[POST /plan/replan/preview/dismiss]', err);
-    res.status(500).json({ error: 'dismiss failed' });
-  }
-});
-
-/**
- * POST /plan/replan — commit the previewed adjustment (self-sufficient: runs preview inline
- * first if called with nothing on file, so this never breaks for a caller that skips the
- * preview step). 200 committed (with a `note`) · 422 vetoed.
- */
-router.post('/replan', async (req: Request, res: Response) => {
-  const userId = req.cadenceUserId!;
-  try {
-    const r = await confirmReplan(userId);
-    res.status(r.status === 'committed' ? 200 : 422).json(r);
-  } catch (err) {
-    console.error('[POST /plan/replan]', err);
-    res.status(500).json({ error: 'replan failed' });
-  }
-});
-
-/** POST /plan/proposal/accept — accept the coach's proactive proposal. Branches on the proposal's
- *  `action` (Req 4): an `enter_disrupted` proposal starts a detour; everything else re-plans (the
- *  original behavior). Accepting IS the commit; the proposal is cleared on success. */
-router.post('/proposal/accept', async (req: Request, res: Response) => {
-  const userId = req.cadenceUserId!;
-  try {
-    const user = await getUser(userId);
-    const proposal = user?.pending_proposal ?? null;
-    if (proposal?.action === 'enter_disrupted') {
-      const r = await enterEpisode(userId, { type: proposal.episode_type ?? 'custom' });
-      await setPendingProposal(userId, null);
-      return void res
-        .status(r ? 200 : 409)
-        .json(r ? { status: 'entered_disrupted', episode: r.episode } : { status: 'no_plan' });
-    }
-    // 'rebaseline' steers a fresh-start synthesis (reassess after a long break); 'replan'/undefined
-    // is the plain adaptive re-plan. Both commit + clear the proposal via replanPlan.
-    const steer = proposal?.action === 'rebaseline' ? REBASELINE_STEER : undefined;
-    const r = await replanPlan(userId, steer);
-    res.status(r.status === 'committed' ? 200 : 422).json(r);
-  } catch (err) {
-    console.error('[POST /plan/proposal/accept]', err);
-    res.status(500).json({ error: 'accept failed' });
-  }
-});
-
-/** POST /plan/proposal/dismiss — decline the proposal; the weekly gate will re-assess next week. */
-router.post('/proposal/dismiss', async (req: Request, res: Response) => {
-  const userId = req.cadenceUserId!;
-  try {
-    await setPendingProposal(userId, null);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('[POST /plan/proposal/dismiss]', err);
-    res.status(500).json({ error: 'dismiss failed' });
-  }
-});
+// The replan + proposal routes (POST /replan/preview, GET /replan/pending, POST /replan,
+// POST /proposal/accept, …) live in routes/plan-replan.ts — they run synthesis behind the
+// background plan_run record and stopped being thin enough to share this file's size budget.
 
 /**
  * POST /plan/episode — enter a disrupted episode (Req 4): an ADDITIVE overlay, base plan paused for

@@ -1,0 +1,12 @@
+-- 0051_plan_run.sql — one durable record of the plan-synthesis run in flight (or how it failed).
+--
+-- Why: a rebuild takes minutes and used to live only inside one HTTP request. When that request
+-- died (undici's 300s default, a backgrounded phone), the work either vanished or finished with
+-- nobody listening, and a repeat tap started a second full synthesis. This column is the run's
+-- home outside any request: routes claim it before starting, report stages into it, and record
+-- failure in it so the client can say what actually happened. Cleared on success — the artifact
+-- (pending_plan, or the new plan version) is the success signal.
+--
+-- Shape: { kind: 'replan_preview' | 'proposal_accept', status: 'running' | 'failed',
+--          stage?: text, started_at: timestamptz-ish text, error?: text }
+alter table cadence.users add column if not exists plan_run jsonb;

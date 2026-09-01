@@ -12,11 +12,14 @@ import { useReplanPreview } from './useReplanPreview.ts';
  * week → confirm or "Not now". The sheet owns the whole lifecycle; the parent just refreshes
  * on commit. Voice input on the steer box (SteerBox).
  *
- * The synthesis behind "See the adjustment" runs about four and a half minutes — see
- * useReplanPreview, which owns the waiting, the recovery and the honest copy. This file is the
- * surface only. It gets the taller `sheet-compose` treatment while composing, because the ask is
- * the whole point of the screen and it was being typed into two fixed lines at the bottom of a
- * 78%-height sheet (owner, 2026-08-15: "There's more real-estate here that we can use").
+ * The synthesis behind "See the adjustment" runs server-side as a durable background run — see
+ * useReplanPreview, which owns the polling, the real stage line, and the honest copy. This file is
+ * the surface only, and because the run survives the client, closing the sheet mid-run is safe:
+ * the × and the scrim stay live, and the finished week comes back via push + the plan view's
+ * mount-time pending check. It gets the taller `sheet-compose` treatment while composing, because
+ * the ask is the whole point of the screen and it was being typed into two fixed lines at the
+ * bottom of a 78%-height sheet (owner, 2026-08-15: "There's more real-estate here that we can
+ * use").
  *
  * `mode='rebalance'` is the "review my whole plan" action: no steer box — it opens straight into a
  * no-steer preview (which, with fan-out enabled, runs the holistic reduce over every goal) so the
@@ -68,7 +71,18 @@ export function AdjustSheet({
         onClose();
         return;
       }
-      setMsg("I couldn't adjust it just now — give it another try in a bit.");
+      // Not committed — the message goes through preview.setError, not msg, because clearing the
+      // proposal returns the sheet to its start screen and only preview.error renders there (the
+      // old setMsg lines were written and then never shown). The start screen's button reads
+      // "Try again", which draws a fresh preview — exactly the road back.
+      if (r.status === 'vetoed') {
+        // 422: the pending week expired server-side. Say why in the server's words.
+        preview.setError(
+          r.violations?.join('; ') || 'That adjustment went stale while it waited — let me draw a fresh one.',
+        );
+      } else {
+        preview.setError("I couldn't adjust it just now — give it another try in a bit.");
+      }
       preview.clearProposal();
     } catch {
       setMsg('Something hiccuped on my end — try again in a moment.');
@@ -89,7 +103,9 @@ export function AdjustSheet({
 
   return (
     <>
-      <div className="sheet-scrim" onClick={busy ? undefined : onClose} aria-hidden />
+      {/* Live even mid-run: the synthesis is server-durable, so closing loses nothing — the
+          finished week comes back via push + the plan view's pending check. */}
+      <div className="sheet-scrim" onClick={onClose} aria-hidden />
       <div
         className={`sheet${composing ? ' sheet-compose' : ''}${p ? ' sheet-week' : ''}`}
         role="dialog"
@@ -169,8 +185,10 @@ export function AdjustSheet({
   );
 }
 
-/** The four-minute wait, told the truth about itself: what she's doing, how long it's been, and
- *  that leaving is fine. The elapsed clock is the part that proves the screen isn't frozen. */
+/** The wait, told the truth about itself: the stage the run is ACTUALLY in (reported by the
+ *  server, not guessed from the clock), how long it's been, and that leaving is fine — which is
+ *  now true in every phase, because the run survives the client. The elapsed clock is the part
+ *  that proves the screen isn't frozen. */
 function Waiting({ note, elapsedMs }: { note: string; elapsedMs: number }) {
   const s = Math.floor(elapsedMs / 1000);
   const clock = s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
@@ -179,7 +197,7 @@ function Waiting({ note, elapsedMs }: { note: string; elapsedMs: number }) {
       <Orb />
       <span>
         {note}
-        <em className="adjust-elapsed">{clock} · I’ll send a notification when it’s ready</em>
+        <em className="adjust-elapsed">{clock} · You can leave — I’ll send a notification when it’s ready</em>
       </span>
     </div>
   );

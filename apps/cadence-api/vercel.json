@@ -5,10 +5,9 @@
     "api": {
       "root": ".",
       "framework": "express",
-      "installCommand": "npm install --prefix ../.."
+      "installCommand": "npm install --prefix ../..",
+      "functions": { "**": { "maxDuration": "max" } }
     }
   },
-  "rewrites": [
-    { "source": "/(.*)", "destination": { "service": "api" } }
-  ]
+  "rewrites": [{ "source": "/(.*)", "destination": { "service": "api" } }]
 }
