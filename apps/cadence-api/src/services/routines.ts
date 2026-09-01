@@ -77,11 +77,13 @@ export function parseAreaParam(value: unknown): GoalArea | undefined {
 }
 
 /**
- * The user's coach-built routines: user-kind plan activities grouped by `commitment_id` lineage
- * across every plan version, each with its area, current schedule (when still on the active
- * plan), most recent step list, finish count and last-done date. Sorted by `finishes` desc, then
- * `last_done` desc. Includes lineages that are NOT on the active plan (`on_plan: false`) — a
- * routine from three weeks ago is still theirs.
+ * The user's coach-built routines: plan activities grouped by `commitment_id` lineage across
+ * every plan version, each with its area, current schedule (when still on the active plan), most
+ * recent step list, finish count and last-done date. Sorted by `finishes` desc, then `last_done`
+ * desc. Includes lineages that are NOT on the active plan (`on_plan: false`) — a routine from
+ * three weeks ago is still theirs. A lineage counts as a routine only when its LATEST version is
+ * `kind = 'user'` — `kind` (like category) can change between versions, so the CURRENT row
+ * decides, never an older one (see `listUserActivityVersions` in repos/routines.ts).
  */
 export async function listRoutines(userId: string, area?: GoalArea): Promise<Routine[]> {
   const [versions, finishRows, sessionRows, goals] = await Promise.all([
@@ -95,13 +97,20 @@ export async function listRoutines(userId: string, area?: GoalArea): Promise<Rou
   const finishByCommitment = new Map(finishRows.map((r) => [r.commitment_id, r]));
   const sessionByCommitment = new Map(sessionRows.map((r) => [r.commitment_id, r.session]));
 
-  // Off-plan buckets (adhoc/episode/menu) are never a routine the user built or the coach
-  // prescribed — the same exclusion buildPlanView's committed-rhythm list applies (plan-view.ts).
-  const real = versions.filter((r) => !r.category || !NON_PLAN_CATEGORIES.has(r.category));
-  const latest = latestVersionByCommitment(real);
+  // Group over EVERY version of every lineage FIRST — a commitment's `kind` (and category) can
+  // differ between plan versions ("Log breakfast" was `user` in v1, `system` in v2 in the dev
+  // account that surfaced this), so filtering kind/category before grouping would judge a lineage
+  // by whichever version's row happened to survive the filter, not by its CURRENT identity.
+  const latest = latestVersionByCommitment(versions);
 
   const routines: Routine[] = [];
   for (const [commitmentId, row] of latest) {
+    // The lineage's CURRENT state decides whether it's a routine at all: latest-row kind must be
+    // 'user' (a system-kind commitment — a capture task like "Log breakfast" — is not a routine,
+    // however it started life), and the same off-plan-bucket exclusion buildPlanView's
+    // committed-rhythm list applies (plan-view.ts) is checked on the latest row too.
+    if (row.kind !== 'user') continue;
+    if (row.category && NON_PLAN_CATEGORIES.has(row.category)) continue;
     const rowArea = row.goal_id ? goalById.get(row.goal_id)?.area : undefined;
     if (area && rowArea !== area) continue;
     const onPlan = row.plan_status === 'active';

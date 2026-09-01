@@ -615,10 +615,11 @@ export interface PlanRoutine {
 }
 
 /**
- * The user's coach-built routines — user-kind plan activities grouped by `commitment_id` lineage
- * across every plan version they've ever ridden, the data behind the Build sheet's "Start from"
- * shelves ("From Cadence", "Yours", ranked by finishes). `area` narrows to one family, matching
- * the noun the ＋ sheet's screen 1 was entered on.
+ * The user's coach-built routines — plan activities grouped by `commitment_id` lineage across
+ * every plan version they've ever ridden (a lineage counts only when its LATEST version is a
+ * user-kind commitment, not an older one), the data behind the Build sheet's "Start from" shelves
+ * ("From Cadence", "Yours", ranked by finishes). `area` narrows to one family, matching the noun
+ * the ＋ sheet's screen 1 was entered on.
  *
  * `null` on a failed read (never an empty array) — the same distinction `getPlan` draws: "I
  * couldn't load your routines" and "you have none yet" must not share a value.
