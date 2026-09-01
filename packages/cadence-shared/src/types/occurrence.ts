@@ -99,6 +99,15 @@ export interface SessionItem {
   metronome_bpm?: number;
   /** Beats to a bar for the accent (default 4). Ignored unless `metronome_bpm` is set. */
   metronome_meter?: number;
+  /** `measure` only — what's being measured ("Weight", "Distance", "Wingspan"). Deliberately NOT
+   *  a `SessionItemTool` member (see tool-catalog.ts's exclusion note): the coach never emits this
+   *  tool, so these two fields exist only for a client-built activity (or any other direct writer
+   *  of an `OccurrenceSession`) to name a numeric-entry step — `inferTool` picks it up from the
+   *  fields alone. Absent falls back to the item's own name. */
+  measure_metric?: string;
+  /** `measure` only — the unit label shown beside the number ("kg", "km", "reps"). Absent = no
+   *  unit shown, never a stray blank label. */
+  measure_unit?: string;
 }
 
 export interface SessionBlock {
