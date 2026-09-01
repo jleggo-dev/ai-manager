@@ -35,6 +35,10 @@ const getRoutineSession = vi.fn(async (..._a: unknown[]): Promise<{ ok: boolean;
   session: { blocks: [{ label: '', items: [{ name: 'warm-up' }] }], note: '', generated_at: '', version: 1 },
 }));
 const logDid = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
+// Screen 2's "Yours" tier (Activity Builder wave 3) — same empty-by-default treatment as
+// `getRoutines`: its own rendering is QuickAddTense.test.tsx's job.
+const listUserRoutines = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
+const logUserRoutineRun = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
 vi.mock('../../../lib/api.ts', () => ({
   logAdhoc: (...a: unknown[]) => logAdhoc(...a),
   logWater: (...a: unknown[]) => logWater(...a),
@@ -45,6 +49,8 @@ vi.mock('../../../lib/api.ts', () => ({
   getRoutines: (...a: unknown[]) => getRoutines(...a),
   getRoutineSession: (...a: unknown[]) => getRoutineSession(...a),
   logDid: (...a: unknown[]) => logDid(...a),
+  listUserRoutines: (...a: unknown[]) => listUserRoutines(...a),
+  logUserRoutineRun: (...a: unknown[]) => logUserRoutineRun(...a),
 }));
 // The real player is its own well-tested surface — here it's a stub with the two controls the
 // play-then-credit contract cares about, so the sheet test can press "finish" and assert the wire.
@@ -110,6 +116,7 @@ function mount(
     onLogged: () => void;
     onOpenFood: () => void;
     onSteer: (text: string) => void;
+    onBuild: (seed?: unknown) => void;
   }> = {},
 ) {
   usePlan.mockReturnValue({ data: state.plan, error: state.planError ?? null });
@@ -233,6 +240,24 @@ describe('QuickAddSheet', () => {
     fireEvent.click(screen.getByLabelText('A run'));
     expect(screen.queryByLabelText('Tell me instead')).toBeNull();
     await settled();
+  });
+
+  it('"Build my own" → Blank hands the host onBuild(undefined) and closes the sheet, when wired', async () => {
+    const onBuild = vi.fn();
+    const onClose = vi.fn();
+    mount({ plan: basePlan([activity()]), day: null }, { onBuild, onClose });
+    fireEvent.click(screen.getByLabelText('A run'));
+    fireEvent.click(await screen.findByLabelText('Build my own'));
+    fireEvent.click(screen.getByText('Blank'));
+    expect(onBuild).toHaveBeenCalledWith(undefined);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('hides "Build my own" on screen 2 when the host has no door for it', async () => {
+    mount({ plan: basePlan([activity()]), day: null });
+    fireEvent.click(screen.getByLabelText('A run'));
+    await settled();
+    expect(screen.queryByLabelText('Build my own')).toBeNull();
   });
 
   it('the meal row is a door to the food module, and only exists when the host has one', async () => {

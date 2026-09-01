@@ -17,6 +17,9 @@ vi.mock('../../../lib/api.ts', () => ({
   getRoutines: async () => [],
   getRoutineSession: async () => ({ ok: true, session: null }),
   logDid: async () => ({ ok: true }),
+  // Wave 3 (Build my own): the tense screen also reads the user's own routines on mount.
+  listUserRoutines: async () => [],
+  logUserRoutineRun: async () => ({ ok: true }),
 }));
 
 vi.mock('../../walkthrough/Walkthrough.tsx', () => ({

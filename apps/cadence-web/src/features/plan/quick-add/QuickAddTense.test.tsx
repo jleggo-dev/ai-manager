@@ -14,12 +14,17 @@ const getNowMenu = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 const getRoutines = vi.fn(async (..._a: unknown[]) => [] as unknown[] | null);
 const getRoutineSession = vi.fn(async (..._a: unknown[]) => ({ ok: true, session: null }) as unknown);
 const logDid = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
+// The "Yours" tier's own two calls (Activity Builder wave 3) — same no-claim default as `getRoutines`.
+const listUserRoutines = vi.fn(async (..._a: unknown[]) => [] as unknown[] | null);
+const logUserRoutineRun = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
 vi.mock('../../../lib/api.ts', () => ({
   logAdhoc: (...a: unknown[]) => logAdhoc(...a),
   getNowMenu: (...a: unknown[]) => getNowMenu(...a),
   getRoutines: (...a: unknown[]) => getRoutines(...a),
   getRoutineSession: (...a: unknown[]) => getRoutineSession(...a),
   logDid: (...a: unknown[]) => logDid(...a),
+  listUserRoutines: (...a: unknown[]) => listUserRoutines(...a),
+  logUserRoutineRun: (...a: unknown[]) => logUserRoutineRun(...a),
 }));
 
 // The walkthrough itself belongs to another agent's parcel — this test only needs to know
@@ -69,6 +74,20 @@ const ROUTINE_SESSION = {
   version: 1,
 };
 
+const userRoutine = (over: Record<string, unknown> = {}) => ({
+  routine_id: 'u1',
+  name: 'Hotel HIIT',
+  area: 'movement',
+  session: ROUTINE_SESSION,
+  provenance: { kind: 'blank' },
+  created_at: '',
+  updated_at: '',
+  runs: 6,
+  last_run: null,
+  schedule: null,
+  ...over,
+});
+
 type MountProps = {
   area?: 'movement' | 'practice';
   noun?: string;
@@ -76,6 +95,7 @@ type MountProps = {
   onBack?: () => void;
   onLogged?: () => void;
   onSteer?: (text: string) => void;
+  onBuild?: (seed?: unknown) => void;
 };
 
 function mount(props: MountProps = {}) {
@@ -87,6 +107,7 @@ function mount(props: MountProps = {}) {
       onBack={props.onBack ?? (() => {})}
       onLogged={props.onLogged ?? (() => {})}
       onSteer={props.onSteer}
+      onBuild={props.onBuild as never}
     />,
   );
 }
@@ -188,12 +209,13 @@ describe('QuickAddTense', () => {
  * never render at all (a dead row nobody could actually play).
  */
 describe('QuickAddTense — the routines shelf', () => {
-  // Each test below is scoped to routines alone — the now-menu half already has its own coverage
-  // above, so it's reset to empty here explicitly. `vi.clearAllMocks()` (afterEach) clears call
-  // history but NOT a `.mockResolvedValue` override, so without this a prior test's now-menu rows
-  // would otherwise leak into these.
+  // Each test below is scoped to coach routines alone — the now-menu half already has its own
+  // coverage above, and the "Yours" tier has its own describe block below. Reset to empty here
+  // explicitly: `vi.clearAllMocks()` (afterEach) clears call history but NOT a `.mockResolvedValue`
+  // override, so without this a prior test's rows would otherwise leak into these.
   beforeEach(() => {
     getNowMenu.mockResolvedValue([]);
+    listUserRoutines.mockResolvedValue([]);
   });
 
   it('a routine row press fetches its session, plays it, then credits and closes on finish', async () => {
@@ -283,5 +305,139 @@ describe('QuickAddTense — the routines shelf', () => {
     mount({ area: 'movement', noun: 'A workout' });
     expect(await screen.findByText('Easy 5k')).toBeTruthy();
     expect(screen.queryByText(/Browse all/)).toBeNull();
+  });
+});
+
+/**
+ * "Take me on one"'s THIRD tier — the user's own built routines (Activity Builder wave 3),
+ * wearing a quiet "yours" chip, listed after now-menu items AND coach routines but sharing the
+ * same 5-row cap and Browse-all. Playing one needs no fetch: the session is already in hand.
+ */
+describe('QuickAddTense — the "Yours" tier', () => {
+  beforeEach(() => {
+    getNowMenu.mockResolvedValue([]);
+    getRoutines.mockResolvedValue([]);
+  });
+
+  it('a Yours row plays straight from the session in hand — no getRoutineSession fetch at all', async () => {
+    listUserRoutines.mockResolvedValue([userRoutine()]);
+    mount({ area: 'movement', noun: 'A workout' });
+    fireEvent.click(await screen.findByText('Hotel HIIT'));
+    expect(getRoutineSession).not.toHaveBeenCalled();
+    expect(screen.getByText('playing: Hotel HIIT')).toBeTruthy();
+  });
+
+  it('completing a Yours walkthrough credits logUserRoutineRun with its id, then onLogged', async () => {
+    listUserRoutines.mockResolvedValue([userRoutine({ routine_id: 'u9' })]);
+    const onLogged = vi.fn();
+    mount({ area: 'movement', noun: 'A workout', onLogged });
+    fireEvent.click(await screen.findByText('Hotel HIIT'));
+    fireEvent.click(screen.getByText('Finish'));
+    await waitFor(() => expect(logUserRoutineRun).toHaveBeenCalledWith('u9'));
+    expect(onLogged).toHaveBeenCalled();
+  });
+
+  it('closing a Yours walkthrough without finishing returns to the shelf and logs nothing', async () => {
+    listUserRoutines.mockResolvedValue([userRoutine()]);
+    mount({ area: 'movement', noun: 'A workout' });
+    fireEvent.click(await screen.findByText('Hotel HIIT'));
+    fireEvent.click(screen.getByText('Close'));
+    expect(await screen.findByText('Take me on one')).toBeTruthy();
+    expect(logUserRoutineRun).not.toHaveBeenCalled();
+  });
+
+  it('a routine for a different area never shows — listUserRoutines carries every area, filtered here', async () => {
+    listUserRoutines.mockResolvedValue([userRoutine({ name: 'Piano scales', area: 'practice' })]);
+    mount({ area: 'movement', noun: 'A workout' });
+    await waitFor(() => expect(listUserRoutines).toHaveBeenCalled());
+    expect(screen.queryByText('Piano scales')).toBeNull();
+  });
+
+  it('a routine with no steps never renders, same "no dead row" rule as a coach routine', async () => {
+    listUserRoutines.mockResolvedValue([
+      userRoutine({ name: 'Empty shell', session: { blocks: [], note: '', generated_at: '', version: 1 } }),
+    ]);
+    mount({ area: 'movement', noun: 'A workout' });
+    await waitFor(() => expect(listUserRoutines).toHaveBeenCalled());
+    expect(screen.queryByText('Empty shell')).toBeNull();
+    expect(screen.queryByText('Take me on one')).toBeNull();
+  });
+
+  it('a failed Yours read (null) never removes the now-menu or coach-routine rows', async () => {
+    getNowMenu.mockResolvedValue([nowItem({ label: 'Easy 5k' })]);
+    listUserRoutines.mockResolvedValue(null);
+    mount({ area: 'movement', noun: 'A workout' });
+    expect(await screen.findByText('Easy 5k')).toBeTruthy();
+  });
+
+  it('now-menu, then coach routines, then Yours — in that order, sharing the one 5-row cap', async () => {
+    getNowMenu.mockResolvedValue([
+      nowItem({ id: 'n1', label: 'Now 1' }),
+      nowItem({ id: 'n2', label: 'Now 2' }),
+      nowItem({ id: 'n3', label: 'Now 3' }),
+    ]);
+    getRoutines.mockResolvedValue([
+      routine({ commitment_id: 'c1', title: 'Coach 1' }),
+      routine({ commitment_id: 'c2', title: 'Coach 2' }),
+    ]);
+    listUserRoutines.mockResolvedValue([userRoutine({ routine_id: 'u1', name: 'Yours 1' })]);
+    mount({ area: 'movement', noun: 'A workout' });
+    // 3 now-menu rows leave 2 slots; both go to coach routines (listed first), so no room is left
+    // for the one "Yours" row — it's real, but only "Browse all" reaches it.
+    expect(await screen.findByText('Coach 1')).toBeTruthy();
+    expect(screen.getByText('Coach 2')).toBeTruthy();
+    expect(screen.queryByText('Yours 1')).toBeNull();
+    expect(screen.getByText('Browse all 3 ›')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Browse all 3 ›'));
+    expect(screen.getByText('Yours 1')).toBeTruthy();
+  });
+});
+
+/**
+ * "Build my own" — the screen's last door, into `StartFromScreen`'s three shelves. Hidden without
+ * `onBuild` (no door without a house, same rule `onSteer` follows); a pick there bubbles straight
+ * up to the `onBuild` this screen was given.
+ */
+describe('QuickAddTense — Build my own', () => {
+  beforeEach(() => {
+    getNowMenu.mockResolvedValue([]);
+    getRoutines.mockResolvedValue([]);
+    listUserRoutines.mockResolvedValue([]);
+  });
+
+  it('is hidden entirely without a house to open it into', () => {
+    mount({ onBuild: undefined });
+    expect(screen.queryByLabelText('Build my own')).toBeNull();
+  });
+
+  it('opens the Start-from screen, scoped to this noun’s own playable routines', async () => {
+    getRoutines.mockResolvedValue([routine({ commitment_id: 'c1', title: 'Easy 5k' })]);
+    listUserRoutines.mockResolvedValue([userRoutine({ routine_id: 'u1', name: 'Hotel HIIT' })]);
+    mount({ area: 'movement', noun: 'A workout', onBuild: vi.fn() });
+    fireEvent.click(await screen.findByLabelText('Build my own'));
+    expect(screen.getByText('Start from')).toBeTruthy();
+    expect(screen.getByText('From Cadence')).toBeTruthy();
+    expect(screen.getByText('Easy 5k')).toBeTruthy();
+    expect(screen.getByText('Yours')).toBeTruthy();
+    expect(screen.getByText('Hotel HIIT')).toBeTruthy();
+    expect(screen.getByText('Blank')).toBeTruthy();
+  });
+
+  it('a Start-from back tap returns to the tense screen', async () => {
+    mount({ area: 'movement', noun: 'A workout', onBuild: vi.fn() });
+    fireEvent.click(await screen.findByLabelText('Build my own'));
+    expect(screen.getByText('Start from')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Back'));
+    expect(await screen.findByLabelText('Build my own')).toBeTruthy();
+  });
+
+  it('picking Blank hands the host onBuild(undefined), and the screen returns to the shelf', async () => {
+    const onBuild = vi.fn();
+    mount({ area: 'movement', noun: 'A workout', onBuild });
+    fireEvent.click(await screen.findByLabelText('Build my own'));
+    fireEvent.click(screen.getByText('Blank'));
+    expect(onBuild).toHaveBeenCalledWith(undefined);
+    expect(await screen.findByLabelText('Build my own')).toBeTruthy();
   });
 });

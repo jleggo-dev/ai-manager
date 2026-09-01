@@ -8,6 +8,7 @@ import { AreaQuickRow, MealQuickRow, PhotoQuickRow, WaterQuickRow, WeightQuickRo
 import { QuickAddPill } from './QuickAddPill.tsx';
 import { QuickAddTense } from './QuickAddTense.tsx';
 import { useRoutinePlay } from './useRoutinePlay.tsx';
+import type { BuilderSeed } from './builderSeed.ts';
 
 /** Screen 1's noun, carried to screen 2 (Activity Builder 2A) — everything QuickAddTense needs to
  *  know which area it's logging into and what to call the thing. */
@@ -35,6 +36,7 @@ export function QuickAddSheet({
   onLogged,
   onOpenFood,
   onSteer,
+  onBuild,
 }: {
   onClose: () => void;
   onLogged: () => void;
@@ -43,6 +45,9 @@ export function QuickAddSheet({
   /** Screen 2's "Tell me instead" — hands a seed sentence to the coach. Wired at the shell
    *  (MainTabs) the same way PlanView's `onSteerCoach` is; the row hides itself without it. */
   onSteer?: (text: string) => void;
+  /** Screen 2's "Build my own" → Start from (Activity Builder wave 3). Wired at the shell the same
+   *  way `onSteer` is; hidden everywhere without it. */
+  onBuild?: (seed?: BuilderSeed) => void;
 }) {
   const [busy, setBusy] = useState(false); // the free line's in-flight guard
   const [text, setText] = useState('');
@@ -129,6 +134,13 @@ export function QuickAddSheet({
               onSteer &&
               ((seed) => {
                 onSteer(seed);
+                onClose();
+              })
+            }
+            onBuild={
+              onBuild &&
+              ((seed) => {
+                onBuild(seed);
                 onClose();
               })
             }
