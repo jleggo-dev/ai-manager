@@ -12,7 +12,7 @@ import { isWeighTitle } from '../../components/occurrence-mod.ts';
  * "I have less time" — there's nothing to walk through or shorten. The weigh-in is a deterministic
  * number; the meal is the redesigned two-tone-ring capture (say / snap / type, resolver draft card,
  * quantities, two-tap recents), pre-selecting the meal the task names. Sessions keep the StartSheet
- * walkthrough; the Week view keeps its own OccurrenceSheet (with the fuller meal log + baseline).
+ * walkthrough.
  */
 export function CaptureSheet({
   occurrenceId,

@@ -755,71 +755,6 @@ html[data-native] .sheet-body {
   background: linear-gradient(90deg, var(--dawn-2), var(--dawn-3));
 }
 
-/* ── Confirm sections + lock ─────────────────────────────────── */
-.confirm-sec {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 13px;
-  background: var(--surface);
-  border: 1px solid var(--line-soft);
-  border-radius: 13px;
-  margin-bottom: 9px;
-}
-.confirm-sec .cs-ic {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  background: var(--surface-2);
-}
-.confirm-sec .cs-t {
-  flex: 1;
-  min-width: 0;
-}
-.confirm-sec .cs-t b {
-  font-size: 14.5px;
-  font-weight: 600;
-  display: block;
-}
-.confirm-sec .cs-t span {
-  font-size: 12.5px;
-  color: var(--text-dim);
-}
-.confirm-sec .cs-state {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.05em;
-  padding: 3px 7px;
-  border-radius: 5px;
-  flex: 0 0 auto;
-}
-/* Objective→commitment grouping in the "Set your rhythm" preview: each goal's commitments ride under it. */
-.prev-group {
-  margin-bottom: 2px;
-}
-.prev-group-h {
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text-dim);
-  margin: 2px 2px 8px;
-}
-.cs-why {
-  font-size: 12.5px;
-  color: var(--text-dim);
-  line-height: 1.45;
-  margin-top: 3px;
-}
-/* Why-this-session line in the occurrence sheet (the commitment's stored rationale). */
-.sheet-why {
-  font-size: 13px;
-  color: var(--text-dim);
-  line-height: 1.5;
-  padding: 0 2px 10px;
-}
 /* Bespoke intake questions in the goal-assessment panel. */
 .ga-intake {
   margin-top: 8px;
@@ -844,13 +779,7 @@ html[data-native] .sheet-body {
   align-self: center;
   white-space: nowrap;
 }
-/* Food-log sheet (Observe phase): the day's meals + the capture row. */
-.meal-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
-}
+/* Meal rows (nutrition insight card). */
 .meal-item {
   display: flex;
   gap: 8px;
@@ -865,130 +794,6 @@ html[data-native] .sheet-body {
   text-transform: uppercase;
   color: var(--text-dim);
   flex: 0 0 62px;
-}
-.meal-what {
-  min-width: 0;
-}
-.meal-btn {
-  flex: 1;
-}
-.meal-thumb {
-  width: 34px;
-  height: 34px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid var(--line-soft);
-  flex: 0 0 34px;
-}
-.meal-est {
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
-.meal-prov .meal-what {
-  opacity: 0.75;
-}
-.meal-confirm {
-  flex: 0 0 26px;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  border: 1px dashed var(--line);
-  background: transparent;
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  color: var(--text-dim);
-}
-/* Removing a logged meal (A23 / 2026-08-22). Quiet by default — a mis-log is an error, not a
-   confession — and two taps, because it is the one action here that cannot be undone. */
-.meal-rm {
-  flex: 0 0 26px;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  color: var(--text-mute);
-  opacity: 0.55;
-}
-.meal-rm:hover {
-  opacity: 1;
-  border-color: var(--line);
-}
-.meal-rm-ask {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 6px;
-  align-items: center;
-}
-.meal-rm-yes,
-.meal-rm-no {
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 4px 8px;
-  color: var(--text-dim);
-}
-.meal-rm-yes:hover {
-  color: var(--text);
-  border-color: var(--text-mute);
-}
-
-.meal-confirm:hover {
-  color: var(--text);
-  border-style: solid;
-}
-.day-totals {
-  font-size: 13.5px;
-  padding: 8px 10px;
-  margin-bottom: 10px;
-  background: var(--surface);
-  border: 1px solid var(--line-soft);
-  border-radius: 11px;
-  font-variant-numeric: tabular-nums;
-}
-.day-totals-prov {
-  color: var(--text-dim);
-}
-.day-left {
-  margin-top: 4px;
-  font-weight: 600;
-}
-/* Coach-proposed daily targets in the Baseline moment. */
-.baseline-targets {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line-soft);
-}
-.baseline-targets-t {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text-dim);
-  margin-bottom: 4px;
-}
-.baseline-targets-n {
-  font-size: 15px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  margin-bottom: 4px;
-}
-.baseline-targets-edit {
-  font-size: 12px;
-  color: var(--text-dim);
-  margin-top: 6px;
-}
-.baseline-targets-done {
-  margin-top: 10px;
-  font-size: 13.5px;
-  color: var(--text-dim);
 }
 /* Settings macro-target editor. */
 .set-targets {
@@ -1102,95 +907,6 @@ html[data-native] .sheet-body {
   color: var(--text-dim);
   line-height: 1.45;
   min-width: 0;
-}
-/* Pre-eat plate advice — a quick "should I?" read before logging. */
-.plate-advice-row {
-  margin-top: 8px;
-}
-.plate-check-btn {
-  width: 100%;
-  padding: 8px 0;
-  border-radius: 11px;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--forest);
-  background: rgba(44, 85, 69, 0.07);
-  border: 1px solid rgba(44, 85, 69, 0.28);
-}
-.plate-check-btn:hover {
-  background: rgba(44, 85, 69, 0.13);
-}
-.plate-advice {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 11px;
-  border: 1px solid var(--line-soft);
-}
-.plate-advice .pa-text {
-  font-size: 13.5px;
-  line-height: 1.45;
-}
-.plate-advice .pa-est {
-  flex: 0 0 auto;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.plate-advice.pa-go {
-  background: rgba(139, 168, 142, 0.12);
-  border-color: rgba(139, 168, 142, 0.35);
-}
-.plate-advice.pa-tweak {
-  background: rgba(214, 178, 94, 0.12);
-  border-color: rgba(214, 178, 94, 0.38);
-}
-.plate-advice.pa-heavy {
-  background: rgba(197, 122, 94, 0.12);
-  border-color: rgba(197, 122, 94, 0.38);
-}
-/* The Baseline moment: observation week done → the coach's read + one gradual change. */
-.baseline-cta {
-  margin-top: 12px;
-  width: 100%;
-  padding: 9px 12px;
-  border-radius: 11px;
-  border: 1px dashed var(--line-soft);
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 13.5px;
-  cursor: pointer;
-}
-.baseline-cta:hover {
-  color: var(--text);
-  border-color: var(--line);
-}
-.baseline-box {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-.baseline-sug {
-  font-size: 13.5px;
-  line-height: 1.55;
-  padding: 10px 12px;
-  background: var(--surface);
-  border: 1px solid var(--line-soft);
-  border-radius: 11px;
-}
-.baseline-why {
-  color: var(--text-dim);
-}
-.cs-state.ok {
-  color: var(--forest);
-  background: rgba(44, 85, 69, 0.12);
-}
-.cs-state.todo {
-  color: var(--dawn-4);
-  background: rgba(234, 150, 112, 0.18);
 }
 .lockbar {
   padding: 12px 16px 16px;
@@ -3211,12 +2927,6 @@ textarea.wiz-title {
   padding: 13px 15px;
   margin-bottom: 10px;
 }
-.prog-title {
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 15px;
-  margin-bottom: 4px;
-}
 .prog-big {
   font-family: var(--display);
   font-weight: 800;
@@ -3229,32 +2939,10 @@ textarea.wiz-title {
   color: var(--text-dim);
   letter-spacing: 0;
 }
-.prog-dir {
-  font-size: 17.5px;
-  color: var(--forest);
-}
 .prog-sub {
   font-size: 12.5px;
   color: var(--text-mute);
   margin-top: 2px;
-}
-/* A23 §2c — the trend line under the headline. Quieter than the goal line beneath it: it is
-   context for the big number, not a second fact competing with it. */
-.prog-quiet {
-  opacity: 0.72;
-  font-variant-numeric: tabular-nums;
-}
-
-.prog-trend-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.spark {
-  flex: 0 0 auto;
-  display: block;
-  margin-top: 6px;
 }
 .countbar {
   height: 7px;
@@ -3494,31 +3182,6 @@ textarea.wiz-title {
   display: grid;
   place-items: center;
 }
-.ring-n {
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 19.5px;
-  letter-spacing: -0.02em;
-  color: var(--text);
-}
-.ring-n i {
-  font-style: normal;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-mute);
-}
-.dash-ringcard {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.dash-ringcard-t {
-  min-width: 0;
-}
-.dash-ringcard-t .prog-sub {
-  margin-top: 3px;
-}
-
 /* Dot rows — kept days filled, the rest neutral (never red). */
 .dotrow {
   display: flex;
@@ -3709,57 +3372,6 @@ textarea.wiz-title {
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
-}
-.sess-block {
-  margin-bottom: 12px;
-}
-.sess-label {
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-mute);
-  font-family: var(--mono);
-  margin-bottom: 6px;
-}
-.sess-item {
-  background: var(--surface);
-  border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  padding: 9px 12px;
-  margin-bottom: 6px;
-}
-.sess-item-t {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-.sess-name {
-  font-size: 14.5px;
-  font-weight: 600;
-}
-.sess-qty {
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--forest);
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-.sess-detail {
-  font-size: 13px;
-  color: var(--text-dim);
-  line-height: 1.4;
-  margin-top: 3px;
-}
-.vid-link {
-  display: inline-block;
-  font-size: 12.5px;
-  color: var(--dawn-4);
-  margin-top: 5px;
-  text-decoration: none;
-}
-.vid-link:hover {
-  text-decoration: underline;
 }
 .sess-note {
   display: flex;

@@ -10,8 +10,7 @@ export interface OccurrenceDetail {
   title: string;
   kind: 'user' | 'system';
   category?: string | null;
-  /** `duration_min` is the effort itself, not the whole session — see `ActivitySchedule`. The
-   *  sheet shows the total beside it, summed from the prescribed session (`sheetMinutes`). */
+  /** `duration_min` is the effort itself, not the whole session — see `ActivitySchedule`. */
   schedule?: { recurrence: string; time_of_day?: string; duration_min?: number } | null;
   session?: OccurrenceSession | null;
   log?: OccurrenceLog | null;

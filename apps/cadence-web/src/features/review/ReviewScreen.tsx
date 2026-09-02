@@ -4,44 +4,15 @@ import { Orb } from '../../components/Orb.tsx';
 import { AboutYouStep } from './AboutYouStep.tsx';
 import { GearStep } from './GearStep.tsx';
 import { GoalsStep } from './GoalsStep.tsx';
-import { LockStep } from './LockStep.tsx';
-import { FaceStep } from './FaceStep.tsx';
-import type { Step } from './reviewConstants.ts';
-import { useReviewWizard, type ReviewMode } from './useReviewWizard.ts';
+import { useReviewWizard } from './useReviewWizard.ts';
 
 /**
  * Review is a curate wizard (accept / reject / modify what the AI captured), spread over
- * four steps: Goals → About you (baseline + what we work around) → Tools → Set your rhythm.
- * Every edit persists immediately (PATCH/DELETE/POST); the final step confirms + commits.
+ * three steps: Goals → About you (baseline + what we work around) → Tools.
+ * Every edit persists immediately (PATCH/DELETE/POST); committing a plan happens in the chat.
  */
-export function ReviewScreen({
-  onBack,
-  onLocked,
-  mode = 'onboard',
-  initialStep,
-}: {
-  onBack: () => void;
-  onLocked: () => void;
-  mode?: ReviewMode;
-  /** Open on a specific step — the chat's confirmation deep-links "edit" straight to it. */
-  initialStep?: Step;
-}) {
-  const {
-    ORDER,
-    LABELS,
-    data,
-    setData,
-    step,
-    busy,
-    preview,
-    msg,
-    idx,
-    back,
-    next,
-    doPreview,
-    doConfirmLock,
-    doDismissPreview,
-  } = useReviewWizard({ mode, onBack, onLocked, initialStep });
+export function ReviewScreen({ onBack }: { onBack: () => void }) {
+  const { ORDER, LABELS, data, setData, step, msg, idx, back, next } = useReviewWizard({ onBack });
 
   const head = (
     <>
@@ -50,8 +21,8 @@ export function ReviewScreen({
           <Orb />
           Cadence
         </div>
-        <button className="counter" onClick={onBack} title={mode === 'manage' ? 'Back' : 'Back to coach'}>
-          <span>{mode === 'manage' ? '✕ close' : 'coach'}</span>
+        <button className="counter" onClick={onBack} title="Back">
+          <span>✕ close</span>
         </button>
       </div>
     </>
@@ -98,7 +69,7 @@ export function ReviewScreen({
             Step {idx + 1} of {ORDER.length} · {LABELS[step]}
           </div>
 
-          {step === 'goals' && <GoalsStep goals={goals} setGoals={setGoals} mode={mode} />}
+          {step === 'goals' && <GoalsStep goals={goals} setGoals={setGoals} />}
           {step === 'you' && (
             <AboutYouStep
               data={data}
@@ -109,47 +80,23 @@ export function ReviewScreen({
             />
           )}
           {step === 'gear' && <GearStep equipment={equipment} setEquip={setEquip} />}
-          {step === 'face' && <FaceStep />}
-          {step === 'lock' && (
-            <LockStep preview={preview} goals={goals} equipment={equipment} baseline={baseline} name={data.name} />
-          )}
         </div>
 
         <div className="lockbar">
-          {step !== 'lock' ? (
-            <div className="wiz-nav">
-              <button className="wiz-back" onClick={back}>
-                {idx === 0 ? (mode === 'manage' ? 'Close' : 'Coach') : 'Back'}
+          <div className="wiz-nav">
+            <button className="wiz-back" onClick={back}>
+              {idx === 0 ? 'Close' : 'Back'}
+            </button>
+            {idx === ORDER.length - 1 ? (
+              <button className="lockbtn" onClick={onBack}>
+                Done ✓
               </button>
-              {mode === 'manage' && idx === ORDER.length - 1 ? (
-                <button className="lockbtn" onClick={onBack}>
-                  Done ✓
-                </button>
-              ) : (
-                <button className="lockbtn" onClick={next}>
-                  Continue →
-                </button>
-              )}
-            </div>
-          ) : preview ? (
-            <div className="wiz-nav">
-              <button className="wiz-back" onClick={doDismissPreview} disabled={busy}>
-                Not yet
+            ) : (
+              <button className="lockbtn" onClick={next}>
+                Continue →
               </button>
-              <button className="lockbtn" onClick={doConfirmLock} disabled={busy}>
-                {busy ? 'Setting your rhythm…' : 'Set your rhythm'}
-              </button>
-            </div>
-          ) : (
-            <div className="wiz-nav">
-              <button className="wiz-back" onClick={back}>
-                Back
-              </button>
-              <button className="lockbtn" onClick={doPreview} disabled={busy}>
-                {busy ? 'Putting it together…' : 'See my rhythm →'}
-              </button>
-            </div>
-          )}
+            )}
+          </div>
           {msg && <div className="lock-msg">{msg}</div>}
         </div>
       </div>

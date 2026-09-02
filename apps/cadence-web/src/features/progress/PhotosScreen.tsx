@@ -77,7 +77,7 @@ function DueCard({
         <span>dated &amp; weight-stamped automatically</span>
       </div>
       {/* Same capture pattern the food flow uses: capture="environment" opens the rear camera on
-          phones, a file picker on desktop (MealLogPanel.tsx). */}
+          phones, a file picker on desktop (FridgeFromPhotoPanel.tsx). */}
       <label className="apg-due-btn">
         {busy ? 'Saving…' : 'Take or choose'}
         <input

@@ -518,24 +518,6 @@ export async function lockPlan(): Promise<{ status: number; body: Record<string,
   return { status: res.status, body: await res.json() };
 }
 
-/**
- * Preview the plan the coach would build — synthesized + vetted but NOT committed. The user
- * reviews it, then either lockPlan() (confirm) or dismissPlanPreview() (go adjust goals first).
- */
-export interface LockPreview {
-  status: 'proposed' | 'needs_focus' | 'vetoed';
-  proposal?: { activities: PendingPlanActivity[]; note: string };
-  violations?: string[];
-  guardrail?: { weightedLoad: number; activeCount: number };
-}
-export async function previewPlan(): Promise<LockPreview> {
-  const res = await fetch(`${BASE}/plan/preview`, { method: 'POST', headers: headers() });
-  return res.json();
-}
-export async function dismissPlanPreview(): Promise<void> {
-  await fetch(`${BASE}/plan/preview/dismiss`, { method: 'POST', headers: headers() });
-}
-
 /* ── Progress dashboard ────────────────────────────────────────── */
 /** `window` omitted keeps the ORIGINAL /progress behavior (backwards compatible — see the API's
  *  progress-window.ts). 'week' | 'month' | 'all' re-derives series/consistency/history sizing. */

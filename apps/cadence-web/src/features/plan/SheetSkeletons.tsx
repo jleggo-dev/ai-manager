@@ -9,8 +9,8 @@ import { Skeleton, SkeletonRing, SkeletonScreen } from '../../components/Skeleto
  * chat's typing dots, which is the app telling its user that writing down breakfast is an AI
  * conversation. Those get these.
  *
- * The sheets that genuinely wait on a model keep their dots and their honest label: StartSheet and
- * OccurrenceSheet prescribe a session (`kind: 'user'` → an LLM round trip that measured **34.2s**
+ * The sheets that genuinely wait on a model keep their dots and their honest label: StartSheet
+ * prescribes a session (`kind: 'user'` → an LLM round trip that measured **34.2s**
  * on a first open, same probe), and CoachFoodActionSheet is matching spoken food. A wait that long
  * needs to say a model is thinking, because a model is thinking.
  */

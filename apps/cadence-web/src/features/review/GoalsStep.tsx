@@ -15,10 +15,9 @@ import { TrashIcon } from './TrashIcon.tsx';
 type Props = {
   goals: Goal[];
   setGoals: (goals: Goal[]) => void;
-  mode: 'onboard' | 'manage';
 };
 
-export function GoalsStep({ goals, setGoals, mode }: Props) {
+export function GoalsStep({ goals, setGoals }: Props) {
   const [assessing, setAssessing] = useState<string | null>(null);
   const [assessments, setAssessments] = useState<Record<string, GoalAssessment>>({});
 
@@ -85,7 +84,7 @@ export function GoalsStep({ goals, setGoals, mode }: Props) {
             title: 'New goal',
             area: 'practice',
             type: 'recurring',
-            ...(mode === 'manage' ? { confirm: true } : {}),
+            confirm: true,
           });
           setGoals([...goals, g]);
         }}

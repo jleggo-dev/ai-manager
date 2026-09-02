@@ -1,23 +1,14 @@
 import type { EquipmentCategory, Goal, GoalArea, GoalAssessment, GoalType, TimeOfDay } from '@cadence/shared';
 
-export type Step = 'goals' | 'you' | 'gear' | 'face' | 'lock';
+export type Step = 'goals' | 'you' | 'gear';
 
-/**
- * `face` sits second-to-last on purpose: it is the one step that curates nothing, so it lands
- * after the work is done and immediately before the plan is committed — a beat of warmth right
- * where the wizard would otherwise go straight from admin to commitment.
- */
-export const ONBOARD_ORDER: Step[] = ['goals', 'you', 'gear', 'face', 'lock'];
-/** Manage mode (from Settings): same curation surface, NO lock step — and no face step either,
- *  because swapping the portrait has its own row in Settings and doesn't belong behind
- *  "Edit goals & equipment". */
+/** The manage wizard (Settings → "Edit goals & equipment"): curation only — committing a plan
+ *  and picking a portrait live elsewhere (the chat and the Settings portrait row). */
 export const MANAGE_ORDER: Step[] = ['goals', 'you', 'gear'];
 export const LABELS: Record<Step, string> = {
   goals: 'Goals',
   you: 'About you',
   gear: 'Tools',
-  face: 'Your Cadence',
-  lock: 'Set your rhythm',
 };
 
 /** How availability reads in the UI. "Flexible" is a real answer, not a missing one. */

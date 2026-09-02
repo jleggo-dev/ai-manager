@@ -61,7 +61,6 @@ vi.mock('./useProposalAccept.ts', () => ({
 vi.mock('../coach/coachFaceContext.ts', () => ({ useCoachFace: () => ({ faceId: null, face: null }) }));
 
 vi.mock('./AdjustSheet.tsx', () => ({ AdjustSheet: () => <div data-testid="adjust-sheet" /> }));
-vi.mock('./OccurrenceSheet.tsx', () => ({ OccurrenceSheet: () => null }));
 vi.mock('./StartSheet.tsx', () => ({ StartSheet: () => null }));
 vi.mock('./CaptureSheet.tsx', () => ({ CaptureSheet: () => null }));
 vi.mock('./CookSheet.tsx', () => ({ CookSheet: () => null }));
