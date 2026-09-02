@@ -7,6 +7,7 @@ import { getOccurrenceDetail, prefetchImminentSessions } from '../services/sessi
 import { runInBackground } from '../services/background.ts';
 import { logOccurrence } from '../services/session-log.ts';
 import { sessionTexts, touchPracticedFromText } from '../services/repertoire-practice.ts';
+import { settleTempoForTitle } from '../services/repertoire-tempo.ts';
 import { logAdhocActivity, logPlannedActivity } from '../services/adhoc-log.ts';
 import { enterEpisode, endEpisode, reviseEpisodeEquipment, postponeEpisodeStart } from '../services/episode.ts';
 import { equipmentFromGymPhotos } from '../services/gym-photo.ts';
@@ -24,6 +25,7 @@ import {
   didLogBodySchema,
   weighInBodySchema,
   occurrenceStatusBodySchema,
+  settledTempoBodySchema,
   episodeEnterBodySchema,
   episodePhotoBodySchema,
   episodeEquipmentBodySchema,
@@ -322,6 +324,30 @@ router.post('/weigh-in', async (req: Request, res: Response) => {
 });
 
 /** POST /plan/occurrences/:id — check off (or un-check) a scheduled occurrence. */
+/**
+ * The tempo someone settled on for one step of this occurrence. Posted on Finish, with the
+ * walkthrough's own commit rule — nothing about a session reaches the store until then, and a
+ * tempo is no exception.
+ *
+ * Answers `{ matched: false }` rather than 404 when the step is not a piece on file ("Scales",
+ * "Warm up"): that is the ordinary case, the client has already kept its local copy, and a 404
+ * would make a normal night look like a failure in the logs.
+ */
+router.post('/occurrences/:id/tempo', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const { title, bpm, meter } = parseBody(settledTempoBodySchema, req.body);
+    const occ = await getOccurrenceWithActivity(userId, req.params.id as string);
+    if (!occ) return void res.status(404).json({ error: 'occurrence not found' });
+    const settled = await settleTempoForTitle(userId, title, { bpm, meter }, { goalId: occ.goal_id ?? null });
+    res.json(settled ? { matched: true, label: settled.label, tempo: settled.tempo } : { matched: false });
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /plan/occurrences/:id/tempo]', err);
+    res.status(500).json({ error: 'tempo update failed' });
+  }
+});
+
 router.post('/occurrences/:id', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {

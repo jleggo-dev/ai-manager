@@ -45,6 +45,20 @@ interface ItemParam {
   kind?: unknown;
 }
 
+/*
+ * No `tempo_bpm` here, deliberately — and not only because the description is 8 characters under
+ * the harness cap.
+ *
+ * A SETTLED tempo is the person's own datum: the speed they actually play the thing at, reported
+ * by the dock once they have engaged with it. What the coach says in chat ("let's take it at 60
+ * this week") is a PRESCRIPTION, and prescriptions already have a channel — `metronome_bpm` on the
+ * session item, which wins over the settled tempo by the owner's ruling.
+ *
+ * Letting her write the settled field would collapse those two into one number, and she would read
+ * her own suggestion back next week as evidence of what they play. That is the same feedback loop
+ * the dock's engagement gate exists to prevent; it should not be reintroduced from the other end.
+ */
+
 export const UPDATE_REPERTOIRE: CoachActionTool = {
   name: 'update_repertoire',
   description:

@@ -288,6 +288,16 @@ export const occurrenceStatusBodySchema = z.object({
   }),
 });
 
+/** The dock reporting the tempo someone settled on for a step. `title` is the STEP's title — the
+ *  server matches it to a repertoire item with the same matcher the practice write-back uses, so
+ *  the client never has to know item ids or the matching rules. Bounds are re-asserted server-side
+ *  (metronome.ts owns them); a request is not a trusted source of a playable tempo. */
+export const settledTempoBodySchema = z.object({
+  title: z.string().trim().min(1, { message: 'title required' }).max(200),
+  bpm: z.number().finite({ message: 'bpm must be a number' }),
+  meter: z.number().finite().optional(),
+});
+
 export const episodeEnterBodySchema = z.object({
   type: z.enum(['travel', 'illness', 'injury', 'recovery', 'custom'], {
     message: 'type must be travel|illness|injury|recovery|custom',

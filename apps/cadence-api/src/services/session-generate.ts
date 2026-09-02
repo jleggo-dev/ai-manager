@@ -13,8 +13,10 @@
 import {
   renderCoachToolCatalog,
   renderRepertoire,
+  settledTempo,
   type OccurrenceSession,
   type OccurrenceWeather,
+  type RepertoireItem,
 } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { DEFAULT_HORIZON_DAYS } from './plan-horizon.ts';
@@ -30,6 +32,7 @@ import { clearOccurrenceSession, setOccurrenceSessionIfEmpty } from '../repos/oc
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
 import { listRepertoire } from '../repos/repertoire.ts';
+import { findItemForTitle } from './repertoire-practice.ts';
 import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
 import { coachingPhase, normalizeSession } from './session-normalize.ts';
@@ -176,6 +179,11 @@ async function generateSession(
     const res = await runJobBySlug(userId, 'prescribe-session', variables);
     session = normalizeSession(parseJson(res.formatted ?? res.raw ?? ''));
   }
+  // The coach WINS on tempo (owner ruling). She is now told the settled tempo in {{repertoire}},
+  // so a bpm she prescribed is an informed decision — "let's take it slower this week" — and a
+  // stored number must not quietly overrule it. This only FILLS what she left empty, per field.
+  if (session && repertoire) fillSettledTempos(session, repertoire, occ.goal_id ?? null);
+
   void logAi(userId, {
     kind: 'prescribe_session',
     input: { occurrenceId: occ.occurrence_id, title: occ.title, date: occ.date, ...(steer ? { steer } : {}) },
@@ -183,6 +191,31 @@ async function generateSession(
     meta: { blocks: session?.blocks.length ?? 0, ok: !!session, phase, sessions_logged: history.length, attempts },
   });
   return session;
+}
+
+/**
+ * Fill each item's metronome from the piece's settled tempo, WITHOUT overriding the coach.
+ *
+ * Per field, because the two answer different questions: she reasons about and prescribes bpm, so
+ * hers wins whenever she named one; the meter is the person's own reading of the piece and she is
+ * rarely the one to change it, so a settled meter fills in even alongside a prescribed bpm.
+ *
+ * Only items that already carry a tempo, or that match a piece with one, are touched — this must
+ * never put a metronome on a step that had none, which is the whole reason the pulse is
+ * coach-invoked in the first place.
+ */
+export function fillSettledTempos(session: OccurrenceSession, items: RepertoireItem[], goalId: string | null): void {
+  for (const block of session.blocks ?? []) {
+    for (const it of block.items ?? []) {
+      const match = findItemForTitle(items, it.name, goalId);
+      const tempo = settledTempo(match?.meta);
+      if (!tempo) continue;
+      // A piece with a settled tempo gets the pulse back even on a step she left plain — the
+      // person practises this one to a beat, and we know it.
+      it.metronome_bpm = it.metronome_bpm ?? tempo.bpm;
+      it.metronome_meter = it.metronome_meter ?? tempo.meter;
+    }
+  }
 }
 
 /**
