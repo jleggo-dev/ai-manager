@@ -20,6 +20,7 @@ import { logWater } from '../services/water.ts';
 import { mergeItems, reachBackToPin, renameItem } from '../services/meal-corrections.ts';
 import { findNutritionLog } from '../repos/nutrition.ts';
 import { enrichMeal } from '../services/meal-enrich.ts';
+import { kickFoodSweep } from '../services/food-sweep.ts';
 import {
   BodyValidationError,
   parseBody,
@@ -177,6 +178,7 @@ router.get('/day', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date ?? '')) ? String(req.query.date) : undefined;
   try {
+    kickFoodSweep(userId); // weekly Sunday-sweep piggyback (S3) — rides the day read like assessIfDue rides GET /plan
     res.json(await getNutritionDay(userId, date));
   } catch (err) {
     console.error('[GET /nutrition/day]', err);

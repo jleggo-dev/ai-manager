@@ -360,3 +360,23 @@ export {
   type ProgressPhotoList,
   type StoredProgressPhoto,
 } from './api/progress-photos.ts';
+
+export {
+  openMealDraft,
+  getOpenMeal,
+  appendFood,
+  appendRecipe,
+  appendParsed,
+  removeDraftItem,
+  setDraftAmount,
+  setDraftMeal,
+  closeMeal,
+  editMealParts,
+  savePartAsRecipe,
+  getFoodSweep,
+  commitFoodSweep,
+  tidyFoodSweep,
+  revertFoodTidy,
+  dismissFoodSweep,
+  type MealPartOp,
+} from './api/meal-draft.ts';

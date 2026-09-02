@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { READ_PHOTO_STEPS, NUTRITION_STEPS, readProgressLine, type MealKind } from '@cadence/shared';
-import { readMealPhoto, logMealFromReading, type Meal } from '../../lib/api.ts';
+import { readMealPhoto, logMealFromReading, previewMeal, type Meal, type MealPreview } from '../../lib/api.ts';
+
+/**
+ * Draft mode (meal-logging rework, 1b): the photo door appends into the open meal instead of
+ * writing one. The confirmed reading — the user's own corrected words — goes through the same
+ * parse-without-write the typed path uses (`previewMeal`), and the resulting rows are handed to
+ * the caller verbatim for `appendParsed`; the write itself belongs to the meal's close.
+ */
+export type PhotoDraftAppend = (items: MealPreview['items'], rawText: string) => Promise<boolean>;
 
 /**
  * Photographing a meal, narrated.
@@ -23,7 +31,7 @@ import { readMealPhoto, logMealFromReading, type Meal } from '../../lib/api.ts';
  */
 export type ReadPhase = 'idle' | 'reading' | 'confirming' | 'nutrition' | 'done' | 'error';
 
-export function useMealPhotoRead() {
+export function useMealPhotoRead(appendDraft?: PhotoDraftAppend) {
   const [phase, setPhase] = useState<ReadPhase>('idle');
   const [progress, setProgress] = useState('');
   const [reading, setReading] = useState('');
@@ -70,6 +78,16 @@ export function useMealPhotoRead() {
       startedAt.current = Date.now();
       setPhase('nutrition');
       try {
+        if (appendDraft) {
+          // Draft mode: price the confirmed reading without writing, then append verbatim.
+          const words = [opts.reading ?? reading, opts.caption].filter(Boolean).join(' — ');
+          const p = await previewMeal(words, opts.meal);
+          if (!p.items.length) throw new Error('could not pick anything out of that reading');
+          const ok = await appendDraft(p.items, words);
+          if (!ok) throw new Error('could not add that to your meal');
+          setPhase('done');
+          return null;
+        }
         const row = await logMealFromReading({
           photo_ref: photoRef,
           reading: opts.reading ?? reading,
@@ -85,7 +103,7 @@ export function useMealPhotoRead() {
         return null;
       }
     },
-    [photoRef, reading],
+    [appendDraft, photoRef, reading],
   );
 
   const reset = useCallback(() => {

@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { getCurrentMealPlan, getRecentMeals, listRecipes, patchMeal, type Meal } from '../../lib/api.ts';
 import { localTodayIso, useInvalidateNutritionDay, useNutritionDay } from '../../lib/query/index.ts';
 import type { MealKind } from '@cadence/shared';
-import { LogScreen } from '../food/LogScreen.tsx';
+import { ExpressFood } from '../food/ExpressFood.tsx';
+import { MealScreen } from '../food/meal/MealScreen.tsx';
+import { FoodSweepCard } from '../food/sweep/FoodSweepCard.tsx';
+import { FoodSweepSheet } from '../food/sweep/FoodSweepSheet.tsx';
+import { FoodSweepTidy } from '../food/sweep/FoodSweepTidy.tsx';
+import { useFoodSweep } from '../food/sweep/useFoodSweep.ts';
 import { FoodDay } from './FoodDay.tsx';
 import { FoodKitchen, type KitchenView } from './FoodKitchen.tsx';
 import { FoodWeek } from './FoodWeek.tsx';
@@ -71,7 +76,11 @@ export function FoodHome({
   const [kitchenView, setKitchenView] = useState<KitchenView>(initialKitchen ?? 'recipes');
   const [nutrients, setNutrients] = useState(false);
   /** The full-screen Log (05b), opened by "Log a meal" or an empty meal slot. */
-  const [logMeal, setLogMeal] = useState<MealKind | 'any' | null>(initialLogMeal ? 'any' : null);
+  const [logMeal, setLogMeal] = useState<MealKind | 'any' | 'express' | null>(initialLogMeal ? 'any' : null);
+  // The Sunday sweep's ride-along: fetched once, carried through client state (the pending row
+  // clears itself after commit). The card only shows on today's Day read.
+  const sweep = useFoodSweep();
+  const [sweepOpen, setSweepOpen] = useState(false);
   // `isPending` is react-query's "no answer yet, first fetch in flight" — it is what tells FoodDay
   // to hold bars where the numbers go instead of settled zeroes (PERF-06). The header, the day
   // dots, the tabs and every door below paint immediately either way: none of them read the day.
@@ -84,6 +93,9 @@ export function FoodHome({
   /** Mirrors the day's water so a tap moves the row now; tagged with its date so it cannot leak
    *  onto another day when you navigate off today and back. */
   const [water, setWater] = useState<{ date: string; ml: number } | null>(null);
+  /** Bumped when a surface below may have changed the cookbook or the week — a meal-screen save
+   *  mints a recipe, so the counts refetch when it closes rather than going stale until remount. */
+  const [standingNonce, setStandingNonce] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -101,7 +113,7 @@ export function FoodHome({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [standingNonce]);
 
   /** A correction rewrote the meal server-side — re-read rather than patch state by hand. */
   async function onCorrected() {
@@ -135,16 +147,32 @@ export function FoodHome({
   const loggedDates = new Set(recent.map((m) => m.date));
   const cookbookTail = recipeCount == null ? '' : recipeCount === 0 ? ' · nothing saved yet' : ` · ${recipeCount}`;
 
-  if (logMeal) {
+  if (logMeal === 'express') {
     return (
-      <LogScreen
-        date={date}
-        initialMeal={logMeal === 'any' ? 'breakfast' : logMeal}
+      <ExpressFood
         onClose={() => setLogMeal(null)}
         onLogged={() => {
           void invalidate();
           onLogged?.();
         }}
+      />
+    );
+  }
+
+  if (logMeal) {
+    // The meal is the screen (1b): you open Breakfast, not Log. The draft rejoins its window on
+    // its own; closing it lands back on the Day read with the day already invalidated by the hook.
+    return (
+      <MealScreen
+        meal={logMeal === 'any' ? undefined : logMeal}
+        onClose={() => {
+          setLogMeal(null);
+          setStandingNonce((n) => n + 1);
+          void refetch();
+          onLogged?.();
+        }}
+        onExpressSingle={() => setLogMeal('express')}
+        onOpenDay={() => setLogMeal(null)}
       />
     );
   }
@@ -213,6 +241,9 @@ export function FoodHome({
       </div>
 
       <div className="fh-body">
+        {tab === 'day' && isToday && sweep.phase === 'offered' && !sweepOpen && sweep.sweep && (
+          <FoodSweepCard sweep={sweep.sweep} onOpen={() => setSweepOpen(true)} />
+        )}
         {tab === 'kitchen' ? (
           <FoodKitchen targetKcal={day?.targets?.kcal ?? null} initialView={kitchenView} />
         ) : tab === 'week' ? (
@@ -249,6 +280,43 @@ export function FoodHome({
           />
         )}
       </div>
+
+      {sweepOpen && (sweep.phase === 'offered' || sweep.phase === 'committing') && sweep.sweep && (
+        <FoodSweepSheet
+          sweep={sweep.sweep}
+          busy={sweep.phase === 'committing'}
+          error={sweep.error}
+          onBack={() => setSweepOpen(false)}
+          onCommit={(ids) => void sweep.commit(ids)}
+          onDismiss={() => {
+            setSweepOpen(false);
+            void sweep.dismiss();
+          }}
+        />
+      )}
+      {sweepOpen &&
+        (sweep.phase === 'tidyOffer' ||
+          sweep.phase === 'tidying' ||
+          sweep.phase === 'done' ||
+          sweep.phase === 'reverted') && (
+          <FoodSweepTidy
+            saved={sweep.saved}
+            tidyable={sweep.tidyable}
+            phase={sweep.phase}
+            tidiedCount={sweep.tidiedCount}
+            error={sweep.error}
+            onTidy={() => void sweep.tidy()}
+            onSkip={() => {
+              sweep.skipTidy();
+              setSweepOpen(false);
+            }}
+            onUndo={() => void sweep.revert()}
+            onClose={() => {
+              setSweepOpen(false);
+              void refetch();
+            }}
+          />
+        )}
     </div>
   );
 }

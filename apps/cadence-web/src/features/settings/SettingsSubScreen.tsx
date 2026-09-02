@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
  * existing settings component underneath a place to live without re-deriving its own chrome.
  *
  * `onBack` always returns to the Room's root list, never further out — the same rule
- * `NutrientsPanel`/`LogScreen` follow inside FoodHome.
+ * `NutrientsPanel`/`MealScreen` follow inside FoodHome.
  */
 export function SettingsSubScreen({
   title,

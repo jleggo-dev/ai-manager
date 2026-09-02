@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { isStoreFoodSource, macrosForLog, MEAL_KINDS, type Food } from '@cadence/shared';
 import { FoodMacroCard } from './FoodMacroCard.tsx';
 import { compoundLabel } from './servingPicker.ts';
@@ -14,21 +14,39 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
  * carries its own servings, so the only question is which one and how many.
  *
  * Confirm-first like every capture surface: what the card shows is what the log stores.
+ *
+ * Two modes since the meal-logging rework (canvas turn-3 B1 — "the sheet · add and stay"):
+ * the default `log` mode writes a meal on its own, exactly as it always has; `draft` mode
+ * repices the same sheet for the open meal — the button says "Add to breakfast", the slot
+ * question disappears (the draft owns it), the caller's strip rides underneath, and `onAdd`
+ * hands the portion back so the sheet RETURNS to search instead of dismissing to nowhere.
  */
 export function AddFoodSheet({
   food,
   meal,
+  mode = 'log',
+  mealLabel,
   busy,
   err,
   onLog,
+  onAdd,
   onBack,
+  strip,
 }: {
   food: Food;
   meal: MealKind;
+  /** 'log' = the legacy write-a-meal sheet; 'draft' = add into the open meal and return. */
+  mode?: 'log' | 'draft';
+  /** Draft mode: the open meal's name for the button — "Add to breakfast". */
+  mealLabel?: string;
   busy?: boolean;
   err?: string;
   onLog: (portion: { servingIndex: number; quantity: number; meal: MealKind }) => void;
+  /** Draft mode's door back: the portion, without a slot — the draft already has one. */
+  onAdd?: (portion: { servingIndex: number; quantity: number }) => void;
   onBack: () => void;
+  /** Draft mode: the caller's strip ("N things · not counted yet"), drawn under the card. */
+  strip?: ReactNode;
 }) {
   const [servingIndex, setServingIndex] = useState(() =>
     Math.max(0, Math.min(food.default_serving ?? 0, food.servings.length - 1)),
@@ -51,9 +69,11 @@ export function AddFoodSheet({
           type="button"
           className="fd-do"
           disabled={busy}
-          onClick={() => onLog({ servingIndex, quantity, meal: slot })}
+          onClick={() =>
+            mode === 'draft' && onAdd ? onAdd({ servingIndex, quantity }) : onLog({ servingIndex, quantity, meal: slot })
+          }
         >
-          {busy ? 'Logging…' : 'Log'}
+          {mode === 'draft' ? `Add to ${mealLabel ?? meal}` : busy ? 'Logging…' : 'Log'}
         </button>
       </div>
 
@@ -103,30 +123,39 @@ export function AddFoodSheet({
           </div>
         </div>
 
-        <div className="fd-field">
-          <span className="fd-field-l">Meal</span>
-          <select
-            className="fd-pick is-on"
-            value={slot}
-            disabled={busy}
-            aria-label="Meal"
-            onChange={(e) => setSlot(e.target.value as MealKind)}
-          >
-            {MEAL_KINDS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
+        {mode === 'log' && (
+          <div className="fd-field">
+            <span className="fd-field-l">Meal</span>
+            <select
+              className="fd-pick is-on"
+              value={slot}
+              disabled={busy}
+              aria-label="Meal"
+              onChange={(e) => setSlot(e.target.value as MealKind)}
+            >
+              {MEAL_KINDS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <FoodMacroCard macros={macros} />
 
-      <p className="fd-note">
-        Picked from a list, scanned, or quick-added: amounts work the way they do everywhere else — serving size, then
-        how many.
-      </p>
+      {mode === 'draft' ? (
+        <>
+          <p className="ms-sheet-return">{"You'll come straight back here for the next one."}</p>
+          {strip}
+        </>
+      ) : (
+        <p className="fd-note">
+          Picked from a list, scanned, or quick-added: amounts work the way they do everywhere else — serving size,
+          then how many.
+        </p>
+      )}
 
       {err && <div className="food-empty">{err}</div>}
 

@@ -1,0 +1,734 @@
+/* ── The bracket (meal-logging rework P2, canvas "Cadence Meal Logging" turn 3) ──────────────
+ * One mark, learned once: a named bracket down the left edge, drawn identically in the meal,
+ * the diary, the cookbook, and coach proposals. Green bracket = one portion; butter bracket =
+ * makes several. Every value here is lifted from the canvas frames A1–A4 / A2-mid-drag / A3 /
+ * B1-select / B3 / C3 — change the canvas first, then this file.
+ *
+ * Only the `.mb-*` family lives here. Capture surfaces stay in food-capture.css (.fa-*/.fm-*),
+ * reading screens in styles.css — this file never touches either.
+ */
+
+.mb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* ── The mark: rail, gutter, notch ─────────────────────────────────────────── */
+.mb-block {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  position: relative;
+}
+.mb-rail {
+  width: 5px;
+  flex: none;
+  border-radius: 3px;
+  background: oklch(58% 0.11 152); /* green: one portion */
+}
+.mb-part--yield .mb-rail,
+.mb-rail--butter {
+  background: oklch(66% 0.1 78); /* butter: makes several */
+}
+.mb-rail--short {
+  height: 30px;
+  align-self: center;
+}
+.mb-rail--head {
+  height: 32px;
+  align-self: center;
+}
+.mb-rail--mini {
+  height: 24px;
+}
+.mb-gutter {
+  width: 14px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mb-notch {
+  display: block;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: oklch(90% 0.015 90);
+}
+.mb-notch--taken {
+  width: 5px;
+  height: 100%;
+  min-height: 24px;
+  border-radius: 3px;
+  background: oklch(58% 0.11 152);
+}
+/* A dedicated handle: it may capture the pointer at once, so the browser must not pan it. */
+.mb-notch-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  width: 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+/* ── Open part: pill head + indented member card ───────────────────────────── */
+.mb-part-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.mb-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mb-pill {
+  background: oklch(93% 0.045 152);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 900;
+  color: oklch(30% 0.07 152);
+}
+.mb-part--yield .mb-pill {
+  background: oklch(93% 0.03 78);
+  color: oklch(42% 0.09 62);
+}
+.mb-head-kcal {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: oklch(54% 0.02 120);
+}
+.mb-head-space {
+  flex: 1;
+}
+.mb-ctrl {
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  color: oklch(60% 0.02 120);
+  cursor: pointer;
+}
+.mb-card {
+  background: #fff;
+  border: 1px solid oklch(91% 0.015 85);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.mb-member {
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Vertical pans stay the scroller's; only a declared horizontal drag takes the pointer. */
+  touch-action: pan-y;
+}
+.mb-member--rule {
+  border-top: 1px solid oklch(96% 0.008 95);
+}
+.mb-member--leaving {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  border: 1.5px solid oklch(72% 0.1 45);
+  border-radius: 14px;
+  box-shadow: 0 12px 26px oklch(25% 0.05 265 / 0.26);
+}
+.mb-member--removing {
+  opacity: 0.45;
+}
+
+/* ── Collapsed part: one row, same mark (canvas A4) ────────────────────────── */
+.mb-collapsed-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-height: 30px;
+}
+.mb-collapsed-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.mb-collapsed-name {
+  font-size: 12.5px;
+  font-weight: 900;
+  color: oklch(28% 0.02 150);
+}
+.mb-collapsed-sub {
+  font-size: 10px;
+  font-weight: 700;
+  color: oklch(56% 0.02 120);
+}
+.mb-collapsed-kcal {
+  font-size: 12px;
+  font-weight: 900;
+  color: oklch(36% 0.02 150);
+}
+.mb-chevron {
+  font-size: 12px;
+  font-weight: 900;
+  color: oklch(70% 0.02 120);
+}
+
+/* ── Loose rows ────────────────────────────────────────────────────────────── */
+.mb-loose {
+  flex: 1;
+  padding: 11px 12px;
+  min-width: 0;
+  touch-action: pan-y;
+}
+.mb-loose--taken {
+  margin-left: 8px;
+  border: 1.5px solid oklch(78% 0.09 152);
+  box-shadow: 0 2px 0 oklch(90% 0.03 152);
+}
+.mb-loose--joining {
+  border: 1.5px solid oklch(78% 0.09 152);
+}
+.mb-part--joining .mb-card {
+  border-color: oklch(78% 0.09 152);
+}
+
+/* ── Drag furniture: bracket ends, the drop gutter ─────────────────────────── */
+.mb-end {
+  position: absolute;
+  left: -6px;
+  width: 17px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  cursor: grab;
+  touch-action: none;
+  z-index: 2;
+}
+.mb-end--head {
+  top: -5px;
+}
+.mb-end--tail {
+  bottom: -5px;
+}
+.mb-drop-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mb-drop-hint {
+  flex: 1;
+  box-sizing: border-box;
+  border: 1.5px dashed oklch(80% 0.02 85);
+  border-radius: 14px;
+  background: oklch(96% 0.012 85);
+  padding: 14px 12px;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: oklch(58% 0.02 120);
+}
+
+/* ── The ⋯ sheet (canvas A3, "The certain path") ───────────────────────────── */
+.mb-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: oklch(25% 0.03 265 / 0.34);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  z-index: 60;
+}
+.mb-sheet {
+  background: oklch(97% 0.012 85);
+  border-radius: 26px 26px 0 0;
+  padding: 12px 20px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mb-sheet-grab {
+  width: 38px;
+  height: 4px;
+  border-radius: 2px;
+  background: oklch(88% 0.015 95);
+  align-self: center;
+}
+.mb-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mb-sheet-words {
+  flex: 1;
+  min-width: 0;
+}
+.mb-sheet-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.1;
+  color: oklch(26% 0.03 150);
+}
+.mb-sheet-sub {
+  font-size: 11px;
+  font-weight: 800;
+  color: oklch(54% 0.02 120);
+  margin-top: 2px;
+}
+.mb-menu {
+  background: #fff;
+  border: 1px solid oklch(91% 0.015 85);
+  border-radius: 16px;
+  padding: 7px;
+  display: flex;
+  flex-direction: column;
+}
+.mb-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 10px;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mb-menu-row + .mb-menu-row {
+  border-top: 1px solid oklch(96% 0.008 95);
+}
+.mb-menu-icon {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 7px;
+  background: oklch(96% 0.012 85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 900;
+  color: oklch(50% 0.02 150);
+}
+.mb-menu-words {
+  flex: 1;
+  min-width: 0;
+}
+.mb-menu-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 900;
+  color: oklch(30% 0.02 150);
+}
+.mb-menu-sub {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: oklch(56% 0.02 120);
+  margin-top: 1px;
+}
+.mb-menu-row--accent {
+  background: oklch(97% 0.02 250);
+  border-radius: 11px;
+}
+.mb-menu-row--accent + .mb-menu-row {
+  border-top: 0;
+}
+.mb-menu-row--accent .mb-menu-icon {
+  background: oklch(93% 0.03 250);
+  color: oklch(42% 0.08 250);
+  font-size: 12px;
+}
+.mb-menu-row--accent .mb-menu-title {
+  color: oklch(30% 0.05 250);
+}
+.mb-menu-row--accent .mb-menu-sub {
+  color: oklch(42% 0.05 250);
+}
+.mb-menu-chevron {
+  font-size: 14px;
+  font-weight: 900;
+  color: oklch(52% 0.07 250);
+}
+.mb-sheet-note {
+  background: oklch(96% 0.012 85);
+  border-radius: 13px;
+  padding: 11px 13px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  font-weight: 700;
+  color: oklch(48% 0.02 150);
+}
+
+/* ── Buttons the canvas repeats everywhere ─────────────────────────────────── */
+.mb-amber-btn {
+  flex: 1;
+  background: oklch(79% 0.16 70);
+  border: 0;
+  border-radius: 14px;
+  padding: 12px;
+  text-align: center;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  color: oklch(29% 0.06 55);
+  box-shadow: 0 4px 0 oklch(63% 0.15 68);
+  cursor: pointer;
+}
+.mb-amber-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.mb-quiet-btn {
+  background: #fff;
+  border: 1.5px solid oklch(88% 0.02 85);
+  border-radius: 14px;
+  padding: 12px;
+  text-align: center;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  color: oklch(46% 0.02 150);
+  cursor: pointer;
+}
+.mb-quiet-btn--snug {
+  flex: none;
+  padding: 12px 15px;
+}
+.mb-btn-row {
+  display: flex;
+  gap: 8px;
+}
+.mb-footnote {
+  font-size: 11px;
+  line-height: 1.45;
+  color: oklch(52% 0.02 120);
+}
+
+/* ── Select mode (canvas turn-2 B1) ────────────────────────────────────────── */
+.mb-select {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mb-select-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mb-select-cancel,
+.mb-select-all {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 900;
+  color: oklch(45% 0.09 152);
+  cursor: pointer;
+}
+.mb-select-heading {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 900;
+  color: oklch(28% 0.02 150);
+}
+.mb-select-lede {
+  font-size: 11.5px;
+  line-height: 1.45;
+  font-weight: 700;
+  color: oklch(52% 0.02 120);
+}
+.mb-select-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.mb-select-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: #fff;
+  border: 1px solid oklch(91% 0.015 85);
+  border-radius: 14px;
+  padding: 11px 12px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mb-select-row--on {
+  border: 1.5px solid oklch(78% 0.09 152);
+  padding: 10.5px 11.5px;
+}
+.mb-tick {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid oklch(86% 0.015 90);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 900;
+  color: #fff;
+}
+.mb-tick--on {
+  border: 0;
+  background: oklch(45% 0.09 152);
+}
+.mb-tick--small {
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+}
+.mb-select-words {
+  flex: 1;
+  min-width: 0;
+}
+.mb-select-name {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 900;
+  color: oklch(28% 0.02 150);
+}
+.mb-select-sub {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: oklch(56% 0.02 120);
+  margin-top: 2px;
+}
+.mb-select-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mb-select-count {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mb-select-tally {
+  flex: 1;
+  font-size: 12.5px;
+  font-weight: 900;
+  color: oklch(28% 0.02 150);
+}
+.mb-select-macros {
+  font-size: 11px;
+  font-weight: 800;
+  color: oklch(56% 0.02 120);
+}
+
+/* ── The name/yield card (canvas A2-mid-drag, B3, C3) ──────────────────────── */
+.mb-name-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mb-name-card--offer {
+  background: #fff;
+  border: 1.5px solid oklch(78% 0.09 152);
+  border-radius: 18px;
+  padding: 15px;
+  box-shadow: 0 6px 20px oklch(25% 0.05 265 / 0.1);
+}
+.mb-coach-dot {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(165deg, oklch(62% 0.08 152) 0%, oklch(48% 0.08 152) 60%);
+  box-shadow: 0 2px 0 oklch(36% 0.07 152);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mb-offer-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: oklch(32% 0.02 150);
+}
+.mb-offer-preview {
+  background: oklch(97% 0.012 85);
+  border-radius: 13px;
+  padding: 12px;
+  display: flex;
+  gap: 9px;
+  align-items: stretch;
+}
+.mb-offer-preview .mb-rail--head {
+  height: auto;
+  align-self: stretch;
+}
+.mb-offer-words {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mb-offer-title {
+  font-size: 11.5px;
+  font-weight: 900;
+  color: oklch(30% 0.05 152);
+}
+.mb-offer-sub {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: oklch(50% 0.02 120);
+  line-height: 1.45;
+}
+.mb-name-input {
+  background: oklch(96% 0.012 85);
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: oklch(28% 0.02 150);
+  caret-color: oklch(45% 0.09 152);
+}
+.mb-name-input::placeholder {
+  color: oklch(64% 0.015 150);
+  font-weight: 800;
+}
+.mb-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.mb-chip {
+  background: #fff;
+  border: 1px solid oklch(90% 0.015 85);
+  border-radius: 999px;
+  padding: 7px 13px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: oklch(42% 0.02 150);
+  cursor: pointer;
+}
+.mb-chip--on {
+  background: oklch(45% 0.09 152);
+  border-color: oklch(45% 0.09 152);
+  font-weight: 900;
+  color: #fff;
+}
+.mb-yield {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mb-yield-label {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  color: oklch(56% 0.02 120);
+}
+.mb-option {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: #fff;
+  border: 1.5px solid oklch(90% 0.015 85);
+  border-radius: 15px;
+  padding: 13px;
+}
+.mb-option--on {
+  border: 2px solid oklch(45% 0.09 152);
+  padding: 12.5px;
+}
+.mb-option-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.mb-option-words {
+  flex: 1;
+  min-width: 0;
+}
+.mb-option-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 900;
+  color: oklch(28% 0.02 150);
+}
+.mb-option-sub {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: oklch(54% 0.02 120);
+  margin-top: 1px;
+}
+.mb-stepper {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: oklch(97% 0.012 85);
+  border-radius: 999px;
+  padding: 3px 4px;
+}
+.mb-step {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  color: oklch(46% 0.02 150);
+  cursor: pointer;
+}
+.mb-step:disabled {
+  color: oklch(70% 0.02 150);
+  cursor: default;
+}
+.mb-step-n {
+  font-size: 11.5px;
+  font-weight: 900;
+  color: oklch(28% 0.02 150);
+  min-width: 14px;
+  text-align: center;
+}

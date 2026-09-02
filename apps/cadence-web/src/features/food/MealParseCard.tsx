@@ -28,6 +28,9 @@ const countLine = (n: number): string =>
 export function MealParseCard({
   preview,
   initialMeal,
+  mode = 'log',
+  mealLabel,
+  onAppend,
   onLogged,
   onNotAMeal,
   onCancel,
@@ -39,6 +42,18 @@ export function MealParseCard({
   preview: MealPreview;
   /** Prefill (the meal task's kind); defaults from the time of day. */
   initialMeal?: MealKind;
+  /**
+   * Draft mode (meal-logging rework, 1b): the confirm APPENDS into the open meal instead of
+   * writing one — rows keep their given/assumed/asked amounts verbatim (appendParsed passes
+   * through, never re-parsed), the slot question disappears (the draft owns it), and an asked
+   * amount no longer gates the button: its chips wait on the meal screen, where one unsettled
+   * amount holds the close instead.
+   */
+  mode?: 'log' | 'draft';
+  /** Draft mode: the open meal's name — the button reads "Add to breakfast". */
+  mealLabel?: string;
+  /** Draft mode's write: hand the card's contents to the draft. Resolves false on failure. */
+  onAppend?: (preview: MealPreview) => Promise<boolean>;
   onLogged: () => void;
   /** "Just one food?" — re-run the same words through the single-food resolver. */
   onNotAMeal?: () => void;
@@ -57,11 +72,20 @@ export function MealParseCard({
   const { rows, setQty, setBrand, removeRow, renameRow, mergeRow, asked, total, toPreview } = useMealAmounts(preview);
   const [editing, setEditing] = useState<number | null>(null);
 
+  const draft = mode === 'draft' && !!onAppend;
+
   async function confirm() {
-    if (busy || asked > 0 || !rows.length) return;
+    if (busy || !rows.length || (!draft && asked > 0)) return;
     setBusy(true);
     setErr('');
     try {
+      if (draft) {
+        // The day cache refreshes when the MEAL closes, not per add — added is not logged.
+        const ok = await onAppend!(toPreview());
+        if (!ok) setErr("Couldn't write that down just now — try again in a moment.");
+        else onLogged();
+        return;
+      }
       await logPreviewedMeal(toPreview(), meal);
       await invalidateNutritionDay();
       onLogged();
@@ -110,16 +134,18 @@ export function MealParseCard({
         <span>{macroLineProteinFirst(total)}</span>
       </div>
 
-      <label className="food-field">
-        <span>Meal</span>
-        <select className="wiz-in" value={meal} disabled={busy} onChange={(e) => setMeal(e.target.value as MealKind)}>
-          {MEAL_KINDS.map((k) => (
-            <option key={k} value={k}>
-              {k}
-            </option>
-          ))}
-        </select>
-      </label>
+      {!draft && (
+        <label className="food-field">
+          <span>Meal</span>
+          <select className="wiz-in" value={meal} disabled={busy} onChange={(e) => setMeal(e.target.value as MealKind)}>
+            {MEAL_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       {/* The same read the camera path has always offered, on the typed path at last: it lived
           only inside the photo branch, so describing your meal instead of photographing it meant
@@ -140,14 +166,16 @@ export function MealParseCard({
       {err && <div className="food-empty">{err}</div>}
 
       <div className="food-confirm-actions">
-        <button type="button" className="fa-log" disabled={busy || asked > 0} onClick={() => void confirm()}>
+        <button type="button" className="fa-log" disabled={busy || (!draft && asked > 0)} onClick={() => void confirm()}>
           {busy
             ? 'Writing it down…'
-            : asked === 1
-              ? 'One amount to settle first'
-              : asked > 1
-                ? `${asked} amounts to settle first`
-                : `Log to ${meal}`}
+            : draft
+              ? `Add to ${mealLabel ?? meal}`
+              : asked === 1
+                ? 'One amount to settle first'
+                : asked > 1
+                  ? `${asked} amounts to settle first`
+                  : `Log to ${meal}`}
         </button>
         {onAddAnother && (
           <button type="button" className="mc-addanother" disabled={busy} onClick={onAddAnother}>
