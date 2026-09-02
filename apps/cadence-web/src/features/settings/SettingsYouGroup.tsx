@@ -12,7 +12,7 @@ function toolsSummary(equipment: ReviewData['equipment']): string {
 
 /**
  * "YOU & YOUR COACH" (design owner-approved 2026-08-31). `review` is fetched once by
- * `SettingsRoom` (the same `getReview()` call `WeighInSettings`/`ReviewScreen` already use) and
+ * `SettingsRoom` (the same `getReview()` call `WeighInSettings` already uses) and
  * handed down here so goal/equipment counts and the sub-screens' underlying data can never
  * disagree about what is "on the plan" right now.
  *

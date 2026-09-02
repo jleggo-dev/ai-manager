@@ -1,6 +1,6 @@
 /**
  * Settings Room 1b — "What you're working with" (SR-4). The chip-grid replacement for the July
- * review wizard's four-select Tools step (GearStep.tsx), which is now dead: no category picker,
+ * review wizard's four-select Tools step (deleted with the wizard): no category picker,
  * no per-item form, just a flat list of removable chips plus a type-to-add. The server still wants
  * a category on every row (`addEquipment` requires one) — this screen passes 'other', the same
  * neutral default the old wizard's "+ Add a tool" button always used, and never surfaces a picker

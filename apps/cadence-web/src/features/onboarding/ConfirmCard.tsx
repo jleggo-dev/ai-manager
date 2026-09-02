@@ -1,8 +1,37 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { AvailabilityWindow, Baseline, Constraint, Goal } from '@cadence/shared';
+import type { AvailabilityWindow, Baseline, Constraint, Goal, TimeOfDay } from '@cadence/shared';
 import { getReview, type ReviewData } from '../../lib/api.ts';
-import { TIME_OF_DAY_LABELS, TIME_OF_DAY_SHORT } from '../review/reviewConstants.ts';
-import { cmToFtIn, kgToLbs } from '../review/unitConversion.ts';
+
+/** How availability reads in the UI. "Flexible" is a real answer, not a missing one. */
+const TIME_OF_DAY_LABELS: Record<TimeOfDay, string> = {
+  morning: 'Mornings work best',
+  midday: 'Middays work best',
+  evening: 'Evenings work best',
+  flexible: 'Any time works',
+};
+
+/** The same slots, said briefly. Someone who gave two windows gets a list, and "Mornings work
+ *  best · Evenings work best" is not a sentence anyone would say out loud. */
+const TIME_OF_DAY_SHORT: Record<TimeOfDay, string> = {
+  morning: 'mornings',
+  midday: 'middays',
+  evening: 'evenings',
+  flexible: 'any time',
+};
+
+// Display-only conversions (storage is canonical kg / cm — @cadence/shared owns coach-facing formatting).
+const LB_TO_KG = 0.453592;
+
+function kgToLbs(kg: number): number {
+  return Math.round((kg / LB_TO_KG) * 10) / 10;
+}
+
+function cmToFtIn(cm: number): { ft: number; in: number } {
+  const totalIn = cm / 2.54;
+  const ft = Math.floor(totalIn / 12);
+  const inches = Math.round(totalIn - ft * 12);
+  return { ft, in: inches };
+}
 
 /**
  * "Here's everything I've heard." The confirmation turn, rendered inside the chat.

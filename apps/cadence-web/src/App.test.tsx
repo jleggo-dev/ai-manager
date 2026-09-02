@@ -60,9 +60,6 @@ vi.mock('./features/auth/SignUpGate.tsx', () => ({
 vi.mock('./features/onboarding/OnboardingChat.tsx', () => ({
   OnboardingChat: () => <div>Onboarding chat</div>,
 }));
-vi.mock('./features/review/ReviewScreen.tsx', () => ({
-  ReviewScreen: () => <div>Review</div>,
-}));
 vi.mock('./features/shell/MainTabs.tsx', () => ({
   MainTabs: () => <div>Main tabs</div>,
 }));

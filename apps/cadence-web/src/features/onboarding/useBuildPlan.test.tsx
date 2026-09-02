@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
-import { useBuildPlan } from './useBuildPlan.ts';
+import { recoverIfAlreadyCommitted, useBuildPlan } from './useBuildPlan.ts';
 
 const lockPlan = vi.fn();
 const getPlan = vi.fn();
@@ -132,5 +132,24 @@ describe('useBuildPlan under StrictMode', () => {
     renderHook(() => useBuildPlan({ onDone: vi.fn(), run: false }), { wrapper: StrictMode });
     await new Promise((r) => setTimeout(r, 10));
     expect(lockPlan).not.toHaveBeenCalled();
+  });
+});
+
+describe('recoverIfAlreadyCommitted', () => {
+  it('calls onLocked and returns true when the plan is already committed', async () => {
+    getPlan.mockResolvedValue({ stage: 'committed' });
+    const onLocked = vi.fn();
+    await expect(recoverIfAlreadyCommitted(onLocked)).resolves.toBe(true);
+    expect(onLocked).toHaveBeenCalledOnce();
+  });
+
+  it('returns false when the plan is not committed or getPlan fails', async () => {
+    getPlan.mockResolvedValue({ stage: 'draft' });
+    await expect(recoverIfAlreadyCommitted(vi.fn())).resolves.toBe(false);
+
+    getPlan.mockRejectedValue(new Error('network'));
+    const onLocked = vi.fn();
+    await expect(recoverIfAlreadyCommitted(onLocked)).resolves.toBe(false);
+    expect(onLocked).not.toHaveBeenCalled();
   });
 });
