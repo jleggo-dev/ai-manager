@@ -22,7 +22,8 @@ async function resolveRecipe(date: string, dish: string): Promise<Recipe | null>
 
 /**
  * The cook task (design 1A "cook → task(n steps)") — a multi-step walkthrough over the recipe's own
- * steps, ending in the SAME portion-aware confirm `RecipesPanel`'s "Log again" uses (MP24). The
+ * steps, ending in the SAME portion-aware confirm the Log screen's recipe tiles use —
+ * `RecipeLogConfirm` (MP24). The
  * recipe carries the steps, so nothing is generated; the final step opens that confirm and ticks
  * the task once it logs. When the recipe can't be resolved (no menu that day) it degrades to a
  * plain "mark it cooked".

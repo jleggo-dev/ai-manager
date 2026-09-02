@@ -2,8 +2,8 @@
  * MP24 — the confirm a one-tap "planned" or "usual" recipe row opens.
  *
  * A quick-add row hands over only a `recipe_id`; `RecipeLogConfirm` needs the whole `Recipe` (for
- * its servings math and the dietary-safety check). This fetches it and then renders the SAME
- * confirm `RecipesPanel`'s "Log again" already uses — nothing new is built, this only bridges an id
+ * its servings math and the dietary-safety check). This fetches it and then renders that same
+ * confirm — nothing new is built, this only bridges an id
  * to it. `CookSheet` already holds a full `Recipe` by the time it logs, so it renders
  * `RecipeLogConfirm` directly and has no need for this wrapper.
  */

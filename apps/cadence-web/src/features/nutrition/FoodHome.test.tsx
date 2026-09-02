@@ -28,13 +28,13 @@ const api = vi.hoisted(() => ({
 vi.mock('../../lib/api.ts', () => api);
 
 // The deep tools have their own tests and their own fetches — stubs keep this about the home.
+// The Kitchen stub echoes the section it was opened on, so the pill-routing tests below can
+// assert WHERE the shell sent the user, not just that it swapped tabs.
 vi.mock('../food/LogScreen.tsx', () => ({ LogScreen: () => <div>log-screen</div> }));
-vi.mock('../food/RecipesPanel.tsx', () => ({ RecipesPanel: () => <div>cookbook-panel</div> }));
-vi.mock('../food/MealPlansPanel.tsx', () => ({ MealPlansPanel: () => <div>plan-panel</div> }));
-vi.mock('./ShopSheet.tsx', () => ({ ShopSheet: () => <div>shop-panel</div> }));
-vi.mock('./WeekMenuSheet.tsx', () => ({ WeekMenuSheet: () => <div>week-panel</div> }));
 vi.mock('./NutritionInsightCard.tsx', () => ({ NutritionInsightCard: () => null }));
-vi.mock('./FoodKitchen.tsx', () => ({ FoodKitchen: () => <div>kitchen-tab</div> }));
+vi.mock('./FoodKitchen.tsx', () => ({
+  FoodKitchen: ({ initialView = 'recipes' }: { initialView?: string }) => <div>kitchen-tab:{initialView}</div>,
+}));
 
 const { FoodHome } = await import('./FoodHome.tsx');
 
@@ -206,9 +206,52 @@ describe('FoodHome', () => {
     expect(onCoach).not.toHaveBeenCalled();
   });
 
-  it('opens straight to the shopping list when a shop task sent it there', () => {
-    mount(day({}), { initialSub: 'shop' });
-    expect(screen.getByText('shop-panel')).toBeTruthy();
+  it('opens straight onto the Kitchen shopping list when a shop task sent it there', () => {
+    mount(day({}), { initialKitchen: 'shop' });
+    expect(screen.getByText('kitchen-tab:shop')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Kitchen' }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  /**
+   * The pills and the planning door used to open the July panel stack in a hosted sheet
+   * (FoodSubSheet). The Kitchen tab is the one prep surface now, so each of them lands on the
+   * matching Kitchen section instead — same promises, one implementation.
+   */
+  it('routes the standing pills into the Kitchen: This week → planner, Shopping → list, Cookbook → recipes', async () => {
+    api.getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: { meal_plan_id: 'mp1' } });
+    mount(day({}));
+    await waitFor(() => expect(screen.getByText('This week')).toBeTruthy());
+
+    fireEvent.click(screen.getByText('Shopping'));
+    expect(screen.getByText('kitchen-tab:shop')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Day' }));
+    fireEvent.click(screen.getByText('This week'));
+    expect(screen.getByText('kitchen-tab:week')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Day' }));
+    fireEvent.click(screen.getByText('Cookbook'));
+    expect(screen.getByText('kitchen-tab:recipes')).toBeTruthy();
+  });
+
+  it('sends "Plan your meals" to the Kitchen planner', () => {
+    mount(day({}));
+    fireEvent.click(screen.getByText('Plan your meals'));
+    expect(screen.getByText('kitchen-tab:week')).toBeTruthy();
+  });
+
+  it('opens the cookbook from the Kitchen tab itself, even after a pill steered elsewhere', async () => {
+    api.getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: { meal_plan_id: 'mp1' } });
+    mount(day({}));
+    await waitFor(() => expect(screen.getByText('Shopping')).toBeTruthy());
+
+    fireEvent.click(screen.getByText('Shopping'));
+    expect(screen.getByText('kitchen-tab:shop')).toBeTruthy();
+
+    // Back to the day, then in through the tab header: the tab is the cookbook's own door.
+    fireEvent.click(screen.getByRole('tab', { name: 'Day' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Kitchen' }));
+    expect(screen.getByText('kitchen-tab:recipes')).toBeTruthy();
   });
 });
 
@@ -228,7 +271,7 @@ describe('FoodHome — the Kitchen tab', () => {
     expect(screen.getByText('Today')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Kitchen' }));
-    expect(screen.getByText('kitchen-tab')).toBeTruthy();
+    expect(screen.getByText('kitchen-tab:recipes')).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Kitchen' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByText('Today')).toBeNull();
     // The day's own read is gone while the Kitchen is up — one body, three tabs.
@@ -239,7 +282,7 @@ describe('FoodHome — the Kitchen tab', () => {
     mount(day({}));
     fireEvent.click(screen.getByRole('tab', { name: 'Kitchen' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Day' }));
-    expect(screen.queryByText('kitchen-tab')).toBeNull();
+    expect(screen.queryByText('kitchen-tab:recipes')).toBeNull();
     expect(screen.getByText('Today')).toBeTruthy();
     expect(screen.getByText('Log a meal')).toBeTruthy();
   });

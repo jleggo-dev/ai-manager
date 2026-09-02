@@ -2,7 +2,7 @@
  * MP24 — `CookSheet` was the worst of the three one-tap surfaces: it logged `servings:
  * recipe.servings`, the recipe's whole BATCH size, so cooking a 4-serving dish for the family
  * landed as 4 servings in the one person's day who tapped "Log". These pin that the final step now
- * opens the same portion-aware confirm `RecipesPanel` uses, defaulting to ONE serving rather than
+ * opens the same portion-aware `RecipeLogConfirm` the recipe surfaces share, defaulting to ONE serving rather than
  * the batch, and that the no-recipe fallback still just marks the task done.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

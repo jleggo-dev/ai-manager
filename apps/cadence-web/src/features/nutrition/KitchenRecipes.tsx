@@ -16,12 +16,18 @@ export function KitchenRecipes({
   status,
   onPlan,
   onPaste,
+  onSnap,
+  onDiscover,
 }: {
   recipes: Recipe[];
   status: KitchenStatus;
   /** Hand this recipe to the day-and-slot picker. */
   onPlan: (recipe: Recipe) => void;
   onPaste: () => void;
+  /** Open the snap-the-fridge intake — photo in, recipe ideas out. */
+  onSnap: () => void;
+  /** Open recipe discovery; null while the endpoint isn't live, and the door stays hidden. */
+  onDiscover: (() => void) | null;
 }) {
   const [open, setOpen] = useState<Recipe | null>(null);
 
@@ -91,6 +97,27 @@ export function KitchenRecipes({
             <i aria-hidden>›</i>
           </button>
         ))
+      )}
+
+      {/* The other ways a recipe gets in — the paste door stands above the whole tab, these two
+          live with the cookbook the way they did on the old panel. Discovery only shows when the
+          endpoint answers the probe: an entry that always errors is worse than no entry. */}
+      <div className="kt-sec">ADD A RECIPE</div>
+      <button className="kt-row" onClick={onSnap}>
+        <span className="kt-row-t">
+          <b>Snap the fridge</b>
+          <span>Photo what you have — I&apos;ll read it and suggest what to cook</span>
+        </span>
+        <i aria-hidden>›</i>
+      </button>
+      {onDiscover && (
+        <button className="kt-row" onClick={onDiscover}>
+          <span className="kt-row-t">
+            <b>Find a real recipe</b>
+            <span>A few ideas to review — nothing is saved until you keep one</span>
+          </span>
+          <i aria-hidden>›</i>
+        </button>
       )}
     </div>
   );

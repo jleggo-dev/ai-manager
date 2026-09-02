@@ -602,6 +602,28 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
 
 ### Backlog — detailed
 
+**Food screen consolidation — what the July panel deletion dropped (opened 2026-08-31, OWNER TO RULE)**
+
+The Day tab's pills and doors now open the Kitchen tab's sections, and the 2026-07-25 panel stack
+(`MealPlansPanel`/`RecipesPanel` + `WeekMenuSheet`/`ShopSheet`) is deleted. Fridge-from-photo and
+recipe discovery were ported into the Kitchen (`KitchenIntake` + doors on the cookbook view);
+paste, the planner, the derived shopping list and log-a-saved-recipe (Log screen / cook task) all
+already existed. Three things did NOT survive, each needing a ruling or a shrug:
+
+- **AI-drafted week** ("Plan this week" → `generateMealPlan` + confirm-save). Dropped on the view
+  that coach-authored weeks (#325) are the generation path now and the Kitchen composes by hand.
+  If a one-tap draft belongs in the Kitchen, it should be designed for it, not resurrected.
+- **Past meal plans list** (`listMealPlans` browsing of earlier weeks). The Kitchen only knows the
+  current week. Nobody has asked for the history view; the data is still stored.
+- **Persistent shopping-list ticks.** The old shop PATCHed `checked` onto the saved plan, so a
+  basket survived an app kill mid-shop; the Kitchen's list is derived-never-kept by its own ruling
+  and its ticks are component state — they now also die on a tab switch or webview reclaim. If a
+  shop should survive a phone lock, the ticks need a home that isn't the derived list.
+
+The client wrappers backing the dropped surfaces (`generateMealPlan`, `listMealPlans`,
+`mealPlanDayLabel`, `shoppingListSummary` in `lib/api/meal-plans.ts` + barrel) are now uncalled —
+prune once the rulings above land, in case one of them brings a surface back.
+
 **A0. Anonymous onboarding — abuse, cleanup, and the RLS audit (opened 2026-08-09, NOT BUILT)**
 
 Sign-in & onboarding v2 moved the sign-up gate to the *end*: "Get started" opens a Supabase

@@ -1,6 +1,6 @@
 /**
  * MP24 — a one-tap "planned" / "usual" recipe row hands over only an id. This bridges that id to
- * the SAME confirm `RecipesPanel`'s "Log again" uses, so a quick-add tap never silently writes a
+ * the SAME portion-aware `RecipeLogConfirm` every recipe surface shares, so a quick-add tap never silently writes a
  * hardcoded amount the way `CookSheet`/`useMealCapture`/`useLogActions` used to.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

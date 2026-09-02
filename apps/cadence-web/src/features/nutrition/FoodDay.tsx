@@ -5,7 +5,7 @@ import { MacroBars } from './MacroBars.tsx';
 import { NutritionInsightCard } from './NutritionInsightCard.tsx';
 import { NutritionRing } from './NutritionRing.tsx';
 import { WaterRow } from './WaterRow.tsx';
-import type { FoodHomeSub } from './foodHomeSub.ts';
+import type { KitchenView } from './FoodKitchen.tsx';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
 
@@ -45,7 +45,7 @@ export function FoodDay({
   onCorrected,
   onCoach,
   onLog,
-  onSub,
+  onKitchen,
   onNutrients,
   waterMl,
   onWater,
@@ -72,7 +72,8 @@ export function FoodDay({
    * Talking food is still one tap away — that is what "Talk food with me" is for.
    */
   onLog: (meal?: MealKind) => void;
-  onSub: (sub: FoodHomeSub) => void;
+  /** Open the Kitchen tab on one of its sections — the pills and the planning door all land there. */
+  onKitchen: (view: KitchenView) => void;
   onNutrients: () => void;
   waterMl: number | null;
   onWater: (ml: number) => void;
@@ -189,23 +190,23 @@ export function FoodDay({
 
           {hasWeek ? (
             <div className="fh-standing">
-              <button className="fh-pill" onClick={() => onSub('week')}>
+              <button className="fh-pill" onClick={() => onKitchen('week')}>
                 This week
               </button>
-              <button className="fh-pill" onClick={() => onSub('shop')}>
+              <button className="fh-pill" onClick={() => onKitchen('shop')}>
                 Shopping
               </button>
-              <button className="fh-pill" onClick={() => onSub('cookbook')}>
+              <button className="fh-pill" onClick={() => onKitchen('recipes')}>
                 Cookbook
               </button>
             </div>
           ) : (
-            <button className="fh-pill fh-pill-wide" onClick={() => onSub('cookbook')}>
+            <button className="fh-pill fh-pill-wide" onClick={() => onKitchen('recipes')}>
               Cookbook{cookbookTail}
             </button>
           )}
 
-          <button className="fh-door" onClick={() => onSub('plan')}>
+          <button className="fh-door" onClick={() => onKitchen('week')}>
             <span className="fh-door-t">
               <b>Plan your meals</b>
               <span>a week of dinners, a recipe, or a photo of your fridge</span>
