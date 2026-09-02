@@ -115,7 +115,7 @@ export function MainTabs({
   const [autoSend, setAutoSend] = useState<{ text: string; key: number } | null>(null);
   /**
    * The Food home (Food Journey 02) — a full screen that replaces the Plan tab's content while
-   * the tab bar stays, the same escape ReviewScreen uses minus the bar. It lives HERE rather
+   * the tab bar stays. It lives HERE rather
    * than inside PlanView so the ＋ FAB knows to stand down and the coach hand-off is one hop.
    * 'shop' opens straight to the shopping list (a shop trail task is a door to that sub-view);
    * 'log' opens straight into the Log screen (the quick-add sheet's meal row).

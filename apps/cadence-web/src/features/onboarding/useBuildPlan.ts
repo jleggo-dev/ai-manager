@@ -1,7 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { getPlan, lockPlan } from '../../lib/api.ts';
 import { useAppResume } from '../../lib/useAppResume.ts';
-import { recoverIfAlreadyCommitted } from '../review/useReviewWizard.ts';
+
+/**
+ * If a lock already succeeded server-side but the client never advanced (e.g. the response was
+ * lost to a connection blip), route to the plan instead of dead-ending on a confusing error.
+ */
+export async function recoverIfAlreadyCommitted(onLocked: () => void): Promise<boolean> {
+  try {
+    if ((await getPlan())?.stage === 'committed') {
+      onLocked();
+      return true;
+    }
+  } catch {
+    /* fall through to the normal error path */
+  }
+  return false;
+}
 
 /**
  * Build the first week, once the user has said "build it".
