@@ -17,8 +17,18 @@ import { insertRecipe } from '../repos/recipes.ts';
 import { runJobBySlug } from '../ai/aim.ts';
 import { runInBackground } from './background.ts';
 import { detectSweepCandidates, type SweepCandidate } from './food-sweep-detect.ts';
+import { localDateIso } from './weather/weather-map.ts';
 
-const SWEEP_INTERVAL_DAYS = 7;
+/**
+ * The local calendar date of the most recent Sunday (today, when today IS Sunday), in the user's
+ * timezone. Noon UTC on the local date keeps the day arithmetic clear of DST edges.
+ */
+export function mostRecentSundayIso(now: Date, tz: string | null | undefined): string {
+  const [y, m, d] = localDateIso(now, tz).split('-').map(Number);
+  const utcNoon = Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1, 12);
+  const weekday = new Date(utcNoon).getUTCDay();
+  return new Date(utcNoon - weekday * 86_400_000).toISOString().slice(0, 10);
+}
 /** Never more than three proposals — the rail's own rule, enforced here regardless of the model. */
 const MAX_PROPOSALS = 3;
 
@@ -114,17 +124,25 @@ function buildProposals(candidates: SweepCandidate[], out: Record<string, unknow
 }
 
 /**
- * The weekly sweep, ridden along GET /nutrition/day. Throttled, skipped while an ask is
- * outstanding, and quiet in every failure mode — a broken sweep must never break the day read.
+ * The SUNDAY sweep, ridden along GET /nutrition/day — anchored to Sunday in the user's own
+ * timezone, not to whenever they happened to open the app first. The first day-read only ARMS
+ * the gate (stamp, no sweep); after that, the first day-read on or after each Sunday builds the
+ * sweep, whichever weekday they actually open — it covers the week that ended, and can never run
+ * twice inside one Sunday-anchored week. Skipped while an ask is outstanding, and quiet in every
+ * failure mode — a broken sweep must never break the day read.
  */
-export async function sweepIfDue(userId: string): Promise<void> {
+export async function sweepIfDue(userId: string, tz?: string | null): Promise<void> {
   const user = await getUser(userId);
   if (!user) return;
   const pending = user.pending_food_sweep as StoredFoodSweep | null | undefined;
   if (pending?.proposals?.length) return; // an unanswered ask is outstanding — wait for the user
 
-  const last = user.last_food_sweep_at ? new Date(user.last_food_sweep_at).getTime() : 0;
-  if (Date.now() - last < SWEEP_INTERVAL_DAYS * 86_400_000) return;
+  if (!user.last_food_sweep_at) {
+    await stampFoodSweep(userId); // first sight arms the gate; the first real sweep lands Sunday
+    return;
+  }
+  const boundary = mostRecentSundayIso(new Date(), tz);
+  if (localDateIso(new Date(user.last_food_sweep_at), tz) >= boundary) return; // this week is done
 
   const candidates = await detectSweepCandidates(userId);
   await stampFoodSweep(userId); // the gate advances whether or not anything is proposed
@@ -143,8 +161,8 @@ export async function sweepIfDue(userId: string): Promise<void> {
 }
 
 /** Fire-and-forget hook for the day read — the one line routes/nutrition.ts adds. */
-export function kickFoodSweep(userId: string): void {
-  runInBackground('foodSweepIfDue', sweepIfDue(userId));
+export function kickFoodSweep(userId: string, tz?: string | null): void {
+  runInBackground('foodSweepIfDue', sweepIfDue(userId, tz));
 }
 
 /** What the client sees: the sweep while its ask is live, null once answered (or never asked). */
