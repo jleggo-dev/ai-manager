@@ -27,3 +27,5 @@ export { drainWatchLogs, useWatchLogInbox } from './useWatchLogInbox.ts';
 export { useWatchPortraitSync } from './useWatchPortraitSync.ts';
 export { useProgressLayoutDraft } from './useProgressLayout.ts';
 export { useProgressPhotos, useUploadProgressPhoto, useSetProgressPhotosEnabled } from './useProgressPhotos.ts';
+export { useClockUnit, useInvalidateUnits, useUnits } from './useUnits.ts';
+export { MAX_EARLIER_WEEKS, useEarlierDays } from './useEarlierDays.ts';

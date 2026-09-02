@@ -22,13 +22,20 @@
  * to the coach (see weight-units.ts). Nothing downstream should ever branch on a unit.
  */
 
-export type UnitAxis = 'body_weight' | 'height' | 'food_mass' | 'food_volume' | 'distance';
+export type UnitAxis = 'body_weight' | 'height' | 'food_mass' | 'food_volume' | 'distance' | 'clock';
 
 export type BodyWeightUnit = 'kg' | 'lb';
 export type HeightUnit = 'cm' | 'ft_in';
 export type FoodMassUnit = 'g' | 'oz';
 export type FoodVolumeUnit = 'ml' | 'cup';
 export type DistanceUnit = 'km' | 'mi';
+/**
+ * How a clock time is written: "21:00" or "9:00 pm". An axis like the others because it is the
+ * same kind of choice — the owner's plan shows "06:00" while his header said "quiet at 9:00", and
+ * a person should be able to pick one and see it everywhere (owner, 2026-09-01). Storage is always
+ * "HH:MM" 24-hour; this only says how to SHOW it.
+ */
+export type ClockUnit = '24h' | '12h';
 
 export interface UnitPrefs {
   /** What to assume for any axis the user has not set. Not an override — see resolveUnit. */
@@ -38,15 +45,18 @@ export interface UnitPrefs {
   food_mass?: FoodMassUnit;
   food_volume?: FoodVolumeUnit;
   distance?: DistanceUnit;
+  clock?: ClockUnit;
 }
 
-/** The two ends of each axis, metric first. */
+/** The two ends of each axis, metric first. (For the clock, "metric" is the 24-hour side — the
+ *  one that goes with kilometres and the one every stored time is already written in.) */
 const AXIS_UNITS: Record<UnitAxis, readonly [string, string]> = {
   body_weight: ['kg', 'lb'],
   height: ['cm', 'ft_in'],
   food_mass: ['g', 'oz'],
   food_volume: ['ml', 'cup'],
   distance: ['km', 'mi'],
+  clock: ['24h', '12h'],
 };
 
 /** Labels for the settings UI. Plain words, not unit codes — "feet & inches", not "ft_in". */
@@ -61,6 +71,8 @@ export const UNIT_LABEL: Record<string, string> = {
   cup: 'cups & spoons',
   km: 'kilometres',
   mi: 'miles',
+  '24h': '24-hour',
+  '12h': '12-hour',
 };
 
 export const AXIS_LABEL: Record<UnitAxis, string> = {
@@ -69,6 +81,7 @@ export const AXIS_LABEL: Record<UnitAxis, string> = {
   food_mass: 'Food weight',
   food_volume: 'Food volume',
   distance: 'Distance',
+  clock: 'Clock',
 };
 
 export const UNIT_AXES = Object.keys(AXIS_UNITS) as UnitAxis[];

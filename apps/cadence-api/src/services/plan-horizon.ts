@@ -4,6 +4,7 @@ import { getUser } from '../repos/users.ts';
 import { upsertOccurrences, type NewOccurrence } from '../repos/occurrences.ts';
 import { expandRecurrence } from './scheduling.ts';
 import { localMinutes } from './notify/policy.ts';
+import { localDayIso, localDayIsoPlus } from './plan-day.ts';
 
 /**
  * The horizon IS the view window (check-in rebuild, step 6) — 7, not 14. A plan used to
@@ -66,11 +67,16 @@ export async function ensureHorizon(
   if (!plan) return 0;
 
   const anchor = new Date(plan.generated_at).toISOString().slice(0, 10);
-  const today = new Date().toISOString().slice(0, 10);
-  const to = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+  // THEIR today, not the server's: from 20:00 in Montreal the UTC date is already tomorrow, and
+  // a fill that starts there leaves the evening the person is still living in with nothing
+  // (plan-day.ts, `localDayIso`). No stored zone → UTC, the same floor the view uses.
+  const now = new Date();
+  const timezone = (await getUser(userId))?.timezone;
+  const today = localDayIso(now, timezone);
+  const to = localDayIsoPlus(now, days, timezone);
 
   const activities = await listActivities(plan.plan_id);
-  const nowMinutes = localMinutes(new Date(), (await getUser(userId))?.timezone);
+  const nowMinutes = localMinutes(now, timezone);
   const occ: NewOccurrence[] = [];
   for (const a of activities) {
     const recurrence = a.schedule?.recurrence;

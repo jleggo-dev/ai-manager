@@ -4,7 +4,40 @@
  * makes that warning obsolete: there is only one copy left to get right.
  */
 import { describe, it, expect } from 'vitest';
-import { isWeeklyCheckinTitle } from './occurrence-titles.ts';
+import { isWeeklyCheckinTitle, isWeighInTitle } from './occurrence-titles.ts';
+
+/**
+ * The scale sheet opened over "Weighted hill intervals" (owner, 2026-09-01): the matcher was
+ * `/weigh/i`, and "weighted" contains it. Every title here is one the planner or the coach has
+ * actually written, so this table is what "tap every button" means for this router — a new
+ * activity title that could be mistaken for a weigh-in gets added here BEFORE it ships.
+ */
+describe('isWeighInTitle', () => {
+  it.each([
+    'Weigh-in',
+    'Weekly weigh-in',
+    'Weigh in',
+    'Morning weigh in',
+    'Weigh yourself',
+    'Weighing day',
+    'WEIGH-IN',
+  ])('matches %s', (title) => {
+    expect(isWeighInTitle(title)).toBe(true);
+  });
+
+  it.each([
+    'Weighted hill intervals (vest or sandbag) + grip finisher',
+    'Weighted vest walk',
+    'Weights',
+    'Weight training',
+    'Body weight squats',
+    'Bodyweight circuit',
+    'Log breakfast',
+    'Easy run',
+  ])('does not match %s', (title) => {
+    expect(isWeighInTitle(title)).toBe(false);
+  });
+});
 
 describe('isWeeklyCheckinTitle', () => {
   it.each(['Weekly check-in', 'Weekly checkin', 'Check-In', 'Your monthly recap', 'RECAP'])('matches %s', (title) => {

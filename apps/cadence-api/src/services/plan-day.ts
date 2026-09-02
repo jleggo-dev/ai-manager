@@ -26,3 +26,24 @@ export function planDayBase(now: Date, timezone?: string | null, tzHint?: string
   }
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 }
+
+/**
+ * The user's calendar day as `YYYY-MM-DD`, from the same precedence as `planDayBase`.
+ *
+ * The plan VIEW has been zone-aware since the demo bug above; the plan COMMIT was not. It still
+ * took `new Date().toISOString().slice(0, 10)` for "today", which is tomorrow in Montreal from
+ * 20:00 on. On 2026-09-01 at 20:05 the owner applied a one-word rename and his whole Tuesday
+ * vanished: the commit re-pointed and wiped rows from the UTC "today" (Wednesday) onward, so
+ * Tuesday's still-pending rows stayed on the superseded plan's activities — invisible to a view
+ * that only knows the active plan's — and the horizon fill, using the same UTC day, never rebuilt
+ * them. Every writer of a plan day goes through this now, so the view and the commit cannot
+ * disagree about which day the person is standing in.
+ */
+export function localDayIso(now: Date, timezone?: string | null, tzHint?: string | null): string {
+  return new Date(planDayBase(now, timezone, tzHint)).toISOString().slice(0, 10);
+}
+
+/** `localDayIso` shifted by whole days — the commit's horizon end, the view's window edges. */
+export function localDayIsoPlus(now: Date, days: number, timezone?: string | null, tzHint?: string | null): string {
+  return new Date(planDayBase(now, timezone, tzHint) + days * 86_400_000).toISOString().slice(0, 10);
+}

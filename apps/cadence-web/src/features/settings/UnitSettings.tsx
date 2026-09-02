@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AXIS_LABEL, UNIT_AXES, UNIT_LABEL, axisOptions, type UnitAxis, type UnitPrefs } from '@cadence/shared';
 import { getUnits, setUnits } from '../../lib/api.ts';
+import { useInvalidateUnits } from '../../lib/query/index.ts';
 
 /**
  * Units, one control per axis.
@@ -22,6 +23,9 @@ export function UnitSettings() {
   const [resolved, setResolved] = useState<Record<string, string> | null>(null);
   const [busy, setBusy] = useState<UnitAxis | null>(null);
   const [err, setErr] = useState('');
+  // The trail, the rows and the quiet-hours chip read the clock through the shared units query;
+  // a tap here has to reach them, so the save drops that cache (lib/query/useUnits.ts).
+  const invalidateUnits = useInvalidateUnits();
 
   useEffect(() => {
     let alive = true;
@@ -40,8 +44,10 @@ export function UnitSettings() {
     // Optimistic: the control is a toggle over two known values, so the answer is never a surprise.
     setResolved((r) => ({ ...(r ?? {}), [axis]: unit }));
     const out = await setUnits({ [axis]: unit } as Partial<UnitPrefs>);
-    if (out) setResolved(out.resolved);
-    else setErr("That didn't save — try again in a moment.");
+    if (out) {
+      setResolved(out.resolved);
+      void invalidateUnits();
+    } else setErr("That didn't save — try again in a moment.");
     setBusy(null);
   }
 

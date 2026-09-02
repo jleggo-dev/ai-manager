@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ClockUnit } from '@cadence/shared';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { glyphOf } from '../today/glyphs.ts';
 import { groupWeek, rowKey, rowMeta, type WeekGroup, type WeekRowLike } from './weekGroups.ts';
@@ -21,7 +22,17 @@ import { groupWeek, rowKey, rowMeta, type WeekGroup, type WeekRowLike } from './
  *
  * Display only: accept/decline buttons and the scroll container belong to the hosts.
  */
-export function ProposedWeek({ activities, note }: { activities: WeekRowLike[]; note?: string }) {
+export function ProposedWeek({
+  activities,
+  note,
+  clock = '24h',
+}: {
+  activities: WeekRowLike[];
+  note?: string;
+  /** How the row times are written (Settings → Units → Clock). Hosts inside the app pass the
+   *  user's choice; a bare mount reads 24-hour, the dialect every stored time is already in. */
+  clock?: ClockUnit;
+}) {
   const groups = groupWeek(activities);
   // Lineage exists ⇒ absence of it MEANS new. No lineage anywhere ⇒ it means nothing.
   const tagNew = activities.some((a) => a.commitment_id);
@@ -43,7 +54,7 @@ export function ProposedWeek({ activities, note }: { activities: WeekRowLike[]; 
           </div>
           <div className="wk-card">
             {g.rows.map(({ a, first }, i) => (
-              <Row
+              <WeekRow
                 key={`${rowKey(a)}-${i}`}
                 a={a}
                 kind={g.kind}
@@ -51,6 +62,7 @@ export function ProposedWeek({ activities, note }: { activities: WeekRowLike[]; 
                 withWhy={first}
                 open={!!open[rowKey(a)]}
                 onToggle={() => setOpen((s) => ({ ...s, [rowKey(a)]: !s[rowKey(a)] }))}
+                clock={clock}
               />
             ))}
           </div>
@@ -60,13 +72,17 @@ export function ProposedWeek({ activities, note }: { activities: WeekRowLike[]; 
   );
 }
 
-function Row({
+/** One row of a week — shared with the changes-first view (ProposedChanges.tsx), so a row reads
+ *  the same whether it is shown in its day or as one of the things being changed. */
+export function WeekRow({
   a,
   kind,
   isNew,
   withWhy,
   open,
   onToggle,
+  clock = '24h',
+  tag,
 }: {
   a: WeekRowLike;
   kind: WeekGroup['kind'];
@@ -74,6 +90,9 @@ function Row({
   withWhy: boolean;
   open: boolean;
   onToggle: () => void;
+  clock?: ClockUnit;
+  /** An extra tag word the host wants on the row ("CHANGED", "DROPPED"). */
+  tag?: string;
 }) {
   const { d, cat } = glyphOf(a.title, a.area);
   const expandable = withWhy && !!a.why;
@@ -86,7 +105,7 @@ function Row({
       </span>
       <span className="wk-row-t">
         <b>{a.title}</b>
-        {rowMeta(a, kind) && <span>{rowMeta(a, kind)}</span>}
+        {rowMeta(a, kind, clock) && <span>{rowMeta(a, kind, clock)}</span>}
         {expandable &&
           (open ? (
             <span className="wk-why-open">
@@ -101,6 +120,7 @@ function Row({
       </span>
       {withWhy && a.suggested && <span className="wk-tag wk-tag-add">MY ADDITION</span>}
       {isNew && <span className="wk-tag">NEW</span>}
+      {tag && <span className="wk-tag wk-tag-diff">{tag}</span>}
     </>
   );
   if (!expandable) return <div className="wk-row">{body}</div>;

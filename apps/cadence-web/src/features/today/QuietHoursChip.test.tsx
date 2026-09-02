@@ -9,9 +9,12 @@ import { shouldShowQuietChip } from './quietChipWindow.ts';
 
 const getPrefs = vi.fn();
 
+/** The units the chip reads its clock from; null = not chosen, which reads 24-hour. */
+const units = vi.hoisted(() => ({ clock: null as string | null }));
 vi.mock('../../lib/api.ts', () => ({
   getNotificationPrefs: (...a: unknown[]) => getPrefs(...a),
   saveNotificationPrefs: vi.fn(),
+  getUnits: () => Promise.resolve(units.clock ? { prefs: null, resolved: { clock: units.clock } } : null),
 }));
 
 const PREFS = {
@@ -68,7 +71,7 @@ describe('shouldShowQuietChip', () => {
 describe('QuietHoursChip', () => {
   it('reads like a sentence, not a setting', async () => {
     renderChip(at(18));
-    expect(await screen.findByText(/quiet at 9:30/)).toBeTruthy();
+    expect(await screen.findByText(/quiet at 21:30/)).toBeTruthy();
   });
 
   it('is absent in the middle of the day', async () => {
@@ -79,9 +82,32 @@ describe('QuietHoursChip', () => {
 
   it('opens the quiet-hours control when tapped', async () => {
     renderChip(at(18));
-    (await screen.findByText(/quiet at 9:30/)).click();
+    (await screen.findByText(/quiet at 21:30/)).click();
     expect(await screen.findByRole('dialog', { name: 'Quiet hours' })).toBeTruthy();
     // The same wind-down framing as Settings — one setting, described one way.
     expect(screen.getAllByText('I treat the start as your wind-down').length).toBeGreaterThan(0);
+  });
+});
+
+/** The clock is the person's (Settings → Units → Clock): "quiet at 21:30", or "quiet at 9:30". */
+describe('QuietHoursChip clock', () => {
+  afterEach(() => {
+    units.clock = null;
+  });
+
+  it('reads 24-hour when that is the setting', async () => {
+    units.clock = '24h';
+    renderChip(at(18));
+    expect((await screen.findByRole('button', { name: /Quiet hours start at/ })).textContent).toContain(
+      'quiet at 21:30',
+    );
+  });
+
+  it('reads 12-hour, without the am/pm, when that is the setting', async () => {
+    units.clock = '12h';
+    renderChip(at(18));
+    const chip = await screen.findByRole('button', { name: /Quiet hours start at 9:30 pm/ });
+    expect(chip.textContent).toContain('quiet at 9:30');
+    expect(chip.textContent).not.toMatch(/pm/);
   });
 });

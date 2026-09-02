@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { minutesToClock } from '../../lib/clock.ts';
+import { useClockUnit } from '../../lib/query/index.ts';
 import { QuietHoursEditor } from '../settings/notifications/QuietHoursEditor.tsx';
-import { minutesToLabel, useNotificationPrefs } from '../settings/notifications/useNotificationPrefs.ts';
+import { useNotificationPrefs } from '../settings/notifications/useNotificationPrefs.ts';
 import { useQuietChipUp } from './useQuietChipUp.ts';
 
 /**
@@ -18,13 +20,16 @@ import { useQuietChipUp } from './useQuietChipUp.ts';
 
 export function QuietHoursChip({ now = new Date() }: { now?: Date }) {
   const { data: prefs } = useNotificationPrefs();
+  const clock = useClockUnit();
   const up = useQuietChipUp(now);
   const [open, setOpen] = useState(false);
   if (!prefs || !up) return null;
 
-  // Rendered without the am/pm suffix: at 6pm, "quiet at 9:30" can only mean tonight, and the
-  // suffix is two characters of noise in a chip that has to stay small.
-  const label = minutesToLabel(prefs.quietStartMin).replace(/\s?(am|pm)$/, '');
+  // In the person's own clock (Settings → Units): "quiet at 21:00" or "quiet at 9:00". The
+  // 12-hour form drops its am/pm: at 6pm, "quiet at 9:00" can only mean tonight, and the suffix
+  // is two characters of noise in a chip that has to stay small.
+  const spoken = minutesToClock(prefs.quietStartMin, clock);
+  const label = spoken.replace(/\s?(am|pm)$/, '');
 
   return (
     <>
@@ -32,7 +37,7 @@ export function QuietHoursChip({ now = new Date() }: { now?: Date }) {
         type="button"
         className="thead-pill thead-quiet"
         onClick={() => setOpen(true)}
-        aria-label={`Quiet hours start at ${minutesToLabel(prefs.quietStartMin)}. Change them.`}
+        aria-label={`Quiet hours start at ${spoken}. Change them.`}
       >
         <span aria-hidden>🌙</span> quiet at {label}
       </button>

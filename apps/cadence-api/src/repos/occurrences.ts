@@ -1,4 +1,5 @@
 import { sql, json, type SqlExecutor } from '../db/sql.ts';
+import { WEIGH_IN_TITLE_SQL_PATTERN } from '@cadence/shared';
 import type {
   Activity,
   Occurrence,
@@ -385,7 +386,7 @@ export async function findWeighInActivity(userId: string): Promise<{ activity_id
     select a.activity_id
     from cadence.activities a
     join cadence.plans p on p.plan_id = a.plan_id
-    where a.user_id = ${userId} and a.kind = 'system' and a.title ~* 'weigh'
+    where a.user_id = ${userId} and a.kind = 'system' and a.title ~* ${WEIGH_IN_TITLE_SQL_PATTERN}
     order by (p.status = 'active') desc
     limit 1`;
   return row ?? null;

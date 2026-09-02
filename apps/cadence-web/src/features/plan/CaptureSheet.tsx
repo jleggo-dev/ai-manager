@@ -4,6 +4,7 @@ import { MealCapturePanel } from './occurrence/MealCapturePanel.tsx';
 import { WeighInPanel } from './occurrence/WeighInPanel.tsx';
 import { MealCaptureSkeleton, WeighInSkeleton } from './SheetSkeletons.tsx';
 import { GLYPH } from '../today/glyphs.ts';
+import { isWeighTitle } from '../../components/occurrence-mod.ts';
 
 /**
  * The **capture sheet** (REQ8 task shapes) — a weigh-in or a meal is one data entry, so it opens
@@ -39,7 +40,7 @@ export function CaptureSheet({
 }) {
   const { detail, setDetail, state } = useOccurrenceDetail(occurrenceId);
   const title = detail?.title ?? known?.title ?? '';
-  const isWeigh = /weigh/i.test(title);
+  const isWeigh = isWeighTitle(title);
   const time = detail?.schedule?.time_of_day ?? known?.time_of_day ?? null;
   /** The header can paint before the fetch lands; the body cannot invent a plate. */
   const headable = !!detail || !!known;

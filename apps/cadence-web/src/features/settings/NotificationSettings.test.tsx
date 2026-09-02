@@ -16,6 +16,7 @@ vi.mock('../../lib/api.ts', () => ({
   saveNotificationPrefs: (...a: unknown[]) => savePrefs(...a),
   registerPushToken: vi.fn().mockResolvedValue(true),
   removePushToken: vi.fn().mockResolvedValue(true),
+  getUnits: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../../lib/capability/index.ts', () => ({
@@ -87,7 +88,7 @@ describe('NotificationSettings', () => {
 
   it('shows the quiet window and calls its start a wind-down', async () => {
     renderSettings();
-    expect(await screen.findByText(/Quiet hours · 9:30 pm to 7:00 am/)).toBeTruthy();
+    expect(await screen.findByText(/Quiet hours · 21:30 to 07:00/)).toBeTruthy();
     expect(screen.getByText('I treat the start as your wind-down')).toBeTruthy();
   });
 

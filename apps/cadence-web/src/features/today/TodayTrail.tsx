@@ -1,10 +1,16 @@
-import { type CSSProperties, type RefObject } from 'react';
-import { type PlanViewData, type PlanDay, type PlanOccurrence } from '../../lib/api.ts';
+import { type CSSProperties, type RefObject, useState } from 'react';
+import type { ClockUnit } from '@cadence/shared';
+import { type PlanViewData, type PlanOccurrence } from '../../lib/api.ts';
+import { formatClock } from '../../lib/clock.ts';
+import { dayLabel, daySide } from './dayLabel.ts';
+import { useClockUnit, useEarlierDays } from '../../lib/query/index.ts';
+import { MAX_EARLIER_WEEKS } from '../../lib/query/useEarlierDays.ts';
 import { isWeeklyCheckin } from '../plan/occurrence/format.ts';
 import { taskOpener } from '../plan/taskShape.ts';
 import { TrailFoodStrip } from '../nutrition/TrailFoodStrip.tsx';
 import { glyphOf } from './glyphs.ts';
 import { currentNodeIndex, useLandOnNow } from './useLandOnNow.ts';
+import { useKeepScrollOnPrepend } from './useKeepScrollOnPrepend.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
 
 /**
@@ -119,15 +125,6 @@ function crescentX(i: number, n: number, d: number): number {
   return Math.round(dir * (-20 + 72 * Math.cos(Math.PI * (t - 0.5))));
 }
 
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-function dayLabel(day: PlanDay, index: number): string {
-  const mon = MONTHS[Number(day.date.slice(5, 7)) - 1] ?? '';
-  const stamp = `${day.weekday.slice(0, 3).toUpperCase()} ${day.dayNum} ${mon}`;
-  if (day.isToday) return `TODAY · ${stamp}`;
-  if (index === 1) return `TOMORROW · ${stamp}`;
-  return stamp;
-}
-
 const COACH_TEXTS = ['Not feeling it? Talk to me.', 'Want to shuffle tomorrow?', "Planning ahead? Let's talk."];
 
 /**
@@ -157,6 +154,7 @@ function TrailNode({
   d,
   onOpen,
   nodeRef,
+  clock,
 }: {
   occ: PlanOccurrence;
   i: number;
@@ -165,6 +163,8 @@ function TrailNode({
   onOpen: (occ: PlanOccurrence) => void;
   /** Set on the one node the trail opens scrolled to — see `useLandOnNow`. */
   nodeRef?: RefObject<HTMLButtonElement>;
+  /** How the time under the disc is written (Settings → Units → Clock). */
+  clock: ClockUnit;
 }) {
   // The goal's AREA is authoritative for the family when present (piano wore the exercise glyph
   // for want of it, 2026-08-31); the title picks the specific glyph within it (glyphs.ts).
@@ -248,7 +248,7 @@ function TrailNode({
       </span>
       {occ.time_of_day && (
         <span className="trail-meta" style={metaStyle}>
-          {occ.time_of_day}
+          {formatClock(occ.time_of_day, clock)}
         </span>
       )}
     </button>
@@ -271,14 +271,42 @@ export function TodayTrail({
   // screen. Visual only — the row (and its occurrence) still exists server-side; this just never
   // renders it. Filtered once, up front, so every downstream index (the crescent geometry, the
   // "now" node) already agrees with what's on screen — filtering later would shift them apart.
-  const days = plan.week.map((d) => ({ ...d, occurrences: d.occurrences.filter((o) => !isWeeklyCheckin(o)) }));
+  //
+  // The trail opens on today and runs forward; the weeks BEFORE today load on top of it one tap
+  // at a time (owner, 2026-09-01: "there should be a mechanism to see previous days… so I can
+  // enter in missed data"). They come from the server in the same day shape, so the same nodes
+  // draw them and the same sheets open on tap — a breakfast forgotten on Monday is logged on
+  // Monday's card, on Monday's date.
+  const clock = useClockUnit();
+  const [weeksBack, setWeeksBack] = useState(0);
+  const earlier = useEarlierDays(weeksBack);
+  const trailRef = useKeepScrollOnPrepend(earlier.days.length);
+  const days = [...earlier.days, ...plan.week].map((d) => ({
+    ...d,
+    occurrences: d.occurrences.filter((o) => !isWeeklyCheckin(o)),
+  }));
   // The one node the trail opens on, and the day it belongs to. Only today has a "now".
   const nowDay = days.findIndex((d) => d.isToday);
   const nowNode = nowDay === -1 ? -1 : currentNodeIndex(days[nowDay]!.occurrences);
   const nowRef = useLandOnNow();
 
   return (
-    <div className="trail">
+    <div className="trail" ref={trailRef}>
+      <div className="trail-earlier">
+        {weeksBack >= MAX_EARLIER_WEEKS ? (
+          <span className="trail-earlier-end">That&rsquo;s as far back as the trail goes.</span>
+        ) : (
+          <button
+            type="button"
+            className="trail-earlier-btn"
+            onClick={() => setWeeksBack((w) => w + 1)}
+            disabled={earlier.loading}
+          >
+            {earlier.loading ? 'Looking back…' : weeksBack === 0 ? '↑ See last week' : '↑ See the week before'}
+          </button>
+        )}
+        {earlier.failed && <span className="trail-earlier-end">Couldn&rsquo;t load that week — try again.</span>}
+      </div>
       {days.map((day, di) => (
         <section
           key={day.date}
@@ -305,7 +333,7 @@ export function TodayTrail({
           </div>
           <div className="trail-daylabel">
             <i />
-            <span>{dayLabel(day, di)}</span>
+            <span>{dayLabel(day, di, nowDay)}</span>
             <i />
           </div>
           {/* Food on the trail (Food Journey 01/3B): one ring, three bars, the day's meal count —
@@ -322,9 +350,10 @@ export function TodayTrail({
                   occ={o}
                   i={i}
                   n={day.occurrences.length}
-                  d={di}
+                  d={daySide(day.date)}
                   onOpen={onOpen}
                   nodeRef={di === nowDay && i === nowNode ? nowRef : undefined}
+                  clock={clock}
                 />
               ))
             )}
@@ -332,7 +361,7 @@ export function TodayTrail({
           {day.occurrences.length > 0 && (
             /* Top to bottom: her line, then her face. The day's food reads full-width at the
                top of today (TrailFoodStrip) — the 134px bay could never hold three bars. */
-            <div className={`trail-bay ${di % 2 === 0 ? 'is-left' : 'is-right'}`}>
+            <div className={`trail-bay ${daySide(day.date) === 0 ? 'is-left' : 'is-right'}`}>
               <button className="trail-bay-bubble" onClick={onCoach}>
                 {COACH_TEXTS[di % COACH_TEXTS.length]}
               </button>

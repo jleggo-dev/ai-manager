@@ -81,7 +81,7 @@ const FAMILY_DEFAULT: Record<Category, GlyphName> = {
 /** Most-specific first — a title is one activity, and the first rule that recognises it wins.
  *  Breath outranks the word "practice" ("Box breathing practice" wore a musical note for a day). */
 const RULES: Array<[RegExp, GlyphName]> = [
-  [/weigh|body.?weight|scale/, 'gauge'],
+  [/\bweigh(?:-?in|ing)?\b|body.?weight|scale/, 'gauge'],
   [/breath|meditat|box.?breathing/, 'wind'],
   [/journal|diary/, 'pen'],
   [/wind.?down|sleep|bedtime|night.?routine/, 'moon'],

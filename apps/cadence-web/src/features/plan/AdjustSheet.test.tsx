@@ -16,6 +16,12 @@ vi.mock('../../lib/api.ts', () => ({
   dismissReplanPreview: (...a: unknown[]) => dismissReplanPreview(...a),
 }));
 vi.mock('../../lib/applied-week-note.ts', () => ({ markWeekApplied: vi.fn() }));
+/** The committed week the diff compares against — empty means a first plan (whole week opens). */
+const committed = vi.hoisted(() => ({ activities: [] as unknown[] }));
+vi.mock('../../lib/query/index.ts', () => ({
+  usePlan: () => ({ data: { activities: committed.activities } }),
+  useClockUnit: () => '24h',
+}));
 
 const NONE = { ok: true, proposal: null };
 const PROPOSAL = { activities: [{ title: 'Dead hangs', cadence: '3x/week' }], note: 'Loosened the elbow guard.' };
@@ -105,5 +111,86 @@ describe('AdjustSheet — mode="rebalance" stays on the direct pipeline', () => 
     expect(onSteerToCoach).not.toHaveBeenCalled();
     // The honest waiting copy takes the sheet over while the durable run works.
     await screen.findByText(/Reading back through your goals/);
+  });
+});
+
+/**
+ * "Show me the diff, and let me click to see the whole plan" (owner, 2026-09-01). With a
+ * committed week to compare against, the sheet opens on what CHANGES; the whole week is one tap
+ * away and one tap back. A first plan has nothing to compare against and opens on the week.
+ */
+describe('AdjustSheet — changes first', () => {
+  const COMMITTED = [
+    {
+      activity_id: 'a1',
+      commitment_id: 'c1',
+      title: 'Weighted hill intervals',
+      kind: 'user',
+      cadence: 'Tuesdays',
+      recurrence: 'FREQ=WEEKLY;BYDAY=TU',
+      time_of_day: '06:00',
+    },
+    {
+      activity_id: 'a2',
+      commitment_id: 'c2',
+      title: 'Easy run',
+      kind: 'user',
+      cadence: 'Thursdays',
+      recurrence: 'FREQ=WEEKLY;BYDAY=TH',
+      time_of_day: '06:00',
+    },
+  ];
+  const RENAME = {
+    activities: [
+      {
+        commitment_id: 'c1',
+        title: 'Hill intervals',
+        cadence: 'Tuesdays',
+        recurrence: 'FREQ=WEEKLY;BYDAY=TU',
+        time_of_day: '06:00',
+      },
+      {
+        commitment_id: 'c2',
+        title: 'Easy run',
+        cadence: 'Thursdays',
+        recurrence: 'FREQ=WEEKLY;BYDAY=TH',
+        time_of_day: '06:00',
+      },
+    ],
+    note: 'Just the name.',
+  };
+
+  beforeEach(() => {
+    committed.activities = [];
+  });
+
+  it('opens on what changes, with the whole week one tap away', async () => {
+    committed.activities = COMMITTED;
+    getPendingReplan.mockResolvedValue({ ok: true, proposal: RENAME });
+    render(<AdjustSheet onClose={vi.fn()} onCommitted={vi.fn()} onSteerToCoach={vi.fn()} />);
+
+    await screen.findByText('Make this my week');
+    // The changed row, and what it was — not the unchanged Thursday run.
+    expect(screen.getByText('Hill intervals')).toBeTruthy();
+    expect(screen.getByText('CHANGED')).toBeTruthy();
+    expect(screen.getByText(/Was: “Weighted hill intervals”/)).toBeTruthy();
+    expect(screen.queryByText('Easy run')).toBeNull();
+    expect(screen.getByText(/1 row unchanged/)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('The whole week'));
+    expect(screen.getByText('Easy run')).toBeTruthy();
+    expect(screen.queryByText('CHANGED')).toBeNull();
+
+    fireEvent.click(screen.getByText('What changes'));
+    expect(screen.queryByText('Easy run')).toBeNull();
+  });
+
+  it('a first plan has nothing to diff against — the whole week opens, with no toggle', async () => {
+    getPendingReplan.mockResolvedValue({ ok: true, proposal: RENAME });
+    render(<AdjustSheet onClose={vi.fn()} onCommitted={vi.fn()} onSteerToCoach={vi.fn()} />);
+
+    await screen.findByText('Make this my week');
+    expect(screen.getByText('Easy run')).toBeTruthy();
+    expect(screen.queryByText('What changes')).toBeNull();
   });
 });

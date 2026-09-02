@@ -5,6 +5,23 @@ export async function listActivities(planId: string, db: SqlExecutor = sql): Pro
   return db<Activity[]>`select * from cadence.activities where plan_id = ${planId}`;
 }
 
+/**
+ * This user's activities by id, from ANY plan version — superseded ones included.
+ *
+ * A day that has already happened belongs to whichever plan was active when it happened: an
+ * occurrence done last Tuesday points at last Tuesday's activity row, and that row lives on a
+ * plan that has since been superseded. The week view only ever loaded the active plan's rows, so
+ * anything older than the current version had no title to render under and silently dropped
+ * out — which is how a whole day could vanish (2026-09-01) and why scrolling back to a previous
+ * week needs this. Scoped by user so an id from someone else's plan resolves to nothing.
+ */
+export async function listActivitiesByIds(userId: string, ids: string[], db: SqlExecutor = sql): Promise<Activity[]> {
+  if (ids.length === 0) return [];
+  return db<Activity[]>`
+    select * from cadence.activities
+    where user_id = ${userId} and activity_id = any(${ids}::uuid[])`;
+}
+
 /** Marks the per-plan "Off-plan" bucket activity that ad-hoc logs attach to. The plan view keeps
  *  activities with this category OUT of the committed-rhythm list while still showing their logged
  *  occurrences (they're things you did, not part of the plan you set). */

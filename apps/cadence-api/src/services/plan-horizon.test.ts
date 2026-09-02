@@ -73,3 +73,23 @@ describe('ensureHorizon and today', () => {
     expect(datesFor()).toContain(today);
   });
 });
+
+/**
+ * The fill's half of the 2026-09-01 bug: at 20:05 in Montreal the UTC date is already tomorrow,
+ * and a fill that starts there leaves the evening the person is still living in with nothing.
+ */
+describe("ensureHorizon and the user's own day", () => {
+  it('starts from the local day, not the UTC one', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-02T00:05:00Z')); // 20:05 Tue 1 Sep, America/Toronto
+    getUser.mockResolvedValue({ timezone: 'America/Toronto' });
+    getActivePlan.mockResolvedValue({ plan_id: 'p2', generated_at: '2026-08-30T00:00:00Z' });
+    listActivities.mockResolvedValue([{ activity_id: 'a1', schedule: { recurrence: DAILY, time_of_day: '21:00' } }]);
+    try {
+      await ensureHorizon('u1', 2, { keepElapsedToday: true });
+      expect(datesFor()).toEqual(['2026-09-01', '2026-09-02', '2026-09-03']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

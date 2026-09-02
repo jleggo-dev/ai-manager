@@ -14,7 +14,13 @@ import type { MealMacros, NutritionDayData, PlanOccurrence, PlanViewData } from 
 
 /** Today's nutrition, as the trail's calorie card sees it. Reset to "nothing loaded" per test. */
 const nut = vi.hoisted(() => ({ day: null as NutritionDayData | null }));
-vi.mock('../../lib/query/index.ts', () => ({ useNutritionDay: () => ({ data: nut.day }) }));
+/** The weeks before today, as the trail's back-scroll hook hands them over. Empty per test. */
+const earlier = vi.hoisted(() => ({ days: [] as unknown[], loading: false, failed: false }));
+vi.mock('../../lib/query/index.ts', () => ({
+  useNutritionDay: () => ({ data: nut.day }),
+  useClockUnit: () => '24h',
+  useEarlierDays: () => earlier,
+}));
 vi.mock('../../components/CoachFace.tsx', () => ({ CoachFace: () => <span /> }));
 
 beforeEach(() => {
@@ -189,5 +195,68 @@ describe('TodayTrail food strip', () => {
 
     fireEvent.click(strip(container)!);
     expect(onOpenFood).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Scrolling back (owner, 2026-09-01): the trail stops at today and runs forward, and there was no
+ * way to log a breakfast forgotten on Monday. One tap loads the week before; the labels stay
+ * relative to TODAY rather than to the top of the list, so "tomorrow" does not move with it.
+ */
+describe('TodayTrail earlier days', () => {
+  const week: PlanViewData['week'] = [
+    { date: '2026-08-16', weekday: 'Sun', dayNum: 16, isToday: true, occurrences: [occ()] },
+    { date: '2026-08-17', weekday: 'Mon', dayNum: 17, isToday: false, occurrences: [] },
+  ];
+  const twoDays = (): PlanViewData => ({ ...plan(occ()), week });
+
+  beforeEach(() => {
+    earlier.days = [];
+    earlier.loading = false;
+    earlier.failed = false;
+  });
+
+  it('offers last week above today, and asks for one more week per tap', () => {
+    const { getByText } = render(
+      <TodayTrail plan={twoDays()} onOpen={() => {}} onOpenFood={() => {}} onCoach={() => {}} />,
+    );
+    expect(getByText('↑ See last week')).toBeTruthy();
+    fireEvent.click(getByText('↑ See last week'));
+    expect(getByText('↑ See the week before')).toBeTruthy();
+  });
+
+  it('draws the loaded days on top, labelled against today', () => {
+    earlier.days = [
+      {
+        date: '2026-08-15',
+        weekday: 'Sat',
+        dayNum: 15,
+        isToday: false,
+        occurrences: [occ({ occurrence_id: 'o0', title: 'Log breakfast', kind: 'system', steps: undefined })],
+      },
+    ];
+    const { container, getByText } = render(
+      <TodayTrail plan={twoDays()} onOpen={() => {}} onOpenFood={() => {}} onCoach={() => {}} />,
+    );
+    const labels = [...container.querySelectorAll('.trail-daylabel span')].map((el) => el.textContent);
+    expect(labels).toEqual(['YESTERDAY · SAT 15 AUG', 'TODAY · SUN 16 AUG', 'TOMORROW · MON 17 AUG']);
+    // The past day's own row is there to tap — that is the whole point.
+    expect(getByText('Log breakfast')).toBeTruthy();
+  });
+
+  it('says so when a week could not be loaded', () => {
+    earlier.failed = true;
+    const { getByText } = render(
+      <TodayTrail plan={twoDays()} onOpen={() => {}} onOpenFood={() => {}} onCoach={() => {}} />,
+    );
+    expect(getByText(/Couldn.t load that week/)).toBeTruthy();
+  });
+});
+
+/** The disc's time is written in the clock the person chose (Settings → Units → Clock). */
+describe('TodayTrail clock', () => {
+  it('shows the stored 24-hour time as-is under the 24-hour setting', () => {
+    const { getByText } = draw(occ({ time_of_day: '06:00' }));
+    expect(getByText('06:00')).toBeTruthy();
   });
 });

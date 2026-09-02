@@ -1,4 +1,5 @@
-import { budgetNote, sessionBudget, weekdaysFromRrule } from '@cadence/shared';
+import { budgetNote, sessionBudget, weekdaysFromRrule, type ClockUnit } from '@cadence/shared';
+import { formatClock } from '../../lib/clock.ts';
 import { glyphOf } from '../today/glyphs.ts';
 import type { Category } from '../today/category.ts';
 
@@ -55,11 +56,12 @@ export function rowKey(a: WeekRowLike): string {
  * when warm-up/cool-down make the session longer than the work (owner ruling 2026-08-17: the
  * person deciding whether they can afford this rhythm needs both numbers).
  */
-export function rowMeta(a: WeekRowLike, kind: WeekGroup['kind']): string {
+export function rowMeta(a: WeekRowLike, kind: WeekGroup['kind'], clock: ClockUnit = '24h'): string {
   const budget = sessionBudget(a.duration_min, a.area);
   const note = budget ? budgetNote(budget) : '';
   const mins = budget ? `${budget.effort_min} min${note ? ` ${note}` : ''}` : '';
-  const bits = kind === 'floating' ? [a.cadence, a.time_of_day, mins] : [a.time_of_day, mins];
+  const time = formatClock(a.time_of_day, clock);
+  const bits = kind === 'floating' ? [a.cadence, time, mins] : [time, mins];
   return bits.filter(Boolean).join(' · ');
 }
 

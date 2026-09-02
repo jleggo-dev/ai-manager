@@ -45,6 +45,9 @@ export interface PlanDay {
 }
 export interface PlanActivity {
   activity_id: string;
+  /** The commitment this row is one version of — the same thread a proposed week's rows carry,
+   *  which is how the Adjust sheet tells a CHANGE to this row from a new one (planDiff.ts). */
+  commitment_id?: string;
   title: string;
   kind: 'user' | 'system';
   cadence: string;
@@ -102,6 +105,21 @@ export async function getPlan(): Promise<PlanViewData | null> {
   // 15s is ~75× the measured endpoint (median ~200ms deployed) and still short enough that a
   // suspended-socket hang becomes a retryable failure instead of a minutes-long skeleton.
   const res = await fetch(`${BASE}/plan`, { headers: headers(), signal: timeoutSignal(15_000) }).catch(() => null);
+  if (!res?.ok) return null;
+  return res.json();
+}
+
+/**
+ * The seven days ending `weeks` weeks before today — `1` is last week, `2` the week before that —
+ * in the same day shape as `PlanViewData.week`, so the trail draws them with the same nodes and
+ * the same sheets open on tap. How a missed breakfast gets logged after the fact.
+ * `null` for "could not load", same contract as `getPlan`.
+ */
+export async function getEarlierDays(weeks: number): Promise<{ weeks: number; days: PlanDay[] } | null> {
+  const res = await fetch(`${BASE}/plan/earlier?weeks=${encodeURIComponent(weeks)}`, {
+    headers: headers(),
+    signal: timeoutSignal(15_000),
+  }).catch(() => null);
   if (!res?.ok) return null;
   return res.json();
 }

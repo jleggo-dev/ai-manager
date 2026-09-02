@@ -37,8 +37,9 @@ export type QuickAddRow =
   | { kind: 'calming' }
   | { kind: 'photo' };
 
-/** Same reading CaptureSheet uses — a weigh row is named, not flagged. */
-const isWeighTitle = (t: string) => /weigh/i.test(t);
+// The shared weigh-in matcher — the same reading CaptureSheet and the server use, so a
+// "Weighted…" workout is never mistaken for the weigh-in row (2026-09-01).
+import { isWeighTitle } from '../../../components/occurrence-mod.ts';
 
 /** Trailing words a title wears for the trail's own grammar but that add nothing once the row is
  *  named on its own screen — "Piano practice" is a person's piano, "Evening session" is nobody's

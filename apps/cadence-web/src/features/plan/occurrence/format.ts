@@ -1,4 +1,4 @@
-import { isWeeklyCheckinTitle, type SessionItem } from '@cadence/shared';
+import { isWeeklyCheckinTitle, isWeighInTitle, type SessionItem } from '@cadence/shared';
 import type { MealKind, MealMacros, OccurrenceDetail } from '../../../lib/api.ts';
 
 /** "3×8 @ 55 lb · 12 min · 5 km" — compose only from the fields the item actually has. */
@@ -64,7 +64,7 @@ export const isWeeklyCheckin = (d: Pick<OccurrenceDetail, 'kind' | 'title'>): bo
 
 /** Pending system weigh-in — deterministic capture, no LLM. */
 export const isWeighInPending = (d: OccurrenceDetail): boolean =>
-  d.kind === 'system' && /weigh/i.test(d.title) && d.status === 'pending';
+  d.kind === 'system' && isWeighInTitle(d.title) && d.status === 'pending';
 
 /** "1400 · P0 C110 F35 left" — what's remaining toward targets (no ~; these are the goal). */
 export function leftLine(m?: MealMacros | null): string {
