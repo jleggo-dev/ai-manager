@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { deriveWalkthrough, type Walkthrough as WalkthroughData } from '@cadence/shared';
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
+import { WatchHandoffRow } from './occurrence/WatchHandoffRow.tsx';
 import { coachingMessages, useRotatingMessage } from './coaching-progress.ts';
 import { StartCoachAsk } from './start/StartCoachAsk.tsx';
 import { StartTrim } from './start/StartTrim.tsx';
@@ -168,6 +169,16 @@ export function StartSheet({
                 <span>{"Custom — let's talk"}</span>
               </button>
             )}
+            {/* A13: "send this to your watch", under the ways to start. Renders nothing unless the
+                whole native chain says yes (paired watch, WorkoutKit, authorization — see
+                useWatchHandoff), so on web and watchless phones this line does not exist. */}
+            <WatchHandoffRow
+              occurrenceId={detail.occurrence_id}
+              title={detail.title}
+              dateISO={detail.date}
+              session={detail.session}
+              pending={detail.status === 'pending'}
+            />
           </>
         )}
       </div>
