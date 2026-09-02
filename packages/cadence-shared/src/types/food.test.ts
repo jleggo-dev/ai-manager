@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { macrosForLog, resolveDefaultServing, scaleNutrients, servingFactor, type Food } from './food.ts';
+import {
+  FOOD_SOURCES,
+  isFoodSource,
+  isStoreFoodSource,
+  macrosForLog,
+  resolveDefaultServing,
+  scaleNutrients,
+  servingFactor,
+  type Food,
+} from './food.ts';
 
 /** Fage-style yogurt: macros per 100g; servings include 170g container + 100g. */
 function yogurt(): Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'> {
@@ -84,5 +93,36 @@ describe('scaleNutrients / resolveDefaultServing', () => {
     expect(resolveDefaultServing(food)?.label).toBe('1 container (170g)');
     expect(resolveDefaultServing({ ...food, default_serving: 1 })?.unit).toBe('g');
     expect(resolveDefaultServing({ ...food, servings: [] })).toBeNull();
+  });
+});
+
+/**
+ * The web client used to carry its own copy of the source list and returned null for anything it
+ * did not recognise, so every store-sourced food failed to open from a quick-add row. These pin the
+ * guards that replaced that copy.
+ */
+describe('food source guards', () => {
+  it('accepts every canonical source', () => {
+    for (const source of FOOD_SOURCES) expect(isFoodSource(source)).toBe(true);
+  });
+
+  it('rejects anything that is not a source', () => {
+    for (const v of ['usda_v2', 'USDA', '', null, undefined, 3]) expect(isFoodSource(v)).toBe(false);
+  });
+
+  it('counts store and lab rows as not-the-user-s-own, and the app-authored ones as theirs', () => {
+    for (const source of ['usda', 'off', 'cnf', 'fatsecret', 'research'] as const) {
+      expect(isStoreFoodSource(source)).toBe(true);
+    }
+    for (const source of ['llm', 'label_photo', 'manual', 'chat'] as const) {
+      expect(isStoreFoodSource(source)).toBe(false);
+    }
+  });
+
+  it('sorts every canonical source into exactly one of the two camps', () => {
+    for (const source of FOOD_SOURCES) expect(typeof isStoreFoodSource(source)).toBe('boolean');
+    expect(
+      FOOD_SOURCES.filter(isStoreFoodSource).length + FOOD_SOURCES.filter((s) => !isStoreFoodSource(s)).length,
+    ).toBe(FOOD_SOURCES.length);
   });
 });

@@ -13,7 +13,7 @@
  * Soft-handles 404/network so the Food tab stays usable on transient outages.
  */
 
-import type { Macros, Recipe } from '@cadence/shared';
+import { isMacrosSource, type Macros, type Recipe } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 import type { ApiAvailability } from './foods.ts';
 
@@ -91,7 +91,7 @@ function parseMacros(raw: unknown): Macros {
   if (typeof raw.protein_g === 'number') out.protein_g = raw.protein_g;
   if (typeof raw.carbs_g === 'number') out.carbs_g = raw.carbs_g;
   if (typeof raw.fat_g === 'number') out.fat_g = raw.fat_g;
-  if (raw.source === 'ai' || raw.source === 'user') out.source = raw.source;
+  if (isMacrosSource(raw.source)) out.source = raw.source;
   return out;
 }
 

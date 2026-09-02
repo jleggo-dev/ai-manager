@@ -29,14 +29,7 @@ export interface Macros {
   calcium_mg?: number;
   potassium_mg?: number;
   vitamin_b12_ug?: number;
-  /**
-   * Who produced these numbers: a model's estimate ('ai'), the user's own correction ('user'), or
-   * the food ledger ('ledger' — every item priced from a saved food, so logging the same meal
-   * again reproduces them exactly). A mixed meal stays 'ai': it is only as reproducible as its
-   * least reproducible item.
-   */
-  /** 'research' = a web-grounded lookup already ran for this item — never run it twice. */
-  source?: 'ai' | 'user' | 'ledger' | 'research';
+  source?: MacrosSource;
 }
 
 /**
@@ -69,7 +62,39 @@ export interface MicroTargetOverride {
   set_at: string;
 }
 
-export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | 'other';
+/**
+ * Who produced a set of numbers: a model's estimate ('ai'), the user's own correction ('user'), or
+ * the food ledger ('ledger' — every item priced from a saved food, so logging the same meal again
+ * reproduces them exactly). A mixed meal stays 'ai': it is only as reproducible as its least
+ * reproducible item. 'research' = a web-grounded lookup already ran for this item — never run it
+ * twice.
+ *
+ * The array is the source of truth and the type is derived from it; parse with `isMacrosSource`
+ * rather than listing the values again, which is how 'ledger' and 'research' came to be dropped
+ * silently by a client parser that still only knew the first two.
+ */
+export const MACROS_SOURCES = ['ai', 'user', 'ledger', 'research'] as const;
+
+export type MacrosSource = (typeof MACROS_SOURCES)[number];
+
+/** True when a value off the wire names a real provenance for a set of numbers. */
+export function isMacrosSource(value: unknown): value is MacrosSource {
+  return typeof value === 'string' && (MACROS_SOURCES as readonly string[]).includes(value);
+}
+
+/**
+ * Every meal slot, in the order a day runs — so a picker built from this reads right without
+ * re-sorting it. The array is the source of truth and the type is derived from it; anything that
+ * needs all the slots at runtime imports this rather than writing the six values out again.
+ */
+export const MEAL_KINDS = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'] as const;
+
+export type MealKind = (typeof MEAL_KINDS)[number];
+
+/** True when a value off the wire names a real meal slot. */
+export function isMealKind(value: unknown): value is MealKind {
+  return typeof value === 'string' && (MEAL_KINDS as readonly string[]).includes(value);
+}
 
 export interface NutritionLog {
   log_id: string;

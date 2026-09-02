@@ -6,11 +6,44 @@
 export type FoodBaseUnit = 'g' | 'ml' | 'item';
 
 /**
+ * Every source a food row can carry.
+ *
  * 'cnf'      — Health Canada's Canadian Nutrient File, bulk-imported as shared rows (lab panels).
  * 'research' — a web-grounded AI lookup made ONCE at pin time; the pin is what makes an unstable
  *              source usable, because the question is never asked twice.
+ *
+ * This array is the source of truth and the type is derived from it. Anything that checks a source
+ * at runtime must read it from here rather than write the list out again: a hand-copied list in the
+ * web client went stale when the store rungs landed, and every `cnf` food it parsed came back null.
  */
-export type FoodSource = 'llm' | 'label_photo' | 'manual' | 'chat' | 'usda' | 'off' | 'fatsecret' | 'cnf' | 'research';
+export const FOOD_SOURCES = [
+  'llm',
+  'label_photo',
+  'manual',
+  'chat',
+  'usda',
+  'off',
+  'fatsecret',
+  'cnf',
+  'research',
+] as const;
+
+export type FoodSource = (typeof FOOD_SOURCES)[number];
+
+/** True when a value off the wire names a real food source. */
+export function isFoodSource(value: unknown): value is FoodSource {
+  return typeof value === 'string' && (FOOD_SOURCES as readonly string[]).includes(value);
+}
+
+/** Foods the app itself did not author — a store or lab row, shared across users. */
+export const STORE_FOOD_SOURCES = ['usda', 'off', 'cnf', 'fatsecret', 'research'] as const satisfies ReadonlyArray<
+  (typeof FOOD_SOURCES)[number]
+>;
+
+/** True for a food that came from a store or lab rather than the user's own saving. */
+export function isStoreFoodSource(source: FoodSource): boolean {
+  return (STORE_FOOD_SOURCES as readonly string[]).includes(source);
+}
 
 export type FoodVisibility = 'private' | 'shared';
 

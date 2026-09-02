@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Food } from '@cadence/shared';
+import { MEAL_KINDS, type Food } from '@cadence/shared';
 import type { Meal, MealKind } from '../../lib/api.ts';
 import { useNutritionDay } from '../../lib/query/index.ts';
 import type { PlannedMeal } from '../plan/occurrence/usePlannedMeal.ts';
@@ -16,8 +16,6 @@ import { foldCandidate } from './mealSlotting.ts';
 import { useLogActions } from './useLogActions.ts';
 import { useLogScreen } from './useLogScreen.ts';
 import type { CaptureMethod } from './MethodTiles.tsx';
-
-const MEALS: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
 
 type Route =
   | { at: 'home' }
@@ -152,7 +150,7 @@ export function LogScreen({
           aria-label="Meal"
           onChange={(e) => setMeal(e.target.value as MealKind)}
         >
-          {MEALS.map((m) => (
+          {MEAL_KINDS.map((m) => (
             <option key={m} value={m}>
               {m}
             </option>
