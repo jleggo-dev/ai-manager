@@ -166,7 +166,7 @@ item such as key rotation).
 | **`CI gate` green** + expected product jobs ran & passed | Safe to treat product CI as green |
 | **`CI gate` green** but `ai-admin/*` / `cadence/*` / `format:check` all **skipped** | Docs/path-skip only — **not** proof the app is healthy |
 | Non-skipped `ai-admin/*`, `cadence/*`, or `format:check` **red** | **Blocker** — fix before merge / next batch |
-| **Vercel** red with Hobby **build rate-limit** / upgrade upsell | **Ignore** — not actionable; do **not** ask the user to change Hobby settings |
+| **Vercel** deployment **red** | Real build/deploy failure — investigate before merge (the Hobby rate-limit carve-out is retired: off the Hobby plan since 2026-09-01) |
 | Config-drift / other workflows | Separate from product `CI`; handle on their own merits |
 
 - Never leave **product** jobs **red** and move on to the next task or batch.
@@ -226,15 +226,16 @@ gh pr merge --squash
 # or merge strategy your team uses
 ```
 
-**Do not merge while product CI is failing or blockers remain.** Vercel Hobby rate-limit
-red alone must not block merge and must not trigger “please upgrade Vercel” asks.
+**Do not merge while product CI is failing or blockers remain.** A red Vercel deploy check
+is a real failure and a blocker too (the Hobby rate-limit exception is retired — paid plan
+since 2026-09-01).
 
 ### Batch merges (anti micro-merge)
 
 Prefer **few coherent PRs** over a stream of single-file micro-PRs for related work.
 After merging something that runs `ai-admin / backend` (shared Supabase e2e), **wait for
 `main`’s `CI gate` to go green** before merging the next such PR. Parallel micro-merges
-cause e2e flakes and Hobby deploy rate-limits.
+cause e2e flakes.
 
 Post-merge: note any ops steps (migrations, env vars, provider setup) for the user.
 
@@ -250,7 +251,7 @@ Before starting the **next** parallel batch or assigning the next backlog item:
    `main` push (or failures are quarantined with a human action item — not silently ignored).
 2. Multi-agent refactor orchestration: **do not start the next parallel batch until product CI
    on the base branch is green** under that same rule. Do not interpret docs-only path-skip
-   greens or Vercel Hobby rate-limit reds as product status.
+   greens as product status.
 3. Do not merge the next backend-touching PR until the previous `main` CI run finished green
    (shared test DB).
 

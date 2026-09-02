@@ -1,5 +1,5 @@
 ---
-description: How to read CI checks, when to merge, and how to batch merges to main (Hobby Vercel + path-filtered GHA)
+description: How to read CI checks, when to merge, and how to batch merges to main (path-filtered GHA)
 alwaysApply: true
 ---
 
@@ -7,7 +7,7 @@ alwaysApply: true
 
 Pair with [development-workflow](../skills/development-workflow/SKILL.md) and
 [branch-and-pr-required](./branch-and-pr-required.mdc). This rule stops agents from
-shipping on false greens or flooding Hobby Vercel.
+shipping on false greens.
 
 ## What is green enough to merge
 
@@ -20,10 +20,11 @@ shipping on false greens or flooding Hobby Vercel.
 
 ## What is NOT a merge blocker (on this repo)
 
-- **Vercel red** for Hobby **build rate-limit** / upgrade upsell — ignore; do **not**
-  ask the user to change Vercel Hobby settings, upgrade plans, or reconfigure deploy
-  hooks to “fix CI.”
 - **Vercel Preview Comments** noise unrelated to compile/test failure.
+
+Retired 2026-09-01: the old “ignore Vercel Hobby rate-limit reds” carve-out. The repo is
+on a paid Vercel plan now, so a **red Vercel deployment check is a real build/deploy
+failure** — investigate and fix it before merging.
 
 ## What is NOT proof the app is healthy
 
@@ -43,15 +44,13 @@ If `CI gate` is red, or any non-skipped `ai-admin / *`, `cadence / *`, or
 - Fix or quarantine with a written reason + owner (see development-workflow step 7).
 
 Config-drift / ops workflows are separate from product `CI`; treat them on their own
-merits — do not confuse drift red with Vercel rate-limit red.
+merits.
 
 ## Batch merges to `main` (required habit)
 
-Micro-merging many tiny PRs back-to-back:
-
-- Trips **Vercel Hobby deploy rate limits** (noise, not actionable here).
-- Overlaps **backend e2e** jobs against the **same shared Supabase** test project and
-  causes flakes (session 404s, deleted.sessions === 0, duplicate workflow slugs).
+Micro-merging many tiny PRs back-to-back overlaps **backend e2e** jobs against the
+**same shared Supabase** test project and causes flakes (session 404s,
+deleted.sessions === 0, duplicate workflow slugs).
 
 **Do this instead:**
 

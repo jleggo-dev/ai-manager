@@ -49,7 +49,7 @@ Vite fails if `VITE_DEV_API_KEY` is set during production build. Unset it or rem
 3. If you edited `docs/` or `.cursor/skills/`, `prebuild` syncs to `frontend/public/` during frontend build.
 4. Commit/push and open/update PR so CI runs (workflow steps 6–7). Local `prepush` does **not**
    replace GitHub Actions — watch **`CI gate`** and the product jobs that ran for this PR.
-   Ignore Vercel Hobby rate-limit reds. Docs-only path-skip green ≠ app healthy. Product CI must
+   Docs-only path-skip green ≠ app healthy. Product CI must
    be green (or intentionally quarantined) before merge and before the next refactor batch.
 5. Then [pr-tl-review](../pr-tl-review/SKILL.md) (workflow step 9).
 6. After merge: [development-workflow](../development-workflow/SKILL.md) **step 12b** —
