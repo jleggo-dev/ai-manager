@@ -79,3 +79,54 @@ describe('the tripled Ultra Beast (device run, 2026-08-13)', () => {
     expect(sameGoalTitle('Lose weight', 'Drop weight to improve race performance')).toBe(false);
   });
 });
+
+describe('accent folding', () => {
+  // "Écossaise" used to normalize to "cossaise": the accent was not ignored, it became a word
+  // boundary that ate the first letter. A stored piece then never matched its unaccented spelling.
+  it('folds an accent to its base letter instead of eating it', () => {
+    expect(normTitle('Écossaise')).toBe('ecossaise');
+    expect(compactTitle('Écossaise')).toBe('ecossaise');
+  });
+
+  it('matches accented and unaccented spellings of the same title', () => {
+    expect(normTitle('Écossaise')).toBe(normTitle('Ecossaise'));
+    expect(sameGoalIdentity('Écossaise (Hummel)', 'Ecossaise (Hummel)')).toBe(true);
+    expect(sameGoalTitle('Café pieces', 'Cafe pieces')).toBe(true);
+  });
+
+  it('handles the composers a repertoire actually contains', () => {
+    expect(normTitle('Dvořák Humoresque')).toBe('dvorak humoresque');
+    expect(normTitle('Fauré Sicilienne')).toBe('faure sicilienne');
+    expect(normTitle('Grieg — Bjørnson songs')).toBe('grieg bjornson songs');
+    expect(normTitle('Chopin Łódź study')).toBe('chopin lodz study');
+    expect(normTitle('Straße etude')).toBe('strasse etude');
+  });
+
+  it('is identical whether the accent arrives composed (NFC) or decomposed (NFD)', () => {
+    const nfc = 'Écossaise'.normalize('NFC');
+    const nfd = 'Écossaise'.normalize('NFD');
+    expect(nfc).not.toBe(nfd); // the two really are different strings
+    expect(normTitle(nfd)).toBe(normTitle(nfc));
+    expect(compactTitle(nfd)).toBe(compactTitle(nfc));
+  });
+
+  // The safety property that bounds this change: goal identity depends on these functions, and
+  // every all-English title must reduce exactly as it did before.
+  it('is a strict no-op for ASCII titles', () => {
+    for (const t of ['Run a 10k', 'Spartan Ultra-Beast', 'Lose weight', '  Run an Ultra Beast!  ']) {
+      expect(normTitle(t)).toBe(
+        t
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, ' ')
+          .replace(/\ban\b/g, 'a')
+          .trim(),
+      );
+      expect(compactTitle(t)).toBe(t.toLowerCase().replace(/[^a-z0-9]+/g, ''));
+    }
+  });
+
+  it('still keeps genuinely different goals apart', () => {
+    expect(sameGoalTitle('Lose weight', 'Run a 50 km')).toBe(false);
+    expect(sameGoalTitle('Étude in C', 'Prélude in C')).toBe(false);
+  });
+});
