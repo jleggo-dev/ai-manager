@@ -1,7 +1,9 @@
 /**
- * Provision the P2 context-pack Broker jobs (pack-select, pack-summarize) in AI Admin,
- * in-process (no SK/HTTP). Reads the definitions from config/ai-admin/ai-admin.config.json
- * and upserts them by slug against the Broker profile. Re-run after editing the prompts.
+ * Provision the ambient-capture Broker job (capture-extract) in AI Admin, in-process
+ * (no SK/HTTP). Reads the definition from config/ai-admin/ai-admin.config.json and upserts
+ * it by slug against the Broker profile. Re-run after editing the prompt. (The other two
+ * P2 context-pack jobs, pack-select and pack-summarize, were retired with the Broker
+ * phase-out — session open is zero-model-call now.)
  *
  * Run: node --import tsx apps/cadence-api/scripts/provision-pack-jobs.ts
  */
@@ -14,7 +16,7 @@ import { cadenceConfig } from '../src/config.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const ACTOR = cadenceConfig.devUserId ?? '00000000-0000-4000-a000-000000000001';
-const SLUGS = ['pack-select', 'pack-summarize', 'capture-extract'];
+const SLUGS = ['capture-extract'];
 
 async function main() {
   const broker = cadenceConfig.aim.brokerProfileId;
