@@ -2,17 +2,18 @@ import { useEffect, useState } from 'react';
 import { getCurrentMealPlan, getRecentMeals, listRecipes, patchMeal, type Meal } from '../../lib/api.ts';
 import { localTodayIso, useInvalidateNutritionDay, useNutritionDay } from '../../lib/query/index.ts';
 import type { MealKind } from '@cadence/shared';
-import { LogScreen } from '../food/LogScreen.tsx';
+import { ExpressFood } from '../food/ExpressFood.tsx';
+import { MealScreen } from '../food/meal/MealScreen.tsx';
+import { FoodSweepCard } from '../food/sweep/FoodSweepCard.tsx';
+import { FoodSweepSheet } from '../food/sweep/FoodSweepSheet.tsx';
+import { FoodSweepTidy } from '../food/sweep/FoodSweepTidy.tsx';
+import { useFoodSweep } from '../food/sweep/useFoodSweep.ts';
 import { FoodDay } from './FoodDay.tsx';
-import { FoodKitchen } from './FoodKitchen.tsx';
-import { FoodSubSheet } from './FoodSubSheet.tsx';
+import { FoodKitchen, type KitchenView } from './FoodKitchen.tsx';
 import { FoodWeek } from './FoodWeek.tsx';
 import { NutrientsPanel } from './NutrientsPanel.tsx';
 import { buildWeek } from './foodWeekModel.ts';
-import type { FoodHomeSub } from './foodHomeSub.ts';
 import { useMealEnrichment } from './useMealEnrichment.ts';
-
-export type { FoodHomeSub } from './foodHomeSub.ts';
 
 /** Sun-start week of local dates around today, for the Day tab's dot row (frame 02 draws it S–S). */
 function weekDates(todayIso: string): string[] {
@@ -38,7 +39,7 @@ function dayLabel(isoDate: string): string {
  * The Food screen (Food Journey 02 + 08/08b/09) — a real full screen, not a sheet: the permanent
  * manage-nutrition surface, reachable from the trail strip in every state.
  *
- * This file is the shell and nothing else: which tab, which day, which sheet. The three reads each
+ * This file is the shell and nothing else: which tab, which day, which Kitchen section. The three reads each
  * own a file — `FoodDay` (what's left, the day's parts, water), `FoodWeek` (averages then every
  * day), `NutrientsPanel` (the eight micronutrients) — because each is a major section and a screen
  * that hosts three reads has no business also drawing them.
@@ -53,13 +54,14 @@ function dayLabel(isoDate: string): string {
  * breaking the ring into a crenulated one (owner, 2026-08-20).
  */
 export function FoodHome({
-  initialSub = null,
+  initialKitchen = null,
   initialLogMeal = false,
   onBack,
   onCoach,
   onLogged,
 }: {
-  initialSub?: FoodHomeSub;
+  /** Open straight onto a Kitchen section (a shop trail task lands on 'shop'). */
+  initialKitchen?: KitchenView | null;
   /** Open straight into the Log screen (the quick-add sheet's meal row) — closing it lands on Day. */
   initialLogMeal?: boolean;
   onBack: () => void;
@@ -69,16 +71,21 @@ export function FoodHome({
 }) {
   const today = localTodayIso();
   const [date, setDate] = useState(today);
-  const [tab, setTab] = useState<'day' | 'week' | 'kitchen'>('day');
+  const [tab, setTab] = useState<'day' | 'week' | 'kitchen'>(initialKitchen ? 'kitchen' : 'day');
+  /** Which Kitchen section the tab opens on — the Day tab's pills and doors steer it. */
+  const [kitchenView, setKitchenView] = useState<KitchenView>(initialKitchen ?? 'recipes');
   const [nutrients, setNutrients] = useState(false);
   /** The full-screen Log (05b), opened by "Log a meal" or an empty meal slot. */
-  const [logMeal, setLogMeal] = useState<MealKind | 'any' | null>(initialLogMeal ? 'any' : null);
+  const [logMeal, setLogMeal] = useState<MealKind | 'any' | 'express' | null>(initialLogMeal ? 'any' : null);
+  // The Sunday sweep's ride-along: fetched once, carried through client state (the pending row
+  // clears itself after commit). The card only shows on today's Day read.
+  const sweep = useFoodSweep();
+  const [sweepOpen, setSweepOpen] = useState(false);
   // `isPending` is react-query's "no answer yet, first fetch in flight" — it is what tells FoodDay
   // to hold bars where the numbers go instead of settled zeroes (PERF-06). The header, the day
   // dots, the tabs and every door below paint immediately either way: none of them read the day.
   const { data: day = null, isPending: dayPending, refetch } = useNutritionDay(date);
   const invalidate = useInvalidateNutritionDay();
-  const [sub, setSub] = useState<FoodHomeSub>(initialSub);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [recent, setRecent] = useState<Meal[]>([]);
   const [hasWeek, setHasWeek] = useState(false);
@@ -86,6 +93,9 @@ export function FoodHome({
   /** Mirrors the day's water so a tap moves the row now; tagged with its date so it cannot leak
    *  onto another day when you navigate off today and back. */
   const [water, setWater] = useState<{ date: string; ml: number } | null>(null);
+  /** Bumped when a surface below may have changed the cookbook or the week — a meal-screen save
+   *  mints a recipe, so the counts refetch when it closes rather than going stale until remount. */
+  const [standingNonce, setStandingNonce] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -103,7 +113,7 @@ export function FoodHome({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [standingNonce]);
 
   /** A correction rewrote the meal server-side — re-read rather than patch state by hand. */
   async function onCorrected() {
@@ -137,16 +147,32 @@ export function FoodHome({
   const loggedDates = new Set(recent.map((m) => m.date));
   const cookbookTail = recipeCount == null ? '' : recipeCount === 0 ? ' · nothing saved yet' : ` · ${recipeCount}`;
 
-  if (logMeal) {
+  if (logMeal === 'express') {
     return (
-      <LogScreen
-        date={date}
-        initialMeal={logMeal === 'any' ? 'breakfast' : logMeal}
+      <ExpressFood
         onClose={() => setLogMeal(null)}
         onLogged={() => {
           void invalidate();
           onLogged?.();
         }}
+      />
+    );
+  }
+
+  if (logMeal) {
+    // The meal is the screen (1b): you open Breakfast, not Log. The draft rejoins its window on
+    // its own; closing it lands back on the Day read with the day already invalidated by the hook.
+    return (
+      <MealScreen
+        meal={logMeal === 'any' ? undefined : logMeal}
+        onClose={() => {
+          setLogMeal(null);
+          setStandingNonce((n) => n + 1);
+          void refetch();
+          onLogged?.();
+        }}
+        onExpressSingle={() => setLogMeal('express')}
+        onOpenDay={() => setLogMeal(null)}
       />
     );
   }
@@ -204,15 +230,22 @@ export function FoodHome({
           role="tab"
           aria-selected={tab === 'kitchen'}
           className={tab === 'kitchen' ? 'is-on' : ''}
-          onClick={() => setTab('kitchen')}
+          onClick={() => {
+            // The tab itself always opens on the cookbook; a pill-steered section is a one-shot.
+            setKitchenView('recipes');
+            setTab('kitchen');
+          }}
         >
           Kitchen
         </button>
       </div>
 
       <div className="fh-body">
+        {tab === 'day' && isToday && sweep.phase === 'offered' && !sweepOpen && sweep.sweep && (
+          <FoodSweepCard sweep={sweep.sweep} onOpen={() => setSweepOpen(true)} />
+        )}
         {tab === 'kitchen' ? (
-          <FoodKitchen targetKcal={day?.targets?.kcal ?? null} />
+          <FoodKitchen targetKcal={day?.targets?.kcal ?? null} initialView={kitchenView} />
         ) : tab === 'week' ? (
           <FoodWeek
             today={today}
@@ -237,7 +270,10 @@ export function FoodHome({
             onCorrected={onCorrected}
             onCoach={onCoach}
             onLog={(meal) => setLogMeal(meal ?? 'any')}
-            onSub={setSub}
+            onKitchen={(view) => {
+              setKitchenView(view);
+              setTab('kitchen');
+            }}
             onNutrients={() => setNutrients(true)}
             waterMl={water?.date === date ? water.ml : null}
             onWater={(ml) => setWater({ date, ml })}
@@ -245,18 +281,42 @@ export function FoodHome({
         )}
       </div>
 
-      {sub && (
-        <FoodSubSheet
-          sub={sub}
-          onClose={() => setSub(null)}
-          onOpen={setSub}
-          onLogged={() => {
-            void invalidate();
-            void refetch();
-            onLogged?.();
+      {sweepOpen && (sweep.phase === 'offered' || sweep.phase === 'committing') && sweep.sweep && (
+        <FoodSweepSheet
+          sweep={sweep.sweep}
+          busy={sweep.phase === 'committing'}
+          error={sweep.error}
+          onBack={() => setSweepOpen(false)}
+          onCommit={(ids) => void sweep.commit(ids)}
+          onDismiss={() => {
+            setSweepOpen(false);
+            void sweep.dismiss();
           }}
         />
       )}
+      {sweepOpen &&
+        (sweep.phase === 'tidyOffer' ||
+          sweep.phase === 'tidying' ||
+          sweep.phase === 'done' ||
+          sweep.phase === 'reverted') && (
+          <FoodSweepTidy
+            saved={sweep.saved}
+            tidyable={sweep.tidyable}
+            phase={sweep.phase}
+            tidiedCount={sweep.tidiedCount}
+            error={sweep.error}
+            onTidy={() => void sweep.tidy()}
+            onSkip={() => {
+              sweep.skipTidy();
+              setSweepOpen(false);
+            }}
+            onUndo={() => void sweep.revert()}
+            onClose={() => {
+              setSweepOpen(false);
+              void refetch();
+            }}
+          />
+        )}
     </div>
   );
 }

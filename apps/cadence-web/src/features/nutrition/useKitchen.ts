@@ -5,6 +5,7 @@ import {
   getCurrentMealPlan,
   listRecipes,
   patchMealPlan,
+  probeRecipeDiscovery,
   saveMealPlan,
   weekOfMonday,
   type MealPlanRecord,
@@ -19,6 +20,8 @@ export interface KitchenData {
   plan: MealPlanRecord | null;
   weekOf: string;
   status: KitchenStatus;
+  /** Whether the recipe-discovery endpoint is live — gates the "Find a real recipe" door. */
+  discoveryLive: boolean;
   busy: boolean;
   note: string;
   setNote: (note: string) => void;
@@ -44,11 +47,22 @@ export function useKitchen(): KitchenData {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [plan, setPlan] = useState<MealPlanRecord | null>(null);
   const [status, setStatus] = useState<KitchenStatus>('loading');
+  const [discoveryLive, setDiscoveryLive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const [nonce, setNonce] = useState(0);
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
+
+  useEffect(() => {
+    let alive = true;
+    void probeRecipeDiscovery().then((live) => {
+      if (alive) setDiscoveryLive(live);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -146,6 +160,7 @@ export function useKitchen(): KitchenData {
     plan,
     weekOf,
     status,
+    discoveryLive,
     busy,
     note,
     setNote,

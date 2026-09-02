@@ -19,6 +19,7 @@ const saveMealPlan = vi.fn();
 const deleteMealPlan = vi.fn();
 const getDietaryProfile = vi.fn();
 const structureRecipeFromChat = vi.fn();
+const probeRecipeDiscovery = vi.fn();
 
 vi.mock('../../lib/api.ts', () => ({
   listRecipes: (...a: unknown[]) => listRecipes(...a),
@@ -28,6 +29,10 @@ vi.mock('../../lib/api.ts', () => ({
   deleteMealPlan: (...a: unknown[]) => deleteMealPlan(...a),
   getDietaryProfile: (...a: unknown[]) => getDietaryProfile(...a),
   structureRecipeFromChat: (...a: unknown[]) => structureRecipeFromChat(...a),
+  probeRecipeDiscovery: (...a: unknown[]) => probeRecipeDiscovery(...a),
+  discoverRecipes: vi.fn(),
+  parseFridgePhoto: vi.fn(),
+  generateRecipesFromIngredients: vi.fn(),
   saveRecipe: vi.fn(),
   weekOfMonday: () => '2026-08-24',
   // The real one-liner, not a stub — the per-serving numbers are the point of 10a.
@@ -76,6 +81,7 @@ beforeEach(() => {
   listRecipes.mockResolvedValue({ status: 'ok', recipes: [chili, dal] });
   getCurrentMealPlan.mockResolvedValue({ status: 'not_found', plan: null });
   getDietaryProfile.mockResolvedValue({ status: 'ok', profile: { allergies: [], dislikes: [] } });
+  probeRecipeDiscovery.mockResolvedValue(false);
 });
 afterEach(cleanup);
 
@@ -310,5 +316,49 @@ describe('the paste-a-recipe door (10)', () => {
     await waitFor(() => expect(structureRecipeFromChat).toHaveBeenCalledWith('shakshuka, 4 eggs, serves 2'));
     // The draft is on screen and still unsaved — the confirm card is the only way it lands.
     expect(await screen.findByDisplayValue('Shakshuka')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The Day tab's pills and doors land HERE now (the July panel stack is gone), so the Kitchen
+ * accepts the section it should open on. The tab still defaults to the cookbook.
+ */
+describe('opening on a named section (the pill re-point)', () => {
+  it('opens on the shopping list when asked', async () => {
+    getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
+    render(<FoodKitchen initialView="shop" />);
+    expect(await screen.findByRole('region', { name: /Shopping list/i })).toBeInTheDocument();
+  });
+
+  it('opens on the planner when asked', async () => {
+    getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
+    render(<FoodKitchen initialView="week" />);
+    expect(await screen.findByRole('region', { name: /Plan the week/i })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The two intake doors the old cookbook panel carried, moved in with the recipes: the fridge
+ * photo, and — only when the endpoint answers the probe — recipe discovery. Both end at the same
+ * confirm card the paste door uses; the panels themselves have their own tests.
+ */
+describe('the other ways a recipe gets in', () => {
+  it('opens snap-the-fridge from the cookbook', async () => {
+    await mountKitchen();
+    fireEvent.click(await screen.findByRole('button', { name: /Snap the fridge/i }));
+    expect(await screen.findByRole('region', { name: /Snap fridge or pantry/i })).toBeInTheDocument();
+  });
+
+  it('hides recipe discovery while the endpoint is not live', async () => {
+    await mountKitchen();
+    await screen.findByRole('button', { name: /Snap the fridge/i });
+    expect(screen.queryByRole('button', { name: /Find a real recipe/i })).toBeNull();
+  });
+
+  it('offers recipe discovery once the probe says it is live', async () => {
+    probeRecipeDiscovery.mockResolvedValue(true);
+    await mountKitchen();
+    fireEvent.click(await screen.findByRole('button', { name: /Find a real recipe/i }));
+    expect(await screen.findByRole('region', { name: /Find a real recipe/i })).toBeInTheDocument();
   });
 });

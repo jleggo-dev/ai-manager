@@ -14,6 +14,7 @@ import { estimateFood, identifyFood, parseNutritionLabel } from '../services/foo
 import { importUsdaFood, searchFoodsWithUsda } from '../services/food-sources/usda-enrich.ts';
 import { isUsdaConfigured, searchUsdaFoods, UsdaConfigError, UsdaHttpError } from '../services/food-sources/usda.ts';
 import { loadResolveShared, resolveFoods } from '../services/food-resolver.ts';
+import { withAmbiguousFlag } from '../services/food-serving-axis.ts';
 import { isMeal, usageSlot } from '../services/nutrition-parse.ts';
 import { usualAtSlot } from '../services/food-usual-slot.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
@@ -48,7 +49,9 @@ router.get('/search', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   const q = typeof req.query.q === 'string' ? req.query.q : '';
   try {
-    res.json({ foods: await searchFoodsWithUsda(userId, q, limitFromQuery(req.query.limit)) });
+    // `ambiguous` (meal-logging rework, B2): servings spanning more than one axis mean the ＋
+    // opens the serving sheet instead of one-tap adding the default. Same flag on all three lists.
+    res.json({ foods: (await searchFoodsWithUsda(userId, q, limitFromQuery(req.query.limit))).map(withAmbiguousFlag) });
   } catch (err) {
     console.error('[GET /nutrition/foods/search]', err);
     res.status(500).json({ error: 'failed to search foods' });
@@ -105,7 +108,7 @@ router.post('/usda/import', async (req: Request, res: Response) => {
 router.get('/recents', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
-    res.json({ foods: await listRecentFoods(userId, limitFromQuery(req.query.limit)) });
+    res.json({ foods: (await listRecentFoods(userId, limitFromQuery(req.query.limit))).map(withAmbiguousFlag) });
   } catch (err) {
     console.error('[GET /nutrition/foods/recents]', err);
     res.status(500).json({ error: 'failed to list recent foods' });
@@ -116,7 +119,7 @@ router.get('/recents', async (req: Request, res: Response) => {
 router.get('/frequents', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
-    res.json({ foods: await listFrequentFoods(userId, limitFromQuery(req.query.limit)) });
+    res.json({ foods: (await listFrequentFoods(userId, limitFromQuery(req.query.limit))).map(withAmbiguousFlag) });
   } catch (err) {
     console.error('[GET /nutrition/foods/frequents]', err);
     res.status(500).json({ error: 'failed to list frequent foods' });

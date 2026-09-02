@@ -23,7 +23,7 @@ function FoodDayPending() {
       onCorrected={() => {}}
       onCoach={() => {}}
       onLog={() => {}}
-      onSub={() => {}}
+      onKitchen={() => {}}
       onNutrients={() => {}}
       waterMl={null}
       onWater={() => {}}

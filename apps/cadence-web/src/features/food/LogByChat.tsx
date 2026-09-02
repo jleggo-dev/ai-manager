@@ -18,12 +18,22 @@ const READING = 'Reading that…';
 export function LogByChat({
   meal,
   listening = false,
+  mode = 'log',
+  mealLabel,
+  onAppend,
   onLogged,
   onBack,
 }: {
   meal: MealKind;
   /** Opened from the Voice tile — the mic starts live. */
   listening?: boolean;
+  /**
+   * Draft mode (meal-logging rework, 1b): this door APPENDS into the open meal — the confirm
+   * card's button reads "Add to {meal}" and `onAppend` carries the rows through verbatim.
+   */
+  mode?: 'log' | 'draft';
+  mealLabel?: string;
+  onAppend?: (preview: MealPreview) => Promise<boolean>;
   onLogged: (preview: MealPreview) => void;
   onBack: () => void;
 }) {
@@ -60,7 +70,7 @@ export function LogByChat({
         <button type="button" className="fd-back" aria-label="Back" onClick={onBack}>
           ‹
         </button>
-        <h2>Log by chat</h2>
+        <h2>{mode === 'draft' ? `Add to ${mealLabel ?? meal}` : 'Log by chat'}</h2>
         <span className="fc-slot">{meal}</span>
       </div>
 
@@ -76,6 +86,9 @@ export function LogByChat({
           <MealParseCard
             preview={preview}
             initialMeal={meal}
+            mode={mode}
+            mealLabel={mealLabel}
+            onAppend={onAppend}
             onLogged={() => onLogged(preview)}
             onCancel={() => setPreview(null)}
           />

@@ -117,7 +117,7 @@ export function MainTabs({
    * The Food home (Food Journey 02) — a full screen that replaces the Plan tab's content while
    * the tab bar stays. It lives HERE rather
    * than inside PlanView so the ＋ FAB knows to stand down and the coach hand-off is one hop.
-   * 'shop' opens straight to the shopping list (a shop trail task is a door to that sub-view);
+   * 'shop' opens straight onto the Kitchen tab's shopping list (a shop trail task lands there);
    * 'log' opens straight into the Log screen (the quick-add sheet's meal row).
    */
   const [food, setFood] = useState<null | 'home' | 'shop' | 'log'>(null);
@@ -166,7 +166,7 @@ export function MainTabs({
         )}
         {tab === 'plan' && food && !settingsRoomOpen && !building.open && (
           <FoodHome
-            initialSub={food === 'shop' ? 'shop' : null}
+            initialKitchen={food === 'shop' ? 'shop' : null}
             initialLogMeal={food === 'log'}
             onBack={() => setFood(null)}
             onCoach={(note) => {

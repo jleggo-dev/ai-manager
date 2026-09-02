@@ -33,7 +33,7 @@ export function RecipeLogConfirm({
   initialMeal?: MealKind;
   initialServings?: number;
   onCancel: () => void;
-  /** The written row, so a caller that shows "where should it sit?" after any other log (LogScreen)
+  /** The written row, so a caller that reads the day back after the log
    *  can do the same here — a recipe log used to skip that step entirely. */
   onLogged: (meal: Meal) => void;
 }) {

@@ -42,6 +42,12 @@ export interface FoodSummary {
   brand?: string | null;
   /** Optional one-line serving hint for the recents list. */
   serving_label?: string | null;
+  /**
+   * Servings span more than one axis (mass/volume/count) — several serving sizes worth asking
+   * about, so the ＋ opens the serving sheet instead of one-tap adding (meal-logging rework, B2).
+   * Absent from older API deploys; treat absent as false.
+   */
+  ambiguous?: boolean;
 }
 
 export interface FoodListResult {
@@ -138,6 +144,7 @@ function parseFoodList(body: unknown): FoodSummary[] {
       name,
       brand: typeof r.brand === 'string' ? r.brand : null,
       serving_label: servingLabelFromFood(r),
+      ...(typeof r.ambiguous === 'boolean' ? { ambiguous: r.ambiguous } : {}),
     });
   }
   return out;

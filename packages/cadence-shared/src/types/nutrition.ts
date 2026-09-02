@@ -96,16 +96,61 @@ export function isMealKind(value: unknown): value is MealKind {
   return typeof value === 'string' && (MEAL_KINDS as readonly string[]).includes(value);
 }
 
+/**
+ * One row of a meal. Previously an anonymous inline shape re-declared structurally in several
+ * places; named once here so the meal-logging rework has a single source (2026-09-02).
+ *
+ * Optional food_id correlates a free-form item back to a saved Food (Req 5 §5.4). `brand` is the
+ * place it came from when the user named it or the packaging showed it — kept on the item so a
+ * previewed meal can still pin its vendor after the round trip to the browser (A23 §1b).
+ * `part` names the MealPart this item belongs to (the bracket); absent = a loose item.
+ */
+export interface MealItem {
+  name: string;
+  brand?: string;
+  qty?: number;
+  unit?: string;
+  est?: Macros;
+  food_id?: string;
+  part?: string;
+}
+
+/**
+ * A recipe instance inside a meal — the bracket (meal-logging rework, 2026-09-02). A meal contains
+ * items and parts, nothing else; there is no "group" object. An unnamed part reads as "N things";
+ * naming and saving it to the cookbook is what makes it a recipe there. Grouping changes no
+ * numbers, ever — parts only change how the day reads back.
+ */
+export interface MealPart {
+  /** Stable within this log; items reference it via `item.part`. */
+  key: string;
+  /** null = unnamed ("4 things"). Suggested names come from the user's own words. */
+  name: string | null;
+  /** The cookbook recipe this part was logged from or saved as. The part's own items are the
+   *  SNAPSHOT — editing the cookbook recipe never reaches backwards into logged meals. */
+  recipe_id?: string | null;
+  /** The recipe's yield at log time (1 = a saved meal; N = makes several). */
+  yield_servings?: number | null;
+  /** How many of those servings this meal logged (the diary's "1 of 4"). */
+  servings_logged?: number | null;
+  /** 'sweep' marks parts the Sunday sweep's retro-tidy added — the reversible set. */
+  source?: 'user' | 'sweep';
+}
+
+/** A meal is open (accepting adds, counted but marked OPEN) or closed. Legacy rows are closed. */
+export type MealState = 'open' | 'closed';
+
 export interface NutritionLog {
   log_id: string;
   date: string;
   meal: MealKind;
-  /**
-   * Optional food_id correlates a free-form item back to a saved Food (Req 5 §5.4). `brand` is the
-   * place it came from when the user named it or the packaging showed it — kept on the item so a
-   * previewed meal can still pin its vendor after the round trip to the browser (A23 §1b).
-   */
-  items: { name: string; brand?: string; qty?: number; unit?: string; est?: Macros; food_id?: string }[];
+  items: MealItem[];
+  /** The brackets. Empty for a flat meal; every `item.part` must name a key in here. */
+  parts?: MealPart[];
+  /** Draft lifecycle (1b — the meal is the screen). Absent on legacy reads = 'closed'. */
+  state?: MealState;
+  /** When an open meal stops accepting adds — visible on-surface, never a silent rule. */
+  closes_at?: string | null;
   macros: Macros;
   input_method: 'photo' | 'voice' | 'text' | 'manual';
   ai_confidence?: number;
@@ -123,6 +168,38 @@ export interface NutritionLog {
   photo_url?: string | null; // display-only: short-lived signed URL attached at read time (never stored)
   /** Set when the meal is N servings of a saved recipe (Req 5 §5.4). */
   recipe_id?: string | null;
+}
+
+/**
+ * The Sunday sweep (meal-logging rework, S3/S4). Deterministic code finds the candidates —
+ * co-occurring item sets, counts, slots; the model only names and judges. The rail is the
+ * practised one: ride-along proposals with toggles and ONE commit; never auto-applied; never
+ * more than three; never anything seen once; never a change to a logged number.
+ */
+export interface FoodSweepProposal {
+  /** Stable id within this sweep, referenced by the commit call. */
+  id: string;
+  /** yield 1 = "saves as a meal"; N = "saves as a recipe". */
+  yield_servings: number;
+  /** Named from the user's own words — nothing invents a cheerful name. */
+  name: string;
+  /** The member foods, by saved food id, with the modal amounts seen. */
+  members: { food_id: string; name: string; qty?: number; unit?: string }[];
+  /** The deterministic evidence, in counts ("five mornings"), never opinion. */
+  seen_count: number;
+  slot: MealKind;
+  /** One plain line for the card ("Five mornings, always these four together."). */
+  line: string;
+  /** Per-serving macros, computed deterministically from the members. */
+  macros_per_serving: Macros;
+  /** log_ids whose flat items match this set — the retro-tidy target list. */
+  tidy_log_ids: string[];
+}
+
+export interface PendingFoodSweep {
+  built_at: string;
+  /** ≤3 by the rail's own rule. */
+  proposals: FoodSweepProposal[];
 }
 
 /** Deterministic Observe-phase read over nutrition_logs — the coach's food-log summary. */

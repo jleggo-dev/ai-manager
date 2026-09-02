@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import type { Recipe } from '@cadence/shared';
-import { KitchenPaste } from './KitchenPaste.tsx';
+import { KitchenIntake, type KitchenIntakeSource } from './KitchenIntake.tsx';
 import { KitchenPlanner } from './KitchenPlanner.tsx';
 import { KitchenRecipes } from './KitchenRecipes.tsx';
 import { KitchenShopList } from './KitchenShopList.tsx';
 import { plannedCount } from './kitchenPlan.ts';
 import { useKitchen } from './useKitchen.ts';
 
-type KitchenView = 'recipes' | 'week' | 'shop' | 'paste';
+/** The Kitchen's three standing sections — what the Day tab's pills and doors navigate to. */
+export type KitchenView = 'recipes' | 'week' | 'shop';
+
+type KitchenScreen = KitchenView | KitchenIntakeSource;
 
 /**
  * The Kitchen (Food Journey 10) — the third tab of the Food screen, and the prep surface.
@@ -18,21 +21,25 @@ type KitchenView = 'recipes' | 'week' | 'shop' | 'paste';
  * meal to a day's totals — a planned dinner is an intention, and it becomes food that counted when
  * it is eaten and logged on the Day tab.
  *
- * That separation is why this tab does not reuse the cookbook panel the Day tab's doors open: that
- * one offers "log N servings", which is exactly the tap this surface must not have.
+ * That separation is why the cookbook here offers "put it on a day" and never "log N servings" —
+ * logging a saved recipe lives on the Day tab's Log screen, where counting belongs.
  */
-export function FoodKitchen({ targetKcal = null }: { targetKcal?: number | null } = {}) {
+export function FoodKitchen({
+  targetKcal = null,
+  initialView = 'recipes',
+}: { targetKcal?: number | null; initialView?: KitchenView } = {}) {
   const kitchen = useKitchen();
-  const [view, setView] = useState<KitchenView>('recipes');
+  const [view, setView] = useState<KitchenScreen>(initialView);
   const [pending, setPending] = useState<Recipe | null>(null);
 
   const days = kitchen.plan?.days ?? [];
   const planned = plannedCount(days);
 
-  if (view === 'paste') {
+  if (view === 'paste' || view === 'snap' || view === 'discover') {
     return (
       <div className="kt">
-        <KitchenPaste
+        <KitchenIntake
+          source={view}
           onCancel={() => setView('recipes')}
           onSaved={() => {
             kitchen.reload();
@@ -93,6 +100,8 @@ export function FoodKitchen({ targetKcal = null }: { targetKcal?: number | null 
           recipes={kitchen.recipes}
           status={kitchen.status}
           onPaste={() => setView('paste')}
+          onSnap={() => setView('snap')}
+          onDiscover={kitchen.discoveryLive ? () => setView('discover') : null}
           onPlan={(recipe) => {
             setPending(recipe);
             setView('week');

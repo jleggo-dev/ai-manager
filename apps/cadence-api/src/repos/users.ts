@@ -6,6 +6,7 @@ import type {
   Constraint,
   DietaryProfile,
   MacroTargets,
+  PendingFoodSweep,
   PendingProposal,
   PendingPlan,
   PendingWeekReview,
@@ -53,6 +54,11 @@ export interface CadenceUserRow {
   // Present once migration 0051 is applied. The one plan-synthesis run in flight for this user
   // (or how the last one failed) — claimed before starting, cleared on success. See PlanRun.
   plan_run?: PlanRun | null;
+  // Present once migration 0053 is applied. The Sunday sweep's ride-along proposals (S3) — the
+  // same pending-jsonb rail as pending_proposal. The user's commit/dismiss resolves it.
+  pending_food_sweep?: PendingFoodSweep | null;
+  // Present once migration 0053 is applied. The sweep's weekly throttle stamp.
+  last_food_sweep_at?: string | null;
 }
 
 /**
@@ -324,6 +330,24 @@ export async function setPendingPlan(userId: string, plan: PendingPlan | null): 
  *  never stored here, only which week to render. */
 export async function setPendingWeekReview(userId: string, review: PendingWeekReview | null): Promise<void> {
   await sql`update cadence.users set pending_week_review = ${review ? json(review) : null} where id = ${userId}`;
+}
+
+/** Read the pending Sunday-sweep blob (S3). Null when nothing is on file or the user row is missing. */
+export async function getPendingFoodSweep(userId: string): Promise<PendingFoodSweep | null> {
+  const [row] = await sql<{ pending_food_sweep: PendingFoodSweep | null }[]>`
+    select pending_food_sweep from cadence.users where id = ${userId}`;
+  return row?.pending_food_sweep ?? null;
+}
+
+/** Store (or clear, with null) the Sunday sweep's proposals — the user's commit/dismiss resolves
+ *  it, in the style of setPendingProposal. */
+export async function setPendingFoodSweep(userId: string, sweep: PendingFoodSweep | null): Promise<void> {
+  await sql`update cadence.users set pending_food_sweep = ${sweep ? json(sweep) : null} where id = ${userId}`;
+}
+
+/** Mark the weekly food-sweep gate as run now — regardless of whether anything was found. */
+export async function stampFoodSweep(userId: string): Promise<void> {
+  await sql`update cadence.users set last_food_sweep_at = now() where id = ${userId}`;
 }
 
 /** Persist the forward-only streak state (Req 4) — written by services/streak.ts after it

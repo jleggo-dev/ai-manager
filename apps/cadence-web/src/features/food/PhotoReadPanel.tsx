@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Meal, MealKind } from '../../lib/api.ts';
+import type { Meal, MealKind, MealPreview } from '../../lib/api.ts';
 import { useMealPhotoRead } from './useMealPhotoRead.ts';
 import { GrowingTextarea } from '../../components/GrowingTextarea.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
@@ -13,7 +13,7 @@ import { MicButton } from '../../components/MicButton.tsx';
  *
  *   caption  →  [reading: rotating copy]  →  THE READING, editable  →  [nutrition: rotating copy]
  *
- * Its own file rather than another branch in `LogScreen`, which is already 227 lines and would be
+ * Its own file rather than another branch in the meal screen, which has its own size budget and would be
  * mixing "route between capture methods" with "run a two-stage read" — a distinct responsibility
  * gets its own file from day one.
  *
@@ -30,6 +30,8 @@ import { MicButton } from '../../components/MicButton.tsx';
 export function PhotoReadPanel({
   photo,
   meal,
+  mode = 'log',
+  appendDraft,
   onLogged,
   onBack,
   initialCaption = '',
@@ -37,6 +39,13 @@ export function PhotoReadPanel({
 }: {
   photo: string;
   meal: MealKind;
+  /**
+   * Draft mode (meal-logging rework, 1b): the photo appends into the open meal — the confirm
+   * button reads "Add to {meal}" and `appendDraft` carries the priced rows to the draft; the
+   * caller owns closing the door, so `onLogged` never fires in this mode.
+   */
+  mode?: 'log' | 'draft';
+  appendDraft?: (items: MealPreview['items'], rawText: string) => Promise<boolean>;
   onLogged: (m: Meal) => void;
   onBack: () => void;
   /** Words already typed before the photo was attached — they are evidence, so they carry over. */
@@ -44,8 +53,9 @@ export function PhotoReadPanel({
   backLabel?: string;
 }) {
   const [caption, setCaption] = useState(initialCaption);
-  const r = useMealPhotoRead();
+  const r = useMealPhotoRead(mode === 'draft' ? appendDraft : undefined);
   const working = r.phase === 'reading' || r.phase === 'nutrition';
+  const commitLabel = mode === 'draft' ? `Add to ${meal}` : `Log to ${meal}`;
 
   return (
     <div className="fl-body fl-photo">
@@ -104,7 +114,7 @@ export function PhotoReadPanel({
           className="fa-log"
           onClick={() => void r.commit({ caption: caption.trim(), meal }).then((m) => m && onLogged(m))}
         >
-          {`Log to ${meal}`}
+          {commitLabel}
         </button>
       )}
 
@@ -119,7 +129,13 @@ export function PhotoReadPanel({
             className="fa-log"
             onClick={() => void r.commit({ caption: caption.trim(), meal, reading: '' }).then((m) => m && onLogged(m))}
           >
-            {caption.trim() ? `Log “${caption.trim()}” to ${meal}` : `Log to ${meal} anyway`}
+            {mode === 'draft'
+              ? caption.trim()
+                ? `Add “${caption.trim()}” to ${meal}`
+                : `Add to ${meal} anyway`
+              : caption.trim()
+                ? `Log “${caption.trim()}” to ${meal}`
+                : `Log to ${meal} anyway`}
           </button>
           <button type="button" className="lockbtn ghost" onClick={() => void r.read(photo, caption.trim())}>
             Try reading it again

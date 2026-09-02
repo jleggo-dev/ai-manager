@@ -14,6 +14,18 @@ import './styles/gate.css';
 // The food CAPTURE surfaces (quick add, the Log screen, the confirm card). Separate from
 // styles.css's `.fh-*` reading screens on purpose — a capture and a read are different jobs.
 import './styles/food-capture.css';
+// The bracket grammar (.mb-*, meal-logging rework P2) — self-contained; drawn the same in the
+// meal, the diary, and the cookbook, so it belongs to none of their stylesheets.
+import './styles/bracket.css';
+// The diary's bracket wrappers and the cookbook shelf (.cs-*, P6) — placement around the mark,
+// never the mark itself, so it loads after bracket.css and leans on it.
+import './styles/shelf.css';
+// The meal screen (.ms-*, meal-logging rework P4) — the draft surface. After bracket.css and
+// food-capture.css because it composes around both families without restating either.
+import './styles/meal-screen.css';
+// The Sunday sweep's surfaces (.sw-*, meal-logging rework P7) — rides the sheet chrome from
+// styles.css and the bracket's taxonomy (green/butter), so it loads after both.
+import './styles/sweep.css';
 // Skeletons (PERF-06). Last, and deliberately self-contained: these rules describe the SHAPE of a
 // screen that has not arrived, so they must not depend on — or be overridden by — any one
 // screen's stylesheet.

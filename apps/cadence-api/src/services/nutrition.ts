@@ -56,6 +56,7 @@ export type { BaselineRead } from './nutrition-baseline.ts';
 import { priceParsedMeal } from './food-pricing.ts';
 import { totalsFromItems } from './meal-corrections.ts';
 import { enrichFlags } from './meal-enrich.ts';
+import { expireOverdueMeals } from './meal-draft.ts';
 
 export { parseMealResult, wantsTargets, PROVISIONAL_BELOW, isMeal } from './nutrition-parse.ts';
 export type { ParsedMealResult } from './nutrition-parse.ts';
@@ -360,6 +361,10 @@ export interface NutritionDay extends DayTotals {
  *  reflects NET calories: base kcal target + the eaten-back share of today's estimated exercise burn. */
 export async function getNutritionDay(userId: string, date?: string): Promise<NutritionDay> {
   const d = date ?? today();
+  // Lazy draft expiry (1b): the day must never read a window that has already ended, so any open
+  // meal past closes_at closes here first (empty ones dissolve). Open meals inside their window
+  // stay in the rows below and count toward totals immediately, marked OPEN — the adopted fork.
+  await expireOverdueMeals(userId);
   const [rows, user, done, water_ml] = await Promise.all([
     listNutritionLogs(userId, d, d),
     getUser(userId),
