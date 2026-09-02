@@ -393,28 +393,22 @@ export function PlanView({
           Pre- and post-activity are user-initiated and mutually exclusive by construction; the
           check-in is the only one that arrives uninvited, so it is the one that yields — it
           mounts (and only then asks the server whether it's due) once nothing else is open. */}
-      {!checkinSettled &&
-        !startOcc &&
-        !captureOcc &&
-        !cookOcc &&
-        !adjustOpen &&
-        !doorOpen &&
-        !detourEntry && (
-          <DailyCheckIn
-            // A pick's preformed steer is a small ask — exactly what the coach's triage exists for
-            // (Phase 2). It goes to her as a visible send, in the pick's own user-voice words; she
-            // makes the change or puts up a card. No sheet, no direct synthesis.
-            onAdjust={(steer) => {
-              setCheckinSettled(true);
-              onSteerCoach(steer);
-            }}
-            onCoach={() => {
-              setCheckinSettled(true);
-              onCoach();
-            }}
-            onClose={() => setCheckinSettled(true)}
-          />
-        )}
+      {!checkinSettled && !startOcc && !captureOcc && !cookOcc && !adjustOpen && !doorOpen && !detourEntry && (
+        <DailyCheckIn
+          // A pick's preformed steer is a small ask — exactly what the coach's triage exists for
+          // (Phase 2). It goes to her as a visible send, in the pick's own user-voice words; she
+          // makes the change or puts up a card. No sheet, no direct synthesis.
+          onAdjust={(steer) => {
+            setCheckinSettled(true);
+            onSteerCoach(steer);
+          }}
+          onCoach={() => {
+            setCheckinSettled(true);
+            onCoach();
+          }}
+          onClose={() => setCheckinSettled(true)}
+        />
+      )}
       {doorOpen && (
         <DoorSheet
           onTempPlan={() => {
