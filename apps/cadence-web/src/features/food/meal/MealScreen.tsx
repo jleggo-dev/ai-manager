@@ -127,7 +127,10 @@ export function MealScreen({ meal: initialMeal, onClose, onExpressSingle, onOpen
               draft={draft}
               offerVisible={offer.shouldOffer(draft.meal)}
               onOfferAccept={(name) => {
-                void draft.groupLoose(draft.items.map((_, i) => i), name);
+                void draft.groupLoose(
+                  draft.items.map((_, i) => i),
+                  name,
+                );
               }}
               onOfferDecline={() => {
                 if (logId) offer.decline(logId);
@@ -144,7 +147,13 @@ export function MealScreen({ meal: initialMeal, onClose, onExpressSingle, onOpen
         {draft.err && <div className="food-empty">{draft.err}</div>}
       </div>
       {!empty && (
-        <MealFooter kind={kind} total={draft.total} askedCount={draft.askedCount} busy={draft.busy} onCloseMeal={() => void doClose()} />
+        <MealFooter
+          kind={kind}
+          total={draft.total}
+          askedCount={draft.askedCount}
+          busy={draft.busy}
+          onCloseMeal={() => void doClose()}
+        />
       )}
       {menuOpen && (
         <MealMenu
@@ -169,7 +178,15 @@ export function MealScreen({ meal: initialMeal, onClose, onExpressSingle, onOpen
  * same act (savePartAsRecipe); renaming alone never touches the cookbook — grouping is not
  * saving. Yield rides the same card (canvas C3).
  */
-function SaveFlowCard({ draft, flow, onClose }: { draft: ReturnType<typeof useMealDraft>; flow: SaveFlow; onClose: () => void }) {
+function SaveFlowCard({
+  draft,
+  flow,
+  onClose,
+}: {
+  draft: ReturnType<typeof useMealDraft>;
+  flow: SaveFlow;
+  onClose: () => void;
+}) {
   const [name, setName] = useState<string | null>(null);
   const [servings, setServings] = useState(1);
   const members = membersOf(draft.items, flow.part);

@@ -39,7 +39,11 @@ function useStartFromYours(kind: MealKind): YoursRow[] {
     rows.push({
       recipe_id: rec.recipe_id,
       name: rec.name,
-      sub: rec.ingredients.map((i) => i.name.split(',')[0]).slice(0, 4).join(' · ') || undefined,
+      sub:
+        rec.ingredients
+          .map((i) => i.name.split(',')[0])
+          .slice(0, 4)
+          .join(' · ') || undefined,
       kcal: typeof rec.macros_per_serving.kcal === 'number' ? rec.macros_per_serving.kcal : undefined,
     });
   }

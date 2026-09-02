@@ -247,7 +247,9 @@ export function MealAddPanel({
           </div>
         )}
         <p className="ms-panel-note">
-          {'A ＋ adds it straight in. A › means that food has several serving sizes worth asking about, so it opens the sheet.'}
+          {
+            'A ＋ adds it straight in. A › means that food has several serving sizes worth asking about, so it opens the sheet.'
+          }
         </p>
         {draft.err && <div className="food-empty">{draft.err}</div>}
       </div>

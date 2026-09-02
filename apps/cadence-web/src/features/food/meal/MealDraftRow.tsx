@@ -57,7 +57,12 @@ function KeptRow({
           −
         </button>
         <b>{[qty, item.unit].filter(Boolean).join(' ')}</b>
-        <button type="button" aria-label={`More ${item.name}`} disabled={busy} onClick={() => onQty(index, round2(qty + 0.25))}>
+        <button
+          type="button"
+          aria-label={`More ${item.name}`}
+          disabled={busy}
+          onClick={() => onQty(index, round2(qty + 0.25))}
+        >
           +
         </button>
       </div>

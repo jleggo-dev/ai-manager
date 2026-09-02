@@ -22,7 +22,21 @@ function windowLine(opts: {
       : null;
     return [day, openedClock, 'nothing in it yet'].filter(Boolean).join(' · ');
   }
-  const WORDS = ['ZERO', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN', 'ELEVEN', 'TWELVE'];
+  const WORDS = [
+    'ZERO',
+    'ONE',
+    'TWO',
+    'THREE',
+    'FOUR',
+    'FIVE',
+    'SIX',
+    'SEVEN',
+    'EIGHT',
+    'NINE',
+    'TEN',
+    'ELEVEN',
+    'TWELVE',
+  ];
   const things = `${WORDS[count] ?? count} ${count === 1 ? 'THING' : 'THINGS'}`;
   return [openedClock, things, addsUntil].filter(Boolean).join(' · ');
 }

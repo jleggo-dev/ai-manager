@@ -61,7 +61,13 @@ describe('BracketList', () => {
     const onToggleCollapse = vi.fn();
     const onOpenMenu = vi.fn();
     render(
-      <BracketList items={items} parts={parts} renderRow={renderRow} onToggleCollapse={onToggleCollapse} onOpenMenu={onOpenMenu} />,
+      <BracketList
+        items={items}
+        parts={parts}
+        renderRow={renderRow}
+        onToggleCollapse={onToggleCollapse}
+        onOpenMenu={onOpenMenu}
+      />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Collapse Chia bowl' }));
     expect(onToggleCollapse).toHaveBeenCalledWith('p1');

@@ -76,9 +76,7 @@ export function tidyButtonLabel(tidyable: TidyableProposal[]): string {
 }
 
 /** Count-honest footnote — never a claim about how many days actually held an extra. */
-export const EXTRAS_FOOTNOTE =
-  'Any that had an extra thing in them keep their extra, loose, outside the bracket.';
+export const EXTRAS_FOOTNOTE = 'Any that had an extra thing in them keep their extra, loose, outside the bracket.';
 
 /** S3's footer, verbatim — the whole card's promise in one line. */
-export const S3_FOOTER =
-  "Nothing's saved until you say so, and none of this touches what you already logged.";
+export const S3_FOOTER = "Nothing's saved until you say so, and none of this touches what you already logged.";

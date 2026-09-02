@@ -6,8 +6,19 @@
 import type { Macros } from '@cadence/shared';
 
 const WORDS = [
-  'zero', 'one', 'two', 'three', 'four', 'five', 'six',
-  'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+  'ten',
+  'eleven',
+  'twelve',
 ] as const;
 
 /** "four" for 4; digits past twelve, where a word would read slower than the number. */

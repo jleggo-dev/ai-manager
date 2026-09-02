@@ -91,10 +91,19 @@ const slotBody = z.object({ meal: mealKindSchema });
 
 /** Mirrors the client's MealPartOp union — the grammar itself is enforced in meal-parts.ts. */
 const partsBody = z.discriminatedUnion('op', [
-  z.object({ op: z.literal('group'), item_indexes: z.array(z.number().int().min(0)).min(2).max(40), name: z.string().max(120).nullable().optional() }),
+  z.object({
+    op: z.literal('group'),
+    item_indexes: z.array(z.number().int().min(0)).min(2).max(40),
+    name: z.string().max(120).nullable().optional(),
+  }),
   z.object({ op: z.literal('ungroup'), part: z.string().min(1).max(40) }),
   z.object({ op: z.literal('rename'), part: z.string().min(1).max(40), name: z.string().trim().min(1).max(120) }),
-  z.object({ op: z.literal('set_yield'), part: z.string().min(1).max(40), yield_servings: z.number().int().min(1).max(99), servings_logged: z.number().positive().max(99).optional() }),
+  z.object({
+    op: z.literal('set_yield'),
+    part: z.string().min(1).max(40),
+    yield_servings: z.number().int().min(1).max(99),
+    servings_logged: z.number().positive().max(99).optional(),
+  }),
   z.object({ op: z.literal('add'), part: z.string().min(1).max(40), index: z.number().int().min(0) }),
   z.object({ op: z.literal('remove'), part: z.string().min(1).max(40), index: z.number().int().min(0) }),
 ]);

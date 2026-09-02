@@ -83,7 +83,14 @@ export function PartMenu(props: PartMenuProps) {
         <div className="mb-menu">
           <Row icon="✎" title="Rename it" onPress={props.onRename} />
           <Row icon="＋" title="Add something to this" sub="search, say it, or scan" onPress={props.onAddTo} />
-          <Row icon="☑" title="Take something out" sub="tick what should leave the bowl" accent chevron onPress={props.onTakeOut} />
+          <Row
+            icon="☑"
+            title="Take something out"
+            sub="tick what should leave the bowl"
+            accent
+            chevron
+            onPress={props.onTakeOut}
+          />
           <Row
             icon="⤨"
             title="Ungroup it"

@@ -53,7 +53,9 @@ describe('CookbookShelf', () => {
     expect(screen.getByText('yogurt · chia · whey · strawberries')).toBeInTheDocument();
     expect(screen.getByText('makes 4')).toBeInTheDocument();
     expect(
-      screen.getByText("A green bracket is one portion. A butter bracket makes several. That's the whole taxonomy — no tabs."),
+      screen.getByText(
+        "A green bracket is one portion. A butter bracket makes several. That's the whole taxonomy — no tabs.",
+      ),
     ).toBeInTheDocument();
   });
 

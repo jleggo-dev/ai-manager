@@ -39,14 +39,7 @@ import { useInvalidateNutritionDay } from '../../../lib/query/index.ts';
 import type { TidyableProposal } from './copy.ts';
 
 export type FoodSweepPhase =
-  | 'idle'
-  | 'offered'
-  | 'committing'
-  | 'tidyOffer'
-  | 'tidying'
-  | 'done'
-  | 'reverted'
-  | 'dismissed';
+  'idle' | 'offered' | 'committing' | 'tidyOffer' | 'tidying' | 'done' | 'reverted' | 'dismissed';
 
 export function useFoodSweep() {
   const [phase, setPhase] = useState<FoodSweepPhase>('idle');

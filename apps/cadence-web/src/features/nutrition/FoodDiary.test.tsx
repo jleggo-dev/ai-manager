@@ -122,7 +122,9 @@ describe('FoodDiary parts rendering', () => {
   });
 
   it('says OPEN on a slot whose meal is still open', () => {
-    renderDiary(dayOf([wideMeal({ state: 'open', items: [{ name: 'latte', est: { kcal: 120 } }], macros: { kcal: 120 } })]));
+    renderDiary(
+      dayOf([wideMeal({ state: 'open', items: [{ name: 'latte', est: { kcal: 120 } }], macros: { kcal: 120 } })]),
+    );
     expect(screen.getByText('OPEN')).toBeInTheDocument();
   });
 });
@@ -165,7 +167,13 @@ describe('grouping the past', () => {
     // The parent re-reads and hands back the same meal, now bracketed. Same kcal, same count —
     // grouping changes no numbers, ever.
     rerender(
-      <FoodDiary day={dayOf([grouped])} confirming={null} onConfirm={() => {}} onLog={() => {}} onCorrected={onCorrected} />,
+      <FoodDiary
+        day={dayOf([grouped])}
+        confirming={null}
+        onConfirm={() => {}}
+        onLog={() => {}}
+        onCorrected={onCorrected}
+      />,
     );
     expect(screen.getByRole('button', { name: /Breakfast —/ }).getAttribute('aria-label')).toBe(before);
     // The unnamed bracket reads as a plain count — label and sub both say so.

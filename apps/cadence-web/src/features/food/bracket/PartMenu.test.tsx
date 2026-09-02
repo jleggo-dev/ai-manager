@@ -71,7 +71,9 @@ describe('PartMenu', () => {
     render(<PartMenu {...menuProps({ mealKcal: 840, readsNow: 3 })} />);
     // 3 rows now; ungrouping a 4-member bracket reads as 3 − 1 + 4 = six things.
     expect(
-      screen.getByText(/Ungrouping never removes food from your day\. It's the same 840 kcal, read as six things instead of three\./),
+      screen.getByText(
+        /Ungrouping never removes food from your day\. It's the same 840 kcal, read as six things instead of three\./,
+      ),
     ).toBeInTheDocument();
   });
 

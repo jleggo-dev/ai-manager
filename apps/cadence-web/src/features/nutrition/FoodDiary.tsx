@@ -217,7 +217,12 @@ function YieldSheet({
               −
             </button>
             <b>{made}</b>
-            <button type="button" aria-label="More portions" disabled={busy || made >= 12} onClick={() => setMade(made + 1)}>
+            <button
+              type="button"
+              aria-label="More portions"
+              disabled={busy || made >= 12}
+              onClick={() => setMade(made + 1)}
+            >
               ＋
             </button>
           </span>
@@ -225,11 +230,21 @@ function YieldSheet({
         <div className="cs-yield-row">
           <span className="cs-yield-lab">THIS MEAL WAS</span>
           <span className="cs-stepper">
-            <button type="button" aria-label="Fewer servings" disabled={busy || ate <= 1} onClick={() => setAte(ate - 1)}>
+            <button
+              type="button"
+              aria-label="Fewer servings"
+              disabled={busy || ate <= 1}
+              onClick={() => setAte(ate - 1)}
+            >
               −
             </button>
             <b>{`${ate} of ${made} servings`}</b>
-            <button type="button" aria-label="More servings" disabled={busy || ate >= made} onClick={() => setAte(ate + 1)}>
+            <button
+              type="button"
+              aria-label="More servings"
+              disabled={busy || ate >= made}
+              onClick={() => setAte(ate + 1)}
+            >
               ＋
             </button>
           </span>
@@ -375,7 +390,9 @@ export function FoodDiary({
         );
       })}
 
-      {failed && <p className="cs-note">That didn’t save — the day re-read itself, so what you see is what’s stored.</p>}
+      {failed && (
+        <p className="cs-note">That didn’t save — the day re-read itself, so what you see is what’s stored.</p>
+      )}
 
       {item && (
         <MealItemSheet
@@ -411,7 +428,13 @@ export function FoodDiary({
                 setMenu(null);
                 const loose = meal ? looseIndexesOf(meal) : [];
                 if (loose.length > 0)
-                  setSelect({ kind: 'addTo', logId: g.logId, partKey, eligible: loose, slotLabel: slotLabelOf(g.logId) });
+                  setSelect({
+                    kind: 'addTo',
+                    logId: g.logId,
+                    partKey,
+                    eligible: loose,
+                    slotLabel: slotLabelOf(g.logId),
+                  });
               }}
               onTakeOut={() => {
                 setMenu(null);
@@ -464,7 +487,12 @@ export function FoodDiary({
           busy={busy}
           onSave={(yieldServings, servingsLogged) =>
             void runOps(yielding.logId, [
-              { op: 'set_yield', part: yielding.partKey!, yield_servings: yieldServings, servings_logged: servingsLogged },
+              {
+                op: 'set_yield',
+                part: yielding.partKey!,
+                yield_servings: yieldServings,
+                servings_logged: servingsLogged,
+              },
             ])
           }
           onClose={() => setYielding(null)}

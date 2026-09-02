@@ -181,7 +181,10 @@ describe('B3 — four quick adds, offered once', () => {
     expect(await screen.findByText('Four things, one after another. Do they go together?')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Yes, together' }));
     await waitFor(() =>
-      expect(editMealParts).toHaveBeenCalledWith('m1', expect.objectContaining({ op: 'group', item_indexes: [0, 1, 2, 3] })),
+      expect(editMealParts).toHaveBeenCalledWith(
+        'm1',
+        expect.objectContaining({ op: 'group', item_indexes: [0, 1, 2, 3] }),
+      ),
     );
   });
 

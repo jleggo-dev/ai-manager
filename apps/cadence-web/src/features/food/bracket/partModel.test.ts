@@ -28,7 +28,13 @@ import {
 /** The A1 breakfast: two brackets and a loose muffin. Frozen — a reducer must never mutate. */
 function fixture(): PartsState {
   const items: MealItem[] = [
-    { name: 'Greek yogurt, plain 2%', qty: 1, unit: 'cup', est: { kcal: 146, protein_g: 20, iron_mg: 0.1 }, part: 'p1' },
+    {
+      name: 'Greek yogurt, plain 2%',
+      qty: 1,
+      unit: 'cup',
+      est: { kcal: 146, protein_g: 20, iron_mg: 0.1 },
+      part: 'p1',
+    },
     { name: 'Chia seeds', qty: 1, unit: 'tbsp', est: { kcal: 58, fat_g: 4 }, part: 'p1' },
     { name: 'Whey protein, vanilla', qty: 1, unit: 'scoop', est: { kcal: 120, protein_g: 24 }, part: 'p1' },
     { name: 'Strawberries, raw', qty: 0.5, unit: 'cup', est: { kcal: 24, vitamin_c_mg: 42 }, part: 'p1' },
@@ -113,7 +119,12 @@ describe('reading helpers', () => {
 
   it('nextPartKey skips keys already in use', () => {
     expect(nextPartKey([])).toBe('p1');
-    expect(nextPartKey([{ key: 'p1', name: null }, { key: 'p3', name: null }])).toBe('p2');
+    expect(
+      nextPartKey([
+        { key: 'p1', name: null },
+        { key: 'p3', name: null },
+      ]),
+    ).toBe('p2');
   });
 });
 
@@ -142,7 +153,10 @@ describe('groupIndexes', () => {
     // Only one loose row survives the filter, so there is nothing to make.
     expect(groupIndexes(before, [0, 1, 6])).toBe(before);
     // With a second loose row, the bracketed index is dropped and the loose pair still groups.
-    const withJuice: PartsState = { items: [...before.items, { name: 'juice', est: { kcal: 40 } }], parts: before.parts };
+    const withJuice: PartsState = {
+      items: [...before.items, { name: 'juice', est: { kcal: 40 } }],
+      parts: before.parts,
+    };
     const after = groupIndexes(withJuice, [0, 6, 7]);
     expect(membersOf(after.items, 'p3')).toEqual([6, 7]);
     expect(membersOf(after.items, 'p1')).toEqual([0, 1, 2, 3]);

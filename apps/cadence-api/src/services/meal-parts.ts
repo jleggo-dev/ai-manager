@@ -55,9 +55,7 @@ const clearPart = (item: NutritionLog['items'][number]): NutritionLog['items'][n
  * Ungrouping never removes food from the day — the members stay, read as loose things.
  */
 export function dissolveThinParts(items: NutritionLog['items'], parts: MealPart[]): PartsShape {
-  const thin = new Set(
-    parts.filter((p) => items.filter((i) => i.part === p.key).length < 2).map((p) => p.key),
-  );
+  const thin = new Set(parts.filter((p) => items.filter((i) => i.part === p.key).length < 2).map((p) => p.key));
   if (thin.size === 0) return { items, parts };
   return {
     items: items.map((i) => (i.part && thin.has(i.part) ? clearPart(i) : i)),

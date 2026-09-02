@@ -45,8 +45,7 @@ export function CookbookShelf({
     const needle = q.trim().toLowerCase();
     if (!needle) return recipes;
     return recipes.filter(
-      (r) =>
-        r.name.toLowerCase().includes(needle) || r.ingredients.some((i) => i.name.toLowerCase().includes(needle)),
+      (r) => r.name.toLowerCase().includes(needle) || r.ingredients.some((i) => i.name.toLowerCase().includes(needle)),
     );
   }, [recipes, q]);
 
@@ -85,7 +84,9 @@ export function CookbookShelf({
         />
 
         <div className="cs-shelf-scroll">
-          {status === 'error' && <p className="cs-note">Couldn’t reach your cookbook just now — have another look in a moment.</p>}
+          {status === 'error' && (
+            <p className="cs-note">Couldn’t reach your cookbook just now — have another look in a moment.</p>
+          )}
           {status === 'ok' && recipes.length === 0 && (
             <p className="cs-note">Nothing here yet. Name a bracket in any meal and it lands on this shelf.</p>
           )}
@@ -140,7 +141,9 @@ export function CookbookShelf({
                 ＋
               </button>
             </div>
-            {typeof pickKcal === 'number' && <div className="cs-pick-kcal">{`${Math.round(pickKcal * n).toLocaleString('en-US')} kcal`}</div>}
+            {typeof pickKcal === 'number' && (
+              <div className="cs-pick-kcal">{`${Math.round(pickKcal * n).toLocaleString('en-US')} kcal`}</div>
+            )}
             <button type="button" className="mb-amber-btn" onClick={() => onPick(picking, n)}>
               {n === 1 ? 'Log 1 serving' : `Log ${n} servings`}
             </button>
@@ -169,7 +172,9 @@ function ShelfRow({ recipe, several, onTap }: { recipe: Recipe; several: boolean
         type="button"
         className="cs-shelf-row"
         onClick={onTap}
-        aria-label={several ? `${recipe.name} — makes ${recipe.servings}, pick a portion` : `${recipe.name} — log one portion`}
+        aria-label={
+          several ? `${recipe.name} — makes ${recipe.servings}, pick a portion` : `${recipe.name} — log one portion`
+        }
       >
         <span className="cs-shelf-words">
           <span className="cs-shelf-name">{recipe.name}</span>

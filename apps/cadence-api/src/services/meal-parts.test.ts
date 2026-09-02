@@ -34,7 +34,13 @@ let resetUserData: (typeof import('./dev-reset.ts'))['resetUserData'];
 const today = (): string => new Date().toISOString().slice(0, 10);
 
 const ITEMS: NutritionLog['items'] = [
-  { name: 'chia pudding', qty: 1, unit: 'cup', est: { kcal: 100, protein_g: 4 }, food_id: '00000000-0000-4000-a000-00000000c41a' },
+  {
+    name: 'chia pudding',
+    qty: 1,
+    unit: 'cup',
+    est: { kcal: 100, protein_g: 4 },
+    food_id: '00000000-0000-4000-a000-00000000c41a',
+  },
   { name: 'oat milk', qty: 1, unit: 'glass', est: { kcal: 50 } },
   { name: 'blueberries', qty: 1, unit: 'handful', est: { kcal: 30, vitamin_c_mg: 4 } },
 ];
@@ -72,9 +78,7 @@ d('applyPartOp — the bracket grammar (pure)', () => {
     expect(() => parts.applyPartOp(fresh(), { op: 'group', item_indexes: [0] })).toThrow(parts.PartOpError);
     expect(() => parts.applyPartOp(fresh(), { op: 'group', item_indexes: [0, 9] })).toThrow(parts.PartOpError);
     const grouped = parts.applyPartOp(fresh(), { op: 'group', item_indexes: [0, 1] });
-    expect(() => parts.applyPartOp(grouped, { op: 'group', item_indexes: [1, 2] })).toThrow(
-      /only belong to one part/,
-    );
+    expect(() => parts.applyPartOp(grouped, { op: 'group', item_indexes: [1, 2] })).toThrow(/only belong to one part/);
   });
 
   it('add joins a loose row; remove takes one out; the second-to-last out dissolves the bracket', () => {

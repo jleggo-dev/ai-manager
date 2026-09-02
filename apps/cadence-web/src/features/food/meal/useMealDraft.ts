@@ -147,7 +147,11 @@ function useDraftEdits(core: DraftCore) {
 
   /** A bracket edit, previewed through the same reducers the server enforces. */
   const editParts = useCallback(
-    (op: MealPartOp) => optimistic((m) => applyPartsOp(m, op), (id) => apiEditMealParts(id, op)),
+    (op: MealPartOp) =>
+      optimistic(
+        (m) => applyPartsOp(m, op),
+        (id) => apiEditMealParts(id, op),
+      ),
     [optimistic],
   );
 
@@ -233,7 +237,14 @@ export function useMealDraft(initialMeal?: MealKind) {
 
   const items = useMemo(() => meal?.items ?? [], [meal]);
   const askedCount = items.filter((it) => it.qty == null).length;
-  const total = useMemo(() => sumEst(items, items.map((_, i) => i)), [items]);
+  const total = useMemo(
+    () =>
+      sumEst(
+        items,
+        items.map((_, i) => i),
+      ),
+    [items],
+  );
 
   const closesAt = meal?.closes_at ? Date.parse(meal.closes_at) : null;
   const minsLeft = closesAt != null ? Math.max(0, Math.round((closesAt - now) / 60_000)) : null;

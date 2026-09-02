@@ -17,8 +17,7 @@ export interface PartsState {
 
 /** One display row: a part drawn as a block at its first member's place, or a loose item. */
 export type BracketRow =
-  | { kind: 'part'; part: MealPart; memberIndexes: number[] }
-  | { kind: 'item'; index: number; item: MealItem };
+  { kind: 'part'; part: MealPart; memberIndexes: number[] } | { kind: 'item'; index: number; item: MealItem };
 
 function knownKeys(parts: MealPart[]): Set<string> {
   return new Set(parts.map((p) => p.key));

@@ -21,9 +21,20 @@ afterEach(cleanup);
 describe('group mode', () => {
   it('ticks build the bar and confirm emits exactly those indexes', () => {
     const onConfirm = vi.fn();
-    render(<SelectMode mode="group" items={items} eligible={[0, 1, 2, 3, 4]} mealName="breakfast" onConfirm={onConfirm} onCancel={() => {}} />);
+    render(
+      <SelectMode
+        mode="group"
+        items={items}
+        eligible={[0, 1, 2, 3, 4]}
+        mealName="breakfast"
+        onConfirm={onConfirm}
+        onCancel={() => {}}
+      />,
+    );
     expect(screen.getByText('Group things')).toBeInTheDocument();
-    expect(screen.getByText('Tap what belongs together. They stay in the same breakfast either way.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Tap what belongs together. They stay in the same breakfast either way.'),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByText('Greek yogurt, plain 2%'));
     fireEvent.click(screen.getByText('Chia seeds'));
     fireEvent.click(screen.getByText('Whey protein, vanilla'));
@@ -63,7 +74,9 @@ describe('group mode', () => {
 describe('takeOut mode', () => {
   it('the same list, ticking what should leave — one is enough', () => {
     const onConfirm = vi.fn();
-    render(<SelectMode mode="takeOut" items={items} eligible={[0, 1, 2, 3]} onConfirm={onConfirm} onCancel={() => {}} />);
+    render(
+      <SelectMode mode="takeOut" items={items} eligible={[0, 1, 2, 3]} onConfirm={onConfirm} onCancel={() => {}} />,
+    );
     expect(screen.getByText('Take something out')).toBeInTheDocument();
     expect(screen.getByText('Tick what should leave.')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Chocolate chip muffin'));

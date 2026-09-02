@@ -70,7 +70,9 @@ export function AddFoodSheet({
           className="fd-do"
           disabled={busy}
           onClick={() =>
-            mode === 'draft' && onAdd ? onAdd({ servingIndex, quantity }) : onLog({ servingIndex, quantity, meal: slot })
+            mode === 'draft' && onAdd
+              ? onAdd({ servingIndex, quantity })
+              : onLog({ servingIndex, quantity, meal: slot })
           }
         >
           {mode === 'draft' ? `Add to ${mealLabel ?? meal}` : busy ? 'Logging…' : 'Log'}
@@ -152,8 +154,8 @@ export function AddFoodSheet({
         </>
       ) : (
         <p className="fd-note">
-          Picked from a list, scanned, or quick-added: amounts work the way they do everywhere else — serving size,
-          then how many.
+          Picked from a list, scanned, or quick-added: amounts work the way they do everywhere else — serving size, then
+          how many.
         </p>
       )}
 

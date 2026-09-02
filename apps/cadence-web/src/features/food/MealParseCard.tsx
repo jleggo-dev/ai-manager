@@ -166,7 +166,12 @@ export function MealParseCard({
       {err && <div className="food-empty">{err}</div>}
 
       <div className="food-confirm-actions">
-        <button type="button" className="fa-log" disabled={busy || (!draft && asked > 0)} onClick={() => void confirm()}>
+        <button
+          type="button"
+          className="fa-log"
+          disabled={busy || (!draft && asked > 0)}
+          onClick={() => void confirm()}
+        >
           {busy
             ? 'Writing it down…'
             : draft

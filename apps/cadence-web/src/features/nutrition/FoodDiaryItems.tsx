@@ -117,11 +117,21 @@ function PartBlock({
           <span className="mb-pill">{group.label}</span>
           <span className="mb-head-kcal">{`${group.sub} · ${kcalText}`}</span>
           <span className="mb-head-space" />
-          <button type="button" className="mb-ctrl" aria-label={`Collapse ${group.label}`} onClick={() => setOpen(false)}>
+          <button
+            type="button"
+            className="mb-ctrl"
+            aria-label={`Collapse ${group.label}`}
+            onClick={() => setOpen(false)}
+          >
             ⌃
           </button>
           {onOpenPartMenu && group.partKey && (
-            <button type="button" className="mb-ctrl" aria-label={`More for ${group.label}`} onClick={() => onOpenPartMenu(group)}>
+            <button
+              type="button"
+              className="mb-ctrl"
+              aria-label={`More for ${group.label}`}
+              onClick={() => onOpenPartMenu(group)}
+            >
               ⋯
             </button>
           )}

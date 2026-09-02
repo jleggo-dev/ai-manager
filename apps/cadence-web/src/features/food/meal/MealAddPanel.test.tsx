@@ -100,7 +100,9 @@ async function openPanel() {
 it('＋ adds an unambiguous food at its default serving — no sheet, field cleared, focus kept', async () => {
   searchFoods.mockResolvedValue({
     status: 'ok',
-    foods: [{ food_id: 'f-yog', name: 'Greek yogurt, plain 2%', brand: null, serving_label: '1 cup', ambiguous: false }],
+    foods: [
+      { food_id: 'f-yog', name: 'Greek yogurt, plain 2%', brand: null, serving_label: '1 cup', ambiguous: false },
+    ],
   });
   appendFood.mockResolvedValue(
     mkMeal({ items: [{ name: 'Greek yogurt, plain 2%', qty: 1, unit: 'cup', est: { kcal: 146 }, food_id: 'f-yog' }] }),
@@ -127,7 +129,9 @@ it('an ambiguous food opens the repriced sheet — "Add to breakfast" — and re
   });
   getFoodById.mockResolvedValue({ status: 'ok', food: granola });
   appendFood.mockResolvedValue(
-    mkMeal({ items: [{ name: 'Granola, maple pecan', qty: 1, unit: 'cup', est: { kcal: 270 }, food_id: 'f-granola' }] }),
+    mkMeal({
+      items: [{ name: 'Granola, maple pecan', qty: 1, unit: 'cup', est: { kcal: 270 }, food_id: 'f-granola' }],
+    }),
   );
   const input = await openPanel();
   fireEvent.change(input, { target: { value: 'gran' } });

@@ -218,7 +218,11 @@ function handleMove(ctx: Ctx, e: ReactPointerEvent): void {
   if (s.axis !== 'active' && s.mode === 'row') return;
   e.preventDefault();
   if (s.mode === 'notch') {
-    ctx.setDrag({ kind: 'group', anchor: s.itemIndex, itemIndexes: groupSpan(ctx.rowsRef.current, s.rowMids, s.rowIdx, e.clientY) });
+    ctx.setDrag({
+      kind: 'group',
+      anchor: s.itemIndex,
+      itemIndexes: groupSpan(ctx.rowsRef.current, s.rowMids, s.rowIdx, e.clientY),
+    });
   } else if (s.mode === 'end' && s.resize) {
     const diff = resizeDiff(ctx.rowsRef.current, s.rowMids, s.memberMids, s.resize.partKey, s.resize.edge, e.clientY);
     ctx.setDrag({ kind: 'resize', partKey: s.resize.partKey, edge: s.resize.edge, ...diff });
@@ -264,8 +268,12 @@ function buildProps(ctx: Ctx) {
         ...handlers,
         onPointerDown: (e: ReactPointerEvent) => {
           begin(ctx, e, {
-            ...rowSession, el: e.currentTarget as HTMLElement, rowIdx: -1, itemIndex,
-            partKey: ctx.cbRef.current.onRemoveFromPart ? partKey : null, joinKey: null,
+            ...rowSession,
+            el: e.currentTarget as HTMLElement,
+            rowIdx: -1,
+            itemIndex,
+            partKey: ctx.cbRef.current.onRemoveFromPart ? partKey : null,
+            joinKey: null,
           });
           armLongPress(ctx, itemIndex);
         },
@@ -278,7 +286,14 @@ function buildProps(ctx: Ctx) {
       return {
         ...handlers,
         onPointerDown: (e: ReactPointerEvent) => {
-          begin(ctx, e, { ...rowSession, el: e.currentTarget as HTMLElement, rowIdx, itemIndex, partKey: null, joinKey });
+          begin(ctx, e, {
+            ...rowSession,
+            el: e.currentTarget as HTMLElement,
+            rowIdx,
+            itemIndex,
+            partKey: null,
+            joinKey,
+          });
           armLongPress(ctx, itemIndex);
         },
       };
@@ -291,9 +306,16 @@ function buildProps(ctx: Ctx) {
         onPointerDown: (e: ReactPointerEvent) => {
           e.preventDefault();
           begin(ctx, e, {
-            mode: 'notch', el: e.currentTarget as HTMLElement, rowIdx, itemIndex,
-            partKey: null, joinKey: null, resize: null, axis: 'active',
-            rowMids: collectMids(ctx.rowEls.current), memberMids: [],
+            mode: 'notch',
+            el: e.currentTarget as HTMLElement,
+            rowIdx,
+            itemIndex,
+            partKey: null,
+            joinKey: null,
+            resize: null,
+            axis: 'active',
+            rowMids: collectMids(ctx.rowEls.current),
+            memberMids: [],
           });
           capture(e.currentTarget as HTMLElement, pidOf(e));
           ctx.setDrag({ kind: 'group', anchor: itemIndex, itemIndexes: [itemIndex] });
@@ -309,9 +331,16 @@ function buildProps(ctx: Ctx) {
         onPointerDown: (e: ReactPointerEvent) => {
           e.preventDefault();
           begin(ctx, e, {
-            mode: 'end', el: e.currentTarget as HTMLElement, rowIdx: -1, itemIndex: -1,
-            partKey: null, joinKey: null, resize: { partKey, edge }, axis: 'active',
-            rowMids: collectMids(ctx.rowEls.current), memberMids: collectMids(ctx.memberEls.current),
+            mode: 'end',
+            el: e.currentTarget as HTMLElement,
+            rowIdx: -1,
+            itemIndex: -1,
+            partKey: null,
+            joinKey: null,
+            resize: { partKey, edge },
+            axis: 'active',
+            rowMids: collectMids(ctx.rowEls.current),
+            memberMids: collectMids(ctx.memberEls.current),
           });
           capture(e.currentTarget as HTMLElement, pidOf(e));
         },

@@ -24,11 +24,7 @@ import {
 } from '../repos/nutrition.ts';
 import { getFood, touchFoodUsage } from '../repos/foods.ts';
 import { getRecipe } from '../repos/recipes.ts';
-import {
-  findPendingFoodLogOccurrence,
-  findPendingMealOccurrence,
-  setOccurrenceStatus,
-} from '../repos/occurrences.ts';
+import { findPendingFoodLogOccurrence, findPendingMealOccurrence, setOccurrenceStatus } from '../repos/occurrences.ts';
 import { composePlate } from './plate-compose.ts';
 import { sumItemNutrients } from './food-pricing.ts';
 import { isMeal, usageSlot } from './nutrition-parse.ts';
@@ -64,7 +60,9 @@ export function inferMealKind(tz?: string | null): MealKind {
   let hour = new Date().getUTCHours();
   if (tz) {
     try {
-      hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }).format(new Date()));
+      hour = Number(
+        new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }).format(new Date()),
+      );
     } catch {
       /* fall back to UTC */
     }

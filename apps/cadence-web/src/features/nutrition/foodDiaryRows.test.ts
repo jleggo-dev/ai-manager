@@ -22,7 +22,8 @@ const meal = (over: Partial<Meal>): Meal => ({ log_id: 'm1', meal: 'lunch', item
 
 /** Same helper, loose on shape: parts/state/item.part arrive off the wire wider than lib/api's
  *  `Meal` declares (see DiaryMeal), so the fixtures get to say them too. */
-const wideMeal = (over: object): Meal => ({ log_id: 'm1', date: '2026-09-02', meal: 'lunch', items: [], ...over }) as Meal;
+const wideMeal = (over: object): Meal =>
+  ({ log_id: 'm1', date: '2026-09-02', meal: 'lunch', items: [], ...over }) as Meal;
 
 describe('diaryRows', () => {
   it('gives every item its own row, addressed for correction', () => {
@@ -127,12 +128,17 @@ describe('diaryGroups', () => {
   it('does not read a parts meal — or a non-positional one — as legacy', () => {
     expect(isLegacyRecipeLog(legacyMeal)).toBe(true);
     expect(isLegacyRecipeLog(chiaBowlMeal)).toBe(false);
-    expect(isLegacyRecipeLog(wideMeal({ recipe_id: 'r9', items: [{ name: 'stew', qty: 200, unit: 'g' }] }))).toBe(false);
+    expect(isLegacyRecipeLog(wideMeal({ recipe_id: 'r9', items: [{ name: 'stew', qty: 200, unit: 'g' }] }))).toBe(
+      false,
+    );
     expect(
       isLegacyRecipeLog(
         wideMeal({
           recipe_id: 'r9',
-          items: [{ name: 'stew', qty: 1, unit: 'serving', part: 'p1' }, { name: 'x', part: 'p1' }],
+          items: [
+            { name: 'stew', qty: 1, unit: 'serving', part: 'p1' },
+            { name: 'x', part: 'p1' },
+          ],
           parts: [{ key: 'p1', name: null, source: 'user' }],
         }),
       ),

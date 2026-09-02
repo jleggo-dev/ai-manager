@@ -99,9 +99,7 @@ function Flow() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      {sw.phase === 'offered' && !open && sw.sweep && (
-        <FoodSweepCard sweep={sw.sweep} onOpen={() => setOpen(true)} />
-      )}
+      {sw.phase === 'offered' && !open && sw.sweep && <FoodSweepCard sweep={sw.sweep} onOpen={() => setOpen(true)} />}
       {open && (sw.phase === 'offered' || sw.phase === 'committing') && sw.sweep && (
         <FoodSweepSheet
           sweep={sw.sweep}

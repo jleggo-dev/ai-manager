@@ -52,7 +52,13 @@ export function MealMenu({
         <div className="ms-sheet-grab" aria-hidden="true" />
         <div className="ms-sheet-k">THIS MEAL</div>
         <div className="mb-menu">
-          <Row icon="◍" title="Save as a meal" sub="one row, one tap, tomorrow" disabled={!canSave} onPress={onSaveMeal} />
+          <Row
+            icon="◍"
+            title="Save as a meal"
+            sub="one row, one tap, tomorrow"
+            disabled={!canSave}
+            onPress={onSaveMeal}
+          />
           <Row
             icon="▤"
             title="Save as a recipe"

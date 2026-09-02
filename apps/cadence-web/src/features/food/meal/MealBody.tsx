@@ -15,7 +15,10 @@ import { nameChips } from './nameChips.ts';
 import { MealDraftRow } from './MealDraftRow.tsx';
 import type { MealDraft } from './useMealDraft.ts';
 
-type Picker = { kind: 'menu'; part: string } | { kind: 'select'; mode: 'group' | 'takeOut'; part?: string } | { kind: 'name'; part: string };
+type Picker =
+  | { kind: 'menu'; part: string }
+  | { kind: 'select'; mode: 'group' | 'takeOut'; part?: string }
+  | { kind: 'name'; part: string };
 
 export function MealBody({
   draft,
@@ -80,7 +83,10 @@ export function MealBody({
           variant="offer"
           count={items.length}
           est={draft.total}
-          chips={nameChips(draft.rawTexts, items.map((i) => i.name))}
+          chips={nameChips(
+            draft.rawTexts,
+            items.map((i) => i.name),
+          )}
           previewNames={items.map((i) => i.name.split(/[,·(]/)[0]!.trim().split(/\s+/)[0]!.toLowerCase())}
           onName={setOfferName}
           onYield={() => {}}
@@ -119,7 +125,8 @@ export function MealBody({
           mealName={draft.meal?.meal}
           onConfirm={(indexes) => {
             if (picker.mode === 'group') draft.editParts({ op: 'group', item_indexes: indexes });
-            else if (picker.part) for (const i of indexes) draft.editParts({ op: 'remove', part: picker.part, index: i });
+            else if (picker.part)
+              for (const i of indexes) draft.editParts({ op: 'remove', part: picker.part, index: i });
             setPicker(null);
           }}
           onCancel={() => setPicker(null)}
@@ -158,7 +165,10 @@ function PartNameFlow({
         <NamePartCard
           count={members.length}
           est={partTotal(draft.items, partKey)}
-          chips={nameChips(draft.rawTexts, members.map((i) => draft.items[i]?.name ?? ''))}
+          chips={nameChips(
+            draft.rawTexts,
+            members.map((i) => draft.items[i]?.name ?? ''),
+          )}
           initialName={initialName}
           onName={setName}
           onYield={setServings}

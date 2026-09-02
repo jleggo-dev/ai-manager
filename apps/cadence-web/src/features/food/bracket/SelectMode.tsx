@@ -46,11 +46,7 @@ export function SelectMode({ mode, items, eligible, initial, mealName, onConfirm
   const macros = macroLine(total);
   const n = chosen.length;
   const confirmLabel =
-    mode === 'group'
-      ? `Group these ${numberWord(n)}`
-      : n === 1
-        ? 'Take it out'
-        : `Take these ${numberWord(n)} out`;
+    mode === 'group' ? `Group these ${numberWord(n)}` : n === 1 ? 'Take it out' : `Take these ${numberWord(n)} out`;
   const disabled = mode === 'group' ? n < 2 : n < 1;
   return (
     <div className="mb-select" role="dialog" aria-label={mode === 'group' ? 'Group things' : 'Take something out'}>

@@ -62,13 +62,27 @@ const bracketed = (): BracketRow[] => {
 
 const flatRows = (): BracketRow[] =>
   orderedRows(
-    [{ name: 'a', est: { kcal: 10 } }, { name: 'b', est: { kcal: 20 } }, { name: 'c', est: { kcal: 30 } }],
+    [
+      { name: 'a', est: { kcal: 10 } },
+      { name: 'b', est: { kcal: 20 } },
+      { name: 'c', est: { kcal: 30 } },
+    ],
     [],
   );
 
 function setRect(el: Element, top: number, height = 40) {
   (el as HTMLElement).getBoundingClientRect = () =>
-    ({ top, height, bottom: top + height, left: 0, right: 100, width: 100, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    ({
+      top,
+      height,
+      bottom: top + height,
+      left: 0,
+      right: 100,
+      width: 100,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    }) as DOMRect;
 }
 
 const drag = () => screen.getByTestId('drag').textContent;

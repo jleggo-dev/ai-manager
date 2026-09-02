@@ -7,10 +7,7 @@ export function CoachLeaf() {
   return (
     <span className="sw-ava" aria-hidden>
       <svg width="17" height="17" viewBox="0 0 24 24">
-        <path
-          d="M12 3c5 1 8 4 8 9 0 5-4 9-9 9-1.5 0-3-.4-4-1 4-1 7-4 8-9-2 3-5 5-8 5 2-6 5-11 5-13z"
-          fill="white"
-        />
+        <path d="M12 3c5 1 8 4 8 9 0 5-4 9-9 9-1.5 0-3-.4-4-1 4-1 7-4 8-9-2 3-5 5-8 5 2-6 5-11 5-13z" fill="white" />
       </svg>
     </span>
   );

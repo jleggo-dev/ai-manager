@@ -55,8 +55,18 @@ function OpenPart({
       <div className="mb-rail" />
       {gestures?.enabled.resize && (
         <>
-          <button type="button" className="mb-end mb-end--head" aria-label={`Resize ${label} from the top`} {...gestures.endProps(part.key, 'head')} />
-          <button type="button" className="mb-end mb-end--tail" aria-label={`Resize ${label} from the bottom`} {...gestures.endProps(part.key, 'tail')} />
+          <button
+            type="button"
+            className="mb-end mb-end--head"
+            aria-label={`Resize ${label} from the top`}
+            {...gestures.endProps(part.key, 'head')}
+          />
+          <button
+            type="button"
+            className="mb-end mb-end--tail"
+            aria-label={`Resize ${label} from the bottom`}
+            {...gestures.endProps(part.key, 'tail')}
+          />
         </>
       )}
       <div className="mb-part-body">
@@ -65,12 +75,22 @@ function OpenPart({
           <span className="mb-head-kcal">{fmtKcal(total.kcal)} kcal</span>
           <span className="mb-head-space" />
           {onToggleCollapse && (
-            <button type="button" className="mb-ctrl" aria-label={`Collapse ${label}`} onClick={() => onToggleCollapse(part.key)}>
+            <button
+              type="button"
+              className="mb-ctrl"
+              aria-label={`Collapse ${label}`}
+              onClick={() => onToggleCollapse(part.key)}
+            >
               ⌃
             </button>
           )}
           {onOpenMenu && (
-            <button type="button" className="mb-ctrl" aria-label={`More for ${label}`} onClick={() => onOpenMenu(part.key)}>
+            <button
+              type="button"
+              className="mb-ctrl"
+              aria-label={`More for ${label}`}
+              onClick={() => onOpenMenu(part.key)}
+            >
               ⋯
             </button>
           )}
@@ -86,7 +106,11 @@ function OpenPart({
                 key={i}
                 ref={gestures?.registerMember(i)}
                 className={`mb-member${n > 0 ? ' mb-member--rule' : ''}${leaving ? ' mb-member--leaving' : ''}${removing ? ' mb-member--removing' : ''}`}
-                style={leaving && drag.kind === 'leave' ? { transform: `translateX(${Math.max(drag.dx, -96)}px)` } : undefined}
+                style={
+                  leaving && drag.kind === 'leave'
+                    ? { transform: `translateX(${Math.max(drag.dx, -96)}px)` }
+                    : undefined
+                }
                 {...gestures?.memberProps(part.key, i)}
               >
                 {renderRow(item, i)}
@@ -114,7 +138,12 @@ function CollapsedPart({
   return (
     <div className={`mb-block mb-collapsed${makesSeveral(part) ? ' mb-part--yield' : ''}`}>
       <div className="mb-rail mb-rail--short" />
-      <button type="button" className="mb-collapsed-row" aria-label={`Expand ${label}`} onClick={() => onToggleCollapse?.(part.key)}>
+      <button
+        type="button"
+        className="mb-collapsed-row"
+        aria-label={`Expand ${label}`}
+        onClick={() => onToggleCollapse?.(part.key)}
+      >
         <span className="mb-collapsed-main">
           <span className="mb-collapsed-name">{label}</span>
           <span className="mb-collapsed-sub">{collapsedSub(part, memberIndexes.length)}</span>
@@ -126,7 +155,17 @@ function CollapsedPart({
   );
 }
 
-function LooseRow({ item, index, rowIdx, props }: { item: MealItem; index: number; rowIdx: number; props: BracketListProps }) {
+function LooseRow({
+  item,
+  index,
+  rowIdx,
+  props,
+}: {
+  item: MealItem;
+  index: number;
+  rowIdx: number;
+  props: BracketListProps;
+}) {
   const { renderRow, gestures } = props;
   const drag = gestures?.drag;
   const taken = drag?.kind === 'group' && drag.itemIndexes.includes(index);
@@ -137,7 +176,12 @@ function LooseRow({ item, index, rowIdx, props }: { item: MealItem; index: numbe
     <div className="mb-block mb-loose-block" ref={gestures?.registerRow(rowIdx)}>
       <div className="mb-gutter">
         {gestures?.enabled.group ? (
-          <button type="button" className="mb-notch-handle" aria-label={`Pull down to bring ${item.name} together with other rows`} {...gestures.notchProps(rowIdx, index)}>
+          <button
+            type="button"
+            className="mb-notch-handle"
+            aria-label={`Pull down to bring ${item.name} together with other rows`}
+            {...gestures.notchProps(rowIdx, index)}
+          >
             {notch}
           </button>
         ) : (
@@ -168,7 +212,13 @@ export function BracketList(props: BracketListProps) {
         const block = collapsed?.[row.part.key] ? (
           <CollapsedPart key={row.part.key} part={row.part} memberIndexes={row.memberIndexes} props={props} />
         ) : (
-          <OpenPart key={row.part.key} part={row.part} memberIndexes={row.memberIndexes} rowIdx={rowIdx} props={props} />
+          <OpenPart
+            key={row.part.key}
+            part={row.part}
+            memberIndexes={row.memberIndexes}
+            rowIdx={rowIdx}
+            props={props}
+          />
         );
         /* Where a member dragged out will land (canvas A2): a dashed gutter under its bracket. */
         const showDrop = drag?.kind === 'leave' && drag.partKey === row.part.key && drag.past;

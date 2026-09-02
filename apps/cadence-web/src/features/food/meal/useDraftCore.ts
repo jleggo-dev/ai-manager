@@ -7,14 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MealKind } from '@cadence/shared';
 import { getOpenMeal, openMealDraft, type Meal, type MealPartOp } from '../../../lib/api/meal-draft.ts';
-import {
-  addToPart,
-  groupIndexes,
-  removeFromPart,
-  renamePart,
-  ungroup,
-  type PartsState,
-} from '../bracket/partModel.ts';
+import { addToPart, groupIndexes, removeFromPart, renamePart, ungroup, type PartsState } from '../bracket/partModel.ts';
 
 /** Which door an item came through — display-only tags on the meal's rows. */
 export type DoorTag = 'searched' | 'scanned' | 'heard' | 'typed' | 'assumed';
@@ -111,7 +104,7 @@ export function useDraftCore(initialMeal?: MealKind) {
    * draft, whose provenance and raw words start clean) and retry exactly once.
    */
   const withDraft = useCallback(
-    async <T,>(fn: (logId: string) => Promise<T>): Promise<T> => {
+    async <T>(fn: (logId: string) => Promise<T>): Promise<T> => {
       const current = mealRef.current;
       if (!current) throw new Error('no draft open');
       try {
