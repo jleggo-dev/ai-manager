@@ -200,6 +200,35 @@ export const ALWAYS_ACTIONS = [
  * coach-drawer-index.test.ts gates exact coverage of onDemandToolNames() — a tail tool without a
  * hook line here fails CI by name.
  */
+/**
+ * What the generated drawer label may cost, in characters, on EVERY message.
+ *
+ * A FIXED total rather than a per-tool budget, and that is deliberate: the thing being protected
+ * is the per-turn context bill, which is a property of the whole index and not of any one entry.
+ * Deriving it from the tail size would make it arithmetic that always passes — the per-hook cap
+ * (`HOOK_MAX`, 90) already handles "one entry got fat", and a bound that grows with whatever it
+ * measures stops being a bound. This is the number the owner's own worry names: *"if we scale to
+ * 100 tools, we eat our context window just finding the tool."*
+ *
+ * 3,000 chars is about 750 tokens a message, by the chars÷4 heuristic TOOL-HARNESS.md already uses
+ * for the always-on definitions.
+ *
+ * RAISED FROM 2,600 ON 2026-09-01, and the reason matters more than the number. The tail reached
+ * 20 tools and the label reached 2,598 — two characters of headroom — so #342 failed CI on a bound
+ * it had not meaningfully moved, and it failed only after merge into main, because the tail had
+ * grown in parallel branches. The tiering's whole promise is that a new read costs nothing until
+ * she asks for it; a cap that turns tool 21 into someone else's red build is that promise leaking.
+ *
+ * Composition when this was set: preamble 382, seven category labels 305, 20 tools averaging ~111
+ * each (name + hook + the action marker). So this buys roughly four more tools, not an era.
+ *
+ * WHEN IT IS HIT AGAIN, RAISING IT IS THE LAST ANSWER, NOT THE FIRST. Every 120 chars added here
+ * is ~30 tokens on every message forever. Trim the longest hooks, or consolidate a category the
+ * way `get_nutrition` already fronts the food reads — the index is meant to stay a label she can
+ * scan, and a tail that cannot be indexed in 3,000 characters is a tail worth consolidating.
+ */
+export const DRAWER_LABEL_MAX = 3000;
+
 export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_nutrition: 'everything about what they eat — log, recipes, targets, trends; name the view you need',
   preview_meal: 'parse-and-price a described meal WITHOUT logging it',
@@ -222,6 +251,27 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   revise_session: 'ACTION: rebuild one upcoming session\'s contents from their words — "add chest and abs"',
   start_replan: 'ACTION: rebuild the WHOLE week around their words — background, takes minutes',
 };
+
+/**
+ * What a blown budget should PRINT: the size, what is in it, and the two real options.
+ *
+ * The failure that prompted this said only "2630 > 2600", which does not tell the next person
+ * whether their own hook is fat or the tail simply grew — and those have opposite fixes. Lives
+ * here rather than in a test file because both gates assert it (coach-drawer-index and
+ * retrieval/description-audit), and a helper imported ACROSS test files re-registers the exporting
+ * file's suites in the importer, silently running them twice.
+ */
+export function labelBudgetReport(label: string): string {
+  const preamble = label.split('\n')[0]?.length ?? 0;
+  const tools = onDemandToolNames().length;
+  const perTool = tools ? Math.round((label.length - preamble) / tools) : 0;
+  return (
+    `find_tools label is ${label.length} chars against a ${DRAWER_LABEL_MAX} budget — ` +
+    `${tools} tail tools at ~${perTool} each, plus a ${preamble}-char preamble. ` +
+    `Trim the longest DRAWER_HOOKS or consolidate a category before raising DRAWER_LABEL_MAX: ` +
+    `every 120 chars here is ~30 tokens on EVERY message, forever.`
+  );
+}
 
 /** Tools offered on every turn: the daily actions, the one always-read, and the way to find the rest. */
 export function alwaysOnToolNames(): string[] {

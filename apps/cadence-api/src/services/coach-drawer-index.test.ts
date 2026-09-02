@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DRAWER_HOOKS, TOOL_CATEGORIES, onDemandToolNames, FIND_TOOLS_NAME } from './coach-tool-tiers.ts';
+import {
+  DRAWER_HOOKS,
+  DRAWER_LABEL_MAX,
+  TOOL_CATEGORIES,
+  labelBudgetReport,
+  onDemandToolNames,
+  FIND_TOOLS_NAME,
+} from './coach-tool-tiers.ts';
 import { COACH_META_TOOLS } from './coach-meta-tools.ts';
 
 /**
@@ -12,7 +19,9 @@ import { COACH_META_TOOLS } from './coach-meta-tools.ts';
  */
 
 const HOOK_MAX = 90;
-const LABEL_MAX = 2600;
+/** One source of truth, beside the hooks it bounds — description-audit.test.ts imports it too.
+ *  It was written out as a bare 2600 in both files, which is two numbers that had to agree. */
+const LABEL_MAX = DRAWER_LABEL_MAX;
 const BANNED = ['streak', 'adherence', 'unlock', 'empower', 'journey', 'captured'];
 
 describe('the drawer hooks', () => {
@@ -38,11 +47,26 @@ describe('the generated find_tools label', () => {
   const label = COACH_META_TOOLS[FIND_TOOLS_NAME]!.description;
 
   it('stays bounded and names every category and tool', () => {
-    expect(label.length).toBeLessThanOrEqual(LABEL_MAX);
+    // The message carries the breakdown on purpose. When this failed on #342 it said only
+    // "2630 > 2600", which does not tell the next person whether THEIR hook is fat or the tail
+    // simply grew past the budget — and those have opposite fixes.
+    expect(label.length, labelBudgetReport(label)).toBeLessThanOrEqual(LABEL_MAX);
     for (const { label: sectionLabel, members } of TOOL_CATEGORIES) {
       expect(label).toContain(sectionLabel);
       for (const name of members) expect(label).toContain(name);
     }
+  });
+
+  it('explains itself when the budget is blown — the breach names its own cause', () => {
+    // Guards the diagnostic, not the size: a breach must say whether ONE hook is fat or the tail
+    // has simply outgrown the budget, because the fix differs and the number alone hides which.
+    const report = labelBudgetReport(label);
+
+    expect(report).toContain(`${label.length} chars`);
+    expect(report).toContain(`${onDemandToolNames().length} tail tools`);
+    expect(report).toMatch(/~\d+ each/);
+    expect(report).toMatch(/DRAWER_HOOKS/);
+    expect(report).toMatch(/DRAWER_LABEL_MAX/);
   });
 
   it('keeps the audit phrases and marks the tail action', () => {
