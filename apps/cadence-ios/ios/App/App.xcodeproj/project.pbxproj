@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CAD0C0DE2FE2001100EA8C5F /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE2000100EA8C5F /* NotificationService.swift */; };
+		CAD0C0DE2FE2001200EA8C5F /* avatars in Resources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE2000400EA8C5F /* avatars */; };
+		CAD0C0DE2FE2001300EA8C5F /* CoachPortraitIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE2000600EA8C5F /* CoachPortraitIntent.swift */; };
+		CAD0C0DE2FE2001400EA8C5F /* CoachPortraitIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE2000600EA8C5F /* CoachPortraitIntent.swift */; };
+		CAD0C0DE2FE2001500EA8C5F /* CadenceNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE2000500EA8C5F /* CadenceNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
@@ -59,6 +64,11 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		CAD0C0DE2FE2000100EA8C5F /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE2000200EA8C5F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		CAD0C0DE2FE2000400EA8C5F /* avatars */ = {isa = PBXFileReference; lastKnownFileType = folder; name = avatars; path = "../../../cadence-web/public/avatars"; sourceTree = SOURCE_ROOT; };
+		CAD0C0DE2FE2000500EA8C5F /* CadenceNotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CadenceNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		CAD0C0DE2FE2000600EA8C5F /* CoachPortraitIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachPortraitIntent.swift; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -113,6 +123,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXContainerItemProxy section */
+		CAD0C0DE2FE2002C00EA8C5F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CAD0C0DE2FE2002600EA8C5F;
+			remoteInfo = CadenceNotificationService;
+		};
 		CAD0C0DE2FE1002C00EA8C5F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
@@ -123,6 +140,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		CAD0C0DE2FE2002500EA8C5F /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CAD0C0DE2FE2001500EA8C5F /* CadenceNotificationService.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CAD0C0DE2FE1002A00EA8C5F /* Embed Watch Content */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -137,6 +165,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		CAD0C0DE2FE2002300EA8C5F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		504EC3011FED79650016851F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -155,12 +190,32 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		CAD0C0DE2FE2002000EA8C5F /* CadenceNotificationService */ = {
+			isa = PBXGroup;
+			children = (
+				CAD0C0DE2FE2000100EA8C5F /* NotificationService.swift */,
+				CAD0C0DE2FE2000200EA8C5F /* Info.plist */,
+				CAD0C0DE2FE2000400EA8C5F /* avatars */,
+			);
+			path = CadenceNotificationService;
+			sourceTree = "<group>";
+		};
+		CAD0C0DE2FE2002100EA8C5F /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				CAD0C0DE2FE2000600EA8C5F /* CoachPortraitIntent.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		504EC2FB1FED79650016851F = {
 			isa = PBXGroup;
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
 				CAD0C0DE2FE1002200EA8C5F /* CadenceWatch */,
+				CAD0C0DE2FE2002000EA8C5F /* CadenceNotificationService */,
+				CAD0C0DE2FE2002100EA8C5F /* Shared */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -170,6 +225,7 @@
 			children = (
 				504EC3041FED79650016851F /* App.app */,
 				CAD0C0DE2FE1002100EA8C5F /* CadenceWatch.app */,
+				CAD0C0DE2FE2000500EA8C5F /* CadenceNotificationService.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -239,6 +295,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		CAD0C0DE2FE2002600EA8C5F /* CadenceNotificationService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CAD0C0DE2FE2002700EA8C5F /* Build configuration list for PBXNativeTarget "CadenceNotificationService" */;
+			buildPhases = (
+				CAD0C0DE2FE2002200EA8C5F /* Sources */,
+				CAD0C0DE2FE2002300EA8C5F /* Frameworks */,
+				CAD0C0DE2FE2002400EA8C5F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CadenceNotificationService;
+			productName = CadenceNotificationService;
+			productReference = CAD0C0DE2FE2000500EA8C5F /* CadenceNotificationService.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		504EC3031FED79650016851F /* App */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 504EC3161FED79650016851F /* Build configuration list for PBXNativeTarget "App" */;
@@ -247,11 +320,13 @@
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
 				CAD0C0DE2FE1002A00EA8C5F /* Embed Watch Content */,
+				CAD0C0DE2FE2002500EA8C5F /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				CAD0C0DE2FE1002D00EA8C5F /* PBXTargetDependency */,
+				CAD0C0DE2FE2002D00EA8C5F /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -312,11 +387,20 @@
 			targets = (
 				504EC3031FED79650016851F /* App */,
 				CAD0C0DE2FE1002600EA8C5F /* CadenceWatch */,
+				CAD0C0DE2FE2002600EA8C5F /* CadenceNotificationService */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		CAD0C0DE2FE2002400EA8C5F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CAD0C0DE2FE2001200EA8C5F /* avatars in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		504EC3021FED79650016851F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -349,6 +433,15 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		CAD0C0DE2FE2002200EA8C5F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CAD0C0DE2FE2001100EA8C5F /* NotificationService.swift in Sources */,
+				CAD0C0DE2FE2001300EA8C5F /* CoachPortraitIntent.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		504EC3001FED79650016851F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -360,6 +453,7 @@
 				CAD0C0DE2FE0000600EA8C5F /* CadenceWatchSyncPlugin.swift in Sources */,
 				CAD0C0DE2FE0000800EA8C5F /* WorkoutActivityMap.swift in Sources */,
 				CAD0C0DE2FE1003300EA8C5F /* CadenceAuthSessionPlugin.swift in Sources */,
+				CAD0C0DE2FE2001400EA8C5F /* CoachPortraitIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -398,6 +492,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		CAD0C0DE2FE2002D00EA8C5F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CAD0C0DE2FE2002600EA8C5F /* CadenceNotificationService */;
+			targetProxy = CAD0C0DE2FE2002C00EA8C5F /* PBXContainerItemProxy */;
+		};
 		CAD0C0DE2FE1002D00EA8C5F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = CAD0C0DE2FE1002600EA8C5F /* CadenceWatch */;
@@ -425,6 +524,53 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		CAD0C0DE2FE2002800EA8C5F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ZLU84LMGQ6;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CadenceNotificationService/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = builders.cadence.app.NotificationService;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CAD0C0DE2FE2002900EA8C5F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ZLU84LMGQ6;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CadenceNotificationService/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = builders.cadence.app.NotificationService;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		504EC3141FED79650016851F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
@@ -648,6 +794,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		CAD0C0DE2FE2002700EA8C5F /* Build configuration list for PBXNativeTarget "CadenceNotificationService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CAD0C0DE2FE2002800EA8C5F /* Debug */,
+				CAD0C0DE2FE2002900EA8C5F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		504EC2FF1FED79650016851F /* Build configuration list for PBXProject "App" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
