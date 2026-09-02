@@ -45,6 +45,16 @@ export async function listRepertoireGoalIds(userId: string): Promise<(string | n
  *    re-mentioned as learned keeps its original date and reports false, so the caller writes the
  *    accomplishment to the goal history exactly once — never once per mention.
  */
+/**
+ * Insert or update one item, keyed on `lower(label)` by the table's unique index.
+ *
+ * **Callers must resolve the label first** — `canonicalLabel()` in repertoire-practice.ts. This
+ * conflict target is Postgres `lower()`, which does not fold accents, so "Écossaise" and
+ * "Ecossaise" reach it as two different keys and would become two rows for one piece. The
+ * normalization that knows they are the same lives in TypeScript (`normTitle`), and is not
+ * expressible in this index without duplicating the rule in SQL — so it is enforced above, and
+ * this is the note saying so.
+ */
 export async function upsertRepertoireItem(
   userId: string,
   item: {

@@ -9,7 +9,14 @@
  * word-boundary rule exists for, and nothing was holding it.
  */
 import { describe, expect, it } from 'vitest';
-import { findItemForTitle, itemNamedIn, matchHay, matchableItems } from './repertoire-practice.ts';
+import {
+  canonicalLabel,
+  findItemForTitle,
+  itemNamedIn,
+  matchHay,
+  matchableItems,
+  samePiece,
+} from './repertoire-practice.ts';
 
 const item = (label: string, over: { status?: string; goal_id?: string | null } = {}) => ({
   label,
@@ -113,5 +120,52 @@ describe('findItemForTitle', () => {
     expect(findItemForTitle(items, 'Scales and arpeggios', PIANO)).toBeNull();
     expect(findItemForTitle([], 'Écossaise', PIANO)).toBeNull();
     expect(findItemForTitle(items, '', PIANO)).toBeNull();
+  });
+});
+
+describe('samePiece', () => {
+  it('is true across accent, case and punctuation differences', () => {
+    expect(samePiece('Écossaise', 'ecossaise')).toBe(true);
+    expect(samePiece('Écossaise (Hummel)', 'ecossaise  hummel')).toBe(true);
+    expect(samePiece('Dvořák Humoresque', 'Dvorak Humoresque')).toBe(true);
+  });
+
+  it('is EQUALITY, not containment — the trap that would merge two études', () => {
+    expect(samePiece('Étude in C', 'Étude in C minor')).toBe(false);
+    expect(samePiece('Prelude', 'Prelude in E minor')).toBe(false);
+  });
+
+  it('is false for empty or unusable labels', () => {
+    expect(samePiece('', '')).toBe(false);
+    expect(samePiece('!!!', '???')).toBe(false);
+  });
+});
+
+describe('canonicalLabel', () => {
+  const onFile = (...labels: string[]) => labels.map((label) => ({ label }));
+
+  it('returns the incoming label when the piece is genuinely new', () => {
+    expect(canonicalLabel(onFile('Minuet in G'), 'Écossaise')).toBe('Écossaise');
+    expect(canonicalLabel([], 'Écossaise')).toBe('Écossaise');
+  });
+
+  it('lands an unaccented mention on the accented row that already exists', () => {
+    expect(canonicalLabel(onFile('Écossaise (Hummel)'), 'Ecossaise (Hummel)')).toBe('Écossaise (Hummel)');
+  });
+
+  it('lets an ACCENTED spelling correct an unaccented row', () => {
+    expect(canonicalLabel(onFile('Ecossaise'), 'Écossaise')).toBe('Écossaise');
+  });
+
+  it('never lets a stripped spelling overwrite an accented one', () => {
+    expect(canonicalLabel(onFile('Fauré Sicilienne'), 'Faure Sicilienne')).toBe('Fauré Sicilienne');
+  });
+
+  it('keeps the first spelling when neither carries accents', () => {
+    expect(canonicalLabel(onFile('Minuet in G'), 'minuet in g')).toBe('Minuet in G');
+  });
+
+  it('does not pull a different piece onto an existing row', () => {
+    expect(canonicalLabel(onFile('Étude in C'), 'Étude in C minor')).toBe('Étude in C minor');
   });
 });

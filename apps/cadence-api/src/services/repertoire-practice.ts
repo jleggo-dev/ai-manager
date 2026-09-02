@@ -1,6 +1,6 @@
 import type { OccurrenceSession, RepertoireItem } from '@cadence/shared';
 import { clearPendingSessionsForGoal, listRepertoire, stampPracticed } from '../repos/repertoire.ts';
-import { normTitle } from './goal-identity.ts';
+import { foldAccents, normTitle } from './goal-identity.ts';
 
 /**
  * The practice write-back — the deterministic rung that makes the rotation rotate.
@@ -60,6 +60,40 @@ export function matchHay(texts: Array<string | null | undefined>): string {
 /** Is this item named in an already-normalized haystack? */
 export function itemNamedIn(label: string, hay: string): boolean {
   return needles(label).some((n) => containsWord(hay, n));
+}
+
+/* ── One row per piece ───────────────────────────────────────────────────────────────────────
+   Matching is accent-tolerant, but the repertoire unique index is `(user_id, lower(label))` and
+   Postgres `lower()` is not: on its own, "Écossaise" and "Ecossaise" become TWO rows for one
+   piece, splitting its practice history and its settled tempo. These resolve an incoming label
+   onto the row that already exists.
+
+   Sameness here is EQUALITY of the normalized form — never `sameGoalTitle`'s containment, which
+   is right for goals and dangerous for pieces: "Étude in C" is contained in "Étude in C minor",
+   and those are two different études. */
+
+/** Two labels name the same piece when they normalize identically (case, accents, punctuation). */
+export function samePiece(a: string, b: string): boolean {
+  const na = normTitle(a);
+  return na.length > 0 && na === normTitle(b);
+}
+
+/** Does this spelling carry accents, rather than being the stripped-down form of the same word? */
+const hasDiacritics = (s: string): boolean => foldAccents(s) !== s.toLowerCase();
+
+/**
+ * The label a new mention should be written under, so accent-variant spellings land on one row.
+ *
+ * The first spelling stands, with one exception: an ACCENTED spelling beats an unaccented one.
+ * "Écossaise" is the piece's actual name and "Ecossaise" is what it looks like typed in a hurry,
+ * so the richer spelling is the more specific claim and wins — otherwise a hurried first mention
+ * would fix the wrong name on the shelf forever, with no way to correct it by saying it properly.
+ * Never the other way round: a stripped spelling must not overwrite an accented one.
+ */
+export function canonicalLabel(existing: Array<{ label: string }>, incoming: string): string {
+  const match = existing.find((i) => samePiece(i.label, incoming));
+  if (!match) return incoming;
+  return hasDiacritics(incoming) && !hasDiacritics(match.label) ? incoming : match.label;
 }
 
 /**

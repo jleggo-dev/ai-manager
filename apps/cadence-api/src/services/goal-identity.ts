@@ -45,7 +45,7 @@ const NO_DECOMPOSITION: Record<string, string> = {
  * strip — so every all-English title normalizes exactly as it did before. Only titles that were
  * already being mangled change.
  */
-const fold = (s: string): string =>
+export const foldAccents = (s: string): string =>
   s
     .toLowerCase()
     .normalize('NFD')
@@ -62,7 +62,7 @@ const fold = (s: string): string =>
  * to pass); treating English's two spellings of the SAME article as different words is not.
  */
 export const normTitle = (s: string): string =>
-  fold(s)
+  foldAccents(s)
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\ban\b/g, 'a')
     .trim();
@@ -72,7 +72,7 @@ export const normTitle = (s: string): string =>
  * "ultrabeast". Word boundaries are exactly what models move around between turns, so the compact
  * form is the one place they can't hide.
  */
-export const compactTitle = (s: string): string => fold(s).replace(/[^a-z0-9]+/g, '');
+export const compactTitle = (s: string): string => foldAccents(s).replace(/[^a-z0-9]+/g, '');
 
 /**
  * Below this many characters a compact title is too short to be evidence of anything: "row" sits
