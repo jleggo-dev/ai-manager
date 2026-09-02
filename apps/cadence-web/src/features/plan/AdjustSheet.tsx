@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { replan, dismissReplanPreview } from '../../lib/api.ts';
 import { markWeekApplied } from '../../lib/applied-week-note.ts';
+import { useClockUnit, usePlan } from '../../lib/query/index.ts';
 import { Orb } from '../../components/Orb.tsx';
 import { SteerBox } from './SteerBox.tsx';
 import { ProposedWeek } from './ProposedWeek.tsx';
+import { ProposedChanges } from './ProposedChanges.tsx';
+import { changesFirst, diffWeek } from './planDiff.ts';
 import { useReplanPreview } from './useReplanPreview.ts';
 
 /**
@@ -113,6 +116,20 @@ export function AdjustSheet({
   // instant they tap 'See the adjustment' is a jump on a screen that then sits still for minutes.
   const composing = !p && mode === 'adjust';
 
+  /**
+   * What the proposal CHANGES, against the week they have (planDiff.ts). The sheet opens on that
+   * — "show me the diff and let me click to see the whole plan" (owner, 2026-09-01) — whenever
+   * there is a committed week to compare against and the proposal keeps some of it. A first
+   * plan, or a rebuild that keeps nothing, opens on the whole week: there the diff IS the week.
+   * `showWhole` is the person's own toggle; null means "whatever the diff says".
+   */
+  const clock = useClockUnit();
+  const { data: current } = usePlan();
+  const [showWhole, setShowWhole] = useState<boolean | null>(null);
+  const diff = p ? diffWeek(current?.activities ?? [], p.activities) : null;
+  const canToggle = !!diff && changesFirst(diff);
+  const whole = canToggle ? (showWhole ?? false) : true;
+
   return (
     <>
       {/* Live even mid-run: the synthesis is server-durable, so closing loses nothing — the
@@ -189,8 +206,32 @@ export function AdjustSheet({
           </div>
         ) : (
           <div className="sheet-body wk-body">
+            {canToggle && (
+              <div className="wk-view" role="group" aria-label="What to show">
+                <button
+                  type="button"
+                  className={whole ? 'wk-view-b' : 'wk-view-b on'}
+                  aria-pressed={!whole}
+                  onClick={() => setShowWhole(false)}
+                >
+                  What changes
+                </button>
+                <button
+                  type="button"
+                  className={whole ? 'wk-view-b on' : 'wk-view-b'}
+                  aria-pressed={whole}
+                  onClick={() => setShowWhole(true)}
+                >
+                  The whole week
+                </button>
+              </div>
+            )}
             <div className="wk-scroll">
-              <ProposedWeek activities={p.activities} note={p.note} />
+              {whole || !diff ? (
+                <ProposedWeek activities={p.activities} note={p.note} clock={clock} />
+              ) : (
+                <ProposedChanges diff={diff} note={p.note} clock={clock} />
+              )}
             </div>
             {msg && <div className="auth-error">{msg}</div>}
             <div className="proposal-actions wk-actions">

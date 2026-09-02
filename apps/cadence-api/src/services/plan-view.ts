@@ -1,6 +1,6 @@
 import type { OccurrenceStatus, PendingProposal, Plan, StreakView } from '@cadence/shared';
 import { getActivePlan } from '../repos/plans.ts';
-import { listActivities, NON_PLAN_CATEGORIES } from '../repos/activities.ts';
+import { listActivities, listActivitiesByIds, NON_PLAN_CATEGORIES } from '../repos/activities.ts';
 import { listOccurrences, listSessionStepCounts } from '../repos/occurrences.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
 import { getUser } from '../repos/users.ts';
@@ -12,7 +12,7 @@ import { rollingConsistency } from './metrics.ts';
 import { evaluateStreak } from './streak.ts';
 import { planDayBase } from './plan-day.ts';
 
-const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+export const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export interface PlanViewOccurrence {
   occurrence_id: string;
@@ -41,6 +41,9 @@ export interface PlanViewDay {
 }
 export interface PlanViewActivity {
   activity_id: string;
+  /** The commitment this row is one version of (0036) — the thread a proposed week's rows carry
+   *  too, so the client can say which of them is a CHANGE to this row and which is new. */
+  commitment_id?: string;
   title: string;
   kind: 'user' | 'system';
   cadence: string; // humanized, e.g. "Every other day"
@@ -94,7 +97,7 @@ export interface ActiveEpisodeView {
 /** Neutral view when the streak evaluation itself fails — never let it break the plan load. */
 const EMPTY_STREAK: StreakView = { current: 0, longest: 0, freezes: 0, savedByFreeze: false };
 
-const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10);
+export const iso = (d: string | Date): string => new Date(d).toISOString().slice(0, 10);
 
 /**
  * "Your week ends → you say so → she pulls the review" (DESIGN-check-in.md). `checkin_due` is the
@@ -254,6 +257,23 @@ export async function buildPlanView(
   // Hoisted above the occurrence loop (2026-08-31): occurrences carry their goal's area now, so
   // the trail's icon family comes from the goal itself instead of a title guess.
   const goalById = new Map(goalsList.map((g) => [g.goal_id, g]));
+  /**
+   * Today's rows that belong to a SUPERSEDED plan version still render — under the title they
+   * had. A commit re-points what it keeps and wipes what it changes from today forward, so
+   * normally nothing of today is left behind; but a commit that read "today" as the UTC date
+   * (fixed 2026-09-01, plan-day.ts) left the whole evening on the old plan, and every row
+   * without a title to render under vanished from the screen with it. History is what was on the
+   * card when it happened, so today's orphans are looked up by id across every plan version.
+   * Future days stay the active plan's alone — an old version's tomorrow is not a plan anyone
+   * still has.
+   */
+  const todayIso = days[0]!.date;
+  const orphanIds = [
+    ...new Set(occ.filter((o) => !actById.has(o.activity_id) && iso(o.date) <= todayIso).map((o) => o.activity_id)),
+  ];
+  if (orphanIds.length > 0) {
+    for (const a of await listActivitiesByIds(userId, orphanIds).catch(() => [])) actById.set(a.activity_id, a);
+  }
   for (const o of occ) {
     const day = dayByDate.get(iso(o.date));
     const a = actById.get(o.activity_id);
@@ -293,6 +313,7 @@ export async function buildPlanView(
       .filter((a) => !a.category || !NON_PLAN_CATEGORIES.has(a.category))
       .map((a) => ({
         activity_id: a.activity_id,
+        ...(a.commitment_id ? { commitment_id: a.commitment_id } : {}),
         title: a.title,
         kind: a.kind,
         cadence: describeRecurrence(a.schedule?.recurrence ?? ''),

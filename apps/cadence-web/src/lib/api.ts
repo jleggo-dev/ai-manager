@@ -75,6 +75,7 @@ export {
 
 export {
   getPlan,
+  getEarlierDays,
   setOccurrence,
   logAdhoc,
   logDid,

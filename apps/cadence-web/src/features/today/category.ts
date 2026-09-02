@@ -1,4 +1,4 @@
-import { isFoodTitle } from '../../components/occurrence-mod.ts';
+import { isFoodTitle, isWeighTitle } from '../../components/occurrence-mod.ts';
 
 /**
  * The icon families a task maps to on the sky-trail — and the "log something you did" sheet and
@@ -26,7 +26,7 @@ export function categoryOf(title: string, area?: 'movement' | 'nourishment' | 'm
   if (isFoodTitle(title)) return 'nutrition';
   const t = title.toLowerCase();
   // A weigh-in is a body measurement — nourishment's family, not a workout's.
-  if (/weigh/.test(t)) return 'nutrition';
+  if (isWeighTitle(t)) return 'nutrition';
   if (/reflect|journal|gratitude|wind.?down|evening|night|sleep/.test(t)) return 'reflection';
   // Mind-specific words before the practice family: "Box breathing practice" is a mind thing
   // that happens to say practice (it wore a musical note for a day, 2026-08-31).

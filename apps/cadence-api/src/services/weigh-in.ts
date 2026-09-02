@@ -4,7 +4,7 @@
  * (which also marks done + provenance and gives History a legible entry for free), and updates
  * baseline.weight_kg.current WITHOUT clobbering .start (jsonb || is shallow — merge app-side).
  */
-import type { Baseline, WeightTrend } from '@cadence/shared';
+import { isWeighInTitle, type Baseline, type WeightTrend } from '@cadence/shared';
 import {
   findWeighInActivity,
   getOccurrenceWithActivity,
@@ -30,7 +30,9 @@ export async function recordWeighIn(
   if (kg < 20 || kg > 500) return null; // same plausibility clamp as the Review weight editor
 
   const occ = await getOccurrenceWithActivity(userId, occurrenceId);
-  if (!occ || occ.kind !== 'system' || !/weigh/i.test(occ.title)) return null;
+  // The shared word-boundary rule: "Weighted hill intervals" is not a weigh-in, and the client
+  // routes by the same import, so a tap that opens the scale sheet is one this accepts.
+  if (!occ || occ.kind !== 'system' || !isWeighInTitle(occ.title)) return null;
 
   const shown = unit === 'lb' ? `${weight} lb` : `${kg} kg`;
   const logged_at = new Date().toISOString();

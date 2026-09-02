@@ -6,7 +6,9 @@ import { getActivePlan, supersedeActivePlans, insertPlan } from '../repos/plans.
 import { insertActivities, listActivities } from '../repos/activities.ts';
 import { deleteFuturePendingOccurrences, repointFuturePendingOccurrences } from '../repos/occurrences.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
+import { getUser } from '../repos/users.ts';
 import { cadenceConfig } from '../config.ts';
+import { localDayIso, localDayIsoPlus } from './plan-day.ts';
 import { diffCommittedActivities } from './plan-commit-diff.ts';
 import { DEFAULT_HORIZON_DAYS, ensureHorizon } from './plan-horizon.ts';
 import { prefetchImminentSessions } from './session-generate.ts';
@@ -402,7 +404,14 @@ export async function commitActivities(
     completion_source: a.completion_source,
   }));
 
-  const today = new Date().toISOString().slice(0, 10);
+  // THEIR today (plan-day.ts). This was the UTC date, and from 20:00 in Montreal that is tomorrow:
+  // the re-point and the wipe below then started a day late, leaving the evening's still-pending
+  // rows on the superseded plan where the view cannot see them — the owner's Tuesday vanished at
+  // 20:05 on 2026-09-01 over a one-word rename. The view, the horizon fill, and this commit now
+  // all read the day from the same zone-aware helper.
+  const now = new Date();
+  const timezone = (await getUser(userId))?.timezone;
+  const today = localDayIso(now, timezone);
   // Atomic (API-01): supersede → insert the new version → insert its activities → re-point the
   // unchanged activities' surviving occurrences → clear the old plan's stale future occurrences
   // must be all-or-nothing. Before this, a crash between supersedeActivePlans and insertPlan left
@@ -434,7 +443,7 @@ export async function commitActivities(
     // check; CADENCE_COMMIT_DIFF=0 restores the old wipe-everything commit without a deploy.
     let survivedCount = 0;
     if (old && cadenceConfig.commitDiff) {
-      const horizonEnd = new Date(Date.now() + occurrenceDays * 86_400_000).toISOString().slice(0, 10);
+      const horizonEnd = localDayIsoPlus(now, occurrenceDays, timezone);
       const diff = diffCommittedActivities(oldActivities, acts, {
         from: today,
         to: horizonEnd,

@@ -11,6 +11,7 @@ import { logAdhocActivity, logPlannedActivity } from '../services/adhoc-log.ts';
 import { enterEpisode, endEpisode, reviseEpisodeEquipment, postponeEpisodeStart } from '../services/episode.ts';
 import { equipmentFromGymPhotos } from '../services/gym-photo.ts';
 import { recordWeighIn, recordWeighInToday } from '../services/weigh-in.ts';
+import { buildEarlierDays, MAX_EARLIER_WEEKS } from '../services/plan-earlier.ts';
 import { getSessionInsight } from '../services/session-insight.ts';
 import { setPendingPlan, getUser } from '../repos/users.ts';
 import { setOccurrenceStatus, getOccurrenceWithActivity } from '../repos/occurrences.ts';
@@ -63,6 +64,24 @@ router.get('/', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /plan]', err);
     res.status(500).json({ error: 'failed to load plan' });
+  }
+});
+
+/**
+ * GET /plan/earlier?weeks=N — the seven days ending N weeks before today, for scrolling the
+ * trail back to log something missed. `weeks=1` is last week; each further tap asks for the one
+ * before. Read-only: it never materializes a day, and the days come back in the same shape as
+ * `week` above so the trail draws them with the same nodes.
+ */
+router.get('/earlier', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const weeks = Math.min(MAX_EARLIER_WEEKS, Math.max(1, Number(req.query.weeks) || 1));
+    const days = await buildEarlierDays(userId, weeks, tzHint(req));
+    res.json({ weeks, days });
+  } catch (err) {
+    console.error('[GET /plan/earlier]', err);
+    res.status(500).json({ error: 'failed to load earlier days' });
   }
 });
 

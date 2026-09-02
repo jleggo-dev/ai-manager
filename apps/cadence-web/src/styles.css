@@ -10243,3 +10243,85 @@ textarea.wiz-title {
   background: transparent;
   cursor: pointer;
 }
+
+/* ── The trail's way back (2026-09-01): one tap loads the week before the first day on screen,
+   so a missed breakfast can be logged on the day it happened. Sits above the first sky in the
+   sky's own dawn tone, so the top of the trail does not read as a separate bar. ───────────── */
+.trail-earlier {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 16px 4px;
+  background: oklch(95% 0.022 74);
+}
+.trail-earlier-btn {
+  border: none;
+  cursor: pointer;
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  color: oklch(34% 0.03 152);
+  box-shadow:
+    0 2px 0 oklch(88% 0.02 85),
+    0 4px 10px oklch(30% 0.03 265 / 0.1);
+}
+.trail-earlier-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.trail-earlier-end {
+  font-size: 12px;
+  font-weight: 600;
+  color: oklch(45% 0.03 250);
+}
+
+/* ── The Adjust sheet's two views (2026-09-01): what changes, or the whole week. A segmented
+   pair, same idiom as the units controls, above the scroll so it never scrolls away. ─────── */
+.wk-view {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 0 0 10px;
+  border-radius: 999px;
+  background: oklch(93% 0.012 85);
+}
+.wk-view-b {
+  flex: 1;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: oklch(45% 0.03 250);
+}
+.wk-view-b.on {
+  background: #fff;
+  color: oklch(30% 0.04 250);
+  box-shadow: 0 1px 3px oklch(30% 0.03 265 / 0.12);
+}
+.wk-change {
+  display: flex;
+  flex-direction: column;
+}
+.wk-was {
+  padding: 0 14px 12px 54px;
+  margin-top: -6px;
+  font-size: 12px;
+  color: oklch(50% 0.03 250);
+  text-decoration: line-through;
+  text-decoration-color: oklch(70% 0.03 250);
+}
+.wk-tag-diff {
+  background: oklch(92% 0.05 60);
+  color: oklch(40% 0.1 55);
+}
+.wk-helper {
+  margin: 8px 4px 0;
+  font-size: 12.5px;
+  color: oklch(45% 0.03 250);
+}

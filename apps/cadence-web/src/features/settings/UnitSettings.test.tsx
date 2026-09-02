@@ -16,6 +16,8 @@ vi.mock('../../lib/api.ts', () => ({
   setUnits: (p: unknown) => api.setUnits(p),
 }));
 
+vi.mock('../../lib/query/index.ts', () => ({ useInvalidateUnits: () => vi.fn() }));
+
 const { UnitSettings } = await import('./UnitSettings.tsx');
 
 const RESOLVED = {

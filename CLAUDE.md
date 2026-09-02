@@ -1,6 +1,7 @@
 # ai-manager monorepo
 
 Two products live here:
+
 - **AI Admin** (`backend/`, `frontend/`, `packages/core`) — the auditable AI-operations platform
   (providers, profiles, processing jobs, workflows, diagnostics).
 - **Cadence** (`apps/cadence-api`, `apps/cadence-web`, `packages/cadence-shared`) — a
@@ -8,17 +9,17 @@ Two products live here:
   through AI Admin jobs/workflows (auditable) — never app-built prompts or bypass relays.
 
 Key docs: [docs/cadence/PLAN.md](docs/cadence/PLAN.md) (living plan + backlog),
-[docs/cadence/BRAND.md](docs/cadence/BRAND.md) (canonical brand), 
+[docs/cadence/BRAND.md](docs/cadence/BRAND.md) (canonical brand),
 [docs/cadence/MEMORY-ARCHITECTURE.md](docs/cadence/MEMORY-ARCHITECTURE.md) (context/memory engine).
 
 ## Cadence brand (canonical: docs/cadence/BRAND.md — defer to it for any wording decision)
 
-- **Tagline:** *a rhythm you can keep*
+- **Tagline:** _a rhythm you can keep_
 - **One-liner:** A coach you just talk to — it listens, remembers you, and turns what you say
   into a rhythm you can keep.
 - **Brand promise:** Cadence never makes you repeat yourself and never makes you start over: it
   remembers what you've told it, and when life changes, the plan bends instead of resetting to zero.
-- **Positioning:** a **coach**, never a "fitness app". Fitness & nutrition are the *launch focus*,
+- **Positioning:** a **coach**, never a "fitness app". Fitness & nutrition are the _launch focus_,
   not the category — mental health, spiritual practice, creative habits are equally in scope.
   Fitness-first via example order, not taxonomy. Hearth, not scoreboard.
 - **Voice:** warm, level, unhyped; the coach speaks as "I"; plain kind words for hard things
@@ -29,17 +30,17 @@ Key docs: [docs/cadence/PLAN.md](docs/cadence/PLAN.md) (living plan + backlog),
 
 Warm words in the UI; boring stable words in schema/prompts. A brand refresh never touches a column.
 
-| Canonical (code/DB/prompts) | User-facing |
-|---|---|
-| `equipment` (never `tools` in schema/prompts) | "Tools — what you're working with" |
-| `constraints` (replaces `injuries`; keep `plan_around`) | "What we work around" |
-| `area: movement\|nourishment\|mind\|practice` (replaces goal `category`; `weight` deleted) | copy names the goal, not the area |
-| `plan.status: draft → committed` (replaces `locked`) | "Set your rhythm" |
-| `consistency` (replaces `adherence`) | "how you showed up this week" |
-| `detours` (replaces disruptions) | "Life happened? Let's take a detour" |
-| `recap` (replaces weekly readout) | "Your weekly check-in" |
+| Canonical (code/DB/prompts)                                                                 | User-facing                                                                                                               |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `equipment` (never `tools` in schema/prompts)                                               | "Tools — what you're working with"                                                                                        |
+| `constraints` (replaces `injuries`; keep `plan_around`)                                     | "What we work around"                                                                                                     |
+| `area: movement\|nourishment\|mind\|practice` (replaces goal `category`; `weight` deleted)  | copy names the goal, not the area                                                                                         |
+| `plan.status: draft → committed` (replaces `locked`)                                        | "Set your rhythm"                                                                                                         |
+| `consistency` (replaces `adherence`)                                                        | "how you showed up this week"                                                                                             |
+| `detours` (replaces disruptions)                                                            | "Life happened? Let's take a detour"                                                                                      |
+| `recap` (replaces weekly readout)                                                           | "Your weekly check-in"                                                                                                    |
 | `Broker` (the Scribe rename is reverted — owner 2026-08-04; a hidden entity, internal only) | UI describes the behaviour ("Cadence takes notes while you talk"), never the entity — to the user there is only the coach |
-| unchanged: `coach`, `baseline`, `occurrences`, `milestone/target/recurring` | |
+| unchanged: `coach`, `baseline`, `occurrences`, `milestone/target/recurring`                 |                                                                                                                           |
 
 **Banned:** "captured" in user copy; `beats`/`instruments`/`tempo changes` anywhere; `tools` as a
 field name; `resources`/`limits` for constraints; streaks that reset to zero; wellness clichés
@@ -50,7 +51,7 @@ field name; `resources`/`limits` for constraints; streaks that reset to zero; we
 - **The Coach is in control of the software, not the other way around** (owner, 2026-08-23).
   Deterministic code is a **tool she calls**, never a pipeline that calls her; tools return facts in
   a consistent shape (for food: macros + nutrients **by a quantity of a measure**, disagreements
-  included) and *she* does the adjudicating. Guards report evidence instead of silently returning
+  included) and _she_ does the adjudicating. Guards report evidence instead of silently returning
   null; the model says WHAT, the store says HOW MUCH (it returns grams, `priceFood()` does the
   arithmetic); whatever she works out gets written back so the deterministic rung hits next time.
   The lone exception is safety — allergen flags are a union, either side may ADD one, only the user
@@ -70,8 +71,8 @@ field name; `resources`/`limits` for constraints; streaks that reset to zero; we
   CI — split the file instead.** (`ProcessingJobManager.tsx` proved a one-time size fix without a
   guardrail doesn't hold: it grew back 1,420 lines larger.)
 - **Adding a coach tool — read the checklist first, every time.**
-  [`docs/cadence/TOOL-HARNESS.md`](docs/cadence/TOOL-HARNESS.md) opens with *"Adding a tool: the
-  checklist"* — eight steps, marked for which are CI-enforced and which are judgement. The two
+  [`docs/cadence/TOOL-HARNESS.md`](docs/cadence/TOOL-HARNESS.md) opens with _"Adding a tool: the
+  checklist"_ — eight steps, marked for which are CI-enforced and which are judgement. The two
   nobody else will catch: **does the dossier already carry this fact** (then it is not a tool, it
   belongs in the context pack), and **which layer** — `ALWAYS_ACTIONS` costs ~190 tokens on every
   message forever, everything else is free until she asks for it. Tool descriptions, categories,
@@ -79,6 +80,14 @@ field name; `resources`/`limits` for constraints; streaks that reset to zero; we
   `retrieval/description-audit.test.ts`; **what a tool hands BACK is not gated yet**, and that gap
   is what let a crash read as "nothing on file" for weeks. Touching the always-on list means
   running `npm run eval:tools`.
+- **Every button gets a table test, and every bug fix lands with the test that would have caught
+  it** (owner, 2026-09-01). Deterministic routers — a title deciding which sheet opens
+  (`taskShape.ts`), which tool a tap invokes, which matcher claims a row — fail silently: the
+  wrong sheet opens and nothing throws. So each one ships with a table of positives AND
+  near-misses (`taskShape.test.ts`, `occurrence-titles.test.ts` are the shape), and a new title
+  pattern that could be mistaken for another gets a row BEFORE it ships. "Weighted hill
+  intervals" opened the scale sheet for weeks because `/weigh/i` had no negative case. A regex
+  that decides behaviour lives in `@cadence/shared` once — never hand-copied per call site.
 - **Ship / agent workflow:** follow
   [`.cursor/skills/development-workflow/SKILL.md`](.cursor/skills/development-workflow/SKILL.md)
   (CI must be green — or intentionally skipped with a documented reason — before merge and before

@@ -15,6 +15,7 @@ const getNotificationPrefs = vi.fn();
 
 vi.mock('../../lib/api.ts', () => ({
   getWeather: (...a: unknown[]) => getWeather(...a),
+  getUnits: vi.fn().mockResolvedValue(null),
   getHomeLocation: () =>
     Promise.resolve({
       home_location: { lat: 45.4, lon: -73.9, label: "Notre-Dame-de-l'Île-Perrot, QC" },
@@ -151,7 +152,7 @@ describe('the weather line', () => {
 
   it('drops its condition word while the quiet-hours chip is up', async () => {
     const view = renderHeader(at(18)); // chip shows from 5pm, quiet hours start at 9:30
-    await screen.findByText(/quiet at 9:30/);
+    await screen.findByText(/quiet at 21:30/);
     await waitFor(() => expect(view.q('.thead-wx').textContent).toBe('☀️ 19°'));
     expect(view.q('.thead-wx').textContent).not.toContain('Clear');
   });

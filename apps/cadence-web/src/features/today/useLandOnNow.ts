@@ -22,7 +22,7 @@ export function currentNodeIndex(occurrences: PlanOccurrence[]): number {
 }
 
 /** The nearest ancestor that actually scrolls. Null when nothing does (jsdom, or a short day). */
-function scrollPane(el: HTMLElement): HTMLElement | null {
+export function scrollPane(el: HTMLElement): HTMLElement | null {
   for (let p = el.parentElement; p; p = p.parentElement) {
     const overflow = getComputedStyle(p).overflowY;
     if ((overflow === 'auto' || overflow === 'scroll') && p.scrollHeight > p.clientHeight) return p;

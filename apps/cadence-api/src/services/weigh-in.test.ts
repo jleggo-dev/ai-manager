@@ -99,6 +99,22 @@ d('A23 §2c — a weight on any day (DB)', () => {
     expect(await listWeighInSeries(USER)).toEqual([]);
   });
 
+  /**
+   * 2026-09-01: the lookup was `title ~* 'weigh'`, so a plan whose only "weigh" was a WEIGHTED
+   * hill session had that session picked as the weigh-in row, and a weight logged from Settings
+   * would have landed on a workout. Same word-boundary rule as the client's router now.
+   */
+  it('does not mistake a weighted workout for the weigh-in row', async () => {
+    const [plan] = await sql<{ plan_id: string }[]>`
+      insert into cadence.plans (user_id, goal_ids, status) values (${USER}, '{}', 'active') returning plan_id`;
+    await sql`
+      insert into cadence.activities (plan_id, user_id, title, kind, category, schedule)
+      values (${plan!.plan_id}, ${USER}, 'Weighted hill intervals (vest or sandbag) + grip finisher', 'system', 'measurement', '{}')`;
+
+    expect(await recordWeighInToday(USER, 195, 'lb')).toBeNull();
+    expect(await listWeighInSeries(USER)).toEqual([]);
+  });
+
   it('still refuses an implausible reading', async () => {
     await seedWeighInActivity();
     expect(await recordWeighInToday(USER, 5, 'kg')).toBeNull();

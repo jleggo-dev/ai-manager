@@ -1,5 +1,7 @@
 import { CoachFace } from '../../../components/CoachFace.tsx';
 import type { SessionInsight } from '../../../lib/api.ts';
+import { formatClock } from '../../../lib/clock.ts';
+import { useClockUnit } from '../../../lib/query/index.ts';
 
 /**
  * The top of the start sheet: Cadence asking the time question, and — at most — one thing Cadence
@@ -22,7 +24,9 @@ export function StartCoachAsk({
   minutes: number;
   insight: SessionInsight | null;
 }) {
-  const when = timeOfDay?.trim();
+  // In the person's own clock (Settings → Units): "at 06:00" or "at 6:00 am".
+  const clock = useClockUnit();
+  const when = formatClock(timeOfDay, clock);
   return (
     <div className="sca">
       <div className="sca-say">

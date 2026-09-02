@@ -81,6 +81,16 @@ export const queryKeys = {
   recaps: {
     scoped: (limit: number) => ['recaps', limit] as const,
   },
+  /** `/me/units` — the resolved display units. One key, because Settings writes them and the
+   *  trail, the rows, the quiet-hours chip and the proposed week all read the clock from it. */
+  units: {
+    all: ['units'] as const,
+  },
+  /** `/plan/earlier?weeks=N` — the week(s) before today, loaded when the trail is scrolled back
+   *  to log something missed. Under the `plan` prefix so a log invalidates it with the week. */
+  planEarlier: {
+    weeks: (n: number) => ['plan', 'earlier', n] as const,
+  },
 } as const;
 
 /**

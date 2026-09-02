@@ -138,6 +138,7 @@ export const unitPrefsBodySchema = z
     food_mass: z.enum(['g', 'oz']).optional(),
     food_volume: z.enum(['ml', 'cup']).optional(),
     distance: z.enum(['km', 'mi']).optional(),
+    clock: z.enum(['24h', '12h']).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'nothing to update' });
 

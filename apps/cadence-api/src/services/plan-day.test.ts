@@ -1,5 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { planDayBase } from './plan-day.ts';
+import { localDayIso, localDayIsoPlus, planDayBase } from './plan-day.ts';
+
+/**
+ * The commit's half of the same bug (2026-09-01): at 20:05 in Montreal a plan change read
+ * "today" as the UTC date — Wednesday — and left Tuesday's rows on the superseded plan, where
+ * the view could not see them. Every writer of a plan day now goes through these.
+ */
+describe('localDayIso', () => {
+  it('is still Tuesday at 20:05 in Montreal, though UTC has moved on', () => {
+    const now = new Date('2026-09-02T00:05:00Z'); // 20:05 Tue 1 Sep, America/Toronto
+    expect(localDayIso(now, 'America/Toronto')).toBe('2026-09-01');
+    // What the commit used to do:
+    expect(now.toISOString().slice(0, 10)).toBe('2026-09-02');
+  });
+
+  it('shifts by whole days for the horizon end', () => {
+    const now = new Date('2026-09-02T00:05:00Z');
+    expect(localDayIsoPlus(now, 7, 'America/Toronto')).toBe('2026-09-08');
+    expect(localDayIsoPlus(now, -7, 'America/Toronto')).toBe('2026-08-25');
+    expect(localDayIsoPlus(now, -1, 'America/Toronto')).toBe('2026-08-31');
+  });
+
+  it('floors to UTC when no zone is known', () => {
+    expect(localDayIso(new Date('2026-09-02T00:05:00Z'))).toBe('2026-09-02');
+  });
+});
 
 /**
  * The demo bug, pinned. On Tuesday 2026-08-18 at 20:41 in Montreal the Plan screen said
