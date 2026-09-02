@@ -1,58 +1,95 @@
-# CadenceCoachIdentity — local Capacitor plugin
+# The coach's portrait on a notification
 
 Makes Cadence's notifications look like they came from the coach rather than from an app: the
 portrait the user picked replaces the app icon, the app icon becomes a corner badge, and Cadence
 appears under **Settings → Focus → People** so it can be allowed through Do Not Disturb the way a
 person is.
 
-## Status
+Two targets do this, because iOS gives no single place to do it:
 
-**UNVERIFIED ON DEVICE.** This was written without an Xcode build available. Nothing here has been
-compiled, let alone run. It needs a simulator build before it is trusted — see the checklist below.
+| | built by | decorated by |
+|---|---|---|
+| **Local** — the plan reminders | `CadenceCoachIdentityPlugin` (this folder) | at schedule time |
+| **Push** — plan-ready, the nudge dispatcher | APNs | `CadenceNotificationService` at delivery |
 
-The JS side degrades silently at every step (no chosen face, plugin missing, donation refused), and
-the fallback is the ordinary `@capacitor/local-notifications` path that shipped before this
-existed. So a plugin that does not work costs the portrait, not the notification.
+`UNNotificationContent.updating(from:)` is the call that attaches the identity, and it can only be
+made on content the app is about to post. For a local notification that content is ours, so the
+plugin schedules as well as donates. For a push it is built by APNs and never passes through the
+app at all — which is why a service extension is the only way to reach one, and why every
+server-sent notification showed the plain app icon until that extension existed.
 
-## What it does
+Both build their sender from `App/Shared/CoachPortraitIntent.swift`, which is compiled into both
+targets. That file is not a tidiness measure: `conversationIdentifier` and `customIdentifier` are
+what iOS files the relationship under, and two targets that disagreed would put Cadence in Focus
+settings twice, with "allow through" working for only half her notifications.
 
-1. `donate({ senderName, avatarBase64 })` — builds an `INSendMessageIntent` with an `INImage` from
-   the passed bytes and donates it as an outgoing `INInteraction`. This is what registers Cadence
-   under "People".
-2. `scheduleWithIdentity({ notifications })` — schedules local notifications with
-   `UNNotificationContent.updating(from:)` applied.
+## Two things that fail silently if you get them wrong
 
-Step 2 is not optional gold-plating. `updating(from:)` is the call that actually attaches the
-identity, and it can only be made on the content the app is about to post — which, for local
-notifications, is built by whoever schedules them. A donate-only plugin would register Cadence in
-Focus settings and change nothing about how a notification looks.
+**The interaction is `.incoming`.** The direction is from the USER's point of view, not the app's.
+The coach sends, the user receives. Donated as `.outgoing` the system reads it as a message the
+user themselves sent, leaves no sender to attribute the notification to, and `updating(from:)`
+hands back undecorated content. Nothing throws, nothing logs, every notification just quietly
+shows the app icon — which is what shipped from #151 until this was fixed.
 
-It writes to the same `UNUserNotificationCenter` as `@capacitor/local-notifications`, so ids,
-cancellation and `getPending` continue to work through that plugin. Only the schedule step moves.
+**A push needs `mutable-content: 1`.** It is what wakes the extension. Without it iOS delivers the
+payload as sent and the extension never runs. `services/push-apns.ts` adds it, and the chosen
+`face_id` alongside — an extension cannot read the app's storage without an App Group, and a
+portrait that depended on the app having run recently would be missing for exactly the first push
+a new user gets. The portraits are a folder reference to `apps/cadence-web/public/avatars`, so the
+extension and the web app serve the same files and adding one is still a single drop.
 
-## Wiring it into the Xcode project
+Someone who has picked no portrait sends neither key: nothing for the extension to do, and no
+process launch to work that out.
 
-The Capacitor SPM layout does not auto-discover loose Swift files. After `npx cap sync ios`:
+## Entitlements — and why the extension has none
 
-1. Open `App.xcworkspace`.
-2. Drag `App/App/CadenceCoachIdentity/` into the **App** target (Create groups, not folder
-   references; tick the App target under "Add to targets").
-3. Confirm `CadenceCoachIdentityPlugin.swift` appears in **Build Phases → Compile Sources**.
+`com.apple.developer.usernotifications.communication` goes on the **app target only**, plus
+`NSUserActivityTypes` = `INSendMessageIntent` in the app's `Info.plist` and `IntentsSupported` in
+the extension's.
 
-Nothing else is needed: Capacitor 6+ discovers `CAPBridgedPlugin` conformers at runtime, so there
-is no registration file and no `.m` bridging header.
+It is tempting to put the entitlement on the extension too — it is the target making the
+`updating(from:)` call, and several write-ups say to. It cannot go there. Xcode's own portal
+metadata lists which product types the capability supports:
 
-`registerPlugin('CadenceCoachIdentity')` on the JS side resolves lazily, so a build without this
-compiled in throws at call time rather than at import — which is why every call site catches.
+```
+id: USERNOTIFICATIONS_COMMUNICATION
+supportedProductTypes: ["com.apple.product-type.application",
+                        "com.apple.product-type.watchkit2-extension"]
+```
 
-## Simulator checklist (do this before trusting it)
+`com.apple.product-type.app-extension` is not among them, so the capability cannot be enabled on
+an extension's App ID at all, and an extension that requests it fails to sign. The extension
+therefore ships with **no entitlements file**; it inherits what it needs from the host app, whose
+App ID carries the capability.
 
-- [ ] It compiles, and the target builds.
-- [ ] Pick a coach face in Settings, then reload the plan. `donate` resolves `{ donated: true }`.
-- [ ] A scheduled notification fires showing the portrait, with the app icon as a corner badge.
-- [ ] Settings → Focus → People lists Cadence.
+That also means there is no portal step for the extension. Automatic signing creates
+`builders.cadence.app.NotificationService` on the next build the same way it created
+`builders.cadence.app.watchkitapp` (Xcode names the ones it made "XC ...").
+
+(`DVTPortalCachedPortalCapabilities.json` inside `DVTPortal.framework` is where that table lives,
+if a future capability raises the same question.)
+
+## Verified, and not
+
+Compiled and linked for the simulator: the extension target produces its binary with all fifteen
+portraits bundled under `avatars/`, and `services/push-apns.ts` has tests for the payload shape.
+
+Still needs a device or simulator run:
+
+- [ ] Pick a face, reload the plan. `donate` resolves `{ donated: true }`.
+- [ ] A scheduled reminder fires showing the portrait, app icon as a corner badge.
+- [ ] A push (`POST /dev/push`) arrives showing the same portrait.
+- [ ] Settings → Focus → People lists Cadence exactly once.
 - [ ] Long-press a `morning_adjust` notification: "Lighten today", "Keep it as planned",
       "Talk it through". The `extra` payload carries the pre-composed lighter day.
-- [ ] Clearing the chosen face and re-syncing gives a plain app-icon notification, not a broken one.
+- [ ] Clearing the chosen face gives a plain app-icon notification, not a broken one.
 - [ ] Re-syncing several times does not duplicate notifications (cancel-then-schedule still holds
       across the two scheduling paths).
+
+## Wiring, if the project file is ever rebuilt
+
+Capacitor's SPM layout does not auto-discover loose Swift files, but Capacitor 6+ discovers
+`CAPBridgedPlugin` conformers at runtime — so the plugin needs to be in **Build Phases → Compile
+Sources** for the App target and nothing else: no registration file, no `.m` bridging header.
+`registerPlugin('CadenceCoachIdentity')` resolves lazily, so a build without it compiled in throws
+at call time rather than at import, which is why every call site catches.

@@ -20,8 +20,9 @@ vi.mock('../repos/device-tokens.ts', () => ({
   listDeviceTokens: vi.fn(async () => []),
   pruneDeadToken: vi.fn(),
 }));
+vi.mock('../repos/users.ts', () => ({ getUser: vi.fn(async () => null) }));
 
-const { apnsConfigured, providerJwt, sendPushToUser } = await import('./push-apns.ts');
+const { apnsConfigured, buildPushPayload, providerJwt, sendPushToUser } = await import('./push-apns.ts');
 
 describe('push-apns', () => {
   it('reports configured when key/team/private key are present', () => {
@@ -46,5 +47,35 @@ describe('push-apns', () => {
     const first = providerJwt(2_000_000);
     expect(providerJwt(2_000_000 + 60_000)).toBe(first); // within 45 min
     expect(providerJwt(2_000_000 + 46 * 60_000)).not.toBe(first);
+  });
+
+  /**
+   * The portrait keys. `mutable-content` is the whole reason a push can carry the coach's face:
+   * it is what wakes CadenceNotificationService, which is the only place iOS lets us call
+   * updating(from:) for a push. A payload without it delivers as-is — the app-icon notification
+   * that shipped for months while the app donated an identity nothing could apply.
+   */
+  it('wakes the service extension and names the portrait when the user picked one', () => {
+    const payload = buildPushPayload('Cadence', 'hi', {}, 'steady-pacer-neutral') as {
+      aps: Record<string, unknown>;
+      face_id?: string;
+    };
+    expect(payload.aps['mutable-content']).toBe(1);
+    expect(payload.face_id).toBe('steady-pacer-neutral');
+  });
+
+  it('sends neither portrait key when no face is picked, so the extension is never woken for nothing', () => {
+    const payload = buildPushPayload('Cadence', 'hi') as { aps: Record<string, unknown>; face_id?: string };
+    expect(payload.aps).not.toHaveProperty('mutable-content');
+    expect(payload).not.toHaveProperty('face_id');
+  });
+
+  it('keeps the alert, sound, category and extra payload alongside the portrait', () => {
+    const payload = buildPushPayload('Cadence', 'hi', { categoryId: 'nudge', extra: { kind: 'ease' } }, 'x') as {
+      aps: Record<string, unknown>;
+      kind?: string;
+    };
+    expect(payload.aps).toMatchObject({ alert: { title: 'Cadence', body: 'hi' }, sound: 'default', category: 'nudge' });
+    expect(payload.kind).toBe('ease');
   });
 });

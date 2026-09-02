@@ -1,7 +1,6 @@
 import Foundation
 import Capacitor
 import Intents
-import UIKit
 import UserNotifications
 
 /**
@@ -29,8 +28,9 @@ import UserNotifications
  returns `donated: false`, and the JS side falls back to the ordinary Capacitor scheduling path,
  which is exactly what shipped before the portrait existed.
 
- UNVERIFIED ON DEVICE: written without an Xcode build available. Needs a simulator run before it is
- trusted (see the PR description).
+ **Local notifications only.** A push's content is built by APNs, so `updating(from:)` cannot be
+ reached from here for one — that is what `CadenceNotificationService` exists to do. The sender
+ both targets describe is built in one place, `Shared/CoachPortraitIntent.swift`.
  */
 @objc(CadenceCoachIdentityPlugin)
 public class CadenceCoachIdentityPlugin: CAPPlugin, CAPBridgedPlugin {
@@ -49,63 +49,23 @@ public class CadenceCoachIdentityPlugin: CAPPlugin, CAPBridgedPlugin {
     // MARK: - Donation
 
     @objc func donate(_ call: CAPPluginCall) {
-        let senderName = call.getString("senderName") ?? "Cadence"
+        let senderName = call.getString("senderName") ?? CoachPortraitIntent.defaultSenderName
         let avatarBase64 = call.getString("avatarBase64") ?? ""
 
         // A malformed or absent portrait is a normal outcome (no face chosen, a failed fetch), not
         // an error worth surfacing — the caller falls back to the plain app icon.
         guard
             let data = Data(base64Encoded: avatarBase64),
-            let uiImage = UIImage(data: data),
-            // INImage wants encoded bytes, not a UIImage. Re-encoding normalises whatever the
-            // webview handed us; 0.9 is indistinguishable at the size iOS renders an avatar.
-            let jpeg = uiImage.jpegData(compressionQuality: 0.9)
+            let intent = CoachPortraitIntent.make(senderName: senderName, avatar: data)
         else {
             call.resolve(["donated": false])
             return
         }
 
-        let intent = Self.makeIntent(senderName: senderName, avatar: jpeg)
-        let interaction = INInteraction(intent: intent, response: nil)
-        // .outgoing: the app is the sender. Marking it incoming files Cadence on the user's own
-        // "sent" side of the system's model, which is not where a coach's message belongs.
-        interaction.direction = .outgoing
-
-        interaction.donate { [weak self] error in
-            if let error = error {
-                CAPLog.print("[CadenceCoachIdentity] donation failed: \(error.localizedDescription)")
-                call.resolve(["donated": false])
-                return
-            }
-            self?.donatedIntent = intent
-            call.resolve(["donated": true])
+        CoachPortraitIntent.donate(intent) { [weak self] donated in
+            if donated { self?.donatedIntent = intent }
+            call.resolve(["donated": donated])
         }
-    }
-
-    private static func makeIntent(senderName: String, avatar: Data) -> INSendMessageIntent {
-        let image = INImage(imageData: avatar)
-        let sender = INPerson(
-            personHandle: INPersonHandle(value: "cadence.coach", type: .unknown),
-            nameComponents: nil,
-            displayName: senderName,
-            image: image,
-            contactIdentifier: nil,
-            // Stable across donations, so iOS treats every Cadence notification as the same
-            // "person" rather than accruing one entry per donation in Focus settings.
-            customIdentifier: "cadence.coach"
-        )
-        let intent = INSendMessageIntent(
-            recipients: nil,
-            outgoingMessageType: .outgoingMessageText,
-            content: nil,
-            speakableGroupName: nil,
-            conversationIdentifier: "cadence.coach",
-            serviceName: nil,
-            sender: sender,
-            attachments: nil
-        )
-        intent.setImage(image, forParameterNamed: \.sender)
-        return intent
     }
 
     // MARK: - Scheduling

@@ -2,6 +2,7 @@ import http2 from 'node:http2';
 import { createSign, createPrivateKey } from 'node:crypto';
 import { cadenceConfig } from '../config.ts';
 import { listDeviceTokens, pruneDeadToken } from '../repos/device-tokens.ts';
+import { getUser } from '../repos/users.ts';
 
 /**
  * APNs sender — token-based auth (.p8 key, ES256 provider JWT) over HTTP/2, no SDK dependency.
@@ -98,6 +99,59 @@ export interface PushOptions {
 }
 
 /**
+ * The APNs payload.
+ *
+ * `mutable-content` is what wakes `CadenceNotificationService` — the only place
+ * `UNNotificationContent.updating(from:)` can be called for a PUSH, and therefore the only way the
+ * coach's portrait ever replaces the app icon on one. Without this key iOS delivers the
+ * notification exactly as sent and the extension never runs, which is why every server-sent
+ * notification showed the app icon no matter what the app had donated.
+ *
+ * The face id rides along because an extension cannot read the app's own storage without an App
+ * Group, and a portrait that depended on the app having run recently would be missing for exactly
+ * the first push a new user gets — the one saying their first week is ready.
+ *
+ * Someone who has not picked a portrait sends neither key. There would be nothing for the
+ * extension to do, and waking it to work that out costs a process launch per notification.
+ *
+ * Exported for its test: the shape of this object is the whole fix, and it is not otherwise
+ * observable without a device.
+ */
+export function buildPushPayload(
+  title: string,
+  bodyText: string,
+  options: PushOptions = {},
+  faceId: string | null = null,
+): Record<string, unknown> {
+  return {
+    aps: {
+      alert: { title, body: bodyText },
+      sound: 'default',
+      ...(options.categoryId ? { category: options.categoryId } : {}),
+      ...(faceId ? { 'mutable-content': 1 } : {}),
+    },
+    ...(options.extra ?? {}),
+    ...(faceId ? { face_id: faceId } : {}),
+  };
+}
+
+/**
+ * The portrait this user picked, or null for "hasn't picked" — which renders the app icon, the
+ * honest thing to show rather than assigning them a face they never chose.
+ *
+ * Best-effort on purpose: a notification that arrives without the portrait is a far better outcome
+ * than one that does not arrive because a face lookup failed.
+ */
+async function coachFaceId(userId: string): Promise<string | null> {
+  try {
+    return (await getUser(userId))?.coach_face_id ?? null;
+  } catch (err) {
+    console.warn('[apns] coach face lookup failed (sending without the portrait):', err);
+    return null;
+  }
+}
+
+/**
  * Send an alert push to every device a user has registered. Dead tokens (410, or 400
  * BadDeviceToken) are pruned as APNs reports them. Returns per-token results for the caller to
  * log; throws only when APNs is unconfigured or unreachable.
@@ -112,14 +166,7 @@ export async function sendPushToUser(
   const tokens = await listDeviceTokens(userId);
   if (tokens.length === 0) return [];
   const jwt = providerJwt();
-  const payload = {
-    aps: {
-      alert: { title, body: bodyText },
-      sound: 'default',
-      ...(options.categoryId ? { category: options.categoryId } : {}),
-    },
-    ...(options.extra ?? {}),
-  };
+  const payload = buildPushPayload(title, bodyText, options, await coachFaceId(userId));
   const results: PushResult[] = [];
   for (const token of tokens) {
     const r = await sendToToken(token, payload, jwt);
