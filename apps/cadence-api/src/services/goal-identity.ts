@@ -15,8 +15,46 @@
  */
 
 /**
- * Lowercase, punctuation → spaces, collapsed — and "an" folded into "a". The comparison form for
- * word-level rules.
+ * Letters that carry no combining mark to strip, so NFD leaves them intact and the `[^a-z0-9]`
+ * pass below would turn them into spaces. Small on purpose: these are the ones a European
+ * repertoire actually contains — Grieg's ø, Chopin's ł, a German ß — not a transliteration table.
+ */
+const NO_DECOMPOSITION: Record<string, string> = {
+  ø: 'o',
+  æ: 'ae',
+  œ: 'oe',
+  ß: 'ss',
+  ł: 'l',
+  đ: 'd',
+  ð: 'd',
+  þ: 'th',
+  ı: 'i',
+};
+
+/**
+ * Lowercase and fold accents to their base letter, BEFORE anything else looks at the characters.
+ *
+ * This has to happen first because both forms below reduce with `[^a-z0-9]`, and an accented
+ * letter is not in `a-z`: without folding, "Écossaise" became **"cossaise"** — the accent was not
+ * ignored, it was turned into a word boundary that ate the first letter. So a stored "Écossaise"
+ * never matched a typed "Ecossaise", and the repertoire rotation quietly failed to stamp the piece
+ * (found 2026-09-02 while testing the matcher; it had been pinned as a characterization test
+ * before being fixed here).
+ *
+ * **Strictly a no-op for ASCII input** — NFD leaves plain ASCII alone and there are no marks to
+ * strip — so every all-English title normalizes exactly as it did before. Only titles that were
+ * already being mangled change.
+ */
+const fold = (s: string): string =>
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[øæœßłđðþı]/g, (c) => NO_DECOMPOSITION[c] ?? c);
+
+/**
+ * Lowercase, accents folded, punctuation → spaces, collapsed — and "an" folded into "a". The
+ * comparison form for word-level rules.
  *
  * The article fold is a real-device scar (2026-08-13): "Run an Ultra Beast Spartan Race" and
  * "Run a Spartan Ultra Beast" shared every content word, and the subset test still failed —
@@ -24,8 +62,7 @@
  * to pass); treating English's two spellings of the SAME article as different words is not.
  */
 export const normTitle = (s: string): string =>
-  s
-    .toLowerCase()
+  fold(s)
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\ban\b/g, 'a')
     .trim();
@@ -35,7 +72,7 @@ export const normTitle = (s: string): string =>
  * "ultrabeast". Word boundaries are exactly what models move around between turns, so the compact
  * form is the one place they can't hide.
  */
-export const compactTitle = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+export const compactTitle = (s: string): string => fold(s).replace(/[^a-z0-9]+/g, '');
 
 /**
  * Below this many characters a compact title is too short to be evidence of anything: "row" sits

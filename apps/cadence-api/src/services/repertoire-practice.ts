@@ -12,9 +12,11 @@ import { normTitle } from './goal-identity.ts';
  *  - **Scoped by goal.** Only items linked to the session's goal (or linked to no goal at all)
  *    can match — "had a melody stuck in my head" on a run log must not stamp the piano piece
  *    "Melody", and it can't: Melody rides the piano goal, the run doesn't.
- *  - **Whole words on normalized text.** Both sides go through NFC + `normTitle` (the same
- *    normalizer goal matching trusts), and needles match only at word boundaries — an item
- *    called "Rain" does not match "training".
+ *  - **Whole words on normalized text.** Both sides go through `normTitle` (the same normalizer
+ *    goal matching trusts, which lowercases, folds accents to their base letter, and reduces
+ *    punctuation to spaces), and needles match only at word boundaries — an item called "Rain"
+ *    does not match "training". Because normTitle folds, a stored "Écossaise" matches a typed
+ *    "Ecossaise", and NFC/NFD spellings of either reduce identically.
  *  - **The label's CORE matches too.** Stored labels carry qualifiers the user's own words never
  *    will — "A Short Story (Lichner)", "Écossaise by J.N. Hummel", "Minuet in G Major, BWV 822"
  *    — so a second needle strips parentheticals, a trailing "by …", and anything after a comma.

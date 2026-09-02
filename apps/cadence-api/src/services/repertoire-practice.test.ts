@@ -50,14 +50,17 @@ describe('itemNamedIn', () => {
     expect(hit('Écossaise'.normalize('NFD'), 'Écossaise, twice')).toBe(true);
   });
 
-  // Documented, not endorsed. `normTitle` maps every non-[a-z0-9] run to a SPACE, so "Écossaise"
-  // reduces to "cossaise" and an unaccented "Ecossaise" reduces to "ecossaise" — no word-boundary
-  // match between them. It is invisible to the tempo path (a step title and its item label both
-  // come from the coach, so both carry the accent), but a person typing "Ecossaise" into a free
-  // text log will not stamp the piece. Folding accents to their base letter belongs in normTitle,
-  // which goal identity also depends on — a deliberate change, not a drive-by one.
-  it('does NOT currently match an unaccented spelling of an accented label', () => {
-    expect(hit('Écossaise', 'played ecossaise twice')).toBe(false);
+  // This used to fail, and was pinned as a characterization test saying so: normTitle turned the
+  // accent into a word boundary, reducing "Écossaise" to "cossaise", so a person typing the
+  // unaccented spelling never stamped the piece. normTitle now folds accents to their base letter.
+  it('matches an unaccented spelling of an accented label', () => {
+    expect(hit('Écossaise', 'played ecossaise twice')).toBe(true);
+    expect(hit('Écossaise by J.N. Hummel', 'ran through the Ecossaise')).toBe(true);
+    expect(hit('Fauré Sicilienne', 'faure sicilienne, slowly')).toBe(true);
+  });
+
+  it('still will not match a different piece that merely looks similar', () => {
+    expect(hit('Étude in C', 'played the prélude in C')).toBe(false);
   });
 
   it('does not match on an empty haystack', () => {
