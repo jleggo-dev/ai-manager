@@ -1,7 +1,8 @@
 import { listGoals } from '../repos/goals.ts';
 import { insertGoalEvent } from '../repos/goal-events.ts';
 import { listRepertoire, upsertRepertoireItem } from '../repos/repertoire.ts';
-import { invalidateSessionsFor } from './repertoire-practice.ts';
+import { canonicalLabel, invalidateSessionsFor } from './repertoire-practice.ts';
+import { normTitle } from './goal-identity.ts';
 import { matchActivity } from './plan-edit.ts';
 import type { CoachActionTool } from './coach-action-types.ts';
 import type { RepertoireStatus } from '@cadence/shared';
@@ -95,9 +96,11 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
         statusWord: typeof i.status === 'string' ? i.status.trim().toLowerCase() : '',
         kind: typeof i.kind === 'string' && i.kind.trim() ? i.kind.trim().slice(0, 40) : null,
       }))
-      // Dedupe within the call — two entries for one label would race the upsert against itself.
+      // Dedupe within the call — two entries for one label would race the upsert against itself,
+      // and `lower(label)` would not stop them landing as two rows when they differ by an accent.
+      // normTitle is the same sameness the rest of the repertoire uses.
       .filter((i) => {
-        const key = i.label.normalize('NFC').toLowerCase();
+        const key = normTitle(i.label);
         if (!i.label || seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -123,12 +126,24 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
       rejected.push(`${item.label} — "${item.statusWord}" is not a standing; use working, known, learned, or parked`);
       return false;
     });
+    // What is already on file, read ONCE for the whole batch: each incoming label is resolved onto
+    // an existing row when it is the same piece under normalization, so an accent-variant spelling
+    // updates that piece instead of starting a second one beside it. A failed read must not turn a
+    // re-mention into a duplicate, so it aborts rather than writing blind.
+    const onFile = await listRepertoire(userId).catch((e): null => {
+      console.error('[repertoire] pre-write read failed:', e);
+      return null;
+    });
+    if (onFile === null) {
+      return 'I could not read what is already on file just now, so I did not write anything — a fault on our side, not an empty record. Try again in a moment.';
+    }
+
     // Independent rows — written concurrently so nine pieces cost one round-trip's wait, not nine.
     const written = await Promise.all(
       accepted.map(async (item) => {
         const mapped = STATUS_OF.get(item.statusWord)!;
         const { item: row, learnedNow } = await upsertRepertoireItem(userId, {
-          label: item.label,
+          label: canonicalLabel(onFile, item.label),
           status: mapped.status,
           markLearned: mapped.markLearned,
           goal_id: goalId,
