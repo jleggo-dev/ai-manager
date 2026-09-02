@@ -1,4 +1,5 @@
-import { renderRepertoire, type RepertoireItem } from '@cadence/shared';
+import { type RepertoireItem } from '@cadence/shared';
+import { renderRepertoireForCoach } from '../repertoire-practice.ts';
 import { listRepertoire } from '../../repos/repertoire.ts';
 import type { RetrievalFunction } from './types.ts';
 
@@ -20,7 +21,7 @@ export const GET_REPERTOIRE: RetrievalFunction = {
     return listRepertoire(userId);
   },
   render(r) {
-    return renderRepertoire(r as RepertoireItem[]);
+    return renderRepertoireForCoach(r as RepertoireItem[]);
   },
   rows(r) {
     return (r as unknown[]).length;

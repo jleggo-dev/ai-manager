@@ -1,4 +1,4 @@
-import type { OccurrenceSession, RepertoireItem } from '@cadence/shared';
+import { renderRepertoire, type OccurrenceSession, type RepertoireItem } from '@cadence/shared';
 import { clearPendingSessionsForGoal, listRepertoire, stampPracticed } from '../repos/repertoire.ts';
 import { foldAccents, normTitle } from './goal-identity.ts';
 
@@ -43,6 +43,58 @@ const containsWord = (hay: string, needle: string): boolean => ` ${hay} `.includ
    A second, subtly different spelling of this matching is exactly the drift CLAUDE.md warns
    about: it would not throw, it would just stamp the wrong piece. */
 
+/* ── Titles that name more than one piece ────────────────────────────────────────────────────
+   Classical repertoire collides BY DESIGN. Suzuki Book 2 alone carries "Minuet in G Major, BWV
+   822", "Minuet in G Major (from Notebook for Anna Magdalena Bach)" and "Minuet in G Minor, BWV
+   822" — and the core needle, which exists so a casual "a short story" finds "A Short Story
+   (Lichner)", strips exactly the qualifier that tells those minuets apart. All three reduced to
+   "minuet in g major", so a log saying that stamped TWO pieces and a step titled that wrote its
+   tempo onto whichever label happened to be longest.
+
+   So a needle carried by more than one item on the shelf is evidence of nothing: it names a
+   family, not a piece. It is dropped from every item that has it, and the mention matches nothing
+   rather than guessing. That is this module's asymmetry applied honestly — a miss leaves one
+   stale date and self-corrects next log; a false hit writes the wrong piece's history and never
+   does. The fully-qualified spelling still matches on its own, unique needle. */
+
+/** Needles shared by two or more items — they cannot distinguish, so they must not decide. */
+export function ambiguousNeedles(items: Array<{ label: string }>): ReadonlySet<string> {
+  const seen = new Map<string, number>();
+  for (const i of items) for (const n of needles(i.label)) seen.set(n, (seen.get(n) ?? 0) + 1);
+  return new Set([...seen].filter(([, count]) => count > 1).map(([n]) => n));
+}
+
+/** The colliding groups, for telling the coach which of her titles cannot be resolved alone. */
+export function collidingTitles(items: Array<{ label: string }>): Array<{ shared: string; labels: string[] }> {
+  const ambiguous = ambiguousNeedles(items);
+  const groups = new Map<string, string[]>();
+  for (const i of items) {
+    for (const n of needles(i.label)) {
+      if (!ambiguous.has(n)) continue;
+      groups.set(n, [...(groups.get(n) ?? []), i.label]);
+    }
+  }
+  return [...groups].map(([shared, labels]) => ({ shared, labels }));
+}
+
+/**
+ * Could this label ever be found again once it is on the shelf?
+ *
+ * Writing "Minuet in G Major" beside two pieces that already answer to it produces a row nothing
+ * can ever resolve: its only needle is the one shared needles rule now blocks, so it can never be
+ * practised, stamped or given a tempo. A row like that is worse than no row — it looks like a
+ * record and behaves like a hole.
+ *
+ * A re-mention of an existing piece is an update, not a new row, so that row is excluded from the
+ * comparison. And a qualified addition is always fine: "Minuet in G Major (Petzold)" keeps a full
+ * needle of its own even though its core collides.
+ */
+export function isResolvable(existing: Array<{ label: string }>, label: string): boolean {
+  const prospective = [...existing.filter((i) => !samePiece(i.label, label)), { label }];
+  const ambiguous = ambiguousNeedles(prospective);
+  return needles(label).some((n) => !ambiguous.has(n));
+}
+
 /** Items this session's goal is allowed to touch at all. Parked items are out by definition. */
 export function matchableItems<T extends { status: string; goal_id: string | null }>(
   items: T[],
@@ -57,9 +109,14 @@ export function matchHay(texts: Array<string | null | undefined>): string {
   return body ? normTitle(body.normalize('NFC')) : '';
 }
 
-/** Is this item named in an already-normalized haystack? */
-export function itemNamedIn(label: string, hay: string): boolean {
-  return needles(label).some((n) => containsWord(hay, n));
+/**
+ * Is this item named in an already-normalized haystack? Pass `ambiguous` (from
+ * `ambiguousNeedles` over the SAME scoped set) so a needle that names several pieces cannot
+ * decide for any of them — without it this answers per-label and will happily match all three
+ * minuets on the word they share.
+ */
+export function itemNamedIn(label: string, hay: string, ambiguous?: ReadonlySet<string>): boolean {
+  return needles(label).some((n) => !ambiguous?.has(n) && containsWord(hay, n));
 }
 
 /* ── One row per piece ───────────────────────────────────────────────────────────────────────
@@ -108,7 +165,9 @@ export function findItemForTitle<T extends { label: string; status: string; goal
 ): T | null {
   const hay = matchHay([title]);
   if (!hay) return null;
-  const hits = matchableItems(items, goalId).filter((i) => itemNamedIn(i.label, hay));
+  const scoped = matchableItems(items, goalId);
+  const ambiguous = ambiguousNeedles(scoped);
+  const hits = scoped.filter((i) => itemNamedIn(i.label, hay, ambiguous));
   return hits.sort((a, b) => b.label.length - a.label.length)[0] ?? null;
 }
 
@@ -131,7 +190,8 @@ export async function touchPracticedFromText(
   const items = await listRepertoire(userId);
   const scoped = matchableItems(items, opts.goalId);
   if (!scoped.length) return [];
-  const touched = scoped.filter((i) => itemNamedIn(i.label, hay));
+  const ambiguous = ambiguousNeedles(scoped);
+  const touched = scoped.filter((i) => itemNamedIn(i.label, hay, ambiguous));
   if (!touched.length) return [];
   await stampPracticed(
     userId,
@@ -167,4 +227,41 @@ export async function invalidateSessionsFor(
       console.error('[repertoire] session invalidation failed (continuing):', e),
     );
   }
+}
+
+/** Enough to make the point without turning a long shelf into a lecture. */
+const MAX_COLLISION_GROUPS = 3;
+
+/**
+ * The shelf as the coach reads it — the shared render, plus a warning naming any title that
+ * belongs to more than one piece here.
+ *
+ * She needs this because the collision is hers to avoid rather than ours to guess: once two pieces
+ * share a title, nothing downstream can resolve a bare mention of it, and the fix is for her to
+ * name the piece in full when she writes it down or puts it in a session. Silence would leave her
+ * writing "Minuet in G Major" forever and wondering why that step's tempo never sticks.
+ *
+ * Costs nothing on a shelf with no collisions, which is nearly all of them.
+ */
+export function renderRepertoireForCoach(items: RepertoireItem[], now?: number): string {
+  const body = renderRepertoire(items, now);
+  if (!body) return body;
+  // Parked items are out of the rotation but still on the shelf, and a title she cannot resolve is
+  // a problem wherever it sits — so collisions are computed over everything rendered.
+  const collisions = collidingTitles(items);
+  if (collisions.length === 0) return body;
+
+  const lines = ['', 'TITLES THAT NAME MORE THAN ONE PIECE HERE:'];
+  for (const group of collisions.slice(0, MAX_COLLISION_GROUPS)) {
+    lines.push(`  - ${group.labels.map((l) => `"${l}"`).join(' and ')}`);
+  }
+  if (collisions.length > MAX_COLLISION_GROUPS) {
+    lines.push(`  ...and ${collisions.length - MAX_COLLISION_GROUPS} more such groups`);
+  }
+  lines.push(
+    '  Name one of these in full whenever you write it down or put it in a session - the composer,',
+    '  the catalogue number, or the collection it comes from. A bare shared title cannot be matched',
+    '  to a row, so practice logged against it counts for nothing and its tempo is never kept.',
+  );
+  return `${body}\n${lines.join('\n')}`;
 }
