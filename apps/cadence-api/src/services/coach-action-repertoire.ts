@@ -1,7 +1,14 @@
 import { listGoals } from '../repos/goals.ts';
 import { insertGoalEvent } from '../repos/goal-events.ts';
 import { listRepertoire, upsertRepertoireItem } from '../repos/repertoire.ts';
-import { canonicalLabel, invalidateSessionsFor } from './repertoire-practice.ts';
+import {
+  canonicalLabel,
+  invalidateSessionsFor,
+  isResolvable,
+  itemNamedIn,
+  matchHay,
+  samePiece,
+} from './repertoire-practice.ts';
 import { normTitle } from './goal-identity.ts';
 import { matchActivity } from './plan-edit.ts';
 import type { CoachActionTool } from './coach-action-types.ts';
@@ -138,9 +145,24 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
       return 'I could not read what is already on file just now, so I did not write anything — a fault on our side, not an empty record. Try again in a moment.';
     }
 
+    // A title that two pieces already answer to cannot be written as-is: the row would exist and
+    // be permanently unfindable, which reads as a record and behaves as a hole. Say which pieces
+    // it collides with so the next attempt can qualify it, rather than writing a dead row.
+    const resolvable = accepted.filter((item) => {
+      if (isResolvable(onFile, item.label)) return true;
+      const clash = onFile.filter(
+        (i) => !samePiece(i.label, item.label) && itemNamedIn(i.label, matchHay([item.label])),
+      );
+      rejected.push(
+        `${item.label} — already the title of ${clash.map((c) => `"${c.label}"`).join(' and ')}. ` +
+          'Add the composer, the catalogue number, or the collection so it names one piece.',
+      );
+      return false;
+    });
+
     // Independent rows — written concurrently so nine pieces cost one round-trip's wait, not nine.
     const written = await Promise.all(
-      accepted.map(async (item) => {
+      resolvable.map(async (item) => {
         const mapped = STATUS_OF.get(item.statusWord)!;
         const { item: row, learnedNow } = await upsertRepertoireItem(userId, {
           label: canonicalLabel(onFile, item.label),

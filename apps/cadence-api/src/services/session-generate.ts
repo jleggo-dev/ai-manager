@@ -12,7 +12,6 @@
  */
 import {
   renderCoachToolCatalog,
-  renderRepertoire,
   settledTempo,
   type OccurrenceSession,
   type OccurrenceWeather,
@@ -32,7 +31,7 @@ import { clearOccurrenceSession, setOccurrenceSessionIfEmpty } from '../repos/oc
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
 import { listRepertoire } from '../repos/repertoire.ts';
-import { findItemForTitle } from './repertoire-practice.ts';
+import { findItemForTitle, renderRepertoireForCoach } from './repertoire-practice.ts';
 import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
 import { coachingPhase, normalizeSession } from './session-normalize.ts';
@@ -151,7 +150,7 @@ async function generateSession(
     repertoire:
       repertoire === null
         ? 'Could not be read just now — a fault on our side, NOT an empty record. Do not assume they know nothing, and do not invent items.'
-        : renderRepertoire(
+        : renderRepertoireForCoach(
             repertoire.filter(
               (i) =>
                 i.goal_id === occ.goal_id ||
