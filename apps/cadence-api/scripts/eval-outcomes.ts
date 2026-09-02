@@ -32,9 +32,10 @@
  *      happened" class that deterministic asserts cannot see in prose. The judge's evidence is
  *      wider than step 4's on purpose: reusing the failure check's ambient-blind summary once
  *      turned a truthful constraint lift into "no actual changes were recorded". Informational
- *      only; it never gates the exit code. (Hosted on the `pack-summarize` job via promptOverride
- *      — a real job on the Broker profile whose only formatting rule is remove-reasoning, so the
- *      prompt is ours and the run is still audited like any job.)
+ *      only; it never gates the exit code. (Hosted on the `coach-compact` job via promptOverride
+ *      — a real job on the Broker profile with no schema and no formatting rules, so the
+ *      prompt is ours and the run is still audited like any job. It moved off `pack-summarize`
+ *      when that job was retired with the Broker phase-out.)
  *
  * Run:
  *   npm run eval:outcomes -- --dry                 # list scenarios, no network, free
@@ -71,7 +72,7 @@ const AIM_BASE =
     ? AIM_RAW.replace(/\/+$/, '')
     : `${AIM_RAW.replace(/\/+$/, '')}/_/backend`;
 /** The real job the judge call rides (promptOverride bypasses its template, not its audit trail). */
-const JUDGE_HOST_JOB = 'pack-summarize';
+const JUDGE_HOST_JOB = 'coach-compact';
 const TURN_TIMEOUT_MS = 300_000;
 
 const argv = process.argv.slice(2);
