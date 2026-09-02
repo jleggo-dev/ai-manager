@@ -132,6 +132,28 @@ export async function setOccurrence(id: string, status: 'pending' | 'done' | 'sk
   });
 }
 
+/**
+ * Report the tempo someone settled on for one step, so the piece remembers it and the coach can
+ * see it. `title` is the STEP's title — the server matches it to a piece with the same matcher the
+ * practice write-back uses, so the client never handles item ids or matching rules.
+ *
+ * Best-effort by design: the dock keeps its own local copy, so a failed call costs the sync, never
+ * the tempo. Resolves false when nothing matched, which is the ordinary case for "Scales".
+ */
+export async function settleTempo(
+  occurrenceId: string,
+  tempo: { title: string; bpm: number; meter?: number },
+): Promise<boolean> {
+  const res = await fetch(`${BASE}/plan/occurrences/${occurrenceId}/tempo`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(tempo),
+    signal: timeoutSignal(10_000),
+  }).catch(() => null);
+  if (!res?.ok) return false;
+  return ((await res.json()) as { matched?: boolean }).matched === true;
+}
+
 /** Log something you did that wasn't on the plan (Req 4) → a done occurrence for the day, so it
  *  counts toward consistency + the streak. `date` optional (YYYY-MM-DD), defaults to today.
  *  `area` (quick add) routes it to that area's own off-plan bucket so a same-day workout and

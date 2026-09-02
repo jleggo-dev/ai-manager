@@ -77,6 +77,7 @@ export {
   getPlan,
   getEarlierDays,
   setOccurrence,
+  settleTempo,
   logAdhoc,
   logDid,
   enterEpisode,

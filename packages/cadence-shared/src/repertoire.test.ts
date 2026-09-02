@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { pickDueNext, renderRepertoire, type RepertoireLike } from './repertoire.ts';
+import {
+  TEMPO_BPM_KEY,
+  pickDueNext,
+  renderRepertoire,
+  settledTempo,
+  tempoMeta,
+  type RepertoireLike,
+} from './repertoire.ts';
 
 const item = (label: string, over: Partial<RepertoireLike> = {}): RepertoireLike => ({
   label,
@@ -82,5 +89,62 @@ describe('renderRepertoire', () => {
 
   it('renders empty for an empty list, so callers can omit the section cleanly', () => {
     expect(renderRepertoire([])).toBe('');
+  });
+});
+
+describe('the settled tempo', () => {
+  it('reads a stored tempo back', () => {
+    expect(settledTempo({ tempo_bpm: 72, tempo_meter: 3 })).toEqual({ bpm: 72, meter: 3 });
+  });
+
+  it('is undefined when there is none — absence must not become a default tempo', () => {
+    expect(settledTempo(null)).toBeUndefined();
+    expect(settledTempo(undefined)).toBeUndefined();
+    expect(settledTempo({})).toBeUndefined();
+    expect(settledTempo({ composer: 'Hummel' })).toBeUndefined();
+  });
+
+  it('ignores a tempo stored as something other than a number', () => {
+    expect(settledTempo({ tempo_bpm: '72' })).toBeUndefined();
+    expect(settledTempo({ tempo_bpm: null })).toBeUndefined();
+  });
+
+  it('bounds a stored tempo — a hand-edited row cannot hand the dock a 4000', () => {
+    expect(settledTempo({ tempo_bpm: 4000 })).toEqual({ bpm: 240, meter: 4 });
+  });
+
+  it('defaults only the meter, never the tempo', () => {
+    expect(settledTempo({ tempo_bpm: 60 })).toEqual({ bpm: 60, meter: 4 });
+  });
+
+  it('round-trips through the patch it writes', () => {
+    expect(settledTempo(tempoMeta({ bpm: 88, meter: 6 }))).toEqual({ bpm: 88, meter: 6 });
+    expect(Object.keys(tempoMeta({ bpm: 88, meter: 6 }))).toContain(TEMPO_BPM_KEY);
+  });
+});
+
+describe('renderRepertoire tells the coach the tempo', () => {
+  it('names the settled tempo on the item line', () => {
+    const out = renderRepertoire([item('Écossaise (Hummel)', { meta: { tempo_bpm: 72 } })]);
+    expect(out).toContain('settled tempo 72 bpm');
+  });
+
+  it('names an unusual meter but stays quiet about the common one', () => {
+    expect(renderRepertoire([item('Waltz', { meta: { tempo_bpm: 90, tempo_meter: 3 } })])).toContain(
+      'settled tempo 90 bpm, 3 to the bar',
+    );
+    const common = renderRepertoire([item('Study', { meta: { tempo_bpm: 90, tempo_meter: 4 } })]);
+    expect(common).toContain('settled tempo 90 bpm');
+    expect(common).not.toContain('to the bar');
+  });
+
+  it('says nothing at all for an item with no tempo on file', () => {
+    expect(renderRepertoire([item('Minuet')])).not.toContain('settled tempo');
+  });
+
+  it('keeps the rotation mark alongside the tempo', () => {
+    const out = renderRepertoire([item('Solo', { meta: { tempo_bpm: 66 } })]);
+    expect(out).toContain('settled tempo 66 bpm');
+    expect(out).toContain('DUE NEXT by rotation');
   });
 });

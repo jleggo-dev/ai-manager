@@ -1,5 +1,5 @@
 import { sql, json } from '../db/sql.ts';
-import type { RepertoireItem, RepertoireStatus } from '@cadence/shared';
+import { type MetronomeSpec, type RepertoireItem, type RepertoireStatus, tempoMeta } from '@cadence/shared';
 
 // Timestamps cast to text — postgres.js Date-object trap (same as recipes/foods/nutrition): the
 // shared type, the rotation math and every renderer expect ISO strings. A FUNCTION, not a
@@ -67,7 +67,10 @@ export async function upsertRepertoireItem(
       status = coalesce(${item.status ?? null}::text, cadence.repertoire.status),
       goal_id = coalesce(excluded.goal_id, cadence.repertoire.goal_id),
       kind = coalesce(excluded.kind, cadence.repertoire.kind),
-      meta = coalesce(excluded.meta, cadence.repertoire.meta),
+      -- MERGE, never replace. meta is shared room (composer, book, settled tempo) written by
+      -- different paths at different times; a plain coalesce made the last writer win and
+      -- silently drop everything the others had put there.
+      meta = coalesce(cadence.repertoire.meta, '{}'::jsonb) || coalesce(excluded.meta, '{}'::jsonb),
       learned_at = coalesce(cadence.repertoire.learned_at, excluded.learned_at),
       updated_at = now()
     returning ${cols()},
@@ -75,6 +78,23 @@ export async function upsertRepertoireItem(
   if (!row) throw new Error('upsertRepertoireItem: no row returned');
   const { learned_now, ...rest } = row;
   return { item: rest as RepertoireItem, learnedNow: learned_now === true };
+}
+
+/**
+ * Record the tempo someone actually practises an item at. Merges into `meta` rather than writing
+ * it whole, for the reason the upsert above now does too: the composer stored last month must
+ * survive tonight's tempo change.
+ *
+ * Scoped by user_id as well as item_id — an id from a request body is not proof of ownership.
+ */
+export async function setSettledTempo(userId: string, itemId: string, spec: MetronomeSpec): Promise<void> {
+  await sql`
+    update cadence.repertoire
+    -- Explicit ::jsonb on the bind: the concat operator is jsonb-only, and how the driver types a
+    -- JSON parameter is not something this query should be depending on.
+    set meta = coalesce(meta, '{}'::jsonb) || ${json(tempoMeta(spec))}::jsonb,
+        updated_at = now()
+    where user_id = ${userId} and item_id = ${itemId}`;
 }
 
 /** Stamp "they worked this" on the given rows. `at` lets a log recorded days later stamp the

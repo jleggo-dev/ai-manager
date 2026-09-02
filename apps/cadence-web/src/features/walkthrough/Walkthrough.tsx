@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import type { Walkthrough as WalkthroughData, WalkthroughStep } from '@cadence/shared';
+import type { MetronomeSpec, Walkthrough as WalkthroughData, WalkthroughStep } from '@cadence/shared';
 import { StepReps } from './tools/StepReps.tsx';
 import { StepTimer } from './tools/StepTimer.tsx';
 import { StepCircuit } from './tools/StepCircuit.tsx';
@@ -18,7 +18,7 @@ import { WalkthroughDone } from './WalkthroughDone.tsx';
 import { Pip, StepHeader } from './wt-parts.tsx';
 import { overlay, closeBtn, caption, navBtn, shortTitle } from './wt-styles.ts';
 import { type StepLog, type StepLogs, stepStatus, stepFraction, minutesLeft, recapSummary } from './state.ts';
-import { keepJournalEntry } from '../../lib/api.ts';
+import { keepJournalEntry, settleTempo } from '../../lib/api.ts';
 
 /**
  * The task walkthrough (v2 — design "browse / do / commit"). Moving between steps (Back ↔ Next, the
@@ -55,6 +55,10 @@ export function Walkthrough({
   // A step may recolour the shell while it is on screen — today only the interval player, whose
   // whole instruction IS the frame colour. Null means the ordinary walkthrough tone.
   const [chrome, setChrome] = useState<StepChrome | null>(null);
+  // Tempos settled during the session, keyed by STEP TITLE — that is what the server matches a
+  // piece on. Held here rather than posted per change so they ride the walkthrough's own commit
+  // rule: nothing about a session reaches the store until Finish.
+  const [tempos, setTempos] = useState<Record<string, MetronomeSpec>>({});
 
   const step = steps[idx];
   const left = minutesLeft(steps, idx, visited);
@@ -85,6 +89,14 @@ export function Walkthrough({
         secret: log.secret,
         mode: 'typed',
       }).catch(() => undefined);
+    }
+    // The settled tempos go with it: the piece remembers what they actually play it at, and the
+    // coach can see it next time she prescribes. Best-effort like the journal write above — the
+    // dock's local copy already holds the tempo, so a failed sync costs the sharing, not the tempo.
+    if (occurrenceId) {
+      for (const [title, tempo] of Object.entries(tempos)) {
+        void settleTempo(occurrenceId, { title, bpm: tempo.bpm, meter: tempo.meter }).catch(() => undefined);
+      }
     }
     onComplete(recapSummary(steps, logs));
   };
@@ -204,7 +216,12 @@ export function Walkthrough({
                 sit outside this branch; neither is a step anyone practises an instrument to. */}
             {step.metronome && (
               <div style={{ marginTop: 12 }}>
-                <Metronome key={step.id} spec={step.metronome} title={step.title} />
+                <Metronome
+                  key={step.id}
+                  spec={step.metronome}
+                  title={step.title}
+                  onSettle={(t) => setTempos((all) => ({ ...all, [step.title]: t }))}
+                />
               </div>
             )}
           </>

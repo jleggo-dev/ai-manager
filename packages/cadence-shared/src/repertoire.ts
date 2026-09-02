@@ -9,6 +9,7 @@
  * TOOL-HARNESS.md's inversion, applied here).
  */
 import type { RepertoireStatus } from './types/repertoire.ts';
+import { type MetronomeSpec, DEFAULT_METER, normalizeMetronome } from './metronome.ts';
 
 /** The slice of an item the rotation and renderers need — repos and tools both satisfy it. */
 export interface RepertoireLike {
@@ -18,6 +19,34 @@ export interface RepertoireLike {
   last_practiced_at?: string | null;
   learned_at?: string | null;
   started_at?: string;
+  /** Durable per-item facts. The settled tempo rides here — see `settledTempo`. */
+  meta?: Record<string, unknown> | null;
+}
+
+/* ── The settled tempo ───────────────────────────────────────────────────────────────────────
+   Where the metronome's per-piece tempo lives, and the ONE place its meta keys are spelled. The
+   dock used to keep this in localStorage alone, which meant a new phone lost the tempo you had
+   settled on and the coach could never see it. `repertoire.meta` was reserved for exactly this
+   from the start ("durable per-item facts (composer, book, settled metronome bpm)").
+
+   Keys live here rather than at each call site for the same reason the weigh-in regex does: the
+   web writes it, the API reads it, and the prescribe renderer prints it. Three spellings of
+   'tempo_bpm' is a bug nobody sees until a tempo silently stops coming back. */
+export const TEMPO_BPM_KEY = 'tempo_bpm';
+export const TEMPO_METER_KEY = 'tempo_meter';
+
+/** The settled tempo on an item, or undefined when there is none (or it is unusable). */
+export function settledTempo(meta: Record<string, unknown> | null | undefined): MetronomeSpec | undefined {
+  if (!meta) return undefined;
+  const bpm = meta[TEMPO_BPM_KEY];
+  const meter = meta[TEMPO_METER_KEY];
+  return normalizeMetronome(typeof bpm === 'number' ? bpm : undefined, typeof meter === 'number' ? meter : undefined);
+}
+
+/** The meta PATCH recording a settled tempo. Merged into whatever meta already holds, never
+ *  replacing it — a composer stored last month must survive tonight's tempo change. */
+export function tempoMeta(spec: MetronomeSpec): Record<string, unknown> {
+  return { [TEMPO_BPM_KEY]: spec.bpm, [TEMPO_METER_KEY]: spec.meter };
 }
 
 const time = (iso?: string | null): number => (iso ? new Date(iso).getTime() : Number.NaN);
@@ -53,6 +82,15 @@ const practicedNote = (i: RepertoireLike, now: number): string => {
   return days === 0 ? 'worked today' : days === 1 ? 'worked yesterday' : `worked ${days} days ago`;
 };
 
+/** "settled tempo 72 bpm" — the tempo they actually practise this at, so a prescription can meet
+ *  them where they are instead of guessing. The meter is named only when it is not the common 4,
+ *  where printing it would be noise on every line. */
+const tempoNote = (i: RepertoireLike): string | null => {
+  const t = settledTempo(i.meta);
+  if (!t) return null;
+  return t.meter === DEFAULT_METER ? `settled tempo ${t.bpm} bpm` : `settled tempo ${t.bpm} bpm, ${t.meter} to the bar`;
+};
+
 /** How many items a group may render before it cuts and says so — a two-year repertoire must not
  *  become a 200-line block in every prescribe prompt and context pack. */
 const GROUP_CAP = 15;
@@ -69,7 +107,12 @@ export function renderRepertoire(items: RepertoireLike[], now = Date.now()): str
   if (!items.length) return '';
   const due = pickDueNext(items);
   const line = (i: RepertoireLike): string => {
-    const marks = [i.kind, practicedNote(i, now), due && i === due ? 'DUE NEXT by rotation' : null].filter(Boolean);
+    const marks = [
+      i.kind,
+      practicedNote(i, now),
+      tempoNote(i),
+      due && i === due ? 'DUE NEXT by rotation' : null,
+    ].filter(Boolean);
     return `  - ${i.label} (${marks.join('; ')})`;
   };
   const capped = (group: RepertoireLike[]): string[] => {

@@ -16,9 +16,19 @@ import * as S from './metronomeStyles.ts';
  * with the Italian marking under it — the line that connects the number on screen to the word at
  * the top of the score.
  */
-export function Metronome({ spec, title }: { spec: MetronomeSpec; title: string }) {
+export function Metronome({
+  spec,
+  title,
+  onSettle,
+}: {
+  spec: MetronomeSpec;
+  title: string;
+  /** Reports the tempo they settled on, so the piece can remember it and the coach can read it.
+   *  Fires only once they have actually engaged with the dock — see `useMetronome`. */
+  onSettle?: (tempo: MetronomeSpec) => void;
+}) {
   const [open, setOpen] = useState(false);
-  const m = useMetronome(spec, title);
+  const m = useMetronome(spec, title, onSettle);
 
   return (
     <div style={S.dock}>

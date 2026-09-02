@@ -34,6 +34,48 @@ const needles = (label: string): string[] => {
 
 const containsWord = (hay: string, needle: string): boolean => ` ${hay} `.includes(` ${needle} `);
 
+/* ── The matcher, exposed ────────────────────────────────────────────────────────────────────
+   The three rules above (goal scope, whole words on normalized text, the label's core) are the
+   repo's one answer to "did they mean THIS item". Two other callers now need that answer — the
+   settled-tempo write and the prescribe-time tempo fill — so it is exported rather than copied.
+   A second, subtly different spelling of this matching is exactly the drift CLAUDE.md warns
+   about: it would not throw, it would just stamp the wrong piece. */
+
+/** Items this session's goal is allowed to touch at all. Parked items are out by definition. */
+export function matchableItems<T extends { status: string; goal_id: string | null }>(
+  items: T[],
+  goalId?: string | null,
+): T[] {
+  return items.filter((i) => i.status !== 'parked' && (i.goal_id == null || i.goal_id === (goalId ?? null)));
+}
+
+/** Normalize a body of text into the haystack the needles are tested against. '' when empty. */
+export function matchHay(texts: Array<string | null | undefined>): string {
+  const body = texts.filter((t): t is string => !!t?.trim()).join('\n');
+  return body ? normTitle(body.normalize('NFC')) : '';
+}
+
+/** Is this item named in an already-normalized haystack? */
+export function itemNamedIn(label: string, hay: string): boolean {
+  return needles(label).some((n) => containsWord(hay, n));
+}
+
+/**
+ * The single item a lone title names, or null. Where several match, the LONGEST label wins — with
+ * "Study" and "Study in C major" both on file, a step called "Study in C major" means the second,
+ * and picking by row order would be a coin flip.
+ */
+export function findItemForTitle<T extends { label: string; status: string; goal_id: string | null }>(
+  items: T[],
+  title: string,
+  goalId?: string | null,
+): T | null {
+  const hay = matchHay([title]);
+  if (!hay) return null;
+  const hits = matchableItems(items, goalId).filter((i) => itemNamedIn(i.label, hay));
+  return hits.sort((a, b) => b.label.length - a.label.length)[0] ?? null;
+}
+
 export interface TouchOptions {
   /** The session's goal — items linked to a DIFFERENT goal can never match. */
   goalId?: string | null;
@@ -48,15 +90,12 @@ export async function touchPracticedFromText(
   texts: Array<string | null | undefined>,
   opts: TouchOptions = {},
 ): Promise<string[]> {
-  const body = texts.filter((t): t is string => !!t?.trim()).join('\n');
-  if (!body) return [];
+  const hay = matchHay(texts);
+  if (!hay) return [];
   const items = await listRepertoire(userId);
-  const scoped = items.filter(
-    (i) => i.status !== 'parked' && (i.goal_id == null || i.goal_id === (opts.goalId ?? null)),
-  );
+  const scoped = matchableItems(items, opts.goalId);
   if (!scoped.length) return [];
-  const hay = normTitle(body.normalize('NFC'));
-  const touched = scoped.filter((i) => needles(i.label).some((n) => containsWord(hay, n)));
+  const touched = scoped.filter((i) => itemNamedIn(i.label, hay));
   if (!touched.length) return [];
   await stampPracticed(
     userId,

@@ -57,7 +57,7 @@ export interface Metronome {
  * Drive the click and own the dock's numbers. `spec` is the coach's prescription; what the person
  * last used on this step (by title) wins over it on open, because they are the one at the piano.
  */
-export function useMetronome(spec: MetronomeSpec, title: string): Metronome {
+export function useMetronome(spec: MetronomeSpec, title: string, onSettle?: (t: MetronomeSpec) => void): Metronome {
   const key = metronomeKey(title);
   const [bpm, setBpmState] = useState(() => remembered(key)?.bpm ?? spec.bpm);
   const [meter, setMeterState] = useState(() => remembered(key)?.meter ?? spec.meter);
@@ -65,6 +65,11 @@ export function useMetronome(spec: MetronomeSpec, title: string): Metronome {
   const [beatIndex, setBeatIndex] = useState(0);
   const taps = useRef<number[]>([]);
   const clock = useRef<MetronomeClock | null>(null);
+  // A tempo is only "settled" once they did something with it — changed it, or played to it. A
+  // step whose dock was never opened must not claim they practise at the number the coach guessed.
+  const [engaged, setEngaged] = useState(false);
+  const settleRef = useRef(onSettle);
+  settleRef.current = onSettle;
 
   if (!clock.current) clock.current = createMetronomeClock(setBeatIndex);
 
@@ -76,23 +81,37 @@ export function useMetronome(spec: MetronomeSpec, title: string): Metronome {
 
   useEffect(() => () => clock.current?.dispose(), []);
 
-  // Written on a short delay so dragging the slider doesn't hammer storage on every frame.
+  // Written on a short delay so dragging the slider doesn't hammer storage on every frame. Local
+  // storage is now the OFFLINE COPY, not the record: the piece itself carries the settled tempo
+  // (repertoire.meta), which is what survives a new phone and what the coach can actually read.
+  // It is still written first and unconditionally — it is the copy that works on a plane.
   useEffect(() => {
     const id = setTimeout(() => {
       try {
         localStorage.setItem(key, JSON.stringify({ bpm, meter }));
       } catch {
-        /* storage unavailable — the tempo simply doesn't persist */
+        /* storage unavailable — the tempo simply doesn't persist locally */
       }
+      if (engaged) settleRef.current?.({ bpm, meter });
     }, 300);
     return () => clearTimeout(id);
-  }, [key, bpm, meter]);
+  }, [key, bpm, meter, engaged]);
 
-  const setBpm = useCallback((next: number) => setBpmState(clampBpm(next)), []);
-  const nudge = useCallback((by: number) => setBpmState((b) => clampBpm(b + by)), []);
-  const setMeter = useCallback((next: number) => setMeterState(clampMeter(next)), []);
+  const setBpm = useCallback((next: number) => {
+    setEngaged(true);
+    setBpmState(clampBpm(next));
+  }, []);
+  const nudge = useCallback((by: number) => {
+    setEngaged(true);
+    setBpmState((b) => clampBpm(b + by));
+  }, []);
+  const setMeter = useCallback((next: number) => {
+    setEngaged(true);
+    setMeterState(clampMeter(next));
+  }, []);
 
   const toggle = useCallback(() => {
+    setEngaged(true); // playing to it counts as settling on it, even untouched
     setRunning((was) => {
       if (was) clock.current?.stop();
       else {
@@ -105,6 +124,7 @@ export function useMetronome(spec: MetronomeSpec, title: string): Metronome {
 
   /** Tap the pulse you want. Four taps is the usual gesture; two already gives a tempo. */
   const tap = useCallback(() => {
+    setEngaged(true);
     const now = performance.now();
     taps.current = [...taps.current, now].slice(-12);
     const found = tapTempo(taps.current);
@@ -112,6 +132,7 @@ export function useMetronome(spec: MetronomeSpec, title: string): Metronome {
   }, []);
 
   const reset = useCallback(() => {
+    setEngaged(true); // deliberately going back to her tempo is itself a decision worth keeping
     taps.current = [];
     setBpmState(spec.bpm);
     setMeterState(spec.meter);
