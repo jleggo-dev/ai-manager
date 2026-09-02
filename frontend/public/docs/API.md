@@ -791,18 +791,21 @@ Executes the health check immediately and records the result.
 **Response**: Run result object with status, latency, response data.
 **Errors**: 400 if profile not found.
 
-### Scheduled runs (Vercel Cron)
+### Scheduled runs
 
-On **serverless deploys** (Vercel), the in-process 60-second scheduler is **not** started. Health checks run only when an external cron hits the tick endpoint below. `vercel.json` configures these paths on a **daily** schedule (`0 0 * * *` — once at 00:00 UTC). Vercel Hobby allows only daily crons; after upgrading to Pro, increase frequency (e.g. `0 * * * *` hourly) to better match check `cadence_minutes`.
+**No cron schedules the health tick any more.** The health-check feature belongs to a deprecated
+feature set (owner, 2026-09-01) and no checks are configured in production, so the daily Vercel
+cron that used to hit it was removed from `vercel.json`. The endpoints still exist:
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/cron/tick/health` | `Bearer CRON_SECRET` | Run all due API health checks |
+| GET | `/api/cron/tick/health` | `Bearer CRON_SECRET` | Run all due API health checks (deprecated feature — nothing schedules this) |
+| GET | `/api/cron/tick/models` | `Bearer CRON_SECRET` | Refresh every provider's model catalog — called nightly (04:17 UTC) by the Supabase `model-sync-daily` pg_cron job (`migrations/013_model_sync_cron.sql`) |
 
-**Auth**: Set `CRON_SECRET` in the deployment environment. Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`. All other callers receive `401`.
+**Auth**: Set `CRON_SECRET` in the deployment environment; callers send `Authorization: Bearer <CRON_SECRET>`. All other callers receive `401`.
 
 **Response** (health): `{ ok: true, healthChecks: number, errors: number }`  
-**Local dev**: Long-running `npm run dev:backend` starts an in-process scheduler (poll every 60s) instead of requiring cron hits.
+**Local dev**: Long-running `npm run dev:backend` starts an in-process health scheduler (poll every 60s); on serverless deploys it is not started, so with no cron the health tick simply never runs.
 
 ---
 

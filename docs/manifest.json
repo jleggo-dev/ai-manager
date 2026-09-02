@@ -1,7 +1,7 @@
 {
   "name": "AI Admin",
   "version": "1.4.0",
-  "lastUpdated": "2026-09-01",
+  "lastUpdated": "2026-09-02",
   "description": "AI profile management, health monitoring, and workflow orchestration platform",
   "navigationHint": "Use sections[] to jump to the relevant part of each document. Fetch this manifest first, then read only the sections you need.",
   "documents": [
