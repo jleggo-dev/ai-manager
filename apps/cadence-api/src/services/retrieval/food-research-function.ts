@@ -59,7 +59,7 @@ export const RESEARCH_FOOD: RetrievalFunction = {
     if (!r.result) {
       return `No usable result — ${r.reason}. Do not invent numbers for it: ask them to read the label, or log it without precise numbers rather than guessing.`;
     }
-    const { food, source_url } = r.result;
+    const { food, source_url, alternates } = r.result;
     const title = [food.brand, food.name].filter(Boolean).join(' ');
     const per = food.base_unit === 'item' ? '1 item' : `100${food.base_unit}`;
     const nutrients = nutrientLine(food.macros_per_base as unknown as Record<string, unknown>);
@@ -67,9 +67,11 @@ export const RESEARCH_FOOD: RetrievalFunction = {
     const stated = food.servings.find((s) => s.amount_g !== servingBasis);
     const servingLine = stated ? ` Also stated per ${stated.label}.` : '';
     const confidence = typeof food.confidence === 'number' ? food.confidence.toFixed(2) : 'unknown';
+    const alternatesLine =
+      alternates && alternates.length > 0 ? `\nOther products that matched the name: ${alternates.join(', ')}.` : '';
     return [
       `Found: ${title} — per ${per}: ${nutrients}.${servingLine}`,
-      `Confidence ${confidence}.${source_url ? ` Source: ${source_url}.` : ''}`,
+      `Confidence ${confidence}.${source_url ? ` Source: ${source_url}.` : ''}${alternatesLine}`,
       'This is a fact, not a saved food — nothing was written down. Relay the numbers yourself, or use ' +
         'them when logging or building a recipe; they are not applied to anything automatically.',
     ].join('\n');
