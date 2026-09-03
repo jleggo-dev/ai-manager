@@ -24,13 +24,16 @@ export interface SeedCandidate {
   ambiguous: boolean;
 }
 
-/** One row the person confirmed. `status` is the shared union, so client and route cannot drift. */
+/** One row the person confirmed. `status` is the shared union, so client and route cannot drift.
+ *  `rank` is null for a piece with no real order (a single hand-added item, P6 "the room") — the
+ *  route's own schema already accepts that (`routes/repertoire-seed.ts`'s `rank: ….nullish()`);
+ *  a book expansion's rows always carry their real 1-based position instead. */
 export interface SeedWriteRow {
   label: string;
   composer: string | null;
   collection: string | null;
   catalogue: string | null;
-  rank: number;
+  rank: number | null;
   status: SeedStatus;
 }
 

@@ -8,7 +8,9 @@
  * A hand-added piece starts `working` ("Learning") — the same default a bare mention gets from the
  * coach's own `update_repertoire` (a new item starts working; CLAUDE.md's derive-don't-duplicate
  * rule stops at behaviour that lives once server-side, and this mirrors that default rather than
- * inventing a different one for the same fact).
+ * inventing a different one for the same fact). Its rank is null, not 1 — this piece has no real
+ * order (it wasn't placed against a book), and writing 1 would fabricate one: it would sort first
+ * the moment anyone ever moves it into Up next, ahead of pieces someone actually put there first.
  */
 import { useState } from 'react';
 import { confirmSeed } from '../../lib/api/repertoire-seed.ts';
@@ -31,7 +33,7 @@ export function HandAddSheet({ goalId, onClose, onSaved }: HandAddSheetProps) {
     setBusy(true);
     setError('');
     const res = await confirmSeed(
-      [{ label: trimmed, composer: null, collection: null, catalogue: null, rank: 1, status: 'working' }],
+      [{ label: trimmed, composer: null, collection: null, catalogue: null, rank: null, status: 'working' }],
       goalId,
     );
     setBusy(false);
