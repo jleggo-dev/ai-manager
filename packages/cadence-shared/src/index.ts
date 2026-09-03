@@ -13,6 +13,7 @@ export * from './types/baseline.ts';
 export * from './types/goals.ts';
 export * from './types/repertoire.ts';
 export * from './repertoire.ts';
+export * from './repertoire-seed.ts';
 export * from './types/equipment.ts';
 export * from './types/plan.ts';
 export * from './types/occurrence.ts';

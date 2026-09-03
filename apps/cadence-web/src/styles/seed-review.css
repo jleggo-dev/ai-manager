@@ -1,0 +1,143 @@
+/* Seeding a collection (.sr-*, design frame 1c) — the review screen only.
+ *
+ * Placement around families that already exist rather than a new grammar: the rows are the
+ * repertoire card's `.pw-rep-*` list, the tick is the plan row's `.occ-check`, the goal picker is
+ * the detour sheet's `.detour-chip`, the confirm is the app's `.cta`. Everything here is the
+ * geometry those need in THIS arrangement, and nothing here restates a color or a type scale.
+ *
+ * Imported by SeedReview.tsx rather than main.tsx: the screen is not registered in the app yet
+ * (its route belongs to another parcel), so the stylesheet rides with the component that needs it.
+ */
+
+.sr-screen {
+  padding-top: 16px;
+}
+
+.sr-count {
+  margin-top: 8px;
+}
+
+.sr-rows {
+  gap: 2px;
+}
+
+/* A row is taller than the read-only repertoire card's: it carries a tick, a two-line body and a
+   standing, and each of those is a tap target. */
+.sr-row {
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.sr-row:last-child {
+  border-bottom: 0;
+}
+
+/* The piece they said they are on — the one row that reads as the anchor of the split. */
+.sr-row--here .sr-title {
+  color: var(--dawn-4);
+}
+
+.sr-tick {
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  font-size: 12px;
+}
+.sr-tick[aria-pressed='true'] {
+  background: linear-gradient(135deg, var(--dawn-2), var(--dawn-3));
+  border-color: transparent;
+}
+
+.sr-body {
+  gap: 2px;
+  align-items: flex-start;
+}
+
+/* The title is a button; it must read as the row's text, not as a control. */
+.sr-title {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.sr-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.sr-sub {
+  font-size: 11.5px;
+  color: var(--text-mute);
+}
+
+.sr-note {
+  margin-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--dawn-4);
+}
+
+.sr-standing {
+  margin-top: 2px;
+  text-align: right;
+}
+
+.sr-add {
+  display: block;
+  width: 100%;
+  margin: 10px 0 2px;
+  padding: 0;
+  background: none;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--forest);
+  cursor: pointer;
+}
+
+.sr-chip--on {
+  border-color: var(--forest);
+  color: var(--forest);
+  font-weight: 700;
+}
+
+.sr-fault {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.sr-fault-t {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.sr-savefault {
+  margin: 12px 0 0;
+  color: var(--danger);
+}
+
+.sr-save {
+  margin: 14px 0 8px;
+}
+.sr-save:disabled {
+  opacity: 0.45;
+  box-shadow: none;
+}
