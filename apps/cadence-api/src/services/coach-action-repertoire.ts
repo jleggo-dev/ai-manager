@@ -89,13 +89,13 @@ interface ItemParam {
 
 export const UPDATE_REPERTOIRE: CoachActionTool = {
   name: 'update_repertoire',
-  // 787 of the 800-char action bound (retrieval/description-audit.test.ts). It teaches five verbs
+  // 796 of the 800-char action bound (retrieval/description-audit.test.ts). It teaches five verbs
   // and now a sixth field, so the clauses that could not change a choice went: "mean to learn",
   // "it is their own account", "not revisited", and the per-field "omit if" repeats, which one
   // closing sentence now covers. The standing words are the four definitions, verbatim from
   // `STANDING_MEANS` — she reads them in the shelf render too, and two spellings would drift.
   description:
-    'Write down the user\'s repertoire — the pieces, katas, poems, or techniques they are learning or already know. Use the moment they name such material; get_repertoire reads it back. Takes effect immediately: your sentence reflecting it back is the confirmation. Pass {"items": [{"label": "Écossaise (Hummel)", "status": "known", "kind": "piece", "description": "the fast one in G"}], "goal": "Practice piano"} — "status" is queued (not started), working (being worked on), known (learned and still played), learned (crossed just now — stored as known, celebrated once), or retired (finished); omit it to keep an item as it stands, and a new one starts working. "kind" is plain words; "description" is their own words for which one it is; "goal" is a goal\'s exact title. Omit any that do not fit.',
+    'Write down the user\'s repertoire — the pieces, katas, poems, or techniques they are learning or already know. Use the moment they name such material; get_repertoire reads it back. Takes effect immediately: your sentence reflecting it back is the confirmation. Pass {"items": [{"label": "Écossaise (Hummel)", "status": "known", "kind": "piece", "description": "the fast one in G"}], "goal": "Practice piano"} — "status" is queued (not started), working (being worked on), known (learned and still played), learned (crossed just now — stored as known, celebrated once), or retired (finished); omit it to keep an item as it stands, and a new one starts working. "kind" is plain words; "description" is a free-text description in their words; "goal" is a goal\'s exact title. Omit any that do not fit.',
   parameters: {
     properties: {
       items: {

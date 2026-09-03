@@ -340,18 +340,18 @@ describe('the ＋ door', () => {
 describe('empty state', () => {
   it('shows only when there is nothing on file — never once there is', async () => {
     mount({ items: [] });
-    expect(await screen.findByText("Tell me what you already play, and I'll stop asking.")).toBeInTheDocument();
+    expect(await screen.findByText("Tell me what you already know, and I'll stop asking.")).toBeInTheDocument();
     expect(screen.queryByText('Learning')).not.toBeInTheDocument();
 
     cleanup();
     mount();
     await screen.findByText('Melody');
-    expect(screen.queryByText("Tell me what you already play, and I'll stop asking.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tell me what you already know, and I'll stop asking.")).not.toBeInTheDocument();
   });
 
   it("the empty state's three doors are the same three the ＋ menu offers", async () => {
     mount({ items: [] });
-    await screen.findByText("Tell me what you already play, and I'll stop asking.");
+    await screen.findByText("Tell me what you already know, and I'll stop asking.");
     expect(screen.getByLabelText('Name a collection')).toBeInTheDocument();
     expect(screen.getByText('Add one by hand')).toBeInTheDocument();
     expect(screen.getByText('Just tell me in chat')).toBeInTheDocument();
@@ -384,7 +384,7 @@ describe('a fault reading the shelf', () => {
     useProgressRepertoire.mockReturnValue({ data: CARD });
     render(<ListScreen goalId="g-piano" goalName="Piano" onBack={() => {}} />);
     expect(await screen.findByText('a fault on our side')).toBeInTheDocument();
-    expect(screen.queryByText("Tell me what you already play, and I'll stop asking.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tell me what you already know, and I'll stop asking.")).not.toBeInTheDocument();
 
     getRepertoireListItems.mockResolvedValueOnce({ ok: true, items: BASE_ITEMS, collisions: [] });
     await user.click(screen.getByText('Try again'));

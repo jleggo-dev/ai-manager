@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react';
 import { getReview } from '../../lib/api/review.ts';
 import { COLLECTION_LOOKUP_PLACEHOLDER } from './itemFieldCopy.ts';
 
-export const EMPTY_HEADLINE = "Tell me what you already play, and I'll stop asking.";
+export const EMPTY_HEADLINE = "Tell me what you already know, and I'll stop asking.";
 export const EMPTY_COLLECTION_PROMISE =
   "I'll list everything in it. You mark what you already know. Nothing is saved until you say so.";
 

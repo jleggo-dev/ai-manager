@@ -106,7 +106,7 @@ describe('the tool description', () => {
   it('teaches the description field, with a quoted worked example', () => {
     expect(description).toContain('"description"');
     expect(description).toContain('"the fast one in G"');
-    expect(description).toMatch(/their own words for which one it is/i);
+    expect(description).toMatch(/a free-text description in their words/i);
   });
 
   it('declares exactly the fields it teaches — nothing silently undocumented', () => {

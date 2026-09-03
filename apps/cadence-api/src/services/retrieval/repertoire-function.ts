@@ -37,9 +37,9 @@ export const GET_REPERTOIRE: RetrievalFunction = {
   // The standings are named by their SCHEMA words, because that is what the returned rows carry
   // and what update_repertoire takes back. The render translates them into the group headers she
   // reads ("Keeping up", "Learned"); a description naming only those labels would leave her
-  // guessing which word to write. 513 of the 520-char read bound.
+  // guessing which word to write. 491 of the 520-char read bound.
   description:
-    'What the user is learning and already knows for a skills practice — pieces, katas, poems, techniques — with each item\'s standing (queued = not started, working = being worked on, known = learned and still played, retired = finished), when it was last worked, and its settled tempo. Use to answer what they can already do. Your copy shows only the 12 most recently finished; pass {"standing": "retired", "all": true} for all of them. To write this list, use update_repertoire; for time totals, get_practice_totals.',
+    'What the user is learning and already knows — pieces, katas, poems, techniques — with each item\'s standing (queued = not started, working = being worked on, known = learned and still played, retired = finished), when it was last worked, and its settled tempo. Use to answer what they can already do. Your copy shows only the 12 most recently finished; pass {"standing": "retired", "all": true} for all of them. To write this list, use update_repertoire; for time totals, get_practice_totals.',
   domains: ['repertoire', 'goals'],
   async run(userId, params): Promise<RepertoireRead> {
     const asked = typeof params?.standing === 'string' ? params.standing.trim().toLowerCase() : '';
