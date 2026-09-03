@@ -29,7 +29,6 @@ function rows(count: number): SeedRowState[] {
     label: `Piece ${i + 1}`,
     composer: null,
     collection: 'Suzuki Piano Book 2',
-    catalogue: null,
     rank: i + 1,
     ambiguous: false,
     selected: false,
@@ -141,7 +140,6 @@ describe('writableRows — exactly what confirm will send', () => {
         label: 'Piece 1',
         composer: null,
         collection: 'Suzuki Piano Book 2',
-        catalogue: null,
         rank: 1,
         status: 'known',
       },
@@ -149,7 +147,6 @@ describe('writableRows — exactly what confirm will send', () => {
         label: 'Piece 2',
         composer: null,
         collection: 'Suzuki Piano Book 2',
-        catalogue: null,
         rank: 2,
         status: 'known',
       },
@@ -157,7 +154,6 @@ describe('writableRows — exactly what confirm will send', () => {
         label: 'Piece 3',
         composer: null,
         collection: 'Suzuki Piano Book 2',
-        catalogue: null,
         rank: 3,
         status: 'working',
       },
@@ -165,7 +161,6 @@ describe('writableRows — exactly what confirm will send', () => {
         label: 'Piece 5',
         composer: null,
         collection: 'Suzuki Piano Book 2',
-        catalogue: null,
         rank: 5,
         status: 'queued',
       },
@@ -194,10 +189,12 @@ describe('writableRows — exactly what confirm will send', () => {
 });
 
 describe('saveLabel — the button says what it will do', () => {
-  it('counts the pieces, and says "piece" for one', () => {
-    expect(saveLabel(9)).toBe('Save 9 pieces');
-    expect(saveLabel(1)).toBe('Save 1 piece');
-    expect(saveLabel(0)).toBe('Save 0 pieces');
+  /** No noun (owner ruling 2026-09-03): one list holds pieces, kata, books and verses, so any noun
+   *  would be wrong for three of the four — and one reads the same as nine without one. */
+  it('counts what will be saved, with no noun to get wrong', () => {
+    expect(saveLabel(9)).toBe('Save 9');
+    expect(saveLabel(1)).toBe('Save 1');
+    expect(saveLabel(0)).toBe('Save 0');
   });
 });
 
@@ -249,11 +246,11 @@ describe('blockedRanks — the marked rows that would actually be written', () =
 describe('ambiguityNote — why the button is held, and what to do about it', () => {
   it('names the count and asks for a fuller name', () => {
     expect(ambiguityNote(1)).toBe(
-      'One of these shares its name with a piece you already have. Give it a fuller name — the composer or the catalogue number — and I can save it.',
+      'One of these shares its name with something you already have. Give it a fuller name — whoever made it, or whatever tells them apart — and I can save it.',
     );
     expect(ambiguityNote(2)).toBe('Two of these share a name. Give one a fuller name and I can save them both.');
     expect(ambiguityNote(5)).toBe(
-      'Some of these share a name. Give each a fuller name — the composer or the catalogue number — and I can save them all.',
+      'Some of these share a name. Give each a fuller name — whoever made it, or whatever tells them apart — and I can save them all.',
     );
   });
 });

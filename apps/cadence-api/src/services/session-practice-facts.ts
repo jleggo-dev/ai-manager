@@ -10,8 +10,9 @@
  * seem unnatural."*
  *
  * So it now answers one question — WHAT IS ON THE SHELF — and hands every item over with the same
- * facts: its standing, when it was last practised, the tempo they settled on, the note saying where
- * the work is, its place in a collection, and the person's own words from the most recent session
+ * facts: its standing, when it was last practised, the tempo they settled on, their own description
+ * of which one it is, the note on how it is going, its place in a collection, and their own words
+ * from the most recent session
  * that named it. It states what the four standings mean and stops there. Nothing marks an item,
  * nothing orders them, nothing counts how many to take. She reads the shelf and decides with the
  * person in front of her (TOOL-HARNESS.md: deterministic code is a tool she calls).
@@ -64,8 +65,9 @@ export interface PracticeFacts {
 const WORDS_CAP = 200;
 
 /**
- * The durable facts on a row, as one phrase: the tempo they actually play it at, where the work is,
- * and the position the collection prints. Same words as the shelf render's own tempo line,
+ * The durable facts on a row, as one phrase: the tempo they actually play it at, their own words for
+ * which one it is, how the work is going, and the position the collection prints. Same words as the
+ * shelf render's own tempo line,
  * deliberately — the coach reads both in one prompt and one vocabulary is the point.
  *
  * The stored practice note (P8 — `bars 9-16`, `p. 240`, `first stanza`, `for 5th kyu`) is a fact

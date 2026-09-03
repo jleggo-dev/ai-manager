@@ -23,13 +23,23 @@ export const STANDING_WORDS: Record<RepertoireItem['status'], string> = {
   retired: 'Learned',
 };
 
-/** The one line under the control, naming what the CHOSEN standing means to the coach — the
- *  table from docs/cadence/PLAN.md's four-standings design, in the coach's own "I" voice. */
+/**
+ * The one line under the control, saying what the CHOSEN standing MEANS, in the coach's own "I"
+ * voice — the same four definitions she reads (`STANDING_MEANS` in @cadence/shared), warm rather
+ * than boring, per CLAUDE.md's nomenclature split.
+ *
+ * They described machinery until 2026-09-03: a rotation ordered by rest, warm-ups and play-outs
+ * drawn from Keeping up, an item she would suggest next, a group she would never schedule. The
+ * owner deleted all of that (*"we don't need to give the coach ANY direction on how to pick"*), and
+ * copy describing a mechanism the app no longer runs is a promise it quietly stops keeping. The one
+ * line that survived is Up next's, because "nothing starts unless you ask" is a consent boundary
+ * rather than a picking rule — and it is a promise the app does still keep.
+ */
 export const STANDING_EXPLANATION: Record<RepertoireItem['status'], string> = {
-  queued: "Up next — I'll suggest it once something else is learned. Nothing starts until then.",
-  working: 'Learning — this is active in your sessions now, one or two pieces at a time.',
-  known: 'Keeping up — in the rotation. I bring it back for warm-ups and play-out, longest rest first.',
-  retired: "Learned — finished. I won't schedule it again unless you bring it back.",
+  queued: "Up next — not started yet, in your order. I won't start one unless you ask.",
+  working: "Learning — what you're working on now.",
+  known: 'Keeping up — learned, and still played.',
+  retired: 'Learned — finished. Bring it back any time.',
 };
 
 /**

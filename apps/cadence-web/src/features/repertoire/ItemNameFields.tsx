@@ -1,52 +1,76 @@
 import { useState } from 'react';
 import type { RepertoireItem } from '@cadence/shared';
+import { DESCRIPTION_MAX } from '@cadence/shared';
 import { patchRepertoireItem, type RepertoireItemPatch } from '../../lib/api/repertoire-item.ts';
+import { ADD_A_COLLECTION, FIELD_HINTS, NO_COLLECTION } from './itemFieldCopy.ts';
 
 export interface ItemNameFieldsProps {
   itemId: string;
   initialLabel: string;
   initialComposer: string;
   initialCollection: string;
-  initialCatalogue: string;
-  /** WHERE THE WORK IS, right now — "bars 9-16", "p. 240", "first stanza", "for 5th kyu" (P8).
-   *  Editable for every kind, unlike the tempo line, which stays read-only music-only history. */
+  /** Their own words for WHICH ONE this is — free text, and the field that replaced the
+   *  music-only catalogue number (owner ruling 2026-09-03). */
+  initialDescription: string;
+  /** How the work is going — editable for every kind, unlike the tempo line, which stays read-only
+   *  music-only history. */
   initialNote: string;
+  /** Collections already in use on this person's shelf, most-used first, from the list read. The
+   *  field offers these rather than a free-text box: a collection only groups if it is one group. */
+  collections: string[];
   /** Called with the fresh row once the server confirms the save. */
   onSaved: (item: RepertoireItem) => void;
 }
 
 /**
- * HOW YOU NAME IT — NAME, COMPOSER, CATALOGUE NO. (optional), COLLECTION, WHERE THE WORK IS
- * (optional, P8), plus the reassurance sentence and "Save the name". Rename is the whole point of
- * this parcel: identity is the row (`item_id`), never the label, so nothing typed here can ever
- * lose a session, a settled tempo, or a date — the sentence under the fields says so in the
- * coach's own words.
+ * HOW YOU NAME IT — Name, By, Collection, Description, Notes, then "Save the name".
  *
- * Composer/collection/catalogue/note can only ever be SET here, never cleared back to blank: the
- * repo merges `meta` with jsonb `||` (repos/repertoire.ts's `updateRepertoireItem`, the same
- * pattern `setSettledTempo` uses), which has no way to remove a key — only overwrite it with
- * another value. A blank field is therefore simply left out of the request rather than sent as "".
+ * Rename is the whole point of this section: identity is the row (`item_id`), never the label, so
+ * nothing typed here can lose a session, a settled tempo, or a date — the sentence under the fields
+ * says so in the coach's own words.
  *
- * The note is the one field here that means something for every kind, not just music: a book's
- * page, a kata's grading, a verse's stanza. Music's own settled tempo stays read-only history
- * lower on the screen (ItemHistoryTempo.tsx) — this is a separate fact, editable regardless.
+ * Every field is set-only, never cleared back to blank: the repo merges `meta` with jsonb `||`
+ * (`updateRepertoireItem`), which has no way to remove a key — only overwrite it. A blank field is
+ * therefore left out of the request rather than sent as "".
+ *
+ * TWO OWNER RULINGS SHAPE THIS SCREEN (2026-09-03):
+ *
+ *  - **No hint may narrow the field to one domain.** *"'bars 9-16' means absolutely nothing to a
+ *    karateka trying to enter heian shodan in the app. This is a multi-purpose list screen. Stop
+ *    narrowing the focus."* So each hint says what the field is FOR, in plain words, and lists no
+ *    examples. The strings live in `itemFieldCopy.ts` so the screen and its tests read one copy.
+ *  - **A collection is chosen, not typed.** *"A collection only works if it's not free-text"* —
+ *    grouping by a typed string drifts, so this is a select over what is already on the shelf, with
+ *    one option to add a new name. A name typed anyway is folded onto an existing spelling by the
+ *    server (`collapseCollection`), which is the guard for the case this control cannot cover: the
+ *    coach and the seed write collections too.
  */
 export function ItemNameFields({
   itemId,
   initialLabel,
   initialComposer,
   initialCollection,
-  initialCatalogue,
+  initialDescription,
   initialNote,
+  collections,
   onSaved,
 }: ItemNameFieldsProps) {
   const [label, setLabel] = useState(initialLabel);
   const [composer, setComposer] = useState(initialComposer);
-  const [collection, setCollection] = useState(initialCollection);
-  const [catalogue, setCatalogue] = useState(initialCatalogue);
+  const [description, setDescription] = useState(initialDescription);
   const [note, setNote] = useState(initialNote);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // The item's own collection always appears in the list, even when it is the only row carrying it
+  // and a goal-scoped read did not return it — a select that silently drops the value it was given
+  // would look like the person had never chosen one.
+  const options =
+    collections.includes(initialCollection) || !initialCollection ? collections : [initialCollection, ...collections];
+  const [choice, setChoice] = useState(initialCollection || NO_COLLECTION);
+  const [typed, setTyped] = useState('');
+  const adding = choice === ADD_A_COLLECTION;
+  const collection = adding ? typed : choice === NO_COLLECTION ? '' : choice;
 
   const canSave = label.trim().length > 0 && !saving;
 
@@ -57,7 +81,7 @@ export function ItemNameFields({
     const patch: RepertoireItemPatch = { label: label.trim() };
     if (composer.trim()) patch.composer = composer.trim();
     if (collection.trim()) patch.collection = collection.trim();
-    if (catalogue.trim()) patch.catalogue = catalogue.trim();
+    if (description.trim()) patch.description = description.trim();
     if (note.trim()) patch.note = note.trim();
     try {
       const saved = await patchRepertoireItem(itemId, patch);
@@ -88,7 +112,7 @@ export function ItemNameFields({
       </div>
       <div className="ri-field">
         <label className="ri-label" htmlFor="ri-composer">
-          Composer
+          By
         </label>
         <input
           id="ri-composer"
@@ -97,34 +121,50 @@ export function ItemNameFields({
           onChange={(e) => setComposer(e.target.value)}
           maxLength={120}
         />
-      </div>
-      <div className="ri-field">
-        <label className="ri-label" htmlFor="ri-catalogue">
-          Catalogue no. (optional)
-        </label>
-        <input
-          id="ri-catalogue"
-          className="ri-input"
-          value={catalogue}
-          onChange={(e) => setCatalogue(e.target.value)}
-          maxLength={120}
-        />
+        <p className="ri-hint">{FIELD_HINTS.composer}</p>
       </div>
       <div className="ri-field">
         <label className="ri-label" htmlFor="ri-collection">
           Collection
         </label>
-        <input
-          id="ri-collection"
+        <select id="ri-collection" className="ri-input" value={choice} onChange={(e) => setChoice(e.target.value)}>
+          <option value={NO_COLLECTION}>{NO_COLLECTION}</option>
+          {options.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+          <option value={ADD_A_COLLECTION}>{ADD_A_COLLECTION}</option>
+        </select>
+        {adding && (
+          <input
+            id="ri-collection-new"
+            className="ri-input"
+            aria-label={ADD_A_COLLECTION}
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            maxLength={120}
+          />
+        )}
+        <p className="ri-hint">{FIELD_HINTS.collection}</p>
+      </div>
+      <div className="ri-field">
+        <label className="ri-label" htmlFor="ri-description">
+          Description (optional)
+        </label>
+        <textarea
+          id="ri-description"
           className="ri-input"
-          value={collection}
-          onChange={(e) => setCollection(e.target.value)}
-          maxLength={120}
+          rows={2}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          maxLength={DESCRIPTION_MAX}
         />
+        <p className="ri-hint">{FIELD_HINTS.description}</p>
       </div>
       <div className="ri-field">
         <label className="ri-label" htmlFor="ri-note">
-          Where the work is (optional)
+          Notes (optional)
         </label>
         <input
           id="ri-note"
@@ -132,8 +172,8 @@ export function ItemNameFields({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           maxLength={120}
-          placeholder="bars 9-16, p. 240, first stanza, for 5th kyu…"
         />
+        <p className="ri-hint">{FIELD_HINTS.note}</p>
       </div>
       <div className="pw-footer">
         Whatever you call it, it keeps its sessions, tempo and dates. Only the words change.

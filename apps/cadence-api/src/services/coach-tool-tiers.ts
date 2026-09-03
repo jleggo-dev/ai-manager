@@ -240,7 +240,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_workout_history: 'their recorded workouts from their devices, newest first',
   get_practice_totals: 'running totals of anything they count — words written, minutes sat, pages read',
   get_repertoire: 'what they are learning and already know — pieces, katas, poems — with standing',
-  offer_repertoire_review: 'ACTION: put a whole book or syllabus up to tick — adds nothing to their list',
+  offer_repertoire_review: 'ACTION: show a named collection (music book, kata syllabus, reading list) as a checklist',
   get_user_built_activities: 'activities the user built themselves — steps, runs, and plan placement',
   get_journal: 'recent journal entries, verbatim; entries marked private are never included',
   get_goal_progress: 'per-goal progress numbers computed from what they logged',

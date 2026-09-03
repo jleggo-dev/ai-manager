@@ -39,14 +39,14 @@ import {
 } from './seedRows.ts';
 
 const COACH_LINE =
-  "Here's the book in order. Tap the piece you're on now and I'll mark everything before it as Keeping up. Tick or untick anything I got wrong.";
+  "Here's everything in it, in order. Tap the one you're on now and I'll mark everything before it as known. Tick or untick anything I got wrong.";
 /** The same screen, opened from the conversation: she already heard where they are, so asking them
  *  to tap what is already tapped would read as if she had not been listening. */
 const PREFILLED_LINE =
-  "Here's the book in order. I've marked where I think you are, from what you told me — move it or untick anything I got wrong.";
-const UNKNOWN_LINE = "I don't know that one — add pieces by hand, or tell me more about it.";
-const ADD_BY_HAND = 'Missing something? Add a piece by hand ›';
-const LOOKING = 'Reading the book…';
+  "Here's everything in it, in order. I've marked where I think you are, from what you told me — move it or untick anything I got wrong.";
+const UNKNOWN_LINE = "I don't know that one — add items by hand, or tell me more about it.";
+const ADD_BY_HAND = 'Missing something? Add one by hand ›';
+const LOOKING = 'Looking it up…';
 
 type Load = { kind: 'loading' } | { kind: 'fault'; fault: string } | { kind: 'ready'; found: number };
 
@@ -170,7 +170,7 @@ export function SeedReview({ collection, whereYouAre, onDone }: Props) {
       <div className="screen-title">{title}</div>
       {load.kind === 'ready' && load.found > 0 ? (
         <>
-          <div className="pw-head-tag sr-count">{`${load.found} PIECES FOUND · NOTHING SAVED YET`}</div>
+          <div className="pw-head-tag sr-count">{`${load.found} FOUND · NOTHING SAVED YET`}</div>
           <p className="screen-sub">{hereRank === null ? COACH_LINE : PREFILLED_LINE}</p>
         </>
       ) : null}

@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { RepertoireItem } from '@cadence/shared';
-import { CATALOGUE_KEY, COMPOSER_KEY, PRACTICE_NOTE_KEY, RANK_KEY } from '@cadence/shared';
+import { COLLECTION_KEY, COMPOSER_KEY, PRACTICE_NOTE_KEY, RANK_KEY } from '@cadence/shared';
 
 const getRepertoireListItems = vi.hoisted(() => vi.fn());
 const useProgressRepertoire = vi.hoisted(() => vi.fn());
@@ -136,21 +136,25 @@ describe('groups — order, header, and count', () => {
     const { container } = mount();
     await screen.findByText('Melody');
 
+    // The count is read off its own element, never by text: a ranked group renders rank numbers on
+    // its rows too (a ladder is any ordered collection now), and "2" would match either.
+    const countOf = (section: HTMLElement) => section.querySelector('.rl-group-count')?.textContent;
+
     const learning = groupSection(container, 'Learning');
-    expect(within(learning).getByText('1')).toBeInTheDocument();
+    expect(countOf(learning)).toBe('1');
     expect(within(learning).getByText("what we're working on now")).toBeInTheDocument();
 
     const upNext = groupSection(container, 'Up next');
-    expect(within(upNext).getByText('2')).toBeInTheDocument();
-    expect(within(upNext).getByText("your order — I'll suggest the first")).toBeInTheDocument();
+    expect(countOf(upNext)).toBe('2');
+    expect(within(upNext).getByText('not started yet, in your order')).toBeInTheDocument();
 
     const keepingUp = groupSection(container, 'Keeping up');
-    expect(within(keepingUp).getByText('2')).toBeInTheDocument();
-    expect(within(keepingUp).getByText('in rotation — longest rest first')).toBeInTheDocument();
+    expect(countOf(keepingUp)).toBe('2');
+    expect(within(keepingUp).getByText('learned and still played')).toBeInTheDocument();
 
     const learned = groupSection(container, 'Learned');
-    expect(within(learned).getByText('1')).toBeInTheDocument();
-    expect(within(learned).getByText('finished — counted, never scheduled')).toBeInTheDocument();
+    expect(countOf(learned)).toBe('1');
+    expect(within(learned).getByText('finished')).toBeInTheDocument();
   });
 
   it('renders the header count line from the payload, never recomputed', async () => {
@@ -158,7 +162,7 @@ describe('groups — order, header, and count', () => {
     expect(await screen.findByText('6 PIECES · 6 LEARNED THIS YEAR')).toBeInTheDocument();
   });
 
-  it('Keeping up reads longest-rest-first, the same order pickDueNext reads', async () => {
+  it('an unranked Keeping up group reads least-recently-practised first', async () => {
     const { container } = mount();
     await screen.findByText('Melody');
     const section = groupSection(container, 'Keeping up');
@@ -282,7 +286,7 @@ describe('the ＋ door', () => {
     mount();
     await user.click(await screen.findByRole('button', { name: 'Add' }));
     await user.click(await screen.findByText('Start from a collection'));
-    await user.type(screen.getByPlaceholderText(/Suzuki/), 'Suzuki Piano Book 2');
+    await user.type(screen.getByPlaceholderText(/look up what's in it/), 'Suzuki Piano Book 2');
     await user.click(screen.getByText('Look it up'));
     expect(await screen.findByTestId('seed-review-collection')).toHaveTextContent('Suzuki Piano Book 2');
   });
@@ -292,7 +296,7 @@ describe('the ＋ door', () => {
     mount();
     await user.click(await screen.findByRole('button', { name: 'Add' }));
     await user.click(await screen.findByText('Start from a collection'));
-    await user.type(screen.getByPlaceholderText(/Suzuki/), 'A Book');
+    await user.type(screen.getByPlaceholderText(/look up what's in it/), 'A Book');
     await user.click(screen.getByText('Look it up'));
     getRepertoireListItems.mockClear();
     await user.click(await screen.findByText('seed-review-done'));
@@ -312,7 +316,7 @@ describe('the ＋ door', () => {
     // rank: null, never a fabricated 1 — this piece has no real order (it wasn't placed against a
     // book), and a fake rank would sort it first the moment it ever moved into Up next.
     expect(confirmSeed).toHaveBeenCalledWith(
-      [{ label: 'A New Piece', composer: null, collection: null, catalogue: null, rank: null, status: 'working' }],
+      [{ label: 'A New Piece', composer: null, collection: null, rank: null, status: 'working' }],
       'g-piano',
     );
     expect(await screen.findByText('Melody')).toBeInTheDocument(); // sheet closed, list refreshed
@@ -401,28 +405,28 @@ describe('scoping', () => {
     expect(getRepertoireListItems).toHaveBeenCalledWith(null);
   });
 
-  it("composer and catalogue, when on file, show on the row's second line", async () => {
+  it("composer and collection, when on file, show on the row's second line", async () => {
     mount({
       items: [
         item({
           item_id: 'debussy1',
           label: 'Clair de lune',
           status: 'known',
-          meta: { [COMPOSER_KEY]: 'Debussy', [CATALOGUE_KEY]: 'L. 75' },
+          meta: { [COMPOSER_KEY]: 'Debussy', [COLLECTION_KEY]: 'Suite bergamasque' },
         }),
       ],
     });
     await screen.findByText('Clair de lune');
-    expect(screen.getByText('Debussy · L. 75')).toBeInTheDocument();
+    expect(screen.getByText('Debussy · Suite bergamasque')).toBeInTheDocument();
   });
 });
 
 /**
- * A kata ladder (P8 "kata — a ladder"): a shelf where every item is a `LADDER_KINDS` domain AND
- * carries a rank reads in rank order instead of the standing's own rule, end to end through the
- * real DOM (the ordering rule itself, and the bug it fixes — rank alone is not enough, since P4's
- * book seed writes rank on every piece row too — are table-tested at the unit level in
- * repertoireListCopy.test.ts; this pins the WIRING, plus the rank number each ladder row shows).
+ * A ladder is any ordered collection (owner ruling 2026-09-03): a group where every item carries a
+ * rank reads in rank order instead of the standing's own rule, end to end through the real DOM.
+ * The rule itself — including the row that flipped, a ranked group of ordinary pieces — is
+ * table-tested at the unit level in repertoireListCopy.test.ts; this pins the WIRING, plus the rank
+ * number each ladder row shows.
  */
 describe('a kata ladder (P8)', () => {
   const belt = (rank: number, label: string, note?: string) =>
@@ -503,10 +507,28 @@ describe('a kata ladder (P8)', () => {
     expect(ranks).toEqual(['1', '2', '3']);
   });
 
-  it('a piece row never shows a rank number, even though a book-seeded piece carries one too', async () => {
+  /**
+   * THE FLIP (owner ruling 2026-09-03): a ranked group of ordinary pieces now DOES read as a
+   * ladder and shows its numbers. It did not until today, because the coach read row position as a
+   * rotation and the screen could not be allowed to contradict her; she reads no position now.
+   */
+  it('a ranked group of ordinary pieces reads as a ladder and shows its numbers', async () => {
     mount({
       items: [
-        item({ item_id: 'seeded-piece', label: 'Prelude', status: 'known', kind: 'piece', meta: { [RANK_KEY]: 1 } }),
+        item({ item_id: 'p2', label: 'Sarabande', status: 'known', kind: 'piece', meta: { [RANK_KEY]: 2 } }),
+        item({ item_id: 'p1', label: 'Prelude', status: 'known', kind: 'piece', meta: { [RANK_KEY]: 1 } }),
+      ],
+      collisions: [],
+    });
+    await screen.findByText('Prelude');
+    expect([...document.querySelectorAll('.rl-row-rank')].map((e) => e.textContent)).toEqual(['1', '2']);
+  });
+
+  it('a group where one row has no rank shows no numbers at all — a part-ladder is not one', async () => {
+    mount({
+      items: [
+        item({ item_id: 'p1', label: 'Prelude', status: 'known', kind: 'piece', meta: { [RANK_KEY]: 1 } }),
+        item({ item_id: 'p2', label: 'Sarabande', status: 'known', kind: 'piece', meta: null }),
       ],
       collisions: [],
     });

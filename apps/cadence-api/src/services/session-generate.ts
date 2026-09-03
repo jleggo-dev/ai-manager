@@ -153,7 +153,7 @@ async function generateSession(
     equipment: JSON.stringify(equipment.map((e) => ({ name: e.name, category: e.category }))),
     recent_logs: renderLogLines(history),
     // What they play FOR THIS SESSION'S GOAL: every item with its standing, when it was last
-    // practised, the tempo they settled on, the note saying where the work is, and their own words
+    // practised, the tempo they settled on, the note saying how the work is going, and their own words
     // from the most recent session naming it. ONE variable since 2026-09-03 — `warmup_pick`,
     // `next_rested`, `learning` and `up_next_top` each named a pick, and the owner ruled that
     // nothing we hand her may tell her which item to reach for. Scoped because the prompt promises

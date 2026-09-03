@@ -33,9 +33,9 @@ export { standingWordFor } from './repertoireItemCopy.ts';
  */
 export const GROUP_LINES: Record<RepertoireStatus, string> = {
   working: "what we're working on now",
-  queued: "your order — I'll suggest the first",
-  known: 'in rotation — longest rest first',
-  retired: 'finished — counted, never scheduled',
+  queued: 'not started yet, in your order',
+  known: 'learned and still played',
+  retired: 'finished',
 };
 
 /**
@@ -75,29 +75,29 @@ function rowDateFor(item: RepertoireItem, now: Date): string {
 }
 
 /**
- * composer · catalogue · collection · note · practiced-relative-date — each segment present only
- * when there is a fact behind it. This is the one place all four domains (piece, book, kata,
- * verse — P8) meet: none of them gets a bespoke line, they simply carry different facts, and this
- * function only formats and orders whatever is on file (the file's own rule, stated above).
+ * composer · collection · note · practiced-relative-date — each segment present only when there is
+ * a fact behind it. This is the one place all four domains (piece, book, kata, verse — P8) meet:
+ * none of them gets a bespoke line, they simply carry different facts, and this function only
+ * formats and orders whatever is on file (the file's own rule, stated above).
  *
- * The practice note (P8: "the practice note gets a store" — `bars 9-16`, `p. 240`, `first stanza`,
- * `for 5th kyu`) sits after the identity qualifiers, right before the date — the design's own
- * order: WHICH piece this is, then WHERE the work is, then WHEN it was last touched. This differs
- * from session-practice-facts.ts's `practiceNote`, which still leads with the note for the coach's
- * prompt — the two share a vocabulary, not a byte order, since a prompt reads best foregrounding
- * what matters most to a session being programmed, while this row reads best naming the piece
- * first. A book or a kata, which rarely carries composer/catalogue/collection, still gets an
- * informative line: the note is simply the first (and often only) segment present.
+ * The practice note sits after the identity qualifiers, right before the date — the design's own
+ * order: WHICH item this is, then how the work is going, then WHEN it was last touched. This
+ * differs from session-practice-facts.ts's line, which leads with the note for the coach's prompt —
+ * the two share a vocabulary, not a byte order, since a prompt reads best foregrounding what
+ * matters most to a session being programmed, while this row reads best naming the item first. A
+ * book or a kata, which rarely carries a composer or a collection, still gets an informative line:
+ * the note is simply the first (and often only) segment present.
  *
- * Catalogue sits right after composer, ahead of collection: it is the qualifier that actually
- * tells two same-titled pieces apart (three Minuets in G, one collection), so it earns the second
- * slot rather than trailing where a long collection name could push it off the row.
+ * TWO FIELDS ARE DELIBERATELY ABSENT.
+ *  - `catalogue` was here until 2026-09-03 and is not a field any more (owner: *"very
+ *    music-specific and adds little"*).
+ *  - `description` IS on the row and is deliberately not rendered here: it is a sentence, up to 240
+ *    characters, and a list row has four other things on one line. It belongs on the item screen,
+ *    which is one tap away.
  */
 export function buildSecondLine(item: RepertoireItem, now: Date = new Date()): string {
   const q = pieceQualifiers(item.meta);
-  const segments = [q.composer, q.catalogue, q.collection, q.note, rowDateFor(item, now)].filter((s): s is string =>
-    Boolean(s),
-  );
+  const segments = [q.composer, q.collection, q.note, rowDateFor(item, now)].filter((s): s is string => Boolean(s));
   return segments.join(' · ');
 }
 
@@ -133,32 +133,25 @@ function byLearnedDesc(a: RepertoireItem, b: RepertoireItem): number {
 }
 
 /**
- * Domains where a full set of ranks means an ordered ladder — never bare rank presence. P4's
- * "confirm" seed writes `rank` on EVERY row it expands from a book, so a fully-seeded Keeping-up
- * group of ORDINARY PIECES is fully ranked too; pieces must keep rotating by rest regardless
- * (`byRest` is the coach's own rule, the same one `pickDueNext` reads), or the screen and the
- * coach would disagree about which row is due first — the one thing this list must never do. Same
- * canonical-spelling reasoning as the book check (`isBookKind` in repertoireItemCopy.ts): an exact
- * match against the coach's own kind word, not a fuzzy one.
+ * A ladder is any ordered collection — a graded syllabus, a method book, a reading list — and
+ * "every item carries a rank" is the whole test again (owner ruling 2026-09-03: *"Kata isn't a
+ * special thing — it was always an example — this is meant to be a flexible tool meant for
+ * learning things progressively"*).
+ *
+ * A `LADDER_KINDS` set gated this on `kind: 'kata'` for a day, because a ranked group of ordinary
+ * pieces used to render in rank order while the COACH read the same group by rest, and the screen
+ * and the coach disagreeing about the first row was the thing the list must never do. That reason
+ * is gone: she no longer reads row position for anything (`pickDueNext` is deleted, and the render
+ * marks nothing), so a ranked group shown in its own rank order now disagrees with nothing — it
+ * simply shows the person the order they put their material in.
+ *
+ * Still ALL-OR-NOTHING: one unranked item means the ladder is incomplete, and the standing's normal
+ * order is the honest fallback rather than a guessed position for the row with no number. Checked
+ * against exactly the items `orderGroupItems` was handed — one standing at a time, the only slice
+ * this function ever sees.
  */
-export const LADDER_KINDS: ReadonlySet<string> = new Set(['kata']);
-
-/** A kata ladder (P8: "kata — a ladder"): a shelf whose items are ALL a ladder kind (`LADDER_KINDS`)
- *  AND every one carries a rank reads as one ordered ladder instead of the standing's own rule —
- *  the belt order matters more than which of the four groups a grade currently sits in. Domain AND
- *  rank are both required: rank alone is not enough (see `LADDER_KINDS`'s own doc). A single
- *  ungraded item, or a single non-ladder-kind item, means the ladder is not complete or not a
- *  ladder at all, so this is deliberately all-or-nothing on both counts — one exception falls back
- *  to the standing's normal order rather than guessing a position for it. Checked against exactly
- *  the items `orderGroupItems` was handed — one standing at a time, the only slice this function
- *  ever sees. */
 export function isFullLadder(items: RepertoireItem[]): boolean {
-  return (
-    items.length > 0 &&
-    items.every(
-      (i) => LADDER_KINDS.has((i.kind ?? '').trim().toLowerCase()) && pieceQualifiers(i.meta).rank !== undefined,
-    )
-  );
+  return items.length > 0 && items.every((i) => pieceQualifiers(i.meta).rank !== undefined);
 }
 
 /**
@@ -166,14 +159,12 @@ export function isFullLadder(items: RepertoireItem[]): boolean {
  * (repertoireListCopy.test.ts) the way every deterministic router in this codebase is, because a
  * swapped case is silent: the wrong order still renders a plausible list, and nothing throws.
  *
- *  - a full ladder (every item a `LADDER_KINDS` domain AND ranked, P8) — rank order, ascending,
- *    REGARDLESS of standing: no rotation, no rank-drag-order-vs-rest distinction, just the belt
- *    order. Checked first, so a kata shelf never falls through to a standing rule that would
- *    silently re-sort it. Rank alone is deliberately NOT enough — a fully-seeded shelf of ordinary
- *    pieces is fully ranked too (P4's book seed writes `rank` on every row), and pieces must keep
- *    rotating by rest (`isFullLadder`'s own doc has the incident this guards against).
- *  - `known` ("Keeping up") — longest rest first, via the SAME `byRest` the coach's own rotation
- *    reads (`pickDueNext`), so the screen and the coach can never disagree about what is due.
+ *  - a fully ranked group — rank order, ascending, REGARDLESS of standing: the person's own order
+ *    through the collection, shown with the numbers. Checked first, so a ranked group never falls
+ *    through to a standing rule that would silently re-sort it.
+ *  - `known` ("Keeping up"), unranked — least recently practised first (`byRest`), with each row's
+ *    own date beside it, so the order restates a fact the person can check rather than asserting a
+ *    priority.
  *  - `queued` ("Up next") — the person's own drag order (`RANK_KEY`, ascending); unranked rows
  *    sort after every ranked one, in the order the server sent them.
  *  - `retired` ("Learned") — newest finished first (`byLearnedDesc`): the design calls this group

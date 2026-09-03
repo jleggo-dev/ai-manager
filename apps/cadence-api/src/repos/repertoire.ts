@@ -125,9 +125,9 @@ export async function stampPracticed(userId: string, itemIds: string[], at?: str
 
 /**
  * Drop the cached session prescriptions a repertoire change makes stale. Sessions are generated
- * once and cached on the occurrence (`setOccurrenceSessionIfEmpty`), so without this a week
- * warmed in one burst names the same DUE NEXT piece all week, and occurrences warmed before a
- * repertoire write never see it at all. Scoped to the goal's own pending, future, user-kind rows
+ * once and cached on the occurrence (`setOccurrenceSessionIfEmpty`), so without this a week warmed
+ * in one burst keeps prescribing the shelf as it stood that morning, and occurrences warmed before
+ * a repertoire write never see it at all. Scoped to the goal's own pending, future, user-kind rows
  * — each cleared row costs one regeneration on next open, bounded by that goal's week.
  */
 export async function clearPendingSessionsForGoal(userId: string, goalId: string): Promise<number> {

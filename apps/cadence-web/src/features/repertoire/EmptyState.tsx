@@ -10,10 +10,11 @@
  */
 import { useEffect, useState } from 'react';
 import { getReview } from '../../lib/api/review.ts';
+import { COLLECTION_LOOKUP_PLACEHOLDER } from './itemFieldCopy.ts';
 
 export const EMPTY_HEADLINE = "Tell me what you already play, and I'll stop asking.";
 export const EMPTY_COLLECTION_PROMISE =
-  "I'll list what's in it with composers and catalogue numbers. You tick what's yours. Nothing is saved until you say so.";
+  "I'll list everything in it. You mark what you already know. Nothing is saved until you say so.";
 
 interface GoalChip {
   goal_id: string;
@@ -70,7 +71,7 @@ export function EmptyState({ goalId, onStartCollection, onAddByHand, onOpenChat,
           id="rl-empty-collection"
           className="ri-input rl-empty-input"
           value={collection}
-          placeholder="Suzuki Piano Book 2, ABRSM Grade 3…"
+          placeholder={COLLECTION_LOOKUP_PLACEHOLDER}
           onChange={(e) => setCollection(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && submitCollection()}
         />

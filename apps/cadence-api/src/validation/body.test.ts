@@ -168,7 +168,7 @@ describe('parseBody / repertoire item patch schema — rank', () => {
 });
 
 /**
- * `note` on the repertoire item PATCH (P8: "the practice note gets a store" — WHERE the work is,
+ * `note` on the repertoire item PATCH (P8: "the practice note gets a store" — how the work is going,
  * "bars 9-16", "p. 240", "first stanza", "for 5th kyu"). Same table shape as `rank` above: a real
  * value, and the near-misses a save could produce.
  */

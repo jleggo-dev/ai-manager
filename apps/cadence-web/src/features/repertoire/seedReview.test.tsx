@@ -42,7 +42,6 @@ function candidates(over: Partial<SeedCandidate>[] = []): SeedCandidate[] {
     label,
     composer: null,
     collection: 'Suzuki Piano Book 2',
-    catalogue: null,
     rank: i + 1,
     ambiguous: false,
     ...(over[i] ?? {}),
@@ -52,7 +51,7 @@ function candidates(over: Partial<SeedCandidate>[] = []): SeedCandidate[] {
 const standings = (c: HTMLElement): (string | null)[] =>
   [...c.querySelectorAll('.pw-rep-standing')].map((e) => e.textContent);
 
-const saveButton = () => screen.getByRole('button', { name: /^Save \d+ piece/ });
+const saveButton = () => screen.getByRole('button', { name: /^Save \d+$/ });
 
 function open(onDone = vi.fn()) {
   const view = render(<SeedReview collection="Suzuki Piano Book 2" onDone={onDone} />);
@@ -80,9 +79,9 @@ describe('the header', () => {
   it('names the collection, counts what was found, and says nothing is saved', async () => {
     open();
     expect(await screen.findByText('Suzuki Piano Book 2')).toBeInTheDocument();
-    expect(screen.getByText('12 PIECES FOUND · NOTHING SAVED YET')).toBeInTheDocument();
+    expect(screen.getByText('12 FOUND · NOTHING SAVED YET')).toBeInTheDocument();
     expect(
-      screen.getByText(/Tap the piece you.re on now and I.ll mark everything before it as Keeping up/),
+      screen.getByText(/Tap the one you.re on now and I.ll mark everything before it as known/),
     ).toBeInTheDocument();
   });
 
@@ -98,7 +97,7 @@ describe('the header', () => {
     await screen.findByText('Écossaise');
     expect(standings(container)).toEqual(Array(12).fill('—'));
     expect(saveButton()).toBeDisabled();
-    expect(saveButton()).toHaveTextContent('Save 0 pieces');
+    expect(saveButton()).toHaveTextContent('Save 0');
   });
 });
 
@@ -109,7 +108,7 @@ describe('the tap that says where you are', () => {
     fireEvent.click(screen.getByRole('button', { name: 'The Happy Farmer' }));
 
     expect(standings(container)).toEqual(['Keeping up', 'Keeping up', 'Keeping up', 'Learning', ...Array(8).fill('—')]);
-    expect(saveButton()).toHaveTextContent('Save 4 pieces');
+    expect(saveButton()).toHaveTextContent('Save 4');
   });
 
   it('on the first piece, only that one is Learning and nothing is Keeping up', async () => {
@@ -117,7 +116,7 @@ describe('the tap that says where you are', () => {
     await screen.findByText('Écossaise');
     fireEvent.click(screen.getByRole('button', { name: 'Écossaise' }));
     expect(standings(container)).toEqual(['Learning', ...Array(11).fill('—')]);
-    expect(saveButton()).toHaveTextContent('Save 1 piece');
+    expect(saveButton()).toHaveTextContent('Save 1');
   });
 
   it('re-tapping earlier in the book redraws the whole split', async () => {
@@ -161,20 +160,20 @@ describe('opened with the coach\u2019s heard split', () => {
     const { container } = openPrefilled('the happy farmer', 4);
     await screen.findByText('Écossaise');
     expect(standings(container)).toEqual(['Keeping up', 'Keeping up', 'Keeping up', 'Learning', ...Array(8).fill('—')]);
-    expect(saveButton()).toHaveTextContent('Save 4 pieces');
+    expect(saveButton()).toHaveTextContent('Save 4');
   });
 
   it('still saves nothing on its own — the confirm is the person\u2019s, prefilled or not', async () => {
     openPrefilled('the happy farmer', 4);
     await screen.findByText('Écossaise');
-    expect(screen.getByText('12 PIECES FOUND · NOTHING SAVED YET')).toBeInTheDocument();
+    expect(screen.getByText('12 FOUND · NOTHING SAVED YET')).toBeInTheDocument();
     expect(confirmSeed).not.toHaveBeenCalled();
   });
 
   it('says she marked it, instead of asking them to tap what is already tapped', async () => {
     openPrefilled('the happy farmer', 4);
     expect(await screen.findByText(/I.ve marked where I think you are/)).toBeInTheDocument();
-    expect(screen.queryByText(/Tap the piece you.re on now/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Tap the one you.re on now/)).not.toBeInTheDocument();
   });
 
   it('lets them move the split afterwards, exactly as if they had tapped it themselves', async () => {
@@ -188,7 +187,7 @@ describe('opened with the coach\u2019s heard split', () => {
     const { container } = openPrefilled('minuet in g major', null);
     await screen.findByText('Écossaise');
     expect(standings(container)).toEqual(Array(12).fill('—'));
-    expect(screen.getByText(/Tap the piece you.re on now/)).toBeInTheDocument();
+    expect(screen.getByText(/Tap the one you.re on now/)).toBeInTheDocument();
   });
 
   it('sends nothing, and marks nothing, when she heard no piece at all', async () => {
@@ -207,7 +206,7 @@ describe('a tick', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Include Long, Long Ago' }));
 
     expect(standings(container)).toEqual(['Keeping up', '—', 'Keeping up', 'Learning', ...Array(8).fill('—')]);
-    expect(saveButton()).toHaveTextContent('Save 3 pieces');
+    expect(saveButton()).toHaveTextContent('Save 3');
   });
 
   it('ticks a piece after the split back on, as Up next', async () => {
@@ -217,7 +216,7 @@ describe('a tick', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Include Chanson' }));
 
     expect(standings(container)[11]).toBe('Up next');
-    expect(saveButton()).toHaveTextContent('Save 2 pieces');
+    expect(saveButton()).toHaveTextContent('Save 2');
   });
 });
 
@@ -246,7 +245,7 @@ describe('confirm', () => {
     expandCollection.mockResolvedValue({
       ok: true,
       collection: 'Suzuki Piano Book 2',
-      candidates: candidates([{ composer: 'J.N. Hummel', catalogue: 'S. 52' }]),
+      candidates: candidates([{ composer: 'J.N. Hummel', collection: 'Suzuki Piano Book 2' }]),
     });
     open();
     await screen.findByText('Écossaise');
@@ -259,7 +258,6 @@ describe('confirm', () => {
       label: 'Écossaise',
       composer: 'J.N. Hummel',
       collection: 'Suzuki Piano Book 2',
-      catalogue: 'S. 52',
       rank: 1,
       status: 'working',
     });
@@ -308,24 +306,24 @@ describe('confirm', () => {
   });
 });
 
-describe('add a piece by hand', () => {
+describe('add one by hand', () => {
   it('appends an editable row, ticked, after the last one', async () => {
     const { container } = open();
     await screen.findByText('Écossaise');
     fireEvent.click(screen.getByRole('button', { name: 'Chanson' }));
-    fireEvent.click(screen.getByRole('button', { name: /Add a piece by hand/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add one by hand/ }));
 
-    const input = screen.getByPlaceholderText('Name the piece');
+    const input = screen.getByPlaceholderText('What you call it');
     fireEvent.change(input, { target: { value: 'Minuet in G Major, BWV 114a' } });
     expect(container.querySelectorAll('.pw-rep-row')).toHaveLength(13);
-    expect(saveButton()).toHaveTextContent('Save 13 pieces');
+    expect(saveButton()).toHaveTextContent('Save 13');
   });
 
   it('an empty hand-added row is never written', async () => {
     open();
     await screen.findByText('Écossaise');
     fireEvent.click(screen.getByRole('button', { name: 'Écossaise' }));
-    fireEvent.click(screen.getByRole('button', { name: /Add a piece by hand/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add one by hand/ }));
     fireEvent.click(saveButton());
 
     await waitFor(() => expect(confirmSeed).toHaveBeenCalled());
@@ -343,8 +341,8 @@ describe('what the screen says when it has no list', () => {
     const { container } = open();
 
     expect(await screen.findByText(/a fault on our side, not an empty book/)).toBeInTheDocument();
-    expect(screen.queryByText(/0 PIECES FOUND/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/PIECES FOUND/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/0 FOUND/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/FOUND · NOTHING SAVED YET/)).not.toBeInTheDocument();
     expect(container.querySelectorAll('.pw-rep-row')).toHaveLength(0);
     expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
   });
@@ -362,7 +360,7 @@ describe('what the screen says when it has no list', () => {
 
     expect(await screen.findByText(/I don.t know that one/)).toBeInTheDocument();
     expect(container.querySelectorAll('.pw-rep-row')).toHaveLength(0);
-    expect(screen.getByRole('button', { name: /Add a piece by hand/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add one by hand/ })).toBeInTheDocument();
   });
 });
 
@@ -375,7 +373,7 @@ describe('a title that names more than one piece', () => {
     });
     const { container } = open();
     await screen.findByText('Chanson');
-    expect(screen.getByText(/names more than one piece/)).toBeInTheDocument();
+    expect(screen.getByText(/names more than one thing/)).toBeInTheDocument();
     expect(container.querySelectorAll('.pw-rep-note')).toHaveLength(1);
     // And it shows its name as a field, because renaming it is the only way out.
     expect(screen.getByDisplayValue('Écossaise')).toBeInTheDocument();
@@ -391,9 +389,9 @@ describe('a title that names more than one piece', () => {
     ok: true,
     collection: 'Suzuki Piano Book 2',
     candidates: [
-      { label: 'Gavotte', composer: null, collection: 'X', catalogue: null, rank: 1, ambiguous: false },
-      { label: 'Gavotte', composer: null, collection: 'X', catalogue: null, rank: 2, ambiguous: false },
-      { label: 'Chanson', composer: null, collection: 'X', catalogue: null, rank: 3, ambiguous: false },
+      { label: 'Gavotte', composer: null, collection: 'X', rank: 1, ambiguous: false },
+      { label: 'Gavotte', composer: null, collection: 'X', rank: 2, ambiguous: false },
+      { label: 'Chanson', composer: null, collection: 'X', rank: 3, ambiguous: false },
     ],
   });
 
@@ -403,7 +401,7 @@ describe('a title that names more than one piece', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Chanson' }));
 
     expect(saveButton()).toBeDisabled();
-    expect(saveButton()).toHaveTextContent('Save 3 pieces');
+    expect(saveButton()).toHaveTextContent('Save 3');
     expect(
       screen.getByText('Two of these share a name. Give one a fuller name and I can save them both.'),
     ).toBeInTheDocument();
@@ -440,11 +438,11 @@ describe('a title that names more than one piece', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Long, Long Ago' }));
 
     expect(saveButton()).toBeDisabled();
-    expect(screen.getByText(/One of these shares its name with a piece you already have/)).toBeInTheDocument();
+    expect(screen.getByText(/One of these shares its name with something you already have/)).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue('Écossaise'), { target: { value: 'Écossaise (Hummel)' } });
     expect(saveButton()).toBeEnabled();
-    expect(saveButton()).toHaveTextContent('Save 2 pieces');
+    expect(saveButton()).toHaveTextContent('Save 2');
   });
 
   it('a server refusal names what it would not write, and never reports it as done', async () => {

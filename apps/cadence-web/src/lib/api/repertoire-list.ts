@@ -18,7 +18,17 @@ export interface RepertoireCollisionGroup {
 }
 
 export type RepertoireListResult =
-  { ok: true; items: RepertoireItem[]; collisions: RepertoireCollisionGroup[] } | { ok: false; fault: string };
+  | {
+      ok: true;
+      items: RepertoireItem[];
+      collisions: RepertoireCollisionGroup[];
+      /** Every collection already in use on this person's WHOLE shelf, most-used first — the names
+       *  the item screen offers instead of a free-text box (owner ruling 2026-09-03). Computed by
+       *  the route from the rows it already read; never narrowed by the goal scope, because a book
+       *  kept under another goal is still a group this person uses. */
+      collections: string[];
+    }
+  | { ok: false; fault: string };
 
 const FAULT = 'I could not read your list just now — a fault on our side, not an empty shelf. Try again in a moment.';
 
@@ -33,11 +43,18 @@ export async function getRepertoireListItems(goalId: string | null): Promise<Rep
   const qs = goalId ? `?goal_id=${encodeURIComponent(goalId)}` : '';
   const res = await fetch(`${BASE}/progress/repertoire/items${qs}`, { headers: headers() }).catch(() => null);
   if (!res) return { ok: false, fault: FAULT };
-  const body = (await res.json().catch(() => null)) as { items?: unknown; collisions?: unknown } | null;
+  const body = (await res.json().catch(() => null)) as {
+    items?: unknown;
+    collisions?: unknown;
+    collections?: unknown;
+  } | null;
   if (!res.ok || !Array.isArray(body?.items)) return { ok: false, fault: faultText(body, FAULT) };
   return {
     ok: true,
     items: body.items as RepertoireItem[],
     collisions: Array.isArray(body.collisions) ? (body.collisions as RepertoireCollisionGroup[]) : [],
+    // An older API that does not send it yet reads as "no collections on file", which is the same
+    // thing the screen shows for a shelf that genuinely has none — never a crash.
+    collections: Array.isArray(body.collections) ? (body.collections as string[]) : [],
   };
 }
