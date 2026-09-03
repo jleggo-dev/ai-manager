@@ -7,6 +7,13 @@ import { generateMealPlan, mealPlanDayLabel, shoppingListSummary, type MealPlanD
  * read and the session prep: don't hide the wait, narrate it, and be specific. The tail line
  * HOLDS however long it runs.
  */
+type DraftSlot = 'breakfast' | 'lunch' | 'dinner';
+const DRAFT_SLOTS: { key: DraftSlot; label: string }[] = [
+  { key: 'breakfast', label: 'Breakfasts' },
+  { key: 'lunch', label: 'Lunches' },
+  { key: 'dinner', label: 'Dinners' },
+];
+
 const DRAFT_WEEK_STEPS: ReadProgressStep[] = [
   { at: 0, text: 'Reading what you like and what we work around…' },
   { at: 8000, text: 'Sketching the week, dinner first…' },
@@ -37,6 +44,8 @@ export function KitchenDraftWeek({
   onCancel: () => void;
 }) {
   const [prefs, setPrefs] = useState('');
+  // Owner ruling 2026-09-03: the user picks which meals get drafted; dinners only by default.
+  const [slots, setSlots] = useState<Set<DraftSlot>>(() => new Set<DraftSlot>(['dinner']));
   const [draft, setDraft] = useState<MealPlanDraft | null>(null);
   const [drafting, setDrafting] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -51,16 +60,29 @@ export function KitchenDraftWeek({
   }, [drafting]);
 
   async function run() {
-    if (drafting) return;
+    if (drafting || slots.size === 0) return;
     setDrafting(true);
     setErr('');
     try {
-      const r = await generateMealPlan({ week_of: weekOf, ...(prefs.trim() ? { prefs: prefs.trim() } : {}) });
+      const r = await generateMealPlan({
+        week_of: weekOf,
+        slots: DRAFT_SLOTS.map((s) => s.key).filter((k) => slots.has(k)),
+        ...(prefs.trim() ? { prefs: prefs.trim() } : {}),
+      });
       if (r.status !== 'ok') return setErr(r.message);
       setDraft(r.draft);
     } finally {
       setDrafting(false);
     }
+  }
+
+  function toggleSlot(key: DraftSlot) {
+    setSlots((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   if (draft) {
@@ -97,6 +119,24 @@ export function KitchenDraftWeek({
       <p className="kt-lede">
         A week of dinners you&apos;d like, with a shopping list to match — nothing sticks until you keep it.
       </p>
+      <div className="kt-field">
+        <span>Which meals should I draft?</span>
+        <div className="kt-slotpick" role="group" aria-label="Which meals to draft">
+          {DRAFT_SLOTS.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              aria-pressed={slots.has(s.key)}
+              className={slots.has(s.key) ? 'is-on' : ''}
+              disabled={drafting}
+              onClick={() => toggleSlot(s.key)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        {slots.size === 0 && <span className="kt-note">Pick at least one meal to draft.</span>}
+      </div>
       <label className="kt-field">
         <span>Anything I should work around?</span>
         <textarea
@@ -110,7 +150,7 @@ export function KitchenDraftWeek({
       </label>
       {err && <div className="kt-note">{err}</div>}
       {drafting && <div className="kt-count">{readProgressLine(DRAFT_WEEK_STEPS, elapsed)}</div>}
-      <button className="kt-primary" disabled={drafting} onClick={() => void run()}>
+      <button className="kt-primary" disabled={drafting || slots.size === 0} onClick={() => void run()}>
         {drafting ? 'Drafting…' : 'Draft the week'} <i aria-hidden>›</i>
       </button>
     </div>
