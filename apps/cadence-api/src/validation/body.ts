@@ -306,9 +306,9 @@ const REPERTOIRE_STANDINGS = ['queued', 'working', 'known', 'retired'] as const 
 
 /**
  * `PATCH /progress/repertoire/:id` — the item screen's save path for the name fields and the
- * qualifiers, and the standing control's own immediate write (each of the four fields, and
- * `status`, may arrive alone or together). At least one field is required — an empty body is
- * never a legitimate call.
+ * qualifiers (composer, collection, catalogue, rank, and the practice note — P8), and the
+ * standing control's own immediate write (any of them, and `status`, may arrive alone or
+ * together). At least one field is required — an empty body is never a legitimate call.
  *
  * `status` rejects "learned" and "parked" BY NAME rather than folding them into one generic enum
  * error, because they are the two words someone reaching for a standing here is likeliest to
@@ -324,6 +324,11 @@ export const patchRepertoireItemBodySchema = z
     composer: z.string().trim().min(1, { message: 'composer, when given, must not be blank' }).max(120).optional(),
     collection: z.string().trim().min(1, { message: 'collection, when given, must not be blank' }).max(120).optional(),
     catalogue: z.string().trim().min(1, { message: 'catalogue, when given, must not be blank' }).max(120).optional(),
+    // WHERE THE WORK IS, right now — "bars 9-16", "p. 240", "first stanza", "for 5th kyu" (P8).
+    // Merged into meta by the same `qualifierMeta` call the other three qualifiers already go
+    // through; separate from them in meaning (WHERE the work is, never WHICH piece this is), but
+    // the same bound — a hand-edited row cannot hand the row a paragraph.
+    note: z.string().trim().min(1, { message: 'note, when given, must not be blank' }).max(120).optional(),
     status: z.string().optional(),
     // 1-based position for a drag-ordered standing (the Up next group, P6 "the room"). Merged into
     // meta by the same `qualifierMeta` call the other three qualifiers already go through.
@@ -359,6 +364,7 @@ export const patchRepertoireItemBodySchema = z
       val.composer === undefined &&
       val.collection === undefined &&
       val.catalogue === undefined &&
+      val.note === undefined &&
       val.status === undefined &&
       val.rank === undefined
     ) {

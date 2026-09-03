@@ -166,3 +166,43 @@ describe('parseBody / repertoire item patch schema — rank', () => {
     expect(() => parseBody(patchRepertoireItemBodySchema, {})).toThrow(/nothing to update/);
   });
 });
+
+/**
+ * `note` on the repertoire item PATCH (P8: "the practice note gets a store" — WHERE the work is,
+ * "bars 9-16", "p. 240", "first stanza", "for 5th kyu"). Same table shape as `rank` above: a real
+ * value, and the near-misses a save could produce.
+ */
+describe('parseBody / repertoire item patch schema — note', () => {
+  it('accepts a real note', () => {
+    expect(parseBody(patchRepertoireItemBodySchema, { note: 'bars 9-16' })).toMatchObject({ note: 'bars 9-16' });
+  });
+
+  it('a note-only body is something to update, not an empty PATCH', () => {
+    expect(() => parseBody(patchRepertoireItemBodySchema, { note: 'p. 240' })).not.toThrow();
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(parseBody(patchRepertoireItemBodySchema, { note: '  first stanza  ' })).toMatchObject({
+      note: 'first stanza',
+    });
+  });
+
+  it('rejects a blank note — whitespace-only is not "nothing given", it is a bad value', () => {
+    expect(() => parseBody(patchRepertoireItemBodySchema, { note: '   ' })).toThrow(BodyValidationError);
+    expect(() => parseBody(patchRepertoireItemBodySchema, { note: '   ' })).toThrow(/must not be blank/);
+  });
+
+  it('rejects a note over 120 characters', () => {
+    expect(() => parseBody(patchRepertoireItemBodySchema, { note: 'x'.repeat(121) })).toThrow(BodyValidationError);
+  });
+
+  it('accepts a note at exactly the 120-character bound', () => {
+    expect(parseBody(patchRepertoireItemBodySchema, { note: 'x'.repeat(120) })).toMatchObject({
+      note: 'x'.repeat(120),
+    });
+  });
+
+  it('rejects an empty body even though note is optional — the base "nothing to update" rule still holds', () => {
+    expect(() => parseBody(patchRepertoireItemBodySchema, {})).toThrow(/nothing to update/);
+  });
+});

@@ -243,6 +243,7 @@ router.patch('/repertoire/:id', async (req: Request, res: Response) => {
       collection: body.collection,
       catalogue: body.catalogue,
       rank: body.rank,
+      note: body.note,
     });
     const status = body.status as RepertoireStatus | undefined;
     if (status !== undefined || Object.keys(meta).length > 0) {

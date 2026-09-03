@@ -56,6 +56,12 @@ const WORDS_CAP = 200;
  * The durable facts on a row, as one line: the tempo they actually play it at, and the qualifiers
  * that tell it from another piece with the same title. Same words as the shelf render's own tempo
  * line, deliberately — the coach reads both in one prompt and one vocabulary is the point.
+ *
+ * The stored practice note (P8: "the practice note gets a store" — `bars 9-16`, `p. 240`, `first
+ * stanza`, `for 5th kyu`) LEADS the line when present, ahead of the identity qualifiers: it says
+ * where the work is right now, which matters more to a session being programmed than which piece
+ * this is. The row's own second line leads with it too (repertoireListCopy.ts's buildSecondLine)
+ * — one vocabulary, one lead position, for both the coach and the screen.
  */
 function practiceNote(i: RepertoireLike): string {
   const parts: string[] = [];
@@ -72,7 +78,8 @@ function practiceNote(i: RepertoireLike): string {
   if (q.collection) parts.push(`collection: ${q.collection}`);
   if (q.catalogue) parts.push(`catalogue: ${q.catalogue}`);
   if (q.rank !== undefined) parts.push(`rank: ${q.rank}`);
-  return parts.join('; ');
+  const rest = parts.join('; ');
+  return q.note ? (rest ? `${q.note} · ${rest}` : q.note) : rest;
 }
 
 /** The words of the most recent log that NAMES this piece, or null. Never a guess: the shelf-wide
