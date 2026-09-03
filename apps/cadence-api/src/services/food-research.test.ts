@@ -123,6 +123,74 @@ describe('researchFood', () => {
 });
 
 /**
+ * `alternates` — the other products the lookup weighed and did not pick (owner's principle,
+ * TOOL-HARNESS.md: "code must not pre-filter to one winner"). A table of good and bad inputs, the
+ * shape every parser here gets (CLAUDE.md: "every button gets a table test").
+ */
+describe('researchFood — alternates', () => {
+  const runWith = async (alternates: unknown, name = 'Dill Pickle Peanuts') => {
+    const parsed = JSON.parse(GOOD) as Record<string, unknown>;
+    parsed.name = name;
+    parsed.alternates = alternates;
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify(parsed) });
+    return researchFood('u1', { name: 'dill pickle peanuts', brand: 'Couche-Tard' });
+  };
+
+  it('no alternates key at all: empty array, not undefined', async () => {
+    const parsed = JSON.parse(GOOD) as Record<string, unknown>;
+    delete parsed.alternates;
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify(parsed) });
+    const out = await researchFood('u1', { name: 'dill pickle peanuts', brand: 'Couche-Tard' });
+    expect(out!.alternates).toEqual([]);
+  });
+
+  it('an explicit empty array: stays empty', async () => {
+    const out = await runWith([]);
+    expect(out!.alternates).toEqual([]);
+  });
+
+  it('a real list of strings: kept, trimmed', async () => {
+    const out = await runWith(['  Costco Dill Pickle Peanuts  ', "Nature's Garden Dill Pickle Mix"]);
+    expect(out!.alternates).toEqual(['Costco Dill Pickle Peanuts', "Nature's Garden Dill Pickle Mix"]);
+  });
+
+  it('junk entries (non-strings, blanks) are dropped, real ones kept', async () => {
+    const out = await runWith([42, null, '  ', 'A Real Product', {}, ['nested']]);
+    expect(out!.alternates).toEqual(['A Real Product']);
+  });
+
+  it('duplicates collapse to one, case-insensitively', async () => {
+    const out = await runWith([
+      'Costco Dill Pickle Peanuts',
+      'costco dill pickle peanuts',
+      'COSTCO DILL PICKLE PEANUTS',
+    ]);
+    expect(out!.alternates).toEqual(['Costco Dill Pickle Peanuts']);
+  });
+
+  it('the pick repeated in its own alternates list is dropped', async () => {
+    const out = await runWith(
+      ['Dill Pickle Peanuts', 'dill pickle peanuts', 'A Different Product'],
+      'Dill Pickle Peanuts',
+    );
+    expect(out!.alternates).toEqual(['A Different Product']);
+  });
+
+  it('caps at 5 and truncates an overlong name at 80 chars', async () => {
+    const long = 'X'.repeat(200);
+    const many = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+    const out = await runWith([long, ...many]);
+    expect(out!.alternates).toHaveLength(5);
+    expect(out!.alternates[0]!.length).toBe(80);
+  });
+
+  it('a non-array value is treated as no alternates', async () => {
+    const out = await runWith('not an array');
+    expect(out!.alternates).toEqual([]);
+  });
+});
+
+/**
  * MP35 — every one of the ten silent `return null`s in this file now carries a `reason` a caller
  * can read. `researchFood` above still returns bare `null` (it is `meal-enrich.ts`'s contract, a
  * file this parcel does not own); `researchFoodOutcome` is the same lookup with the reason kept.

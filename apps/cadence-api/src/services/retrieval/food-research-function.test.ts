@@ -101,4 +101,46 @@ describe('research_food.render', () => {
     expect(out).toContain('Generic Bar');
     expect(out).not.toContain('Source:');
   });
+
+  it('names the other products weighed when alternates came back non-empty', () => {
+    const out = RESEARCH_FOOD.render({
+      result: {
+        food: {
+          name: 'Dill Pickle Peanuts',
+          brand: 'The Carolina Nut Co.',
+          base_unit: 'g',
+          macros_per_base: { kcal: 607, protein_g: 25, carbs_g: 25, fat_g: 46.4 },
+          servings: [{ label: '100g', unit: 'g', amount_g: 100 }],
+          confidence: 0.7,
+        },
+        source_url: 'https://carolinanut.com/products/dill-pickle',
+        alternates: ['Costco Dill Pickle Peanuts', "Nature's Garden Dill Pickle Mix"],
+      },
+      reason: null,
+    } as never);
+    expect(out).toContain(
+      'Other products that matched the name: Costco Dill Pickle Peanuts, ' + "Nature's Garden Dill Pickle Mix.",
+    );
+    // Facts, not picks (owner red line): the tool never tells her which one to ask about or offer.
+    expect(out).not.toMatch(/\bask (them )?which\b/i);
+  });
+
+  it('says nothing about alternates when the list is empty', () => {
+    const out = RESEARCH_FOOD.render({
+      result: {
+        food: {
+          name: 'Generic Bar',
+          brand: null,
+          base_unit: 'item',
+          macros_per_base: { kcal: 200 },
+          servings: [{ label: '1 item', unit: 'item', amount_g: 1 }],
+          confidence: 0.5,
+        },
+        source_url: null,
+        alternates: [],
+      },
+      reason: null,
+    } as never);
+    expect(out).not.toContain('Other products that matched the name');
+  });
 });

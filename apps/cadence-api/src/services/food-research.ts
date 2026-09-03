@@ -32,6 +32,12 @@ export interface ResearchedFood {
   /** A transient row — NOT inserted; pinItem persists it (with real servings) when the log commits. */
   food: Food;
   source_url: string | null;
+  /**
+   * Other product names the lookup weighed and did not pick, when several plausibly matched
+   * (owner's principle, TOOL-HARNESS.md: "code must not pre-filter to one winner"). Empty when
+   * only one product plausibly matched — never padded to look thorough.
+   */
+  alternates: string[];
 }
 
 /**
@@ -104,6 +110,31 @@ function firstJsonObject(raw: string): Record<string, unknown> | null {
 function num(v: unknown): number | null {
   const n = typeof v === 'string' ? Number(v) : v;
   return typeof n === 'number' && Number.isFinite(n) ? n : null;
+}
+
+const MAX_ALTERNATES = 5;
+const MAX_ALTERNATE_LEN = 80;
+
+/**
+ * The other names the lookup weighed and did not pick. Trimmed, capped, deduplicated, and never
+ * including the name it actually returned — that would just be the pick repeating itself.
+ */
+function toAlternates(raw: unknown, pickedName: string): string[] {
+  if (!Array.isArray(raw)) return [];
+  const pick = pickedName.trim().toLowerCase();
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of raw) {
+    if (typeof v !== 'string') continue;
+    const name = v.trim().slice(0, MAX_ALTERNATE_LEN);
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (key === pick || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+    if (out.length >= MAX_ALTERNATES) break;
+  }
+  return out;
 }
 
 function toNutrients(raw: unknown): FoodNutrients {
@@ -210,6 +241,7 @@ function shapeResult(parsed: Record<string, unknown>, fallbackBrand: string | nu
     typeof parsed.source_url === 'string' && /^https?:\/\//.test(parsed.source_url)
       ? parsed.source_url.slice(0, 500)
       : null;
+  const alternates = toAlternates(parsed.alternates, name);
 
   const food: Food = {
     food_id: '',
@@ -228,7 +260,7 @@ function shapeResult(parsed: Record<string, unknown>, fallbackBrand: string | nu
     photo_ref: null,
     created_at: '',
   };
-  return { result: { food, source_url }, reason: null };
+  return { result: { food, source_url, alternates }, reason: null };
 }
 
 /**
