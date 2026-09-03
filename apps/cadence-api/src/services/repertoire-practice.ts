@@ -91,8 +91,8 @@ const MAX_COLLISION_GROUPS = 3;
 export function renderRepertoireForCoach(items: RepertoireItem[], now?: number): string {
   const body = renderRepertoire(items, now);
   if (!body) return body;
-  // Parked items are out of the rotation but still on the shelf, and a title she cannot resolve is
-  // a problem wherever it sits — so collisions are computed over everything rendered.
+  // Over every standing: a title she cannot resolve is a problem wherever it sits, and a retired
+  // piece can collide with a queued one just as easily as two in the rotation can.
   const collisions = collidingTitles(items);
   if (collisions.length === 0) return body;
 

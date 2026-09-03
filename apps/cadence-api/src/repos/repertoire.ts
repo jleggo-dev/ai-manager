@@ -23,14 +23,17 @@ export async function listRepertoire(userId: string): Promise<RepertoireItem[]> 
 }
 
 /**
- * The distinct goal ids that have at least one item still in play (not parked) — plus null when
- * unattached items exist. Feeds the Progress page's availability/derivation ("does this goal have
- * a repertoire card to show") without shipping the whole table for that yes/no.
+ * The distinct goal ids that have at least one item at all — plus null when unattached items
+ * exist. Feeds the Progress page's availability/derivation ("does this goal have a repertoire card
+ * to show") without shipping the whole table for that yes/no.
+ *
+ * No standing is excluded. It used to skip 'parked'; under the four standings there is no such
+ * thing, and each of the four earns a place on the card — retired counts as learned, queued as not
+ * started. A goal whose shelf is entirely finished material still has something to show.
  */
 export async function listRepertoireGoalIds(userId: string): Promise<(string | null)[]> {
   const rows = await sql<{ goal_id: string | null }[]>`
-    select distinct goal_id from cadence.repertoire
-    where user_id = ${userId} and status <> 'parked'`;
+    select distinct goal_id from cadence.repertoire where user_id = ${userId}`;
   return rows.map((r) => r.goal_id);
 }
 

@@ -68,20 +68,40 @@ describe('resolveRepertoire', () => {
     });
   });
 
-  it('excludes parked items entirely, and week counts floor at 1', () => {
+  /**
+   * The four standings (owner design 2026-09-02). Nothing is excluded from the card any more —
+   * `parked`, the one standing that was, is gone. `retired` is finished material and counts as
+   * learned (retiring must never shrink "learned this year"); `queued` is material they have yet
+   * to start, which is the state 'not started' already means.
+   */
+  it('counts retired as learned and queued as not started, and week counts floor at 1', () => {
     const result = resolveRepertoire(
       [
-        item('Moonlight Sonata', 'parked'),
+        item('Moonlight Sonata', 'retired', { learned_at: '2026-05-11T10:00:00Z' }),
+        item('Frankie and Johnnie', 'queued'),
         item('Arabesque', 'working', { started_at: '2026-08-30T09:00:00Z', last_practiced_at: '2026-08-30T10:00:00Z' }),
       ],
       'g-piano',
       NOW,
     );
     expect(result).toEqual({
-      items: [{ label: 'Arabesque', state: 'in_progress', weeks_in: 1 }],
-      learned: 0, // the parked item never counts anywhere
+      items: [
+        { label: 'Moonlight Sonata', state: 'learned', learned_month: '2026-05' },
+        { label: 'Arabesque', state: 'in_progress', weeks_in: 1 },
+        { label: 'Frankie and Johnnie', state: 'not_started' },
+      ],
+      learned: 1,
       in_progress: 1,
       noun: 'pieces',
+    });
+  });
+
+  it('a retired item they already knew keeps showing as learned with no month — never an invented one', () => {
+    const result = resolveRepertoire([item('Für Elise', 'retired')], 'g-piano', NOW);
+    expect('items' in result && result.items[0]).toEqual({
+      label: 'Für Elise',
+      state: 'learned',
+      learned_month: null,
     });
   });
 

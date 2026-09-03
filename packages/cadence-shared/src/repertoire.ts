@@ -49,6 +49,60 @@ export function tempoMeta(spec: MetronomeSpec): Record<string, unknown> {
   return { [TEMPO_BPM_KEY]: spec.bpm, [TEMPO_METER_KEY]: spec.meter };
 }
 
+/* ── Qualifiers ─────────────────────────────────────────────────────────────────────────────
+   The fields that tell two pieces with one title apart — composer, the collection it comes from,
+   a catalogue number — and, for material that has an order (a book, a grading ladder), its rank.
+   Structured in `meta` so the title can stay short and the qualifier does the work: "Minuet in G
+   Major" is three pieces on one shelf until BWV 822 or the Anna Magdalena notebook is named.
+
+   Spelled ONCE here. The seed writes these, the item screen edits them, identity reads them for
+   the collision check, and the list renders them on the row's second line — four call sites in
+   three packages, which is exactly the hand-copied-key drift the weigh-in regex taught. */
+export const COMPOSER_KEY = 'composer';
+export const COLLECTION_KEY = 'collection';
+export const CATALOGUE_KEY = 'catalogue';
+/** 1-based position in an ordered collection. Present on every item of a goal ⇒ the list is a ladder. */
+export const RANK_KEY = 'rank';
+
+export interface PieceQualifiers {
+  composer?: string;
+  collection?: string;
+  catalogue?: string;
+  rank?: number;
+}
+
+const qualifierString = (v: unknown): string | undefined =>
+  typeof v === 'string' && v.trim() ? v.trim().slice(0, 120) : undefined;
+
+/** The qualifiers on an item, or nothing where a field is absent or unusable. Never throws. */
+export function pieceQualifiers(meta: Record<string, unknown> | null | undefined): PieceQualifiers {
+  if (!meta) return {};
+  const out: PieceQualifiers = {};
+  const composer = qualifierString(meta[COMPOSER_KEY]);
+  const collection = qualifierString(meta[COLLECTION_KEY]);
+  const catalogue = qualifierString(meta[CATALOGUE_KEY]);
+  const rank = meta[RANK_KEY];
+  if (composer) out.composer = composer;
+  if (collection) out.collection = collection;
+  if (catalogue) out.catalogue = catalogue;
+  if (typeof rank === 'number' && Number.isInteger(rank) && rank >= 1) out.rank = rank;
+  return out;
+}
+
+/** The meta PATCH for a set of qualifiers — only the fields given, so a partial edit never blanks
+ *  the others. Merged into meta by the repo, never written whole. */
+export function qualifierMeta(q: PieceQualifiers): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  const composer = qualifierString(q.composer);
+  const collection = qualifierString(q.collection);
+  const catalogue = qualifierString(q.catalogue);
+  if (composer) patch[COMPOSER_KEY] = composer;
+  if (collection) patch[COLLECTION_KEY] = collection;
+  if (catalogue) patch[CATALOGUE_KEY] = catalogue;
+  if (typeof q.rank === 'number' && Number.isInteger(q.rank) && q.rank >= 1) patch[RANK_KEY] = q.rank;
+  return patch;
+}
+
 const time = (iso?: string | null): number => (iso ? new Date(iso).getTime() : Number.NaN);
 
 /** Longest-rest-first: never-practiced beats practiced; ties break by started_at (oldest first),
@@ -96,6 +150,41 @@ const tempoNote = (i: RepertoireLike): string | null => {
 const GROUP_CAP = 15;
 
 /**
+ * The four groups, in the order she reads them, each header carrying the standing's instruction.
+ *
+ * Two things every header must do, because this text is read by a MODEL (tool-catalog.ts, "HOW TO
+ * WRITE THE STRINGS IN THIS FILE"):
+ *
+ *  1. **State what to DO with the group**, not what it is. "Keeping up" alone makes her infer a
+ *     rule; "draw warm-up and play-out material from here, longest rest first" is one.
+ *  2. **Name the status word she writes back.** The user-facing label and the schema word differ
+ *     on purpose, and one pair collides outright: the group called "Learned" is `retired`, while
+ *     `learned` is the verb for the opposite move (crossed into Keeping up just now, celebrated
+ *     once). Without the word in the header she would write status "learned" to file something
+ *     under Learned and land it in the rotation with a cheer attached.
+ */
+const GROUPS: Array<{ status: RepertoireStatus; header: string }> = [
+  {
+    status: 'working',
+    header: 'Learning (status "working") — work these in the learn part of each session; keep it to one or two:',
+  },
+  {
+    status: 'queued',
+    header:
+      'Up next (status "queued") — not started yet, in the user\'s order. Propose the top one when something is learned; never start one unasked:',
+  },
+  {
+    status: 'known',
+    header:
+      'Keeping up (status "known") — learned and in the rotation. Draw warm-up and play-out material from here, longest rest first:',
+  },
+  {
+    status: 'retired',
+    header: 'Learned (status "retired") — finished. Count these; never schedule them:',
+  },
+];
+
+/**
  * The compact text both consumers inject — get_repertoire's render and prescribe-session's
  * {{repertoire}} variable. One renderer so the coach in chat and the coach programming a session
  * read the same facts in the same words. Empty string when there is nothing on file. The known
@@ -120,15 +209,13 @@ export function renderRepertoire(items: RepertoireLike[], now = Date.now()): str
     if (group.length > GROUP_CAP) shown.push(`  …and ${group.length - GROUP_CAP} more on file`);
     return shown;
   };
-  const working = items.filter((i) => i.status === 'working');
-  const known = [...items.filter((i) => i.status === 'known')].sort(byRest);
-  const parked = items.filter((i) => i.status === 'parked');
   const sections: string[] = [];
-  if (working.length) sections.push(`Working on now:\n${capped(working).join('\n')}`);
-  if (known.length)
-    sections.push(
-      `Known — the rotation pool for review and warm material, longest rest first:\n${capped(known).join('\n')}`,
-    );
-  if (parked.length) sections.push(`Set aside for now: ${parked.map((i) => i.label).join('; ')}`);
+  for (const spec of GROUPS) {
+    const members = items.filter((i) => i.status === spec.status);
+    // Only 'known' rotates, so only 'known' is ordered by rest — that ordering is what makes a cut
+    // safe there (the DUE NEXT item can never be the one dropped).
+    const ordered = spec.status === 'known' ? [...members].sort(byRest) : members;
+    if (ordered.length) sections.push(`${spec.header}\n${capped(ordered).join('\n')}`);
+  }
   return sections.join('\n');
 }

@@ -81,15 +81,29 @@ describe('matchableItems', () => {
     item('Piano piece', { goal_id: PIANO }),
     item('Run drill', { goal_id: RUN }),
     item('Unlinked', { goal_id: null }),
-    item('Set aside', { goal_id: PIANO, status: 'parked' }),
+    item('Frankie and Johnnie', { goal_id: PIANO, status: 'queued' }),
+    item('Cradle Song', { goal_id: PIANO, status: 'retired' }),
   ];
 
   it("keeps this goal's items and unlinked ones, drops another goal's", () => {
-    expect(matchableItems(items, PIANO).map((i) => i.label)).toEqual(['Piano piece', 'Unlinked']);
+    expect(matchableItems(items, PIANO).map((i) => i.label)).toEqual([
+      'Piano piece',
+      'Unlinked',
+      'Frankie and Johnnie',
+      'Cradle Song',
+    ]);
   });
 
-  it('never returns a parked item — it is out of the rotation by definition', () => {
-    expect(matchableItems(items, PIANO).some((i) => i.status === 'parked')).toBe(false);
+  /**
+   * The scope is the GOAL, never the standing (owner design 2026-09-02). Playing something you
+   * have retired, or reading through one you have not started, is a real thing that happened —
+   * stamping `last_practiced_at` for it is honest, and it is the only way the date is ever true.
+   * Only the ROTATION is standing-scoped, and that is `pickDueNext`'s job, not this one's.
+   */
+  it('matches every standing — a mention is a mention, retired and queued included', () => {
+    const statuses = matchableItems(items, PIANO).map((i) => i.status);
+    expect(statuses).toContain('queued');
+    expect(statuses).toContain('retired');
   });
 
   it('an unscoped session still cannot reach another goal’s items', () => {
