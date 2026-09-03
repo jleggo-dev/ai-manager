@@ -36,6 +36,10 @@ interface BoundProps {
   onDrill?: (activity: string) => void;
   /** photo_pair drill-down: open the "All photos" screen. */
   onOpenPhotos?: () => void;
+  /** repertoire drill-down (P6 "the room"): open the full list screen. `goalId` carries the
+   *  card's own scope (null for an unscoped "everything they keep" card); `goalName` is the
+   *  card's own warm heading, for the list screen's header. */
+  onOpenRepertoire?: (goalId: string | null, goalName: string | undefined) => void;
 }
 
 function RhythmBound({ spec, window }: BoundProps) {
@@ -126,12 +130,21 @@ function FeltWeeksBound({ spec }: BoundProps) {
   return <WidgetSection spec={spec} payload={{ kind: 'felt_week', data }} family="mind" />;
 }
 
-function RepertoireBound({ spec }: BoundProps) {
+function RepertoireBound({ spec, onOpenRepertoire }: BoundProps) {
   // Unscoped (no goal_id) is a real mode: everything they keep. The repertoire has no time axis,
   // so the page's window control honestly does not reach this card.
   const { data } = useProgressRepertoire(spec.source?.goal_id);
   if (!data || 'omission' in data || data.items.length === 0) return null;
-  return <WidgetSection spec={spec} payload={{ kind: 'repertoire', data }} family="practice" />;
+  return (
+    <div>
+      <WidgetSection spec={spec} payload={{ kind: 'repertoire', data }} family="practice" />
+      {onOpenRepertoire && (
+        <button className="prog-addbtn" onClick={() => onOpenRepertoire(spec.source?.goal_id ?? null, spec.title)}>
+          everything you&rsquo;re learning ›
+        </button>
+      )}
+    </div>
+  );
 }
 
 function ThenNowBound({ spec }: BoundProps) {

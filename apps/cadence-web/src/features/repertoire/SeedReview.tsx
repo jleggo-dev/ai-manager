@@ -15,6 +15,10 @@
  *  - **A fault is not an empty book.** When the lookup breaks, this says so and offers a retry.
  *    It never renders "0 pieces found" over a crash — that is a claim about the person's book,
  *    made in our voice, and they would believe it.
+ *
+ * Its stylesheet (`styles/seed-review.css`) loads centrally from main.tsx now (P6: this screen is
+ * real navigation from the list screen, not preview-only, so its rules load like every other
+ * screen's rather than riding in with whichever component happens to mount first).
  */
 import { useEffect, useMemo, useState } from 'react';
 import { confirmSeed, expandCollection } from '../../lib/api/repertoire-seed.ts';
@@ -33,7 +37,6 @@ import {
   writableRows,
   type SeedRowState,
 } from './seedRows.ts';
-import '../../styles/seed-review.css';
 
 const COACH_LINE =
   "Here's the book in order. Tap the piece you're on now and I'll mark everything before it as Keeping up. Tick or untick anything I got wrong.";
