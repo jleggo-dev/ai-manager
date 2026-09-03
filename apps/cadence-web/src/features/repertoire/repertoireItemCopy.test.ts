@@ -146,4 +146,18 @@ describe('buildCaption — every segment present only when there is a fact behin
     });
     expect(buildCaption(full, 8)).toBe('Learned · learned Jan · ♩ = 60 · 8 sessions');
   });
+
+  /**
+   * P8's word swap (books read "Finished", not "Learned") reaches this caption too, via
+   * `standingWordFor` — a bug the item screen still had after P8 first shipped: the list row said
+   * "Finished" for a book while this caption, reading `STANDING_WORDS` directly, still said
+   * "Learned". Table: the domain that swaps, and the one that must not.
+   */
+  it('a finished book\'s caption says "Finished"', () => {
+    expect(buildCaption(item({ status: 'retired', kind: 'book' }))).toBe('Finished');
+  });
+
+  it('a finished piece\'s caption still says "Learned" — the swap is books-only', () => {
+    expect(buildCaption(item({ status: 'retired', kind: 'piece' }))).toBe('Learned');
+  });
 });
