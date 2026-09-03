@@ -24,6 +24,7 @@ describe('readProgressLine', () => {
    */
   it('holds the last line past the longest measured run', () => {
     const tail = READ_PHOTO_STEPS.at(-1)?.text;
+    expect(tail).toBeDefined();
     expect(readProgressLine(READ_PHOTO_STEPS, 60_000)).toBe(tail);
     expect(readProgressLine(READ_PHOTO_STEPS, 600_000)).toBe(tail);
   });
