@@ -26,12 +26,20 @@ vi.mock('../repos/occurrence-sessions.ts', () => ({
   clearOccurrenceSession: vi.fn().mockResolvedValue(true),
   setOccurrenceSessionIfEmpty: vi.fn().mockResolvedValue(true),
 }));
+// All three exports, not just the one this file drives: repertoire-practice.ts imports the other
+// two, and a mock missing an export makes that import throw at load.
+vi.mock('../repos/repertoire.ts', () => ({
+  listRepertoire: vi.fn().mockResolvedValue([]),
+  stampPracticed: vi.fn().mockResolvedValue(undefined),
+  clearPendingSessionsForGoal: vi.fn().mockResolvedValue(0),
+}));
 
 import { runJobBySlug } from '../ai/aim.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getOccurrenceWithActivity, listRecentLogsByTitle } from '../repos/occurrences.ts';
 import { clearOccurrenceSession, setOccurrenceSessionIfEmpty } from '../repos/occurrence-sessions.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
+import { listRepertoire } from '../repos/repertoire.ts';
 import { getOccurrenceDetail, prefetchImminentSessions, reviseSession } from './session-generate.ts';
 
 const GOOD = JSON.stringify({
@@ -93,6 +101,89 @@ describe('prescribe retry-on-normalize-null', () => {
     vi.mocked(runJobBySlug).mockRejectedValue(new Error('502'));
     await expect(getOccurrenceDetail('u1', 'o1')).rejects.toThrow('502');
     expect(runJobBySlug).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * A practice session is built from the standings, so the prompt is handed WHICH items each part
+ * draws on rather than asked to work it out: the warm-up (the Keeping up item rested longest), the
+ * swap (the next-rested), Learning with each piece's note and last words, and the top of Up next as
+ * a forecast. All four are empty for a goal with no shelf — an empty tag the template ignores, so a
+ * gym session's prompt is unchanged.
+ */
+describe('the prescribe prompt is handed the practice standings', () => {
+  const row = (label: string, status: string, extra: Record<string, unknown> = {}) => ({
+    item_id: label,
+    user_id: 'u1',
+    goal_id: 'g-piano',
+    label,
+    status,
+    kind: 'piece',
+    meta: null,
+    started_at: '2026-06-01T00:00:00.000Z',
+    learned_at: null,
+    last_practiced_at: null,
+    ...extra,
+  });
+
+  const SHELF = [
+    row('Arietta', 'known'), // never worked ⇒ rests longest ⇒ the warm-up
+    row('Écossaise (Hummel)', 'known', { last_practiced_at: '2026-08-20T18:00:00.000Z' }),
+    row('Hungarian Folk Song', 'working'),
+    row('Melody (Schumann)', 'queued'),
+    row('Cradle Song', 'retired'),
+  ];
+
+  const varsOfLastCall = () => vi.mocked(runJobBySlug).mock.calls.at(-1)?.[2] as Record<string, string>;
+
+  beforeEach(() => {
+    vi.mocked(runJobBySlug).mockResolvedValue({ raw: GOOD } as never);
+    vi.mocked(listRepertoire).mockResolvedValue([] as never);
+  });
+
+  it('names the warm-up, the swap, Learning and the top of Up next', async () => {
+    vi.mocked(listGoalsByStatus).mockResolvedValueOnce([{ goal_id: 'g-piano', area: 'practice' }] as never);
+    vi.mocked(getOccurrenceWithActivity).mockResolvedValue({ ...pendingOccurrence(), goal_id: 'g-piano' } as never);
+    vi.mocked(listRepertoire).mockResolvedValueOnce(SHELF as never);
+
+    await getOccurrenceDetail('u1', 'o1');
+
+    const vars = varsOfLastCall();
+    expect(vars.warmup_pick).toContain('Arietta');
+    expect(vars.next_rested).toContain('Écossaise (Hummel)');
+    expect(vars.learning).toContain('Hungarian Folk Song');
+    expect(vars.up_next_top).toContain('Melody (Schumann)');
+    // Learned is never scheduled, and Up next is a forecast — neither is a part of the session.
+    expect(`${vars.warmup_pick}${vars.next_rested}${vars.learning}`).not.toContain('Cradle Song');
+    expect(`${vars.warmup_pick}${vars.next_rested}${vars.learning}`).not.toContain('Melody (Schumann)');
+  });
+
+  it('sends all four empty for a goal whose shelf holds nothing of its own', async () => {
+    vi.mocked(listGoalsByStatus).mockResolvedValueOnce([{ goal_id: 'g-gym', area: 'movement' }] as never);
+    vi.mocked(getOccurrenceWithActivity).mockResolvedValue({ ...pendingOccurrence(), goal_id: 'g-gym' } as never);
+    // Unlinked items reach practice-area goals only; these are the piano goal's.
+    vi.mocked(listRepertoire).mockResolvedValueOnce(SHELF as never);
+
+    await getOccurrenceDetail('u1', 'o1');
+
+    const vars = varsOfLastCall();
+    expect(vars.warmup_pick).toBe('');
+    expect(vars.next_rested).toBe('');
+    expect(vars.learning).toBe('');
+    expect(vars.up_next_top).toBe('');
+  });
+
+  it('sends all four empty when the shelf could not be read, and says so in <repertoire>', async () => {
+    vi.mocked(listGoalsByStatus).mockResolvedValueOnce([{ goal_id: 'g-piano', area: 'practice' }] as never);
+    vi.mocked(getOccurrenceWithActivity).mockResolvedValue({ ...pendingOccurrence(), goal_id: 'g-piano' } as never);
+    vi.mocked(listRepertoire).mockRejectedValueOnce(new Error('db down'));
+
+    await getOccurrenceDetail('u1', 'o1');
+
+    const vars = varsOfLastCall();
+    expect(vars.warmup_pick).toBe('');
+    expect(vars.learning).toBe('');
+    expect(vars.repertoire).toContain('NOT an empty record');
   });
 });
 
