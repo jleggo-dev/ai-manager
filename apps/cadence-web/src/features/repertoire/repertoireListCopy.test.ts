@@ -175,12 +175,13 @@ describe('buildSecondLine — composer · catalogue · collection · date, only 
   });
 
   /**
-   * The practice note (P8) — leads the line, ahead of composer/catalogue/collection, so a book or
-   * a kata (which rarely carries the other three) still gets an informative first segment.
+   * The practice note (P8) — sits after composer/catalogue/collection (the design's own order:
+   * WHICH piece, then WHERE the work is, then WHEN), so a book or a kata (which rarely carries the
+   * other three) still gets an informative line — the note is simply the first segment present.
    */
-  it('a stored note leads the line, ahead of composer', () => {
+  it('a stored note trails the identity qualifiers, ahead of the date', () => {
     const i = item({ meta: { [PRACTICE_NOTE_KEY]: 'bars 9-16', [COMPOSER_KEY]: 'Debussy' }, last_practiced_at: null });
-    expect(buildSecondLine(i, now)).toBe('bars 9-16 · Debussy');
+    expect(buildSecondLine(i, now)).toBe('Debussy · bars 9-16');
   });
 
   it('a note with nothing else on file is the whole second line — kata (for 5th kyu)', () => {
@@ -269,39 +270,119 @@ describe('orderGroupItems', () => {
   });
 
   /**
-   * A kata ladder (P8) — a shelf where every item carries a rank reads in rank order instead of
-   * the standing's own rule. All-or-nothing: table-tested for a full ladder and its near-miss
-   * (one ungraded item), on every standing this router handles.
+   * A kata ladder (P8, bug fix) — a shelf reads in rank order instead of the standing's own rule
+   * ONLY when every item is BOTH a `LADDER_KINDS` domain AND ranked. Rank alone is not enough:
+   * P4's book seed writes `rank` on every row it expands, so a fully-seeded Keeping-up group of
+   * ordinary PIECES is fully ranked too, and must keep rotating by rest (`byRest`, the coach's own
+   * `pickDueNext` rule) or the screen and the coach would disagree about the first row. Table:
+   * a ranked `piece` group (rest wins), a ranked `kata` group (rank wins), one ungraded kata
+   * (falls back), and a mixed kata+piece group (falls back) — on every standing this router
+   * handles.
    */
-  describe('a full ladder (P8) overrides the standing rule', () => {
+  describe('a full ladder (P8) overrides the standing rule — but only for a ladder DOMAIN', () => {
     const ranked = (rank: number, label: string, status: RepertoireItem['status'] = 'known') =>
-      item({ status, label, meta: { [RANK_KEY]: rank } });
+      item({ status, label, kind: 'kata', meta: { [RANK_KEY]: rank } });
 
-    it('with ranks, order is by rank — even for known, where rest order would otherwise win', () => {
+    it('with ranks AND the kata domain, order is by rank — even for known, where rest order would otherwise win', () => {
       const items = [
-        item({ status: 'known', label: 'brown belt', meta: { [RANK_KEY]: 3 }, last_practiced_at: daysAgo(1) }),
-        item({ status: 'known', label: 'yellow belt', meta: { [RANK_KEY]: 1 }, last_practiced_at: daysAgo(9) }),
-        item({ status: 'known', label: 'orange belt', meta: { [RANK_KEY]: 2 }, last_practiced_at: daysAgo(19) }),
+        item({
+          status: 'known',
+          label: 'brown belt',
+          kind: 'kata',
+          meta: { [RANK_KEY]: 3 },
+          last_practiced_at: daysAgo(1),
+        }),
+        item({
+          status: 'known',
+          label: 'yellow belt',
+          kind: 'kata',
+          meta: { [RANK_KEY]: 1 },
+          last_practiced_at: daysAgo(9),
+        }),
+        item({
+          status: 'known',
+          label: 'orange belt',
+          kind: 'kata',
+          meta: { [RANK_KEY]: 2 },
+          last_practiced_at: daysAgo(19),
+        }),
       ];
       // Rest order alone would read orange (19d), yellow (9d), brown (1d) — rank order overrides it.
       expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['yellow belt', 'orange belt', 'brown belt']);
     });
 
-    it('remove one rank and the shelf falls back to the standing rule (known: rest order)', () => {
+    it('THE BUG: a fully-ranked group of ordinary PIECES sorts by rest, never by rank', () => {
       const items = [
-        item({ status: 'known', label: 'yellow belt', meta: { [RANK_KEY]: 1 }, last_practiced_at: daysAgo(1) }),
-        item({ status: 'known', label: 'ungraded', meta: null, last_practiced_at: daysAgo(19) }),
-        item({ status: 'known', label: 'orange belt', meta: { [RANK_KEY]: 2 }, last_practiced_at: daysAgo(9) }),
+        item({ status: 'known', label: 'A', kind: 'piece', meta: { [RANK_KEY]: 1 }, last_practiced_at: daysAgo(1) }),
+        item({ status: 'known', label: 'B', kind: 'piece', meta: { [RANK_KEY]: 2 }, last_practiced_at: daysAgo(9) }),
+        item({ status: 'known', label: 'C', kind: 'piece', meta: { [RANK_KEY]: 3 }, last_practiced_at: daysAgo(19) }),
+      ];
+      // Rank order would read A, B, C — that was the bug (P4's book seed writes rank on every row
+      // it expands, so a seeded shelf of pieces is fully ranked too). byRest — the coach's own
+      // pickDueNext rule — must win instead: longest-resting first, C, B, A.
+      expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['C', 'B', 'A']);
+    });
+
+    it('remove one rank from a kata group and it falls back to the standing rule (known: rest order)', () => {
+      const items = [
+        item({
+          status: 'known',
+          label: 'yellow belt',
+          kind: 'kata',
+          meta: { [RANK_KEY]: 1 },
+          last_practiced_at: daysAgo(1),
+        }),
+        item({ status: 'known', label: 'ungraded', kind: 'kata', meta: null, last_practiced_at: daysAgo(19) }),
+        item({
+          status: 'known',
+          label: 'orange belt',
+          kind: 'kata',
+          meta: { [RANK_KEY]: 2 },
+          last_practiced_at: daysAgo(9),
+        }),
       ];
       // Falls back to byRest: longest-resting (ungraded, 19 days) first — NOT rank order.
       expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['ungraded', 'orange belt', 'yellow belt']);
     });
 
-    it('a full ladder in Learned (retired) still reads by rank, not newest-finished-first', () => {
+    it('a mixed kata+piece group falls back too, even with every item ranked', () => {
       const items = [
-        item({ status: 'retired', label: 'black belt', meta: { [RANK_KEY]: 3 }, learned_at: daysAgo(1) }),
-        item({ status: 'retired', label: 'yellow belt', meta: { [RANK_KEY]: 1 }, learned_at: daysAgo(400) }),
-        item({ status: 'retired', label: 'orange belt', meta: { [RANK_KEY]: 2 }, learned_at: daysAgo(200) }),
+        item({
+          status: 'known',
+          label: 'yellow belt',
+          kind: 'kata',
+          meta: { [RANK_KEY]: 1 },
+          last_practiced_at: daysAgo(1),
+        }),
+        item({
+          status: 'known',
+          label: 'Étude',
+          kind: 'piece',
+          meta: { [RANK_KEY]: 2 },
+          last_practiced_at: daysAgo(19),
+        }),
+      ];
+      // Rank order would read yellow belt, Étude. byRest reads Étude (19d) before yellow belt (1d).
+      expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['Étude', 'yellow belt']);
+    });
+
+    it('a full kata ladder in Learned (retired) still reads by rank, not newest-finished-first', () => {
+      const items = [
+        item({ status: 'retired', label: 'black belt', kind: 'kata', meta: { [RANK_KEY]: 3 }, learned_at: daysAgo(1) }),
+        item({
+          status: 'retired',
+          label: 'yellow belt',
+          kind: 'kata',
+          meta: { [RANK_KEY]: 1 },
+          learned_at: daysAgo(400),
+        }),
+        item({
+          status: 'retired',
+          label: 'orange belt',
+          kind: 'kata',
+          meta: { [RANK_KEY]: 2 },
+          learned_at: daysAgo(200),
+        }),
       ];
       expect(orderGroupItems('retired', items).map((i) => i.label)).toEqual([
         'yellow belt',
@@ -310,7 +391,7 @@ describe('orderGroupItems', () => {
       ]);
     });
 
-    it('a single-item shelf with a rank is trivially a full ladder', () => {
+    it('a single-item kata shelf with a rank is trivially a full ladder', () => {
       expect(orderGroupItems('working', [ranked(1, 'white belt', 'working')]).map((i) => i.label)).toEqual([
         'white belt',
       ]);

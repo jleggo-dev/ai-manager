@@ -11,7 +11,14 @@
 import type { RepertoireItem, RepertoireStatus } from '@cadence/shared';
 import { byRest, pieceQualifiers } from '@cadence/shared';
 import type { RepertoireCollisionGroup } from '../../lib/api/repertoire-list.ts';
-import { MONTH_ABBR, STANDING_WORDS } from './repertoireItemCopy.ts';
+import { isBookKind, MONTH_ABBR, STANDING_WORDS } from './repertoireItemCopy.ts';
+import { BY_HEART_NOUNS } from '../progress/widgets/cardHeader.ts';
+
+// `standingWordFor` lives in repertoireItemCopy.ts (beside `STANDING_WORDS`, which the item
+// screen's own caption also reads) — this file already imports FROM that one, so the reverse
+// import would be a cycle. Re-exported here so RepertoireRow.tsx's existing import path keeps
+// working; it needs no logic of its own in this file.
+export { standingWordFor } from './repertoireItemCopy.ts';
 
 /**
  * The group header's own warm line — the coach's voice, never the model's. `REPERTOIRE_GROUPS` in
@@ -68,17 +75,19 @@ function rowDateFor(item: RepertoireItem, now: Date): string {
 }
 
 /**
- * note · composer · catalogue · collection · practiced-relative-date — each segment present only
+ * composer · catalogue · collection · note · practiced-relative-date — each segment present only
  * when there is a fact behind it. This is the one place all four domains (piece, book, kata,
  * verse — P8) meet: none of them gets a bespoke line, they simply carry different facts, and this
  * function only formats and orders whatever is on file (the file's own rule, stated above).
  *
  * The practice note (P8: "the practice note gets a store" — `bars 9-16`, `p. 240`, `first stanza`,
- * `for 5th kyu`) LEADS the line, ahead of the identity qualifiers — the same lead position the
- * coach's own prompt render uses for it (session-practice-facts.ts's `practiceNote`), one
- * vocabulary for both. Leading with it also means a book or a kata — which carry a note but
- * rarely a composer — still gets an informative first segment instead of an empty one, with no
- * per-domain branch anywhere in this function.
+ * `for 5th kyu`) sits after the identity qualifiers, right before the date — the design's own
+ * order: WHICH piece this is, then WHERE the work is, then WHEN it was last touched. This differs
+ * from session-practice-facts.ts's `practiceNote`, which still leads with the note for the coach's
+ * prompt — the two share a vocabulary, not a byte order, since a prompt reads best foregrounding
+ * what matters most to a session being programmed, while this row reads best naming the piece
+ * first. A book or a kata, which rarely carries composer/catalogue/collection, still gets an
+ * informative line: the note is simply the first (and often only) segment present.
  *
  * Catalogue sits right after composer, ahead of collection: it is the qualifier that actually
  * tells two same-titled pieces apart (three Minuets in G, one collection), so it earns the second
@@ -86,7 +95,7 @@ function rowDateFor(item: RepertoireItem, now: Date): string {
  */
 export function buildSecondLine(item: RepertoireItem, now: Date = new Date()): string {
   const q = pieceQualifiers(item.meta);
-  const segments = [q.note, q.composer, q.catalogue, q.collection, rowDateFor(item, now)].filter((s): s is string =>
+  const segments = [q.composer, q.catalogue, q.collection, q.note, rowDateFor(item, now)].filter((s): s is string =>
     Boolean(s),
   );
   return segments.join(' · ');
@@ -123,15 +132,33 @@ function byLearnedDesc(a: RepertoireItem, b: RepertoireItem): number {
   return a.label < b.label ? -1 : a.label > b.label ? 1 : 0;
 }
 
-/** A kata ladder (P8: "kata — a ladder"): a shelf whose items EVERY ONE carries a rank reads as
- *  one ordered ladder instead of the standing's own rule — the belt order matters more than which
- *  of the four groups a grade currently sits in. A single ungraded item means the ladder is not
- *  complete yet, so this is deliberately all-or-nothing: one missing rank falls back to the
- *  standing's normal order rather than sorting the unranked item to an arbitrary end. Checked
- *  against exactly the items `orderGroupItems` was handed — one standing at a time, the only
- *  slice this function ever sees. */
-function isFullLadder(items: RepertoireItem[]): boolean {
-  return items.length > 0 && items.every((i) => pieceQualifiers(i.meta).rank !== undefined);
+/**
+ * Domains where a full set of ranks means an ordered ladder — never bare rank presence. P4's
+ * "confirm" seed writes `rank` on EVERY row it expands from a book, so a fully-seeded Keeping-up
+ * group of ORDINARY PIECES is fully ranked too; pieces must keep rotating by rest regardless
+ * (`byRest` is the coach's own rule, the same one `pickDueNext` reads), or the screen and the
+ * coach would disagree about which row is due first — the one thing this list must never do. Same
+ * canonical-spelling reasoning as the book check (`isBookKind` in repertoireItemCopy.ts): an exact
+ * match against the coach's own kind word, not a fuzzy one.
+ */
+export const LADDER_KINDS: ReadonlySet<string> = new Set(['kata']);
+
+/** A kata ladder (P8: "kata — a ladder"): a shelf whose items are ALL a ladder kind (`LADDER_KINDS`)
+ *  AND every one carries a rank reads as one ordered ladder instead of the standing's own rule —
+ *  the belt order matters more than which of the four groups a grade currently sits in. Domain AND
+ *  rank are both required: rank alone is not enough (see `LADDER_KINDS`'s own doc). A single
+ *  ungraded item, or a single non-ladder-kind item, means the ladder is not complete or not a
+ *  ladder at all, so this is deliberately all-or-nothing on both counts — one exception falls back
+ *  to the standing's normal order rather than guessing a position for it. Checked against exactly
+ *  the items `orderGroupItems` was handed — one standing at a time, the only slice this function
+ *  ever sees. */
+export function isFullLadder(items: RepertoireItem[]): boolean {
+  return (
+    items.length > 0 &&
+    items.every(
+      (i) => LADDER_KINDS.has((i.kind ?? '').trim().toLowerCase()) && pieceQualifiers(i.meta).rank !== undefined,
+    )
+  );
 }
 
 /**
@@ -139,9 +166,12 @@ function isFullLadder(items: RepertoireItem[]): boolean {
  * (repertoireListCopy.test.ts) the way every deterministic router in this codebase is, because a
  * swapped case is silent: the wrong order still renders a plausible list, and nothing throws.
  *
- *  - a full ladder (every item ranked, P8) — rank order, ascending, REGARDLESS of standing: no
- *    rotation, no rank-drag-order-vs-rest distinction, just the belt order. Checked first, so a
- *    kata shelf never falls through to a standing rule that would silently re-sort it.
+ *  - a full ladder (every item a `LADDER_KINDS` domain AND ranked, P8) — rank order, ascending,
+ *    REGARDLESS of standing: no rotation, no rank-drag-order-vs-rest distinction, just the belt
+ *    order. Checked first, so a kata shelf never falls through to a standing rule that would
+ *    silently re-sort it. Rank alone is deliberately NOT enough — a fully-seeded shelf of ordinary
+ *    pieces is fully ranked too (P4's book seed writes `rank` on every row), and pieces must keep
+ *    rotating by rest (`isFullLadder`'s own doc has the incident this guards against).
  *  - `known` ("Keeping up") — longest rest first, via the SAME `byRest` the coach's own rotation
  *    reads (`pickDueNext`), so the screen and the coach can never disagree about what is due.
  *  - `queued` ("Up next") — the person's own drag order (`RANK_KEY`, ascending); unranked rows
@@ -175,27 +205,6 @@ export function splitUnattached<T extends { goal_id: string | null }>(items: T[]
   return { linked, unattached };
 }
 
-/**
- * Books — a record, not a repertoire (P8): `kind: 'book'` exactly (case-insensitive, trimmed),
- * the one canonical spelling, not a fuzzy match against the coach's free-text `kind` field. A
- * looser match risks a false positive on some other domain's kind that happens to contain the
- * word; an exact one is a router CLAUDE.md's own rule asks for a table test on, which
- * `repertoireListCopy.test.ts` carries.
- */
-function isBookKind(kind: string | null | undefined): boolean {
-  return (kind ?? '').trim().toLowerCase() === 'book';
-}
-
-/** The standing word for one item's own status. Identical to `STANDING_WORDS` for every standing
- *  and every domain except one: a book's Learned standing reads "Finished" — "Learned" reads oddly
- *  for a record that was simply read to the end (the design's own word swap, P8). Used for the
- *  ROW's own right-side label and its move-menu, which are per-item and so stay domain-accurate
- *  even in a shelf that mixes books with something else. */
-export function standingWordFor(kind: string | null | undefined, status: RepertoireStatus): string {
-  if (status === 'retired' && isBookKind(kind)) return 'Finished';
-  return STANDING_WORDS[status];
-}
-
 /** The GROUP HEADER's own standing word — "Finished" only when EVERY item in the group is a book:
  *  a header is one word for the whole section, so a shelf mixing a book into a pile of pieces
  *  keeps "Learned" rather than mislabeling the pieces. (The per-item row word above has no such
@@ -204,12 +213,6 @@ export function groupStandingWord(status: RepertoireStatus, items: RepertoireIte
   if (status === 'retired' && items.length > 0 && items.every((i) => isBookKind(i.kind))) return 'Finished';
   return STANDING_WORDS[status];
 }
-
-/** Nouns for material held in memory rather than played, read, or performed — "by heart" reads
- *  better than "learned" for a verse. Mirrors `cardHeader.ts`'s own `BY_HEART_NOUNS` (the progress
- *  card's header tag, P5) exactly in spirit — same idiom, same trigger — so a verses shelf reads
- *  the same verb on the card and on this list screen, never two words for one domain. */
-const BY_HEART_NOUNS = new Set(['verse', 'verses']);
 
 /** "14 PIECES · 6 LEARNED THIS YEAR" — both numbers and the noun come from the payload; this only
  *  formats them, never counts anything itself. The verb after the year count swaps for two
