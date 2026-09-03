@@ -51,8 +51,10 @@ export function headerGlyphPath(kind: WidgetKind): string {
  *  English idiom for that, and reads better than "learned" for a verse the way "learned" reads
  *  better for a piece. Keyed off the payload's own `noun` (never recomputed from `kind` here, and
  *  never hard-coded into the sentence itself) — 'learned' is the default for every other noun,
- *  including one we've never seen. */
-const BY_HEART_NOUNS: ReadonlySet<string> = new Set(['verse', 'verses']);
+ *  including one we've never seen. Exported: the list screen's own header count line
+ *  (repertoireListCopy.ts's `headerCountLine`, P8) reads the SAME set rather than a hand-copied
+ *  one, so the progress card and the list screen can never say two different words for one shelf. */
+export const BY_HEART_NOUNS: ReadonlySet<string> = new Set(['verse', 'verses']);
 
 /** "6 learned in 2026" / "5 by heart in 2026" (design frame 2c, owner 2026-09-02): the repertoire
  *  card's own measure is what was learned THIS YEAR, not the all-time counts — retiring a piece
