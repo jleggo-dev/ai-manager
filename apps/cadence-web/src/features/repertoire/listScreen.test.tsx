@@ -418,9 +418,11 @@ describe('scoping', () => {
 });
 
 /**
- * A kata ladder (P8 "kata — a ladder"): a shelf where every item carries a rank reads in rank
- * order instead of the standing's own rule, end to end through the real DOM (the ordering rule
- * itself is table-tested at the unit level in repertoireListCopy.test.ts; this pins the WIRING).
+ * A kata ladder (P8 "kata — a ladder"): a shelf where every item is a `LADDER_KINDS` domain AND
+ * carries a rank reads in rank order instead of the standing's own rule, end to end through the
+ * real DOM (the ordering rule itself, and the bug it fixes — rank alone is not enough, since P4's
+ * book seed writes rank on every piece row too — are table-tested at the unit level in
+ * repertoireListCopy.test.ts; this pins the WIRING, plus the rank number each ladder row shows).
  */
 describe('a kata ladder (P8)', () => {
   const belt = (rank: number, label: string, note?: string) =>
@@ -465,7 +467,7 @@ describe('a kata ladder (P8)', () => {
     expect(screen.getByText('for 5th kyu')).toBeInTheDocument();
   });
 
-  it('one ungraded belt and the shelf falls back to the standing rule (rest order)', async () => {
+  it('one ungraded belt and the shelf falls back to the standing rule (rest order), no ranks shown', async () => {
     const { container } = mount({
       items: [
         belt(1, 'Yellow belt'),
@@ -487,6 +489,29 @@ describe('a kata ladder (P8)', () => {
       .getAllByText(/^(Yellow belt|Ungraded belt)$/)
       .map((n) => n.textContent);
     expect(titles).toEqual(['Ungraded belt', 'Yellow belt']);
+    // Not a ladder any more (one item lacks a rank) — neither row shows a rank number.
+    expect(section.querySelector('.rl-row-rank')).toBeNull();
+  });
+
+  it('shows the rank 1, 2, 3 in order on a fully-ranked kata ladder, left of each title', async () => {
+    mount({
+      items: [belt(3, 'Brown belt'), belt(1, 'Yellow belt'), belt(2, 'Orange belt')],
+      collisions: [],
+    });
+    await screen.findByText('Yellow belt');
+    const ranks = [...document.querySelectorAll('.rl-row-rank')].map((el) => el.textContent);
+    expect(ranks).toEqual(['1', '2', '3']);
+  });
+
+  it('a piece row never shows a rank number, even though a book-seeded piece carries one too', async () => {
+    mount({
+      items: [
+        item({ item_id: 'seeded-piece', label: 'Prelude', status: 'known', kind: 'piece', meta: { [RANK_KEY]: 1 } }),
+      ],
+      collisions: [],
+    });
+    await screen.findByText('Prelude');
+    expect(document.querySelector('.rl-row-rank')).toBeNull();
   });
 });
 
@@ -598,7 +623,7 @@ describe('verses, by heart (P8)', () => {
     expect(screen.queryByText(/only|just|still|behind/i)).not.toBeInTheDocument();
   });
 
-  it('an author on file leads ahead of the note, reusing the same composer qualifier', async () => {
+  it('an author on file comes first, the note right after — reusing the same composer qualifier', async () => {
     mount({
       items: [
         item({
@@ -612,7 +637,7 @@ describe('verses, by heart (P8)', () => {
       collisions: [],
     });
     await screen.findByText('Sonnet 18');
-    expect(screen.getByText('first stanza · Shakespeare')).toBeInTheDocument();
+    expect(screen.getByText('Shakespeare · first stanza')).toBeInTheDocument();
   });
 
   it("the header count line reads BY HEART for verses — the same word P5's progress card uses", async () => {
