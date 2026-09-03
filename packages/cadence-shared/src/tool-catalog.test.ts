@@ -52,6 +52,26 @@ describe('tool catalog', () => {
     expect(SET_FLOWS.circuit.summary).toMatch(/rounds/i);
   });
 
+  // Owner ruling (2026-09-03): a set flow is a fact she reads, never a pick we make for her.
+  // "Omit mode for ordinary strength work" / "Use ONLY for ... a conditioning triplet" told her
+  // strength is straight, so a person who trains strength as a circuit never got one. The
+  // definitions stay (what A,A,B,B and A,B,A,B mean, that a circuit needs rounds); the steer goes.
+  it.each([
+    ['ordinary strength work', 'names a kind of work the flow is for'],
+    ['conditioning', 'names a kind of work the flow is for'],
+    ['mobility flow', 'names a kind of work the flow is for'],
+    ['finisher', 'names a kind of work the flow is for'],
+    ['Use ONLY', 'restricts the flow to a kind of work'],
+  ])('no set-flow summary says %s (%s)', (phrase) => {
+    for (const mode of BLOCK_MODE_KINDS) expect(SET_FLOWS[mode].summary).not.toMatch(new RegExp(phrase, 'i'));
+  });
+
+  it('both set flows say they are available for any kind of work, or say nothing about kinds at all', () => {
+    expect(SET_FLOWS.straight.summary).toMatch(/A,A,B,B/);
+    expect(SET_FLOWS.circuit.summary).toMatch(/A,B,A,B/);
+    expect(SET_FLOWS.circuit.summary).toMatch(/any kind of work/i);
+  });
+
   it('renders a hierarchical block that names every tool and the SET FLOW section', () => {
     const rendered = renderCoachToolCatalog();
     for (const kind of SESSION_TOOL_KINDS) expect(rendered).toContain(`• ${kind} —`);

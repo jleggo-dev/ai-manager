@@ -233,11 +233,11 @@ export interface SetFlowSpec {
 /** How a block's sets are sequenced — the second half of the coach's structural palette. */
 export const SET_FLOWS: Record<BlockMode, SetFlowSpec> = {
   straight: {
-    summary: "default — each exercise's sets done consecutively (A,A,B,B). Omit mode for ordinary strength work",
+    summary: 'the default when "mode" is omitted — each exercise\'s sets done in a row (A,A,B,B)',
   },
   circuit: {
     summary:
-      'rotate the block\'s items for "rounds" rounds (A,B,A,B), one rest per round. Use ONLY for items meant to be done together — a conditioning triplet, a mobility flow. Set "rounds"; each item\'s per-round target is its reps or duration_min',
+      'rotate the block\'s items for "rounds" rounds (A,B,A,B), one rest per round. Set "rounds"; each item\'s per-round target is its reps or duration_min. Available for any kind of work',
   },
 };
 
