@@ -107,8 +107,13 @@ const time = (iso?: string | null): number => (iso ? new Date(iso).getTime() : N
 
 /** Longest-rest-first: never-practiced beats practiced; ties break by started_at (oldest first),
  *  then by codepoint label order — locale-independent, so the pick is identical on a dev laptop
- *  and a UTC server rather than dependent on ICU data or row order. */
-function byRest(a: RepertoireLike, b: RepertoireLike): number {
+ *  and a UTC server rather than dependent on ICU data or row order.
+ *
+ *  Exported (2026-09-02, P6 "the room"): the list screen sorts the WHOLE Keeping-up group by this
+ *  same comparator, not just the one due pick `pickDueNext` returns — so the coach and the screen
+ *  read one rest-order, never a second spelling of "longest rest" drifting from this one
+ *  (CLAUDE.md: a comparator that decides behaviour lives in `@cadence/shared` once). */
+export function byRest(a: RepertoireLike, b: RepertoireLike): number {
   const at = time(a.last_practiced_at);
   const bt = time(b.last_practiced_at);
   const aNever = Number.isNaN(at);
@@ -162,8 +167,15 @@ const GROUP_CAP = 15;
  *     `learned` is the verb for the opposite move (crossed into Keeping up just now, celebrated
  *     once). Without the word in the header she would write status "learned" to file something
  *     under Learned and land it in the rotation with a cheer attached.
+ *
+ * Exported (2026-09-02, P6 "the room"): the list screen's four group headers name, count, and
+ * one-line instruction all read off this SAME array — never a second, hand-typed copy of these
+ * sentences in the web package (CLAUDE.md: a string that decides behaviour lives once). The
+ * screen strips each header down to its instruction clause for display (the "(status \"x\")"
+ * parenthetical is prompt scaffolding for the model, not brand-safe user copy), but the words of
+ * the instruction itself are these, verbatim.
  */
-const GROUPS: Array<{ status: RepertoireStatus; header: string }> = [
+export const REPERTOIRE_GROUPS: Array<{ status: RepertoireStatus; header: string }> = [
   {
     status: 'working',
     header: 'Learning (status "working") — work these in the learn part of each session; keep it to one or two:',
@@ -210,7 +222,7 @@ export function renderRepertoire(items: RepertoireLike[], now = Date.now()): str
     return shown;
   };
   const sections: string[] = [];
-  for (const spec of GROUPS) {
+  for (const spec of REPERTOIRE_GROUPS) {
     const members = items.filter((i) => i.status === spec.status);
     // Only 'known' rotates, so only 'known' is ordered by rest — that ordering is what makes a cut
     // safe there (the DUE NEXT item can never be the one dropped).
