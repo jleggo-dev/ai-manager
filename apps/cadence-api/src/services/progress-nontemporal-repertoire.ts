@@ -15,6 +15,12 @@
  *    state already means.
  *  - nothing is excluded any more. 'parked' was, and it is gone (owner design 2026-09-02); the
  *    card's own redesign for the four standings comes later — this keeps it truthful meanwhile.
+ *
+ * "Progress counts what was learned this year" (design frame 2c, owner 2026-09-02) adds the
+ * card's own measure: `learned_in_year`/`learned_by_month`/`years` count known-or-retired items
+ * whose `learned_at` lands in a calendar year — always the CURRENT year, never the page's
+ * Week/Month/All window (this card has no time axis; see `learnedInYear`). A backfilled item
+ * (`learned_at` null) never counts into any year, and retiring one never un-counts it either.
  */
 import type { RepertoireItem, RepertoirePayload, RepertoireCardItem, WidgetOmission } from '@cadence/shared';
 import { listRepertoire } from '../repos/repertoire.ts';
@@ -31,6 +37,26 @@ function weeksIn(startedAt: string, now: Date): number {
   const started = new Date(startedAt).getTime();
   if (!Number.isFinite(started)) return 1;
   return Math.max(1, Math.floor((now.getTime() - started) / WEEK_MS));
+}
+
+/** Whole weeks from start to the day it was learned, rounded (not floored) and never below 1 —
+ *  "how long this one took", a finished span, unlike `weeksIn`'s "how far in so far". */
+function weeksTaken(startedAt: string, learnedAt: string): number {
+  const started = new Date(startedAt).getTime();
+  const learned = new Date(learnedAt).getTime();
+  if (!Number.isFinite(started) || !Number.isFinite(learned)) return 1;
+  return Math.max(1, Math.round((learned - started) / WEEK_MS));
+}
+
+/** True when an item counts as learned in `year` — known or retired, with a real `learned_at`
+ *  landing in that calendar year. Retiring never un-counts it (both standings pass); a backfilled
+ *  item (`learned_at` null) never does (owner ruling 2026-09-02: never counted into a year).
+ *  String-sliced against the ISO date, not `Date#getFullYear()`, so the year read is the same
+ *  regardless of the server's local timezone. */
+function learnedInYear(item: RepertoireItem, year: number): boolean {
+  if (item.status !== 'known' && item.status !== 'retired') return false;
+  if (!item.learned_at) return false;
+  return item.learned_at.slice(0, 4) === String(year);
 }
 
 /** Plural word for what these are, from the items' own `kind` values ('piece' → 'pieces').
@@ -88,11 +114,36 @@ export function resolveRepertoire(
   // Trimming from the front drops only the oldest learned rows — in-progress and not-started
   // items sort after them and always stay visible.
   const visible = cards.length > REPERTOIRE_CAP ? cards.slice(cards.length - REPERTOIRE_CAP) : cards;
+
+  // "Progress counts what was learned this year" (design frame 2c) — always the CURRENT calendar
+  // year, never the page's Week/Month/All window: a repertoire has no time axis (BoundWidget's
+  // RepertoireBound honestly never passes window through, and neither does the route). Read off
+  // the ISO string, not `now.getFullYear()`, for the same server-timezone-independence the rest
+  // of this file already keeps.
+  const currentYear = Number(now.toISOString().slice(0, 4));
+  const learnedThisYear = scoped.filter((i) => learnedInYear(i, currentYear));
+  const learned_by_month = learnedThisYear
+    .map((i) => ({
+      month: i.learned_at!.slice(0, 7),
+      label: i.label,
+      weeks: weeksTaken(i.started_at, i.learned_at!),
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month) || a.label.localeCompare(b.label));
+  const years = [currentYear - 2, currentYear - 1, currentYear].map((year) => ({
+    year,
+    count: scoped.filter((i) => learnedInYear(i, year)).length,
+  }));
+
   return {
     items: visible,
     learned: cards.filter((c) => c.state === 'learned').length,
     in_progress: cards.filter((c) => c.state === 'in_progress').length,
     noun: repertoireNoun(scoped),
+    learned_in_year: learnedThisYear.length,
+    learned_by_month,
+    years,
+    learning: scoped.filter((i) => i.status === 'working').length,
+    keeping_up: scoped.filter((i) => i.status === 'known').length,
   };
 }
 

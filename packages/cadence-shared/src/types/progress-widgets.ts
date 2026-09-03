@@ -199,13 +199,35 @@ export interface RepertoireCardItem {
 }
 
 /** "Measured in pieces, not minutes" — the list of what they're learning or already have.
- *  `learned`/`in_progress` count the WHOLE repertoire; `items` may be capped for the card. */
+ *  `learned`/`in_progress` count the WHOLE repertoire; `items` may be capped for the card.
+ *
+ *  `learned_in_year`/`learned_by_month`/`years` answer the card's OWN question — "how many did I
+ *  learn" — on a calendar year, never the page's Week/Month/All window: a repertoire has no time
+ *  axis (BoundWidget's RepertoireBound honestly never receives `window`), so these are always
+ *  reckoned against the current year regardless of which window tab is active. `known` and
+ *  `retired` both count once `learned_at` is set — retiring a piece is finishing it, never
+ *  un-learning it, so it must never shrink these. A backfilled item (known before Cadence,
+ *  `learned_at` null) is never counted into any year — there is no honest date to place it at. */
 export interface RepertoirePayload {
   items: RepertoireCardItem[];
   learned: number;
   in_progress: number;
   /** Plural word for what these are ('pieces', 'katas') — 'items' when the kind is unknown. */
   noun: string;
+  /** How many crossed to learned (known or retired, real `learned_at`) within the current calendar
+   *  year — the card's headline count ("6 learned in 2026"). */
+  learned_in_year: number;
+  /** This year's learned items, oldest month first — "Écossaise · 5 wks" (whole weeks
+   *  started-to-learned, min 1). A backfilled item never appears here: no `learned_at` to place
+   *  it in a month. */
+  learned_by_month: { month: string; label: string; weeks: number }[];
+  /** The trailing three calendar years, oldest first, with how many were learned in each — the
+   *  card's three plain bars. No target: this counts what happened, nothing more. */
+  years: { year: number; count: number }[];
+  /** How many are in each of the two active standings, scoped the same as everything else on this
+   *  card — 'working' (Learning) and 'known' (Keeping up). */
+  learning: number;
+  keeping_up: number;
 }
 
 /** One plain before/after fact: an early measured value and a recent one for the same thing
