@@ -86,6 +86,45 @@ describe('rename', () => {
   });
 });
 
+/**
+ * The practice note (P8: "the practice note gets a store") — WHERE THE WORK IS, saved through the
+ * same "Save the name" action as the other fields, for every kind (not just music).
+ */
+describe('the practice note', () => {
+  it('saves alongside the other fields when filled in', async () => {
+    const user = userEvent.setup();
+    patchRepertoireItem.mockResolvedValue(item());
+    render(<ItemScreen item={item()} onBack={() => {}} />);
+    await user.type(screen.getByLabelText('Where the work is (optional)'), 'bars 9-16');
+    await user.click(screen.getByRole('button', { name: 'Save the name' }));
+    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
+      label: 'Clair de lune',
+      composer: 'Debussy',
+      note: 'bars 9-16',
+    });
+  });
+
+  it('starts from what is already on file', () => {
+    render(<ItemScreen item={item({ meta: { composer: 'Debussy', practice_note: 'p. 240' } })} onBack={() => {}} />);
+    expect(screen.getByLabelText('Where the work is (optional)')).toHaveDisplayValue('p. 240');
+  });
+
+  it('a blank note is left out of the request rather than sent as "" — same rule as composer', async () => {
+    const user = userEvent.setup();
+    patchRepertoireItem.mockResolvedValue(item());
+    render(<ItemScreen item={item()} onBack={() => {}} />);
+    await user.click(screen.getByRole('button', { name: 'Save the name' }));
+    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', { label: 'Clair de lune', composer: 'Debussy' });
+  });
+
+  it('is not the tempo field — it stays editable for a piece that already has a settled tempo', () => {
+    render(<ItemScreen item={item({ meta: { composer: 'Debussy', tempo_bpm: 60 } })} onBack={() => {}} />);
+    const note = screen.getByLabelText('Where the work is (optional)');
+    expect(note).not.toBeDisabled();
+    expect(note).toHaveDisplayValue('');
+  });
+});
+
 describe('standing control', () => {
   it('posts the exact schema word for each of the four taps, never the button label', async () => {
     const user = userEvent.setup();
@@ -137,9 +176,10 @@ describe('tempo — read-only', () => {
     // The header caption ALSO carries a compact "♩ = 60" — this checks the full read-only
     // sentence in the TEMPO section specifically, which is unique to it.
     expect(screen.getByText(/settled from your metronome · changes when you play, not here/)).toBeInTheDocument();
-    // The only inputs on the whole screen are the four name fields — none of them tempo.
+    // The only inputs on the whole screen are the five name/note fields — none of them tempo
+    // (P8 added "Where the work is", the fifth; the tempo stays read-only lower on the screen).
     const inputs = screen.getAllByRole('textbox');
-    expect(inputs).toHaveLength(4);
+    expect(inputs).toHaveLength(5);
     for (const el of inputs) expect(el).not.toHaveDisplayValue(/60/);
   });
 

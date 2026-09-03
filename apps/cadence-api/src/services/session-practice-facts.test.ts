@@ -11,7 +11,7 @@
  * a near-miss, on the real Suzuki Book 2 shelf (the one that actually collides).
  */
 import { describe, expect, it } from 'vitest';
-import { RANK_KEY, TEMPO_BPM_KEY, TEMPO_METER_KEY, type RepertoireLike } from '@cadence/shared';
+import { PRACTICE_NOTE_KEY, RANK_KEY, TEMPO_BPM_KEY, TEMPO_METER_KEY, type RepertoireLike } from '@cadence/shared';
 import { practiceFacts, practiceVariables, type PracticeLogRow } from './session-practice-facts.ts';
 
 const item = (
@@ -50,7 +50,7 @@ const SHELF: RepertoireLike[] = [
   // Learning (working).
   item(FOLK_SONG, 'working', {
     last_practiced_at: '2026-08-31T18:00:00.000Z',
-    meta: { [TEMPO_BPM_KEY]: 66, [TEMPO_METER_KEY]: 3, [RANK_KEY]: 9 },
+    meta: { [TEMPO_BPM_KEY]: 66, [TEMPO_METER_KEY]: 3, [RANK_KEY]: 9, [PRACTICE_NOTE_KEY]: 'bars 9–16' },
   }),
   // Up next (queued), in the user's ladder order.
   item(MELODY, 'queued', { meta: { [RANK_KEY]: 10 } }),
@@ -136,6 +136,16 @@ describe('practiceFacts — Learning carries the note and the last words', () =>
   it('leaves the practice note empty when the row holds nothing to say', () => {
     const bare = [item('Arietta', 'working')];
     expect(practiceFacts(bare, []).learning[0]?.practice_note).toBe('');
+  });
+
+  it('a stored practice note (P8) leads the line, ahead of the settled tempo and the rank', () => {
+    const [learning] = practiceFacts(SHELF, LOGS).learning;
+    expect(learning?.practice_note).toBe('bars 9–16 · settled tempo 66 bpm, 3 to the bar; rank: 9');
+  });
+
+  it('a note with nothing else on the row is the whole practice note, with no dangling separator', () => {
+    const notedOnly = [item('Arietta', 'working', { meta: { [PRACTICE_NOTE_KEY]: 'first stanza' } })];
+    expect(practiceFacts(notedOnly, []).learning[0]?.practice_note).toBe('first stanza');
   });
 
   it('quotes the most recent log that names the piece, with its date', () => {

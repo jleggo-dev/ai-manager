@@ -32,6 +32,29 @@ export const STANDING_EXPLANATION: Record<RepertoireItem['status'], string> = {
   retired: "Learned — finished. I won't schedule it again unless you bring it back.",
 };
 
+/**
+ * Books — a record, not a repertoire (P8): `kind: 'book'` exactly (case-insensitive, trimmed),
+ * the one canonical spelling, not a fuzzy match against the coach's free-text `kind` field. A
+ * looser match risks a false positive on some other domain's kind that happens to contain the
+ * word; an exact one is a router CLAUDE.md's own rule asks for a table test on, which
+ * `repertoireItemCopy.test.ts` and `repertoireListCopy.test.ts` both carry.
+ */
+export function isBookKind(kind: string | null | undefined): boolean {
+  return (kind ?? '').trim().toLowerCase() === 'book';
+}
+
+/** The standing word for one item's own status. Identical to `STANDING_WORDS` for every standing
+ *  and every domain except one: a book's Learned standing reads "Finished" — "Learned" reads oddly
+ *  for a record that was simply read to the end (the design's own word swap, P8). Lives beside
+ *  `STANDING_WORDS` (rather than in repertoireListCopy.ts, which imports FROM this file already —
+ *  the reverse import would be a cycle) so every reader of a standing word, the list row's own
+ *  right-side label and move-menu AND this screen's own header caption below, reads the same
+ *  domain-aware word from one place. */
+export function standingWordFor(kind: string | null | undefined, status: RepertoireItem['status']): string {
+  if (status === 'retired' && isBookKind(kind)) return 'Finished';
+  return STANDING_WORDS[status];
+}
+
 /** Hardcoded rather than `toLocaleDateString`'s month name — locale-independent, so the same
  *  item reads the same way on every device (the shared repertoire renderer's own reasoning).
  *  Exported for the list screen's own (coarser) date grammar, `repertoireListCopy.ts` — same
@@ -97,7 +120,7 @@ export function compactTempo(spec: MetronomeSpec): string {
  * caller with no session count simply shortens the line instead of guessing.
  */
 export function buildCaption(item: RepertoireItem, sessionCount?: number): string {
-  const segments: string[] = [STANDING_WORDS[item.status]];
+  const segments: string[] = [standingWordFor(item.kind, item.status)];
   if (item.learned_at) segments.push(`learned ${monthAbbr(item.learned_at)}`);
   const tempo = settledTempo(item.meta);
   if (tempo) segments.push(compactTempo(tempo));

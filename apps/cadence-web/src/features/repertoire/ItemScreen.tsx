@@ -71,6 +71,7 @@ export function ItemScreen({ item: initial, collidesWithLabel, sessionCount, onB
           initialComposer={q.composer ?? ''}
           initialCollection={q.collection ?? ''}
           initialCatalogue={q.catalogue ?? ''}
+          initialNote={q.note ?? ''}
           onSaved={setItem}
         />
 

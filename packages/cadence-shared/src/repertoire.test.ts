@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  PRACTICE_NOTE_KEY,
   REPERTOIRE_GROUPS,
   TEMPO_BPM_KEY,
   byRest,
   pickDueNext,
   pieceQualifiers,
+  practiceNoteOf,
   qualifierMeta,
   renderRepertoire,
   settledTempo,
@@ -237,6 +239,58 @@ describe('piece qualifiers', () => {
     const meta = { ...tempoMeta({ bpm: 72, meter: 3 }), ...qualifierMeta({ composer: 'Hummel' }) };
     expect(settledTempo(meta)).toEqual({ bpm: 72, meter: 3 });
     expect(pieceQualifiers(meta)).toEqual({ composer: 'Hummel' });
+  });
+});
+
+/**
+ * The practice note (P8: "the practice note gets a store") — WHERE the work is, not WHICH piece
+ * this is, so it rides the same qualifier read/patch rather than a parallel pair of functions: one
+ * PATCH from the item screen writes composer/collection/catalogue/rank/note together.
+ */
+describe('the practice note', () => {
+  it('round-trips through the patch it writes, alongside the other qualifiers', () => {
+    const q = { composer: 'J.S. Bach', note: 'bars 9–16' };
+    expect(pieceQualifiers(qualifierMeta(q))).toEqual(q);
+  });
+
+  it('is folded into meta under its own key, not a hand-copied string', () => {
+    expect(qualifierMeta({ note: 'p. 240' })).toEqual({ [PRACTICE_NOTE_KEY]: 'p. 240' });
+  });
+
+  it('a note-only patch never touches the other qualifiers', () => {
+    expect(qualifierMeta({ note: 'first stanza' })).toEqual({ [PRACTICE_NOTE_KEY]: 'first stanza' });
+  });
+
+  it('ignores a blank note the same way a blank composer is ignored', () => {
+    expect(pieceQualifiers({ [PRACTICE_NOTE_KEY]: '   ' })).toEqual({});
+    expect(qualifierMeta({ note: '   ' })).toEqual({});
+  });
+
+  it('trims and caps a note at 120 characters, same bound as every other qualifier string', () => {
+    const long = 'x'.repeat(150);
+    expect(pieceQualifiers({ [PRACTICE_NOTE_KEY]: `  ${long}  ` })?.note).toBe(long.slice(0, 120));
+  });
+
+  it('is absent for an item with no note on file', () => {
+    expect(pieceQualifiers({ composer: 'Hummel' }).note).toBeUndefined();
+    expect(pieceQualifiers(null).note).toBeUndefined();
+  });
+
+  describe('practiceNoteOf — the note read on its own', () => {
+    it('reads a stored note back', () => {
+      expect(practiceNoteOf({ [PRACTICE_NOTE_KEY]: 'for 5th kyu' })).toBe('for 5th kyu');
+    });
+
+    it('is undefined where there is none, or meta itself is absent', () => {
+      expect(practiceNoteOf({})).toBeUndefined();
+      expect(practiceNoteOf({ composer: 'Hummel' })).toBeUndefined();
+      expect(practiceNoteOf(null)).toBeUndefined();
+      expect(practiceNoteOf(undefined)).toBeUndefined();
+    });
+
+    it('ignores a non-string value rather than throwing', () => {
+      expect(practiceNoteOf({ [PRACTICE_NOTE_KEY]: 42 })).toBeUndefined();
+    });
   });
 });
 

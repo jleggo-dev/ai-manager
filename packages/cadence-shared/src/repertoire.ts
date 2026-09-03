@@ -64,11 +64,24 @@ export const CATALOGUE_KEY = 'catalogue';
 /** 1-based position in an ordered collection. Present on every item of a goal ⇒ the list is a ladder. */
 export const RANK_KEY = 'rank';
 
+/**
+ * WHERE THE WORK IS, right now — "bars 9-16", "p. 240", "first stanza", "for 5th kyu". Unlike the
+ * three qualifiers above, this says nothing about which piece it is; it says what is on file about
+ * how it is being practised. Read by both consumers of "the durable facts on a row" (the coach's
+ * own practice-note line in session-practice-facts.ts, and this row's second line on the list
+ * screen) so the two never drift into separate vocabularies for the same fact. Folded into the
+ * SAME qualifier read/patch below rather than a parallel pair of functions, so the item screen's
+ * one PATCH writes the note alongside composer/collection/catalogue/rank in a single merge.
+ */
+export const PRACTICE_NOTE_KEY = 'practice_note';
+
 export interface PieceQualifiers {
   composer?: string;
   collection?: string;
   catalogue?: string;
   rank?: number;
+  /** See `PRACTICE_NOTE_KEY` — WHERE the work is, not WHICH piece this is. */
+  note?: string;
 }
 
 const qualifierString = (v: unknown): string | undefined =>
@@ -81,10 +94,12 @@ export function pieceQualifiers(meta: Record<string, unknown> | null | undefined
   const composer = qualifierString(meta[COMPOSER_KEY]);
   const collection = qualifierString(meta[COLLECTION_KEY]);
   const catalogue = qualifierString(meta[CATALOGUE_KEY]);
+  const note = qualifierString(meta[PRACTICE_NOTE_KEY]);
   const rank = meta[RANK_KEY];
   if (composer) out.composer = composer;
   if (collection) out.collection = collection;
   if (catalogue) out.catalogue = catalogue;
+  if (note) out.note = note;
   if (typeof rank === 'number' && Number.isInteger(rank) && rank >= 1) out.rank = rank;
   return out;
 }
@@ -96,11 +111,22 @@ export function qualifierMeta(q: PieceQualifiers): Record<string, unknown> {
   const composer = qualifierString(q.composer);
   const collection = qualifierString(q.collection);
   const catalogue = qualifierString(q.catalogue);
+  const note = qualifierString(q.note);
   if (composer) patch[COMPOSER_KEY] = composer;
   if (collection) patch[COLLECTION_KEY] = collection;
   if (catalogue) patch[CATALOGUE_KEY] = catalogue;
+  if (note) patch[PRACTICE_NOTE_KEY] = note;
   if (typeof q.rank === 'number' && Number.isInteger(q.rank) && q.rank >= 1) patch[RANK_KEY] = q.rank;
   return patch;
+}
+
+/** The practice note on its own, or undefined where there is none (or it is blank) — for a caller
+ *  that wants just this one fact rather than the whole qualifier bundle. Same trim-and-cap rule as
+ *  every other qualifier string (`qualifierString`): trimmed, capped at 120 characters, never
+ *  thrown on a bad shape. */
+export function practiceNoteOf(meta: Record<string, unknown> | null | undefined): string | undefined {
+  if (!meta) return undefined;
+  return qualifierString(meta[PRACTICE_NOTE_KEY]);
 }
 
 const time = (iso?: string | null): number => (iso ? new Date(iso).getTime() : Number.NaN);
