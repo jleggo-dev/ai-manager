@@ -1,4 +1,5 @@
 import type { WidgetKind, WidgetPayload } from '@cadence/shared';
+import { PIANO_REPERTOIRE } from './repertoire-fixtures.ts';
 
 /** Tiny inline placeholder "photos" (solid-color SVGs, 3:4) so the photo_pair fixtures need no
  *  network and no binary asset — real slots carry short-lived signed URLs. */
@@ -188,6 +189,16 @@ export const FITNESS_FIXTURES: Record<WidgetKind, WidgetPayload> = {
       learned: 2,
       in_progress: 1,
       noun: 'skills',
+      // "Freestyle flip turn" is backfilled — never counted into a year; "Breaststroke" is.
+      learned_in_year: 1,
+      learned_by_month: [{ month: '2026-05', label: 'Breaststroke', weeks: 7 }],
+      years: [
+        { year: 2024, count: 0 },
+        { year: 2025, count: 0 },
+        { year: 2026, count: 1 },
+      ],
+      learning: 1,
+      keeping_up: 2,
     },
   },
   then_now: {
@@ -380,20 +391,9 @@ export const PRACTICE_FIXTURES: Record<WidgetKind, WidgetPayload> = {
     kind: 'variety',
     data: { count: 6, noun: 'different techniques practiced', window_label: 'this month' },
   },
-  repertoire: {
-    kind: 'repertoire',
-    data: {
-      items: [
-        { label: 'Gymnopédie №1', state: 'learned', learned_month: '2026-03' },
-        { label: "Comptine d'un autre été", state: 'learned', learned_month: '2026-06' },
-        { label: 'Clair de lune', state: 'in_progress', weeks_in: 6 },
-        { label: 'River Flows in You', state: 'not_started' },
-      ],
-      learned: 2,
-      in_progress: 1,
-      noun: 'pieces',
-    },
-  },
+  // The piano shelf for "Progress counts what was learned this year" (design frame 2c) — see
+  // repertoire-fixtures.ts for the payload and why it lives there.
+  repertoire: { kind: 'repertoire', data: PIANO_REPERTOIRE },
   then_now: {
     kind: 'then_now',
     data: {

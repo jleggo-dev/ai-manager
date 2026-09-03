@@ -561,6 +561,59 @@
   color: oklch(48% 0.06 320);
 }
 
+/* ── repertoire, the by-year section (design frame 2c, owner 2026-09-02): this year's learned
+   pieces, oldest month first, then three plain bars comparing the trailing three years. No target
+   line — the bars only ever compare each other. ───────────────────────────────────────────────── */
+.pw-rep-year {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.pw-rep-year-row {
+  font-size: 12px;
+}
+.pw-rep-year-label {
+  font-weight: 700;
+  color: var(--text);
+}
+.pw-rep-year-weeks {
+  color: var(--text-mute);
+}
+.pw-rep-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-top: 10px;
+}
+.pw-rep-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.pw-rep-bar-track {
+  display: flex;
+  align-items: flex-end;
+  height: 48px;
+}
+.pw-rep-bar-fill {
+  width: 20px;
+  border-radius: 3px 3px 0 0;
+  background: oklch(48% 0.06 320);
+}
+.pw-rep-bar-count {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text);
+}
+.pw-rep-bar-label {
+  font-size: 10.5px;
+  color: var(--text-mute);
+}
+
 /* ── then_now — plain before/after rows (design 1a "THEN → NOW"): a family dot, the label, then
    "20 lb → 50 lb" with the early end muted and the recent end strong. The weighting marks which
    end is CURRENT, never which is better — no judgment color in either direction. ─────────────── */

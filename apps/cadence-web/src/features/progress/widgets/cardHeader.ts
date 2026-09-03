@@ -1,4 +1,4 @@
-import type { GoalArea, WidgetKind, WidgetPayload, WidgetSpec } from '@cadence/shared';
+import type { GoalArea, RepertoirePayload, WidgetKind, WidgetPayload, WidgetSpec } from '@cadence/shared';
 import { GLYPH, type GlyphName } from '../../today/glyphs.ts';
 import { formatCaptionNumber } from './caption.ts';
 
@@ -45,6 +45,24 @@ const KIND_GLYPH: Record<WidgetKind, GlyphName> = {
 
 export function headerGlyphPath(kind: WidgetKind): string {
   return GLYPH[KIND_GLYPH[kind]];
+}
+
+/** Nouns for material held in memory rather than played or performed — "by heart" is the plain
+ *  English idiom for that, and reads better than "learned" for a verse the way "learned" reads
+ *  better for a piece. Keyed off the payload's own `noun` (never recomputed from `kind` here, and
+ *  never hard-coded into the sentence itself) — 'learned' is the default for every other noun,
+ *  including one we've never seen. */
+const BY_HEART_NOUNS: ReadonlySet<string> = new Set(['verse', 'verses']);
+
+/** "6 learned in 2026" / "5 by heart in 2026" (design frame 2c, owner 2026-09-02): the repertoire
+ *  card's own measure is what was learned THIS YEAR, not the all-time counts — retiring a piece
+ *  must read the same as keeping it up. `years` carries the current year already (the resolver's
+ *  own `now`, never `new Date()` read here); an empty `years` (should not happen) drops the year
+ *  rather than inventing one. */
+function repertoireHeaderTag(data: RepertoirePayload): string {
+  const verb = BY_HEART_NOUNS.has(data.noun) ? 'by heart' : 'learned';
+  const year = data.years.at(-1)?.year;
+  return year ? `${data.learned_in_year} ${verb} in ${year}` : `${data.learned_in_year} ${verb}`;
 }
 
 /** Kinds whose card is one goal's — the only place the deadline countdown belongs. */
@@ -97,7 +115,7 @@ export function headerTag(payload: WidgetPayload): string {
     case 'variety':
       return `variety · ${payload.data.window_label}`;
     case 'repertoire':
-      return `repertoire · ${payload.data.learned} learned · ${payload.data.in_progress} in progress`;
+      return repertoireHeaderTag(payload.data);
     case 'then_now': {
       const since = new Date(`${payload.data.since}T12:00:00`);
       if (Number.isNaN(since.getTime())) return 'then → now';

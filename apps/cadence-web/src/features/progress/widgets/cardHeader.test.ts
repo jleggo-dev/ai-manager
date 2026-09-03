@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { WidgetSpec } from '@cadence/shared';
 import { deadlineTag, headerTag } from './cardHeader.ts';
+import { PRACTICE_FIXTURES } from './fixtures.ts';
+import { VERSES_REPERTOIRE } from './repertoire-fixtures.ts';
 
 const spec = (over: Partial<WidgetSpec>): WidgetSpec => ({ id: 'w', kind: 'stage_path', ...over });
 const NOW = new Date('2026-08-31T10:00:00');
@@ -21,13 +23,74 @@ describe('deadlineTag', () => {
 });
 
 describe('headerTag', () => {
-  it('names the repertoire counts from the payload, never a stored sentence', () => {
+  it('names the year and the count from the payload, never a stored sentence — "learned" by default', () => {
     expect(
       headerTag({
         kind: 'repertoire',
-        data: { items: [], learned: 2, in_progress: 1, noun: 'pieces' },
+        data: {
+          items: [],
+          learned: 9,
+          in_progress: 1,
+          noun: 'pieces',
+          learned_in_year: 6,
+          learned_by_month: [],
+          years: [
+            { year: 2024, count: 1 },
+            { year: 2025, count: 1 },
+            { year: 2026, count: 6 },
+          ],
+          learning: 1,
+          keeping_up: 8,
+        },
       }),
-    ).toBe('repertoire · 2 learned · 1 in progress');
+    ).toBe('6 learned in 2026');
+  });
+
+  it('reads "by heart" for a verses noun — the idiom for held-in-memory text, keyed off the payload, never the kind recomputed client-side', () => {
+    expect(
+      headerTag({
+        kind: 'repertoire',
+        data: {
+          items: [],
+          learned: 7,
+          in_progress: 1,
+          noun: 'verses',
+          learned_in_year: 5,
+          learned_by_month: [],
+          years: [
+            { year: 2024, count: 0 },
+            { year: 2025, count: 1 },
+            { year: 2026, count: 5 },
+          ],
+          learning: 1,
+          keeping_up: 6,
+        },
+      }),
+    ).toBe('5 by heart in 2026');
+  });
+
+  it('drops the year rather than inventing one when years is somehow empty', () => {
+    expect(
+      headerTag({
+        kind: 'repertoire',
+        data: {
+          items: [],
+          learned: 0,
+          in_progress: 0,
+          noun: 'items',
+          learned_in_year: 0,
+          learned_by_month: [],
+          years: [],
+          learning: 0,
+          keeping_up: 0,
+        },
+      }),
+    ).toBe('0 learned');
+  });
+
+  it('produces the exact piano and verses measure lines from the shipped fixtures (design frame 2c)', () => {
+    expect(headerTag(PRACTICE_FIXTURES.repertoire)).toBe('6 learned in 2026');
+    expect(headerTag({ kind: 'repertoire', data: VERSES_REPERTOIRE })).toBe('5 by heart in 2026');
   });
 
   it('names the felt measure and its source', () => {
