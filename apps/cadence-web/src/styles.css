@@ -7621,6 +7621,26 @@ html[data-native] .sheet-body {
   font-weight: 700;
   color: oklch(45% 0.03 120);
 }
+.kt-slotpick {
+  display: flex;
+  gap: 8px;
+}
+.kt-slotpick button {
+  border: 1px solid oklch(88% 0.02 85);
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: oklch(45% 0.03 120);
+  cursor: pointer;
+}
+.kt-slotpick button.is-on {
+  border-color: oklch(45% 0.09 152);
+  background: oklch(93% 0.045 152);
+  color: oklch(30% 0.07 152);
+}
 .kt-field-in {
   border: 1px solid oklch(88% 0.02 85);
   border-radius: 12px;

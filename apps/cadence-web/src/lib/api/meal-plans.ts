@@ -356,7 +356,8 @@ export async function getMealPlanById(mealPlanId: string): Promise<MealPlanDetai
 export async function generateMealPlan(input: {
   week_of: string;
   prefs?: string;
-  meals_per_day?: number;
+  /** Which meals each day carries — the user's selection; the server defaults to dinners only. */
+  slots?: ('breakfast' | 'lunch' | 'dinner')[];
   fridge_ingredients?: { name: string; qty?: number; unit?: string }[];
   recipe_ids?: string[];
 }): Promise<GenerateMealPlanResult> {
@@ -367,9 +368,7 @@ export async function generateMealPlan(input: {
   try {
     const body: Record<string, unknown> = { week_of };
     if (input.prefs?.trim()) body.prefs = input.prefs.trim();
-    if (typeof input.meals_per_day === 'number' && input.meals_per_day > 0) {
-      body.meals_per_day = Math.min(4, Math.max(2, Math.trunc(input.meals_per_day)));
-    }
+    if (input.slots?.length) body.slots = input.slots;
     if (input.fridge_ingredients?.length) body.fridge_ingredients = input.fridge_ingredients;
     if (input.recipe_ids?.length) body.recipe_ids = input.recipe_ids;
     const res = await fetch(`${BASE}/nutrition/meal-plans/generate`, {

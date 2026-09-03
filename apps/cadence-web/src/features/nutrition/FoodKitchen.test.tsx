@@ -449,13 +449,39 @@ describe('AI week-drafting, back in the Kitchen', () => {
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'more fish' } });
     fireEvent.click(screen.getByRole('button', { name: /Draft the week/i }));
-    await waitFor(() => expect(generateMealPlan).toHaveBeenCalledWith({ week_of: '2026-08-24', prefs: 'more fish' }));
+    await waitFor(() =>
+      expect(generateMealPlan).toHaveBeenCalledWith({
+        week_of: '2026-08-24',
+        slots: ['dinner'],
+        prefs: 'more fish',
+      }),
+    );
     // The draft is on screen and still unsaved — keeping is the only way it lands.
     expect(await screen.findByText(/dinner: Beef chili/i)).toBeInTheDocument();
     expect(saveMealPlan).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: /Keep this week/i }));
     await waitFor(() => expect(saveMealPlan).toHaveBeenCalledWith(draft));
+  });
+
+  it('drafts the slots the user picked — dinners only by default, none disables the button', async () => {
+    generateMealPlan.mockResolvedValue({ status: 'ok', draft });
+    await mountKitchen();
+    fireEvent.click(screen.getByRole('tab', { name: 'The week' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Draft this week/i }));
+
+    expect(screen.getByRole('button', { name: 'Dinners' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Breakfasts' }));
+    fireEvent.click(screen.getByRole('button', { name: /Draft the week/i }));
+    await waitFor(() =>
+      expect(generateMealPlan).toHaveBeenCalledWith({ week_of: '2026-08-24', slots: ['breakfast', 'dinner'] }),
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /Try a different note/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Breakfasts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dinners' }));
+    expect(screen.getByText(/Pick at least one meal to draft/i)).toBeInTheDocument();
+    expect((screen.getByRole('button', { name: /Draft the week/i }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('says plainly that keeping a draft replaces an already-planned week', async () => {

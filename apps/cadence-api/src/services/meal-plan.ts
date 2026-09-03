@@ -67,9 +67,12 @@ export interface GenerateMealPlanInput {
   week_of: string;
   fridge_ingredients?: FridgeLike[];
   recipe_ids?: string[];
-  meals_per_day?: number;
+  /** Which meals each day carries — the user's own selection; dinners only by default. */
+  slots?: ('breakfast' | 'lunch' | 'dinner')[];
   prefs?: string;
 }
+
+const SLOT_ORDER = ['breakfast', 'lunch', 'dinner'] as const;
 
 function dietaryJobVars(profile: Awaited<ReturnType<typeof getDietaryProfile>>): {
   allergies: string;
@@ -132,7 +135,11 @@ export async function generateMealPlan(userId: string, input: GenerateMealPlanIn
   const week_of = input.week_of.trim();
   if (!ISO_DATE.test(week_of)) throw new Error('week_of must be YYYY-MM-DD');
 
-  const mealsPerDay = Math.min(4, Math.max(2, Math.trunc(input.meals_per_day ?? 3)));
+  // Owner ruling 2026-09-03: the user picks the slots; dinners only unless they asked for more.
+  // Fewer slots is also the speed lever — the model writes every recipe, so 7 dinners is a third
+  // of the tokens (and the wait) of a 21-meal week.
+  const slots = SLOT_ORDER.filter((s) => (input.slots ?? ['dinner']).includes(s));
+  const slotList = (slots.length ? slots : ['dinner']).join(', ');
   const fridge = (input.fridge_ingredients ?? [])
     .map((i) => ({
       name: i.name.trim().slice(0, 80),
@@ -151,7 +158,7 @@ export async function generateMealPlan(userId: string, input: GenerateMealPlanIn
   try {
     const res = await runJobBySlug(userId, 'generate-meal-plan', {
       week_of,
-      meals_per_day: String(mealsPerDay),
+      slots: slotList,
       fridge_ingredients: formatFridgeForJob(fridge),
       saved_recipes: savedRecipes,
       allergies: dietVars.allergies,
@@ -212,7 +219,7 @@ export async function generateMealPlan(userId: string, input: GenerateMealPlanIn
     input: {
       week_of,
       fridge: fridge.map((i) => i.name),
-      meals_per_day: mealsPerDay,
+      slots: slotList,
       prefs: input.prefs ?? null,
     },
     output: { raw: rawOut.slice(0, 2000) },

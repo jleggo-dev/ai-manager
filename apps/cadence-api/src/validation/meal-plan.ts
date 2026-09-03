@@ -56,7 +56,11 @@ export const generateMealPlanBodySchema = z.object({
   week_of: isoDate,
   fridge_ingredients: z.array(fridgeIngredientSchema).max(40).optional(),
   recipe_ids: z.array(z.string().uuid()).max(20).optional(),
-  meals_per_day: z.number().int().min(2).max(4).optional(),
+  slots: z
+    .array(z.enum(['breakfast', 'lunch', 'dinner']))
+    .min(1)
+    .max(3)
+    .optional(),
   prefs: z.string().trim().max(400).optional(),
 });
 
