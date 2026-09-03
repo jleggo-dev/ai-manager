@@ -34,8 +34,12 @@ describe('pickDueNext', () => {
     expect(pickDueNext(items)?.label).toBe('Arietta');
   });
 
-  it('only known items rotate — working and parked are never due', () => {
-    const items = [item('Melody', { status: 'working' }), item('Cradle Song', { status: 'parked' })];
+  it('only known items rotate — working, queued and retired are never due', () => {
+    const items = [
+      item('Melody', { status: 'working' }),
+      item('Frankie and Johnnie', { status: 'queued' }),
+      item('Cradle Song', { status: 'retired' }),
+    ];
     expect(pickDueNext(items)).toBeNull();
   });
 
@@ -47,6 +51,83 @@ describe('pickDueNext', () => {
     ];
     expect(pickDueNext(items)?.label).toBe('C piece');
     expect(pickDueNext([...items].reverse())?.label).toBe('C piece');
+  });
+});
+
+/**
+ * The four standings (owner design 2026-09-02: "a standing is an instruction to the coach, not a
+ * label"). Each group header has to carry BOTH halves or the render misleads her:
+ *
+ *  - the standing's own instruction, so she knows what the group is for without inferring it;
+ *  - the status word she must write back, because the user-facing label and the schema word are
+ *    deliberately different — and one pair actively collides. "Learned" is the group name for
+ *    `retired`, while `learned` is the verb that means the opposite thing ("crossed into Keeping
+ *    up just now"). A header naming only the label would have her write status "learned" to move
+ *    something into the group called Learned, and land it in Keeping up with a celebration.
+ */
+describe('renderRepertoire — the four standings', () => {
+  const oneOfEach = (now: number) => [
+    item('Melody', { status: 'working', kind: 'piece', last_practiced_at: new Date(now - 86_400_000).toISOString() }),
+    item('Frankie and Johnnie', { status: 'queued', kind: 'piece' }),
+    item('Écossaise', {
+      status: 'known',
+      kind: 'piece',
+      last_practiced_at: new Date(now - 20 * 86_400_000).toISOString(),
+    }),
+    item('Cradle Song', { status: 'retired', kind: 'piece' }),
+  ];
+
+  it('renders every standing under a header naming it, its status word, and what to do with it', () => {
+    const now = Date.now();
+    const text = renderRepertoire(oneOfEach(now), now);
+    const headers: Array<[string, RegExp]> = [
+      ['Learning (status "working")', /learn part of each session/i],
+      ['Up next (status "queued")', /never start one unasked/i],
+      ['Keeping up (status "known")', /longest rest first/i],
+      ['Learned (status "retired")', /never schedule/i],
+    ];
+    for (const [label, instruction] of headers) {
+      expect(text).toContain(label);
+      expect(text).toMatch(instruction);
+    }
+  });
+
+  it('orders the groups Learning, Up next, Keeping up, Learned — the order she reads them in', () => {
+    const now = Date.now();
+    const text = renderRepertoire(oneOfEach(now), now);
+    const at = (s: string) => text.indexOf(s);
+    expect(at('Learning (status')).toBeGreaterThanOrEqual(0);
+    expect(at('Learning (status')).toBeLessThan(at('Up next (status'));
+    expect(at('Up next (status')).toBeLessThan(at('Keeping up (status'));
+    expect(at('Keeping up (status')).toBeLessThan(at('Learned (status'));
+  });
+
+  it('gives queued and retired items the same per-line marks as the rest', () => {
+    const now = Date.now();
+    const text = renderRepertoire(
+      [
+        item('Frankie and Johnnie', { status: 'queued', kind: 'piece' }),
+        item('Cradle Song', { status: 'retired', kind: 'piece', last_practiced_at: new Date(now).toISOString() }),
+      ],
+      now,
+    );
+    expect(text).toContain('- Frankie and Johnnie (piece; not worked yet while on file)');
+    expect(text).toContain('- Cradle Song (piece; worked today)');
+  });
+
+  it('caps every group and says how much it cut — a queued shelf is not exempt', () => {
+    const many = Array.from({ length: 20 }, (_, i) =>
+      item(`Piece ${String(i).padStart(2, '0')}`, { status: 'queued' }),
+    );
+    expect(renderRepertoire(many)).toContain('…and 5 more on file');
+  });
+
+  it('omits a group nobody has anything in', () => {
+    const text = renderRepertoire([item('Écossaise', { status: 'known' })]);
+    expect(text).toContain('Keeping up (status "known")');
+    expect(text).not.toContain('Up next');
+    expect(text).not.toContain('Learning (status');
+    expect(text).not.toContain('Learned (status');
   });
 });
 
@@ -63,16 +144,16 @@ describe('renderRepertoire', () => {
         item('Melody', { status: 'working', kind: 'piece', last_practiced_at: at(1) }),
         item('Écossaise', { kind: 'piece', last_practiced_at: at(20) }),
         item('A Short Story', { kind: 'piece', last_practiced_at: at(0.2) }),
-        item('Cradle Song', { status: 'parked' }),
+        item('Cradle Song', { status: 'retired' }),
       ],
       now,
     );
-    expect(text).toContain('Working on now:');
+    expect(text).toContain('Learning (status "working")');
     expect(text).toContain('- Melody (piece; worked yesterday)');
-    expect(text).toContain('rotation pool');
+    expect(text).toContain('Keeping up (status "known")');
     expect(text).toContain('- Écossaise (piece; worked 20 days ago; DUE NEXT by rotation)');
     expect(text).toContain('- A Short Story (piece; worked today)');
-    expect(text).toContain('Set aside for now: Cradle Song');
+    expect(text).toContain('- Cradle Song (not worked yet while on file)');
   });
 
   it('orders the known pool longest-rest first and a cut never drops the due item', () => {

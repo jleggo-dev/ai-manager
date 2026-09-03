@@ -96,6 +96,41 @@ const tempoNote = (i: RepertoireLike): string | null => {
 const GROUP_CAP = 15;
 
 /**
+ * The four groups, in the order she reads them, each header carrying the standing's instruction.
+ *
+ * Two things every header must do, because this text is read by a MODEL (tool-catalog.ts, "HOW TO
+ * WRITE THE STRINGS IN THIS FILE"):
+ *
+ *  1. **State what to DO with the group**, not what it is. "Keeping up" alone makes her infer a
+ *     rule; "draw warm-up and play-out material from here, longest rest first" is one.
+ *  2. **Name the status word she writes back.** The user-facing label and the schema word differ
+ *     on purpose, and one pair collides outright: the group called "Learned" is `retired`, while
+ *     `learned` is the verb for the opposite move (crossed into Keeping up just now, celebrated
+ *     once). Without the word in the header she would write status "learned" to file something
+ *     under Learned and land it in the rotation with a cheer attached.
+ */
+const GROUPS: Array<{ status: RepertoireStatus; header: string }> = [
+  {
+    status: 'working',
+    header: 'Learning (status "working") — work these in the learn part of each session; keep it to one or two:',
+  },
+  {
+    status: 'queued',
+    header:
+      'Up next (status "queued") — not started yet, in the user\'s order. Propose the top one when something is learned; never start one unasked:',
+  },
+  {
+    status: 'known',
+    header:
+      'Keeping up (status "known") — learned and in the rotation. Draw warm-up and play-out material from here, longest rest first:',
+  },
+  {
+    status: 'retired',
+    header: 'Learned (status "retired") — finished. Count these; never schedule them:',
+  },
+];
+
+/**
  * The compact text both consumers inject — get_repertoire's render and prescribe-session's
  * {{repertoire}} variable. One renderer so the coach in chat and the coach programming a session
  * read the same facts in the same words. Empty string when there is nothing on file. The known
@@ -120,15 +155,13 @@ export function renderRepertoire(items: RepertoireLike[], now = Date.now()): str
     if (group.length > GROUP_CAP) shown.push(`  …and ${group.length - GROUP_CAP} more on file`);
     return shown;
   };
-  const working = items.filter((i) => i.status === 'working');
-  const known = [...items.filter((i) => i.status === 'known')].sort(byRest);
-  const parked = items.filter((i) => i.status === 'parked');
   const sections: string[] = [];
-  if (working.length) sections.push(`Working on now:\n${capped(working).join('\n')}`);
-  if (known.length)
-    sections.push(
-      `Known — the rotation pool for review and warm material, longest rest first:\n${capped(known).join('\n')}`,
-    );
-  if (parked.length) sections.push(`Set aside for now: ${parked.map((i) => i.label).join('; ')}`);
+  for (const spec of GROUPS) {
+    const members = items.filter((i) => i.status === spec.status);
+    // Only 'known' rotates, so only 'known' is ordered by rest — that ordering is what makes a cut
+    // safe there (the DUE NEXT item can never be the one dropped).
+    const ordered = spec.status === 'known' ? [...members].sort(byRest) : members;
+    if (ordered.length) sections.push(`${spec.header}\n${capped(ordered).join('\n')}`);
+  }
   return sections.join('\n');
 }

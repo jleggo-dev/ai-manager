@@ -23,9 +23,10 @@ import type { RepertoireStatus } from '@cadence/shared';
  * 2026-08-30: recording repertoire is proactive — when the user names material they know, are
  * working on, or just learned, storing it is not optional.
  *
- * The status verbs: `working` (learning it now), `known` (already have it — backfill, no
+ * The status verbs, against the four standings (owner design 2026-09-02): `queued` (yet to learn,
+ * waiting its turn), `working` (learning it now), `known` (already have it — backfill, no
  * anniversary invented), `learned` (crossed the line just now → stored as known + stamped +
- * written to the goal's history as an accomplishment), `parked` (set aside, out of rotation).
+ * written to the goal's history as an accomplishment), `retired` (finished, not revisited).
  * An OMITTED status keeps an existing item exactly as it stands (a bare re-mention must never
  * demote a known piece out of the rotation); a new item starts as working.
  *
@@ -34,15 +35,33 @@ import type { RepertoireStatus } from '@cadence/shared';
  * "you learned nine pieces this week" — which is exactly the kind of inflated cheer the brand
  * bans. Backfill is quiet; only a real crossing celebrates — and only ONCE: a re-mention of an
  * already-learned piece keeps its date and writes no second accomplishment.
+ *
+ * 'learned' vs 'retired' is the other pair that must not blur, and this one collides by name: the
+ * standing the user sees as "Learned" is `retired`, while the VERB `learned` moves a piece into
+ * "Keeping up". So `retired` never stamps, and it never clears a `learned_at` either — retiring
+ * something is not un-learning it, and "learned this year" must not shrink when a piece leaves
+ * the rotation.
+ *
+ * There is no `parked`. It was a standing until the four-standings design dropped it; a stale
+ * prompt still offering it gets the ordinary rejection naming the five verbs, never a quiet
+ * aliasing onto `queued` — a silent alias would keep teaching the old vocabulary forever.
  */
 
-const STATUS_OF = new Map<string, { status: RepertoireStatus | undefined; markLearned: boolean }>([
+/** Verb → what to write. Exported for its table test: it is a router that fails silently (swap
+ *  `learned` and `retired` and nothing throws — a finished piece just rejoins the rotation with a
+ *  celebration attached), so coach-action-repertoire.test.ts pins every row and the near-misses. */
+export const STATUS_OF = new Map<string, { status: RepertoireStatus | undefined; markLearned: boolean }>([
   ['', { status: undefined, markLearned: false }], // omitted: keep existing; new rows default working
+  ['queued', { status: 'queued', markLearned: false }],
   ['working', { status: 'working', markLearned: false }],
   ['known', { status: 'known', markLearned: false }],
   ['learned', { status: 'known', markLearned: true }],
-  ['parked', { status: 'parked', markLearned: false }],
+  ['retired', { status: 'retired', markLearned: false }],
 ]);
+
+/** The verbs the description teaches and the schema offers — '' is the omitted case, not a word
+ *  she can write, so it never reaches the enum. */
+const STATUS_WORDS = [...STATUS_OF.keys()].filter((w) => w !== '');
 
 /** How many items one call will write. Not a silent cap: anything beyond it is reported back. */
 const MAX_ITEMS_PER_CALL = 30;
@@ -69,8 +88,11 @@ interface ItemParam {
 
 export const UPDATE_REPERTOIRE: CoachActionTool = {
   name: 'update_repertoire',
+  // 791 of the 800-char action bound (retrieval/description-audit.test.ts). It teaches five verbs
+  // where it used to teach four, so the motivation clause ("so it is never asked for twice") and
+  // "of what they know" went: neither can change which verb she picks, and every rule can.
   description:
-    'Write down the user\'s repertoire — the pieces, katas, poems, or techniques they are learning or already know — so it is never asked for twice and practice can draw on it. Use the moment they name such material; get_repertoire reads it back. Takes effect immediately: it is their own account of what they know, so your sentence reflecting it back is the confirmation. Pass {"items": [{"label": "Écossaise (Hummel)", "status": "known", "kind": "piece"}], "goal": "Practice piano"} — "status" is working (learning it now), known (already have it), learned (finished just now — celebrated, once), or parked (set aside); omitted, it keeps an existing item as it stands, and new items start working. "kind" is plain words, omit if unclear; "goal" names a goal exactly as listed, omit if none fits.',
+    'Write down the user\'s repertoire — the pieces, katas, poems, or techniques they are learning, mean to learn, or already know. Use the moment they name such material; get_repertoire reads it back. Takes effect immediately: it is their own account, so your sentence reflecting it back is the confirmation. Pass {"items": [{"label": "Écossaise (Hummel)", "status": "known", "kind": "piece"}], "goal": "Practice piano"} — "status" is queued (yet to start), working (learning it now), known (has it, in the rotation), learned (crossed just now — stored as known, celebrated once), or retired (finished, not revisited). Omitted, it keeps an existing item as it stands, and a new item starts working. "kind" is plain words, omit if unclear; "goal" names a goal exactly as listed, omit if none fits.',
   parameters: {
     properties: {
       items: {
@@ -80,7 +102,9 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
           type: 'object',
           properties: {
             label: { type: 'string' },
-            status: { type: 'string', enum: ['working', 'known', 'learned', 'parked'] },
+            // Derived from STATUS_OF, never hand-copied: a declared verb the table cannot run is
+            // rejected at the door, and a runnable one she is never offered is dead code.
+            status: { type: 'string', enum: STATUS_WORDS },
             kind: { type: 'string' },
           },
           required: ['label'],
@@ -130,7 +154,7 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
     const rejected: string[] = [];
     const accepted = batch.filter((item) => {
       if (STATUS_OF.has(item.statusWord)) return true;
-      rejected.push(`${item.label} — "${item.statusWord}" is not a standing; use working, known, learned, or parked`);
+      rejected.push(`${item.label} — "${item.statusWord}" is not a standing; use ${STATUS_WORDS.join(', ')}`);
       return false;
     });
     // What is already on file, read ONCE for the whole batch: each incoming label is resolved onto
@@ -194,7 +218,7 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
 
     // Read back after writing, so the answer describes the OBSERVED state (TOOL-HARNESS.md §5).
     const now = await listRepertoire(userId);
-    const counts = { working: 0, known: 0, parked: 0 };
+    const counts: Record<RepertoireStatus, number> = { queued: 0, working: 0, known: 0, retired: 0 };
     for (const i of now) counts[i.status] += 1;
     const overflow = wanted.length - batch.length;
     const eventFailures = written.filter((w) => w.eventFailed).length;
@@ -212,7 +236,10 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
             `Note: ${eventFailures} learned item(s) were saved, but adding them to the goal's history failed — do not claim they were celebrated in the record; the standing itself is stored.`,
           ]
         : []),
-      `On file now: ${counts.working} being learned, ${counts.known} known, ${counts.parked} set aside.`,
+      // Counted in the same words the "status" parameter takes, so the tally she reads back is
+      // directly re-usable in her next call — a count labelled "keeping up" would have her
+      // writing "keeping up" as a standing and getting it rejected.
+      `On file now: ${counts.queued} queued, ${counts.working} working, ${counts.known} known, ${counts.retired} retired.`,
       'Say in one line what you noted down. Anything newly learned is worth a warm sentence — it is a thing they did.',
     ].join('\n');
   },

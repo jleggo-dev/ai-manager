@@ -19,7 +19,9 @@ import { describedItems } from './repertoire-describe.ts';
  *  - **The label's CORE matches too.** Stored labels carry qualifiers the user's own words never
  *    will — "A Short Story (Lichner)", "Écossaise by J.N. Hummel", "Minuet in G Major, BWV 822"
  *    — so a second needle strips parentheticals, a trailing "by …", and anything after a comma.
- *  - **Parked items never stamp** — they are out of the rotation by definition.
+ *  - **Every standing can stamp.** The scope is the goal, never the standing: someone who plays a
+ *    piece they have retired, or reads through one they have not started, did that — see
+ *    `matchableItems`.
  */
 export const needles = (label: string): string[] => {
   const full = normTitle(label.normalize('NFC'));
@@ -76,12 +78,20 @@ export function collidingTitles(items: Array<{ label: string }>): Array<{ shared
   return [...groups].map(([shared, labels]) => ({ shared, labels }));
 }
 
-/** Items this session's goal is allowed to touch at all. Parked items are out by definition. */
+/**
+ * Items this session's goal is allowed to touch at all.
+ *
+ * Scoped by GOAL and by nothing else. It used to drop the parked ones as "out of the rotation by
+ * definition", and under the four standings that reasoning no longer holds anywhere: playing
+ * something you have retired, or reading through one you have not started yet, is a real thing
+ * that happened, and `last_practiced_at` is a record of what happened. A mention is a mention.
+ * Only the ROTATION is standing-scoped — `pickDueNext` runs over `known` and nothing else.
+ */
 export function matchableItems<T extends { status: string; goal_id: string | null }>(
   items: T[],
   goalId?: string | null,
 ): T[] {
-  return items.filter((i) => i.status !== 'parked' && (i.goal_id == null || i.goal_id === (goalId ?? null)));
+  return items.filter((i) => i.goal_id == null || i.goal_id === (goalId ?? null));
 }
 
 /** Normalize a body of text into the haystack the needles are tested against. '' when empty. */

@@ -35,7 +35,7 @@ export interface ProgressAvailability {
   has_food_usage: boolean;
   /** Any daily check-in mood in the trailing four weeks — what `felt_week` draws on. */
   has_felt: boolean;
-  /** Any repertoire item still in play (not parked), attached to a goal or not. */
+  /** Any repertoire item at all, whatever its standing, attached to a goal or not. */
   has_repertoire: boolean;
   /** Any done, logged session at all — the feed `then_now` mines. Existence only: whether two
    *  honest before/after pairs actually bind is the resolver's own judgment. */
@@ -44,7 +44,7 @@ export interface ProgressAvailability {
    *  photos table is only ever queried when the flag is on, so a pre-migration-0048 database
    *  simply reads false here. */
   has_photos: boolean;
-  /** Goal ids with at least one in-play repertoire item — what `repertoire.source.goal_id` may name. */
+  /** Goal ids with at least one repertoire item — what `repertoire.source.goal_id` may name. */
   repertoire_goal_ids: string[];
   /** Activity TITLES with at least one logged session — what `dated_sessions.source.activity` may name. */
   activities: string[];

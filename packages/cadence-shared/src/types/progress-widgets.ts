@@ -182,10 +182,12 @@ export interface VarietyPayload {
   window_label: string;
 }
 
-/** One repertoire item's standing, as the card shows it. Derived from RepertoireItem:
- *  known → 'learned'; working + practiced → 'in_progress'; working, never practiced →
- *  'not_started' (the coach proposed it, they haven't picked it up). Parked items are
- *  deliberately set aside and never appear here. */
+/** One repertoire item's standing, as the card shows it. Derived from RepertoireItem's four
+ *  standings: known and retired → 'learned' (retiring is finishing — it must not shrink what they
+ *  have learned); working + practiced → 'in_progress'; working, never practiced, and queued →
+ *  'not_started' (either the coach proposed it or it is waiting its turn; they haven't picked it
+ *  up). Nothing is hidden from the card. These three states predate the four standings and the
+ *  card's own redesign for them comes later — the mapping keeps it honest meanwhile. */
 export interface RepertoireCardItem {
   label: string;
   state: 'learned' | 'in_progress' | 'not_started';

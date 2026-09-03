@@ -3,14 +3,18 @@
  * Progress" 1a, piano card; the repertoire store shipped 2026-08-30). Binds to
  * `cadence.repertoire`, optionally scoped to one goal. Standing rules:
  *
- *  - known → 'learned'. `learned_month` comes from `learned_at`; a backfilled item (they already
- *    knew it when they told us, `learned_at` null) shows as learned WITHOUT a date — never an
- *    invented one.
+ *  - known and retired → 'learned'. `learned_month` comes from `learned_at`; a backfilled item
+ *    (they already knew it when they told us, `learned_at` null) shows as learned WITHOUT a date —
+ *    never an invented one. Retired belongs here because retiring is finishing: it must never
+ *    shrink what they have learned, only stop the item being scheduled.
  *  - working + practiced at least once → 'in_progress', with whole weeks since `started_at`
  *    (min 1). `last_practiced_at` IS the sessions evidence: `stampPracticed` writes it from
  *    session logs.
  *  - working, never practiced → 'not_started' (the coach proposed it; they haven't picked it up).
- *  - parked is EXCLUDED: deliberately set aside is not progress content.
+ *  - queued → 'not_started' as well: it is material they have yet to start, which is what that
+ *    state already means.
+ *  - nothing is excluded any more. 'parked' was, and it is gone (owner design 2026-09-02); the
+ *    card's own redesign for the four standings comes later — this keeps it truthful meanwhile.
  */
 import type { RepertoireItem, RepertoirePayload, RepertoireCardItem, WidgetOmission } from '@cadence/shared';
 import { listRepertoire } from '../repos/repertoire.ts';
@@ -47,9 +51,10 @@ function repertoireNoun(items: RepertoireItem[]): string {
 }
 
 function toCardItem(item: RepertoireItem, now: Date): RepertoireCardItem {
-  if (item.status === 'known') {
+  if (item.status === 'known' || item.status === 'retired') {
     return { label: item.label, state: 'learned', learned_month: item.learned_at?.slice(0, 7) ?? null };
   }
+  if (item.status === 'queued') return { label: item.label, state: 'not_started' };
   if (item.last_practiced_at) {
     return { label: item.label, state: 'in_progress', weeks_in: weeksIn(item.started_at, now) };
   }
@@ -75,11 +80,11 @@ export function resolveRepertoire(
   goalId?: string | null,
   now: Date = new Date(),
 ): RepertoirePayload | WidgetOmission {
-  const inPlay = items.filter((i) => i.status !== 'parked' && (!goalId || i.goal_id === goalId));
-  if (inPlay.length === 0) {
+  const scoped = items.filter((i) => !goalId || i.goal_id === goalId);
+  if (scoped.length === 0) {
     return omit('repertoire', 'repertoire', goalId ? 'no repertoire items for this goal' : 'no repertoire on file');
   }
-  const cards = inPlay.map((i) => toCardItem(i, now)).sort(byStanding);
+  const cards = scoped.map((i) => toCardItem(i, now)).sort(byStanding);
   // Trimming from the front drops only the oldest learned rows — in-progress and not-started
   // items sort after them and always stay visible.
   const visible = cards.length > REPERTOIRE_CAP ? cards.slice(cards.length - REPERTOIRE_CAP) : cards;
@@ -87,7 +92,7 @@ export function resolveRepertoire(
     items: visible,
     learned: cards.filter((c) => c.state === 'learned').length,
     in_progress: cards.filter((c) => c.state === 'in_progress').length,
-    noun: repertoireNoun(inPlay),
+    noun: repertoireNoun(scoped),
   };
 }
 
