@@ -88,8 +88,12 @@ const MAX_COLLISION_GROUPS = 3;
  *
  * Costs nothing on a shelf with no collisions, which is nearly all of them.
  */
-export function renderRepertoireForCoach(items: RepertoireItem[], now?: number): string {
-  const body = renderRepertoire(items, now);
+export function renderRepertoireForCoach(
+  items: RepertoireItem[],
+  now?: number,
+  opts: { allLearned?: boolean } = {},
+): string {
+  const body = renderRepertoire(items, now, opts);
   if (!body) return body;
   // Over every standing: a title she cannot resolve is a problem wherever it sits, and a retired
   // piece can collide with a queued one just as easily as two in the rotation can.

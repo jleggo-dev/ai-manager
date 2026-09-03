@@ -150,11 +150,13 @@ describe('renderRepertoire — the four standings', () => {
     expect(text).toContain('- Cradle Song (piece; worked today)');
   });
 
-  it('caps every group and says how much it cut — a queued shelf is not exempt', () => {
-    const many = Array.from({ length: 20 }, (_, i) =>
-      item(`Piece ${String(i).padStart(2, '0')}`, { status: 'queued' }),
-    );
-    expect(renderRepertoire(many)).toContain('…and 5 more on file');
+  it('sends Learning, Up next and Keeping up in FULL — no cap on what they are actually working on', () => {
+    for (const status of ['working', 'queued', 'known'] as const) {
+      const many = Array.from({ length: 40 }, (_, i) => item(`Piece ${String(i).padStart(2, '0')}`, { status }));
+      const text = renderRepertoire(many);
+      for (const i of [0, 14, 20, 39]) expect(text).toContain(`Piece ${String(i).padStart(2, '0')}`);
+      expect(text).not.toContain('more on file');
+    }
   });
 
   it('omits a group nobody has anything in', () => {
@@ -236,25 +238,80 @@ describe('renderRepertoire', () => {
     expect(text).toContain('- Cradle Song (not worked yet while on file)');
   });
 
-  /**
-   * The cut is still least-recently-worked-last, and that is arithmetic rather than advice: a group
-   * over the cap has to drop SOMETHING, and dropping the items she was told about most recently
-   * would hide the ones she has least evidence about. The order is not stated in the text and no
-   * line is marked, so nothing here tells her which to pick — the row above pins that.
-   */
-  it('a cut keeps the longest-rested lines and says how many it dropped', () => {
-    const many = Array.from({ length: 20 }, (_, i) =>
-      item(`Piece ${String(i).padStart(2, '0')}`, { last_practiced_at: daysAgo(i) }),
-    );
-    const text = renderRepertoire(many);
-    const lines = text.split('\n');
-    expect(lines[1]).toContain('Piece 19'); // rested longest — kept, not marked
-    expect(text).not.toContain('Piece 00'); // worked today — the one a cut of 5 drops
-    expect(text).toContain('…and 5 more on file'); // 20 known, cap 15 — the cut says so
-  });
-
   it('renders empty for an empty list, so callers can omit the section cleanly', () => {
     expect(renderRepertoire([])).toBe('');
+  });
+});
+
+/**
+ * Learned is the one capped group (owner ruling 2026-09-03): *"a 500-piece Learned list should not
+ * go to the coach every turn; the total plus the ability to ask for more limits tokens and gives
+ * her a more relevant list."* What they are actually working on — Learning, Up next, Keeping up —
+ * rides in full.
+ *
+ * The ranking is the LATER of the two dates a finished item can carry, because both are practices:
+ * `learned_at` is the day they finished it, and `last_practiced_at` is any time they have played it
+ * since. Ranking on either alone hides half the shelf — a piece finished in 2019 and played last
+ * week is recent, and so is one finished last week and never touched since.
+ */
+describe('renderRepertoire — Learned is capped at 12, and says how many there are', () => {
+  const learned = (label: string, over: Partial<RepertoireLike> = {}): RepertoireLike =>
+    item(label, { status: 'retired', kind: 'piece', ...over });
+
+  it('shows the 12 most recent and states the total', () => {
+    const many = Array.from({ length: 214 }, (_, i) =>
+      learned(`Piece ${String(i).padStart(3, '0')}`, {
+        learned_at: daysAgo(i + 1),
+      }),
+    );
+    const text = renderRepertoire(many);
+    expect(text).toContain('Learned: 214 items — 12 most recent shown');
+    expect(text.split('\n').filter((l) => l.trim().startsWith('- '))).toHaveLength(12);
+    expect(text).toContain('Piece 000'); // finished yesterday — the most recent
+    expect(text).toContain('Piece 011'); // the 12th
+    expect(text).not.toContain('Piece 012'); // the 13th is over the cap
+  });
+
+  it('states the total without a "shown" clause when the whole group fits', () => {
+    const few = Array.from({ length: 9 }, (_, i) => learned(`Piece ${i}`, { learned_at: daysAgo(i + 1) }));
+    const text = renderRepertoire(few);
+    expect(text).toContain('Learned: 9 items');
+    expect(text).not.toContain('most recent shown');
+  });
+
+  it('counts the day it was finished as a practice — a 2019 piece played last week is recent', () => {
+    const items = [
+      learned('finished long ago, played last week', { learned_at: daysAgo(2000), last_practiced_at: daysAgo(7) }),
+      learned('finished last month, untouched since', { learned_at: daysAgo(30), last_practiced_at: null }),
+    ];
+    const lines = renderRepertoire(items)
+      .split('\n')
+      .filter((l) => l.trim().startsWith('- '));
+    expect(lines[0]).toContain('finished long ago, played last week');
+    expect(lines[1]).toContain('finished last month, untouched since');
+  });
+
+  it('puts an item with no date at all last, never at a guessed position', () => {
+    const items = [
+      learned('no date', { learned_at: null, last_practiced_at: null }),
+      learned('dated', { learned_at: daysAgo(900) }),
+    ];
+    const lines = renderRepertoire(items)
+      .split('\n')
+      .filter((l) => l.trim().startsWith('- '));
+    expect(lines[0]).toContain('dated');
+    expect(lines[1]).toContain('no date');
+  });
+
+  it('caps Learned without touching the other three, on one mixed shelf', () => {
+    const shelf = [
+      ...Array.from({ length: 20 }, (_, i) => item(`Keeping ${i}`, { status: 'known' })),
+      ...Array.from({ length: 20 }, (_, i) => learned(`Done ${i}`, { learned_at: daysAgo(i + 1) })),
+    ];
+    const text = renderRepertoire(shelf);
+    for (let i = 0; i < 20; i += 1) expect(text).toContain(`Keeping ${i}`);
+    expect(text).toContain('Learned: 20 items — 12 most recent shown');
+    expect(text).not.toContain('Done 12');
   });
 });
 

@@ -24,6 +24,8 @@ import {
   REPERTOIRE_GROUPS,
   STANDING_MEANS,
   STANDING_NAMES,
+  cappedLearned,
+  learnedTotalLine,
   pieceQualifiers,
   settledTempo,
   type RepertoireLike,
@@ -57,11 +59,6 @@ export interface ItemFact {
 export interface PracticeFacts {
   items: ItemFact[];
 }
-
-/** How many item lines the variable may carry before it cuts and says so. A two-year repertoire
- *  must not become a 200-line block in every prescribe prompt; a cut that does not declare itself
- *  is a quiet lie about completeness (TOOL-HARNESS.md §4). */
-const ITEM_CAP = 40;
 
 /** A quoted log is one line in a prompt, not a transcript. */
 const WORDS_CAP = 200;
@@ -179,8 +176,21 @@ export function practiceVariables(
   recentLogs: PracticeLogRow[],
 ): { repertoire: string } {
   if (!items?.length) return { repertoire: '' };
+  // Read over the WHOLE shelf first, then choose what to print. The order matters: the last-words
+  // matcher's shared-needle rule is shelf-wide, so a Minuet hidden below the Learned cap must still
+  // make "worked the Minuet" ambiguous. Filtering before matching would let a cut change what a log
+  // is taken to mean.
   const facts = practiceFacts(items, recentLogs);
-  const shown = facts.items.slice(0, ITEM_CAP).map(itemLine);
-  if (facts.items.length > ITEM_CAP) shown.push(`…and ${facts.items.length - ITEM_CAP} more on file`);
-  return { repertoire: [standingsLine(), ...shown].join('\n') };
+  const factOf = new Map<RepertoireLike, ItemFact>();
+  items.forEach((i, at) => factOf.set(i, facts.items[at]!));
+  const lineOf = (i: RepertoireLike): string => itemLine(factOf.get(i)!);
+
+  // Learning, Up next and Keeping up in full — a session is built from those, and a cut there hides
+  // live material. Learned is the one capped group (owner ruling 2026-09-03), read through
+  // `@cadence/shared`'s own helpers so this and the chat render show the same twelve and state the
+  // same total; a second spelling of "12 most recent" is how the two would drift.
+  const active = items.filter((i) => i.status !== 'retired').map(lineOf);
+  const { shown, total } = cappedLearned(items);
+  const learned = total ? [learnedTotalLine(total, shown.length), ...shown.map(lineOf)] : [];
+  return { repertoire: [standingsLine(), ...active, ...learned].join('\n') };
 }

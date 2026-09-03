@@ -230,15 +230,51 @@ describe('practiceVariables — the bounds', () => {
     expect(practiceVariables(null, LOGS)).toEqual({ repertoire: '' });
   });
 
-  it('caps the list at 40 items and says how many it left out, rather than truncating in silence', () => {
-    const many = Array.from({ length: 46 }, (_, n) => item(`Study ${n + 1}`, 'known'));
-    const out = practiceVariables(many, []).repertoire;
-    expect(out.split('\n').filter((l) => l.startsWith('- '))).toHaveLength(40);
-    expect(out).toContain('…and 6 more');
+  /**
+   * The one cap, and it is on Learned only (owner ruling 2026-09-03). Learning, Up next and Keeping
+   * up are what a session is built from, so a cut there hides live material; Learned only grows.
+   * Same rule, same twelve, same wording as the chat render — both read `cappedLearned` and
+   * `learnedTotalLine` from `@cadence/shared`, so the two can never disagree about which twelve.
+   */
+  it('sends Learning, Up next and Keeping up in full', () => {
+    for (const status of ['working', 'queued', 'known'] as const) {
+      const many = Array.from({ length: 60 }, (_, n) => item(`Study ${n + 1}`, status));
+      const out = practiceVariables(many, []).repertoire;
+      expect(out.split('\n').filter((l) => l.startsWith('- '))).toHaveLength(60);
+    }
   });
 
-  it('says nothing about a cut when the shelf fits exactly', () => {
-    const many = Array.from({ length: 40 }, (_, n) => item(`Study ${n + 1}`, 'known'));
-    expect(practiceVariables(many, []).repertoire).not.toContain('…and');
+  it('shows the 12 most recently touched Learned items and states the total', () => {
+    const many = Array.from({ length: 214 }, (_, n) =>
+      item(`Study ${String(n).padStart(3, '0')}`, 'retired', { learned_at: `2026-0${1 + (n % 8)}-01T00:00:00.000Z` }),
+    );
+    const out = practiceVariables(many, []).repertoire;
+    expect(out).toContain('Learned: 214 items — 12 most recent shown');
+    expect(out.split('\n').filter((l) => l.startsWith('- '))).toHaveLength(12);
+  });
+
+  it('counts the day it was finished as a practice when ranking Learned', () => {
+    const out = practiceVariables(
+      [
+        item('old finish, played last week', 'retired', {
+          learned_at: '2019-01-01T00:00:00.000Z',
+          last_practiced_at: '2026-08-27T00:00:00.000Z',
+        }),
+        item('recent finish, untouched', 'retired', { learned_at: '2026-07-01T00:00:00.000Z' }),
+      ],
+      [],
+    ).repertoire;
+    const lines = out.split('\n').filter((l) => l.startsWith('- '));
+    expect(lines[0]).toContain('old finish, played last week');
+    expect(lines[1]).toContain('recent finish, untouched');
+  });
+
+  it('states the total without a "shown" clause when Learned fits', () => {
+    const out = practiceVariables(
+      [item('Cradle Song', 'retired', { learned_at: '2026-01-01T00:00:00.000Z' })],
+      [],
+    ).repertoire;
+    expect(out).toContain('Learned: 1 item');
+    expect(out).not.toContain('most recent shown');
   });
 });

@@ -185,9 +185,58 @@ const noteMark = (i: RepertoireLike): string | null => {
   return note ? `note: ${note}` : null;
 };
 
-/** How many items a group may render before it cuts and says so — a two-year repertoire must not
- *  become a 200-line block in every prescribe prompt and context pack. */
-const GROUP_CAP = 15;
+/**
+ * How many Learned items she is shown, and the ONLY cap on what she reads (owner ruling
+ * 2026-09-03).
+ *
+ * What they are working on — Learning, Up next, Keeping up — goes in full: those are the facts a
+ * session is built from and a cut there hides live material. Learned only grows, and a reading
+ * record can reach several hundred, so she gets the most recent 12 plus the total, and asks
+ * `get_repertoire` for the rest when the conversation is actually about it. Owner: *"a 500-piece
+ * Learned list should not go to the coach every turn; the total plus the ability to ask for more
+ * limits tokens and gives her a more relevant list."*
+ */
+export const LEARNED_CAP = 12;
+
+/**
+ * When a finished item was last touched: the LATER of the day they finished it and any practice
+ * since. NaN when it carries neither date (backfilled — they already knew it when they told us).
+ *
+ * Both dates are practices, so ranking on either alone hides half the shelf: a piece finished in
+ * 2019 and played last week is recent, and so is one finished last week and never touched again.
+ */
+function lastTouched(i: RepertoireLike): number {
+  const dates = [time(i.last_practiced_at), time(i.learned_at)].filter((t) => !Number.isNaN(t));
+  return dates.length ? Math.max(...dates) : Number.NaN;
+}
+
+/** Most recently touched first; an item with no date at all sorts last, never at a guessed
+ *  position among the dated ones, with the label breaking a tie so the order is stable. */
+export function byLastTouched(a: RepertoireLike, b: RepertoireLike): number {
+  const at = lastTouched(a);
+  const bt = lastTouched(b);
+  const aNone = Number.isNaN(at);
+  const bNone = Number.isNaN(bt);
+  if (aNone !== bNone) return aNone ? 1 : -1;
+  if (!aNone && at !== bt) return bt - at;
+  return a.label < b.label ? -1 : a.label > b.label ? 1 : 0;
+}
+
+/** The Learned items she is shown, most recently touched first, and how many there are in all.
+ *  Both renders read this one function so the coach's context block and the prescribe prompt can
+ *  never disagree about which twelve, or about the number. */
+export function cappedLearned(items: RepertoireLike[]): { shown: RepertoireLike[]; total: number } {
+  const learned = items.filter((i) => i.status === 'retired');
+  return { shown: [...learned].sort(byLastTouched).slice(0, LEARNED_CAP), total: learned.length };
+}
+
+/** "Learned: 214 items — 12 most recent shown" — the count is always stated, so a capped group can
+ *  never read as the whole record. Domain-neutral noun: the same row holds kata, books and verses
+ *  (P8), so "pieces" would be wrong for three of the four. */
+export function learnedTotalLine(total: number, shown: number): string {
+  const head = `Learned: ${total} item${total === 1 ? '' : 's'}`;
+  return total > shown ? `${head} — ${shown} most recent shown` : head;
+}
 
 /**
  * The four groups, in the order she reads them, each header DEFINING its standing.
@@ -266,29 +315,34 @@ export const REPERTOIRE_GROUPS: Array<{ status: RepertoireStatus; header: string
  * practice note — and nothing on it ranks one item against another. No item is marked, and no
  * header says which group today's work comes from.
  *
- * The `known` group is still sorted longest-rest-first, but only so a group over the cap drops the
- * items she has the most recent evidence about rather than the least; the order is not stated and
- * a cut always says how much it dropped (a silent truncation is a quiet lie about completeness).
- * `now` is injectable for tests; callers omit it.
+ * Learning, Up next and Keeping up go in FULL. Learned is the one capped group — the 12 most
+ * recently touched, under a line stating how many there are in all, so she can see the size of the
+ * record and ask `get_repertoire` for the rest (`LEARNED_CAP`). `now` is injectable for tests;
+ * callers omit it. `allLearned` lifts the cap, and exists for exactly one caller: `get_repertoire`
+ * answering the ask the total line invites.
  */
-export function renderRepertoire(items: RepertoireLike[], now = Date.now()): string {
+export function renderRepertoire(
+  items: RepertoireLike[],
+  now = Date.now(),
+  opts: { allLearned?: boolean } = {},
+): string {
   if (!items.length) return '';
   const line = (i: RepertoireLike): string => {
     const marks = [i.kind, practicedNote(i, now), tempoNote(i), noteMark(i)].filter(Boolean);
     return `  - ${i.label} (${marks.join('; ')})`;
   };
-  const capped = (group: RepertoireLike[]): string[] => {
-    const shown = group.slice(0, GROUP_CAP).map(line);
-    if (group.length > GROUP_CAP) shown.push(`  …and ${group.length - GROUP_CAP} more on file`);
-    return shown;
-  };
   const sections: string[] = [];
   for (const spec of REPERTOIRE_GROUPS) {
     const members = items.filter((i) => i.status === spec.status);
-    // Ordered by rest so that a CUT keeps the longest-rested lines — the ones the last-practised
-    // date has least to say about. Nothing in the text claims this order means anything.
-    const ordered = spec.status === 'known' ? [...members].sort(byRest) : members;
-    if (ordered.length) sections.push(`${spec.header}\n${capped(ordered).join('\n')}`);
+    if (!members.length) continue;
+    if (spec.status === 'retired') {
+      const { shown, total } = opts.allLearned
+        ? { shown: [...members].sort(byLastTouched), total: members.length }
+        : cappedLearned(members);
+      sections.push(`${spec.header}\n  ${learnedTotalLine(total, shown.length)}\n${shown.map(line).join('\n')}`);
+      continue;
+    }
+    sections.push(`${spec.header}\n${members.map(line).join('\n')}`);
   }
   return sections.join('\n');
 }
