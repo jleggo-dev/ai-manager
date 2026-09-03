@@ -20,6 +20,10 @@ export interface SelectModeProps {
   initial?: number[];
   /** Names the slot in the group-mode sub-line ("They stay in the same breakfast either way."). */
   mealName?: string;
+  /** Take-out mode: the part's own name, so the lede says what it should leave — "Tick what
+   *  should leave Chia bowl." The canvas's "the bowl" was its example's noun; an unnamed part
+   *  keeps the plain line rather than inventing one. */
+  partLabel?: string;
   onConfirm: (indexes: number[]) => void;
   onCancel: () => void;
 }
@@ -30,7 +34,16 @@ function rowSub(item: MealItem): string {
   return [amount, kcal].filter(Boolean).join(' · ');
 }
 
-export function SelectMode({ mode, items, eligible, initial, mealName, onConfirm, onCancel }: SelectModeProps) {
+export function SelectMode({
+  mode,
+  items,
+  eligible,
+  initial,
+  mealName,
+  partLabel,
+  onConfirm,
+  onCancel,
+}: SelectModeProps) {
   const [picked, setPicked] = useState<Set<number>>(() => new Set(initial ?? []));
   const toggle = (i: number) => {
     setPicked((prev) => {
@@ -62,7 +75,7 @@ export function SelectMode({ mode, items, eligible, initial, mealName, onConfirm
       <div className="mb-select-lede">
         {mode === 'group'
           ? `Tap what belongs together. They stay in the same ${mealName ?? 'meal'} either way.`
-          : 'Tick what should leave.'}
+          : `Tick what should leave${partLabel ? ` ${partLabel}` : ''}.`}
       </div>
       <div className="mb-select-rows">
         {eligible.map((i) => {

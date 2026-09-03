@@ -123,6 +123,11 @@ export function MealBody({
           items={items}
           eligible={picker.mode === 'group' ? loose : picker.part ? membersOf(items, picker.part) : []}
           mealName={draft.meal?.meal}
+          partLabel={
+            picker.mode === 'takeOut' && picker.part
+              ? (draft.meal?.parts?.find((p) => p.key === picker.part)?.name ?? undefined)
+              : undefined
+          }
           onConfirm={(indexes) => {
             if (picker.mode === 'group') draft.editParts({ op: 'group', item_indexes: indexes });
             else if (picker.part)

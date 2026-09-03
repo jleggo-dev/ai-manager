@@ -87,3 +87,25 @@ describe('takeOut mode', () => {
     expect(onConfirm).toHaveBeenCalledWith([1, 2]);
   });
 });
+
+describe('the take-out lede names the part', () => {
+  it('says what the tick leaves when the part has a name, and stays plain when it does not', () => {
+    const items = [
+      { name: 'oats', est: { kcal: 100 } },
+      { name: 'chia', est: { kcal: 50 } },
+    ];
+    const { rerender } = render(
+      <SelectMode
+        mode="takeOut"
+        items={items}
+        eligible={[0, 1]}
+        partLabel="Chia bowl"
+        onConfirm={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    expect(screen.getByText('Tick what should leave Chia bowl.')).toBeInTheDocument();
+    rerender(<SelectMode mode="takeOut" items={items} eligible={[0, 1]} onConfirm={() => {}} onCancel={() => {}} />);
+    expect(screen.getByText('Tick what should leave.')).toBeInTheDocument();
+  });
+});
