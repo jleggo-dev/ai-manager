@@ -527,6 +527,7 @@
 		CAD0C0DE2FE2002800EA8C5F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CadenceNotificationService/CadenceNotificationService.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ZLU84LMGQ6;
@@ -551,6 +552,7 @@
 		CAD0C0DE2FE2002900EA8C5F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CadenceNotificationService/CadenceNotificationService.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ZLU84LMGQ6;

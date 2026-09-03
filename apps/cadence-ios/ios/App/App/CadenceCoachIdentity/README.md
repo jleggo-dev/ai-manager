@@ -41,15 +41,19 @@ extension and the web app serve the same files and adding one is still a single 
 Someone who has picked no portrait sends neither key: nothing for the extension to do, and no
 process launch to work that out.
 
-## Entitlements — and why the extension has none
+## Entitlements — both targets carry it
 
-`com.apple.developer.usernotifications.communication` goes on the **app target only**, plus
-`NSUserActivityTypes` = `INSendMessageIntent` in the app's `Info.plist` and `IntentsSupported` in
-the extension's.
+`com.apple.developer.usernotifications.communication` goes on the **app target AND the
+extension target**, plus `NSUserActivityTypes` = `INSendMessageIntent` in the app's `Info.plist`
+and `IntentsSupported` in the extension's.
 
-It is tempting to put the entitlement on the extension too — it is the target making the
-`updating(from:)` call, and several write-ups say to. It cannot go there. Xcode's own portal
-metadata lists which product types the capability supports:
+The extension needs it in its own right: it is the process calling `updating(from:)` for a push.
+Without it the call throws, the `try?` in `NotificationService.swift` swallows the throw, and the
+notification is delivered with the plain app icon — no crash, no log, nothing to notice.
+
+### The wrong turn this section used to document
+
+This file previously claimed the entitlement "cannot go there", citing Xcode's capability table:
 
 ```
 id: USERNOTIFICATIONS_COMMUNICATION
@@ -57,17 +61,33 @@ supportedProductTypes: ["com.apple.product-type.application",
                         "com.apple.product-type.watchkit2-extension"]
 ```
 
-`com.apple.product-type.app-extension` is not among them, so the capability cannot be enabled on
-an extension's App ID at all, and an extension that requests it fails to sign. The extension
-therefore ships with **no entitlements file**; it inherits what it needs from the host app, whose
-App ID carries the capability.
+That table is real (`DVTPortalCachedPortalCapabilities.json` inside `DVTPortal.framework`), but it
+governs only which targets **Xcode's Signing & Capabilities UI** offers the checkbox for. The
+developer portal has no notion of a product type — an App ID is just a bundle id — so the
+capability can be enabled there by hand, and `CODE_SIGN_ENTITLEMENTS` on the target then signs
+against the profile that results. Verified, not reasoned:
 
-That also means there is no portal step for the extension. Automatic signing creates
-`builders.cadence.app.NotificationService` on the next build the same way it created
-`builders.cadence.app.watchkitapp` (Xcode names the ones it made "XC ...").
+```
+Provisioning Profile: "iOS Team Provisioning Profile: builders.cadence.app.NotificationService"
+** BUILD SUCCEEDED **
 
-(`DVTPortalCachedPortalCapabilities.json` inside `DVTPortal.framework` is where that table lives,
-if a future capability raises the same question.)
+$ codesign -d --entitlements - CadenceNotificationService.appex
+application-identifier: ZLU84LMGQ6.builders.cadence.app.NotificationService
+com.apple.developer.usernotifications.communication: true
+```
+
+The inference from "Xcode won't offer it" to "it fails to sign" cost this feature weeks of plain
+app icons. **A capability table is a statement about a UI, not about what can be signed** — settle
+this class of question with a device build, which fails loudly, rather than with a doc.
+
+### Portal step (required, not automatic)
+
+`builders.cadence.app.NotificationService` must exist as an **explicit** App ID with the
+Communication Notifications capability enabled. Automatic signing will happily create the App ID
+on its own, but it creates it **without** the capability — so the profile it mints is missing the
+entitlement and the extension silently falls back. The first device build after adding it needs
+`-allowProvisioningUpdates`; note that `cap run ios` can exit 0 on a failed `xcodebuild`, so read
+the log for `BUILD SUCCEEDED` rather than trusting the exit code.
 
 ## Verified, and not
 
