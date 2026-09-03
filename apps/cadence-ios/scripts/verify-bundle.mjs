@@ -14,17 +14,19 @@
  * produced here, on the machine holding the phone), and nothing in code is wrong in either mode.
  * The only place the mistake is visible is immediately after the build, which is here.
  *
- * Two assertions, both about the ARTIFACT rather than the source, because the source was fine:
+ * Three assertions, all about the ARTIFACT rather than the source, because the source was fine:
  *  1. `.env.ios` declares an absolute API base (a relative one cannot work in the shell).
  *  2. That host actually appears in the built JS — proving the ios-mode env reached the bundle.
+ *  3. Every local package path in the generated `CapApp-SPM/Package.swift` resolves. See below.
  */
-import { readFileSync, readdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const envPath = join(here, '../../cadence-web/.env.ios');
 const assetsDir = join(here, '../ios/App/App/public/assets');
+const packageSwift = join(here, '../ios/App/CapApp-SPM/Package.swift');
 
 const fail = (msg) => {
   console.error(`\n✖ iOS bundle check failed\n\n  ${msg}\n`);
@@ -52,3 +54,33 @@ if (!found) {
 }
 
 console.log(`✓ iOS bundle points at ${host}`);
+
+/**
+ * `cap sync` writes the plugin paths in Package.swift RELATIVE to that file, so the correct depth
+ * depends on where it was run. An agent worktree under `.claude/worktrees/<name>/` sits three
+ * levels deeper than the primary checkout and carries no `node_modules` of its own, so a sync run
+ * there resolves back to the real one eight levels up and writes `../` × 8. Committed from there,
+ * the file points at `/Users/node_modules` for everyone else, and a plain `xcodebuild` dies at
+ * package resolution before it compiles a line.
+ *
+ * That is survivable only because `npm run sync` regenerates the file first, which is precisely
+ * why it went unnoticed on main for weeks: the normal flow never reads the committed version.
+ * Checked here rather than in CI for the same reason as the assertions above — CI never builds
+ * the iOS project, so this is the last place the mistake is visible.
+ */
+const pkg = readFileSync(packageSwift, 'utf8');
+const pkgDir = dirname(packageSwift);
+const localPaths = [...pkg.matchAll(/path:\s*"([^"]+)"/g)].map((m) => m[1]);
+if (!localPaths.length) fail(`No local package paths found in ${packageSwift} — did cap sync run?`);
+
+const unresolved = localPaths.filter((p) => !existsSync(resolve(pkgDir, p)));
+if (unresolved.length) {
+  fail(`CapApp-SPM/Package.swift points at packages that do not exist, e.g.
+      ${resolve(pkgDir, unresolved[0])}
+
+  These paths are relative to Package.swift, so this is what \`cap sync\` writes when it is run
+  from a different depth than the primary checkout — an agent worktree under .claude/worktrees/ is
+  the usual culprit. Re-run the sync from the primary checkout and commit the result.`);
+}
+
+console.log(`✓ ${localPaths.length} SPM plugin paths resolve`);
