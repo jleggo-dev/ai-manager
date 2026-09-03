@@ -262,7 +262,7 @@ function YieldSheet({
 
 type SelectTask =
   | { kind: 'group'; logId: string; eligible: number[]; slotLabel: string }
-  | { kind: 'takeOut'; logId: string; partKey: string; eligible: number[]; slotLabel: string }
+  | { kind: 'takeOut'; logId: string; partKey: string; eligible: number[]; slotLabel: string; partName: string | null }
   | { kind: 'addTo'; logId: string; partKey: string; eligible: number[]; slotLabel: string };
 
 export function FoodDiary({
@@ -439,7 +439,14 @@ export function FoodDiary({
               onTakeOut={() => {
                 setMenu(null);
                 const eligible = g.rows.map((r) => r.index).filter((i): i is number => i != null);
-                setSelect({ kind: 'takeOut', logId: g.logId, partKey, eligible, slotLabel: slotLabelOf(g.logId) });
+                setSelect({
+                  kind: 'takeOut',
+                  logId: g.logId,
+                  partKey,
+                  eligible,
+                  slotLabel: slotLabelOf(g.logId),
+                  partName: g.partName,
+                });
               }}
               onUngroup={() => {
                 setMenu(null);
@@ -464,6 +471,7 @@ export function FoodDiary({
               items={selectItems}
               eligible={select.eligible}
               mealName={select.slotLabel}
+              partLabel={select.kind === 'takeOut' ? (select.partName ?? undefined) : undefined}
               onConfirm={(indexes) => confirmSelect(select, indexes)}
               onCancel={() => setSelect(null)}
             />

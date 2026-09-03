@@ -173,6 +173,16 @@ enforced (reads close overdue drafts; empty ones are deleted). Draft dates respe
 - The `sweep-food-recipes` job is in config but **not synced** — `sync-jobs.ts` is a post-merge
   step, called out in the PR.
 
+### Copy resolutions (the canvas leaked its example data — settled 2026-09-03)
+
+- The take-out tick-list's lede: the canvas wrote "tick what should leave the bowl", where "the
+  bowl" was the example part's own name. Shipped dynamic: **"Tick what should leave {part
+  name}."** when the part is named, the plain "Tick what should leave." when it is not — nothing
+  invents a noun.
+- The sweep's tidy copy: "read as a bowl" / "outside the bowl" name the actual proposal ("read as
+  Chia bowl") and say "outside the bracket"; every count renders from data, never from the
+  drawing's example numbers.
+
 ## Parcels
 
 Wave 1 (parallel, disjoint files):
