@@ -107,8 +107,13 @@ const time = (iso?: string | null): number => (iso ? new Date(iso).getTime() : N
 
 /** Longest-rest-first: never-practiced beats practiced; ties break by started_at (oldest first),
  *  then by codepoint label order — locale-independent, so the pick is identical on a dev laptop
- *  and a UTC server rather than dependent on ICU data or row order. */
-function byRest(a: RepertoireLike, b: RepertoireLike): number {
+ *  and a UTC server rather than dependent on ICU data or row order.
+ *
+ *  Exported (2026-09-02, P6 "the room"): the list screen sorts the WHOLE Keeping-up group by this
+ *  same comparator, not just the one due pick `pickDueNext` returns — so the coach and the screen
+ *  read one rest-order, never a second spelling of "longest rest" drifting from this one
+ *  (CLAUDE.md: a comparator that decides behaviour lives in `@cadence/shared` once). */
+export function byRest(a: RepertoireLike, b: RepertoireLike): number {
   const at = time(a.last_practiced_at);
   const bt = time(b.last_practiced_at);
   const aNever = Number.isNaN(at);
@@ -162,8 +167,18 @@ const GROUP_CAP = 15;
  *     `learned` is the verb for the opposite move (crossed into Keeping up just now, celebrated
  *     once). Without the word in the header she would write status "learned" to file something
  *     under Learned and land it in the rotation with a cheer attached.
+ *
+ * Exported (2026-09-02, P6 "the room") for the GROUP ORDER only: the list screen renders its four
+ * sections in exactly this array's order (`working, queued, known, retired`), read off here so the
+ * screen and the coach can never disagree about which standing comes first. The HEADER TEXT below
+ * is not for the screen — it is imperative, third-person, and names the schema word by design,
+ * because it is a prompt string a MODEL reads (see the two rules above), and putting it in front of
+ * a person would break the warm-UI/boring-prompt split CLAUDE.md's nomenclature rule draws. The
+ * screen carries its own short, warm line per standing instead (`GROUP_LINES` in
+ * `repertoireListCopy.ts`, web package) — a first attempt at reusing this text verbatim for the UI
+ * was wrong and was reverted (owner review, 2026-09-02).
  */
-const GROUPS: Array<{ status: RepertoireStatus; header: string }> = [
+export const REPERTOIRE_GROUPS: Array<{ status: RepertoireStatus; header: string }> = [
   {
     status: 'working',
     header: 'Learning (status "working") — work these in the learn part of each session; keep it to one or two:',
@@ -210,7 +225,7 @@ export function renderRepertoire(items: RepertoireLike[], now = Date.now()): str
     return shown;
   };
   const sections: string[] = [];
-  for (const spec of GROUPS) {
+  for (const spec of REPERTOIRE_GROUPS) {
     const members = items.filter((i) => i.status === spec.status);
     // Only 'known' rotates, so only 'known' is ordered by rest — that ordering is what makes a cut
     // safe there (the DUE NEXT item can never be the one dropped).

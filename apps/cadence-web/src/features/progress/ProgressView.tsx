@@ -7,6 +7,7 @@ import { SessionListScreen } from './SessionListScreen.tsx';
 import { PhotosRow, PhotosScreen } from './PhotosScreen.tsx';
 import { WindowSeg } from './WindowSeg.tsx';
 import { ProgressSkeleton } from './ProgressSkeleton.tsx';
+import { ListScreen } from '../repertoire/ListScreen.tsx';
 
 /**
  * The Progress tab (Progress Engine W1-6) — the page renders whatever the layout says, and the
@@ -89,6 +90,11 @@ export function ProgressView({ onCoach }: { onCoach?: (note: string) => void }) 
   const [window, setWindow] = useState<ProgressWindow>('month');
   const [drill, setDrill] = useState<string | null>(null);
   const [photosOpen, setPhotosOpen] = useState(false);
+  /** repertoire drill-down (P6 "the room"): which scope opened the list screen, or null when it
+   *  is closed. `goalId` null means the card itself was unscoped ("everything they keep"). */
+  const [repertoireScope, setRepertoireScope] = useState<{ goalId: string | null; goalName: string | null } | null>(
+    null,
+  );
   const { data: layout, error } = useProgressLayout();
   // Shared /plan cache (PERF-01) — the header subline and StreakLine read it, never a new endpoint.
   const { data: plan } = usePlan();
@@ -96,6 +102,16 @@ export function ProgressView({ onCoach }: { onCoach?: (note: string) => void }) 
   if (drill) return <SessionListScreen activity={drill} onBack={() => setDrill(null)} />;
   // "All photos live in Progress" (Settings Room design, 1e) — the settings toggle points here.
   if (photosOpen) return <PhotosScreen onBack={() => setPhotosOpen(false)} />;
+  if (repertoireScope) {
+    return (
+      <ListScreen
+        goalId={repertoireScope.goalId}
+        goalName={repertoireScope.goalName}
+        onBack={() => setRepertoireScope(null)}
+        onOpenChat={onCoach}
+      />
+    );
+  }
 
   if (error && !layout) {
     return (
@@ -138,6 +154,7 @@ export function ProgressView({ onCoach }: { onCoach?: (note: string) => void }) 
             window={window}
             onDrill={setDrill}
             onOpenPhotos={() => setPhotosOpen(true)}
+            onOpenRepertoire={(goalId, goalName) => setRepertoireScope({ goalId, goalName: goalName ?? null })}
           />
         ))
       )}

@@ -7,7 +7,8 @@ import { StandingControl } from './StandingControl.tsx';
 import { ItemHistoryTempo } from './ItemHistoryTempo.tsx';
 import { ItemRemove } from './ItemRemove.tsx';
 import '../../styles/progress-widgets.css';
-import '../../styles/repertoire-item.css';
+// repertoire-item.css now loads centrally from main.tsx (P6: this screen is real navigation now,
+// not preview-only, and the list screen's own collision card reuses `.ri-collision` from it too).
 
 /** The one sentence this screen renders verbatim when the shelf has a collision — the app never
  *  proposes the distinction, only names that one exists (brief: "the app never proposes the

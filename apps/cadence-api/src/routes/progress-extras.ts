@@ -20,11 +20,12 @@ import { getThenNow } from '../services/progress-then-now.ts';
 import { resolveWindowRange } from '../services/window-range.ts';
 import {
   deleteRepertoireItem,
+  listRepertoire,
   renameRepertoireItem,
   RepertoireRenameConflictError,
   updateRepertoireItem,
 } from '../repos/repertoire.ts';
-import { invalidateSessionsFor } from '../services/repertoire-practice.ts';
+import { collidingTitles, invalidateSessionsFor } from '../services/repertoire-practice.ts';
 import { parseBody, patchRepertoireItemBodySchema, BodyValidationError } from '../validation/body.ts';
 
 const router = Router();
@@ -180,6 +181,35 @@ router.get('/count', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /progress/repertoire/items?goal_id= — the list screen's own read (P6: "the room"). The
+ * `repertoire` card above (`/progress/repertoire`) is a DISPLAY summary — capped, and its rows
+ * carry no `item_id` — so a screen that opens an item or PATCHes its standing/rank needs the full
+ * row instead. Scoped exactly like the card (`goal_id` given ⇒ that goal's own items only; omitted
+ * ⇒ everything they keep, unattached material included) so the two reads can never disagree about
+ * what "this goal's repertoire" means.
+ *
+ * Collisions are computed HERE, once, server-side, with the same `collidingTitles` the coach's own
+ * render uses (`repertoire-practice.ts`) — a second, browser-side spelling of "which titles name
+ * more than one piece" is exactly the matching drift CLAUDE.md warns about, so the list is handed
+ * the answer rather than the ingredients to recompute it.
+ */
+router.get('/repertoire/items', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const goalId = req.query.goal_id;
+  if (goalId !== undefined && (typeof goalId !== 'string' || !goalId)) {
+    return void res.status(400).json({ error: 'goal_id, when given, must be a non-empty string' });
+  }
+  try {
+    const all = await listRepertoire(userId);
+    const items = typeof goalId === 'string' ? all.filter((i) => i.goal_id === goalId) : all;
+    res.json({ items, collisions: collidingTitles(items) });
+  } catch (err) {
+    console.error('[GET /progress/repertoire/items]', err);
+    res.status(500).json({ error: 'failed to load repertoire items' });
+  }
+});
+
 /*
  * PATCH/DELETE /progress/repertoire/:id — the item screen (P2: the item, opened). Deterministic
  * throughout: no coach call, no AI. Two repo writes because the screen itself makes two
@@ -208,7 +238,12 @@ router.patch('/repertoire/:id', async (req: Request, res: Response) => {
       if (!row) return void res.status(404).json({ error: 'repertoire item not found' });
     }
 
-    const meta = qualifierMeta({ composer: body.composer, collection: body.collection, catalogue: body.catalogue });
+    const meta = qualifierMeta({
+      composer: body.composer,
+      collection: body.collection,
+      catalogue: body.catalogue,
+      rank: body.rank,
+    });
     const status = body.status as RepertoireStatus | undefined;
     if (status !== undefined || Object.keys(meta).length > 0) {
       row = await updateRepertoireItem(userId, itemId, { status, meta: Object.keys(meta).length ? meta : undefined });

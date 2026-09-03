@@ -16,6 +16,8 @@ export interface RepertoireItemPatch {
   collection?: string;
   catalogue?: string;
   status?: RepertoireStatus;
+  /** 1-based position for a drag-ordered standing (the Up next group, P6 "the room"). */
+  rank?: number;
 }
 
 async function readError(res: Response, fallback: string): Promise<Error> {

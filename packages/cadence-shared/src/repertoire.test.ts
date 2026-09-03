@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  REPERTOIRE_GROUPS,
   TEMPO_BPM_KEY,
+  byRest,
   pickDueNext,
   pieceQualifiers,
   qualifierMeta,
@@ -130,6 +132,39 @@ describe('renderRepertoire — the four standings', () => {
     expect(text).not.toContain('Up next');
     expect(text).not.toContain('Learning (status');
     expect(text).not.toContain('Learned (status');
+  });
+});
+
+/**
+ * `REPERTOIRE_GROUPS` and `byRest` are exported for one consumer outside this file: the list
+ * screen (P6, "the room"), which renders its own four group headers from these same words and
+ * sorts the whole Keeping-up group by this same rest order — never a hand-typed second copy of
+ * either (CLAUDE.md). These two tests pin the exported SHAPE so a rename or reorder here is caught
+ * where it happens, not as a silent drift discovered on the screen.
+ */
+describe('REPERTOIRE_GROUPS (exported for the list screen)', () => {
+  it('is exactly the four standings, in the order the screen must show them', () => {
+    expect(REPERTOIRE_GROUPS.map((g) => g.status)).toEqual(['working', 'queued', 'known', 'retired']);
+  });
+
+  it('every header still carries its name, its status word, and an instruction clause', () => {
+    for (const { status, header } of REPERTOIRE_GROUPS) {
+      expect(header).toContain(`(status "${status}")`);
+      expect(header).toMatch(/ — .+:$/);
+    }
+  });
+});
+
+describe('byRest (exported for the list screen)', () => {
+  it('orders the same way pickDueNext picks — its first pick sorts first', () => {
+    const items = [
+      item('A Short Story', { last_practiced_at: daysAgo(1) }),
+      item('Écossaise', { last_practiced_at: daysAgo(19) }),
+      item('Minuet in G', { last_practiced_at: daysAgo(9) }),
+    ];
+    const sorted = [...items].sort(byRest);
+    expect(sorted[0]?.label).toBe(pickDueNext(items)?.label);
+    expect(sorted.map((i) => i.label)).toEqual(['Écossaise', 'Minuet in G', 'A Short Story']);
   });
 });
 

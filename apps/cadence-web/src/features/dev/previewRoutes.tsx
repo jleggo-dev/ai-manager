@@ -14,6 +14,9 @@ import { CoachMomentsPreview } from './CoachMomentsPreview.tsx';
 import { PlanCardPreview } from './PlanCardPreview.tsx';
 import { SkeletonPreview } from './SkeletonPreview.tsx';
 import { WidgetsPreview } from './WidgetsPreview.tsx';
+import { ItemScreenPreview } from '../repertoire/ItemScreenPreview.tsx';
+import { SeedReviewPreview } from '../repertoire/SeedReviewPreview.tsx';
+import { ListScreenPreview } from '../repertoire/ListScreenPreview.tsx';
 
 /**
  * `?preview=<tool>` — render ONE component against fixture data, short-circuiting auth and the
@@ -36,6 +39,9 @@ const PREVIEWS: Record<string, () => ReactNode> = {
   plancard: () => <PlanCardPreview />,
   skeletons: () => <SkeletonPreview />,
   widgets: () => <WidgetsPreview />,
+  item: () => <ItemScreenPreview />,
+  seed: () => <SeedReviewPreview />,
+  repertoire: () => <ListScreenPreview />,
 };
 
 export function previewScreen(name: string | null): ReactNode | null {

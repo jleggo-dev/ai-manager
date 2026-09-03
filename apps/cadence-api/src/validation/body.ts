@@ -325,6 +325,13 @@ export const patchRepertoireItemBodySchema = z
     collection: z.string().trim().min(1, { message: 'collection, when given, must not be blank' }).max(120).optional(),
     catalogue: z.string().trim().min(1, { message: 'catalogue, when given, must not be blank' }).max(120).optional(),
     status: z.string().optional(),
+    // 1-based position for a drag-ordered standing (the Up next group, P6 "the room"). Merged into
+    // meta by the same `qualifierMeta` call the other three qualifiers already go through.
+    rank: z
+      .number()
+      .int({ message: 'rank must be a whole number' })
+      .min(1, { message: 'rank must be at least 1' })
+      .optional(),
   })
   .superRefine((val, ctx) => {
     if (val.status === 'learned') {
@@ -352,7 +359,8 @@ export const patchRepertoireItemBodySchema = z
       val.composer === undefined &&
       val.collection === undefined &&
       val.catalogue === undefined &&
-      val.status === undefined
+      val.status === undefined &&
+      val.rank === undefined
     ) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'nothing to update' });
     }

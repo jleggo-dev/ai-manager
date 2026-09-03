@@ -33,8 +33,10 @@ export const STANDING_EXPLANATION: Record<RepertoireItem['status'], string> = {
 };
 
 /** Hardcoded rather than `toLocaleDateString`'s month name — locale-independent, so the same
- *  item reads the same way on every device (the shared repertoire renderer's own reasoning). */
-const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+ *  item reads the same way on every device (the shared repertoire renderer's own reasoning).
+ *  Exported for the list screen's own (coarser) date grammar, `repertoireListCopy.ts` — same
+ *  twelve names, never a second array to keep in step with this one. */
+export const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** 'Mar 14' this year, 'Mar 14, 2025' otherwise — an absolute date for a HISTORY row, which
  *  spans years, not a relative one (cardHeader.ts's `deadlineTag` uses the same escalation). */

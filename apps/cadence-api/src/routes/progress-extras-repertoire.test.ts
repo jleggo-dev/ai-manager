@@ -124,6 +124,19 @@ describe('PATCH /progress/repertoire/:id — validation (near-misses before the 
     expect(r.status).toBe(400);
     expect(renameRepertoireItem).not.toHaveBeenCalled();
   });
+
+  // `rank` — the Up next group's drag order (P6 "the room"). Table: a real 1-based rank passes,
+  // and the near-misses a drag interaction could actually produce (dropped at the top: 0; a
+  // fractional position from a naive average-of-neighbours reorder: 1.5; a stringly-typed body: "2").
+  it.each([
+    [0, 'zero is not a 1-based position'],
+    [1.5, 'not a whole number'],
+    ['2', 'not a number at all'],
+  ])('rejects rank %j (%s)', async (rank: number | string, _why: string) => {
+    const r = await call('PATCH', '/progress/repertoire/it-1', { rank });
+    expect(r.status).toBe(400);
+    expect(updateRepertoireItem).not.toHaveBeenCalled();
+  });
 });
 
 describe('PATCH /progress/repertoire/:id — rename', () => {
@@ -160,6 +173,23 @@ describe('PATCH /progress/repertoire/:id — rename', () => {
     expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
       status: 'retired',
       meta: { composer: 'Debussy', collection: 'Suite bergamasque' },
+    });
+  });
+
+  it('accepts a rank-only body — reordering Up next needs no other field', async () => {
+    updateRepertoireItem.mockResolvedValue(item({ status: 'queued' }));
+    const r = await call('PATCH', '/progress/repertoire/it-1', { rank: 3 });
+    expect(r.status).toBe(200);
+    expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', { status: undefined, meta: { rank: 3 } });
+  });
+
+  it('sends rank alongside a status change as one merged meta patch, like the other qualifiers', async () => {
+    updateRepertoireItem.mockResolvedValue(item({ status: 'queued' }));
+    const r = await call('PATCH', '/progress/repertoire/it-1', { status: 'queued', rank: 1, composer: 'Debussy' });
+    expect(r.status).toBe(200);
+    expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
+      status: 'queued',
+      meta: { composer: 'Debussy', rank: 1 },
     });
   });
 

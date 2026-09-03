@@ -26,10 +26,21 @@ import './styles/meal-screen.css';
 // The Sunday sweep's surfaces (.sw-*, meal-logging rework P7) — rides the sheet chrome from
 // styles.css and the bracket's taxonomy (green/butter), so it loads after both.
 import './styles/sweep.css';
-// Skeletons (PERF-06). Last, and deliberately self-contained: these rules describe the SHAPE of a
-// screen that has not arrived, so they must not depend on — or be overridden by — any one
-// screen's stylesheet.
+// Skeletons (PERF-06). Deliberately self-contained: these rules describe the SHAPE of a screen
+// that has not arrived, so they must not depend on — or be overridden by — any one screen's
+// stylesheet.
 import './styles/skeleton.css';
+// The item, opened (.ri-*, P2) — was self-imported by ItemScreen.tsx while the screen was reachable
+// only behind a dev preview; now that the list screen (P6) makes it real navigation, its rules load
+// centrally like every other screen's, so `.ri-collision`'s butter card is available wherever the
+// list screen's own collision card needs it too.
+import './styles/repertoire-item.css';
+// Seeding a collection (.sr-*, P4) — same move, same reason: SeedReview was self-imported while its
+// route belonged to another parcel; P6 wires it into real navigation from the list screen.
+import './styles/seed-review.css';
+// The list screen itself (.rl-*, P6 "the room") — leans on `.ri-collision` above for the collision
+// card and on styles.css's `.sheet-*`/`.ld-row`/`.detour-chip`/`.cta`, so it loads last of the three.
+import './styles/repertoire-list.css';
 import { App } from './App.tsx';
 import { createAppQueryClient, persistBootCache, seedBootCache } from './lib/query/index.ts';
 import { warmApi } from './lib/api.ts';

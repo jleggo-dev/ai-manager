@@ -5,8 +5,9 @@
  * the detour sheet's `.detour-chip`, the confirm is the app's `.cta`. Everything here is the
  * geometry those need in THIS arrangement, and nothing here restates a color or a type scale.
  *
- * Imported by SeedReview.tsx rather than main.tsx: the screen is not registered in the app yet
- * (its route belongs to another parcel), so the stylesheet rides with the component that needs it.
+ * Imported from main.tsx (P6 "the room"): the list screen wires this screen into real navigation,
+ * so its rules load centrally like every other screen's rather than riding in with whichever
+ * component happens to mount first.
  */
 
 .sr-screen {
