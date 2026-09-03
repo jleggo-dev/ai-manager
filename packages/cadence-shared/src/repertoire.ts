@@ -168,12 +168,15 @@ const GROUP_CAP = 15;
  *     once). Without the word in the header she would write status "learned" to file something
  *     under Learned and land it in the rotation with a cheer attached.
  *
- * Exported (2026-09-02, P6 "the room"): the list screen's four group headers name, count, and
- * one-line instruction all read off this SAME array — never a second, hand-typed copy of these
- * sentences in the web package (CLAUDE.md: a string that decides behaviour lives once). The
- * screen strips each header down to its instruction clause for display (the "(status \"x\")"
- * parenthetical is prompt scaffolding for the model, not brand-safe user copy), but the words of
- * the instruction itself are these, verbatim.
+ * Exported (2026-09-02, P6 "the room") for the GROUP ORDER only: the list screen renders its four
+ * sections in exactly this array's order (`working, queued, known, retired`), read off here so the
+ * screen and the coach can never disagree about which standing comes first. The HEADER TEXT below
+ * is not for the screen — it is imperative, third-person, and names the schema word by design,
+ * because it is a prompt string a MODEL reads (see the two rules above), and putting it in front of
+ * a person would break the warm-UI/boring-prompt split CLAUDE.md's nomenclature rule draws. The
+ * screen carries its own short, warm line per standing instead (`GROUP_LINES` in
+ * `repertoireListCopy.ts`, web package) — a first attempt at reusing this text verbatim for the UI
+ * was wrong and was reverted (owner review, 2026-09-02).
  */
 export const REPERTOIRE_GROUPS: Array<{ status: RepertoireStatus; header: string }> = [
   {
