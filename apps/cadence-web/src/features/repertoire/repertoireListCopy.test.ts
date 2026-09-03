@@ -5,13 +5,13 @@
  * row for every standing, not just the ones with a real sort.
  */
 import { describe, it, expect } from 'vitest';
-import type { RepertoireItem, RepertoireStatus } from '@cadence/shared';
-import { RANK_KEY } from '@cadence/shared';
+import type { RepertoireItem } from '@cadence/shared';
+import { CATALOGUE_KEY, COLLECTION_KEY, COMPOSER_KEY, RANK_KEY, REPERTOIRE_GROUPS } from '@cadence/shared';
 import {
   buildSecondLine,
   collisionPartnersFor,
   formatRowDate,
-  groupInstruction,
+  GROUP_LINES,
   headerCountLine,
   moveQueuedRank,
   orderGroupItems,
@@ -37,21 +37,41 @@ function item(over: Partial<RepertoireItem> = {}): RepertoireItem {
 const daysAgo = (n: number, now = new Date('2026-09-02T12:00:00Z')): string =>
   new Date(now.getTime() - n * 86_400_000).toISOString();
 
-describe('groupInstruction — strips the LLM-prompt wrapper, keeps the words verbatim', () => {
-  it('drops the leading name + status parenthetical and the trailing colon', () => {
-    const header = 'Learning (status "working") — work these in the learn part of each session; keep it to one or two:';
-    expect(groupInstruction(header)).toBe('work these in the learn part of each session; keep it to one or two');
+/**
+ * `GROUP_LINES` — the group header's own words, in the coach's voice. `REPERTOIRE_GROUPS`' header
+ * text is a PROMPT string for the model (third person, imperative, names the schema word on
+ * purpose); an earlier version of this screen put that in front of a person, which a review caught
+ * (owner, 2026-09-02) as a nomenclature-rule break. These four lines replace it, pinned verbatim so
+ * nobody drifts the wording at a second call site, plus a completeness check: a fifth standing
+ * added to REPERTOIRE_GROUPS without a matching line here must fail loudly, not render blank.
+ */
+describe('GROUP_LINES', () => {
+  it("renders the coach's own line for each standing, verbatim", () => {
+    expect(GROUP_LINES.working).toBe("what we're working on now");
+    expect(GROUP_LINES.queued).toBe("your order — I'll suggest the first");
+    expect(GROUP_LINES.known).toBe('in rotation — longest rest first');
+    expect(GROUP_LINES.retired).toBe('finished — counted, never scheduled');
   });
 
-  it('never leaks the schema status word into the derived instruction', () => {
-    const header = 'Learned (status "retired") — finished. Count these; never schedule them:';
-    expect(groupInstruction(header)).not.toContain('status');
-    expect(groupInstruction(header)).not.toContain('retired');
-    expect(groupInstruction(header)).toBe('finished. Count these; never schedule them');
+  it('never leaks the model-prompt scaffolding — the schema word quoted after "status"', () => {
+    // Plain English words like "working" are fine in warm copy (GROUP_LINES.working says exactly
+    // that); what must never appear is REPERTOIRE_GROUPS' own prompt wrapper, `status "word"`.
+    for (const line of Object.values(GROUP_LINES)) {
+      expect(line).not.toMatch(/status\s*"/i);
+    }
   });
 
-  it('is idempotent-safe on a string with no wrapper — returns it unchanged rather than mangling it', () => {
-    expect(groupInstruction('plain sentence')).toBe('plain sentence');
+  it('is not the REPERTOIRE_GROUPS prompt text — the earlier "verbatim" reuse this replaces', () => {
+    for (const { status, header } of REPERTOIRE_GROUPS) {
+      expect(GROUP_LINES[status]).not.toBe(header);
+    }
+  });
+
+  it('has an entry for every standing REPERTOIRE_GROUPS carries — a fifth standing cannot ship silent', () => {
+    for (const { status } of REPERTOIRE_GROUPS) {
+      expect(GROUP_LINES[status]).toBeTruthy();
+    }
+    expect(Object.keys(GROUP_LINES).sort()).toEqual(REPERTOIRE_GROUPS.map((g) => g.status).sort());
   });
 });
 
@@ -85,12 +105,12 @@ describe('formatRowDate — relative, then month, then year (coarser than the it
   });
 });
 
-describe('buildSecondLine — only what is on file, never an empty separator', () => {
+describe('buildSecondLine — composer · catalogue · collection · date, only what is on file', () => {
   const now = new Date('2026-09-02T12:00:00Z');
 
   it('composer and collection both on file, joined with the practiced date', () => {
     const i = item({
-      meta: { composer: 'Debussy', collection: 'Suite bergamasque' },
+      meta: { [COMPOSER_KEY]: 'Debussy', [COLLECTION_KEY]: 'Suite bergamasque' },
       last_practiced_at: daysAgo(1, now),
     });
     expect(buildSecondLine(i, now)).toBe('Debussy · Suite bergamasque · yesterday');
@@ -100,8 +120,30 @@ describe('buildSecondLine — only what is on file, never an empty separator', (
     expect(buildSecondLine(item({ meta: null, last_practiced_at: null }), now)).toBe('');
   });
 
-  it('composer only — no dangling " · " where collection or the date would go', () => {
-    expect(buildSecondLine(item({ meta: { composer: 'Hummel' }, last_practiced_at: null }), now)).toBe('Hummel');
+  it('composer only — no dangling " · " where catalogue, collection, or the date would go', () => {
+    expect(buildSecondLine(item({ meta: { [COMPOSER_KEY]: 'Hummel' }, last_practiced_at: null }), now)).toBe('Hummel');
+  });
+
+  it('catalogue alone — the one qualifier that actually tells same-titled pieces apart', () => {
+    const i = item({ meta: { [CATALOGUE_KEY]: 'BWV 822' }, last_practiced_at: null });
+    expect(buildSecondLine(i, now)).toBe('BWV 822');
+  });
+
+  it('composer and catalogue, catalogue second — ahead of collection, right after composer', () => {
+    const i = item({ meta: { [COMPOSER_KEY]: 'J.S. Bach', [CATALOGUE_KEY]: 'BWV 822' }, last_practiced_at: null });
+    expect(buildSecondLine(i, now)).toBe('J.S. Bach · BWV 822');
+  });
+
+  it('all four segments, in order: composer, catalogue, collection, date', () => {
+    const i = item({
+      meta: {
+        [COMPOSER_KEY]: 'J.S. Bach',
+        [CATALOGUE_KEY]: 'BWV 822',
+        [COLLECTION_KEY]: 'Anna Magdalena Notebook',
+      },
+      last_practiced_at: daysAgo(1, now),
+    });
+    expect(buildSecondLine(i, now)).toBe('J.S. Bach · BWV 822 · Anna Magdalena Notebook · yesterday');
   });
 
   it('a retired item with no practice date falls back to when it was learned — "dated" even at rest', () => {
@@ -151,14 +193,37 @@ describe('orderGroupItems', () => {
     expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['B', 'C', 'A']);
   });
 
-  it.each<RepertoireStatus>(['working', 'retired'])(
-    'near-miss: %s is left in server order — it must NOT pick up rank or rest sorting meant for the other two',
-    (status) => {
-      const items = [item({ status, label: 'Z' }), item({ status, label: 'A' })];
-      // Server order (alphabetical from listRepertoire) is preserved as-is: no re-sort applied.
-      expect(orderGroupItems(status, items).map((i) => i.label)).toEqual(['Z', 'A']);
-    },
-  );
+  it('near-miss: working is left in server order — it must NOT pick up rank, rest, or date sorting meant for the other three', () => {
+    const items = [item({ status: 'working', label: 'Z' }), item({ status: 'working', label: 'A' })];
+    // Server order (alphabetical from listRepertoire) is preserved as-is: no re-sort applied.
+    expect(orderGroupItems('working', items).map((i) => i.label)).toEqual(['Z', 'A']);
+  });
+
+  it('retired sorts newest-finished-first', () => {
+    const items = [
+      item({ status: 'retired', label: 'oldest', learned_at: daysAgo(400) }),
+      item({ status: 'retired', label: 'newest', learned_at: daysAgo(1) }),
+      item({ status: 'retired', label: 'middle', learned_at: daysAgo(30) }),
+    ];
+    expect(orderGroupItems('retired', items).map((i) => i.label)).toEqual(['newest', 'middle', 'oldest']);
+  });
+
+  it('retired: a backfilled row with no learned_at goes last, even if it was practiced yesterday', () => {
+    const items = [
+      item({ status: 'retired', label: 'backfilled', learned_at: null, last_practiced_at: daysAgo(1) }),
+      item({ status: 'retired', label: 'dated', learned_at: daysAgo(200) }),
+    ];
+    expect(orderGroupItems('retired', items).map((i) => i.label)).toEqual(['dated', 'backfilled']);
+  });
+
+  it('retired: a tie on learned_at (both null) falls to last_practiced_at, newest first, then label', () => {
+    const items = [
+      item({ status: 'retired', label: 'B', learned_at: null, last_practiced_at: daysAgo(10) }),
+      item({ status: 'retired', label: 'A', learned_at: null, last_practiced_at: daysAgo(2) }),
+      item({ status: 'retired', label: 'C', learned_at: null, last_practiced_at: null }),
+    ];
+    expect(orderGroupItems('retired', items).map((i) => i.label)).toEqual(['A', 'B', 'C']);
+  });
 });
 
 describe('splitUnattached', () => {
