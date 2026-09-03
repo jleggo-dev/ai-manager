@@ -61,7 +61,12 @@ export function CollectionRow({ collection, onRename, onRemove }: CollectionRowP
             maxLength={120}
           />
           <div className="rc-actions">
-            <button type="button" className="detour-chip" disabled={!typed.trim() || busy} onClick={() => void saveName()}>
+            <button
+              type="button"
+              className="detour-chip"
+              disabled={!typed.trim() || busy}
+              onClick={() => void saveName()}
+            >
               Save
             </button>
             <button

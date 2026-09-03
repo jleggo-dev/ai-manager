@@ -6,13 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { RepertoireItem } from '@cadence/shared';
-import {
-  DESCRIPTION_KEY,
-  COMPOSER_KEY,
-  PRACTICE_NOTE_KEY,
-  RANK_KEY,
-  REPERTOIRE_GROUPS,
-} from '@cadence/shared';
+import { DESCRIPTION_KEY, COMPOSER_KEY, PRACTICE_NOTE_KEY, RANK_KEY, REPERTOIRE_GROUPS } from '@cadence/shared';
 import {
   bucketsByYear,
   buildSecondLine,

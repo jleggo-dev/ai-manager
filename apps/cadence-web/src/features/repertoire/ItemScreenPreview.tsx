@@ -25,7 +25,13 @@ const COLLECTIONS = [
 const FIXTURES: Record<string, { item: RepertoireItem; collidesWithLabel?: string | null; sessionCount?: number }> = {
   'plain (Keeping up, with tempo)': { item: BASE, sessionCount: 23 },
   'colliding title': {
-    item: { ...BASE, label: 'Minuet in G Major', meta: { composer: 'Petzold' }, collection_id: null, collection_name: null },
+    item: {
+      ...BASE,
+      label: 'Minuet in G Major',
+      meta: { composer: 'Petzold' },
+      collection_id: null,
+      collection_name: null,
+    },
     collidesWithLabel: 'Minuet in G Major (Anna Magdalena Notebook)',
   },
   'up next, backfilled, no tempo': {
