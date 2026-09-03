@@ -184,7 +184,9 @@ describe('expandCollection — the twelve rows', () => {
   it('an unknown collection is an EMPTY list and still ok — nothing found, not a fault', async () => {
     runJobBySlug.mockResolvedValue(answered([]));
     const res = await expandCollection('u1', 'A book nobody has heard of');
-    expect(res).toEqual({ ok: true, collection: 'A book nobody has heard of', candidates: [] });
+    // `here_rank` is part of the shape now (P7) and is null on every path the person's own
+    // door takes — nothing was heard, so there is nothing to pre-mark.
+    expect(res).toEqual({ ok: true, collection: 'A book nobody has heard of', candidates: [], here_rank: null });
   });
 
   it('a job that throws is a FAULT, never an empty book', async () => {

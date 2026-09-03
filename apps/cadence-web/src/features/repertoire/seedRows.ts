@@ -54,63 +54,6 @@ export function applyHere(rows: SeedRowState[], hereRank: number): SeedRowState[
   return rows.map((r) => ({ ...r, selected: r.rank <= hereRank }));
 }
 
-/* ── The coach's door onto the same tap (P7, design frame 1e) ────────────────────────────────
-   She hears "I'm on the Hungarian folk song" and hands over those words; this turns them into the
-   tap, or refuses to. It runs `applyHere` when it resolves, so a prefilled screen and a tapped one
-   are the same screen — there is one split rule and this is not a second copy of it.
-
-   THE RULING IT ENFORCES: the coach may pre-mark, and she may not invent a distinction between two
-   titles. A phrase several rows answer to ("minuet in g" — Suzuki Book 2 holds four) therefore
-   marks NOTHING and becomes a tap the person makes. Erring toward no prefill is cheap: they tap
-   once. Erring the other way silently files sixty pieces off a phrase nobody confirmed.
-
-   The normalizing is local on purpose. `@cadence/shared` holds the rules the coach and the record
-   must agree on — sameness, standing, order — and this is not one of them: it decides only what a
-   screen shows before anyone has confirmed anything, and it never reaches the server (`writableRows`
-   is still what confirm posts). The server's own `normTitle` lives in the api workspace and no
-   browser can import it. */
-
-/** Lower-cased, accents folded, punctuation to spaces, collapsed. The comparison form for a title
- *  a person spoke: "Écossaise", "ecossaise" and "Ecossaise!" are one piece by any honest reading. */
-function foldTitle(s: string): string {
-  return (
-    s
-      .normalize('NFD')
-      // The combining marks NFD just split off, written as escapes rather than as the marks
-      // themselves: a bare combining range in source survives no round-trip through an editor.
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, ' ')
-      .trim()
-  );
-}
-
-/** Below this a phrase is not evidence: "a" and "the" sit inside half of any book. */
-const MIN_HEARD = 4;
-
-/**
- * The rank of the piece she heard them say they are on, or null when it names none — or more than
- * one. Null is the safe answer and the common one; the screen simply opens unmarked.
- */
-export function prefillHereRank(rows: SeedRowState[], heard: string | null | undefined): number | null {
-  const needle = foldTitle(typeof heard === 'string' ? heard : '');
-  if (needle.length < MIN_HEARD) return null;
-
-  // An exact title wins outright, even when it also sits inside a longer one — "Minuet in G Major,
-  // BWV Anh. 114" said in full is not ambiguous just because three siblings share its opening.
-  const exact = rows.filter((r) => foldTitle(r.label) === needle);
-  if (exact.length === 1) return exact[0]!.rank;
-  if (exact.length > 1) return null;
-
-  // Otherwise: containment either way, so "hungarian" finds "Hungarian Folk Song" and "the
-  // hungarian folk song" finds it too. One row or nothing.
-  const near = rows.filter((r) => {
-    const label = foldTitle(r.label);
-    return !!label && (label.includes(needle) || needle.includes(label));
-  });
-  return near.length === 1 ? near[0]!.rank : null;
-}
-
 /** One tick, one row. Every other row keeps its identity so React re-renders only this one. */
 export function toggleRow(rows: SeedRowState[], index: number): SeedRowState[] {
   if (index < 0 || index >= rows.length) return rows;

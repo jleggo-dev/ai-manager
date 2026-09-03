@@ -38,7 +38,16 @@ export interface SeedWriteRow {
 }
 
 export type SeedExpansion =
-  { ok: true; collection: string; candidates: SeedCandidate[] } | { ok: false; fault: string };
+  | {
+      ok: true;
+      collection: string;
+      candidates: SeedCandidate[];
+      /** Which candidate the coach's heard words named, 1-based by `rank` — null when she heard
+       *  nothing, or heard something more than one piece answers to. Worked out SERVER-SIDE
+       *  (`resolveHereRank`): the browser is handed a rank and never a rule for finding one. */
+      here_rank: number | null;
+    }
+  | { ok: false; fault: string };
 
 /** A row the server would not write, with the words that say what to change about it. */
 export interface RefusedSeedRow {
@@ -63,23 +72,34 @@ function faultText(body: unknown, fallback: string): string {
 /**
  * Expand a collection into candidates. Writes nothing on the server either — this is the read.
  *
+ * `whereYouAre` is the coach's door (P7): her words for the piece they said they are on, sent for
+ * the SERVER to resolve against the book it just produced. It rides this call rather than a second
+ * one because a rank only means anything against this exact list of candidates.
+ *
  * 60s, because this one spends a model call and a book is the longest thing it ever produces. The
  * timeout is what turns iOS's suspended-socket hang into a failure the screen can show.
  */
-export async function expandCollection(collection: string): Promise<SeedExpansion> {
+export async function expandCollection(collection: string, whereYouAre?: string): Promise<SeedExpansion> {
   const res = await fetch(`${BASE}/progress/repertoire/seed`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ collection }),
+    body: JSON.stringify({ collection, ...(whereYouAre?.trim() ? { where_you_are: whereYouAre.trim() } : {}) }),
     signal: timeoutSignal(60_000),
   }).catch(() => null);
   if (!res) return { ok: false, fault: EXPAND_FAULT };
-  const body = (await res.json().catch(() => null)) as { collection?: unknown; candidates?: unknown } | null;
+  const body = (await res.json().catch(() => null)) as {
+    collection?: unknown;
+    candidates?: unknown;
+    here_rank?: unknown;
+  } | null;
   if (!res.ok || !Array.isArray(body?.candidates)) return { ok: false, fault: faultText(body, EXPAND_FAULT) };
   return {
     ok: true,
     collection: typeof body.collection === 'string' ? body.collection : collection,
     candidates: body.candidates as SeedCandidate[],
+    // Anything but a real rank is "nothing to pre-mark" — an older server, or a shape change,
+    // must leave the screen unmarked rather than pre-marking row NaN.
+    here_rank: typeof body.here_rank === 'number' && Number.isInteger(body.here_rank) ? body.here_rank : null,
   };
 }
 

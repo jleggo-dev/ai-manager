@@ -61,7 +61,12 @@ function open(onDone = vi.fn()) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  expandCollection.mockResolvedValue({ ok: true, collection: 'Suzuki Piano Book 2', candidates: candidates() });
+  expandCollection.mockResolvedValue({
+    ok: true,
+    collection: 'Suzuki Piano Book 2',
+    candidates: candidates(),
+    here_rank: null,
+  });
   confirmSeed.mockResolvedValue({ ok: true, written: 3, labels: ['a'], refused: [] });
   getReview.mockResolvedValue({
     goals: [
@@ -129,48 +134,67 @@ describe('the tap that says where you are', () => {
  * are, so the screen opens with that tap already applied. Nothing else about it changes — same
  * screen, same confirm, same "nothing saved yet" — which is the whole point of there being one
  * review rather than two.
+ *
+ * The RANK is the server's. This screen sends her words and applies the rank that comes back; it
+ * owns no rule for turning a phrase into a row (that is `resolveHereRank`, and its own table test
+ * lives beside it in the api). So these drive off the mocked response, which is exactly what the
+ * real screen sees.
  */
-describe('opened with the coach’s heard split', () => {
-  const openPrefilled = (whereYouAre?: string, onDone = vi.fn()) =>
-    render(<SeedReview collection="Suzuki Piano Book 2" whereYouAre={whereYouAre} onDone={onDone} />);
+describe('opened with the coach\u2019s heard split', () => {
+  function openPrefilled(whereYouAre?: string, hereRank: number | null = null, onDone = vi.fn()) {
+    expandCollection.mockResolvedValue({
+      ok: true,
+      collection: 'Suzuki Piano Book 2',
+      candidates: candidates(),
+      here_rank: hereRank,
+    });
+    return render(<SeedReview collection="Suzuki Piano Book 2" whereYouAre={whereYouAre} onDone={onDone} />);
+  }
+
+  it('sends her words to the server rather than matching them here', async () => {
+    openPrefilled('the happy farmer', 4);
+    await screen.findByText('Écossaise');
+    expect(expandCollection).toHaveBeenCalledWith('Suzuki Piano Book 2', 'the happy farmer');
+  });
 
   it('marks exactly what the tap would have marked', async () => {
-    const { container } = openPrefilled('the happy farmer');
+    const { container } = openPrefilled('the happy farmer', 4);
     await screen.findByText('Écossaise');
     expect(standings(container)).toEqual(['Keeping up', 'Keeping up', 'Keeping up', 'Learning', ...Array(8).fill('—')]);
     expect(saveButton()).toHaveTextContent('Save 4 pieces');
   });
 
-  it('still saves nothing on its own — the confirm is the person’s, prefilled or not', async () => {
-    openPrefilled('the happy farmer');
+  it('still saves nothing on its own — the confirm is the person\u2019s, prefilled or not', async () => {
+    openPrefilled('the happy farmer', 4);
     await screen.findByText('Écossaise');
     expect(screen.getByText('12 PIECES FOUND · NOTHING SAVED YET')).toBeInTheDocument();
     expect(confirmSeed).not.toHaveBeenCalled();
   });
 
   it('says she marked it, instead of asking them to tap what is already tapped', async () => {
-    openPrefilled('the happy farmer');
+    openPrefilled('the happy farmer', 4);
     expect(await screen.findByText(/I.ve marked where I think you are/)).toBeInTheDocument();
     expect(screen.queryByText(/Tap the piece you.re on now/)).not.toBeInTheDocument();
   });
 
   it('lets them move the split afterwards, exactly as if they had tapped it themselves', async () => {
-    const { container } = openPrefilled('the happy farmer');
+    const { container } = openPrefilled('the happy farmer', 4);
     await screen.findByText('Écossaise');
     fireEvent.click(screen.getByRole('button', { name: 'Long, Long Ago' }));
     expect(standings(container)).toEqual(['Keeping up', 'Learning', ...Array(10).fill('—')]);
   });
 
-  it('marks nothing when her words name three pieces — she may not pick between them', async () => {
-    const { container } = openPrefilled('minuet in g major');
+  it('marks nothing when the server resolved her words to no one piece', async () => {
+    const { container } = openPrefilled('minuet in g major', null);
     await screen.findByText('Écossaise');
     expect(standings(container)).toEqual(Array(12).fill('—'));
     expect(screen.getByText(/Tap the piece you.re on now/)).toBeInTheDocument();
   });
 
-  it('marks nothing when she heard no piece at all', async () => {
-    const { container } = openPrefilled(undefined);
+  it('sends nothing, and marks nothing, when she heard no piece at all', async () => {
+    const { container } = openPrefilled(undefined, null);
     await screen.findByText('Écossaise');
+    expect(expandCollection).toHaveBeenCalledWith('Suzuki Piano Book 2', undefined);
     expect(standings(container)).toEqual(Array(12).fill('—'));
   });
 });

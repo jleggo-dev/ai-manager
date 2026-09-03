@@ -30,7 +30,6 @@ import {
   applyHere,
   blockedRanks,
   markedRanks,
-  prefillHereRank,
   refusedNote,
   rowStanding,
   saveLabel,
@@ -58,7 +57,7 @@ interface Props {
    * The piece the coach heard them say they are on, in their own words (P7, design frame 1e) —
    * the ONE thing her door adds. It is applied exactly as a tap on that row is, and it resolves to
    * nothing whenever the words fit more than one piece: she may pre-mark, she may not pick between
-   * two titles (prefillHereRank). Omitted for the person's own ＋ door, which marks nothing.
+   * two titles (`resolveHereRank`, server-side). Omitted for the person's own ＋ door, which marks nothing.
    */
   whereYouAre?: string;
   /** Called with the number of rows actually written. Navigation belongs to the caller. */
@@ -80,16 +79,17 @@ export function SeedReview({ collection, whereYouAre, onDone }: Props) {
     let live = true;
     setLoad({ kind: 'loading' });
     setTitle(collection);
-    void expandCollection(collection)
+    void expandCollection(collection, whereYouAre)
       .then((res) => {
         if (!live) return;
         if (!res.ok) return setLoad({ kind: 'fault', fault: res.fault });
         setTitle(res.collection);
         const fresh = res.candidates.map((c) => ({ ...c, selected: false }));
         // Her heard split, applied through the SAME function the tap runs, so a prefilled screen
-        // and a tapped one cannot differ. Null when she heard nothing, or heard something several
-        // pieces answer to — then this is the person's own door exactly as it was.
-        const here = prefillHereRank(fresh, whereYouAre);
+        // and a tapped one cannot differ. The RANK is the server's (`resolveHereRank`) — this
+        // screen never matches a title itself. Null when she heard nothing, or heard something
+        // several pieces answer to; then this is the person's own door exactly as it was.
+        const here = res.here_rank;
         setRows(here === null ? fresh : applyHere(fresh, here));
         setHereRank(here);
         setLoad({ kind: 'ready', found: res.candidates.length });

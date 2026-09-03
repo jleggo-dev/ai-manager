@@ -28,6 +28,7 @@
  */
 import { MAX_SEED_ITEMS, isSeedStatus, qualifierMeta, type SeedStatus } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
+import { compactTitle, normTitle } from './goal-identity.ts';
 import { listRepertoire, upsertRepertoireItem } from '../repos/repertoire.ts';
 import {
   canonicalLabel,
@@ -51,7 +52,15 @@ export interface SeedCandidate {
 }
 
 export type ExpandCollectionResult =
-  { ok: true; collection: string; candidates: SeedCandidate[] } | { ok: false; fault: string };
+  | {
+      ok: true;
+      collection: string;
+      candidates: SeedCandidate[];
+      /** The rank of the piece the coach heard they were on, or null — see `resolveHereRank`.
+       *  Always null when no `where_you_are` was sent, which is the person's own add door. */
+      here_rank: number | null;
+    }
+  | { ok: false; fault: string };
 
 /** One row the person confirmed. `status` is re-checked here; the route's schema is not the guard. */
 export interface SeedRowInput {
@@ -145,6 +154,60 @@ function normalizeItems(raw: unknown[]): Omit<SeedCandidate, 'ambiguous'>[] {
     .map((c, i) => ({ ...c, rank: i + 1 }));
 }
 
+/* ── Where in the book they are (P7, design frame 1e) ─────────────────────────
+   The coach hears "I'm on the Hungarian folk song" and hands those words over; this turns them
+   into the one row the review pre-marks, or into nothing.
+
+   It lives HERE, beside the collision rule it shares a book with, because a matcher that decides
+   behaviour lives once (CLAUDE.md). It shipped for a day in the browser as its own fold-and-compare
+   and that was a second spelling of a question this workspace already answers — the drift that
+   never throws and simply files the wrong thing. Both forms below are the repo's own:
+   `normTitle` (accents folded to their base letter, punctuation to spaces) and `compactTitle`
+   (separators gone entirely), the same pair goal identity is built on.
+
+   "It only PRE-marks" is not a reason to be loose about it. People confirm what they are shown,
+   so the pre-mark is what gets written — which is why an ambiguous phrase must resolve to
+   nothing. Suzuki Book 2 prints four minuets in G; "minuet in g" names a family, not a piece, and
+   the coach may not invent a distinction between two titles. Erring toward no prefill costs one
+   tap. Erring the other way files sixty standings off a phrase nobody confirmed. */
+
+/** Below this a normalized phrase is not evidence: "a" and "the" sit inside half of any book. */
+const MIN_HEARD = 4;
+
+/**
+ * The rank of the one piece `heard` names, or null when it names none — or more than one.
+ *
+ * Exact wins outright (either normalized form), so a title given in full is never made ambiguous
+ * by the siblings that share its opening. Failing that, containment either way — so "hungarian"
+ * finds "Hungarian Folk Song" and "the hungarian folk song" finds it too — and then only when
+ * exactly one candidate answers.
+ */
+export function resolveHereRank(
+  candidates: Array<{ label: string; rank: number }>,
+  heard: string | null | undefined,
+): number | null {
+  const raw = typeof heard === 'string' ? heard : '';
+  const needle = normTitle(raw.normalize('NFC'));
+  if (needle.length < MIN_HEARD) return null;
+  const compact = compactTitle(raw.normalize('NFC'));
+
+  const one = (hits: Array<{ rank: number }>): number | null => (hits.length === 1 ? hits[0]!.rank : null);
+
+  const exact = candidates.filter(
+    (c) => normTitle(c.label) === needle || (!!compact && compactTitle(c.label) === compact),
+  );
+  // More than one exact hit is two rows carrying one title — the screen already marks that pair
+  // as unsaveable, and picking either would be the distinction she is not allowed to invent.
+  if (exact.length > 0) return one(exact);
+
+  return one(
+    candidates.filter((c) => {
+      const label = normTitle(c.label);
+      return !!label && (label.includes(needle) || needle.includes(label));
+    }),
+  );
+}
+
 /* ── One collision rule, used twice ──────────────────────────────────────────────────────────
    `expandCollection` marks with it and `confirmSeed` refuses with it, so the note the screen shows
    and the row the server rejects can never disagree about which label is the problem. */
@@ -207,8 +270,16 @@ function parseJson(text: string): Record<string, unknown> | null {
  *
  * The shelf is read FIRST: the ambiguity check needs it, and a database that cannot answer should
  * not cost a model call whose answer we could not check anyway.
+ *
+ * `whereYouAre` is the coach's door only (P7): the piece she heard them say they are on, resolved
+ * against the book this call just produced. Omitted — the person's own add door — `here_rank` is
+ * null and the screen marks nothing, exactly as it did before this parameter existed.
  */
-export async function expandCollection(userId: string, text: string): Promise<ExpandCollectionResult> {
+export async function expandCollection(
+  userId: string,
+  text: string,
+  whereYouAre?: string | null,
+): Promise<ExpandCollectionResult> {
   const collection = scrub(text);
   if (!collection) return { ok: false, fault: EXPAND_FAULT };
 
@@ -231,7 +302,8 @@ export async function expandCollection(userId: string, text: string): Promise<Ex
     return { ok: false, fault: EXPAND_FAULT };
   }
 
-  return { ok: true, collection, candidates: markAmbiguity(shelf, normalizeItems(parsed.items)) };
+  const candidates = markAmbiguity(shelf, normalizeItems(parsed.items));
+  return { ok: true, collection, candidates, here_rank: resolveHereRank(candidates, whereYouAre) };
 }
 
 /** How many upserts run at once. Each is a round trip; sixty at once is a pool exhaustion. */

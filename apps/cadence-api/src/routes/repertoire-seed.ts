@@ -26,6 +26,10 @@ router.use(requireCadenceUser);
 
 const seedBodySchema = z.object({
   collection: z.string().trim().min(1, 'collection is required').max(120),
+  /** The coach's door only (P7): the piece she heard them say they are on, in their own words.
+   *  Resolved SERVER-SIDE against the book this call produces (`resolveHereRank`) — the browser
+   *  gets a rank, never a matching rule of its own. Absent for the person's own add door. */
+  where_you_are: z.string().trim().max(120).nullish(),
 });
 
 /** One confirmed row. `status` is the shared union, so the door and the writer cannot drift. */
@@ -43,14 +47,22 @@ const confirmBodySchema = z.object({
   rows: z.array(seedRowSchema).min(1, 'rows is required').max(MAX_SEED_ITEMS),
 });
 
-/** POST /progress/repertoire/seed — a collection's name in, candidates out. Writes nothing. */
+/**
+ * POST /progress/repertoire/seed — a collection's name in, candidates out. Writes nothing.
+ *
+ * `here_rank` rides the same response rather than a second call: the rank only means anything
+ * against THIS list of candidates, and two calls could not be sure they were talking about the
+ * same book. Always present, null when nothing was heard or when what was heard names more than
+ * one piece.
+ */
 router.post('/repertoire/seed', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
-    const { collection } = parseBody(seedBodySchema, req.body);
-    const result = await expandCollection(userId, collection);
+    const { collection, where_you_are } = parseBody(seedBodySchema, req.body);
+    // '' and null are one case here — nothing was heard — so neither reaches the resolver as text.
+    const result = await expandCollection(userId, collection, where_you_are?.trim() || null);
     if (!result.ok) return void res.status(502).json({ error: result.fault });
-    res.json({ collection: result.collection, candidates: result.candidates });
+    res.json({ collection: result.collection, candidates: result.candidates, here_rank: result.here_rank ?? null });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /progress/repertoire/seed]', err);
