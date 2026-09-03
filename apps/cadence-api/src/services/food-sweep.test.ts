@@ -129,7 +129,51 @@ d('food-sweep rail (S3) + retro tidy (S4)', () => {
     runJobBySlug.mockReset();
   });
 
-  it('nothing to find: stamps the throttle and never calls the model', async () => {
+  /** The gate is Sunday-anchored: first sight only arms it, and it opens once the stamp predates
+   *  the most recent Sunday. Nine days back is before the most recent Sunday on every weekday, so
+   *  these tests stay deterministic whatever real day they run on. */
+  const armLastWeek = () =>
+    sql`update cadence.users set last_food_sweep_at = now() - interval '9 days' where id = ${USER}`;
+
+  it('first sight arms the gate: stamp set, no detection, no model, no ask', async () => {
+    await seedBreakfastSet(); // even with a findable set, the first read must not sweep
+    await sweepIfDue(USER);
+    const user = await getUser(USER);
+    expect(user?.last_food_sweep_at).toBeTruthy();
+    expect(user?.pending_food_sweep ?? null).toBeNull();
+    expect(runJobBySlug).not.toHaveBeenCalled();
+  });
+
+  it('a stamp inside the current Sunday-week does not sweep again', async () => {
+    await seedBreakfastSet();
+    primeModelKeepAll();
+    await sql`update cadence.users set last_food_sweep_at = now() where id = ${USER}`;
+    await sweepIfDue(USER);
+    expect(runJobBySlug).not.toHaveBeenCalled();
+  });
+
+  describe("mostRecentSundayIso — the Sunday anchor, in the user's own timezone", () => {
+    it('walks a mid-week date back to its Sunday, and a Sunday to itself', async () => {
+      const { mostRecentSundayIso } = await import('./food-sweep.ts');
+      expect(mostRecentSundayIso(new Date('2026-09-02T12:00:00Z'), 'UTC')).toBe('2026-08-30'); // Wed
+      expect(mostRecentSundayIso(new Date('2026-08-30T00:00:01Z'), 'UTC')).toBe('2026-08-30'); // Sun itself
+    });
+
+    it('anchors to the LOCAL Sunday: late Saturday UTC is already Sunday in Auckland', async () => {
+      const { mostRecentSundayIso } = await import('./food-sweep.ts');
+      const lateSatUtc = new Date('2026-08-29T23:30:00Z');
+      expect(mostRecentSundayIso(lateSatUtc, 'UTC')).toBe('2026-08-23');
+      expect(mostRecentSundayIso(lateSatUtc, 'Pacific/Auckland')).toBe('2026-08-30');
+    });
+
+    it('falls back to UTC on a broken timezone rather than failing the day read', async () => {
+      const { mostRecentSundayIso } = await import('./food-sweep.ts');
+      expect(mostRecentSundayIso(new Date('2026-09-02T12:00:00Z'), 'Not/A_Zone')).toBe('2026-08-30');
+    });
+  });
+
+  it('nothing to find: stamps the gate and never calls the model', async () => {
+    await armLastWeek();
     await sweepIfDue(USER);
     const user = await getUser(USER);
     expect(user?.last_food_sweep_at).toBeTruthy();
@@ -139,6 +183,7 @@ d('food-sweep rail (S3) + retro tidy (S4)', () => {
 
   it('builds proposals from the model keeps — numbers from the candidate, name from the model', async () => {
     await seedBreakfastSet();
+    await armLastWeek();
     primeModelKeepAll('Chia bowl', 1);
     await sweepIfDue(USER);
 
@@ -162,8 +207,9 @@ d('food-sweep rail (S3) + retro tidy (S4)', () => {
     expect(await listRecipes(USER)).toHaveLength(0);
   });
 
-  it('throttles: a second sweep inside seven days does not run again', async () => {
+  it('one sweep per Sunday-week: a second call after the sweep does not run again', async () => {
     await seedBreakfastSet();
+    await armLastWeek();
     primeModelKeepAll();
     await sweepIfDue(USER);
     await commitSweep(USER, []); // decline everything so no ask is outstanding
@@ -172,8 +218,9 @@ d('food-sweep rail (S3) + retro tidy (S4)', () => {
     expect(runJobBySlug).not.toHaveBeenCalled();
   });
 
-  it('waits for the user while an ask is outstanding, even once the throttle is stale', async () => {
+  it('waits for the user while an ask is outstanding, even once the gate is stale', async () => {
     await seedBreakfastSet();
+    await armLastWeek();
     primeModelKeepAll();
     await sweepIfDue(USER);
     await sql`update cadence.users set last_food_sweep_at = now() - interval '9 days' where id = ${USER}`;
@@ -185,6 +232,7 @@ d('food-sweep rail (S3) + retro tidy (S4)', () => {
 
   it('unusable model output: stamps the throttle, proposes nothing, saves nothing', async () => {
     await seedBreakfastSet();
+    await armLastWeek();
     runJobBySlug.mockResolvedValue({ formatted: 'not json at all' });
     await sweepIfDue(USER);
     expect((await getUser(USER))?.last_food_sweep_at).toBeTruthy();
@@ -193,6 +241,7 @@ d('food-sweep rail (S3) + retro tidy (S4)', () => {
   });
 
   it('never more than three proposals, however many the model keeps', async () => {
+    await armLastWeek();
     // Four distinct three-day sets, one per slot — four candidates reach the model.
     const slots: MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack'];
     for (const [i, slot] of slots.entries()) {

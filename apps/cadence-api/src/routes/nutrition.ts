@@ -178,7 +178,9 @@ router.get('/day', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date ?? '')) ? String(req.query.date) : undefined;
   try {
-    kickFoodSweep(userId); // weekly Sunday-sweep piggyback (S3) — rides the day read like assessIfDue rides GET /plan
+    // Sunday-sweep piggyback (S3) — rides the day read like assessIfDue rides GET /plan; the
+    // timezone is what anchors "Sunday" to the user's own week rather than the server's.
+    kickFoodSweep(userId, req.header('X-Cadence-Timezone'));
     res.json(await getNutritionDay(userId, date));
   } catch (err) {
     console.error('[GET /nutrition/day]', err);
