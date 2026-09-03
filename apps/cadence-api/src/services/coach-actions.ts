@@ -25,6 +25,7 @@ import { UPDATE_REPERTOIRE } from './coach-action-repertoire.ts';
 import { OFFER_REPERTOIRE_REVIEW } from './coach-action-offer-repertoire.ts';
 import { REVISE_SESSION } from './coach-action-revise-session.ts';
 import { START_REPLAN } from './coach-action-start-replan.ts';
+import { SET_HOME_LOCATION } from './coach-action-home-location.ts';
 
 /** Today, YYYY-MM-DD — stamped on a target change so the weekly review throttle can see it. */
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -542,6 +543,11 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   set_micro_target: SET_MICRO_TARGET,
 
   propose_progress_layout: PROPOSE_PROGRESS_LAYOUT,
+  // Tail tier (the drawer), not ALWAYS_ACTIONS: recording where someone lives is a once-in-a-while
+  // moment, the checklist's "changes data, weekly or rarer" row. Closes the gap left by retiring
+  // date-context.ts's "ask once, warmly" nudge — the coach now has an explicit, consented write
+  // path for a location volunteered in chat, instead of only Settings and ambient capture.
+  set_home_location: SET_HOME_LOCATION,
   update_repertoire: UPDATE_REPERTOIRE,
   // Tail tier (the drawer), not ALWAYS_ACTIONS: laying out a book is a once-per-book moment, the
   // checklist's "changes data, weekly or rarer" row — and it changes LESS than that, since it

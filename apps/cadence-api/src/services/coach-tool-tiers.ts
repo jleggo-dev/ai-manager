@@ -251,6 +251,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   extend_horizon: 'ACTION: run the current week longer — "plan two weeks ahead" — check-in moves with it',
   revise_session: 'ACTION: rebuild one upcoming session\'s contents from their words — "add chest and abs"',
   start_replan: 'ACTION: rebuild the WHOLE week around their words — background, takes minutes',
+  set_home_location: 'record where they live, so weather and daylight can be read for outdoor sessions',
 };
 
 /**
@@ -385,6 +386,14 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // read, marked [changes their data] in the label, and its own contract still gates the write
     // behind the user's tap on the proposal card.
     members: ['propose_progress_layout'],
+  },
+  {
+    key: 'home',
+    label: 'their home location, for weather and daylight',
+    // Born with `set_home_location`: a coarse place fact for weather/daylight, not training
+    // content, not plan surgery, not Progress-page chrome — none of the existing categories fit,
+    // so this is a new one rather than a strained fit into an old one.
+    members: ['set_home_location'],
   },
 ];
 
