@@ -11,6 +11,7 @@ import {
   createGoalBodySchema,
   createEquipmentBodySchema,
   patchProfileBodySchema,
+  patchRepertoireItemBodySchema,
   replanSteerBodySchema,
 } from './body.ts';
 
@@ -134,5 +135,34 @@ describe('parseBody / plan review progress schemas', () => {
     });
     expect(parseBody(patchProfileBodySchema, { name: 'Alex' })).toEqual({ name: 'Alex' });
     expect(() => parseBody(patchProfileBodySchema, {})).toThrow(/name/);
+  });
+});
+
+/**
+ * `rank` on the repertoire item PATCH (P6 "the room": the Up next group is drag-ordered, and a
+ * reorder writes each moved row's new 1-based rank). The rest of this schema — status/label/
+ * composer/collection/catalogue — is covered at the route level in
+ * progress-extras-repertoire.test.ts; this pins the schema's OWN rule for the one field this
+ * parcel added, table-style: a real rank, and the near-misses a drag interaction could produce.
+ */
+describe('parseBody / repertoire item patch schema — rank', () => {
+  it('accepts a real 1-based rank', () => {
+    expect(parseBody(patchRepertoireItemBodySchema, { rank: 3 })).toMatchObject({ rank: 3 });
+  });
+
+  it('a rank-only body is something to update, not an empty PATCH', () => {
+    expect(() => parseBody(patchRepertoireItemBodySchema, { rank: 1 })).not.toThrow();
+  });
+
+  it.each([
+    [0, 'not a 1-based position'],
+    [1.5, 'not a whole number'],
+    ['2', 'not a number at all'],
+  ])('rejects rank %j (%s)', (rank: number | string, _why: string) => {
+    expect(() => parseBody(patchRepertoireItemBodySchema, { rank })).toThrow(BodyValidationError);
+  });
+
+  it('rejects an empty body even though rank is optional — the base "nothing to update" rule still holds', () => {
+    expect(() => parseBody(patchRepertoireItemBodySchema, {})).toThrow(/nothing to update/);
   });
 });
