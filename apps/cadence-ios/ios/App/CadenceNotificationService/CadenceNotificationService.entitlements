@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Communication Notifications. The extension is the target that calls
+	     UNNotificationContent.updating(from:) for a PUSH, so it carries the entitlement in its own
+	     right; the App ID builders.cadence.app.NotificationService has the matching capability
+	     enabled in the portal. Without it the call throws, the `try?` in NotificationService.swift
+	     swallows it, and the push falls back to the plain app icon with nothing logged. -->
+	<key>com.apple.developer.usernotifications.communication</key>
+	<true/>
+</dict>
+</plist>
