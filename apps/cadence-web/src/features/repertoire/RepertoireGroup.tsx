@@ -13,9 +13,14 @@
  * flat scroll the way a repertoire of a few dozen pieces can. Every other group, and a books group
  * under the threshold, renders exactly as it always has; the collapse never touches the
  * linked/unattached split, which only applies below the threshold.
+ *
+ * Kata, a ladder (P8): this component, not `RepertoireRow`, decides whether the WHOLE group is a
+ * ladder (`isFullLadder`) and only then hands each row its own rank to show. A single row never
+ * makes that call for itself — a book-seeded piece carries a rank too, and must never look ranked.
  */
 import { useState } from 'react';
 import type { RepertoireItem, RepertoireStatus } from '@cadence/shared';
+import { pieceQualifiers } from '@cadence/shared';
 import type { RepertoireCollisionGroup } from '../../lib/api/repertoire-list.ts';
 import {
   bucketsByYear,
@@ -23,6 +28,7 @@ import {
   findMatches,
   GROUP_LINES,
   groupStandingWord,
+  isFullLadder,
   orderGroupItems,
   shouldCollapseByYear,
   splitUnattached,
@@ -68,6 +74,10 @@ export function RepertoireGroup({
   const indexOf = new Map(ordered.map((item, i) => [item.item_id, i] as const));
   const { linked, unattached } = splitUnattached(ordered);
   const headWord = groupStandingWord(status, items);
+  // Whole-group decision, same input `orderGroupItems` itself checks — a ladder's rows show their
+  // rank; nothing else ever does, even a piece that happens to carry one (P4's book seed writes
+  // rank on every row it expands).
+  const ladder = isFullLadder(items);
 
   const row = (item: RepertoireItem) => {
     const partners = collisionPartnersFor(item.label, collisions);
@@ -81,6 +91,7 @@ export function RepertoireGroup({
           onChangeStanding={(next) => onChangeStanding(item, next)}
           onMoveUp={canMove && i > 0 ? () => onMove!(item, 'up') : undefined}
           onMoveDown={canMove && i < ordered.length - 1 ? () => onMove!(item, 'down') : undefined}
+          rank={ladder ? pieceQualifiers(item.meta).rank : undefined}
           now={now}
         />
         {partners.length > 0 && (

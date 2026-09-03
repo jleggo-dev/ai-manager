@@ -15,7 +15,9 @@
  * One row component for every domain (P8): the standing word on the right and in the move menu
  * comes from `standingWordFor`, which reads THIS item's own `kind` — a book's Learned standing
  * says "Finished" there, everything else is `STANDING_WORDS` unchanged. No second row type, no
- * per-domain branch in this file.
+ * per-domain branch in this file. The one exception that touches this file's own markup is the
+ * ladder's rank number, left of the title (`rank` prop) — still not a per-domain branch HERE,
+ * since the caller (RepertoireGroup) is the one deciding whether a group is a ladder at all.
  */
 import { useState } from 'react';
 import type { RepertoireItem, RepertoireStatus } from '@cadence/shared';
@@ -36,11 +38,16 @@ export interface RepertoireRowProps {
   /** Present only for a row in the Up next group — omitted (never rendered) everywhere else. */
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  /** The item's own rank, shown left of the title — present ONLY when the caller (RepertoireGroup)
+   *  has decided the whole group is a full ladder (`isFullLadder`, repertoireListCopy.ts). Never
+   *  passed for an ordinary shelf, even when the item happens to carry a rank (a book-seeded piece
+   *  does) — a rank number here means "this is a ladder", and only the group knows that. */
+  rank?: number;
   /** Injectable for tests; the row's own date segment is otherwise `new Date()`. */
   now?: Date;
 }
 
-export function RepertoireRow({ item, onOpen, onChangeStanding, onMoveUp, onMoveDown, now }: RepertoireRowProps) {
+export function RepertoireRow({ item, onOpen, onChangeStanding, onMoveUp, onMoveDown, rank, now }: RepertoireRowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const secondLine = buildSecondLine(item, now);
   const canReorder = Boolean(onMoveUp) || Boolean(onMoveDown);
@@ -49,6 +56,7 @@ export function RepertoireRow({ item, onOpen, onChangeStanding, onMoveUp, onMove
     <div className="rl-row">
       <button type="button" className="rl-row-main" onClick={onOpen}>
         <span className={`rl-mark ${MARK_TONE[item.status]}`} aria-hidden="true" />
+        {typeof rank === 'number' && <span className="rl-row-rank">{rank}</span>}
         <span className="rl-row-body">
           <span className="rl-row-title">{item.label}</span>
           {secondLine && <span className="rl-row-sub">{secondLine}</span>}

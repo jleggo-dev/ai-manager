@@ -93,6 +93,58 @@
   flex-direction: column;
 }
 
+/* ── Books, 200 long: the Learned-group collapse (P8) ───────────────────────────────────────
+   The find field looks like `.ri-input` (repertoire-item.css) — same field, a different screen;
+   a bucket looks like a row — same padding, border-bottom, and title weight as `.rl-row`. */
+.rl-year-collapse {
+  display: flex;
+  flex-direction: column;
+}
+.rl-find {
+  width: 100%;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px 11px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.rl-find:focus {
+  outline: none;
+  border-color: var(--forest);
+}
+.rl-year-buckets {
+  display: flex;
+  flex-direction: column;
+}
+.rl-year-bucket {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 8px 0;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.rl-year-buckets > .rl-year-bucket:last-child {
+  border-bottom: none;
+}
+.rl-year-back {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 2px 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-mute);
+}
+
 /* ── One row ─────────────────────────────────────────────────────────────────────────────── */
 .rl-row {
   display: flex;
@@ -162,6 +214,20 @@
   font-weight: 700;
   color: var(--text-mute);
   padding-left: 6px;
+}
+
+/* A kata ladder's own rank, left of the title (P8) — RepertoireRow renders it only when the whole
+   group is a ladder (isFullLadder), never for an ordinary shelf. Tabular digits so 1..12 line up
+   in a column the way a real belt-grading list does. */
+.rl-row-rank {
+  flex: 0 0 auto;
+  min-width: 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-mute);
+  text-align: right;
 }
 
 /* ── The ⋯ menu: standing change always, Up next reorder when the caller wires it in ───────── */
