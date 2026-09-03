@@ -36,6 +36,9 @@ function rows(count: number): SeedRowState[] {
   }));
 }
 
+/** Rows with real titles — for the refusal gate below, where `Piece 1`…`Piece 5` prove nothing. */
+const named = (labels: string[]): SeedRowState[] => labels.map((label, i) => ({ ...rows(1)[0]!, label, rank: i + 1 }));
+
 describe('standingFor — the where-you-are split', () => {
   const table: Array<[number, number | null, string | null]> = [
     // They tapped piece 3: everything before it is already theirs, that one is the work.
@@ -202,8 +205,6 @@ describe('saveLabel — the button says what it will do', () => {
    The seed applies `update_repertoire`'s own rule: a title two pieces answer to is refused, never
    written. The server is the authority — it refuses and names what it refused — and these are the
    screen's half: mark the row, and hold the button while a marked row would be written. */
-
-const named = (labels: string[]): SeedRowState[] => labels.map((label, i) => ({ ...rows(1)[0]!, label, rank: i + 1 }));
 
 describe('markedRanks — the labels the screen will not let through as they are', () => {
   it('marks a row the server already judged unresolvable', () => {

@@ -72,7 +72,47 @@ describe('POST /progress/repertoire/seed', () => {
     expect(r.status).toBe(200);
     expect(r.body.collection).toBe('Suzuki Piano Book 2');
     expect(r.body.candidates).toHaveLength(2);
-    expect(expandCollection).toHaveBeenCalledWith('u1', 'Suzuki Piano Book 2');
+    expect(expandCollection).toHaveBeenCalledWith('u1', 'Suzuki Piano Book 2', null);
+  });
+
+  /* The coach's door (P7): she may say WHERE in the book they are, and the answer to "which row is
+     that" is worked out here rather than in the browser — a second matching rule in a client is
+     the drift CLAUDE.md bans, and this one decides what gets pre-marked and therefore confirmed. */
+  it('passes the piece she heard through, and hands back the rank it resolved to', async () => {
+    expandCollection.mockResolvedValue({
+      ok: true,
+      collection: 'Suzuki Piano Book 2',
+      candidates: [candidate('Écossaise', 1), candidate('Hungarian Folk Song', 2)],
+      here_rank: 2,
+    });
+    const r = await call('/progress/repertoire/seed', {
+      collection: 'Suzuki Piano Book 2',
+      where_you_are: 'the hungarian folk song',
+    });
+    expect(r.status).toBe(200);
+    expect(expandCollection).toHaveBeenCalledWith('u1', 'Suzuki Piano Book 2', 'the hungarian folk song');
+    expect(r.body.here_rank).toBe(2);
+  });
+
+  it('treats a blank where-you-are as nothing heard, rather than as text to match on', async () => {
+    const r = await call('/progress/repertoire/seed', { collection: 'Suzuki Piano Book 2', where_you_are: '   ' });
+    expect(r.status).toBe(200);
+    expect(expandCollection).toHaveBeenCalledWith('u1', 'Suzuki Piano Book 2', null);
+  });
+
+  it('always answers with here_rank, null when nothing was heard — never an absent field', async () => {
+    const r = await call('/progress/repertoire/seed', { collection: 'Suzuki Piano Book 2' });
+    expect(r.body).toHaveProperty('here_rank');
+    expect(r.body.here_rank).toBeNull();
+  });
+
+  it('400s on an over-long where-you-are, and never calls the service', async () => {
+    const r = await call('/progress/repertoire/seed', {
+      collection: 'Suzuki Piano Book 2',
+      where_you_are: 'x'.repeat(121),
+    });
+    expect(r.status).toBe(400);
+    expect(expandCollection).not.toHaveBeenCalled();
   });
 
   it('an unknown collection is 200 with an empty list — an answer, not an error', async () => {

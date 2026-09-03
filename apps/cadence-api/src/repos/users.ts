@@ -35,6 +35,10 @@ export interface CadenceUserRow {
   // week is up for review, never the figures themselves (the app renders those from the user's
   // own data). Older rows (or a pre-migration read) leave it undefined.
   pending_week_review?: PendingWeekReview | null;
+  // Present once migration 0055 is applied. The pointer `offer_repertoire_review` writes — which
+  // collection she offered to lay out, never the pieces themselves (the review screen expands the
+  // book, and only the person's confirm on it writes anything). Older rows leave it undefined.
+  pending_repertoire_review?: PendingRepertoireReview | null;
   // Present once migration 0015 is applied; older rows (or a pre-migration read) leave it
   // undefined and callers fall back to initialStreakState().
   streak_state?: StreakState | null;
@@ -59,6 +63,26 @@ export interface CadenceUserRow {
   pending_food_sweep?: PendingFoodSweep | null;
   // Present once migration 0053 is applied. The sweep's weekly throttle stamp.
   last_food_sweep_at?: string | null;
+}
+
+/**
+ * `offer_repertoire_review` puts THIS up — not the book, just the pointer to which collection she
+ * offered to lay out and where in it they said they are.
+ *
+ * Kept beside `PlanRun` in this file rather than in the shared contracts module for the same
+ * reason: it is a column's shape, read by the route that serves it and written by the one tool
+ * that offers it. The web client states its own view of the same JSON (lib/api/repertoire-offer.ts).
+ *
+ * It carries an OFFER and never a result. No piece, no standing, no count — the review screen
+ * expands the collection itself, and the person's confirm on that screen is the only thing that
+ * writes a row. `where_you_are` is their own words for the piece they are on ("the Hungarian folk
+ * song"); the screen resolves it onto a row, and pre-marks nothing when it names more than one.
+ */
+export interface PendingRepertoireReview {
+  collection: string;
+  where_you_are: string | null;
+  goal_id: string | null;
+  offered_at: string;
 }
 
 /**
@@ -330,6 +354,16 @@ export async function setPendingPlan(userId: string, plan: PendingPlan | null): 
  *  never stored here, only which week to render. */
 export async function setPendingWeekReview(userId: string, review: PendingWeekReview | null): Promise<void> {
   await sql`update cadence.users set pending_week_review = ${review ? json(review) : null} where id = ${userId}`;
+}
+
+/** Store (or clear, with null) the pointer `offer_repertoire_review` puts up — which collection
+ *  she offered to lay out. The person's "Lay them out"/"Not now", and their confirm on the review
+ *  itself, all resolve it; no piece is ever stored here, only the offer. */
+export async function setPendingRepertoireReview(
+  userId: string,
+  review: PendingRepertoireReview | null,
+): Promise<void> {
+  await sql`update cadence.users set pending_repertoire_review = ${review ? json(review) : null} where id = ${userId}`;
 }
 
 /** Read the pending Sunday-sweep blob (S3). Null when nothing is on file or the user row is missing. */

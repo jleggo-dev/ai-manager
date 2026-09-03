@@ -22,6 +22,7 @@ import { LOG_MEAL } from './coach-action-log-meal.ts';
 import { SET_MICRO_TARGET } from './coach-action-micro-target.ts';
 import { PROPOSE_PROGRESS_LAYOUT } from './coach-action-progress-layout.ts';
 import { UPDATE_REPERTOIRE } from './coach-action-repertoire.ts';
+import { OFFER_REPERTOIRE_REVIEW } from './coach-action-offer-repertoire.ts';
 import { REVISE_SESSION } from './coach-action-revise-session.ts';
 import { START_REPLAN } from './coach-action-start-replan.ts';
 
@@ -542,6 +543,11 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
 
   propose_progress_layout: PROPOSE_PROGRESS_LAYOUT,
   update_repertoire: UPDATE_REPERTOIRE,
+  // Tail tier (the drawer), not ALWAYS_ACTIONS: laying out a book is a once-per-book moment, the
+  // checklist's "changes data, weekly or rarer" row — and it changes LESS than that, since it
+  // writes no repertoire row at all. Sits beside update_repertoire so the pair is one filing:
+  // individual pieces are written straight, a whole collection goes up for the person to tick.
+  offer_repertoire_review: OFFER_REPERTOIRE_REVIEW,
 
   log_session: {
     name: 'log_session',
